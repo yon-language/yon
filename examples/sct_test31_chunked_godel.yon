@@ -1,0 +1,50 @@
+/* SCT Test 31 — Theorem 13 (Chunked Gödel Numbers, §23) (turno 33 part 6).
+ *
+ * Chunked GN: bitmask di n bit, suddiviso in ⌈n/w⌉ chunks (w = word size, qui usiamo 24-bit per Co_0 context).
+ *
+ * Operazioni preservate:
+ *   GN.set(i) → set bit i
+ *   GN.get(i) → test bit i
+ *   GN.or(GN') → union (disjunction)
+ *   GN.disjoint(GN') → intersection == 0
+ *
+ * Yon ha Bits.{band, bor, bxor, bnot, shl, shr, popcount} per implementare
+ * tutte le ops chunked GN come compositions di 24-bit chunks.
+ *
+ * Test: 2 axiom set encoded come 24-bit chunked, verifico union, disjoint. */
+
+fun main(): number {
+  /* GN1 = {axiom 0, 2, 5} encoded as bits 0, 2, 5 = 1 + 4 + 32 = 37 */
+  be gn1 holds Bits.bor(Bits.bor(1, 4), 32)        /* = 37 */
+
+  /* GN2 = {axiom 1, 3, 7} encoded as bits 1, 3, 7 = 2 + 8 + 128 = 138 */
+  be gn2 holds Bits.bor(Bits.bor(2, 8), 128)        /* = 138 */
+
+  /* GN3 = {axiom 0, 7} = bits 0, 7 = 1 + 128 = 129 (sharing bit 7 with gn2) */
+  be gn3 holds Bits.bor(1, 128)
+
+  /* OR union: gn1 ∪ gn2 = 37 | 138 = 175 */
+  be union_12 holds Bits.bor(gn1, gn2)
+
+  /* DISJOINT test: gn1 ∩ gn2 = 37 & 138 = 0 → disjoint = TRUE */
+  be inter_12 holds Bits.band(gn1, gn2)
+  be disjoint_12 holds if inter_12 == 0 then 1 else 0
+
+  /* gn2 ∩ gn3 = 138 & 129 = 128 (bit 7 shared) → NOT disjoint */
+  be inter_23 holds Bits.band(gn2, gn3)
+  be disjoint_23 holds if inter_23 == 0 then 1 else 0
+
+  /* SET/GET test: bit 5 in gn1 should be set */
+  be bit5_mask holds Bits.shl(1, 5)
+  be bit5_set holds if Bits.band(gn1, bit5_mask) > 0 then 1 else 0
+
+  /* Popcount: |gn1| = 3 axioms */
+  be card_gn1 holds Bits.popcount(gn1)
+
+  be _io1 holds IO.print_num(union_12)
+  be _io2 holds IO.print_num(disjoint_12)
+  be _io3 holds IO.print_num(disjoint_23)
+
+  /* Output: union(175 mod 256=175) + disjoint_12*1000 + disjoint_23(0) + bit5*10 + card(3) */
+  return union_12 + disjoint_12 * 1000 + bit5_set * 10 + card_gn1
+}

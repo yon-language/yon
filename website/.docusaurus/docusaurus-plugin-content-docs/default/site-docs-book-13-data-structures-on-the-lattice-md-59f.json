@@ -1,0 +1,28 @@
+{
+  "id": "book/data-structures-on-the-lattice",
+  "title": "13. Data structures on the lattice",
+  "description": "Every collection in the stdlib is a persistent structure over the",
+  "source": "@site/docs/book/13-data-structures-on-the-lattice.md",
+  "sourceDirName": "book",
+  "slug": "/book/data-structures-on-the-lattice",
+  "permalink": "/book/data-structures-on-the-lattice",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 13,
+  "frontMatter": {
+    "id": "data-structures-on-the-lattice",
+    "title": "13. Data structures on the lattice",
+    "sidebar_position": 13
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "12. Values, cells, and lifetime",
+    "permalink": "/book/values-cells-lifetime"
+  },
+  "next": {
+    "title": "14. Projects, yon.toml, and packages",
+    "permalink": "/book/projects-and-packages"
+  }
+}

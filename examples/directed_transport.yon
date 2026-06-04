@@ -1,0 +1,8 @@
+world W { Code is X }
+place Account in W { balance number }
+fun proofId(a: Account): Account { return a }
+fun transport_demo(a: Account): Account {
+  be c holds coerce_incl(a, proofId)
+  return c
+}
+fun main(): number { return 0 }

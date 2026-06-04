@@ -1,0 +1,28 @@
+{
+  "id": "book/the-project",
+  "title": "16. The project: a ledger in three packages",
+  "description": "Everything in one walkthrough: a git dependency, a service in its own Space,",
+  "source": "@site/docs/book/16-the-project.md",
+  "sourceDirName": "book",
+  "slug": "/book/the-project",
+  "permalink": "/book/the-project",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 16,
+  "frontMatter": {
+    "id": "the-project",
+    "title": "16. The project: a ledger in three packages",
+    "sidebar_position": 16
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "15. How Spaces talk",
+    "permalink": "/book/how-spaces-talk"
+  },
+  "next": {
+    "title": "17. When things go wrong",
+    "permalink": "/book/when-things-go-wrong"
+  }
+}

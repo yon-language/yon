@@ -1,0 +1,39 @@
+/* SCT Test 4 — Phase Yon programs (runtime, turno 32).
+ *
+ * 3 patterns di allocazione misurati a runtime:
+ *   Linear: alloca leaves consecutive (1,2,3,4,5) → 5 slot
+ *   Doubling: alloca leaves a doubling (1,2,4,8,16) → 5 slot (tutti unici)
+ *   Burst: alloca leaves sparse + 1 collisione (1,5,1,20,100) → 4 slot */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  /* Pattern Linear */
+  be _l1 holds Merkle.leaf(101)
+  be _l2 holds Merkle.leaf(102)
+  be _l3 holds Merkle.leaf(103)
+  be _l4 holds Merkle.leaf(104)
+  be _l5 holds Merkle.leaf(105)
+  be n1 holds __xheap_used()
+  be linear holds n1 - n0
+
+  /* Pattern Doubling */
+  be _d1 holds Merkle.leaf(201)
+  be _d2 holds Merkle.leaf(202)
+  be _d4 holds Merkle.leaf(204)
+  be _d8 holds Merkle.leaf(208)
+  be _d16 holds Merkle.leaf(216)
+  be n2 holds __xheap_used()
+  be doubling holds n2 - n1
+
+  /* Pattern Burst with intentional dedup */
+  be _b1 holds Merkle.leaf(301)
+  be _b5 holds Merkle.leaf(305)
+  be _b1_dup holds Merkle.leaf(301)  /* DEDUP */
+  be _b20 holds Merkle.leaf(320)
+  be _b100 holds Merkle.leaf(400)
+  be n3 holds __xheap_used()
+  be burst holds n3 - n2  /* expected 4 (uno dedup) */
+
+  return linear * 100 + doubling * 10 + burst
+}

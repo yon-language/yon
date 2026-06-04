@@ -1,0 +1,8 @@
+/* Legge FALSA dichiarata dall'utente: TropicalMin NON e' monotona.
+ * MagmaSolve deve RIFIUTARE a compile-time (decisione 2A). */
+world Alg { Code is X }
+place MinPlace in Alg with effects {
+  operation min(a: number, b: number): number uses algebra TropicalMin
+  law monotone
+}
+fun main(): number { return 0 }

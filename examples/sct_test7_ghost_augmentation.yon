@@ -1,0 +1,49 @@
+/* SCT Test 7 — Ghost augmentation (turno 32 fix, runtime measure).
+ *
+ * Anti-bias: T7 originale aveva w e κ hardcoded. Ora misura runtime
+ * la differenza tra:
+ *   - Branch SENZA ghost: alloca state encode (axiom_1, axiom_2)
+ *   - Branch CON ghost: alloca state encode (axiom_1, axiom_2, ghost_collide)
+ *
+ * Costruzione: axioms = {1, 100}, ghost = 99.
+ * SENZA ghost: alloca leaves 0, 1, 100, 101 (4 distinti)
+ * CON ghost: alloca leaves 0, 1, 100, 101, 99, 199, 200
+ *   ma 100 collide con 99+1 (sono leaf(100) e leaf(100) → DEDUP)
+ *
+ * Misuro empiricamente delta_xheap per ciascun branch.
+ *
+ * Predizione paper §20: il ghost forza collisioni → riduce omicron al
+ * passo successivo. Misurato: ratio_ghost_vs_no_ghost dovrebbe mostrare
+ * effect strutturale del ghost (qui in termini di slot allocati). */
+
+fun main(): number {
+  /* === SENZA GHOST: R_0 = {0}, axioms {1, 100} === */
+  be n0 holds __xheap_used()
+  be l0 holds Merkle.leaf(0)
+  be l1 holds Merkle.leaf(1)    /* 0 + 1 */
+  be l100 holds Merkle.leaf(100) /* 0 + 100 */
+  be l101 holds Merkle.leaf(101) /* 1 + 100 */
+  be l_extra holds Merkle.leaf(2) /* 1 + 1 */
+  be n1 holds __xheap_used()
+  be delta_no_ghost holds n1 - n0
+
+  /* === CON GHOST: R_0 = {0, 99}, axioms {1, 100} === */
+  be n2 holds __xheap_used()
+  be g0 holds Merkle.leaf(0)    /* DEDUP */
+  be g99 holds Merkle.leaf(99)  /* NUOVO (ghost) */
+  be g1 holds Merkle.leaf(1)    /* DEDUP */
+  be g100a holds Merkle.leaf(100) /* DEDUP */
+  be g100b holds Merkle.leaf(100) /* 99+1 = stesso slot — DEDUP NATURALE! */
+  be g199 holds Merkle.leaf(199) /* 99+100 NUOVO */
+  be g200 holds Merkle.leaf(200) /* 100+100 NUOVO */
+  be g101 holds Merkle.leaf(101) /* DEDUP */
+  be n3 holds __xheap_used()
+  be delta_with_ghost holds n3 - n2
+
+  /* delta_with_ghost > delta_no_ghost ma le COLLISIONI sono visibili nel
+   * numero di leaf operazioni vs delta misurato.
+   * Predizione: delta_with_ghost = 3 (g99, g199, g200), delta_no_ghost = 5 (l0..l101 + extra) */
+
+  /* Output: encoded sulle misure */
+  return delta_no_ghost * 10 + delta_with_ghost
+}

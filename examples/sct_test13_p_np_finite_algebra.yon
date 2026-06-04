@@ -1,0 +1,89 @@
+/* SCT Test 13 — §34 P=NP for finite algebras (empirical evidence).
+ *
+ * ONESTÀ UPFRONT: §34 del paper SCT è un CLAIM matematico ("PROVEN for
+ * finite algebras"), non verificabile empiricamente. Quello che si può
+ * fare è:
+ *
+ *   1. Implementare T = T_struct ∘ T_comp per UN'algebra finita specifica
+ *   2. Misurare empiricamente il SCALING su istanze a complessità crescente
+ *   3. Verificare se il pattern misurato è coerente con P (polinomiale)
+ *      o NP (esponenziale)
+ *
+ * Yon implementa T_struct via content-addressing xleech2 + Merkle DAG.
+ * T_comp è il dispatch hash-based per equivalence class.
+ *
+ * Algebra finita scelta: (ℤ_3, +_3, 0) — modulare 3, 3 elementi.
+ * Problema: reachability su prodotto cartesiano.
+ *
+ * Setup: 5 livelli di reachability, misuro xheap_used delta ad ogni livello.
+ *
+ *   level 0: R_0 = {0}                              (1 stato)
+ *   level 1: R_1 = R_0 ∪ {0+a : a∈axioms} = {0,1,2} (3 stati)
+ *   level 2: R_2 = R_1 ∪ {a+b : a∈R_1, b∈axioms}    (≤ 9 ma collapse a 3)
+ *   level 3: R_3 = R_2 ∪ ...                         (collassa a 3 sempre)
+ *   level 4, 5: idem (saturation a 3)
+ *
+ * Se T = T_struct ∘ T_comp lavora: il content-addressing dovrebbe
+ * collassare i prodotti che producono stesso elemento ℤ_3.
+ *
+ * Predizione P (polinomiale): delta_xheap per livello cresce lentamente
+ * (lineare/log), non esponenzialmente.
+ *
+ * Predizione NP-naive (senza collapse): cresce come 3^level → esplode.
+ *
+ * Misuro empiricamente. */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  /* Level 1: encode stato {0,1,2} via 3 Merkle leaf + node */
+  be r1_a holds Merkle.leaf(0)
+  be r1_b holds Merkle.leaf(1)
+  be r1_c holds Merkle.leaf(2)
+  be r1_root holds Merkle.node2(1, r1_a, Merkle.node2(1, r1_b, r1_c))
+  be n1 holds __xheap_used()
+  be w1 holds n1 - n0
+
+  /* Level 2: applico +1 mod 3 a ogni elemento → {1,2,0} = stesso set in ℤ_3 */
+  /* COLLAPSE NATURALE: gli stessi 3 leaf, riusati. Solo nuova root se ordine diverso. */
+  be r2_a holds Merkle.leaf(1)  /* DEDUP r1_b */
+  be r2_b holds Merkle.leaf(2)  /* DEDUP r1_c */
+  be r2_c holds Merkle.leaf(0)  /* DEDUP r1_a */
+  be r2_root holds Merkle.node2(2, r2_a, Merkle.node2(2, r2_b, r2_c))
+  be n2 holds __xheap_used()
+  be w2 holds n2 - n1
+
+  /* Level 3: applico +2 mod 3 = -1 mod 3 → {2,0,1} */
+  be r3_a holds Merkle.leaf(2)  /* DEDUP */
+  be r3_b holds Merkle.leaf(0)  /* DEDUP */
+  be r3_c holds Merkle.leaf(1)  /* DEDUP */
+  be r3_root holds Merkle.node2(3, r3_a, Merkle.node2(3, r3_b, r3_c))
+  be n3 holds __xheap_used()
+  be w3 holds n3 - n2
+
+  /* Level 4: applico +1+2=0 mod 3, stesso set */
+  be r4_root holds Merkle.node2(4, r1_a, Merkle.node2(4, r1_b, r1_c))
+  be n4 holds __xheap_used()
+  be w4 holds n4 - n3
+
+  /* Level 5 */
+  be r5_root holds Merkle.node2(5, r1_a, Merkle.node2(5, r1_b, r1_c))
+  be n5 holds __xheap_used()
+  be w5 holds n5 - n4
+
+  /* Total xheap consumed */
+  be total holds w1 + w2 + w3 + w4 + w5
+
+  /* Comparison metric:
+   *   - SE polinomial: total ~ 4*levels = 20 max
+   *   - SE esponenziale 3^level: total ~ 3^5 = 243
+   * Misurato: vedremo
+   *
+   * Output: total + (max_w * 100) per dare info */
+  be m1 holds if w1 > w2 then w1 else w2
+  be m2 holds if m1 > w3 then m1 else w3
+  be m3 holds if m2 > w4 then m2 else w4
+  be max_w holds if m3 > w5 then m3 else w5
+
+  return total + max_w * 10
+}

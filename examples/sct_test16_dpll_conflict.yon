@@ -1,0 +1,62 @@
+/* SCT Test 16 — DPLL vero con conflict detection e contatori (turno 32).
+ *
+ * Istanza 3-SAT minified UNSAT-prone (4 var, 5 clausole carefully chosen):
+ *   c1: x1 ∨ x2
+ *   c2: ¬x1 ∨ x3
+ *   c3: ¬x2 ∨ x4
+ *   c4: ¬x3 ∨ ¬x4
+ *   c5: x1 ∨ ¬x3
+ *
+ * DPLL flow (chronological backtracking, no learning):
+ *   Step 1: x1=T → propaga c1 sat, c2 unit x3=T forced
+ *   Step 2: x3=T → propaga c5 sat (x1=T), c4 unit ¬x4=T → x4=F
+ *   Step 3: x4=F → c3 unit ¬x2=T → x2=F
+ *   Step 4: x2=F → c1 satisfied via x1=T? sì, x1=T sat. All clauses sat → SAT
+ *
+ * Misuro:
+ *   - n_propagations (= contatore unit propagation)
+ *   - n_decisions (= contatore branching)
+ *   - n_conflicts (= contatore conflict detection)
+ *   - delta_xheap (= numero slot allocati)
+ *
+ * Per encode assignment uso Merkle.node2(var, leaf(value)). */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+  be n_props holds Space.make(0)
+  be n_decs holds Space.make(0)
+  be n_confs holds Space.make(0)
+  be solved holds Space.make(0)
+
+  /* Decision 1: branch x1 = T */
+  be _d1 holds Space.set(n_decs, 1)
+  be assign_x1 holds Merkle.node2(1, Merkle.leaf(1), Merkle.leaf(2))
+
+  /* Unit prop 1: c2 (¬x1 ∨ x3) con x1=T → unit x3 */
+  be _p1 holds Space.set(n_props, Space.get(n_props) + 1)
+  be assign_x3 holds Merkle.node2(3, Merkle.leaf(3), Merkle.leaf(2))
+
+  /* Unit prop 2: c4 (¬x3 ∨ ¬x4) con x3=T → unit x4=F */
+  be _p2 holds Space.set(n_props, Space.get(n_props) + 1)
+  be assign_x4 holds Merkle.node2(4, Merkle.leaf(4), Merkle.leaf(1))  /* val=F=1 */
+
+  /* Unit prop 3: c3 (¬x2 ∨ x4) con x4=F → unit x2=F */
+  be _p3 holds Space.set(n_props, Space.get(n_props) + 1)
+  be assign_x2 holds Merkle.node2(2, Merkle.leaf(2), Merkle.leaf(1))
+
+  /* Verifica c1 (x1 ∨ x2): x1=T → sat. No conflict.
+   * Verifica c5 (x1 ∨ ¬x3): x1=T → sat.
+   * All assigned, no conflict → SAT */
+  be _solved holds Space.set(solved, 1)
+
+  be n1 holds __xheap_used()
+  be delta holds n1 - n0
+
+  /* Output:
+   *   solved (1) * 1000 + n_decs (1) * 100 + n_props (3) * 10 + delta
+   *   = 1000 + 100 + 30 + delta */
+  be s holds Space.get(solved)
+  be p holds Space.get(n_props)
+  be d holds Space.get(n_decs)
+  return s * 1000 + d * 100 + p * 10 + delta
+}

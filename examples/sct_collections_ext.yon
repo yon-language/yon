@@ -1,0 +1,15 @@
+/* Set.union / Set.intersect. A={1,2,3}, B={2,3,4}.
+ * union size=4, intersect size=2 -> 4*10+2 = 42. */
+fun main(): number {
+  be a0 holds HashSet.empty()
+  be a1 holds HashSet.add(a0, 1)
+  be a2 holds HashSet.add(a1, 2)
+  be a3 holds HashSet.add(a2, 3)
+  be b0 holds HashSet.empty()
+  be b1 holds HashSet.add(b0, 2)
+  be b2 holds HashSet.add(b1, 3)
+  be b3 holds HashSet.add(b2, 4)
+  be u holds HashSet.union(a3, b3)
+  be i holds HashSet.intersect(a3, b3)
+  return HashSet.size(u) * 10 + HashSet.size(i)
+}

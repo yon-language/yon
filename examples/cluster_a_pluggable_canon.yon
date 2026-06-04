@@ -1,0 +1,57 @@
+/* Cluster A esteso — Pluggable canonicalizer (turno 33 part 7).
+ *
+ * Stesso input keys, 6 canonicalizer diversi → 6 collapse pattern diversi.
+ *
+ * Input: 8 chiavi consecutive {100..107}
+ *   canon 0 (identity): tutte distinte → 8 entries
+ *   canon 5 (popcount): popcount(100)=3, popcount(101)=4, ... → variabile
+ *   canon 6 (mod_8):    100 mod 8 = 4, 101 mod 8 = 5, ... → 8 entries (consecutive)
+ *
+ * Test focalizzato su canon_id 5 (popcount): chiavi 100..107 hanno popcount
+ * 3,4,4,5,4,5,5,6 = 4 valori distinti {3,4,5,6} → 4 entries. */
+
+fun main(): number {
+  /* canon_id 0 = identity */
+  be m_id holds HashMap.empty()
+  be m_id_1 holds HashMap.orbital_set_with(m_id, 100, 1, 0)
+  be m_id_2 holds HashMap.orbital_set_with(m_id_1, 101, 1, 0)
+  be m_id_3 holds HashMap.orbital_set_with(m_id_2, 102, 1, 0)
+  be m_id_4 holds HashMap.orbital_set_with(m_id_3, 103, 1, 0)
+  be m_id_5 holds HashMap.orbital_set_with(m_id_4, 104, 1, 0)
+  be m_id_6 holds HashMap.orbital_set_with(m_id_5, 105, 1, 0)
+  be m_id_7 holds HashMap.orbital_set_with(m_id_6, 106, 1, 0)
+  be m_id_8 holds HashMap.orbital_set_with(m_id_7, 107, 1, 0)
+  be size_identity holds HashMap.size(m_id_8)   /* expected 8 */
+
+  /* canon_id 5 = popcount */
+  be m_pc holds HashMap.empty()
+  be m_pc_1 holds HashMap.orbital_set_with(m_pc, 100, 1, 5)
+  be m_pc_2 holds HashMap.orbital_set_with(m_pc_1, 101, 1, 5)
+  be m_pc_3 holds HashMap.orbital_set_with(m_pc_2, 102, 1, 5)
+  be m_pc_4 holds HashMap.orbital_set_with(m_pc_3, 103, 1, 5)
+  be m_pc_5 holds HashMap.orbital_set_with(m_pc_4, 104, 1, 5)
+  be m_pc_6 holds HashMap.orbital_set_with(m_pc_5, 105, 1, 5)
+  be m_pc_7 holds HashMap.orbital_set_with(m_pc_6, 106, 1, 5)
+  be m_pc_8 holds HashMap.orbital_set_with(m_pc_7, 107, 1, 5)
+  be size_popcount holds HashMap.size(m_pc_8)   /* expected 4 (popcount values 3,4,5,6) */
+
+  /* canon_id 6 = mod_8 */
+  be m_m8 holds HashMap.empty()
+  be m_m8_1 holds HashMap.orbital_set_with(m_m8, 100, 1, 6)
+  be m_m8_2 holds HashMap.orbital_set_with(m_m8_1, 101, 1, 6)
+  be m_m8_3 holds HashMap.orbital_set_with(m_m8_2, 102, 1, 6)
+  be m_m8_4 holds HashMap.orbital_set_with(m_m8_3, 103, 1, 6)
+  be m_m8_5 holds HashMap.orbital_set_with(m_m8_4, 104, 1, 6)
+  be m_m8_6 holds HashMap.orbital_set_with(m_m8_5, 105, 1, 6)
+  be m_m8_7 holds HashMap.orbital_set_with(m_m8_6, 106, 1, 6)
+  be m_m8_8 holds HashMap.orbital_set_with(m_m8_7, 107, 1, 6)
+  be size_mod8 holds HashMap.size(m_m8_8)   /* expected 8 (consecutive mod 8 → 8) */
+
+  be _io1 holds IO.print_num(size_identity)
+  be _io2 holds IO.print_num(size_popcount)
+  be _io3 holds IO.print_num(size_mod8)
+
+  /* Output: size_identity*100 + size_popcount*10 + size_mod8
+   * Expected: 8*100 + 4*10 + 8 = 848 mod 256 = 80 */
+  return size_identity * 100 + size_popcount * 10 + size_mod8
+}

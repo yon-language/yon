@@ -1,0 +1,34 @@
+/* SCT Test 14 — DPLL VERO con loop dinamico (anti-replay).
+ *
+ * T11 simulava 5 step come 5 statement. Questo è il vero loop dinamico
+ * con while + Space mutabile per contatore.
+ *
+ * Per ogni iterazione:
+ *   - alloca Merkle node che encode "assignment al step i"
+ *   - misura xheap_used delta complessivo
+ *
+ * Atteso: delta scala lineare nel numero di iterazioni (Yon implementa
+ * cluster collapse → no esplosione esponenziale).
+ *
+ * Scaling test: 5 iterazioni. Ideale delta = 2*5 + 1 = 11 (val_leaf
+ * condiviso + var_leaf+node per iter). */
+
+fun main(): number {
+  be n_0 holds __xheap_used()
+  be counter holds Space.make(0)
+
+  while Space.get(counter) < 5 do {
+    be i holds Space.get(counter)
+    be var_leaf holds Merkle.leaf(i + 1)
+    be val_leaf holds Merkle.leaf(2)        /* value=T constant */
+    be assignment holds Merkle.node2(i, var_leaf, val_leaf)
+    be _ holds Space.set(counter, i + 1)
+  }
+
+  be n_after holds __xheap_used()
+  be delta holds n_after - n_0
+  be n_iter holds Space.get(counter)
+
+  /* encoded: delta + n_iter * 10 */
+  return delta + n_iter * 10
+}

@@ -1,0 +1,74 @@
+/* SCT Test 32 — Theorem 15a (Reachability Product, §25.1) (turno 33 part 6).
+ *
+ * Paper §25.1: |R| = ∏_i (1 + o_i)
+ *
+ * Verifico empiricamente per pattern {1, 2, 4, 8}:
+ *   R_0 = {0}, |R_0| = 1
+ *   R_1 = {0, 1}, |R_1| = 2, o_1 = (2-1)/(1+1) = 0.5
+ *   R_2 = {0, 1, 2, 3}, |R_2| = 4, o_2 = (4-2)/(1+2) = 0.667
+ *   R_3 = {0,1,2,3,4,5,6,7}, |R_3| = 8, o_3 = (8-4)/(1+4) = 0.8
+ *   R_4 = {0..15}, |R_4| = 16, o_4 = (16-8)/(1+8) = 0.889
+ *
+ * Predizione: |R_4| = (1+0.5)(1+0.667)(1+0.8)(1+0.889) = 1.5 * 1.667 * 1.8 * 1.889 = ~8.5
+ * In realtà R_4 = 16, ma il prodotto = (|R_i|+1)/(|R_{i-1}|+1) ⇒ telescoping → (16+1)/(0+1) = 17
+ *
+ * Test: misuro empirico |R_4| via HashSet, calcolo prodotto, confronto. */
+
+fun main(): number {
+  /* R_0 */
+  be r0 holds HashSet.empty()
+  be r0i holds HashSet.add(r0, 0)
+
+  /* Add 1 */
+  be r1 holds HashSet.add(r0i, 1)
+  be s1 holds HashSet.size(r1)   /* = 2 */
+
+  /* Add 2 → also adds 1+2 = 3 */
+  be r2a holds HashSet.add(r1, 2)
+  be r2b holds HashSet.add(r2a, 3)
+  be s2 holds HashSet.size(r2b)  /* = 4 */
+
+  /* Add 4 → adds 4, 5, 6, 7 */
+  be r3a holds HashSet.add(r2b, 4)
+  be r3b holds HashSet.add(r3a, 5)
+  be r3c holds HashSet.add(r3b, 6)
+  be r3d holds HashSet.add(r3c, 7)
+  be s3 holds HashSet.size(r3d)  /* = 8 */
+
+  /* Add 8 → adds 8..15 */
+  be r4a holds HashSet.add(r3d, 8)
+  be r4b holds HashSet.add(r4a, 9)
+  be r4c holds HashSet.add(r4b, 10)
+  be r4d holds HashSet.add(r4c, 11)
+  be r4e holds HashSet.add(r4d, 12)
+  be r4f holds HashSet.add(r4e, 13)
+  be r4g holds HashSet.add(r4f, 14)
+  be r4h holds HashSet.add(r4g, 15)
+  be s4 holds HashSet.size(r4h)  /* = 16 */
+
+  /* Misuro o_i */
+  be o1 holds (s1 - 1) / (1 + 1)
+  be o2 holds (s2 - s1) / (1 + s1)
+  be o3 holds (s3 - s2) / (1 + s2)
+  be o4 holds (s4 - s3) / (1 + s3)
+
+  /* Product (1+o_1)*(1+o_2)*(1+o_3)*(1+o_4) */
+  be p1 holds 1 + o1
+  be p2 holds 1 + o2
+  be p3 holds 1 + o3
+  be p4 holds 1 + o4
+  be prod holds p1 * p2 * p3 * p4
+
+  /* Telescopic identity: (1+|R_G|) / (1+|R_0|) = prod */
+  be tel_lhs holds (1 + s4) / (1 + 1)  /* (1+16) / (1+1) = 8.5 */
+
+  be _io1 holds IO.print_num(s4)
+  be _io2 holds IO.print_num(prod)
+  be _io3 holds IO.print_num(tel_lhs)
+
+  /* Both should equal each other (telescopic identity §25.1):
+   * prod = (1+0.5)(1+0.667)(1+0.8)(1+0.889) = 8.5 */
+  be match_telescopic holds if Math.abs(prod - tel_lhs) < 0.1 then 1 else 0
+
+  return match_telescopic * 100 + s4   /* expected 100+16 = 116 */
+}

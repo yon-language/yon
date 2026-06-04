@@ -1,0 +1,5 @@
+fun do_emit(s: String): unit visits Output { return Output.print(s) }
+fun caller(s: String): unit visits Output {
+  return do_emit(s)
+}
+fun main(): number { return 0 }

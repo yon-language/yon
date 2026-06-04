@@ -1,0 +1,20 @@
+{
+  "name": "yon-lsp",
+  "displayName": "Yon Language Support",
+  "description": "Diagnostics in tempo reale per il linguaggio Yon",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages"],
+  "activationEvents": ["onLanguage:yon"],
+  "main": "./client.js",
+  "contributes": {
+    "languages": [{
+      "id": "yon",
+      "extensions": [".yon"],
+      "aliases": ["Yon"]
+    }]
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.0"
+  }
+}

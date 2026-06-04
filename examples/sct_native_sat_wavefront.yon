@@ -1,0 +1,59 @@
+/* SCT — SAT wavefront NATIVO Yon su SATLIB UF20 (part 17, 2026-05-30).
+ *
+ * Dual structure (allocatore Leech xheap):
+ *   R_raw: stati raw per iter
+ *   R_canon: canon S_n via xheap content-addressed slot
+ *
+ * Skip nullo (s|a == s) come C runtime. */
+
+fun dual_add(R_raw: Space, R_canon: Space, new_raw: number): number {
+  be was_new holds HashSet.try_add_canon_sn(Space.get(R_canon), new_raw)
+  when was_new > 0 {
+    be _r holds Space.set(R_raw, HashSet.add(Space.get(R_raw), new_raw))
+  }
+  return 0
+}
+
+fun apply_axiom_to_fact(R_raw: Space, R_canon: Space, clause: number, f: number): number {
+  be new_raw holds Bits.bor_64(f, clause)
+  when new_raw > f {
+    be _ holds dual_add(R_raw, R_canon, new_raw)
+  }
+  return 0
+}
+
+fun wavefront_step(R_raw: Space, R_canon: Space, clause: number): number {
+  be _ holds HashSet.to_stream(Space.get(R_raw)).fold(0, fun(a: number, f: number) =>
+    apply_axiom_to_fact(R_raw, R_canon, clause, f))
+  return 0
+}
+
+fun wavefront_run(R_raw: Space, R_canon: Space, G: number): number {
+  be _ holds Seq.range(G).fold(0, fun(a: number, i: number) =>
+    wavefront_step(R_raw, R_canon, DIMACS.clause(i)))
+  return HashSet.size(Space.get(R_canon))
+}
+
+fun main(): number {
+  be _ok holds DIMACS.uf20_load(1)
+  be n holds DIMACS.n_vars(0)
+  be G holds DIMACS.G(0)
+  be _pn holds IO.print_num(n)
+  be _pg holds IO.print_num(G)
+
+  be rr0 holds HashSet.empty()
+  be rr1 holds HashSet.add(rr0, 0)
+  be R_raw holds Space.make(rr1)
+  
+  be rc0 holds HashSet.empty()
+  be R_canon holds Space.make(rc0)
+  be _init holds dual_add(R_raw, R_canon, 0)
+  
+  be final_R holds wavefront_run(R_raw, R_canon, G)
+  be raw_size holds HashSet.size(Space.get(R_raw))
+  be canon_size holds HashSet.size(Space.get(R_canon))
+  be _pf holds IO.print_num(raw_size)
+  be _pc holds IO.print_num(canon_size)
+  
+  return canon_size
+}

@@ -1,0 +1,21 @@
+/* System logger demo — logger built in Yon on the Output effect, with a main
+ * that exercises the three levels. Levels: 0=INFO 1=WARN 2=ERROR. */
+
+fun log_at(level: number, msg: String): unit visits Output {
+  be ts holds Time.now_ms(0)
+  be ts_str holds String.from_int(ts)
+  be lvl_str holds String.from_int(level)
+  be line holds String.concat(String.concat(lvl_str, ts_str), msg)
+  return Output.print(line)
+}
+
+fun log_info(msg: String): unit visits Output { return log_at(0, msg) }
+fun log_warn(msg: String): unit visits Output { return log_at(1, msg) }
+fun log_error(msg: String): unit visits Output { return log_at(2, msg) }
+
+fun main(): number visits Output {
+  be _a holds log_info(String.from_int(100))
+  be _b holds log_warn(String.from_int(200))
+  be _c holds log_error(String.from_int(300))
+  return 0
+}

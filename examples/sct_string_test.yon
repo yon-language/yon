@@ -1,0 +1,7 @@
+/* String: from_int, concat, length, char_at. */
+fun main(): number {
+  be a holds String.from_int(123)
+  be b holds String.from_int(45)
+  be ab holds String.concat(a, b)
+  return String.length(ab)
+}

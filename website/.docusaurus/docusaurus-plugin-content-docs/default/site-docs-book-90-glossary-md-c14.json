@@ -1,0 +1,28 @@
+{
+  "id": "book/glossary",
+  "title": "Appendix A. Glossary",
+  "description": "One sentence each. Left what it means in Yon, with the",
+  "source": "@site/docs/book/90-glossary.md",
+  "sourceDirName": "book",
+  "slug": "/book/glossary",
+  "permalink": "/book/glossary",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 90,
+  "frontMatter": {
+    "id": "glossary",
+    "title": "Appendix A. Glossary",
+    "sidebar_position": 90
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "20. Tooling",
+    "permalink": "/book/tooling"
+  },
+  "next": {
+    "title": "Appendix B. The limits of 1.0",
+    "permalink": "/book/limits"
+  }
+}

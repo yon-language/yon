@@ -1,0 +1,28 @@
+{
+  "id": "book/coming-from",
+  "title": "Appendix C. Yon, for those coming from elsewhere",
+  "description": "Calibrated comparisons. Where a rival is more mature, this page says so.",
+  "source": "@site/docs/book/92-coming-from.md",
+  "sourceDirName": "book",
+  "slug": "/book/coming-from",
+  "permalink": "/book/coming-from",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 92,
+  "frontMatter": {
+    "id": "coming-from",
+    "title": "Appendix C. Yon, for those coming from elsewhere",
+    "sidebar_position": 92
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "Appendix B. The limits of 1.0",
+    "permalink": "/book/limits"
+  },
+  "next": {
+    "title": "Appendix D. Benchmarks",
+    "permalink": "/book/benchmarks"
+  }
+}

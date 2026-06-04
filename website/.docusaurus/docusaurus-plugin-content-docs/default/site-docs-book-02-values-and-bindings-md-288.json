@@ -1,0 +1,28 @@
+{
+  "id": "book/values-and-bindings",
+  "title": "2. Values and bindings",
+  "description": "This program exits with 62 and prints ciao mondo. Walking through it:",
+  "source": "@site/docs/book/02-values-and-bindings.md",
+  "sourceDirName": "book",
+  "slug": "/book/values-and-bindings",
+  "permalink": "/book/values-and-bindings",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 2,
+  "frontMatter": {
+    "id": "values-and-bindings",
+    "title": "2. Values and bindings",
+    "sidebar_position": 2
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "1. Hello, world",
+    "permalink": "/book/hello-world"
+  },
+  "next": {
+    "title": "3. Control flow and mutation",
+    "permalink": "/book/control-flow"
+  }
+}

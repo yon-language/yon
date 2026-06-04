@@ -1,0 +1,28 @@
+{
+  "id": "book/control-flow",
+  "title": "3. Control flow and mutation",
+  "description": "becomes is the one mutation. A binding that is ever the target of",
+  "source": "@site/docs/book/03-control-flow.md",
+  "sourceDirName": "book",
+  "slug": "/book/control-flow",
+  "permalink": "/book/control-flow",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 3,
+  "frontMatter": {
+    "id": "control-flow",
+    "title": "3. Control flow and mutation",
+    "sidebar_position": 3
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "2. Values and bindings",
+    "permalink": "/book/values-and-bindings"
+  },
+  "next": {
+    "title": "4. Functions and effects",
+    "permalink": "/book/functions-and-effects"
+  }
+}

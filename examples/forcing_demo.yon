@@ -1,0 +1,9 @@
+world Net { Code is X }
+place NodeA in Net { value number }
+fun guard(): number {
+  forces NodeA value is number {
+    return 1
+  }
+  return 0
+}
+fun main(): number { return 0 }

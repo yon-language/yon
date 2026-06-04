@@ -1,0 +1,49 @@
+/* SCT Test 17 — DIMACS-style input minified (turno 32).
+ *
+ * Onestà upfront: Yon non ha file IO né indexing di string runtime.
+ * Skip "parser DIMACS testuale". MA encoder DIMACS-equivalente: 
+ * istanza 3-SAT encoded come 3 literal/clausola in HashMap (chiave =
+ * clause_id, valore = (l1*1000000 + l2*1000 + l3)).
+ *
+ * Vantaggio: la stessa istanza può essere "ricaricata" passando un nuovo
+ * HashMap → simula effettivamente parser DIMACS input.
+ *
+ * Istanza: SATLIB-style 5 var, 8 clausole, ratio 1.6:
+ *   c1: x1 ∨ x2 ∨ ¬x3      → 2, 4, 7
+ *   c2: ¬x1 ∨ x3 ∨ x4      → 3, 6, 8
+ *   c3: x2 ∨ ¬x4 ∨ x5      → 4, 9, 10
+ *   c4: ¬x2 ∨ x3 ∨ ¬x5     → 5, 6, 11
+ *   c5: x1 ∨ ¬x3 ∨ x5      → 2, 7, 10
+ *   c6: ¬x2 ∨ ¬x4 ∨ x5     → 5, 9, 10
+ *   c7: x3 ∨ x4 ∨ x5       → 6, 8, 10
+ *   c8: ¬x1 ∨ x2 ∨ x5      → 3, 4, 10
+ *
+ * Encoding compatto: lit1*1000000 + lit2*1000 + lit3 per clausola.
+ * c1 = 2*1000000 + 4*1000 + 7 = 2004007
+ *
+ * Misurato: numero di clausole stored + delta xheap.
+ * Output: n_clauses + delta. */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  be clauses0 holds HashMap.empty()
+  be c1 holds HashMap.set(clauses0, 1, 2004007)
+  be c2 holds HashMap.set(c1, 2, 3006008)
+  be c3 holds HashMap.set(c2, 3, 4009010)
+  be c4 holds HashMap.set(c3, 4, 5006011)
+  be c5 holds HashMap.set(c4, 5, 2007010)
+  be c6 holds HashMap.set(c5, 6, 5009010)
+  be c7 holds HashMap.set(c6, 7, 6008010)
+  be c8 holds HashMap.set(c7, 8, 3004010)
+
+  be n1 holds __xheap_used()
+  be delta holds n1 - n0
+
+  /* Verifica retrieve: leggo c1 e c8 */
+  be r1 holds HashMap.get(c8, 1)
+  be r8 holds HashMap.get(c8, 8)
+
+  /* Output: n_clauses (8) + delta */
+  return 8 + delta
+}

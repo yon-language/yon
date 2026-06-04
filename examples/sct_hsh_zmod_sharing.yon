@@ -1,0 +1,16 @@
+/* HSH su monoide finito Z_12 — il Merkle-sharing scatta dal linguaggio.
+ * Assiomi {3,4,6,8,9} saturano il sottogruppo (gcd=1 -> tutto Z_12),
+ * poi 2 step ridondanti {3,4} non aggiungono stati -> delta=0 -> root condivisa.
+ * shared_levels atteso > 0. return = shared (exit code). */
+fun main(): number {
+  be s0 holds HSH.empty_mod(0, 12)
+  be s1 holds HSH.step(s0, 3, 12)
+  be s2 holds HSH.step(s1, 4, 12)
+  be s3 holds HSH.step(s2, 6, 12)
+  be s4 holds HSH.step(s3, 8, 12)
+  be s5 holds HSH.step(s4, 9, 12)
+  be s6 holds HSH.step(s5, 3, 12)
+  be s7 holds HSH.step(s6, 4, 12)
+  be shared holds HSH.shared_levels(s7)
+  return shared
+}

@@ -1,0 +1,55 @@
+/* SCT Test 21 — M_24 + ξ Conway orbit canonicalization (turno 33).
+ *
+ * Tre verifiche empiriche:
+ *
+ * (1) M_24 weight-based orbits:
+ *   - v=0 (peso 0) → orbit 0
+ *   - v=255=0x0000FF (codeword, peso 8) → orbit (8<<8)|0 = 2048
+ *   - v=0xFFFF00 (codeword, peso 16) → orbit (16<<8)|0 = 4096
+ *   - v=0xFFFFFF (all-ones, peso 24) → orbit (24<<8)|0 = 6144
+ *   Tutti DIVERSI → 4 slot xheap distinti per m24_orbit calls.
+ *
+ * (2) ξ Conway ordine 3 (NON involuzione):
+ *   ξ ha ordine 3 in Co_0. Verifico:
+ *     v0 = 0x1000 (g=1, c=0 in Leech2 format)
+ *     v1 = ξ(v0)
+ *     v2 = ξ(v1)
+ *     v3 = ξ(v2)  → DEVE essere == v0
+ *   xi_inv_check = 1 se ξ³(v0) == v0
+ *
+ * (3) Co_0 step canonical:
+ *   Per v0 = 0x1000, applichiamo co0_step.
+ *   Per v1 = ξ(v0), applichiamo co0_step.
+ *   Devono ritornare LO STESSO slot (sono nella stessa orbita <ξ>·M_24).
+ *
+ * Output encoded:
+ *   m24_collapse_count (4 distinct slots) + xi_inv (1) * 10 + co0_collapse (1) * 100
+ *   = 4 + 10 + 100 = 114 */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  /* (1) M_24 orbits */
+  be o_0 holds Leech.m24_orbit(0)
+  be o_255 holds Leech.m24_orbit(255)
+  be o_16 holds Leech.m24_orbit(16776960)   /* 0xFFFF00 */
+  be o_24 holds Leech.m24_orbit(16777215)   /* 0xFFFFFF */
+  be n1 holds __xheap_used()
+  be m24_distinct holds n1 - n0  /* expected: 4 slot distinti */
+
+  /* (2) ξ ordine 3 verify */
+  be v0 holds 4096   /* 0x1000 = (gcode_idx=1, cocode=0) in Leech2 */
+  be v1 holds Leech.xi_apply(v0)
+  be v2 holds Leech.xi_apply(v1)
+  be v3 holds Leech.xi_apply(v2)
+  be xi_order3 holds if v3 == v0 then 1 else 0
+
+  /* (3) Co_0 step collapse: v0 e ξ(v0) stessa orbita <ξ>·M_24 */
+  be co0_v0 holds Leech.co0_step(v0)
+  be co0_v1 holds Leech.co0_step(v1)
+  be co0_v2 holds Leech.co0_step(v2)
+  be co0_collapse_01 holds if co0_v0 == co0_v1 then 1 else 0
+  be co0_collapse_02 holds if co0_v0 == co0_v2 then 1 else 0
+
+  return m24_distinct + xi_order3 * 10 + co0_collapse_01 * 100 + co0_collapse_02 * 1000
+}

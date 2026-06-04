@@ -1,0 +1,512 @@
+(* tyenv.ml — type environment for the Yon type checker.
+ *
+ * Tracks term variables, place/world/reduction/fun declarations, and
+ * operation signatures. Functional (persistent): extension does not
+ * mutate the original env.
+ *
+ * Used by both the Cubical and CATT_R_Yon fragments through the
+ * dispatcher. Type variables for the cubical layer are tracked as
+ * separate "interval variables" since they live in a different
+ * sort (the interval I).
+ *)
+
+open Surface_ast
+
+(* ─── Cubical interval variables ───────────────────────────────────── *)
+
+type interval_var = string
+
+(* ─── Function signatures ──────────────────────────────────────────── *)
+
+type fun_sig = {
+  fs_params : (string * ty) list;
+  fs_return : ty;
+  fs_visits : string list;
+  fs_partial : bool;
+}
+
+(* ─── Operation signatures ─────────────────────────────────────────── *)
+
+type op_sig = {
+  os_place : string;
+  os_op_name : string;
+  os_params : (string * ty) list;
+  os_return : ty;
+}
+
+(* ─── The environment ──────────────────────────────────────────────── *)
+
+type env = {
+  vars : (string * ty) list;
+  intervals : interval_var list;
+  places : (string * place_decl) list;
+  worlds : (string * world_decl) list;
+  reductions : (string * reduction_decl) list;
+  funs : (string * fun_sig) list;
+  ops : (string * op_sig) list;
+  current_effects : string list;
+  active_handlers : string list;
+  (* For each variable bound via `let x holds new P in EU { ... }`, track its
+   * explicit space. Variables created with `new P { ... }` (without `in`) and
+   * function parameters have no entry (implicitly "in __Default", or passed
+   * cross-space as opaque).
+   *
+   * Space-locality rule: `x.field` where x has an explicit entry fails with
+   * [TOPOS-E1110] cross-space field access. The only way to read a foreign
+   * section is to pass it to apply_move, which transports it into the current
+   * space via a geometric morphism. *)
+  var_spaces : (string * string) list;
+  (* The spaces declared in the program, filled by register_decl. Used to
+     validate the binding `topos T at S`. *)
+  declared_spaces : string list;
+  (* The morphisms declared in the program, filled by register_decl. Used to
+     validate `nat_transform Name from F to G { ... }`, where F and G must be
+     existing morphisms. *)
+  declared_morphs : string list;
+  (* The full morph_decls, so we can read mp_source/mp_target while validating
+     a nat_transform. *)
+  morph_decls : (string * morph_decl) list;
+  (* view_decls, for looking up a view name to its vw_of (the place). *)
+  view_decls : (string * view_decl) list;
+  (* topos_decls for topos-name -> tp_objects lookup, used to derive the target
+   * place of m(x) when m: TyMorphHandle. *)
+  topos_decls : (string * topos_decl) list;
+}
+
+let empty : env = {
+  vars = [];
+  intervals = [];
+  places = [];
+  worlds = [];
+  reductions = [];
+  funs = [];
+  ops = [];
+  current_effects = [];
+  active_handlers = [];
+  var_spaces = [];
+  declared_spaces = [];
+  declared_morphs = [];
+  morph_decls = [];
+  view_decls = [];
+  topos_decls = [];
+}
+
+let lookup_var (env : env) (x : string) : ty option =
+  List.assoc_opt x env.vars
+
+let lookup_place (env : env) (name : string) : place_decl option =
+  List.assoc_opt name env.places
+
+(* The data fields of a place (dropping ops/cells/laws). Used both for
+   structural subtyping and for recognizing the terminal object. *)
+let place_fields (pd : place_decl) : field_decl list =
+  List.filter_map
+    (function FoField f -> Some f | FoOp _ | FoCell _ | FoLaw _ -> None)
+    pd.pd_members
+
+(* Terminal object 1 (derived, not a primitive): a place with no data fields.
+   Its unique inhabitant is the empty tuple `()`; for every place A there is a
+   unique map `!_A : A -> 1`. We recognize 1 by its shape (zero fields) rather
+   than adding a TyUnit former, keeping the core AST untouched. *)
+let place_is_terminal (pd : place_decl) : bool =
+  place_fields pd = []
+
+(* Is the named place the terminal object of its world? *)
+let name_is_terminal (env : env) (name : string) : bool =
+  match lookup_place env name with
+  | Some pd -> place_is_terminal pd
+  | None -> false
+
+(* ─── Place subtyping (row polymorphism) ─────────────────────────── *)
+
+(* Structural width subtyping for places (rows):
+ *   p_sub  <:_w  p_super
+ *   ⟺   forall (name, ty) in fields(p_super).
+ *          exists (name, ty') in fields(p_sub). ty == ty' (or ty' is "unknown")
+ *
+ * In words: p_sub has at least all the fields of p_super, with
+ * compatible types. p_sub may have additional fields ("row variable").
+ *
+ * Uses a coarse type-equality check (no env/ctx access at this layer)
+ * to avoid importing Tycheck/Dispatcher. Sufficient for nominal +
+ * structural matching of basic types and place references. *)
+
+let simple_ty_compatible (t1 : ty) (t2 : ty) : bool =
+  (* Coarse equality: any "unknown" matches; same constructor + same
+   * name/payload. This is intentionally permissive because the full
+   * structural check happens in Dispatcher.type_equal. *)
+  let is_unknown = function
+    | TyPrim "unknown" | TyUser "unknown" -> true
+    | _ -> false in
+  (* "boolean" and "proposition" are the same semantic object (the Heyting
+   * algebra Omega, the subobject classifier). The name "boolean" survives as a
+   * syntactic alias. Semantically: t : boolean <=> t : proposition. *)
+  let is_omega = function
+    | TyPrim "boolean" | TyPrim "proposition" -> true
+    | _ -> false in
+  (* String fusion (2026-06-03): "text" and "String" are the same semantic
+   * object — sections of the builtin String place (runtime: an xheap handle).
+   * "text" survives as the primitive-family alias. *)
+  let is_text = function
+    | TyPrim "text" | TyUser "String" -> true
+    | _ -> false in
+  if is_unknown t1 || is_unknown t2 then true
+  else if is_omega t1 && is_omega t2 then true
+  else if is_text t1 && is_text t2 then true
+  else
+    match t1, t2 with
+    | TyPrim n1, TyPrim n2 -> n1 = n2
+    | TyPrim n1, TyPrimIn (n2, _) | TyPrimIn (n1, _), TyPrim n2 -> n1 = n2
+    | TyPrim n1, TyUser n2 | TyUser n1, TyPrim n2 -> n1 = n2
+    | TyUser n1, TyUser n2 -> n1 = n2
+    | TyPrimIn (n1, _), TyPrimIn (n2, _) -> n1 = n2
+    | _ -> t1 = t2
+
+(* Depth-aware version: when comparing two TyUser field types, recurse
+ * into place_is_subtype rather than requiring nominal identity. This
+ * realizes width + depth subtyping ("rows with subsumed entries"). *)
+let rec place_field_ty_subtype (env : env) (super_ty : ty) (sub_ty : ty) : bool =
+  if simple_ty_compatible super_ty sub_ty then true
+  else
+    match super_ty, sub_ty with
+    | TyUser n_super, TyUser n_sub ->
+        (* Depth covariance: sub's field can be a more specific place. *)
+        place_is_subtype_depth env n_super n_sub
+    | TyList a, TyList b ->
+        place_field_ty_subtype env a b
+    | TyMap (ka, va), TyMap (kb, vb) ->
+        place_field_ty_subtype env ka kb && place_field_ty_subtype env va vb
+    | _ -> false
+
+and place_is_subtype_depth (env : env) (p_super_name : string) (p_sub_name : string) : bool =
+  if p_super_name = p_sub_name then true
+  else
+    let extract_fields p =
+      List.filter_map
+        (function FoField f -> Some f | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
+        p.pd_members
+    in
+    match lookup_place env p_super_name, lookup_place env p_sub_name with
+    | Some pd_super, Some pd_sub ->
+        let super_fields = extract_fields pd_super in
+        let sub_fields   = extract_fields pd_sub in
+        List.for_all
+          (fun sf ->
+             match List.find_opt (fun f -> f.fd_name = sf.fd_name) sub_fields with
+             | Some f ->
+                 (* Width: same field name found.
+                  * Depth: field's own type may be subtyped recursively. *)
+                 place_field_ty_subtype env sf.fd_ty f.fd_ty
+             | None -> false)
+          super_fields
+    | _ -> false
+
+(* Public entry: use the depth-aware version. *)
+let place_is_subtype = place_is_subtype_depth
+
+let lookup_world (env : env) (name : string) : world_decl option =
+  List.assoc_opt name env.worlds
+
+let lookup_reduction (env : env) (name : string) : reduction_decl option =
+  List.assoc_opt name env.reductions
+
+let lookup_fun (env : env) (name : string) : fun_sig option =
+  List.assoc_opt name env.funs
+
+let lookup_op (env : env) (qualified : string) : op_sig option =
+  List.assoc_opt qualified env.ops
+
+let is_interval_var (env : env) (i : string) : bool =
+  List.mem i env.intervals
+
+let lookup_op_unqualified (env : env) (op_name : string) : op_sig list =
+  List.filter_map
+    (fun (_key, sig_) ->
+       if sig_.os_op_name = op_name then Some sig_ else None)
+    env.ops
+
+let add_var (env : env) (x : string) (t : ty) : env =
+  { env with vars = (x, t) :: env.vars }
+
+let add_vars (env : env) (bindings : (string * ty) list) : env =
+  { env with vars = bindings @ env.vars }
+
+(* Bind a variable together with an explicit originating space. Used by
+   `let x holds new P in EU { ... }`. *)
+let add_var_in_space (env : env) (x : string) (t : ty) (space : string) : env =
+  { env with
+    vars = (x, t) :: env.vars;
+    var_spaces = (x, space) :: env.var_spaces }
+
+(* Look up the explicit space of a variable. None means "implicitly in
+   __Default" or "parameter / return-derived", both treated as
+   local-readable. *)
+let lookup_var_space (env : env) (x : string) : string option =
+  List.assoc_opt x env.var_spaces
+
+let add_interval (env : env) (i : interval_var) : env =
+  { env with intervals = i :: env.intervals }
+
+let add_place (env : env) (pd : place_decl) : env =
+  let env = { env with places = (pd.pd_name, pd) :: env.places } in
+  (* If an operation of the place instantiates a catalog algebra (op_algebra),
+   * register the function <P>_instantiate : () -> Magma. This is the function
+   * the MagmaSolve pass generates; the type checker must know it because
+   * `solve P` calls it. *)
+  let has_algebra =
+    List.exists (function FoOp o -> o.op_algebra <> None | _ -> false) pd.pd_members
+  in
+  let env =
+    if has_algebra then
+      { env with funs =
+          (pd.pd_name ^ "_instantiate",
+           { fs_params = []; fs_return = TyUser "Magma"; fs_visits = []; fs_partial = false })
+          :: env.funs }
+    else env
+  in
+  List.fold_left
+    (fun env fo ->
+       match fo with
+       | FoOp op ->
+           let key = pd.pd_name ^ "__" ^ op.op_name in
+           let sig_ = {
+             os_place = pd.pd_name;
+             os_op_name = op.op_name;
+             os_params = List.map (fun p -> (p.param_name, p.param_ty))
+                                  op.op_params;
+             os_return = (match op.op_return with
+                          | Some t -> t
+                          | None -> TyPrim "unit");
+           } in
+           { env with ops = (key, sig_) :: env.ops }
+       | FoField _ -> env
+       | FoCell _ -> env
+       | FoLaw _ -> env)
+    env pd.pd_members
+
+let add_world (env : env) (wd : world_decl) : env =
+  { env with worlds = (wd.wd_name, wd) :: env.worlds }
+
+let add_reduction (env : env) (rd : reduction_decl) : env =
+  { env with reductions = (rd.rd_name, rd) :: env.reductions }
+
+(* *)
+let add_view (env : env) (vd : view_decl) : env =
+  { env with view_decls = (vd.vw_name, vd) :: env.view_decls }
+
+let lookup_view (env : env) (name : string) : view_decl option =
+  List.assoc_opt name env.view_decls
+
+let lookup_morph_decl (env : env) (name : string) : morph_decl option =
+  List.assoc_opt name env.morph_decls
+
+(* *)
+let add_topos (env : env) (td : topos_decl) : env =
+  { env with topos_decls = (td.tp_name, td) :: env.topos_decls }
+
+let lookup_topos (env : env) (name : string) : topos_decl option =
+  List.assoc_opt name env.topos_decls
+
+(* Find the first place inside a topos. Used to derive the target place of
+ * m(x) when m : morph from S1 to S2 (target topos S2). *)
+let first_place_in_topos (env : env) (topos_name : string) : place_decl option =
+  match lookup_topos env topos_name with
+  | Some td ->
+      (match td.tp_objects with
+       | pd :: _ -> Some pd
+       | [] -> None)
+  | None -> None
+
+(* Multi-place lookup.
+ * For a morph from S1 to S2 with src: SourcePlace, find the target place
+ * inside S2 whose on_object accepts SourcePlace as a param.
+ *
+ * Find a match via the registered morph_decls: for each morph of the topos
+ * (source = S1, target = S2), the mp_on_object indicates how a specific source
+ * place maps to a specific target place.
+ *
+ * Fallback: if no specific morph matches, the first place of the target. *)
+let find_target_place_for_source
+    (env : env) (source_topos : string) (target_topos : string)
+    (source_place : string) : place_decl option =
+  let matching_morphs = List.filter_map (fun (_, mp) ->
+    if mp.mp_source = source_topos && mp.mp_target = target_topos then
+      (* Find on_object with a first parameter of type SourcePlace *)
+      match mp.mp_on_object with
+      | Some fd ->
+          (match fd.fn_params with
+           | { param_ty = TyUser pname; _ } :: _ when pname = source_place ->
+               (match fd.fn_return with
+                | Some (TyUser ret_pname) -> Some ret_pname
+                | _ -> None)
+           | _ -> None)
+      | None -> None
+    else None
+  ) env.morph_decls in
+  match matching_morphs with
+  | ret_pname :: _ -> lookup_place env ret_pname
+  | [] -> first_place_in_topos env target_topos  (* fallback *)
+
+let add_fun (env : env) (name : string) (sig_ : fun_sig) : env =
+  { env with funs = (name, sig_) :: env.funs }
+
+(* Compute the "surface tag" of a type. Two incompatible representations
+ * (TyPrim "number" vs TyUser "number") collapse to the same tag. Used
+ * by the dispatcher to find structural matches. *)
+let rec type_tag (t : ty) : string =
+  match t with
+  | TyPrim n | TyPrimIn (n, _) -> n
+  | TyUser n -> n
+  | TyVar n -> n
+  | TyMetaVar n -> Printf.sprintf "alpha%d" n
+  | TyUniverse n -> Printf.sprintf "Type_%d" n
+  | TyList inner -> "list_" ^ type_tag inner
+  | TyMap (k, v) -> "map_" ^ type_tag k ^ "_" ^ type_tag v
+  | TyStream (inner, _) -> "stream_" ^ type_tag inner
+  | TyPi (_, _, _) -> "Pi"
+  | TySigma (_, _, _) -> "Sigma"
+  | TyId (a, _, _) -> "Id_" ^ type_tag a
+  | TySum _ | TySumIn _ -> "sum"
+  | TyHeytInt n -> "heyt_int_" ^ string_of_int n
+  | TyArrow (a, b) -> "arrow_" ^ type_tag a ^ "_" ^ type_tag b
+  | TyMoveHandle (w1, w2) ->
+      let s = function Some n -> n | None -> "ANY" in
+      "movehandle_" ^ s w1 ^ "_" ^ s w2
+  | TyReductionHandle p ->
+      let s = function Some n -> n | None -> "ANY" in
+      "reductionhandle_" ^ s p
+  | TyMorphHandle (s1, s2) ->
+      let s = function Some n -> n | None -> "ANY" in
+      "morphhandle_" ^ s s1 ^ "_" ^ s s2
+  | TyViewHandle p ->
+      let s = function Some n -> n | None -> "ANY" in
+      "viewhandle_" ^ s p
+
+let set_effects (env : env) (effects : string list) : env =
+  { env with current_effects = effects }
+
+let activate_handler (env : env) (reduction_name : string) : env =
+  { env with active_handlers = reduction_name :: env.active_handlers }
+
+let with_builtins (env : env) : env =
+  let output_op_decl = {
+    op_name = "print";
+    op_params = [{ param_name = "s"; param_ty = TyUser "String" }];
+    op_return = Some (TyPrim "unit");
+    op_functorial = false;
+    op_algebra = None;
+    op_loc = dummy_loc;
+  } in
+  let output_place = {
+    pd_name = "Output";
+    pd_world = "__Builtin";
+    pd_with_effects = true;
+    pd_members = [FoOp output_op_decl];
+    pd_over = None;
+    pd_laws = [];
+    pd_extends = None;
+    pd_is_error = false;
+    pd_on_error = None;
+    pd_loc = dummy_loc;
+  } in
+  let console_reduction = {
+    rd_name = "__Console";
+    rd_of = "Output";
+    rd_multi_shot = false;
+    rd_clauses = [];
+    rd_direction = RdForward;
+    rd_lawful = false;
+    rd_shot_ordering = OrdSequential;
+    rd_type_params = [];
+    rd_invertible = false;
+    rd_fold_name = None;
+    rd_loc = dummy_loc;
+  } in
+  (* Coercion builtins boolean ↔ proposition.
+   * to_prop : boolean -> proposition  (total, canonical injection)
+   * to_bool : proposition -> boolean  (partial: present->true, absent->false,
+   *                                    unknown lifts to indeterminate at runtime) *)
+  let to_prop_sig = {
+    fs_params = [("b", TyPrim "boolean")];
+    fs_return = TyPrim "proposition";
+    fs_visits = [];
+    fs_partial = false;
+  } in
+  let to_bool_sig = {
+    fs_params = [("p", TyPrim "proposition")];
+    fs_return = TyPrim "boolean";
+    fs_visits = [];
+    fs_partial = false;
+  } in
+  (* Decidable. Makes explicit in the type system WHERE the classical boolean
+   * fragment of an intuitionistic logic is used.
+   * decide : proposition -> Decidable   (total on the type; at runtime it fails
+   *          on HUnknown -> the point where the programmer asserts
+   *          decidability, made visible instead of implicit in to_bool).
+   * to_bool_dec : Decidable -> boolean  (total: a Decidable is already decided). *)
+  let decide_sig = {
+    fs_params = [("p", TyPrim "proposition")];
+    fs_return = TyPrim "Decidable";
+    fs_visits = [];
+    fs_partial = false;
+  } in
+  let to_bool_dec_sig = {
+    fs_params = [("d", TyPrim "Decidable")];
+    fs_return = TyPrim "boolean";
+    fs_visits = [];
+    fs_partial = false;
+  } in
+  env
+  |> (fun e -> add_place e output_place)
+  |> (fun e -> add_reduction e console_reduction)
+  |> (fun e -> add_fun e "to_prop" to_prop_sig)
+  |> (fun e -> add_fun e "to_bool" to_bool_sig)
+  |> (fun e -> add_fun e "decide" decide_sig)
+  |> (fun e -> add_fun e "to_bool_dec" to_bool_dec_sig)
+
+let rec ty_to_string (t : ty) : string =
+  match t with
+  | TyPrim n -> n
+  | TyPrimIn (n, ws) -> n ^ " in " ^ String.concat ", " ws
+  | TyUser n -> n
+  | TyVar n -> n
+  | TyMetaVar n -> Printf.sprintf "alpha%d" n
+  | TyUniverse 0 -> "Type"
+  | TyUniverse n -> Printf.sprintf "Type_%d" n
+  | TyPi (x, a, b) ->
+      Printf.sprintf "Pi(%s : %s). %s" x (ty_to_string a) (ty_to_string b)
+  | TySigma (x, a, b) ->
+      Printf.sprintf "Sigma(%s : %s). %s" x (ty_to_string a) (ty_to_string b)
+  | TyId (a, x, y) ->
+      let ts = function TyTermExpr s -> s in
+      Printf.sprintf "Id_%s(%s, %s)" (ty_to_string a) (ts x) (ts y)
+  | TyList inner -> "list of " ^ ty_to_string inner
+  | TyMap (k, v) -> "map of " ^ ty_to_string k ^ " to " ^ ty_to_string v
+  | TyStream (inner, _) -> "stream of " ^ ty_to_string inner
+  | TySum variants ->
+      String.concat " | " (List.map variant_to_string variants)
+  | TySumIn (variants, ws) ->
+      String.concat " | " (List.map variant_to_string variants)
+      ^ " in " ^ String.concat ", " ws
+  | TyHeytInt n -> Printf.sprintf "heyt_int<%d>" n
+  | TyArrow (a, b) -> Printf.sprintf "%s -> %s" (ty_to_string a) (ty_to_string b)
+  | TyMoveHandle (w1, w2) ->
+      let s = function Some n -> n | None -> "?" in
+      Printf.sprintf "move from %s to %s" (s w1) (s w2)
+  | TyReductionHandle p ->
+      let s = function Some n -> n | None -> "?" in
+      Printf.sprintf "reduction of %s" (s p)
+  | TyMorphHandle (s1, s2) ->
+      let s = function Some n -> n | None -> "?" in
+      Printf.sprintf "morph from %s to %s" (s s1) (s s2)
+  | TyViewHandle p ->
+      let s = function Some n -> n | None -> "?" in
+      Printf.sprintf "view of %s" (s p)
+
+and variant_to_string (v : variant) : string =
+  match v.v_args with
+  | [] -> v.v_name
+  | args -> v.v_name ^ "(" ^ String.concat ", " (List.map ty_to_string args) ^ ")"
+
+let loc_to_string (l : location) : string =
+  Printf.sprintf "line %d, col %d" l.start_line l.start_col

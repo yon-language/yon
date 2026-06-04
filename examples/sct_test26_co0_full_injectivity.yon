@@ -1,0 +1,21 @@
+/* SCT Test 26 — Co_0 iniettività ESATTA (turno 33 part 26).
+ * Riscritto: il vecchio usava co0_canonical(v, max_iter=50000) BFS-bounded,
+ * RIMOSSO. Ora canonicalizzazione esatta (reduce_type2).
+ *
+ * Iniettività esatta: v0, ξ(v0), ξ²(v0) nella stessa orbita Co_0 → stesso
+ * canonical. Output: test_xi + test_xi2*10 + 1 (atteso 1+1+10 = 12 se iniettivo). */
+fun main(): number {
+  be v0 holds 8388609
+
+  be can_v0 holds Leech.co0_canonical(v0)
+
+  be v_xi holds Leech.xi_apply(v0)
+  be can_xi holds Leech.co0_canonical(v_xi)
+  be test_xi holds if can_v0 == can_xi then 1 else 0
+
+  be v_xi2 holds Leech.xi_apply(v_xi)
+  be can_xi2 holds Leech.co0_canonical(v_xi2)
+  be test_xi2 holds if can_v0 == can_xi2 then 1 else 0
+
+  return 1 + test_xi * 10 + test_xi2 * 100
+}
