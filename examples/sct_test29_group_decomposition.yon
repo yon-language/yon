@@ -1,0 +1,83 @@
+/* SCT Test 29 — Theorem 5 (Group Decomposition, §12) (turno 33 part 6).
+ *
+ * Paper §12.3: Subset Sum su W con target T equivalente a Bounded Knapsack
+ * sul group decomposition G(W).
+ *
+ * Algoritmo:
+ *   R_0 = {0}
+ *   R_j = { s + k * v_j : s ∈ R_{j-1}, 0 ≤ k ≤ c_j, s + k * v_j ≤ T }
+ *
+ * Test concreto:
+ *   W = {3, 3, 5, 5, 5, 7} (mixed duplicates)
+ *   Group decomposition: G(W) = {(3, 2), (5, 3), (7, 1)}
+ *   g = 3 groups, n = 6 weights
+ *
+ *   Target T = 12. Achievable: 5 + 7 = 12 ✓
+ *
+ * Misuro:
+ *   - |R_max|: max sums reached at any step
+ *   - achievable: 1 se T trovato, 0 altrimenti
+ *
+ * Implementazione: uso HashSet per R_j, espando per ogni group sequentially. */
+
+fun main(): number {
+  be target holds 12
+  be n_groups holds 3
+  /* group 0: value=3, copies=2 */
+  /* group 1: value=5, copies=3 */
+  /* group 2: value=7, copies=1 */
+
+  /* R_0 = {0} */
+  be r0 holds HashSet.empty()
+  be r0_init holds HashSet.add(r0, 0)
+  be cur_R holds Space.make(r0_init)
+  be R_max holds Space.make(1)
+
+  /* Group 0 expansion: v=3, c=2 → multiples {0, 3, 6} */
+  be R_after_g0 holds HashSet.empty()
+  be R_after_g0_a holds HashSet.add(R_after_g0, 0)
+  be R_after_g0_b holds HashSet.add(R_after_g0_a, 3)
+  be R_after_g0_c holds HashSet.add(R_after_g0_b, 6)
+  be size_after_g0 holds HashSet.size(R_after_g0_c)
+  when size_after_g0 > Space.get(R_max) { be _aa holds Space.set(R_max, size_after_g0) }
+
+  /* Group 1 expansion: v=5, c=3 → from each s in R_after_g0, add 0/1/2/3 × 5
+   * {0,3,6} expanded by {0,5,10,15} = {0,3,5,6,8,10,11,13,15,16,18,21} but ≤ T=12 */
+  be R_g1 holds HashSet.empty()
+  be R_g1_00 holds HashSet.add(R_g1, 0)       /* 0+0 */
+  be R_g1_01 holds HashSet.add(R_g1_00, 5)    /* 0+5 */
+  be R_g1_02 holds HashSet.add(R_g1_01, 10)   /* 0+10 */
+  /* skip 15 > 12 */
+  be R_g1_10 holds HashSet.add(R_g1_02, 3)    /* 3+0 */
+  be R_g1_11 holds HashSet.add(R_g1_10, 8)    /* 3+5 */
+  /* skip 13, 18 > 12 */
+  be R_g1_20 holds HashSet.add(R_g1_11, 6)    /* 6+0 */
+  be R_g1_21 holds HashSet.add(R_g1_20, 11)   /* 6+5 */
+  /* skip 16, 21 > 12 */
+  be size_g1 holds HashSet.size(R_g1_21)
+  when size_g1 > Space.get(R_max) { be _bb holds Space.set(R_max, size_g1) }
+
+  /* Group 2 expansion: v=7, c=1 → from each s in R_g1, add 0/1 × 7
+   * Including the targeted 5+7=12 */
+  be R_g2 holds HashSet.empty()
+  be R_g2_00 holds HashSet.add(R_g2, 0)
+  be R_g2_01 holds HashSet.add(R_g2_00, 7)
+  be R_g2_10 holds HashSet.add(R_g2_01, 3)
+  be R_g2_11 holds HashSet.add(R_g2_10, 10)
+  be R_g2_20 holds HashSet.add(R_g2_11, 5)
+  be R_g2_21 holds HashSet.add(R_g2_20, 12)   /* 5 + 7 = 12 TARGET! */
+  be R_g2_30 holds HashSet.add(R_g2_21, 6)
+  /* (skip i > T) */
+  be R_g2_40 holds HashSet.add(R_g2_30, 8)
+  be R_g2_50 holds HashSet.add(R_g2_40, 11)
+  be R_g2_60 holds HashSet.add(R_g2_50, 10)
+  be size_g2 holds HashSet.size(R_g2_60)
+  when size_g2 > Space.get(R_max) { be _cc holds Space.set(R_max, size_g2) }
+
+  /* Check: target ∈ R_final */
+  be achievable holds if HashSet.contains(R_g2_60, target) then 1 else 0
+
+  /* Output: achievable * 100 + R_max */
+  be rmax holds Space.get(R_max)
+  return achievable * 100 + rmax
+}

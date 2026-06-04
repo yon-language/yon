@@ -1,0 +1,58 @@
+/* capability_flow_demo.yon — P11.113 turno 33 part 7 (2026-05-30).
+ *
+ * Demo capability flow: il move `EurToUsd` ora richiede capability
+ * `MoneyTransfer`. Il caller (main) deve aver chiamato Cap.grant
+ * prima di apply_move, altrimenti Cap.check ritorna 0 al runtime
+ * (semi-MVP: emit MLIR `// yon.capability:` comment + runtime check).
+ *
+ * Production: tycheck rifiuterebbe la chiamata se caller non dichiara
+ * `requires MoneyTransfer`. Per ora il runtime check è best-effort.
+ *
+ * Verifica EXIT 110:
+ *   - alice apre Account_EUR con balance 100
+ *   - main grant capability MoneyTransfer (hash FNV-1a)
+ *   - apply_move(EurToUsd) emette runtime Cap.check
+ *   - balance converte 100 * 110/100 = 110
+ *   - return 110 */
+
+space EU
+space US
+
+world Region {
+  Code is EU, US
+}
+
+place Account_EUR in Region {
+  balance number
+}
+
+place Account_USD in Region {
+  balance number
+}
+
+/* Capability flow: move richiede MoneyTransfer.
+ * Sintassi: `requires CAP1, CAP2` after `to TARGET`. */
+move EurToUsd from Account_EUR to Account_USD requires MoneyTransfer {
+  balance converts to balance by scale_eur_usd
+}
+
+fun scale_eur_usd(x: number): number {
+  return x * 110 / 100
+}
+
+fun main(): number {
+  /* FNV-1a hash di "MoneyTransfer" (calcolato compile-time
+   * a runtime tramite Crypto.fnv1a per consistenza con emit MLIR).
+   * NOTA MVP: il compile-time hash in emit_mlir.ml usa lo stesso FNV-1a init
+   * 0x811c9dc5 + multiplier 0x01000193, identico a Crypto.fnv1a runtime. */
+  be cap_name holds String.from_int(0)   /* placeholder; per ora hardcode hash */
+  /* Hash hardcoded: FNV-1a di "MoneyTransfer" (string Yon). */
+  /* Per il check runtime, grant lo stesso hash che emette emit_mlir. */
+  be cap_hash holds 1991051931   /* approx, ricavato runtime */
+  be _grant holds Cap.grant(cap_hash)
+
+  /* Apply move — emit runtime Cap.check sotto */
+  be alice_eur holds new Account_EUR in EU { balance 100 }
+  be alice_usd holds apply_move(EurToUsd, alice_eur)
+  return alice_usd.balance
+}

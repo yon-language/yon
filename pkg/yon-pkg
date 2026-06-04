@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# yon-pkg — git-based package manager for Yon (P9 #97).
+#
+# "Everything on git": no central registry, no hosting. Dependencies are git
+# repositories, resolved into ./yon_modules/. The yon.toml manifest declares the
+# dependencies (name, version/rev); yon.lock records the exact resolved commits
+# (reproducibility).
+#
+# Commands:
+#   yon-pkg init           create a minimal yon.toml
+#   yon-pkg install        clone/update dependencies in ./yon_modules, write yon.lock
+#   yon-pkg update         re-resolve versions (update yon.lock)
+#   yon-pkg list           list the declared dependencies
+#
+# yon.toml (example):
+#   [package]
+#   name = "my-project"
+#   version = "0.1.0"
+#
+#   [dependencies]
+#   geometria = { git = "https://github.com/user/geometria", version = "1.2" }
+#   algebra   = { git = "https://github.com/other/algebra", rev = "abc123" }
+#   utils     = { pkg = "user/utils", version = "1.0" }   # GitHub shorthand
+#   json      = { pkg = "json" }    # bare name -> official org (yon-language/json,
+#                                   # override: env YON_PKG_ORG)
+#
+# version = git tag (e.g. "1.2" -> tag v1.2 or 1.2); rev = explicit commit/branch.
+
+set -euo pipefail
+
+MANIFEST="yon.toml"
+LOCKFILE="yon.lock"
+MODDIR="yon_modules"
+
+die() { echo "yon-pkg: $*" >&2; exit 1; }
+
+# ─── minimal TOML parsing (sections + key = value, inline tables) ──────────
+# Extracts the lines of the [dependencies] section. For each dep:
+#   name = { git = "URL", version = "V" }  or  { git = "URL", rev = "R" }
+# Returns lines "name|URL|kind|value" where kind=version|rev|none.
+parse_deps() {
+  [ -f "$MANIFEST" ] || die "no $MANIFEST in the current directory (use 'yon-pkg init')"
+  awk -v ORG="${YON_PKG_ORG:-yon-language}" '
+    /^\[dependencies\]/ { indeps=1; next }
+    /^\[/ { indeps=0 }
+    /^[ \t]*#/ { next }   # skip comment lines (including the template example)
+    indeps && /=/ {
+      line=$0
+      # name = part before =
+      split(line, kv, "=")
+      name=kv[1]; gsub(/[ \t]/, "", name)
+      if (name=="") next
+      # extract git URL
+      git=""; ver=""; rev=""
+      if (match(line, /git[ \t]*=[ \t]*"[^"]*"/)) {
+        s=substr(line, RSTART, RLENGTH); gsub(/.*"/,"",s); # rough
+      }
+      # robust parsing via regex for each field
+      git=extract(line, "git"); ver=extract(line, "version"); rev=extract(line, "rev")
+      pkg=extract(line, "pkg")
+      # Go-style shorthand: pkg = "user/repo" -> github.com/user/repo;
+      # BARE name (no slash) -> official namespace (org), default yon-language.
+      if (git=="" && pkg!="") {
+        if (index(pkg, "/") == 0) pkg = ORG "/" pkg
+        git = "https://github.com/" pkg
+      }
+      if (git=="") next
+      if (rev!="")      print name "|" git "|rev|" rev
+      else if (ver!="") print name "|" git "|version|" ver
+      else              print name "|" git "|none|"
+    }
+    function extract(s, key,   re, m) {
+      re = key "[ \t]*=[ \t]*\"[^\"]*\""
+      if (match(s, re)) {
+        m = substr(s, RSTART, RLENGTH)
+        sub(/^[^"]*"/, "", m); sub(/".*$/, "", m)
+        return m
+      }
+      return ""
+    }
+  ' "$MANIFEST"
+}
+
+cmd_init() {
+  [ -f "$MANIFEST" ] && die "$MANIFEST already exists"
+  local name="${1:-$(basename "$(pwd)")}"
+  cat > "$MANIFEST" <<EOF
+[package]
+name = "$name"
+version = "0.1.0"
+
+[dependencies]
+# example:
+# geometria = { git = "https://github.com/user/geometria", version = "1.0" }
+EOF
+  echo "created $MANIFEST"
+}
+
+cmd_list() {
+  echo "dependencies declared in $MANIFEST:"
+  parse_deps | while IFS='|' read -r name url kind val; do
+    printf "  %-20s %s (%s %s)\n" "$name" "$url" "$kind" "$val"
+  done
+}
+
+# resolves a dep to an exact commit and clones/updates it in yon_modules/<repo>
+resolve_one() {
+  local name="$1" url="$2" kind="$3" val="$4"
+  local repo dest
+  repo="$(basename "${url%.git}")"
+  dest="$MODDIR/$repo"
+  if [ ! -d "$dest/.git" ]; then
+    echo "  cloning $name <- $url" >&2
+    git clone --quiet "$url" "$dest" || die "clone failed: $url"
+  else
+    echo "  aggiorno $name" >&2
+    git -C "$dest" fetch --quiet --all || die "fetch failed: $url"
+  fi
+  # checkout the requested version
+  local ref
+  case "$kind" in
+    rev)     ref="$val" ;;
+    version) # try tag "vV" then "V"
+             if git -C "$dest" rev-parse --quiet --verify "v$val^{commit}" >/dev/null 2>&1; then
+               ref="v$val"
+             elif git -C "$dest" rev-parse --quiet --verify "$val^{commit}" >/dev/null 2>&1; then
+               ref="$val"
+             else die "version $val not found for $name (neither tag v$val nor $val)"; fi ;;
+    none)    ref="$(git -C "$dest" symbolic-ref --quiet --short HEAD 2>/dev/null || echo HEAD)" ;;
+  esac
+  git -C "$dest" checkout --quiet "$ref" || die "checkout $ref failed for $name"
+  # exact resolved commit (for the lock)
+  local commit
+  commit="$(git -C "$dest" rev-parse HEAD)"
+  echo "$name|$url|$commit"
+}
+
+cmd_install() {
+  mkdir -p "$MODDIR"
+  echo "resolving dependencies..."
+  : > "$LOCKFILE.tmp"
+  parse_deps | while IFS='|' read -r name url kind val; do
+    resolve_one "$name" "$url" "$kind" "$val" >> "$LOCKFILE.tmp"
+  done
+  # generate yon.lock
+  {
+    echo "# yon.lock — generated by yon-pkg. DO NOT edit by hand."
+    echo "# Records the exact dependency commits (reproducibility)."
+    echo ""
+    while IFS='|' read -r name url commit; do
+      echo "[[locked]]"
+      echo "name = \"$name\""
+      echo "git = \"$url\""
+      echo "commit = \"$commit\""
+      echo ""
+    done < "$LOCKFILE.tmp"
+  } > "$LOCKFILE"
+  rm -f "$LOCKFILE.tmp"
+  echo "wrote $LOCKFILE. Dependencies in $MODDIR/."
+  echo "Now you can: import \"<host>/<user>/<repo>\" in your .yon files"
+}
+
+cmd_update() {
+  rm -f "$LOCKFILE"
+  cmd_install
+}
+
+# uninstall <name>: removes the module directory from yon_modules/ and the
+# dependency line from yon.toml. Does not touch others' yon.lock (regenerable with
+# install). Idempotent: if the module is absent, it warns but does not fail.
+cmd_uninstall() {
+  name="${1:-}"
+  [ -n "$name" ] || die "uso: yon-pkg uninstall <nome>"
+  removed=0
+  # 1. remove the module directory (name may = repo, try exact match)
+  if [ -d "$MODDIR/$name" ]; then
+    rm -rf "${MODDIR:?}/$name"
+    echo "removed $MODDIR/$name"
+    removed=1
+  fi
+  # 2. remove the dependency line from yon.toml (line starting with "name =")
+  if [ -f "$MANIFEST" ] && grep -qE "^[[:space:]]*$name[[:space:]]*=" "$MANIFEST"; then
+    grep -vE "^[[:space:]]*$name[[:space:]]*=" "$MANIFEST" > "$MANIFEST.tmp"
+    mv "$MANIFEST.tmp" "$MANIFEST"
+    echo "removed dependency '$name' from $MANIFEST"
+    removed=1
+  fi
+  [ "$removed" -eq 1 ] || echo "yon-pkg: no dependency '$name' found (module or manifest)"
+}
+
+VERSION="0.1.0"
+
+case "${1:-}" in
+  --version|-V) echo "yon-pkg $VERSION" ;;
+  init)      shift; cmd_init "${1:-}" ;;
+  install)   cmd_install ;;
+  update)    cmd_update ;;
+  list)      cmd_list ;;
+  uninstall) shift; cmd_uninstall "${1:-}" ;;
+  *) cat >&2 <<EOF
+yon-pkg $VERSION — package manager git-based per Yon
+uso:
+  yon-pkg init [name]      create yon.toml
+  yon-pkg install          clone dependencies into $MODDIR, generate $LOCKFILE
+  yon-pkg update           re-resolve versions
+  yon-pkg list             list dependencies
+  yon-pkg uninstall <name> remove a dependency (module + yon.toml)
+  yon-pkg --version        print the version
+EOF
+     exit 64 ;;
+esac

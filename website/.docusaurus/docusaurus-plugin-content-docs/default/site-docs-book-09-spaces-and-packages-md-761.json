@@ -1,0 +1,28 @@
+{
+  "id": "book/spaces-and-packages",
+  "title": "9. Spaces and packages",
+  "description": "A Space is a hermetic tenant: a named heap where sections live.",
+  "source": "@site/docs/book/09-spaces-and-packages.md",
+  "sourceDirName": "book",
+  "slug": "/book/spaces-and-packages",
+  "permalink": "/book/spaces-and-packages",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 9,
+  "frontMatter": {
+    "id": "spaces-and-packages",
+    "title": "9. Spaces and packages",
+    "sidebar_position": 9
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "8. Types from HoTT",
+    "permalink": "/book/hott-types"
+  },
+  "next": {
+    "title": "10. A tour of the standard library",
+    "permalink": "/book/standard-library"
+  }
+}

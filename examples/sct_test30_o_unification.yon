@@ -1,0 +1,58 @@
+/* SCT Test 30 — Theorem 9 (o-Unification, §16) (turno 33 part 6).
+ *
+ * o_system = max_j { |R_j \ R_{j-1}| / (1 + |R_{j-1}|) }
+ *
+ * Test 3 weight patterns:
+ *   - sequential {1,2,3,4,5}: o_system = 1.0 (balanced)
+ *   - powers of 2 {1,2,4,8,16}: o_system = 1.0 (critical)
+ *   - burst {1,5,20,100,1000}: o_system = 1.0 (each new dominates)
+ *
+ * Measuro:
+ *   - per ogni step j, calcolo |R_j \ R_{j-1}| via HashSet difference (manual)
+ *   - o_j = w_j / (1 + |R_{j-1}|)
+ *   - max o_j = o_system
+ *
+ * Predizione (paper §16.5): per sequential, o_prover ≤ o_weight.
+ *
+ * Output: o_unified * 100 (rounded). */
+
+fun omicron(w: number, prev_size: number): number {
+  return w / (1 + prev_size)
+}
+
+fun max2(a: number, b: number): number { return if a > b then a else b }
+
+fun main(): number {
+  /* Sequential pattern */
+  be r0 holds HashSet.empty()
+  be r0a holds HashSet.add(r0, 0)
+  be size_0 holds HashSet.size(r0a)   /* = 1 */
+
+  /* Add 1 → R_1 = {0, 1} */
+  be r1 holds HashSet.add(r0a, 1)
+  be size_1 holds HashSet.size(r1)    /* = 2 */
+  be w_1 holds size_1 - size_0        /* = 1 */
+  be o_1 holds omicron(w_1, size_0)   /* = 1/(1+1) = 0.5 */
+
+  /* Add 2 → R_2 = {0, 1, 2, 3} */
+  be r2a holds HashSet.add(r1, 2)
+  be r2b holds HashSet.add(r2a, 3)
+  be size_2 holds HashSet.size(r2b)
+  be w_2 holds size_2 - size_1
+  be o_2 holds omicron(w_2, size_1)
+
+  /* Add 3 → R_3 = {0,1,2,3,4,5,6} */
+  be r3a holds HashSet.add(r2b, 4)
+  be r3b holds HashSet.add(r3a, 5)
+  be r3c holds HashSet.add(r3b, 6)
+  be size_3 holds HashSet.size(r3c)
+  be w_3 holds size_3 - size_2
+  be o_3 holds omicron(w_3, size_2)
+
+  /* o_system = max */
+  be o_max holds max2(max2(o_1, o_2), o_3)
+
+  /* Output o_max * 100 round */
+  be _io holds IO.print_num(o_max)
+  return Math.floor(o_max * 100)
+}

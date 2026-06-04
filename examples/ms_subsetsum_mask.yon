@@ -1,0 +1,16 @@
+/* MS subset-sum: certificato (maschera) per il peptide target 298.
+ * La maschera ha bit i = frammento i usato. Frammenti:
+ *   bit0=57 bit1=71 bit2=87 bit3=99 bit4=113 bit5=128 bit6=147
+ * Un sottoinsieme che somma 298: 71+99+128 = bit1+bit3+bit5 = 2+8+32 = 42.
+ * return = maschera (il PRIMO certificato trovato dal motore). */
+fun main(): number {
+  be p0 holds Magma.from_catalog(0)
+  be p1 holds Magma.gen(p0, 57)
+  be p2 holds Magma.gen(p1, 71)
+  be p3 holds Magma.gen(p2, 87)
+  be p4 holds Magma.gen(p3, 99)
+  be p5 holds Magma.gen(p4, 113)
+  be p6 holds Magma.gen(p5, 128)
+  be m  holds Magma.gen(p6, 147)
+  return Magma.subsetsum_mask(m, 298)
+}

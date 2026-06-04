@@ -1,0 +1,7 @@
+world W { Code is X }
+world V { Code is Y }
+world U { Code is Z }
+fun main(): number {
+  be h holds compose (functor (x: number) => x from W to V) with (functor (y: number) => y from V to U)
+  return 0
+}

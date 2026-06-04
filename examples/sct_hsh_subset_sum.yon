@@ -1,0 +1,12 @@
+/* HSH end-to-end da Yon. Subset Sum [3,5,8,11].
+ * Verifica: witness(16) deve dare bitmask 10 (={5,11}: bit1+bit3=2+8).
+ * return witness direttamente -> exit code = 10. */
+fun main(): number {
+  be s0 holds HSH.empty(0)
+  be s1 holds HSH.step(s0, 3, 0)
+  be s2 holds HSH.step(s1, 5, 0)
+  be s3 holds HSH.step(s2, 8, 0)
+  be s4 holds HSH.step(s3, 11, 0)
+  be wit holds HSH.witness(s4, 16, 0)
+  return wit
+}

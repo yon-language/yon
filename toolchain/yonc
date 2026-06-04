@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# yonc — Yon end-to-end compiler.
+#
+# Compiles a Yon source (.yon) or a Topos MLIR (.mlir) to a native executable,
+# using EXACTLY the chain verified by the regression suite (107 green examples):
+#   yoner_emit_mlir -> topos-opt (extensions+to-standard) -> topos-opt (to-llvm)
+#   -> mlir-translate -> llc -> gcc -no-pie (link runtime + libmmgroup).
+#
+# Uso:
+#   yonc input.yon -o prog            # compile a file to executable ./prog
+#   yonc myproject/ -o prog           # compile a project DIRECTORY (with yon.toml)
+#   yonc input.yon                    # output: ./a.out
+#   yonc input.mlir -o prog           # start from Topos MLIR
+#   yonc --emit=mlir   input.yon      # stop at the Topos MLIR emitted by the frontend
+#   yonc --emit=standard input.yon    # stop after Topos->Standard lowering
+#   yonc --emit=llvm   input.yon      # stop after ->LLVM dialect lowering
+#   yonc --emit=ll     input.yon      # stop at LLVM IR (.ll)
+#   yonc --emit=obj    input.yon -o f.o   # stop at the object file
+#   yonc --emit=binary input.yon      # default: executable
+#   yonc -v ...                       # verbose (print each stage)
+#
+# Override path via env: YONC_FRONTEND, YONC_TOPOS_OPT, YONC_MLIR_TRANSLATE,
+#   YONC_LLC, YONC_CC, YONC_RUNTIME_DIR, YONC_MMGROUP_DIR.
+
+set -euo pipefail
+
+# === Default paths (aligned to the real environment, overridable) ==========
+# Root of the canonical tree = the parent dir of toolchain/.
+YONC_ROOT="${YONC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+
+YONC_FRONTEND="${YONC_FRONTEND:-$YONC_ROOT/frontend/_build/default/yoner_emit_mlir.exe}"
+YONC_TOPOS_OPT="${YONC_TOPOS_OPT:-/home/claude/tree2/turno_33_part17_2026-05-30/mlir/build/topos-opt}"
+YONC_MLIR_TRANSLATE="${YONC_MLIR_TRANSLATE:-mlir-translate}"
+YONC_LLC="${YONC_LLC:-llc}"
+YONC_CC="${YONC_CC:-gcc}"
+YONC_RUNTIME_DIR="${YONC_RUNTIME_DIR:-$YONC_ROOT/runtime}"
+YONC_MMGROUP_DIR="${YONC_MMGROUP_DIR:-/usr/local/lib/python3.12/dist-packages/mmgroup}"
+
+# Runtime objects, in the same order used by the regression suite.
+RUNTIME_OBJS_LIST="yon_rt.o xleech2_coord.o xleech2_handler_stack.o xleech2_heap.o xleech2_mphf.o"
+
+# === Parsing argomenti =====================================================
+INPUT=""
+OUTPUT=""
+EMIT="binary"
+VERBOSE=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --emit=*) EMIT="${1#--emit=}"; shift ;;
+        -o)       OUTPUT="$2"; shift 2 ;;
+        -v|--verbose) VERBOSE=1; shift ;;
+        --help|-h) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
+        --) shift; break ;;
+        -*) echo "yonc: opzione sconosciuta '$1'" >&2; exit 1 ;;
+        *)
+            if [ -z "$INPUT" ]; then INPUT="$1"
+            else echo "yonc: troppi file di input ('$INPUT' e '$1')" >&2; exit 1; fi
+            shift ;;
+    esac
+done
+
+[ -n "$INPUT" ] || { echo "yonc: no input. See: yonc --help" >&2; exit 1; }
+[ -e "$INPUT" ] || { echo "yonc: '$INPUT' not found" >&2; exit 1; }
+
+# Input may be a FILE (.yon/.mlir) or a DIRECTORY (project, Maven-style in the
+# pom directory). A directory is a package: the frontend concatenates the .yon
+# files and resolves yon_modules/ (see yoner_emit_mlir). If yon.toml declares
+# dependencies not yet installed, we report it (yon-pkg install).
+IS_PROJECT=0
+if [ -d "$INPUT" ]; then
+    IS_PROJECT=1
+    INPUT_EXT="yon"   # a project enters via the frontend as Yon source
+    START=0
+    # If a manifest declares real dependencies but yon_modules is missing, warn.
+    # "Real dependency" = a `key = value` line inside the [dependencies] section
+    # (not in [package], and not a commented-out example).
+    if [ -f "$INPUT/yon.toml" ] && [ ! -d "$INPUT/yon_modules" ] \
+       && awk '/^\[dependencies\]/{d=1;next} /^\[/{d=0} d && /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*=/{found=1} END{exit !found}' "$INPUT/yon.toml"; then
+        echo "yonc: '$INPUT' declares dependencies in yon.toml but yon_modules/ is missing." >&2
+        echo "      run first: (cd '$INPUT' && yon-pkg install)" >&2
+        exit 1
+    fi
+else
+    INPUT_EXT="${INPUT##*.}"
+    case "$INPUT_EXT" in
+        yon)  START=0 ;;
+        mlir) START=1 ;;
+        *) echo "yonc: unsupported extension '.$INPUT_EXT' (expected .yon or .mlir, or a project directory)" >&2; exit 1 ;;
+    esac
+fi
+
+# Stage di stop numerico in base a --emit.
+case "$EMIT" in
+    mlir)     STOP=0 ;;
+    standard) STOP=1 ;;
+    llvm)     STOP=2 ;;
+    ll)       STOP=3 ;;
+    obj)      STOP=4 ;;
+    binary)   STOP=5 ;;
+    *) echo "yonc: invalid --emit '$EMIT' (mlir|standard|llvm|ll|obj|binary)" >&2; exit 1 ;;
+esac
+
+# Nome di output di default in base a --emit.
+if [ -z "$OUTPUT" ]; then
+    BASE="$(basename "${INPUT%/}" ".$INPUT_EXT")"
+    case "$EMIT" in
+        mlir)     OUTPUT="${BASE}.topos.mlir" ;;
+        standard) OUTPUT="${BASE}.standard.mlir" ;;
+        llvm)     OUTPUT="${BASE}.llvm.mlir" ;;
+        ll)       OUTPUT="${BASE}.ll" ;;
+        obj)      OUTPUT="${BASE}.o" ;;
+        binary)   OUTPUT="a.out" ;;
+    esac
+fi
+
+log() { [ "$VERBOSE" -eq 1 ] && echo "[yonc] $*" >&2; return 0; }
+
+WORKDIR="$(mktemp -d -t yonc.XXXXXX)"
+trap 'rm -rf "$WORKDIR"' EXIT
+
+CURRENT="$INPUT"
+
+# === Stage 0: Yon -> MLIR Topos (frontend OCaml) ===========================
+if [ "$START" -le 0 ] && [ "$INPUT_EXT" = "yon" ]; then
+    log "Stage 0: Yon -> MLIR Topos ($YONC_FRONTEND)"
+    [ -x "$YONC_FRONTEND" ] || { echo "yonc: frontend not found/executable: $YONC_FRONTEND" >&2; echo "      build: cd $YONC_ROOT/frontend && dune build" >&2; exit 1; }
+    NEXT="$WORKDIR/stage0.topos.mlir"
+    "$YONC_FRONTEND" "$INPUT" > "$NEXT" 2>"$WORKDIR/fe.err" || { echo "yonc: frontend error:" >&2; cat "$WORKDIR/fe.err" >&2; exit 1; }
+    [ -s "$NEXT" ] || { echo "yonc: the frontend produced no MLIR (type/parse error?):" >&2; cat "$WORKDIR/fe.err" >&2; exit 1; }
+    CURRENT="$NEXT"
+fi
+if [ "$STOP" -eq 0 ]; then cp "$CURRENT" "$OUTPUT"; log "done -> $OUTPUT"; echo "$OUTPUT"; exit 0; fi
+
+# === Stage 1: Topos -> Standard MLIR =======================================
+if [ "$STOP" -ge 1 ] && [ "$START" -le 1 ]; then
+    log "Stage 1: Topos -> Standard MLIR"
+    NEXT="$WORKDIR/stage1.standard.mlir"
+    "$YONC_TOPOS_OPT" --cluster-collapse --lower-topos-extensions --lower-topos-to-standard "$CURRENT" > "$NEXT"
+    CURRENT="$NEXT"
+fi
+if [ "$STOP" -eq 1 ]; then cp "$CURRENT" "$OUTPUT"; log "done -> $OUTPUT"; echo "$OUTPUT"; exit 0; fi
+
+# === Stage 2: Standard -> LLVM dialect =====================================
+if [ "$STOP" -ge 2 ] && [ "$START" -le 2 ]; then
+    log "Stage 2: Standard -> LLVM dialect"
+    NEXT="$WORKDIR/stage2.llvm.mlir"
+    "$YONC_TOPOS_OPT" --lower-topos-to-llvm "$CURRENT" > "$NEXT"
+    CURRENT="$NEXT"
+fi
+if [ "$STOP" -eq 2 ]; then cp "$CURRENT" "$OUTPUT"; log "done -> $OUTPUT"; echo "$OUTPUT"; exit 0; fi
+
+# === Stage 3: MLIR -> LLVM IR ==============================================
+if [ "$STOP" -ge 3 ] && [ "$START" -le 3 ]; then
+    log "Stage 3: MLIR -> LLVM IR"
+    NEXT="$WORKDIR/stage3.ll"
+    "$YONC_MLIR_TRANSLATE" "$CURRENT" --mlir-to-llvmir > "$NEXT"
+    CURRENT="$NEXT"
+fi
+if [ "$STOP" -eq 3 ]; then cp "$CURRENT" "$OUTPUT"; log "done -> $OUTPUT"; echo "$OUTPUT"; exit 0; fi
+
+# === Stage 4: LLVM IR -> object ============================================
+if [ "$STOP" -ge 4 ] && [ "$START" -le 4 ]; then
+    log "Stage 4: LLVM IR -> object"
+    NEXT="$WORKDIR/stage4.o"
+    "$YONC_LLC" -filetype=obj "$CURRENT" -o "$NEXT"
+    CURRENT="$NEXT"
+fi
+if [ "$STOP" -eq 4 ]; then cp "$CURRENT" "$OUTPUT"; log "done -> $OUTPUT"; echo "$OUTPUT"; exit 0; fi
+
+# === Stage 5: link -> binary ===============================================
+if [ "$STOP" -ge 5 ] && [ "$START" -le 5 ]; then
+    log "Stage 5: link -> binary (gcc -no-pie + runtime + libmmgroup)"
+    [ -d "$YONC_RUNTIME_DIR" ] || { echo "yonc: runtime dir not found: $YONC_RUNTIME_DIR" >&2; exit 1; }
+    RTSET=""
+    for o in $RUNTIME_OBJS_LIST; do
+        [ -f "$YONC_RUNTIME_DIR/$o" ] || { echo "yonc: missing $YONC_RUNTIME_DIR/$o" >&2; echo "      build: cd $YONC_RUNTIME_DIR && make" >&2; exit 1; }
+        RTSET="$RTSET $YONC_RUNTIME_DIR/$o"
+    done
+    [ -d "$YONC_MMGROUP_DIR" ] || { echo "yonc: mmgroup dir not found: $YONC_MMGROUP_DIR" >&2; exit 1; }
+    # -no-pie: required on Linux (non-PIC runtime); on Darwin the Apple
+    # linker rejects it and PIE is the correct default.
+    NOPIE="-no-pie"; [ "$(uname -s)" = "Darwin" ] && NOPIE=""
+    # mmgroup libraries by EXPLICIT PATH: the files are .so on both
+    # platforms (macOS wheels included); with -l the Apple linker would
+    # look for .dylib/.tbd/.a and fail.
+    "$YONC_CC" $NOPIE "$CURRENT" $RTSET \
+        "$YONC_MMGROUP_DIR/libmmgroup_mat24.so" \
+        "$YONC_MMGROUP_DIR/libmmgroup_mm_op.so" \
+        -Wl,-rpath,"$YONC_MMGROUP_DIR" -lpthread -lm \
+        -o "$OUTPUT"
+    log "binary -> $OUTPUT"
+    echo "$OUTPUT"
+fi

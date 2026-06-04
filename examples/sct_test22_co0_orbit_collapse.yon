@@ -1,0 +1,51 @@
+/* SCT Test 22 — Co_0 orbit collapse strutturale (turno 33).
+ *
+ * Verifico collapse pratico: prendo 5 vettori che SI SA essere nella stessa
+ * orbita Co_0 (vettori e i loro ξ-trasformati), e misuro che producono
+ * UN SOLO slot xheap via co0_step.
+ *
+ * Confronto: 5 vettori in orbite DIVERSE → 5 slot distinti.
+ *
+ * Setup orbita stessa:
+ *   v0 = 0x1000 (g=1, c=0)
+ *   v1 = ξ(v0)
+ *   v2 = ξ²(v0)  
+ *   v3 = ξ(v1) = ξ²(v0) = v2 (same as v2)
+ *   v4 = (M_24 trivial) v0 stessa orbita
+ *   Tutti questi sono nella stessa <ξ>·M_24 orbita.
+ *
+ * Setup orbite diverse:
+ *   peso 0, peso 8, peso 12, peso 16, peso 24 → 5 orbite distinct (M_24)
+ *
+ * Misuro slot allocati per ciascun caso. */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  /* === ORBITA STESSA: 5 chiamate, expected 1 slot === */
+  be v0 holds 4096
+  be v1 holds Leech.xi_apply(v0)
+  be v2 holds Leech.xi_apply(v1)
+
+  be _co1 holds Leech.co0_step(v0)
+  be _co2 holds Leech.co0_step(v1)
+  be _co3 holds Leech.co0_step(v2)
+  be _co4 holds Leech.co0_step(v0)   /* same as _co1 */
+  be _co5 holds Leech.co0_step(v1)   /* same as _co2 */
+
+  be n1 holds __xheap_used()
+  be delta_same holds n1 - n0   /* expected: 1 (tutti stesso orbit) */
+
+  /* === ORBITE DIVERSE: 5 codeword di pesi distinti === */
+  be _d0 holds Leech.co0_step(0)               /* peso 0 */
+  be _d1 holds Leech.co0_step(255)             /* peso 8 codeword */
+  be _d2 holds Leech.co0_step(13386240)        /* 0xCC3300 = gcode 19, peso 8 — orbita diversa? */
+  be _d3 holds Leech.co0_step(16776960)        /* peso 16 codeword */
+  be _d4 holds Leech.co0_step(16777215)        /* peso 24 all-ones */
+
+  be n2 holds __xheap_used()
+  be delta_diff holds n2 - n1   /* expected: 4 (peso 8 viene contato 1 volta) */
+
+  /* Output: delta_same * 10 + delta_diff */
+  return delta_same * 10 + delta_diff
+}

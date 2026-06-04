@@ -1,0 +1,36 @@
+/* SCT Test 3b — Phase Classification (runtime, turno 32).
+ *
+ * 3 serie con regime diverso (sub-critical, critical, super-critical),
+ * misurate via xheap_used (NON literal hardcoded). */
+
+fun main(): number {
+  /* Series A: Powers of 2 → tutti unici → o = 1.0 critical */
+  be n0 holds __xheap_used()
+  be _a1 holds Merkle.leaf(1)
+  be _a2 holds Merkle.leaf(2)
+  be _a4 holds Merkle.leaf(4)
+  be _a8 holds Merkle.leaf(8)
+  be _a16 holds Merkle.leaf(16)
+  be nA holds __xheap_used()
+  be total_A holds nA - n0    /* 5 nuovi → 5 slot */
+
+  /* Series B: Fibonacci - alcuni dedup */
+  be _b1 holds Merkle.leaf(1)    /* DEDUP */
+  be _b2 holds Merkle.leaf(2)    /* DEDUP */
+  be _b3 holds Merkle.leaf(3)    /* NUOVO */
+  be _b5 holds Merkle.leaf(5)    /* NUOVO */
+  be _b8 holds Merkle.leaf(8)    /* DEDUP */
+  be nB holds __xheap_used()
+  be total_B holds nB - nA
+
+  /* Series C: Burst (1, 5, 20, 100) — sparse, alti */
+  be _c1 holds Merkle.leaf(1)
+  be _c5 holds Merkle.leaf(5)
+  be _c20 holds Merkle.leaf(20)
+  be _c100 holds Merkle.leaf(100)
+  be nC holds __xheap_used()
+  be total_C holds nC - nB
+
+  /* Classification: total_A baseline; ratio C/A indica burst pattern */
+  return total_A * 10 + total_B + total_C * 100
+}

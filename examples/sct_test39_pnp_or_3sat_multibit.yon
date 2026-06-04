@@ -1,0 +1,104 @@
+/* SCT Test 39 — §34.6 OR/SAT con axiomi MULTI-BIT (3-SAT-like) (turno 33 part 8).
+ *
+ * Mentre T38 usa axiomi single-bit (boundary case, o_i alti),
+ * 3-SAT reale ha clausole multi-literal → axiomi multi-bit → più
+ * collisioni → o_i lower → k_active < G (osservazione paper §34.6).
+ *
+ * Setup: G=6 axiomi (clauses), 5-bit space. Pattern:
+ *   a1 = 0b00011 = 3   (2 bit set, "x1 OR x2")
+ *   a2 = 0b00110 = 6   (2 bit set, "x2 OR x3")
+ *   a3 = 0b01100 = 12  (2 bit set, "x3 OR x4")
+ *   a4 = 0b11000 = 24  (2 bit set, "x4 OR x5")
+ *   a5 = 0b10001 = 17  (2 bit set, "x1 OR x5") — duplica bit con a1, a4
+ *   a6 = 0b00010 = 2   (1 bit set, "x2 puro") — duplica bit con a1, a2
+ *
+ * Quante R distinte si formano? Quanti o_i > 0.3 (active)?
+ *
+ * Predizione: collisioni → |R| < 32 (= 2^5 max), k_active < 6. */
+
+fun main(): number {
+  be G holds 6
+  be two_to_G holds 64    /* 2^6 */
+
+  /* R_0 */
+  be r0 holds HashSet.empty()
+  be r0i holds HashSet.add(r0, 0)
+  be s0 holds 1
+
+  /* Round 1: axiom 3 = 0b00011 */
+  be r1_a holds HashSet.add(r0i, 3)   /* 0|3=3 */
+  be s1 holds HashSet.size(r1_a)
+  be o1 holds (s1 - s0) / (1 + s0)
+
+  /* Round 2: axiom 6 = 0b00110, OR su {0, 3} → {6, 7} new */
+  be r2_a holds HashSet.add(r1_a, 6)   /* 0|6=6 */
+  be r2 holds HashSet.add(r2_a, 7)     /* 3|6=7 */
+  be s2 holds HashSet.size(r2)
+  be o2 holds (s2 - s1) / (1 + s1)
+
+  /* Round 3: axiom 12 = 0b01100, OR su {0,3,6,7} → 12, 15, 14, 15 (15 dup), 14 (dup)
+   * Nuovi: 12 (0|12), 15 (3|12), 14 (6|12), 15 already → {12, 14, 15} */
+  be r3_a holds HashSet.add(r2, 12)
+  be r3_b holds HashSet.add(r3_a, 15)
+  be r3 holds HashSet.add(r3_b, 14)
+  be s3 holds HashSet.size(r3)
+  be o3 holds (s3 - s2) / (1 + s2)
+
+  /* Round 4: axiom 24 = 0b11000, OR su {0,3,6,7,12,14,15}:
+   * 0|24=24, 3|24=27, 6|24=30, 7|24=31, 12|24=28, 14|24=30(dup), 15|24=31(dup)
+   * Nuovi: {24, 27, 30, 31, 28} */
+  be r4_a holds HashSet.add(r3, 24)
+  be r4_b holds HashSet.add(r4_a, 27)
+  be r4_c holds HashSet.add(r4_b, 30)
+  be r4_d holds HashSet.add(r4_c, 31)
+  be r4 holds HashSet.add(r4_d, 28)
+  be s4 holds HashSet.size(r4)
+  be o4 holds (s4 - s3) / (1 + s3)
+
+  /* Round 5: axiom 17 = 0b10001, ad alta probability of collision con bit 0,4
+   * OR su {0,3,6,7,12,14,15,24,27,28,30,31} (12 elementi):
+   * 0|17=17, 3|17=19, 6|17=23, 7|17=23(dup), 12|17=29, 14|17=31(dup),
+   * 15|17=31(dup), 24|17=25, 27|17=27(dup), 28|17=29(dup), 30|17=31(dup), 31|17=31(dup)
+   * Nuovi: {17, 19, 23, 29, 25} */
+  be r5_a holds HashSet.add(r4, 17)
+  be r5_b holds HashSet.add(r5_a, 19)
+  be r5_c holds HashSet.add(r5_b, 23)
+  be r5_d holds HashSet.add(r5_c, 29)
+  be r5 holds HashSet.add(r5_d, 25)
+  be s5 holds HashSet.size(r5)
+  be o5 holds (s5 - s4) / (1 + s4)
+
+  /* Round 6: axiom 2 = 0b00010 (single bit, già in a1=3) — alta collision
+   * OR su 17 elementi presenti, axiom=2: a|2 = a o a|2 a seconda di bit 1.
+   * I numeri che hanno già bit 1: 3, 6, 7, 14, 15, 19, 23, 27, 30, 31 (10) → no change
+   * Numeri senza bit 1: 0, 12, 17, 24, 25, 28, 29 (7) → mappati in 2, 14, 19, 26, 27, 30, 31
+   * Già in R: 14(yes), 19(yes), 27(yes), 30(yes), 31(yes)
+   * Nuovi: {2, 26} */
+  be r6_a holds HashSet.add(r5, 2)
+  be r6 holds HashSet.add(r6_a, 26)
+  be s6 holds HashSet.size(r6)
+  be o6 holds (s6 - s5) / (1 + s5)
+
+  /* Conta active groups (o_i > 0.3) */
+  be k_acc1 holds if o1 > 0.3 then 1 else 0
+  be k_acc2 holds if o2 > 0.3 then k_acc1 + 1 else k_acc1
+  be k_acc3 holds if o3 > 0.3 then k_acc2 + 1 else k_acc2
+  be k_acc4 holds if o4 > 0.3 then k_acc3 + 1 else k_acc3
+  be k_acc5 holds if o5 > 0.3 then k_acc4 + 1 else k_acc4
+  be k_active holds if o6 > 0.3 then k_acc5 + 1 else k_acc5
+
+  /* Verify Prop 34.5: o_i < 1 strict ovunque (post-ghost) */
+  be max_o holds Math.max(Math.max(Math.max(Math.max(Math.max(o1, o2), o3), o4), o5), o6)
+  be all_o_lt_1 holds if max_o < 1 then 1 else 0
+
+  /* Verify sub-exponential: |R| ≤ 2^G */
+  be sub_exp holds if s6 <= two_to_G then 1 else 0
+
+  be _io1 holds IO.print_num(s6)
+  be _io2 holds IO.print_num(k_active)
+  be _io3 holds IO.print_num(max_o)
+  be _io4 holds IO.print_num(o6)
+
+  /* Output: all_o_lt_1*1000 + sub_exp*100 + k_active*10 + s6 */
+  return all_o_lt_1 * 1000 + sub_exp * 100 + k_active * 10 + s6
+}

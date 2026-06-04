@@ -1,0 +1,63 @@
+/* SCT Test 35 — Theorem 7 (Generalized Group Decomposition, §13.5) (turno 33 part 6).
+ *
+ * R_0 = {e}
+ * R_i = { s ∘ a_i : s ∈ R_{i-1} } ∪ R_{i-1}
+ *
+ * Test 1: (ℤ, +, 0) con A = {3, 5, 7}, target=15 (achievable: 3+5+7=15).
+ * Test 2: ({0,1}^m, |, 0) OR-bitmask: A = {1, 2, 4, 8}, target=15 (achievable: 1|2|4|8=15).
+ *
+ * Verifico: stesso loop, solo compose cambia. Algebra-indipendenza dim T7. */
+
+fun main(): number {
+  /* TEST 1: (ℤ, +, 0) */
+  be r0_z holds HashSet.empty()
+  be r0_zi holds HashSet.add(r0_z, 0)
+
+  /* Apply a=3 */
+  be r1_z holds HashSet.add(r0_zi, 3)
+  /* Apply a=5: 0+5, 3+5 */
+  be r2_z_a holds HashSet.add(r1_z, 5)
+  be r2_z_b holds HashSet.add(r2_z_a, 8)
+  /* Apply a=7: 0+7, 3+7, 5+7, 8+7 */
+  be r3_z_a holds HashSet.add(r2_z_b, 7)
+  be r3_z_b holds HashSet.add(r3_z_a, 10)
+  be r3_z_c holds HashSet.add(r3_z_b, 12)
+  be r3_z_d holds HashSet.add(r3_z_c, 15)
+  be R_z_size holds HashSet.size(r3_z_d)
+  be target_z_reached holds if HashSet.contains(r3_z_d, 15) then 1 else 0
+
+  /* TEST 2: OR-bitmask */
+  be r0_or holds HashSet.empty()
+  be r0_ori holds HashSet.add(r0_or, 0)
+
+  /* Apply a=1: 0|1=1 */
+  be r1_or holds HashSet.add(r0_ori, 1)
+  /* Apply a=2: 0|2=2, 1|2=3 */
+  be r2_or_a holds HashSet.add(r1_or, 2)
+  be r2_or_b holds HashSet.add(r2_or_a, 3)
+  /* Apply a=4: 0|4=4, 1|4=5, 2|4=6, 3|4=7 */
+  be r3_or_a holds HashSet.add(r2_or_b, 4)
+  be r3_or_b holds HashSet.add(r3_or_a, 5)
+  be r3_or_c holds HashSet.add(r3_or_b, 6)
+  be r3_or_d holds HashSet.add(r3_or_c, 7)
+  /* Apply a=8: 0|8=8, ..., 7|8=15 */
+  be r4_or_0 holds HashSet.add(r3_or_d, 8)
+  be r4_or_1 holds HashSet.add(r4_or_0, 9)
+  be r4_or_2 holds HashSet.add(r4_or_1, 10)
+  be r4_or_3 holds HashSet.add(r4_or_2, 11)
+  be r4_or_4 holds HashSet.add(r4_or_3, 12)
+  be r4_or_5 holds HashSet.add(r4_or_4, 13)
+  be r4_or_6 holds HashSet.add(r4_or_5, 14)
+  be r4_or_7 holds HashSet.add(r4_or_6, 15)
+  be R_or_size holds HashSet.size(r4_or_7)
+  be target_or_reached holds if HashSet.contains(r4_or_7, 15) then 1 else 0
+
+  be _io1 holds IO.print_num(R_z_size)
+  be _io2 holds IO.print_num(R_or_size)
+  be _io3 holds IO.print_num(target_z_reached)
+  be _io4 holds IO.print_num(target_or_reached)
+
+  /* Output: both targets reached → algebra-indipendenza T7
+   * Predizione: R_z (Z,+) ≤ R_or (OR-bitmask) perché OR satura */
+  return target_z_reached * 100 + target_or_reached * 10 + R_or_size
+}

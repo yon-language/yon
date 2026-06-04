@@ -1,0 +1,1 @@
+fun eur_to_usd(eur: number): number { return eur * 110 / 100 }

@@ -1,0 +1,33 @@
+Yon Runtime Library — License
+
+The Yon runtime library (every file in this runtime/ directory) is
+licensed under the GNU Affero General Public License, version 3
+(see the LICENSE file at the root of this repository), WITH the
+following additional permission under section 7 of the AGPLv3:
+
+                    YON RUNTIME LINKING EXCEPTION
+
+  As a special exception, the copyright holders of the Yon runtime
+  library give you permission to link or combine object code produced
+  by the Yon compiler from your own source programs with this runtime
+  library (statically or dynamically) to produce an executable, and to
+  copy, distribute, convey and make available that executable — over a
+  network or otherwise — under license terms of your choice, without
+  the requirements of the AGPLv3 applying to your program by reason of
+  that linking alone.
+
+  This exception covers your programs. It does NOT extend to the Yon
+  compiler, frontend, MLIR dialect, toolchain, or to the runtime
+  library itself: any modified version of those remains governed by
+  the full AGPLv3, including its network-use provision.
+
+  If you modify this runtime library, you may extend this exception to
+  your version, but you are not obliged to do so. If you do not wish
+  to, delete this exception statement from your version.
+
+In plain words: programs you write in Yon are yours, under any license
+you like. Yon itself — the compiler and this runtime — stays free, and
+anyone improving or serving it must share those improvements.
+
+This exception follows the established pattern of the GCC Runtime
+Library Exception and the GNU Classpath Exception.

@@ -1,0 +1,20 @@
+/* Magma — risolutore algebrico da Yon. Operazione OR (op_id=4) su {1,2,4}.
+ * Verifica commutativita', poi: closure_size, reachable, normal_form.
+ *
+ * OR{1,2,4}: commutativo (1), chiusura = {1,2,4,3,5,6,7} size 7,
+ *   7 raggiungibile (1), 8 no (0).
+ * return = comm*1 + size*10 + reach7*100 + reach8*1000
+ *        = 1 + 70 + 100 + 0 = 171. */
+fun main(): number {
+  be m0 holds Magma.empty(4)
+  be m1 holds Magma.gen(m0, 1)
+  be m2 holds Magma.gen(m1, 2)
+  be m holds Magma.gen(m2, 4)
+
+  be comm holds if Magma.is_commutative(m) then 1 else 0
+  be size holds Magma.closure_size(m)
+  be r7 holds if Magma.reachable(m, 7) then 1 else 0
+  be r8 holds if Magma.reachable(m, 8) then 1 else 0
+
+  return comm + size * 10 + r7 * 100 + r8 * 1000
+}

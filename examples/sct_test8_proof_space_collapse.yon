@@ -1,0 +1,83 @@
+/* SCT Test 8 — Cluster Collapse in Proof Space (Paper Theorem 4).
+ *
+ * In proof search, due rami che raggiungono lo stesso stato strutturale
+ * vengono UNIFICATI dal cluster collapse. Yon realizza questo via
+ * CONTENT-ADDRESSING dello xheap.
+ *
+ * Misuriamo via Merkle DAG (che usa xheap arena content-addressed,
+ * NON HashSet inline). Costruisco 4 rami con stati intermedi che
+ * collidono:
+ *
+ *   Stati condivisi tra rami:
+ *     leaf 0, leaf 3, leaf 5, leaf 7, leaf 8, leaf 10
+ *     node2(0,3)  ← shared b1, b2 (via path diversi)
+ *     node2(0,5)
+ *     node2(0,7)
+ *     node2(0,3,5,8)  ← branch 1 == branch 2 final
+ *     node2(0,3,7,10) ← branch 3 == branch 4 final
+ *
+ *   Branch i finale (Merkle.node2(left, right) come encoding stato):
+ *
+ *   Branch 1: path 0→3→5→8.
+ *     intermediate: leaf 0, leaf 3, node2(99, leaf0, leaf3),
+ *                   leaf 5, node2(99, prev, leaf5),
+ *                   leaf 8, node2(99, prev, leaf8)
+ *   Branch 2: path 0→5→3→8. STESSO STATO FINALE.
+ *     intermediate: leaf 0, leaf 5, node2(99, leaf0, leaf5) ← NUOVO,
+ *                   leaf 3, node2(99, prev, leaf3) ← VEDIAMO se collide
+ *                   leaf 8, node2(99, prev, leaf8)
+ *
+ *   Onesto: tag=99 per ogni nodo, MA i CONTENUTI sono diversi (sequenza
+ *   diversa di insertion) → Merkle node2 ha hash CONTENT-BASED, quindi
+ *   stati diversi se costruzione diversa, anche se valori uguali.
+ *
+ * Strategia revisionata: costruisco rami che produrranno gli STESSI
+ * Merkle node (= stesso hash content) per dimostrare il collapse.
+ *
+ * Setup: 4 rami che producono ENTRAMBI lo stesso node2(99, leaf3, leaf5).
+ *   Branch 1: node2(99, leaf(3), leaf(5))   ← prima volta
+ *   Branch 2: node2(99, leaf(3), leaf(5))   ← stesso content → STESSO slot
+ *   Branch 3: node2(99, leaf(7), leaf(8))   ← diverso → NUOVO slot
+ *   Branch 4: node2(99, leaf(7), leaf(8))   ← stesso di 3 → STESSO slot
+ *
+ *   Alloc previsti:
+ *     leaf(3), leaf(5), node2(99,leaf3,leaf5) → 3 slot
+ *     branch 2: tutti dedup → 0 nuovi slot
+ *     branch 3: leaf(7), leaf(8), node2(99,leaf7,leaf8) → 3 slot
+ *     branch 4: tutti dedup → 0 nuovi slot
+ *
+ *   TOTALE: 6 slot per 4 rami (= 2 rami logici distinti).
+ *   SENZA collapse: sarebbe 4 rami × 3 alloc = 12 slot.
+ *
+ *   Ratio cluster collapse: 6/12 = 0.5 → 50% riduzione.
+ *
+ * Output: delta_xheap (= 6 atteso). */
+
+fun main(): number {
+  be n_before holds __xheap_used()
+
+  /* Branch 1: build node2(99, leaf3, leaf5) */
+  be b1_l3 holds Merkle.leaf(3)
+  be b1_l5 holds Merkle.leaf(5)
+  be b1_node holds Merkle.node2(99, b1_l3, b1_l5)
+
+  /* Branch 2: STESSO STATO FINALE costruito uguale → dedup totale */
+  be b2_l3 holds Merkle.leaf(3)   /* DEDUP con b1_l3 */
+  be b2_l5 holds Merkle.leaf(5)   /* DEDUP con b1_l5 */
+  be b2_node holds Merkle.node2(99, b2_l3, b2_l5)  /* DEDUP con b1_node */
+
+  /* Branch 3: node2(99, leaf7, leaf8) — NUOVO contenuto */
+  be b3_l7 holds Merkle.leaf(7)
+  be b3_l8 holds Merkle.leaf(8)
+  be b3_node holds Merkle.node2(99, b3_l7, b3_l8)
+
+  /* Branch 4: stesso di 3 → dedup */
+  be b4_l7 holds Merkle.leaf(7)
+  be b4_l8 holds Merkle.leaf(8)
+  be b4_node holds Merkle.node2(99, b4_l7, b4_l8)
+
+  be n_after holds __xheap_used()
+  be delta holds n_after - n_before
+
+  return delta
+}

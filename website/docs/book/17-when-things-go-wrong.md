@@ -1,0 +1,76 @@
+---
+id: when-things-go-wrong
+title: "17. When things go wrong"
+sidebar_position: 17
+---
+
+# When things go wrong
+
+Yon has no exceptions, no unwinding, no `try`/`catch` — deliberately. A
+non-local jump teleports control across the very boundaries the language
+spends its whole design defending. Failure in Yon takes three shapes, all of
+them *values or declarations*.
+
+## Errors are places
+
+An `error` declaration is a place whose meaning is failure. Errors form
+their own sub-object hierarchy with `extends` (chapter 4's monomorphisms),
+and a place can declare its error morphism with `on_error`:
+
+```yon
+world Db { Code is X }
+
+error Error in Db { message number }
+error QueryError in Db extends Error { message number  sqlstate number }
+
+place QueryInsert in Db on_error QueryError { sql number }
+
+fun handle(e: Error): number { return e.message }
+fun on_query_fail(q: QueryError): number {
+  return handle(q)               // sub-error used where Error is expected
+}
+
+fun main(): number {
+  be q holds new QueryError { message 40 sqlstate 23505 }
+  return on_query_fail(q) + 2    // 42
+}
+```
+
+`on_error` is checked like everything else: the named error must be a
+declared error place, and a handler written against `Error` accepts every
+sub-error — subsumption doing for failures exactly what it does for data.
+An error is a section: it carries fields, it is content-addressed, it can
+cross a `move`. Nothing is thrown; errors travel by the same arrows as
+everything else.
+
+## Failure is a value
+
+At the stdlib boundary, absence is in-band (chapter 10): a missing file, an
+unset variable, an out-of-range index all return the `0.0` handle. You test
+it like any number. The compiler does its part *before* runtime: a false
+`law` is rejected by MagmaSolve, a missing subsumption mono is rejected by
+the checker, a string in a cross-Space signature never compiles — entire
+categories of "going wrong" are moved from runtime to the type checker.
+
+## When another process fails
+
+Cross-Space, failure is a process matter, and chapter 15's machinery handles
+the recoverable case: a crashed server is respawned on a virgin channel with
+the epoch advanced, and the call retried once — transparently. When the
+failure is *not* recoverable (the server binary is missing, the operation
+was never exported), the runtime says so plainly:
+
+```
+error: cross-Space call failed — Space server './Bank_srv' did not
+answer or the operation is not exported
+```
+
+## On the horizon
+
+The third shape is the most Yon of all and is openly *in progress*: the
+Heyting unwrapping. Ω already has the three states (chapter 7); the plan is
+a result discipline where an operation's outcome is **Provato / Assurdo /
+Indeterminato** — proven, absurd, undecided — so "it failed" and "it has
+not decided yet" stop being the same thing. The trit machinery
+(`heyt_int`) is operational today; the surface unwrapping construct is
+post-1.0, and this book will gain a section when it lands.

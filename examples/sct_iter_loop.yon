@@ -1,0 +1,9 @@
+/* iter N do — bounded loop. Somma 1 cinque volte in una Space cell -> 5. */
+fun main(): number {
+  be acc holds Space.make(0)
+  iter 5 do {
+    be cur holds Space.get(acc)
+    be _ holds Space.set(acc, cur + 1)
+  }
+  return Space.get(acc)
+}

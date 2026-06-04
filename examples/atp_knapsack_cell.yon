@@ -1,0 +1,26 @@
+/* Allocazione risorse cellulari — knapsack 0/1 biologico.
+ *
+ * Una cellula ha ATP finito (budget) e sceglie quali processi attivare per
+ * MASSIMIZZARE la resa complessiva. Ogni processo costa ATP (peso) e produce
+ * resa (valore); ogni processo si attiva o no (0/1, ogni item una volta).
+ *
+ * Processi (costo ATP, resa):
+ *   glicolisi_extra (2,6)  biosintesi_lipidi (5,10)  riparazione_DNA (4,5)
+ *   sintesi_proteine (7,14)  trasporto_attivo (3,4)  detossificazione (6,9)
+ * Budget ATP = 12.
+ *
+ * Ottimo (verificato via DP): resa 24 = lipidi(5,10)+proteine(7,14), costo 12.
+ * Knapsack NON e' raggiungibilita': massimizza il valore entro il budget.
+ *
+ * return = resa massima ottenibile = 24. */
+fun main(): number {
+  be c0 holds Magma.from_catalog(0)
+  be c1 holds Magma.knap_item(c0, 2, 6)
+  be c2 holds Magma.knap_item(c1, 5, 10)
+  be c3 holds Magma.knap_item(c2, 4, 5)
+  be c4 holds Magma.knap_item(c3, 7, 14)
+  be c5 holds Magma.knap_item(c4, 3, 4)
+  be cellula holds Magma.knap_item(c5, 6, 9)
+
+  return Magma.knapsack(cellula, 12)
+}

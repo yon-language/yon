@@ -1,0 +1,28 @@
+{
+  "id": "book/arrows",
+  "title": "6. Arrows",
+  "description": "Everything that maps in Yon is an arrow with a categorical kind. Arrows are",
+  "source": "@site/docs/book/06-arrows.md",
+  "sourceDirName": "book",
+  "slug": "/book/arrows",
+  "permalink": "/book/arrows",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 6,
+  "frontMatter": {
+    "id": "arrows",
+    "title": "6. Arrows",
+    "sidebar_position": 6
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "5. Worlds and places",
+    "permalink": "/book/worlds-and-places"
+  },
+  "next": {
+    "title": "7. The Heyting core",
+    "permalink": "/book/heyting-core"
+  }
+}

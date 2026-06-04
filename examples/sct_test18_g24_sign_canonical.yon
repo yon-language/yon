@@ -1,0 +1,43 @@
+/* SCT Test 18 — G_24 Golay sign-flip canonicalization (turno 32).
+ *
+ * NUOVO API: Leech.sign_canonical(label, signs_24bit) ritorna slot xheap
+ * canonicalizzato sotto orbita Golay code G_24.
+ *
+ * Predizione paper §3.2: signs nella stessa orbita G_24 → STESSO slot.
+ *
+ * Test setup:
+ *   s_zero = 0b0...0 (24 zeri) → syndrome = 0
+ *   s_first_octad = 0b00000000_11111111 = 0xFF = 255
+ *     Questo è un codeword G_24 valido (peso 8 = first octad)
+ *     Quindi s_first_octad ∈ G_24 → syndrome = 0 (= stesso di s_zero)
+ *
+ * Verifica: Leech.sign_canonical(L, 0) e Leech.sign_canonical(L, 255)
+ * dovrebbero produrre lo STESSO slot xheap.
+ *
+ * Inoltre testo che signs NON in G_24 (es. peso 1 = 0b1) producono
+ * syndrome distinto e quindi slot distinto.
+ *
+ * Misuro:
+ *   - Leech.syndrome(0) = 0
+ *   - Leech.syndrome(255) = 0  (se 255 ∈ G_24)
+ *   - Leech.syndrome(1) ≠ 0    (1 non in G_24)
+ *
+ * Output encoded: synd_0 + synd_255*10 + synd_1*100 + collapse_check */
+
+fun main(): number {
+  be synd_0 holds Leech.syndrome(0)
+  be synd_255 holds Leech.syndrome(255)
+  be synd_1 holds Leech.syndrome(1)
+
+  /* Verifica collapse: slot_a == slot_b se canonicalizzati uguale */
+  be slot_a holds Leech.sign_canonical(42, 0)
+  be slot_b holds Leech.sign_canonical(42, 255)
+  be slot_c holds Leech.sign_canonical(42, 1)
+
+  be collapse_ab holds if slot_a == slot_b then 1 else 0
+  be distinct_ac holds if slot_a == slot_c then 0 else 1
+
+  /* Output: synd_0 (0) + synd_255 (sperata 0) * 10 + synd_1 (sperata ≠0) * 100
+   * Test discriminante: collapse_ab * 1000 + distinct_ac * 100 + synd_1 */
+  return collapse_ab * 1000 + distinct_ac * 100 + synd_1
+}

@@ -1,0 +1,66 @@
+/* SCT Test 27 — SAT extended benchmark (turno 33 finale).
+ *
+ * 20 clausole random 24-bit + 20 flip via XOR 0x00FFFF (codeword G_24 peso 16).
+ * Atteso: 40 input → 20 slot xheap (collapse 2× per simmetria parity).
+ *
+ * Misura empirica delta_xheap + sample 5 collapse pair. */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  /* 20 clausole hardcoded */
+  be c01 holds Leech.sign_canonical(0, 5263441)
+  be c02 holds Leech.sign_canonical(0, 8388609)
+  be c03 holds Leech.sign_canonical(0, 4194820)
+  be c04 holds Leech.sign_canonical(0, 12648465)
+  be c05 holds Leech.sign_canonical(0, 7733521)
+  be c06 holds Leech.sign_canonical(0, 9088729)
+  be c07 holds Leech.sign_canonical(0, 13434953)
+  be c08 holds Leech.sign_canonical(0, 11184810)
+  be c09 holds Leech.sign_canonical(0, 6710886)
+  be c10 holds Leech.sign_canonical(0, 14540253)
+  be c11 holds Leech.sign_canonical(0, 3355443)
+  be c12 holds Leech.sign_canonical(0, 16384256)
+  be c13 holds Leech.sign_canonical(0, 2796202)
+  be c14 holds Leech.sign_canonical(0, 9437184)
+  be c15 holds Leech.sign_canonical(0, 5592405)
+  be c16 holds Leech.sign_canonical(0, 11829920)
+  be c17 holds Leech.sign_canonical(0, 1118481)
+  be c18 holds Leech.sign_canonical(0, 14942208)
+  be c19 holds Leech.sign_canonical(0, 8224125)
+  be c20 holds Leech.sign_canonical(0, 5174573)
+
+  /* 20 flip: c XOR 65535 (= 0x00FFFF codeword G_24) — VALORI VERIFICATI Python */
+  be f01 holds Leech.sign_canonical(0, 5287854)
+  be f02 holds Leech.sign_canonical(0, 8454142)
+  be f03 holds Leech.sign_canonical(0, 4259323)
+  be f04 holds Leech.sign_canonical(0, 12713966)
+  be f05 holds Leech.sign_canonical(0, 7798510)
+  be f06 holds Leech.sign_canonical(0, 9064742)
+  be f07 holds Leech.sign_canonical(0, 13500342)
+  be f08 holds Leech.sign_canonical(0, 11162965)
+  be f09 holds Leech.sign_canonical(0, 6723993)
+  be f10 holds Leech.sign_canonical(0, 14492194)
+  be f11 holds Leech.sign_canonical(0, 3394764)
+  be f12 holds Leech.sign_canonical(0, 16449279)
+  be f13 holds Leech.sign_canonical(0, 2774357)
+  be f14 holds Leech.sign_canonical(0, 9502719)
+  be f15 holds Leech.sign_canonical(0, 5614250)
+  be f16 holds Leech.sign_canonical(0, 11828575)
+  be f17 holds Leech.sign_canonical(0, 1175278)
+  be f18 holds Leech.sign_canonical(0, 15007743)
+  be f19 holds Leech.sign_canonical(0, 8225410)
+  be f20 holds Leech.sign_canonical(0, 5114578)
+
+  be n1 holds __xheap_used()
+  be delta_total holds n1 - n0
+
+  be p1 holds if c01 == f01 then 1 else 0
+  be p5 holds if c05 == f05 then 1 else 0
+  be p10 holds if c10 == f10 then 1 else 0
+  be p15 holds if c15 == f15 then 1 else 0
+  be p20 holds if c20 == f20 then 1 else 0
+  be collapse_sum holds p1 + p5 + p10 + p15 + p20
+
+  return delta_total + collapse_sum * 100
+}

@@ -1,0 +1,28 @@
+{
+  "id": "book/functions-and-effects",
+  "title": "4. Functions and effects",
+  "description": "Inference. A parameter may omit its annotation; the signature pre-pass",
+  "source": "@site/docs/book/04-functions-and-effects.md",
+  "sourceDirName": "book",
+  "slug": "/book/functions-and-effects",
+  "permalink": "/book/functions-and-effects",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 4,
+  "frontMatter": {
+    "id": "functions-and-effects",
+    "title": "4. Functions and effects",
+    "sidebar_position": 4
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "3. Control flow and mutation",
+    "permalink": "/book/control-flow"
+  },
+  "next": {
+    "title": "5. Worlds and places",
+    "permalink": "/book/worlds-and-places"
+  }
+}

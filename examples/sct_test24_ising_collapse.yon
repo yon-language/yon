@@ -1,0 +1,58 @@
+/* SCT Test 24 — Ising 24-spin collapse benchmark (turno 33 parte 2).
+ *
+ * Setup: 4 configurazioni di 24 spin, in cui ogni coppia differisce per
+ * un sign-flip globale (= simmetria Z_2 del modello Ising).
+ *
+ * Tradizionalmente:
+ *   - configurazione s ∈ {+1, -1}^24 → 2^24 stati totali
+ *   - Ising ha simmetria globale s ↔ -s
+ *   - Quotient: 2^23 = 8388608 stati distinti
+ *
+ * Con Co_0 sign-flip canonicalization:
+ *   Le configurazioni s e -s = s XOR 0xFFFFFF
+ *   In G_24, 0xFFFFFF è il codeword all-ones (peso 24) ✓
+ *   Quindi s ~ -s sotto G_24 orbit
+ *   → 1 slot per coppia (s, -s)
+ *
+ * Encoding: config = bitmask 24-bit
+ * Test: 4 configurazioni e i loro spin-flip globali → 8 input, 4 slot.
+ *
+ * MISURO: delta_xheap per 8 chiamate sign_canonical. Predizione: 4. */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  /* 4 configurazioni distinte */
+  be c1 holds 13434953  /* 0xCD0D89 random pattern */
+  be c2 holds 9088729   /* 0x8AB199 */
+  be c3 holds 7733521   /* 0x76FBD1 */
+  be c4 holds 16711935  /* 0xFF00FF */
+
+  /* Le loro flip globali = c XOR 0xFFFFFF */
+  be c1_flip holds 3342262  /* = c1 XOR 0xFFFFFF */
+  be c2_flip holds 7688486  /* = c2 XOR 0xFFFFFF */
+  be c3_flip holds 9043694  /* = c3 XOR 0xFFFFFF */
+  be c4_flip holds 65280    /* = c4 XOR 0xFFFFFF = 0x00FF00 */
+
+  /* Hash ciascuna sotto Co_0 G_24 (sign-flip orbit) */
+  be s1 holds Leech.sign_canonical(0, c1)
+  be s2 holds Leech.sign_canonical(0, c2)
+  be s3 holds Leech.sign_canonical(0, c3)
+  be s4 holds Leech.sign_canonical(0, c4)
+  be s1_flip holds Leech.sign_canonical(0, c1_flip)
+  be s2_flip holds Leech.sign_canonical(0, c2_flip)
+  be s3_flip holds Leech.sign_canonical(0, c3_flip)
+  be s4_flip holds Leech.sign_canonical(0, c4_flip)
+
+  be n1 holds __xheap_used()
+  be delta_ising holds n1 - n0  /* predizione: 4 (ogni coppia → 1 slot) */
+
+  /* Check collapse: s1 == s1_flip? */
+  be pair1_collapse holds if s1 == s1_flip then 1 else 0
+  be pair2_collapse holds if s2 == s2_flip then 1 else 0
+  be pair3_collapse holds if s3 == s3_flip then 1 else 0
+  be pair4_collapse holds if s4 == s4_flip then 1 else 0
+
+  /* Output: delta_ising + sum_collapses * 10 */
+  return delta_ising + (pair1_collapse + pair2_collapse + pair3_collapse + pair4_collapse) * 10
+}

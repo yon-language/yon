@@ -1,0 +1,35 @@
+/* Cluster A esteso — XSet, Space, Merkle.leaf orbital (turno 33 part 7). */
+
+fun main(): number {
+  /* XSet orbital con canon_id 1 (G_24 syndrome) */
+  be xs0 holds XSet.empty()
+  be xs1 holds XSet.orbital_add(xs0, 5263441, 1)     /* canon 1 = G_24 */
+  be xs2 holds XSet.orbital_add(xs1, 5287854, 1)     /* same orbit → DEDUP */
+  be xs3 holds XSet.orbital_add(xs2, 8388609, 1)
+  be xs4 holds XSet.orbital_add(xs3, 8454142, 1)     /* same orbit → DEDUP */
+  be xset_size holds XSet.size(xs4)   /* expected 2 */
+
+  /* Merkle.leaf_orbital con canon_id 5 (popcount) */
+  be leaf_a holds Merkle.leaf_orbital(100, 5)   /* popcount=3 → label 3 */
+  be leaf_b holds Merkle.leaf_orbital(104, 5)   /* popcount=3 → label 3 → SAME slot xheap */
+  be leaf_c holds Merkle.leaf_orbital(101, 5)   /* popcount=4 → label 4 → different */
+  be merkle_dedup holds if leaf_a == leaf_b then 1 else 0
+  be merkle_distinct holds if leaf_a != leaf_c then 1 else 0
+
+  /* Space.orbital_set/get con canon_id 6 (mod_8) */
+  /* Idx 100 e 108 entrambi mod 8 = 4 → stessa entry */
+  be sp holds Space.make(0)
+  be _ holds Space.orbital_set(sp, 100, 999, 6)
+  be v_100 holds Space.orbital_get(sp, 100, 6)
+  be v_108 holds Space.orbital_get(sp, 108, 6)   /* same canonical → 999 */
+  be space_consistent holds if v_100 == v_108 then 1 else 0
+
+  be _io1 holds IO.print_num(xset_size)
+  be _io2 holds IO.print_num(merkle_dedup)
+  be _io3 holds IO.print_num(merkle_distinct)
+  be _io4 holds IO.print_num(space_consistent)
+
+  /* Output: xset(2)*1000 + merkle_dedup*100 + merkle_distinct*10 + space_consistent
+   * Expected: 2000 + 100 + 10 + 1 = 2111 mod 256 = $(python3 -c 'print(2111%256)') */
+  return xset_size * 1000 + merkle_dedup * 100 + merkle_distinct * 10 + space_consistent
+}

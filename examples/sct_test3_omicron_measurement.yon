@@ -1,0 +1,90 @@
+/* SCT Test 3 — Omicron Measurement con misurazione RUNTIME (turno 32 fix).
+ *
+ * Versione precedente: omicron_step(w_literal, S_literal) con valori
+ * hardcoded → replay aritmetico. ANTI-BIAS: questo test ora misura
+ * w_i e S_i tramite __xheap_used() reale.
+ *
+ * Setup: per ciascuna delle 3 serie (Powers of 2, Fibonacci, Burst),
+ * alloca Merkle leaf con i valori della serie e misura xheap delta.
+ *
+ * Series A — Powers of 2: {1, 2, 4, 8, 16}
+ *   Ogni leaf è unico → w_i = 1 (un nuovo slot per leaf)
+ *   S_i cumulativo = i
+ *   o_i = 1 / (1 + (i-1)) = 1/i  → max = 1.0 (al primo step)
+ *
+ * Series B — Fibonacci: {1, 2, 3, 5, 8}
+ *   leaf(1) DEDUP con A, leaf(2) DEDUP con A, leaf(3) NUOVO,
+ *   leaf(5) NUOVO, leaf(8) DEDUP con A.
+ *   Misurato: w cambia in base ai dedup naturali.
+ *
+ * Series C — Burst: {1, 5, 20, 100, 1000}
+ *   leaf(1) DEDUP, leaf(5) DEDUP, gli altri NUOVI.
+ *
+ * Tutti misurati a runtime → output dipende da ordine reale di esecuzione,
+ * non da pre-computation. */
+
+fun omicron_step(w_i: number, s_prev: number): number {
+  return w_i / (1.0 + s_prev)
+}
+fun max2(a: number, b: number): number { return if a > b then a else b }
+
+fun main(): number {
+  /* === Series A === */
+  be nA_0 holds __xheap_used()
+  be a1 holds Merkle.leaf(1)
+  be nA_1 holds __xheap_used()
+  be w_A1 holds nA_1 - nA_0
+
+  be a2 holds Merkle.leaf(2)
+  be nA_2 holds __xheap_used()
+  be w_A2 holds nA_2 - nA_1
+
+  be a3 holds Merkle.leaf(4)
+  be nA_3 holds __xheap_used()
+  be w_A3 holds nA_3 - nA_2
+
+  be a4 holds Merkle.leaf(8)
+  be nA_4 holds __xheap_used()
+  be w_A4 holds nA_4 - nA_3
+
+  be a5 holds Merkle.leaf(16)
+  be nA_5 holds __xheap_used()
+  be w_A5 holds nA_5 - nA_4
+
+  be s_A1 holds w_A1
+  be s_A2 holds s_A1 + w_A2
+  be s_A3 holds s_A2 + w_A3
+  be s_A4 holds s_A3 + w_A4
+
+  be o_A1 holds omicron_step(w_A1, 0.0)
+  be o_A2 holds omicron_step(w_A2, s_A1)
+  be o_A3 holds omicron_step(w_A3, s_A2)
+  be o_A4 holds omicron_step(w_A4, s_A3)
+  be o_A5 holds omicron_step(w_A5, s_A4)
+
+  be max_A holds max2(max2(max2(max2(o_A1, o_A2), o_A3), o_A4), o_A5)
+
+  /* === Series B (uses Fibonacci values, some dedup with A) === */
+  be nB_0 holds __xheap_used()
+  be b1 holds Merkle.leaf(1)   /* DEDUP a1 */
+  be b2 holds Merkle.leaf(2)   /* DEDUP a2 */
+  be b3 holds Merkle.leaf(3)   /* NUOVO */
+  be b4 holds Merkle.leaf(5)   /* NUOVO */
+  be b5 holds Merkle.leaf(8)   /* DEDUP a4 */
+  be nB_1 holds __xheap_used()
+  be w_B_total holds nB_1 - nB_0  /* dovrebbe essere 2: solo leaf(3) e leaf(5) nuovi */
+
+  /* === Series C burst === */
+  be nC_0 holds __xheap_used()
+  be c1 holds Merkle.leaf(1)    /* DEDUP */
+  be c2 holds Merkle.leaf(5)    /* DEDUP */
+  be c3 holds Merkle.leaf(20)   /* NUOVO */
+  be c4 holds Merkle.leaf(100)  /* NUOVO */
+  be c5 holds Merkle.leaf(1000) /* NUOVO */
+  be nC_1 holds __xheap_used()
+  be w_C_total holds nC_1 - nC_0  /* dovrebbe essere 3 */
+
+  /* Output: encoded con info misurate genuinamente
+   *   max_A * 100 + w_B_total * 10 + w_C_total */
+  return max_A * 100 + w_B_total * 10 + w_C_total
+}

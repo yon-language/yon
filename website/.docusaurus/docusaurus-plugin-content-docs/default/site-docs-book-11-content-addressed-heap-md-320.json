@@ -1,0 +1,28 @@
+{
+  "id": "book/content-addressed-heap",
+  "title": "11. The content-addressed heap",
+  "description": "Everything you have built so far — numbers aside — lives in one structure:",
+  "source": "@site/docs/book/11-content-addressed-heap.md",
+  "sourceDirName": "book",
+  "slug": "/book/content-addressed-heap",
+  "permalink": "/book/content-addressed-heap",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 11,
+  "frontMatter": {
+    "id": "content-addressed-heap",
+    "title": "11. The content-addressed heap",
+    "sidebar_position": 11
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "10. A tour of the standard library",
+    "permalink": "/book/standard-library"
+  },
+  "next": {
+    "title": "12. Values, cells, and lifetime",
+    "permalink": "/book/values-cells-lifetime"
+  }
+}

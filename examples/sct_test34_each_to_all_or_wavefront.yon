@@ -1,0 +1,40 @@
+/* SCT Test 34 — Theorem 20 (Each-to-All passage, §28) (turno 33 part 6).
+ *
+ * OR wavefront implementa ω-rule costruttivamente: ogni P(n) verificato
+ * setta bit n nel wavefront. Ne il bit n viene mai cancellato (tail-sensitive).
+ *
+ * Test: verifico P(0), P(1), ..., P(7) come bit ORed in wavefront 24-bit.
+ * Dopo 8 verifiche, wavefront = 0xFF = 255.
+ * popcount(wavefront) = 8 = numero verifiche.
+ * Nessun bit perso (tail-sensitive ω-rule).
+ *
+ * Confronto con tail-blind: shr o bit-clear avrebbe perso info. */
+
+fun main(): number {
+  be wavefront holds Space.make(0)
+  be counter holds Space.make(0)
+
+  /* Loop: verifica P(n) per n = 0..7, set bit n nel wavefront */
+  while Space.get(counter) < 8 do {
+    be n holds Space.get(counter)
+    be bit_n holds Bits.shl(1, n)
+    be cur holds Space.get(wavefront)
+    be new_wf holds Bits.bor(cur, bit_n)
+    be _ holds Space.set(wavefront, new_wf)
+    be _2 holds Space.set(counter, n + 1)
+  }
+
+  be final_wf holds Space.get(wavefront)   /* expected: 255 = 11111111 */
+  be n_verified holds Bits.popcount(final_wf)   /* expected: 8 */
+
+  be _io1 holds IO.print_num(final_wf)
+  be _io2 holds IO.print_num(n_verified)
+
+  /* Verify each bit set */
+  be bit0_set holds if Bits.band(final_wf, 1) > 0 then 1 else 0
+  be bit7_set holds if Bits.band(final_wf, 128) > 0 then 1 else 0
+  be all_bits_set holds bit0_set * bit7_set   /* expected 1 if entrambi set */
+
+  /* Output: n_verified*100 + all_bits_set*10 + (final_wf mod 100) */
+  return n_verified * 100 + all_bits_set * 10 + final_wf
+}

@@ -1,0 +1,11 @@
+world W { Code is X }
+world V { Code is Y }
+
+functor F(x: number) from W to V { return x }
+functor G(x: number) from W to V { return x }
+
+nat_transform Eta from F to G {
+  for each X by F
+}
+
+fun main(): number { return 0 }

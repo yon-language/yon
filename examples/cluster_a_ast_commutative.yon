@@ -1,0 +1,50 @@
+/* Cluster A — AST commutative auto-quotient via Merkle.nodeN (turno 33 part 5).
+ *
+ * AST commutative operations (and, or, +) hanno ordine non significativo.
+ * Encoding tradizionale: AST con figli posizionali → and(a, b) ≠ and(b, a)
+ * Encoding Merkle: and(a, b) = and(b, a) (sort children automatico)
+ *
+ * Setup: 3 AST equivalenti modulo commutativity:
+ *   t1 = and(or(x, y), z)
+ *   t2 = and(z, or(y, x))      ≡ t1 sotto commutativity
+ *   t3 = and(or(y, x), z)      ≡ t1 sotto commutativity
+ *
+ * Con Merkle.node2 (S_2 auto-canonicalize): t1, t2, t3 → 1 SOLO slot.
+ * Compiler hash-cons quotient pass = gratis.
+ *
+ * Misura: total slot allocati. */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  /* Variables (leaves) */
+  be x holds Merkle.leaf(1)
+  be y holds Merkle.leaf(2)
+  be z holds Merkle.leaf(3)
+
+  /* t1 = and(or(x, y), z) */
+  be or_xy holds Merkle.node2_commutative(100, x, y)     /* label 100 = "or" */
+  be t1 holds Merkle.node2_commutative(200, or_xy, z)     /* label 200 = "and" */
+
+  /* t2 = and(z, or(y, x)) — swap arg ordering everywhere */
+  be or_yx holds Merkle.node2_commutative(100, y, x)     /* canonical sort: same slot as or_xy */
+  be t2 holds Merkle.node2_commutative(200, z, or_yx)     /* canonical: same slot as t1 */
+
+  /* t3 = and(or(y, x), z) — alternative ordering */
+  be t3 holds Merkle.node2_commutative(200, or_yx, z)     /* canonical: same as t1 */
+
+  be n1 holds __xheap_used()
+  be delta holds n1 - n0   /* expected: 3 leaf + 1 or + 1 and = 5 slot */
+
+  /* Verifica iniettività: t1 == t2 == t3 (stesso slot) */
+  be eq12 holds if t1 == t2 then 1 else 0
+  be eq13 holds if t1 == t3 then 1 else 0
+
+  be _io1 holds IO.print_num(delta)
+  be _io2 holds IO.print_num(t1)
+  be _io3 holds IO.print_num(t2)
+  be _io4 holds IO.print_num(t3)
+
+  /* Output: delta * 10 + eq12 * 100 + eq13 * 1000 */
+  return delta + eq12 * 100 + eq13 * 1000
+}

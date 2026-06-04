@@ -1,0 +1,38 @@
+/* SCT Test 25 — SAT clausole equivalenti via flip codeword G_24 (turno 33 parte 2).
+ *
+ * 4 clausole bit-encoded, ciascuna XOR con codeword 0x00FFFF (verificato G_24).
+ * Atteso: 4 coppie collassano → 4 slot xheap distinti (collapse 2×). */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+
+  be c1 holds 5263441    /* 0x505051 */
+  be c2 holds 8388609    /* 0x800001 */
+  be c3 holds 4194820    /* 0x400204 */
+  be c4 holds 12648465   /* 0xC10011 */
+
+  /* CORRETTO: XOR con 0x00FFFF (= 65535) */
+  be c1_flip holds 5287854   /* 0x50AFAE */
+  be c2_flip holds 8454142   /* 0x80FFFE */
+  be c3_flip holds 4259323   /* 0x40FDFB */
+  be c4_flip holds 12713966  /* 0xC1FFEE */
+
+  be h1 holds Leech.sign_canonical(0, c1)
+  be h2 holds Leech.sign_canonical(0, c2)
+  be h3 holds Leech.sign_canonical(0, c3)
+  be h4 holds Leech.sign_canonical(0, c4)
+  be h1f holds Leech.sign_canonical(0, c1_flip)
+  be h2f holds Leech.sign_canonical(0, c2_flip)
+  be h3f holds Leech.sign_canonical(0, c3_flip)
+  be h4f holds Leech.sign_canonical(0, c4_flip)
+
+  be n1 holds __xheap_used()
+  be delta_sat holds n1 - n0
+
+  be p1 holds if h1 == h1f then 1 else 0
+  be p2 holds if h2 == h2f then 1 else 0
+  be p3 holds if h3 == h3f then 1 else 0
+  be p4 holds if h4 == h4f then 1 else 0
+
+  return delta_sat + (p1 + p2 + p3 + p4) * 10
+}

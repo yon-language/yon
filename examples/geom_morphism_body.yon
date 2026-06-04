@@ -1,0 +1,10 @@
+world Shop { Code is X }
+place Account in Shop { balance number }
+place AccountEU in Shop { balance number }
+geomorph LiftBody from Account to AccountEU {
+  pull(a: AccountEU): Account {
+    be tmp holds a
+    return tmp
+  }
+}
+fun main(): number { return 0 }

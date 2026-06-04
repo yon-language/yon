@@ -1,0 +1,28 @@
+{
+  "id": "book/capabilities",
+  "title": "19. Capabilities",
+  "description": "A move can demand more than well-typed fields: it can demand authority.",
+  "source": "@site/docs/book/19-capabilities.md",
+  "sourceDirName": "book",
+  "slug": "/book/capabilities",
+  "permalink": "/book/capabilities",
+  "draft": false,
+  "unlisted": false,
+  "tags": [],
+  "version": "current",
+  "sidebarPosition": 19,
+  "frontMatter": {
+    "id": "capabilities",
+    "title": "19. Capabilities",
+    "sidebar_position": 19
+  },
+  "sidebar": "docs",
+  "previous": {
+    "title": "18. Showpieces",
+    "permalink": "/book/showpieces"
+  },
+  "next": {
+    "title": "20. Tooling",
+    "permalink": "/book/tooling"
+  }
+}

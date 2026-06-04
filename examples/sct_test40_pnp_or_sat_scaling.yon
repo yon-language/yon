@@ -1,0 +1,107 @@
+/* SCT Test 40 — §34.6 P=NP OR/SAT scaling exponent measurement (turno 33 part 9).
+ *
+ * ONESTÀ: §34.6 dichiara P=NP per OR/SAT OPEN. Dipende da k=O(log G).
+ *
+ * Misurazione runtime: random 3-SAT a phase transition α=4.27, n=6..14.
+ *
+ * Per ogni n calcolo:
+ *   - |R|, G, k_active, max_o, sum_o
+ *   - exponent c stimato: c = log(|R|) / log(G)
+ *
+ * Predizione paper §34.6 (basata su SATLIB UF20): c ≈ 5.
+ * Se c stabile attraverso n crescente → poly bound suggested (NON proof).
+ * Se c cresce con n → exponential. */
+
+fun ratio_k_logG(n: number, seed: number): number {
+  be k holds SAT.run_3sat(n, seed, 2)
+  be G holds SAT.run_3sat(n, seed, 6)
+  return k / Math.log(G)
+}
+
+fun exponent_c(n: number, seed: number): number {
+  be R holds SAT.run_3sat(n, seed, 1)
+  be G holds SAT.run_3sat(n, seed, 6)
+  return Math.log(R) / Math.log(G)
+}
+
+fun main(): number {
+  be seed holds 42
+
+  /* n = 6 */
+  be R6 holds SAT.run_3sat(6, seed, 1)
+  be G6 holds SAT.run_3sat(6, seed, 6)
+  be k6 holds SAT.run_3sat(6, seed, 2)
+  be c6 holds exponent_c(6, seed)
+  be r6 holds ratio_k_logG(6, seed)
+
+  /* n = 8 */
+  be R8 holds SAT.run_3sat(8, seed, 1)
+  be G8 holds SAT.run_3sat(8, seed, 6)
+  be k8 holds SAT.run_3sat(8, seed, 2)
+  be c8 holds exponent_c(8, seed)
+  be r8 holds ratio_k_logG(8, seed)
+
+  /* n = 10 */
+  be R10 holds SAT.run_3sat(10, seed, 1)
+  be G10 holds SAT.run_3sat(10, seed, 6)
+  be k10 holds SAT.run_3sat(10, seed, 2)
+  be c10 holds exponent_c(10, seed)
+  be r10 holds ratio_k_logG(10, seed)
+
+  /* n = 12 */
+  be R12 holds SAT.run_3sat(12, seed, 1)
+  be G12 holds SAT.run_3sat(12, seed, 6)
+  be k12 holds SAT.run_3sat(12, seed, 2)
+  be c12 holds exponent_c(12, seed)
+  be r12 holds ratio_k_logG(12, seed)
+
+  /* n = 14 */
+  be R14 holds SAT.run_3sat(14, seed, 1)
+  be G14 holds SAT.run_3sat(14, seed, 6)
+  be k14 holds SAT.run_3sat(14, seed, 2)
+  be c14 holds exponent_c(14, seed)
+  be r14 holds ratio_k_logG(14, seed)
+
+  /* Output: print all scaling data */
+  be _0 holds IO.print_num(R6)
+  be _1 holds IO.print_num(R8)
+  be _2 holds IO.print_num(R10)
+  be _3 holds IO.print_num(R12)
+  be _4 holds IO.print_num(R14)
+  be _5 holds IO.print_num(c6)
+  be _6 holds IO.print_num(c8)
+  be _7 holds IO.print_num(c10)
+  be _8 holds IO.print_num(c12)
+  be _9 holds IO.print_num(c14)
+  be _10 holds IO.print_num(k6)
+  be _11 holds IO.print_num(k8)
+  be _12 holds IO.print_num(k10)
+  be _13 holds IO.print_num(k12)
+  be _14 holds IO.print_num(k14)
+  be _15 holds IO.print_num(r6)
+  be _16 holds IO.print_num(r8)
+  be _17 holds IO.print_num(r10)
+  be _18 holds IO.print_num(r12)
+  be _19 holds IO.print_num(r14)
+
+  /* Variance check c: stable → poly bound suggested */
+  be c_max holds Math.max(Math.max(Math.max(Math.max(c6, c8), c10), c12), c14)
+  be c_min holds Math.min(Math.min(Math.min(Math.min(c6, c8), c10), c12), c14)
+  be c_spread holds c_max - c_min
+
+  /* Verifica claim k = O(log G):
+   *   ratio_k_logG = k / log(G) ≈ constant per c·ln G hypothesis
+   * Se k = c·ln G → ratio stabile.
+   * Se k cresce più velocemente → ratio cresce. */
+  be r_max holds Math.max(Math.max(Math.max(Math.max(r6, r8), r10), r12), r14)
+  be r_min holds Math.min(Math.min(Math.min(Math.min(r6, r8), r10), r12), r14)
+  be r_spread holds r_max - r_min
+
+  be _x1 holds IO.print_num(c_spread)
+  be _x2 holds IO.print_num(r_spread)
+
+  /* Output: c_min(c_max-c_min) summary in single int.
+   * floor(c_avg*100) per check stability */
+  be c_avg holds (c6 + c8 + c10 + c12 + c14) / 5
+  return Math.floor(c_avg * 100)
+}

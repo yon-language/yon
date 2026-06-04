@@ -1,0 +1,12 @@
+fun server_node(): number {
+  be sid holds Stream.make_net(5, 54331, 1)
+  be v holds Stream.recv_net(sid)
+  be c holds Stream.close_net(sid)
+  return 0
+}
+fun client_node(): number {
+  be sid holds Stream.make_net(5, 54331, 0)
+  be ok holds Stream.send_net(sid, 42)
+  return 0
+}
+fun main(): number { return 0 }

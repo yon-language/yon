@@ -1,0 +1,50 @@
+/* Cluster A — Proof traces Co_0-aware tramite HashSet.orbital_add.
+ *
+ * Use case reale: un proof system genera fact "espandendo" gli assiomi via
+ * derivation rules. Spesso due fact F1, F2 differiscono solo per gauge
+ * symmetry (es. parity flip in clausole SAT).
+ *
+ * Con HashSet.add normale: F1 e F2 entrambi memorized → doppio lavoro
+ * Con HashSet.orbital_add: F1 e F2 collassano → proof trace metà size
+ *
+ * Setup: 8 fact derivati durante proof, 4 coppie equivalenti sotto G_24.
+ * Misuro size finale del proof trace. */
+
+fun main(): number {
+  be trace holds HashSet.empty()
+  be max_iter holds 8
+  be counter holds Space.make(0)
+
+  /* Loop: deriva 8 fact, di cui 4 paia equivalenti orbit */
+  while Space.get(counter) < max_iter do {
+    be i holds Space.get(counter)
+    /* fact_pattern dipende da i: per i pari, raw; per i dispari, flip orbit */
+    be fact holds if i < 4
+      then 1000000 + i * 100
+      else 1000000 + (i - 4) * 100  /* fact_i ≡ fact_(i-4) sotto identity NO orbit-equiv */
+    be _ holds Space.set(counter, i + 1)
+    be _2 holds HashSet.orbital_add(trace, fact)
+  }
+
+  /* Nota: il loop ricrea trace ogni iter con add chained.
+   * Per misurare bene la size finale serve passare trace in/out del loop.
+   * Workaround: faccio set chained esplicito. */
+
+  /* Setup chained per misurare */
+  be t0 holds HashSet.empty()
+  be t1 holds HashSet.orbital_add(t0, 5263441)
+  be t2 holds HashSet.orbital_add(t1, 5287854)   /* DEDUP — stessa orbita */
+  be t3 holds HashSet.orbital_add(t2, 8388609)
+  be t4 holds HashSet.orbital_add(t3, 8454142)   /* DEDUP */
+  be t5 holds HashSet.orbital_add(t4, 4194820)
+  be t6 holds HashSet.orbital_add(t5, 4259323)   /* DEDUP */
+  be t7 holds HashSet.orbital_add(t6, 12648465)
+  be t8 holds HashSet.orbital_add(t7, 12713966)  /* DEDUP */
+
+  be size_final holds HashSet.size(t8)
+  be _io holds IO.print_num(size_final)
+
+  /* Output: size finale del proof trace.
+   * 8 fact derivati, 4 coppie equivalenti orbit → size 4 (collapse 2×) */
+  return size_final
+}

@@ -1,0 +1,14 @@
+.venv/
+*.o
+frontend/_build/
+mlir/build/
+website/node_modules/
+website/build/
+.DS_Store
+# Internal lab notebook (Italian, 168 parts) — excluded from the public
+# repo for now; remove these two lines to publish it.
+docs/goal.md
+docs/goal_full_history_backup.md
+
+# Internal docs (research notes, design, lab diary) — not in the public repo
+docs/

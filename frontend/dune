@@ -1,0 +1,7 @@
+(ocamllex lexer)
+(menhir (modules parser))
+(executables
+ (names main run_example yoner_emit_mlir eval_runner yon_lsp yonfmt yon_lint yon_doc)
+ (libraries str)
+ (modules (:standard \ lex_test test_ty_subst))
+ (flags (:standard -w -a)))
