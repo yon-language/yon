@@ -1,0 +1,9 @@
+// Cloudflare Workers (static assets only): serves the Docusaurus site
+// built into website/build. No Worker script — pure static hosting.
+{
+  "name": "yon",
+  "compatibility_date": "2026-06-04",
+  "assets": {
+    "directory": "./website/build"
+  }
+}
