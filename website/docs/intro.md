@@ -1,11 +1,8 @@
 ---
 id: intro
-title: "Yon: a topos-oriented programming language"
-sidebar_label: Introduction
+title: Introduction
 sidebar_position: 1
 slug: /
-description: "Yon is a research programming language with topos-theoretic foundations, compiled to native code via MLIR and LLVM, with a content-addressed heap on the Leech lattice."
-keywords: [topos, programming language, category theory, MLIR, LLVM, content-addressed, Leech lattice, HoTT]
 ---
 
 # The Yon Programming Language

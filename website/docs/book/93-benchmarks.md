@@ -2,7 +2,6 @@
 id: benchmarks
 title: "Appendix D. Benchmarks"
 sidebar_position: 93
-description: "Measured benchmarks for the Yon language: O(1) structural equality on the content-addressed heap, state-space exploration, Merkle diff, and cross-process RPC, with method and sources."
 ---
 
 # Appendix D — Benchmarks

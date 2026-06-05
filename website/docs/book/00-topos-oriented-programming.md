@@ -2,7 +2,6 @@
 id: topos-oriented-programming
 title: "0. Topos-Oriented Programming"
 sidebar_position: 0
-description: "What topos-oriented programming means in Yon: subobject classifier, comprehension types, functors with checked laws, and an intuitionistic core, compiled to native code."
 ---
 
 # Topos-Oriented Programming
