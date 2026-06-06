@@ -153,7 +153,6 @@
       "every", EVERY;
       "here", HERE;
       "sequence", SEQUENCE;
-      "over", OVER;
       "repeat", REPEAT;
       "at", AT;
       "most", MOST;

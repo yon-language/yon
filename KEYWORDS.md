@@ -24,7 +24,6 @@ its row says `example`. Open items, in execution order:
 
 | # | Item | Keyword(s) | What is missing |
 |---|---|---|---|
-| 1 | Duplicate `over` entry in the lexer table | none | remove the second registration (one line) |
 | 2 | View declaration lowering | `show` | desugar drops `TopView`; synthesize a record place plus a constructor function per view so `Snapshot(acc)` works |
 | 3 | Path-value runtime representation | `refl` | path cells (`!topos.cell<1,"id">`) have no lowering; design decision pending (inert erased witness vs full structure) |
 | 4 | Universe-typed parameters | `Type` | `fun f(t: Type)` does not lower in body positions |
@@ -243,7 +242,3 @@ Duration suffixes `ms`, `s`, `min`, `h`, `d`, `y` (`2s + 500ms`; a
 duration is a `number` of milliseconds) and `Type_N` for universe
 levels.
 
-## Known cleanups
-
-`over` is registered twice in the lexer table (same word, same token,
-harmless). Candidate for removal.
