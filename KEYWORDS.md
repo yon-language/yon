@@ -127,7 +127,7 @@ These read as English in declarations.
 | `by` | example | `A maps to B by f`: the function realizing the clause |
 | `is` | example | Pattern condition: `e is pattern` (a variable, a literal, `present`/`absent`/`unknown`) |
 | `not` | example | Pattern negation: `e is not pattern` (`examples/kw_patterns.yon`) |
-| `list` | wired | The list type: `list of T` |
+| `list` | example | The list type: `list of T` (`examples/kw_list_here.yon`) |
 | `map` | example | The map type: `map of K to V` |
 | `stream` | example | The stream type: `stream of T`, plus modifiers |
 | `with` | example | `with effects`, `with multishot`, `with fold`, `compose h1 with h2` |
@@ -158,7 +158,7 @@ These read as English in declarations.
 | `while` | example | `while cond do { }`: general loop, may not terminate |
 | `do` | example | Introduces the body of `iter`/`while` |
 | `for` `every` | example | `for every x in e { }`: iteration over a List (1.0 executes sequentially) |
-| `here` | wired | `when here`: Space filter on the iteration (declared intent, not yet a runtime distinction) |
+| `here` | example | `when here`: Space filter in the for-every header (declared intent, not yet a runtime distinction) (`examples/kw_list_here.yon`) |
 | `sequence` | example | `in sequence over x in e { }`: explicit sequential iteration |
 | `repeat` `at` `most` `times` | example | `repeat at most N times { } [otherwise { }]`: the body runs N times, then the otherwise |
 | `forever` | example | Infinite loop (`while present`); typically paired with effects |
