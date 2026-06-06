@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# yon-lint — user-facing wrapper. Resolves the dune-built binary relative to
+# this script (repo layout), or YON_BIN_DIR if set (installed layout).
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN="${YON_BIN_DIR:-$HERE/../frontend/_build/default}/yon_lint.exe"
+[ -x "$BIN" ] || { echo "yon-lint: binary not found: $BIN (build with: cd frontend && dune build)" >&2; exit 1; }
+exec "$BIN" "$@"

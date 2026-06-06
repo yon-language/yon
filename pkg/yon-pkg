@@ -21,7 +21,7 @@
 #   geometria = { git = "https://github.com/user/geometria", version = "1.2" }
 #   algebra   = { git = "https://github.com/other/algebra", rev = "abc123" }
 #   utils     = { pkg = "user/utils", version = "1.0" }   # GitHub shorthand
-#   json      = { pkg = "json" }    # bare name -> official org (yon-language/json,
+#   json      = { pkg = "json" }    # bare name -> official org (yon-lang/json,
 #                                   # override: env YON_PKG_ORG)
 #
 # version = git tag (e.g. "1.2" -> tag v1.2 or 1.2); rev = explicit commit/branch.
@@ -40,7 +40,7 @@ die() { echo "yon-pkg: $*" >&2; exit 1; }
 # Returns lines "name|URL|kind|value" where kind=version|rev|none.
 parse_deps() {
   [ -f "$MANIFEST" ] || die "no $MANIFEST in the current directory (use 'yon-pkg init')"
-  awk -v ORG="${YON_PKG_ORG:-yon-language}" '
+  awk -v ORG="${YON_PKG_ORG:-yon-lang}" '
     /^\[dependencies\]/ { indeps=1; next }
     /^\[/ { indeps=0 }
     /^[ \t]*#/ { next }   # skip comment lines (including the template example)
@@ -59,7 +59,7 @@ parse_deps() {
       git=extract(line, "git"); ver=extract(line, "version"); rev=extract(line, "rev")
       pkg=extract(line, "pkg")
       # Go-style shorthand: pkg = "user/repo" -> github.com/user/repo;
-      # BARE name (no slash) -> official namespace (org), default yon-language.
+      # BARE name (no slash) -> official namespace (org), default yon-lang.
       if (git=="" && pkg!="") {
         if (index(pkg, "/") == 0) pkg = ORG "/" pkg
         git = "https://github.com/" pkg
@@ -103,12 +103,12 @@ cmd_list() {
   done
 }
 
-# resolves a dep to an exact commit and clones/updates it in yon_modules/<repo>
+# resolves a dep to an exact commit and clones/updates it in yon_modules/<name>
+# (the manifest key: it is what `import` resolves, regardless of the repo name)
 resolve_one() {
   local name="$1" url="$2" kind="$3" val="$4"
-  local repo dest
-  repo="$(basename "${url%.git}")"
-  dest="$MODDIR/$repo"
+  local dest
+  dest="$MODDIR/$name"
   if [ ! -d "$dest/.git" ]; then
     echo "  cloning $name <- $url" >&2
     git clone --quiet "$url" "$dest" || die "clone failed: $url"
@@ -126,7 +126,7 @@ resolve_one() {
              elif git -C "$dest" rev-parse --quiet --verify "$val^{commit}" >/dev/null 2>&1; then
                ref="$val"
              else die "version $val not found for $name (neither tag v$val nor $val)"; fi ;;
-    none)    ref="$(git -C "$dest" symbolic-ref --quiet --short HEAD 2>/dev/null || echo HEAD)" ;;
+    none)    ref="$(git -C "$dest" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/HEAD)" ;;
   esac
   git -C "$dest" checkout --quiet "$ref" || die "checkout $ref failed for $name"
   # exact resolved commit (for the lock)
