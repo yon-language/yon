@@ -50,7 +50,7 @@ New objects from old ones, named after their universal property.
 |---|---|---|
 | `geomorph` | example | Geometric morphism between two worlds: the adjoint pair `pull`/`push` |
 | `pull` | example | Inside a geomorph: the inverse image f*, the left adjoint |
-| `push` | wired | Inside a geomorph: the direct image f lower star, the right adjoint |
+| `push` | example | Inside a geomorph: the direct image f lower star, the right adjoint |
 | `pullback` | wired | Limit: glues two maps over a shared target |
 | `pushout` | wired | Colimit: glues two maps under a shared source |
 | `over` | example | Slice category: `place P over X`, objects equipped with a chosen map down to X |
@@ -95,8 +95,8 @@ New objects from old ones, named after their universal property.
 
 | Keyword | Status | What it does |
 |---|---|---|
-| `adjunction` | wired | Declares the geomorph's adjoint pairing |
-| `exact` | wired | In `exact pull` / `exact push`: the inverse image preserves finite limits |
+| `adjunction` | example | Declares the geomorph's adjoint pairing |
+| `exact` | example | In `exact pull` / `exact push`: the inverse image preserves finite limits |
 
 ## Error model
 
