@@ -17,13 +17,13 @@ compiler enforces. The kinds live at different *levels* of the structure:
 | `move … from P to Q` | place → place | a morphism of objects | transport sections; the only way content crosses places (and Spaces) |
 | `reduction … of P` | `P`'s operations → a value | an algebra / eliminator | interpret a place's effectful operations (a handler) |
 | `functor` / `morph … from W to V` | world → world | a functor between categories | translate whole contexts, objects *and* operations |
-| `nat_transform … from F to G` | functor → functor | a natural transformation (2-cell) | relate two translations, one component per object |
+| `nat transform … from F to G` | functor → functor | a natural transformation (2-cell) | relate two translations, one component per object |
 | `geomorph … from P to Q` | site → site | a geometric morphism `f* ⊣ f∗` | change the site itself: pull/push with an adjunction |
 
 One ladder, in words: a `fun` moves *values*; a `view` looks *into* one
 place; a `move` carries content *between* places; a `reduction` says what a
 place's *operations mean*; a `functor` translates an entire *world*; a
-`nat_transform` compares two such translations; a `geomorph` relocates the
+`nat transform` compares two such translations; a `geomorph` relocates the
 *logic itself*. Pick the lowest rung that does the job, the type checker
 will hold you to it.
 
@@ -84,7 +84,7 @@ world V { Code is Y }
 functor F(x: number) from W to V { return x }
 functor G(x: number) from W to V { return x }
 
-nat_transform Eta from F to G {
+nat transform Eta from F to G {
   for each X by F
 }
 
@@ -92,7 +92,7 @@ fun main(): number { return 0 }
 ```
 
 A `functor` translates a whole world (and may declare `law identity`,
-`law composition` for the checker); a `nat_transform` relates two functors,
+`law composition` for the checker); a `nat transform` relates two functors,
 giving one component per object of the source world, Eckmann–Hilton
 interchange for these 2-cells is inherited by the directed core.
 
@@ -189,7 +189,7 @@ and `apply_move` accepts a locally bound move-lambda.
 A `morph F from W to V` block gives a functor by components
 (`on object(...)`, `on morphism op via op2`); a top-level
 `functor F(x) from W to V law identity law composition` declares one with
-checkable laws (its body is a single `return`); `nat_transform t from F to G`
+checkable laws (its body is a single `return`); `nat transform t from F to G`
 lists the components, one `for each X by fnX` per object. A
 `geomorph g from P to Q` carries a `pull(...)` and a `push(...)`, the
 geometric morphism, i.e. the adjunction `f* ⊣ f∗` (`adjunction`,

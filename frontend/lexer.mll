@@ -81,7 +81,7 @@
          inside it (it has a subobject classifier, `prop` below). `objects`/
          `morphisms` list its content; `terminal` is the one-point object;
          `morph` declares a single map; `on object`/`on morphism ... via ...`
-         say how a functor acts on each. A `nat_transform` (natural
+         say how a functor acts on each. A `nat transform` (natural
          transformation) is a map *between two functors* F and G: for each
          object it gives a map F(X) -> G(X), coherently. *)
       "topos", TOPOS_KW;
@@ -89,10 +89,9 @@
       "morphisms", MORPHISMS_KW;
       "terminal", TERMINAL_KW;
       "prop", PROP_KW;
-      "each", EACH;             (* `for each X by Y` inside a nat_transform *)
+      "each", EACH;             (* `for each X by Y` inside a nat transform *)
       "morph", MORPH_KW;
       "via", VIA_KW;
-      "nat_transform", NAT_TRANSFORM_KW;
 
       (* A geometric morphism between topoi is an adjoint pair of functors:
          pull (f^*, inverse image, the left adjoint) and push (f_*, direct
