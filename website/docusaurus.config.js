@@ -7,6 +7,7 @@ const config = {
   tagline: 'A topos-oriented programming language with a content-addressed lattice heap',
   url: 'https://yon-lang.org',
   baseUrl: '/',
+  trailingSlash: false,
   favicon: 'img/logo.svg',
   onBrokenLinks: 'warn',
   onBrokenMarkdownLinks: 'warn',
