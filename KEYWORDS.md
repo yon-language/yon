@@ -51,8 +51,8 @@ New objects from old ones, named after their universal property.
 | `geomorph` | example | Geometric morphism between two worlds: the adjoint pair `pull`/`push` |
 | `pull` | example | Inside a geomorph: the inverse image f*, the left adjoint |
 | `push` | example | Inside a geomorph: the direct image f lower star, the right adjoint |
-| `pullback` | wired | Limit: glues two maps over a shared target |
-| `pushout` | wired | Colimit: glues two maps under a shared source |
+| `pullback` | example | Limit: glues two maps over a shared target. Runtime form pullback(f, g, a, b) checks f(a) == g(b) and packs the pair (`examples/kw_pullback_pushout.yon`); the place declaration is kernel metadata |
+| `pushout` | example | Colimit: glues two maps under a shared source. The place declaration is kernel metadata (`examples/kw_pullback_pushout.yon`); the expression form is a stub today |
 | `over` | example | Slice category: `place P over X`, objects equipped with a chosen map down to X |
 | `topology` | wired | Equips a world with a notion of covering (Grothendieck / Lawvere-Tierney topology) |
 
