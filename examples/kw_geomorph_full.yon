@@ -1,0 +1,21 @@
+// Micro-example: the full geometric morphism surface. `pull` is the
+// inverse image f*, `push` the direct image f_*; the categorical
+// clauses `adjunction`, `exact pull` and `exact push` declare the
+// adjoint pairing and the finite-limit preservation.
+world Shop { Code is X }
+place Account in Shop { balance number }
+place AccountEU in Shop { balance number }
+geomorph Lift from Account to AccountEU {
+  adjunction
+  exact pull
+  exact push
+  pull(a: AccountEU): Account {
+    be tmp holds a
+    return tmp
+  }
+  push(a: Account): AccountEU {
+    be tmp holds a
+    return tmp
+  }
+}
+fun main(): number { return 0 }
