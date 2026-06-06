@@ -26,6 +26,7 @@ RAN handle_lambdas exit=44
 RAN hermetic_scope exit=42
 RAN kw_geomorph_full exit=0
 RAN kw_heyting exit=42
+RAN kw_hott exit=42
 RAN kw_is_literal exit=30
 RAN kw_list_here exit=21
 RAN kw_merge_move exit=14
