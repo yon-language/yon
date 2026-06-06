@@ -4,7 +4,7 @@
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'Yon',
-  tagline: 'A topos-oriented programming language with a content-addressed lattice heap',
+  tagline: 'The Topos of Programming',
   url: 'https://yon-lang.org',
   baseUrl: '/',
   trailingSlash: false,
