@@ -131,7 +131,7 @@
 %token SHARE RESOLVES
 
 /* Stream modifiers */
-%token BUFFER DROP_OLDEST DROP_NEWEST
+%token BUFFER DROP
 
 /* Control flow */
 %token WHEN OTHERWISE FOR EVERY EACH HERE SEQUENCE OVER REPEAT AT MOST TIMES
@@ -226,7 +226,7 @@
 
 /* Precedence for stream modifiers (innermost binding). */
 %nonassoc NO_STREAM_MOD
-%nonassoc BUFFER DROP_OLDEST DROP_NEWEST
+%nonassoc BUFFER DROP
 
 /* ─── Start symbol ──────────────────────────────────────────────────── */
 
@@ -889,8 +889,15 @@ variant:
 
 stream_modifier:
   | BUFFER n = NUM_LIT                          { StreamBuffer (int_of_float n) }
-  | DROP_OLDEST                                 { StreamDropOldest }
-  | DROP_NEWEST                                 { StreamDropNewest }
+  (* `drop oldest` / `drop newest`: DROP is a keyword (a bare two-word
+   * contextual form would be ambiguous with `name type` field pairs in
+   * type position), the policy word is contextual. *)
+  | DROP which = IDENT
+    { match which with
+      | "oldest" -> StreamDropOldest
+      | "newest" -> StreamDropNewest
+      | w -> failwith ("expected 'drop oldest' or 'drop newest', got 'drop "
+                       ^ w ^ "'") }
 
 stream_mod_list:
   | /* empty */                                 %prec NO_STREAM_MOD

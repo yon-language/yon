@@ -143,8 +143,8 @@
 
       (* Stream back-pressure policy: bound the buffer, or drop old/new items. *)
       "buffer", BUFFER;
-      "drop_oldest", DROP_OLDEST;
-      "drop_newest", DROP_NEWEST;
+      "drop", DROP;             (* `drop oldest` / `drop newest`: the
+                                   policy word after `drop` is contextual *)
 
       (* Control flow *)
       "when", WHEN;
