@@ -138,7 +138,7 @@ These read as English in declarations.
 | `unifies` | wired | Merge move: `move m unifies A, B { }` merges two places field by field |
 | `share` | wired | In the merge move: shared fields, no conflict |
 | `resolves` | example | `conflict on f resolves to fn`: the conflict-resolution function |
-| `heyting` | wired | `heyting<N>` / `heyting(v, mask)`: an integer in Heyting (intuitionistic) arithmetic, trits with an Unknown mask |
+| `heyting` | example | `heyting<N>` / `heyting(v, mask)`: an integer in Heyting (intuitionistic) arithmetic, trits with an Unknown mask |
 
 ## Stream back-pressure
 
