@@ -144,8 +144,8 @@ These read as English in declarations.
 
 | Keyword | Status | What it does |
 |---|---|---|
-| `buffer` | wired | `buffer N`: bounds the stream queue |
-| `drop` | wired | `drop oldest` / `drop newest`: drop policy (the policy word is contextual) |
+| `buffer` | example | `buffer N`: bounds the stream queue |
+| `drop` | example | `drop oldest` / `drop newest`: drop policy (the policy word is contextual) |
 
 ## Control flow
 
