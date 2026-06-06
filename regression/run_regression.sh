@@ -21,9 +21,21 @@ if [ ! -x "$TOPOS" ]; then
   echo "WARNING: topos-opt not executable: $TOPOS" >&2
   echo "         (wrong YONC_TOPOS_OPT or missing mlir build)" >&2
 fi
-LLC="${YONC_LLC:-llc}"
-MLIRTRANS="${YONC_MLIR_TRANSLATE:-mlir-translate}"
-MLIROPT="${YONC_MLIR_OPT:-mlir-opt}"
+# --- LLVM tools: env > PATH > versioned (-18) > distro dir > brew ----
+find_llvm_tool() {
+  for cand in "$1" "$1-18"; do
+    command -v "$cand" >/dev/null 2>&1 && { command -v "$cand"; return 0; }
+  done
+  [ -x "/usr/lib/llvm-18/bin/$1" ] && { echo "/usr/lib/llvm-18/bin/$1"; return 0; }
+  if command -v brew >/dev/null 2>&1; then
+    bp="$(brew --prefix llvm@18 2>/dev/null || true)"
+    [ -n "$bp" ] && [ -x "$bp/bin/$1" ] && { echo "$bp/bin/$1"; return 0; }
+  fi
+  echo "$1"
+}
+LLC="${YONC_LLC:-$(find_llvm_tool llc)}"
+MLIRTRANS="${YONC_MLIR_TRANSLATE:-$(find_llvm_tool mlir-translate)}"
+MLIROPT="${YONC_MLIR_OPT:-$(find_llvm_tool mlir-opt)}"
 CC="${YONC_CC:-gcc}"
 NOPIE="-no-pie"; [ "$(uname -s)" = "Darwin" ] && NOPIE=""
 
