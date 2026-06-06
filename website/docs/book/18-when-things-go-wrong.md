@@ -15,7 +15,7 @@ them *values or declarations*.
 
 An `error` declaration is a place whose meaning is failure. Errors form
 their own sub-object hierarchy with `extends` (chapter 4's monomorphisms),
-and a place can declare its error morphism with `on_error`:
+and a place can declare its error morphism with `on error`:
 
 ```yon
 world Db { Code is X }
@@ -23,7 +23,7 @@ world Db { Code is X }
 error Error in Db { message number }
 error QueryError in Db extends Error { message number  sqlstate number }
 
-place QueryInsert in Db on_error QueryError { sql number }
+place QueryInsert in Db on error QueryError { sql number }
 
 fun handle(e: Error): number { return e.message }
 fun on_query_fail(q: QueryError): number {
@@ -36,7 +36,7 @@ fun main(): number {
 }
 ```
 
-`on_error` is checked like everything else: the named error must be a
+`on error` is checked like everything else: the named error must be a
 declared error place, and a handler written against `Error` accepts every
 sub-error, subsumption doing for failures exactly what it does for data.
 An error is a section: it carries fields, it is content-addressed, it can

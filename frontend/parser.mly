@@ -113,7 +113,6 @@
 %token SOLVE
 %token EXTENDS
 %token ERROR_KW
-%token ON_ERROR
 %token INVERTIBLE
 /* The tokens BACKED_BY/POL_DIRECT/POL_SHARDED/POL_PAXOS/POL_CRDT were removed:
  * they were distributed-policy keywords, replaced by geom_morphism +
@@ -670,7 +669,7 @@ place_decl:
         pd_loc = mk_loc $startpos $endpos } }
 
 (* error E (in W)? (extends Base)? { fields } — an error place. Reuses
- * place_decl with pd_is_error=true. The target of the on_error morphism. *)
+ * place_decl with pd_is_error=true. The target of the `on error` morphism. *)
 error_decl:
   | ERROR_KW name = IDENT in_world = option(in_world_clause)
     ext = option(extends_clause)
@@ -697,9 +696,15 @@ over_clause:
 extends_clause:
   | EXTENDS base = IDENT  { base }
 
-(* place P ... on_error E — an error morphism P -> E. *)
+(* place P ... on error E — an error morphism P -> E. `on` is read as a
+ * plain identifier and validated contextually, the same scheme used by
+ * the morph body clauses: `on` stays free as a user name. *)
 on_error_clause:
-  | ON_ERROR e = IDENT  { e }
+  | tag = IDENT ERROR_KW e = IDENT
+    { if tag <> "on" then
+        failwith ("expected 'on error' clause in place header, got '"
+                  ^ tag ^ " error'");
+      e }
 
 (* field-only-or-cell list: a place without "with effects" allows fields and
  * custom cells, but not operations. The cells are structural declarations (the
