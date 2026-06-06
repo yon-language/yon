@@ -161,6 +161,15 @@ let () =
     exit 3
   end;
   let desugared = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) prog in
+  (* TEMP DIAGNOSTIC: dump the Core IR under YON_DUMP_CORE=1 *)
+  (try if Sys.getenv "YON_DUMP_CORE" = "1" then begin
+    List.iter (fun (name, body) ->
+      Printf.eprintf "=== %s ===\n%s\n" name (Pretty.pp_term body))
+      desugared.Desugar.functions;
+    (match desugared.Desugar.main with
+     | Some m -> Printf.eprintf "=== main ===\n%s\n" (Pretty.pp_term m)
+     | None -> ())
+  end with Not_found -> ());
   (* Extract the view decls from the program and propagate them to
    * emit_program via a global setter. *)
   Emit_mlir.set_views_list (List.filter_map (function

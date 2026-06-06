@@ -3588,6 +3588,15 @@ let rec emit_term (e : emitter)
                          "[emit_mlir] let-binding '%s' to a Lambda value matches no top-level function. Known functions: [%s]."
                          x
                          (String.concat "; " (List.map fst funcs)))
+       | _ when List.mem_assoc x funcs ->
+           (* Same drained self-binding, zero-parameter case: with no
+              parameters the function body is a let-chain (an App), not a
+              Lam, so the case above misses. Emitting the value here would
+              run the body's effects inline AND leave the later Var to
+              resolve through funcs into a func.call: the effects would
+              execute twice (the zero-arg double-execution bug). The
+              top-level func.func already exists; skip the binding. *)
+           emit_term e env funcs rest
        | _ ->
            (* If value is a Var naming a top-level function, record an alias in
               the env as "__hof_ref:name". A later App pattern knows that
