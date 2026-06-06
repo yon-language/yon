@@ -201,13 +201,13 @@ These read as English in declarations.
 
 | Keyword | Status | What it does |
 |---|---|---|
-| `Type` | wired | The universe of types (`Type_N` for levels, recognized at the lex-rule level) |
+| `Type` | parse-only | The universe of types (`Type_N` for levels); a universe-typed parameter does not lower in body positions today |
 | `Pi` | example | Dependent product type (dependent functions) |
-| `Sigma` | wired | Dependent sum type (dependent pairs) |
+| `Sigma` | example | Dependent sum type, lowered to the honest two-field struct (`examples/kw_hott.yon`); as a comprehension fibre it does not lower today (use Pi/Id fibres) |
 | `Id` | example | Identity type: paths between two terms |
-| `refl` | wired | The reflexivity path |
+| `refl` | parse-only | The reflexivity path; typed as a path cell, not lowered in expression position today |
 | `pair` | example | Constructor of the Sigma pair |
-| `fst` `snd` | wired | Projections of the pair |
+| `fst` `snd` | example | Projections of the pair (`examples/kw_hott.yon`) |
 | `ind_path` | parse-only | The J eliminator at surface level: parsing only, honestly flagged in the reference |
 
 ## Two-word contextual phrases
