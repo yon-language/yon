@@ -135,8 +135,8 @@ These read as English in declarations.
 | `effects` | example | `place P with effects { }`: the place exposes operations |
 | `requires` | example | `move m ... requires CAP1, CAP2`: required capabilities |
 | `init` | example | `init X as Space`: initializes a Space |
-| `unifies` | wired | Merge move: `move m unifies A, B { }` merges two places field by field |
-| `share` | wired | In the merge move: shared fields, no conflict |
+| `unifies` | example | Merge move declaration: `move m unifies A, B { }` (`examples/kw_merge_move.yon`); the merge engine exists and is unit-tested, the surface application call is pending |
+| `share` | example | In the merge move: shared fields, no conflict (`examples/kw_merge_move.yon`) |
 | `resolves` | example | `conflict on f resolves to fn`: the conflict-resolution function |
 | `heyting` | example | `heyting<N>` / `heyting(v, mask)`: an integer in Heyting (intuitionistic) arithmetic, trits with an Unknown mask |
 
@@ -183,9 +183,9 @@ These read as English in declarations.
 |---|---|---|
 | `show` | parse-only | Inside a view declaration: `show name` / `show name = e`. The declaration form is dropped at desugar today; the wired form is the inline view lambda (`view(s: P) => e of P`) |
 | `as` | example | Alias: `import q as a`, `init X as Space` |
-| `maps` | wired | Move clause: `A maps to B by f` |
+| `maps` | example | Move clause: `A maps to B by f` (the `by` is mandatory) (`examples/kw_merge_move.yon`) |
 | `converts` | example | Move clause: field conversion |
-| `aggregates` | wired | Move clause: aggregation of several fields |
+| `aggregates` | example | Move clause: `src aggregates to dst by f` (single source in the grammar; operationally fn(source), declared intent) (`examples/kw_merge_move.yon`) |
 | `multishot` | wired | `with multishot`: the continuation may be resumed more than once |
 
 ## Three-valued logic and effects
