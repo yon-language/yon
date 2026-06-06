@@ -38,7 +38,7 @@ Static structures of the topos: they compose but do not nest.
 | `fun` | example | Ordinary function; also the inline lambda form |
 | `move` | example | A map between two places (`move m from A to B`); the body is a list of mapping clauses |
 | `view` | example | A representable functor on a place (`view V of P { show ... }`) |
-| `reduction` | wired | Folds a structure to a value (`reduction(acc, x) => e of P`) |
+| `reduction` | example | Folds a structure to a value (`reduction(acc, x) => e of P`) |
 | `operation` | example | A method exposed by a place; carries an effect |
 | `cell` | example | A higher cell inside a place (CaTT style) |
 
@@ -63,8 +63,8 @@ New objects from old ones, named after their universal property.
 | `functor` | example | A map between worlds preserving the categorical structure |
 | `functorial` | example | Marks an operation that behaves as a functor |
 | `forward` | example | Reduction direction: forward |
-| `backward` | wired | Reduction direction: backward |
-| `bi` | wired | Bidirectional reduction (reserved word, see reference) |
+| `backward` | example | Reduction direction: backward |
+| `bi` | example | Bidirectional reduction (reserved word, see reference) |
 
 ## Certified algebra
 
@@ -73,8 +73,8 @@ New objects from old ones, named after their universal property.
 | `algebra` | example | Names an algebra from the certified catalog (`uses algebra Additive`) |
 | `uses` | example | Binds an operation to its algebra |
 | `law` | example | Declares an algebraic law; the compiler verifies it against the catalog and rejects a false claim |
-| `lawful` | wired | Reduction modifier: declared and verified law |
-| `invertible` | wired | Reduction modifier: invertible |
+| `lawful` | example | Reduction modifier: declared and verified law |
+| `invertible` | example | Reduction modifier: invertible |
 | `solve` | example | Instantiates a law-verified place as a runnable handle |
 | `fold` | example | Names a space's fold function (`with fold "sum_f64"`) |
 
@@ -186,7 +186,7 @@ These read as English in declarations.
 | `maps` | example | Move clause: `A maps to B by f` (the `by` is mandatory) (`examples/kw_merge_move.yon`) |
 | `converts` | example | Move clause: field conversion |
 | `aggregates` | example | Move clause: `src aggregates to dst by f` (single source in the grammar; operationally fn(source), declared intent) (`examples/kw_merge_move.yon`) |
-| `multishot` | wired | `with multishot`: the continuation may be resumed more than once |
+| `multishot` | example | `with multishot`: the continuation may be resumed more than once |
 
 ## Three-valued logic and effects
 

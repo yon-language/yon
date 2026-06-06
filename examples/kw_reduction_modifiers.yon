@@ -1,0 +1,18 @@
+// Micro-example: the reduction declaration with its full modifier
+// battery. Direction (`backward`, `bi`), `lawful` (declared and
+// verified law), `invertible`, `with multishot` (the continuation may
+// be resumed more than once), explicit `fold`. Clauses are contextual
+// `on` handlers and `be` bindings.
+world W { Code is X }
+place Tally in W with effects { total number
+  operation add(x: number): number }
+reduction bi lawful invertible Sum of Tally with multishot fold "sum_f64" {
+  be seed holds 0
+  on add(x: number) {
+    return x
+  }
+}
+reduction backward Rewind of Tally {
+  be seed holds 0
+}
+fun main(): number { return 0 }
