@@ -181,7 +181,7 @@ These read as English in declarations.
 
 | Keyword | Status | What it does |
 |---|---|---|
-| `show` | wired | Inside a view: `show name` / `show name = e`, the exposed fields |
+| `show` | parse-only | Inside a view declaration: `show name` / `show name = e`. The declaration form is dropped at desugar today; the wired form is the inline view lambda (`view(s: P) => e of P`) |
 | `as` | example | Alias: `import q as a`, `init X as Space` |
 | `maps` | wired | Move clause: `A maps to B by f` |
 | `converts` | example | Move clause: field conversion |

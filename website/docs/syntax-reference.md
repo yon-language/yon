@@ -220,7 +220,7 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | `functor F(x: T) from W to V [law identity] [law composition] { return e }` | ✓ | Functor given by a return expression with declared laws |
 | `nat transform t from F to G { for each X by fnX }` | ✓ | Natural transformation: one component per object |
 | `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: `pull` is the inverse image, `push` the direct image; clauses `adjunction`, `exact pull`, `exact push` declare its properties |
-| `view V of P { show f  show f = e  show f as "label" }` | ✓ | Derived projection of a place |
+| `view V of P { show f  show f = e  show f as "label" }` | parse-only | Derived projection of a place. The declaration form is parsed but not yet lowered; use the inline view lambda (`view(s: P) => e of P`) |
 | `topology j of P { ... }` | ✓ | **Lawvere–Tierney** topology: a body defining `j : Ω → Ω` |
 | `reduction [forward\|backward\|bi] [lawful] [invertible] R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | Reduction with direction and laws; clauses are contextual `on` handlers and `be` bindings |
 
