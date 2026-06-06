@@ -11,4 +11,6 @@ docs/goal.md
 docs/goal_full_history_backup.md
 
 # Internal docs (research notes, design, lab diary) — not in the public repo
-docs/
+/docs/
+website/.docusaurus/
+website.zip

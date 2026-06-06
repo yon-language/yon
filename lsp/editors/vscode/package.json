@@ -1,9 +1,13 @@
 {
-  "name": "yon-lsp",
+  "name": "yon-lang",
   "displayName": "Yon Language Support",
-  "description": "Diagnostics in tempo reale per il linguaggio Yon",
-  "version": "0.1.0",
-  "engines": { "vscode": "^1.75.0" },
+  "description": "Syntax highlighting and language server (diagnostics, hover, symbols, completion) for the Yon programming language.",
+  "version": "0.2.1",
+  "publisher": "yon-lang",
+  "license": "AGPL-3.0",
+  "icon": "icon.png",
+  "repository": {"type": "git", "url": "https://github.com/yon-language/yon"},
+  "engines": {"vscode": "^1.75.0"},
   "categories": ["Programming Languages"],
   "activationEvents": ["onLanguage:yon"],
   "main": "./client.js",
@@ -11,10 +15,24 @@
     "languages": [{
       "id": "yon",
       "extensions": [".yon"],
-      "aliases": ["Yon"]
-    }]
+      "aliases": ["Yon"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "yon",
+      "scopeName": "source.yon",
+      "path": "./syntaxes/yon.tmLanguage.json"
+    }],
+    "configuration": {
+      "title": "Yon",
+      "properties": {
+        "yon.lspPath": {
+          "type": "string",
+          "default": "yon-lsp",
+          "description": "Absolute path to the yon_lsp binary (build it with: cd frontend && dune build)."
+        }
+      }
+    }
   },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.0"
-  }
+  "dependencies": {"vscode-languageclient": "^9.0.0"}
 }
