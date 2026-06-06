@@ -79,7 +79,7 @@ inside views.
 | `list of T`, `map of K to V` | ✓ | Collections |
 | `stream of T buffer N drop_oldest`/`drop_newest` | ✓ | Stream with back-pressure modifiers |
 | `T -> U` | ✓ | Function type, right-associative |
-| `heyt_int<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
+| `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | `Type`, `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
 | `Pi(x: A). B`, `Sigma(x: A). B` | ✓ | Dependent function / pair types |
 | `Id(A, x, y)` | ✓ | Identity (path) type between terms `x`, `y` |
@@ -116,7 +116,7 @@ from the call sites.
 | `refl(t)`, `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
 | `ind_path(C, d, p)` | ⚠ not implemented | The J eliminator parses; its emission is not wired in 1.0 (the runnable fragment is `refl`/`pair`/`fst`/`snd`) |
 | `pullback(f, g)` / `pullback(f, g, a, b)` | ✓ | Pullback scaffolding / runtime compatible pair with `f(a) == g(b)` checked |
-| `heyt_int(v)`, `heyt_int(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
+| `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
 ### Operators (by family)
 
@@ -128,7 +128,7 @@ from the call sites.
 | `a => b` | ✓ | Classical implication, sugar for `(not a) or b` |
 | `& \| ^ ~` | ✓ | **Bitwise on numbers** |
 | `&&? \|\|? =>? !?` | ✓ | Heyting (scalar Ω): and, or, implication, negation |
-| `&? \|? ^? ~?` | ✓ | Heyting **trit-wise** on `heyt_int` (Unknown-mask propagation) |
+| `&? \|? ^? ~?` | ✓ | Heyting **trit-wise** on `heyting` (Unknown-mask propagation) |
 | `:` `.` `->` `\|>` | ✓ | Annotation, access, function type, pipe |
 
 ## Statements

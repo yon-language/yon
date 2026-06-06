@@ -17,8 +17,8 @@ fun main(): number {
   be both holds p &&? u            // unknown: conjunction with the undecided
   be imp holds u =>? p             // present: anything implies the present
   be dec holds to_bool(imp)
-  be h1 holds heyt_int(5)          // trits 101, all certain
-  be h2 holds heyt_int(5, 2)       // middle trit unknown
+  be h1 holds heyting(5)          // trits 101, all certain
+  be h2 holds heyting(5, 2)       // middle trit unknown
   be hand holds h1 &? h2           // trit-wise, unknown propagates
   return if dec then 42 else 0
 }
@@ -30,9 +30,9 @@ The operator families keep the two logics visually distinct:
 - `&&? ||? =>? !?` are the Heyting connectives on Ω, `unknown` is not an
   error state, it is a *value*, and it propagates by the algebra's rules
   (`present &&? unknown` is `unknown`; `unknown =>? present` is `present`);
-- `&? |? ^? ~?` are **trit-wise** on `heyt_int<N>`: an integer whose bits
+- `&? |? ^? ~?` are **trit-wise** on `heyting<N>`: an integer whose bits
   each carry their own certainty, with an Unknown mask that propagates
-  bit by bit. `heyt_int(v)` has no unknown bits; `heyt_int(v, mask)` marks
+  bit by bit. `heyting(v)` has no unknown bits; `heyting(v, mask)` marks
   the masked ones.
 
 Bridges: `to_bool`/`to_prop` move between the faces; `decide` guards on the
