@@ -1,0 +1,32 @@
+// Micro-example: the merge move declaration (`unifies`, `share`,
+// `conflict on`) and the mapping clauses `maps to` / `aggregates to`
+// (one source each, transformed `by` a function; the three kinds are
+// operationally fn(source), the distinction is declared intent).
+// Note: the merge ENGINE exists (apply_merge_move, unit-tested) but
+// has no surface call yet; the declaration registers and compiles.
+world W { Code is X }
+place A in W { v number
+  w number }
+place B in W { v number
+  w number }
+place Wide in W { x number
+  y number }
+place Narrow in W { x number
+  total number }
+fun pick(a: number, b: number): number { return a }
+fun ident(x: number): number { return x }
+fun double(x: number): number { return x * 2 }
+move Merge unifies A, B {
+  share v
+  conflict on w resolves to pick
+}
+move Squeeze from Wide to Narrow {
+  x maps to x by ident
+  y aggregates to total by double
+}
+fun main(): number {
+  be wide holds new Wide { x 4
+    y 5 }
+  be narrow holds apply_move(Squeeze, wide)
+  return narrow.x + narrow.total   // 4 + 10 = 14
+}
