@@ -29,7 +29,7 @@ set -euo pipefail
 YONC_ROOT="${YONC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 YONC_FRONTEND="${YONC_FRONTEND:-$YONC_ROOT/frontend/_build/default/yoner_emit_mlir.exe}"
-YONC_TOPOS_OPT="${YONC_TOPOS_OPT:-/home/claude/tree2/turno_33_part17_2026-05-30/mlir/build/topos-opt}"
+YONC_TOPOS_OPT="${YONC_TOPOS_OPT:-$YONC_ROOT/mlir/build/topos-opt}"
 YONC_MLIR_TRANSLATE="${YONC_MLIR_TRANSLATE:-mlir-translate}"
 YONC_LLC="${YONC_LLC:-llc}"
 YONC_CC="${YONC_CC:-gcc}"

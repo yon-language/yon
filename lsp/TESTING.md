@@ -1,7 +1,7 @@
 # Testare l'LSP Yon in Cursor e vim
 
 Binario (path assoluto su questa macchina):
-`/home/claude/full/turno_33_part17_2026-05-30/frontend/_build/default/yon_lsp.exe`
+`frontend/_build/default/yon_lsp.exe`
 
 Builda con: `cd frontend && dune build`
 
@@ -25,7 +25,7 @@ il settings.json del workspace per associare .yon e puntare al binario.
 Neovim 0.8+ ha vim.lsp nativo. Copia lsp/editors/neovim.lua in init.lua
 (o source-alo), esportando il path del binario:
 ```
-export YON_LSP_BIN="/home/claude/full/turno_33_part17_2026-05-30/frontend/_build/default/yon_lsp.exe"
+export YON_LSP_BIN="frontend/_build/default/yon_lsp.exe"
 nvim test.yon
 ```
 Poi apri un .yon: gli errori appaiono inline, :lua vim.lsp.buf.hover() per
@@ -34,7 +34,7 @@ l'hover, :lua vim.lsp.buf.document_symbol() per l'outline, completion con
 
 ## Test al volo da terminale (no editor)
 ```
-/home/claude/full/turno_33_part17_2026-05-30/frontend/_build/default/yon_lsp.exe --check test.yon   # diagnostics, exit code = #errori
+frontend/_build/default/yon_lsp.exe --check test.yon   # diagnostics, exit code = #errori
 ```
 
 ## Cosa aspettarsi
