@@ -34,9 +34,8 @@
    * property of the topos (space), not of the reduction. It is now declared
    * explicitly: space TALLY with fold "sum_f64". *)
 
-  (* A builder helper reused by both keyword forms (geom_morphism +
-   * geometric_morphism). Extracts the declared categorical flags and rebuilds
-   * the AST declaration. *)
+  (* Builder for the geomorph declaration. Extracts the declared
+   * categorical flags and rebuilds the AST declaration. *)
   let build_geom_morphism (name : string) (src_site : string)
                           (dst_site : string)
                           (items : geom_morphism_item_kind list)
@@ -125,7 +124,6 @@
 %token TOPOS_KW OBJECTS_KW MORPHISMS_KW TERMINAL_KW PROP_KW
 %token MORPH_KW ON_OBJECT_KW ON_MORPHISM_KW VIA_KW
 %token NAT_TRANSFORM_KW
-%token GEOMETRIC_MORPHISM_KW F_STAR_KW F_LOWER_STAR_KW
 %token ADJUNCTION_KW EXACT_KW
 (* OVER is already declared below in the WHEN/SEQUENCE token group *)
 
@@ -362,8 +360,9 @@ topos_morphisms_opt:
  *   }
  *
  * A morph is a morphism in the category of topoi (that is, a functor). Future
- * editions may add other kinds of morphisms (geometric_morphism is already
- * separate; one could imagine lex_morph, regular_morph, etale_morph).
+ * editions may add other kinds of morphisms (the geometric morphism,
+ * geomorph, is already separate; one could imagine lex_morph,
+ * regular_morph, etale_morph).
  *
  * The two aspects (on_object and on_morphism) are both optional and
  * orthogonal. They may appear in any order in the body. *)
@@ -480,16 +479,8 @@ pushout_decl:
  *     push(x: TypeFromA): TypeInB { ... }
  *   }
  *)
-(* Two keywords for the same declaration. `geom_morphism` (short) is the
- * original form;
- * `geometric_morphism` (long) is the categorically honest alias. *)
 geom_morphism_decl:
   | GEOM_MORPHISM name = IDENT
-    FROM src_site = IDENT TO dst_site = IDENT
-    LBRACE items = list(geom_morphism_item) RBRACE
-    { build_geom_morphism name src_site dst_site items
-        (mk_loc $startpos $endpos) }
-  | GEOMETRIC_MORPHISM_KW name = IDENT
     FROM src_site = IDENT TO dst_site = IDENT
     LBRACE items = list(geom_morphism_item) RBRACE
     { build_geom_morphism name src_site dst_site items
@@ -518,35 +509,11 @@ geom_morphism_item:
                    fn_partial = false; fn_internal = false;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
-  (* f_star is a synonym for pull (f^* inverse image).
-   * f_lower_star is a synonym for push (f_* direct image). *)
-  | F_STAR_KW LPAREN params = param_list RPAREN
-    ret = option(return_type_decl)
-    LBRACE body = list(stmt) RBRACE
-    { GmItemPull { fn_name = "f_star";
-                   fn_type_params = [];
-                   fn_params = params;
-                   fn_return = ret;
-                   fn_visits = [];
-                   fn_partial = false; fn_internal = false;
-                   fn_body = body;
-                   fn_loc = mk_loc $startpos $endpos } }
-  | F_LOWER_STAR_KW LPAREN params = param_list RPAREN
-    ret = option(return_type_decl)
-    LBRACE body = list(stmt) RBRACE
-    { GmItemPush { fn_name = "f_lower_star";
-                   fn_type_params = [];
-                   fn_params = params;
-                   fn_return = ret;
-                   fn_visits = [];
-                   fn_partial = false; fn_internal = false;
-                   fn_body = body;
-                   fn_loc = mk_loc $startpos $endpos } }
   (* Categorical clauses declaring properties of the geometric morphism. The
      runtime reads them to derive the coordination shape. *)
   | ADJUNCTION_KW                                  { GmItemAdjunction }
-  | EXACT_KW F_STAR_KW                              { GmItemExactFStar }
-  | EXACT_KW F_LOWER_STAR_KW                        { GmItemExactFLowerStar }
+  | EXACT_KW PULL                                   { GmItemExactFStar }
+  | EXACT_KW PUSH                                   { GmItemExactFLowerStar }
 
 top_let:
   | LET name = IDENT HOLDS e = expr

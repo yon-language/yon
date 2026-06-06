@@ -192,9 +192,8 @@ A `morph F from W to V` block gives a functor by components
 checkable laws (its body is a single `return`); `nat_transform t from F to G`
 lists the components, one `for each X by fnX` per object. A
 `geomorph g from P to Q` carries a `pull(...)` and a `push(...)`, the
-geometric morphism, i.e. the adjunction `f* ⊣ f∗` (`f_star`/`f_lower_star`
-are honest synonyms; `adjunction` and `exact f_star` are declarable
-properties):
+geometric morphism, i.e. the adjunction `f* ⊣ f∗` (`adjunction`,
+`exact pull` and `exact push` are declarable properties):
 
 ```yon
 geomorph LiftBody from Account to AccountEU {
