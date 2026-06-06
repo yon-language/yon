@@ -122,7 +122,7 @@
 
 /* First-class topos constructs. */
 %token TOPOS_KW OBJECTS_KW MORPHISMS_KW TERMINAL_KW PROP_KW
-%token MORPH_KW ON_OBJECT_KW ON_MORPHISM_KW VIA_KW
+%token MORPH_KW VIA_KW
 %token NAT_TRANSFORM_KW
 %token ADJUNCTION_KW EXACT_KW
 (* OVER is already declared below in the WHEN/SEQUENCE token group *)
@@ -354,9 +354,9 @@ topos_morphisms_opt:
  *
  * Syntax:
  *   morph LiftEU from Account to AccountEU {
- *     on_object(s: State): EUState = ...
- *     on_morphism deposit via deposit_eu
- *     on_morphism withdraw via withdraw_eu
+ *     on object(s: State): EUState = ...
+ *     on morphism deposit via deposit_eu
+ *     on morphism withdraw via withdraw_eu
  *   }
  *
  * A morph is a morphism in the category of topoi (that is, a functor). Future
@@ -364,7 +364,7 @@ topos_morphisms_opt:
  * geomorph, is already separate; one could imagine lex_morph,
  * regular_morph, etale_morph).
  *
- * The two aspects (on_object and on_morphism) are both optional and
+ * The two aspects (on object and on morphism) are both optional and
  * orthogonal. They may appear in any order in the body. *)
 morph_decl:
   | MORPH_KW name = IDENT FROM src = IDENT TO tgt = IDENT
@@ -381,11 +381,18 @@ morph_decl:
         mp_loc = mk_loc $startpos $endpos } }
 
 morph_item:
-  | ON_OBJECT_KW
+  (* `on object` / `on morphism` are two-word contextual phrases, not
+   * reserved keywords: the parser reads two identifiers and validates
+   * the strings, the same scheme used by the reduction `on` clause.
+   * This keeps `on`, `object` and `morphism` free as user names. *)
+  | tag = IDENT kind = IDENT
     LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
     LBRACE body = list(stmt) RBRACE
-    { (* on_object uses an inline syntax without a redundant `fun` keyword. We
+    { if tag <> "on" || kind <> "object" then
+        failwith ("expected 'on object' clause in morph body, got '"
+                  ^ tag ^ " " ^ kind ^ "'");
+      (* on object uses an inline syntax without a redundant `fun` keyword. We
        * synthesize a fun_decl with a name derived from the morph context; the
        * real name is patched by the desugar (mp_name + "__on_object"). *)
       let fd = { fn_name = "__on_object";
@@ -398,13 +405,16 @@ morph_item:
                  fn_loc = mk_loc $startpos $endpos } in
       MItemOnObject fd }
   (* An inline lambda as the body. Syntax:
-   * `on_object: fun(s: State): USDState => expr`. Equivalent to the block
+   * `on object: fun(s: State): USDState => expr`. Equivalent to the block
    * { return expr }. *)
-  | ON_OBJECT_KW COLON FUN
+  | tag = IDENT kind = IDENT COLON FUN
     LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
     FATARROW body_expr = expr
-    { let loc = mk_loc $startpos $endpos in
+    { if tag <> "on" || kind <> "object" then
+        failwith ("expected 'on object' clause in morph body, got '"
+                  ^ tag ^ " " ^ kind ^ "'");
+      let loc = mk_loc $startpos $endpos in
       let fd = { fn_name = "__on_object";
                  fn_type_params = [];
                  fn_params = params;
@@ -414,8 +424,11 @@ morph_item:
                  fn_body = [SReturn (body_expr, loc)];
                  fn_loc = loc } in
       MItemOnObject fd }
-  | ON_MORPHISM_KW src_op = IDENT VIA_KW tgt_op = IDENT
-    { MItemOnMorphism (src_op, tgt_op) }
+  | tag = IDENT kind = IDENT src_op = IDENT VIA_KW tgt_op = IDENT
+    { if tag <> "on" || kind <> "morphism" then
+        failwith ("expected 'on morphism' clause in morph body, got '"
+                  ^ tag ^ " " ^ kind ^ "'");
+      MItemOnMorphism (src_op, tgt_op) }
 
 (* natural transformation.
  *

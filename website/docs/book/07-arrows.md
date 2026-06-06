@@ -187,7 +187,7 @@ and `apply_move` accepts a locally bound move-lambda.
 ## Between worlds
 
 A `morph F from W to V` block gives a functor by components
-(`on_object(...)`, `on_morphism op via op2`); a top-level
+(`on object(...)`, `on morphism op via op2`); a top-level
 `functor F(x) from W to V law identity law composition` declares one with
 checkable laws (its body is a single `return`); `nat_transform t from F to G`
 lists the components, one `for each X by fnX` per object. A

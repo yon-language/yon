@@ -81,7 +81,7 @@
          surface language. A `topos` is a category rich enough to do logic
          inside it (it has a subobject classifier, `prop` below). `objects`/
          `morphisms` list its content; `terminal` is the one-point object;
-         `morph` declares a single map; `on_object`/`on_morphism ... via ...`
+         `morph` declares a single map; `on object`/`on morphism ... via ...`
          say how a functor acts on each. A `nat_transform` (natural
          transformation) is a map *between two functors* F and G: for each
          object it gives a map F(X) -> G(X), coherently. *)
@@ -92,8 +92,6 @@
       "prop", PROP_KW;
       "each", EACH;             (* `for each X by Y` inside a nat_transform *)
       "morph", MORPH_KW;
-      "on_object", ON_OBJECT_KW;
-      "on_morphism", ON_MORPHISM_KW;
       "via", VIA_KW;
       "nat_transform", NAT_TRANSFORM_KW;
 

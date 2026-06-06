@@ -216,7 +216,7 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | `move m from P to Q [requires CAP1, CAP2] { A maps to B by f ... }` | ✓ | Move between places; the body is a list of **mapping clauses**; `requires` lists capabilities |
 | `move m unifies A, B { share f1, f2  conflict_on f resolves to fn }` | ✓ | Merge move: shared fields plus per-field conflict resolution |
 | `A maps to B by f` / `converts to` / `aggregates to` | ✓ | Mapping kinds; `by fun(x) => e` inline lambda allowed |
-| `morph F from W to V { on_object(...) { } on_morphism op via op2 }` | ✓ | Functor by components; `on_object: fun(...) => e` inline form allowed |
+| `morph F from W to V { on object(...) { } on morphism op via op2 }` | ✓ | Functor by components; `on object: fun(...) => e` inline form allowed; `on`, `object`, `morphism` stay free as user identifiers |
 | `functor F(x: T) from W to V [law identity] [law composition] { return e }` | ✓ | Functor given by a return expression with declared laws |
 | `nat_transform t from F to G { for each X by fnX }` | ✓ | Natural transformation: one component per object |
 | `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: `pull` is the inverse image, `push` the direct image; clauses `adjunction`, `exact pull`, `exact push` declare its properties |
