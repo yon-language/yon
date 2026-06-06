@@ -1,0 +1,31 @@
+// Micro-example: `is` with literal and variable patterns.
+// `x is 7` and `name is "rome"` compile to a single f64 equality:
+// numbers are f64, text is an interned content-addressed handle, so
+// text equality is the O(1) single-comparison of the xleech2 heap.
+// `is not <literal>` rides the same path through heyt negation.
+fun pick(x: number): number visits Output {
+  when x is 7 {
+    be _ holds String.print("x is seven")
+  }
+  return 10
+}
+fun name_check(a: number, b: number): number visits Output {
+  be city holds "rome"
+  when city is "rome" {
+    be _ holds String.print("city is rome")
+  }
+  be other holds "paris"
+  when other is not "rome" {
+    be _ holds String.print("other is not rome")
+  }
+  be y holds (a + b)
+  when y is a {
+    be _ holds String.print("NEVER: y equals a")
+  }
+  return 20
+}
+fun main(): number visits Output {
+  be r1 holds pick(7)
+  be r2 holds name_check(2, 3)
+  return r1 + r2
+}
