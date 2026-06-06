@@ -77,7 +77,7 @@ inside views.
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
 | `A \| B \| C(T)` | ✓ | Sum type; variants may carry arguments |
 | `list of T`, `map of K to V` | ✓ | Collections |
-| `stream of T buffer N drop_oldest`/`drop_newest` | ✓ | Stream with back-pressure modifiers |
+| `stream of T buffer N drop oldest`/`drop newest` | ✓ | Stream with back-pressure modifiers |
 | `T -> U` | ✓ | Function type, right-associative |
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | `Type`, `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
