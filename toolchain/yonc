@@ -30,11 +30,37 @@ YONC_ROOT="${YONC_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 
 YONC_FRONTEND="${YONC_FRONTEND:-$YONC_ROOT/frontend/_build/default/yoner_emit_mlir.exe}"
 YONC_TOPOS_OPT="${YONC_TOPOS_OPT:-$YONC_ROOT/mlir/build/topos-opt}"
-YONC_MLIR_TRANSLATE="${YONC_MLIR_TRANSLATE:-mlir-translate}"
-YONC_LLC="${YONC_LLC:-llc}"
+
+# LLVM tool discovery: bare name on PATH > versioned name (-18) on PATH
+# > Linux distro dir (/usr/lib/llvm-18/bin) > Homebrew keg (llvm@18).
+# Returns the bare name as last resort so the failure stays loud and local.
+find_llvm_tool() {
+    local cand
+    for cand in "$1" "$1-18"; do
+        if command -v "$cand" >/dev/null 2>&1; then
+            command -v "$cand"; return 0
+        fi
+    done
+    if [ -x "/usr/lib/llvm-18/bin/$1" ]; then
+        echo "/usr/lib/llvm-18/bin/$1"; return 0
+    fi
+    if command -v brew >/dev/null 2>&1; then
+        local bp
+        bp="$(brew --prefix llvm@18 2>/dev/null || true)"
+        if [ -n "$bp" ] && [ -x "$bp/bin/$1" ]; then
+            echo "$bp/bin/$1"; return 0
+        fi
+    fi
+    echo "$1"
+}
+
+YONC_MLIR_TRANSLATE="${YONC_MLIR_TRANSLATE:-$(find_llvm_tool mlir-translate)}"
+YONC_LLC="${YONC_LLC:-$(find_llvm_tool llc)}"
 YONC_CC="${YONC_CC:-gcc}"
 YONC_RUNTIME_DIR="${YONC_RUNTIME_DIR:-$YONC_ROOT/runtime}"
-YONC_MMGROUP_DIR="${YONC_MMGROUP_DIR:-/usr/local/lib/python3.12/dist-packages/mmgroup}"
+# mmgroup: env > the active python3 (venv-aware, same probe as the
+# regression suite) > legacy Linux system path.
+YONC_MMGROUP_DIR="${YONC_MMGROUP_DIR:-$(python3 -c 'import mmgroup,os;print(os.path.dirname(mmgroup.__file__))' 2>/dev/null || echo /usr/local/lib/python3.12/dist-packages/mmgroup)}"
 
 # Runtime objects, in the same order used by the regression suite.
 RUNTIME_OBJS_LIST="yon_rt.o xleech2_coord.o xleech2_handler_stack.o xleech2_heap.o xleech2_mphf.o"
