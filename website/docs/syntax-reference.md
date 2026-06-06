@@ -195,9 +195,9 @@ function that `visits E` requires the caller to cover `E`, by declaring
 
 | Form | Status | Meaning |
 |---|---|---|
-| `place P [in W] [over X] [extends B] [on_error E] { members }` | ✓ | An object. `over X` = slice (fibered over `X`); `extends B` = sub-object mono `P ↪ B`; `on_error E` = error morphism `P → E` |
+| `place P [in W] [over X] [extends B] [on error E] { members }` | ✓ | An object. `over X` = slice (fibered over `X`); `extends B` = sub-object mono `P ↪ B`; `on error E` = error morphism `P → E` |
 | `place P ... with effects { ... }` | ✓ | Enables operations (1-cells) among the members |
-| `error E [in W] [extends B] { fields }` | ✓ | An error place (target of `on_error`) |
+| `error E [in W] [extends B] { fields }` | ✓ | An error place (target of `on error`) |
 | `field_name type` | ✓ | Field, **no colon**: `balance number` |
 | `operation op(a: T): U` | ✓ | Operation (1-cell) |
 | `functorial operation op(...)` | ✓ | Operation lifted along world morphisms (Yoneda lifting) |

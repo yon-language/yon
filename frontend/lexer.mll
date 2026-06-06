@@ -105,10 +105,10 @@
       (* Error model. `error E extends Base { ... }` declares an error as a
          place that is a sub-object of Base (an injection E -> Base: every E
          is a Base, so E can be used wherever a Base is expected). `place P
-         on_error E` declares the error morphism P -> E: on failure, P is
+         on error E` declares the error morphism P -> E: on failure, P is
          transformed into the error object E, which exposes different maps
-         (e.g. .rollback instead of .commit). *)
-      "on_error", ON_ERROR;
+         (e.g. .rollback instead of .commit). `on error` is a two-word
+         contextual phrase, not a reserved keyword. *)
       "error", ERROR_KW;
       "extends", EXTENDS;
 
