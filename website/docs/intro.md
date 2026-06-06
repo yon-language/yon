@@ -51,7 +51,7 @@ description of Yon 1.0, then follow the book:
 5. [Functions and effects](./book/05-functions-and-effects.md), inference, lambdas, pipes, `visits`.
 6. [Worlds and places](./book/06-worlds-and-places.md), the categorical data model, operations, certified laws.
 7. [Arrows](./book/07-arrows.md), moves, views, reductions, handle lambdas, composition, geometric morphisms.
-8. [The Heyting core](./book/08-heyting-core.md), present/absent/unknown, the operator families, `heyt_int`.
+8. [The Heyting core](./book/08-heyting-core.md), present/absent/unknown, the operator families, `heyting`.
 9. [Types from HoTT](./book/09-hott-types.md), Pi/Sigma/Id, `refl`, comprehension types.
 10. [Spaces and packages](./book/10-spaces-and-packages.md), hermeticity, cross-package calls, hermetic scopes.
 11. [A tour of the standard library](./book/11-standard-library.md), collections, streams, system, the exotic corner.

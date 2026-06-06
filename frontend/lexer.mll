@@ -139,9 +139,9 @@
       "share", SHARE;
       "conflict_on", CONFLICT_ON;
       "resolves", RESOLVES;
-      (* heyt_int<N>: an integer in Heyting (intuitionistic) arithmetic, used
+      (* heyting<N>: an integer in Heyting (intuitionistic) arithmetic, used
          where the logic is not assumed two-valued. *)
-      "heyt_int", HEYT_INT_KW;
+      "heyting", HEYT_INT_KW;
 
       (* Stream back-pressure policy: bound the buffer, or drop old/new items. *)
       "buffer", BUFFER;
