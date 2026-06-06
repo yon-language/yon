@@ -219,7 +219,7 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | `morph F from W to V { on_object(...) { } on_morphism op via op2 }` | ✓ | Functor by components; `on_object: fun(...) => e` inline form allowed |
 | `functor F(x: T) from W to V [law identity] [law composition] { return e }` | ✓ | Functor given by a return expression with declared laws |
 | `nat_transform t from F to G { for each X by fnX }` | ✓ | Natural transformation: one component per object |
-| `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism (long alias: `geometric_morphism`); `f_star`/`f_lower_star` are synonyms of `pull`/`push`; clauses `adjunction`, `exact f_star`, `exact f_lower_star` declare its properties |
+| `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: `pull` is the inverse image, `push` the direct image; clauses `adjunction`, `exact pull`, `exact push` declare its properties |
 | `view V of P { show f  show f = e  show f as "label" }` | ✓ | Derived projection of a place |
 | `topology j of P { ... }` | ✓ | **Lawvere–Tierney** topology: a body defining `j : Ω → Ω` |
 | `reduction [forward\|backward\|bi] [lawful] [invertible] R[<T>] of P [with multi_shot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | Reduction with direction and laws; clauses are contextual `on` handlers and `be` bindings |

@@ -98,12 +98,9 @@
       "nat_transform", NAT_TRANSFORM_KW;
 
       (* A geometric morphism between topoi is an adjoint pair of functors:
-         f_star (inverse image, the left adjoint) and f_lower_star (direct
+         pull (f^*, inverse image, the left adjoint) and push (f_*, direct
          image, the right adjoint). `adjunction` names the pairing, `exact`
-         the requirement that f_star preserve finite limits. *)
-      "geometric_morphism", GEOMETRIC_MORPHISM_KW;
-      "f_star", F_STAR_KW;
-      "f_lower_star", F_LOWER_STAR_KW;
+         the requirement that the inverse image preserve finite limits. *)
       "adjunction", ADJUNCTION_KW;
       "exact", EXACT_KW;
 
