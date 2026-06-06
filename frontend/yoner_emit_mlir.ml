@@ -153,6 +153,9 @@ let () =
   let prog = Module_prefix.resolve_aliases prog in
   Module_prefix.check_visibility !internals prog;
   let prog = Module_prefix.mangle_decls prog in
+  (* View declarations expand to synthetic place + constructor BEFORE
+     tycheck, so the view name resolves as a normal function. *)
+  let prog = Desugar.expand_views prog in
   let cr = Tycheck.check_program prog in
   if cr.Tycheck.cr_errors <> [] then begin
     List.iter (fun e ->
