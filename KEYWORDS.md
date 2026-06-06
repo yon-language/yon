@@ -54,14 +54,14 @@ New objects from old ones, named after their universal property.
 | `pullback` | example | Limit: glues two maps over a shared target. Runtime form pullback(f, g, a, b) checks f(a) == g(b) and packs the pair (`examples/kw_pullback_pushout.yon`); the place declaration is kernel metadata |
 | `pushout` | example | Colimit: glues two maps under a shared source. The place declaration is kernel metadata (`examples/kw_pullback_pushout.yon`); the expression form is a stub today |
 | `over` | example | Slice category: `place P over X`, objects equipped with a chosen map down to X |
-| `topology` | wired | Equips a world with a notion of covering (Grothendieck / Lawvere-Tierney topology) |
+| `topology` | example | Equips a world with a notion of covering (Grothendieck / Lawvere-Tierney topology) |
 
 ## Functors and directions
 
 | Keyword | Status | What it does |
 |---|---|---|
 | `functor` | example | A map between worlds preserving the categorical structure |
-| `functorial` | wired | Marks an operation that behaves as a functor |
+| `functorial` | example | Marks an operation that behaves as a functor |
 | `forward` | example | Reduction direction: forward |
 | `backward` | wired | Reduction direction: backward |
 | `bi` | wired | Bidirectional reduction (reserved word, see reference) |
@@ -83,9 +83,9 @@ New objects from old ones, named after their universal property.
 | Keyword | Status | What it does |
 |---|---|---|
 | `topos` | example | First-class declaration: a category rich enough to do logic inside |
-| `objects` | wired | Lists the objects of the topos |
-| `morphisms` | wired | Lists the maps of the topos |
-| `terminal` | wired | The one-point object |
+| `objects` | example | Lists the objects of the topos |
+| `morphisms` | example | Lists the maps of the topos |
+| `terminal` | example | The one-point object |
 | `prop` | example | Subobject classifier: a map into Omega (`prop is_overdrawn(s): proposition = ...`) |
 | `morph` | wired | Declares a single map (functor) between topoi; body uses `on object` / `on morphism` |
 | `via` | example | In `on morphism op via op2`: which operation realizes the map |
