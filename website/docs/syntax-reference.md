@@ -214,7 +214,7 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | Form | Status | Meaning |
 |---|---|---|
 | `move m from P to Q [requires CAP1, CAP2] { A maps to B by f ... }` | ✓ | Move between places; the body is a list of **mapping clauses**; `requires` lists capabilities |
-| `move m unifies A, B { share f1, f2  conflict_on f resolves to fn }` | ✓ | Merge move: shared fields plus per-field conflict resolution |
+| `move m unifies A, B { share f1, f2  conflict on f resolves to fn }` | ✓ | Merge move: shared fields plus per-field conflict resolution |
 | `A maps to B by f` / `converts to` / `aggregates to` | ✓ | Mapping kinds; `by fun(x) => e` inline lambda allowed |
 | `morph F from W to V { on object(...) { } on morphism op via op2 }` | ✓ | Functor by components; `on object: fun(...) => e` inline form allowed; `on`, `object`, `morphism` stay free as user identifiers |
 | `functor F(x: T) from W to V [law identity] [law composition] { return e }` | ✓ | Functor given by a return expression with declared laws |
