@@ -2,10 +2,11 @@
 id: benchmarks
 title: "Appendix D. Benchmarks"
 sidebar_position: 93
+slug: /book/benchmarks
 description: "Measured benchmarks for the Yon language: O(1) structural equality on the content-addressed heap, state-space exploration, Merkle diff, and cross-process RPC, with method and sources."
 ---
 
-# Appendix D — Benchmarks
+# Appendix D, Benchmarks
 
 Numbers before claims. Everything below was produced by Yon programs
 compiled through the standard `yonc` pipeline and run where this book was
@@ -34,8 +35,8 @@ shapes. The benchmark sources ship with the repository.
 | `HashMap`, 1M entries across **six heaps** | 1M | 1,380 ms | ~1.4 µs amortized |
 | `VoyagerList.get` (Golay open + correct on every read) | 1M | 27 ms | ~27 ns |
 | Space cell set+get pair (the cost of `becomes`) | 2M pairs | 25 ms | ~12.5 ns |
-| Merkle build, 4,096 leaves (fresh) | 1 tree | 2 ms | — |
-| Merkle build, identical tree (all dedup hits) | 1 tree | 1 ms | — |
+| Merkle build, 4,096 leaves (fresh) | 1 tree | 2 ms |  |
+| Merkle build, identical tree (all dedup hits) | 1 tree | 1 ms |  |
 | `Merkle.equal`, two 4,096-leaf trees | 1 comparison | &lt;1 ms | O(1) |
 
 ## What the shapes mean
@@ -43,32 +44,32 @@ shapes. The benchmark sources ship with the repository.
 **Equality is flat.** Three orders of magnitude of string size, the same
 per-comparison time: the O(1) equality of chapter 11, measured rather
 than asserted. The benchmark prints and checks the string lengths before
-timing — an earlier version of this suite was silently comparing invalid
+timing, an earlier version of this suite was silently comparing invalid
 handles above a since-removed 1,024-character cap, and the table was
 corrected. Trust numbers that verify their own inputs.
 
 **Deduplication is not about allocation speed.** A dedup hit (~120 ns)
 costs the same order as a fresh slot (~145 ns). What dedup buys is space
-— and the flat equality above. The claim is narrow on purpose.
+, and the flat equality above. The claim is narrow on purpose.
 
 **The chain is no longer the variable.** Global deduplication is one
-O(1) probe of a process-wide content index, however many heaps exist —
+O(1) probe of a process-wide content index, however many heaps exist, 
 six heaps at the million-entry mark cost five lines on stderr and
 nothing in the lookup.
 
 **The million-entry figure includes a rehash, on purpose.** Directories
-hold one invariant — load ≤ 0.7, hence expected O(1) probes at every
-size — and pay for it by doubling with a rehash when growth demands it.
+hold one invariant, load ≤ 0.7, hence expected O(1) probes at every
+size, and pay for it by doubling with a rehash when growth demands it.
 Just short of a million entries the directory doubles from 2²⁰ to 2²¹
 slots, re-placing ~734k entries; at the 1M measuring point that cost is
-not yet amortized, and the table shows it honestly. The alternative — a
-size cap — looked faster at exactly this point and was a defect: at the
+not yet amortized, and the table shows it honestly. The alternative, a
+size cap, looked faster at exactly this point and was a defect: at the
 cap the directory reaches 100% load and begins discarding writes. No
 knob, no cliff; the spike amortizes, the cliff does not. Exactness held
 at every scale tested.
 
-**Self-healing is a factor of two.** A sealed VoyagerList read — decode
-the Golay codeword, correct up to three flipped bits — lands at ~27 ns
+**Self-healing is a factor of two.** A sealed VoyagerList read, decode
+the Golay codeword, correct up to three flipped bits, lands at ~27 ns
 against ~12.5 ns for a raw cell pair. Error correction in the hot path
 for a 2× constant.
 

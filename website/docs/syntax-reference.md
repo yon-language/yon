@@ -5,17 +5,17 @@ sidebar_position: 2
 description: The normative syntax of Yon 1.0, derived from the actual grammar.
 ---
 
-# Yon — Syntax Reference
+# Yon, Syntax Reference
 
 This is the **normative reference for Yon 1.0**. Every form below was derived
 from a complete pass over the real grammar (`frontend/parser.mly` and
-`frontend/lexer.mll`) — not from memory, not from older documents.
+`frontend/lexer.mll`), not from memory, not from older documents.
 
 Each construct carries a status:
 
-- **✓** — verified end-to-end: a regression example or a compiled probe
+- **✓**, verified end-to-end: a regression example or a compiled probe
   exercises it through `yonc` down to a running binary.
-- **⚠ not implemented** — the grammar accepts it, but the 1.0 compiler does
+- **⚠ not implemented**, the grammar accepts it, but the 1.0 compiler does
   not implement it (it fails at emission, or the construct cannot actually be
   used). Listed for completeness; *not part of the 1.0 contract*.
 
@@ -25,7 +25,7 @@ Each construct carries a status:
 |---|---|---|
 | `// ...`, `/* ... */` | ✓ | Line / block comments |
 | `42`, `3.14` | ✓ | `number` literal (IEEE f64) |
-| `"ciao"` | ✓ | String literal — a real value of type `text`/`String` (see *Strings*) |
+| `"ciao"` | ✓ | String literal, a real value of type `text`/`String` (see *Strings*) |
 | `true`, `false` | ✓ | Boolean literals |
 | `present`, `absent`, `unknown` | ✓ | Heyting truth values (intuitionistic Ω) |
 | `100ms`, `5s`, `2min`, `1h`, `3d`, `1y` | ✓ | Duration literals (no whitespace before the unit). **A duration is a `number` of milliseconds**: `2s + 500ms == 2500` |
@@ -53,14 +53,14 @@ fun main(): number {
 }
 ```
 
-Strings are **process-local**: they cannot cross a Space (package) boundary —
+Strings are **process-local**: they cannot cross a Space (package) boundary, 
 only numbers travel on the wire.
 
 ## Bindings and mutation
 
 | Form | Status | Meaning |
 |---|---|---|
-| `be x holds e` | ✓ | Immutable binding — the only declaration form, at top level and inside functions alike (there is no `let` keyword) |
+| `be x holds e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword) |
 | `x becomes e` | ✓ | Mutation. A becomes-target binding is **promoted to a Space cell** (the content-addressed mutation mechanism): its `be` allocates the cell, reads go through it, `becomes` updates it. Works on locals and parameters |
 | `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
 | `x.f becomes e` | ⚠ not implemented | Field mutation: place sections are immutable in 1.0; mutate through cells |
@@ -104,14 +104,14 @@ from the call sites.
 | `fun(x: T, y) => e` | ✓ | Inline lambda (unannotated params are inferred) |
 | `move(s: P) => new Q {...} from P to Q` | ✓ | Inline handle lambdas, one per arrow kind. They bind, compose |
 | `reduction(acc, x) => e of P` | ✓ | (kind-checked: same kind, or post-compose of view/reduction with |
-| `view(s: P) => e of P` | ✓ | a fun), and apply — a bound or composed handle is called like a |
+| `view(s: P) => e of P` | ✓ | a fun), and apply, a bound or composed handle is called like a |
 | `functor(x) => e from W to V [law id]*` | ✓ | function, and `apply_move` accepts a locally bound move-lambda. |
 | `morph(s) => e from S1 to S2` | ✓ | Functor laws are checkable |
 | `compose h1 with h2` | ✓ | Handle composition, `(compose f with g)(x) = g(f(x))`. Kind discipline enforced: e.g. `reduction ∘ reduction` is rejected (the eliminator lands in `number`) |
 | `f(args) in S` | ✓ | Call in a Space context (`apply_move ... in S`, morph dispatch) |
 | `all P where cond` | ✓ | Quantification over the sections of a place |
 | `solve P` | ✓ | Instantiate a law-verified place as a Magma handle |
-| `new P { field value }` | ✓ | Section construction — **no `=`** between field and value |
+| `new P { field value }` | ✓ | Section construction, **no `=`** between field and value |
 | `new P in S { ... }` | ✓ | Construction inside Space `S` |
 | `refl(t)`, `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
 | `ind_path(C, d, p)` | ⚠ not implemented | The J eliminator parses; its emission is not wired in 1.0 (the runnable fragment is `refl`/`pair`/`fst`/`snd`) |
@@ -125,7 +125,7 @@ from the call sites.
 | `+ - * / %`, unary `-` | ✓ | Arithmetic |
 | `== != < > <= >=` | ✓ | Comparison |
 | `and`/`&&`, `or`/`\|\|`, `not`/`!` | ✓ | Classical logic |
-| `a => b` | ✓ | Classical implication — sugar for `(not a) or b` |
+| `a => b` | ✓ | Classical implication, sugar for `(not a) or b` |
 | `& \| ^ ~` | ✓ | **Bitwise on numbers** |
 | `&&? \|\|? =>? !?` | ✓ | Heyting (scalar Ω): and, or, implication, negation |
 | `&? \|? ^? ~?` | ✓ | Heyting **trit-wise** on `heyt_int` (Unknown-mask propagation) |
@@ -136,7 +136,7 @@ from the call sites.
 | Form | Status | Meaning |
 |---|---|---|
 | `return e` | ✓ | Return from the function |
-| `when c { } when c2 { } otherwise { }` | ✓ | Conditional chain. **A `return` inside a branch does not exit the function** — branches are for effects; select values with `if/then/else` |
+| `when c { } when c2 { } otherwise { }` | ✓ | Conditional chain. **A `return` inside a branch does not exit the function**, branches are for effects; select values with `if/then/else` |
 | `e is pattern`, `e is not pattern` | ✓ | Pattern conditions (in `when`/`forces`): patterns are a variable, a literal, `present`, `absent`, `unknown`; chainable with `and`/`or` |
 | `iter n do { }` | ✓ | Bounded loop (always terminates; `scf.for`) |
 | `while c do { }` | ✓ | General loop (`scf.while`) |
@@ -177,7 +177,7 @@ partial fun p(x: number): number { ... }          // partial (may not return)
 ```
 
 All four modifiers are ✓ verified. **Effect discipline (`visits`)**: calling a
-function that `visits E` requires the caller to cover `E` — by declaring
+function that `visits E` requires the caller to cover `E`, by declaring
 `visits E` itself or having a handler active; the effect propagates up to
 `main`. I/O is an effect (`visits Output`).
 
@@ -198,7 +198,7 @@ function that `visits E` requires the caller to cover `E` — by declaring
 | `place P [in W] [over X] [extends B] [on_error E] { members }` | ✓ | An object. `over X` = slice (fibered over `X`); `extends B` = sub-object mono `P ↪ B`; `on_error E` = error morphism `P → E` |
 | `place P ... with effects { ... }` | ✓ | Enables operations (1-cells) among the members |
 | `error E [in W] [extends B] { fields }` | ✓ | An error place (target of `on_error`) |
-| `field_name type` | ✓ | Field — **no colon**: `balance number` |
+| `field_name type` | ✓ | Field, **no colon**: `balance number` |
 | `operation op(a: T): U` | ✓ | Operation (1-cell) |
 | `functorial operation op(...)` | ✓ | Operation lifted along world morphisms (Yoneda lifting) |
 | `operation op(...) uses algebra Additive` | ✓ | Bind to a catalog algebra; laws certified by the compiler |
@@ -235,7 +235,7 @@ topos Account [in W] [at SPACE] where {
 }
 ```
 
-Status: ✓ (regression examples). A `prop` is a subobject classifier — a map
+Status: ✓ (regression examples). A `prop` is a subobject classifier, a map
 into Ω; the abstract form (no `= body`) declares the signature only. `at SPACE`
 binds the topos to a residence heap; without it the topos is purely formal.
 
@@ -278,9 +278,9 @@ effects, move/morphism gating) with opt-in physical heap separation
 | `List` / `Map` / `Set` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
 | `Merkle` | Content-addressed Merkle trees |
 | `VoyagerList` | Golay-sealed list (error-correcting) |
-| `Magma` | `gen, closure_size, reachable, normal_form, subsetsum[_mask], knapsack[_mask]` — with `solve P` |
+| `Magma` | `gen, closure_size, reachable, normal_form, subsetsum[_mask], knapsack[_mask]`, with `solve P` |
 | `Stream` | `from_list, map, filter, fold, iterate, take` |
-| `Space` | `make, set, get` — mutable cells (the 1.0 mutation mechanism) |
+| `Space` | `make, set, get`, mutable cells (the 1.0 mutation mechanism) |
 
 Failure convention: string-producing operations return the `0.0` handle on
 failure (missing file, unset variable, out-of-range index).
@@ -288,7 +288,7 @@ failure (missing file, unset variable, out-of-range index).
 ## Conventions
 
 - Zero-argument builtins are called with a dummy `0`: `Args.count(0)`.
-- `new P { field value }` and place fields `name type` — no `=`, no `:`.
+- `new P { field value }` and place fields `name type`, no `=`, no `:`.
 - A program's exit code is `main`'s return value, truncated mod 256.
 - `return` inside a `when` branch does not exit the function; use
   `if/then/else` to select values.

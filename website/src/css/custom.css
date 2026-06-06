@@ -1,1 +1,229 @@
-:root { --ifm-color-primary: #5b4bb5; }
+/* ============================================================
+   Yon · Docusaurus design system
+   Indigo dark theme. Space Grotesk (UI/headings), Spectral
+   (book body), JetBrains Mono (code). Landing + book share it.
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root,
+[data-theme='dark'] {
+  /* brand tokens (shared by custom CSS + the landing module) */
+  --yon-bg:       #262050;
+  --yon-bg-2:     #211b47;
+  --yon-disc:     #1C173E;
+  --yon-disc-2:   #181336;
+  --yon-ring:     #6A5FC0;
+  --yon-hair:     rgba(165,158,215,.16);
+  --yon-hair-2:   rgba(165,158,215,.10);
+  --yon-lav:      #A59ED7;
+  --yon-lav-dim:  #8079b0;
+  --yon-light:    #EBE6FF;
+  --yon-prose:    #d8d2f2;
+  --yon-white:    #ffffff;
+  --yon-gold:     #E8A33D;
+  --yon-gold-soft:#f0bf72;
+  /* book body uses the same grotesque as the landing */
+  --yon-serif: var(--ifm-font-family-base);
+
+  /* Infima primary scale (purple) */
+  --ifm-color-primary:         #9384dd;
+  --ifm-color-primary-dark:    #7c69d4;
+  --ifm-color-primary-darker:  #715dcf;
+  --ifm-color-primary-darkest: #5b48b8;
+  --ifm-color-primary-light:   #aa9fe6;
+  --ifm-color-primary-lighter: #b6ace9;
+  --ifm-color-primary-lightest:#d4cef2;
+
+  /* typography */
+  --ifm-font-family-base: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ifm-heading-font-family: 'Space Grotesk', system-ui, sans-serif;
+  --ifm-heading-font-weight: 600;
+  --ifm-font-weight-bold: 600;
+
+  /* surfaces + text */
+  --ifm-background-color: var(--yon-bg);
+  --ifm-background-surface-color: var(--yon-disc);
+  --ifm-font-color-base: var(--yon-light);
+  --ifm-heading-color: var(--yon-white);
+  --ifm-link-color: var(--ifm-color-primary-lighter);
+  --ifm-link-hover-color: var(--yon-white);
+
+  /* code */
+  --ifm-code-background: rgba(28,23,62,.85);
+  --ifm-pre-background: var(--yon-disc);
+  --ifm-code-font-size: 88%;
+  --docusaurus-highlighted-code-line-bg: rgba(106,95,192,.2);
+
+  /* chrome */
+  --ifm-navbar-height: 64px;
+  --ifm-navbar-background-color: rgba(38,32,80,.82);
+  --ifm-navbar-shadow: inset 0 -1px 0 var(--yon-hair-2);
+  --ifm-footer-background-color: var(--yon-bg-2);
+  --ifm-footer-color: var(--yon-lav);
+  --ifm-footer-link-color: var(--yon-lav);
+  --ifm-footer-title-color: var(--yon-lav-dim);
+  --ifm-toc-border-color: var(--yon-hair-2);
+  --ifm-table-border-color: var(--yon-hair-2);
+  --ifm-hr-border-color: var(--yon-hair-2);
+  --ifm-blockquote-color: var(--yon-lav);
+  --ifm-blockquote-border-color: var(--yon-ring);
+  --ifm-menu-color: var(--yon-lav);
+  --ifm-menu-color-active: var(--yon-white);
+  --ifm-menu-color-background-active: rgba(106,95,192,.14);
+  --ifm-breadcrumb-color-active: var(--yon-white);
+  --ifm-toc-link-color: var(--yon-lav-dim);
+}
+
+html, body { background: var(--yon-bg); }
+::selection { background: rgba(232,163,61,.30); color: var(--yon-white); }
+
+/* ============================================================ NAVBAR */
+.navbar { backdrop-filter: blur(14px) saturate(1.1); }
+.navbar__title { font-weight: 700; letter-spacing: -0.02em; color: var(--yon-white); }
+.navbar__link { font-weight: 500; font-size: 14.5px; }
+.navbar__link:hover, .navbar__link--active { color: var(--yon-white); }
+.navbar__brand:hover .navbar__title { color: var(--yon-white); }
+
+/* ============================================================ SIDEBAR */
+.theme-doc-sidebar-container { border-right: 1px solid var(--yon-hair-2) !important; background: rgba(33,27,71,.35); }
+.menu { padding: 16px 12px !important; font-size: 14px; }
+.menu__list-item { margin-top: 1px; }
+.menu__link {
+  font-family: var(--ifm-font-family-base); color: var(--yon-lav);
+  border-radius: 8px; padding: 7px 12px; line-height: 1.35;
+}
+.menu__link:hover, .menu__list-item-collapsible:hover { background: rgba(106,95,192,.10); color: var(--yon-light); }
+.menu__link--active:not(.menu__link--sublist) {
+  color: var(--yon-white); background: rgba(106,95,192,.16);
+  box-shadow: inset 2px 0 0 var(--yon-gold);
+}
+.menu__link--sublist-caret:after, .menu__caret:before { opacity: .55; }
+
+/* ============================================================ TOC (right) */
+.table-of-contents { font-size: 13px; border-left: 1px solid var(--yon-hair-2); }
+.table-of-contents__link { color: var(--yon-lav-dim); }
+.table-of-contents__link:hover, .table-of-contents__link--active { color: var(--yon-white); }
+.table-of-contents__link--active { font-weight: 600; }
+
+/* ============================================================ BOOK / DOC PROSE */
+.theme-doc-markdown { padding-top: 8px; }
+.markdown {
+  font-family: var(--ifm-font-family-base);
+  font-size: 17.5px; line-height: 1.72; color: var(--yon-prose);
+  letter-spacing: -0.005em;
+  --ifm-h2-vertical-rhythm-top: 2.2;
+  --ifm-h3-vertical-rhythm-top: 1.8;
+}
+.markdown p, .markdown li { font-family: var(--yon-serif); }
+.markdown li { margin-top: .35em; }
+.markdown strong { color: var(--yon-light); font-weight: 600; }
+.markdown em { color: var(--yon-light); }
+
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5,
+article h1, article h2, article h3 {
+  font-family: var(--ifm-font-family-base); color: var(--yon-white);
+}
+.markdown h1:first-child {
+  font-size: clamp(34px, 5vw, 50px); letter-spacing: -0.035em; line-height: 1.06; margin-bottom: .5em;
+}
+.markdown > h2 {
+  font-size: 27px; letter-spacing: -0.02em; margin-top: 2.3em;
+  padding-top: 1.2em; border-top: 1px solid var(--yon-hair-2);
+}
+.markdown h3 { font-size: 20px; color: var(--yon-light); margin-top: 1.7em; letter-spacing: -0.01em; }
+.markdown h4 {
+  font-family: var(--ifm-font-family-monospace); font-weight: 500; font-size: 14.5px;
+  letter-spacing: .03em; color: var(--yon-lav); text-transform: none;
+}
+
+/* links in prose */
+.markdown a {
+  color: var(--ifm-color-primary-lighter); text-decoration: none;
+  border-bottom: 1px solid var(--yon-hair); transition: border-color .15s ease, color .15s ease;
+}
+.markdown a:hover { color: var(--yon-white); border-color: var(--ifm-color-primary); }
+
+/* inline code */
+.markdown :not(pre) > code {
+  font-family: var(--ifm-font-family-monospace); font-size: .82em;
+  color: #cdc6f4; background: rgba(28,23,62,.85);
+  border: 1px solid var(--yon-hair-2); border-radius: 6px; padding: .1em .42em;
+}
+
+/* code blocks */
+.theme-code-block, div[class*='codeBlockContainer_'] {
+  border-radius: 14px !important; box-shadow: 0 26px 54px -32px rgba(0,0,0,.65);
+}
+.theme-code-block pre, pre[class*='language-'] {
+  border: 1px solid var(--yon-hair-2); border-radius: 14px;
+}
+div[class*='codeBlockTitle_'] {
+  font-family: var(--ifm-font-family-monospace); font-size: 12.5px; color: var(--yon-lav-dim);
+  background: var(--yon-disc-2); border-bottom: 1px solid var(--yon-hair-2);
+}
+.theme-code-block code { font-size: 13.8px; line-height: 1.72; }
+
+/* blockquote */
+.markdown blockquote {
+  border-left: 3px solid var(--yon-ring); background: rgba(28,23,62,.42);
+  border-radius: 0 10px 10px 0; padding: 2px 22px; color: var(--yon-lav);
+  font-style: italic; font-family: var(--yon-serif);
+}
+
+/* tables read as data, not prose */
+.markdown table {
+  display: table; width: 100%; font-family: var(--ifm-font-family-base); font-size: 14.5px;
+  border: 1px solid var(--yon-hair-2); border-radius: 12px; border-collapse: separate; border-spacing: 0; overflow: hidden;
+}
+.markdown table thead { background: rgba(28,23,62,.6); }
+.markdown table thead tr { border-bottom: none; }
+.markdown table th { color: var(--yon-white); font-weight: 600; border-bottom: 1px solid var(--yon-hair); border-right: 0; }
+.markdown table td { border-top: 1px solid var(--yon-hair-2); border-right: 0; }
+.markdown table tr { background: transparent !important; }
+.markdown table tbody tr:hover { background: rgba(106,95,192,.07) !important; }
+.markdown table code { color: var(--yon-light); background: none; border: 0; padding: 0; }
+
+/* hr */
+.markdown hr { border: 0; border-top: 1px solid var(--yon-hair-2); margin: 2.4em 0; }
+
+/* admonitions */
+.theme-admonition {
+  background: rgba(28,23,62,.6); border: 1px solid var(--yon-hair);
+  border-left-width: 3px; border-radius: 10px; font-family: var(--yon-serif);
+}
+
+/* breadcrumbs */
+.breadcrumbs__link { color: var(--yon-lav); }
+.breadcrumbs__item--active .breadcrumbs__link { color: var(--yon-white); background: rgba(106,95,192,.14); }
+
+/* pagination */
+.pagination-nav__link {
+  border: 1px solid var(--yon-hair); border-radius: 12px; background: rgba(28,23,62,.4);
+  transition: border-color .15s ease, background .15s ease;
+}
+.pagination-nav__link:hover { border-color: var(--yon-ring); background: rgba(106,95,192,.10); }
+.pagination-nav__sublabel { color: var(--yon-lav-dim); }
+.pagination-nav__label { color: var(--yon-light); font-family: var(--ifm-font-family-base); }
+
+/* doc footer (tags / edit) */
+.theme-doc-footer { border-top: 1px solid var(--yon-hair-2); margin-top: 2.4em; padding-top: 18px; }
+
+/* generated category index cards */
+article .card { background: rgba(28,23,62,.5); border: 1px solid var(--yon-hair); border-radius: 14px; transition: border-color .15s ease, transform .12s ease; }
+article .card:hover { border-color: var(--yon-ring); transform: translateY(-2px); }
+
+/* ============================================================ FOOTER */
+/* .footer--dark (style:'dark' in config) resets the bg var, so override it. */
+.footer, .footer--dark {
+  --ifm-footer-background-color: var(--yon-bg-2);
+  --ifm-footer-color: var(--yon-lav);
+  --ifm-footer-link-color: var(--yon-lav);
+  --ifm-footer-title-color: var(--yon-lav-dim);
+  background-color: var(--yon-bg-2);
+  border-top: 1px solid var(--yon-hair);
+}
+.footer__title { font-family: var(--ifm-font-family-monospace); font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; }
+.footer__link-item { color: var(--yon-lav); transition: color .15s ease; }
+.footer__link-item:hover { color: var(--yon-light); }
+.footer__copyright { color: var(--yon-lav-dim); font-family: var(--ifm-font-family-monospace); font-size: 12px; }
