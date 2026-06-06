@@ -41,7 +41,7 @@ algebraic-effects handler).
 **functor / morph**, an arrow between worlds, translating objects and
 operations together, with checkable laws (a functor between categories).
 
-**nat_transform**, a family of arrows relating two functors, one component
+**nat transform**, a family of arrows relating two functors, one component
 per object (a natural transformation; a 2-cell).
 
 **geomorph**, a pull/push pair between places-as-sites (a geometric

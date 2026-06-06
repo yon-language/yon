@@ -121,7 +121,6 @@
 /* First-class topos constructs. */
 %token TOPOS_KW OBJECTS_KW MORPHISMS_KW TERMINAL_KW PROP_KW
 %token MORPH_KW VIA_KW
-%token NAT_TRANSFORM_KW
 %token ADJUNCTION_KW EXACT_KW
 (* OVER is already declared below in the WHEN/SEQUENCE token group *)
 
@@ -431,7 +430,7 @@ morph_item:
 (* natural transformation.
  *
  * Syntax:
- *   nat_transform Upgrade from LiftEU_v1 to LiftEU_v2 {
+ *   nat transform Upgrade from LiftEU_v1 to LiftEU_v2 {
  *     for each State by upgrade_state
  *     for each USDState by upgrade_usd
  *   }
@@ -439,10 +438,16 @@ morph_item:
  * Each binding `for each X by Y` declares that the component eta_X of the
  * naturality is realized by the fun (or reduction clause of the same name) Y.
  * Y must exist in scope (validated by the type checker). *)
+(* `nat transform t from F to G { for each X by fnX }` — `nat transform`
+ * is a two-word contextual phrase, not a reserved keyword pair: `nat`
+ * and `transform` stay free as user identifiers. *)
 nat_transform_decl:
-  | NAT_TRANSFORM_KW name = IDENT FROM src = IDENT TO tgt = IDENT
+  | tag = IDENT kind = IDENT name = IDENT FROM src = IDENT TO tgt = IDENT
     LBRACE bindings = list(nat_transform_binding) RBRACE
-    { { nt_name = name;
+    { if tag <> "nat" || kind <> "transform" then
+        failwith ("expected 'nat transform' declaration, got '"
+                  ^ tag ^ " " ^ kind ^ "'");
+      { nt_name = name;
         nt_source_morph = src;
         nt_target_morph = tgt;
         nt_components = [];
