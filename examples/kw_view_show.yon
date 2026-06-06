@@ -1,0 +1,18 @@
+// Micro-example: the view DECLARATION with `show` clauses, lowered to
+// a synthetic record place plus a constructor function (work map
+// item 2). `show f` exposes the field, `show f = e` a derived value,
+// `show f as "label"` keeps the field with presentation metadata.
+world W { Code is X }
+place Account in W { balance number
+  fee number }
+view Snapshot of Account {
+  show balance
+  show net = balance - fee
+  show fee as "monthly fee"
+}
+fun main(): number {
+  be acc holds new Account { balance 50
+    fee 8 }
+  be snap holds Snapshot(acc)
+  return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
+}

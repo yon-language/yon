@@ -1748,6 +1748,75 @@ let rewrite_top_decl (m : (string * string) list) (td : S.top_decl) : S.top_decl
               * a stmt body are rewritten to their real position after expansion
               * (where applicable). *)
 
+(* View declaration lowering (KEYWORDS.md work map item 2): each
+   `view V of P { show ... }` expands into a synthetic record place V
+   (one field per show clause) plus a constructor function V(s: P): V
+   building the record, so `V(x)` and `r.field` just work through the
+   existing machinery. `show f as "label"` keeps the field; the label
+   is presentation metadata. The inline view lambda path is untouched. *)
+let expand_views (p : S.program) : S.program =
+let place_info = List.filter_map (function
+    | S.TopPlace pd ->
+        let fields = List.filter_map (function
+          | S.FoField fd -> Some (fd.S.fd_name, fd.S.fd_ty)
+          | _ -> None) pd.S.pd_members in
+        Some (pd.S.pd_name, (pd.S.pd_world, fields))
+    | _ -> None) p in
+  let rec rw_fields fields e =
+    let r = rw_fields fields in
+    match e with
+    | S.EVar (n, loc) when List.mem_assoc n fields ->
+        S.EField (S.EVar ("__view_s", loc), n, loc)
+    | S.EBinop (op, a, b, loc) -> S.EBinop (op, r a, r b, loc)
+    | S.EParen (e1, loc) -> S.EParen (r e1, loc)
+    | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
+    | S.EField (e1, f, loc) -> S.EField (r e1, f, loc)
+    | other -> other
+  in
+  List.concat_map (function
+    | S.TopView vd ->
+        (match List.assoc_opt vd.S.vw_of place_info with
+         | None -> [S.TopView vd]   (* unknown target: tycheck reports *)
+         | Some (world, fields) ->
+             let loc = vd.S.vw_loc in
+             let num = S.TyPrim "number" in
+             let shown = List.map (function
+               | S.VShowSimple f | S.VShowLabel (f, _) ->
+                   let ty = match List.assoc_opt f fields with
+                     | Some t -> t | None -> num in
+                   (f, ty,
+                    S.EField (S.EVar ("__view_s", loc), f, loc))
+               | S.VShowAs (f, e) -> (f, num, rw_fields fields e)
+             ) vd.S.vw_items in
+             let synth_place : S.place_decl = {
+               S.pd_name = vd.S.vw_name;
+               pd_world = world;
+               pd_with_effects = false;
+               pd_members = List.map (fun (f, ty, _) ->
+                 S.FoField { S.fd_name = f; fd_ty = ty; fd_loc = loc }) shown;
+               pd_over = None;
+               pd_laws = [];
+               pd_extends = None;
+               pd_is_error = false;
+               pd_on_error = None;
+               pd_loc = loc } in
+             let assigns = List.map (fun (f, _, e) ->
+               { S.fa_name = f; fa_value = e; fa_loc = loc }) shown in
+             let synth_fun : S.fun_decl = {
+               S.fn_name = vd.S.vw_name;
+               fn_type_params = [];
+               fn_params = [ { S.param_name = "__view_s";
+                               param_ty = S.TyUser vd.S.vw_of } ];
+               fn_return = Some (S.TyUser vd.S.vw_name);
+               fn_visits = [];
+               fn_partial = false;
+               fn_internal = false;
+               fn_body = [ S.SReturn
+                 (S.ENew (vd.S.vw_name, assigns, loc), loc) ];
+               fn_loc = loc } in
+             [S.TopPlace synth_place; S.TopFun synth_fun])
+    | d -> [d]) p
+
 let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_result =
   (* The optional [env] is the typed environment from Tycheck (cr_env). The
      terminal absorber (B.3) consults it to collapse a pure, terminal-returning
@@ -1759,6 +1828,7 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
   reset_synth ();  (* reset the accumulator of handle lambdas *)
   let place_to_space = build_place_to_space_map p in
   let p = List.map (rewrite_top_decl place_to_space) p in
+  let p = expand_views p in
   (* The first fold collects synth_funs into the global refs (filled by
    * desugar_expr for each EMoveLam/EReductionLam/EMorphLam). We then add them
    * to the program as TopFun declarations and re-process. *)

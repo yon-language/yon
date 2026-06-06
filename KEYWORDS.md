@@ -24,7 +24,6 @@ its row says `example`. Open items, in execution order:
 
 | # | Item | Keyword(s) | What is missing |
 |---|---|---|---|
-| 2 | View declaration lowering | `show` | desugar drops `TopView`; synthesize a record place plus a constructor function per view so `Snapshot(acc)` works |
 | 3 | Path-value runtime representation | `refl` | path cells (`!topos.cell<1,"id">`) have no lowering; design decision pending (inert erased witness vs full structure) |
 | 4 | Universe-typed parameters | `Type` | `fun f(t: Type)` does not lower in body positions |
 | 5 | J eliminator | `ind_path` | depends on item 3's design; J computes on refl |
@@ -197,7 +196,7 @@ These read as English in declarations.
 
 | Keyword | Status | What it does |
 |---|---|---|
-| `show` | parse-only | Inside a view declaration: `show name` / `show name = e`. The declaration form is dropped at desugar today; the wired form is the inline view lambda (`view(s: P) => e of P`) |
+| `show` | example | Inside a view declaration: `show name` (field), `show name = e` (derived), `show name as "label"` (presentation metadata). Lowered to a synthetic record place plus constructor function (`examples/kw_view_show.yon`) |
 | `as` | example | Alias: `import q as a`, `init X as Space` |
 | `maps` | example | Move clause: `A maps to B by f` (the `by` is mandatory) (`examples/kw_merge_move.yon`) |
 | `converts` | example | Move clause: field conversion |
