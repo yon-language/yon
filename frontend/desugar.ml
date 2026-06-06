@@ -997,7 +997,11 @@ and desugar_condition (c : S.condition) : C.term =
   | S.CondIs (e, p) ->
       curry_apply (C.Var "__is") [desugar_expr e; desugar_pattern p]
   | S.CondIsNot (e, p) ->
-      curry_apply (C.Var "__is_not") [desugar_expr e; desugar_pattern p]
+      (* x is not p == Heyting negation of (x is p). Reuses the __is
+       * runtime path and the topos.heyt_not lowering; __is_not had no
+       * runtime emission (it only existed as constant folding). *)
+      C.App (C.Var "__heyt_not",
+             curry_apply (C.Var "__is") [desugar_expr e; desugar_pattern p])
   | S.CondAnd (c1, c2) ->
       curry_apply (C.Var "__and") [desugar_condition c1; desugar_condition c2]
   | S.CondOr (c1, c2) ->

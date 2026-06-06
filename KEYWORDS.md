@@ -126,7 +126,7 @@ These read as English in declarations.
 | `from` | example | Source of move/morph/geomorph/import |
 | `by` | example | `A maps to B by f`: the function realizing the clause |
 | `is` | example | Pattern condition: `e is pattern` (a variable, a literal, `present`/`absent`/`unknown`) |
-| `not` | wired | Pattern negation: `e is not pattern` |
+| `not` | example | Pattern negation: `e is not pattern` (`examples/kw_patterns.yon`) |
 | `list` | wired | The list type: `list of T` |
 | `map` | example | The map type: `map of K to V` |
 | `stream` | example | The stream type: `stream of T`, plus modifiers |
@@ -193,7 +193,7 @@ These read as English in declarations.
 | Keyword | Status | What it does |
 |---|---|---|
 | `present` `unknown` | example | The certain/uncertain values of the Heyting tri-value |
-| `absent` | wired | The third value; all three usable as patterns in `when`/`forces` |
+| `absent` | example | The third value; all three usable as patterns in `when`/`forces` (`examples/kw_patterns.yon`) |
 | `visits` | example | Effect signature: `fun h(x) visits Output`; the caller must cover the effect, up to `main` |
 | `true` `false` | example | The boolean literals (in Omega) |
 
