@@ -5473,12 +5473,12 @@ double yon_rt_sat_dimacs_run(double str_id_d, double metric_id_d) {
 }
 
 /* Helper SATLIB UF20/UF50: load by index.
- * Path hardcoded: /home/claude/yon-work/satlib/{uf20,uf50}/uf20-NNNN.cnf
+ * Instance dir: $YON_SATLIB_DIR, default ./satlib, layout {uf20,uf50}/uf20-NNNN.cnf
  * Index 1..1000.
  *
  * metric_id come yon_rt_sat_dimacs_run. */
 
-#define SATLIB_BASE "/home/claude/yon-work/satlib"
+#define SATLIB_BASE (getenv("YON_SATLIB_DIR") ? getenv("YON_SATLIB_DIR") : "./satlib")
 
 static double satlib_run_cached(const char *path, uint32_t metric_id) {
     static char cached_path[1024] = "";
