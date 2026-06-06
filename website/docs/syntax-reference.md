@@ -189,7 +189,7 @@ function that `visits E` requires the caller to cover `E`, by declaring
 | `world W = A * B` | ✓ | Product of worlds |
 | `world W = A + B` | ✓ | Coproduct |
 | `world W = Base / Rel` | ✓ | Quotient world by an equivalence |
-| `world W subset_of V` | ✓ | Sub-world |
+| `world W subset of V` | ✓ | Sub-world |
 
 ## Places, operations, laws
 

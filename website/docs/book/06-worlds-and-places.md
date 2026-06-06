@@ -36,7 +36,7 @@ world Currency { Code is EUR, USD }
 world Status { State is on, off }
 world Pair = Currency * Status        // product
 world Either = Currency + Status      // coproduct
-world Sub subset_of Currency          // sub-world
+world Sub subset of Currency          // sub-world
 world Anon = Currency / SameZone      // quotient by an equivalence
 ```
 
