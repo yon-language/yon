@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# yon-lsp — user-facing wrapper for the Yon language server (stdio).
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN="${YON_BIN_DIR:-$HERE/../frontend/_build/default}/yon_lsp.exe"
+[ -x "$BIN" ] || { echo "yon-lsp: binary not found: $BIN (build with: cd frontend && dune build)" >&2; exit 1; }
+exec "$BIN" "$@"
