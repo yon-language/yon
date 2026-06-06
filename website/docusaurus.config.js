@@ -76,7 +76,7 @@ const config = {
               { label: 'The Book', to: '/intro' },
               { label: 'Syntax Reference', to: '/syntax-reference' },
               { label: 'Benchmarks', to: '/book/benchmarks' },
-              { label: 'The limits of 1.0', to: '/book/limits' },
+              { label: 'Future work', to: '/book/future-work' },
             ],
           },
           {

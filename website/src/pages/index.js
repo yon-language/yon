@@ -125,7 +125,7 @@ function Execution() {
           {ABSENT.map(([h, p]) => (<div key={h}><h4>{h}</h4><p>{p}</p></div>))}
         </div>
         <div className={styles.links}>
-          <Link className={styles.arrowlink} to="/book/limits">The limits of 1.0 <Arrow /></Link>
+          <Link className={styles.arrowlink} to="/book/future-work">Future work <Arrow /></Link>
           <a className={styles.arrowlink} href="https://github.com/yon-language/yon">Source: OCaml, MLIR, C <Arrow /></a>
         </div>
       </div>

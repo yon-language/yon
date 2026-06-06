@@ -72,7 +72,7 @@ description of Yon 1.0, then follow the book:
 20. [Capabilities](./book/20-capabilities.md), authority attached to arrows, never ambient.
 21. [Tooling](./book/21-tooling.md), yon-doc, the language server, inspecting the compiler.
 
-Appendices: [Glossary](./book/90-glossary.md) · [The limits of 1.0](./book/91-limits.md) · [Coming from elsewhere](./book/92-coming-from.md) · [Benchmarks](./book/93-benchmarks.md)
+Appendices: [Glossary](./book/90-glossary.md) · [Future work](./book/91-future-work.md) · [Coming from elsewhere](./book/92-coming-from.md) · [Benchmarks](./book/93-benchmarks.md)
 
 ## Toolchain at a glance
 

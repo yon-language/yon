@@ -1,16 +1,18 @@
 ---
-id: limits
-title: "Appendix B. The limits of 1.0"
+id: future-work
+title: "Appendix B. Future work"
 sidebar_position: 91
-slug: /book/limits
+slug: /book/future-work
 ---
 
-# Appendix B, The limits of 1.0
+# Appendix B, Future work
 
-Everything on this page is deliberate. A limit you know is a contract; a
-limit you discover is a bug.
+1.0 draws its perimeter on purpose. A limit you know is a contract; a
+limit you discover is a bug. This page states the contract of the
+current version, what is absent by design and stays that way, and the
+work that is arriving, in that order.
 
-## Hard numbers
+## The contract of 1.0
 
 - **Space cells:** 1,024 per process. Cells are the identity mechanism,
   not a data structure; if you are allocating thousands, you want a
@@ -52,41 +54,49 @@ limit you discover is a bug.
   Strings and sections never cross (they are process-local handles).
 - **Exit codes:** `main`'s value mod 256, like every Unix process.
 
-## Absent by design
+## Absent by design, and staying that way
+
+These are not on any roadmap. They are the design.
 
 - **No garbage collector**, slots are stable for the life of the process;
-  the heap grows with distinct content only (chapter 12).
-- **No threads, no intra-process spawn**, the unit of concurrency is the
-  process (chapter 15).
+  the heap grows with distinct content only (chapter 13). Reclamation is
+  coming, but as regions, not tracing: see below.
+- **No threads**, the unit of concurrency is the process (chapter 16).
 - **No exceptions**, failure is data, declarations, or a process matter
-  (chapter 17).
+  (chapter 18).
 - **No interfaces / typeclasses / virtual dispatch**, arrows are the
-  interface (chapters 0, 4).
-- **No `src/` convention, no central package registry**, a package is a
-  directory; dependencies are git (chapter 14).
+  interface (chapters 0, 5).
+- **No central package registry**, a dependencies are git.
 
-## Declared but not implemented in 1.0
+## Arriving
 
-These parse (the grammar reserves them) but the compiler rejects them;
-they are contracts for later versions, listed in the normative reference
-with the same flag:
+The grammar already reserves most of this syntax; the compiler rejects
+it until each implementation lands with regression coverage. In planned
+order:
 
-- `produce { emit e }`, the stream-producer block.
-- `ind_path(C, d, p)`, the J eliminator (the runnable HoTT fragment is
-  `refl`/`pair`/`fst`/`snd`).
-- `x.f becomes e`, field mutation (sections are immutable; mutate through
-  cells).
-- Static capability checking (`requires` is enforced at runtime; the
-  caller-side static rule is design, chapter 19).
-- Value-level construction of comprehension types (the type and its
-  coercion are live, chapter 8).
-- True parallel execution of `for every` / `when here` (sequential in 1.0,
-  declared intent).
+- **`spawn { ... }` and `promote`**: ephemeral sub-runtimes with an
+  isolated arena. Only the yielded value is promoted to the parent
+  heap; the arena is reclaimed in one move. The design and its
+  invariants are public in the LLVM Discourse announcement thread. An
+  API for Space lifecycles belongs to the same work.
+- **`produce { emit e }`**, the stream-producer block, and folding
+  sub-runtimes into streams.
+- **`ind_path(C, d, p)`**, the J eliminator (the runnable HoTT fragment
+  is `refl`/`pair`/`fst`/`snd`).
+- **`x.f becomes e`**, field mutation (sections are immutable; today you
+  mutate through cells).
+- **Static capability checking** (`requires` is enforced at runtime; the
+  caller-side static rule is design, chapter 20).
+- **Value-level construction of comprehension types** (the type and its
+  coercion are live, chapter 9).
+- **True parallel execution of `for every` / `when here`** (sequential
+  in 1.0, declared intent).
 
-## Not measured yet
+## Measured, and measured next
 
-No performance claims appear in this book because no benchmarks have been
-published. Two open empirical questions are recorded in the development
-diary: what the structural-collapse pass catches that classical value
-numbering does not, and the physical cost of the "zero-bit" categorical
-structure in final object code. Numbers will precede claims.
+Appendix D publishes benchmarks with method and sources; the numbers on
+the landing page come from there. Two empirical questions remain open
+in the development notes and will be answered the same way, numbers
+before claims: what the structural-collapse pass catches that classical
+value numbering does not, and the physical cost of the categorical
+structure in final object code.
