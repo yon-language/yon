@@ -29,6 +29,7 @@ RAN kw_heyting exit=42
 RAN kw_is_literal exit=30
 RAN kw_list_here exit=21
 RAN kw_merge_move exit=14
+RAN kw_morph exit=0
 RAN kw_patterns exit=6
 RAN kw_pullback_pushout exit=12
 RAN kw_stream_policies exit=33

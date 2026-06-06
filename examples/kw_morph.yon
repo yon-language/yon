@@ -1,0 +1,13 @@
+// Micro-example: `morph`, a single functor between topoi, with its
+// `on object` aspect (the two-word contextual phrase). The two
+// aspects (on object, on morphism ... via ...) are optional and
+// orthogonal; this exercises the object part end to end.
+world Shop { Code is X }
+place Account in Shop { balance number }
+place AccountEU in Shop { balance number }
+morph LiftEU from Account to AccountEU {
+  on object(s: Account): AccountEU {
+    return new AccountEU { balance s.balance }
+  }
+}
+fun main(): number { return 0 }
