@@ -17,6 +17,23 @@ Status legend:
 Counts: 115 unique reserved words. Two-word contextual phrases and
 duration suffixes are listed at the end; they are not reserved words.
 
+## Work map
+
+The census doubles as the work tracker: nothing counts as closed until
+its row says `example`. Open items, in execution order:
+
+| # | Item | Keyword(s) | What is missing |
+|---|---|---|---|
+| 1 | Duplicate `over` entry in the lexer table | none | remove the second registration (one line) |
+| 2 | View declaration lowering | `show` | desugar drops `TopView`; synthesize a record place plus a constructor function per view so `Snapshot(acc)` works |
+| 3 | Path-value runtime representation | `refl` | path cells (`!topos.cell<1,"id">`) have no lowering; design decision pending (inert erased witness vs full structure) |
+| 4 | Universe-typed parameters | `Type` | `fun f(t: Type)` does not lower in body positions |
+| 5 | J eliminator | `ind_path` | depends on item 3's design; J computes on refl |
+| 6 | `Move.merge` surface call | none (functional debt) | the merge engine exists and is unit-tested; tycheck/desugar do not know the surface call |
+
+When an item closes, its keyword row flips to `example` with the
+example path, and the row above is deleted.
+
 ## Top-level declarations
 
 A Yon program is a list of these.
