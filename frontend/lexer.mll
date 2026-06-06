@@ -136,7 +136,6 @@
       "unifies", UNIFIES;
       "requires", REQUIRES;
       "share", SHARE;
-      "conflict_on", CONFLICT_ON;
       "resolves", RESOLVES;
       (* heyting<N>: an integer in Heyting (intuitionistic) arithmetic, used
          where the logic is not assumed two-valued. *)

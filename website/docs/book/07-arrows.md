@@ -125,7 +125,7 @@ field by field:
 fun pick(a: number, b: number): number { return a }
 move Merge unifies A, B {
   share v
-  conflict_on w resolves to pick
+  conflict on w resolves to pick
 }
 ```
 

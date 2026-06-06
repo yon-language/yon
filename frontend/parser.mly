@@ -128,7 +128,7 @@
 /* Type-related */
 %token OF IN TO LIST MAP STREAM IS NOT BY FROM WITH EFFECTS UNIFIES REQUIRES
 %token COMPOSE
-%token SHARE CONFLICT_ON RESOLVES
+%token SHARE RESOLVES
 
 /* Stream modifiers */
 %token BUFFER DROP_OLDEST DROP_NEWEST
@@ -988,9 +988,15 @@ merge_body:
 share_clause:
   | SHARE ids = ident_list                { ids }
 
+(* `conflict on F resolves to fn` — `conflict on` is a two-word
+ * contextual phrase, not a reserved keyword: both words stay free as
+ * user identifiers. *)
 conflict_clause:
-  | CONFLICT_ON field = IDENT RESOLVES TO fn = IDENT
-    { (field, fn) }
+  | tag = IDENT prep = IDENT field = IDENT RESOLVES TO fn = IDENT
+    { if tag <> "conflict" || prep <> "on" then
+        failwith ("expected 'conflict on' clause, got '"
+                  ^ tag ^ " " ^ prep ^ "'");
+      (field, fn) }
 
 /* ─── View declaration ─────────────────────────────────────────────── */
 
