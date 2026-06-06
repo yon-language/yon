@@ -13,7 +13,7 @@ MM="${YONC_MMGROUP_DIR:-$(python3 -c 'import mmgroup,os;print(os.path.dirname(mm
 # --- topos-opt: env > flat tree > container canonical tree -----------
 TOPOS="${YONC_TOPOS_OPT:-}"
 [ -z "$TOPOS" ] && [ -x "$ROOT/mlir/build/topos-opt" ] && TOPOS="$ROOT/mlir/build/topos-opt"
-[ -z "$TOPOS" ] && TOPOS=/home/claude/tree2/turno_33_part17_2026-05-30/mlir/build/topos-opt
+[ -z "$TOPOS" ] && TOPOS="$(cd "$(dirname "$0")/.." && pwd)/mlir/build/topos-opt"
 # No silent degradation: a missing/broken topos-opt would falsify the
 # suite (simple examples pass through the mlir-opt fallback, the topos
 # ones do not). Warn loudly.
