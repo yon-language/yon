@@ -50,7 +50,6 @@
       "pullback", PULLBACK;
       "pushout", PUSHOUT;
       "topology", TOPOLOGY;
-      "subset_of", SUBSET_OF;
 
       (* A `functor` is a first-class map between two worlds that preserves the
          categorical structure (it sends objects to objects and maps to maps,

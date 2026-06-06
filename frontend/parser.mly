@@ -99,7 +99,6 @@
 %token GEOM_MORPHISM PULL PUSH
 %token PULLBACK PUSHOUT
 %token TOPOLOGY
-%token SUBSET_OF
 %token FUNCTORIAL
 %token FUNCTOR
 %token IMPORT
@@ -601,9 +600,13 @@ world_decl:
         wd_quotient_of = Some (base, rel);
         wd_subset_of = None;
         wd_loc = mk_loc $startpos $endpos } }
-  | WORLD name = IDENT SUBSET_OF parent = IDENT
-    (* world hierarchy: world EU_Region subset_of Region *)
-    { { wd_name = name;
+  | WORLD name = IDENT tag = IDENT OF parent = IDENT
+    (* world hierarchy: `world EU_Region subset of Region`. `subset` is a
+     * two-word contextual phrase with the existing OF token, not a
+     * reserved keyword: it stays free as a user identifier. *)
+    { if tag <> "subset" then
+        failwith ("expected 'subset of' clause in world header, got '"
+                  ^ tag ^ " of'"); { wd_name = name;
         wd_places = [];
         wd_product_of = [];
         wd_coproduct_of = [];
