@@ -1574,6 +1574,33 @@ let rec emit_term (e : emitter)
       (v_eq, "i1")
   (* __bool_not unary.
    * Accepts i1 (direct boolean) or f64 (number, semantics 0=false). *)
+  (* Literal / variable patterns: `x is 7`, `x is "rome"`, `x is y`.
+     Numbers and interned text both travel as f64 (text equality is the
+     O(1) content-addressed handle comparison), so the test is a single
+     arith.cmpf oeq. i1 operands compare with arith.cmpi; propositions
+     with topos.heyt_is. Mixed representations fail loudly. *)
+  | C.App (C.App (C.Var "__is", x), pat_term) ->
+      let (vx, tx) = emit_term e env funcs x in
+      let (vp, tp) = emit_term e env funcs pat_term in
+      if tx = "f64" && tp = "f64" then begin
+        let v = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.cmpf oeq, %s, %s : f64" v vx vp);
+        (v, "i1")
+      end
+      else if tx = "i1" && tp = "i1" then begin
+        let v = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.cmpi eq, %s, %s : i1" v vx vp);
+        (v, "i1")
+      end
+      else if tx = "!topos.proposition" && tp = "!topos.proposition" then begin
+        let v = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = topos.heyt_is %s, %s : i1" v vx vp);
+        (v, "i1")
+      end
+      else
+        failwith (Printf.sprintf
+          "[emit_mlir] `is` pattern with mismatched representations: %s vs %s."
+          tx tp)
   | C.App (C.Var "__bool_not", arg) ->
       let (v_arg, ty) = emit_term e env funcs arg in
       if ty = "f64" then begin
