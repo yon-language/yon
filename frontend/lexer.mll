@@ -198,7 +198,7 @@
       "aggregates", AGGREGATES;
       
       (* Multi-shot marker *)
-      "multi_shot", MULTI_SHOT;
+      "multishot", MULTI_SHOT;
       
       (* Booleans *)
       "true", BOOL_LIT true;

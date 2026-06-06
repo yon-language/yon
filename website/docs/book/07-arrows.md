@@ -154,7 +154,7 @@ fun main(): number {
 ```
 
 Modifiers refine the contract: `forward`/`backward`/`bi` (direction),
-`lawful`, `invertible`, `with multi_shot`, and a `fold "sum_f64"` hint.
+`lawful`, `invertible`, `with multishot`, and a `fold "sum_f64"` hint.
 
 ## Inline handle lambdas, composition, application
 
