@@ -89,16 +89,24 @@ cmake -G Ninja -B build \
 ninja -C build
 cd ..
 
-# environment for yonc (add to your shell profile if you like)
-export YONC_LLC=$LLVM_PREFIX/bin/llc
-export YONC_MLIR_TRANSLATE=$LLVM_PREFIX/bin/mlir-translate
-export YONC_CC=clang
-export YONC_TOPOS_OPT=$(pwd)/mlir/build/topos-opt
-export YONC_MMGROUP_DIR=$(python3 -c 'import mmgroup,os;print(os.path.dirname(mmgroup.__file__))')
-export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"   # `timeout`
+# `timeout` for the regression (GNU coreutils)
+export PATH="$(brew --prefix coreutils)/libexec/gnubin:$PATH"
 
 # the test that counts
 cd regression && ./run_regression.sh
+```
+
+No environment variables are needed: `yonc` and the regression locate
+the LLVM tools on their own (PATH, then the `-18` suffixed names, then
+the distro dir, then the Homebrew keg) and ask the active `python3`
+where mmgroup lives. The `YONC_*` variables (`YONC_LLC`,
+`YONC_MLIR_TRANSLATE`, `YONC_CC`, `YONC_TOPOS_OPT`, `YONC_MMGROUP_DIR`,
+...) remain available as overrides if you want to force a non-standard
+toolchain.
+
+```bash
+# example override: a custom LLVM build
+export YONC_LLC=/opt/llvm-18/bin/llc
 ```
 
 macOS notes already handled in the sources: `-D_DARWIN_C_SOURCE` (BSD
@@ -122,8 +130,7 @@ cmake -G Ninja -B build \
   -DLLVM_DIR=/usr/lib/llvm-18/lib/cmake/llvm
 ninja -C build
 cd ..
-export YONC_TOPOS_OPT=$(pwd)/mlir/build/topos-opt
-cd regression && ./run_regression.sh
+cd regression && ./run_regression.sh   # no env vars needed, see above
 ```
 
 ---
