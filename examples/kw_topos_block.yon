@@ -1,0 +1,24 @@
+// Micro-example: the explicit topos vocabulary. A `topos` block
+// declares its `objects`, its `terminal` (the one-point object), its
+// `morphisms` (operation signatures, `functorial` marks the ones
+// lifted along world morphisms) and its props (maps into Omega); a
+// `topology` declares a Lawvere-Tierney j : Omega -> Omega on a place.
+world Ledger { Code is X }
+topos Bank in Ledger where {
+  objects {
+    place State in Ledger { balance number }
+    place Unit1 in Ledger { u number }
+  }
+  terminal Unit1
+  morphisms {
+    operation tag(s: State): number
+    functorial operation lift(s: State): number
+  }
+  prop is_overdrawn(s: State): proposition = s.balance < 0
+}
+topology j of State { return 1 }
+fun main(): number {
+  be s holds new State { balance 5 }
+  be bad holds is_overdrawn(s)
+  return if bad then 0 else 42
+}
