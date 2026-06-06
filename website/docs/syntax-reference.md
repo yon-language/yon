@@ -222,7 +222,7 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: `pull` is the inverse image, `push` the direct image; clauses `adjunction`, `exact pull`, `exact push` declare its properties |
 | `view V of P { show f  show f = e  show f as "label" }` | ✓ | Derived projection of a place |
 | `topology j of P { ... }` | ✓ | **Lawvere–Tierney** topology: a body defining `j : Ω → Ω` |
-| `reduction [forward\|backward\|bi] [lawful] [invertible] R[<T>] of P [with multi_shot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | Reduction with direction and laws; clauses are contextual `on` handlers and `be` bindings |
+| `reduction [forward\|backward\|bi] [lawful] [invertible] R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | Reduction with direction and laws; clauses are contextual `on` handlers and `be` bindings |
 
 ## Topos declarations
 
