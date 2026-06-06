@@ -87,7 +87,7 @@ New objects from old ones, named after their universal property.
 | `morphisms` | example | Lists the maps of the topos |
 | `terminal` | example | The one-point object |
 | `prop` | example | Subobject classifier: a map into Omega (`prop is_overdrawn(s): proposition = ...`) |
-| `morph` | wired | Declares a single map (functor) between topoi; body uses `on object` / `on morphism` |
+| `morph` | example | Declares a single map (functor) between topoi; body uses `on object` / `on morphism` |
 | `via` | example | In `on morphism op via op2`: which operation realizes the map |
 | `each` | example | In `for each X by fnX` inside a nat transform: one component per object |
 
