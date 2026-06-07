@@ -67,3 +67,27 @@ place, the seed of sheaf semantics:
 ```yon
 topology j of P { return 1 }          // a Lawvere–Tierney j : Omega -> Omega
 ```
+
+## Forcing at a stage
+
+Kripke–Joyal semantics evaluates truth at a stage: a statement may hold
+at one object of the site and fail at another. In Yon the stage is a
+place, and the statement is a pattern condition, the same patterns that
+drive `when`:
+
+```yon
+world Net { Code is X }
+place NodeA in Net { value number }
+fun guard(): number {
+  forces NodeA value is number {
+    return 1
+  }
+  return 0
+}
+fun main(): number { return 0 }
+```
+
+The block runs only where the condition holds at that stage. Patterns
+are a variable, a literal, `present`, `absent`, `unknown`, chainable
+with `and`/`or`; `forces` adds the stage to the machinery that `when`
+already uses.

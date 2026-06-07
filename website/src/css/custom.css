@@ -227,3 +227,26 @@ article .card:hover { border-color: var(--yon-ring); transform: translateY(-2px)
 .footer__link-item { color: var(--yon-lav); transition: color .15s ease; }
 .footer__link-item:hover { color: var(--yon-light); }
 .footer__copyright { color: var(--yon-lav-dim); font-family: var(--ifm-font-family-monospace); font-size: 12px; }
+
+/* Local search: match the site palette */
+.navbar__search-input {
+  background-color: rgba(235, 230, 255, 0.07);
+  color: #EBE6FF;
+  border: 1px solid rgba(165, 158, 215, 0.35);
+  border-radius: 999px;
+}
+.navbar__search-input::placeholder { color: #8079b0; }
+.navbar__search-input:focus { border-color: #f0bf72; outline: none; }
+
+/* Search modal: match the palette */
+div[class*="searchModal"] button,
+div[class*="SearchModal"] button {
+  background-color: rgba(235, 230, 255, 0.08);
+  color: #EBE6FF;
+  border: 1px solid rgba(165, 158, 215, 0.35);
+  border-radius: 8px;
+}
+div[class*="searchModal"] button:hover,
+div[class*="SearchModal"] button:hover {
+  border-color: #f0bf72;
+}
