@@ -13,8 +13,123 @@ from a complete pass over the real grammar (`frontend/parser.mly` and
 
 This table answers *is this form valid?* For *what does this keyword
 mean?*, with a compiling example next to each explanation, see
-[Keywords, one by one](/book/keywords); rows below link there as the
-chapter grows.
+[Keywords, one by one](/book/keywords). Every keyword, alphabetically:
+
+[`absent`](/book/keywords#absent) ·
+[`adjunction`](/book/keywords#adjunction) ·
+[`aggregates`](/book/keywords#aggregates) ·
+[`algebra`](/book/keywords#algebra) ·
+[`all`](/book/keywords#all) ·
+[`and`](/book/keywords#and) ·
+[`as`](/book/keywords#as) ·
+[`at`](/book/keywords#at) ·
+[`backward`](/book/keywords#backward) ·
+[`be`](/book/keywords#be) ·
+[`becomes`](/book/keywords#becomes) ·
+[`bi`](/book/keywords#bi) ·
+[`buffer`](/book/keywords#buffer) ·
+[`by`](/book/keywords#by) ·
+[`cell`](/book/keywords#cell) ·
+[`compose`](/book/keywords#compose) ·
+[`converts`](/book/keywords#converts) ·
+[`do`](/book/keywords#do) ·
+[`drop`](/book/keywords#drop) ·
+[`each`](/book/keywords#each) ·
+[`effects`](/book/keywords#effects) ·
+[`else`](/book/keywords#else) ·
+[`emit`](/book/keywords#emit) ·
+[`error`](/book/keywords#error) ·
+[`every`](/book/keywords#every) ·
+[`exact`](/book/keywords#exact) ·
+[`extends`](/book/keywords#extends) ·
+[`false`](/book/keywords#false) ·
+[`fold`](/book/keywords#fold) ·
+[`for`](/book/keywords#for) ·
+[`forces`](/book/keywords#forces) ·
+[`forever`](/book/keywords#forever) ·
+[`forward`](/book/keywords#forward) ·
+[`from`](/book/keywords#from) ·
+[`fst`](/book/keywords#fst) ·
+[`fun`](/book/keywords#fun) ·
+[`functor`](/book/keywords#functor) ·
+[`functorial`](/book/keywords#functorial) ·
+[`geomorph`](/book/keywords#geomorph) ·
+[`here`](/book/keywords#here) ·
+[`heyting`](/book/keywords#heyting) ·
+[`holds`](/book/keywords#holds) ·
+[`Id`](/book/keywords#id) ·
+[`if`](/book/keywords#if) ·
+[`import`](/book/keywords#import) ·
+[`in`](/book/keywords#in) ·
+[`ind_path`](/book/keywords#ind_path) ·
+[`init`](/book/keywords#init) ·
+[`internal`](/book/keywords#internal) ·
+[`invertible`](/book/keywords#invertible) ·
+[`is`](/book/keywords#is) ·
+[`iter`](/book/keywords#iter) ·
+[`law`](/book/keywords#law) ·
+[`lawful`](/book/keywords#lawful) ·
+[`list`](/book/keywords#list) ·
+[`map`](/book/keywords#map) ·
+[`maps`](/book/keywords#maps) ·
+[`morph`](/book/keywords#morph) ·
+[`morphisms`](/book/keywords#morphisms) ·
+[`most`](/book/keywords#most) ·
+[`move`](/book/keywords#move) ·
+[`multishot`](/book/keywords#multishot) ·
+[`new`](/book/keywords#new) ·
+[`not`](/book/keywords#not) ·
+[`objects`](/book/keywords#objects) ·
+[`of`](/book/keywords#of) ·
+[`operation`](/book/keywords#operation) ·
+[`or`](/book/keywords#or) ·
+[`otherwise`](/book/keywords#otherwise) ·
+[`over`](/book/keywords#over) ·
+[`pair`](/book/keywords#pair) ·
+[`partial`](/book/keywords#partial) ·
+[`Pi`](/book/keywords#pi) ·
+[`place`](/book/keywords#place) ·
+[`present`](/book/keywords#present) ·
+[`produce`](/book/keywords#produce) ·
+[`prop`](/book/keywords#prop) ·
+[`pull`](/book/keywords#pull) ·
+[`pullback`](/book/keywords#pullback) ·
+[`push`](/book/keywords#push) ·
+[`pushout`](/book/keywords#pushout) ·
+[`reduction`](/book/keywords#reduction) ·
+[`refl`](/book/keywords#refl) ·
+[`repeat`](/book/keywords#repeat) ·
+[`requires`](/book/keywords#requires) ·
+[`resolves`](/book/keywords#resolves) ·
+[`return`](/book/keywords#return) ·
+[`scope`](/book/keywords#scope) ·
+[`sequence`](/book/keywords#sequence) ·
+[`share`](/book/keywords#share) ·
+[`show`](/book/keywords#show) ·
+[`Sigma`](/book/keywords#sigma) ·
+[`snd`](/book/keywords#snd) ·
+[`solve`](/book/keywords#solve) ·
+[`space`](/book/keywords#space) ·
+[`stream`](/book/keywords#stream) ·
+[`terminal`](/book/keywords#terminal) ·
+[`then`](/book/keywords#then) ·
+[`times`](/book/keywords#times) ·
+[`to`](/book/keywords#to) ·
+[`topology`](/book/keywords#topology) ·
+[`topos`](/book/keywords#topos) ·
+[`true`](/book/keywords#true) ·
+[`Type`](/book/keywords#type) ·
+[`unifies`](/book/keywords#unifies) ·
+[`unknown`](/book/keywords#unknown) ·
+[`uses`](/book/keywords#uses) ·
+[`via`](/book/keywords#via) ·
+[`view`](/book/keywords#view) ·
+[`visits`](/book/keywords#visits) ·
+[`when`](/book/keywords#when) ·
+[`where`](/book/keywords#where) ·
+[`while`](/book/keywords#while) ·
+[`with`](/book/keywords#with) ·
+[`world`](/book/keywords#world)
 
 Each construct carries a status:
 
@@ -31,8 +146,8 @@ Each construct carries a status:
 | `// ...`, `/* ... */` | ✓ | Line / block comments |
 | `42`, `3.14` | ✓ | `number` literal (IEEE f64) |
 | `"ciao"` | ✓ | String literal, a real value of type `text`/`String` (see *Strings*) |
-| `true`, `false` | ✓ | Boolean literals |
-| `present`, [`absent`](/book/keywords#absent), `unknown` | ✓ | Heyting truth values (intuitionistic Ω) |
+| [`true`](/book/keywords#true), [`false`](/book/keywords#false) | ✓ | Boolean literals |
+| [`present`](/book/keywords#present), [`absent`](/book/keywords#absent), [`unknown`](/book/keywords#unknown) | ✓ | Heyting truth values (intuitionistic Ω) |
 | `100ms`, `5s`, `2min`, `1h`, `3d`, `1y` | ✓ | Duration literals (no whitespace before the unit). **A duration is a `number` of milliseconds**: `2s + 500ms == 2500` |
 | `mod::name` | ✓ | Qualified name (module namespace) |
 
@@ -66,7 +181,7 @@ only numbers travel on the wire.
 | Form | Status | Meaning |
 |---|---|---|
 | `be x holds e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword) |
-| `x becomes e` | ✓ | Mutation. A becomes-target binding is **promoted to a Space cell** (the content-addressed mutation mechanism): its `be` allocates the cell, reads go through it, `becomes` updates it. Works on locals and parameters |
+| `x becomes e` | ✓ | Mutation. A becomes-target binding is **promoted to a Space cell** (the content-addressed mutation mechanism): its `be` allocates the cell, reads go through it, [`becomes`](/book/keywords#becomes) updates it. Works on locals and parameters |
 | `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
 | `x.f becomes e` | ⚠ not implemented | Field mutation: place sections are immutable in 1.0; mutate through cells |
 
@@ -92,7 +207,7 @@ inside views.
 | `move from W1 to W2` | ✓ | Handle types: arrows are first-class values that |
 | `reduction of P` | ✓ | can be passed as parameters. Each keeps its |
 | `morph from S1 to S2` | ✓ | categorical stratification (no nesting, only |
-| `view of P` | ✓ | composition via `compose`) |
+| `view of P` | ✓ | composition via [`compose`](/book/keywords#compose)) |
 
 A function parameter may omit its annotation; the signature pre-pass infers it
 from the call sites.
@@ -119,7 +234,7 @@ from the call sites.
 | `new P { field value }` | ✓ | Section construction, **no `=`** between field and value |
 | `new P in S { ... }` | ✓ | Construction inside Space `S` |
 | [`refl(t)`](/book/keywords#refl), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
-| [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is `refl` in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
+| [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is [`refl`](/book/keywords#refl) in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
 | `pullback(f, g)` / `pullback(f, g, a, b)` | ✓ | Pullback scaffolding / runtime compatible pair with `f(a) == g(b)` checked |
 | `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
@@ -129,11 +244,11 @@ from the call sites.
 |---|---|---|
 | `+ - * / %`, unary `-` | ✓ | Arithmetic |
 | `== != < > <= >=` | ✓ | Comparison |
-| `and`/`&&`, `or`/`\|\|`, `not`/`!` | ✓ | Classical logic |
+| [`and`](/book/keywords#and)/`&&`, [`or`](/book/keywords#or)/`\|\|`, [`not`](/book/keywords#not)/`!` | ✓ | Classical logic |
 | `a => b` | ✓ | Classical implication, sugar for `(not a) or b` |
 | `& \| ^ ~` | ✓ | **Bitwise on numbers** |
 | `&&? \|\|? =>? !?` | ✓ | Heyting (scalar Ω): and, or, implication, negation |
-| `&? \|? ^? ~?` | ✓ | Heyting **trit-wise** on `heyting` (Unknown-mask propagation) |
+| `&? \|? ^? ~?` | ✓ | Heyting **trit-wise** on [`heyting`](/book/keywords#heyting) (Unknown-mask propagation) |
 | `:` `.` `->` `\|>` | ✓ | Annotation, access, function type, pipe |
 
 ## Statements
@@ -141,8 +256,8 @@ from the call sites.
 | Form | Status | Meaning |
 |---|---|---|
 | `return e` | ✓ | Return from the function |
-| `when c { } when c2 { } otherwise { }` | ✓ | Conditional chain. **A `return` inside a branch does not exit the function**, branches are for effects; select values with `if/then/else` |
-| `e is pattern`, [`e is not pattern`](/book/keywords#not) | ✓ | Pattern conditions (in `when`/`forces`): patterns are a variable, a literal, `present`, `absent`, `unknown`; chainable with `and`/`or` |
+| `when c { } when c2 { } otherwise { }` | ✓ | Conditional chain. **A [`return`](/book/keywords#return) inside a branch does not exit the function**, branches are for effects; select values with `if/then/else` |
+| `e is pattern`, [`e is not pattern`](/book/keywords#not) | ✓ | Pattern conditions (in [`when`](/book/keywords#when)/[`forces`](/book/keywords#forces)): patterns are a variable, a literal, `present`, `absent`, `unknown`; chainable with `and`/`or` |
 | `iter n do { }` | ✓ | Bounded loop (always terminates; `scf.for`) |
 | `while c do { }` | ✓ | General loop (`scf.while`) |
 | `scope [Name] { }` | ✓ | **Hermetic block** (see below) |
@@ -151,7 +266,7 @@ from the call sites.
 | `forces stage cond { }` | ✓ | Kripke–Joyal forcing block at a stage |
 | `for every x in e { }` (+ `when here`) | ✓ | Iteration over a List. **1.0 executes sequentially**; parallelism (and the `when here` space filter) are declared intent, not yet a runtime distinction |
 | `in sequence over x in e { }` | ✓ | Sequential iteration over a List |
-| `repeat at most N times { } [otherwise { }]` | ✓ | The body runs exactly N times, then `otherwise` (if present) runs. A success-based early exit is a post-1.0 protocol |
+| `repeat at most N times { } [otherwise { }]` | ✓ | The body runs exactly N times, then [`otherwise`](/book/keywords#otherwise) (if present) runs. A success-based early exit is a post-1.0 protocol |
 | `forever { }` | ✓ | Infinite loop (`while present`); typically paired with effects inside |
 
 ### Hermetic scope
@@ -218,16 +333,16 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 
 | Form | Status | Meaning |
 |---|---|---|
-| `move m from P to Q [requires CAP1, CAP2] { A maps to B by f ... }` | ✓ | Move between places; the body is a list of **mapping clauses**; `requires` lists capabilities |
+| `move m from P to Q [requires CAP1, CAP2] { A maps to B by f ... }` | ✓ | Move between places; the body is a list of **mapping clauses**; [`requires`](/book/keywords#requires) lists capabilities |
 | `move m unifies A, B { share f1, f2  conflict on f resolves to fn }` | ✓ | Merge move: shared fields plus per-field conflict resolution |
 | `A maps to B by f` / `converts to` / `aggregates to` | ✓ | Mapping kinds; `by fun(x) => e` inline lambda allowed |
 | `morph F from W to V { on object(...) { } on morphism op via op2 }` | ✓ | Functor by components; `on object: fun(...) => e` inline form allowed; `on`, `object`, `morphism` stay free as user identifiers |
 | `functor F(x: T) from W to V [law identity] [law composition] { return e }` | ✓ | Functor given by a return expression with declared laws |
 | `nat transform t from F to G { for each X by fnX }` | ✓ | Natural transformation: one component per object |
-| `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: `pull` is the inverse image, `push` the direct image; clauses `adjunction`, `exact pull`, `exact push` declare its properties |
+| `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: [`pull`](/book/keywords#pull) is the inverse image, [`push`](/book/keywords#push) the direct image; clauses [`adjunction`](/book/keywords#adjunction), `exact pull`, `exact push` declare its properties |
 | `view V of P { show f  show f = e  show f as "label" }` | ✓ | Derived projection of a place, lowered to a record place plus a constructor: `V(x)` builds the projection, fields read normally |
 | `topology j of P { ... }` | ✓ | **Lawvere–Tierney** topology: a body defining `j : Ω → Ω` |
-| `reduction [forward\|backward\|bi] [lawful] [invertible] R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | Reduction with direction and laws; clauses are contextual `on` handlers and `be` bindings |
+| `reduction [forward\|backward\|bi] [lawful] [invertible] R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | Reduction with direction and laws; clauses are contextual `on` handlers and [`be`](/book/keywords#be) bindings |
 
 ## Topos declarations
 
