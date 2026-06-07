@@ -113,6 +113,7 @@ type expr =
   | EVar of string * location
   | EField of expr * string * location                (* "obj.field" *)
   | ECall of string * expr list * location            (* "f(a, b, c)" *)
+  | EProduce of stmt list * location                  (* "produce { ... }" as an expression: the value is the stream id *)
   | ENew of string * field_assignment list * location (* "new Place { field1 e1, ... }" *)
   | ENewIn of string * string * field_assignment list * location  (* "new P in Space { ... }" *)
   | EBinop of binop * expr * expr * location
@@ -217,7 +218,7 @@ and pattern =
 
 (* ─── Statements ───────────────────────────────────────────────────── *)
 
-type stmt =
+and stmt =
   | SLet of string * expr * location                  (* "let x holds e" *)
   | SAssignHolds of lvalue * expr * location          (* "x holds e" or "x.f holds e" *)
   | SAssignBecomes of lvalue * expr * location        (* "x becomes e" or "x.f becomes e" *)
