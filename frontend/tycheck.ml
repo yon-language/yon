@@ -28,6 +28,34 @@ module E = Tyenv
  * check_program. *)
 let scheme_env : (string * Ty_subst.scheme) list ref = ref []
 
+(* ─── Wire subscriptions: compile-time knowledge ────────────────────
+   Filled at check_program start from the (already loaded and prefixed)
+   program: which Spaces are importable targets, which names are
+   imported from which Space, and every function's declared return type
+   (qualified names included), so awaits can verify the producer. *)
+let wire_spaces : (string, unit) Hashtbl.t = Hashtbl.create 8
+let wire_imports : (string, string * string) Hashtbl.t = Hashtbl.create 16
+let wire_fun_returns : (string, ty option) Hashtbl.t = Hashtbl.create 64
+
+(* Remote signatures, loaded by the driver from the Space's source
+   (sibling <module>.yon or yon_modules/<module>): name -> return ty.
+   The cross-Space import is nominal (the code lives in the other
+   process); the producer check needs the declared signature only. *)
+let register_remote_signature (name : string) (ret : ty option) : unit =
+  Hashtbl.replace wire_fun_returns name ret
+
+let collect_wire_knowledge (p : program) : unit =
+  Hashtbl.reset wire_spaces;
+  Hashtbl.reset wire_imports;
+  List.iter (function
+    | TopImportFrom (m, n, sp, _) ->
+        Hashtbl.replace wire_spaces sp ();
+        Hashtbl.replace wire_imports n (sp, m);
+        Hashtbl.replace wire_imports (m ^ "::" ^ n) (sp, m)
+    | TopFun fd ->
+        Hashtbl.replace wire_fun_returns fd.fn_name fd.fn_return
+    | _ -> ()) p
+
 let reset_scheme_env () = scheme_env := []
 
 let add_scheme (name : string) (s : Ty_subst.scheme) =
@@ -393,6 +421,18 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                | Some _ -> ok (TyUser x)
                | None -> err loc (Printf.sprintf "unknown identifier: %s" x)))))
 
+  | EField (obj, "stream", loc) when
+      (match obj with
+       | EVar (n, _) ->
+           (match Tyenv.lookup_var env n with
+            | Some (TySubscription _) -> true
+            | _ -> false)
+       | _ -> false) ->
+      (* subscription.stream: materialize the emissions as a stream. The
+         site is registered for the drain lowering. *)
+      Hashtbl.replace substream_site_table (loc.start_line, loc.start_col) ();
+      ok (TyStream (TyPrim "number", []))
+
   | EField (obj, fld, loc) ->
       (* Cross-space field-access detection. If obj is a variable bound in an
        * explicit space (`let x holds new P in EU { ... }`), the field access is
@@ -438,6 +478,63 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        | other -> err loc
            (Printf.sprintf "field access requires a place; got %s"
               (Tyenv.ty_to_string other)))
+
+  | ECall (name, args, loc) when
+      (let ln = String.length name in
+       ln > 8 && String.sub name (ln - 8) 8 = "__awaits") ->
+      (* w.awaits(producer): the receiver must be a wire to a Space; the
+         argument is a producer FUNCTION NAME, imported from that same
+         Space and declared `stream of T`. All three are compile errors
+         otherwise (design note, locked). *)
+      let prefix = String.sub name 0 (String.length name - 8) in
+      let* recv_ty = infer env ctx (EVar (prefix, loc)) in
+      (match recv_ty with
+       | TyWire sp ->
+           (match args with
+            | [EVar (fname, floc)] ->
+                (match Hashtbl.find_opt wire_imports fname with
+                 | None ->
+                     err floc (Printf.sprintf
+                       "Space %s does not declare '%s' (or it is not \
+imported: import <module>::%s from %s)" sp fname fname sp)
+                 | Some (sp', m) when sp' <> sp ->
+                     err floc (Printf.sprintf
+                       "'%s' is imported from Space %s, not %s" fname sp' sp)
+                 | Some (_, m) ->
+                     let bare =
+                       match String.index_opt fname ':' with
+                       | Some i -> String.sub fname (i + 2)
+                                     (String.length fname - i - 2)
+                       | None -> fname
+                     in
+                     let ret =
+                       match Hashtbl.find_opt wire_fun_returns
+                               (m ^ "::" ^ bare) with
+                       | Some r -> Some r
+                       | None -> Hashtbl.find_opt wire_fun_returns bare
+                     in
+                     (match ret with
+                      | Some (Some (TyStream _)) ->
+                          let sel = Module_prefix.op_selector bare in
+                          Hashtbl.replace awaits_site_table
+                            (loc.start_line, loc.start_col) (sp, sel, sel);
+                          ok (TySubscription sp)
+                      | Some r ->
+                          let shown = (match r with
+                            | Some t -> Tyenv.ty_to_string t
+                            | None -> "number") in
+                          err floc (Printf.sprintf
+                            "'%s' is not a producer: it returns %s; a \
+producer is declared `stream of T`" bare shown)
+                      | None ->
+                          err floc (Printf.sprintf
+                            "Space %s does not declare '%s'" sp bare)))
+            | _ ->
+                err loc "awaits takes the name of a producer function")
+       | other ->
+           err loc (Printf.sprintf
+             "awaits needs a wire receiver (be w holds wire to <Space>), \
+got %s" (Tyenv.ty_to_string other)))
 
   | ECall (name, args, loc) ->
       (* B.2: directed-transport builtin. `coerce_incl(v, proof)` transports a
@@ -640,6 +737,12 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       let* arg_tys = arg_tys_result in
       check_call env ctx name arg_tys loc
       end
+
+  | EWireTo (sp, loc) ->
+      if Hashtbl.mem wire_spaces sp then ok (TyWire sp)
+      else err loc (Printf.sprintf
+        "wire to %s: unknown Space. Import its producer first \
+(import <module>::<producer> from %s)" sp sp)
 
   | EProduce (body, _) ->
       (* produce { ... } as an expression: the body's statements are
@@ -964,7 +1067,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
 
 and location_of_expr (e : expr) : location =
   match e with
-  | EProduce (_, l)
+  | EProduce (_, l) | EWireTo (_, l)
   | ELit (_, l) | EVar (_, l) | EField (_, _, l) | ECall (_, _, l)
   | ENew (_, _, l) | ENewIn (_, _, _, l) | EBinop (_, _, _, l) | EParen (_, l)
   | EAll (_, _, l) | EIn (_, _, l)
@@ -2824,7 +2927,7 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | EPair (a, b, _) -> walk_expr a; walk_expr b
     | EFst (e, _) | ESnd (e, _) | ERefl (e, _) -> walk_expr e
     | EJ (a, b, c, _) -> walk_expr a; walk_expr b; walk_expr c
-    | EPullback (_, _, _) | EPushout (_, _, _) -> ()
+    | EPullback (_, _, _) | EPushout (_, _, _) | EWireTo (_, _) -> ()
     | EPullbackVal (_, _, a, b, _) -> walk_expr a; walk_expr b
     | ENot (e, _) -> walk_expr e
     | EIfThenElse (c, a, b, _) -> walk_expr c; walk_expr a; walk_expr b
@@ -3108,6 +3211,7 @@ let infer_effects (env : Tyenv.env) (p : program) : Tyenv.env =
 
 let check_program (p : program) : check_result =
   reset_scheme_env ();  (* let-poly schemes reset *)
+  collect_wire_knowledge p;
   Ty_subst.reset_metavars ();
   (* Pass 0: infer world parameters for unannotated places. *)
   match infer_place_worlds p with

@@ -355,6 +355,8 @@ let add_fun (env : env) (name : string) (sig_ : fun_sig) : env =
  * by the dispatcher to find structural matches. *)
 let rec type_tag (t : ty) : string =
   match t with
+  | TyWire sp -> "wire to " ^ sp
+  | TySubscription sp -> "subscription to " ^ sp
   | TyPrim n | TyPrimIn (n, _) -> n
   | TyUser n -> n
   | TyVar n -> n
@@ -466,6 +468,8 @@ let with_builtins (env : env) : env =
 
 let rec ty_to_string (t : ty) : string =
   match t with
+  | TyWire sp -> "wire to " ^ sp
+  | TySubscription sp -> "subscription to " ^ sp
   | TyPrim n -> n
   | TyPrimIn (n, ws) -> n ^ " in " ^ String.concat ", " ws
   | TyUser n -> n

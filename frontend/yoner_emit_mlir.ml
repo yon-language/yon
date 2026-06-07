@@ -149,6 +149,42 @@ let () =
   in
   (* Resolve selective-import aliases (geo_scale -> geometria::scale), then
    * mangle qualified names (a::b -> a_NS_b) so MLIR symbols are valid. *)
+  (* Wire subscriptions: load the SIGNATURES of every module named in a
+     cross-Space import (the import is nominal, the code lives in the
+     other process; the producer check needs the declared return type).
+     Resolution: sibling <module>.yon, then yon_modules/<module>/. *)
+  List.iter (function
+    | Surface_ast.TopImportFrom (m, _, _, _) ->
+        let base = Filename.dirname (List.hd yon_files) in
+        let candidates =
+          let sib = Filename.concat base (m ^ ".yon") in
+          if Sys.file_exists sib then [sib]
+          else
+            let dir = Filename.concat (Filename.concat base "yon_modules") m in
+            if Sys.file_exists dir && Sys.is_directory dir then
+              Sys.readdir dir |> Array.to_list
+              |> List.filter (fun f -> Filename.check_suffix f ".yon")
+              |> List.map (Filename.concat dir)
+            else []
+        in
+        List.iter (fun fn ->
+          try
+            let raw = read_file fn in
+            let (stripped, _) = strip_imports raw in
+            let lexbuf = Lexing.from_string stripped in
+            Lexing.set_filename lexbuf fn;
+            Parser_state.reset ();
+            let p = Parser.program Lexer.token lexbuf in
+            let _ = Parser_state.drain () in
+            List.iter (function
+              | Surface_ast.TopFun fd ->
+                  Tycheck.register_remote_signature
+                    (m ^ "::" ^ fd.Surface_ast.fn_name) fd.Surface_ast.fn_return;
+                  Tycheck.register_remote_signature
+                    fd.Surface_ast.fn_name fd.Surface_ast.fn_return
+              | _ -> ()) p
+          with _ -> ()) candidates
+    | _ -> ()) prog;
   let prog = Module_prefix.lower_cross_space prog in
   let prog = Module_prefix.resolve_aliases prog in
   Module_prefix.check_visibility !internals prog;

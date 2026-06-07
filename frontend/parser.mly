@@ -126,6 +126,7 @@
 
 /* Type-related */
 %token OF IN TO LIST MAP STREAM IS NOT BY FROM WITH EFFECTS UNIFIES REQUIRES
+%token WIRE
 %token COMPOSE
 %token SHARE RESOLVES
 
@@ -1455,6 +1456,11 @@ expr_atom:
         (EVar (x, dummy_loc))
         fs
     }
+  | x = IDENT DOT STREAM
+    { (* subscription.stream: STREAM is a keyword, so the generic field
+         chain above cannot accept it; dedicated rule *)
+      EField (EVar (x, dummy_loc), "stream", mk_loc $startpos $endpos)
+    }
   | x = IDENT                                                          
     { EVar (x, mk_loc $startpos $endpos) }
   | x = QIDENT
@@ -1463,6 +1469,8 @@ expr_atom:
     { ENew (name, fas, mk_loc $startpos $endpos) }
   | NEW name = IDENT IN space = IDENT LBRACE fas = field_assign_list RBRACE
     { ENewIn (name, space, fas, mk_loc $startpos $endpos) }
+  | WIRE TO sp = IDENT
+    { EWireTo (sp, mk_loc $startpos $endpos) }
   | PRODUCE LBRACE body = list(stmt) RBRACE
     { EProduce (body, mk_loc $startpos $endpos) }
   | LPAREN e = expr RPAREN                                             
