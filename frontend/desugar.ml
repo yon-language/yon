@@ -286,7 +286,8 @@ let rec desugar_expr (e : S.expr) : C.term =
             let suffix = String.sub name (idx + 2) (String.length name - idx - 2) in
             let is_method = (suffix = "map" || suffix = "filter"
                           || suffix = "fold" || suffix = "take"
-                          || suffix = "sum_take" || suffix = "to_stream") in
+                          || suffix = "sum_take" || suffix = "to_stream"
+                          || suffix = "for_every") in
             let is_lower = String.length prefix > 0
               && let c = prefix.[0] in c >= 'a' && c <= 'z'
             in
@@ -785,7 +786,55 @@ and subst_var_in_stmt (old_n : string) (new_n : string) (s : S.stmt) : S.stmt =
   | S.SCall (n, args, loc) ->
       let n' = if n = old_n then new_n else n in
       S.SCall (n', List.map goe args, loc)
+  (* Compound statements: the substitution must reach nested bodies
+     (a lambda bound before a while and called inside it, e.g. the
+     stream-method drain lowering). *)
+  | S.SWhile (c, b, loc) ->
+      S.SWhile (goe c, List.map (subst_var_in_stmt old_n new_n) b, loc)
+  | S.SIter (n, b, loc) ->
+      S.SIter (goe n, List.map (subst_var_in_stmt old_n new_n) b, loc)
+  | S.SForEvery (k, x, e, b, loc) ->
+      S.SForEvery (k, x, goe e,
+                   (if x = old_n then b
+                    else List.map (subst_var_in_stmt old_n new_n) b), loc)
+  | S.SInSequence (x, e, b, loc) ->
+      S.SInSequence (x, goe e,
+                     (if x = old_n then b
+                      else List.map (subst_var_in_stmt old_n new_n) b), loc)
+  | S.SScope (n, b, r, loc) ->
+      S.SScope (n, List.map (subst_var_in_stmt old_n new_n) b, goe r, loc)
+  | S.SWith (r, p, b, loc) ->
+      S.SWith (r, p, List.map (subst_var_in_stmt old_n new_n) b, loc)
+  | S.SProduce (b, loc) ->
+      S.SProduce (List.map (subst_var_in_stmt old_n new_n) b, loc)
+  | S.SForever (b, loc) ->
+      S.SForever (List.map (subst_var_in_stmt old_n new_n) b, loc)
+  | S.SRepeat (n, b, oth, loc) ->
+      S.SRepeat (n, List.map (subst_var_in_stmt old_n new_n) b,
+                 (match oth with
+                  | None -> None
+                  | Some o -> Some (List.map (subst_var_in_stmt old_n new_n) o)), loc)
+  | S.SWhen (c, b, elifs, oth, loc) ->
+      S.SWhen (subst_var_in_cond old_n new_n c,
+               List.map (subst_var_in_stmt old_n new_n) b,
+               List.map (fun (c2, b2) ->
+                 (subst_var_in_cond old_n new_n c2,
+                  List.map (subst_var_in_stmt old_n new_n) b2)) elifs,
+               (match oth with
+                | None -> None
+                | Some o -> Some (List.map (subst_var_in_stmt old_n new_n) o)), loc)
   | _ -> s
+
+and subst_var_in_cond (old_n : string) (new_n : string) (c : S.condition) : S.condition =
+  let goe = subst_var_in_expr old_n new_n in
+  match c with
+  | S.CondExpr e -> S.CondExpr (goe e)
+  | S.CondIs (e, p) -> S.CondIs (goe e, p)
+  | S.CondIsNot (e, p) -> S.CondIsNot (goe e, p)
+  | S.CondAnd (a, b) -> S.CondAnd (subst_var_in_cond old_n new_n a,
+                                   subst_var_in_cond old_n new_n b)
+  | S.CondOr (a, b) -> S.CondOr (subst_var_in_cond old_n new_n a,
+                                 subst_var_in_cond old_n new_n b)
 
 (* Rewrite the uses of `old_n` (a let-bound lambda with capture) into calls to
  * the synthetic fun `new_n` with the captured args prepended.
@@ -1286,6 +1335,24 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
   | S.SWith (r, p, b, loc) -> [S.SWith (r, p, body b, loc)]
   | S.SProduce (b, loc) -> [S.SProduce (body b, loc)]
   | S.SForces (stg, c, b, loc) -> [S.SForces (stg, c, body b, loc)]
+  | S.SCall (n, [f], loc)
+    when v1_has_suffix n "__for_every"
+      && Hashtbl.mem S.stream_method_table (loc.S.start_line, loc.S.start_col) ->
+      v1_lower_stream_for_every (v1_strip n "__for_every") f loc
+  | S.SLet (x, S.ECall (n, [f], eloc), loc)
+    when v1_has_suffix n "__for_every"
+      && Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
+      v1_lower_stream_for_every (v1_strip n "__for_every") f loc
+      @ [S.SLet (x, v1_num 0.0, loc)]
+  | S.SCall (n, [init; f], loc)
+    when v1_has_suffix n "__fold"
+      && Hashtbl.mem S.stream_method_table (loc.S.start_line, loc.S.start_col) ->
+      fst (v1_lower_stream_fold (v1_strip n "__fold") init f loc)
+  | S.SLet (x, S.ECall (n, [init; f], eloc), loc)
+    when v1_has_suffix n "__fold"
+      && Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
+      let (stmts, result) = v1_lower_stream_fold (v1_strip n "__fold") init f loc in
+      stmts @ [S.SLet (x, result, loc)]
   | other -> [other]
 
 and v1_lower_foreach x e b loc =
@@ -1325,6 +1392,58 @@ and v1_lower_foreach_stream x e b loc =
       @ [ S.SLet (v1_fresh "adv",
                   v1_call "Space__set" [S.EVar (cur, l); recv ()], loc) ],
       loc) ]
+
+and v1_has_suffix n suf =
+  let ln = String.length n and ls = String.length suf in
+  ln > ls && String.sub n (ln - ls) ls = suf
+
+and v1_strip n suf = String.sub n 0 (String.length n - String.length suf)
+
+and v1_lower_stream_for_every recv f loc =
+  (* s.for_every(f): drain the stream, calling f on each value. The
+     lambda is bound once to a name (the let-position lifting handles
+     both inline and named forms); state, if any, threads through fold
+     instead: capture-and-mutate is not closure semantics we offer. *)
+  let fn = v1_fresh "fe_f" in
+  let w = v1_fresh "fe_w" in
+  let cur = v1_fresh "fe_cur" in
+  let l = S.dummy_loc in
+  let getcur () = v1_call "Space__get" [S.EVar (cur, l)] in
+  let recvw () = v1_call "Wire__recv" [S.EVar (w, l)] in
+  [ S.SLet (fn, f, loc);
+    S.SLet (w, S.EVar (recv, l), loc);
+    S.SLet (cur, v1_call "Space__make" [recvw ()], loc);
+    S.SWhile (
+      S.EBinop (S.OpNeq, getcur (), v1_num 4294967295.0, l),
+      [ S.SLet (v1_fresh "fe_r", S.ECall (fn, [getcur ()], l), loc);
+        S.SLet (v1_fresh "adv",
+                v1_call "Space__set" [S.EVar (cur, l); recvw ()], loc) ],
+      loc) ]
+
+and v1_lower_stream_fold recv init f loc =
+  (* s.fold(init, f): drain with an accumulator cell; per element
+     acc = f(acc, v). Returns (stmts, result_expr). *)
+  let fn = v1_fresh "fl_f" in
+  let w = v1_fresh "fl_w" in
+  let cur = v1_fresh "fl_cur" in
+  let acc = v1_fresh "fl_acc" in
+  let l = S.dummy_loc in
+  let getcur () = v1_call "Space__get" [S.EVar (cur, l)] in
+  let getacc () = v1_call "Space__get" [S.EVar (acc, l)] in
+  let recvw () = v1_call "Wire__recv" [S.EVar (w, l)] in
+  ([ S.SLet (fn, f, loc);
+     S.SLet (w, S.EVar (recv, l), loc);
+     S.SLet (acc, v1_call "Space__make" [init], loc);
+     S.SLet (cur, v1_call "Space__make" [recvw ()], loc);
+     S.SWhile (
+       S.EBinop (S.OpNeq, getcur (), v1_num 4294967295.0, l),
+       [ S.SLet (v1_fresh "fl_set",
+                 v1_call "Space__set"
+                   [S.EVar (acc, l); S.ECall (fn, [getacc (); getcur ()], l)], loc);
+         S.SLet (v1_fresh "adv",
+                 v1_call "Space__set" [S.EVar (cur, l); recvw ()], loc) ],
+       loc) ],
+   getacc ())
 
 (* ---- pass 2: becomes promotion ---- *)
 let rec v1_targets_stmts acc ss = List.fold_left v1_targets_stmt acc ss

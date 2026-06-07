@@ -23,6 +23,10 @@ let dummy_loc = { start_line = 0; start_col = 0; end_line = 0; end_col = 0 }
    the drain lowering over the list walk. *)
 let stream_foreach_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
 
+(* Same mechanism for the stream METHOD calls (s.fold / s.for_every):
+   sites whose receiver types as a stream take the drain lowering. *)
+let stream_method_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
+
 (* ─── Type expressions ─────────────────────────────────────────────── *)
 
 (* Types in Yon surface — covers first-order schema types plus
