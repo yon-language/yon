@@ -161,6 +161,7 @@ if [ "$STOP" -eq 0 ]; then cp "$CURRENT" "$OUTPUT"; log "done -> $OUTPUT"; echo 
 # === Stage 1: Topos -> Standard MLIR =======================================
 if [ "$STOP" -ge 1 ] && [ "$START" -le 1 ]; then
     log "Stage 1: Topos -> Standard MLIR"
+    [ -x "$YONC_TOPOS_OPT" ] || { echo "yonc: topos-opt not found/executable: $YONC_TOPOS_OPT" >&2; echo "      the MLIR dialect build is required: cd $YONC_ROOT/mlir && cmake -G Ninja -B build -DMLIR_DIR=<llvm18>/lib/cmake/mlir -DLLVM_DIR=<llvm18>/lib/cmake/llvm && ninja -C build" >&2; exit 1; }
     NEXT="$WORKDIR/stage1.standard.mlir"
     "$YONC_TOPOS_OPT" --cluster-collapse --lower-topos-extensions --lower-topos-to-standard "$CURRENT" > "$NEXT"
     CURRENT="$NEXT"
