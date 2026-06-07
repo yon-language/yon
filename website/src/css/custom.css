@@ -250,3 +250,49 @@ div[class*="searchModal"] button:hover,
 div[class*="SearchModal"] button:hover {
   border-color: #f0bf72;
 }
+
+/* ── The landing code window, book-wide ─────────────────────────────
+   Every fenced code block in the docs gets the landing frame: hairline
+   border, 14px radius, disc background, soft shadow, and the dots bar.
+   Blocks inside the CodeWindow component (.yon-in-window) are excluded:
+   they already carry the frame. Blocks with a title= keep their header
+   bar, which gains the dots and loses the duplicate bar. */
+.theme-doc-markdown .theme-code-block:not(.yon-in-window) {
+  border: 1px solid var(--yon-hair);
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--yon-disc);
+  box-shadow: 0 30px 60px -34px rgba(0, 0, 0, .6);
+}
+.theme-doc-markdown .theme-code-block:not(.yon-in-window)::before {
+  content: "";
+  display: block;
+  height: 36px;
+  border-bottom: 1px solid var(--yon-hair-2);
+  background:
+    radial-gradient(circle 5px at 22px 50%, #E8A33D 98%, transparent),
+    radial-gradient(circle 5px at 40px 50%, #6A5FC0 98%, transparent),
+    radial-gradient(circle 5px at 58px 50%, #3a2f72 98%, transparent);
+}
+/* with a title= the header bar already exists: dots go in there,
+   the synthetic bar disappears */
+.theme-doc-markdown .theme-code-block:not(.yon-in-window):has([class*="codeBlockTitle"])::before {
+  display: none;
+}
+.theme-doc-markdown .theme-code-block:not(.yon-in-window) [class*="codeBlockTitle"] {
+  padding-left: 74px;
+  border-bottom: 1px solid var(--yon-hair-2);
+  background:
+    radial-gradient(circle 5px at 22px 50%, #E8A33D 98%, transparent),
+    radial-gradient(circle 5px at 40px 50%, #6A5FC0 98%, transparent),
+    radial-gradient(circle 5px at 58px 50%, #3a2f72 98%, transparent),
+    var(--yon-disc);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 12px;
+  color: var(--yon-lav-dim);
+}
+.theme-doc-markdown .theme-code-block:not(.yon-in-window) pre {
+  margin: 0;
+  border-radius: 0;
+  background: var(--yon-disc);
+}
