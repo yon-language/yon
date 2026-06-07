@@ -1471,7 +1471,10 @@ double yon_rt_stream_shm_await_blocking_f64(double id_f64) {
     uint32_t id = (uint32_t)id_f64;
     if (id >= YON_MAX_SHM_STREAMS || !g_shm_stream_handles[id]) return -1.0;
     double out = 0.0;
-    if (yon_rt_stream_shm_await_blocking(g_shm_stream_handles[id], &out) != 0) return -1.0;
+    int rc = yon_rt_stream_shm_await_blocking(g_shm_stream_handles[id], &out);
+    if (rc == -2) return (double)0xFFFFFFFFu;  /* drained AND closed: the
+                                                  unified EOF sentinel */
+    if (rc != 0) return -1.0;
     return out;
 }
 double Stream__produce_shm(double id, double v) { return yon_rt_stream_shm_produce_f64(id, v); }
@@ -1486,6 +1489,23 @@ double yon_rt_stream_shm_close_write_f64(double id_f64) {
     return (double)yon_rt_stream_shm_close_write(g_shm_stream_handles[id]);
 }
 double Stream__close_shm(double id) { return yon_rt_stream_shm_close_write_f64(id); }
+
+/* Subscription .stream: drain a completed shm channel into a local
+ * stream, structurally closed; the stream methods then work unchanged.
+ * One copy of the values, by design (v1). */
+double Wire__subscription_stream(double chan_id) {
+    char nm[64];
+    snprintf(nm, sizeof(nm), "__sub_stream_%u", (unsigned)chan_id);
+    double local = (double)yon_rt_stream_create(nm, 0, 8);
+    if (local < 0.0) return -1.0;
+    for (;;) {
+        double v = yon_rt_stream_shm_await_blocking_f64(chan_id);
+        if (v == (double)0xFFFFFFFFu || v == -1.0) break;
+        yon_rt_stream_emit_f64(local, v);
+    }
+    yon_rt_stream_close((uint32_t)local);
+    return local;
+}
 
 /* ============================================================== */
 /* Cross-Space server side: dispatch extern + argv stash           */
@@ -2069,6 +2089,29 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
         if (req.selector == 0u) {                   /* protocol shutdown */
             yon_rt_rpc2_reply(&req, 0.0);
             break;
+        }
+        if (req.selector == 0xFFFFFFFFu) {
+            /* SUBSCRIPTION (reserved selector): args = (producer_selector,
+             * channel_id). Run the producer via the dispatch, obtaining the
+             * local stream it returned; drain it (the structural-close
+             * sentinel ends the drain); forward each value over the shm
+             * channel with back-pressure; close the write side. Synchronous
+             * in the loop, by design (v1): producers terminate. */
+            double producer_sel = req.args[0];
+            double chan_id = req.args[1];
+            double attach = yon_rt_stream_shm_open_f64(chan_id, 0.0);
+            double local_sid = __yon_dispatch(producer_sel, 0.0, 0.0, 0.0, 0.0);
+            if (attach >= 0.0 && local_sid >= 0.0) {
+                for (;;) {
+                    double v = yon_rt_stream_await_f64(local_sid);
+                    if (v == (double)0xFFFFFFFFu) break;
+                    if (v == -1.0) break;  /* open-but-empty: producer misdeclared */
+                    yon_rt_stream_shm_produce_f64(attach, v);
+                }
+                yon_rt_stream_shm_close_write_f64(attach);
+            }
+            yon_rt_rpc2_reply(&req, 0.0);
+            continue;
         }
         double r = __yon_dispatch((double)req.selector,
                                   req.args[0], req.args[1],
