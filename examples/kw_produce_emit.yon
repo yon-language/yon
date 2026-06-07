@@ -1,13 +1,11 @@
-fun source(): number {
+fun main(): number {
   be s holds produce {
     emit 41
     emit 1
   }
-  return s
-}
-fun main(): number {
-  be s holds source()
-  be a holds Wire.recv(s)
-  be b holds Wire.recv(s)
-  return a + b        // 41 + 1 = 42
+  be total holds 0
+  for every v in s {
+    total becomes total + v
+  }
+  return total        // 41 + 1 = 42
 }

@@ -624,7 +624,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
          checked like the statement form; the value is the stream id,
          a number, same convention as the Stream.* API. *)
       let* _ = !produce_check_ref env ctx body None in
-      ok (TyPrim "number")
+      ok (TyStream (TyPrim "number", []))
   | ENew (place_name, fas, loc) ->
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
@@ -942,6 +942,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
 
 and location_of_expr (e : expr) : location =
   match e with
+  | EProduce (_, l)
   | ELit (_, l) | EVar (_, l) | EField (_, _, l) | ECall (_, _, l)
   | ENew (_, _, l) | ENewIn (_, _, _, l) | EBinop (_, _, _, l) | EParen (_, l)
   | EAll (_, _, l) | EIn (_, _, l)
@@ -1407,7 +1408,11 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       let* coll_ty = infer env ctx collection in
       let elem_ty = match coll_ty with
         | TyList inner -> Some inner
-        | TyStream (inner, _) -> Some inner
+        | TyStream (inner, _) ->
+            (* stream collection: the desugar drains the wire instead of
+               walking cons cells; register the site. *)
+            Hashtbl.replace stream_foreach_table (loc.start_line, loc.start_col) ();
+            Some inner
         | _ -> None
       in
       (match elem_ty with
