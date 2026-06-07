@@ -1,0 +1,15 @@
+// for_every: the stream method. Each value is handed to the function;
+// the drain stops on its own at the structural close of the produce.
+// (Lists keep the `for every x in xs` statement; streams use the method.)
+fun display(v: number): number visits Output {
+  be _p holds IO.print_num(v)
+  return 0
+}
+fun main(): number visits Output {
+  be s holds produce {
+    emit 5
+    emit 2
+  }
+  s.for_every(display)
+  return 0
+}
