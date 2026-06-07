@@ -1,7 +1,8 @@
 // Swizzled (eject) of @docusaurus/theme-classic's prism-include-languages.
 // Loads the configured additionalLanguages AND registers a small grammar for
 // Yon, so ```yon code blocks are syntax-highlighted with the site's theme.
-// Keyword list derived from frontend/lexer.mll (book audit, 2026-06-06).
+// Keyword list generated from frontend/lexer.mll; regenerate on any
+// lexer change (the Keywords chapter coverage check is the companion).
 import siteConfig from '@generated/docusaurus.config';
 
 export default function prismIncludeLanguages(PrismObject) {
@@ -35,23 +36,14 @@ export default function prismIncludeLanguages(PrismObject) {
       pattern: /\b[A-Z][A-Za-z0-9_]*\b/,
     },
     keyword: new RegExp(
+      // Generated mechanically from frontend/lexer.mll (2026-06-07):
+      // every lowercase reserved word, minus true/false (boolean below).
+      // Capitalized reserved words (Pi, Sigma, Id, Type) are matched by
+      // the class-name rule above. Contextual phrase words (object,
+      // morphism, oldest, newest, subset, conflict, nat, transform) are
+      // free identifiers and stay uncolored on purpose.
       '\\b(?:' +
-      // core
-      'fun|be|holds|return|if|then|else|when|otherwise|is|not|and|or|new|import|extends|from|to|as|in|here|package|requires|becomes|visits|move|view|handle|cell|share|uses|via' +
-      // loops & blocks
-      '|for|every|each|sequence|over|while|iter|do|forever|repeat|most|times|scope|with|where' +
-      // worlds, places, topoi
-      '|world|place|space|topos|objects|morphisms|terminal|prop|forces|topology' +
-      // reductions
-      '|reduction|forward|backward|bi|law|lawful|invertible|fold|multi_shot|on|on_error|on_morphism|on_object|operation|conflict_on' +
-      // streams & sub-runtimes
-      '|produce|emit|spawn|stream|buffer|drop_newest|drop_oldest' +
-      // solving & algebra
-      '|solve|unifies|resolves|converts|algebra|aggregates|heyt_int|subset_of|sum_f64' +
-      // categorical layer (live: geomorph & friends, pullback/pushout)
-      '|functor|functorial|nat_transform|adjunction|geomorph|geometric_morphism|f_star|f_lower_star|pull|push|pullback|pushout|compose|morph|exact' +
-      // HoTT fragment & truth values
-      '|refl|pair|fst|snd|ind_path|present|absent|unknown' +
+      'absent|adjunction|aggregates|algebra|all|and|as|at|backward|be|becomes|bi|buffer|by|cell|compose|converts|do|drop|each|effects|else|emit|error|every|exact|extends|fold|for|forces|forever|forward|from|fst|fun|functor|functorial|geomorph|here|heyting|holds|if|import|in|ind_path|init|internal|invertible|is|iter|law|lawful|list|map|maps|morph|morphisms|most|move|multishot|new|not|objects|of|operation|or|otherwise|over|pair|partial|place|present|produce|prop|pull|pullback|push|pushout|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|solve|space|stream|terminal|then|times|to|topology|topos|unifies|unknown|uses|via|view|visits|when|where|while|with|world' +
       ')\\b'
     ),
     boolean: /\b(?:true|false)\b/,

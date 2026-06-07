@@ -414,7 +414,7 @@ fun main(): number {
   be m1 holds Magma.gen(m, 3)
   be m2 holds Magma.gen(m1, 5)
   be m3 holds Magma.gen(m2, 11)
-  /* subset-sum: 8 = 3+5 raggiungibile -> maschera 3 */
+  /* subset-sum: 8 = 3+5 is reachable -> mask 3 */
   return Magma.subsetsum_mask(m3, 8)
 }`}
 </CodeWindow>
