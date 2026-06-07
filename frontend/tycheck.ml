@@ -336,6 +336,13 @@ let forbid_handle_in_body
          composition."
         outer_kind inner_kind)
 
+(* Forward reference: infer (this rec group) reaches the statement
+   checker of the later group, for produce blocks in expression
+   position. Initialized right after check_stmts is defined. *)
+let produce_check_ref :
+  (Tyenv.env -> Reduce.ctx -> stmt list -> ty option -> Tyenv.env tc_result) ref =
+  ref (fun env _ _ _ -> ok env)
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -612,6 +619,12 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       check_call env ctx name arg_tys loc
       end
 
+  | EProduce (body, _) ->
+      (* produce { ... } as an expression: the body's statements are
+         checked like the statement form; the value is the stream id,
+         a number, same convention as the Stream.* API. *)
+      let* _ = !produce_check_ref env ctx body None in
+      ok (TyPrim "number")
   | ENew (place_name, fas, loc) ->
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
@@ -1551,6 +1564,8 @@ and type_of_lvalue (env : Tyenv.env) (ctx : Reduce.ctx)
  * cumulativity principle (Type_n : Type_m whenever m > n) ensures
  * that no type is "too big" for the universe we want to put it in.
  *)
+let () = produce_check_ref := check_stmts
+
 let rec level_of_type (t : ty) : int =
   match t with
   | TyUniverse n -> n + 1
@@ -2738,6 +2753,7 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | EFunctorLam (_, body, _, _, _, _) -> walk_expr body
     | EViewLam (_, body, _, _) -> walk_expr body
     | EComposeWith (h1, h2, _) -> walk_expr h1; walk_expr h2
+    | EProduce (body, _) -> List.iter walk_stmt body
     | ELit _ | EVar _ -> ()
   and walk_stmt s =
     match s with

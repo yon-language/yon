@@ -1034,6 +1034,14 @@ let rec infer_mlir_ty (e : emitter)
   (* Control-flow loops evaluate to f64 (a 0.0 placeholder, Unit semantics). *)
   | C.App (C.App (C.Var "__iter_n", _), C.Lam _) -> "f64"
   | C.App (C.App (C.Var "__while_loop", C.Lam _), C.Lam _) -> "f64"
+  | C.App (g, C.Unit) ->
+      (* zero-arg call marker: the type is the callee's return type for
+         a user function; anything else degrades to inferring g, the
+         pre-marker bare-Var behavior. *)
+      (match g with
+       | C.Var f when List.mem_assoc f funcs ->
+           (List.assoc f funcs).fn_ret_mlir
+       | _ -> infer_mlir_ty e env funcs g)
   | C.App (C.Lam (x, _, rest), value) ->
       (match value with
        | C.Lam _ ->
@@ -3628,6 +3636,40 @@ let rec emit_term (e : emitter)
       let v_unit = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_unit);
       (v_unit, "f64")
+  | C.App (g, C.Unit) ->
+      (* Zero-argument call marker from the desugar: f() compiled as
+         App(f, Unit). For a user function (direct name or a bound
+         __hof_ref alias) this is ONE func.call, emitted here, so a
+         bound result never re-executes at its use sites. Anything else
+         degrades to emitting g itself, which is exactly the pre-marker
+         bare-Var behavior for builtins and module calls. *)
+      (match g with
+       | C.Var f when List.mem_assoc f funcs ->
+           (match List.assoc f funcs with
+            | fs when fs.fn_params = [] ->
+                let v = fresh_ssa e in
+                emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s"
+                               v f fs.fn_ret_mlir);
+                (v, fs.fn_ret_mlir)
+            | _ ->
+                failwith (Printf.sprintf
+                  "[emit_mlir] %s() called with no arguments but the function has parameters." f))
+       | C.Var x ->
+           (match Env.find_opt x env with
+            | Some (ssa, _) when String.length ssa > 10
+                                 && String.sub ssa 0 10 = "__hof_ref:" ->
+                let real_fname = String.sub ssa 10 (String.length ssa - 10) in
+                (match List.assoc_opt real_fname funcs with
+                 | Some fs when fs.fn_params = [] ->
+                     let v = fresh_ssa e in
+                     emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s"
+                                    v real_fname fs.fn_ret_mlir);
+                     (v, fs.fn_ret_mlir)
+                 | _ ->
+                     failwith (Printf.sprintf
+                       "[emit_mlir] alias %s does not name a zero-argument function." x))
+            | _ -> emit_term e env funcs g)
+       | _ -> emit_term e env funcs g)
   | C.App (C.Lam (x, _, rest), value) ->
       (* Special case: the bound value is itself a Lam, so this is a function
          let-binding. Functions are already emitted as top-level func.func
