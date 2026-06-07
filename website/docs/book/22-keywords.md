@@ -188,7 +188,7 @@ fun main(): number { return 0 }`}
 
 #### `produce`
 
-The producer block: `produce { ... }` builds a stream, the body emits into it, and the value of the block is the stream, consumed with `for every`. The close is structural: when the block ends, nobody can write any more, so the stream closes itself, and the consuming loop stops on its own. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
+The producer block: `produce { ... }` builds a stream, the body emits into it, and the value of the block is the stream. Streams are consumed with the methods: `s.fold(init, fun(acc, v) => ...)` accumulates (state threads through the parameters), `s.for_every(f)` runs a function on each value. The close is structural: when the block ends, nobody can write any more, so the stream closes itself and the drain stops on its own. Lists keep the `for every x in xs` statement; streams use the methods.
 
 #### `emit`
 
@@ -202,10 +202,7 @@ fun main(): number {
     emit 41
     emit 1
   }
-  be total holds 0
-  for every v in s {
-    total becomes total + v
-  }
+  be total holds s.fold(0, fun(a: number, v: number) => a + v)
   return total        // 41 + 1 = 42
 }
 ```

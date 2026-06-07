@@ -1340,6 +1340,12 @@ expr_atom:
     { ELit (l, mk_loc $startpos $endpos) }
   (* Inline lambda. Syntax: `fun(x: T, y: U) => expr` or `fun(x) => expr`.
    * Unannotated types receive TyPrim "unknown", to be resolved via HM. *)
+  | FUN LPAREN params = separated_list(COMMA, lambda_param) RPAREN FATARROW
+    LBRACE body = list(stmt) RBRACE
+    { (* block-bodied inline lambda: lifted to a synthetic function,
+         the expression's value is its name *)
+      let loc = mk_loc $startpos $endpos in
+      EVar (Parser_state.lift_inline_block_lambda_to_fun params body loc, loc) }
   | FUN LPAREN params = separated_list(COMMA, lambda_param) RPAREN FATARROW body = expr
     { ELam (params, body, mk_loc $startpos $endpos) }
   (* handle lambdas inline.

@@ -120,6 +120,7 @@ RAN shm_backpressure exit=0
 RAN shm_stream exit=0
 RAN stdlib_extended exit=90
 RAN stdlib_showcase exit=244
+RAN stream_for_every exit=0
 RAN string_literals exit=31
 RAN syslog_demo exit=0
 RAN system_io exit=63
