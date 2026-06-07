@@ -1159,7 +1159,21 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                            let* () = check_args (param_tys, arg_tys) in
                            ok return_ty
                      | None ->
-                         err loc (Printf.sprintf "unknown function or operation: %s" name)))
+                         (* Renamed family: channel ops moved from Stream to
+                            Wire; say so instead of "unknown". *)
+                         let renamed = ["make"; "send"; "recv"; "make_shm";
+                                        "send_shm"; "recv_shm"; "produce_shm";
+                                        "await_shm"; "close_shm"; "make_net";
+                                        "send_net"; "recv_net"; "close_net"] in
+                         (match String.index_opt name '_' with
+                          | Some _ when String.length name > 8
+                                        && String.sub name 0 8 = "Stream__"
+                                        && List.mem (String.sub name 8 (String.length name - 8)) renamed ->
+                              let op = String.sub name 8 (String.length name - 8) in
+                              err loc (Printf.sprintf
+                                "Stream.%s was renamed: the channel family lives under Wire (use Wire.%s). Stream is the sequence: map, filter, fold." op op)
+                          | _ ->
+                              err loc (Printf.sprintf "unknown function or operation: %s" name))))
            | many ->
                err loc
                  (Printf.sprintf
@@ -2110,7 +2124,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    * `fun f(R: Space): ...` and `fun g(m: Map): ...` without having to register
    * them with `place`. *)
   let runtime_builtin = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH";
-                         "List"; "Stream"; "Seq"; "XSet"; "Merkle";
+                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "Merkle";
                          "VoyagerList"; "PerfectMap"; "String"] in
   match t with
   | TyPrim n | TyPrimIn (n, _) ->
