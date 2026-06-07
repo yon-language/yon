@@ -24,9 +24,6 @@ its row says `example`. Open items, in execution order:
 
 | # | Item | Keyword(s) | What is missing |
 |---|---|---|---|
-| 3 | Path-value runtime representation | `refl` | path cells (`!topos.cell<1,"id">`) have no lowering; design decision pending (inert erased witness vs full structure) |
-| 4 | Universe-typed parameters | `Type` | `fun f(t: Type)` does not lower in body positions |
-| 5 | J eliminator | `ind_path` | depends on item 3's design; J computes on refl |
 | 6 | `Move.merge` surface call | none (functional debt) | the merge engine exists and is unit-tested; tycheck/desugar do not know the surface call |
 
 When an item closes, its keyword row flips to `example` with the
@@ -216,14 +213,14 @@ These read as English in declarations.
 
 | Keyword | Status | What it does |
 |---|---|---|
-| `Type` | parse-only | The universe of types (`Type_N` for levels); a universe-typed parameter does not lower in body positions today |
+| `Type` | example | The universe of types (`Type_N` for levels); a universe-typed parameter lowers to an inert runtime token (`examples/kw_paths.yon`) |
 | `Pi` | example | Dependent product type (dependent functions) |
 | `Sigma` | example | Dependent sum type, lowered to the honest two-field struct (`examples/kw_hott.yon`); as a comprehension fibre it does not lower today (use Pi/Id fibres) |
 | `Id` | example | Identity type: paths between two terms |
-| `refl` | parse-only | The reflexivity path; typed as a path cell, not lowered in expression position today |
+| `refl` | example | The reflexivity path; lowers to its erased witness, operationally the endpoint value (`examples/kw_paths.yon`). Path equality stays with the reducer |
 | `pair` | example | Constructor of the Sigma pair |
 | `fst` `snd` | example | Projections of the pair (`examples/kw_hott.yon`) |
-| `ind_path` | parse-only | The J eliminator at surface level: parsing only, honestly flagged in the reference |
+| `ind_path` | example | The J eliminator: computes d(basepoint) when the path is refl in evidence at the call site (`examples/kw_paths.yon`); a J stuck on a non-refl path is rejected at compile time, the runtime never decides path equality (Syn(Yon) formalization sec. 13/16) |
 
 ## Two-word contextual phrases
 
