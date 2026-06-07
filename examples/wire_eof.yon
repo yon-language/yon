@@ -1,0 +1,9 @@
+// Structural close: the wire of a produce block closes when the block
+// ends. Queued values stay readable; once drained, recv answers with
+// the EOF sentinel (the same end marker the fused pipelines use).
+fun main(): number {
+  be s holds produce { emit 7 }
+  be a holds Wire.recv(s)          // 7, queued before the close
+  be b holds Wire.recv(s)          // drained AND closed: EOF sentinel
+  return if b == 4294967295 then a else 0
+}

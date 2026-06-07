@@ -1077,6 +1077,7 @@ typedef struct yon_stream_s {
     uint32_t  tail;            /* next position to emit */
     uint32_t  count;           /* number of values present */
     uint32_t  capacity;        /* in slots */
+    uint32_t  closed;          /* structural EOF: no more writes will come */
 } yon_stream_t;
 
 static yon_stream_t g_streams[YON_MAX_STREAMS];
@@ -1103,6 +1104,7 @@ uint32_t yon_rt_stream_create(const char *name,
     s->head = 0;
     s->tail = 0;
     s->count = 0;
+    s->closed = 0;
     if (!s->buffer) {
         free(s->name);
         g_n_streams--;
@@ -1127,6 +1129,7 @@ int yon_rt_stream_emit(uint32_t stream_id, const void *value_ptr) {
     ensure_init();
     if (stream_id >= g_n_streams) return -1;
     yon_stream_t *s = &g_streams[stream_id];
+    if (s->closed) return -1;  /* no writes after close */
     if (s->count >= s->capacity) {
         fprintf(stderr, "[YON-RT #87] stream_emit: stream %u FULL\n", stream_id);
         return -1;
@@ -1148,6 +1151,7 @@ int yon_rt_stream_await(uint32_t stream_id, void *out_ptr) {
     if (stream_id >= g_n_streams) return -1;
     yon_stream_t *s = &g_streams[stream_id];
     if (s->count == 0) {
+        if (s->closed) return -2;  /* drained AND closed: structural EOF */
         fprintf(stderr, "[YON-RT #87] stream_await: stream %u EMPTY\n", stream_id);
         return -1;
     }
@@ -1189,14 +1193,26 @@ double yon_rt_stream_await_f64(double stream_id_f64) {
     uint32_t id = (uint32_t)stream_id_f64;
     double out = 0.0;
     int rc = yon_rt_stream_await(id, &out);
+    if (rc == -2) return (double)0xFFFFFFFFu;  /* EOF sentinel, same as the
+                                                  fused pipelines' end marker */
     if (rc < 0) return -1.0;
     return out;
+}
+
+/* Structural close: no more writes will come. Queued values remain
+ * readable; recv on a drained closed wire returns the EOF sentinel. */
+uint32_t yon_rt_stream_close(uint32_t stream_id) {
+    ensure_init();
+    if (stream_id >= g_n_streams) return 1;
+    g_streams[stream_id].closed = 1;
+    return 0;
 }
 
 /* C aliases for the symbols used by the frontend stdlib. */
 double Stream__make(double t)         { return yon_rt_stream_make_f64(t); }
 double Stream__send(double s, double v) { return yon_rt_stream_emit_f64(s, v); }
 double Stream__recv(double s)        { return yon_rt_stream_await_f64(s); }
+double Stream__close(double s)       { return (double)yon_rt_stream_close((uint32_t)s); }
 
 /* ============================================================== */
 /* Cross-PROCESS streams over POSIX shared memory (mattone A)      */

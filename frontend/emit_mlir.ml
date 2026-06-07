@@ -349,6 +349,7 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Stream__make", (["f64"], "f64");
   "Stream__send", (["f64"; "f64"], "f64");
   "Stream__recv", (["f64"], "f64");
+  "Stream__close", (["f64"], "f64");
   (* Cross-PROCESS streams over POSIX shared memory (mattone A): same f64-id
      calling convention as the intra-process ones, but the channel crosses the
      process boundary. make_shm(id, create) rendezvous on a shared region. *)
