@@ -262,6 +262,16 @@ let rec core_ty_to_mlir_simple (t : C.ty) : string =
        | C.Place pd -> Printf.sprintf "!topos.section<\"%s\">" pd.C.p_name
        | C.Var name -> Printf.sprintf "!topos.section<\"%s\">" name
        | _ -> "!llvm.ptr")
+  | C.TyId (a, _, _) ->
+      (* A path value lowers to its erased witness, which carries the
+         endpoint type: refl(x) is operationally x (see the C.Refl case
+         in emit_term). The arbiter of path EQUALITY stays the reducer
+         (Syn(Yon) formalization sec. 16); no equation is decided here. *)
+      core_ty_to_mlir_simple a
+  | C.TyType _ ->
+      (* A universe-typed parameter is an inert runtime token: types are
+         compile-time citizens, the runtime never inspects one. *)
+      "f64"
   | _ ->
       failwith (Printf.sprintf
                   "[emit_mlir] unhandled type in body lowering: %s. Handled: number, boolean, money, proposition, text, unit, and user-defined place types."
@@ -1193,6 +1203,12 @@ let rec infer_mlir_ty (e : emitter)
   | C.Refl x ->
       (* refl(x) is inert; its type is the type of x *)
       infer_mlir_ty e env funcs x
+  | C.J _ as jt ->
+      (* same reduce-then-look discipline as the emission case *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx jt with
+       | C.J _ ->
+           failwith "[emit_mlir infer] ind_path stuck on a non-refl path."
+       | t' -> infer_mlir_ty e env funcs t')
   | C.With (_, body) ->
       (* handler activation passes through; the type is the type of the body *)
       infer_mlir_ty e env funcs body
@@ -4318,8 +4334,18 @@ let rec emit_term (e : emitter)
          identity: return the original value (the simplified cubical reduction
          refl(x) -> x). *)
       emit_term e env funcs x
-  | C.J _ ->
-      failwith "[emit_mlir] J primitive (HoTT path elimination) not handled yet."
+  | C.J _ as jt ->
+      (* Path induction. The arbiter of path equality is the REDUCER
+         (Syn(Yon) formalization sec. 16): we normalize the J term, and
+         on a refl path J computes to its diagonal case, which we emit.
+         A J stuck on a non-refl path (a HIT constructor such as the
+         S1 loop) is NOT decided at runtime: identifying it with the
+         diagonal would trivialize S1. Loud error, no equation added. *)
+      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx jt in
+      (match reduced with
+       | C.J _ ->
+           failwith "[emit_mlir] ind_path stuck on a non-refl path: path induction over non-trivial paths is compile-time only; the runtime does not decide path equality."
+       | t' -> emit_term e env funcs t')
   (* P7-frontend A2: Sigma pair (Pair, Fst, Snd) --> !llvm.struct *)
   | C.Pair (a, b) ->
       let (va, ta) = emit_term e env funcs a in

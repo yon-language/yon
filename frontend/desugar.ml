@@ -354,12 +354,17 @@ let rec desugar_expr (e : S.expr) : C.term =
        * The motive binder name is synthesized; the carrier type is
        * elaborated later by the type checker. For runtime, J fires
        * the beta-rule J(C, d, refl(a), a) = d(a). The basepoint is
-       * extracted from the path (the kernel keeps it as a separate
-       * arg; for surface we project it from the path itself, using
-       * Unit as a placeholder that gets refined at type-check time. *)
+       * projected from the path itself when the path is refl in
+       * evidence (the only form the emitter accepts today: a J stuck
+       * on a non-refl path is rejected, the runtime never decides
+       * path equality); Unit stays as the placeholder otherwise. *)
+      let p_core = desugar_expr p in
+      let basepoint = match p_core with
+        | C.Refl a -> a
+        | _ -> C.Unit in
       C.J ("_motive_x", C.TyType 0,
            desugar_expr c, desugar_expr d,
-           desugar_expr p, C.Unit)
+           p_core, basepoint)
   | S.EPullback (_f, _g, _loc) ->
       Builtins.encode_number 0.0
   | S.EPullbackVal (_f, _g, _a, _b, _loc) ->

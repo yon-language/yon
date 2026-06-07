@@ -114,7 +114,7 @@ from the call sites.
 | `new P { field value }` | ✓ | Section construction, **no `=`** between field and value |
 | `new P in S { ... }` | ✓ | Construction inside Space `S` |
 | `refl(t)`, `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
-| `ind_path(C, d, p)` | ⚠ not implemented | The J eliminator parses; its emission is not wired in 1.0 (the runnable fragment is `refl`/`pair`/`fst`/`snd`) |
+| `ind_path(C, d, p)` | ✓ | The J eliminator: computes `d(basepoint)` when `p` is `refl` in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
 | `pullback(f, g)` / `pullback(f, g, a, b)` | ✓ | Pullback scaffolding / runtime compatible pair with `f(a) == g(b)` checked |
 | `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
