@@ -1,0 +1,11 @@
+// Producer: streams readings 1..8 into the wire, then closes it.
+fun main(): number {
+  be w holds Wire.make_shm(9, 1)
+  be k holds 1
+  while k < 9 do {
+    be _s holds Wire.produce_shm(w, k)
+    k becomes k + 1
+  }
+  be _z holds Wire.close_shm(w)
+  return 0
+}

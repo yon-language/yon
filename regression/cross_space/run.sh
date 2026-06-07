@@ -16,6 +16,16 @@ out=$(timeout 20 ./ledger 2>/dev/null); rc=$?
 "$YONC" loop_remote.yon -o "$TMP/loopr" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: loop_remote does not compile"; exit 1; }
 timeout 20 ./loopr >/dev/null 2>&1; rc=$?
 [ "$rc" = "95" ] || { echo "CROSS-SPACE FAIL: loop_remote rc=$rc (expected 95)"; fail=1; }
+# Scenario 3: two OS processes talking over a shared-memory Wire.
+# The sensor streams readings 1..8 (with close), the dashboard drains
+# them and exits with the sum: a true cross-process wire test.
+"$YONC" wire_sensor.yon -o "$TMP/wsensor" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: wire_sensor does not compile"; exit 1; }
+"$YONC" wire_dashboard.yon -o "$TMP/wdash" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: wire_dashboard does not compile"; exit 1; }
+rm -f /dev/shm/yon_stream_9 /tmp/yon_stream_9 2>/dev/null
+( timeout 20 ./wsensor >/dev/null 2>&1 & )
+sleep 0.4
+timeout 20 ./wdash >/dev/null 2>&1; rc=$?
+[ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: wire scenario rc=$rc (expected 36)"; fail=1; }
 rm -rf "$TMP"
-[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 2 scenarios (ledger 209/42, remote-call-in-loop 95)"
+[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 3 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36)"
 exit $fail
