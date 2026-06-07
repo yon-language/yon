@@ -207,7 +207,10 @@ let rec emit_ty (t : C.ty) : string =
        | C.Place pd -> Printf.sprintf "!topos.section<\"%s\">" pd.C.p_name
        | C.Var name -> Printf.sprintf "!topos.section<\"%s\">" name
        | _ -> "!llvm.ptr")
-  | C.TyStream t -> Printf.sprintf "!llvm.struct<(%s)>" (emit_ty t)
+  | C.TyStream _ ->
+      (* a stream value at runtime IS its id: the queue lives in the
+         runtime tables, the body lowering moves only the f64 handle *)
+      "f64"
   | C.TyType _ -> "!llvm.ptr"
 
 let rec core_ty_to_mlir_simple (t : C.ty) : string =
@@ -271,6 +274,10 @@ let rec core_ty_to_mlir_simple (t : C.ty) : string =
   | C.TyType _ ->
       (* A universe-typed parameter is an inert runtime token: types are
          compile-time citizens, the runtime never inspects one. *)
+      "f64"
+  | C.TyStream _ ->
+      (* a stream value at runtime IS its id (f64): the queue lives in
+         the runtime tables *)
       "f64"
   | _ ->
       failwith (Printf.sprintf
@@ -354,6 +361,7 @@ let stdlib_registry : (string * (string list * string)) list = [
      calling convention as the intra-process ones, but the channel crosses the
      process boundary. make_shm(id, create) rendezvous on a shared region. *)
   "Stream__make_shm", (["f64"; "f64"], "f64");
+  "Wire__subscription_stream", (["f64"], "f64");
   "Stream__send_shm", (["f64"; "f64"], "f64");
   "Stream__recv_shm", (["f64"], "f64");
   "Stream__produce_shm", (["f64"; "f64"], "f64");
@@ -5589,6 +5597,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
        * external symbol; the body is in the C runtime. *)
       let is_external_runtime =
         (String.length name >= 8 && String.sub name 0 8 = "Stream__")
+        || (String.length name >= 6 && String.sub name 0 6 = "Wire__")
         || (String.length name >= 7 && String.sub name 0 7 = "yon_rt_")
       in
       if is_external_runtime then begin

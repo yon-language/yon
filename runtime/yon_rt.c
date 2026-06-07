@@ -1423,6 +1423,16 @@ int yon_rt_stream_shm_unlink(const char *name) {
  * (e.g. by convention) attach to the same shared region. ---- */
 #define YON_MAX_SHM_STREAMS 64
 static yon_shm_stream_t *g_shm_stream_handles[YON_MAX_SHM_STREAMS];
+/* The f64 handle IS the channel id (nominal, e.g. a dispatch selector,
+ * up to 23 bits); the table slot is found by scanning this map. Slot
+ * and identity are separate: 64 simultaneous channels per process,
+ * any id value. */
+static uint32_t g_shm_stream_slot_ids[YON_MAX_SHM_STREAMS];
+static int yon_rt_shm_slot_of(uint32_t id) {
+    for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
+        if (g_shm_stream_handles[i] && g_shm_stream_slot_ids[i] == id) return i;
+    return -1;
+}
 static uint32_t g_n_shm_streams = 0;
 
 /* Open/attach a cross-process stream identified by an integer id. create=1
@@ -1430,28 +1440,36 @@ static uint32_t g_n_shm_streams = 0;
  * with the same id to rendezvous on the same shared region. */
 double yon_rt_stream_shm_open_f64(double id_f64, double create_f64) {
     uint32_t id = (uint32_t)id_f64;
-    if (id >= YON_MAX_SHM_STREAMS) return -1.0;
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot < 0) {
+        for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
+            if (!g_shm_stream_handles[i]) { slot = i; break; }
+    }
+    if (slot < 0) return -1.0;  /* 64 simultaneous channels exhausted */
     char name[32];
     snprintf(name, sizeof(name), "id_%u", id);
     yon_shm_stream_t *s =
         yon_rt_stream_shm_open(name, sizeof(double), 256, (int)create_f64);
     if (!s) return -1.0;
-    g_shm_stream_handles[id] = s;
-    if (id >= g_n_shm_streams) g_n_shm_streams = id + 1;
+    g_shm_stream_handles[slot] = s;
+    g_shm_stream_slot_ids[slot] = id;
+    if ((uint32_t)slot >= g_n_shm_streams) g_n_shm_streams = (uint32_t)slot + 1;
     return (double)id;
 }
 
 double yon_rt_stream_shm_send_f64(double id_f64, double value) {
     uint32_t id = (uint32_t)id_f64;
-    if (id >= YON_MAX_SHM_STREAMS || !g_shm_stream_handles[id]) return -1.0;
-    return (double)yon_rt_stream_shm_emit(g_shm_stream_handles[id], &value);
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot < 0) return -1.0;
+    return (double)yon_rt_stream_shm_emit(g_shm_stream_handles[slot], &value);
 }
 
 double yon_rt_stream_shm_recv_f64(double id_f64) {
     uint32_t id = (uint32_t)id_f64;
-    if (id >= YON_MAX_SHM_STREAMS || !g_shm_stream_handles[id]) return -1.0;
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot < 0) return -1.0;
     double out = 0.0;
-    if (yon_rt_stream_shm_await(g_shm_stream_handles[id], &out) != 0) return -1.0;
+    if (yon_rt_stream_shm_await(g_shm_stream_handles[slot], &out) != 0) return -1.0;
     return out;
 }
 
@@ -1464,14 +1482,16 @@ double Stream__recv_shm(double id)                 { return yon_rt_stream_shm_re
  * await waits for a value, both with a bounded timeout (-1 on timeout). */
 double yon_rt_stream_shm_produce_f64(double id_f64, double value) {
     uint32_t id = (uint32_t)id_f64;
-    if (id >= YON_MAX_SHM_STREAMS || !g_shm_stream_handles[id]) return -1.0;
-    return (double)yon_rt_stream_shm_produce_blocking(g_shm_stream_handles[id], &value);
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot < 0) return -1.0;
+    return (double)yon_rt_stream_shm_produce_blocking(g_shm_stream_handles[slot], &value);
 }
 double yon_rt_stream_shm_await_blocking_f64(double id_f64) {
     uint32_t id = (uint32_t)id_f64;
-    if (id >= YON_MAX_SHM_STREAMS || !g_shm_stream_handles[id]) return -1.0;
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot < 0) return -1.0;
     double out = 0.0;
-    int rc = yon_rt_stream_shm_await_blocking(g_shm_stream_handles[id], &out);
+    int rc = yon_rt_stream_shm_await_blocking(g_shm_stream_handles[slot], &out);
     if (rc == -2) return (double)0xFFFFFFFFu;  /* drained AND closed: the
                                                   unified EOF sentinel */
     if (rc != 0) return -1.0;
@@ -1485,8 +1505,9 @@ double Stream__await_shm(double id)             { return yon_rt_stream_shm_await
  * out — clean shutdown vs dead peer. */
 double yon_rt_stream_shm_close_write_f64(double id_f64) {
     uint32_t id = (uint32_t)id_f64;
-    if (id >= YON_MAX_SHM_STREAMS || !g_shm_stream_handles[id]) return -1.0;
-    return (double)yon_rt_stream_shm_close_write(g_shm_stream_handles[id]);
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot < 0) return -1.0;
+    return (double)yon_rt_stream_shm_close_write(g_shm_stream_handles[slot]);
 }
 double Stream__close_shm(double id) { return yon_rt_stream_shm_close_write_f64(id); }
 
