@@ -27,6 +27,12 @@ let stream_foreach_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
    sites whose receiver types as a stream take the drain lowering. *)
 let stream_method_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
 
+(* Wire subscription sites, registered by the tycheck for the desugar:
+   awaits sites carry (space, producer selector, channel id); stream
+   field sites just the membership. *)
+let awaits_site_table : (int * int, string * int * int) Hashtbl.t = Hashtbl.create 16
+let substream_site_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
+
 (* ─── Type expressions ─────────────────────────────────────────────── *)
 
 (* Types in Yon surface — covers first-order schema types plus
@@ -51,6 +57,8 @@ type ty =
   | TyList of ty                                      (* "list of T" *)
   | TyMap of ty * ty                                  (* "map of K to V" *)
   | TyStream of ty * stream_modifier list             (* "stream of T buffer N drop_newest" *)
+  | TyWire of string                                  (* the handle of "wire to Space"; carries the Space name *)
+  | TySubscription of string                          (* the handle of w.awaits(f); carries the Space name *)
   | TyUser of string                                  (* user-defined place name *)
   | TyVar of string                                   (* type variable (generic binder) *)
   | TyMetaVar of int                                  (* HM fresh tyvar alpha_N *)
@@ -123,6 +131,7 @@ type expr =
   | EVar of string * location
   | EField of expr * string * location                (* "obj.field" *)
   | ECall of string * expr list * location            (* "f(a, b, c)" *)
+  | EWireTo of string * location                      (* "wire to Space": open the transport toward a Space *)
   | EProduce of stmt list * location                  (* "produce { ... }" as an expression: the value is the stream id *)
   | ENew of string * field_assignment list * location (* "new Place { field1 e1, ... }" *)
   | ENewIn of string * string * field_assignment list * location  (* "new P in Space { ... }" *)

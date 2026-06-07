@@ -141,8 +141,8 @@ let rec collect_names (e : expr) : string list =
       collect_names body  (* handle lambda *)
   | EViewLam (_, body, _, _) ->
       collect_names body  (* 5o handle lambda *)
-  | EProduce (_, _) ->
-      []  (* a produce block in a proposition carries no referable names *)
+  | EProduce (_, _) | EWireTo (_, _) ->
+      []  (* no referable names inside *)
   | EComposeWith (h1, h2, _) ->
       (* compose h1 with h2 — entrambe le sub-expr *)
       collect_names h1 @ collect_names h2

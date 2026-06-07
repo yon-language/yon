@@ -365,6 +365,10 @@ let rec desugar_expr (e : S.expr) : C.term =
        | _ -> curry_apply (C.Var name') args_terms)
   | S.EProduce (body, _) ->
       !produce_block_ref body
+  | S.EWireTo (_, _) ->
+      (* the wire handle is compile-time identity: the Space name lives
+         in the type (TyWire); the runtime value is inert *)
+      desugar_expr (S.ELit (S.LitNumber 0.0, S.dummy_loc))
   | S.ENew (place_name, fas, _) ->
       (* new P { f1 e1, f2 e2 } translates to a constructor call with
          field values as arguments in declared order. *)
@@ -1353,6 +1357,30 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
       && Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
       let (stmts, result) = v1_lower_stream_fold (v1_strip n "__fold") init f loc in
       stmts @ [S.SLet (x, result, loc)]
+  | S.SLet (sub, S.ECall (n, [S.EVar _], eloc), loc)
+    when v1_has_suffix n "__awaits"
+      && Hashtbl.mem S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) ->
+      (* be sub holds w.awaits(producer): create the shm channel
+         (creator side, id = the producer's dispatch selector, nominal
+         by construction), send the reserved-selector subscription
+         request (the server pump runs the producer and forwards over
+         the channel), bind the subscription handle to the channel. *)
+      let (sp, sel, chan) =
+        Hashtbl.find S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) in
+      let l = S.dummy_loc in
+      [ S.SLet (v1_fresh "sub_mk",
+                v1_call "Wire__make_shm" [v1_num (float_of_int chan); v1_num 1.0], loc);
+        S.SLet (v1_fresh "sub_rq",
+                S.ECall (Printf.sprintf "__yon_rpc2_invoke2__%s" sp,
+                         [v1_num 4294967295.0;
+                          v1_num (float_of_int sel);
+                          v1_num (float_of_int chan)], l), loc);
+        S.SLet (sub, v1_num (float_of_int chan), loc) ]
+  | S.SLet (x, S.EField (S.EVar (sub, _), "stream", floc), loc)
+    when Hashtbl.mem S.substream_site_table (floc.S.start_line, floc.S.start_col) ->
+      (* be s holds sub.stream: drain the completed channel into a
+         structurally closed local stream; the methods work unchanged. *)
+      [ S.SLet (x, v1_call "Wire__subscription_stream" [S.EVar (sub, S.dummy_loc)], loc) ]
   | other -> [other]
 
 and v1_lower_foreach x e b loc =
@@ -1508,6 +1536,7 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
       let inner = List.fold_left (fun a (n, _) -> V1SS.remove n a) cells ps in
       S.EViewLam (ps, v1_cell_expr inner b, pl, loc)
   | S.EProduce (b, loc) -> S.EProduce (v1_cell_stmts cells b, loc)
+  | S.EWireTo _ -> e
   | S.EComposeWith (a, b, loc) -> S.EComposeWith (r a, r b, loc)
 
 and v1_cell_cond cells (c : S.condition) : S.condition =

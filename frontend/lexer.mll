@@ -124,6 +124,7 @@
       "list", LIST;
       "map", MAP;
       "stream", STREAM;
+  "wire", WIRE;
       "is", IS;
       "not", NOT;
       "by", BY;
