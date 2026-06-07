@@ -188,7 +188,7 @@ fun main(): number { return 0 }`}
 
 #### `produce`
 
-The producer block: `produce { ... }` creates a wire, the body emits into it, and the value of the block is the wire handle, consumed with `Wire.recv`. The close is structural: when the block ends, nobody can write any more, so the wire closes itself; queued values stay readable, and a drained closed wire answers `recv` with the EOF sentinel. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
+The producer block: `produce { ... }` builds a stream, the body emits into it, and the value of the block is the stream, consumed with `for every`. The close is structural: when the block ends, nobody can write any more, so the stream closes itself, and the consuming loop stops on its own. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
 
 #### `emit`
 
@@ -197,18 +197,16 @@ Emits a value: into the stream being built inside a `produce` block, or into the
 <CodeWindow file="kw_produce_emit.yon" run="yonc kw_produce_emit.yon -o produce_emit && ./produce_emit; echo $?" out={["42"]}>
 
 ```yon
-fun source(): number {
+fun main(): number {
   be s holds produce {
     emit 41
     emit 1
   }
-  return s
-}
-fun main(): number {
-  be s holds source()
-  be a holds Wire.recv(s)
-  be b holds Wire.recv(s)
-  return a + b        // 41 + 1 = 42
+  be total holds 0
+  for every v in s {
+    total becomes total + v
+  }
+  return total        // 41 + 1 = 42
 }
 ```
 

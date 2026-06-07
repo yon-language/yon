@@ -1,9 +1,11 @@
-// Structural close: the wire of a produce block closes when the block
-// ends. Queued values stay readable; once drained, recv answers with
-// the EOF sentinel (the same end marker the fused pipelines use).
+// Structural close: the produce wire closes itself when the block
+// ends, so the for-every drain stops on its own. No count is known
+// in advance anywhere in this program.
 fun main(): number {
   be s holds produce { emit 7 }
-  be a holds Wire.recv(s)          // 7, queued before the close
-  be b holds Wire.recv(s)          // drained AND closed: EOF sentinel
-  return if b == 4294967295 then a else 0
+  be total holds 0
+  for every v in s {
+    total becomes total + v
+  }
+  return total      // 7
 }

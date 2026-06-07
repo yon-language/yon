@@ -219,6 +219,7 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.EFunctorLam (ps, b, w1, w2, laws, ll) -> S.EFunctorLam (ps, rwe b, w1, w2, laws, ll)
       | S.EViewLam (ps, b, pl, ll) -> S.EViewLam (ps, rwe b, pl, ll)
       | S.EComposeWith (a, b, ll) -> S.EComposeWith (rwe a, rwe b, ll)
+      | S.EProduce (b, ll) -> S.EProduce (List.map rws b, ll)
       | S.EAll (n, c, ll) -> S.EAll (n, rwc c, ll)
       | other -> other
     and rwc (c : S.condition) : S.condition =
@@ -228,8 +229,7 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.CondIsNot (e, p) -> S.CondIsNot (rwe e, p)
       | S.CondAnd (a, b) -> S.CondAnd (rwc a, rwc b)
       | S.CondOr (a, b) -> S.CondOr (rwc a, rwc b)
-    in
-    let rec rws (s : S.stmt) : S.stmt =
+    and rws (s : S.stmt) : S.stmt =
       let rb = List.map rws in
       match s with
       | S.SReturn (e, ll) -> S.SReturn (rwe e, ll)

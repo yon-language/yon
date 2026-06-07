@@ -87,6 +87,7 @@ let rec classify_expr (e : expr) : fragment =
   match e with
   | ELit _ -> FragCATT
   | EVar _ -> FragCATT
+  | EProduce (_, _) -> FragCATT
   | EField (obj, _, _) -> classify_expr obj
   | ECall (name, args, _) ->
       if is_cubical_call name then FragCubical
