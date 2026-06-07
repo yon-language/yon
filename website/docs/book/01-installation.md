@@ -8,8 +8,9 @@ slug: /book/installation
 # Installation
 
 Yon runs on Linux x86-64 and macOS arm64 (Apple Silicon). Prebuilt
-binaries and a Homebrew tap are planned; today you build from source,
-which takes a working toolchain and a few minutes.
+binaries and a Homebrew tap are planned; today you build from source:
+one round of prerequisites and three builds, the same on both
+platforms.
 
 ## What you need
 
@@ -17,22 +18,51 @@ which takes a working toolchain and a few minutes.
 - LLVM/MLIR 18 (`topos-opt` is an MLIR dialect; `mlir-translate` and
   `llc` come from the same toolchain)
 - A C compiler (`gcc` or `clang`) to link the runtime
-- The `mmgroup` Python package: the runtime links `libmmgroup_mat24`
-  and `libmmgroup_mm_op` from its wheel (Conway group machinery for
-  the Leech-lattice heap)
 
-Platform notes, exact versions and flags live in the repository:
-`INSTRUCTIONS.md` and, for Apple Silicon, `PORTING-MACOS.md`.
+That is the whole list. The mathematical core of the runtime (Golay
+code and Leech lattice, the machinery of the content-addressed heap)
+is vendored in the repository under `runtime/vendor/mmgroup`
+(BSD-2-Clause) and built with the rest: no Python, no packages to
+install, and a Yon binary depends on libc and libpthread only.
+
+Prerequisites, once:
+
+```bash
+# macOS
+xcode-select --install
+brew install opam cmake ninja llvm@18 coreutils
+
+# Linux (Debian/Ubuntu)
+apt install llvm-18 mlir-18-tools libmlir-18-dev clang opam cmake ninja-build
+```
 
 ## Build
+
+Three builds, one per compiler stage:
 
 ```bash
 git clone https://github.com/yon-language/yon.git
 cd yon
-(cd frontend && dune build)     # compiler frontend and tools
-make                            # C runtime
-# MLIR dialect: see INSTRUCTIONS.md / PORTING-MACOS.md for your platform
+(cd runtime && make)            # 1. C runtime (vendored math included)
+(cd frontend && dune build)     # 2. compiler frontend and tools
+cd mlir                         # 3. the Topos MLIR dialect
+cmake -G Ninja -B build \
+  -DMLIR_DIR=$(brew --prefix llvm@18 2>/dev/null || echo /usr/lib/llvm-18)/lib/cmake/mlir \
+  -DLLVM_DIR=$(brew --prefix llvm@18 2>/dev/null || echo /usr/lib/llvm-18)/lib/cmake/llvm
+ninja -C build
+cd ..
 export PATH="$PWD/toolchain:$PATH"
+```
+
+No environment variables are needed: `yonc` locates the LLVM tools on
+its own (PATH, the `-18` suffixed names, the distro dir, the Homebrew
+keg). Exact platform notes live in the repository: `INSTRUCTIONS.md`
+and, for Apple Silicon, `PORTING-MACOS.md`. The acceptance criterion
+on every platform is the regression suite:
+
+```bash
+cd regression && ./run_regression.sh
+# → REGRESSION OK: <N> examples, identical to the baseline.
 ```
 
 ## Verify

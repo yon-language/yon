@@ -3,14 +3,15 @@
 **For the operational walkthrough follow INSTRUCTIONS.md (authoritative):
 this document is the rationale behind the choices, plus troubleshooting.**
 
-**STATUS: VALIDATED** (2026-06-04, Apple Silicon): regression 112/112
+Status: the full suite is green on Apple Silicon with the self-contained runtime (first brought up 2026-06-04 at 112 examples; last verified 2026-06-07 at 126). Regression 112/112
 identical to the baseline + cross-Space 2/2. Every fix mentioned below
 already lives in the sources; the only manual step left is the
 install_name surgery (INSTRUCTIONS.md §1b).
 
-## The critical dependency: mmgroup — DISSOLVED by vendoring (2026-06-07)
+## The critical dependency: mmgroup — superseded by vendoring (2026-06-07)
 
-Everything below in this section is HISTORY. The mmgroup mathematical
+The section below predates the vendoring and is kept for the record.
+The mmgroup mathematical
 core is now vendored under `runtime/vendor/mmgroup` and built by the
 runtime Makefile: no Python, no wheel, no install_name surgery, no
 rpath. The macOS port needs only: Xcode CLT, Homebrew

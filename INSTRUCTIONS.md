@@ -11,9 +11,14 @@ The acceptance criterion, identical on every platform:
 
 ```
 cd regression && ./run_regression.sh
-→ REGRESSION OK: 112 examples, identical to the baseline.
+→ REGRESSION OK: <N> examples, identical to the baseline.
 → CROSS-SPACE OK: 2 scenarios (ledger 209/42, remote-call-in-loop 95)
 ```
+
+The example count grows with the corpus (126 at the time of writing);
+the criterion is the phrase "identical to the baseline". One example
+(`sct_decidable_unknown`) terminates by signal by design: its exit code
+is part of the baseline.
 
 ---
 
@@ -25,7 +30,10 @@ the content-addressed heap) is VENDORED under `runtime/vendor/mmgroup`
 rest of the runtime. No venv, no pip, no wheel surgery, no shared
 library paths: a Yon binary depends on libc and libpthread only.
 
-## 2. macOS (Apple Silicon) — VALIDATED: 112 + cross-Space green
+## 2. macOS (Apple Silicon)
+
+The full suite runs green on Apple Silicon with the self-contained
+runtime (last verified 2026-06-07).
 
 Prerequisites, once:
 

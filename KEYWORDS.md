@@ -20,9 +20,8 @@ duration suffixes are listed at the end; they are not reserved words.
 ## Work map
 
 The census doubles as the work tracker: nothing counts as closed until
-its row says `example`. **The map is empty: every reserved word has a
-compiling example in the regression suite, and the functional debts
-opened by the census are paid.**
+its row says `example`. The map is empty: every reserved word has a compiling example in the
+regression suite; the functional debts opened by the census are paid.
 
 ## Top-level declarations
 
