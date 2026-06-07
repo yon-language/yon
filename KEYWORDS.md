@@ -20,14 +20,9 @@ duration suffixes are listed at the end; they are not reserved words.
 ## Work map
 
 The census doubles as the work tracker: nothing counts as closed until
-its row says `example`. Open items, in execution order:
-
-| # | Item | Keyword(s) | What is missing |
-|---|---|---|---|
-| 6 | `Move.merge` surface call | none (functional debt) | the merge engine exists and is unit-tested; tycheck/desugar do not know the surface call |
-
-When an item closes, its keyword row flips to `example` with the
-example path, and the row above is deleted.
+its row says `example`. **The map is empty: every reserved word has a
+compiling example in the regression suite, and the functional debts
+opened by the census are paid.**
 
 ## Top-level declarations
 
@@ -147,7 +142,7 @@ These read as English in declarations.
 | `effects` | example | `place P with effects { }`: the place exposes operations |
 | `requires` | example | `move m ... requires CAP1, CAP2`: required capabilities |
 | `init` | example | `init X as Space`: initializes a Space |
-| `unifies` | example | Merge move declaration: `move m unifies A, B { }` (`examples/kw_merge_move.yon`); the merge engine exists and is unit-tested, the surface application call is pending |
+| `unifies` | example | Merge move declaration: `move m unifies A, B { }` applied via `Move.merge(M, s1, s2)` (`examples/kw_merge_move.yon`): the result lives in the first source place |
 | `share` | example | In the merge move: shared fields, no conflict (`examples/kw_merge_move.yon`) |
 | `resolves` | example | `conflict on f resolves to fn`: the conflict-resolution function |
 | `heyting` | example | `heyting<N>` / `heyting(v, mask)`: an integer in Heyting (intuitionistic) arithmetic, trits with an Unknown mask |

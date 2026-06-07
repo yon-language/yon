@@ -309,7 +309,7 @@ fun main(): number {
 
 #### `unifies`
 
-The merge move: `move m unifies A, B { }` merges two places field by field.
+The merge move: `move m unifies A, B { }` merges two places field by field, applied with `Move.merge(m, s1, s2)`; the result lives in the first source place.
 
 #### `share`
 
@@ -333,7 +333,7 @@ In the merge move: the fields shared without conflict.
 
 <CodeWindow file="kw_merge_move.yon"
             run="yonc kw_merge_move.yon -o merge_move && ./merge_move; echo $?"
-            out={["14"]}>
+            out={["22"]}>
 {`world W { Code is X }
 place A in W { v number
   w number }
@@ -355,10 +355,15 @@ move Squeeze from Wide to Narrow {
   y aggregates to total by double
 }
 fun main(): number {
+  be a holds new A { v 7
+    w 1 }
+  be b holds new B { v 7
+    w 9 }
+  be m holds Move.merge(Merge, a, b)
   be wide holds new Wide { x 4
     y 5 }
   be narrow holds apply_move(Squeeze, wide)
-  return narrow.x + narrow.total   // 4 + 10 = 14
+  return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
 }`}
 </CodeWindow>
 

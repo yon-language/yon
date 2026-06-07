@@ -1,9 +1,10 @@
-// Micro-example: the merge move declaration (`unifies`, `share`,
-// `conflict on`) and the mapping clauses `maps to` / `aggregates to`
-// (one source each, transformed `by` a function; the three kinds are
-// operationally fn(source), the distinction is declared intent).
-// Note: the merge ENGINE exists (apply_merge_move, unit-tested) but
-// has no surface call yet; the declaration registers and compiles.
+// Micro-example: the merge move (`unifies`, `share`, `conflict on`)
+// applied via Move.merge(M, s1, s2), and the mapping clauses
+// `maps to` / `aggregates to` (one source each, transformed `by` a
+// function; the three kinds are operationally fn(source), the
+// distinction is declared intent). The merge result lives in the
+// first source place: shared fields read from s1, conflicting fields
+// compute resolver(s1.f, s2.f).
 world W { Code is X }
 place A in W { v number
   w number }
@@ -25,8 +26,13 @@ move Squeeze from Wide to Narrow {
   y aggregates to total by double
 }
 fun main(): number {
+  be a holds new A { v 7
+    w 1 }
+  be b holds new B { v 7
+    w 9 }
+  be m holds Move.merge(Merge, a, b)
   be wide holds new Wide { x 4
     y 5 }
   be narrow holds apply_move(Squeeze, wide)
-  return narrow.x + narrow.total   // 4 + 10 = 14
+  return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
 }
