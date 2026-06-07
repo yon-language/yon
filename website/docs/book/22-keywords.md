@@ -188,7 +188,7 @@ fun main(): number { return 0 }`}
 
 #### `produce`
 
-The producer block: `produce { ... }` creates a wire, the body emits into it, and the value of the block is the wire handle, consumed with `Wire.recv`. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
+The producer block: `produce { ... }` creates a wire, the body emits into it, and the value of the block is the wire handle, consumed with `Wire.recv`. The close is structural: when the block ends, nobody can write any more, so the wire closes itself; queued values stay readable, and a drained closed wire answers `recv` with the EOF sentinel. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
 
 #### `emit`
 
