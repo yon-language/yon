@@ -48,6 +48,7 @@ EMIT="$FE/_build/default/yoner_emit_mlir.exe"
 OUT=/tmp/regression_now.txt; > "$OUT"
 for f in "$EXD"/*.yon; do
   name=$(basename "$f" .yon)
+  rm -f /tmp/rr   # never execute a stale binary when a compile stage fails
   if ! "$EMIT" "$f" 2>/dev/null > /tmp/r.mlir || [ ! -s /tmp/r.mlir ]; then echo "EMITFAIL $name" >>"$OUT"; continue; fi
   if "$TOPOS" --lower-topos-extensions --lower-topos-to-standard /tmp/r.mlir 2>/dev/null >/tmp/r.s1 && \
      "$TOPOS" --lower-topos-to-llvm /tmp/r.s1 2>/dev/null >/tmp/r.s2 && [ -s /tmp/r.s2 ]; then :; \
