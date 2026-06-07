@@ -11,6 +11,11 @@ This is the **normative reference for Yon 1.0**. Every form below was derived
 from a complete pass over the real grammar (`frontend/parser.mly` and
 `frontend/lexer.mll`), not from memory, not from older documents.
 
+This table answers *is this form valid?* For *what does this keyword
+mean?*, with a compiling example next to each explanation, see
+[Keywords, one by one](/book/keywords); rows below link there as the
+chapter grows.
+
 Each construct carries a status:
 
 - **✓**, verified end-to-end: a regression example or a compiled probe
@@ -27,7 +32,7 @@ Each construct carries a status:
 | `42`, `3.14` | ✓ | `number` literal (IEEE f64) |
 | `"ciao"` | ✓ | String literal, a real value of type `text`/`String` (see *Strings*) |
 | `true`, `false` | ✓ | Boolean literals |
-| `present`, `absent`, `unknown` | ✓ | Heyting truth values (intuitionistic Ω) |
+| `present`, [`absent`](/book/keywords#absent), `unknown` | ✓ | Heyting truth values (intuitionistic Ω) |
 | `100ms`, `5s`, `2min`, `1h`, `3d`, `1y` | ✓ | Duration literals (no whitespace before the unit). **A duration is a `number` of milliseconds**: `2s + 500ms == 2500` |
 | `mod::name` | ✓ | Qualified name (module namespace) |
 
@@ -80,7 +85,7 @@ inside views.
 | `stream of T buffer N drop oldest`/`drop newest` | ✓ | Stream with back-pressure modifiers |
 | `T -> U` | ✓ | Function type, right-associative |
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
-| `Type`, `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
+| [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
 | `Pi(x: A). B`, `Sigma(x: A). B` | ✓ | Dependent function / pair types |
 | `Id(A, x, y)` | ✓ | Identity (path) type between terms `x`, `y` |
 | `{ x : A where P }` | ✓ | **Comprehension**: the subobject of `A` carved out by the fibre `P` (a Σ whose first projection is monic when `P` is a mere proposition) |
@@ -113,8 +118,8 @@ from the call sites.
 | `solve P` | ✓ | Instantiate a law-verified place as a Magma handle |
 | `new P { field value }` | ✓ | Section construction, **no `=`** between field and value |
 | `new P in S { ... }` | ✓ | Construction inside Space `S` |
-| `refl(t)`, `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
-| `ind_path(C, d, p)` | ✓ | The J eliminator: computes `d(basepoint)` when `p` is `refl` in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
+| [`refl(t)`](/book/keywords#refl), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
+| [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is `refl` in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
 | `pullback(f, g)` / `pullback(f, g, a, b)` | ✓ | Pullback scaffolding / runtime compatible pair with `f(a) == g(b)` checked |
 | `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
@@ -137,7 +142,7 @@ from the call sites.
 |---|---|---|
 | `return e` | ✓ | Return from the function |
 | `when c { } when c2 { } otherwise { }` | ✓ | Conditional chain. **A `return` inside a branch does not exit the function**, branches are for effects; select values with `if/then/else` |
-| `e is pattern`, `e is not pattern` | ✓ | Pattern conditions (in `when`/`forces`): patterns are a variable, a literal, `present`, `absent`, `unknown`; chainable with `and`/`or` |
+| `e is pattern`, [`e is not pattern`](/book/keywords#not) | ✓ | Pattern conditions (in `when`/`forces`): patterns are a variable, a literal, `present`, `absent`, `unknown`; chainable with `and`/`or` |
 | `iter n do { }` | ✓ | Bounded loop (always terminates; `scf.for`) |
 | `while c do { }` | ✓ | General loop (`scf.while`) |
 | `scope [Name] { }` | ✓ | **Hermetic block** (see below) |

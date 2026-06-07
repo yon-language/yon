@@ -9,8 +9,12 @@ import CodeWindow from '@site/src/components/CodeWindow';
 Every reserved word of Yon, explained next to a compiling example.
 Each snippet on this page is a file from `examples/` in the
 repository: it builds and runs in the regression suite, with the exit
-code shown. (For the census view with status per keyword, see
-`KEYWORDS.md` in the repository root.)
+code shown.
+
+This chapter answers *what does it mean?* For the normative table of
+valid forms, with status per construct, see the
+[Syntax Reference](/syntax-reference); for the maintainers' census,
+`KEYWORDS.md` in the repository root.
 
 ## Paths and the universe
 
