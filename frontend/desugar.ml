@@ -25,6 +25,11 @@ let fresh_synth_name (prefix : string) : string =
 (* The synthetic declarations to emit at the end of the program, one list per
    handle kind: move, reduction, and morph each have a different surface decl. *)
 let synth_moves : S.move_decl list ref = ref []
+let produce_counter = ref 0
+(* Forward reference: desugar_expr (earlier rec group) reaches the
+   produce-block desugaring defined in the statement group below. *)
+let produce_block_ref : (S.stmt list -> C.term) ref =
+  ref (fun _ -> failwith "[desugar] produce_block_ref not initialized")
 let synth_reductions : S.reduction_decl list ref = ref []
 let synth_morphs : S.morph_decl list ref = ref []
 let synth_funs : S.fun_decl list ref = ref []
@@ -320,7 +325,18 @@ let rec desugar_expr (e : S.expr) : C.term =
              | None -> (name, args))
       in
       let args_terms = List.map desugar_expr args' in
-      curry_apply (C.Var name') args_terms
+      (* A zero-argument CALL is not the same surface as a bare name:
+         f() means "call now", f means "pass by name". The bare C.Var
+         erased that difference and the emitter re-executed the call at
+         every use of the bound result (the re-execution bug family).
+         Mark the call with a Unit application; the emitter resolves
+         App(Var f, Unit) to one func.call for user functions and
+         degrades to the old bare-Var behavior for builtins. *)
+      (match args_terms with
+       | [] -> C.App (C.Var name', C.Unit)
+       | _ -> curry_apply (C.Var name') args_terms)
+  | S.EProduce (body, _) ->
+      !produce_block_ref body
   | S.ENew (place_name, fas, _) ->
       (* new P { f1 e1, f2 e2 } translates to a constructor call with
          field values as arguments in declared order. *)
@@ -881,6 +897,39 @@ and desugar_stmt_or_return (s : S.stmt) : C.term =
   | S.SReturn (e, _) -> desugar_expr e
   | other -> desugar_stmt other
 
+and desugar_produce_block (body : S.stmt list) : C.term =
+  (* produce { ... }: the block creates a stream on the local heap,
+     every `emit e` inside it becomes a send into that stream, and the
+     value of the block is the stream id. Pure desugar over the live
+     Stream API (Stream__make / Stream__send): no new emitter code.
+     Nested produce blocks are rewritten innermost-first by recursion,
+     so each rewrite only consumes its own Emit nodes; an `emit`
+     outside any produce stays a bare C.Emit and is rejected later. *)
+  let body_term = desugar_stmts body in
+  incr produce_counter;
+  let sid = Printf.sprintf "__produce_s%d" !produce_counter in
+  let rec rw (t : C.term) : C.term =
+    match t with
+    | C.Emit e ->
+        C.App (C.App (C.Var "Stream__send", C.Var sid), rw e)
+    | C.Var _ | C.Unit | C.Place _ | C.Reduction _ -> t
+    | C.Lam (x, ty, b) -> C.Lam (x, ty, rw b)
+    | C.App (f, a) -> C.App (rw f, rw a)
+    | C.Scope (n, b) -> C.Scope (n, rw b)
+    | C.With (n, b) -> C.With (n, rw b)
+    | C.Refl e -> C.Refl (rw e)
+    | C.J (x, ty, a, b, c, d) -> C.J (x, ty, rw a, rw b, rw c, rw d)
+    | C.Pair (a, b) -> C.Pair (rw a, rw b)
+    | C.Fst e -> C.Fst (rw e)
+    | C.Snd e -> C.Snd (rw e)
+    | C.StreamCons (a, b) -> C.StreamCons (rw a, rw b)
+  in
+  let body' = rw body_term in
+  (* (lam sid. (lam _. sid) body') (Stream__make 0) *)
+  C.App (C.Lam (sid, C.TyBase "number",
+           C.App (C.Lam ("_", C.TyBase "number", C.Var sid), body')),
+         C.App (C.Var "Stream__make", Builtins.encode_number 0.0))
+
 and desugar_stmt (s : S.stmt) : C.term =
   match s with
   | S.SLet (_name, e, _) ->
@@ -929,9 +978,7 @@ and desugar_stmt (s : S.stmt) : C.term =
       let body_term = desugar_stmts body in
       C.With (r, body_term)
   | S.SProduce (body, _) ->
-      (* produce { ... } — collects emitted values into a stream *)
-      let body_term = desugar_stmts body in
-      C.App (C.Var "__produce", body_term)
+      desugar_produce_block body
   | S.SEmit (e, _) ->
       C.Emit (desugar_expr e)
   | S.SForces (stage, cond, body, _) ->
@@ -1821,6 +1868,8 @@ let place_info = List.filter_map (function
                fn_loc = loc } in
              [S.TopPlace synth_place; S.TopFun synth_fun])
     | d -> [d]) p
+
+let () = produce_block_ref := desugar_produce_block
 
 let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_result =
   (* The optional [env] is the typed environment from Tycheck (cr_env). The

@@ -188,11 +188,31 @@ fun main(): number { return 0 }`}
 
 #### `produce`
 
-The producer block of a stream: its body emits values into the stream it builds.
+The producer block of a stream: `produce { ... }` creates a stream, the body emits into it, and the value of the block is the stream id. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
 
 #### `emit`
 
-Emits a value into the active stream or handler.
+Emits a value: into the stream being built inside a `produce` block, or into the active handler inside a reduction's `on` clause.
+
+<CodeWindow file="kw_produce_emit.yon" run="yonc kw_produce_emit.yon -o produce_emit && ./produce_emit; echo $?" out={["42"]}>
+
+```yon
+fun source(): number {
+  be s holds produce {
+    emit 41
+    emit 1
+  }
+  return s
+}
+fun main(): number {
+  be s holds source()
+  be a holds Stream.recv(s)
+  be b holds Stream.recv(s)
+  return a + b        // 41 + 1 = 42
+}
+```
+
+</CodeWindow>
 
 #### `return`
 

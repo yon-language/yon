@@ -1457,6 +1457,8 @@ expr_atom:
     { ENew (name, fas, mk_loc $startpos $endpos) }
   | NEW name = IDENT IN space = IDENT LBRACE fas = field_assign_list RBRACE
     { ENewIn (name, space, fas, mk_loc $startpos $endpos) }
+  | PRODUCE LBRACE body = list(stmt) RBRACE
+    { EProduce (body, mk_loc $startpos $endpos) }
   | LPAREN e = expr RPAREN                                             
     { EParen (e, mk_loc $startpos $endpos) }
   | IF_KW c = expr THEN_KW a = expr ELSE_KW b = expr   %prec LOWEST
