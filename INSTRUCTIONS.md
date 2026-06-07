@@ -17,48 +17,13 @@ cd regression && ./run_regression.sh
 
 ---
 
-## 1. Python environment (local venv + mmgroup)
+## 1. No Python required
 
-From the project root (macOS and Linux alike):
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install mmgroup
-# verify: native libraries AND headers must be present
-MM=$(python3 -c 'import mmgroup,os;print(os.path.dirname(mmgroup.__file__))')
-ls "$MM" | grep -i 'mat24\|mm_op'
-ls "$MM/dev/headers" | head -3
-```
-
-If `dev/headers` is missing, your platform's wheel is incomplete:
-`pip install mmgroup --no-binary :all:` (requires cython).
-
-**From here on, every command assumes the venv is active** — the
-Makefile and `yonc` locate mmgroup by asking `python3`.
-
-## 1b. macOS only: repair the mmgroup wheel's install_name
-
-The macOS wheel's `.so` files carry the GitHub CI runner's absolute
-path baked in as their install_name: without this one-time surgery,
-every Yon binary aborts at runtime
-(`dyld: Library not loaded: /Users/runner/...`).
-
-```bash
-MM=$(python3 -c 'import mmgroup,os;print(os.path.dirname(mmgroup.__file__))')
-install_name_tool -id "@rpath/libmmgroup_mat24.so" "$MM/libmmgroup_mat24.so"
-install_name_tool -id "@rpath/libmmgroup_mm_op.so" "$MM/libmmgroup_mm_op.so"
-install_name_tool -change "/Users/runner/work/mmgroup/mmgroup/src/mmgroup/libmmgroup_mat24.so" \
-  "@rpath/libmmgroup_mat24.so" "$MM/libmmgroup_mm_op.so"
-codesign -f -s - "$MM/libmmgroup_mat24.so" "$MM/libmmgroup_mm_op.so"
-python3 -c "import mmgroup; print('mmgroup ok')"
-```
-
-(If `otool -L` shows a different runner path, use the exact string you
-see. Redo this step whenever the wheel is reinstalled.)
-
----
+The mmgroup mathematical core (Golay code, Leech lattice: the heart of
+the content-addressed heap) is VENDORED under `runtime/vendor/mmgroup`
+(BSD-2-Clause, see PROVENANCE.md there). `make` builds it with the
+rest of the runtime. No venv, no pip, no wheel surgery, no shared
+library paths: a Yon binary depends on libc and libpthread only.
 
 ## 2. macOS (Apple Silicon) — VALIDATED: 112 + cross-Space green
 
@@ -98,10 +63,9 @@ cd regression && ./run_regression.sh
 
 No environment variables are needed: `yonc` and the regression locate
 the LLVM tools on their own (PATH, then the `-18` suffixed names, then
-the distro dir, then the Homebrew keg) and ask the active `python3`
-where mmgroup lives. The `YONC_*` variables (`YONC_LLC`,
-`YONC_MLIR_TRANSLATE`, `YONC_CC`, `YONC_TOPOS_OPT`, `YONC_MMGROUP_DIR`,
-...) remain available as overrides if you want to force a non-standard
+the distro dir, then the Homebrew keg). The `YONC_*` variables
+(`YONC_LLC`, `YONC_MLIR_TRANSLATE`, `YONC_CC`, `YONC_TOPOS_OPT`, ...)
+remain available as overrides if you want to force a non-standard
 toolchain.
 
 ```bash

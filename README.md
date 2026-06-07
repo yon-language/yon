@@ -13,7 +13,7 @@ Same content, same address: equality is one machine comparison,
 deduplication is global, and the heap chain grows without tuning knobs.
 
 The pipeline: OCaml frontend → custom MLIR "topos" dialect → LLVM →
-native binary, linked against a C runtime (xleech allocator + libmmgroup).
+native binary, linked against a self-contained C runtime (xleech allocator with the vendored mmgroup mathematical core).
 
 ## Status
 
@@ -27,7 +27,7 @@ macOS Intel: untested (expected to work; reports welcome).
 ## Build
 
 Follow **`INSTRUCTIONS.md`** — the single authoritative walkthrough
-(Python venv + mmgroup, runtime, OCaml frontend, MLIR dialect,
+(runtime, OCaml frontend, MLIR dialect,
 then the regression). The acceptance criterion on every platform:
 
 ```

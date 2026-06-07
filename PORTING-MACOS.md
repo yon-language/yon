@@ -8,7 +8,16 @@ identical to the baseline + cross-Space 2/2. Every fix mentioned below
 already lives in the sources; the only manual step left is the
 install_name surgery (INSTRUCTIONS.md §1b).
 
-## The critical dependency: mmgroup
+## The critical dependency: mmgroup — DISSOLVED by vendoring (2026-06-07)
+
+Everything below in this section is HISTORY. The mmgroup mathematical
+core is now vendored under `runtime/vendor/mmgroup` and built by the
+runtime Makefile: no Python, no wheel, no install_name surgery, no
+rpath. The macOS port needs only: Xcode CLT, Homebrew
+(`opam cmake ninja llvm@18 coreutils`), and the standard build. The
+original analysis is kept for the record.
+
+### (historical) The critical dependency: mmgroup
 
 The runtime links `libmmgroup_mat24` and `libmmgroup_mm_op` from the
 Python `mmgroup` package (BSD-2-Clause). The arm64 wheel ships both the

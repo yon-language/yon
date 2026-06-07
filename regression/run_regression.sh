@@ -3,13 +3,11 @@
 # Usage: ./run_regression.sh   (from the regression/ dir)
 # Portable Linux/macOS: honors the same env vars as yonc
 #   YONC_TOPOS_OPT, YONC_LLC, YONC_MLIR_TRANSLATE, YONC_MLIR_OPT,
-#   YONC_CC, YONC_MMGROUP_DIR
+#   YONC_CC
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FT="$ROOT/runtime"; FE="$ROOT/frontend"; EXD="$ROOT/examples"
 
-# --- mmgroup: env > venv/system python > Linux fallback --------------
-MM="${YONC_MMGROUP_DIR:-$(python3 -c 'import mmgroup,os;print(os.path.dirname(mmgroup.__file__))' 2>/dev/null || echo /usr/local/lib/python3.12/dist-packages/mmgroup)}"
 # --- topos-opt: env > flat tree > container canonical tree -----------
 TOPOS="${YONC_TOPOS_OPT:-}"
 [ -z "$TOPOS" ] && [ -x "$ROOT/mlir/build/topos-opt" ] && TOPOS="$ROOT/mlir/build/topos-opt"
@@ -39,10 +37,7 @@ MLIROPT="${YONC_MLIR_OPT:-$(find_llvm_tool mlir-opt)}"
 CC="${YONC_CC:-gcc}"
 NOPIE="-no-pie"; [ "$(uname -s)" = "Darwin" ] && NOPIE=""
 
-RTSET="$FT/yon_rt.o $FT/xleech2_coord.o $FT/xleech2_handler_stack.o $FT/xleech2_heap.o $FT/xleech2_mphf.o"
-# mmgroup libraries by EXPLICIT PATH (.so on both platforms):
-# no -l, no .dylib symlinks, no linker ambiguity.
-MMLIBS="$MM/libmmgroup_mat24.so $MM/libmmgroup_mm_op.so"
+RTSET="$FT/yon_rt.o $FT/xleech2_coord.o $FT/xleech2_handler_stack.o $FT/xleech2_heap.o $FT/xleech2_mphf.o $FT/vendor/mmgroup/mat24_tables.o $FT/vendor/mmgroup/mat24_functions.o $FT/vendor/mmgroup/gen_leech.o $FT/vendor/mmgroup/gen_leech3.o $FT/vendor/mmgroup/gen_leech_type.o $FT/vendor/mmgroup/gen_leech_reduce.o $FT/vendor/mmgroup/gen_xi_functions.o $FT/vendor/mmgroup/mm_group_n.o $FT/vendor/mmgroup/mm_index.o"
 LOWER="--convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm --convert-arith-to-llvm --reconcile-unrealized-casts"
 EMIT="$FE/_build/default/yoner_emit_mlir.exe"
 OUT=/tmp/regression_now.txt; > "$OUT"
@@ -55,7 +50,7 @@ for f in "$EXD"/*.yon; do
   else "$MLIROPT" /tmp/r.mlir $LOWER 2>/dev/null >/tmp/r.s2; fi
   if ! "$MLIRTRANS" /tmp/r.s2 --mlir-to-llvmir 2>/dev/null >/tmp/r.ll || \
      ! "$LLC" -filetype=obj /tmp/r.ll -o /tmp/r.o 2>/dev/null || \
-     ! "$CC" $NOPIE /tmp/r.o $RTSET $MMLIBS -Wl,-rpath,$MM -lpthread -lm -o /tmp/rr 2>/dev/null; then
+     ! "$CC" $NOPIE /tmp/r.o $RTSET -lpthread -lm -o /tmp/rr 2>/dev/null; then
     echo "BUILDFAIL $name" >>"$OUT"; continue; fi
   timeout 30 /tmp/rr >/dev/null 2>&1; echo "RAN $name exit=$?" >>"$OUT"
 done

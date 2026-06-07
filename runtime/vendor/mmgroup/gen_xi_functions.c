@@ -1,0 +1,510 @@
+// Warning: This file has been generated automatically. Do not change!
+
+/// @cond DO_NOT_DOCUMENT 
+#define MAT24_DLL_EXPORTS 
+/// @endcond
+
+/** @file gen_xi_functions.c
+The functions in file ``gen_xi_function.c`` correspond to the python
+functions in class ``mmgroup.dev.generators.gen_xi_ref.GenXi``. They
+are used for computing the tables required for implementing the
+operation of generator \f$\xi\f$ on the representation \f$\rho_p\f$
+of the Monster.
+*/
+
+
+
+
+/*************************************************************************
+** External references 
+*************************************************************************/
+
+
+
+#include <stdint.h>
+// #include <stdio.h>
+#include <string.h>
+#include "mat24_functions.h"
+#include "mmgroup_generators.h"
+
+
+
+
+
+
+// %%GEN ch
+#ifdef __cplusplus
+extern "C" {
+#endif
+// %%GEN c
+
+
+//  %%GEN h
+//  %%GEN c
+
+
+
+/*************************************************************************
+*** Tables for operation of xi on gray code and cocode vectors
+*************************************************************************/
+
+
+
+
+/// @cond DO_NOT_DOCUMENT 
+
+static const uint8_t MAT24_XI_G_GRAY_TABLE[64] = { 
+// %%TABLE GenXi_g_gray_table , uint8
+0x00,0x0e,0x0d,0x83,0x0b,0x85,0x86,0x88,
+0x07,0x89,0x8a,0x84,0x8c,0x82,0x81,0x0f,
+0x20,0x2e,0x2d,0xa3,0x2b,0xa5,0xa6,0xa8,
+0x27,0xa9,0xaa,0xa4,0xac,0xa2,0xa1,0x2f,
+0x90,0x9e,0x9d,0x13,0x9b,0x15,0x16,0x18,
+0x97,0x19,0x1a,0x14,0x1c,0x12,0x11,0x9f,
+0x30,0x3e,0x3d,0xb3,0x3b,0xb5,0xb6,0xb8,
+0x37,0xb9,0xba,0xb4,0xbc,0xb2,0xb1,0x3f
+};
+
+
+static const uint8_t MAT24_XI_G_COCODE_TABLE[64] = { 
+// %%TABLE GenXi_g_cocode_table , uint8
+0x00,0x8e,0x8d,0x83,0x8b,0x85,0x86,0x08,
+0x87,0x89,0x8a,0x04,0x8c,0x02,0x01,0x0f,
+0xa0,0x2e,0x2d,0x23,0x2b,0x25,0x26,0xa8,
+0x27,0x29,0x2a,0xa4,0x2c,0xa2,0xa1,0xaf,
+0x10,0x9e,0x9d,0x93,0x9b,0x95,0x96,0x18,
+0x97,0x99,0x9a,0x14,0x9c,0x12,0x11,0x1f,
+0x30,0xbe,0xbd,0xb3,0xbb,0xb5,0xb6,0x38,
+0xb7,0xb9,0xba,0x34,0xbc,0x32,0x31,0x3f
+};
+
+
+#define compress_gray(x) (((x) & 0x0f) + (((x) >> 6) & 0x30))
+
+#define expand_gray(x)  (((x) & 0x0f) + (((x) & 0x30) << 6))
+
+
+/// @endcond  
+
+/**
+  @brief Compute function \f$\gamma\f$ on a Golay code element.
+
+  Here parameter \f$v\f$ is encoded in ``gcode`` representation,
+  and the return value \f$\gamma(v)\f$ is encoded in ``cocode``
+  representation. These representations are defined in 
+  the *Description of the mmgroup.mat24 extension*.
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_g_gray(uint32_t v)
+// // %%PY_DOCSTR GenXi_doc.gen_xi_g_gray
+{
+    return expand_gray(MAT24_XI_G_GRAY_TABLE[compress_gray(v)]);
+}
+
+
+/**
+  @brief Compute function \f$w_2\f$ on a Golay code element.
+
+  Here parameter \f$v\f$ is encoded in ``gcode`` representation 
+  as defined in the *Description of the mmgroup.mat24 extension*.
+  The function returns \f$w_2(v)\f$, which may be 0 or 1.  
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_w2_gray(uint32_t v)
+{
+    return MAT24_XI_G_GRAY_TABLE[compress_gray(v)] >> 7;
+}
+
+/**
+  @brief A kind of an inverse of function \f$\gamma\f$ 
+
+  Given a cocode element  \f$c\f$ in ``cocode`` representation, 
+  the function returns the unique grey Golay code vector  \f$v\f$ 
+  such that \f$\gamma(v)\f$ is equal to the grey part of \f$c\f$. 
+  \f$v\f$ is returned in ``gcode`` representation, see 
+  the *Description of the mmgroup.mat24 extension*. 
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_g_cocode(uint32_t c)
+// // %%PY_DOCSTR GenXi_doc.gen_xi_g_cocode
+{
+    return expand_gray(MAT24_XI_G_COCODE_TABLE[compress_gray(c)]);
+}
+
+/**
+  @brief Compute function \f$w_2\f$ on a Golay cocode element.
+
+  Here parameter \f$v\f$ is encoded in ``cocode`` representation 
+  as defined in the *Description of the mmgroup.mat24 extension*. 
+  The function returns \f$w_2(v)\f$, which may be 0 or 1.  
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_w2_cocode(uint32_t v)
+{
+    return MAT24_XI_G_COCODE_TABLE[compress_gray(v)] >> 7;
+}
+
+
+/*************************************************************************
+*** Operation of xi on the extraspecial group 2^{1+24}
+*************************************************************************/
+
+/**
+  @brief Conjugate an element of the group \f$Q_{x0}\f$ with \f$\xi^e\f$ 
+  
+  The function returns \f$\xi^{-e} x \xi^e\f$ for an element 
+  \f$x\f$  of the group \f$Q_{x0}\f$. Input \f$x\f$ and the
+  return value are encoded in *Leech lattice encoding* as described
+  above.
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_op_xi(uint32_t x, uint32_t e)
+{
+    uint_fast32_t tv, tc; 
+    // reduce bits 1 and 0 of e mod 3, no action if e is 0 (mod 3)
+    if ((e - 1) & 2) return x;
+    // map e = 1, 2   to  e = -1,  0
+    e = (e & 3) - 2;   
+    // put tv = scalar product of gray parts of code and cocode
+    tv = (x >> 12) & x & 0xc0f;
+    tv = 0x6996UL >> ((tv ^ (tv >> 10)) & 0xf);
+    // xor scalar product to sign
+    x ^= (tv & 1)  << 24; 
+    // tv = w2(code), g(code);   tc = w2(cocode), g(cocode);      
+    tv = MAT24_XI_G_GRAY_TABLE[compress_gray(x >> 12)]; 
+    tc = MAT24_XI_G_COCODE_TABLE[compress_gray(x)];
+    // if old e = 1: x &= ~0xc0f000, i.e. kill gray code part
+    // if old e = 2: x &= ~0xc0f, i.e. kill gray cocode part
+    x &= ~(0xc0fUL << (e & 12)); 
+    // xor g(code) to cocode and g(cocode) to code
+    x ^= expand_gray(tv);       // xor g(code) to cocode
+    x ^= expand_gray(tc) << 12; // xor g(cocode) to code
+    // if old e = 1: x ^= (tc>>7)<<24 // xor w2(cocode) to sign
+    // if old e = 2: x ^= (tv>>7)<<24 // xor w2(code) to sign
+    tv ^= (tc ^ tv) & e; 
+    x ^= (tv >> 7) << 24;
+    return x;
+}
+
+
+
+
+
+/**
+  @brief Similar to function ``gen_xi_op_xi``, ingoring sign 
+  
+  The function returns \f$\xi^{-e} x \xi^e\f$ for an element 
+  \f$x\f$  of the group \f$Q_{x0}\f$. Input \f$x\f$ and the
+  return value are encoded in *Leech lattice encoding* as described
+  above. This function computes the result up to sign only.
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_op_xi_nosign(uint32_t x, uint32_t e)
+{
+    uint_fast32_t tv, tc; 
+    // reduce bits 1 and 0 of e mod 3, no action if e is 0 (mod 3)
+    if ((e - 1) & 2) return x;
+    // map e = 1, 2   to  e = -1,  0
+    e = (e & 3) - 2;   
+    // tv = w2(code), g(code);   tc = w2(cocode), g(cocode);      
+    tv = MAT24_XI_G_GRAY_TABLE[compress_gray(x >> 12)]; 
+    tc = MAT24_XI_G_COCODE_TABLE[compress_gray(x)];
+    // if old e = 1: x &= ~0xc0f000, i.e. kill gray code part
+    // if old e = 2: x &= ~0xc0f, i.e. kill gray cocode part
+    x &= ~(0xc0fUL << (e & 12)); 
+    // xor g(code) to cocode and g(cocode) to code
+    x ^= expand_gray(tv);       // xor g(code) to cocode
+    x ^= expand_gray(tc) << 12; // xor g(cocode) to code
+    return x;
+}
+
+
+
+
+
+/*************************************************************************
+*** Conversion between 'short' and 'Leech' representation of vectors
+*************************************************************************/
+
+/**
+  @brief Convert the encoding of an element of the group \f$Q_{x0}\f$
+  
+  The function converts an element \f$x\f$ of the group \f$Q_{x0}\f$
+  from *Leech lattice encoding* to *Short vector encoding* and returns
+  the converted element.
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_leech_to_short(uint32_t x)
+// // %%PY_DOCSTR GenXi_doc.gen_xi_leech_to_short
+{
+    uint32_t  gcodev, cocodev, sign, w, box = 0, code = 0;
+    sign = (x >> 24) & 1;
+    gcodev = mat24_gcode_to_vect(x >> 12);
+    // transform linear to internal Leech lattice rep
+    x ^= MAT24_THETA_TABLE[(x >> 12) & 0x7ff] & 0xfff; 
+    cocodev = mat24_cocode_syndrome(x, mat24_lsbit24(gcodev));
+    // put w = weight(code word gcodev) / 4
+    w = 0 - ((x >> 23) & 1);
+    w = (((MAT24_THETA_TABLE[(x>>12) & 0x7ff] >> 12) & 7) ^ w) 
+                 + (w & 7);  
+    if (x & 0x800) {  // case odd cocode
+        uint_fast32_t scalar;      
+        if (cocodev & (cocodev - 1)) return 0;
+        scalar = (x >> 12) &  x & 0xfff;
+        scalar = mat24_def_parity12(scalar);
+        if ((scalar ^ w) & 1) return 0;
+        code = ((x & 0x7ff000) >> 7) | mat24_lsbit24(cocodev);
+        box = 4 + (code >> 15);
+        code &= 0x7fff;
+    } else {       // case even cocode
+        uint_fast32_t  y1, y2;
+        switch (w) {
+            case 4:
+            case 2:
+                code = mat24_inline_cocode_to_suboctad(x, x >> 12, 1);
+                if (code >= 24000) { 
+                    //  24000 = (15 + 360) * 64
+                    code -= 24000; box = 3;
+                } else if (code >= 960) {
+                    //  960 = 15 * 64
+                    code -= 960; box = 2;
+                } else {
+                    code += 1536;  box = 1;
+                }
+                break;
+            case 3:
+                return 0;
+            default:  // can be case 0 or 6 only
+                y1 = mat24_lsbit24(cocodev); 
+                cocodev ^= 1 << y1;  
+                y2 = mat24_lsbit24(cocodev); 
+                if (cocodev != (1UL << y2) || y1 >= 24)  return 0;
+                code = 384 * (w & 2) + (y2 << 5) + y1;
+                box = 1;
+                break;
+        }
+    } 
+    return (sign << 15) + (box << 16) + code;
+}
+
+
+/**
+  @brief Convert the encoding of an element of the group \f$Q_{x0}\f$
+  
+  The function converts an element \f$x\f$ of the group \f$Q_{x0}\f$
+  from *Short vector encoding* to *Leech lattice encoding* and returns
+  the converted element.
+  
+  An invalid value \f$x\f$ is converted to 0.
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_short_to_leech(uint32_t x)
+{
+    uint_fast32_t sign = (x >> 15) & 1;
+    uint_fast32_t code = x & 0x7fff;
+    uint_fast32_t gcode = 0, cocode = 0, octad = 0xffff;
+    switch(x >> 16) {
+        case 1:
+            if (code < 1536) {  
+                //  1536 = 2 * 24 * 32 
+                uint_fast32_t i, j;
+                gcode = code >= 768;
+                code -= (0 - gcode) & 768;
+                gcode <<= 11; // gecode = code >= 768 ? 0x800 : 0
+                i = code >> 5; j = code & 31;
+                cocode = mat24_vect_to_cocode((1 << i) ^ (1 << j));
+                if (cocode == 0  || cocode & 0x800) return 0;
+            } else if (code < 2496) { 
+                // 2496 = 2 * 24 * 32 + 15 * 64 
+                octad = code - 1536;
+            } else return 0;
+            break;
+        case 2:
+            if (code >= 23040) return 0; // 23040 = 360 * 64     
+            octad = code + 960;  //  960 = 15 * 64  
+            break;
+        case 3:
+            if (code >= 24576) return 0; // 24576 = 384 * 64     
+            octad = code + 24000;  //  24000 = (15 + 360) * 64  
+            break;
+        case 5:
+            code += 0x8000;
+            // fall through to case 3
+        case 4:
+            {
+                uint_fast32_t w;
+                cocode = mat24_vect_to_cocode(1 << (code & 31));
+                if (cocode == 0) return 0;
+                gcode = (code >> 5) & 0x7ff;
+                w = ((MAT24_THETA_TABLE[gcode] >> 12) & 1)
+                    ^ (gcode & cocode);
+                w = mat24_def_parity12(w);
+                gcode ^= w << 11;
+            }
+            break;
+        default:
+            return 0;
+    }
+    if (octad < 48576) {
+        // 48756 = 759 * 64 
+        uint_fast32_t w;
+        gcode = MAT24_OCT_DEC_TABLE[octad >> 6] & 0xfff;
+        cocode = mat24_inline_suboctad_to_cocode(octad & 0x3f, octad >> 6);
+        w = mat24_def_suboctad_weight(octad & 0x3f);
+        gcode ^=  w << 11;
+    }
+    // transform internal Leech lattice rep to linear rep
+    cocode ^= MAT24_THETA_TABLE[gcode & 0x7ff] & 0xfff; 
+    return (sign << 24) | (gcode << 12) | cocode; 
+}
+
+
+/*************************************************************************
+*** Operation of xi on sort vectors in 'short' representation
+*************************************************************************/
+
+/**
+  @brief Conjugate an element of the group \f$Q_{x0}\f$ with \f$\xi^e\f$ 
+  
+  The function returns \f$\xi^{-e} x \xi^e\f$ for an element 
+  \f$x\f$  of the group \f$Q_{x0}\f$. In contrast to function
+  gen_xi_op_xi, the input \f$x\f$ and the return value are encoded 
+  in *short vector encoding* as described above.
+  
+  Any invalid element \f$x\f$ is converted to \f$x\f$.
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_xi_op_xi_short(uint32_t x, uint32_t u)
+{
+    uint_fast32_t y = gen_xi_short_to_leech(x);
+    if (y == 0) return x;
+    y = gen_xi_op_xi(y, u);
+    if (y == 0) return x;
+    y = gen_xi_leech_to_short(y);
+    return y ? y : x;
+}
+
+
+/*************************************************************************
+*** Creating tables for the operation of xi in 'short' representation
+*************************************************************************/
+
+
+/**
+  @brief Create table for operation of \f$\xi^e\f$,
+  
+  The function creates a table ``ptab`` such that ``ptab[i]`` encodes
+  \f$\xi^{-e} x \xi^e\f$, where \f$x = 2^{16} \cdot b + i\f$ 
+  encodes a short vector in \f$Q_{x0}\f$ in *Short vector encoding*.
+  The length of the gererated table is 
+  \f$l(b) =  2496, 23040, 24576, 32768, 32768\f$ for 
+  \f$b = 1,2,3,4,5\f$. 
+  
+  Here ``ptab[i]`` contains the lower 16 bits of the table entry only, 
+  with bit 15 equal to the sign bit. The upper 3 bits of ``ptab[i]``
+  depend on ``b`` only; they can be deduced from the permutation
+  of the boxes ``b = 1,...,5`` by \f$\xi\f$ described above.
+  
+  Not all table indices ``i`` correspond to short vectors. We put
+  ``p[i] = i`` for all invalid indices ``i``.
+*/
+// %%EXPORT p
+MAT24_API
+uint32_t gen_xi_make_table(uint32_t b, uint32_t e, uint16_t *ptab)
+// generate table, yet to be documented!!
+{
+    static uint16_t t_size[6] = {
+        0, 2496, 23040, 24576, 32768, 32768
+    };
+    uint_fast32_t i, len = b < 6 ? t_size[b] : 0;
+    b <<= 16;
+    for (i = 0; i < len; ++i) ptab[i] = 
+         (uint16_t)(gen_xi_op_xi_short(b + i, e) & 0xffff);
+    return len;
+}
+
+/**
+  @brief Invert a table created by function ``gen_xi_make_table``
+  
+  The function computes the inverse table of a table ``ptab``
+  of length ``len`` created by function ``gen_xi_make_table`` 
+  and stores the inverse table in the buffer referred by ``pres``.
+  
+  Parameter ``len_res`` is the length of the returned table.
+  Parameter ``ncols`` must be 24 or 32. This means that
+  only entries ``ptab[32*i + j]`` with ``0 <= j < ncols`` are
+  valid. 
+  
+  The details of the inversion of such a table are rather tricky;
+  they are coded in class 
+  ``mmgroup.dev.mm_basics.mm_tables_xi.Pre_MM_TablesXi``. The 
+  purpose of this function is to speed up the calculations in
+  that class.
+*/  
+// %%EXPORT p
+MAT24_API
+void gen_xi_invert_table(uint16_t *ptab, uint32_t len, uint32_t ncols, uint16_t *pres, uint32_t len_res)
+{
+    uint_fast32_t i, r;
+    for (i = 0; i < len_res; ++i) pres[i] = 0;
+
+    for (i = 0; i < len; ++i) {
+        r = ptab[i];
+        if ((i & 31) < ncols && (r & 0x7fff) < len_res) {
+            pres[r & 0x7fff] = (uint16_t)(i | (r & 0x8000));
+        }
+    }
+}
+
+
+/**
+  @brief Split a table created by function ``gen_xi_invert_table``
+  
+  The function splits the sign bit  from a table ``ptab`` of length
+  ``len`` created by function ``gen_xi_invert_table`` and replaces
+  ``ptab[i]`` by ``(ptab[i] & 0x7fff) % mod``. The sign bit
+  ``ptab[32*i+j] >> 15`` is stored in bit ``j`` of entry 
+  ``psign[i]``. 
+  
+  The purpose of this function is to speed up the computations in 
+  class ``mmgroup.dev.mm_basics.mm_tables_xi.Pre_MM_TablesXi``.
+*/  
+// %%EXPORT p
+MAT24_API
+void gen_xi_split_table(uint16_t *ptab, uint32_t len, uint32_t mod, uint32_t *psign)
+{
+    uint_fast32_t i, j, r, sign;
+    len >>= 5;
+    for (i = 0; i < len; ++i) {
+         sign = 0;
+         for (j = 0; j < 32; ++j) {
+             r = *ptab;
+             *ptab++ = (uint16_t)((r & 0x7fff) % mod); 
+             sign += ((r >> 15) & 1) << j;
+         }
+         *psign++ = sign;
+    }
+}
+
+
+//  %%GEN h
+//  %%GEN c
+
+
+// %%GEN ch
+#ifdef __cplusplus
+}
+#endif
+
+
+
+
