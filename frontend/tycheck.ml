@@ -964,6 +964,15 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
     else
       ok (TyPrim "unknown")
   end else
+  (* Builtin: Move.merge(MoveName, s1, s2) — applies a registered Form B
+   * (merge) move to two instances. Same loose typing as apply_move; the
+   * emitter checks the move exists and is a merge. *)
+  if name = "Move__merge" then begin
+    if List.length arg_tys <> 3 then
+      err loc "Move.merge expects 3 arguments: (move_name, source1, source2)"
+    else
+      ok (TyPrim "unknown")
+  end else
   (* If `name` is a local variable of type TyArrow (a higher-order function
    * passed as a parameter), treat the call as an application of the function
    * value. *)

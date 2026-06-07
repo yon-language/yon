@@ -1052,6 +1052,21 @@ let rec infer_mlir_ty (e : emitter)
          and argument list, which we then resolve against user functions, the
          stdlib registry, and the __new_X constructors. *)
       (match uncurry_app app with
+       | Some ("Move__merge", [C.Var move_name; _; _]) ->
+           (* Move.merge returns the FIRST source place of the merge move,
+              the same choice as the emission and the kernel reducer. *)
+           (match Move_engine.lookup_move move_name with
+            | Some md ->
+                (match md.mv_from with
+                 | [a; _] -> Printf.sprintf "!topos.section<\"%s\">" a
+                 | _ ->
+                     failwith (Printf.sprintf
+                                 "[emit_mlir infer] merge move '%s' needs two sources."
+                                 move_name))
+            | None ->
+                failwith (Printf.sprintf
+                            "[emit_mlir infer] merge move '%s' not declared."
+                            move_name))
        | Some (fname, [C.Var move_name; _])
          when fname = "apply_move"
            || (String.length fname > 16
@@ -4076,6 +4091,154 @@ let rec emit_term (e : emitter)
                 emit_line e (Printf.sprintf
                                "%s = func.call @yon_rt_new(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
                                v_xc v_heap v_buf v_size));
+           let v_result = fresh_ssa e in
+           emit_line e (Printf.sprintf
+                          "%s = topos.xcoord_to_section %s : %s"
+                          v_result v_xc target_ty);
+           (v_result, target_ty)
+       (* Move.merge(MoveName, s1, s2): the Form B (merge) move applied to
+        * two runtime instances. The result lives in the FIRST source place
+        * (the same arbitrary-but-fixed choice as the kernel reducer in
+        * move_engine.ml). Semantics mirror apply_merge_move: a field in
+        * merge_shares reads from s1; a field in merge_conflicts computes
+        * resolver(s1.f, s2.f); every other target field copies from s1. *)
+       | Some ("Move__merge", [C.Var move_name; s1_term; s2_term]) ->
+           let mv_decl =
+             match Move_engine.lookup_move move_name with
+             | Some md -> md
+             | None ->
+                 failwith (Printf.sprintf
+                             "[emit_mlir] merge move '%s' not declared."
+                             move_name)
+           in
+           let mg =
+             let open Surface_ast in
+             match mv_decl.mv_body with
+             | MoveMerge mg -> mg
+             | MoveMapping _ ->
+                 failwith (Printf.sprintf
+                             "[emit_mlir] move '%s' is Form A (mapping): use apply_move."
+                             move_name)
+           in
+           let (p1, p2) =
+             match mv_decl.mv_from with
+             | [a; b] -> (a, b)
+             | _ ->
+                 failwith (Printf.sprintf
+                             "[emit_mlir] merge move '%s' needs exactly two sources."
+                             move_name)
+           in
+           let target_place = p1 in
+           let target_ty =
+             Printf.sprintf "!topos.section<\"%s\">" target_place in
+           let (v_s1, _) = emit_term e env funcs s1_term in
+           let (v_s2, _) = emit_term e env funcs s2_term in
+           let fields_of p =
+             match List.assoc_opt p e.places_table with
+             | Some fs -> fs
+             | None ->
+                 failwith (Printf.sprintf
+                             "[emit_mlir] place '%s' has no layout." p)
+           in
+           let mlir_ty_size = function
+             | "f64" -> 8 | "i1" -> 1 | "i8" -> 1
+             | "i32" -> 4 | "i64" -> 8 | "!llvm.ptr" -> 8
+             | "!topos.proposition" -> 1 | _ -> 8
+           in
+           let offsets fields =
+             let acc = ref 0 in
+             List.map (fun (fname, fty) ->
+               let o = !acc in
+               acc := !acc + mlir_ty_size fty;
+               (fname, fty, o)
+             ) fields
+           in
+           let o1 = offsets (fields_of p1) in
+           let o2 = offsets (fields_of p2) in
+           let target_total =
+             List.fold_left (fun a (_, ty) -> a + mlir_ty_size ty) 0
+               (fields_of p1)
+           in
+           let v_x1 = fresh_ssa e in
+           emit_line e (Printf.sprintf
+                          "%s = topos.section_to_xcoord %s : !topos.section<\"%s\"> to i64"
+                          v_x1 v_s1 p1);
+           let v_x2 = fresh_ssa e in
+           emit_line e (Printf.sprintf
+                          "%s = topos.section_to_xcoord %s : !topos.section<\"%s\"> to i64"
+                          v_x2 v_s2 p2);
+           let v_one = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant 1 : i64" v_one);
+           let v_buf = fresh_ssa e in
+           emit_line e (Printf.sprintf
+                          "%s = llvm.alloca %s x !llvm.array<%d x i8> : (i64) -> !llvm.ptr"
+                          v_buf v_one target_total);
+           (* Load one field given an xcoord, an offset and a type. *)
+           let load_field v_xc soff sty =
+             let v_off = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
+                            v_off soff);
+             let v_size = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
+                            v_size (mlir_ty_size sty));
+             let v_t1 = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.constant 1 : i64" v_t1);
+             let v_tbuf = fresh_ssa e in
+             emit_line e (Printf.sprintf
+                            "%s = llvm.alloca %s x i64 : (i64) -> !llvm.ptr"
+                            v_tbuf v_t1);
+             let v_st = fresh_ssa e in
+             emit_line e (Printf.sprintf
+                            "%s = func.call @yon_rt_field_load(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> i32"
+                            v_st v_xc v_off v_size v_tbuf);
+             let _ = v_st in
+             let v_l = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = llvm.load %s : !llvm.ptr -> %s"
+                            v_l v_tbuf sty);
+             v_l
+           in
+           List.iter (fun (fname, fty, toff) ->
+             let from_s1 () = load_field v_x1 toff fty in
+             let v_val =
+               if List.mem fname mg.Surface_ast.merge_shares then from_s1 ()
+               else match List.assoc_opt fname mg.Surface_ast.merge_conflicts with
+                 | Some resolver ->
+                     (match List.find_opt (fun (n, _, _) -> n = fname) o2 with
+                      | Some (_, sty2, soff2) ->
+                          let v1 = from_s1 () in
+                          let v2 = load_field v_x2 soff2 sty2 in
+                          let ret_ty =
+                            match List.assoc_opt resolver funcs with
+                            | Some fs -> fs.fn_ret_mlir
+                            | None -> fty
+                          in
+                          let v_call = fresh_ssa e in
+                          emit_line e (Printf.sprintf
+                                         "%s = func.call @%s(%s, %s) : (%s, %s) -> %s"
+                                         v_call resolver v1 v2 fty sty2 ret_ty);
+                          v_call
+                      | None -> from_s1 ())
+                 | None -> from_s1 ()
+             in
+             let v_toff = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
+                            v_toff toff);
+             let v_gep = fresh_ssa e in
+             emit_line e (Printf.sprintf
+                            "%s = llvm.getelementptr %s[%s] : (!llvm.ptr, i32) -> !llvm.ptr, i8"
+                            v_gep v_buf v_toff);
+             emit_line e (Printf.sprintf "llvm.store %s, %s : %s, !llvm.ptr"
+                            v_val v_gep fty)
+           ) o1;
+           let v_size = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
+                          v_size target_total);
+           let v_heap = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_heap);
+           let v_xc = fresh_ssa e in
+           emit_line e (Printf.sprintf
+                          "%s = func.call @yon_rt_new(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
+                          v_xc v_heap v_buf v_size);
            let v_result = fresh_ssa e in
            emit_line e (Printf.sprintf
                           "%s = topos.xcoord_to_section %s : %s"
