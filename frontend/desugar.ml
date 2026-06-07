@@ -324,6 +324,7 @@ let rec desugar_expr (e : S.expr) : C.term =
         | "Wire__make" -> ("Stream__make", args)
         | "Wire__send" -> ("Stream__send", args)
         | "Wire__recv" -> ("Stream__recv", args)
+        | "Wire__close" -> ("Stream__close", args)
         | "Wire__make_shm" -> ("Stream__make_shm", args)
         | "Wire__send_shm" -> ("Stream__send_shm", args)
         | "Wire__recv_shm" -> ("Stream__recv_shm", args)
@@ -951,9 +952,17 @@ and desugar_produce_block (body : S.stmt list) : C.term =
     | C.StreamCons (a, b) -> C.StreamCons (rw a, rw b)
   in
   let body' = rw body_term in
-  (* (lam sid. (lam _. sid) body') (Stream__make 0) *)
+  (* (lam sid. (lam _. (lam __c. sid) (Stream__close sid)) body')
+       (Stream__make 0)
+     The close is STRUCTURAL: when the block ends nobody can write any
+     more, by construction, so the wire closes itself. Queued values
+     stay readable; a drained closed wire answers recv with the EOF
+     sentinel (the fused pipelines' end marker). *)
   C.App (C.Lam (sid, C.TyBase "number",
-           C.App (C.Lam ("_", C.TyBase "number", C.Var sid), body')),
+           C.App (C.Lam ("_", C.TyBase "number",
+                    C.App (C.Lam ("__c", C.TyBase "number", C.Var sid),
+                           C.App (C.Var "Stream__close", C.Var sid))),
+                  body')),
          C.App (C.Var "Stream__make", Builtins.encode_number 0.0))
 
 and desugar_stmt (s : S.stmt) : C.term =
