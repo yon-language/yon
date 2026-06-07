@@ -12,7 +12,7 @@ The acceptance criterion, identical on every platform:
 ```
 cd regression && ./run_regression.sh
 → REGRESSION OK: <N> examples, identical to the baseline.
-→ CROSS-SPACE OK: 2 scenarios (ledger 209/42, remote-call-in-loop 95)
+→ CROSS-SPACE OK: 3 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36)
 ```
 
 The example count grows with the corpus (126 at the time of writing);
