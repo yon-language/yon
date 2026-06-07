@@ -1263,6 +1263,12 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
          post-1.0 protocol. *)
       S.SIter (v1_num (float_of_int n), body b, loc)
       :: (match oth with None -> [] | Some o -> body o)
+  | S.SForEvery (_kind, x, e, b, loc)
+    when Hashtbl.mem S.stream_foreach_table (loc.S.start_line, loc.S.start_col) ->
+      (* STREAM collection (registered by the tycheck): drain the wire
+         until the structural-close sentinel instead of walking list
+         cells. Same cell technique as v1_lower_foreach below. *)
+      v1_lower_foreach_stream x e (body b) loc
   | S.SForEvery (_kind, x, e, b, loc) ->
       (* 1.0 executes both for-every kinds SEQUENTIALLY over a List;
          parallelism (and the `when here` space filter) are declared
@@ -1295,6 +1301,29 @@ and v1_lower_foreach x e b loc =
                   v1_call "Space__set"
                     [S.EVar (cur, S.dummy_loc);
                      v1_call "List__tail" [getcur ()]], loc) ],
+      loc) ]
+
+and v1_lower_foreach_stream x e b loc =
+  (* The wire is its own cursor: recv both reads and advances, so the
+     only state is a cell holding the current value. Loop shape:
+       w = e; cur = cell(recv w);
+       while get(cur) != EOF { x = get(cur); body; set(cur, recv w) }
+     The EOF sentinel is the structural close of the producer; the body
+     never runs on it. Wire__recv (not Stream__recv) so the internal
+     call passes the rename map, not the guidance error. *)
+  let w = v1_fresh "wire" in
+  let cur = v1_fresh "wcur" in
+  let l = S.dummy_loc in
+  let getcur () = v1_call "Space__get" [S.EVar (cur, l)] in
+  let recv () = v1_call "Wire__recv" [S.EVar (w, l)] in
+  [ S.SLet (w, e, loc);
+    S.SLet (cur, v1_call "Space__make" [recv ()], loc);
+    S.SWhile (
+      S.EBinop (S.OpNeq, getcur (), v1_num 4294967295.0, l),
+      S.SLet (x, getcur (), loc)
+      :: b
+      @ [ S.SLet (v1_fresh "adv",
+                  v1_call "Space__set" [S.EVar (cur, l); recv ()], loc) ],
       loc) ]
 
 (* ---- pass 2: becomes promotion ---- *)
@@ -1359,6 +1388,7 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   | S.EViewLam (ps, b, pl, loc) ->
       let inner = List.fold_left (fun a (n, _) -> V1SS.remove n a) cells ps in
       S.EViewLam (ps, v1_cell_expr inner b, pl, loc)
+  | S.EProduce (b, loc) -> S.EProduce (v1_cell_stmts cells b, loc)
   | S.EComposeWith (a, b, loc) -> S.EComposeWith (r a, r b, loc)
 
 and v1_cell_cond cells (c : S.condition) : S.condition =
@@ -1369,7 +1399,7 @@ and v1_cell_cond cells (c : S.condition) : S.condition =
   | S.CondAnd (a, b) -> S.CondAnd (v1_cell_cond cells a, v1_cell_cond cells b)
   | S.CondOr (a, b) -> S.CondOr (v1_cell_cond cells a, v1_cell_cond cells b)
 
-let rec v1_cell_stmts cells ss = List.map (v1_cell_stmt cells) ss
+and v1_cell_stmts cells ss = List.map (v1_cell_stmt cells) ss
 and v1_cell_stmt cells st =
   let re = v1_cell_expr cells in
   let rb = v1_cell_stmts cells in
