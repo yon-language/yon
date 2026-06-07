@@ -316,6 +316,32 @@ let rec desugar_expr (e : S.expr) : C.term =
         | "Seq__range" ->
             let list_call = S.ECall ("Seq__range_to_list", args, S.dummy_loc) in
             ("__stream_from_list", [list_call])
+        (* Wire: the cross-Space channel family. Surface Wire.X maps to
+           the runtime Stream__X symbols (the C names stay; renaming the
+           runtime stack is Idraulica v2 territory). The old Stream.X
+           channel spellings are rejected with guidance: Stream is the
+           sequence (map/filter/fold), Wire is the transport. *)
+        | "Wire__make" -> ("Stream__make", args)
+        | "Wire__send" -> ("Stream__send", args)
+        | "Wire__recv" -> ("Stream__recv", args)
+        | "Wire__make_shm" -> ("Stream__make_shm", args)
+        | "Wire__send_shm" -> ("Stream__send_shm", args)
+        | "Wire__recv_shm" -> ("Stream__recv_shm", args)
+        | "Wire__produce_shm" -> ("Stream__produce_shm", args)
+        | "Wire__await_shm" -> ("Stream__await_shm", args)
+        | "Wire__close_shm" -> ("Stream__close_shm", args)
+        | "Wire__make_net" -> ("Stream__make_net", args)
+        | "Wire__send_net" -> ("Stream__send_net", args)
+        | "Wire__recv_net" -> ("Stream__recv_net", args)
+        | "Wire__close_net" -> ("Stream__close_net", args)
+        | ("Stream__make" | "Stream__send" | "Stream__recv"
+          | "Stream__make_shm" | "Stream__send_shm" | "Stream__recv_shm"
+          | "Stream__produce_shm" | "Stream__await_shm" | "Stream__close_shm"
+          | "Stream__make_net" | "Stream__send_net" | "Stream__recv_net"
+          | "Stream__close_net") as old_name ->
+            let op = String.sub old_name 8 (String.length old_name - 8) in
+            failwith (Printf.sprintf
+              "[desugar] Stream.%s was renamed: the channel family lives under Wire (use Wire.%s). Stream is the sequence: map, filter, fold." op op)
         | "Stream__iterate" -> ("__stream_iterate", args)
         | "Stream__take" -> ("__stream_take", args)
         | "Stream__sum_take" -> ("__stream_sum_take", args)
