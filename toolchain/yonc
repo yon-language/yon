@@ -4,7 +4,7 @@
 # Compiles a Yon source (.yon) or a Topos MLIR (.mlir) to a native executable,
 # using EXACTLY the chain verified by the regression suite (107 green examples):
 #   yoner_emit_mlir -> topos-opt (extensions+to-standard) -> topos-opt (to-llvm)
-#   -> mlir-translate -> llc -> gcc -no-pie (link runtime + libmmgroup).
+#   -> mlir-translate -> llc -> gcc -no-pie (link the self-contained runtime).
 #
 # Uso:
 #   yonc input.yon -o prog            # compile a file to executable ./prog
@@ -20,7 +20,7 @@
 #   yonc -v ...                       # verbose (print each stage)
 #
 # Override path via env: YONC_FRONTEND, YONC_TOPOS_OPT, YONC_MLIR_TRANSLATE,
-#   YONC_LLC, YONC_CC, YONC_RUNTIME_DIR, YONC_MMGROUP_DIR.
+#   YONC_LLC, YONC_CC, YONC_RUNTIME_DIR.
 
 set -euo pipefail
 
@@ -58,12 +58,10 @@ YONC_MLIR_TRANSLATE="${YONC_MLIR_TRANSLATE:-$(find_llvm_tool mlir-translate)}"
 YONC_LLC="${YONC_LLC:-$(find_llvm_tool llc)}"
 YONC_CC="${YONC_CC:-gcc}"
 YONC_RUNTIME_DIR="${YONC_RUNTIME_DIR:-$YONC_ROOT/runtime}"
-# mmgroup: env > the active python3 (venv-aware, same probe as the
-# regression suite) > legacy Linux system path.
-YONC_MMGROUP_DIR="${YONC_MMGROUP_DIR:-$(python3 -c 'import mmgroup,os;print(os.path.dirname(mmgroup.__file__))' 2>/dev/null || echo /usr/local/lib/python3.12/dist-packages/mmgroup)}"
-
-# Runtime objects, in the same order used by the regression suite.
-RUNTIME_OBJS_LIST="yon_rt.o xleech2_coord.o xleech2_handler_stack.o xleech2_heap.o xleech2_mphf.o"
+# Runtime objects, in the same order used by the regression suite. The
+# mmgroup mathematical core is VENDORED (runtime/vendor/mmgroup) and
+# linked as plain objects: no Python, no shared-library paths.
+RUNTIME_OBJS_LIST="yon_rt.o xleech2_coord.o xleech2_handler_stack.o xleech2_heap.o xleech2_mphf.o vendor/mmgroup/mat24_tables.o vendor/mmgroup/mat24_functions.o vendor/mmgroup/gen_leech.o vendor/mmgroup/gen_leech3.o vendor/mmgroup/gen_leech_type.o vendor/mmgroup/gen_leech_reduce.o vendor/mmgroup/gen_xi_functions.o vendor/mmgroup/mm_group_n.o vendor/mmgroup/mm_index.o"
 
 # === Parsing argomenti =====================================================
 INPUT=""
@@ -197,25 +195,17 @@ if [ "$STOP" -eq 4 ]; then cp "$CURRENT" "$OUTPUT"; log "done -> $OUTPUT"; echo 
 
 # === Stage 5: link -> binary ===============================================
 if [ "$STOP" -ge 5 ] && [ "$START" -le 5 ]; then
-    log "Stage 5: link -> binary (gcc -no-pie + runtime + libmmgroup)"
+    log "Stage 5: link -> binary (gcc -no-pie + self-contained runtime)"
     [ -d "$YONC_RUNTIME_DIR" ] || { echo "yonc: runtime dir not found: $YONC_RUNTIME_DIR" >&2; exit 1; }
     RTSET=""
     for o in $RUNTIME_OBJS_LIST; do
         [ -f "$YONC_RUNTIME_DIR/$o" ] || { echo "yonc: missing $YONC_RUNTIME_DIR/$o" >&2; echo "      build: cd $YONC_RUNTIME_DIR && make" >&2; exit 1; }
         RTSET="$RTSET $YONC_RUNTIME_DIR/$o"
     done
-    [ -d "$YONC_MMGROUP_DIR" ] || { echo "yonc: mmgroup dir not found: $YONC_MMGROUP_DIR" >&2; exit 1; }
     # -no-pie: required on Linux (non-PIC runtime); on Darwin the Apple
     # linker rejects it and PIE is the correct default.
     NOPIE="-no-pie"; [ "$(uname -s)" = "Darwin" ] && NOPIE=""
-    # mmgroup libraries by EXPLICIT PATH: the files are .so on both
-    # platforms (macOS wheels included); with -l the Apple linker would
-    # look for .dylib/.tbd/.a and fail.
-    "$YONC_CC" $NOPIE "$CURRENT" $RTSET \
-        "$YONC_MMGROUP_DIR/libmmgroup_mat24.so" \
-        "$YONC_MMGROUP_DIR/libmmgroup_mm_op.so" \
-        -Wl,-rpath,"$YONC_MMGROUP_DIR" -lpthread -lm \
-        -o "$OUTPUT"
+    "$YONC_CC" $NOPIE "$CURRENT" $RTSET -lpthread -lm -o "$OUTPUT"
     log "binary -> $OUTPUT"
     echo "$OUTPUT"
 fi

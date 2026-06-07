@@ -1,0 +1,754 @@
+// Warning: This file has been generated automatically. Do not change!
+
+/// @cond DO_NOT_DOCUMENT 
+#define MAT24_DLL_EXPORTS 
+/// @endcond
+
+/** @file gen_leech3.c
+The functions in file ``gen_leech3.c`` implement operations on the
+vectors of the Leech lattice modulo 3  and on the
+subgroup \f$Q_{x0}\f$. We use the terminology defined in
+the document *The C interface of the mmgroup project*, 
+section *Description of the mmgroup.generators extension*.
+*/
+
+
+/*************************************************************************
+** External references 
+*************************************************************************/
+
+/// @cond DO_NOT_DOCUMENT 
+#include <string.h>
+#include "mat24_functions.h"
+#define MMGROUP_GENERATORS_INTERN
+#include "mmgroup_generators.h"
+/// @endcond 
+
+
+
+
+
+
+// %%GEN ch
+#ifdef __cplusplus
+extern "C" {
+#endif
+// %%GEN c
+
+
+// %%GEN h
+// %%GEN c
+
+
+
+
+
+
+
+
+ 
+
+
+
+/************************************************************************
+*************************************************************************
+*** Functions for supporting the Leech lattice mod 3
+*************************************************************************
+*************************************************************************/
+
+//  %%GEN h
+//  %%GEN c
+
+
+/*************************************************************************
+** Simple functions for Leech lattice vectors modulo 3
+*************************************************************************/
+
+
+/**
+  @brief Return reduced form of a vector in the Leech lattice mod 3
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3_reduce(uint64_t v3)
+{
+    return short_3_reduce(v3);
+}
+
+
+
+/**
+  @brief Scalar product of two vectors in the Leech lattice mod 3
+
+  The function returns the scalar product of the 
+  vectors \f$v_{3,1}, v_{3,2}\f$. The parameters are given in 
+  Leech lattice mod 3 encoding. The result is between 0 and 2.
+*/
+// %%EXPORT px
+MAT24_API
+uint32_t gen_leech3_scalprod(uint64_t v3_1, uint64_t v3_2)
+{
+    return short_3_scalprod(v3_1, v3_2);
+}
+
+
+/**
+  @brief Add two vectors in the Leech lattice mod 3
+
+  The function returns the sum of the 
+  vectors \f$v_{3,1}, v_{3,2}\f$. The parameters and the
+  result are given in Leech lattice mod 3 encoding. 
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3_add(uint64_t v3_1, uint64_t v3_2)
+{
+    // quick and dirty implementation, not optimized.
+    uint64_t res, sum, cy;
+    v3_1 = short_3_reduce(v3_1);
+    v3_2 = short_3_reduce(v3_2);
+    sum = v3_1 ^ v3_2; 
+    cy = v3_1 & v3_2;
+    res = sum | ((cy & 0xffffffL) << 24) | ((cy >> 24) & 0xffffffL);    
+    return short_3_reduce(res);
+}
+
+
+/**
+  @brief Negate a vector in the Leech lattice mod 3
+
+  The function returns the negated vector  \f$v_{3}\f$.
+  The parameter and the result are given in Leech lattice 
+  mod 3 encoding. 
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3_neg(uint64_t v3)
+{
+    uint64_t res;
+    res = ((v3 & 0xffffffL) << 24) | ((v3 >> 24) & 0xffffffL);    
+    return short_3_reduce(res);
+}
+
+/*************************************************************************
+** Convert a short vector (mod 2) to a short vector (mod 3)
+*************************************************************************/
+
+/// @cond DO_NOT_DOCUMENT 
+
+#define ONE ((uint64_t)(1ULL))
+
+/// @endcond  
+
+
+/**
+  @brief Map short vector from \f$\Lambda/2\Lambda\f$ to \f$\Lambda/3\Lambda\f$
+
+  Here parameter \f$v_2\f$ is a short vector (i.e. a vector of type 2)
+  in \f$\Lambda/2\Lambda\f$ in Leech lattice encoding. 
+
+  The function returns a short vector in \f$\Lambda/3\Lambda\f$
+  corresponding to \f$v_2\f$ in Leech lattice mod3 encoding.
+
+  The result is unique upto sign only. The function returns 0 if
+  \f$v_2\f$ is not short.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech2to3_short(uint64_t v2)
+{
+    uint64_t  gcodev, cocodev, theta, w, result;
+    // Put gcodev = codeword (in vector rep)
+    gcodev = mat24_gcode_to_vect((uint32_t)v2 >> 12); 
+    theta = MAT24_THETA_TABLE[((uint32_t)v2 >> 12) & 0x7ff]; 
+    // Put w = weight(code word gcodev) / 4
+    w = 0 - ((v2 >> 23) & 1);
+    w = (((theta >> 12) & 7) ^ w) + (w & 7);  
+
+    if (v2 & 0x800) {  // case odd cocode
+        uint_fast32_t scalar; 
+        // Put cocodev = cocode word (in vector rep)
+        cocodev = mat24_cocode_syndrome((uint32_t)(v2 ^ theta), 0);    
+        if (cocodev & (cocodev - 1)) return 0;
+        // Put scalar = scalar product (code, cocode)
+        scalar = (v2 >> 12) &  v2;
+        scalar = mat24_def_parity12(scalar);
+        if (scalar & 1) return 0;
+        result = (gcodev ^ ((gcodev ^ 0xffffff) << 24))
+               & ~(cocodev | (cocodev << 24));
+        return result;        
+    } else { 
+        uint_fast32_t  c_w;
+        uint8_t c_list[4];
+        // Put v2[11...0] = cocode word (in cocode rep)
+        v2 ^= theta; 
+        switch (w) {
+            case 4:
+                gcodev ^= 0xffffff;
+            case 2:
+                // Put cocodev = cocode word (in vector rep)
+                cocodev = mat24_cocode_syndrome((uint32_t)v2, 
+                    mat24_lsbit24((uint32_t)gcodev));
+                // Put c_w = min weight of cocode word
+                c_w = mat24_bw24((uint32_t)cocodev);
+                if ( ((cocodev & gcodev) != cocodev)
+                    ||  (c_w ^ 2 ^ w) & 3 ) return 0;
+                result = (gcodev & ~cocodev) | (cocodev << 24);
+                return result;
+            case 3:
+                return 0;
+            default:  // can be case 0 or 6 only
+                // Put c_w = min weight of cocode word
+                // and store cocode bits in c_list.
+                c_w = mat24_cocode_to_bit_list((uint32_t)v2, 0, c_list);
+                if (c_w != 2) return 0;
+                result = (ONE <<  c_list[0]) + (ONE <<  (c_list[1] + 24 - 4 * w));
+                return result;
+        }
+    } 
+}
+
+/*************************************************************************
+** Convert a vector of type 2 or 3 (mod 2) to a  vector (mod 3)
+*************************************************************************/
+
+
+/**
+  @brief Map vector from \f$\Lambda/2\Lambda\f$ to \f$\Lambda/3\Lambda\f$
+
+  Here parameter \f$v_2\f$ is a short vector of type 2 or 3.
+  in \f$\Lambda/2\Lambda\f$ in Leech lattice encoding. 
+
+  The function returns a vector in \f$\Lambda/3\Lambda\f$
+  corresponding to \f$v_2\f$ in Leech lattice mod3 encoding.
+
+  The result is unique upto sign only. The function returns 0 if
+  \f$v_2\f$ is not of type 2 or 3.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech2to3_abs(uint64_t v2)
+{
+    uint32_t scalar, i, j, gcodev1, gcode, coc;
+    uint64_t  gcodev, theta, cocodev, w, single, result;
+
+    // Put scalar = scalar product (code, cocode)
+    scalar = (uint32_t)((v2 >> 12) &  v2);
+    scalar = mat24_def_parity12(scalar);
+    // use function gen_leech2to3_short is scalar is 0
+    if ((scalar & 1) == 0) return gen_leech2to3_short(v2);
+
+    // Put gcodev = codeword (in vector rep)
+    gcode = (uint32_t)v2 >> 12;
+    gcodev = mat24_gcode_to_vect(gcode); 
+    theta = MAT24_THETA_TABLE[((uint32_t)v2 >> 12) & 0x7ff]; 
+    // Put w = weight(code word gcodev) / 4
+    w = 0 - ((v2 >> 23) & 1);
+    w = (((theta >> 12) & 7) ^ w) + (w & 7);  
+    // Put coc = cocode word (in cocode rep)
+    coc = (uint32_t)(v2 ^ theta) & 0xfff; 
+
+    if (coc & 0x800) {  // case odd cocode
+        // Put cocodev = cocode word (in vector rep)
+        cocodev = mat24_cocode_syndrome(coc, 0);  
+        // Put result = 1...1; then negate entries given by gcodev
+        result = gcodev ^ ((~gcodev & 0xffffff) << 24);
+        // Put j = 0 iff cocodev has bit weight 1 
+        j = (uint32_t)(cocodev & (cocodev - 1));
+        // Expand cocodev to high part of vector mod 3
+        cocodev ^= (cocodev << 24);
+        result =  j ? result & ~cocodev : result ^ cocodev;
+        return result;   
+    } else { 
+        switch (w) {
+            case 4:
+                gcodev ^= 0xffffff;
+            case 2:
+                gcodev1 = (uint32_t)gcodev;
+                for (i = 0; i < 8; ++i) {
+                    j = mat24_def_lsbit24(gcodev1);
+                    if (j >= 24) return 0;
+                    cocodev = mat24_cocode_syndrome(coc, j);
+                    single = cocodev & ~gcodev;
+                    if ((single & (single - 1)) == 0) {
+                         w = (w ^ mat24_bw24((uint32_t)cocodev));
+                         cocodev &= ~single; 
+                         result = (gcodev & ~cocodev) | (cocodev << 24)
+                                  | (single << ((w & 2) ? 0 : 24));
+                         return result;
+                    }
+                    gcodev1 &= ~(1UL << j);
+                } 
+                return 0;
+            case 3:
+                cocodev = mat24_cocode_as_subdodecad(coc, gcode, 0);
+                if ((cocodev & gcodev) != cocodev) return 0;
+                j = mat24_bw24((uint32_t)cocodev);
+                if ((j & 2) == 0) {
+                    gcode ^= 0x800;  gcodev ^= 0xffffff;
+                    cocodev = mat24_cocode_as_subdodecad(coc, gcode, 0);
+                    if ((cocodev & gcodev) != cocodev) return 0;
+                }
+                return (gcodev & ~cocodev) | (cocodev << 24);
+            default:
+                return 0;
+        }
+    }
+
+}
+
+/*************************************************************************
+** Convert a short vector (mod 3) to a short vector (mod 2)
+*************************************************************************/
+
+
+
+/**
+  @brief Map short vector from \f$\Lambda/3\Lambda\f$ to \f$\Lambda/2\Lambda\f$
+
+  Here parmeter \f$v_3\f$ is a short vector (i.e. a vector of type 2)
+  in \f$\Lambda/3\Lambda\f$ in Leech lattice mod 3 encoding. 
+
+  The function returns a short vector in \f$\Lambda/2\Lambda\f$
+  corresponding to \f$v_3\f$ in Leech lattice encoding.
+
+  The result is unique. The function returns 0 if \f$v_3\f$ is not 
+  short. This function is an inverse of function ``gen_leech2to3_short``.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3to2_short(uint64_t v3)
+{
+    uint_fast32_t  gcodev, cocodev, theta, w1, w2;
+    v3 = short_3_reduce(v3);
+    w1 = mat24_bw24((uint32_t)v3); 
+    w2 = mat24_bw24((uint32_t)(v3 >> 24));
+    switch (w1 + w2) {
+        case 23:
+            cocodev = ~(uint32_t)(v3 | (v3 >> 24)) & 0xffffffUL;
+            if ((cocodev == 0) || (cocodev & (cocodev - 1))) return 0; 
+            gcodev = (uint32_t)(v3 >> ((0-(w1 & 1)) & 24)) & 0xffffffUL;
+            if ((w1 + 1) & 4)  gcodev ^= 0xffffffUL;
+            break;              
+        case 8:
+            if (w1 & 1) return 0;
+            gcodev = (v3 | (v3 >> 24)) & 0xffffffUL;
+            cocodev = v3 & 0xffffffUL;
+            if (w1 & 2) gcodev ^= 0xffffffUL;
+            break;
+        case 2:
+            cocodev = (v3 |  (v3 >> 24)) & 0xffffffUL;
+            gcodev = (w1 & 1) ? 0 : 0xffffffUL;
+            break;
+        default:
+            return 0;        
+    }
+    gcodev = mat24_vect_to_gcode(gcodev);
+    if (gcodev & 0xfffff000UL) return 0;
+    theta = MAT24_THETA_TABLE[gcodev & 0x7ff] & 0xfff;
+    cocodev = mat24_vect_to_cocode(cocodev);
+    return (gcodev << 12) ^ theta ^ cocodev;
+}
+
+
+
+/*************************************************************************
+*** Convert a type-4 vector (mod 3) to a type-4 vector (mod 2)
+*************************************************************************/
+
+
+/// @cond DO_NOT_DOCUMENT 
+
+
+/**
+  @brief Return parity of a 12-bit integer
+*/
+static inline uint32_t parity12(uint64_t x)
+{
+    return mat24_def_parity12(x);
+}
+
+
+/**
+  @brief Return parity of a 24-bit integer
+*/
+static inline uint32_t parity24(uint64_t x)
+{
+    x ^= x >> 12; 
+    return mat24_def_parity12(x);
+}
+
+
+/// @endcond 
+
+/**
+  @brief Map vector from \f$\Lambda/3\Lambda\f$ to \f$\Lambda/2\Lambda\f$
+
+  Here parameter \f$v_3\f$ is a vector in \f$\Lambda/3\Lambda\f$ in 
+  Leech lattice mod 3 encoding. 
+
+  If a shortest preimage \f$v\f$ of \f$v_3\f$ in \f$\Lambda\f$ if of 
+  type \f$t\f$ with \f$t \leq 4\f$ then the function computes the 
+  (unique) vector \f$v_2\f$ in \f$\Lambda/2\Lambda\f$ that has the 
+  same preimage \f$v\f$ in \f$\Lambda\f$. Otherwise the function fails.
+
+  In case of success the function returns \f$2^{24} \cdot t + v_2\f$,
+  with \f$v_2\f$ given in Leech lattice encoding. The function returns
+  ``uint64_t(-1)`` in case of failure.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3to2(uint64_t v3)
+{
+    uint_fast32_t  gcodev, cocodev, h, w, w1, x1, syn, t, res;
+    uint_fast32_t omega = 0;
+    uint64_t vtype = 0 - 0x1ULL;
+    v3 = short_3_reduce(v3);
+    // Let h be the support of v3, i.e. the bit vector of nonzero
+    // coordinates of the vector v3 (modulo 3)
+    h = (uint_fast32_t)(((v3 >> 24) | v3) & 0xffffff);
+    // Let w be the number of indices with coordinate 1 or 2
+    w = mat24_bw24(h);
+    // Compute ``gcode`` and ``cocode`` for vector v3. Return 0 if we 
+    // detect that is not of type 4. If ``omega`` is odd then ``gcode`` 
+    // has to be corrected by a term 0xffffff. At the end of the
+    // switch statemnt, ``gcode`` might not correspond to a Golay
+    // code vector; this means that v3 is not of type 4.
+    switch (w) {
+        // Deal with type-4 vectors
+        case 22:
+            // type (5**1, 3**2, 1**21)
+            syn = mat24_syndrome((uint32_t)v3, 0);
+            gcodev = (v3 ^ syn) & 0xffffff;
+            t = h & syn;
+            cocodev = t | (0xffffff & ~h);
+            if ((t == 0) || (t & (t-1))) return vtype;
+            vtype = 4;
+            break;              
+        case 19:
+            // type (3**5, 1**19)
+            w1 = mat24_bw24((uint32_t)v3);
+            x1 = ((w1 & 1) ? v3 : (v3 >> 24)) & 0xffffff;
+            syn = mat24_syndrome(x1, 0);
+            cocodev = ~h & 0xffffff;
+            if (syn & h) syn = cocodev;            
+            gcodev = (x1 ^ syn) & 0xffffff;
+            vtype = 4;
+            break;
+        case 16:
+            // type (2**16, 0**8)
+            w1 = mat24_bw24((uint32_t)v3);
+            if (w1 & 1) return vtype;
+            gcodev = h;
+            omega = w1 >> 1;
+            cocodev = v3 & 0xfffffff;
+            vtype = 4;
+            break;
+        case 13:
+            // type (4**1, 2**12, 0**11)
+        case 10:
+            // type (4**2, 2**8, 0**14)
+            syn = mat24_syndrome(h & 0xffffff, 24);
+            if (syn & 0xff000000UL) return vtype;
+            if ((h & syn) != syn) return vtype;                  
+            gcodev = h ^ syn;
+            cocodev = syn | (v3 & ~syn & 0xffffff);
+            w1 = mat24_bw24(cocodev);
+            if (w1 & 1)  return vtype;
+            omega = (w1 >> 1) + parity24(syn & v3) + w;
+            vtype = 4;
+            break; 
+        case 7:
+            // type (6**1, 2**7, 0**16)
+            syn = mat24_syndrome(h, 0);
+            if (syn & (syn - 1)) return vtype;
+            gcodev = h ^ syn;
+            cocodev = (v3 & 0xffffff);
+            w1 = mat24_bw24(cocodev);
+            cocodev |=  (0 - (w1 & 1)) & syn;
+            omega = ((w1 + 1) >> 1) + 1;
+            vtype = 4;
+            break; 
+        case 4:
+            // type (4**4, 0**20)
+            gcodev = 0;
+            cocodev = h;
+            omega = parity24(v3);
+            vtype = 4;
+            break;
+        case 1:
+            // type (8**1, 0**23)
+            gcodev = cocodev = 0;
+            omega = 1;
+            vtype = 4;
+            break;   
+        // Deal with type-3 vectors
+        case 24:
+            // type (5**1, 1**23)
+            cocodev = mat24_syndrome((uint32_t)v3, 0);
+            gcodev = (v3 ^ cocodev) & 0xffffff;
+            if ((cocodev == 0) || (cocodev & (cocodev-1))) return vtype;
+            vtype = 3;
+            break;              
+        case 21:
+            // type (3**3, 1**21)
+            syn = mat24_syndrome((uint32_t)v3, 0);
+            gcodev = (v3 ^ syn) & 0xffffff;
+            cocodev = 0xffffff & ~h;
+            if ((syn & cocodev) != syn) return vtype;
+            vtype = 3;
+            break;              
+        case 12:
+            // type (2**12, 0**12)
+            gcodev = h;
+            syn = mat24_syndrome(h, 0);
+            cocodev = v3 & 0xffffff;
+            w1 = mat24_bw24(cocodev);
+            if (w1 & 1)  return vtype;
+            omega = (w1 >> 1) + 1;
+            vtype = 3;
+            break; 
+        case 9:
+            // type (4**1, 2**8, 0**15)
+            syn = mat24_syndrome(h, 0);
+            if ((h & syn) != syn) return vtype;
+            gcodev = h ^ syn;
+            cocodev = syn | (v3 & ~syn & 0xffffff);
+            w1 = mat24_bw24(cocodev);
+            if (w1 & 1)  return vtype;
+            omega = (w1 >> 1) + parity24(syn & v3);
+            vtype = 3;
+            break; 
+        // Deal with type-2 vectors
+        case 23:
+            // type (2**1, 1**23)
+            cocodev = ~h & 0xffffffUL;
+            if ((cocodev == 0) || (cocodev & (cocodev - 1))) return vtype; 
+            w1 = (0 - parity24(v3)) & 24;
+            gcodev = (uint32_t)(v3 >> w1) & 0xffffffUL;
+            vtype = 2;
+            break;              
+        case 8:
+            // type (2**8, 0**16)
+            w1 = mat24_bw24((uint32_t)v3);
+            if (w1 & 1) return vtype;
+            gcodev = h;
+            cocodev = v3 & 0xffffffUL;
+            omega = w1 >> 1;
+            vtype = 2;
+            break;
+        case 2:
+            // type (4**2, 0**22)
+            cocodev = (v3 |  (v3 >> 24)) & 0xffffffUL;
+            gcodev = 0;
+            omega = mat24_bw24((uint32_t)v3) ^ 1;
+            vtype = 2;
+            break;
+        // Deal with zero vector
+        case 0:
+            // type (0**24)
+            return 0;
+        // Anything else is rejected
+        default:
+            return vtype;        
+    }
+    gcodev = mat24_vect_to_gcode(gcodev); 
+    if (gcodev & 0xfffff000UL) return 0 - 0x1ULL;
+    cocodev = mat24_vect_to_cocode(cocodev);
+    cocodev ^= MAT24_THETA_TABLE[gcodev & 0x7ff] & 0xfff;
+    // correct ``gcodev`` by term ``Omega`` if omega is odd
+    gcodev ^= (omega & 1) << 11;         
+    res = (gcodev << 12) ^ cocodev;
+    // Correct an odd result
+    if (w >= 19) {
+        w1 = (vtype ^ parity12(res & (res >> 12))) & 1;
+        res ^= (0 - w1) & 0x800000;
+    }
+    return res | (vtype << 24);
+}
+
+
+
+/**
+  @brief Map type-4 vector from \f$\Lambda/3\Lambda\f$ to \f$\Lambda/2\Lambda\f$
+
+  Here parameter \f$v_3\f$ must be a type-4 vector 
+  in \f$\Lambda/3\Lambda\f$ in Leech lattice mod 3 encoding. 
+
+  The function returns a type-4 vector in \f$\Lambda/2\Lambda\f$
+  corresponding to \f$v_3\f$ in Leech lattice encoding.
+
+  The result is unique. The function returns 0 if \f$v_3\f$ is not of
+  type 4.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3to2_type4(uint64_t v3)
+{
+     uint64_t res = gen_leech3to2(v3);
+     return ((res >> 24) == 4) ? res & 0xffffff : 0; 
+}
+
+
+
+
+/*************************************************************************
+*** Operation of G_{x1} on the Leech lattice mod 3
+*************************************************************************/
+
+
+
+/**
+  @brief Special case of function ``gen_leech3_op_vector_word``
+
+  For internal purposes only. This is equivalent to
+  ``gen_leech3_op_vector_word(v3, g)``, where ``g`` encodes
+  the element \f$\xi^e\f$ of \f$G_{x1}\f$.
+  
+  Parameter \f${v_3}\f$ and the result are given Leech lattice 
+  mod 3 encoding.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3_op_xi(uint64_t v3, uint32_t e)
+{
+    uint64_t a, b, t, ee1;
+    e %= 3;
+    if (e == 0) return v3;
+
+    ee1 = 0ULL - (uint64_t)((e - 1) & 1ULL);
+    v3 ^= 0x111111111111ULL & ~ee1;
+    // multiply x with matrix  (++++),    where '+' means 1
+    //                         (++--)     and   '-' means -1
+    //                         (+-+-)
+    //                         (+--+)
+    // reorder bits of a, 7 ops
+    a = ((v3 & 0xaaaaaa555555ULL) ^ ((v3 >> 23) & 0xaaaaaaULL)
+         ^ ((v3 & 0xaaaaaaULL) << 23));
+    // special step
+    a ^= 0xcccccc000000ULL;
+    // split a
+    b = (a >> 2) & 0x333333333333ULL;
+    a &= 0x333333333333ULL;
+    // 1st Hadamard step.11 ops
+    t = a + b;
+    b = a + (b ^ 0x333333333333ULL);
+    a = t & 0x444444444444ULL;
+    a = t - a + (a >> 2);
+    t = b & 0x444444444444ULL;
+    b = b - t + (t >> 2);
+    // exchange high and low part of b
+    b = ((b >> 24) & 0xffffffULL) + ((b & 0xffffffULL) << 24);
+    // 2nd Hadamard step, 11 ops
+    t = a + b;
+    b = a + (b ^ 0x333333333333ULL);
+    a = t & 0x444444444444ULL;
+    a = t - a + (a >> 2);
+    t = b & 0x444444444444ULL;
+    b = b - t + (t >> 2);
+    // unite a and b
+    a = a ^ (b << 2);
+    // special step
+    a ^= 0xcccccc000000ULL;
+    // reorder bits of a, 7 ops
+    a = ((a & 0xaaaaaa555555ULL) ^ ((a >> 23) & 0xaaaaaaULL)
+         ^ ((a & 0xaaaaaaULL) << 23));
+    // matrix multipliction done
+    a ^= 0x111111111111ULL & ee1; 
+    return a;
+}
+
+
+/**
+  @brief Operation of \f$G_{x1}\f$ on the Leech lattice mod 3
+
+  The function returns the element \f$v_3 g\f$ for
+  \f$v_3 \in \Lambda/3\Lambda\f$ and \f$g \in G_{x0}\f$. Here 
+  \f$g\f$ is given as a word of genenators of length \f$n\f$ in 
+  the array ``pg``. Each atom of the word \f$g\f$ is encoded as 
+  defined in the header file ``mmgroup_generators.h``.
+  
+  Parameter \f${v_3}\f$ and the result are given Leech lattice 
+  mod 3 encoding.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3_op_vector_word(uint64_t v3, uint32_t *pg, uint32_t n)
+{
+    uint_fast32_t tag, i, v;
+    uint8_t perm[24], perm_i[24];
+
+    for (i = 0; i < n; ++i) {
+        v = pg[i];
+        tag = v >> 28;
+        v  &= 0xfffffff;
+        switch(tag) {
+            case 8:
+            case 0:
+            case 8 + 1:
+            case 1:
+            case 8 + 3:
+            case 3:
+               break;
+            case 8 + 2:
+               mat24_m24num_to_perm(v, perm);
+               mat24_inv_perm(perm, perm_i);
+               v3 = gen_leech3_op_pi(v3, perm_i);
+               break;
+            case 2:
+               mat24_m24num_to_perm(v, perm);
+               v3 = gen_leech3_op_pi(v3, perm);
+               break;
+            case 8 + 4:
+            case 4:
+               v3 = gen_leech3_op_y(v3, v & 0x1fffUL);
+               break;
+            case 8 + 5:
+            case 5:
+               if ((v + 1) & 2) return 0xffff000000000000ULL;
+               break;
+            case 8 + 6:
+               v ^= 3;
+            case 6:
+               if ((v + 1) & 2) v3 = gen_leech3_op_xi(v3, v & 3);
+               break;
+            default:
+               return 0xffff000000000000ULL;
+        }
+    }       
+    return short_3_reduce(v3);
+}
+
+
+
+
+/**
+  @brief Atomic operation of \f$G_{x1}\f$ on the Leech lattice mod 3
+
+  Equivalent to ``gen_leech3_op_vector_word(v3, &g, 1)``.
+  
+  Parameter \f${v_3}\f$ and the result are given Leech lattice 
+  mod 3 encoding.
+*/
+// %%EXPORT px
+MAT24_API
+uint64_t gen_leech3_op_vector_atom(uint64_t v3, uint32_t g)
+{
+    return gen_leech3_op_vector_word(v3, &g, 1);
+}
+
+
+
+//  %%GEN h
+//  %%GEN c
+
+
+
+// %%GEN ch
+#ifdef __cplusplus
+}
+#endif
+
+
+
+
