@@ -4467,6 +4467,32 @@ let rec emit_term (e : emitter)
              "%s = func.call_indirect %s(%s) : (%s) -> %s"
              v v_fn arg_str arg_ty_str ret_ty);
            (v, ret_ty)
+       | Some (fname, args) when
+           (match Env.find_opt fname env with
+            | Some (ssa, _) -> String.length ssa > 10
+                               && String.sub ssa 0 10 = "__hof_ref:"
+            | None -> false) ->
+           (* fname is a local alias of a named function (the binding
+              `be f holds <lifted lambda>` pattern): dereference the
+              alias and call the real function directly. *)
+           let real = (match Env.find_opt fname env with
+             | Some (ssa, _) -> String.sub ssa 10 (String.length ssa - 10)
+             | None -> assert false) in
+           (match List.assoc_opt real funcs with
+            | Some fs ->
+                let arg_vals = List.map (emit_term e env funcs) args in
+                let arg_str = String.concat ", " (List.map fst arg_vals) in
+                let param_tys = List.map snd arg_vals in
+                let v = fresh_ssa e in
+                let arg_ty_str = String.concat ", " param_tys in
+                emit_line e (Printf.sprintf
+                               "%s = func.call @%s(%s) : (%s) -> %s"
+                               v real arg_str arg_ty_str fs.fn_ret_mlir);
+                (v, fs.fn_ret_mlir)
+            | None ->
+                failwith (Printf.sprintf
+                  "[emit_mlir] alias %s points to unknown function '%s'."
+                  fname real))
        | Some (fname, _) ->
            failwith (Printf.sprintf
                        "[emit_mlir] unknown function '%s'."

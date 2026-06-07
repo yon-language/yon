@@ -474,7 +474,8 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
             let suffix = String.sub name (idx + 2) (String.length name - idx - 2) in
             let is_method = (suffix = "map" || suffix = "filter"
                           || suffix = "fold" || suffix = "take"
-                          || suffix = "sum_take" || suffix = "to_stream") in
+                          || suffix = "sum_take" || suffix = "to_stream"
+                          || suffix = "for_every") in
             let is_lower = String.length prefix > 0
               && let c = prefix.[0] in c >= 'a' && c <= 'z'
             in
@@ -525,10 +526,31 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
         String.length name > 11
         && String.sub name 0 11 = "__morph_in_"
       in
+      (* Stream METHOD sites: if the receiver (first rewritten arg)
+         types as a stream, register the site so the desugar drains the
+         wire; for_every exists ONLY for streams (lists keep the
+         `for every x in xs` statement). fold on a stream is the
+         accumulator: state threads through the lambda's parameters, so
+         no closure capture is involved. *)
+      let* () =
+        if (name = "__stream_for_every" || name = "__stream_fold")
+           && args <> [] then begin
+          let* recv_ty = infer env ctx (List.hd args) in
+          (match recv_ty with
+           | TyStream _ ->
+               Hashtbl.replace stream_method_table
+                 (loc.start_line, loc.start_col) ();
+               ok ()
+           | _ when name = "__stream_for_every" ->
+               err loc "for_every is the stream method; lists use the `for every x in xs` statement"
+           | _ -> ok ())
+        end else ok ()
+      in
       (* __stream_map/filter/fold accept a function name as their last
        * argument (the type check on it is skipped). *)
       let is_seq_with_fun_arg =
         name = "__stream_map" || name = "__stream_filter" || name = "__stream_fold"
+        || name = "__stream_for_every"
       in
       if is_apply_move then begin
         match args with
@@ -1354,6 +1376,47 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
            ok env)
 
   | SCall (name, args, loc) ->
+      (* Stream method in STATEMENT position: s.for_every(f) / s.fold(i, f).
+         The receiver lives in the mangled name (parser: obj__fld); if it
+         types as a stream, register the site for the drain lowering and
+         skip the normal call resolution (the lambda argument is checked
+         loosely, like the fused pipelines do). *)
+      let has_suffix suf =
+        let ln = String.length name and ls = String.length suf in
+        ln > ls && String.sub name (ln - ls) ls = suf
+      in
+      let stream_method =
+        if has_suffix "__for_every" then Some ("__for_every", 1)
+        else if has_suffix "__fold" then Some ("__fold", 2)
+        else None
+      in
+      (match stream_method with
+       | Some (suf, n_args) when List.length args = n_args ->
+           let prefix = String.sub name 0 (String.length name - String.length suf) in
+           let* recv_ty = infer env ctx (EVar (prefix, loc)) in
+           (match recv_ty with
+            | TyStream _ ->
+                Hashtbl.replace stream_method_table (loc.start_line, loc.start_col) ();
+                (* fold's init is a value: check it; the lambda is loose *)
+                let* _ = (match suf, args with
+                          | "__fold", init :: _ -> infer env ctx init
+                          | _ -> ok (TyPrim "number")) in
+                ok env
+            | _ when suf = "__for_every" ->
+                err loc "for_every is the stream method; lists use the `for every x in xs` statement"
+            | _ ->
+                (* list receiver with fold: the fused pipeline path *)
+                let arg_tys_result = List.fold_left
+                  (fun acc a ->
+                     let* tys = acc in
+                     let* t = infer env ctx a in
+                     ok (tys @ [t]))
+                  (ok []) args
+                in
+                let* arg_tys = arg_tys_result in
+                let* _ = check_call env ctx name arg_tys loc in
+                ok env)
+       | _ ->
       let arg_tys_result = List.fold_left
         (fun acc a ->
            let* tys = acc in
@@ -1363,7 +1426,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       in
       let* arg_tys = arg_tys_result in
       let* _ = check_call env ctx name arg_tys loc in
-      ok env
+      ok env)
 
   | SNew (place_name, fas, loc) ->
       (match Tyenv.lookup_place env place_name with
