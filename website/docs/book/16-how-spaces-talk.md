@@ -37,6 +37,11 @@ outlives the conversation.
 
 ## The channel
 
+In the language this transport is the `Wire` family: `Wire.make` /
+`Wire.send` / `Wire.recv` within one process, the `_shm` variants
+across processes, the `_net` variants across machines. `Stream` is the
+sequence (map, filter, fold); `Wire` is how Spaces talk.
+
 Transport is a POSIX shared-memory region named `/yon_stream_<Space>`,
 designed to be **position-independent**: a fixed header followed by a ring
 buffer, all fields plain integers and offsets, no pointers, so every

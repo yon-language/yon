@@ -1,11 +1,11 @@
 fun producer(): number {
-  be sid holds Stream.make_shm(2, 1)
-  be ok holds Stream.produce_shm(sid, 99)
+  be sid holds Wire.make_shm(2, 1)
+  be ok holds Wire.produce_shm(sid, 99)
   return 0
 }
 fun consumer(): number {
-  be sid holds Stream.make_shm(2, 0)
-  be v holds Stream.await_shm(sid)
+  be sid holds Wire.make_shm(2, 0)
+  be v holds Wire.await_shm(sid)
   return 0
 }
 fun main(): number { return 0 }

@@ -7,7 +7,7 @@ fun source(): number {
 }
 fun main(): number {
   be s holds source()
-  be a holds Stream.recv(s)
-  be b holds Stream.recv(s)
+  be a holds Wire.recv(s)
+  be b holds Wire.recv(s)
   return a + b        // 41 + 1 = 42
 }

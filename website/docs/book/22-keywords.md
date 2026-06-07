@@ -188,7 +188,7 @@ fun main(): number { return 0 }`}
 
 #### `produce`
 
-The producer block of a stream: `produce { ... }` creates a stream, the body emits into it, and the value of the block is the stream id. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
+The producer block: `produce { ... }` creates a wire, the body emits into it, and the value of the block is the wire handle, consumed with `Wire.recv`. It works as an expression, so the canonical idiom is `be s holds produce { ... }`.
 
 #### `emit`
 
@@ -206,8 +206,8 @@ fun source(): number {
 }
 fun main(): number {
   be s holds source()
-  be a holds Stream.recv(s)
-  be b holds Stream.recv(s)
+  be a holds Wire.recv(s)
+  be b holds Wire.recv(s)
   return a + b        // 41 + 1 = 42
 }
 ```
