@@ -89,8 +89,19 @@ parallel execution will be process-shaped, not thread-shaped.
 
 ## Choosing a runtime backend
 
-`YON_BACKEND` selects how Space heaps are backed within one machine:
-`private` (default, one private heap), `separate` (one heap per Space),
+The backend selects how Space heaps are backed within one machine. A
+project declares it in `yon.toml`, and the key is required in project
+mode:
+
+```toml
+[runtime]
+backend = "memory"     # or: separate | shm
+```
+
+`yonc` bakes the declared value into the binary as its default; a
+`YON_BACKEND` environment variable at launch still overrides it, as a
+deployment lever. The values:
+`memory` (the default, one private heap), `separate` (one heap per Space),
 `shm` (heaps in POSIX shared memory, `/yon_space_<name>`, enabling the
 cross-process cells and convergent shared folds of chapter 13). The
 language semantics do not change across backends; only the physical

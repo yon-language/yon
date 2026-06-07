@@ -33,18 +33,27 @@ only via imports) and builds one program.
 
 ## The manifest
 
-`yon.toml` declares identity and dependencies. Dependencies are **git
-repositories**, no central registry, no hosting to trust:
+`yon.toml` declares identity, the runtime backend, and dependencies.
+Dependencies are **git repositories**, no central registry, no hosting
+to trust:
 
 ```toml
 [package]
 name = "example"
 version = "0.1.0"
 
+[runtime]
+backend = "memory"     # required: memory | separate | shm
+
 [dependencies]
 geometria = { git = "https://github.com/utente/geometria", version = "1.0" }
 algebra   = { git = "https://github.com/altro/algebra", rev = "abc123" }
 ```
+
+The `[runtime]` section is required in project mode: `backend` decides
+how Space heaps are physically backed (chapter 16), and a missing or
+invalid key is a compile error. The declared value is the binary's
+default; a `YON_BACKEND` environment variable at launch overrides it.
 
 `version` is a git tag (`v1.0` or `1.0`); `rev` pins a commit or branch
 explicitly. The workflow is `yon-pkg`:
