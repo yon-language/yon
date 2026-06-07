@@ -220,6 +220,7 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.EViewLam (ps, b, pl, ll) -> S.EViewLam (ps, rwe b, pl, ll)
       | S.EComposeWith (a, b, ll) -> S.EComposeWith (rwe a, rwe b, ll)
       | S.EProduce (b, ll) -> S.EProduce (List.map rws b, ll)
+      | S.EWireTo _ -> e
       | S.EAll (n, c, ll) -> S.EAll (n, rwc c, ll)
       | other -> other
     and rwc (c : S.condition) : S.condition =
