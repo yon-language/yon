@@ -21,7 +21,7 @@ native binary, linked against a self-contained C runtime (xleech allocator with 
 regression suite: **112 examples + 2 cross-Space scenarios**, exit
 codes identical across platforms.
 
-Validated platforms: **Linux x86-64** and **macOS Apple Silicon**.
+Platforms: Linux x86-64 and macOS Apple Silicon; the regression suite runs green on both.
 macOS Intel: untested (expected to work; reports welcome).
 
 ## Build
