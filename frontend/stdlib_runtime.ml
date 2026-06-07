@@ -916,6 +916,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "make", [tnum], tnum;
       "send", [tnum; tnum], tnum;
       "recv", [tnum], tnum;
+      "close", [tnum], tnum;
       (* Cross-PROCESS streams over POSIX shared memory (mattone A). Same f64-id
          convention; make_shm(id, create) rendezvous two isolated Space
          processes on a shared region. send_shm/recv_shm cross the boundary. *)
