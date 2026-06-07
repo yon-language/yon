@@ -910,7 +910,9 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
      * Stream.recv(stream_id) -> value (or -1 if empty)
      * Note: we use send/recv to avoid a clash with the EMIT token (reserved
      * for `emit expr` statement effects). *)
-    "Stream", [
+    (* Wire: the cross-Space channel family (formerly under Stream).
+       Wire is the transport; Stream is the sequence (map/filter/fold). *)
+    "Wire", [
       "make", [tnum], tnum;
       "send", [tnum; tnum], tnum;
       "recv", [tnum], tnum;
@@ -932,6 +934,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "send_net", [tnum; tnum], tnum;
       "recv_net", [tnum], tnum;
       "close_net", [tnum], tnum;
+    ];
+    "Stream", [
       (* True infinite streams. iterate(f, x0) returns a lazy stream applying f
        * to x0 repeatedly. take(s, n) materializes the first n into a list.
        * sum_take(s, n) = fold(+, 0, take(s, n)) fused.
