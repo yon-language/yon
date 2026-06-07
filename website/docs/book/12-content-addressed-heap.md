@@ -55,7 +55,7 @@ number. One heap is a contiguous, mmap-relocatable block of ~70 MB (64 MB of
 payload arena plus the content index), which is what lets a Space be backed
 by private memory or POSIX shared memory interchangeably.
 
-The lattice is not just sizing. Through `libmmgroup`, the runtime exposes
+The lattice is not just sizing. Through the vendored mmgroup core, the runtime exposes
 **canonicalization under the lattice symmetries**: sign patterns canonical
 under the Golay-code stabilizer, M₂₄ orbit representatives, orbit ids. The
 orbital variants of the collections use them, `HashMap.orbital_set` stores
@@ -94,7 +94,7 @@ six heaps, every value read back exactly from whichever heap it landed
 in; sixty thousand distinct string keys with zero collisions and exact
 re-derivation through the chain.
 
-One asymmetry to know about: orbit canonicalization (the `libmmgroup`
+One asymmetry to know about: orbit canonicalization (the vendored mmgroup
 machinery below) operates on heap 0, where the lattice indexing lives.
 Orbital collections are a heap-0 feature; plain content addressing spans
 the whole chain.

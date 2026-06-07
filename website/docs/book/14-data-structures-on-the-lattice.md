@@ -67,7 +67,7 @@ Equality of whole trees is one comparison, the same trick as
 ## VoyagerList: storage that heals
 
 `VoyagerList` seals every element with the **binary Golay code (24,12,8)**
-(via `libmmgroup`'s mat24 machinery): 12 data bits become a 24-bit codeword
+(via the vendored mat24 machinery): 12 data bits become a 24-bit codeword
 with minimum distance 8, which corrects up to **3 arbitrary bit flips**.
 The module ships a fault injector so you can watch it work:
 

@@ -1,6 +1,6 @@
 # Dead code audit (2026-06-07)
 
-Status: **class A pruned** (this commit), regression 126 green plus
+Status: class A pruned (this commit), regression 126 green plus
 cross-Space after the cut. One scan-scope correction recorded below.
 
 Method: mechanical cross-reference, four scans. (1) OCaml toplevel
@@ -43,7 +43,7 @@ A entry was re-checked against `.mly`/`.mll` and confirmed dead.
 | frontend/catt_r_yon.ml | 23 functions (`family1_alpha_equiv`, `family2_beta_step`, `family4_place_iso`, whiskers, `pd_comp_2`, `universal_colimit_cell`, cell accessors, registry/persistence helpers) | the R_Yon reduction families and the CaTT cell kernel: the formalization research program |
 | frontend/cubical.ml, cubical_bindings.ml, hit_env.ml, tyenv.ml interval helpers | `face_is_consistent`, `formula_holds`, `glue_type`, `hit_constructor_arity`, `mk_equiv_ty`, `empty_env`, `register`, `missing_constructors`, `add_interval`, `is_interval_var`, `add_vars` | the cubical/HIT frontier; S1 (hit_env) is load-bearing in the formalization sec. 13 counterexample |
 | frontend/dispatcher.ml | the `*_equal` family + `summarize_classification`, `term_equal_kernel` | the dispatcher classification API |
-| frontend/tycheck.ml | `is_comprehension`, `is_classifier_pullback`, `comprehension_ty`, `true_arrow_ty` | **cited by the formalization sec. 5** as the deciding procedures of the classifier. Finding: they are not wired into any compilation path today (the wired piece is `comprehension_coerces_to`). Either wire them into the checker or keep them as the verification API the document points at; do NOT prune |
+| frontend/tycheck.ml | `is_comprehension`, `is_classifier_pullback`, `comprehension_ty`, `true_arrow_ty` | cited by the formalization sec. 5 as the deciding procedures of the classifier. Finding: they are not wired into any compilation path today (the wired piece is `comprehension_coerces_to`). Either wire them into the checker or keep them as the verification API the document points at; do NOT prune |
 | frontend/heyting.ml | `h_leq`, `to_bool_strict` | lattice API completeness |
 | runtime/yon_rt.c SCT families | `sat_*`, `sat2_*`, `co0_*`, `leech_*`, `orb_*`, `sparse_*`, `frontier_init`, `alpha_3sat_gen`, `dimacs_run_co0_wavefront`, `sort_children_*` | SCT paper instrumentation and reproducibility |
 | runtime/yon_rt_hsh.c | the `yon_rt_alg_*` catalog family | certified-algebra runtime API surface |
