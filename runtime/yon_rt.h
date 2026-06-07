@@ -144,19 +144,6 @@ yon_section_t yon_rt_new(uint32_t heap_id,
 int yon_rt_field_load(yon_section_t sec, uint32_t offset,
                       uint32_t size, void *out);
 
-/* Cross-space apply move: allocate a new section in the target heap, copying
- * the payload from the source. The field-by-field transformation (with
- * conversion functions) is emitted by the compiler before calling yon_rt_new
- * on the target.
- *
- * Currently: identity with cross-heap awareness.
- * Later: will transfer bytes via IPC if source/target are in different
- * processes.
- *
- * Returns: the section allocated in the target heap.
- */
-yon_section_t yon_rt_apply_move(uint32_t target_heap_id,
-                                 yon_section_t source);
 
 /* ---- Non-trivial FREE_MERGE via a fold function ----
  *

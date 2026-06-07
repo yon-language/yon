@@ -319,31 +319,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
     return 0;
 }
 
-yon_section_t yon_rt_apply_move(uint32_t target_heap_id,
-                                 yon_section_t source) {
-    ensure_init();
-    uint32_t src_heap = yon_section_heap(source);
-    uint32_t src_slot = yon_section_slot(source);
-    yon_xheap_t *src_h = heap_for(src_heap);
-    const yon_xheap_slot_t *src = yon_xheap_get(src_h, src_slot);
-    if (!src || src->payload_offset == 0) {
-        return YON_SECTION_INVALID;
-    }
-    /* Retrieve the payload from the source. In L1_SHARED with the heap_id prefix
-     * (see yon_rt_new), the stored payload includes the 4-byte heap_id_source
-     * prefix — these must be skipped to obtain the raw bytes of the record,
-     * which then end up in the target under target_heap_id. */
-    const uint8_t *src_payload = (const uint8_t *)yon_xheap_slot_payload(src_h, src);
-    if (!src_payload) return YON_SECTION_INVALID;
 
-    uint32_t prefix_skip = 0;
-    if (g_backend == YON_BACKEND_L1_SHARED && src_heap != YON_HEAP_ID_DEFAULT) {
-        prefix_skip = sizeof(uint32_t);
-    }
-    if (prefix_skip > src->payload_size) return YON_SECTION_INVALID;
-    uint32_t raw_size = src->payload_size - prefix_skip;
-    return yon_rt_new(target_heap_id, src_payload + prefix_skip, raw_size);
-}
 
 /* ============================================================== */
 /* P8 #86: FREE_MERGE non-triviale via fold (CRDT-style)           */

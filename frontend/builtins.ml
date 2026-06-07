@@ -213,8 +213,6 @@ let output_place : place_decl = {
 let place_fields_table : (string, string list) Hashtbl.t = Hashtbl.create 16
 
 (* Reset for tests. *)
-let reset_place_fields () = Hashtbl.reset place_fields_table
-
 let register_place_fields (name : string) (fields : string list) : unit =
   Hashtbl.replace place_fields_table name fields
 
@@ -256,7 +254,8 @@ let rec try_reduce_builtin (t : term) : term option =
       (* Try recursing on a and b first to ensure they are evaluated. *)
       let a' = match try_reduce_builtin a with Some v -> v | None -> a in
       let b' = match try_reduce_builtin b with Some v -> v | None -> b in
-      (* Special-case __is/__is_not for Heyting pattern matching. *)
+      (* Special-case __is for Heyting pattern matching. `is not` never
+         reaches here: it desugars to __heyt_not(__is ...) (desugar.ml). *)
       (match op, a', b' with
        | "__is", value, Var "__pat_present" ->
            Some (Heyting.encode_heyt
@@ -280,16 +279,6 @@ let rec try_reduce_builtin (t : term) : term option =
              (match Heyting.decode_heyt value with
               | Some Heyting.HUnknown -> Heyting.HPresent
               | _ -> Heyting.HAbsent))
-       | "__is_not", value, pat ->
-           (* x is not p == NOT (x is p) — using Heyting negation. *)
-           let positive = try_reduce_builtin
-             (App (App (Var "__is", value), pat)) in
-           (match positive with
-            | Some t ->
-                (match Heyting.decode_heyt t with
-                 | Some h -> Some (Heyting.encode_heyt (Heyting.h_not h))
-                 | None -> None)
-            | None -> None)
        (* AND/OR over Heyting: bridge __and/__or to Heyting operators
         * when arguments decode to Heyting values. *)
        | "__and", _, _ ->

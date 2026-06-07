@@ -73,20 +73,6 @@ let get_field (t : Ast.term) (fld : string) : Ast.term option =
   | None -> None
   | Some r -> Hashtbl.find_opt r.rec_fields fld
 
-let set_field (t : Ast.term) (fld : string) (v : Ast.term) : Ast.term option =
-  match decode_record_id t with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt record_store id with
-       | None -> None
-       | Some r ->
-           let new_id = fresh_record_id () in
-           let new_tbl = Hashtbl.copy r.rec_fields in
-           Hashtbl.replace new_tbl fld v;
-           Hashtbl.add record_store new_id
-             { rec_place = r.rec_place; rec_fields = new_tbl };
-           Some (encode_record new_id))
-
 (* ─── Move registry ────────────────────────────────────────────────── *)
 
 (* Move declarations indexed by name. *)
@@ -247,44 +233,3 @@ let kernel_apply_2
   let partial = !kernel_reducer fn a in
   !kernel_reducer partial b
 
-(* ─── Hook into try_reduce_builtin ─────────────────────────────────── *)
-
-let try_reduce_move (t : Ast.term) : Ast.term option =
-  match t with
-  | Ast.App (App (Var "Move__apply", Var move_name), source) ->
-      let move_name_clean =
-        if String.length move_name > 7 && String.sub move_name 0 7 = "__str_"
-        then String.sub move_name 7 (String.length move_name - 7)
-        else move_name
-      in
-      (match lookup_move move_name_clean with
-       | None -> None
-       | Some md ->
-           let target_place = match md.mv_to with
-             | Some w -> w
-             | None -> "Unknown" in
-           apply_mapping_move md source target_place !kernel_reducer)
-
-  | Ast.App (App (App (Var "Move__merge", Var move_name), s1), s2) ->
-      let move_name_clean =
-        if String.length move_name > 7 && String.sub move_name 0 7 = "__str_"
-        then String.sub move_name 7 (String.length move_name - 7)
-        else move_name
-      in
-      (match lookup_move move_name_clean with
-       | None -> None
-       | Some md ->
-           let target_place = match md.mv_from with
-             | [w; _] -> w  (* arbitrary choice: first world is target *)
-             | _ -> "Unknown" in
-           apply_merge_move md s1 s2 target_place kernel_apply_2)
-
-  | Ast.App (App (Var "Record__field", record), Var fld_var) ->
-      let fld =
-        if String.length fld_var > 7 && String.sub fld_var 0 6 = "__str_"
-        then String.sub fld_var 6 (String.length fld_var - 6)
-        else fld_var
-      in
-      get_field record fld
-
-  | _ -> None

@@ -67,19 +67,6 @@ type parse_diagnostic = {
   pd_message : string;
 }
 
-let format_parse_error
-    (src : string) (diag : parse_diagnostic) : string =
-  let location = Printf.sprintf "Parse error at line %d, column %d"
-                   diag.pd_line diag.pd_col in
-  let token_info = match diag.pd_last_token with
-    | Some t -> Printf.sprintf "  unexpected token: %s\n" t
-    | None -> ""
-  in
-  let extra = if diag.pd_message = "" then ""
-              else Printf.sprintf "  %s\n" diag.pd_message in
-  let context = format_source_context src diag.pd_line (max 0 (diag.pd_col - 1)) in
-  Printf.sprintf "%s\n%s%s\n%s" location token_info extra context
-
 (* ─── Type checker error formatting ────────────────────────────────── *)
 
 (* Error kinds for type checking. Each kind has a short tag for
@@ -191,18 +178,3 @@ let suggest_closest (target : string) (candidates : string list)
   | _ -> None
 
 (* Format an error with a suggestion appended if a similar name exists. *)
-let format_with_suggestion
-    (src : string) (line : int) (col : int)
-    (kind : ty_error_kind)
-    (candidates : string list) : string =
-  let base = format_ty_error src line col kind in
-  let target = match kind with
-    | UnknownIdentifier n | UnknownPlace n | UnknownWorld n
-    | UnknownReduction n | UnknownFunction n -> Some n
-    | _ -> None in
-  match target with
-  | None -> base
-  | Some t ->
-      match suggest_closest t candidates 3 with
-      | None -> base
-      | Some s -> base ^ Printf.sprintf "\n  did you mean '%s'?\n" s

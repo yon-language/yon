@@ -236,10 +236,3 @@ let instantiate (s : scheme) : ty =
 
 (* ─── Pretty-printing ────────────────────────────────────────────────── *)
 
-let scheme_to_string (s : scheme) : string =
-  let body_s = Tyenv.ty_to_string s.body in
-  match s.bound with
-  | [] -> body_s
-  | _ ->
-      let qs = String.concat "," (List.map (Printf.sprintf "alpha%d") s.bound) in
-      Printf.sprintf "forall%s. %s" qs body_s
