@@ -1,0 +1,12 @@
+// Consumer: attaches, drains eight readings in a loop, exits with the sum.
+fun main(): number {
+  be w holds Wire.make_shm(9, 0)
+  be total holds 0
+  be i holds 0
+  while i < 8 do {
+    be v holds Wire.await_shm(w)
+    total becomes total + v
+    i becomes i + 1
+  }
+  return total          // 1+2+...+8 = 36
+}
