@@ -4651,26 +4651,6 @@ let emit_reduction (e : emitter) (rd : C.reduction_decl) : unit =
    site when there is a single reduction in scope for that place (static
    early binding). This runs separately, after all the program's user functions
    are declared, so a handler body can refer to the other user functions. *)
-let collect_reduction_handler_sigs (reductions : C.reduction_decl list)
-    : (string * func_sig) list =
-  List.concat_map (fun (rd : C.reduction_decl) ->
-    List.map (fun (hc : C.handler_clause) ->
-      let name = rd.r_name ^ "__" ^ hc.hc_op in
-      (* Wrap the body in one lambda per parameter, mirroring how
-       * extract_func_sig sees it. *)
-      let wrapped = List.fold_right (fun (pn, pt) acc ->
-        C.Lam (pn, pt, acc)
-      ) hc.hc_params hc.hc_body in
-      (name, {
-        fn_name = name;
-        fn_params = hc.hc_params;
-        fn_ret_mlir = "f64"; (* fallback; will be inferred at emit time *)
-        fn_body = wrapped;
-        fn_type_params = [];
-      })
-    ) rd.r_handlers
-  ) reductions
-
 let emit_world (e : emitter) (world_name : string) (places : C.place_decl list) : unit =
   emit_indent e;
   emit_str e (Printf.sprintf "topos.world @%s {\n" world_name);

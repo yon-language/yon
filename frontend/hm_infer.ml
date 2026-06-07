@@ -36,20 +36,6 @@ type infer_error =
   | ArityMismatch of string * int * int * location
       (* fname, expected, got, loc *)
 
-let error_to_string = function
-  | UnifyFailed (e, loc, ctx) ->
-      Printf.sprintf "[HM line %d, col %d] %s: %s"
-        loc.start_line loc.start_col ctx (unify_error_to_string e)
-  | UnknownVar (x, loc) ->
-      Printf.sprintf "[HM line %d, col %d] unknown variable: %s"
-        loc.start_line loc.start_col x
-  | UnknownFun (f, loc) ->
-      Printf.sprintf "[HM line %d, col %d] unknown function: %s"
-        loc.start_line loc.start_col f
-  | ArityMismatch (f, exp, got, loc) ->
-      Printf.sprintf "[HM line %d, col %d] %s: expected %d args, got %d"
-        loc.start_line loc.start_col f exp got
-
 exception Infer_error of infer_error
 
 (* ─── Environment locale per inference ────────────────────────────────── *)

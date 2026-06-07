@@ -41,28 +41,3 @@ let run_with_trace ?(fuel = 1000) ctx t =
 let run ?(fuel = 1000) ctx t = reduce ~fuel ctx t
 
 (* Pretty-print a trace for debugging. *)
-let pp_trace trace =
-  let buf = Buffer.create 256 in
-  List.iteri (fun i step ->
-    Buffer.add_string buf
-      (Printf.sprintf "Step %d:\n  %s\n  ->  %s\n"
-         (i + 1)
-         (Pretty.pp_compact step.ts_before)
-         (Pretty.pp_compact step.ts_after))
-  ) trace;
-  Buffer.contents buf
-
-let pp_result result =
-  match result with
-  | Done (v, trace) ->
-      Printf.sprintf "DONE in %d steps. Final value:\n  %s"
-        (List.length trace)
-        (Pretty.pp_compact v)
-  | Stuck (t, trace) ->
-      Printf.sprintf "STUCK after %d steps. Final term:\n  %s"
-        (List.length trace)
-        (Pretty.pp_compact t)
-  | OutOfFuel (t, trace) ->
-      Printf.sprintf "OUT OF FUEL after %d steps. Last term:\n  %s"
-        (List.length trace)
-        (Pretty.pp_compact t)

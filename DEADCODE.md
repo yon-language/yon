@@ -1,5 +1,8 @@
 # Dead code audit (2026-06-07)
 
+Status: **class A pruned** (this commit), regression 126 green plus
+cross-Space after the cut. One scan-scope correction recorded below.
+
 Method: mechanical cross-reference, four scans. (1) OCaml toplevel
 `let` definitions vs references in every module, qualified, via
 `open`, and in test files; entry-point binaries excluded as
@@ -11,7 +14,15 @@ in the emitter, the passes and the MLIR examples. (4) Known
 session-level deads. No removal happens without an explicit decision:
 this file is the worklist.
 
-## Class A: removable, no theoretical role (proposal: prune)
+## Scan-scope correction (recorded)
+
+`parser_state.lift_inline_lambda_to_fun` was a false positive: the
+OCaml scan covered `*.ml` only, and the function is referenced from
+the **parser.mly semantic actions** (alias at line 26). Lesson for the
+method: `.mly`/`.mll` actions are reference sources. Every other class
+A entry was re-checked against `.mly`/`.mll` and confirmed dead.
+
+## Class A: PRUNED (this commit)
 
 | Where | What | Why dead |
 |---|---|---|
@@ -22,7 +33,6 @@ this file is the worklist.
 | frontend/hm_infer.ml | `error_to_string` | never called |
 | frontend/ty_subst.ml | `scheme_to_string` | never called |
 | frontend/emit_mlir.ml | `collect_reduction_handler_sigs` | superseded by the current reduction lowering |
-| frontend/parser_state.ml | `lift_inline_lambda_to_fun` | superseded by parser-side lambda synthesis |
 | frontend/move_engine.ml | `set_field`, `try_reduce_move` | kernel uses the dispatch at ~262 instead |
 | runtime/yon_rt.c | `yon_rt_apply_move` | the move application is lowered emit-side (field ops), the runtime shim is unreached |
 
