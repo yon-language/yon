@@ -23,7 +23,7 @@ export default function CodeWindow({ file, run, out, children }) {
         <span className={styles.dots}><i></i><i></i><i></i></span>
         <span>{file}</span>
       </div>
-      <CodeBlock language="yon" className={styles.body}>{children}</CodeBlock>
+      <CodeBlock language="yon" className={`${styles.body} yon-in-window`}>{children}</CodeBlock>
       {(run || out) && (
         <div className={styles.codeOut}>
           {run && (
