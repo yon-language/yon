@@ -6402,6 +6402,160 @@ double yon_rt_hashset_dir_capacity(double set_id) {
     return (double)hs->dir_slots;
 }
 
+/* ============================================================== */
+/* Wire DTO transport, seal 2: recursive length-prefixed frames    */
+/* ============================================================== */
+/* The frame is [u32 schema_id][u32 payload_len][payload]. The payload
+ * concatenates the fields in declaration order, positional, untagged: a
+ * scalar is its 8 raw bytes, a string is [u32 len][len bytes]. The schema_id
+ * (stamped on the instance by yon_rt_new_v, carried at the frame head) finds
+ * the descriptor and is the one cross-process type guard. Length prefixes are
+ * u32 native-endian: the shm wire is one machine, one build, so no swap, and a
+ * fixed width keeps every read trivially bounded. Both halves of the wormhole
+ * are generic runtime, so both recover the descriptor here at runtime. */
+
+#define YON_WIRE_MAX_SCHEMAS 256u
+#define YON_WIRE_MAX_FIELDS  64u
+
+typedef struct {
+    uint32_t       schema_id;
+    uint32_t       n_fields;
+    const uint8_t *tags;   /* n_fields bytes, static in the binary */
+    int            used;
+} yon_wire_schema_t;
+
+static yon_wire_schema_t g_wire_schemas[YON_WIRE_MAX_SCHEMAS];
+static uint32_t g_wire_n_schemas = 0;
+
+void yon_rt_register_schema(uint32_t schema_id, uint32_t n_fields,
+                            const uint8_t *tags) {
+    for (uint32_t i = 0; i < g_wire_n_schemas; i++) {
+        if (g_wire_schemas[i].used && g_wire_schemas[i].schema_id == schema_id) {
+            g_wire_schemas[i].n_fields = n_fields;  /* idempotent update */
+            g_wire_schemas[i].tags = tags;
+            return;
+        }
+    }
+    if (g_wire_n_schemas >= YON_WIRE_MAX_SCHEMAS) {
+        fprintf(stderr, "[YON-RT] register_schema: table full (id=%u)\n", schema_id);
+        return;
+    }
+    yon_wire_schema_t *e = &g_wire_schemas[g_wire_n_schemas++];
+    e->schema_id = schema_id;
+    e->n_fields  = n_fields;
+    e->tags      = tags;
+    e->used      = 1;
+}
+
+static const yon_wire_schema_t *yon_wire_lookup(uint32_t schema_id) {
+    for (uint32_t i = 0; i < g_wire_n_schemas; i++)
+        if (g_wire_schemas[i].used && g_wire_schemas[i].schema_id == schema_id)
+            return &g_wire_schemas[i];
+    return NULL;
+}
+
+int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap) {
+    ensure_init();
+    uint32_t heap_id  = yon_section_heap(sec);
+    uint32_t slot_idx = yon_section_slot(sec);
+    yon_xheap_t *h = heap_for(heap_id);
+    const yon_xheap_slot_t *slot = yon_xheap_get(h, slot_idx);
+    if (!slot || slot->payload_offset == 0) return -1;
+    uint32_t schema_id = slot->schema_version;
+    const yon_wire_schema_t *sc = yon_wire_lookup(schema_id);
+    if (!sc) {
+        fprintf(stderr, "[YON-RT] serialize: unregistered schema id=%u\n", schema_id);
+        return -1;
+    }
+    if (sc->n_fields > YON_WIRE_MAX_FIELDS) return -1;
+
+    /* The instance payload is n_fields * 8 bytes, one f64 slot per field. */
+    uint8_t inst[YON_WIRE_MAX_FIELDS * 8];
+    int32_t pn = yon_rt_flatten(sec, inst, sizeof(inst));
+    if (pn < 0 || (uint32_t)pn != sc->n_fields * 8u) return -1;
+
+    uint8_t *out = (uint8_t *)out_buf;
+    const uint32_t hdr = 8u;     /* schema_id + payload_len */
+    if (cap < hdr) return -1;
+    uint32_t w = hdr;            /* payload starts after the header */
+    for (uint32_t i = 0; i < sc->n_fields; i++) {
+        uint32_t off = i * 8u;
+        if (sc->tags[i] == YON_WIRE_TAG_SCALAR) {
+            if (w + 8u > cap) return -1;
+            memcpy(out + w, inst + off, 8u);
+            w += 8u;
+        } else if (sc->tags[i] == YON_WIRE_TAG_STRING) {
+            double sid;
+            memcpy(&sid, inst + off, 8u);
+            const char *p = yon_ds_cstr(sid);
+            uint32_t slen = p ? (uint32_t)strlen(p) : 0u;
+            if (w + 4u + slen > cap) return -1;
+            memcpy(out + w, &slen, 4u); w += 4u;
+            if (slen) memcpy(out + w, p, slen);
+            w += slen;
+        } else {
+            fprintf(stderr, "[YON-RT] serialize: tag %u unsupported at this seal\n",
+                    (unsigned)sc->tags[i]);
+            return -1;
+        }
+    }
+    uint32_t payload_len = w - hdr;
+    memcpy(out + 0, &schema_id,   4u);
+    memcpy(out + 4, &payload_len, 4u);
+    return (int32_t)w;
+}
+
+yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
+                                 uint32_t heap_id) {
+    ensure_init();
+    if (len < 8u) return YON_SECTION_INVALID;
+    const uint8_t *in = (const uint8_t *)in_buf;
+    uint32_t schema_id, payload_len;
+    memcpy(&schema_id,   in + 0, 4u);
+    memcpy(&payload_len, in + 4, 4u);
+    if ((uint64_t)8u + payload_len > (uint64_t)len) return YON_SECTION_INVALID;
+    const yon_wire_schema_t *sc = yon_wire_lookup(schema_id);
+    if (!sc) {
+        fprintf(stderr, "[YON-RT] deserialize: unregistered schema id=%u\n", schema_id);
+        return YON_SECTION_INVALID;
+    }
+    if (sc->n_fields > YON_WIRE_MAX_FIELDS) return YON_SECTION_INVALID;
+
+    uint8_t inst[YON_WIRE_MAX_FIELDS * 8];
+    const uint8_t *p = in + 8u;
+    uint32_t cur = 0u;
+    for (uint32_t i = 0; i < sc->n_fields; i++) {
+        uint32_t off = i * 8u;
+        if (sc->tags[i] == YON_WIRE_TAG_SCALAR) {
+            if (cur + 8u > payload_len) return YON_SECTION_INVALID;
+            memcpy(inst + off, p + cur, 8u);
+            cur += 8u;
+        } else if (sc->tags[i] == YON_WIRE_TAG_STRING) {
+            if (cur + 4u > payload_len) return YON_SECTION_INVALID;
+            uint32_t slen;
+            memcpy(&slen, p + cur, 4u); cur += 4u;
+            if ((uint64_t)cur + slen > (uint64_t)payload_len) return YON_SECTION_INVALID;
+            char *tmp = (char *)malloc((size_t)slen + 1u);
+            if (!tmp) return YON_SECTION_INVALID;
+            if (slen) memcpy(tmp, p + cur, slen);
+            tmp[slen] = 0;
+            double sid = yon_ds_string(tmp);  /* rebuilt in this process's ds */
+            free(tmp);
+            memcpy(inst + off, &sid, 8u);
+            cur += slen;
+        } else {
+            return YON_SECTION_INVALID;
+        }
+    }
+    if (cur != payload_len) {   /* loud on structural drift, never silent */
+        fprintf(stderr,
+                "[YON-RT] deserialize: walk consumed %u of %u payload bytes (schema drift)\n",
+                cur, payload_len);
+        return YON_SECTION_INVALID;
+    }
+    return yon_rt_new_v(heap_id, inst, sc->n_fields * 8u, NULL, schema_id);
+}
+
 /* ============================================================================
  * HSH module + extensions (extended Math, collections, Decidable, exact Co_0).
  * Included in the same translation unit: shares the runtime statics and
