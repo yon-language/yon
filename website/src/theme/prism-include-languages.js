@@ -36,14 +36,14 @@ export default function prismIncludeLanguages(PrismObject) {
       pattern: /\b[A-Z][A-Za-z0-9_]*\b/,
     },
     keyword: new RegExp(
-      // Generated mechanically from frontend/lexer.mll (2026-06-07):
+      // Generated mechanically from frontend/lexer.mll (2026-06-08):
       // every lowercase reserved word, minus true/false (boolean below).
       // Capitalized reserved words (Pi, Sigma, Id, Type) are matched by
       // the class-name rule above. Contextual phrase words (object,
       // morphism, oldest, newest, subset, conflict, nat, transform) are
       // free identifiers and stay uncolored on purpose.
       '\\b(?:' +
-      'absent|adjunction|aggregates|algebra|all|and|as|at|backward|be|becomes|bi|buffer|by|cell|compose|converts|do|drop|each|effects|else|emit|error|every|exact|extends|fold|for|forces|forever|forward|from|fst|fun|functor|functorial|geomorph|here|heyting|holds|if|import|in|ind_path|init|internal|invertible|is|iter|law|lawful|list|map|maps|morph|morphisms|most|move|multishot|new|not|objects|of|operation|or|otherwise|over|pair|partial|place|present|produce|prop|pull|pullback|push|pushout|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|solve|space|stream|terminal|then|times|to|topology|topos|unifies|unknown|uses|via|view|visits|when|where|while|with|world' +
+      'absent|adjunction|aggregates|algebra|all|and|as|at|backward|be|becomes|bi|buffer|by|cell|compose|converts|do|drop|each|effects|else|emit|error|every|exact|extends|fold|for|forces|forever|forward|from|fst|fun|functor|functorial|geomorph|here|heyting|holds|if|import|in|ind_path|init|internal|invertible|is|iter|law|lawful|list|map|maps|morph|morphisms|most|move|multishot|new|not|objects|of|operation|or|otherwise|over|pair|partial|place|present|produce|prop|pull|pullback|push|pushout|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|solve|space|stream|terminal|then|times|to|topology|topos|unifies|unknown|uses|via|view|visits|when|where|while|wire|with|world' +
       ')\\b'
     ),
     boolean: /\b(?:true|false)\b/,

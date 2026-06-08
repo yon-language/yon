@@ -26,6 +26,15 @@ rm -f /dev/shm/yon_stream_9 /tmp/yon_stream_9 2>/dev/null
 sleep 0.4
 timeout 20 ./wdash >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: wire scenario rc=$rc (expected 36)"; fail=1; }
+# Scenario 4: wire subscription. The Sensors Space declares a producer
+# (a public function returning stream of number); the subscriber opens
+# wire to Sensors, awaits(readings), drains .stream with fold. The
+# server is spawned by the runtime on first contact; the channel id is
+# the producer's dispatch selector (nominal, no literals anywhere).
+"$YONC" sensors.yon -o "$TMP/Sensors_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sensors does not compile"; exit 1; }
+"$YONC" subscriber.yon -o "$TMP/subscriber" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: subscriber does not compile"; exit 1; }
+timeout 20 ./subscriber >/dev/null 2>&1; rc=$?
+[ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: subscription scenario rc=$rc (expected 36)"; fail=1; }
 rm -rf "$TMP"
-[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 3 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36)"
+[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 4 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36)"
 exit $fail
