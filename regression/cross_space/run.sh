@@ -46,6 +46,17 @@ rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
 "$YONC" sub_meteo.yon -o "$TMP/sub_meteo" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_meteo does not compile"; exit 1; }
 timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: DTO-place scenario rc=$rc (expected 36)"; fail=1; }
+# Scenario 6: a place with a STRING field crosses the wire. The Weather Space
+# declares a producer returning stream of Reading {temp number, label text} and
+# emits three. The subscriber awaits(forecasts), drains .stream and folds
+# a + r.temp + String.length(r.label). Seal 2 of the wire-DTO wormhole: the
+# recursive length-prefixed frame carries the string content by value, rebuilt
+# in the consumer's own ds heap; (10+11+15) + length("ok")*3 = 36 + 6 = 42.
+rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
+"$YONC" weather.yon -o "$TMP/Weather_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather does not compile"; exit 1; }
+"$YONC" sub_weather.yon -o "$TMP/sub_weather" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_weather does not compile"; exit 1; }
+timeout 20 ./sub_weather >/dev/null 2>&1; rc=$?
+[ "$rc" = "42" ] || { echo "CROSS-SPACE FAIL: DTO-string scenario rc=$rc (expected 42)"; fail=1; }
 rm -rf "$TMP"
-[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 5 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36)"
+[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 6 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36, dto-string 42)"
 exit $fail
