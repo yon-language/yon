@@ -35,6 +35,17 @@ timeout 20 ./wdash >/dev/null 2>&1; rc=$?
 "$YONC" subscriber.yon -o "$TMP/subscriber" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: subscriber does not compile"; exit 1; }
 timeout 20 ./subscriber >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: subscription scenario rc=$rc (expected 36)"; fail=1; }
+# Scenario 5: wire subscription whose stream element is a PLACE (DTO), not a
+# scalar. The Meteo Space declares a producer returning stream of Reading
+# (a fixed-size all-scalar place {temp, humidity}); it emits three places. The
+# subscriber awaits(samples), drains .stream and folds a + r.temp. Each place
+# crosses the process boundary by value: the pump flattens it to bytes, the
+# drain rebuilds it in the consumer's own heap. Seal 1 of the wire-DTO wormhole.
+rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
+"$YONC" meteo.yon -o "$TMP/Meteo_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: meteo does not compile"; exit 1; }
+"$YONC" sub_meteo.yon -o "$TMP/sub_meteo" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_meteo does not compile"; exit 1; }
+timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
+[ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: DTO-place scenario rc=$rc (expected 36)"; fail=1; }
 rm -rf "$TMP"
-[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 4 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36)"
+[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 5 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36)"
 exit $fail
