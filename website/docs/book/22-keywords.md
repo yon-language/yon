@@ -789,6 +789,26 @@ fun main(): number {
 
 The stream type, `stream of T`, with its back-pressure modifiers in type position.
 
+#### `wire`
+
+`wire to Space` opens the transport toward a Space. The producer side declares a public function returning `stream of T`; the consumer subscribes by name with `w.awaits(producer)` and materializes the emissions with `.stream`. Three errors are caught at compile time: an unknown Space, a function the Space does not declare, a declared function that is not a producer. The channel identity is the producer's dispatch selector: nominal on both sides, no literals anywhere.
+
+<CodeWindow file="subscriber.yon" run="yonc sensors.yon -o Sensors_srv && yonc subscriber.yon -o subscriber && ./subscriber; echo $?" out={["36"]}>
+
+```yon
+import sensors::readings from Sensors
+
+fun main(): number {
+  be w holds wire to Sensors
+  be sub holds w.awaits(readings)
+  be s holds sub.stream
+  be total holds s.fold(0, fun(a: number, v: number) => a + v)
+  return total      // 10+11+15 = 36, from another process
+}
+```
+
+</CodeWindow>
+
 #### `buffer`
 
 `buffer N` bounds the stream queue.
