@@ -327,6 +327,7 @@ let rec desugar_expr (e : S.expr) : C.term =
         | "Wire__recv" -> ("Stream__recv", args)
         | "Wire__close" -> ("Stream__close", args)
         | "Wire__make_shm" -> ("Stream__make_shm", args)
+        | "Wire__make_shm_sized" -> ("Stream__make_shm_sized", args)
         | "Wire__send_shm" -> ("Stream__send_shm", args)
         | "Wire__recv_shm" -> ("Stream__recv_shm", args)
         | "Wire__produce_shm" -> ("Stream__produce_shm", args)
@@ -1365,22 +1366,43 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
          by construction), send the reserved-selector subscription
          request (the server pump runs the producer and forwards over
          the channel), bind the subscription handle to the channel. *)
-      let (sp, sel, chan) =
+      let (sp, sel, chan, n_bytes) =
         Hashtbl.find S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) in
       let l = S.dummy_loc in
-      [ S.SLet (v1_fresh "sub_mk",
-                v1_call "Wire__make_shm" [v1_num (float_of_int chan); v1_num 1.0], loc);
+      let make_chan =
+        if n_bytes > 0 then
+          S.SLet (v1_fresh "sub_mk",
+                  v1_call "Wire__make_shm_sized"
+                    [v1_num (float_of_int chan); v1_num 1.0;
+                     v1_num (float_of_int n_bytes)], loc)
+        else
+          S.SLet (v1_fresh "sub_mk",
+                  v1_call "Wire__make_shm"
+                    [v1_num (float_of_int chan); v1_num 1.0], loc)
+      in
+      [ make_chan;
         S.SLet (v1_fresh "sub_rq",
-                S.ECall (Printf.sprintf "__yon_rpc2_invoke2__%s" sp,
+                S.ECall (Printf.sprintf "__yon_rpc2_invoke3__%s" sp,
                          [v1_num 4294967295.0;
                           v1_num (float_of_int sel);
-                          v1_num (float_of_int chan)], l), loc);
+                          v1_num (float_of_int chan);
+                          v1_num (float_of_int n_bytes)], l), loc);
         S.SLet (sub, v1_num (float_of_int chan), loc) ]
   | S.SLet (x, S.EField (S.EVar (sub, _), "stream", floc), loc)
     when Hashtbl.mem S.substream_site_table (floc.S.start_line, floc.S.start_col) ->
       (* be s holds sub.stream: drain the completed channel into a
-         structurally closed local stream; the methods work unchanged. *)
-      [ S.SLet (x, v1_call "Wire__subscription_stream" [S.EVar (sub, S.dummy_loc)], loc) ]
+         structurally closed local stream; the methods work unchanged.
+         N>0 means the channel carries place DTOs: drain N-byte frames and
+         rebuild each place in the consumer's own heap. N=0 is the scalar
+         drain. *)
+      let n_bytes =
+        Hashtbl.find S.substream_site_table (floc.S.start_line, floc.S.start_col) in
+      if n_bytes > 0 then
+        [ S.SLet (x,
+                  v1_call "Wire__subscription_stream_dto"
+                    [S.EVar (sub, S.dummy_loc); v1_num (float_of_int n_bytes)], loc) ]
+      else
+        [ S.SLet (x, v1_call "Wire__subscription_stream" [S.EVar (sub, S.dummy_loc)], loc) ]
   | other -> [other]
 
 and v1_lower_foreach x e b loc =

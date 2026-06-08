@@ -30,8 +30,8 @@ let stream_method_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
 (* Wire subscription sites, registered by the tycheck for the desugar:
    awaits sites carry (space, producer selector, channel id); stream
    field sites just the membership. *)
-let awaits_site_table : (int * int, string * int * int) Hashtbl.t = Hashtbl.create 16
-let substream_site_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
+let awaits_site_table : (int * int, string * int * int * int) Hashtbl.t = Hashtbl.create 16
+let substream_site_table : (int * int, int) Hashtbl.t = Hashtbl.create 16
 
 (* ─── Type expressions ─────────────────────────────────────────────── *)
 
@@ -58,7 +58,7 @@ type ty =
   | TyMap of ty * ty                                  (* "map of K to V" *)
   | TyStream of ty * stream_modifier list             (* "stream of T buffer N drop_newest" *)
   | TyWire of string                                  (* the handle of "wire to Space"; carries the Space name *)
-  | TySubscription of string                          (* the handle of w.awaits(f); carries the Space name *)
+  | TySubscription of string * ty                     (* the handle of w.awaits(f); carries the Space name and the stream element type *)
   | TyUser of string                                  (* user-defined place name *)
   | TyVar of string                                   (* type variable (generic binder) *)
   | TyMetaVar of int                                  (* HM fresh tyvar alpha_N *)

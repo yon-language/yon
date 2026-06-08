@@ -361,7 +361,9 @@ let stdlib_registry : (string * (string list * string)) list = [
      calling convention as the intra-process ones, but the channel crosses the
      process boundary. make_shm(id, create) rendezvous on a shared region. *)
   "Stream__make_shm", (["f64"; "f64"], "f64");
+  "Stream__make_shm_sized", (["f64"; "f64"; "f64"], "f64");
   "Wire__subscription_stream", (["f64"], "f64");
+  "Wire__subscription_stream_dto", (["f64"; "f64"], "f64");
   "Stream__send_shm", (["f64"; "f64"], "f64");
   "Stream__recv_shm", (["f64"], "f64");
   "Stream__produce_shm", (["f64"; "f64"], "f64");
@@ -1391,6 +1393,40 @@ let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
                    "%s = topos.subtype_cast %s : %s to %s"
                    v arg_ssa arg_ty param_ty);
     v
+  end
+  else if param_ty = "f64"
+          && String.length arg_ty >= 15
+          && String.sub arg_ty 0 15 = "!topos.section<" then begin
+    (* A section flowing into an f64 parameter travels as its numeric handle:
+       section_to_xcoord recovers the packed xcoord (i64), sitofp carries it as
+       f64. This is the wire convention (handles cross as f64) and the producer
+       side of the DTO wormhole: emit deposits the place handle on the local
+       stream as f64, the pump flattens it at the boundary. *)
+    let vi = fresh_ssa e in
+    emit_line e (Printf.sprintf
+                   "%s = topos.section_to_xcoord %s : %s to i64"
+                   vi arg_ssa arg_ty);
+    let vf = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.sitofp %s : i64 to f64" vf vi);
+    vf
+  end
+  else if arg_ty = "f64"
+          && String.length param_ty >= 15
+          && String.sub param_ty 0 15 = "!topos.section<" then begin
+    (* The inverse coercion, at the consumer end of the DTO wormhole: a stream
+       element that the emitter carries as f64 is, by the type discipline, a
+       place-typed value (the drain rebuilt it locally via yon_rt_new and put
+       its handle on the stream as f64). fptosi recovers the xcoord, then
+       xcoord_to_section materializes the local section. The typechecker is the
+       gate: only place-typed values reach a section parameter, and the only one
+       with an f64 representation is this locally rebuilt handle. *)
+    let vi = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i64" vi arg_ssa);
+    let vs = fresh_ssa e in
+    emit_line e (Printf.sprintf
+                   "%s = topos.xcoord_to_section %s : %s"
+                   vs vi param_ty);
+    vs
   end
   else arg_ssa  (* unhandled mismatch: let it through, MLIR will reject it *)
 
@@ -4330,8 +4366,13 @@ let rec emit_term (e : emitter)
                          "[emit_mlir] stdlib '%s' atteso %d arg, ricevuti %d."
                          fname n_expected n_given);
            let arg_vals = List.map (emit_term e env funcs) args in
+           let coerced_ssas =
+             List.map2 (fun (ssa, ty) param_ty ->
+               coerce_to_param e ssa ty param_ty
+             ) arg_vals param_tys
+           in
            let v = fresh_ssa e in
-           let arg_str = String.concat ", " (List.map fst arg_vals) in
+           let arg_str = String.concat ", " coerced_ssas in
            let arg_ty_str = String.concat ", " param_tys in
            emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                           v fname arg_str arg_ty_str ret_ty);

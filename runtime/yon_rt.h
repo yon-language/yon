@@ -144,6 +144,13 @@ yon_section_t yon_rt_new(uint32_t heap_id,
 int yon_rt_field_load(yon_section_t sec, uint32_t offset,
                       uint32_t size, void *out);
 
+/* Flatten a place into position-independent content bytes (the outbound half
+ * of the cross-process wormhole). Writes the raw payload into out_buf and
+ * returns the byte count, or -1 on error / if cap is too small. Rebuild with
+ * yon_rt_new(consumer_heap, buf, n). All-scalar places only at this seal;
+ * handle-valued fields are not yet followed. */
+int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
+
 
 /* ---- Non-trivial FREE_MERGE via a fold function ----
  *
