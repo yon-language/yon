@@ -151,6 +151,48 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
  * handle-valued fields are not yet followed. */
 int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
 
+/* ---- Wire DTO transport, seal 2: the recursive, length-prefixed frame ----
+ *
+ * Inline encoding, schema-driven, decided on paper (design-wire-dto.md). A
+ * frame is [u32 schema_id][u32 payload_len][payload]; the payload concatenates
+ * the field encodings in declaration order, positional, no per-field type tag
+ * (the schema is nominal and known on both sides). Field encodings:
+ *   - scalar: 8 raw bytes, no prefix (size known from the schema)
+ *   - string: [u32 len][len bytes] (NUL excluded on the wire)
+ * The frame-level schema_id is the single cross-process type guard: it finds
+ * the descriptor and lets the consumer assert the shape it awaited, turning a
+ * schema drift into a loud error instead of silent corruption. Length prefixes
+ * are u32 native-endian: producer and consumer are the same build on one
+ * machine for the shm wire, so no byte-swap; a fixed width keeps every read
+ * trivially bounded (unlike a varint, which can run off a drifted frame).
+ *
+ * Both the producer pump and the consumer drain are generic runtime code, so
+ * both recover the descriptor at runtime through this registry, keyed by the
+ * schema_id stamped on the instance (yon_rt_new_v) and carried in the frame. */
+#define YON_WIRE_TAG_SCALAR 0u
+#define YON_WIRE_TAG_STRING 1u
+/* reserved for later seals: 2=LIST, 3=MAP, 4=NESTED+sub-schema */
+
+/* Register the field-tag descriptor for a transportable place type. The
+ * emitter emits one call per type at startup; tags points to n_fields bytes,
+ * one YON_WIRE_TAG_* per field in declaration order. Idempotent per id. */
+void yon_rt_register_schema(uint32_t schema_id, uint32_t n_fields,
+                            const uint8_t *tags);
+
+/* Serialize a place instance into a wire frame. Reads the schema_id stamped on
+ * the section, looks up its descriptor, writes the frame into out_buf. Returns
+ * the total frame length, or -1 on error / unregistered schema / cap too
+ * small. */
+int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap);
+
+/* Rebuild a place instance from a wire frame into heap_id (the consumer's own
+ * heap, the wormhole's copy semantics). Strings are reallocated locally. The
+ * walk asserts it consumes exactly payload_len; a mismatch is a loud -1, not a
+ * corrupt instance. Returns the reconstructed section, or YON_SECTION_INVALID
+ * on error. */
+yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
+                                 uint32_t heap_id);
+
 
 /* ---- Non-trivial FREE_MERGE via a fold function ----
  *
