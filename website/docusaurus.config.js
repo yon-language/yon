@@ -55,6 +55,12 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      announcementBar: {
+        id: 'wip',
+        content:
+          'These docs are a work in progress, written incrementally behind the implementation.',
+        isCloseable: true,
+      },
       image: 'img/social-card.png',
       metadata: [
         {name: 'keywords', content: 'topos programming language, category theory, MLIR, LLVM, content-addressed memory, Leech lattice, HoTT'},
