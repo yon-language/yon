@@ -1305,7 +1305,9 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
     if (fd < 0) { perror("[YON-RT stream-shm] shm_open"); return NULL; }
 
     size_t region_size = sizeof(yon_shm_stream_hdr_t)
-                        + (size_t)slot_size * (size_t)capacity;
+                        + (slot_size == 0u
+                              ? (size_t)capacity            /* byte ring: capacity = ring bytes */
+                              : (size_t)slot_size * (size_t)capacity);
     struct stat st;
     int is_new = 0;
     if (fstat(fd, &st) == 0 && (size_t)st.st_size < region_size) {
@@ -1447,6 +1449,117 @@ int yon_rt_stream_shm_unlink(const char *name) {
     snprintf(shm_name, sizeof(shm_name), "%s%s", YON_SHM_STREAM_PREFIX, name);
     return shm_unlink(shm_name);
 }
+
+/* ---- (4) Byte-ring variant for variable-length DTO frames. A DTO channel is
+ * opened with slot_size == 0; then `capacity` is the ring size in BYTES and
+ * head/tail/count are byte offsets/counts. Frames ([u32 schema_id][u32
+ * payload_len][payload]) are written densely, wrapping at the buffer end by
+ * splitting the copy in two; the frame's own header carries its length, so the
+ * ring is self-delimiting and there is no fixed per-element cap (a frame is
+ * bounded only by the ring size). flock + the closed flag give the same
+ * back-pressure and EOF discipline as the slot ring. An oversized frame is a
+ * loud failure (rc -3), never a silent truncation. ---- */
+
+/* Emit one variable frame. rc 0 sent, -1 full (back-pressure), -3 frame larger
+ * than the whole ring (can never fit). */
+int yon_rt_stream_shm_emit_frame(yon_shm_stream_t *s,
+                                 const void *frame, uint32_t frame_len) {
+    if (!s) return -1;
+    yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
+    uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
+    uint32_t cap = hdr->capacity;
+    if (frame_len > cap) return -3;          /* cannot ever fit: loud */
+    flock(s->fd, LOCK_EX);
+    int rc;
+    if (cap - hdr->count < frame_len) {
+        rc = -1;                              /* full: back-pressure */
+    } else {
+        uint32_t t = hdr->tail;
+        uint32_t first = cap - t;             /* bytes until the buffer end */
+        if (first >= frame_len) {
+            memcpy(buf + t, frame, frame_len);
+        } else {                              /* straddle: split in two */
+            memcpy(buf + t, frame, first);
+            memcpy(buf, (const uint8_t *)frame + first, frame_len - first);
+        }
+        hdr->tail = (t + frame_len) % cap;
+        hdr->count += frame_len;
+        rc = 0;
+    }
+    flock(s->fd, LOCK_UN);
+    return rc;
+}
+
+/* Await one variable frame into out (out_cap bytes); on success *out_len is the
+ * frame length. rc 0 got a frame, -1 empty-but-open (retry), -2 EOF
+ * (closed+empty), -3 loud error (frame larger than out_cap, or a closed channel
+ * left a partial frame = drift). */
+int yon_rt_stream_shm_await_frame(yon_shm_stream_t *s,
+                                  void *out, uint32_t out_cap,
+                                  uint32_t *out_len) {
+    if (!s) return -1;
+    yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
+    uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
+    uint32_t cap = hdr->capacity;
+    flock(s->fd, LOCK_EX);
+    int rc;
+    if (hdr->count < 8u) {
+        if (hdr->count == 0u) rc = hdr->closed ? -2 : -1;  /* EOF or empty */
+        else                  rc = hdr->closed ? -3 : -1;  /* drift or wait */
+    } else {
+        uint32_t h = hdr->head;
+        uint8_t hb[8];
+        for (uint32_t i = 0; i < 8u; i++) hb[i] = buf[(h + i) % cap];
+        uint32_t payload_len;
+        memcpy(&payload_len, hb + 4, 4u);
+        uint32_t frame_len = 8u + payload_len;
+        if (hdr->count < frame_len) {
+            rc = hdr->closed ? -3 : -1;       /* partial: drift if closed, else wait */
+        } else if (frame_len > out_cap) {
+            rc = -3;                          /* consumer buffer too small: loud */
+        } else {
+            uint32_t first = cap - h;
+            if (first >= frame_len) {
+                memcpy(out, buf + h, frame_len);
+            } else {
+                memcpy(out, buf + h, first);
+                memcpy((uint8_t *)out + first, buf, frame_len - first);
+            }
+            hdr->head = (h + frame_len) % cap;
+            hdr->count -= frame_len;
+            if (out_len) *out_len = frame_len;
+            rc = 0;
+        }
+    }
+    flock(s->fd, LOCK_UN);
+    return rc;
+}
+
+int yon_rt_stream_shm_produce_frame_blocking(yon_shm_stream_t *s,
+                                             const void *frame, uint32_t frame_len) {
+    if (!s) return -1;
+    for (uint32_t i = 0; i < YON_SHM_MAX_POLLS; i++) {
+        int rc = yon_rt_stream_shm_emit_frame(s, frame, frame_len);
+        if (rc == 0) return 0;
+        if (rc == -3) return -3;              /* frame > ring: loud, do not spin */
+        usleep(YON_SHM_POLL_USEC);            /* full: back-pressure, wait for room */
+    }
+    return -1;
+}
+
+int yon_rt_stream_shm_await_frame_blocking(yon_shm_stream_t *s,
+                                           void *out, uint32_t out_cap,
+                                           uint32_t *out_len) {
+    if (!s) return -1;
+    for (uint32_t i = 0; i < YON_SHM_MAX_POLLS; i++) {
+        int rc = yon_rt_stream_shm_await_frame(s, out, out_cap, out_len);
+        if (rc == 0) return 0;
+        if (rc == -2 || rc == -3) return rc;  /* EOF or loud error: stop */
+        usleep(YON_SHM_POLL_USEC);            /* empty but open: wait for a frame */
+    }
+    return -1;
+}
+
 
 /* ---- f64-id wrappers, so the frontend (which carries everything as f64) can
  * use cross-process streams the same way it uses intra-process ones. Handles
