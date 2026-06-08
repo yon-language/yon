@@ -154,6 +154,42 @@ let prim_to_mlir = function
   | "arrow"       -> "(f64) -> f64"
   | n             -> Printf.sprintf "!topos.section<\"%s\">" n
 
+(* Wire DTO transport (seal 2): the per-place field-tag descriptor and its
+   structural schema id. Each field maps to a wire tag; only number/money
+   (SCALAR, 8 bytes) and text (STRING) are transportable at this seal, so a
+   place with any other field type (boolean, a nested place, a list/map) yields
+   None and is not registered, and a wire on it fails loudly with an
+   unregistered schema rather than mis-serializing. The id is FNV-1a over
+   [n_fields; tags...], computed identically by every side from its OWN
+   redeclaration (two Spaces never exchange it: agreement is by construction,
+   a drift gives a different id and a loud miss at the boundary). Masked to 31
+   bits so it is a non-negative i32. *)
+let wire_tag_of_field ((_, ty) : string * C.ty) : int option =
+  match ty with
+  | C.TyBase n | C.TyPlace n ->
+      (match n with
+       | "text" -> Some 1               (* YON_WIRE_TAG_STRING *)
+       | "number" | "money" -> Some 0   (* YON_WIRE_TAG_SCALAR *)
+       | _ -> None)
+  | _ -> None
+
+let wire_tags_of_place (pd : C.place_decl) : int list option =
+  List.fold_right (fun f acc ->
+    match wire_tag_of_field f, acc with
+    | Some t, Some ts -> Some (t :: ts)
+    | _ -> None
+  ) pd.p_fields (Some [])
+
+let wire_schema_id (tags : int list) : int =
+  let fnv = ref 0x811c9dc5 in
+  let mix b =
+    fnv := !fnv lxor (b land 0xff);
+    fnv := (!fnv * 0x01000193) land 0xffffffff
+  in
+  mix (List.length tags);
+  List.iter mix tags;
+  !fnv land 0x7fffffff
+
 (* Core-level recognizer for the comprehension subobject. After desugaring, a
    comprehension { x : A where P } is C.TySigma(x, A, fibre) where the fibre is
    the mere-proposition shape Pi(_:A).Pi(_:A).Id_A(_,_). We recognize that shape
@@ -5334,6 +5370,28 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
                    v_name v_ptr)
   ) space_imports;
   emit_space_bootstrap e spaces reductions;
+  (* Wire DTO transport (seal 2): register each transportable place's field-tag
+     descriptor with the runtime, keyed by its structural schema id. Every side
+     registers from its own redeclaration; identical schemas yield the same id,
+     so producer and consumer agree without exchanging anything. Runs before
+     maybe_serve so a serve-mode producer has its descriptors ready. *)
+  List.iter (fun (pd : C.place_decl) ->
+    match wire_tags_of_place pd with
+    | Some tags when tags <> [] ->
+        let id = wire_schema_id tags in
+        let n = List.length tags in
+        let v_tags = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @yon_wire_tags_%s : !llvm.ptr"
+                       v_tags pd.p_name);
+        let v_id = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_id id);
+        let v_nf = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_nf n);
+        emit_line e (Printf.sprintf
+                       "func.call @yon_rt_register_schema(%s, %s, %s) : (i32, i32, !llvm.ptr) -> ()"
+                       v_id v_nf v_tags)
+    | _ -> ()
+  ) e.places_decls;
   (* Register the declared geometric morphisms so the later
      begin_cross_space_op finds them and uses the categorical derivation. *)
   emit_geom_morphism_bootstrap e geom_morphisms spaces;
@@ -5998,6 +6056,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
   if places <> [] then begin
     emit_line e "// Runtime external declarations (P8) for places";
     emit_line e "func.func private @yon_rt_new(i32, !llvm.ptr, i32) -> i64";
+    emit_line e "func.func private @yon_rt_new_v(i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64";
+    emit_line e "func.func private @yon_rt_register_schema(i32, i32, !llvm.ptr) -> ()";
     emit_line e "func.func private @yon_rt_field_load(i64, i32, i32, !llvm.ptr) -> i32";
     (* fold_named plus the string constants naming the canonical folds. We
        emit these whenever there are places: the cost is negligible and it
@@ -6069,6 +6129,18 @@ let emit_program (dr : Desugar.desugar_result) : string =
      identity-zero stub returning an opaque section. *)
   if places <> [] then begin
     emit_line e "// Place constructors __new_<X> (P8) — alloca payload via yon_rt_new";
+    (* Wire DTO descriptors: one global byte array of field tags per
+       transportable place, addressed at startup by yon_rt_register_schema. *)
+    List.iter (fun (pd : C.place_decl) ->
+      match wire_tags_of_place pd with
+      | Some tags when tags <> [] ->
+          let n = List.length tags in
+          let bytes = String.concat ", " (List.map string_of_int tags) in
+          emit_line e (Printf.sprintf
+                         "llvm.mlir.global internal constant @yon_wire_tags_%s(dense<[%s]> : tensor<%d x i8>) : !llvm.array<%d x i8>"
+                         pd.p_name bytes n n)
+      | _ -> ()
+    ) places;
     (* Helper to size the MLIR types (bytes). *)
     let mlir_ty_size = function
       | "f64" -> 8
@@ -6120,9 +6192,23 @@ let emit_program (dr : Desugar.desugar_result) : string =
                             "%s = func.call @yon_rt_fold_named(%s, %s, %s, %s, %s) : (i32, i64, !llvm.ptr, i32, !llvm.ptr) -> i64"
                             v_xc v_heap v_prev v_buf v_size v_fold_str)
          | None ->
-             emit_line e (Printf.sprintf
-                            "%s = func.call @yon_rt_new(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
-                            v_xc v_heap v_buf v_size));
+             (match wire_tags_of_place pd with
+              | Some tags ->
+                  (* Transportable place: stamp the structural schema id so the
+                     pump can recover the descriptor when this instance crosses
+                     a wire. Inert for instances that never leave the heap. *)
+                  let id = wire_schema_id tags in
+                  let v_null = fresh_ssa e in
+                  emit_line e (Printf.sprintf "%s = llvm.mlir.zero : !llvm.ptr" v_null);
+                  let v_ver = fresh_ssa e in
+                  emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_ver id);
+                  emit_line e (Printf.sprintf
+                                 "%s = func.call @yon_rt_new_v(%s, %s, %s, %s, %s) : (i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64"
+                                 v_xc v_heap v_buf v_size v_null v_ver)
+              | None ->
+                  emit_line e (Printf.sprintf
+                                 "%s = func.call @yon_rt_new(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
+                                 v_xc v_heap v_buf v_size)));
         v_xc
       in
       let emit_new_body (heap_kind : [`Default | `Lookup of string])
