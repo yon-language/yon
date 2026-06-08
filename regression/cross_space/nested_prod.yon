@@ -1,0 +1,15 @@
+/* A nested DTO: Outer carries an Inner place by value. Seal 2d of the wormhole:
+ * the sub-place's frame is inlined into the parent's, recursively. */
+world W { Code is X }
+place Inner in W { a number b text }
+place Outer in W { tag number inner Inner }
+
+fun pairs(): stream of Outer {
+  be s holds produce {
+    emit new Outer { tag 7 inner new Inner { a 3 b "hi" } }
+    emit new Outer { tag 8 inner new Inner { a 4 b "yo" } }
+  }
+  return s
+}
+
+fun main(): number { return 0 }
