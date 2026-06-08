@@ -1,0 +1,12 @@
+import weather_big::bulletins from WeatherBig
+
+world W { Code is X }
+place Note in W { id number body text }
+
+fun main(): number {
+  be w holds wire to WeatherBig
+  be sub holds w.awaits(bulletins)
+  be s holds sub.stream
+  be total holds s.fold(0, fun(a: number, n: Note) => a + n.id + String.length(n.body))
+  return total      // 5 + 250 = 255 ; the 270-byte frame crosses the byte ring
+}

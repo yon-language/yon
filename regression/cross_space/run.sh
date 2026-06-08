@@ -57,6 +57,16 @@ rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
 "$YONC" sub_weather.yon -o "$TMP/sub_weather" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_weather does not compile"; exit 1; }
 timeout 20 ./sub_weather >/dev/null 2>&1; rc=$?
 [ "$rc" = "42" ] || { echo "CROSS-SPACE FAIL: DTO-string scenario rc=$rc (expected 42)"; fail=1; }
+# Scenario 7: a DTO frame larger than the old 256-byte slot cap. The WeatherBig
+# Space emits a Note {id number, body text} whose 250-char body makes the frame
+# about 270 bytes; the subscriber folds a + n.id + String.length(n.body) = 5 +
+# 250 = 255. Under seal 2b this frame could not cross (serialize > slot -> the
+# pump truncated); the dense byte ring of seal 2c carries it whole.
+rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
+"$YONC" weather_big.yon -o "$TMP/WeatherBig_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather_big does not compile"; exit 1; }
+"$YONC" sub_weather_big.yon -o "$TMP/sub_weather_big" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_weather_big does not compile"; exit 1; }
+timeout 20 ./sub_weather_big >/dev/null 2>&1; rc=$?
+[ "$rc" = "255" ] || { echo "CROSS-SPACE FAIL: DTO-large-frame scenario rc=$rc (expected 255)"; fail=1; }
 rm -rf "$TMP"
-[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 6 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36, dto-string 42)"
+[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 7 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36, dto-string 42, dto-large-frame 255)"
 exit $fail
