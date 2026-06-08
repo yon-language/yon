@@ -4906,6 +4906,7 @@ static const char *yon_ds_cstr(double id_d) {
 
 static double yon_ds_string(const char *str) {
     if (!str) return 0.0;
+    ds_ensure_init();
     size_t len = strlen(str);
     if (len >= YON_STR_MAX_LEN) len = YON_STR_MAX_LEN - 1;
     char *buf = (char *)malloc(len + 1);
