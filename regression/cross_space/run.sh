@@ -67,6 +67,17 @@ rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
 "$YONC" sub_weather_big.yon -o "$TMP/sub_weather_big" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_weather_big does not compile"; exit 1; }
 timeout 20 ./sub_weather_big >/dev/null 2>&1; rc=$?
 [ "$rc" = "255" ] || { echo "CROSS-SPACE FAIL: DTO-large-frame scenario rc=$rc (expected 255)"; fail=1; }
+# Scenario 8: a nested DTO. The Nested Space emits Outer {tag number, inner
+# Inner} where Inner {a number, b text}; the subscriber folds
+# acc + o.tag + o.inner.a + String.length(o.inner.b) over two pairs = (7+3+2) +
+# (8+4+2) = 26. The sub-place's frame is inlined recursively into the parent's
+# and rebuilt in the consumer's heap; the schema registry resolves the
+# sub-descriptor from the sub-frame's own id.
+rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
+"$YONC" nested_prod.yon -o "$TMP/Nested_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: nested_prod does not compile"; exit 1; }
+"$YONC" sub_nested.yon -o "$TMP/sub_nested" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_nested does not compile"; exit 1; }
+timeout 20 ./sub_nested >/dev/null 2>&1; rc=$?
+[ "$rc" = "26" ] || { echo "CROSS-SPACE FAIL: nested-DTO scenario rc=$rc (expected 26)"; fail=1; }
 rm -rf "$TMP"
-[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 7 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36, dto-string 42, dto-large-frame 255)"
+[ "$fail" = "0" ] && echo "CROSS-SPACE OK: 8 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36, dto-string 42, dto-large-frame 255, nested-dto 26)"
 exit $fail
