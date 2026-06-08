@@ -133,6 +133,55 @@ function Execution() {
   );
 }
 
+function Sets() {
+  return (
+    <section className={`${styles.section} ${styles.sectionAlt}`}>
+      <div className={styles.sectionIn}>
+        <span className={styles.kicker}>Sets</span>
+        <h2 className={styles.h2}>A set is 24 KB of geometry.</h2>
+        <p className={styles.lede} style={{maxWidth: '64ch'}}>
+          An <strong>XSet</strong> is a subset of the 196,560 minimal vectors of the Leech lattice, stored as a
+          fixed <strong>196,560-bit bitmap</strong>: 3,072 64-bit words, about 24&nbsp;KB, the same size whether
+          the set holds one element or all of them. Membership is one bit test, <strong>O(1)</strong>. Union and
+          intersection are a bitwise OR and AND over those 3,072 words, a fixed pass independent of how many
+          elements each set holds; size is a popcount. A minimal perfect hash places each minimal vector at its
+          bit with no table of its own and <strong>zero collisions</strong>, verified exhaustively over all
+          196,560 (<code>runtime/test_mphf.c</code>).
+        </p>
+        <p className={styles.lede} style={{maxWidth: '64ch'}}>
+          A general-purpose hash set matches the O(1) membership, but not the constant-time set algebra: there,
+          union and intersection cost time proportional to the sets. Here they are a fixed 3,072-word pass with
+          no per-element work.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function Orbits() {
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionIn}>
+        <div className={styles.panel}>
+          <span className={styles.kicker}>Symmetry</span>
+          <h2 className={styles.h2}>Opt in to identity up to symmetry.</h2>
+          <p className={styles.lede}>
+            Ordinary allocation addresses a value by its exact content. On top of that, Yon offers
+            <strong> opt-in orbital canonicalization</strong>. The Leech lattice carries an exceptional symmetry
+            group, the Conway group Co<sub>0</sub>, containing the Mathieu group M<sub>24</sub> acting on the 24
+            coordinates of the Golay code. Two values that differ only by such a symmetry lie in the same orbit.
+            A collection can be asked to identify each value with the canonical representative of its orbit, so
+            symmetry-equivalent contents collapse to one slot: <code>HashSet.orbital_add</code>,
+            <code> HashMap.orbital_set</code>, and the orbital variants of XSet and the rest. It is a choice you
+            make per collection, where symmetry-equivalence is the identity you want; the canonical form is
+            computed through the same mmgroup machinery as the rest of the Leech engine.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   return (
     <Layout title="The Topos of Programming"
@@ -140,6 +189,8 @@ export default function Home() {
       <main className={styles.page}>
         <Hero />
         <Heap />
+        <Sets />
+        <Orbits />
         <Topos />
         <Execution />
       </main>
