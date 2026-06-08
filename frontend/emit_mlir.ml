@@ -155,40 +155,75 @@ let prim_to_mlir = function
   | n             -> Printf.sprintf "!topos.section<\"%s\">" n
 
 (* Wire DTO transport (seal 2): the per-place field-tag descriptor and its
-   structural schema id. Each field maps to a wire tag; only number/money
-   (SCALAR, 8 bytes) and text (STRING) are transportable at this seal, so a
-   place with any other field type (boolean, a nested place, a list/map) yields
-   None and is not registered, and a wire on it fails loudly with an
-   unregistered schema rather than mis-serializing. The id is FNV-1a over
-   [n_fields; tags...], computed identically by every side from its OWN
-   redeclaration (two Spaces never exchange it: agreement is by construction,
-   a drift gives a different id and a loud miss at the boundary). Masked to 31
-   bits so it is a non-negative i32. *)
-let wire_tag_of_field ((_, ty) : string * C.ty) : int option =
-  match ty with
+   structural schema id, computed recursively. number/money -> SCALAR (8 bytes),
+   text -> STRING, a transportable nested place -> NESTED (and that sub-place's
+   own id folds into the parent's id, so two parents that differ only in a
+   nested type get different ids). Any other field type, or a nesting cycle /
+   excessive depth, makes the place non-transportable (None): it is not
+   registered, and a wire on it fails loudly with an unregistered schema rather
+   than mis-serializing. The id is FNV-1a, computed identically by every side
+   from its OWN redeclaration (two Spaces never exchange it: agreement is by
+   construction, a drift gives a different id and a loud miss at the boundary).
+   Masked to 31 bits so it is a non-negative i32. *)
+let wire_tag_scalar = 0
+let wire_tag_string = 1
+let wire_tag_nested = 4
+
+let rec wire_field_desc (places : C.place_decl list) (depth : int)
+                        ((_, ty) : string * C.ty) : (int * int) option =
+  if depth > 8 then None   (* refuse pathological or cyclic nesting *)
+  else match ty with
   | C.TyBase n | C.TyPlace n ->
       (match n with
-       | "text" -> Some 1               (* YON_WIRE_TAG_STRING *)
-       | "number" | "money" -> Some 0   (* YON_WIRE_TAG_SCALAR *)
-       | _ -> None)
+       | "text" -> Some (wire_tag_string, 0)
+       | "number" | "money" -> Some (wire_tag_scalar, 0)
+       | _ ->
+           (* a place-typed field: resolve it and recurse if it is itself a
+              transportable place *)
+           (match List.find_opt (fun (p : C.place_decl) -> p.p_name = n) places with
+            | Some sub ->
+                (match wire_place_schema_id places (depth + 1) sub with
+                 | Some subid -> Some (wire_tag_nested, subid)
+                 | None -> None)
+            | None -> None))
   | _ -> None
 
-let wire_tags_of_place (pd : C.place_decl) : int list option =
+and wire_place_descs (places : C.place_decl list) (depth : int)
+                     (pd : C.place_decl) : (int * int) list option =
   List.fold_right (fun f acc ->
-    match wire_tag_of_field f, acc with
-    | Some t, Some ts -> Some (t :: ts)
+    match wire_field_desc places depth f, acc with
+    | Some d, Some ds -> Some (d :: ds)
     | _ -> None
   ) pd.p_fields (Some [])
 
-let wire_schema_id (tags : int list) : int =
-  let fnv = ref 0x811c9dc5 in
-  let mix b =
-    fnv := !fnv lxor (b land 0xff);
-    fnv := (!fnv * 0x01000193) land 0xffffffff
-  in
-  mix (List.length tags);
-  List.iter mix tags;
-  !fnv land 0x7fffffff
+and wire_place_schema_id (places : C.place_decl list) (depth : int)
+                         (pd : C.place_decl) : int option =
+  match wire_place_descs places depth pd with
+  | None -> None
+  | Some descs ->
+      let fnv = ref 0x811c9dc5 in
+      let mix b =
+        fnv := !fnv lxor (b land 0xff);
+        fnv := (!fnv * 0x01000193) land 0xffffffff
+      in
+      mix (List.length descs);
+      List.iter (fun (tag, subid) ->
+        mix tag;
+        mix (subid land 0xff);
+        mix ((subid asr 8)  land 0xff);
+        mix ((subid asr 16) land 0xff);
+        mix ((subid asr 24) land 0xff)
+      ) descs;
+      Some (!fnv land 0x7fffffff)
+
+(* Emitter-facing wrappers (depth 0). *)
+let wire_tags_of_place (places : C.place_decl list) (pd : C.place_decl) : int list option =
+  match wire_place_descs places 0 pd with
+  | Some descs -> Some (List.map fst descs)
+  | None -> None
+
+let wire_schema_id_of_place (places : C.place_decl list) (pd : C.place_decl) : int option =
+  wire_place_schema_id places 0 pd
 
 (* Core-level recognizer for the comprehension subobject. After desugaring, a
    comprehension { x : A where P } is C.TySigma(x, A, fibre) where the fibre is
@@ -5376,9 +5411,9 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
      so producer and consumer agree without exchanging anything. Runs before
      maybe_serve so a serve-mode producer has its descriptors ready. *)
   List.iter (fun (pd : C.place_decl) ->
-    match wire_tags_of_place pd with
-    | Some tags when tags <> [] ->
-        let id = wire_schema_id tags in
+    match wire_tags_of_place e.places_decls pd,
+          wire_schema_id_of_place e.places_decls pd with
+    | Some tags, Some id when tags <> [] ->
         let n = List.length tags in
         let v_tags = fresh_ssa e in
         emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @yon_wire_tags_%s : !llvm.ptr"
@@ -6132,7 +6167,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
     (* Wire DTO descriptors: one global byte array of field tags per
        transportable place, addressed at startup by yon_rt_register_schema. *)
     List.iter (fun (pd : C.place_decl) ->
-      match wire_tags_of_place pd with
+      match wire_tags_of_place places pd with
       | Some tags when tags <> [] ->
           let n = List.length tags in
           let bytes = String.concat ", " (List.map string_of_int tags) in
@@ -6192,12 +6227,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
                             "%s = func.call @yon_rt_fold_named(%s, %s, %s, %s, %s) : (i32, i64, !llvm.ptr, i32, !llvm.ptr) -> i64"
                             v_xc v_heap v_prev v_buf v_size v_fold_str)
          | None ->
-             (match wire_tags_of_place pd with
-              | Some tags ->
+             (match wire_schema_id_of_place places pd with
+              | Some id ->
                   (* Transportable place: stamp the structural schema id so the
                      pump can recover the descriptor when this instance crosses
                      a wire. Inert for instances that never leave the heap. *)
-                  let id = wire_schema_id tags in
                   let v_null = fresh_ssa e in
                   emit_line e (Printf.sprintf "%s = llvm.mlir.zero : !llvm.ptr" v_null);
                   let v_ver = fresh_ssa e in
