@@ -319,6 +319,38 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
     return 0;
 }
 
+/* ============================================================== */
+/* Flatten: a place's content as position-independent bytes        */
+/* ============================================================== */
+
+/* The outbound half of the wormhole. Copy the section's raw payload (minus
+ * the L1_SHARED heap_id prefix) into out_buf and return the byte count, or -1
+ * on error / if cap is too small. The bytes are pure content, valid in any
+ * heap: rebuild with yon_rt_new(consumer_heap, buf, n) in the consumer's own
+ * heap. Scalar fields live inline in the payload, so for an all-scalar place
+ * this is the whole story. Handle-valued fields (text, list) hold a foreign
+ * handle inline and are NOT followed here; inlining them recursively is the
+ * next seal (variable-length frames). */
+int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap) {
+    ensure_init();
+    uint32_t heap_id = yon_section_heap(sec);
+    uint32_t slot_idx = yon_section_slot(sec);
+    yon_xheap_t *h = heap_for(heap_id);
+    const yon_xheap_slot_t *slot = yon_xheap_get(h, slot_idx);
+    if (!slot || slot->payload_offset == 0) return -1;
+    const uint8_t *payload = (const uint8_t *)yon_xheap_slot_payload(h, slot);
+    if (!payload) return -1;
+    uint32_t prefix_skip = 0;
+    if (g_backend == YON_BACKEND_L1_SHARED && heap_id != YON_HEAP_ID_DEFAULT) {
+        prefix_skip = sizeof(uint32_t);
+    }
+    if (prefix_skip > slot->payload_size) return -1;
+    uint32_t raw_size = slot->payload_size - prefix_skip;
+    if (raw_size > cap) return -1;
+    memcpy(out_buf, payload + prefix_skip, raw_size);
+    return (int32_t)raw_size;
+}
+
 
 
 /* ============================================================== */
@@ -1457,6 +1489,35 @@ double yon_rt_stream_shm_open_f64(double id_f64, double create_f64) {
     return (double)id;
 }
 
+/* Sized variant: create/attach a channel whose slots are slot_size bytes wide,
+ * for place-DTO frames (the scalar f64 channel is the slot_size==8 case). On
+ * attach the existing header's slot_size wins; slot_size matters on creation. */
+double yon_rt_stream_shm_open_sized_f64(double id_f64, double create_f64,
+                                        double slot_size_f64) {
+    uint32_t id = (uint32_t)id_f64;
+    uint32_t ss = (uint32_t)slot_size_f64;
+    if (ss == 0u || ss > 256u) return -1.0;
+    int slot = yon_rt_shm_slot_of(id);
+    if (slot < 0) {
+        for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
+            if (!g_shm_stream_handles[i]) { slot = i; break; }
+    }
+    if (slot < 0) return -1.0;
+    char name[32];
+    snprintf(name, sizeof(name), "id_%u", id);
+    yon_shm_stream_t *s =
+        yon_rt_stream_shm_open(name, ss, 256, (int)create_f64);
+    if (!s) return -1.0;
+    g_shm_stream_handles[slot] = s;
+    g_shm_stream_slot_ids[slot] = id;
+    if ((uint32_t)slot >= g_n_shm_streams) g_n_shm_streams = (uint32_t)slot + 1;
+    return (double)id;
+}
+
+double Stream__make_shm_sized(double id, double create, double slot_size) {
+    return yon_rt_stream_shm_open_sized_f64(id, create, slot_size);
+}
+
 double yon_rt_stream_shm_send_f64(double id_f64, double value) {
     uint32_t id = (uint32_t)id_f64;
     int slot = yon_rt_shm_slot_of(id);
@@ -1474,8 +1535,7 @@ double yon_rt_stream_shm_recv_f64(double id_f64) {
 }
 
 /* Frontend-facing aliases (mirroring Stream__make/send/recv). */
-double Stream__make_shm(double id, double create) { return yon_rt_stream_shm_open_f64(id, create); }
-double Stream__send_shm(double id, double v)       { return yon_rt_stream_shm_send_f64(id, v); }
+double Stream__make_shm(double id, double create) { return yon_rt_stream_shm_open_f64(id, create); }double Stream__send_shm(double id, double v)       { return yon_rt_stream_shm_send_f64(id, v); }
 double Stream__recv_shm(double id)                 { return yon_rt_stream_shm_recv_f64(id); }
 
 /* Blocking (back-pressure) f64 wrappers + aliases. produce waits for room,
@@ -1528,8 +1588,32 @@ double Wire__subscription_stream(double chan_id) {
     return local;
 }
 
-/* ============================================================== */
-/* Cross-Space server side: dispatch extern + argv stash           */
+/* Subscription .stream for a place DTO: drain a completed shm channel whose
+ * slots are n_bytes-wide place payloads, rebuild each in THIS process's heap
+ * (yon_rt_new), and emit the local handle into a structurally closed local
+ * stream. The wormhole's inbound half: content crosses, the object is born
+ * anew here, the producer's handle never leaves its process. EOF is the
+ * channel's structural close (await rc == -2), not a value sentinel. */
+double Wire__subscription_stream_dto(double chan_id, double n_bytes_d) {
+    uint32_t n = (uint32_t)n_bytes_d;
+    if (n == 0 || n > 256) return -1.0;
+    char nm[64];
+    snprintf(nm, sizeof(nm), "__sub_stream_%u", (unsigned)chan_id);
+    double local = (double)yon_rt_stream_create(nm, 0, 8);
+    if (local < 0.0) return -1.0;
+    int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
+    if (ch < 0) { yon_rt_stream_close((uint32_t)local); return -1.0; }
+    unsigned char buf[256];
+    for (;;) {
+        int rc = yon_rt_stream_shm_await_blocking(g_shm_stream_handles[ch], buf);
+        if (rc != 0) break;  /* rc == -2: drained and closed (EOF); else error */
+        yon_section_t sec = yon_rt_new(YON_HEAP_ID_DEFAULT, buf, n);
+        if (sec == YON_SECTION_INVALID) break;
+        yon_rt_stream_emit_f64(local, (double)(int64_t)(uint64_t)sec);
+    }
+    yon_rt_stream_close((uint32_t)local);
+    return local;
+}
 /* (the serve loop, spawn and registry live in the v2 section)     */
 /* ============================================================== */
 /* The generated binary provides __yon_dispatch(selector, a1..a4) -> result, a
@@ -2120,14 +2204,31 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
              * in the loop, by design (v1): producers terminate. */
             double producer_sel = req.args[0];
             double chan_id = req.args[1];
+            uint32_t elem_bytes = (uint32_t)req.args[2]; /* 0 = scalar f64;
+                                                            >0 = place payload */
             double attach = yon_rt_stream_shm_open_f64(chan_id, 0.0);
             double local_sid = __yon_dispatch(producer_sel, 0.0, 0.0, 0.0, 0.0);
             if (attach >= 0.0 && local_sid >= 0.0) {
+                int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
                 for (;;) {
                     double v = yon_rt_stream_await_f64(local_sid);
                     if (v == (double)0xFFFFFFFFu) break;
                     if (v == -1.0) break;  /* open-but-empty: producer misdeclared */
-                    yon_rt_stream_shm_produce_f64(attach, v);
+                    if (elem_bytes == 0) {
+                        yon_rt_stream_shm_produce_f64(attach, v); /* scalar: unchanged */
+                    } else if (ch >= 0) {
+                        /* place: v is the section handle in THIS process's heap;
+                         * flatten its content to bytes and forward them. The
+                         * channel slot is elem_bytes wide (set at creation). */
+                        unsigned char fbuf[256];
+                        yon_section_t sec = (yon_section_t)(uint64_t)(int64_t)v;
+                        int32_t fn = yon_rt_flatten(sec, fbuf, sizeof(fbuf));
+                        if (fn < 0 || (uint32_t)fn != elem_bytes) break;
+                        yon_rt_stream_shm_produce_blocking(
+                            g_shm_stream_handles[ch], fbuf);
+                    } else {
+                        break;
+                    }
                 }
                 yon_rt_stream_shm_close_write_f64(attach);
             }

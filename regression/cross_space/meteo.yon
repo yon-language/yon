@@ -1,0 +1,16 @@
+/* The Meteo service: a producer whose stream element is a place (DTO),
+ * not a scalar. Seal 1 of the wire-DTO wormhole: a fixed-size, all-scalar
+ * place crosses the process boundary by value. */
+world W { Code is X }
+place Reading in W { temp number humidity number }
+
+fun samples(): stream of Reading {
+  be s holds produce {
+    emit new Reading { temp 10 humidity 50 }
+    emit new Reading { temp 11 humidity 51 }
+    emit new Reading { temp 15 humidity 52 }
+  }
+  return s
+}
+
+fun main(): number { return 0 }

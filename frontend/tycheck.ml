@@ -371,6 +371,12 @@ let produce_check_ref :
   (Tyenv.env -> Reduce.ctx -> stmt list -> ty option -> Tyenv.env tc_result) ref =
   ref (fun env _ _ _ -> ok env)
 
+(* Element type of the produce block currently being checked, inferred from its
+   emits. SEmit records it, EProduce reads it. None until the first emit; a
+   produce with no emits keeps the historical number element. Saved/restored
+   around each produce so nesting is well-scoped. *)
+let produce_emit_ty : ty option ref = ref None
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -428,10 +434,33 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
             | Some (TySubscription _) -> true
             | _ -> false)
        | _ -> false) ->
-      (* subscription.stream: materialize the emissions as a stream. The
-         site is registered for the drain lowering. *)
-      Hashtbl.replace substream_site_table (loc.start_line, loc.start_col) ();
-      ok (TyStream (TyPrim "number", []))
+      (* subscription.stream: materialize the emissions as a stream whose
+         element type is the one the subscription carries (the producer's
+         declared element). For a place element the site records N (payload
+         bytes) so the drain rebuilds DTOs locally; 0 keeps the scalar drain. *)
+      let elem =
+        (match obj with
+         | EVar (n, _) ->
+             (match Tyenv.lookup_var env n with
+              | Some (TySubscription (_, e)) -> e
+              | _ -> TyPrim "number")
+         | _ -> TyPrim "number")
+      in
+      let n_bytes =
+        match elem with
+        | TyUser pname ->
+            (match Tyenv.lookup_place env pname with
+             | Some pd ->
+                 let nf =
+                   List.length
+                     (List.filter (function FoField _ -> true | _ -> false)
+                        pd.pd_members)
+                 in 8 * nf
+             | None -> 0)
+        | _ -> 0
+      in
+      Hashtbl.replace substream_site_table (loc.start_line, loc.start_col) n_bytes;
+      ok (TyStream (elem, []))
 
   | EField (obj, fld, loc) ->
       (* Cross-space field-access detection. If obj is a variable bound in an
@@ -514,11 +543,30 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                        | None -> Hashtbl.find_opt wire_fun_returns bare
                      in
                      (match ret with
-                      | Some (Some (TyStream _)) ->
+                      | Some (Some (TyStream (elem, _))) ->
                           let sel = Module_prefix.op_selector bare in
+                          (* N = the place payload size the wire carries: every
+                             field occupies 8 bytes in the payload, so
+                             N = 8 * field_count for a place element; 0 for a
+                             scalar (the unchanged f64 channel). *)
+                          let n_bytes =
+                            match elem with
+                            | TyUser pname ->
+                                (match Tyenv.lookup_place env pname with
+                                 | Some pd ->
+                                     let nf =
+                                       List.length
+                                         (List.filter
+                                            (function FoField _ -> true
+                                                    | _ -> false)
+                                            pd.pd_members)
+                                     in 8 * nf
+                                 | None -> 0)
+                            | _ -> 0
+                          in
                           Hashtbl.replace awaits_site_table
-                            (loc.start_line, loc.start_col) (sp, sel, sel);
-                          ok (TySubscription sp)
+                            (loc.start_line, loc.start_col) (sp, sel, sel, n_bytes);
+                          ok (TySubscription (sp, elem))
                       | Some r ->
                           let shown = (match r with
                             | Some t -> Tyenv.ty_to_string t
@@ -747,9 +795,15 @@ got %s" (Tyenv.ty_to_string other)))
   | EProduce (body, _) ->
       (* produce { ... } as an expression: the body's statements are
          checked like the statement form; the value is the stream id,
-         a number, same convention as the Stream.* API. *)
+         a number, same convention as the Stream.* API. The stream's
+         element type is inferred from the emits (number if none), and
+         is checked against the declared return type by the caller. *)
+      let saved = !produce_emit_ty in
+      produce_emit_ty := None;
       let* _ = !produce_check_ref env ctx body None in
-      ok (TyStream (TyPrim "number", []))
+      let elem = (match !produce_emit_ty with Some t -> t | None -> TyPrim "number") in
+      produce_emit_ty := saved;
+      ok (TyStream (elem, []))
   | ENew (place_name, fas, loc) ->
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
@@ -1651,7 +1705,10 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       ok env
 
   | SEmit (e, _) ->
-      let* _ = infer env ctx e in
+      let* t = infer env ctx e in
+      (match !produce_emit_ty with
+       | None -> produce_emit_ty := Some t
+       | Some _ -> ());
       ok env
 
   | SForces (_stage, _cond, body, _) ->
