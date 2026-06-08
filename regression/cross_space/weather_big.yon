@@ -1,0 +1,14 @@
+/* A place whose serialized frame exceeds the old 256-byte slot cap: id (8) +
+ * a 250-char text body. Under seal 2b this frame (about 270 bytes) could not
+ * cross; the dense byte ring of seal 2c carries it whole. */
+world W { Code is X }
+place Note in W { id number body text }
+
+fun bulletins(): stream of Note {
+  be s holds produce {
+    emit new Note { id 5 body "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
+  }
+  return s
+}
+
+fun main(): number { return 0 }
