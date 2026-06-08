@@ -450,12 +450,8 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
         match elem with
         | TyUser pname ->
             (match Tyenv.lookup_place env pname with
-             | Some pd ->
-                 let nf =
-                   List.length
-                     (List.filter (function FoField _ -> true | _ -> false)
-                        pd.pd_members)
-                 in 8 * nf
+             | Some _pd -> 256  (* wire slot cap for the variable frame;
+                                   the byte ring (seal 2c) removes the cap *)
              | None -> 0)
         | _ -> 0
       in
@@ -545,22 +541,15 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                      (match ret with
                       | Some (Some (TyStream (elem, _))) ->
                           let sel = Module_prefix.op_selector bare in
-                          (* N = the place payload size the wire carries: every
-                             field occupies 8 bytes in the payload, so
-                             N = 8 * field_count for a place element; 0 for a
-                             scalar (the unchanged f64 channel). *)
+                          (* The wire carries a variable-length frame, not the
+                             raw payload, so the channel slot is a generous cap
+                             (the byte ring of seal 2c removes the fixed cap);
+                             0 for a scalar (the unchanged f64 channel). *)
                           let n_bytes =
                             match elem with
                             | TyUser pname ->
                                 (match Tyenv.lookup_place env pname with
-                                 | Some pd ->
-                                     let nf =
-                                       List.length
-                                         (List.filter
-                                            (function FoField _ -> true
-                                                    | _ -> false)
-                                            pd.pd_members)
-                                     in 8 * nf
+                                 | Some _pd -> 256
                                  | None -> 0)
                             | _ -> 0
                           in
