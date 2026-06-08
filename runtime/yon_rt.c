@@ -1607,7 +1607,7 @@ double Wire__subscription_stream_dto(double chan_id, double n_bytes_d) {
     for (;;) {
         int rc = yon_rt_stream_shm_await_blocking(g_shm_stream_handles[ch], buf);
         if (rc != 0) break;  /* rc == -2: drained and closed (EOF); else error */
-        yon_section_t sec = yon_rt_new(YON_HEAP_ID_DEFAULT, buf, n);
+        yon_section_t sec = yon_rt_deserialize(buf, n, YON_HEAP_ID_DEFAULT);
         if (sec == YON_SECTION_INVALID) break;
         yon_rt_stream_emit_f64(local, (double)(int64_t)(uint64_t)sec);
     }
@@ -2217,13 +2217,16 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
                     if (elem_bytes == 0) {
                         yon_rt_stream_shm_produce_f64(attach, v); /* scalar: unchanged */
                     } else if (ch >= 0) {
-                        /* place: v is the section handle in THIS process's heap;
-                         * flatten its content to bytes and forward them. The
-                         * channel slot is elem_bytes wide (set at creation). */
+                        /* place: v is the section handle in THIS process's
+                         * heap; serialize its content (recursive, length
+                         * prefixed) into the slot and forward. The channel slot
+                         * is elem_bytes wide (a generous cap); the frame's own
+                         * header carries its true length. */
                         unsigned char fbuf[256];
+                        memset(fbuf, 0, sizeof(fbuf));
                         yon_section_t sec = (yon_section_t)(uint64_t)(int64_t)v;
-                        int32_t fn = yon_rt_flatten(sec, fbuf, sizeof(fbuf));
-                        if (fn < 0 || (uint32_t)fn != elem_bytes) break;
+                        int32_t fn = yon_rt_serialize(sec, fbuf, sizeof(fbuf));
+                        if (fn < 0 || (uint32_t)fn > elem_bytes) break;
                         yon_rt_stream_shm_produce_blocking(
                             g_shm_stream_handles[ch], fbuf);
                     } else {
