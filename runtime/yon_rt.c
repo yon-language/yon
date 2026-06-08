@@ -1603,13 +1603,16 @@ double yon_rt_stream_shm_open_f64(double id_f64, double create_f64) {
 }
 
 /* Sized variant: create/attach a channel whose slots are slot_size bytes wide,
- * for place-DTO frames (the scalar f64 channel is the slot_size==8 case). On
- * attach the existing header's slot_size wins; slot_size matters on creation. */
+ * for place-DTO frames. slot_size == 0 selects the byte ring (a dense
+ * variable-frame channel of YON_WIRE_RING_BYTES bytes); the scalar f64 channel
+ * is the slot_size == 8 case. On attach the existing header's geometry wins. */
+#define YON_WIRE_RING_BYTES 65536u   /* 64KB dense byte ring for DTO frames */
+
 double yon_rt_stream_shm_open_sized_f64(double id_f64, double create_f64,
                                         double slot_size_f64) {
     uint32_t id = (uint32_t)id_f64;
     uint32_t ss = (uint32_t)slot_size_f64;
-    if (ss == 0u || ss > 256u) return -1.0;
+    if (ss > 256u) return -1.0;
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) {
         for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
@@ -1619,7 +1622,9 @@ double yon_rt_stream_shm_open_sized_f64(double id_f64, double create_f64,
     char name[32];
     snprintf(name, sizeof(name), "id_%u", id);
     yon_shm_stream_t *s =
-        yon_rt_stream_shm_open(name, ss, 256, (int)create_f64);
+        (ss == 0u)
+          ? yon_rt_stream_shm_open(name, 0u, YON_WIRE_RING_BYTES, (int)create_f64)
+          : yon_rt_stream_shm_open(name, ss, 256, (int)create_f64);
     if (!s) return -1.0;
     g_shm_stream_handles[slot] = s;
     g_shm_stream_slot_ids[slot] = id;
@@ -1709,21 +1714,25 @@ double Wire__subscription_stream(double chan_id) {
  * channel's structural close (await rc == -2), not a value sentinel. */
 double Wire__subscription_stream_dto(double chan_id, double n_bytes_d) {
     uint32_t n = (uint32_t)n_bytes_d;
-    if (n == 0 || n > 256) return -1.0;
+    if (n == 0) return -1.0;             /* n>0 only signals "place DTO channel" */
     char nm[64];
     snprintf(nm, sizeof(nm), "__sub_stream_%u", (unsigned)chan_id);
     double local = (double)yon_rt_stream_create(nm, 0, 8);
     if (local < 0.0) return -1.0;
     int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
     if (ch < 0) { yon_rt_stream_close((uint32_t)local); return -1.0; }
-    unsigned char buf[256];
+    unsigned char *buf = (unsigned char *)malloc(YON_WIRE_RING_BYTES);
+    if (!buf) { yon_rt_stream_close((uint32_t)local); return -1.0; }
     for (;;) {
-        int rc = yon_rt_stream_shm_await_blocking(g_shm_stream_handles[ch], buf);
-        if (rc != 0) break;  /* rc == -2: drained and closed (EOF); else error */
-        yon_section_t sec = yon_rt_deserialize(buf, n, YON_HEAP_ID_DEFAULT);
+        uint32_t flen = 0;
+        int rc = yon_rt_stream_shm_await_frame_blocking(
+                     g_shm_stream_handles[ch], buf, YON_WIRE_RING_BYTES, &flen);
+        if (rc != 0) break;  /* -2 EOF, -3 loud error, -1 timeout: stop draining */
+        yon_section_t sec = yon_rt_deserialize(buf, flen, YON_HEAP_ID_DEFAULT);
         if (sec == YON_SECTION_INVALID) break;
         yon_rt_stream_emit_f64(local, (double)(int64_t)(uint64_t)sec);
     }
+    free(buf);
     yon_rt_stream_close((uint32_t)local);
     return local;
 }
@@ -2318,34 +2327,44 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
             double producer_sel = req.args[0];
             double chan_id = req.args[1];
             uint32_t elem_bytes = (uint32_t)req.args[2]; /* 0 = scalar f64;
-                                                            >0 = place payload */
-            double attach = yon_rt_stream_shm_open_f64(chan_id, 0.0);
+                                                            >0 = place DTO (byte-ring) */
+            double attach = (elem_bytes == 0)
+                ? yon_rt_stream_shm_open_f64(chan_id, 0.0)              /* scalar slot ring */
+                : yon_rt_stream_shm_open_sized_f64(chan_id, 0.0, 0.0); /* byte ring attach */
             double local_sid = __yon_dispatch(producer_sel, 0.0, 0.0, 0.0, 0.0);
             if (attach >= 0.0 && local_sid >= 0.0) {
                 int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
+                unsigned char *fbuf = (elem_bytes == 0) ? NULL
+                                      : (unsigned char *)malloc(YON_WIRE_RING_BYTES);
                 for (;;) {
                     double v = yon_rt_stream_await_f64(local_sid);
                     if (v == (double)0xFFFFFFFFu) break;
                     if (v == -1.0) break;  /* open-but-empty: producer misdeclared */
                     if (elem_bytes == 0) {
                         yon_rt_stream_shm_produce_f64(attach, v); /* scalar: unchanged */
-                    } else if (ch >= 0) {
-                        /* place: v is the section handle in THIS process's
-                         * heap; serialize its content (recursive, length
-                         * prefixed) into the slot and forward. The channel slot
-                         * is elem_bytes wide (a generous cap); the frame's own
-                         * header carries its true length. */
-                        unsigned char fbuf[256];
-                        memset(fbuf, 0, sizeof(fbuf));
+                    } else if (ch >= 0 && fbuf) {
+                        /* place: serialize the section's content (recursive,
+                         * length prefixed) into a variable frame and push it
+                         * onto the dense byte ring. The frame is bounded only by
+                         * the ring; an oversized one is a loud failure, never a
+                         * silent truncation. */
                         yon_section_t sec = (yon_section_t)(uint64_t)(int64_t)v;
-                        int32_t fn = yon_rt_serialize(sec, fbuf, sizeof(fbuf));
-                        if (fn < 0 || (uint32_t)fn > elem_bytes) break;
-                        yon_rt_stream_shm_produce_blocking(
-                            g_shm_stream_handles[ch], fbuf);
+                        int32_t fn = yon_rt_serialize(sec, fbuf, YON_WIRE_RING_BYTES);
+                        if (fn < 0) break;
+                        int prc = yon_rt_stream_shm_produce_frame_blocking(
+                                      g_shm_stream_handles[ch], fbuf, (uint32_t)fn);
+                        if (prc == -3) {
+                            fprintf(stderr, "[YON-RT] wire: DTO frame (%d bytes) "
+                                    "exceeds the %u-byte ring; closing the stream "
+                                    "instead of truncating\n", fn, YON_WIRE_RING_BYTES);
+                            break;
+                        }
+                        if (prc != 0) break;
                     } else {
                         break;
                     }
                 }
+                free(fbuf);
                 yon_rt_stream_shm_close_write_f64(attach);
             }
             yon_rt_rpc2_reply(&req, 0.0);
