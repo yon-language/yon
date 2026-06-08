@@ -1,0 +1,16 @@
+/* The Weather service: a producer whose place has a STRING field (text), not
+ * only scalars. Seal 2 of the wire-DTO wormhole: the recursive, length-prefixed
+ * frame carries the string content by value across the process boundary. */
+world W { Code is X }
+place Reading in W { temp number label text }
+
+fun forecasts(): stream of Reading {
+  be s holds produce {
+    emit new Reading { temp 10 label "ok" }
+    emit new Reading { temp 11 label "ok" }
+    emit new Reading { temp 15 label "ok" }
+  }
+  return s
+}
+
+fun main(): number { return 0 }
