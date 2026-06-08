@@ -171,7 +171,8 @@ int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
  * schema_id stamped on the instance (yon_rt_new_v) and carried in the frame. */
 #define YON_WIRE_TAG_SCALAR 0u
 #define YON_WIRE_TAG_STRING 1u
-/* reserved for later seals: 2=LIST, 3=MAP, 4=NESTED+sub-schema */
+#define YON_WIRE_TAG_NESTED 4u
+/* reserved for later seals: 2=LIST, 3=MAP */
 
 /* Register the field-tag descriptor for a transportable place type. The
  * emitter emits one call per type at startup; tags points to n_fields bytes,

@@ -6629,6 +6629,18 @@ int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap) {
             memcpy(out + w, &slen, 4u); w += 4u;
             if (slen) memcpy(out + w, p, slen);
             w += slen;
+        } else if (sc->tags[i] == YON_WIRE_TAG_NESTED) {
+            /* nested place: the field slot holds the sub-section's coordinate
+             * (heap is the default in-process heap). Recurse, inlining the
+             * sub-frame ([sub_schema_id][sub_payload_len][sub_payload]); the
+             * sub-instance carries its own schema id, so the registry resolves
+             * the sub-descriptor on the way back. */
+            int64_t raw;
+            memcpy(&raw, inst + off, 8u);
+            yon_section_t sub = yon_section_pack(YON_HEAP_ID_DEFAULT, (uint32_t)raw);
+            int32_t sn = yon_rt_serialize(sub, out + w, cap - w);
+            if (sn < 0) return -1;
+            w += (uint32_t)sn;
         } else {
             fprintf(stderr, "[YON-RT] serialize: tag %u unsupported at this seal\n",
                     (unsigned)sc->tags[i]);
@@ -6679,6 +6691,20 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
             free(tmp);
             memcpy(inst + off, &sid, 8u);
             cur += slen;
+        } else if (sc->tags[i] == YON_WIRE_TAG_NESTED) {
+            /* nested place: the inlined sub-frame begins at p+cur. Read its
+             * header to size it, recursively rebuild the sub-place in this
+             * heap, and store the sub-handle in the parent slot. */
+            if (cur + 8u > payload_len) return YON_SECTION_INVALID;
+            uint32_t sub_pl;
+            memcpy(&sub_pl, p + cur + 4u, 4u);
+            uint32_t sub_frame_len = 8u + sub_pl;
+            if ((uint64_t)cur + sub_frame_len > (uint64_t)payload_len)
+                return YON_SECTION_INVALID;
+            yon_section_t sub = yon_rt_deserialize(p + cur, sub_frame_len, heap_id);
+            if (sub == YON_SECTION_INVALID) return YON_SECTION_INVALID;
+            memcpy(inst + off, &sub, 8u);
+            cur += sub_frame_len;
         } else {
             return YON_SECTION_INVALID;
         }
