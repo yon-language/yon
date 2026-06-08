@@ -1,0 +1,10 @@
+/* The Sensors service: declares the producer (chapter 16 + wire design). */
+fun readings(): stream of number {
+  be s holds produce {
+    emit 10
+    emit 11
+    emit 15
+  }
+  return s
+}
+fun main(): number { return 0 }

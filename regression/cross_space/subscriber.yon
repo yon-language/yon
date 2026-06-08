@@ -1,0 +1,9 @@
+import sensors::readings from Sensors
+
+fun main(): number {
+  be w holds wire to Sensors
+  be sub holds w.awaits(readings)
+  be s holds sub.stream
+  be total holds s.fold(0, fun(a: number, v: number) => a + v)
+  return total      // 10+11+15 = 36
+}

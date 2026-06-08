@@ -136,6 +136,7 @@ These read as English in declarations.
 | `list` | example | The list type: `list of T` (`examples/kw_list_here.yon`) |
 | `map` | example | The map type: `map of K to V` |
 | `stream` | example | The stream type: `stream of T`, plus modifiers |
+| `wire` | example | `wire to Space`: the transport toward a Space (`regression/cross_space/subscriber.yon`) |
 | `with` | example | `with effects`, `with multishot`, `with fold`, `compose h1 with h2` |
 | `compose` | example | Handle composition, `(compose f with g)(x) = g(f(x))`; kind discipline enforced |
 | `effects` | example | `place P with effects { }`: the place exposes operations |
