@@ -1371,10 +1371,12 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
       let l = S.dummy_loc in
       let make_chan =
         if n_bytes > 0 then
+          (* place element: a dense byte ring (slot_size 0 selects it); the
+             frame is self-delimiting, so the channel needs no per-element size. *)
           S.SLet (v1_fresh "sub_mk",
                   v1_call "Wire__make_shm_sized"
                     [v1_num (float_of_int chan); v1_num 1.0;
-                     v1_num (float_of_int n_bytes)], loc)
+                     v1_num 0.0], loc)
         else
           S.SLet (v1_fresh "sub_mk",
                   v1_call "Wire__make_shm"
