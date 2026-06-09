@@ -125,6 +125,9 @@
       "map", MAP;
       "stream", STREAM;
   "wire", WIRE;
+      "spawn", SPAWN;
+      "promote", PROMOTE;
+      "parallel", PARALLEL;
       "is", IS;
       "not", NOT;
       "by", BY;
