@@ -366,6 +366,12 @@ let rec desugar_expr (e : S.expr) : C.term =
        | _ -> curry_apply (C.Var name') args_terms)
   | S.EProduce (body, _) ->
       !produce_block_ref body
+  | S.ESpawn (_, _, _) ->
+      (* Lowering is step 4: fork N isolated replicas via yon_rt_spawn_self and
+       * collect each `promote` over a shared collection wire into the parent's
+       * heap. Reusing the in-process produce path here would silently drop the
+       * fork and isolation, so we fail loudly until the real lowering lands. *)
+      failwith "[desugar] spawn lowering not yet implemented (step 4)"
   | S.EWireTo (_, _) ->
       (* the wire handle is compile-time identity: the Space name lives
          in the type (TyWire); the runtime value is inert *)
@@ -1070,6 +1076,8 @@ and desugar_stmt (s : S.stmt) : C.term =
       desugar_produce_block body
   | S.SEmit (e, _) ->
       C.Emit (desugar_expr e)
+  | S.SPromote (_, _) ->
+      failwith "[desugar] promote lowering not yet implemented (step 4; promote is only valid inside a spawn block)"
   | S.SForces (stage, cond, body, _) ->
       (* Kripke-Joyal forcing (now with semantics, not ignored): "stage forces
        * cond" builds a directed cell stage -> c_cond into the forced sub-object,
@@ -1560,6 +1568,9 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
       let inner = List.fold_left (fun a (n, _) -> V1SS.remove n a) cells ps in
       S.EViewLam (ps, v1_cell_expr inner b, pl, loc)
   | S.EProduce (b, loc) -> S.EProduce (v1_cell_stmts cells b, loc)
+  | S.ESpawn (count, b, loc) ->
+      S.ESpawn ((match count with Some e -> Some (r e) | None -> None),
+                v1_cell_stmts cells b, loc)
   | S.EWireTo _ -> e
   | S.EComposeWith (a, b, loc) -> S.EComposeWith (r a, r b, loc)
 
@@ -1602,6 +1613,7 @@ and v1_cell_stmt cells st =
   | S.SWith (r2, p, b, loc) -> S.SWith (r2, p, rb b, loc)
   | S.SProduce (b, loc) -> S.SProduce (rb b, loc)
   | S.SEmit (e, loc) -> S.SEmit (re e, loc)
+  | S.SPromote (e, loc) -> S.SPromote (re e, loc)
   | S.SForces (stg, c, b, loc) -> S.SForces (stg, v1_cell_cond cells c, rb b, loc)
   | S.SForever (b, loc) -> S.SForever (rb b, loc)
   | S.SForEvery (k, x, e, b, loc) -> S.SForEvery (k, x, re e, rb b, loc)
@@ -2001,6 +2013,7 @@ let rec rewrite_stmt (m : (string * string) list) (s : S.stmt) : S.stmt =
       S.SWith (r, p_opt, stmts body, loc)
   | S.SProduce (body, loc) -> S.SProduce (stmts body, loc)
   | S.SEmit (e, loc) -> S.SEmit (rewrite_expr m e, loc)
+  | S.SPromote (e, loc) -> S.SPromote (rewrite_expr m e, loc)
   | S.SForces (stage, c, body, loc) ->
       S.SForces (stage, rewrite_condition m c, stmts body, loc)
   | S.SIter (n_e, body, loc) ->

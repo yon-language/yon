@@ -377,6 +377,13 @@ let produce_check_ref :
    around each produce so nesting is well-scoped. *)
 let produce_emit_ty : ty option ref = ref None
 
+(* Element type of the spawn block currently being checked, inferred from its
+   promotes. SPromote records it, ESpawn reads it. Kept separate from
+   produce_emit_ty so a spawn with no promote is an error (decided), while a
+   produce with no emit keeps its historical number element. Saved/restored
+   around each spawn for well-scoped nesting. *)
+let spawn_promote_ty : ty option ref = ref None
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -793,6 +800,25 @@ got %s" (Tyenv.ty_to_string other)))
       let elem = (match !produce_emit_ty with Some t -> t | None -> TyPrim "number") in
       produce_emit_ty := saved;
       ok (TyStream (elem, []))
+  | ESpawn (count, body, loc) ->
+      (* spawn { ... } / spawn in N parallel { ... } as an expression: the body
+         runs in one or N isolated forked replicas; each `promote E` contributes
+         an element of type T; the whole construct is `stream of T`, collected in
+         the parent's heap. The count, if present, must be a number (evaluated in
+         the parent before fork). A block with no promote is an error. *)
+      let* () = (match count with
+        | Some n -> let* _ = check env ctx n (TyPrim "number") in ok ()
+        | None -> ok ()) in
+      let saved = !spawn_promote_ty in
+      spawn_promote_ty := None;
+      let* _ = !produce_check_ref env ctx body None in
+      (match !spawn_promote_ty with
+       | Some elem ->
+           spawn_promote_ty := saved;
+           ok (TyStream (elem, []))
+       | None ->
+           spawn_promote_ty := saved;
+           err loc "spawn block has no promote: it must promote at least one value")
   | ENew (place_name, fas, loc) ->
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
@@ -1697,6 +1723,13 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       let* t = infer env ctx e in
       (match !produce_emit_ty with
        | None -> produce_emit_ty := Some t
+       | Some _ -> ());
+      ok env
+
+  | SPromote (e, _) ->
+      let* t = infer env ctx e in
+      (match !spawn_promote_ty with
+       | None -> spawn_promote_ty := Some t
        | Some _ -> ());
       ok env
 
@@ -2985,6 +3018,9 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | EViewLam (_, body, _, _) -> walk_expr body
     | EComposeWith (h1, h2, _) -> walk_expr h1; walk_expr h2
     | EProduce (body, _) -> List.iter walk_stmt body
+    | ESpawn (count, body, _) ->
+        (match count with Some e -> walk_expr e | None -> ());
+        List.iter walk_stmt body
     | ELit _ | EVar _ -> ()
   and walk_stmt s =
     match s with
@@ -3009,6 +3045,7 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | SWith (_, _, body, _) -> List.iter walk_stmt body
     | SProduce (body, _) -> List.iter walk_stmt body
     | SEmit (e, _) -> walk_expr e
+    | SPromote (e, _) -> walk_expr e
     | SForces (_, _, body, _) -> List.iter walk_stmt body
     | SIter (n, body, _) -> walk_expr n; List.iter walk_stmt body
     | SWhile (c, body, _) -> walk_expr c; List.iter walk_stmt body
