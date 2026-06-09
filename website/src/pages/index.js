@@ -41,11 +41,15 @@ function Heap() {
             <span className={styles.kicker}>The heap</span>
             <h2 className={styles.h2}>The address of a value is its content.</h2>
             <p className={styles.lede}>
-              Yon allocates into <strong>xleech2</strong>, a content-addressed heap whose geometry is the
-              Leech lattice Λ<sub>24</sub>: exactly <strong>196,560 slots</strong> per heap. Allocation hashes
-              the bytes; identical content returns the existing slot, so <strong>same content ⇔ same slot</strong>.
-              Equality of arbitrarily large values is one number comparison: <strong>O(1) structural equality</strong>,
-              by construction.
+              Yon allocates into <strong>xleech2</strong>, a <strong>content-addressed</strong> heap. Allocation
+              hashes the bytes; identical content returns the existing slot, and a hash collision is settled by a
+              direct byte comparison, so distinct content never aliases and <strong>same content ⇔ same slot</strong>.
+              Equality of arbitrarily large values is then one integer comparison: <strong>O(1) structural
+              equality</strong>, by construction. The work is done by content-addressing, not by lattice geometry.
+              The Leech lattice enters as a deliberate bound: a heap holds at most <strong>196,560 slots</strong>,
+              the count of minimal vectors of Λ<sub>24</sub> — a fixed, bounded-state capacity that fails loudly at
+              the limit instead of degrading silently. Where the lattice is actually load-bearing is below: sets,
+              symmetry, and error correction.
             </p>
             <div className={styles.stat}>
               <b>String.equal</b>: ~17 ns at 1 char and at 32,768 chars. Three orders of magnitude of size,
@@ -84,7 +88,7 @@ function Heap() {
 
 function Topos() {
   return (
-    <section className={`${styles.section} ${styles.sectionAlt}`}>
+    <section className={styles.section}>
       <div className={styles.sectionIn}>
         <div className={styles.panel}>
           <span className={styles.kicker}>The paradigm</span>
@@ -113,7 +117,7 @@ const ABSENT = [
 
 function Execution() {
   return (
-    <section className={styles.section}>
+    <section className={`${styles.section} ${styles.sectionAlt}`}>
       <div className={styles.sectionIn}>
         <span className={styles.kicker}>Execution model</span>
         <h2 className={styles.h2}>What Yon does without.</h2>
@@ -182,15 +186,38 @@ function Orbits() {
   );
 }
 
+function Voyager() {
+  return (
+    <section className={`${styles.section} ${styles.sectionAlt}`}>
+      <div className={styles.sectionIn}>
+        <div className={styles.panel}>
+          <span className={styles.kicker}>Error correction</span>
+          <h2 className={styles.h2}>A list that survives bit-flips.</h2>
+          <p className={styles.lede}>
+            A <strong>VoyagerList</strong> stores each 12-bit payload as a 24-bit codeword of the binary
+            <strong> Golay code (24,&nbsp;12,&nbsp;8)</strong> — the code the Voyager probes used to send images
+            home across the solar system. Encoding and syndrome decoding run through the real mmgroup
+            <code> mat24</code> tables, not a re-implementation. The code has minimum distance 8, so any
+            <strong> three</strong> flipped bits in a codeword are detected and corrected on read. The Golay code
+            is not decoration here: it is the combinatorial object the Leech lattice is built from, so the same
+            engine that addresses sets and canonicalizes orbits also hardens storage against corruption.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   return (
     <Layout title="The Topos of Programming"
-            description="A topos-oriented programming language. Native via MLIR and LLVM, with a content-addressed heap on the Leech lattice.">
+            description="A topos-oriented programming language. Native via MLIR and LLVM, with a content-addressed heap and Leech-lattice sets, symmetry, and error correction.">
       <main className={styles.page}>
         <Hero />
         <Heap />
         <Sets />
         <Orbits />
+        <Voyager />
         <Topos />
         <Execution />
       </main>
