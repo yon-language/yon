@@ -384,6 +384,10 @@ let produce_emit_ty : ty option ref = ref None
    around each spawn for well-scoped nesting. *)
 let spawn_promote_ty : ty option ref = ref None
 
+(* Are we currently type-checking inside a spawn body? Incremented around the
+   body so promote is rejected outside a spawn, and so nested spawns compose. *)
+let in_spawn_depth : int ref = ref 0
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -811,7 +815,12 @@ got %s" (Tyenv.ty_to_string other)))
         | None -> ok ()) in
       let saved = !spawn_promote_ty in
       spawn_promote_ty := None;
-      let* _ = !produce_check_ref env ctx body None in
+      (* spawn_index : number is in scope only inside the body (the replica's
+         own index, 0..N-1). *)
+      let body_env = Tyenv.add_var env "spawn_index" (TyPrim "number") in
+      incr in_spawn_depth;
+      let* _ = !produce_check_ref body_env ctx body None in
+      decr in_spawn_depth;
       (match !spawn_promote_ty with
        | Some elem ->
            spawn_promote_ty := saved;
@@ -1726,12 +1735,16 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
        | Some _ -> ());
       ok env
 
-  | SPromote (e, _) ->
-      let* t = infer env ctx e in
-      (match !spawn_promote_ty with
-       | None -> spawn_promote_ty := Some t
-       | Some _ -> ());
-      ok env
+  | SPromote (e, loc) ->
+      if !in_spawn_depth = 0 then
+        err loc "promote is only valid inside a spawn block"
+      else begin
+        let* t = infer env ctx e in
+        (match !spawn_promote_ty with
+         | None -> spawn_promote_ty := Some t
+         | Some _ -> ());
+        ok env
+      end
 
   | SForces (_stage, _cond, body, _) ->
       (* forcing semantics. Type-check body in current env;

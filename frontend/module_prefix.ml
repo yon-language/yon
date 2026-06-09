@@ -80,6 +80,7 @@ let rec rw_stmt (rename : string -> string) (s : S.stmt) : S.stmt =
   | S.SWith (r1, r2, body, l) -> S.SWith (r1, r2, rs body, l)
   | S.SProduce (body, l) -> S.SProduce (rs body, l)
   | S.SEmit (e, l) -> S.SEmit (re e, l)
+  | S.SPromote (e, l) -> S.SPromote (re e, l)
   | S.SForces (st, c, body, l) -> S.SForces (st, c, rs body, l)
   | S.SIter (e, body, l) -> S.SIter (re e, rs body, l)
   | S.SWhile (e, body, l) -> S.SWhile (re e, rs body, l)
@@ -119,6 +120,7 @@ let rec refs_in_stmt (s : S.stmt) : string list =
   match s with
   | S.SLet (_, e, _) | S.SAssignHolds (_, e, _) | S.SAssignBecomes (_, e, _)
   | S.SReturn (e, _) | S.SEmit (e, _) -> re e
+  | S.SPromote (e, _) -> re e
   | S.SCall (n, args, _) -> n :: List.concat_map re args
   | S.SWhen (_, b, brs, ow, _) ->
       rs b @ List.concat_map (fun (_, x) -> rs x) brs
@@ -220,6 +222,9 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.EViewLam (ps, b, pl, ll) -> S.EViewLam (ps, rwe b, pl, ll)
       | S.EComposeWith (a, b, ll) -> S.EComposeWith (rwe a, rwe b, ll)
       | S.EProduce (b, ll) -> S.EProduce (List.map rws b, ll)
+      | S.ESpawn (count, b, ll) ->
+          S.ESpawn ((match count with Some e -> Some (rwe e) | None -> None),
+                    List.map rws b, ll)
       | S.EWireTo _ -> e
       | S.EAll (n, c, ll) -> S.EAll (n, rwc c, ll)
       | other -> other
@@ -243,6 +248,7 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.SAssignHolds (lv, e, ll) -> S.SAssignHolds (lv, rwe e, ll)
       | S.SAssignBecomes (lv, e, ll) -> S.SAssignBecomes (lv, rwe e, ll)
       | S.SEmit (e, ll) -> S.SEmit (rwe e, ll)
+      | S.SPromote (e, ll) -> S.SPromote (rwe e, ll)
       | S.SNew (n, fas, ll) ->
           S.SNew (n, List.map (fun fa -> { fa with S.fa_value = rwe fa.S.fa_value }) fas, ll)
       | S.SNewIn (n, sp, fas, ll) ->
