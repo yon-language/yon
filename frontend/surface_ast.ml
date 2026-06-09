@@ -133,6 +133,7 @@ type expr =
   | ECall of string * expr list * location            (* "f(a, b, c)" *)
   | EWireTo of string * location                      (* "wire to Space": open the transport toward a Space *)
   | EProduce of stmt list * location                  (* "produce { ... }" as an expression: the value is the stream id *)
+  | ESpawn of expr option * stmt list * location      (* "spawn { ... }" / "spawn in N parallel { ... }": value is the collection stream; None = single replica, Some e = e replicas *)
   | ENew of string * field_assignment list * location (* "new Place { field1 e1, ... }" *)
   | ENewIn of string * string * field_assignment list * location  (* "new P in Space { ... }" *)
   | EBinop of binop * expr * expr * location
@@ -257,6 +258,10 @@ and stmt =
   | SWith of string * string option * stmt list * location    (* "with R (of P)? { ... }" *)
   | SProduce of stmt list * location                  (* "produce { ... }" *)
   | SEmit of expr * location
+  | SPromote of expr * location
+    (* "promote E" inside a spawn body: emits E onto the spawn's collection
+     * stream. Like SEmit but valid only inside a spawn block; tycheck enforces
+     * the scope and that all promotes in one block agree on the element type. *)
   | SForces of string * condition * stmt list * location
     (* Forcing semantics. "forces <stage> <cond> { body }" runs body only if
      * the stage `stage` forces (|-) the condition `cond` in the Kripke-Joyal

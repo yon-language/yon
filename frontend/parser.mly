@@ -1102,6 +1102,7 @@ stmt:
   | s = with_stmt                         { s }
   | s = produce_stmt                      { s }
   | s = emit_stmt                         { s }
+  | s = promote_stmt                      { s }
   | s = iter_stmt                         { s }
   | s = while_stmt                        { s }
   | s = forces_stmt                       { s }
@@ -1227,6 +1228,10 @@ produce_stmt:
 emit_stmt:
   | EMIT e = expr
     { SEmit (e, mk_loc $startpos $endpos) }
+
+promote_stmt:
+  | PROMOTE e = expr
+    { SPromote (e, mk_loc $startpos $endpos) }
 
 /* ─── Expressions ──────────────────────────────────────────────────── */
 
@@ -1474,6 +1479,10 @@ expr_atom:
     { EWireTo (sp, mk_loc $startpos $endpos) }
   | PRODUCE LBRACE body = list(stmt) RBRACE
     { EProduce (body, mk_loc $startpos $endpos) }
+  | SPAWN LBRACE body = list(stmt) RBRACE
+    { ESpawn (None, body, mk_loc $startpos $endpos) }
+  | SPAWN IN n = expr PARALLEL LBRACE body = list(stmt) RBRACE
+    { ESpawn (Some n, body, mk_loc $startpos $endpos) }
   | LPAREN e = expr RPAREN                                             
     { EParen (e, mk_loc $startpos $endpos) }
   | IF_KW c = expr THEN_KW a = expr ELSE_KW b = expr   %prec LOWEST
