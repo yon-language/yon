@@ -75,6 +75,16 @@ and handler_clause = {
 
 and term =
   | Var of string
+  (* Locally-nameless representation (de Bruijn migration, stadio 1).
+   * BVar i: a BOUND variable, the de Bruijn index — how many binders out
+   *         from the use site its binder sits. Carries no name; this is what
+   *         makes alpha-equivalence become textual equality.
+   * FVar x: a FREE / GLOBAL name — builtins (Spawn__open, Stream__make),
+   *         top-level functions — resolved by name downstream (emit_mlir).
+   * The legacy `Var of string` stays alive until every producer/consumer has
+   * migrated; nothing constructs BVar/FVar yet (stadio 1 is purely additive). *)
+  | BVar of int
+  | FVar of string
   | Lam of string * ty * term
   | App of term * term
   | Place of place_decl
@@ -113,6 +123,8 @@ and reduction_decl = {
 let rec term_equal t1 t2 =
   match t1, t2 with
   | Var x, Var y -> x = y
+  | BVar i, BVar j -> i = j
+  | FVar x, FVar y -> x = y
   | Lam (x, tx, b1), Lam (y, ty', b2) ->
       x = y && ty_equal tx ty' && term_equal b1 b2
   | App (f1, a1), App (f2, a2) ->
@@ -190,6 +202,8 @@ let rec free_vars t =
   let module S = Set.Make (String) in
   match t with
   | Var x -> S.singleton x
+  | BVar _ -> S.empty                 (* a bound variable is not free *)
+  | FVar x -> S.singleton x           (* a free/global name is free *)
   | Lam (x, _, b) -> S.remove x (free_vars b)
   | App (f, a) -> S.union (free_vars f) (free_vars a)
   | Place _ -> S.empty
