@@ -26,10 +26,13 @@ let fresh_synth_name (prefix : string) : string =
    handle kind: move, reduction, and morph each have a different surface decl. *)
 let synth_moves : S.move_decl list ref = ref []
 let produce_counter = ref 0
+let spawn_counter = ref 0
 (* Forward reference: desugar_expr (earlier rec group) reaches the
    produce-block desugaring defined in the statement group below. *)
 let produce_block_ref : (S.stmt list -> C.term) ref =
   ref (fun _ -> failwith "[desugar] produce_block_ref not initialized")
+let spawn_block_ref : (S.expr option -> S.stmt list -> C.term) ref =
+  ref (fun _ _ -> failwith "[desugar] spawn_block_ref not initialized")
 let synth_reductions : S.reduction_decl list ref = ref []
 let synth_morphs : S.morph_decl list ref = ref []
 let synth_funs : S.fun_decl list ref = ref []
@@ -366,12 +369,8 @@ let rec desugar_expr (e : S.expr) : C.term =
        | _ -> curry_apply (C.Var name') args_terms)
   | S.EProduce (body, _) ->
       !produce_block_ref body
-  | S.ESpawn (_, _, _) ->
-      (* Lowering is step 4: fork N isolated replicas via yon_rt_spawn_self and
-       * collect each `promote` over a shared collection wire into the parent's
-       * heap. Reusing the in-process produce path here would silently drop the
-       * fork and isolation, so we fail loudly until the real lowering lands. *)
-      failwith "[desugar] spawn lowering not yet implemented (step 4)"
+  | S.ESpawn (count, body, _) ->
+      !spawn_block_ref count body
   | S.EWireTo (_, _) ->
       (* the wire handle is compile-time identity: the Space name lives
          in the type (TyWire); the runtime value is inert *)
@@ -1025,6 +1024,62 @@ and desugar_produce_block (body : S.stmt list) : C.term =
                   body')),
          C.App (C.Var "Stream__make", Builtins.encode_number 0.0))
 
+and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
+  (* spawn { B } / spawn in N parallel { B }: fork N isolated replicas; each
+     `promote e` becomes Spawn__promote(ch, e); spawn_index becomes
+     Spawn__index(ch); the child runs the body then Spawn__child_exit(ch); the
+     parent joins the promoted values into a stream, which is the value of the
+     block. Built over the f64 facade verified in step 4b-i.
+
+         (lam ch.
+            __if_expr( Spawn__role(ch) == 1.0,
+                       <body'> ; Spawn__child_exit(ch),     -- child
+                       Spawn__join_stream(ch) ))            -- parent
+         (Spawn__open N)
+
+     Like produce, the body is rewritten innermost-first by recursion, so this
+     rewrite only consumes its own Emit nodes (promotes). *)
+  let body_term = desugar_stmts body in
+  incr spawn_counter;
+  let ch = Printf.sprintf "__spawn_ch%d" !spawn_counter in
+  let rec rw (t : C.term) : C.term =
+    match t with
+    | C.Emit e ->
+        (* a promote inside this spawn body *)
+        C.App (C.App (C.Var "Spawn__promote", C.Var ch), rw e)
+    | C.Var "spawn_index" ->
+        C.App (C.Var "Spawn__index", C.Var ch)
+    | C.Var _ | C.Unit | C.Place _ | C.Reduction _ -> t
+    | C.Lam (x, ty, b) -> C.Lam (x, ty, rw b)
+    | C.App (f, a) -> C.App (rw f, rw a)
+    | C.Scope (n, b) -> C.Scope (n, rw b)
+    | C.With (n, b) -> C.With (n, rw b)
+    | C.Refl e -> C.Refl (rw e)
+    | C.J (x, ty, a, b, c, d) -> C.J (x, ty, rw a, rw b, rw c, rw d)
+    | C.Pair (a, b) -> C.Pair (rw a, rw b)
+    | C.Fst e -> C.Fst (rw e)
+    | C.Snd e -> C.Snd (rw e)
+    | C.StreamCons (a, b) -> C.StreamCons (rw a, rw b)
+  in
+  let body' = rw body_term in
+  (* child: run body' (for its promotes), then exit; sequence via (lam _. exit) body' *)
+  let child =
+    C.App (C.Lam ("_", C.TyBase "number",
+             C.App (C.Var "Spawn__child_exit", C.Var ch)),
+           body') in
+  let parent = C.App (C.Var "Spawn__join_stream", C.Var ch) in
+  (* condition as i1: Spawn__role(ch) == 1.0 (1.0 = child, 0.0 = parent) *)
+  let cond =
+    C.App (C.App (C.Var "__eq", C.App (C.Var "Spawn__role", C.Var ch)),
+           Builtins.encode_number 1.0) in
+  let n_term =
+    match count with
+    | Some e -> desugar_expr e
+    | None -> Builtins.encode_number 1.0 in
+  C.App (C.Lam (ch, C.TyBase "number",
+           curry_apply (C.Var "__if_expr") [cond; child; parent]),
+         C.App (C.Var "Spawn__open", n_term))
+
 and desugar_stmt (s : S.stmt) : C.term =
   match s with
   | S.SLet (_name, e, _) ->
@@ -1076,8 +1131,12 @@ and desugar_stmt (s : S.stmt) : C.term =
       desugar_produce_block body
   | S.SEmit (e, _) ->
       C.Emit (desugar_expr e)
-  | S.SPromote (_, _) ->
-      failwith "[desugar] promote lowering not yet implemented (step 4; promote is only valid inside a spawn block)"
+  | S.SPromote (e, _) ->
+      (* Inside a spawn body (tycheck guarantees this), promote is "emit onto
+       * the spawn's collection". We reuse the C.Emit marker: desugar_spawn_block
+       * rewrites these into Spawn__promote(ch, _), exactly as produce rewrites
+       * them into Stream__send. *)
+      C.Emit (desugar_expr e)
   | S.SForces (stage, cond, body, _) ->
       (* Kripke-Joyal forcing (now with semantics, not ignored): "stage forces
        * cond" builds a directed cell stage -> c_cond into the forced sub-object,
@@ -2120,6 +2179,7 @@ let place_info = List.filter_map (function
     | d -> [d]) p
 
 let () = produce_block_ref := desugar_produce_block
+let () = spawn_block_ref := desugar_spawn_block
 
 let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_result =
   (* The optional [env] is the typed environment from Tycheck (cr_env). The
