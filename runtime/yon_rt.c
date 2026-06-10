@@ -2382,6 +2382,77 @@ void yon_rt_spawn_close(void *h) {
     free(c);
 }
 
+/* Parent bridge: drain+reap (same interleave as join_collect) but emit each
+ * collected value directly into a fresh stream, then close it; returns the
+ * stream id as f64. This is what the spawn expression evaluates to. Draining
+ * straight into the stream avoids an intermediate buffer of unknown size. */
+double yon_rt_spawn_join_stream(void *h) {
+    yon_spawn_ctx_t *c = (yon_spawn_ctx_t *)h;
+    if (!c || c->role != 0) return -1.0;
+    double sid_f = yon_rt_stream_make_f64(0.0);   /* default heap */
+    uint32_t sid = (uint32_t)sid_f;
+    int reaped = 0;
+    for (;;) {
+        yon_rpc2_req_t r;
+        int rc = yon_rt_rpc2_take(c->q, &r, 50u);
+        if (rc >= 0) { double v = r.args[0]; yon_rt_stream_emit(sid, &v); continue; }
+        for (int i = 0; i < c->n_spawned; i++) {
+            if (c->pids[i] > 0) {
+                int st = 0;
+                if (waitpid(c->pids[i], &st, WNOHANG) == c->pids[i]) {
+                    c->pids[i] = -1;
+                    reaped++;
+                }
+            }
+        }
+        if (reaped >= c->n_spawned) {
+            int rc2 = yon_rt_rpc2_take(c->q, &r, 0u);
+            if (rc2 >= 0) { double v = r.args[0]; yon_rt_stream_emit(sid, &v); continue; }
+            break;
+        }
+    }
+    yon_rt_stream_close(sid);
+    return sid_f;
+}
+
+/* ─── f64 id-based facade for the Core lowering ──────────────────────────
+ * The Core layer traffics in f64, so a raw ctx pointer cannot ride through it.
+ * Instead Spawn__open registers the ctx in a small fixed table and returns a
+ * session id. fork() copies the table, so a child and the parent resolve the
+ * same id to their own ctx copy. Names match the externs in emit_mlir, exactly
+ * like the Stream__ wrappers below. */
+#define YON_SPAWN_MAX 64
+static yon_spawn_ctx_t *g_yon_spawn_tab[YON_SPAWN_MAX];
+
+static yon_spawn_ctx_t *yon_spawn_by_id(double id_f) {
+    int id = (int)id_f;
+    if (id < 0 || id >= YON_SPAWN_MAX) return NULL;
+    return g_yon_spawn_tab[id];
+}
+
+double Spawn__open(double n) {
+    void *ctx = yon_rt_spawn_open(n);
+    if (!ctx) return -1.0;
+    int id = -1;
+    for (int i = 0; i < YON_SPAWN_MAX; i++)
+        if (!g_yon_spawn_tab[i]) { id = i; break; }  /* deterministic: same pre/post fork */
+    if (id < 0) { yon_rt_spawn_close(ctx); return -1.0; }
+    g_yon_spawn_tab[id] = (yon_spawn_ctx_t *)ctx;
+    return (double)id;
+}
+
+double Spawn__role(double id)  { return yon_rt_spawn_role(yon_spawn_by_id(id)); }
+double Spawn__index(double id) { return yon_rt_spawn_index_of(yon_spawn_by_id(id)); }
+double Spawn__promote(double id, double v) { yon_rt_spawn_promote(yon_spawn_by_id(id), v); return 0.0; }
+double Spawn__child_exit(double id) { yon_rt_spawn_child_exit(yon_spawn_by_id(id)); return 0.0; /* unreachable */ }
+double Spawn__join_stream(double id) {
+    yon_spawn_ctx_t *c = yon_spawn_by_id(id);
+    double sid = yon_rt_spawn_join_stream(c);
+    int i = (int)id;
+    if (i >= 0 && i < YON_SPAWN_MAX) { yon_rt_spawn_close(c); g_yon_spawn_tab[i] = NULL; }
+    return sid;
+}
+
 /* Caller side, the v2 core: enqueue the request in the Space's NAMED mailbox,
  * then wait on the private reply channel. -777.0 = unreachable/failed (the
  * language layer turns the sentinel into a clear English error; the in-band
