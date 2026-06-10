@@ -1,5 +1,5 @@
 
-** Conflict (shift/reduce) in state 355.
+** Conflict (shift/reduce) in state 505.
 ** Token involved: DOT
 ** This state is reached from program after reading:
 
@@ -16,7 +16,7 @@ LET IDENT HOLDS expr
                 chained_expr 
                 (?)
 
-** In state 355, looking ahead at DOT, reducing production
+** In state 505, looking ahead at DOT, reducing production
 ** separated_nonempty_list(DOT,IDENT) -> IDENT
 ** is permitted because of the following sub-derivation:
 
@@ -26,7 +26,7 @@ IDENT DOT separated_nonempty_list(DOT,IDENT) // lookahead token is inherited
           IDENT DOT separated_nonempty_list(DOT,IDENT) // lookahead token is inherited
                     IDENT . 
 
-** In state 355, looking ahead at DOT, shifting is permitted
+** In state 505, looking ahead at DOT, shifting is permitted
 ** because of the following sub-derivation:
 
 expr_atom 
@@ -34,7 +34,7 @@ IDENT DOT separated_nonempty_list(DOT,IDENT)
           IDENT DOT separated_nonempty_list(DOT,IDENT) 
                     IDENT . DOT separated_nonempty_list(DOT,IDENT) 
 
-** Conflict (shift/reduce) in state 350.
+** Conflict (shift/reduce) in state 500.
 ** Token involved: DOT
 ** This state is reached from program after reading:
 
@@ -51,7 +51,7 @@ LET IDENT HOLDS expr
                 chained_expr 
                 (?)
 
-** In state 350, looking ahead at DOT, reducing production
+** In state 500, looking ahead at DOT, reducing production
 ** separated_nonempty_list(DOT,IDENT) -> IDENT
 ** is permitted because of the following sub-derivation:
 
@@ -60,14 +60,14 @@ expr_atom // lookahead token is inherited
 IDENT DOT separated_nonempty_list(DOT,IDENT) // lookahead token is inherited
           IDENT . 
 
-** In state 350, looking ahead at DOT, shifting is permitted
+** In state 500, looking ahead at DOT, shifting is permitted
 ** because of the following sub-derivation:
 
 expr_atom 
 IDENT DOT separated_nonempty_list(DOT,IDENT) 
           IDENT . DOT separated_nonempty_list(DOT,IDENT) 
 
-** Conflict (shift/reduce) in state 342.
+** Conflict (shift/reduce) in state 491.
 ** Token involved: IN
 ** This state is reached from program after reading:
 
@@ -83,7 +83,7 @@ topology_decl
 TOPOLOGY IDENT OF IDENT LBRACE list(stmt) RBRACE 
                                (?)
 
-** In state 342, looking ahead at IN, shifting is permitted
+** In state 491, looking ahead at IN, shifting is permitted
 ** because of the following sub-derivation:
 
 stmt list(stmt) 
@@ -93,7 +93,7 @@ RETURN expr
        expr_atom 
        IDENT LPAREN expr_list RPAREN . IN IDENT 
 
-** In state 342, looking ahead at IN, reducing production
+** In state 491, looking ahead at IN, reducing production
 ** expr_atom -> IDENT LPAREN expr_list RPAREN
 ** is permitted because of the following sub-derivation:
 
@@ -104,7 +104,7 @@ RETURN expr // lookahead token is inherited
        expr_atom // lookahead token is inherited
        IDENT LPAREN expr_list RPAREN . 
 
-** Conflict (shift/reduce) in state 334.
+** Conflict (shift/reduce) in state 483.
 ** Token involved: LAW
 ** This state is reached from program after reading:
 
@@ -121,7 +121,7 @@ PLACE IDENT option(in_world_clause) option(over_clause) option(extends_clause) o
                                                                                                                            list(field_or_op) 
                                                                                                                            (?)
 
-** In state 334, looking ahead at LAW, shifting is permitted
+** In state 483, looking ahead at LAW, shifting is permitted
 ** because of the following sub-derivation:
 
 field_or_op list(field_or_op) 
@@ -134,7 +134,7 @@ CELL IDENT FROM expr TO expr
                                                                                                                                                  functor_law list(functor_law) 
                                                                                                                                                  . LAW IDENT 
 
-** In state 334, looking ahead at LAW, reducing production
+** In state 483, looking ahead at LAW, reducing production
 ** list(functor_law) ->
 ** is permitted because of the following sub-derivation:
 
@@ -147,7 +147,7 @@ CELL IDENT FROM expr TO expr // lookahead token is inherited
                                                                                                                                      functor_law list(functor_law) // lookahead token is inherited
                                                                                                                                                  . 
 
-** Conflict (shift/reduce) in state 330.
+** Conflict (shift/reduce) in state 479.
 ** Token involved: LAW
 ** This state is reached from program after reading:
 
@@ -164,7 +164,7 @@ PLACE IDENT option(in_world_clause) option(over_clause) option(extends_clause) o
                                                                                                                            list(field_or_op) 
                                                                                                                            (?)
 
-** In state 330, looking ahead at LAW, shifting is permitted
+** In state 479, looking ahead at LAW, shifting is permitted
 ** because of the following sub-derivation:
 
 field_or_op list(field_or_op) 
@@ -176,7 +176,7 @@ CELL IDENT FROM expr TO expr
                                                                                                                                      functor_law list(functor_law) 
                                                                                                                                      . LAW IDENT 
 
-** In state 330, looking ahead at LAW, reducing production
+** In state 479, looking ahead at LAW, reducing production
 ** list(functor_law) ->
 ** is permitted because of the following sub-derivation:
 
@@ -188,7 +188,7 @@ CELL IDENT FROM expr TO expr // lookahead token is inherited
                         FUNCTOR LPAREN loption(separated_nonempty_list(COMMA,lambda_param)) RPAREN FATARROW expr FROM IDENT TO IDENT list(functor_law) // lookahead token is inherited
                                                                                                                                      . 
 
-** Conflict (shift/reduce) in state 229.
+** Conflict (shift/reduce) in state 250.
 ** Token involved: DOT
 ** This state is reached from program after reading:
 
@@ -205,7 +205,7 @@ LET IDENT HOLDS expr
                 chained_expr 
                 (?)
 
-** In state 229, looking ahead at DOT, shifting is permitted
+** In state 250, looking ahead at DOT, shifting is permitted
 ** because of the following sub-derivation:
 
 expr_atom 
@@ -215,7 +215,7 @@ ALL IDENT WHERE condition
                 chained_expr 
                 chained_expr . DOT IDENT LPAREN expr_list RPAREN 
 
-** In state 229, looking ahead at DOT, reducing production
+** In state 250, looking ahead at DOT, reducing production
 ** expr -> chained_expr
 ** is permitted because of the following sub-derivation:
 
@@ -226,7 +226,7 @@ ALL IDENT WHERE condition // lookahead token is inherited
                 expr // lookahead token is inherited
                 chained_expr . 
 
-** Conflict (shift/reduce) in state 201.
+** Conflict (shift/reduce) in state 218.
 ** Token involved: DOT
 ** This state is reached from program after reading:
 
@@ -243,13 +243,13 @@ LET IDENT HOLDS expr
                 chained_expr 
                 (?)
 
-** In state 201, looking ahead at DOT, shifting is permitted
+** In state 218, looking ahead at DOT, shifting is permitted
 ** because of the following sub-derivation:
 
 expr_atom 
 IDENT . DOT IDENT LPAREN expr_list RPAREN 
 
-** In state 201, looking ahead at DOT, reducing production
+** In state 218, looking ahead at DOT, reducing production
 ** expr_atom -> IDENT
 ** is permitted because of the following sub-derivation:
 
@@ -257,7 +257,7 @@ chained_expr DOT IDENT LPAREN expr_list RPAREN // lookahead token appears
 expr_atom // lookahead token is inherited
 IDENT . 
 
-** Conflict (shift/reduce) in state 97.
+** Conflict (shift/reduce) in state 101.
 ** Token involved: ARROW
 ** This state is reached from program after reading:
 
@@ -278,14 +278,14 @@ OPERATION IDENT LPAREN param_list RPAREN option(return_type_decl) option(uses_al
                        IDENT COLON type_expr 
                                    (?)
 
-** In state 97, looking ahead at ARROW, shifting is permitted
+** In state 101, looking ahead at ARROW, shifting is permitted
 ** because of the following sub-derivation:
 
 type_atom ARROW type_expr 
 SIGMA LPAREN IDENT COLON type_expr RPAREN DOT type_expr 
                                               type_atom . ARROW type_expr 
 
-** In state 97, looking ahead at ARROW, reducing production
+** In state 101, looking ahead at ARROW, reducing production
 ** type_expr -> type_atom
 ** is permitted because of the following sub-derivation:
 
@@ -293,7 +293,7 @@ type_atom ARROW type_expr // lookahead token appears
 SIGMA LPAREN IDENT COLON type_expr RPAREN DOT type_expr // lookahead token is inherited
                                               type_atom . 
 
-** Conflict (shift/reduce) in state 8.
+** Conflict (shift/reduce) in state 6.
 ** Token involved: COMMA
 ** This state is reached from program after reading:
 
@@ -312,7 +312,7 @@ OPERATION IDENT LPAREN param_list RPAREN option(return_type_decl) option(uses_al
                        separated_nonempty_list(COMMA,param) 
                        (?)
 
-** In state 8, looking ahead at COMMA, reducing production
+** In state 6, looking ahead at COMMA, reducing production
 ** separated_nonempty_list(COMMA,IDENT) -> IDENT
 ** is permitted because of the following sub-derivation:
 
@@ -323,7 +323,7 @@ IDENT COLON type_expr // lookahead token is inherited
                      separated_nonempty_list(COMMA,IDENT) // lookahead token is inherited
                      IDENT . 
 
-** In state 8, looking ahead at COMMA, shifting is permitted
+** In state 6, looking ahead at COMMA, shifting is permitted
 ** because of the following sub-derivation:
 
 param 
