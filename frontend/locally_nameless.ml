@@ -49,12 +49,18 @@ let rec shift (d : int) (c : int) (t : term) : term =
   | Scope (s, b) -> Scope (s, shift d c b)    (* scope name: not a term binder *)
   | With (r, b) -> With (r, shift d c b)      (* reduction name: not a term binder *)
   | Place _ | Unit -> t                       (* closed *)
-  | J _ ->
-      failwith "locally_nameless.shift: J binder arity not yet handled \
-                (stadio 2 covers Lam; J needs full bidirectional typing)"
-  | Reduction _ ->
-      failwith "locally_nameless.shift: Reduction handler binders not yet handled \
-                (stadio 2 covers Lam)"
+  | J (x, ty, a, b, p, q) ->
+      (* J does NOT bind: the motive and base case are function terms (Lams)
+         held in a and b; the beta rule applies b, so its binder is inside it.
+         Recurse with the cutoff unchanged. (ty is a placeholder type here;
+         type-level binder traversal is part of the dependent-type work.) *)
+      J (x, ty, shift d c a, shift d c b, shift d c p, shift d c q)
+  | Reduction r ->
+      (* each handler clause binds its hc_params in hc_body: cutoff += n *)
+      Reduction { r with r_handlers =
+        List.map (fun h ->
+          let n = List.length h.hc_params in
+          { h with hc_body = shift d (c + n) h.hc_body }) r.r_handlers }
 
 (* open: replace BVar k (the binder we are entering) with u *)
 let rec open_rec (k : int) (u : term) (t : term) : term =
@@ -75,10 +81,13 @@ let rec open_rec (k : int) (u : term) (t : term) : term =
   | Scope (s, b) -> Scope (s, open_rec k u b)
   | With (r, b) -> With (r, open_rec k u b)
   | Place _ | Unit -> t
-  | J _ ->
-      failwith "locally_nameless.open: J binder arity not yet handled (stadio 2 covers Lam)"
-  | Reduction _ ->
-      failwith "locally_nameless.open: Reduction handler binders not yet handled (stadio 2 covers Lam)"
+  | J (x, ty, a, b, p, q) ->
+      J (x, ty, open_rec k u a, open_rec k u b, open_rec k u p, open_rec k u q)
+  | Reduction r ->
+      Reduction { r with r_handlers =
+        List.map (fun h ->
+          let n = List.length h.hc_params in
+          { h with hc_body = open_rec (k + n) u h.hc_body }) r.r_handlers }
 
 let open_term (u : term) (t : term) : term = open_rec 0 u t
 
@@ -99,9 +108,12 @@ let rec close_rec (k : int) (x : string) (t : term) : term =
   | Scope (s, b) -> Scope (s, close_rec k x b)
   | With (r, b) -> With (r, close_rec k x b)
   | Place _ | Unit -> t
-  | J _ ->
-      failwith "locally_nameless.close: J binder arity not yet handled (stadio 2 covers Lam)"
-  | Reduction _ ->
-      failwith "locally_nameless.close: Reduction handler binders not yet handled (stadio 2 covers Lam)"
+  | J (mn, ty, a, b, p, q) ->
+      J (mn, ty, close_rec k x a, close_rec k x b, close_rec k x p, close_rec k x q)
+  | Reduction r ->
+      Reduction { r with r_handlers =
+        List.map (fun h ->
+          let n = List.length h.hc_params in
+          { h with hc_body = close_rec (k + n) x h.hc_body }) r.r_handlers }
 
 let close_term (x : string) (t : term) : term = close_rec 0 x t

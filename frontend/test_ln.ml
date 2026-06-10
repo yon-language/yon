@@ -59,5 +59,28 @@ let () =
   check "alpha payoff: bodies of (fun a. a) and (fun b. b) both close to #0"
     (term_equal body_a body_b && term_equal body_a (BVar 0));
 
+  (* J does NOT bind: round-trip a J term carrying a free name through its
+     fields (motive, base case as a Lam, path, basepoint). *)
+  let j_body =
+    J ("_m", TyType 0,
+       FVar "x",                              (* motive (placeholder term) *)
+       Lam ("a", num, App (FVar "x", BVar 0)),(* base case: a function *)
+       Refl (FVar "x"),                       (* path *)
+       FVar "x") in                           (* basepoint *)
+  rt "round-trip: J term (non-binding) carrying a free name" j_body;
+
+  (* Reduction binds its handler params in the body: a clause with two params
+     puts the free name x at depth 2 inside the body; round-trip must recover. *)
+  let red_body =
+    Reduction {
+      r_name = "R"; r_target = "T"; r_multi_shot = false; r_fold_name = None;
+      r_handlers = [ {
+        hc_op = "op";
+        hc_params = [ ("p1", num); ("p2", num) ];
+        hc_body = App (App (FVar "x", BVar 1), BVar 0);  (* x p1 p2 *)
+      } ] } in
+  rt "round-trip: Reduction handler (2 param binders) carrying a free name"
+    red_body;
+
   Printf.printf "\n=== %d passed, %d failed ===\n" !pass !fail;
   if !fail > 0 then exit 1
