@@ -428,6 +428,14 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Stream__send", (["f64"; "f64"], "f64");
   "Stream__recv", (["f64"], "f64");
   "Stream__close", (["f64"], "f64");
+  (* spawn { } collection facade (step 4b): the parent forks N replicas, each
+     promotes f64 values onto a shared channel, the parent joins into a stream. *)
+  "Spawn__open", (["f64"], "f64");
+  "Spawn__role", (["f64"], "f64");
+  "Spawn__index", (["f64"], "f64");
+  "Spawn__promote", (["f64"; "f64"], "f64");
+  "Spawn__child_exit", (["f64"], "f64");
+  "Spawn__join_stream", (["f64"], "f64");
   (* Cross-PROCESS streams over POSIX shared memory (mattone A): same f64-id
      calling convention as the intra-process ones, but the channel crosses the
      process boundary. make_shm(id, create) rendezvous on a shared region. *)
@@ -5732,6 +5740,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
       let is_external_runtime =
         (String.length name >= 8 && String.sub name 0 8 = "Stream__")
         || (String.length name >= 6 && String.sub name 0 6 = "Wire__")
+        || (String.length name >= 7 && String.sub name 0 7 = "Spawn__")
         || (String.length name >= 7 && String.sub name 0 7 = "yon_rt_")
       in
       if is_external_runtime then begin
