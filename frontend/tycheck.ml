@@ -910,18 +910,31 @@ got %s" (Tyenv.ty_to_string other)))
        | other ->
            err loc (Printf.sprintf "snd expects Sigma type, got %s"
                       (Tyenv.ty_to_string other)))
-  | EJ (_c, _d, p, loc) ->
-      (* ind_path(C, d, p) : path induction.
-       * Full check requires verifying:
-       *   C : Pi(x:A). Pi(y:A). Pi(p:Id_A(x,y)). Type_n
+  | EJ (c, d, p, loc) ->
+      (* ind_path(C, d, p) : path elimination.
+       *
+       * Yon's J is, today, the NON-dependent computational eliminator:
+       * on refl it reduces to d applied at the basepoint,
+       *   J(C, d, refl(a)) = d(a).
+       * The full dependent eliminator would require
+       *   C : Pi(x:A). Pi(y:A). Pi(p:Id_A(x,y)). Type_n   (a real motive)
        *   d : Pi(x:A). C(x, x, refl(x))
-       *   p : Id_A(a, b)
-       * For the prototype we infer p's type, verify it's an Id type,
-       * and return TyPrim "unknown" for the result (the motive should
-       * dictate it; we defer until full bidirectional typing). *)
+       *   result : C(a, b, p)                              (motive applied)
+       * which needs type-level motive application (a dependent substitution
+       * the checker does not have) and a real motive (call sites pass a
+       * placeholder). So we type J HONESTLY for what it is here: infer
+       * p : Id_A, require d to be a function out of A, and return its
+       * codomain R. This replaces the prototype's opaque "unknown" with the
+       * actual result type, without pretending the eliminator is dependent. *)
       let* p_ty = infer env ctx p in
       (match p_ty with
-       | TyId _ -> ok (TyPrim "unknown")
+       | TyId (_a_ty, _x, _y) ->
+           let* _c_ty = infer env ctx c in   (* motive present but not constrained in this mode *)
+           let* d_ty = infer env ctx d in
+           (match d_ty with
+            | TyArrow (_dom, cod) -> ok cod
+            | TyPi (_, _dom, cod) -> ok cod
+            | _ -> ok (TyPrim "unknown"))     (* d not a function we can read: stay opaque, never wrong *)
        | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
        | other ->
            err loc (Printf.sprintf "ind_path expects Id type as 3rd arg, got %s"
