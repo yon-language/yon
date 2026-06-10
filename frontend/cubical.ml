@@ -317,15 +317,26 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
           CPathLam (j,
             reduce_comp inner_ty extended_phi extended_sides base_at_j)
 
-      | CTGlue (base_ty, glue_phi, _partial_pairs) ->
-          (* comp at Glue: compose along the base type, then re-glue
-           * using the partial equivalences. *)
-          let base_sides =
-            List.map (fun (i, f, t) -> (i, f, unglue t)) sides in
-          let base_u0 = unglue base in
-          let combined_phi = phi @ glue_phi in
-          let result_base = reduce_comp base_ty combined_phi base_sides base_u0 in
-          CGlueElem result_base
+      | CTGlue (base_ty, glue_phi, partial_pairs) ->
+          (match partial_pairs with
+           | [] ->
+               (* Degenerate Glue with no partial equivalences = the base
+                * type B. comp reduces to comp in the base. *)
+               let base_sides =
+                 List.map (fun (i, f, t) -> (i, f, unglue t)) sides in
+               let base_u0 = unglue base in
+               let combined_phi = phi @ glue_phi in
+               CGlueElem (reduce_comp base_ty combined_phi base_sides base_u0)
+           | _ ->
+               (* Non-degenerate Glue: the CCHM comp-Glue rule needs the
+                * isEquiv proofs of the partial equivalences (the pres /
+                * equiv-fixing steps use contractibility of the fibers). This
+                * prototype tracks only the underlying maps, not isEquiv, so it
+                * CANNOT compute this rule. Stay STUCK — return the canonical,
+                * unreduced comp — rather than silently dropping the partial
+                * equivalences and emitting a wrong glued element. Unblocks when
+                * real equivalences land (research item: true comp-Glue). *)
+               CComp (ty, phi, sides, base))
 
       | CTQuotient (underlying_ty, _path_constructors) ->
           (* comp at quotient: compose in the underlying type, then
