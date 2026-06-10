@@ -2250,6 +2250,138 @@ static yon_rpc2_session_t *yon_rpc2_session(const char *space) {
     return s;
 }
 
+/* ─── spawn { } collection primitive (step 4a) ──────────────────────────
+ * See the header for the contract. Reuses the v2 PROCESS_SHARED queue
+ * (yon_rpc2_queue_t) as the N-producers -> 1-consumer collection channel:
+ * the parent is the consumer, the forked children are the producers. The
+ * deadlock between the bounded (16-slot) queue and the join is avoided by
+ * interleaving take() with a non-blocking WNOHANG reap in the parent, so the
+ * parent is always draining and producers never block forever.
+ *
+ * Limit: a promoted value is one f64 (args[0]); rich types (strings, nested
+ * places) will route through the DTO serialize path in a later step and are
+ * not handled here. */
+typedef struct {
+    int    role;          /* 0 = parent, 1 = child */
+    int    index;         /* child index 0..n-1 (child only) */
+    int    n;             /* replica count */
+    void  *q;             /* yon_rpc2_queue_t* shared collection channel */
+    char   name[96];      /* unique channel name */
+    pid_t  pids[256];     /* parent only */
+    int    n_spawned;     /* parent only */
+} yon_spawn_ctx_t;
+
+static unsigned g_yon_spawn_counter = 0u;
+
+void *yon_rt_spawn_open(double n_replicas_f64) {
+    int n = (int)n_replicas_f64;
+    if (n <= 0) n = 1;
+    if (n > 256) {
+        fprintf(stderr, "[YON-RT spawn] n=%d exceeds max 256, clamping\n", n);
+        n = 256;
+    }
+    yon_spawn_ctx_t *ctx = (yon_spawn_ctx_t *)calloc(1, sizeof(*ctx));
+    if (!ctx) return NULL;
+    ctx->n = n;
+    snprintf(ctx->name, sizeof(ctx->name), "spawncollect_%d_%u",
+             (int)getpid(), g_yon_spawn_counter++);
+    /* Parent is the consumer: create and claim the queue BEFORE forking so the
+     * children inherit the same PROCESS_SHARED mapping. */
+    int created = 0;
+    yon_rpc2_queue_t *q = yon_rpc2_queue_map_init(ctx->name, 0u, &created);
+    if (!q) { free(ctx); return NULL; }
+    q->server_pid = (uint64_t)getpid();   /* children check parent liveness */
+    ctx->q = q;
+    for (int i = 0; i < n; i++) {
+        char idx[16];
+        snprintf(idx, sizeof(idx), "%d", i);
+        setenv("YON_SPAWN_INDEX", idx, 1);   /* keep yon_rt_spawn_index() working */
+        pid_t pid = fork();
+        if (pid < 0) { perror("[YON-RT spawn] fork failed"); break; }
+        if (pid == 0) {
+            ctx->role = 1;   /* this is a post-fork private copy */
+            ctx->index = i;
+            return ctx;
+        }
+        ctx->pids[ctx->n_spawned++] = pid;
+    }
+    unsetenv("YON_SPAWN_INDEX");
+    ctx->role = 0;
+    return ctx;
+}
+
+double yon_rt_spawn_role(void *h) {
+    yon_spawn_ctx_t *c = (yon_spawn_ctx_t *)h;
+    return c ? (double)c->role : 0.0;
+}
+
+double yon_rt_spawn_index_of(void *h) {
+    yon_spawn_ctx_t *c = (yon_spawn_ctx_t *)h;
+    return c ? (double)c->index : -1.0;
+}
+
+void yon_rt_spawn_promote(void *h, double value) {
+    yon_spawn_ctx_t *c = (yon_spawn_ctx_t *)h;
+    if (!c || !c->q) return;
+    yon_rpc2_req_t r;
+    memset(&r, 0, sizeof(r));
+    r.argc = 1u;
+    r.args[0] = value;
+    /* Generous timeout: the parent drains continuously, so back-pressure on
+     * the 16-slot queue clears quickly. -1 (value dropped, loud) only if the
+     * parent has died. */
+    if (yon_rpc2_enqueue((yon_rpc2_queue_t *)c->q, &r, 10000u) != 0)
+        fprintf(stderr, "[YON-RT spawn] promote dropped (parent gone?)\n");
+}
+
+void yon_rt_spawn_child_exit(void *h) {
+    (void)h;
+    _exit(0);   /* do NOT run the parent's continuation */
+}
+
+int yon_rt_spawn_join_collect(void *h, double *out, int cap) {
+    yon_spawn_ctx_t *c = (yon_spawn_ctx_t *)h;
+    if (!c || c->role != 0) return 0;
+    int got = 0, reaped = 0;
+    for (;;) {
+        yon_rpc2_req_t r;
+        int rc = yon_rt_rpc2_take(c->q, &r, 50u);   /* short idle slice */
+        if (rc >= 0) {
+            if (got < cap) out[got] = r.args[0];
+            got++;
+            continue;   /* keep draining while values are flowing */
+        }
+        /* Queue idle: reap any children that have exited (non-blocking). */
+        for (int i = 0; i < c->n_spawned; i++) {
+            if (c->pids[i] > 0) {
+                int st = 0;
+                if (waitpid(c->pids[i], &st, WNOHANG) == c->pids[i]) {
+                    c->pids[i] = -1;
+                    reaped++;
+                }
+            }
+        }
+        if (reaped >= c->n_spawned) {
+            /* All children have exited: every value they will ever push is
+             * already enqueued. Drain whatever remains, then stop. */
+            int rc2 = yon_rt_rpc2_take(c->q, &r, 0u);
+            if (rc2 >= 0) { if (got < cap) out[got] = r.args[0]; got++; continue; }
+            break;
+        }
+    }
+    return got;
+}
+
+void yon_rt_spawn_close(void *h) {
+    yon_spawn_ctx_t *c = (yon_spawn_ctx_t *)h;
+    if (!c) return;
+    if (c->role == 0 && c->q) {
+        yon_rt_rpc2_queue_close(c->q);
+        yon_rt_rpc2_queue_unlink(c->name);
+    }
+    free(c);
+}
+
 /* Caller side, the v2 core: enqueue the request in the Space's NAMED mailbox,
  * then wait on the private reply channel. -777.0 = unreachable/failed (the
  * language layer turns the sentinel into a clear English error; the in-band

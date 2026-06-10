@@ -674,6 +674,22 @@ double yon_rt_spawn_self(double n_replicas);
  * replica. */
 double yon_rt_spawn_index(void);
 
+/* ─── spawn { } collection primitive (step 4a) ──────────────────────────
+ * Backs the spawn block-expression. The parent opens a PROCESS_SHARED queue
+ * BEFORE forking N replicas; each child runs the block body, pushes every
+ * `promote E` (one f64) onto the queue, then exits without running the
+ * parent's continuation; the parent interleaves draining the queue with
+ * reaping exited children so the bounded queue never deadlocks the join, and
+ * collects the promoted values. Opaque handle is the same in parent and child
+ * (each a post-fork copy). */
+void   *yon_rt_spawn_open(double n_replicas);   /* parent: fork; child: returns its own ctx */
+double  yon_rt_spawn_role(void *ctx);           /* 1.0 = child, 0.0 = parent */
+double  yon_rt_spawn_index_of(void *ctx);       /* child index 0..n-1 (-1 in parent) */
+void    yon_rt_spawn_promote(void *ctx, double value);  /* child: push one value */
+void    yon_rt_spawn_child_exit(void *ctx);     /* child: _exit(0), never returns */
+int     yon_rt_spawn_join_collect(void *ctx, double *out, int cap); /* parent: drain+reap; returns count */
+void    yon_rt_spawn_close(void *ctx);          /* parent: close + unlink + free */
+
 /* ============================================================== */
 /* Idraulica v2 — actor-model cross-Space RPC                      */
 /* ============================================================== */
