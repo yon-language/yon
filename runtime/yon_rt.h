@@ -690,6 +690,19 @@ void    yon_rt_spawn_child_exit(void *ctx);     /* child: _exit(0), never return
 int     yon_rt_spawn_join_collect(void *ctx, double *out, int cap); /* parent: drain+reap; returns count */
 void    yon_rt_spawn_close(void *ctx);          /* parent: close + unlink + free */
 
+/* Parent bridge: drain the collection and emit the values into a fresh stream,
+ * returning the stream id as f64 (the value of the spawn expression). */
+double  yon_rt_spawn_join_stream(void *ctx);
+
+/* f64 id-based facade the Core/MLIR lowering calls (names match the emit_mlir
+ * externs, like the Stream__ wrappers). Spawn__open returns a session id. */
+double  Spawn__open(double n);
+double  Spawn__role(double id);
+double  Spawn__index(double id);
+double  Spawn__promote(double id, double value);
+double  Spawn__child_exit(double id);
+double  Spawn__join_stream(double id);
+
 /* ============================================================== */
 /* Idraulica v2 — actor-model cross-Space RPC                      */
 /* ============================================================== */
