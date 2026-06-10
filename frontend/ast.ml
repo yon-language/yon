@@ -119,49 +119,77 @@ and reduction_decl = {
 (* For testing and debugging, define a way to make terms readable.
  * The pretty-printer lives in pretty.ml; here we just need
  * structural equality for tests.
- *)
-let rec term_equal t1 t2 =
+ *
+ * de Bruijn migration, stadio 3: term_equal is now ALPHA-EQUIVALENCE. A
+ * renaming environment threads pairs (name-in-t1, name-in-t2) of the binders
+ * crossed so far, innermost first. At a bound Var the comparison is by DEPTH in
+ * that environment — the depth is exactly the de Bruijn index — so two terms
+ * that differ only in bound names compare equal: (fun x. x) = (fun y. y).
+ * Free variables (not in the env) compare by name; BVar by index; FVar by name.
+ * Scope/With names are Space/reduction labels (semantically meaningful, not
+ * alpha-renameable) so they stay literal. Lam binders are made alpha; the J
+ * motive and TyPi/TySigma binders are compared literally for now (conservative:
+ * no false identifications) until their binding arity is pinned down with full
+ * bidirectional typing — the env is still threaded through their subterms so
+ * alpha works for any Lam nested inside them. *)
+let var_alpha env x y =
+  let rec ldepth l i = match l with
+    | [] -> None | (a, _) :: r -> if a = x then Some i else ldepth r (i + 1) in
+  let rec rdepth l i = match l with
+    | [] -> None | (_, b) :: r -> if b = y then Some i else rdepth r (i + 1) in
+  match ldepth env 0, rdepth env 0 with
+  | Some i, Some j -> i = j          (* both bound: alpha iff same de Bruijn depth *)
+  | None, None -> x = y              (* both free: by name *)
+  | _ -> false                       (* one bound, one free: distinct *)
+
+let rec term_equal_env env t1 t2 =
   match t1, t2 with
-  | Var x, Var y -> x = y
+  | Var x, Var y -> var_alpha env x y
   | BVar i, BVar j -> i = j
   | FVar x, FVar y -> x = y
   | Lam (x, tx, b1), Lam (y, ty', b2) ->
-      x = y && ty_equal tx ty' && term_equal b1 b2
+      ty_equal_env env tx ty' && term_equal_env ((x, y) :: env) b1 b2
   | App (f1, a1), App (f2, a2) ->
-      term_equal f1 f2 && term_equal a1 a2
+      term_equal_env env f1 f2 && term_equal_env env a1 a2
   | Place p1, Place p2 -> place_equal p1 p2
   | Reduction r1, Reduction r2 -> reduction_equal r1 r2
-  | Scope (s1, b1), Scope (s2, b2) -> s1 = s2 && term_equal b1 b2
-  | With (r1, b1), With (r2, b2) -> r1 = r2 && term_equal b1 b2
-  | Emit t1', Emit t2' -> term_equal t1' t2'
-  | Refl t1', Refl t2' -> term_equal t1' t2'
+  | Scope (s1, b1), Scope (s2, b2) -> s1 = s2 && term_equal_env env b1 b2
+  | With (r1, b1), With (r2, b2) -> r1 = r2 && term_equal_env env b1 b2
+  | Emit t1', Emit t2' -> term_equal_env env t1' t2'
+  | Refl t1', Refl t2' -> term_equal_env env t1' t2'
   | J (x1, a1, c1, d1, p1, b1), J (x2, a2, c2, d2, p2, b2) ->
-      x1 = x2 && ty_equal a1 a2 && term_equal c1 c2 && term_equal d1 d2
-      && term_equal p1 p2 && term_equal b1 b2
-  | Pair (a1, b1), Pair (a2, b2) -> term_equal a1 a2 && term_equal b1 b2
-  | Fst t1', Fst t2' -> term_equal t1' t2'
-  | Snd t1', Snd t2' -> term_equal t1' t2'
+      x1 = x2 && ty_equal_env env a1 a2
+      && term_equal_env env c1 c2 && term_equal_env env d1 d2
+      && term_equal_env env p1 p2 && term_equal_env env b1 b2
+  | Pair (a1, b1), Pair (a2, b2) ->
+      term_equal_env env a1 a2 && term_equal_env env b1 b2
+  | Fst t1', Fst t2' -> term_equal_env env t1' t2'
+  | Snd t1', Snd t2' -> term_equal_env env t1' t2'
   | StreamCons (h1, k1), StreamCons (h2, k2) ->
-      term_equal h1 h2 && term_equal k1 k2
+      term_equal_env env h1 h2 && term_equal_env env k1 k2
   | Unit, Unit -> true
   | _ -> false
 
-and ty_equal t1 t2 =
+and ty_equal_env env t1 t2 =
   match t1, t2 with
-  | TyType n1, TyType n2 -> n1 = n2  (* Type_n = Type_m iff n = m *)
-  | TyArrow (a1, b1), TyArrow (a2, b2) -> ty_equal a1 a2 && ty_equal b1 b2
+  | TyType n1, TyType n2 -> n1 = n2
+  | TyArrow (a1, b1), TyArrow (a2, b2) ->
+      ty_equal_env env a1 a2 && ty_equal_env env b1 b2
   | TyPi (x1, a1, b1), TyPi (x2, a2, b2) ->
-      x1 = x2 && ty_equal a1 a2 && ty_equal b1 b2
+      x1 = x2 && ty_equal_env env a1 a2 && ty_equal_env env b1 b2
   | TySigma (x1, a1, b1), TySigma (x2, a2, b2) ->
-      x1 = x2 && ty_equal a1 a2 && ty_equal b1 b2
+      x1 = x2 && ty_equal_env env a1 a2 && ty_equal_env env b1 b2
   | TyId (a1, x1, y1), TyId (a2, x2, y2) ->
-      ty_equal a1 a2 && term_equal x1 x2 && term_equal y1 y2
+      ty_equal_env env a1 a2 && term_equal_env env x1 x2 && term_equal_env env y1 y2
   | TyDirUniverse n1, TyDirUniverse n2 -> n1 = n2
-  | TyEl c1, TyEl c2 -> term_equal c1 c2
+  | TyEl c1, TyEl c2 -> term_equal_env env c1 c2
   | TyPlace n1, TyPlace n2 -> n1 = n2
-  | TyStream t1', TyStream t2' -> ty_equal t1' t2'
+  | TyStream t1', TyStream t2' -> ty_equal_env env t1' t2'
   | TyBase n1, TyBase n2 -> n1 = n2
   | _ -> false
+
+and term_equal t1 t2 = term_equal_env [] t1 t2
+and ty_equal t1 t2 = ty_equal_env [] t1 t2
 
 and place_equal p1 p2 =
   p1.p_name = p2.p_name
