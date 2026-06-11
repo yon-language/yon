@@ -800,10 +800,16 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "is_associative", [TyUser "Magma"], tbool;
       "identity", [TyUser "Magma"], tnum;
       "closure_size", [TyUser "Magma"], tnum;
-      "reachable", [TyUser "Magma"; tnum], tbool;
       "word_push", [TyUser "Magma"; tnum], TyUser "Magma";
       "normal_form", [TyUser "Magma"], tnum;
       "from_catalog", [tnum], TyUser "Magma";        (* catalog id -> place with certified laws *)
+    ];
+    (* Land: the reachability view of a Magma. reach = is the target reachable
+     * by composing generators (each at most once) under the magma operation;
+     * witness = the certificate (bitmask of which generators reach it). *)
+    "Land", [
+      "reach", [TyUser "Magma"; tnum], tbool;
+      "witness", [TyUser "Magma"; tnum], tnum;
     ];
     "Bits", [
       "band", [tnum; tnum], tnum;
