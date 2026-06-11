@@ -650,11 +650,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       (* pluggable *)
       "orbital_add_with", [TyUser "Map"; tnum; tnum], TyUser "Map";
       "orbital_contains_with", [TyUser "Map"; tnum; tnum], tbool;
-      (* S_n canon native SAT, usa dimacs_n_vars. *)
-      "add_canon_sn", [TyUser "Map"; tnum], TyUser "Map";
       (* Dual-structure wavefront support. *)
       "try_add", [TyUser "Map"; tnum], tnum;
-      "try_add_canon_sn", [TyUser "Map"; tnum], tnum;
       (* zero-alloc iteration *)
       "at_bucket", [TyUser "Map"; tnum], tnum;
       "dir_capacity", [tnum], tnum;
@@ -860,14 +857,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "count", [tunit], tnum;
       "get",   [tnum], TyUser "String";
     ];
-    "DIMACS", [
-      (* SATLIB DIMACS primitives. *)
-      "uf20_load", [tnum], tnum;
-      "uf50_load", [tnum], tnum;
-      "n_vars", [tunit], tnum;
-      "G", [tunit], tnum;
-      "clause", [tnum], tnum;
-    ];
     "Time", [
       "now_ms", [tunit], tnum;
       "now_ns", [tunit], tnum;
@@ -885,41 +874,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
      * Empirical OR/SAT at the phase transition alpha=4.27.
      * metric_id: 1=|R|, 2=k_active, 3=max_o*1000, 4=avg_o*1000,
      *            5=sum_o*1000, 6=G, 7=R/G^5*10^6 *)
-    "SAT", [
-      "run_3sat", [tnum; tnum; tnum], tnum;
-      (* NOT-literals + filtered satisfiable.
-       * filter=1: DPLL retries up to 100 times to guarantee SAT.
-       * metric_id: 1=|R|, 2=k, 3=max_o*1000, 4=sum_o*1000, 5=G, 6=sat *)
-      "run_3sat_filtered", [tnum; tnum; tnum; tnum], tnum;
-      (* Real DIMACS UF20/UF50 via sparse wavefront state-space (HashSet, not
-       * bitmap). Limit n_vars >> 24.
-       * filepath: TyUser "String" (slot xheap).
-       * metric_id: 1=|R|, 2=k, 3=max_o*1000, 4=sum_o*1000, 5=G, 6=n_vars *)
-      "run_dimacs", [TyUser "String"; tnum], tnum;
-      (* SATLIB UF20/UF50 helper: idx 1..1000.
-       * metric_id: 1=|R|, 2=k, 3=max_o*1000, 4=sum_o*1000, 5=G, 6=n_vars *)
-      "uf20", [tnum; tnum], tnum;
-      "uf50", [tnum; tnum], tnum;
-      (* Access the o_i trace of the most recent DIMACS wavefront.
-       * round is 1-indexed. Returns o_i * 1000. *)
-      "o_at", [tnum], tnum;
-      (* random 3-SAT with arbitrary alpha
-       * to investigate the c(alpha) dependence in the quasi-poly scaling.
-       * Args: n_vars, alpha (G/n), seed, metric_id (same as uf20). *)
-      "alpha_3sat", [tnum; tnum; tnum; tnum], tnum;
-      (* Orbital wavefront over SATLIB UF20. Canonicalizes each state under S_n
-       * (variable permutations) before dedup. |R_orb| <= |R_naive|, often <<
-       * for symmetric problems. *)
-      "uf20_orbital", [tnum; tnum], tnum;
-      "uf50_orbital", [tnum; tnum], tnum;
-      (* Leech wavefront via embedding 2n->24 + G_24 syndrome. *)
-      "uf20_leech", [tnum; tnum], tnum;
-      "uf50_leech", [tnum; tnum], tnum;
-      "leech_o_at", [tnum], tnum;
-      (* Co_0 wavefront via Conway group BFS. *)
-      "uf20_co0", [tnum; tnum], tnum;
-      "orbital_o_at", [tnum], tnum;
-    ];
     (* Cross-Space streams.
      * Stream.make(target_heap) -> stream_id as number
      * Stream.send(stream_id, value) -> 0 on success

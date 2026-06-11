@@ -967,37 +967,23 @@ double yon_rt_crypto_hash_int(double n);
  *
  * metric_id: 1=|R|, 2=k_active, 3=max_o*1000, 4=avg_o*1000,
  *            5=sum_o*1000, 6=G, 7=R/G^5 *10^6 */
-double yon_rt_sat_3sat_run(double n_vars, double seed, double metric_id);
 
 /* SAT 3-clause with NOT literals + filtered satisfiable.
  * Encoding: pos_mask | (neg_mask << n_vars), wavefront in 2n-bit OR-space.
  * filter=1: retries generation up to 100 times until DPLL confirms SAT.
  * metric_id: 1=|R|, 2=k, 3=max_o*1000, 4=sum_o*1000, 5=G, 6=sat(0/1) */
-double yon_rt_sat_3sat_filtered(double n_vars, double seed, double filter, double metric_id);
 
 /* SAT DIMACS sparse wavefront.
  * Loads a .cnf file from str_id (xheap slot), proves via a sparse wavefront
  * state-space (HashSet, not bitmap). Works up to n_vars >> 24.
  * metric_id: 1=|R|, 2=k, 3=max_o*1000, 4=sum_o*1000, 5=G, 6=n_vars */
-double yon_rt_sat_dimacs_run(double str_id, double metric_id);
 
 /* SATLIB helper: load UF20/UF50 by index 1..1000. */
-double yon_rt_sat_dimacs_uf20(double idx, double metric_id);
-double yon_rt_sat_dimacs_uf50(double idx, double metric_id);
-double yon_rt_sat_dimacs_o_at(double round);
 
-double yon_rt_sat_3sat_alpha(double n, double alpha, double seed, double metric_id);
 
 /* SAT DIMACS orbital wavefront — canonicalize under S_n. */
-double yon_rt_sat_dimacs_uf20_orbital(double idx, double metric_id);
-double yon_rt_sat_dimacs_orbital_o_at(double round);
-double yon_rt_sat_dimacs_uf50_orbital(double idx, double metric_id);
 
 /* Leech wavefront via embedding 2n->24 + G_24 syndrome canon. */
-double yon_rt_sat_dimacs_uf20_leech(double idx, double metric_id);
-double yon_rt_sat_dimacs_uf50_leech(double idx, double metric_id);
-double yon_rt_sat_dimacs_leech_o_at(double round);
-double yon_rt_sat_dimacs_uf20_co0(double idx, double metric_id);
 double yon_rt_math_modulo(double a, double b);
 double yon_rt_math_gcd(double a, double b);
 
@@ -1010,22 +996,15 @@ double yon_rt_file_read_text(double path_id);
 double yon_rt_file_exists(double path_id);
 double yon_rt_bits_fold(double value, double op_id, double init);
 
-double yon_rt_dimacs_uf20_load(double idx);
-double yon_rt_dimacs_uf50_load(double idx);
-double yon_rt_dimacs_n_vars(void);
-double yon_rt_dimacs_G(void);
-double yon_rt_dimacs_clause(double idx);
 double yon_rt_seq_range(double n);
 
 /* Native S_n canonicalization for SAT wavefront */
-double yon_rt_hashset_add_canon_sn(double set_id, double value);
 double yon_rt_bits_or_64(double a, double b);
 double yon_rt_bits_and_64(double a, double b);
 double yon_rt_bits_xor_64(double a, double b);
 
 /* try_add returns added/dup flag for dual structure wavefront */
 double yon_rt_hashset_try_add(double set_id, double elem);
-double yon_rt_hashset_try_add_canon_sn(double set_id, double raw_value);
 
 /* zero-alloc iteration over HashSet buckets */
 double yon_rt_hashset_at_bucket(double set_id, double idx);

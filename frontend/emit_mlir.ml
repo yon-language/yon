@@ -576,11 +576,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Args__count", ([], "f64");
   "Args__get",  (["f64"], "f64");
   "File__exists",     (["f64"], "i1");
-  "DIMACS__uf20_load", (["f64"], "f64");
-  "DIMACS__uf50_load", (["f64"], "f64");
-  "DIMACS__n_vars",    (["f64"], "f64");
-  "DIMACS__G",         (["f64"], "f64");
-  "DIMACS__clause",    (["f64"], "f64");
   "Seq__range",        (["f64"], "f64");
   "Seq__range_to_list", (["f64"], "f64");
   "Bits__fold",       (["f64"; "f64"; "f64"], "f64");
@@ -594,20 +589,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Random__range",    (["f64"; "f64"], "f64");
   "Crypto__fnv1a",    (["f64"], "f64");
   "Crypto__hash_int", (["f64"], "f64");
-  "SAT__run_3sat",    (["f64"; "f64"; "f64"], "f64");
-  "SAT__run_3sat_filtered", (["f64"; "f64"; "f64"; "f64"], "f64");
-  "SAT__run_dimacs", (["f64"; "f64"], "f64");
-  "SAT__uf20", (["f64"; "f64"], "f64");
-  "SAT__uf50", (["f64"; "f64"], "f64");
-  "SAT__o_at", (["f64"], "f64");
-  "SAT__alpha_3sat", (["f64"; "f64"; "f64"; "f64"], "f64");
-  "SAT__uf20_orbital", (["f64"; "f64"], "f64");
-  "SAT__uf50_orbital", (["f64"; "f64"], "f64");
-  "SAT__uf20_leech", (["f64"; "f64"], "f64");
-  "SAT__uf50_leech", (["f64"; "f64"], "f64");
-  "SAT__leech_o_at", (["f64"], "f64");
-  "SAT__uf20_co0", (["f64"; "f64"], "f64");
-  "SAT__orbital_o_at", (["f64"], "f64");
   (* SCT integration in the structures. *)
   "HashMap__orbital_set", (["f64"; "f64"; "f64"], "f64");
   "HashMap__orbital_get", (["f64"; "f64"], "f64");
@@ -617,9 +598,7 @@ let stdlib_registry : (string * (string list * string)) list = [
   "HashMap__orbital_set_with", (["f64"; "f64"; "f64"; "f64"], "f64");
   "HashMap__orbital_get_with", (["f64"; "f64"; "f64"], "f64");
   "HashSet__orbital_add_with", (["f64"; "f64"; "f64"], "f64");
-  "HashSet__add_canon_sn", (["f64"; "f64"], "f64");
   "HashSet__try_add", (["f64"; "f64"], "f64");
-  "HashSet__try_add_canon_sn", (["f64"; "f64"], "f64");
   "HashSet__at_bucket", (["f64"; "f64"], "f64");
   "HashSet__dir_capacity", (["f64"], "f64");
   "HashSet__orbital_contains_with", (["f64"; "f64"; "f64"], "i1");
@@ -2941,29 +2920,6 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_file_exists(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "DIMACS__uf20_load", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_dimacs_uf20_load(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  | C.App (C.Var "DIMACS__uf50_load", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_dimacs_uf50_load(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  | C.App (C.Var "DIMACS__n_vars", _) ->
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_dimacs_n_vars() : () -> f64" v);
-      (v, "f64")
-  | C.App (C.Var "DIMACS__G", _) ->
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_dimacs_G() : () -> f64" v);
-      (v, "f64")
-  | C.App (C.Var "DIMACS__clause", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_dimacs_clause(%s) : (f64) -> f64" v va);
-      (v, "f64")
   | C.App (C.Var "Seq__range", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
@@ -3032,107 +2988,6 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_crypto_hash_int(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "SAT__run_3sat", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_3sat_run(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
-  | C.App (C.App (C.App (C.App (C.Var "SAT__run_3sat_filtered", a), b), c), d) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let (vd, _) = emit_term e env funcs d in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_3sat_filtered(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64" v va vb vc vd);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__run_dimacs", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_run(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__uf20", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_uf20(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__uf50", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_uf50(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.Var "SAT__o_at", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_o_at(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  | C.App (C.App (C.App (C.App (C.Var "SAT__alpha_3sat", a), b), c), d) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let (vd, _) = emit_term e env funcs d in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_3sat_alpha(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64" v va vb vc vd);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__uf20_orbital", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_uf20_orbital(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__uf50_orbital", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_uf50_orbital(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__uf20_leech", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_uf20_leech(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__uf50_leech", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_uf50_leech(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.Var "SAT__leech_o_at", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_leech_o_at(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  | C.App (C.App (C.Var "SAT__uf20_co0", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_uf20_co0(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.Var "SAT__orbital_o_at", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_sat_dimacs_orbital_o_at(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  (* HashMap/HashSet orbital ops. *)
   | C.App (C.App (C.App (C.Var "HashMap__orbital_set", a), b), c) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
@@ -3263,26 +3118,12 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hashset_orbital_add_with(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
-  | C.App (C.App (C.Var "HashSet__add_canon_sn", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_add_canon_sn(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
   | C.App (C.App (C.Var "HashSet__try_add", a), b) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hashset_try_add(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "HashSet__try_add_canon_sn", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_try_add_canon_sn(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "HashSet__at_bucket", a), b) ->
       let (va, _) = emit_term e env funcs a in
@@ -6106,11 +5947,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_args_count() -> f64";
   emit_line e "func.func private @yon_rt_args_get(f64) -> f64";
   emit_line e "func.func private @yon_rt_file_exists(f64) -> f64";
-  emit_line e "func.func private @yon_rt_dimacs_uf20_load(f64) -> f64";
-  emit_line e "func.func private @yon_rt_dimacs_uf50_load(f64) -> f64";
-  emit_line e "func.func private @yon_rt_dimacs_n_vars() -> f64";
-  emit_line e "func.func private @yon_rt_dimacs_G() -> f64";
-  emit_line e "func.func private @yon_rt_dimacs_clause(f64) -> f64";
   emit_line e "func.func private @yon_rt_seq_range(f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_fold(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_or_64(f64, f64) -> f64";
@@ -6123,20 +5959,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_random_range(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_crypto_fnv1a(f64) -> f64";
   emit_line e "func.func private @yon_rt_crypto_hash_int(f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_3sat_run(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_3sat_filtered(f64, f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_run(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_uf20(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_uf50(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_o_at(f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_3sat_alpha(f64, f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_uf20_orbital(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_uf50_orbital(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_uf20_leech(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_uf50_leech(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_leech_o_at(f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_uf20_co0(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_sat_dimacs_orbital_o_at(f64) -> f64";
   (* HashMap/HashSet orbital ops. *)
   emit_line e "func.func private @yon_rt_hashmap_orbital_set(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashmap_orbital_get(f64, f64) -> f64";
@@ -6146,9 +5968,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_hashmap_orbital_set_with(f64, f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashmap_orbital_get_with(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_orbital_add_with(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_add_canon_sn(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_try_add(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_try_add_canon_sn(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_at_bucket(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_dir_capacity(f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_orbital_contains_with(f64, f64, f64) -> f64";
