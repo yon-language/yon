@@ -585,15 +585,13 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Random__range",    (["f64"; "f64"], "f64");
   "Crypto__fnv1a",    (["f64"], "f64");
   "Crypto__hash_int", (["f64"], "f64");
-  (* SCT integration in the structures. *)
-  (* Pluggable canonicalizer. *)
   "HashSet__try_add", (["f64"; "f64"], "f64");
   "HashSet__at_bucket", (["f64"; "f64"], "f64");
   "HashSet__dir_capacity", (["f64"], "f64");
   "HashSet__union", (["f64"; "f64"], "f64");
   "HashSet__intersect", (["f64"; "f64"], "f64");
   "List__reverse", (["f64"], "f64");
-  (* HSH — History Store, Hierarchical (Teorema 1b, SCT 6.4) *)
+  (* Route — versioned history store. *)
   "Route__empty", (["f64"], "f64");
   "Route__empty_mod", (["f64"; "f64"], "f64");
   "Route__step", (["f64"; "f64"; "f64"], "f64");

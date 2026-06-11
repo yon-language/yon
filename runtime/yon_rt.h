@@ -928,7 +928,6 @@ double yon_rt_bits_popcount(double a);
 /* IO */
 double yon_rt_io_print_num(double x);
 
-/* SCT integration in the data structures. */
 
 /* Pluggable canonicalizer.
  * canon_id: 0=identity, 1=G_24, 2=M_24 weight, 3=Co_0 one-shot,
@@ -949,31 +948,10 @@ double yon_rt_random_range(double lo, double hi);
 double yon_rt_crypto_fnv1a(double str_id);
 double yon_rt_crypto_hash_int(double n);
 
-/* SAT 3-clause OR-wavefront prover. Empirical OR/SAT exploration at the phase
- * transition (alpha=4.27).
- *
- * metric_id: 1=|R|, 2=k_active, 3=max_o*1000, 4=avg_o*1000,
- *            5=sum_o*1000, 6=G, 7=R/G^5 *10^6 */
-
-/* SAT 3-clause with NOT literals + filtered satisfiable.
- * Encoding: pos_mask | (neg_mask << n_vars), wavefront in 2n-bit OR-space.
- * filter=1: retries generation up to 100 times until DPLL confirms SAT.
- * metric_id: 1=|R|, 2=k, 3=max_o*1000, 4=sum_o*1000, 5=G, 6=sat(0/1) */
-
-/* SAT DIMACS sparse wavefront.
- * Loads a .cnf file from str_id (xheap slot), proves via a sparse wavefront
- * state-space (HashSet, not bitmap). Works up to n_vars >> 24.
- * metric_id: 1=|R|, 2=k, 3=max_o*1000, 4=sum_o*1000, 5=G, 6=n_vars */
-
-/* SATLIB helper: load UF20/UF50 by index 1..1000. */
-
-
-
-/* Leech wavefront via embedding 2n->24 + G_24 syndrome canon. */
 double yon_rt_math_modulo(double a, double b);
 double yon_rt_math_gcd(double a, double b);
 
-/* String/File/Bits.fold for the native DIMACS+SAT parser */
+/* String / File / Bits helpers. */
 double yon_rt_string_parse_number(double str_id);
 double yon_rt_string_substring(double str_id, double start, double len);
 double yon_rt_string_find_char(double str_id, double char_code, double from_idx);
@@ -984,12 +962,12 @@ double yon_rt_bits_fold(double value, double op_id, double init);
 
 double yon_rt_seq_range(double n);
 
-/* Native S_n canonicalization for SAT wavefront */
+/* 64-bit Bits variants. */
 double yon_rt_bits_or_64(double a, double b);
 double yon_rt_bits_and_64(double a, double b);
 double yon_rt_bits_xor_64(double a, double b);
 
-/* try_add returns added/dup flag for dual structure wavefront */
+/* try_add returns added/dup flag. */
 double yon_rt_hashset_try_add(double set_id, double elem);
 
 /* zero-alloc iteration over HashSet buckets */

@@ -71,5 +71,4 @@ trees. `VoyagerList`, above, is a Golay-sealed list, error-correcting
 storage, à la Voyager probe (`corrupt_at` exists precisely so you can watch
 it heal). And `Magma` (with `solve P`, chapter 5) turns a law-verified place
 into a runnable algebraic structure: closure, reachability with certificates,
-normal forms, subset-sum and knapsack as algebraic queries over the
-Leech-lattice runtime.
+and normal forms.

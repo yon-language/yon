@@ -398,7 +398,7 @@ effects, move/morphism gating) with opt-in physical heap separation
 | `List` / `Map` / `Set` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
 | `Merkle` | Content-addressed Merkle trees |
 | `VoyagerList` | Golay-sealed list (error-correcting) |
-| `Magma` | `gen, closure_size, reachable, normal_form, subsetsum[_mask], knapsack[_mask]`, with `solve P` |
+| `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog`, with `solve P` |
 | `Stream` | `from_list, map, filter, fold, iterate, take` |
 | `Space` | `make, set, get`, mutable cells (the 1.0 mutation mechanism) |
 

@@ -608,19 +608,16 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "has", [TyUser "Map"; tunk], tbool;
       "size", [TyUser "Map"], tnum;
       "to_stream", [TyUser "Map"], tlist tunk;
-      (* Pluggable canonicalizer.
-       * canon_id: 0=identity, 1=G_24, 2=M_24 weight, 3=Co_0 one-shot,
-       *           4=Co_0 BFS bounded, 5=popcount, 6=mod_8 *)
     ];
-    (* HSH — History Store, Hierarchical. A backward prover with three views:
-     * hash (O(1) membership), voyager (witness extraction), merkle (sharing
-     * of the H_i levels). *)
+    (* Route — versioned history store with three views: hash (O(1)
+     * membership), voyager (witness extraction), merkle (sharing of the
+     * H_i levels). *)
     "Route", [
-      "empty", [tnum], tnum;                     (* HSH.empty(e) -> store *)
-      "empty_mod", [tnum; tnum], tnum;            (* HSH.empty_mod(e, M) -> store Z_M *)
-      "step", [tnum; tnum; tnum], tnum;           (* HSH.step(store, a_i, mod) *)
-      "contains", [tnum; tnum; tnum], tbool;      (* HSH.contains(store, level, v) *)
-      "witness", [tnum; tnum; tnum], tnum;        (* HSH.witness(store, goal, _) -> bitmask *)
+      "empty", [tnum], tnum;                     (* Route.empty(e) -> store *)
+      "empty_mod", [tnum; tnum], tnum;            (* Route.empty_mod(e, M) -> store Z_M *)
+      "step", [tnum; tnum; tnum], tnum;           (* Route.step(store, a_i, mod) *)
+      "contains", [tnum; tnum; tnum], tbool;      (* Route.contains(store, level, v) *)
+      "witness", [tnum; tnum; tnum], tnum;        (* Route.witness(store, goal, _) -> bitmask *)
       "shared_levels", [tnum], tnum;              (* # levels with a shared Merkle root *)
       "levels", [tnum], tnum;                     (* # H_i levels *)
     ];
@@ -632,8 +629,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "union", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "to_stream", [TyUser "Map"], tlist tunk;
-      (* pluggable *)
-      (* Dual-structure wavefront support. *)
       "try_add", [TyUser "Map"; tnum], tnum;
       (* zero-alloc iteration *)
       "at_bucket", [TyUser "Map"; tnum], tnum;
@@ -795,7 +790,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "popcount", [tnum], tnum;
       (* Bits.fold over set bits. *)
       "fold", [tnum; tnum; tnum], tnum;
-      (* 64-bit variants for SAT 2n>32. *)
+      (* 64-bit variants. *)
       "bor_64", [tnum; tnum], tnum;
       "band_64", [tnum; tnum], tnum;
       "bxor_64", [tnum; tnum], tnum;
@@ -811,7 +806,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "equal",    [TyUser "String"; TyUser "String"], tbool;
       "char_at",  [TyUser "String"; tnum], tnum;
       "print",    [TyUser "String"], tnum;
-      (* for DIMACS parser *)
+      (* string parsing helpers *)
       "parse_number", [TyUser "String"], tnum;
       "substring", [TyUser "String"; tnum; tnum], TyUser "String";
       "find_char", [TyUser "String"; tnum; tnum], tnum;
@@ -845,10 +840,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "fnv1a",    [TyUser "String"], tnum;
       "hash_int", [tnum], tnum;
     ];
-    (* SAT 3-clause prover.
-     * Empirical OR/SAT at the phase transition alpha=4.27.
-     * metric_id: 1=|R|, 2=k_active, 3=max_o*1000, 4=avg_o*1000,
-     *            5=sum_o*1000, 6=G, 7=R/G^5*10^6 *)
     (* Cross-Space streams.
      * Stream.make(target_heap) -> stream_id as number
      * Stream.send(stream_id, value) -> 0 on success

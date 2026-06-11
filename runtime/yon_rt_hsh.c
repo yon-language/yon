@@ -1,7 +1,7 @@
 /* ============================================================================
  * HSH — Hierarchical History Store (array-backed)
  * ----------------------------------------------------------------------------
- * A structure for the backward direction of the prover.
+ * A structure for the backward reachability direction.
  * A chain H_0 subset H_1 subset ... subset H_n with three views of the same
  * content:
  *   HASH view    (hashset)        -> membership (v in H_i) in O(1)
@@ -570,7 +570,6 @@ double yon_rt_alg_catalog_is_associative(double cat_id);
 double yon_rt_alg_catalog_identity(double cat_id);
 double yon_rt_alg_catalog_is_monotone(double cat_id);
 double yon_rt_alg_reachable_bounded(double,const double*,double,int,double);
-double yon_rt_alg_knapsack(const double*,const double*,double,double,double*);
 double yon_rt_alg_subsetsum(double,const double*,double,double,int,double*);
 
 #define YON_MAGMA_MAX     64u
@@ -582,8 +581,6 @@ typedef struct {
     uint32_t n_gen;
     double   word[YON_MAGMA_GEN_CAP];   /* parola per normal_form */
     uint32_t n_word;
-    double   kw[YON_MAGMA_GEN_CAP];     /* knapsack: pesi/costi */
-    double   kv[YON_MAGMA_GEN_CAP];     /* knapsack: values/yields */
     uint32_t n_knap;
     uint32_t is_used;
 } ds_magma_t;
@@ -887,66 +884,3 @@ double yon_rt_alg_subsetsum(double op_id, const double *gen, double n_gen_d,
 }
 
 
-/* ============================================================================
- * 0/1 Knapsack — OPTIMIZATION.
- *
- * Different from subsetsum (reachability): here we maximize the value while
- * keeping the weight <= capacity. State = (mask, total_weight, total_value).
- * Composes two states iff the masks are disjoint (each item once, like Theorem
- * 4) AND the combined weight <= cap (valid pruning: the weight is monotonically
- * increasing, a state already over cap will not come back). Tracks the global
- * maximum value + mask.
- *
- * Item i: weights[i] (weight/cost), values[i] (value/yield). n <= 53.
- * Returns the maximum value obtainable within cap; writes into out_mask the
- * mask of the selected items (the certificate: which items).
- * Terminates: states with weight<=cap and distinct masks are finite in number.
- * ============================================================================ */
-double yon_rt_alg_knapsack(const double *weights, const double *values,
-                           double n_d, double cap, double *out_mask) {
-    uint32_t n = (uint32_t)n_d;
-    if (n > 53) n = 53;
-    yon_xheap_t *H = yon_xheap_create();
-    if (!H) return 0.0;
-    static double Sw[1u<<16]; static double Sv[1u<<16]; static uint64_t Sm[1u<<16];
-    uint32_t s_n = 0;
-    double best_val = 0.0; uint64_t best_mask = 0;   /* empty state: value 0 is valid */
-
-    /* single items that fit in the budget */
-    for (uint32_t i = 0; i < n; i++) {
-        if (weights[i] > cap) continue;             /* alone already over budget */
-        double w = weights[i], v = values[i]; uint64_t m = (1ULL << i);
-        struct { uint64_t m; } key = { m };
-        bool was_new = false;
-        yon_xheap_put_or_get(H, &key, sizeof(key), YON_TAG_USER1, &was_new);
-        if (was_new && s_n < (1u<<16)) { Sw[s_n]=w; Sv[s_n]=v; Sm[s_n]=m; s_n++; }
-        if (v > best_val) { best_val = v; best_mask = m; }
-    }
-    /* closure: combine states with disjoint masks, weight within cap */
-    uint32_t frontier_start = 0; int grew = 1;
-    while (grew) {
-        grew = 0; uint32_t cur_n = s_n;
-        for (uint32_t i = 0; i < cur_n; i++) {
-            uint32_t jstart = (i >= frontier_start) ? 0 : frontier_start;
-            for (uint32_t j = jstart; j < cur_n; j++) {
-                if (Sm[i] & Sm[j]) continue;           /* disjointness: each item once */
-                double w = Sw[i] + Sw[j];
-                if (w > cap) continue;                 /* pruning: oltre budget */
-                uint64_t m = Sm[i] | Sm[j];
-                double v = Sv[i] + Sv[j];
-                struct { uint64_t m; } key = { m };
-                bool was_new = false;
-                yon_xheap_put_or_get(H, &key, sizeof(key), YON_TAG_USER1, &was_new);
-                if (was_new) {
-                    if (s_n < (1u<<16)) { Sw[s_n]=w; Sv[s_n]=v; Sm[s_n]=m; s_n++; }
-                    grew = 1;
-                    if (v > best_val) { best_val = v; best_mask = m; }
-                }
-            }
-        }
-        frontier_start = cur_n;
-    }
-    yon_xheap_destroy(H);
-    if (out_mask) *out_mask = (double)best_mask;
-    return best_val;
-}
