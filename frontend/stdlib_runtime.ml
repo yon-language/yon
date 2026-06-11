@@ -608,14 +608,9 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "has", [TyUser "Map"; tunk], tbool;
       "size", [TyUser "Map"], tnum;
       "to_stream", [TyUser "Map"], tlist tunk;
-      (* orbital ops dedupli per G_24 orbita *)
-      "orbital_set", [TyUser "Map"; tnum; tnum], TyUser "Map";
-      "orbital_get", [TyUser "Map"; tnum], tnum;
       (* Pluggable canonicalizer.
        * canon_id: 0=identity, 1=G_24, 2=M_24 weight, 3=Co_0 one-shot,
        *           4=Co_0 BFS bounded, 5=popcount, 6=mod_8 *)
-      "orbital_set_with", [TyUser "Map"; tnum; tnum; tnum], TyUser "Map";
-      "orbital_get_with", [TyUser "Map"; tnum; tnum], tnum;
     ];
     (* HSH — History Store, Hierarchical. A backward prover with three views:
      * hash (O(1) membership), voyager (witness extraction), merkle (sharing
@@ -637,12 +632,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "union", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "to_stream", [TyUser "Map"], tlist tunk;
-      (* orbital ops *)
-      "orbital_add", [TyUser "Map"; tnum], TyUser "Map";
-      "orbital_contains", [TyUser "Map"; tnum], tbool;
       (* pluggable *)
-      "orbital_add_with", [TyUser "Map"; tnum; tnum], TyUser "Map";
-      "orbital_contains_with", [TyUser "Map"; tnum; tnum], tbool;
       (* Dual-structure wavefront support. *)
       "try_add", [TyUser "Map"; tnum], tnum;
       (* zero-alloc iteration *)
@@ -661,9 +651,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "union", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "to_stream", [TyUser "Map"], tlist tnum;
-      (* orbital pluggable *)
-      "orbital_add", [TyUser "Map"; tnum; tnum], TyUser "Map";
-      "orbital_contains", [TyUser "Map"; tnum; tnum], tbool;
     ];
     (* Merkle DAG as a stdlib place.
      * Surface API: MerkleTree.{leaf, node2, label, child, equal, to_stream}.
@@ -681,8 +668,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "child", [TyUser "MerkleTree"; tnum], TyUser "MerkleTree";
       "equal", [TyUser "MerkleTree"; TyUser "MerkleTree"], tbool;
       "to_stream", [TyUser "MerkleTree"], tlist tnum;
-      (* leaf orbital *)
-      "leaf_orbital", [tnum; tnum], TyUser "MerkleTree";
     ];
     "Leech", [
       "sign_canonical", [tnum; tnum], tnum;
@@ -732,10 +717,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "new", [tunk], TyUser "Space";
       "get", [TyUser "Space"], tunk;
       "set", [TyUser "Space"; tunk], tunit;
-      (* An orbital-indexed Space. Lets one keep "states equivalent by orbit"
-       * in a single Space. *)
-      "orbital_set", [TyUser "Space"; tnum; tnum; tnum], tunit;
-      "orbital_get", [TyUser "Space"; tnum; tnum], tnum;
     ];
     (* The Lattice module was removed (dead code). No example uses it; the
      * example topos_heyt_int_lattice.yon uses the __heyt_int_make builtins

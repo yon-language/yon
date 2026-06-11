@@ -48,8 +48,7 @@ function Heap() {
               equality</strong>, by construction. The work is done by content-addressing, not by lattice geometry.
               The Leech lattice enters as a deliberate bound: a heap holds at most <strong>196,560 slots</strong>,
               the count of minimal vectors of Λ<sub>24</sub> — a fixed, bounded-state capacity that fails loudly at
-              the limit instead of degrading silently. Where the lattice is actually load-bearing is below: sets,
-              symmetry, and error correction.
+              the limit instead of degrading silently. Where the lattice is actually load-bearing is below: sets and error correction.
             </p>
             <div className={styles.stat}>
               <b>String.equal</b>: ~17 ns at 1 char and at 32,768 chars. Three orders of magnitude of size,
@@ -162,30 +161,6 @@ function Sets() {
   );
 }
 
-function Orbits() {
-  return (
-    <section className={styles.section}>
-      <div className={styles.sectionIn}>
-        <div className={styles.panel}>
-          <span className={styles.kicker}>Symmetry</span>
-          <h2 className={styles.h2}>Opt in to identity up to symmetry.</h2>
-          <p className={styles.lede}>
-            Ordinary allocation addresses a value by its exact content. On top of that, Yon offers
-            <strong> opt-in orbital canonicalization</strong>. The Leech lattice carries an exceptional symmetry
-            group, the Conway group Co<sub>0</sub>, containing the Mathieu group M<sub>24</sub> acting on the 24
-            coordinates of the Golay code. Two values that differ only by such a symmetry lie in the same orbit.
-            A collection can be asked to identify each value with the canonical representative of its orbit, so
-            symmetry-equivalent contents collapse to one slot: <code>HashSet.orbital_add</code>,
-            <code> HashMap.orbital_set</code>, and the orbital variants of XSet and the rest. It is a choice you
-            make per collection, where symmetry-equivalence is the identity you want; the canonical form is
-            computed through the same mmgroup machinery as the rest of the Leech engine.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function Voyager() {
   return (
     <section className={`${styles.section} ${styles.sectionAlt}`}>
@@ -200,7 +175,7 @@ function Voyager() {
             <code> mat24</code> tables, not a re-implementation. The code has minimum distance 8, so any
             <strong> three</strong> flipped bits in a codeword are detected and corrected on read. The Golay code
             is not decoration here: it is the combinatorial object the Leech lattice is built from, so the same
-            engine that addresses sets and canonicalizes orbits also hardens storage against corruption.
+            engine that addresses sets also hardens storage against corruption.
           </p>
         </div>
       </div>
@@ -211,12 +186,11 @@ function Voyager() {
 export default function Home() {
   return (
     <Layout title="The Topos of Programming"
-            description="A topos-oriented programming language. Native via MLIR and LLVM, with a content-addressed heap and Leech-lattice sets, symmetry, and error correction.">
+            description="A topos-oriented programming language. Native via MLIR and LLVM, with a content-addressed heap and Leech-lattice sets and error correction.">
       <main className={styles.page}>
         <Hero />
         <Heap />
         <Sets />
-        <Orbits />
         <Voyager />
         <Topos />
         <Execution />
