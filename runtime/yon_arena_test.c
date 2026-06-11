@@ -49,17 +49,19 @@ int main(void) {
            ok, YON_LEECH_TYPE2_COUNT, wrong);
     printf("  orbit sealed==calc: %ld / %u  (inconsistent %ld)\n",
            orbit_consistent, YON_LEECH_TYPE2_COUNT, orbit_bad);
-    printf("  distinct subtypes (shapes) over all type-2 points: %ld\n", distinct);
+    printf("  distinct pure M24 orbits over all type-2 points: %ld\n", distinct);
 
-    /* orbit invariant under the central sign (negate): same 24 low bits */
-    int sign_ok = 1;
+    /* M24 is permutations of coordinates only: the central sign is not in M24,
+     * so negate need not preserve the pure orbit (informational, not asserted). */
+    int neg_diff = 0;
     uint32_t probe[5] = { 0u, 100u, 1000u, 50000u, 196559u };
     for (int i = 0; i < 5; i++) {
         yon_xcoord_t v = yon_mphf_unindex(probe[i]);
         yon_xcoord_t nv = yon_xcoord_negate(v);
-        if (yon_arena_orbit(a, v) != yon_arena_orbit(a, nv)) sign_ok = 0;
+        if (yon_arena_orbit(a, v) != yon_arena_orbit(a, nv)) neg_diff++;
     }
-    printf("  orbit(v)==orbit(-v): %s\n", sign_ok ? "ok" : "FAIL");
+    printf("  sign vs M24 orbit : %d/5 probes change orbit under negate (M24 = perms only)\n",
+           neg_diff);
 
     /* --- brick 2: sigma-certified fusions, LIFO --- */
     yon_xcoord_t p = yon_mphf_unindex(100u);
@@ -111,8 +113,8 @@ int main(void) {
 
     int pass = (ok == (long)YON_LEECH_TYPE2_COUNT && wrong == 0
                 && orbit_consistent == (long)YON_LEECH_TYPE2_COUNT && orbit_bad == 0
-                && distinct == 3
-                && sign_ok && fusion_ok
+                && distinct == 12
+                && fusion_ok
                 && put_bad == 0 && orb_bad == YON_ARENA_ORBIT_INVALID
                 && eq_inv == eq_total && eq_same == eq_total
                 && moved > 0 && cert_moved == moved

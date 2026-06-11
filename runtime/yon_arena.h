@@ -60,37 +60,35 @@ long yon_arena_fusions(const ds_arena_t *a, yon_xcoord_t point,
 /* Sentinel orbit for a non-type-2 point. */
 #define YON_ARENA_ORBIT_INVALID 0xFFFFFFFFu
 
-/* The orbit invariant of a point. Sealed at allocation: for an occupied slot it
- * is a stored field (O(1), no recomputation — the orbit belongs to the value
- * because of where it was allocated, not a parameter recomputed per op). For an
- * unoccupied type-2 point it is computed on the fly; for a non-type-2 point it is
- * YON_ARENA_ORBIT_INVALID. The invariant is gen_leech2_subtype, genuinely
- * equivariant; over the type-2 shell it takes three values (0x20, 0x21, 0x22),
- * the three shapes (4^2 0^22), (3 1^23), (2^8 0^16). */
+/* The orbit of a point. Sealed at allocation: for an occupied slot it is a
+ * stored field (O(1), no recomputation — the orbit belongs to the value because
+ * of where it was allocated). For an unoccupied type-2 point it is looked up; for
+ * a non-type-2 point it is YON_ARENA_ORBIT_INVALID. The value is the pure M24
+ * orbit id in [0, 12): the exact orbit of the point under the Mathieu group M24,
+ * precomputed once over the type-2 shell. */
 uint32_t yon_arena_orbit(const ds_arena_t *a, yon_xcoord_t point);
 
-/* The orbit invariant of a point (the leech2 subtype), independent of any arena
- * state: the subtype for a type-2 point, or YON_ARENA_ORBIT_INVALID otherwise. */
+/* The pure M24 orbit id of a point ([0,12)), independent of any arena state, or
+ * YON_ARENA_ORBIT_INVALID otherwise. */
 uint32_t yon_arena_orbit_of(yon_xcoord_t point);
 
 /* Maximum length (in atoms) of an emitted sigma certificate word. */
 #define YON_ARENA_SIGMA_MAX 64u
 
-/* Decide whether two type-2 points share the same orbit invariant (subtype), and
- * optionally emit a sigma certificate. Returns 1 if same subtype, 0 otherwise
- * (including if either point is not type-2).
+/* Decide whether two type-2 points lie in the same pure M24 orbit, and optionally
+ * emit a sigma certificate. Returns 1 if same orbit, 0 otherwise (including if
+ * either point is not type-2).
  *
- * Layer 1 — the judge: the leech2 subtype, equivariant. A different subtype means
- * a different orbit, exact and O(1); this decides every "no".
+ * Layer 1 — the judge: the pure M24 orbit id (precomputed, exact). Equal id iff
+ * the points are carried onto each other by some g in M24.
  * Layer 2 — the certificate: when sigma_word_out and sigma_len_out are non-NULL
  * and the points pass layer 1, the transport's sigma (a group word carrying p to
  * q) is written out, up to YON_ARENA_SIGMA_MAX atoms.
  *
- * HONEST SCOPE: the subtype partitions the type-2 shell into the three shapes; it
- * is the natural G_x0 orbit invariant, exact for that group. The sigma the
- * transport returns is a Co_0 witness (Co_0 is transitive on the type-2 vectors),
- * not restricted to a finer subgroup. If one ever wanted the pure M24 orbits
- * (finer than three), the subtype would be only a filter, not the decision. */
+ * HONEST NOTE: the decision is exact (it reads the precomputed M24 orbit table).
+ * The sigma the transport returns is a Co_0 witness (Co_0 is transitive on the
+ * type-2 vectors), not a word restricted to M24; it certifies Co_0-equivalence,
+ * which always holds, so the orbit decision rests on the table, not on sigma. */
 int yon_arena_same_orbit_exact(yon_xcoord_t p, yon_xcoord_t q,
                                uint32_t *sigma_word_out, uint32_t *sigma_len_out);
 
