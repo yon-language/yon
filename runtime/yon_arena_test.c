@@ -1,4 +1,4 @@
-/* yon_arena_test.c — oracle for the Leech type-2 arena (road 3, bricks 1-3).
+/* yon_arena_test.c — oracle for the Leech type-2 arena (road 3, bricks 1-4).
  *
  * Brick 1: repr round-trip + zero collisions over all 196560 points.
  * Brick 2: sigma-certified fusion list (LIFO, walked back exactly).
@@ -28,7 +28,7 @@ static void collect(uint32_t value, uint32_t sigma, void *ctx) {
 static char seen_orbit[8192];   /* orbit invariant <= (24<<8)|24 = 6168 */
 
 int main(void) {
-    printf("=== Leech type-2 arena oracle (road 3, bricks 1-3) ===\n\n");
+    printf("=== Leech type-2 arena oracle (road 3, bricks 1-4) ===\n\n");
     yon_xheap_t *heap = yon_xheap_create();
     ds_arena_t *a = yon_arena_create(heap);
 
@@ -49,7 +49,7 @@ int main(void) {
            ok, YON_LEECH_TYPE2_COUNT, wrong);
     printf("  orbit sealed==calc: %ld / %u  (inconsistent %ld)\n",
            orbit_consistent, YON_LEECH_TYPE2_COUNT, orbit_bad);
-    printf("  distinct M24 orbits over all type-2 points: %ld\n", distinct);
+    printf("  distinct subtypes (shapes) over all type-2 points: %ld\n", distinct);
 
     /* orbit invariant under the central sign (negate): same 24 low bits */
     int sign_ok = 1;
@@ -78,11 +78,45 @@ int main(void) {
     int put_bad = yon_arena_put_repr(a, bad, 999u);
     uint32_t orb_bad = yon_arena_orbit(a, bad);
 
+    /* --- brick 4: M24 equivariance + same_orbit_exact (filter decides, transport certifies) --- */
+    extern uint32_t gen_leech2_op_atom(uint32_t q0, uint32_t g);
+    long eq_total = 0, eq_same = 0, eq_inv = 0, moved = 0, cert_moved = 0;
+    uint32_t m24nums[6] = { 1u, 2u, 7u, 1000u, 123456u, 7654321u };
+    uint32_t sidx[5] = { 0u, 100u, 5000u, 100000u, 196559u };
+    for (int si = 0; si < 5; si++) {
+        yon_xcoord_t pp = yon_mphf_unindex(sidx[si]);
+        for (int mi = 0; mi < 6; mi++) {
+            uint32_t atom = 0x20000000u | (m24nums[mi] & 0x0FFFFFFFu);  /* TAG_P | m24num */
+            yon_xcoord_t gp = (yon_xcoord_t)gen_leech2_op_atom((uint32_t)pp, atom);
+            uint32_t sw[YON_ARENA_SIGMA_MAX]; uint32_t sl = 0;
+            eq_total++;
+            if (yon_arena_orbit_of(pp) == yon_arena_orbit_of(gp)) eq_inv++;  /* subtype preserved */
+            if (yon_arena_same_orbit_exact(pp, gp, sw, &sl)) eq_same++;       /* g.p in p's orbit */
+            if ((uint32_t)gp != (uint32_t)pp) { moved++; if (sl > 0) cert_moved++; }
+        }
+    }
+    printf("  M24 equivariance  : subtype %ld/%ld, same-orbit %ld/%ld; sigma when moved %ld/%ld\n",
+           eq_inv, eq_total, eq_same, eq_total, cert_moved, moved);
+
+    /* across distinct subtypes the filter must cut: same_orbit_exact == no */
+    yon_xcoord_t r0 = yon_mphf_unindex(0u);
+    uint32_t o0 = yon_arena_orbit_of(r0);
+    yon_xcoord_t rdiff = r0; int found_diff = 0;
+    for (uint32_t k = 1; k < YON_LEECH_TYPE2_COUNT && !found_diff; k++) {
+        yon_xcoord_t cand = yon_mphf_unindex(k);
+        if (yon_arena_orbit_of(cand) != o0) { rdiff = cand; found_diff = 1; }
+    }
+    int cross_cut = found_diff && (yon_arena_same_orbit_exact(r0, rdiff, NULL, NULL) == 0);
+    printf("  cross-subtype cut : %s\n", cross_cut ? "no (ok)" : "FAIL");
+
     int pass = (ok == (long)YON_LEECH_TYPE2_COUNT && wrong == 0
                 && orbit_consistent == (long)YON_LEECH_TYPE2_COUNT && orbit_bad == 0
-                && distinct > 0 && distinct < 100
+                && distinct == 3
                 && sign_ok && fusion_ok
-                && put_bad == 0 && orb_bad == YON_ARENA_ORBIT_INVALID);
+                && put_bad == 0 && orb_bad == YON_ARENA_ORBIT_INVALID
+                && eq_inv == eq_total && eq_same == eq_total
+                && moved > 0 && cert_moved == moved
+                && cross_cut);
     printf("\n  %s\n", pass ? "ALL PASS" : "FAILED");
 
     yon_arena_destroy(a);

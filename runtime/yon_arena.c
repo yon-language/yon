@@ -5,7 +5,6 @@
 #include "xleech2_heap.h"   /* YON_HEAPREF_INVALID */
 #include "leech_theta.h"    /* YON_LEECH_TYPE2_COUNT */
 #include "yon_mmap.h"       /* yon_map / yon_unmap */
-#include "mat24_functions.h"  /* mat24_syndrome, for the M24 orbit invariant */
 
 #include <stddef.h>
 #include <string.h>
@@ -39,16 +38,15 @@ _Static_assert(sizeof(((struct ds_arena *)0)->slots) / sizeof(arena_slot_t)
                    == YON_LEECH_TYPE2_COUNT,
     "arena must hold exactly the type-2 vectors (theta_coeff 2 = 196560)");
 
-/* M24 orbit invariant of a type-2 point: (codeword_weight << 8) | syndrome_weight,
- * via mat24_syndrome. Constant on each M24 orbit; the same computation the
- * runtime's yon_rt_leech_m24_orbit performs, without the heap-id indirection. */
+/* M24/Co_0 orbit invariant of a type-2 point: gen_leech2_subtype, the genuine
+ * equivariant invariant on leech2 vectors. Over the type-2 shell it takes three
+ * values (0x20, 0x21, 0x22) — the three shapes (4^2 0^22), (3 1^23), (2^8 0^16).
+ * (An earlier version applied mat24_syndrome to the low 24 bits; that treats the
+ * leech2 encoding as raw coordinates and is NOT M24-equivariant — verified to
+ * break under gen_leech2_op_atom — so it is not an orbit invariant. Replaced.) */
 static uint32_t arena_m24_orbit(yon_xcoord_t point) {
-    uint32_t v    = ((uint32_t)point) & 0xFFFFFFu;
-    uint32_t synd = mat24_syndrome(v, 0);
-    uint32_t gpart = v ^ synd;
-    uint32_t w_g = (uint32_t)__builtin_popcount(gpart);
-    uint32_t w_c = (uint32_t)__builtin_popcount(synd);
-    return (w_g << 8) | w_c;
+    extern uint32_t gen_leech2_subtype(uint64_t v2);
+    return gen_leech2_subtype((uint64_t)point);
 }
 
 ds_arena_t *yon_arena_create(yon_xheap_t *heap) {
@@ -135,4 +133,40 @@ uint32_t yon_arena_orbit(const ds_arena_t *a, yon_xcoord_t point) {
     const arena_slot_t *s = &a->slots[idx];
     if (s->occupied) return s->orbit;        /* sealed at allocation, O(1) */
     return arena_m24_orbit(point);           /* not yet allocated: compute */
+}
+
+uint32_t yon_arena_orbit_of(yon_xcoord_t point) {
+    extern int32_t gen_leech2_reduce_type2(uint32_t, uint32_t *);
+    uint32_t g[32];
+    if (gen_leech2_reduce_type2((uint32_t)point & 0xFFFFFFu, g) < 0)
+        return YON_ARENA_ORBIT_INVALID;
+    return arena_m24_orbit(point);
+}
+
+int yon_arena_same_orbit_exact(yon_xcoord_t p, yon_xcoord_t q,
+                               uint32_t *sigma_word_out, uint32_t *sigma_len_out) {
+    /* mmgroup primitives, declared as the runtime's transport does (no yon_rt dep) */
+    extern int32_t  gen_leech2_reduce_type2(uint32_t, uint32_t *);
+    extern uint32_t mm_group_mul_words(uint32_t *, uint32_t, uint32_t *, uint32_t, int32_t);
+
+    uint32_t vp = (uint32_t)p & 0xFFFFFFu;
+    uint32_t vq = (uint32_t)q & 0xFFFFFFu;
+    uint32_t gp[32], gq[32];
+    int32_t lp = gen_leech2_reduce_type2(vp, gp);
+    int32_t lq = gen_leech2_reduce_type2(vq, gq);
+    if (lp < 0 || lq < 0) return 0;          /* not type-2: no orbit */
+
+    /* layer 1 (the judge): different M24 invariant => different orbit, exact */
+    if (arena_m24_orbit(p) != arena_m24_orbit(q)) return 0;
+
+    /* layer 2 (the certificate): sigma = g_p * g_q^{-1} carries p to q */
+    if (sigma_word_out && sigma_len_out) {
+        uint32_t sigma[YON_ARENA_SIGMA_MAX];
+        uint32_t ls = mm_group_mul_words(sigma, 0, gp, (uint32_t)lp, 1);
+        ls = mm_group_mul_words(sigma, ls, gq, (uint32_t)lq, -1);
+        if (ls > YON_ARENA_SIGMA_MAX) ls = YON_ARENA_SIGMA_MAX;
+        for (uint32_t i = 0; i < ls; i++) sigma_word_out[i] = sigma[i];
+        *sigma_len_out = ls;
+    }
+    return 1;
 }
