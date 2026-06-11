@@ -1,0 +1,17 @@
+/* Land — the reachability view of a Magma. Generators {3, 5, 7} under (Z, +).
+ * Reachable by composing disjoint generators: 3, 5, 7, 8, 10, 12, 15.
+ *   reach(8) = true  (3 + 5)
+ *   reach(9) = false (no disjoint subset sums to 9)
+ *   witness(8) = bitmask of the generators that reach 8 = {gen0=3, gen1=5}
+ *              = 0b011 = 3
+ * return (reach8 ? 100 : 0) + (reach9 ? 0 : 10) + witness8 = 100 + 10 + 3 = 113. */
+fun main(): number {
+  be m0 holds Magma.empty(0)
+  be m1 holds Magma.gen(m0, 3)
+  be m2 holds Magma.gen(m1, 5)
+  be m3 holds Magma.gen(m2, 7)
+  be reach8 holds Land.reach(m3, 8)
+  be reach9 holds Land.reach(m3, 9)
+  be w8 holds Land.witness(m3, 8)
+  return (if reach8 then 100 else 0) + (if reach9 then 0 else 10) + w8
+}

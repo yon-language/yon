@@ -571,6 +571,7 @@ double yon_rt_alg_catalog_identity(double cat_id);
 double yon_rt_alg_catalog_is_monotone(double cat_id);
 double yon_rt_alg_reachable_bounded(double,const double*,double,int,double);
 double yon_rt_alg_knapsack(const double*,const double*,double,double,double*);
+double yon_rt_alg_subsetsum(double,const double*,double,double,int,double*);
 
 #define YON_MAGMA_MAX     64u
 #define YON_MAGMA_GEN_CAP 4096u
@@ -673,6 +674,29 @@ double yon_rt_magma_reachable(double h, double T) {
         return yon_rt_alg_reachable_bounded(m->op_id, m->gen, (double)m->n_gen, comm, T);
     double ca, cb;
     return yon_rt_alg_reachable(m->op_id, m->gen, (double)m->n_gen, comm, T, &ca, &cb);
+}
+
+/* Land.reach(magma, target) -> 1.0 if the target is reachable by composing
+ * generators (each at most once, Theorem 4) under the magma operation, else
+ * 0.0. Coherent with Land.witness by construction: both run the same disjoint
+ * composition; reach is "a witness exists", witness is the witness itself. */
+double yon_rt_land_reach(double h, double T) {
+    ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
+    int mono = (m->cat_id >= 0.0) ? (int)yon_rt_alg_catalog_is_monotone(m->cat_id) : 0;
+    double mask = 0.0;
+    return yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, mono, &mask);
+}
+
+/* Land.witness(magma, target) -> the certificate: a bitmask of which generators
+ * compose (under the magma operation, each used at most once) to reach the
+ * target. 0 if the target is not reachable. The reachability decision is
+ * Land.reach; this returns the witnessing combination. */
+double yon_rt_land_witness(double h, double T) {
+    ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
+    int mono = (m->cat_id >= 0.0) ? (int)yon_rt_alg_catalog_is_monotone(m->cat_id) : 0;
+    double mask = 0.0;
+    yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, mono, &mask);
+    return mask;
 }
 /* word for normal_form: push elements, then normal_form reduces them */
 double yon_rt_magma_word_push(double h, double x) {
