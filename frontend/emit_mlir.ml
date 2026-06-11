@@ -497,6 +497,8 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Leech__co0_canonical",  (["f64"], "f64");
   "Leech__co0_equivalent", (["f64"; "f64"], "f64");
   "Leech__co0_orbit_size", (["f64"; "f64"], "f64");
+  "Leech__transport",       (["f64"; "f64"], "f64");
+  "Leech__transport_apply", (["f64"; "f64"], "f64");
   (* Capabilities and schema-version tracking. *)
   "Cap__grant",   (["f64"], "f64");
   "Cap__check",   (["f64"], "f64");
@@ -2514,6 +2516,20 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_leech_co0_equivalent(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "Leech__transport", a), b) ->
+      let (va,_) = emit_term e env funcs a in
+      let (vb,_) = emit_term e env funcs b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_leech_transport(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "Leech__transport_apply", a), b) ->
+      let (va,_) = emit_term e env funcs a in
+      let (vb,_) = emit_term e env funcs b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_leech_transport_apply(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.Var "Leech__co0_step", arg) ->
       let (va, _) = emit_term e env funcs arg in
@@ -5935,6 +5951,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_leech_co0_step(f64) -> f64";
   emit_line e "func.func private @yon_rt_leech_co0_canonical_exact(f64) -> f64";
   emit_line e "func.func private @yon_rt_leech_co0_equivalent(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_leech_transport(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_leech_transport_apply(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_leech_co0_canonical(f64) -> f64";
   emit_line e "func.func private @yon_rt_leech_co0_orbit_size(f64, f64) -> f64";
   (* Capability + schema evolution. *)

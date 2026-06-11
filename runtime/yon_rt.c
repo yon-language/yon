@@ -4056,6 +4056,62 @@ double yon_rt_leech_same_orbit(double signs_a, double signs_b) {
 }
 
 /* ============================================================== */
+/* Co_0 transport (Curtis method): explicit group-element certificate.
+ *
+ * Two type-2 Leech vectors are ALWAYS in the same Co_0 orbit (transitivity).
+ * transport(v, w) builds the word sigma in Co_0 with v * sigma == w (mod 2),
+ * via reduce_type2 on each (the certificate mmgroup computes) composed as
+ * sigma = g_v * g_w^{-1}. The word is stored in a pool; the id is returned.
+ * apply(x, id) applies the stored word to x.
+ *
+ * NOTE: sigma exists for ANY pair of type-2 vectors. It is a witness of a
+ * *logical* equivalence only when the Co_0 action is meaningful on the domain
+ * (M_24-structured); otherwise it is a (correct but empty) orbit transport. */
+#define YON_TRANSPORT_MAX     256u
+#define YON_TRANSPORT_WORDLEN  64u
+typedef struct {
+    uint32_t word[YON_TRANSPORT_WORDLEN];
+    uint32_t len;
+    uint32_t used;
+} ds_transport_t;
+static ds_transport_t g_transports[YON_TRANSPORT_MAX];
+static uint32_t g_n_transports = 0;
+
+double yon_rt_leech_transport(double v_f64, double w_f64) {
+    extern int32_t gen_leech2_reduce_type2(uint32_t, uint32_t *);
+    extern uint32_t mm_group_mul_words(uint32_t *, uint32_t, uint32_t *, uint32_t, int32_t);
+    if (g_n_transports >= YON_TRANSPORT_MAX) {
+        fprintf(stderr, "[YON-RT] leech_transport: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t v = ((uint32_t)v_f64) & 0xFFFFFFu;
+    uint32_t w = ((uint32_t)w_f64) & 0xFFFFFFu;
+    uint32_t gv[32], gw[32];
+    int32_t lv = gen_leech2_reduce_type2(v, gv);
+    int32_t lw = gen_leech2_reduce_type2(w, gw);
+    if (lv < 0 || lw < 0) return 0.0;   /* not type-2: no transport */
+    uint32_t id = g_n_transports++;
+    ds_transport_t *t = &g_transports[id];
+    uint32_t ls = mm_group_mul_words(t->word, 0, gv, (uint32_t)lv, 1);   /* sigma = g_v */
+    ls = mm_group_mul_words(t->word, ls, gw, (uint32_t)lw, -1);          /* sigma *= g_w^{-1} */
+    t->len = ls;
+    t->used = 1;
+    return (double)(id + 1);
+}
+
+double yon_rt_leech_transport_apply(double x_f64, double transport_id_f64) {
+    extern uint32_t gen_leech2_op_word_leech2(uint32_t, uint32_t *, uint32_t, uint32_t);
+    if (transport_id_f64 < 0.5) return 0.0;
+    uint32_t id = (uint32_t)transport_id_f64;
+    if (id == 0 || id > g_n_transports) return 0.0;
+    ds_transport_t *t = &g_transports[id - 1];
+    if (!t->used) return 0.0;
+    uint32_t x = ((uint32_t)x_f64) & 0xFFFFFFu;
+    uint32_t res = gen_leech2_op_word_leech2(x, t->word, t->len, 0);
+    return (double)(res & 0xFFFFFFu);
+}
+
+/* ============================================================== */
 /* S5 — Phased memory: observe payload via geom_morphism           */
 /* ============================================================== */
 

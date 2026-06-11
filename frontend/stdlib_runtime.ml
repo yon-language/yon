@@ -709,6 +709,9 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "co0_canonical", [tnum], tnum;
       "co0_step", [tnum], tnum;
       "co0_equivalent", [tnum; tnum], tbool;
+      (* Co_0 transport (Curtis): sigma with v*sigma == w; apply runs the word. *)
+      "transport", [tnum; tnum], tnum;
+      "transport_apply", [tnum; tnum], tnum;
     ];
     (* VoyagerList as a collection. A Golay (24,12,8) codeword: auto-seal on
      * append, auto-open on get, with error correction up to 3 bits per

@@ -617,6 +617,10 @@ double yon_rt_leech_co0_step(double v_24bit);
 double yon_rt_leech_co0_canonical(double v_24bit);
 double yon_rt_leech_co0_orbit_size(double v_24bit, double max_iter);
 
+/* Co_0 transport (Curtis): sigma with v*sigma == w. Returns pool id (or 0). */
+double yon_rt_leech_transport(double v_24bit, double w_24bit);
+double yon_rt_leech_transport_apply(double x_24bit, double transport_id);
+
 /* ============================================================== */
 /* S5 — Phased memory: observe payload via geom_morphism           */
 /* ============================================================== */
