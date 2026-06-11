@@ -57,4 +57,15 @@ typedef void (*yon_arena_fusion_fn)(uint32_t value, uint32_t sigma, void *ctx);
 long yon_arena_fusions(const ds_arena_t *a, yon_xcoord_t point,
                        yon_arena_fusion_fn visit, void *ctx);
 
+/* Sentinel orbit for a non-type-2 point. */
+#define YON_ARENA_ORBIT_INVALID 0xFFFFFFFFu
+
+/* The M24 orbit invariant of a point. Sealed at allocation: for an occupied
+ * slot it is a stored field (O(1), no recomputation — the orbit belongs to the
+ * value because of where it was allocated, not a parameter recomputed per op).
+ * For an unoccupied type-2 point it is computed on the fly; for a non-type-2
+ * point it is YON_ARENA_ORBIT_INVALID. The invariant is
+ * (codeword_weight << 8) | syndrome_weight, constant on each M24 orbit. */
+uint32_t yon_arena_orbit(const ds_arena_t *a, yon_xcoord_t point);
+
 #endif /* YON_ARENA_H */
