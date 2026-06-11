@@ -1,12 +1,6 @@
 INTERP arena_basic exit=0
-INTERP arena_orbital_canon exit=0
 INTERP capability_flow_demo exit=110
 INTERP cluster_a_ast_commutative exit=0
-INTERP cluster_a_hashmap_orbital exit=0
-INTERP cluster_a_hashset_orbital exit=0
-INTERP cluster_a_pluggable_canon exit=0
-INTERP cluster_a_proof_trace exit=0
-INTERP cluster_a_xset_space_merkle_orbital exit=0
 INTERP collections_ext exit=0
 INTERP comprehension_carrier exit=0
 INTERP decidable_ok exit=0

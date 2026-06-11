@@ -98,7 +98,7 @@ let is_value t =
       || starts_with "__bool_" || starts_with "__heyt_"
       || starts_with "__dur_" || starts_with "__space_"
       || starts_with "__list_" || starts_with "__map_"
-      || starts_with "__lattice_" || starts_with "__pmap_"
+      || starts_with "__pmap_"
       || starts_with "__coh_"
   | App _ ->
       (* Check if the outermost App is a constructor application
@@ -175,7 +175,7 @@ let rec has_side_effect t =
         String.length name >= String.length p
         && String.sub name 0 (String.length p) = p
       in
-      prefix "Space__" || prefix "Lattice__"
+      prefix "Space__"
       || prefix "PerfectMap__" || prefix "Output__"
       || prefix "Stream__"
       (* List__, Map__ are pure: each op produces a new id without

@@ -658,11 +658,11 @@ and deep_reduce_pure (t : term) : term =
           String.length name >= String.length p
           && String.sub name 0 (String.length p) = p
         in
-        prefix "Space__" || prefix "Lattice__"
+        prefix "Space__"
         || prefix "PerfectMap__" || prefix "Output__"
         (* Note: List__, Map__ are pure functional (each op creates a
          * new id; no in-place mutation), so they CAN be deep-reduced.
-         * Only Space, Lattice, PerfectMap, Output have mutable state
+         * Only Space, PerfectMap, Output have mutable state
          * and must follow strict reduction order.
          *
          * Note: Stream__ has mutable state (the stream queue), but we leave it
