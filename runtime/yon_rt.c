@@ -18,6 +18,7 @@
 #include "xleech2_handler_stack.h"
 #include "leech_theta.h"
 #include "yon_mmap.h"
+#include "yon_arena.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -4073,6 +4074,77 @@ double yon_rt_leech_same_orbit(double signs_a, double signs_b) {
     uint32_t b = ((uint32_t)signs_b) & 0xFFFFFFu;
     if (mat24_syndrome(a, 0) == mat24_syndrome(b, 0)) return 1.0;
     return 0.0;
+}
+
+/* ============================================================== */
+/* Arena: the Leech type-2 arena, exposed to the language as a handle-based
+ * structure (the same pattern as VoyagerList/Set). The handle is an f64 = id+1
+ * into a pool of arena pointers (0 = invalid); each arena is mmap-backed via
+ * yon_arena_create, so the pool holds pointers, not inline structs. Points are
+ * type-2 xcoords; orbit/same_orbit read the pure M24 orbit from leech_orbits. */
+#define YON_ARENA_POOL_MAX 64u
+static ds_arena_t *g_arenas[YON_ARENA_POOL_MAX];
+static uint32_t g_n_arenas = 0;
+
+static ds_arena_t *arena_of(double h) {
+    uint32_t s = (uint32_t)h;
+    if (s == 0 || s > g_n_arenas) return NULL;
+    return g_arenas[s - 1];
+}
+
+double yon_rt_arena_empty(void) {
+    ds_ensure_init();
+    if (g_n_arenas >= YON_ARENA_POOL_MAX) return 0.0;
+    ds_arena_t *a = yon_arena_create(g_ds_heap);
+    if (!a) return 0.0;
+    uint32_t id = g_n_arenas++;
+    g_arenas[id] = a;
+    return (double)(id + 1);   /* handle = id + 1, 0 reserved as invalid */
+}
+
+double yon_rt_arena_put(double h, double point, double value) {
+    ds_arena_t *a = arena_of(h);
+    if (!a) return 0.0;
+    yon_arena_put_repr(a, (yon_xcoord_t)(uint32_t)point, (uint32_t)value);
+    return h;   /* chainable: returns the same handle */
+}
+
+double yon_rt_arena_get(double h, double point) {
+    ds_arena_t *a = arena_of(h);
+    if (!a) return 0.0;
+    return (double)yon_arena_get_repr(a, (yon_xcoord_t)(uint32_t)point);
+}
+
+double yon_rt_arena_occupied(double h, double point) {
+    ds_arena_t *a = arena_of(h);
+    if (!a) return 0.0;
+    return yon_arena_occupied(a, (yon_xcoord_t)(uint32_t)point) ? 1.0 : 0.0;
+}
+
+double yon_rt_arena_orbit(double h, double point) {
+    ds_arena_t *a = arena_of(h);
+    if (!a) return 0.0;
+    return (double)yon_arena_orbit(a, (yon_xcoord_t)(uint32_t)point);
+}
+
+double yon_rt_arena_same_orbit(double h, double pa, double pb) {
+    ds_arena_t *a = arena_of(h);
+    if (!a) return 0.0;
+    return yon_arena_same_orbit_exact((yon_xcoord_t)(uint32_t)pa,
+                                      (yon_xcoord_t)(uint32_t)pb, NULL, NULL) ? 1.0 : 0.0;
+}
+
+double yon_rt_arena_fuse(double h, double point, double value, double sigma) {
+    ds_arena_t *a = arena_of(h);
+    if (!a) return 0.0;
+    yon_arena_put_fusion(a, (yon_xcoord_t)(uint32_t)point, (uint32_t)value, (uint32_t)sigma);
+    return h;   /* chainable */
+}
+
+double yon_rt_arena_fusion_count(double h, double point) {
+    ds_arena_t *a = arena_of(h);
+    if (!a) return 0.0;
+    return (double)yon_arena_fusions(a, (yon_xcoord_t)(uint32_t)point, NULL, NULL);
 }
 
 /* ============================================================== */

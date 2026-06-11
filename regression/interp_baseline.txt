@@ -1,3 +1,4 @@
+INTERP arena_basic exit=0
 INTERP atp_knapsack_cell exit=0
 INTERP atp_knapsack_mask exit=0
 INTERP capability_flow_demo exit=110

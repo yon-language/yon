@@ -606,6 +606,16 @@ double yon_rt_leech_syndrome(double signs_24bit);
 double yon_rt_leech_orbit_id(double signs_24bit);
 double yon_rt_leech_same_orbit(double signs_a, double signs_b);
 
+/* Arena: Leech type-2 arena exposed to the language (handle = id+1 into a pool). */
+double yon_rt_arena_empty(void);
+double yon_rt_arena_put(double h, double point, double value);
+double yon_rt_arena_get(double h, double point);
+double yon_rt_arena_occupied(double h, double point);
+double yon_rt_arena_orbit(double h, double point);
+double yon_rt_arena_same_orbit(double h, double pa, double pb);
+double yon_rt_arena_fuse(double h, double point, double value, double sigma);
+double yon_rt_arena_fusion_count(double h, double point);
+
 /* M_24 Mathieu orbit canonical + xi Conway involution. */
 double yon_rt_leech_m24_orbit(double v_24bit);
 double yon_rt_leech_gcode_weight(double v_24bit);
