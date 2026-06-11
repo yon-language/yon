@@ -5086,6 +5086,12 @@ double yon_rt_hashset_orbital_contains(double set_id, double elem) {
  *   4 = Co_0 BFS canonical (transitivo, max 32 iter for speed)
  *   5 = popcount (orbit by Hamming weight)
  *   6 = mod_8 (mod-8 representative)
+ *   8 = pure M24 orbit via the arena allocator: intern the value in the
+ *       content-addressed heap (the arena's allocator); the slot IS a type-2
+ *       lattice point; canonicalize by that point's pure M24 orbit (one of 12).
+ *       This is the unified mechanism: the allocator turns any value into a
+ *       type-2 point, and m24_orbit reads its orbit. (Positional: the orbit
+ *       follows allocation order, exact for values that are themselves type-2.)
  *
  * Use case: scegliere canonicalizer in base al type di equivalenza desiderata. */
 
@@ -5116,6 +5122,17 @@ static uint32_t apply_canonicalizer(uint32_t value, uint32_t canon_id) {
         }
         case 5: return (uint32_t)__builtin_popcount(v);
         case 6: return v % 8;
+        case 8: {
+            /* pure M24 orbit via the arena allocator (the unified mechanism) */
+            extern uint32_t yon_mphf_unindex(uint32_t);
+            extern uint32_t yon_leech_m24_orbit_pure(uint32_t);
+            uint32_t val = v;
+            uint32_t slot = yon_xheap_put_chain(g_ds_heap, &val, sizeof(val), YON_TAG_USER1);
+            if (slot == YON_HEAP_SLOT_INVALID || slot >= YON_LEECH_TYPE2_COUNT) return v;
+            uint32_t point = yon_mphf_unindex(slot);
+            uint32_t orbit = yon_leech_m24_orbit_pure(point);
+            return (orbit == 0xFFFFFFFFu) ? v : orbit;
+        }
         default: return v;
     }
 }

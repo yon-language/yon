@@ -1,4 +1,5 @@
 RAN arena_basic exit=6
+RAN arena_orbital_canon exit=11
 RAN atp_knapsack_cell exit=24
 RAN atp_knapsack_mask exit=10
 RAN capability_flow_demo exit=110

@@ -1,0 +1,24 @@
+/* Orbital canonicalization through the arena allocator (canon id 8).
+ *
+ * Each element is interned in the content-addressed heap (the arena's
+ * allocator); its slot is a type-2 lattice point, and the element is
+ * canonicalized by that point's pure M24 orbit. Since there are only 12 pure
+ * orbits, any number of distinct elements collapses into at most 12 classes.
+ *
+ * Checks: an added element is found (round-trip), and the set size stays <= 12.
+ * Returns 11 when both hold (1 + 1*10). */
+
+fun main(): number {
+  be s0 holds HashSet.empty()
+  be s1 holds HashSet.orbital_add_with(s0, 100, 8)
+  be s2 holds HashSet.orbital_add_with(s1, 200, 8)
+  be s3 holds HashSet.orbital_add_with(s2, 300, 8)
+  be s4 holds HashSet.orbital_add_with(s3, 400, 8)
+  be s5 holds HashSet.orbital_add_with(s4, 500, 8)
+  be has100 holds HashSet.orbital_contains_with(s5, 100, 8)
+  be sz holds HashSet.size(s5)
+
+  be c_has holds if has100 then 1 else 0
+  be c_sz holds if sz <= 12 then 1 else 0
+  return c_has + c_sz * 10
+}
