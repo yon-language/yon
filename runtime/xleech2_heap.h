@@ -155,9 +155,7 @@ uint32_t yon_xheap_lookup_content(const yon_xheap_t *h,
                                     const void *payload, uint32_t n_bytes);
 
 /* Put + a "was_new" flag. Returns slot_index; *out_was_new = true if it
- * allocated a new slot, false if it reused an existing one (content dedup).
- * For the orbital wavefront dual structure (separates "new canon" from "dup
- * canon"). */
+ * allocated a new slot, false if it reused an existing one (content dedup). */
 uint32_t yon_xheap_put_or_get(yon_xheap_t *h,
                                const void *payload, uint32_t n_bytes,
                                yon_xtag_t tag, bool *out_was_new);
@@ -188,7 +186,7 @@ bool yon_xheap_is_occupied(const yon_xheap_t *h, uint32_t slot_index);
 int yon_xheap_clear(yon_xheap_t *h, uint32_t slot_index);
 
 /* Full reset: all slots -> FREE, content_index -> INVALID, arena -> 0. Fast
- * O(N_INDEX). For "scratchpad" use (SAT wavefront, BFS Co_0, etc) where each
+ * O(N_INDEX). For scratchpad use (transient working sets) where each
  * invocation starts from a clean heap. */
 int yon_xheap_reset(yon_xheap_t *h);
 

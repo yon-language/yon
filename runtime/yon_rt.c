@@ -5116,7 +5116,7 @@ double yon_rt_string_print(double str_id_d) {
 }
 
 /* ============================================================== */
-/* String extensions per parsing DIMACS     */
+/* String extensions. */
 /* ============================================================== */
 
 /* String.parse_number(s) -> number. Expression: int or float, tolerates spaces. */
@@ -5430,7 +5430,7 @@ double yon_rt_seq_range(double n_d) {
 extern uint32_t mat24_syndrome(uint32_t v, uint32_t u);
 
 
-/* Bits.bor_64 - OR su 64 bit per SAT 2n>32. */
+/* Bits.bor_64 - 64-bit OR. */
 double yon_rt_bits_or_64(double a, double b) {
     return (double)((uint64_t)a | (uint64_t)b);
 }

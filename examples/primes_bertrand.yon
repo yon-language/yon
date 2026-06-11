@@ -1,8 +1,8 @@
-/* SCT Test 3c — Primes Bertrand (runtime measure, turno 32).
+/* Primes / Bertrand (runtime measure).
  *
- * Misuro xheap_used delta per la serie primes ≤ 19 = {2,3,5,7,11,13,17,19}.
- * Predizione paper §4: o_i ≤ 1 per primi grazie a Bertrand postulate.
- * Misurato: w_i = 1 per ogni prime (tutti unici se non collidono con leaves già allocate). */
+ * Measures the xheap_used delta over the series of primes <= 19 = {2,3,5,7,11,13,17,19}.
+ * Each prime allocates one new leaf (w_i = 1) unless it collides with an
+ * already allocated leaf. */
 
 fun main(): number {
   be n0 holds __xheap_used()

@@ -79,8 +79,8 @@ fun main(): number {
 laws against the algebra (`Additive`, `Multiplicative`, `TropicalMax`,
 `TropicalMin`, `BooleanOr`, `BooleanAnd`, `Gcd`) and **rejects a false
 claim** at compile time. `solve P` then hands you the verified structure as a
-runnable Magma: generators, closure, reachability with certificates, normal
-forms, even subset-sum and knapsack as algebraic queries.
+runnable Magma: generators, closure, reachability with certificates, and
+normal forms.
 
 This is the heart of Yon's bet: the algebra you declare is the algebra you
 get, checked, not trusted.
