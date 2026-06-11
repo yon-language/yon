@@ -1398,38 +1398,6 @@ let test_stdlib_space () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 48: Lattice — 2D grid with reads and writes. *)
-let test_stdlib_lattice () =
-  Printf.printf "\n=== Test 48: stdlib Lattice — 2D grid ===\n";
-  let open Ast in
-  let default = Builtins.encode_number 0.0 in
-  let dims = Builtins.encode_number 2.0 in
-  let lat = invoke_stdlib (App (App (Var "Lattice__new", dims), default)) in
-  (* Build coords [3, 5] as a list. *)
-  let mk_coords cs =
-    List.fold_right
-      (fun n acc ->
-         invoke_stdlib (App (App (Var "List__cons",
-                                  Builtins.encode_number (float_of_int n)),
-                             acc)))
-      cs
-      (invoke_stdlib (App (Var "List__empty", Unit)))
-  in
-  let c35 = mk_coords [3; 5] in
-  let c12 = mk_coords [1; 2] in
-  let v_at_35 = Builtins.encode_number 99.0 in
-  let _ = invoke_stdlib (App (App (App (Var "Lattice__set", lat), c35), v_at_35)) in
-  let r35 = invoke_stdlib (App (App (Var "Lattice__get", lat), c35)) in
-  let r12 = invoke_stdlib (App (App (Var "Lattice__get", lat), c12)) in
-  let ok_set = Builtins.decode_number r35 = Some 99.0 in
-  let ok_default = Builtins.decode_number r12 = Some 0.0 in
-  Printf.printf "  set [3,5] = 99; get [3,5] = 99: %b\n" ok_set;
-  Printf.printf "  unset [1,2] returns default 0: %b\n" ok_default;
-  if ok_set && ok_default then
-    (Printf.printf "Status: PASS\n"; true)
-  else
-    (Printf.printf "Status: FAIL\n"; false)
-
 (* Test 49: PerfectMap — construction + lookup. *)
 let test_stdlib_pmap () =
   Printf.printf "\n=== Test 49: stdlib PerfectMap — build + get ===\n";
@@ -1463,30 +1431,6 @@ let test_stdlib_pmap () =
     (Printf.printf "Status: PASS\n"; true)
   else
     (Printf.printf "Status: FAIL\n"; false)
-
-(* Test 50: lattice union (SCT cluster collapse pattern). *)
-let test_stdlib_lattice_cluster () =
-  Printf.printf "\n=== Test 50: stdlib Lattice — SCT cluster collapse ===\n";
-  let open Ast in
-  let default = Builtins.encode_number 0.0 in
-  let dims = Builtins.encode_number 1.0 in
-  let lat = invoke_stdlib (App (App (Var "Lattice__new", dims), default)) in
-  let mk1 = invoke_stdlib (App (App (Var "List__cons",
-                                     Builtins.encode_number 1.0),
-                                invoke_stdlib (App (Var "List__empty", Unit)))) in
-  let mk2 = invoke_stdlib (App (App (Var "List__cons",
-                                     Builtins.encode_number 2.0),
-                                invoke_stdlib (App (Var "List__empty", Unit)))) in
-  let v = Builtins.encode_number 42.0 in
-  let _ = invoke_stdlib (App (App (App (Var "Lattice__set", lat), mk1), v)) in
-  let _ = invoke_stdlib (App (App (App (Var "Lattice__set", lat), mk2), v)) in
-  let r1 = invoke_stdlib (App (App (Var "Lattice__get", lat), mk1)) in
-  let r2 = invoke_stdlib (App (App (Var "Lattice__get", lat), mk2)) in
-  let ok = (Builtins.decode_number r1 = Some 42.0)
-        && (Builtins.decode_number r2 = Some 42.0) in
-  Printf.printf "  cells 1 and 2 both = 42 (clustered): %b\n" ok;
-  if ok then (Printf.printf "Status: PASS\n"; true)
-  else (Printf.printf "Status: FAIL\n"; false)
 
 (* Test 51: HIT lookup — S1 base constructor. *)
 let test_hit_s1_base () =
@@ -5069,7 +5013,7 @@ let test_reduction_invertible () =
 let () =
   (* Register Heyting hook for proposition tri-value reduction. *)
   Builtins.heyting_hook := Heyting.try_reduce_heyt;
-  (* Register stdlib runtime hook so that List/Map/Space/Lattice/PerfectMap
+  (* Register stdlib runtime hook so that List/Map/Space/PerfectMap
    * operations are recognized during reduction. *)
   Builtins.stdlib_hook := Stdlib_runtime.try_reduce_stdlib;
   (* Register world-tag setter so With-blocks tag Space allocations. *)
@@ -5128,9 +5072,7 @@ let () =
     test_stdlib_list_basic;
     test_stdlib_map;
     test_stdlib_space;
-    test_stdlib_lattice;
     test_stdlib_pmap;
-    test_stdlib_lattice_cluster;
     test_hit_s1_base;
     test_hit_suspension_merid;
     test_hit_pushout_inl;

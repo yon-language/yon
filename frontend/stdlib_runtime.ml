@@ -291,96 +291,6 @@ let stream_recv (sid : term) : term option =
            Some (Queue.pop q)
        | _ -> Some (encode_number (-1.0)))
 
-(* ─── Lattice runtime ──────────────────────────────────────────────── *)
-
-(* Lattice of n dimensions of T: stored as a sparse Hashtbl keyed by
- * coordinate tuples. The Dense reduction would use a flat array; for
- * the prototype Sparse is sufficient.
- *
- * Coordinate tuples are represented as comma-separated strings since
- * OCaml Hashtbl on tuples requires care with hashing.
- *)
-
-type lattice = {
-  cells : (string, term) Hashtbl.t;
-  default : term;
-  dimensions : int;
-}
-
-let lattice_store : (int, lattice) Hashtbl.t = Hashtbl.create 64
-
-let encode_lattice (id : int) : term = Var (Printf.sprintf "__lattice_%d" id)
-
-let decode_lattice_id (t : term) : int option =
-  match t with
-  | Var name when String.length name > 10 && String.sub name 0 10 = "__lattice_" ->
-      (try Some (int_of_string (String.sub name 10 (String.length name - 10)))
-       with _ -> None)
-  | _ -> None
-
-(* Build a coordinate key from a list of integer indices. *)
-let coord_key (indices : int list) : string =
-  String.concat "," (List.map string_of_int indices)
-
-(* Create a lattice with n dimensions and a default value. *)
-let lattice_new (dims : int) (default : term) : term =
-  let id = fresh_id () in
-  let lat = {
-    cells = Hashtbl.create 64;
-    default;
-    dimensions = dims;
-  } in
-  Hashtbl.add lattice_store id lat;
-  encode_lattice id
-
-(* Read a cell at the given coordinates. *)
-let lattice_get (lat_term : term) (coords : int list) : term option =
-  match decode_lattice_id lat_term with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt lattice_store id with
-       | None -> None
-       | Some lat ->
-           if List.length coords <> lat.dimensions then None
-           else
-             let key = coord_key coords in
-             match Hashtbl.find_opt lat.cells key with
-             | Some v -> Some v
-             | None -> Some lat.default)
-
-(* Write to a cell (mutating). *)
-let lattice_set (lat_term : term) (coords : int list) (v : term) : term option =
-  match decode_lattice_id lat_term with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt lattice_store id with
-       | None -> None
-       | Some lat ->
-           if List.length coords <> lat.dimensions then None
-           else
-             let key = coord_key coords in
-             Hashtbl.replace lat.cells key v;
-             Some Unit)
-
-(* SCT-style cluster collapse: identify all cells in a cluster and
- * share their domain. This is the operational realization of
- * Theorem 1's structural component. *)
-let lattice_union_cells (lat_term : term)
-                        (cells_a : int list)
-                        (cells_b : int list)
-                        (combined_value : term) : term option =
-  match decode_lattice_id lat_term with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt lattice_store id with
-       | None -> None
-       | Some lat ->
-           let key_a = coord_key cells_a in
-           let key_b = coord_key cells_b in
-           Hashtbl.replace lat.cells key_a combined_value;
-           Hashtbl.replace lat.cells key_b combined_value;
-           Some Unit)
-
 (* ─── PerfectMap runtime ───────────────────────────────────────────── *)
 
 (* PerfectMap: like Map but with construction-time key set, enabling
@@ -527,23 +437,6 @@ let try_reduce_stdlib (t : term) : term option =
       stream_send sid v
   | App (Var "Stream__recv", sid) ->
       stream_recv sid
-
-  (* Lattice operations.
-     Lattice__new(dims, default): create a new lattice.
-     Lattice__get(lat, coord_list): read a cell.
-     Lattice__set(lat, coord_list, value): write a cell. *)
-  | App (App (Var "Lattice__new", dims_t), default) ->
-      (match decode_number dims_t with
-       | Some d -> Some (lattice_new (int_of_float d) default)
-       | None -> None)
-  | App (App (Var "Lattice__get", lat), coords) ->
-      (match decode_int_coords coords with
-       | Some cs -> lattice_get lat cs
-       | None -> None)
-  | App (App (App (Var "Lattice__set", lat), coords), v) ->
-      (match decode_int_coords coords with
-       | Some cs -> lattice_set lat cs v
-       | None -> None)
 
   (* PerfectMap operations.
      We expose PerfectMap__build only with a list-of-pairs encoded as
