@@ -3953,17 +3953,13 @@ double yon_rt_leech_orbit_id(double signs_24bit) {
 extern uint32_t mat24_gcode_weight(uint32_t v1);
 extern uint32_t mat24_cocode_weight(uint32_t c1);
 
-double yon_rt_leech_m24_orbit(double v_24bit) {
+double yon_rt_leech_m24_orbit(double v_f64) {
+    extern uint32_t yon_leech_m24_orbit_pure(uint32_t point);
     ds_ensure_init();
-    uint32_t v = ((uint32_t)v_24bit) & 0xFFFFFFu;
-    uint32_t synd = mat24_syndrome(v, 0);
-    uint32_t gpart = v ^ synd;  /* codeword part */
-    /* gcode_weight expects a gcode index (0..4095), NOT the vector. To get the
-     * gcode from the vector: mat24_vect_to_gcode. But if gpart is a codeword,
-     * the weight is simply popcount(gpart). */
-    uint32_t w_g = __builtin_popcount(gpart);
-    uint32_t w_c = __builtin_popcount(synd);
-    uint32_t canonical = (w_g << 8) | w_c;
+    /* full xcoord (incl. the sign bit) — the MPHF is over 25-bit leech2, so we
+     * must NOT mask to 24 bits the way the old (w_g,w_c) version did. */
+    uint32_t v = (uint32_t)v_f64;
+    uint32_t canonical = yon_leech_m24_orbit_pure(v);  /* pure M24 orbit in [0,12), or INVALID */
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, &canonical, sizeof(canonical),
                                   YON_TAG_USER1);
     if (slot == YON_HEAP_SLOT_INVALID) return 0.0;

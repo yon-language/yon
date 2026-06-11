@@ -61,7 +61,7 @@ YONC_RUNTIME_DIR="${YONC_RUNTIME_DIR:-$YONC_ROOT/runtime}"
 # Runtime objects, in the same order used by the regression suite. The
 # mmgroup mathematical core is VENDORED (runtime/vendor/mmgroup) and
 # linked as plain objects: no Python, no shared-library paths.
-RUNTIME_OBJS_LIST="yon_rt.o yon_mmap.o xleech2_coord.o xleech2_handler_stack.o xleech2_heap.o xleech2_mphf.o vendor/mmgroup/mat24_tables.o vendor/mmgroup/mat24_functions.o vendor/mmgroup/gen_leech.o vendor/mmgroup/gen_leech3.o vendor/mmgroup/gen_leech_type.o vendor/mmgroup/gen_leech_reduce.o vendor/mmgroup/gen_xi_functions.o vendor/mmgroup/mm_group_n.o vendor/mmgroup/mm_index.o"
+RUNTIME_OBJS_LIST="yon_rt.o yon_mmap.o leech_orbits.o xleech2_coord.o xleech2_handler_stack.o xleech2_heap.o xleech2_mphf.o vendor/mmgroup/mat24_tables.o vendor/mmgroup/mat24_functions.o vendor/mmgroup/gen_leech.o vendor/mmgroup/gen_leech3.o vendor/mmgroup/gen_leech_type.o vendor/mmgroup/gen_leech_reduce.o vendor/mmgroup/gen_xi_functions.o vendor/mmgroup/mm_group_n.o vendor/mmgroup/mm_index.o"
 
 # === Parsing argomenti =====================================================
 INPUT=""
