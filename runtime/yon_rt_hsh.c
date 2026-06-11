@@ -862,37 +862,6 @@ double yon_rt_alg_subsetsum(double op_id, const double *gen, double n_gen_d,
     return 0.0;
 }
 
-/* builder wrapper for SubsetSum: uses the magma generators + certified monotonicity. */
-double yon_rt_magma_subsetsum(double h, double T) {
-    ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
-    int mono = (m->cat_id >= 0.0) ? (int)yon_rt_alg_catalog_is_monotone(m->cat_id) : 0;
-    double mask;
-    return yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, mono, &mask);
-}
-double yon_rt_magma_subsetsum_mask(double h, double T) {
-    ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
-    int mono = (m->cat_id >= 0.0) ? (int)yon_rt_alg_catalog_is_monotone(m->cat_id) : 0;
-    double mask = 0.0;
-    yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, mono, &mask);
-    return mask;
-}
-/* knapsack: add an item (weight/cost, value/yield) to the knapsack channel */
-double yon_rt_magma_knap_item(double h, double weight, double value) {
-    ds_magma_t *m = magma_lookup(h); if (!m) return h;
-    if (m->n_knap < YON_MAGMA_GEN_CAP) { m->kw[m->n_knap]=weight; m->kv[m->n_knap]=value; m->n_knap++; }
-    return h;
-}
-double yon_rt_magma_knapsack(double h, double cap) {
-    ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
-    double mask;
-    return yon_rt_alg_knapsack(m->kw, m->kv, (double)m->n_knap, cap, &mask);
-}
-double yon_rt_magma_knapsack_mask(double h, double cap) {
-    ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
-    double mask = 0.0;
-    yon_rt_alg_knapsack(m->kw, m->kv, (double)m->n_knap, cap, &mask);
-    return mask;
-}
 
 /* ============================================================================
  * 0/1 Knapsack — OPTIMIZATION.

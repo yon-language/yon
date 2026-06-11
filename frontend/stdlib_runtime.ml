@@ -804,11 +804,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "word_push", [TyUser "Magma"; tnum], TyUser "Magma";
       "normal_form", [TyUser "Magma"], tnum;
       "from_catalog", [tnum], TyUser "Magma";        (* catalog id -> place with certified laws *)
-      "subsetsum", [TyUser "Magma"; tnum], tbool;      (* is there a subset summing to T? *)
-      "subsetsum_mask", [TyUser "Magma"; tnum], tnum;  (* maschera certificato (quali generatori) *)
-      "knap_item", [TyUser "Magma"; tnum; tnum], TyUser "Magma";  (* (weight, value) *)
-      "knapsack", [TyUser "Magma"; tnum], tnum;          (* max value within capacity *)
-      "knapsack_mask", [TyUser "Magma"; tnum], tnum;     (* maschera item selezionati *)
     ];
     "Bits", [
       "band", [tnum; tnum], tnum;
