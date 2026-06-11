@@ -1,4 +1,4 @@
-/* Cluster A — AST commutative auto-quotient via Merkle.nodeN (turno 33 part 5).
+/* Cluster A — AST commutative auto-quotient via MerkleTree.nodeN (turno 33 part 5).
  *
  * AST commutative operations (and, or, +) hanno ordine non significativo.
  * Encoding tradizionale: AST con figli posizionali → and(a, b) ≠ and(b, a)
@@ -9,7 +9,7 @@
  *   t2 = and(z, or(y, x))      ≡ t1 sotto commutativity
  *   t3 = and(or(y, x), z)      ≡ t1 sotto commutativity
  *
- * Con Merkle.node2 (S_2 auto-canonicalize): t1, t2, t3 → 1 SOLO slot.
+ * Con MerkleTree.node2 (S_2 auto-canonicalize): t1, t2, t3 → 1 SOLO slot.
  * Compiler hash-cons quotient pass = gratis.
  *
  * Misura: total slot allocati. */
@@ -18,20 +18,20 @@ fun main(): number {
   be n0 holds __xheap_used()
 
   /* Variables (leaves) */
-  be x holds Merkle.leaf(1)
-  be y holds Merkle.leaf(2)
-  be z holds Merkle.leaf(3)
+  be x holds MerkleTree.leaf(1)
+  be y holds MerkleTree.leaf(2)
+  be z holds MerkleTree.leaf(3)
 
   /* t1 = and(or(x, y), z) */
-  be or_xy holds Merkle.node2_commutative(100, x, y)     /* label 100 = "or" */
-  be t1 holds Merkle.node2_commutative(200, or_xy, z)     /* label 200 = "and" */
+  be or_xy holds MerkleTree.node2_commutative(100, x, y)     /* label 100 = "or" */
+  be t1 holds MerkleTree.node2_commutative(200, or_xy, z)     /* label 200 = "and" */
 
   /* t2 = and(z, or(y, x)) — swap arg ordering everywhere */
-  be or_yx holds Merkle.node2_commutative(100, y, x)     /* canonical sort: same slot as or_xy */
-  be t2 holds Merkle.node2_commutative(200, z, or_yx)     /* canonical: same slot as t1 */
+  be or_yx holds MerkleTree.node2_commutative(100, y, x)     /* canonical sort: same slot as or_xy */
+  be t2 holds MerkleTree.node2_commutative(200, z, or_yx)     /* canonical: same slot as t1 */
 
   /* t3 = and(or(y, x), z) — alternative ordering */
-  be t3 holds Merkle.node2_commutative(200, or_yx, z)     /* canonical: same as t1 */
+  be t3 holds MerkleTree.node2_commutative(200, or_yx, z)     /* canonical: same as t1 */
 
   be n1 holds __xheap_used()
   be delta holds n1 - n0   /* expected: 3 leaf + 1 or + 1 and = 5 slot */

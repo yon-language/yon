@@ -2400,7 +2400,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    * `fun f(R: Space): ...` and `fun g(m: Map): ...` without having to register
    * them with `place`. *)
   let runtime_builtin = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH";
-                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "Merkle";
+                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "MerkleTree";
                          "VoyagerList"; "PerfectMap"; "String"] in
   match t with
   | TyPrim n | TyPrimIn (n, _) ->

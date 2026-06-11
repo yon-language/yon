@@ -1,4 +1,4 @@
-/* Cluster A esteso — XSet, Space, Merkle.leaf orbital (turno 33 part 7). */
+/* Cluster A esteso — XSet, Space, MerkleTree.leaf orbital (turno 33 part 7). */
 
 fun main(): number {
   /* XSet orbital con canon_id 1 (G_24 syndrome) */
@@ -9,10 +9,10 @@ fun main(): number {
   be xs4 holds XSet.orbital_add(xs3, 8454142, 1)     /* same orbit → DEDUP */
   be xset_size holds XSet.size(xs4)   /* expected 2 */
 
-  /* Merkle.leaf_orbital con canon_id 5 (popcount) */
-  be leaf_a holds Merkle.leaf_orbital(100, 5)   /* popcount=3 → label 3 */
-  be leaf_b holds Merkle.leaf_orbital(104, 5)   /* popcount=3 → label 3 → SAME slot xheap */
-  be leaf_c holds Merkle.leaf_orbital(101, 5)   /* popcount=4 → label 4 → different */
+  /* MerkleTree.leaf_orbital con canon_id 5 (popcount) */
+  be leaf_a holds MerkleTree.leaf_orbital(100, 5)   /* popcount=3 → label 3 */
+  be leaf_b holds MerkleTree.leaf_orbital(104, 5)   /* popcount=3 → label 3 → SAME slot xheap */
+  be leaf_c holds MerkleTree.leaf_orbital(101, 5)   /* popcount=4 → label 4 → different */
   be merkle_dedup holds if leaf_a == leaf_b then 1 else 0
   be merkle_distinct holds if leaf_a != leaf_c then 1 else 0
 
