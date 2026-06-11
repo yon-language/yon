@@ -17,6 +17,7 @@
 #include "xleech2_heap.h"
 #include "xleech2_handler_stack.h"
 #include "leech_theta.h"
+#include "yon_mmap.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -3496,10 +3497,19 @@ typedef struct {
     uint32_t cache_valid;
 } ds_xset_t;
 
-static ds_xset_t g_xsets[YON_XSET_MAX_SETS];
+/* The XSet pool is mmap-backed (never a static array, never malloc): a private
+ * anonymous map, kernel-zeroed so every bitmap starts empty at no cost. Shared
+ * memory is the sole exception to mmap-always, and XSets live inside one Space. */
+static ds_xset_t *g_xsets = NULL;
 static uint32_t g_n_xsets = 0;
 
+static void xset_pool_ensure(void) {
+    if (g_xsets) return;
+    g_xsets = (ds_xset_t *)yon_map(sizeof(ds_xset_t) * YON_XSET_MAX_SETS);
+}
+
 double yon_rt_xset_empty(void) {
+    xset_pool_ensure();
     if (g_n_xsets >= YON_XSET_MAX_SETS) {
         fprintf(stderr, "[YON-RT] xset_empty: pool exhausted\n");
         return 0.0;
@@ -3517,6 +3527,7 @@ static ds_xset_t *xset_lookup(double set_id) {
     if (set_id < 0.5) return NULL;
     uint32_t shifted = (uint32_t)set_id;
     if (shifted == 0 || shifted > g_n_xsets) return NULL;
+    if (!g_xsets) return NULL;
     ds_xset_t *xs = &g_xsets[shifted - 1];
     if (!xs->is_used) return NULL;
     return xs;
