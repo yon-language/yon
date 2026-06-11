@@ -48,6 +48,7 @@ INTERP merkle_noncommutative exit=0
 INTERP nat_transform_functor exit=0
 INTERP net_stream exit=0
 INTERP primes_bertrand exit=0
+INTERP route_history exit=0
 INTERP shm_backpressure exit=0
 INTERP shm_stream exit=0
 INTERP spawn_parallel_collect exit=0
