@@ -18,12 +18,15 @@
 #define YON_ARENA_H
 
 #include "xleech2_coord.h"
+#include "xleech2_heap.h"   /* yon_xheap_t, YON_HEAPREF_INVALID */
 #include <stdint.h>
 
 typedef struct ds_arena ds_arena_t;
 
-/* Create an empty arena (mmap-backed, kernel-zeroed = every slot unoccupied). */
-ds_arena_t *yon_arena_create(void);
+/* Create an empty arena over `heap` (mmap-backed, kernel-zeroed = every slot
+ * unoccupied). The heap is where canonical values and fusion nodes live; the
+ * arena only indexes them by lattice position. */
+ds_arena_t *yon_arena_create(yon_xheap_t *heap);
 void        yon_arena_destroy(ds_arena_t *a);
 
 /* Set the canonical repr (a heapref) for a type-2 point. Returns 1 on success,
@@ -36,5 +39,22 @@ uint32_t yon_arena_get_repr(const ds_arena_t *a, yon_xcoord_t point);
 
 /* 1 if the type-2 point's slot is occupied, 0 otherwise (or non-type-2). */
 int yon_arena_occupied(const ds_arena_t *a, yon_xcoord_t point);
+
+/* Record a fusion at `point`: a value (heapref) fused onto the slot's canonical
+ * repr, carried by `sigma` (a transport id — the Curtis witness in Co_0). The
+ * slot must already be occupied (have a repr). Allocates an immutable fusion
+ * node {value, sigma, next} in the heap (content-addressed, so shared tails are
+ * deduplicated) and pushes it onto the slot's list. Returns 1 on success, 0 if
+ * `point` is not type-2, the slot is empty, or the heap allocation fails. */
+int yon_arena_put_fusion(ds_arena_t *a, yon_xcoord_t point,
+                         uint32_t value, uint32_t sigma);
+
+/* Visitor over a slot's fusions, most-recent first. */
+typedef void (*yon_arena_fusion_fn)(uint32_t value, uint32_t sigma, void *ctx);
+
+/* Walk the fusion list at `point`, calling `visit` for each fusion (LIFO order).
+ * Returns the number of fusions visited (0 if empty or non-type-2). */
+long yon_arena_fusions(const ds_arena_t *a, yon_xcoord_t point,
+                       yon_arena_fusion_fn visit, void *ctx);
 
 #endif /* YON_ARENA_H */
