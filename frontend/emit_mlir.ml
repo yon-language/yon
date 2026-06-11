@@ -472,15 +472,15 @@ let stdlib_registry : (string * (string list * string)) list = [
      compile time. *)
   "HashMap__to_stream", (["f64"], "f64");
   "HashSet__to_stream", (["f64"], "f64");
-  "Merkle__to_stream",  (["f64"], "f64");
-  "Merkle__leaf",       (["f64"], "f64");
-  "Merkle__label",      (["f64"], "f64");
-  "Merkle__child",      (["f64"; "f64"], "f64");
-  "Merkle__equal",      (["f64"; "f64"], "i1");
-  "Merkle__node2",      (["f64"; "f64"; "f64"], "f64");
-  "Merkle__node2_commutative", (["f64"; "f64"; "f64"], "f64");
-  "Merkle__node3",      (["f64"; "f64"; "f64"; "f64"], "f64");
-  "Merkle__node4",      (["f64"; "f64"; "f64"; "f64"; "f64"], "f64");
+  "MerkleTree__to_stream",  (["f64"], "f64");
+  "MerkleTree__leaf",       (["f64"], "f64");
+  "MerkleTree__label",      (["f64"], "f64");
+  "MerkleTree__child",      (["f64"; "f64"], "f64");
+  "MerkleTree__equal",      (["f64"; "f64"], "i1");
+  "MerkleTree__node2",      (["f64"; "f64"; "f64"], "f64");
+  "MerkleTree__node2_commutative", (["f64"; "f64"; "f64"], "f64");
+  "MerkleTree__node3",      (["f64"; "f64"; "f64"; "f64"], "f64");
+  "MerkleTree__node4",      (["f64"; "f64"; "f64"; "f64"; "f64"], "f64");
   (* Leech lattice: canonicalize a vector under the sign-flip action of the
      binary Golay code G_24. *)
   "Leech__sign_canonical", (["f64"; "f64"], "f64");
@@ -603,7 +603,7 @@ let stdlib_registry : (string * (string list * string)) list = [
   "List__reverse", (["f64"], "f64");
   "XSet__orbital_add", (["f64"; "f64"; "f64"], "f64");
   "XSet__orbital_contains", (["f64"; "f64"; "f64"], "i1");
-  "Merkle__leaf_orbital", (["f64"; "f64"], "f64");
+  "MerkleTree__leaf_orbital", (["f64"; "f64"], "f64");
   (* HSH — History Store, Hierarchical (Teorema 1b, SCT 6.4) *)
   "Route__empty", (["f64"], "f64");
   "Route__empty_mod", (["f64"; "f64"], "f64");
@@ -1037,13 +1037,13 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "__stream_to_stream", _) -> "f64"
   | C.App (C.Var "HashMap__to_stream", _) -> "f64"
   | C.App (C.Var "HashSet__to_stream", _) -> "f64"
-  | C.App (C.Var "Merkle__to_stream", _) -> "f64"
-  | C.App (C.Var "Merkle__leaf", _) -> "f64"
-  | C.App (C.Var "Merkle__label", _) -> "f64"
-  | C.App (C.App (C.Var "Merkle__child", _), _) -> "f64"
-  | C.App (C.App (C.Var "Merkle__equal", _), _) -> "i1"
-  | C.App (C.App (C.App (C.Var "Merkle__node2", _), _), _) -> "f64"
-  | C.App (C.App (C.App (C.Var "Merkle__node2_commutative", _), _), _) -> "f64"
+  | C.App (C.Var "MerkleTree__to_stream", _) -> "f64"
+  | C.App (C.Var "MerkleTree__leaf", _) -> "f64"
+  | C.App (C.Var "MerkleTree__label", _) -> "f64"
+  | C.App (C.App (C.Var "MerkleTree__child", _), _) -> "f64"
+  | C.App (C.App (C.Var "MerkleTree__equal", _), _) -> "i1"
+  | C.App (C.App (C.App (C.Var "MerkleTree__node2", _), _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "MerkleTree__node2_commutative", _), _), _) -> "f64"
   | C.App (C.App (C.Var "VoyagerList__append", _), _) -> "f64"
   | C.App (C.App (C.Var "VoyagerList__get", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__size", _) -> "f64"
@@ -2393,32 +2393,32 @@ let rec emit_term (e : emitter)
   (* Merkle DAG.to_stream
    * yields LEAVES via DFS. *)
   | C.App (C.Var "__merkle_to_stream", arg)
-  | C.App (C.Var "Merkle__to_stream", arg) ->
+  | C.App (C.Var "MerkleTree__to_stream", arg) ->
       let (vm, _) = emit_term e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_to_list(%s) : (f64) -> f64" v vm);
       (v, "f64")
-  | C.App (C.Var "Merkle__leaf", arg) ->
+  | C.App (C.Var "MerkleTree__leaf", arg) ->
       let (va, _) = emit_term e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_leaf(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "Merkle__label", arg) ->
+  | C.App (C.Var "MerkleTree__label", arg) ->
       let (va, _) = emit_term e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_label(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.Var "Merkle__child", arg_a), arg_b) ->
+  | C.App (C.App (C.Var "MerkleTree__child", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
       let (vb, _) = emit_term e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_child(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  | C.App (C.App (C.Var "Merkle__equal", arg_a), arg_b) ->
+  | C.App (C.App (C.Var "MerkleTree__equal", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
       let (vb, _) = emit_term e env funcs arg_b in
       let v_f64 = fresh_ssa e in
@@ -2430,7 +2430,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
       (v_i1, "i1")
-  | C.App (C.App (C.App (C.Var "Merkle__node2_commutative", arg_l), arg_c1), arg_c2) ->
+  | C.App (C.App (C.App (C.Var "MerkleTree__node2_commutative", arg_l), arg_c1), arg_c2) ->
       let (vl, _)  = emit_term e env funcs arg_l in
       let (vc1, _) = emit_term e env funcs arg_c1 in
       let (vc2, _) = emit_term e env funcs arg_c2 in
@@ -2438,7 +2438,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_node2_commutative(%s, %s, %s) : (f64, f64, f64) -> f64" v vl vc1 vc2);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "Merkle__node2", arg_l), arg_c1), arg_c2) ->
+  | C.App (C.App (C.App (C.Var "MerkleTree__node2", arg_l), arg_c1), arg_c2) ->
       let (vl, _) = emit_term e env funcs arg_l in
       let (vc1, _) = emit_term e env funcs arg_c1 in
       let (vc2, _) = emit_term e env funcs arg_c2 in
@@ -3151,7 +3151,7 @@ let rec emit_term (e : emitter)
       let cv = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.cmpf une, %s, %s : f64" cv v bv);
       (cv, "i1")
-  | C.App (C.App (C.Var "Merkle__leaf_orbital", a), b) ->
+  | C.App (C.App (C.Var "MerkleTree__leaf_orbital", a), b) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
       let v = fresh_ssa e in
@@ -3176,7 +3176,7 @@ let rec emit_term (e : emitter)
         "%s = func.call @yon_rt_space_orbital_get(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
   (* Merkle node3 / node4 S_n canonical. *)
-  | C.App (C.App (C.App (C.App (C.Var "Merkle__node3", a_l), a_c1), a_c2), a_c3) ->
+  | C.App (C.App (C.App (C.App (C.Var "MerkleTree__node3", a_l), a_c1), a_c2), a_c3) ->
       let (vl, _) = emit_term e env funcs a_l in
       let (vc1, _) = emit_term e env funcs a_c1 in
       let (vc2, _) = emit_term e env funcs a_c2 in
@@ -3186,7 +3186,7 @@ let rec emit_term (e : emitter)
         "%s = func.call @yon_rt_merkle_node3(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64"
         v vl vc1 vc2 vc3);
       (v, "f64")
-  | C.App (C.App (C.App (C.App (C.App (C.Var "Merkle__node4", a_l), a_c1), a_c2), a_c3), a_c4) ->
+  | C.App (C.App (C.App (C.App (C.App (C.Var "MerkleTree__node4", a_l), a_c1), a_c2), a_c3), a_c4) ->
       let (vl, _) = emit_term e env funcs a_l in
       let (vc1, _) = emit_term e env funcs a_c1 in
       let (vc2, _) = emit_term e env funcs a_c2 in

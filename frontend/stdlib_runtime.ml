@@ -666,23 +666,23 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "orbital_contains", [TyUser "Map"; tnum; tnum], tbool;
     ];
     (* Merkle DAG as a stdlib place.
-     * Surface API: Merkle.{leaf, node2, label, child, equal, to_stream}.
+     * Surface API: MerkleTree.{leaf, node2, label, child, equal, to_stream}.
      * Backing: ds_merkle_node_t in xheap content-addressed.
      * to_stream yields LEAVES via DFS left-first. *)
-    "Merkle", [
-      "leaf", [tnum], TyUser "Merkle";
-      "node2", [tnum; TyUser "Merkle"; TyUser "Merkle"], TyUser "Merkle";
-      "node2_commutative", [tnum; TyUser "Merkle"; TyUser "Merkle"], TyUser "Merkle";
-      "node3", [tnum; TyUser "Merkle"; TyUser "Merkle"; TyUser "Merkle"],
-              TyUser "Merkle";
-      "node4", [tnum; TyUser "Merkle"; TyUser "Merkle"; TyUser "Merkle";
-                TyUser "Merkle"], TyUser "Merkle";
-      "label", [TyUser "Merkle"], tnum;
-      "child", [TyUser "Merkle"; tnum], TyUser "Merkle";
-      "equal", [TyUser "Merkle"; TyUser "Merkle"], tbool;
-      "to_stream", [TyUser "Merkle"], tlist tnum;
+    "MerkleTree", [
+      "leaf", [tnum], TyUser "MerkleTree";
+      "node2", [tnum; TyUser "MerkleTree"; TyUser "MerkleTree"], TyUser "MerkleTree";
+      "node2_commutative", [tnum; TyUser "MerkleTree"; TyUser "MerkleTree"], TyUser "MerkleTree";
+      "node3", [tnum; TyUser "MerkleTree"; TyUser "MerkleTree"; TyUser "MerkleTree"],
+              TyUser "MerkleTree";
+      "node4", [tnum; TyUser "MerkleTree"; TyUser "MerkleTree"; TyUser "MerkleTree";
+                TyUser "MerkleTree"], TyUser "MerkleTree";
+      "label", [TyUser "MerkleTree"], tnum;
+      "child", [TyUser "MerkleTree"; tnum], TyUser "MerkleTree";
+      "equal", [TyUser "MerkleTree"; TyUser "MerkleTree"], tbool;
+      "to_stream", [TyUser "MerkleTree"], tlist tnum;
       (* leaf orbital *)
-      "leaf_orbital", [tnum; tnum], TyUser "Merkle";
+      "leaf_orbital", [tnum; tnum], TyUser "MerkleTree";
     ];
     "Leech", [
       "sign_canonical", [tnum; tnum], tnum;
