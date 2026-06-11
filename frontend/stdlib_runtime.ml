@@ -599,15 +599,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "append", [tlist tunk; tlist tunk], tlist tunk;
       "reverse", [tlist tunk], tlist tunk;
     ];
-    "Map", [
-      "empty", [], TyUser "Map";
-      "set", [TyUser "Map"; tunk; tunk], TyUser "Map";
-      "get", [TyUser "Map"; tunk], tnum;
-      "has", [TyUser "Map"; tunk], tbool;
-      "size", [TyUser "Map"], tnum;
-    ];
     (* HashMap is a real O(1) hash table via a content-addressed directory +
-     * xheap. A surface alias of Map, for naming clarity. *)
+     * xheap. The user-facing hash map. *)
     "HashMap", [
       "empty", [], TyUser "Map";
       "set", [TyUser "Map"; tunk; tunk], TyUser "Map";
