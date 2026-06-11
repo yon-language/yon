@@ -647,6 +647,14 @@ let stdlib_registry : (string * (string list * string)) list = [
   "VoyagerList__size",       (["f64"], "f64");
   "VoyagerList__corrupt_at", (["f64"; "f64"; "f64"], "f64");
   "VoyagerList__to_stream",  (["f64"], "f64");
+  "Arena__empty",        ([], "f64");
+  "Arena__put",          (["f64"; "f64"; "f64"], "f64");
+  "Arena__get",          (["f64"; "f64"], "f64");
+  "Arena__occupied",     (["f64"; "f64"], "f64");
+  "Arena__orbit",        (["f64"; "f64"], "f64");
+  "Arena__same_orbit",   (["f64"; "f64"; "f64"], "f64");
+  "Arena__fuse",         (["f64"; "f64"; "f64"; "f64"], "f64");
+  "Arena__fusion_count", (["f64"; "f64"], "f64");
   "Map__to_stream",     (["f64"], "f64");
 ]
 
@@ -948,6 +956,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.Var "HashSet__empty" -> "f64"
   | C.Var "XSet__empty" -> "f64"
   | C.Var "VoyagerList__empty" -> "f64"
+  | C.Var "Arena__empty" -> "f64"
   | C.Var "__set_empty" -> "f64"
   | C.Var "__xheap_used" -> "f64"
   | C.Var "__spawn_index" -> "f64"
@@ -1065,6 +1074,13 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.App (C.Var "VoyagerList__get", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__size", _) -> "f64"
   | C.App (C.App (C.App (C.Var "VoyagerList__corrupt_at", _), _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "Arena__put", _), _), _) -> "f64"
+  | C.App (C.App (C.Var "Arena__get", _), _) -> "f64"
+  | C.App (C.App (C.Var "Arena__occupied", _), _) -> "f64"
+  | C.App (C.App (C.Var "Arena__orbit", _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "Arena__same_orbit", _), _), _) -> "f64"
+  | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", _), _), _), _) -> "f64"
+  | C.App (C.App (C.Var "Arena__fusion_count", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__to_stream", _) -> "f64"
   | C.App (C.Var "__merkle_to_stream", _) -> "f64"
   | C.App (C.Var "Map__to_stream", _) -> "f64"
@@ -1576,6 +1592,11 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_voyagerlist_empty() : () -> f64" v);
+      (v, "f64")
+  | C.Var "Arena__empty" ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_empty() : () -> f64" v);
       (v, "f64")
   | C.Var "__set_empty" ->
       let v = fresh_ssa e in
@@ -3361,6 +3382,60 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_voyagerlist_append(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  (* Arena: the Leech type-2 arena as a first-class structure. *)
+  | C.App (C.App (C.App (C.Var "Arena__put", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_put(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.App (C.Var "Arena__get", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_get(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "Arena__occupied", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_occupied(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "Arena__orbit", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_orbit(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.App (C.Var "Arena__same_orbit", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_same_orbit(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", arg_a), arg_b), arg_c), arg_d) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let (vd, _) = emit_term e env funcs arg_d in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_fuse(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64" v va vb vc vd);
+      (v, "f64")
+  | C.App (C.App (C.Var "Arena__fusion_count", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_arena_fusion_count(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "VoyagerList__get", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
@@ -6091,6 +6166,14 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_space_orbital_get(f64, f64, f64) -> f64";
   (* VoyagerList as a collection. *)
   emit_line e "func.func private @yon_rt_voyagerlist_empty() -> f64";
+  emit_line e "func.func private @yon_rt_arena_empty() -> f64";
+  emit_line e "func.func private @yon_rt_arena_put(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_get(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_occupied(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_orbit(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_same_orbit(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_fuse(f64, f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_fusion_count(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_append(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_get(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_size(f64) -> f64";

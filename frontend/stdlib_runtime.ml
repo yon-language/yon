@@ -724,6 +724,19 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "corrupt_at", [TyUser "VoyagerList"; tnum; tnum], TyUser "VoyagerList";
       "to_stream", [TyUser "VoyagerList"], tlist tnum;
     ];
+    (* Arena: the Leech type-2 arena as a first-class structure. Points are
+     * type-2 xcoords; orbit/same_orbit read the pure M24 orbit. occupied and
+     * same_orbit return 0/1 as numbers. *)
+    "Arena", [
+      "empty", [], TyUser "Arena";
+      "put", [TyUser "Arena"; tnum; tnum], TyUser "Arena";
+      "get", [TyUser "Arena"; tnum], tnum;
+      "occupied", [TyUser "Arena"; tnum], tnum;
+      "orbit", [TyUser "Arena"; tnum], tnum;
+      "same_orbit", [TyUser "Arena"; tnum; tnum], tnum;
+      "fuse", [TyUser "Arena"; tnum; tnum; tnum], TyUser "Arena";
+      "fusion_count", [TyUser "Arena"; tnum], tnum;
+    ];
     "Space", [
       "make", [tunk], TyUser "Space";   (* alias for "new" to avoid keyword clash *)
       "new", [tunk], TyUser "Space";
