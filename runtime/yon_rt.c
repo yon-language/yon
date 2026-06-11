@@ -3473,6 +3473,18 @@ extern uint32_t yon_mphf_unindex(uint32_t idx);
 #define YON_MPHF_INVALID UINT32_MAX
 
 #define YON_XSET_N_BITS    196560u
+
+/* The XSet bitmap holds exactly one bit per type-2 vector of the Leech
+ * lattice. That count is not a magic number: it is the kissing number,
+ * theta_coeff(2) of the Leech theta series (Theta = E_12 - (65520/691) Delta,
+ * a weight-12 modular form), verified independently in
+ * frontend/test_leech_theta.ml through Ramanujan's sigma_11 and tau. If the
+ * bitmap size ever drifts from the theorem, the build fails right here rather
+ * than corrupting indexing silently. */
+#define YON_LEECH_TYPE2_COUNT 196560u
+_Static_assert(YON_XSET_N_BITS == YON_LEECH_TYPE2_COUNT,
+    "XSet bitmap size drifted from the Leech kissing number (theta_coeff 2 = 196560)");
+
 #define YON_XSET_N_CHUNKS  (YON_XSET_N_BITS / 64u + 1u)   /* 3072 + 1 padding */
 #define YON_XSET_MAX_SETS  256u
 
