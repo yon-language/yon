@@ -929,23 +929,10 @@ double yon_rt_bits_popcount(double a);
 double yon_rt_io_print_num(double x);
 
 /* SCT integration in the data structures. */
-double yon_rt_hashmap_orbital_set(double map_id, double key, double value);
-double yon_rt_hashmap_orbital_get(double map_id, double key);
-double yon_rt_hashset_orbital_add(double set_id, double elem);
-double yon_rt_hashset_orbital_contains(double set_id, double elem);
 
 /* Pluggable canonicalizer.
  * canon_id: 0=identity, 1=G_24, 2=M_24 weight, 3=Co_0 one-shot,
  *           4=Co_0 BFS bounded, 5=popcount, 6=mod_8 */
-double yon_rt_hashmap_orbital_set_with(double map_id, double key, double value, double canon_id);
-double yon_rt_hashmap_orbital_get_with(double map_id, double key, double canon_id);
-double yon_rt_hashset_orbital_add_with(double set_id, double elem, double canon_id);
-double yon_rt_hashset_orbital_contains_with(double set_id, double elem, double canon_id);
-double yon_rt_merkle_leaf_orbital(double label, double canon_id);
-double yon_rt_space_orbital_set(double space_id, double idx, double value, double canon_id);
-double yon_rt_space_orbital_get(double space_id, double idx, double canon_id);
-double yon_rt_xset_orbital_add(double set_id, double elem, double canon_id);
-double yon_rt_xset_orbital_contains(double set_id, double elem, double canon_id);
 
 /* Extended stdlib — String/Time/Random/Crypto. */
 double yon_rt_string_from_int(double n);
@@ -981,7 +968,6 @@ double yon_rt_crypto_hash_int(double n);
 /* SATLIB helper: load UF20/UF50 by index 1..1000. */
 
 
-/* SAT DIMACS orbital wavefront — canonicalize under S_n. */
 
 /* Leech wavefront via embedding 2n->24 + G_24 syndrome canon. */
 double yon_rt_math_modulo(double a, double b);

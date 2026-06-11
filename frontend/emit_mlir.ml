@@ -586,24 +586,13 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Crypto__fnv1a",    (["f64"], "f64");
   "Crypto__hash_int", (["f64"], "f64");
   (* SCT integration in the structures. *)
-  "HashMap__orbital_set", (["f64"; "f64"; "f64"], "f64");
-  "HashMap__orbital_get", (["f64"; "f64"], "f64");
-  "HashSet__orbital_add", (["f64"; "f64"], "f64");
-  "HashSet__orbital_contains", (["f64"; "f64"], "i1");
   (* Pluggable canonicalizer. *)
-  "HashMap__orbital_set_with", (["f64"; "f64"; "f64"; "f64"], "f64");
-  "HashMap__orbital_get_with", (["f64"; "f64"; "f64"], "f64");
-  "HashSet__orbital_add_with", (["f64"; "f64"; "f64"], "f64");
   "HashSet__try_add", (["f64"; "f64"], "f64");
   "HashSet__at_bucket", (["f64"; "f64"], "f64");
   "HashSet__dir_capacity", (["f64"], "f64");
-  "HashSet__orbital_contains_with", (["f64"; "f64"; "f64"], "i1");
   "HashSet__union", (["f64"; "f64"], "f64");
   "HashSet__intersect", (["f64"; "f64"], "f64");
   "List__reverse", (["f64"], "f64");
-  "XSet__orbital_add", (["f64"; "f64"; "f64"], "f64");
-  "XSet__orbital_contains", (["f64"; "f64"; "f64"], "i1");
-  "MerkleTree__leaf_orbital", (["f64"; "f64"], "f64");
   (* HSH — History Store, Hierarchical (Teorema 1b, SCT 6.4) *)
   "Route__empty", (["f64"], "f64");
   "Route__empty_mod", (["f64"; "f64"], "f64");
@@ -612,8 +601,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Route__witness", (["f64"; "f64"; "f64"], "f64");
   "Route__shared_levels", (["f64"], "f64");
   "Route__levels", (["f64"], "f64");
-  "Space__orbital_set", (["f64"; "f64"; "f64"; "f64"], "f64");
-  "Space__orbital_get", (["f64"; "f64"; "f64"], "f64");
   (* VoyagerList: an append-only collection with positional corruption (used to
      model fault injection in the Voyager examples). *)
   "VoyagerList__empty",      ([], "f64");
@@ -2969,58 +2956,6 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_crypto_hash_int(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "HashMap__orbital_set", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashmap_orbital_set(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
-  | C.App (C.App (C.Var "HashMap__orbital_get", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashmap_orbital_get(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "HashSet__orbital_add", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_orbital_add(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "HashSet__orbital_contains", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_orbital_contains(%s, %s) : (f64, f64) -> f64" v va vb);
-      let bv = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" bv);
-      let cv = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.cmpf une, %s, %s : f64" cv v bv);
-      (cv, "i1")
-  (* Pluggable canonicalizer dispatch. *)
-  | C.App (C.App (C.App (C.App (C.Var "HashMap__orbital_set_with", a), b), c), d) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let (vd, _) = emit_term e env funcs d in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashmap_orbital_set_with(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64" v va vb vc vd);
-      (v, "f64")
-  | C.App (C.App (C.App (C.Var "HashMap__orbital_get_with", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashmap_orbital_get_with(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
-  (* ---- HSH builtins ---- *)
   | C.App (C.App (C.App (C.Var "Route__step", a), b), c) ->
       let (va,_) = emit_term e env funcs a in
       let (vb,_) = emit_term e env funcs b in
@@ -3091,14 +3026,6 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_list_reverse(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "HashSet__orbital_add_with", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_orbital_add_with(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
   | C.App (C.App (C.Var "HashSet__try_add", a), b) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
@@ -3119,63 +3046,6 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hashset_dir_capacity(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "HashSet__orbital_contains_with", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_orbital_contains_with(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      let bv = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" bv);
-      let cv = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.cmpf une, %s, %s : f64" cv v bv);
-      (cv, "i1")
-  | C.App (C.App (C.App (C.Var "XSet__orbital_add", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xset_orbital_add(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
-  | C.App (C.App (C.App (C.Var "XSet__orbital_contains", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xset_orbital_contains(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      let bv = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" bv);
-      let cv = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.cmpf une, %s, %s : f64" cv v bv);
-      (cv, "i1")
-  | C.App (C.App (C.Var "MerkleTree__leaf_orbital", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_merkle_leaf_orbital(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.App (C.App (C.Var "Space__orbital_set", a), b), c), d) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let (vd, _) = emit_term e env funcs d in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_space_orbital_set(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64" v va vb vc vd);
-      (v, "f64")
-  | C.App (C.App (C.App (C.Var "Space__orbital_get", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_space_orbital_get(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
-  (* Merkle node3 / node4 S_n canonical. *)
   | C.App (C.App (C.App (C.App (C.Var "MerkleTree__node3", a_l), a_c1), a_c2), a_c3) ->
       let (vl, _) = emit_term e env funcs a_l in
       let (vc1, _) = emit_term e env funcs a_c1 in
@@ -5936,22 +5806,10 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_random_range(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_crypto_fnv1a(f64) -> f64";
   emit_line e "func.func private @yon_rt_crypto_hash_int(f64) -> f64";
-  (* HashMap/HashSet orbital ops. *)
-  emit_line e "func.func private @yon_rt_hashmap_orbital_set(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashmap_orbital_get(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_orbital_add(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_orbital_contains(f64, f64) -> f64";
   (* Extended stdlib. *)
-  emit_line e "func.func private @yon_rt_hashmap_orbital_set_with(f64, f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashmap_orbital_get_with(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_orbital_add_with(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_try_add(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_at_bucket(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_dir_capacity(f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_orbital_contains_with(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xset_orbital_add(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xset_orbital_contains(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_merkle_leaf_orbital(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_empty(f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_empty_mod(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_step(f64, f64, f64) -> f64";
@@ -5959,8 +5817,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_hsh_backward(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_shared_levels(f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_levels(f64) -> f64";
-  emit_line e "func.func private @yon_rt_space_orbital_set(f64, f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_space_orbital_get(f64, f64, f64) -> f64";
   (* VoyagerList as a collection. *)
   emit_line e "func.func private @yon_rt_voyagerlist_empty() -> f64";
   emit_line e "func.func private @yon_rt_arena_empty() -> f64";

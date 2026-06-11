@@ -1,12 +1,6 @@
 RAN arena_basic exit=6
-RAN arena_orbital_canon exit=11
 RAN capability_flow_demo exit=110
 RAN cluster_a_ast_commutative exit=81
-RAN cluster_a_hashmap_orbital exit=20
-RAN cluster_a_hashset_orbital exit=15
-RAN cluster_a_pluggable_canon exit=70
-RAN cluster_a_proof_trace exit=4
-RAN cluster_a_xset_space_merkle_orbital exit=87
 RAN collections_ext exit=42
 RAN comprehension_carrier exit=0
 RAN decidable_ok exit=42
