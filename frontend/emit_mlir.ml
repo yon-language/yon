@@ -604,13 +604,13 @@ let stdlib_registry : (string * (string list * string)) list = [
   "XSet__orbital_contains", (["f64"; "f64"; "f64"], "i1");
   "Merkle__leaf_orbital", (["f64"; "f64"], "f64");
   (* HSH — History Store, Hierarchical (Teorema 1b, SCT 6.4) *)
-  "HSH__empty", (["f64"], "f64");
-  "HSH__empty_mod", (["f64"; "f64"], "f64");
-  "HSH__step", (["f64"; "f64"; "f64"], "f64");
-  "HSH__contains", (["f64"; "f64"; "f64"], "i1");
-  "HSH__witness", (["f64"; "f64"; "f64"], "f64");
-  "HSH__shared_levels", (["f64"], "f64");
-  "HSH__levels", (["f64"], "f64");
+  "Route__empty", (["f64"], "f64");
+  "Route__empty_mod", (["f64"; "f64"], "f64");
+  "Route__step", (["f64"; "f64"; "f64"], "f64");
+  "Route__contains", (["f64"; "f64"; "f64"], "i1");
+  "Route__witness", (["f64"; "f64"; "f64"], "f64");
+  "Route__shared_levels", (["f64"], "f64");
+  "Route__levels", (["f64"], "f64");
   "Space__orbital_set", (["f64"; "f64"; "f64"; "f64"], "f64");
   "Space__orbital_get", (["f64"; "f64"; "f64"], "f64");
   (* VoyagerList: an append-only collection with positional corruption (used to
@@ -3016,7 +3016,7 @@ let rec emit_term (e : emitter)
         "%s = func.call @yon_rt_hashmap_orbital_get_with(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
   (* ---- HSH builtins ---- *)
-  | C.App (C.App (C.App (C.Var "HSH__step", a), b), c) ->
+  | C.App (C.App (C.App (C.Var "Route__step", a), b), c) ->
       let (va,_) = emit_term e env funcs a in
       let (vb,_) = emit_term e env funcs b in
       let (vc,_) = emit_term e env funcs c in
@@ -3024,7 +3024,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hsh_step(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "HSH__contains", a), b), c) ->
+  | C.App (C.App (C.App (C.Var "Route__contains", a), b), c) ->
       let (va,_) = emit_term e env funcs a in
       let (vb,_) = emit_term e env funcs b in
       let (vc,_) = emit_term e env funcs c in
@@ -3036,7 +3036,7 @@ let rec emit_term (e : emitter)
       let v_i1 = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
       (v_i1, "i1")
-  | C.App (C.App (C.App (C.Var "HSH__witness", a), b), c) ->
+  | C.App (C.App (C.App (C.Var "Route__witness", a), b), c) ->
       let (va,_) = emit_term e env funcs a in
       let (vb,_) = emit_term e env funcs b in
       let (vc,_) = emit_term e env funcs c in
@@ -3044,26 +3044,26 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hsh_backward(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
-  | C.App (C.App (C.Var "HSH__empty_mod", a), b) ->
+  | C.App (C.App (C.Var "Route__empty_mod", a), b) ->
       let (va,_) = emit_term e env funcs a in
       let (vb,_) = emit_term e env funcs b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hsh_empty_mod(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  | C.App (C.Var "HSH__empty", a) ->
+  | C.App (C.Var "Route__empty", a) ->
       let (va,_) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hsh_empty(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "HSH__shared_levels", a) ->
+  | C.App (C.Var "Route__shared_levels", a) ->
       let (va,_) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hsh_shared_levels(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "HSH__levels", a) ->
+  | C.App (C.Var "Route__levels", a) ->
       let (va,_) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf

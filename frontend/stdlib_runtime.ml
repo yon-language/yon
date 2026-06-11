@@ -627,7 +627,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     (* HSH — History Store, Hierarchical. A backward prover with three views:
      * hash (O(1) membership), voyager (witness extraction), merkle (sharing
      * of the H_i levels). *)
-    "HSH", [
+    "Route", [
       "empty", [tnum], tnum;                     (* HSH.empty(e) -> store *)
       "empty_mod", [tnum; tnum], tnum;            (* HSH.empty_mod(e, M) -> store Z_M *)
       "step", [tnum; tnum; tnum], tnum;           (* HSH.step(store, a_i, mod) *)

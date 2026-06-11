@@ -48,6 +48,7 @@ RAN merkle_noncommutative exit=11
 RAN nat_transform_functor exit=0
 RAN net_stream exit=0
 RAN primes_bertrand exit=8
+RAN route_history exit=31
 RAN shm_backpressure exit=0
 RAN shm_stream exit=0
 RAN spawn_parallel_collect exit=10
