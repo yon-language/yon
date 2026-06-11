@@ -5,6 +5,7 @@
  */
 
 #include "xleech2_mphf.h"
+#include "leech_theta.h"
 #include <pthread.h>
 
 /* libmmgroup_mm_op.so symbols */
@@ -41,7 +42,7 @@ uint32_t yon_mphf_index(yon_xcoord_t v) {
 }
 
 yon_xcoord_t yon_mphf_unindex(uint32_t idx) {
-    if (idx >= 196560u) return YON_XCOORD_INVALID;
+    if (idx >= YON_LEECH_TYPE2_COUNT) return YON_XCOORD_INVALID;
 
     uint32_t ext = (idx >> 1) + EXTERN_OFFSET;
     uint32_t sign = idx & 1u;

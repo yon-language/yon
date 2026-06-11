@@ -16,6 +16,7 @@
 #include "yon_rt.h"
 #include "xleech2_heap.h"
 #include "xleech2_handler_stack.h"
+#include "leech_theta.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -3480,8 +3481,8 @@ extern uint32_t yon_mphf_unindex(uint32_t idx);
  * a weight-12 modular form), verified independently in
  * frontend/test_leech_theta.ml through Ramanujan's sigma_11 and tau. If the
  * bitmap size ever drifts from the theorem, the build fails right here rather
- * than corrupting indexing silently. */
-#define YON_LEECH_TYPE2_COUNT 196560u
+ * than corrupting indexing silently. The count itself is defined once in
+ * leech_theta.h. */
 _Static_assert(YON_XSET_N_BITS == YON_LEECH_TYPE2_COUNT,
     "XSet bitmap size drifted from the Leech kissing number (theta_coeff 2 = 196560)");
 
