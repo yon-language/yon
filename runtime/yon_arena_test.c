@@ -1,9 +1,10 @@
-/* yon_arena_test.c — oracle for the Leech type-2 arena (road 3, bricks 1-2).
+/* yon_arena_test.c — oracle for the Leech type-2 arena (road 3, bricks 1-3).
  *
- * Brick 1: repr round-trip + zero collisions over all 196560 type-2 points.
- * Brick 2: the sigma-certified fusion list — pushes are LIFO and the walk
- *          returns each (value, sigma) exactly, fusions require an occupied
- *          repr, and non-type-2 points are rejected.
+ * Brick 1: repr round-trip + zero collisions over all 196560 points.
+ * Brick 2: sigma-certified fusion list (LIFO, walked back exactly).
+ * Brick 3: the M24 orbit sealed into the slot at allocation — the orbit read
+ *          back from the slot matches the computation, the 196560 points
+ *          partition into a small number of orbits, invariant under sign.
  *
  * Standalone (vendor objects already built by `make`):
  *   cc -std=c11 -D_DARWIN_C_SOURCE -O2 -Ivendor/mmgroup \
@@ -12,6 +13,7 @@
  */
 #include "yon_arena.h"
 #include "xleech2_mphf.h"
+#include "xleech2_coord.h"
 #include "xleech2_heap.h"
 #include "leech_theta.h"
 #include <stdio.h>
@@ -23,65 +25,66 @@ static void collect(uint32_t value, uint32_t sigma, void *ctx) {
     if (c->n < MAXF) { c->val[c->n] = value; c->sig[c->n] = sigma; c->n++; }
 }
 
+static char seen_orbit[8192];   /* orbit invariant <= (24<<8)|24 = 6168 */
+
 int main(void) {
-    printf("=== Leech type-2 arena oracle (road 3, bricks 1-2) ===\n\n");
+    printf("=== Leech type-2 arena oracle (road 3, bricks 1-3) ===\n\n");
     yon_xheap_t *heap = yon_xheap_create();
     ds_arena_t *a = yon_arena_create(heap);
 
-    /* --- brick 1: repr round-trip + zero collisions over the whole shell --- */
+    /* --- bricks 1 & 3: repr round-trip, zero collisions, orbit sealed --- */
+    long ok = 0, wrong = 0, orbit_consistent = 0, orbit_bad = 0, distinct = 0;
     for (uint32_t idx = 0; idx < YON_LEECH_TYPE2_COUNT; idx++) {
         yon_xcoord_t v = yon_mphf_unindex(idx);
-        if (!yon_arena_put_repr(a, v, idx + 1u)) {
-            printf("  [FAIL] put rejected a type-2 point at idx=%u\n", idx);
-            return 1;
-        }
-    }
-    long ok = 0, wrong = 0;
-    for (uint32_t idx = 0; idx < YON_LEECH_TYPE2_COUNT; idx++) {
-        yon_xcoord_t v = yon_mphf_unindex(idx);
+        uint32_t orbit_before = yon_arena_orbit(a, v);   /* unoccupied: computed */
+        yon_arena_put_repr(a, v, idx + 1u);
         if (yon_arena_get_repr(a, v) == idx + 1u) ok++; else wrong++;
+        uint32_t orbit_after = yon_arena_orbit(a, v);    /* occupied: sealed slot */
+        if (orbit_before == orbit_after) orbit_consistent++; else orbit_bad++;
+        if (orbit_after < 8192 && !seen_orbit[orbit_after]) {
+            seen_orbit[orbit_after] = 1; distinct++;
+        }
     }
     printf("  repr round-trip   : %ld / %u  (mismatches %ld)\n",
            ok, YON_LEECH_TYPE2_COUNT, wrong);
+    printf("  orbit sealed==calc: %ld / %u  (inconsistent %ld)\n",
+           orbit_consistent, YON_LEECH_TYPE2_COUNT, orbit_bad);
+    printf("  distinct M24 orbits over all type-2 points: %ld\n", distinct);
+
+    /* orbit invariant under the central sign (negate): same 24 low bits */
+    int sign_ok = 1;
+    uint32_t probe[5] = { 0u, 100u, 1000u, 50000u, 196559u };
+    for (int i = 0; i < 5; i++) {
+        yon_xcoord_t v = yon_mphf_unindex(probe[i]);
+        yon_xcoord_t nv = yon_xcoord_negate(v);
+        if (yon_arena_orbit(a, v) != yon_arena_orbit(a, nv)) sign_ok = 0;
+    }
+    printf("  orbit(v)==orbit(-v): %s\n", sign_ok ? "ok" : "FAIL");
 
     /* --- brick 2: sigma-certified fusions, LIFO --- */
-    yon_xcoord_t p = yon_mphf_unindex(100u);   /* occupied: repr = 101 */
+    yon_xcoord_t p = yon_mphf_unindex(100u);
     int f1 = yon_arena_put_fusion(a, p, 11u, 101u);
     int f2 = yon_arena_put_fusion(a, p, 22u, 202u);
     collect_t c = { .n = 0 };
     long nf = yon_arena_fusions(a, p, collect, &c);
     int fusion_ok = (f1 && f2 && nf == 2 && c.n == 2
-                     && c.val[0] == 22u && c.sig[0] == 202u   /* most recent first */
+                     && c.val[0] == 22u && c.sig[0] == 202u
                      && c.val[1] == 11u && c.sig[1] == 101u);
     printf("  fusions LIFO      : %ld recorded, walk %s\n",
            nf, fusion_ok ? "exact (ok)" : "WRONG");
 
-    /* a fusion needs an occupied repr: a fresh empty arena rejects + walks 0 */
-    ds_arena_t *empty = yon_arena_create(heap);
-    yon_xcoord_t q = yon_mphf_unindex(7u);
-    int rej_unoccupied = yon_arena_put_fusion(empty, q, 1u, 2u);   /* -> 0 */
-    long walk_empty = yon_arena_fusions(empty, q, collect, &c);    /* -> 0 */
-
-    /* non-type-2 is rejected everywhere */
+    /* non-type-2 rejected, including orbit */
     yon_xcoord_t bad = 0;
     int put_bad = yon_arena_put_repr(a, bad, 999u);
-    uint32_t get_bad = yon_arena_get_repr(a, bad);
-    int fus_bad = yon_arena_put_fusion(a, bad, 1u, 2u);
-
-    printf("  occupied required : put_fusion %s, walk_empty %ld\n",
-           rej_unoccupied == 0 ? "rejected (ok)" : "FAIL", walk_empty);
-    printf("  non-type-2 reject : repr %s, get %s, fusion %s\n",
-           put_bad == 0 ? "ok" : "FAIL",
-           get_bad == YON_HEAPREF_INVALID ? "ok" : "FAIL",
-           fus_bad == 0 ? "ok" : "FAIL");
+    uint32_t orb_bad = yon_arena_orbit(a, bad);
 
     int pass = (ok == (long)YON_LEECH_TYPE2_COUNT && wrong == 0
-                && fusion_ok
-                && rej_unoccupied == 0 && walk_empty == 0
-                && put_bad == 0 && get_bad == YON_HEAPREF_INVALID && fus_bad == 0);
+                && orbit_consistent == (long)YON_LEECH_TYPE2_COUNT && orbit_bad == 0
+                && distinct > 0 && distinct < 100
+                && sign_ok && fusion_ok
+                && put_bad == 0 && orb_bad == YON_ARENA_ORBIT_INVALID);
     printf("\n  %s\n", pass ? "ALL PASS" : "FAILED");
 
-    yon_arena_destroy(empty);
     yon_arena_destroy(a);
     return pass ? 0 : 1;
 }

@@ -5,6 +5,7 @@
 #include "xleech2_heap.h"   /* YON_HEAPREF_INVALID */
 #include "leech_theta.h"    /* YON_LEECH_TYPE2_COUNT */
 #include "yon_mmap.h"       /* yon_map / yon_unmap */
+#include "mat24_functions.h"  /* mat24_syndrome, for the M24 orbit invariant */
 
 #include <stddef.h>
 #include <string.h>
@@ -15,6 +16,7 @@
 typedef struct {
     uint32_t repr;          /* heapref of the canonical value (valid iff occupied) */
     uint32_t fusions_head;  /* heapref of the fusion-list head, or INVALID */
+    uint32_t orbit;         /* M24 orbit invariant, sealed at put_repr */
     uint8_t  occupied;
 } arena_slot_t;
 
@@ -37,6 +39,18 @@ _Static_assert(sizeof(((struct ds_arena *)0)->slots) / sizeof(arena_slot_t)
                    == YON_LEECH_TYPE2_COUNT,
     "arena must hold exactly the type-2 vectors (theta_coeff 2 = 196560)");
 
+/* M24 orbit invariant of a type-2 point: (codeword_weight << 8) | syndrome_weight,
+ * via mat24_syndrome. Constant on each M24 orbit; the same computation the
+ * runtime's yon_rt_leech_m24_orbit performs, without the heap-id indirection. */
+static uint32_t arena_m24_orbit(yon_xcoord_t point) {
+    uint32_t v    = ((uint32_t)point) & 0xFFFFFFu;
+    uint32_t synd = mat24_syndrome(v, 0);
+    uint32_t gpart = v ^ synd;
+    uint32_t w_g = (uint32_t)__builtin_popcount(gpart);
+    uint32_t w_c = (uint32_t)__builtin_popcount(synd);
+    return (w_g << 8) | w_c;
+}
+
 ds_arena_t *yon_arena_create(yon_xheap_t *heap) {
     /* mmap-always: a private anonymous map, kernel-zeroed, so every slot starts
      * unoccupied (occupied == 0) at no cost. yon_map aborts on failure. */
@@ -55,6 +69,7 @@ int yon_arena_put_repr(ds_arena_t *a, yon_xcoord_t point, uint32_t repr) {
     arena_slot_t *s = &a->slots[idx];
     s->repr = repr;
     s->fusions_head = YON_HEAPREF_INVALID;
+    s->orbit = arena_m24_orbit(point);   /* sealed at allocation, never recomputed */
     s->occupied = 1;
     return 1;
 }
@@ -112,4 +127,12 @@ long yon_arena_fusions(const ds_arena_t *a, yon_xcoord_t point,
         cur = node.next;
     }
     return count;
+}
+
+uint32_t yon_arena_orbit(const ds_arena_t *a, yon_xcoord_t point) {
+    uint32_t idx = yon_mphf_index(point);
+    if (idx == YON_MPHF_INVALID) return YON_ARENA_ORBIT_INVALID;
+    const arena_slot_t *s = &a->slots[idx];
+    if (s->occupied) return s->orbit;        /* sealed at allocation, O(1) */
+    return arena_m24_orbit(point);           /* not yet allocated: compute */
 }
