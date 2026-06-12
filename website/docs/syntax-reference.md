@@ -108,7 +108,7 @@ mean?*, with a compiling example next to each explanation, see
 [`show`](/book/keywords#show) ·
 [`Sigma`](/book/keywords#sigma) ·
 [`snd`](/book/keywords#snd) ·
-[`solve`](/book/keywords#solve) ·
+[`verify`](/book/keywords#verify) ·
 [`space`](/book/keywords#space) ·
 [`stream`](/book/keywords#stream) ·
 [`terminal`](/book/keywords#terminal) ·
@@ -230,7 +230,7 @@ from the call sites.
 | `compose h1 with h2` | ✓ | Handle composition, `(compose f with g)(x) = g(f(x))`. Kind discipline enforced: e.g. `reduction ∘ reduction` is rejected (the eliminator lands in `number`) |
 | `f(args) in S` | ✓ | Call in a Space context (`apply_move ... in S`, morph dispatch) |
 | `all P where cond` | ✓ | Quantification over the sections of a place |
-| `solve P` | ✓ | Instantiate a law-verified place as a Magma handle |
+| `verify P` | ✓ | Instantiate a law-verified place as a Magma handle |
 | `new P { field value }` | ✓ | Section construction, **no `=`** between field and value |
 | `new P in S { ... }` | ✓ | Construction inside Space `S` |
 | [`refl(t)`](/book/keywords#refl), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
@@ -398,7 +398,7 @@ effects, move/morphism gating) with opt-in physical heap separation
 | `List` / `Map` / `Set` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
 | `Merkle` | Content-addressed Merkle trees |
 | `VoyagerList` | Golay-sealed list (error-correcting) |
-| `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog`, with `solve P` |
+| `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog`, with `verify P` |
 | `Stream` | `from_list, map, filter, fold, iterate, take` |
 | `Space` | `make, set, get`, mutable cells (the 1.0 mutation mechanism) |
 

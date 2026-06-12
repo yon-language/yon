@@ -109,7 +109,7 @@
 %token LAW
 %token USES
 %token ALGEBRA
-%token SOLVE
+%token VERIFY
 %token EXTENDS
 %token ERROR_KW
 %token INVERTIBLE
@@ -1450,8 +1450,8 @@ expr_atom:
     { ECall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
     { ECall (name, args, mk_loc $startpos $endpos) }   (* mod::fun(args) *)
-  | SOLVE place = IDENT
-    { (* solve P (an expression) -> @P_instantiate(). The verified place
+  | VERIFY place = IDENT
+    { (* verify P (an expression) -> @P_instantiate(). The verified place
        * becomes a Magma handle inside Yon. *)
       ECall (place ^ "_instantiate", [], mk_loc $startpos $endpos) }
   | x = IDENT DOT fs = separated_nonempty_list(DOT, IDENT)

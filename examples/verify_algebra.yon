@@ -11,7 +11,7 @@ place OrPlace in Alg with effects {
 }
 
 fun main(): number {
-  be m holds solve OrPlace
+  be m holds verify OrPlace
   be m1 holds Magma.gen(m, 1)
   be m2 holds Magma.gen(m1, 2)
   return Magma.closure_size(m2)

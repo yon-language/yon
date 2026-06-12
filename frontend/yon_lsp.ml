@@ -260,7 +260,7 @@ let hover_at (prog : Surface_ast.program) (line0 : int) (col0 : int)
 
 let keywords = [
   "world"; "place"; "fun"; "let"; "holds"; "return"; "operation"; "import"; "as"; "internal"; "init"; "from";
-  "uses"; "algebra"; "law"; "solve"; "move"; "reduction"; "view";
+  "uses"; "algebra"; "law"; "verify"; "move"; "reduction"; "view";
   "with"; "effects"; "is"; "if"; "then"; "else"; "all"; "where";
   "commutative"; "associative"; "monotone"; "Additive"; "TropicalMax";
   "TropicalMin"; "Multiplicative"; "BooleanOr"; "BooleanAnd"; "Gcd";

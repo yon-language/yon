@@ -81,7 +81,7 @@ New objects from old ones, named after their universal property.
 | `law` | example | Declares an algebraic law; the compiler verifies it against the catalog and rejects a false claim |
 | `lawful` | example | Reduction modifier: declared and verified law |
 | `invertible` | example | Reduction modifier: invertible |
-| `solve` | example | Instantiates a law-verified place as a runnable handle |
+| `verify` | example | Instantiates a law-verified place as a runnable handle |
 | `fold` | example | Names a space's fold function (`with fold "sum_f64"`) |
 
 ## The explicit topos vocabulary
