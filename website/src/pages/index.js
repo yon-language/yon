@@ -10,6 +10,25 @@ const Arrow = () => (
   </svg>
 );
 
+function Banner() {
+  return (
+    <div style={{
+      borderBottom: '1px solid rgba(212,175,55,0.35)',
+      background: 'rgba(212,175,55,0.06)',
+      padding: '11px 20px',
+      textAlign: 'center',
+      fontSize: '0.9rem',
+      lineHeight: 1.55,
+    }}>
+      <strong>Active development.</strong> Yon is under heavy refactoring and new
+      capabilities land continuously, so an example, a doc page, or an API name may
+      be briefly out of step with the compiler — rough edges are expected. The source
+      and the benchmarks are public; what these pages describe is what compiles and
+      runs today.
+    </div>
+  );
+}
+
 function Hero() {
   return (
     <header className={styles.hero}>
@@ -48,7 +67,9 @@ function Heap() {
               equality</strong>, by construction. The work is done by content-addressing, not by lattice geometry.
               The Leech lattice enters as a deliberate bound: a heap holds at most <strong>196,560 slots</strong>,
               the count of minimal vectors of Λ<sub>24</sub> — a fixed, bounded-state capacity that fails loudly at
-              the limit instead of degrading silently. Where the lattice is actually load-bearing is below: sets and error correction.
+              the limit instead of degrading silently. Where the lattice is actually load-bearing is in the
+              structures below — sets and error correction — and in the Arena, whose Co<sub>0</sub>/M<sub>24</sub> orbit
+              operations recognize contents equal up to the lattice's symmetry group.
             </p>
             <div className={styles.stat}>
               <b>String.equal</b>: ~17 ns at 1 char and at 32,768 chars. Three orders of magnitude of size,
@@ -188,6 +209,7 @@ export default function Home() {
     <Layout title="The Topos of Programming"
             description="A topos-oriented programming language. Native via MLIR and LLVM, with a content-addressed heap and Leech-lattice sets and error correction.">
       <main className={styles.page}>
+        <Banner />
         <Hero />
         <Heap />
         <Sets />
