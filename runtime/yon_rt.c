@@ -4005,6 +4005,148 @@ double yon_rt_memo_size(double id) {
     return (double)t->live;
 }
 
+/* ============================================================== */
+/* Deque: double-ended queue, ring buffer on an arena strip.        */
+/* capacity is a power of two so wraparound is a mask. No malloc.    */
+/* ============================================================== */
+#define YON_DEQUE_MAX       256u
+#define YON_DEQUE_INIT_CAP  16u           /* power of two */
+
+typedef struct {
+    uint32_t buf_off;    /* strip: capacity doubles (ring)  */
+    uint32_t capacity;   /* power of two                    */
+    uint32_t head;       /* index of the front element      */
+    uint32_t count;      /* elements present                */
+    uint32_t is_used;
+} yon_deque_t;
+
+static yon_deque_t g_deques[YON_DEQUE_MAX];
+static uint32_t g_n_deques = 0;
+
+static double *deque_buf(const yon_deque_t *d) {
+    return (double *)yon_xheap_strip_at(g_ds_heap, d->buf_off);
+}
+static yon_deque_t *deque_lookup(double id) {
+    if (id < 0.5) return NULL;
+    uint32_t s = (uint32_t)id;
+    if (s == 0 || s > g_n_deques) return NULL;
+    yon_deque_t *d = &g_deques[s - 1];
+    return d->is_used ? d : NULL;
+}
+
+double yon_rt_deque_empty(void) {
+    ds_ensure_init();
+    ensure_init();
+    if (g_n_deques >= YON_DEQUE_MAX) {
+        fprintf(stderr, "[YON-RT] deque_empty: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_deques++;
+    yon_deque_t *d = &g_deques[id];
+    d->capacity = YON_DEQUE_INIT_CAP;
+    d->buf_off = yon_xheap_strip_alloc(g_ds_heap,
+                     d->capacity * (uint32_t)sizeof(double));
+    if (d->buf_off == 0) {
+        fprintf(stderr, "[YON-RT] deque_empty: arena exhausted\n");
+        g_n_deques--;
+        return 0.0;
+    }
+    d->head = 0; d->count = 0; d->is_used = 1;
+    return (double)(id + 1);
+}
+
+static int deque_grow(yon_deque_t *d) {
+    uint32_t new_cap = d->capacity * 2u;
+    uint32_t off = yon_xheap_strip_alloc(g_ds_heap,
+                       new_cap * (uint32_t)sizeof(double));
+    if (off == 0) return 0;
+    double *nb = (double *)yon_xheap_strip_at(g_ds_heap, off);
+    double *ob = deque_buf(d);
+    uint32_t mask = d->capacity - 1u;
+    for (uint32_t i = 0; i < d->count; i++)   /* linearize from head */
+        nb[i] = ob[(d->head + i) & mask];
+    yon_xheap_strip_trim(g_ds_heap, d->buf_off, 0u,
+                         d->capacity * (uint32_t)sizeof(double));
+    d->buf_off = off; d->capacity = new_cap; d->head = 0;
+    return 1;
+}
+
+double yon_rt_deque_push_back(double id, double v) {
+    ds_ensure_init();
+    yon_deque_t *d = (id < 0.5) ? NULL : deque_lookup(id);
+    if (!d) {
+        double nid = yon_rt_deque_empty();
+        d = deque_lookup(nid);
+        if (!d) return 0.0;
+        id = nid;
+    }
+    if (d->count >= d->capacity) {
+        if (!deque_grow(d)) return id;
+    }
+    double *b = deque_buf(d);
+    uint32_t mask = d->capacity - 1u;
+    b[(d->head + d->count) & mask] = v;
+    d->count++;
+    return id;
+}
+
+double yon_rt_deque_push_front(double id, double v) {
+    ds_ensure_init();
+    yon_deque_t *d = (id < 0.5) ? NULL : deque_lookup(id);
+    if (!d) {
+        double nid = yon_rt_deque_empty();
+        d = deque_lookup(nid);
+        if (!d) return 0.0;
+        id = nid;
+    }
+    if (d->count >= d->capacity) {
+        if (!deque_grow(d)) return id;
+    }
+    double *b = deque_buf(d);
+    uint32_t mask = d->capacity - 1u;
+    d->head = (d->head + mask) & mask;        /* (head - 1) mod capacity */
+    b[d->head] = v;
+    d->count++;
+    return id;
+}
+
+double yon_rt_deque_pop_front(double id) {
+    yon_deque_t *d = deque_lookup(id);
+    if (!d || d->count == 0) return 0.0;
+    double *b = deque_buf(d);
+    uint32_t mask = d->capacity - 1u;
+    double v = b[d->head];
+    d->head = (d->head + 1u) & mask;
+    d->count--;
+    return v;
+}
+
+double yon_rt_deque_pop_back(double id) {
+    yon_deque_t *d = deque_lookup(id);
+    if (!d || d->count == 0) return 0.0;
+    double *b = deque_buf(d);
+    uint32_t mask = d->capacity - 1u;
+    double v = b[(d->head + d->count - 1u) & mask];
+    d->count--;
+    return v;
+}
+
+double yon_rt_deque_peek_front(double id) {
+    yon_deque_t *d = deque_lookup(id);
+    if (!d || d->count == 0) return 0.0;
+    return deque_buf(d)[d->head];
+}
+double yon_rt_deque_peek_back(double id) {
+    yon_deque_t *d = deque_lookup(id);
+    if (!d || d->count == 0) return 0.0;
+    uint32_t mask = d->capacity - 1u;
+    return deque_buf(d)[(d->head + d->count - 1u) & mask];
+}
+double yon_rt_deque_size(double id) {
+    yon_deque_t *d = deque_lookup(id);
+    return d ? (double)d->count : 0.0;
+}
+
 /* ---- XSet -------------------------------------------------------- */
 /* MPHF-backed set: elements are type-2 xcoords of the 24D Leech lattice.
  * Backing: a bitmap of 196560 bits (= 24570 bytes = ~24 KB) per set.
