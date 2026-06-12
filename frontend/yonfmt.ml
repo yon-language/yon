@@ -67,7 +67,7 @@ let rec fmt_expr (e : expr) : string =
   | ECall (name, args, _) ->
       (* Undo the parser's normalization, to reprint the surface syntax the
        * user wrote:
-       *   - "P_instantiate" with 0 args  -> "solve P"
+       *   - "P_instantiate" with 0 args  -> "verify P"
        *   - "Obj__method"                -> "Obj.method(...)"
        * so the round-trip preserves the form, not just the semantics. *)
       let ends_with suffix s =
@@ -76,7 +76,7 @@ let rec fmt_expr (e : expr) : string =
       (match args, name with
        | [], _ when ends_with "_instantiate" name ->
            let place = String.sub name 0 (String.length name - String.length "_instantiate") in
-           "solve " ^ place
+           "verify " ^ place
        | recv :: rest, ("fold" | "map") ->
            Printf.sprintf "%s.%s(%s)" (fmt_expr recv) name
              (String.concat ", " (List.map fmt_expr rest))

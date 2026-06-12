@@ -4639,7 +4639,7 @@ let emit_world (e : emitter) (world_name : string) (places : C.place_decl list) 
   (* For each place that instantiates a catalog algebra, emit @<P>_instantiate()
    * outside the world (a valid top-level func.func) that
    * instantiates it as a Magma handle. The verified place becomes runnable from
-   * Yon via `solve P`. The AlgebraVerifier pass remains the verifier of the laws. *)
+   * Yon via `verify P`. The AlgebraVerifier pass remains the verifier of the laws. *)
   List.iter (fun (pd : C.place_decl) ->
     let alg = List.fold_left (fun acc (op : C.op_sig) ->
       match acc, op.op_algebra with Some _, _ -> acc | None, a -> a) None pd.p_operations in

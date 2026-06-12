@@ -67,7 +67,7 @@ place Tally in Algebra with effects {
 }
 
 fun main(): number {
-  be m holds solve Tally                  // the verified place, as a Magma
+  be m holds verify Tally                  // the verified place, as a Magma
   be _g1 holds Magma.gen(m, 5)
   be _g2 holds Magma.gen(m, 7)
   be ok holds Magma.reachable(m, 12)      // 5 + 7
@@ -78,7 +78,7 @@ fun main(): number {
 `law commutative` is not a comment: the AlgebraVerifier pass checks the declared
 laws against the algebra (`Additive`, `Multiplicative`, `TropicalMax`,
 `TropicalMin`, `BooleanOr`, `BooleanAnd`, `Gcd`) and **rejects a false
-claim** at compile time. `solve P` then hands you the verified structure as a
+claim** at compile time. `verify P` then hands you the verified structure as a
 runnable Magma: generators, closure, reachability with certificates, and
 normal forms.
 

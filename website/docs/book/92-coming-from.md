@@ -31,7 +31,7 @@ Yon says "prove it or don't claim it", for the algebras it knows.
 
 **From Lean/Idris/Agda.** Proof assistants verify arbitrary laws, with
 your labor. Yon sits at a different point: automatic, bounded
-verification, plus something proof assistants don't do: `solve` hands the
+verification, plus something proof assistants don't do: `verify` hands the
 verified structure back as a *runnable* object with reachability
 certificates (chapter 18). Yon's HoTT layer (chapter 8) is a fragment of
 theirs; its topos vocabulary as compiled syntax has no equivalent there.
@@ -48,7 +48,7 @@ are vastly more mature; that is not in dispute.
 **What has no counterpart anywhere**, stated once and narrowly:
 allocation-as-deduplication with O(1) deep equality as a language
 guarantee; orbit-canonical collections (equality up to a symmetry group as
-storage semantics); `solve` returning verified algebras as runnable
+storage semantics); `verify` returning verified algebras as runnable
 objects; trit-valued integers with per-bit certainty; error-correcting
 storage in the standard library; topos constructs as compiled primitives
 rather than library encodings.

@@ -97,7 +97,7 @@ flips.
 **law**, an algebraic property declared on a place's operation and
 *verified* at compile time by AlgebraVerifier; a false law does not compile.
 
-**solve**, the keyword that hands you a law-verified place as a runnable
+**verify**, the keyword that hands you a law-verified place as a runnable
 algebraic structure (a Magma with closure, reachability, certificates).
 
 **effect / visits**, what a function touches, written in its signature and

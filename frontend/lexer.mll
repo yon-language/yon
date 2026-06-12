@@ -67,12 +67,12 @@
          TropicalMax, ...). `law` declares an algebraic law the operation must
          satisfy (commutative, associative, ...); the compiler verifies the
          declared laws against the catalog and rejects a false claim.
-         `solve P` then instantiates the verified place as a runnable handle. *)
+         `verify P` then instantiates the verified place as a runnable handle. *)
       "lawful", LAWFUL;
       "law", LAW;
       "uses", USES;
       "algebra", ALGEBRA;
-      "solve", SOLVE;
+      "verify", VERIFY;
       "invertible", INVERTIBLE;
       "fold", FOLD;             (* names the fold function, e.g. fold "sum_f64" *)
 
