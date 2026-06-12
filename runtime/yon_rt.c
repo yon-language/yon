@@ -4616,6 +4616,112 @@ double yon_rt_list_length(double list_id) {
 }
 
 /* ============================================================== */
+/* Vec: persistent dynamic array (v1: copy-on-write).               */
+/*                                                                  */
+/* Handle-based like the other collections: the handle is an f64    */
+/* (id + 1), so a 0.0 handle reads as "none". push/set are          */
+/* persistent - they copy the backing array and return a fresh      */
+/* handle, leaving the source untouched (the immutable discipline   */
+/* shared by List/HashMap/HashSet). v1 copies the whole array on    */
+/* every push (O(n)); a future v2 will back this with a trie for    */
+/* O(log n) structural sharing. The building block for FxIndexMap.  */
+/* ============================================================== */
+#define YON_VEC_MAX 256u   /* max concurrent vecs; mirrors the other pools */
+
+typedef struct {
+    double  *data;   /* element storage (cap may exceed n) */
+    uint32_t n;      /* number of live elements            */
+    uint32_t cap;    /* allocated capacity in elements     */
+    int      is_used;
+} ds_vec_t;
+
+static ds_vec_t g_vecs[YON_VEC_MAX];
+static uint32_t g_n_vecs = 0;
+
+/* Allocate a fresh vec slot with the given initial capacity; returns the
+ * f64 handle (id + 1), or 0.0 on pool/heap exhaustion. */
+static double vec_alloc(uint32_t cap) {
+    ds_ensure_init();
+    if (g_n_vecs >= YON_VEC_MAX) {
+        fprintf(stderr, "[YON-RT] vec: pool exhausted\n");
+        return 0.0;
+    }
+    if (cap < 4u) cap = 4u;
+    uint32_t id = g_n_vecs++;
+    ds_vec_t *v = &g_vecs[id];
+    v->data = (double *)malloc((size_t)cap * sizeof(double));
+    if (!v->data) {
+        fprintf(stderr, "[YON-RT] vec: out of memory\n");
+        g_n_vecs--;
+        return 0.0;
+    }
+    v->n = 0;
+    v->cap = cap;
+    v->is_used = 1;
+    return (double)(id + 1);
+}
+
+static ds_vec_t *vec_lookup(double vec_id) {
+    uint32_t shifted = (uint32_t)vec_id;
+    if (shifted == 0 || shifted > g_n_vecs) return NULL;
+    ds_vec_t *v = &g_vecs[shifted - 1];
+    return v->is_used ? v : NULL;
+}
+
+/* empty() -> handle of a fresh, zero-length vec. */
+double yon_rt_vec_empty(void) {
+    return vec_alloc(4u);
+}
+
+/* size(h) -> element count (0 for an invalid handle). */
+double yon_rt_vec_size(double vec_id) {
+    ds_vec_t *v = vec_lookup(vec_id);
+    return v ? (double)v->n : 0.0;
+}
+
+/* get(h, idx) -> element at idx, or 0.0 if handle/index is out of range. */
+double yon_rt_vec_get(double vec_id, double idx_d) {
+    ds_vec_t *v = vec_lookup(vec_id);
+    if (!v || idx_d < 0.0) return 0.0;
+    uint32_t idx = (uint32_t)idx_d;
+    if (idx >= v->n) return 0.0;
+    return v->data[idx];
+}
+
+/* push(h, value) -> a NEW handle: the source elements followed by value.
+ * The source vec is left untouched (persistent). An invalid source handle
+ * is treated as the empty vec, yielding a one-element result. */
+double yon_rt_vec_push(double vec_id, double value) {
+    ds_vec_t *src = vec_lookup(vec_id);
+    uint32_t src_n = src ? src->n : 0u;
+    double out = vec_alloc(src_n + 1u);
+    if (out < 0.5) return 0.0;
+    /* src and dst are distinct, stable slots in the static registry. */
+    ds_vec_t *dst = vec_lookup(out);
+    for (uint32_t i = 0; i < src_n; i++) dst->data[i] = src->data[i];
+    dst->data[src_n] = value;
+    dst->n = src_n + 1u;
+    return out;
+}
+
+/* set(h, idx, value) -> a NEW handle equal to the source with element idx
+ * replaced by value; an out-of-range idx yields an unchanged copy. */
+double yon_rt_vec_set(double vec_id, double idx_d, double value) {
+    ds_vec_t *src = vec_lookup(vec_id);
+    uint32_t src_n = src ? src->n : 0u;
+    double out = vec_alloc(src_n > 0u ? src_n : 1u);
+    if (out < 0.5) return 0.0;
+    ds_vec_t *dst = vec_lookup(out);
+    for (uint32_t i = 0; i < src_n; i++) dst->data[i] = src->data[i];
+    dst->n = src_n;
+    if (idx_d >= 0.0) {
+        uint32_t idx = (uint32_t)idx_d;
+        if (idx < dst->n) dst->data[idx] = value;
+    }
+    return out;
+}
+
+/* ============================================================== */
 /* Space cell mutabile (array statico in BSS)                       */
 /* ============================================================== */
 

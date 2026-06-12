@@ -492,6 +492,15 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "append", [tlist tunk; tlist tunk], tlist tunk;
       "reverse", [tlist tunk], tlist tunk;
     ];
+    (* Vec: persistent dynamic array (v1 copy-on-write). push/set return a new
+     * handle leaving the source untouched; the building block for FxIndexMap. *)
+    "Vec", [
+      "empty", [], TyUser "Vec";
+      "push", [TyUser "Vec"; tnum], TyUser "Vec";
+      "get", [TyUser "Vec"; tnum], tnum;
+      "set", [TyUser "Vec"; tnum; tnum], TyUser "Vec";
+      "size", [TyUser "Vec"], tnum;
+    ];
     (* HashMap is a real O(1) hash table via a content-addressed directory +
      * xheap. The user-facing hash map. *)
     "HashMap", [

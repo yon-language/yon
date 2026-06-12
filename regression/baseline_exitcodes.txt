@@ -56,6 +56,7 @@ RAN syslog_demo exit=0
 RAN system_io exit=63
 RAN terminal_pure exit=0
 RAN v1_control_flow exit=42
+RAN vec_basic exit=48
 RAN verify_algebra exit=3
 RAN while_loop exit=7
 RAN wire_eof exit=7

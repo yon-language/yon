@@ -826,6 +826,14 @@ double yon_rt_list_head(double list_id);
 double yon_rt_list_tail(double list_id);
 double yon_rt_list_length(double list_id);
 
+/* Vec: persistent dynamic array (v1 copy-on-write). push/set return a fresh
+ * handle; the source is untouched. Building block for FxIndexMap. */
+double yon_rt_vec_empty(void);
+double yon_rt_vec_size(double vec_id);
+double yon_rt_vec_get(double vec_id, double idx);
+double yon_rt_vec_push(double vec_id, double value);
+double yon_rt_vec_set(double vec_id, double idx, double value);
+
 /* ============================================================== */
 /* Mutable space cell (a static BSS registry)                       */
 /* ============================================================== */
