@@ -4494,6 +4494,158 @@ double yon_rt_xrelmap_size(double id) {
 }
 
 /* ============================================================== */
+/* XRelSet: equivariant set of relational classes, a bitmap indexed */
+/* by representative MPHF index -- on the lattice, not a hash set.   */
+/* At freeze a canon_map sends every type-2 (by MPHF index) to the   */
+/* MPHF index of its class representative (smallest in the class).   */
+/* add(v)/contains(v) touch the bit of that representative, so all   */
+/* vectors in a class share one bit. union/intersect operate         */
+/* bitmap-wise and require the same frame (same canon, comparable     */
+/* bits). size is the number of present classes (set bits). The      */
+/* bitmap and canon_map are mmap-backed; no malloc.                  */
+/* ============================================================== */
+#define YON_XRELSET_MAX  256u
+
+typedef struct {
+    yon_xrel_t frame;       /* the reference frame, inline */
+    uint32_t  *canon;       /* [196560] MPHF idx -> representative MPHF idx (freeze) */
+    uint32_t  *bits;        /* bitmap over representative idx (freeze) */
+    uint32_t   n_classes;   /* present classes (set bits) */
+    uint32_t   frozen;
+    uint32_t   is_used;
+} yon_xrelset_t;
+
+static yon_xrelset_t g_xrelsets[YON_XRELSET_MAX];
+static uint32_t g_n_xrelsets = 0;
+
+#define YON_XRELSET_WORDS (((YON_LEECH_TYPE2_COUNT) + 31u) / 32u)
+
+static yon_xrelset_t *xrelset_lookup(double id) {
+    if (id < 0.5) return NULL;
+    uint32_t s = (uint32_t)id;
+    if (s == 0 || s > g_n_xrelsets) return NULL;
+    yon_xrelset_t *x = &g_xrelsets[s - 1];
+    return x->is_used ? x : NULL;
+}
+
+/* Build canon_map for a frame: canon[i] = MPHF index of the representative
+ * (smallest MPHF index) of the relational class of type-2 vector i. */
+static void xrelset_build_canon(const yon_xrel_t *frame, uint32_t *canon) {
+    uint32_t N = YON_LEECH_TYPE2_COUNT;
+    xrelmap_ci_t *ci = (xrelmap_ci_t *)yon_map((size_t)N * sizeof(xrelmap_ci_t));
+    for (uint32_t i = 0; i < N; i++) {
+        uint32_t v = (uint32_t)yon_mphf_unindex(i);
+        double cls = xrel_class_of(frame, (double)v);
+        ci[i].cls = (cls < 0.0) ? 0xFFFFFFFFFFFFFFFFULL : (uint64_t)cls;
+        ci[i].idx = i;
+    }
+    qsort(ci, N, sizeof(xrelmap_ci_t), xrelmap_ci_cmp);
+    uint32_t gi = 0;
+    while (gi < N) {
+        uint64_t c = ci[gi].cls;
+        uint32_t rep_idx = ci[gi].idx;            /* smallest idx in the group */
+        uint32_t gj = gi;
+        while (gj < N && ci[gj].cls == c) { canon[ci[gj].idx] = rep_idx; gj++; }
+        gi = gj;
+    }
+    yon_unmap(ci, (size_t)N * sizeof(xrelmap_ci_t));
+}
+
+static int xrelset_freeze(yon_xrelset_t *x) {
+    if (x->frozen) return 1;
+    x->canon = (uint32_t *)yon_map((size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
+    x->bits  = (uint32_t *)yon_map((size_t)YON_XRELSET_WORDS * sizeof(uint32_t));
+    xrelset_build_canon(&x->frame, x->canon);
+    x->frozen = 1;
+    return 1;
+}
+
+static int xrel_frame_eq(const yon_xrel_t *a, const yon_xrel_t *b) {
+    if (a->n_refs != b->n_refs) return 0;
+    for (uint32_t i = 0; i < a->n_refs; i++) if (a->refs[i] != b->refs[i]) return 0;
+    return 1;
+}
+
+double yon_rt_xrelset_empty(void) {
+    ds_ensure_init();
+    if (g_n_xrelsets >= YON_XRELSET_MAX) {
+        fprintf(stderr, "[YON-RT] xrelset_empty: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_xrelsets++;
+    yon_xrelset_t *x = &g_xrelsets[id];
+    x->frame.n_refs = 0;
+    x->canon = NULL; x->bits = NULL;
+    x->n_classes = 0; x->frozen = 0; x->is_used = 1;
+    return (double)(id + 1);
+}
+
+double yon_rt_xrelset_add_ref(double id, double v) {
+    yon_xrelset_t *x = xrelset_lookup(id);
+    if (!x || x->frozen || x->frame.n_refs >= YON_XREL_MAX_REFS) return -1.0;
+    uint32_t vv = ((uint32_t)v) & YON_XCOORD_VALID_MASK;
+    if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
+    x->frame.refs[x->frame.n_refs++] = vv;
+    return (double)x->frame.n_refs;
+}
+
+double yon_rt_xrelset_add(double id, double v) {
+    yon_xrelset_t *x = xrelset_lookup(id);
+    if (!x) return 0.0;
+    if (!x->frozen && !xrelset_freeze(x)) return 0.0;
+    uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
+    if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
+    uint32_t ri = x->canon[idx];
+    uint32_t w = ri >> 5, b = ri & 31u;
+    if (!((x->bits[w] >> b) & 1u)) { x->bits[w] |= (1u << b); x->n_classes++; }
+    return id;
+}
+
+double yon_rt_xrelset_contains(double id, double v) {
+    yon_xrelset_t *x = xrelset_lookup(id);
+    if (!x || !x->frozen) return 0.0;
+    uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
+    if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
+    uint32_t ri = x->canon[idx];
+    return ((x->bits[ri >> 5] >> (ri & 31u)) & 1u) ? 1.0 : 0.0;
+}
+
+double yon_rt_xrelset_size(double id) {
+    yon_xrelset_t *x = xrelset_lookup(id);
+    return x ? (double)x->n_classes : 0.0;
+}
+
+/* union/intersect: both operands must share the frame. The result reuses a's
+ * canon (same frame), so no resort. Returns a new set id, or 0 on a mismatch. */
+static double xrelset_combine(double ida, double idb, int is_union) {
+    yon_xrelset_t *a = xrelset_lookup(ida);
+    yon_xrelset_t *b = xrelset_lookup(idb);
+    if (!a || !b) return 0.0;
+    if (!a->frozen && !xrelset_freeze(a)) return 0.0;
+    if (!b->frozen && !xrelset_freeze(b)) return 0.0;
+    if (!xrel_frame_eq(&a->frame, &b->frame)) return 0.0;
+    double rid = yon_rt_xrelset_empty();
+    yon_xrelset_t *r = xrelset_lookup(rid);
+    if (!r) return 0.0;
+    r->frame = a->frame;
+    r->canon = (uint32_t *)yon_map((size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
+    memcpy(r->canon, a->canon, (size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
+    r->bits = (uint32_t *)yon_map((size_t)YON_XRELSET_WORDS * sizeof(uint32_t));
+    r->frozen = 1;
+    uint32_t n = 0;
+    for (uint32_t w = 0; w < YON_XRELSET_WORDS; w++) {
+        uint32_t bw = is_union ? (a->bits[w] | b->bits[w]) : (a->bits[w] & b->bits[w]);
+        r->bits[w] = bw;
+        n += (uint32_t)__builtin_popcount(bw);
+    }
+    r->n_classes = n;
+    return rid;
+}
+
+double yon_rt_xrelset_union(double ida, double idb)     { return xrelset_combine(ida, idb, 1); }
+double yon_rt_xrelset_intersect(double ida, double idb) { return xrelset_combine(ida, idb, 0); }
+
+/* ============================================================== */
 /* FrozenMap: immutable map with FKS two-level perfect hashing,     */
 /* built from an IndexedHeapMap. O(1) worst-case lookup (two        */
 /* multiply-shift hashes, no probing). All tables on arena strips,  */
