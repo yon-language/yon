@@ -3573,7 +3573,13 @@ static yon_ihmap_t g_ihmaps[YON_IHMAP_MAX];
 static uint32_t g_n_ihmaps = 0;
 
 static inline uint32_t ihmap_fx(uint32_t key_ref, uint32_t mask) {
-    return (key_ref * 2654435761u) & mask;   /* Fibonacci spread (necessary) */
+    /* Fibonacci (Knuth) multiplicative hashing: multiply by floor(2^32/phi)
+     * and take the HIGH bits of the 32-bit product, which carry the mix.
+     * High bits (>> 32-k) are robust at every table size; the low bits
+     * (& mask) would degenerate whenever the constant is == 1 mod m
+     * (e.g. A mod 8 == 1). mask = m-1 = k set bits, so popcount(mask) = k. */
+    uint32_t k = (uint32_t)__builtin_popcount(mask);
+    return (key_ref * 2654435761u) >> (32u - k);
 }
 static uint32_t *ihmap_index(const yon_ihmap_t *m) {
     return (uint32_t *)yon_xheap_strip_at(g_ds_heap, m->index_off);
