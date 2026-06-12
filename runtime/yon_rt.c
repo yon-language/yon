@@ -4266,6 +4266,212 @@ double yon_rt_pq_size(double id) {
     return q ? (double)q->count : 0.0;
 }
 
+/* ============================================================== */
+/* FrozenMap: immutable map with FKS two-level perfect hashing,     */
+/* built from an IndexedHeapMap. O(1) worst-case lookup (two        */
+/* multiply-shift hashes, no probing). All tables on arena strips,  */
+/* no malloc. Level 1 sends n keys into m=pow2(n) buckets with sum  */
+/* of squares <= 4n; each bucket of b keys gets a b^2-slot table     */
+/* with a collision-free second hash. Read-only after build.        */
+/* ============================================================== */
+#define YON_FROZEN_MAX  256u
+
+typedef struct {
+    uint32_t l2_off;     /* offset (in entries) into the level-2 strip */
+    uint32_t shift2;     /* 64 - log2(s_i); 64 = single-slot (pos 0)   */
+    uint64_t a2;         /* odd multiplier for this bucket             */
+} yon_fks_bucket_t;
+
+typedef struct {
+    uint32_t buckets_off;  /* strip: m yon_fks_bucket_t          */
+    uint32_t l2_off;       /* strip: total yon_ihmap_entry_t     */
+    uint32_t m;            /* level-1 bucket count (power of two) */
+    uint32_t shift1;       /* 64 - log2(m)                       */
+    uint64_t a1;           /* level-1 odd multiplier             */
+    uint32_t n;            /* live entries                       */
+    uint32_t is_used;
+} yon_frozen_t;
+
+static yon_frozen_t g_frozens[YON_FROZEN_MAX];
+static uint32_t g_n_frozens = 0;
+
+static uint64_t fks_rng(uint64_t *st) {           /* splitmix64 */
+    uint64_t z = (*st += 0x9E3779B97F4A7C15ull);
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+    return z ^ (z >> 31);
+}
+static uint32_t fks_pow2_ceil(uint32_t x) {
+    uint32_t p = 1u;
+    while (p < x) p <<= 1;
+    return p;
+}
+static uint32_t fks_log2(uint32_t p) {
+    uint32_t b = 0u;
+    while ((1u << b) < p) b++;
+    return b;
+}
+static yon_fks_bucket_t *frozen_buckets(const yon_frozen_t *f) {
+    return (yon_fks_bucket_t *)yon_xheap_strip_at(g_ds_heap, f->buckets_off);
+}
+static yon_ihmap_entry_t *frozen_l2(const yon_frozen_t *f) {
+    return (yon_ihmap_entry_t *)yon_xheap_strip_at(g_ds_heap, f->l2_off);
+}
+static yon_frozen_t *frozen_lookup(double id) {
+    if (id < 0.5) return NULL;
+    uint32_t s = (uint32_t)id;
+    if (s == 0 || s > g_n_frozens) return NULL;
+    yon_frozen_t *f = &g_frozens[s - 1];
+    return f->is_used ? f : NULL;
+}
+
+/* level-2 position: shift2 == 64 means a single-slot bucket (pos 0),
+ * avoiding an undefined >> 64. */
+static inline uint32_t fks_pos(uint32_t key_ref, uint64_t a2, uint32_t shift2) {
+    if (shift2 >= 64u) return 0u;
+    return (uint32_t)(((uint64_t)key_ref * a2) >> shift2);
+}
+
+double yon_rt_frozen_from_indexed(double src_id) {
+    ds_ensure_init();
+    ensure_init();
+    yon_ihmap_t *src = ihmap_lookup(src_id);
+    if (!src) return 0.0;
+    if (g_n_frozens >= YON_FROZEN_MAX) {
+        fprintf(stderr, "[YON-RT] frozen: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_frozens++;
+    yon_frozen_t *f = &g_frozens[id];
+    uint32_t n = src->live;
+    f->n = n;
+
+    if (n == 0) {
+        f->m = 1u; f->shift1 = 64u; f->a1 = 1ull;
+        f->buckets_off = yon_xheap_strip_alloc(g_ds_heap, (uint32_t)sizeof(yon_fks_bucket_t));
+        f->l2_off = yon_xheap_strip_alloc(g_ds_heap, (uint32_t)sizeof(yon_ihmap_entry_t));
+        yon_fks_bucket_t *bk0 = frozen_buckets(f);
+        bk0[0].l2_off = 0u; bk0[0].shift2 = 64u; bk0[0].a2 = 1ull;
+        f->is_used = 1;
+        return (double)(id + 1);
+    }
+
+    /* copy live (key_ref, value) into a temp strip */
+    uint32_t keys_off = yon_xheap_strip_alloc(g_ds_heap,
+                            n * (uint32_t)sizeof(yon_ihmap_entry_t));
+    yon_ihmap_entry_t *ek = (yon_ihmap_entry_t *)yon_xheap_strip_at(g_ds_heap, keys_off);
+    {
+        yon_ihmap_entry_t *se = ihmap_entries(src);
+        uint32_t w = 0;
+        for (uint32_t i = 0; i < src->n; i++) {
+            if (se[i].key_ref != YON_IHMAP_TOMBSTONE) ek[w++] = se[i];
+        }
+    }
+
+    uint32_t m = fks_pow2_ceil(n);
+    uint32_t shift1 = 64u - fks_log2(m);
+    uint32_t cnt_off = yon_xheap_strip_alloc(g_ds_heap, m * (uint32_t)sizeof(uint32_t));
+    uint32_t *cnt = (uint32_t *)yon_xheap_strip_at(g_ds_heap, cnt_off);
+
+    /* level 1: retry a1 until sum of bucket-square sizes <= 4n */
+    uint64_t rng = 0x243F6A8885A308D3ull ^ ((uint64_t)id << 40);
+    uint64_t a1 = 1ull;
+    for (;;) {
+        a1 = fks_rng(&rng) | 1ull;
+        for (uint32_t i = 0; i < m; i++) cnt[i] = 0u;
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t b = (uint32_t)(((uint64_t)ek[i].key_ref * a1) >> shift1);
+            cnt[b]++;
+        }
+        uint64_t sumsq = 0;
+        for (uint32_t i = 0; i < m; i++) sumsq += (uint64_t)cnt[i] * cnt[i];
+        if (sumsq <= 4ull * n) break;
+    }
+
+    /* level-2 layout: each bucket gets pow2(b^2) slots */
+    uint32_t buckets_off = yon_xheap_strip_alloc(g_ds_heap,
+                               m * (uint32_t)sizeof(yon_fks_bucket_t));
+    yon_fks_bucket_t *bk = (yon_fks_bucket_t *)yon_xheap_strip_at(g_ds_heap, buckets_off);
+    uint32_t total = 0;
+    for (uint32_t i = 0; i < m; i++) {
+        uint32_t bi = cnt[i];
+        uint32_t s = (bi <= 1u) ? bi : fks_pow2_ceil(bi * bi);
+        bk[i].l2_off = total;
+        bk[i].shift2 = (s <= 1u) ? 64u : (64u - fks_log2(s));
+        bk[i].a2 = 1ull;
+        total += s;
+    }
+    uint32_t l2_off = yon_xheap_strip_alloc(g_ds_heap,
+                          (total ? total : 1u) * (uint32_t)sizeof(yon_ihmap_entry_t));
+    yon_ihmap_entry_t *l2 = (yon_ihmap_entry_t *)yon_xheap_strip_at(g_ds_heap, l2_off);
+    for (uint32_t i = 0; i < total; i++) l2[i].key_ref = YON_IHMAP_INVALID;
+
+    /* fill each bucket with a collision-free a2 */
+    for (uint32_t bi = 0; bi < m; bi++) {
+        uint32_t bcount = cnt[bi];
+        if (bcount == 0u) continue;
+        uint32_t s = (bcount <= 1u) ? bcount : fks_pow2_ceil(bcount * bcount);
+        uint32_t shift2 = bk[bi].shift2;
+        uint32_t base = bk[bi].l2_off;
+        for (;;) {
+            uint64_t a2 = fks_rng(&rng) | 1ull;
+            for (uint32_t j = 0; j < s; j++) l2[base + j].key_ref = YON_IHMAP_INVALID;
+            int ok = 1;
+            for (uint32_t i = 0; i < n; i++) {
+                uint32_t b1 = (uint32_t)(((uint64_t)ek[i].key_ref * a1) >> shift1);
+                if (b1 != bi) continue;
+                uint32_t pos = fks_pos(ek[i].key_ref, a2, shift2);
+                if (l2[base + pos].key_ref != YON_IHMAP_INVALID) { ok = 0; break; }
+                l2[base + pos] = ek[i];
+            }
+            if (ok) { bk[bi].a2 = a2; break; }
+        }
+    }
+
+    /* trim the temp strips (counts, key copy); best-effort whole pages */
+    yon_xheap_strip_trim(g_ds_heap, cnt_off, 0u, m * (uint32_t)sizeof(uint32_t));
+    yon_xheap_strip_trim(g_ds_heap, keys_off, 0u, n * (uint32_t)sizeof(yon_ihmap_entry_t));
+
+    f->buckets_off = buckets_off;
+    f->l2_off = l2_off;
+    f->m = m;
+    f->shift1 = shift1;
+    f->a1 = a1;
+    f->is_used = 1;
+    return (double)(id + 1);
+}
+
+double yon_rt_frozen_get(double id, double key) {
+    ds_ensure_init();
+    yon_frozen_t *f = frozen_lookup(id);
+    if (!f || f->n == 0) return 0.0;
+    uint32_t kr = ihmap_intern(key);
+    yon_fks_bucket_t *bk = frozen_buckets(f);
+    uint32_t b1 = (uint32_t)(((uint64_t)kr * f->a1) >> f->shift1);
+    yon_fks_bucket_t *bb = &bk[b1];
+    uint32_t pos = fks_pos(kr, bb->a2, bb->shift2);
+    yon_ihmap_entry_t *e = &frozen_l2(f)[bb->l2_off + pos];
+    return (e->key_ref == kr) ? e->value : 0.0;
+}
+
+double yon_rt_frozen_contains(double id, double key) {
+    ds_ensure_init();
+    yon_frozen_t *f = frozen_lookup(id);
+    if (!f || f->n == 0) return 0.0;
+    uint32_t kr = ihmap_intern(key);
+    yon_fks_bucket_t *bk = frozen_buckets(f);
+    uint32_t b1 = (uint32_t)(((uint64_t)kr * f->a1) >> f->shift1);
+    yon_fks_bucket_t *bb = &bk[b1];
+    uint32_t pos = fks_pos(kr, bb->a2, bb->shift2);
+    yon_ihmap_entry_t *e = &frozen_l2(f)[bb->l2_off + pos];
+    return (e->key_ref == kr) ? 1.0 : 0.0;
+}
+
+double yon_rt_frozen_size(double id) {
+    yon_frozen_t *f = frozen_lookup(id);
+    return f ? (double)f->n : 0.0;
+}
+
 /* ---- XSet -------------------------------------------------------- */
 /* MPHF-backed set: elements are type-2 xcoords of the 24D Leech lattice.
  * Backing: a bitmap of 196560 bits (= 24570 bytes = ~24 KB) per set.

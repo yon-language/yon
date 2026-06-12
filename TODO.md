@@ -17,15 +17,23 @@ in-process examples + the cross-Space suite, all green.
 
 ## Collections
 
-- **Vec v1** — persistent dynamic array, copy-on-write. *Done.*
-- **Vec v2** — back the array with a trie for O(log n) push and structural
-  sharing (v1 copies the whole array on push, O(n)).
-- **FxIndexMap** — built on Vec.
-- **MemoTable** — on top of the indexed map.
-- **BTreeMap**, **Deque**, **PriorityQueue**.
-- **FrozenMap** / **FrozenTrie** — frozen/perfect variants.
+- **Vec** — dynamic array, mutable in-place on an arena strip. *Done.*
+- **IndexedHeapMap** (FxIndexMap) — insertion-ordered, content-addressed key
+  interning, Fibonacci open-addressing. *Done.*
+- **MemoTable** — memoization cache on the same Fx machinery. *Done.*
+- **Deque** — ring buffer on an arena strip. *Done.*
+- **PriorityQueue** — binary min-heap on an arena strip. *Done.*
+- **FrozenMap** / **FrozenTrie** — frozen/perfect variants, FKS two-level
+  perfect hashing, built from an IndexedHeapMap, all on arena strips.
 - **Orbit-equivariant encoding → Orbit\* collections** (OrbitVoyager / OrbitMap /
-  OrbitSet / OrbitTree) over the Arena's real Co₀/M₂₄ orbits.
+  OrbitSet / OrbitTree) over the Arena's real Co₀/M₂₄ orbits. The encoding
+  (key → Leech xcoord, Co₀/M₂₄-equivariant) is the research prerequisite.
+- *Dropped:* Vec v2 trie — superseded, the in-place mutable Vec already gives
+  amortized O(1) push; a persistent trie is unnecessary unless an immutable
+  Vec is wanted.
+- *Deferred:* BTreeMap — a key-ordered map is only needed for range queries;
+  MerkleTree (content-addressed hash tree) does not cover that case but no
+  range-query use has come up. Revisit if it does.
 
 ## Language / compiler
 
