@@ -45,7 +45,7 @@ for f in "$EXD"/*.yon; do
   name=$(basename "$f" .yon)
   rm -f /tmp/rr   # never execute a stale binary when a compile stage fails
   if ! "$EMIT" "$f" 2>/dev/null > /tmp/r.mlir || [ ! -s /tmp/r.mlir ]; then echo "EMITFAIL $name" >>"$OUT"; continue; fi
-  if "$TOPOS" --lower-topos-extensions --lower-topos-to-standard /tmp/r.mlir 2>/dev/null >/tmp/r.s1 && \
+  if "$TOPOS" --algebra-verifier --lower-topos-extensions --lower-topos-to-standard /tmp/r.mlir 2>/dev/null >/tmp/r.s1 && \
      "$TOPOS" --lower-topos-to-llvm /tmp/r.s1 2>/dev/null >/tmp/r.s2 && [ -s /tmp/r.s2 ]; then :; \
   else "$MLIROPT" /tmp/r.mlir $LOWER 2>/dev/null >/tmp/r.s2; fi
   if ! "$MLIRTRANS" /tmp/r.s2 --mlir-to-llvmir 2>/dev/null >/tmp/r.ll || \

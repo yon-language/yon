@@ -412,25 +412,23 @@ Instantiates a law-verified place as a runnable handle.
 
 Names a space's fold function: `with fold "sum_f64"`.
 
-<CodeWindow file="magma_solve_full.yon"
-            run="yonc magma_solve_full.yon -o magma_solve_full && ./magma_solve_full; echo $?"
+<CodeWindow file="solve_algebra.yon"
+            run="yonc solve_algebra.yon -o solve_algebra && ./solve_algebra; echo $?"
             out={["3"]}>
 {`world Alg { Code is X }
 
-place AddPlace in Alg with effects {
-  operation add(a: number, b: number): number uses algebra Additive
+place OrPlace in Alg with effects {
+  operation join(a: number, b: number): number uses algebra BooleanOr
   law commutative
   law associative
-  law monotone
 }
 
 fun main(): number {
-  be m holds solve AddPlace
-  be m1 holds Magma.gen(m, 3)
-  be m2 holds Magma.gen(m1, 5)
-  be m3 holds Magma.gen(m2, 11)
-  /* subset-sum: 8 = 3+5 is reachable -> mask 3 */
-  return Magma.subsetsum_mask(m3, 8)
+  be m holds solve OrPlace
+  be m1 holds Magma.gen(m, 1)
+  be m2 holds Magma.gen(m1, 2)
+  /* closure of {1, 2} under OR is {1, 2, 3} -> size 3 */
+  return Magma.closure_size(m2)
 }`}
 </CodeWindow>
 
