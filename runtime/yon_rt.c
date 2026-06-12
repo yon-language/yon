@@ -40,20 +40,18 @@
 
 #define YON_MAX_SPACES 64
 
-/* Backend mode:
- *   L1_SHARED   = a single shared yon_xheap_t (default)
- *   L2_SEPARATE = one yon_xheap_t per heap_id (physical separation)
- *   L2_SHM      = POSIX shared memory (multi-process)
+/* Backend mode (process-per-Space, PostgreSQL-style; no shared address space):
+ *   L2_SHM      = POSIX shared memory, multi-process (default)
+ *   L2_SEPARATE = one yon_xheap_t per heap_id, single-process (test/debug)
  *
- * Selectable via the env var YON_BACKEND={memory,separate,shm}. */
+ * Selectable via the env var YON_BACKEND={shm,separate}; default shm. */
 typedef enum {
-    YON_BACKEND_L1_SHARED   = 0,  /* default */
     YON_BACKEND_L2_SEPARATE = 1,
     YON_BACKEND_L2_SHM      = 2
 } yon_backend_t;
 
-static yon_backend_t g_backend = YON_BACKEND_L1_SHARED;
-static yon_xheap_t *g_yon_heap = NULL;        /* used in L1_SHARED */
+static yon_backend_t g_backend = YON_BACKEND_L2_SHM;
+static yon_xheap_t *g_yon_heap = NULL;        /* global DS heap, all backends */
 static int g_initialized = 0;
 
 /* Space registry. Has an optional `fold_name` for the topos semilattice (a
@@ -75,7 +73,6 @@ static uint32_t g_n_spaces = 0;
 /* Helper: return the physical heap associated with heap_id, per backend.
  * Exposed as yon_rt_heap_for in the header. */
 yon_xheap_t *yon_rt_heap_for(uint32_t heap_id) {
-    if (g_backend == YON_BACKEND_L1_SHARED) return g_yon_heap;
     if (heap_id >= g_n_spaces) return g_yon_heap;  /* safe fallback */
     if (g_spaces[heap_id].heap) return g_spaces[heap_id].heap;
     return g_yon_heap;
@@ -93,7 +90,7 @@ void yon_rt_init(void) {
     if (be) {
         if (strcmp(be, "separate") == 0)  g_backend = YON_BACKEND_L2_SEPARATE;
         else if (strcmp(be, "shm") == 0)  g_backend = YON_BACKEND_L2_SHM;
-        else g_backend = YON_BACKEND_L1_SHARED;
+        else g_backend = YON_BACKEND_L2_SHM;
     }
     g_yon_heap = yon_xheap_create();
     if (!g_yon_heap) {
@@ -122,10 +119,9 @@ void yon_rt_init(void) {
     g_n_spaces = 1;
     g_initialized = 1;
 
-    if (g_backend != YON_BACKEND_L1_SHARED) {
+    {
         const char *bname =
-            g_backend == YON_BACKEND_L2_SEPARATE ? "L2_SEPARATE" :
-            g_backend == YON_BACKEND_L2_SHM      ? "L2_SHM" : "UNKNOWN";
+            g_backend == YON_BACKEND_L2_SEPARATE ? "L2_SEPARATE" : "L2_SHM";
         fprintf(stderr, "[YON-RT L2] backend: %s\n", bname);
     }
 }
@@ -255,26 +251,7 @@ yon_section_t yon_rt_new(uint32_t heap_id,
      * heap for all — global dedup by content. To preserve the logical partition
      * even in L1_SHARED, we prefix the payload with heap_id (4 bytes). */
     yon_xheap_t *h = heap_for(heap_id);
-    uint32_t slot_idx;
-    if (g_backend == YON_BACKEND_L1_SHARED && heap_id != YON_HEAP_ID_DEFAULT) {
-        /* Prefix heap_id for logical partition in a shared heap. */
-        uint8_t stack_buf[256];
-        uint8_t *combined = stack_buf;
-        size_t combined_size = sizeof(uint32_t) + n_bytes;
-        uint32_t cmb_off = 0;
-        if (combined_size > sizeof(stack_buf)) {
-            cmb_off = yon_xheap_strip_alloc(h, (uint32_t)combined_size);
-            if (cmb_off == 0) return YON_SECTION_INVALID;
-            combined = (uint8_t *)yon_xheap_strip_at(h, cmb_off);
-        }
-        memcpy(combined, &heap_id, sizeof(uint32_t));
-        memcpy(combined + sizeof(uint32_t), payload_bytes, n_bytes);
-        slot_idx = yon_xheap_put(h, combined, (uint32_t)combined_size, YON_TAG_USER1);
-        if (cmb_off != 0)
-            yon_xheap_strip_trim(h, cmb_off, 0u, (uint32_t)combined_size);
-    } else {
-        slot_idx = yon_xheap_put(h, payload_bytes, n_bytes, YON_TAG_USER1);
-    }
+    uint32_t slot_idx = yon_xheap_put(h, payload_bytes, n_bytes, YON_TAG_USER1);
 
     if (slot_idx == YON_HEAP_SLOT_INVALID) {
         fprintf(stderr, "[YON-RT] yon_rt_new: put failed (heap=%u n=%u)\n",
@@ -309,12 +286,8 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
         memset(out, 0, size);
         return -1;
     }
-    /* In L1_SHARED the payload includes the heap_id prefix (4 bytes) for logical
-     * partitioning. Skip it on read. */
+    /* L2 backends use physically separate heaps per space, no payload prefix. */
     uint32_t prefix_skip = 0;
-    if (g_backend == YON_BACKEND_L1_SHARED && heap_id != YON_HEAP_ID_DEFAULT) {
-        prefix_skip = sizeof(uint32_t);
-    }
     if (offset + size + prefix_skip > slot->payload_size) {
         memset(out, 0, size);
         fprintf(stderr,
@@ -348,9 +321,6 @@ int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap) {
     const uint8_t *payload = (const uint8_t *)yon_xheap_slot_payload(h, slot);
     if (!payload) return -1;
     uint32_t prefix_skip = 0;
-    if (g_backend == YON_BACKEND_L1_SHARED && heap_id != YON_HEAP_ID_DEFAULT) {
-        prefix_skip = sizeof(uint32_t);
-    }
     if (prefix_skip > slot->payload_size) return -1;
     uint32_t raw_size = slot->payload_size - prefix_skip;
     if (raw_size > cap) return -1;
@@ -487,12 +457,7 @@ yon_section_t yon_rt_fold(uint32_t heap_id,
         return YON_SECTION_INVALID;
     }
 
-    /* In L1_SHARED the payload includes the heap_id prefix (4 bytes). Skip it
-     * to get the raw bytes to modify. */
     uint32_t prefix_skip = 0;
-    if (g_backend == YON_BACKEND_L1_SHARED && heap_id != YON_HEAP_ID_DEFAULT) {
-        prefix_skip = sizeof(uint32_t);
-    }
     uint32_t raw_size = slot->payload_size - prefix_skip;
     if (raw_size != n_bytes) {
         fprintf(stderr,
@@ -571,7 +536,7 @@ yon_section_t yon_rt_fold_named(uint32_t heap_id,
             fprintf(stderr,
                     "[YON-RT S4] fold_named: using process-local accumulator prev=(heap=%u, slot=%u)\n",
                     yon_section_heap(prev), yon_section_slot(prev));
-        } else if (g_backend != YON_BACKEND_L1_SHARED) {
+        } else {
             /* Cross-process L2: look for an occupied slot=0 (convention) */
             yon_xheap_t *h = heap_for(heap_id);
             if (h && yon_xheap_is_occupied(h, 0)) {
@@ -778,27 +743,8 @@ yon_section_t yon_rt_new_v(uint32_t heap_id,
     /* Policy-based log removed; see the comment above. */
 
     yon_xheap_t *h = heap_for(heap_id);
-    uint32_t slot_idx;
-    if (g_backend == YON_BACKEND_L1_SHARED && heap_id != YON_HEAP_ID_DEFAULT) {
-        uint8_t stack_buf[256];
-        uint8_t *combined = stack_buf;
-        size_t combined_size = sizeof(uint32_t) + n_bytes;
-        uint32_t cmb_off = 0;
-        if (combined_size > sizeof(stack_buf)) {
-            cmb_off = yon_xheap_strip_alloc(h, (uint32_t)combined_size);
-            if (cmb_off == 0) return YON_SECTION_INVALID;
-            combined = (uint8_t *)yon_xheap_strip_at(h, cmb_off);
-        }
-        memcpy(combined, &heap_id, sizeof(uint32_t));
-        memcpy(combined + sizeof(uint32_t), payload_bytes, n_bytes);
-        slot_idx = yon_xheap_put_v(h, combined, (uint32_t)combined_size,
-                                    YON_TAG_USER1, schema_version);
-        if (cmb_off != 0)
-            yon_xheap_strip_trim(h, cmb_off, 0u, (uint32_t)combined_size);
-    } else {
-        slot_idx = yon_xheap_put_v(h, payload_bytes, n_bytes,
-                                    YON_TAG_USER1, schema_version);
-    }
+    uint32_t slot_idx = yon_xheap_put_v(h, payload_bytes, n_bytes,
+                                        YON_TAG_USER1, schema_version);
 
     if (slot_idx == YON_HEAP_SLOT_INVALID) {
         fprintf(stderr, "[YON-RT #89] new_v: put failed\n");
@@ -853,9 +799,6 @@ int yon_rt_field_load_v(yon_section_t sec,
     const uint8_t *src_payload = (const uint8_t *)yon_xheap_slot_payload(h, slot);
     if (!src_payload) return -1;
     uint32_t prefix_skip = 0;
-    if (g_backend == YON_BACKEND_L1_SHARED && heap_id != YON_HEAP_ID_DEFAULT) {
-        prefix_skip = sizeof(uint32_t);
-    }
     if (prefix_skip > slot->payload_size) return -1;
     uint32_t raw_size = slot->payload_size - prefix_skip;
 
