@@ -4642,6 +4642,62 @@ double yon_rt_xrelset_union(double ida, double idb)     { return xrelset_combine
 double yon_rt_xrelset_intersect(double ida, double idb) { return xrelset_combine(ida, idb, 0); }
 
 /* ============================================================== */
+/* XTower: stateless stabilizer-tower classifier for a single      */
+/* type-2 point along the nested chain Co0 > N > M24 > id.         */
+/*   level 0 (Co0):  1 class      -> always 0                       */
+/*   level 1 (N):    3 classes    -> subtype shape {0x20,0x21,0x22} */
+/*   level 2 (M24):  12 classes   -> pure M24 orbit                 */
+/*   level 3 (id):   196560       -> MPHF index                     */
+/* Each level refines the previous: a subgroup's orbits split the   */
+/* group's orbits (M24 subset N subset Co0), so the chain is a true */
+/* refinement. Pure geometric projection: no state, no allocation,  */
+/* no arena. If persistence of pruning is ever needed it is layered */
+/* on top via XRelMap, never inside this module.                    */
+/* ============================================================== */
+#define YON_XTOWER_DEPTH 4u
+
+extern uint32_t gen_leech2_subtype(uint64_t v2);
+extern uint32_t yon_leech_m24_orbit_pure(uint32_t point);
+
+/* Class of a type-2 point at the given tower level; -1 if not type-2. */
+double yon_rt_xtower_class(double point, double level) {
+    uint32_t v = (uint32_t)point & 0x1FFFFFFu;
+    uint32_t st = gen_leech2_subtype((uint64_t)v);
+    if ((st >> 4) != 2u) return -1.0;                       /* not type-2 */
+    uint32_t lvl = (level < 0.0) ? 0u : (uint32_t)level;
+    switch (lvl) {
+        case 0:  return 0.0;                                /* Co0: one class */
+        case 1:  return (double)(st & 0xFu);                /* N: shape 0/1/2 */
+        case 2:  return (double)yon_leech_m24_orbit_pure(v);/* M24: 0..11 */
+        default: return (double)yon_mphf_index((yon_xcoord_t)v); /* identity */
+    }
+}
+
+/* 1.0 if a and b fall in the same class at the given level (same branch up
+ * to that depth, by refinement); -1.0 if either is not type-2. */
+double yon_rt_xtower_same_branch(double a, double b, double level) {
+    double ca = yon_rt_xtower_class(a, level);
+    double cb = yon_rt_xtower_class(b, level);
+    if (ca < 0.0 || cb < 0.0) return -1.0;
+    return (ca == cb) ? 1.0 : 0.0;
+}
+
+/* Number of classes at a level: 1 / 3 / 12 / 196560. */
+double yon_rt_xtower_width(double level) {
+    uint32_t lvl = (level < 0.0) ? 0u : (uint32_t)level;
+    switch (lvl) {
+        case 0:  return 1.0;
+        case 1:  return 3.0;
+        case 2:  return 12.0;
+        default: return (double)YON_LEECH_TYPE2_COUNT;
+    }
+}
+
+/* Depth of the tower (number of levels, Co0..id). */
+double yon_rt_xtower_depth(void) { return (double)YON_XTOWER_DEPTH; }
+
+
+/* ============================================================== */
 /* FrozenMap: immutable map with FKS two-level perfect hashing,     */
 /* built from an IndexedHeapMap. O(1) worst-case lookup (two        */
 /* multiply-shift hashes, no probing). All tables on arena strips,  */
