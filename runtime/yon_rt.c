@@ -1113,10 +1113,11 @@ void yon_rt_end_cross_space_op(uint32_t token) {
 #define YON_MAX_STREAMS 32
 
 typedef struct yon_stream_s {
-    char     *name;
+    char      name[256];       /* inline (was strdup) */
     uint32_t  target_heap_id;  /* the consumer's space */
     uint32_t  slot_size;       /* bytes per value */
-    uint8_t  *buffer;          /* ring buffer of n_slots x slot_size bytes */
+    /* inline ring: capacity (<=64) x slot_size (<=256) bytes; no malloc */
+    uint8_t   buffer[YON_STREAM_MAX_SLOTS * 256];
     uint32_t  head;            /* next position to await */
     uint32_t  tail;            /* next position to emit */
     uint32_t  count;           /* number of values present */
@@ -1140,20 +1141,16 @@ uint32_t yon_rt_stream_create(const char *name,
     if (slot_size == 0 || slot_size > 256) return YON_STREAM_INVALID;
     uint32_t id = g_n_streams++;
     yon_stream_t *s = &g_streams[id];
-    s->name = strdup(name);
+    snprintf(s->name, sizeof(s->name), "%s", name);
     s->target_heap_id = target_heap_id;
     s->slot_size = slot_size;
     s->capacity = YON_STREAM_MAX_SLOTS;
-    s->buffer = (uint8_t*)calloc(s->capacity, slot_size);
+    /* buffer is inline; zero the active region (capacity*slot_size <= sizeof) */
+    memset(s->buffer, 0, (size_t)s->capacity * slot_size);
     s->head = 0;
     s->tail = 0;
     s->count = 0;
     s->closed = 0;
-    if (!s->buffer) {
-        free(s->name);
-        g_n_streams--;
-        return YON_STREAM_INVALID;
-    }
     fprintf(stderr,
             "[YON-RT #87] stream_create: id=%u name='%s' target_heap=%u slot_size=%u\n",
             id, name, target_heap_id, slot_size);
@@ -1295,12 +1292,18 @@ typedef struct {
 
 #define YON_SHM_STREAM_MAGIC 0x53545245u  /* "STRE" */
 
+#define YON_MAX_SHM_STREAMS 64
 typedef struct {
     int   fd;
     void *region;          /* mmap'd: header + buffer */
     size_t region_size;
-    char *name;
+    char  name[256];       /* inline (was strdup) */
+    int   in_use;          /* pool slot occupancy */
 } yon_shm_stream_t;
+
+/* Pool of shm-stream handles (was one malloc per open). Pointers into this
+ * BSS pool are stable; close() frees a slot by clearing in_use. */
+static yon_shm_stream_t g_shm_stream_pool[YON_MAX_SHM_STREAMS];
 
 /* Open (create or attach) a cross-process stream by name. create=1 makes it
  * if absent and initializes the header. slot_size/capacity are used only on
@@ -1346,11 +1349,20 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
         hdr->head = 0; hdr->tail = 0; hdr->count = 0;
         hdr->closed = 0; hdr->producers = 0;
     }
-    yon_shm_stream_t *s = (yon_shm_stream_t *)malloc(sizeof(yon_shm_stream_t));
+    int pslot = -1;
+    for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
+        if (!g_shm_stream_pool[i].in_use) { pslot = i; break; }
+    if (pslot < 0) {
+        munmap(region, region_size);
+        close(fd);
+        return NULL;   /* handle pool exhausted */
+    }
+    yon_shm_stream_t *s = &g_shm_stream_pool[pslot];
     s->fd = fd;
     s->region = region;
     s->region_size = region_size;
-    s->name = strdup(shm_name);
+    snprintf(s->name, sizeof(s->name), "%s", shm_name);
+    s->in_use = 1;
     return s;
 }
 
@@ -1452,8 +1464,7 @@ void yon_rt_stream_shm_close(yon_shm_stream_t *s) {
     if (!s) return;
     munmap(s->region, s->region_size);
     close(s->fd);
-    free(s->name);
-    free(s);
+    s->in_use = 0;
 }
 
 int yon_rt_stream_shm_unlink(const char *name) {
@@ -1578,7 +1589,6 @@ int yon_rt_stream_shm_await_frame_blocking(yon_shm_stream_t *s,
  * are kept in a small registry indexed by id; the id is carried as f64. The
  * stream NAME is derived from the id, so two processes that agree on the id
  * (e.g. by convention) attach to the same shared region. ---- */
-#define YON_MAX_SHM_STREAMS 64
 static yon_shm_stream_t *g_shm_stream_handles[YON_MAX_SHM_STREAMS];
 /* The f64 handle IS the channel id (nominal, e.g. a dispatch selector,
  * up to 23 bits); the table slot is found by scanning this map. Slot
@@ -1733,8 +1743,10 @@ double Wire__subscription_stream_dto(double chan_id, double n_bytes_d) {
     if (local < 0.0) return -1.0;
     int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
     if (ch < 0) { yon_rt_stream_close((uint32_t)local); return -1.0; }
-    unsigned char *buf = (unsigned char *)malloc(YON_WIRE_RING_BYTES);
-    if (!buf) { yon_rt_stream_close((uint32_t)local); return -1.0; }
+    ensure_init();
+    uint32_t buf_off = yon_xheap_strip_alloc(g_yon_heap, YON_WIRE_RING_BYTES);
+    if (buf_off == 0) { yon_rt_stream_close((uint32_t)local); return -1.0; }
+    unsigned char *buf = (unsigned char *)yon_xheap_strip_at(g_yon_heap, buf_off);
     for (;;) {
         uint32_t flen = 0;
         int rc = yon_rt_stream_shm_await_frame_blocking(
@@ -1744,7 +1756,7 @@ double Wire__subscription_stream_dto(double chan_id, double n_bytes_d) {
         if (sec == YON_SECTION_INVALID) break;
         yon_rt_stream_emit_f64(local, (double)(int64_t)(uint64_t)sec);
     }
-    free(buf);
+    yon_xheap_strip_trim(g_yon_heap, buf_off, 0u, YON_WIRE_RING_BYTES);
     yon_rt_stream_close((uint32_t)local);
     return local;
 }
@@ -2273,6 +2285,7 @@ static yon_rpc2_session_t *yon_rpc2_session(const char *space) {
  * Limit: a promoted value is one f64 (args[0]); rich types (strings, nested
  * places) will route through the DTO serialize path in a later step and are
  * not handled here. */
+#define YON_SPAWN_MAX 64
 typedef struct {
     int    role;          /* 0 = parent, 1 = child */
     int    index;         /* child index 0..n-1 (child only) */
@@ -2281,7 +2294,13 @@ typedef struct {
     char   name[96];      /* unique channel name */
     pid_t  pids[256];     /* parent only */
     int    n_spawned;     /* parent only */
+    int    in_use;        /* pool slot occupancy */
 } yon_spawn_ctx_t;
+
+/* Pool of spawn contexts (was one calloc per spawn_open). The parent claims a
+ * slot before fork; children inherit the copy. close() clears in_use.
+ * YON_SPAWN_MAX is (identically) re-defined further below next to the id table. */
+static yon_spawn_ctx_t g_spawn_pool[YON_SPAWN_MAX];
 
 static unsigned g_yon_spawn_counter = 0u;
 
@@ -2292,8 +2311,16 @@ void *yon_rt_spawn_open(double n_replicas_f64) {
         fprintf(stderr, "[YON-RT spawn] n=%d exceeds max 256, clamping\n", n);
         n = 256;
     }
-    yon_spawn_ctx_t *ctx = (yon_spawn_ctx_t *)calloc(1, sizeof(*ctx));
-    if (!ctx) return NULL;
+    int pslot = -1;
+    for (int i = 0; i < YON_SPAWN_MAX; i++)
+        if (!g_spawn_pool[i].in_use) { pslot = i; break; }
+    if (pslot < 0) {
+        fprintf(stderr, "[YON-RT spawn] context pool exhausted\n");
+        return NULL;
+    }
+    yon_spawn_ctx_t *ctx = &g_spawn_pool[pslot];
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->in_use = 1;
     ctx->n = n;
     snprintf(ctx->name, sizeof(ctx->name), "spawncollect_%d_%u",
              (int)getpid(), g_yon_spawn_counter++);
@@ -2301,7 +2328,7 @@ void *yon_rt_spawn_open(double n_replicas_f64) {
      * children inherit the same PROCESS_SHARED mapping. */
     int created = 0;
     yon_rpc2_queue_t *q = yon_rpc2_queue_map_init(ctx->name, 0u, &created);
-    if (!q) { free(ctx); return NULL; }
+    if (!q) { ctx->in_use = 0; return NULL; }
     q->server_pid = (uint64_t)getpid();   /* children check parent liveness */
     ctx->q = q;
     for (int i = 0; i < n; i++) {
@@ -2391,7 +2418,7 @@ void yon_rt_spawn_close(void *h) {
         yon_rt_rpc2_queue_close(c->q);
         yon_rt_rpc2_queue_unlink(c->name);
     }
-    free(c);
+    c->in_use = 0;
 }
 
 /* Parent bridge: drain+reap (same interleave as join_collect) but emit each
@@ -2549,8 +2576,15 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
             double local_sid = __yon_dispatch(producer_sel, 0.0, 0.0, 0.0, 0.0);
             if (attach >= 0.0 && local_sid >= 0.0) {
                 int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
-                unsigned char *fbuf = (elem_bytes == 0) ? NULL
-                                      : (unsigned char *)malloc(YON_WIRE_RING_BYTES);
+                uint32_t fbuf_off = 0;
+                unsigned char *fbuf = NULL;
+                if (elem_bytes != 0) {
+                    ensure_init();
+                    fbuf_off = yon_xheap_strip_alloc(g_yon_heap, YON_WIRE_RING_BYTES);
+                    fbuf = (fbuf_off != 0)
+                         ? (unsigned char *)yon_xheap_strip_at(g_yon_heap, fbuf_off)
+                         : NULL;
+                }
                 for (;;) {
                     double v = yon_rt_stream_await_f64(local_sid);
                     if (v == (double)0xFFFFFFFFu) break;
@@ -2579,7 +2613,8 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
                         break;
                     }
                 }
-                free(fbuf);
+                if (fbuf_off != 0)
+                    yon_xheap_strip_trim(g_yon_heap, fbuf_off, 0u, YON_WIRE_RING_BYTES);
                 yon_rt_stream_shm_close_write_f64(attach);
             }
             yon_rt_rpc2_reply(&req, 0.0);
