@@ -3808,6 +3808,197 @@ double yon_rt_ihmap_key_at(double map_id, double pos_d) {
     return key;
 }
 
+/* ============================================================== */
+/* MemoTable: memoization cache, no insertion order. Same Fx        */
+/* interning + Fibonacci open-addressing as IndexedHeapMap, but a    */
+/* single strip of (key_ref, value) slots -> one pointer hop, no     */
+/* separate order array. For the prover's result cache. No malloc.   */
+/* Load factor 70% (denser than the indexed map; lookup-heavy). */
+/* ============================================================== */
+#define YON_MEMO_MAX        256u
+#define YON_MEMO_INIT_CAP   64u           /* power of two */
+
+typedef struct {
+    uint32_t key_ref;     /* INVALID = empty, TOMBSTONE = deleted */
+    double   value;
+} yon_memo_slot_t;
+
+typedef struct {
+    uint32_t slots_off;   /* strip: capacity yon_memo_slot_t       */
+    uint32_t capacity;    /* power of two                          */
+    uint32_t used;        /* live + tombstones (for load factor)   */
+    uint32_t live;        /* live entries (for size)               */
+    uint32_t is_used;
+} yon_memo_t;
+
+static yon_memo_t g_memos[YON_MEMO_MAX];
+static uint32_t g_n_memos = 0;
+
+static yon_memo_slot_t *memo_slots(const yon_memo_t *t) {
+    return (yon_memo_slot_t *)yon_xheap_strip_at(g_ds_heap, t->slots_off);
+}
+static yon_memo_t *memo_lookup(double id) {
+    if (id < 0.5) return NULL;
+    uint32_t shifted = (uint32_t)id;
+    if (shifted == 0 || shifted > g_n_memos) return NULL;
+    yon_memo_t *t = &g_memos[shifted - 1];
+    return t->is_used ? t : NULL;
+}
+
+double yon_rt_memo_empty(void) {
+    ds_ensure_init();
+    ensure_init();
+    if (g_n_memos >= YON_MEMO_MAX) {
+        fprintf(stderr, "[YON-RT] memo_empty: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_memos++;
+    yon_memo_t *t = &g_memos[id];
+    t->capacity = YON_MEMO_INIT_CAP;
+    t->slots_off = yon_xheap_strip_alloc(g_ds_heap,
+                       t->capacity * (uint32_t)sizeof(yon_memo_slot_t));
+    if (t->slots_off == 0) {
+        fprintf(stderr, "[YON-RT] memo_empty: arena exhausted\n");
+        g_n_memos--;
+        return 0.0;
+    }
+    yon_memo_slot_t *sl = memo_slots(t);
+    for (uint32_t i = 0; i < t->capacity; i++) sl[i].key_ref = YON_IHMAP_INVALID;
+    t->used = 0;
+    t->live = 0;
+    t->is_used = 1;
+    return (double)(id + 1);
+}
+
+static int memo_grow(yon_memo_t *t) {
+    uint32_t new_cap = t->capacity * 2u;
+    uint32_t off = yon_xheap_strip_alloc(g_ds_heap,
+                       new_cap * (uint32_t)sizeof(yon_memo_slot_t));
+    if (off == 0) return 0;
+    yon_memo_slot_t *ns = (yon_memo_slot_t *)yon_xheap_strip_at(g_ds_heap, off);
+    for (uint32_t i = 0; i < new_cap; i++) ns[i].key_ref = YON_IHMAP_INVALID;
+    yon_memo_slot_t *os = memo_slots(t);
+    uint32_t new_mask = new_cap - 1u;
+    for (uint32_t i = 0; i < t->capacity; i++) {
+        uint32_t kr = os[i].key_ref;
+        if (kr == YON_IHMAP_INVALID || kr == YON_IHMAP_TOMBSTONE) continue;
+        uint32_t h = ihmap_fx(kr, new_mask);
+        for (uint32_t j = 0; j <= new_mask; j++) {
+            uint32_t s = (h + j) & new_mask;
+            if (ns[s].key_ref == YON_IHMAP_INVALID) { ns[s] = os[i]; break; }
+        }
+    }
+    yon_xheap_strip_trim(g_ds_heap, t->slots_off, 0u,
+                         t->capacity * (uint32_t)sizeof(yon_memo_slot_t));
+    t->slots_off = off;
+    t->capacity = new_cap;
+    t->used = t->live;
+    return 1;
+}
+
+double yon_rt_memo_put(double id, double key, double value) {
+    ds_ensure_init();
+    yon_memo_t *t = (id < 0.5) ? NULL : memo_lookup(id);
+    if (!t) {
+        double nid = yon_rt_memo_empty();
+        t = memo_lookup(nid);
+        if (!t) return 0.0;
+        id = nid;
+    }
+    if ((uint64_t)t->used * 10u >= (uint64_t)t->capacity * 7u) {
+        (void)memo_grow(t);
+    }
+    uint32_t key_ref = ihmap_intern(key);
+    yon_memo_slot_t *sl = memo_slots(t);
+    uint32_t mask = t->capacity - 1u;
+    uint32_t h = ihmap_fx(key_ref, mask);
+    uint32_t first_free = YON_IHMAP_INVALID;   /* first tombstone to reuse */
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t kr = sl[s].key_ref;
+        if (kr == YON_IHMAP_INVALID) {
+            uint32_t dst = (first_free != YON_IHMAP_INVALID) ? first_free : s;
+            sl[dst].key_ref = key_ref;
+            sl[dst].value   = value;
+            t->live++;
+            if (first_free == YON_IHMAP_INVALID) t->used++;   /* fresh slot */
+            return id;
+        }
+        if (kr == YON_IHMAP_TOMBSTONE) {
+            if (first_free == YON_IHMAP_INVALID) first_free = s;
+            continue;
+        }
+        if (kr == key_ref) { sl[s].value = value; return id; }  /* update */
+    }
+    if (first_free != YON_IHMAP_INVALID) {        /* all probed, reuse tombstone */
+        sl[first_free].key_ref = key_ref;
+        sl[first_free].value   = value;
+        t->live++;
+        return id;
+    }
+    return id;
+}
+
+double yon_rt_memo_get(double id, double key) {
+    ds_ensure_init();
+    yon_memo_t *t = memo_lookup(id);
+    if (!t) return 0.0;
+    uint32_t key_ref = ihmap_intern(key);
+    yon_memo_slot_t *sl = memo_slots(t);
+    uint32_t mask = t->capacity - 1u;
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t kr = sl[s].key_ref;
+        if (kr == YON_IHMAP_INVALID) return 0.0;
+        if (kr == YON_IHMAP_TOMBSTONE) continue;
+        if (kr == key_ref) return sl[s].value;
+    }
+    return 0.0;
+}
+
+double yon_rt_memo_contains(double id, double key) {
+    ds_ensure_init();
+    yon_memo_t *t = memo_lookup(id);
+    if (!t) return 0.0;
+    uint32_t key_ref = ihmap_intern(key);
+    yon_memo_slot_t *sl = memo_slots(t);
+    uint32_t mask = t->capacity - 1u;
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t kr = sl[s].key_ref;
+        if (kr == YON_IHMAP_INVALID) return 0.0;
+        if (kr == YON_IHMAP_TOMBSTONE) continue;
+        if (kr == key_ref) return 1.0;
+    }
+    return 0.0;
+}
+
+double yon_rt_memo_remove(double id, double key) {
+    ds_ensure_init();
+    yon_memo_t *t = memo_lookup(id);
+    if (!t) return 0.0;
+    uint32_t key_ref = ihmap_intern(key);
+    yon_memo_slot_t *sl = memo_slots(t);
+    uint32_t mask = t->capacity - 1u;
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t kr = sl[s].key_ref;
+        if (kr == YON_IHMAP_INVALID) return 0.0;
+        if (kr == YON_IHMAP_TOMBSTONE) continue;
+        if (kr == key_ref) { sl[s].key_ref = YON_IHMAP_TOMBSTONE; t->live--; return 1.0; }
+    }
+    return 0.0;
+}
+
+double yon_rt_memo_size(double id) {
+    yon_memo_t *t = memo_lookup(id);
+    if (!t) return 0.0;
+    return (double)t->live;
+}
+
 /* ---- XSet -------------------------------------------------------- */
 /* MPHF-backed set: elements are type-2 xcoords of the 24D Leech lattice.
  * Backing: a bitmap of 196560 bits (= 24570 bytes = ~24 KB) per set.
