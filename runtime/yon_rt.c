@@ -5251,15 +5251,22 @@ double yon_rt_string_concat(double a_id_d, double b_id_d) {
      * for large results; the limit is memory (and the heap arena, which
      * the chain extends by itself). */
     char stack_buf[1024];
-    char *buf = (la + lb + 1 <= sizeof(stack_buf))
-                ? stack_buf
-                : (char *)malloc(la + lb + 1);
-    if (!buf) return 0.0;
+    size_t need = la + lb + 1;
+    uint32_t fb_off = 0;
+    char *buf;
+    if (need <= sizeof(stack_buf)) {
+        buf = stack_buf;
+    } else {
+        fb_off = yon_xheap_strip_alloc(g_ds_heap, (uint32_t)need);
+        if (fb_off == 0) return 0.0;
+        buf = (char *)yon_xheap_strip_at(g_ds_heap, fb_off);
+    }
     memcpy(buf, pa, la);
     memcpy(buf + la, pb, lb);
     buf[la + lb] = 0;
-    uint32_t slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)(la + lb + 1), YON_TAG_USER1);
-    if (buf != stack_buf) free(buf);
+    uint32_t slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)need, YON_TAG_USER1);
+    if (fb_off != 0)
+        yon_xheap_strip_trim(g_ds_heap, fb_off, 0u, (uint32_t)need);
     return (double)slot;
 }
 
@@ -5321,14 +5328,21 @@ double yon_rt_string_substring(double str_id_d, double start_d, double len_d) {
     if (len < 0) len = 0;
     if (start + len > total_len) len = total_len - start;
     char stack_buf[1024];
-    char *buf = ((size_t)len + 1 <= sizeof(stack_buf))
-                ? stack_buf
-                : (char *)malloc((size_t)len + 1);
-    if (!buf) return 0.0;
+    size_t need = (size_t)len + 1;
+    uint32_t fb_off = 0;
+    char *buf;
+    if (need <= sizeof(stack_buf)) {
+        buf = stack_buf;
+    } else {
+        fb_off = yon_xheap_strip_alloc(g_ds_heap, (uint32_t)need);
+        if (fb_off == 0) return 0.0;
+        buf = (char *)yon_xheap_strip_at(g_ds_heap, fb_off);
+    }
     memcpy(buf, p + start, len);
     buf[len] = 0;
-    uint32_t new_slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)(len + 1), YON_TAG_USER1);
-    if (buf != stack_buf) free(buf);
+    uint32_t new_slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)need, YON_TAG_USER1);
+    if (fb_off != 0)
+        yon_xheap_strip_trim(g_ds_heap, fb_off, 0u, (uint32_t)need);
     return (double)new_slot;
 }
 
@@ -5378,18 +5392,13 @@ double yon_rt_file_read_text(double path_id_d) {
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
     if (sz <= 0 || sz >= 16*1024*1024) { fclose(f); return 0.0; }
-    char *buf = (char *)malloc(sz + 1);
-    if (!buf) { fclose(f); return 0.0; }
-    size_t r = fread(buf, 1, sz, f);
+    char buf[YON_STR_MAX_LEN];
+    size_t to_read = (size_t)sz;
+    if (to_read >= YON_STR_MAX_LEN) to_read = YON_STR_MAX_LEN - 1;
+    size_t r = fread(buf, 1, to_read, f);
     buf[r] = 0;
     fclose(f);
-    /* Truncate to YON_STR_MAX_LEN if needed for xheap */
-    if ((long)r >= YON_STR_MAX_LEN) {
-        buf[YON_STR_MAX_LEN - 1] = 0;
-        r = YON_STR_MAX_LEN - 1;
-    }
-    uint32_t out_slot = yon_xheap_put_chain(g_ds_heap, buf, r + 1, YON_TAG_USER1);
-    free(buf);
+    uint32_t out_slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)(r + 1), YON_TAG_USER1);
     return (double)out_slot;
 }
 
@@ -5425,12 +5434,10 @@ static double yon_ds_string(const char *str) {
     ds_ensure_init();
     size_t len = strlen(str);
     if (len >= YON_STR_MAX_LEN) len = YON_STR_MAX_LEN - 1;
-    char *buf = (char *)malloc(len + 1);
-    if (!buf) return 0.0;
+    char buf[YON_STR_MAX_LEN];
     memcpy(buf, str, len);
     buf[len] = 0;
-    uint32_t slot = yon_xheap_put_chain(g_ds_heap, buf, len + 1, YON_TAG_USER1);
-    free(buf);
+    uint32_t slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)(len + 1), YON_TAG_USER1);
     return (double)slot;
 }
 
@@ -5806,12 +5813,12 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
             uint32_t slen;
             memcpy(&slen, p + cur, 4u); cur += 4u;
             if ((uint64_t)cur + slen > (uint64_t)payload_len) return YON_SECTION_INVALID;
-            char *tmp = (char *)malloc((size_t)slen + 1u);
-            if (!tmp) return YON_SECTION_INVALID;
-            if (slen) memcpy(tmp, p + cur, slen);
-            tmp[slen] = 0;
+            char tmp[YON_STR_MAX_LEN];
+            uint32_t cpy = slen < (uint32_t)YON_STR_MAX_LEN
+                           ? slen : (uint32_t)(YON_STR_MAX_LEN - 1);
+            if (cpy) memcpy(tmp, p + cur, cpy);
+            tmp[cpy] = 0;
             double sid = yon_ds_string(tmp);  /* rebuilt in this process's ds */
-            free(tmp);
             memcpy(inst + off, &sid, 8u);
             cur += slen;
         } else if (sc->tags[i] == YON_WIRE_TAG_NESTED) {
