@@ -4698,26 +4698,39 @@ double yon_rt_xtower_depth(void) { return (double)YON_XTOWER_DEPTH; }
 
 /* ============================================================== */
 /* XSimplex: stateless classifier for a configuration of type-2    */
-/* points by the multiset of its pairwise edge types               */
-/* type(v_i ^ v_j). Co0-invariant: g acts on all vertices and the  */
-/* edge-type multiset is unchanged. Coarse granularity (4 shells   */
-/* per edge); the fine McL/HS separation needs the sign lift, done */
-/* later. Pure projection, no state, no allocation.                */
-/*   pair:     edge class in {0,1,2,3}  (t0/t2/t3/t4)              */
+/* points by the multiset of its pairwise edge subtypes            */
+/* subtype(v_i ^ v_j). Co2-invariant: g fixing the vertices' frame */
+/* leaves each subtype unchanged. The edge invariant is the full   */
+/* leech2 subtype (12 classes realized for a pair of type-2),       */
+/* mapped to a dense index 0..11; this is strictly finer than the  */
+/* coarse type (4 shells) and is leech2-native (no sign lift). The */
+/* sign (real scalar product) is a complementary refinement added  */
+/* later by the cartesian lift. Pure projection, no state, no       */
+/* allocation.                                                     */
+/*   pair:     edge class in 0..11 (dense subtype)                 */
 /*   triangle: canonical key of the sorted 3-edge multiset         */
-/*             (10 types realized for distinct points)             */
 /* ============================================================== */
-extern uint32_t gen_leech2_type(uint64_t v2);
+
+/* Dense map of the 12 subtypes realized by v^w (v,w type-2) to 0..11.
+ * Entry 0 means "not one of the 12" (default); stored value is index+1. */
+static const unsigned char XSIMPLEX_ST[256] = {
+    [0x00] = 1,  [0x20] = 2,  [0x21] = 3,  [0x22] = 4,
+    [0x31] = 5,  [0x33] = 6,  [0x34] = 7,  [0x40] = 8,
+    [0x42] = 9,  [0x43] = 10, [0x44] = 11, [0x48] = 12,
+};
 
 static int xsimplex_is_t2(uint32_t v) {
     return (gen_leech2_subtype((uint64_t)v) >> 4) == 2u;
 }
-static uint32_t xsimplex_edge(uint32_t a, uint32_t b) {
-    uint32_t t = gen_leech2_type((uint64_t)((a ^ b) & 0x1FFFFFFu)) & 7u;
-    return t == 0u ? 0u : t == 2u ? 1u : t == 3u ? 2u : t == 4u ? 3u : 0u;
+/* Dense subtype class 0..11 of the edge a^b, or -1 if outside the 12. */
+static int xsimplex_edge(uint32_t a, uint32_t b) {
+    uint32_t st = gen_leech2_subtype((uint64_t)((a ^ b) & 0x1FFFFFFu)) & 0xFFu;
+    int d = XSIMPLEX_ST[st];
+    return d == 0 ? -1 : d - 1;
 }
 
-/* Edge class of a pair (v,w): type(v^w) in {0,1,2,3}; -1 if not both type-2. */
+/* Edge class of a pair (v,w): dense subtype(v^w) in 0..11; -1 if not both
+ * type-2 or the subtype is outside the realized 12. */
 double yon_rt_xsimplex_pair(double vd, double wd) {
     uint32_t v = (uint32_t)vd & 0x1FFFFFFu, w = (uint32_t)wd & 0x1FFFFFFu;
     if (!xsimplex_is_t2(v) || !xsimplex_is_t2(w)) return -1.0;
@@ -4725,25 +4738,24 @@ double yon_rt_xsimplex_pair(double vd, double wd) {
 }
 
 /* Triangle class of (u,v,w): canonical key of the sorted multiset of the three
- * pairwise edge types; -1 if any vertex is not type-2. Co0- and
- * vertex-permutation-invariant. */
+ * pairwise edge subtypes (each 0..11), packed as e0*144 + e1*12 + e2; -1 if any
+ * vertex is not type-2 or any edge is outside the 12. Vertex-permutation- and
+ * Co2-invariant. */
 double yon_rt_xsimplex_triangle(double ud, double vd, double wd) {
     uint32_t u = (uint32_t)ud & 0x1FFFFFFu, v = (uint32_t)vd & 0x1FFFFFFu,
              w = (uint32_t)wd & 0x1FFFFFFu;
     if (!xsimplex_is_t2(u) || !xsimplex_is_t2(v) || !xsimplex_is_t2(w)) return -1.0;
-    uint32_t e[3];
-    e[0] = xsimplex_edge(u, v);
-    e[1] = xsimplex_edge(v, w);
-    e[2] = xsimplex_edge(u, w);
-    uint32_t t;
-    if (e[0] > e[1]) { t = e[0]; e[0] = e[1]; e[1] = t; }
-    if (e[1] > e[2]) { t = e[1]; e[1] = e[2]; e[2] = t; }
-    if (e[0] > e[1]) { t = e[0]; e[0] = e[1]; e[1] = t; }
-    return (double)(e[0] * 16u + e[1] * 4u + e[2]);  /* canonical sorted key */
+    int e0 = xsimplex_edge(u, v), e1 = xsimplex_edge(v, w), e2 = xsimplex_edge(u, w);
+    if (e0 < 0 || e1 < 0 || e2 < 0) return -1.0;
+    int t;
+    if (e0 > e1) { t = e0; e0 = e1; e1 = t; }
+    if (e1 > e2) { t = e1; e1 = e2; e2 = t; }
+    if (e0 > e1) { t = e0; e0 = e1; e1 = t; }
+    return (double)(e0 * 144 + e1 * 12 + e2);  /* canonical sorted key */
 }
 
-double yon_rt_xsimplex_pair_width(void)     { return 4.0; }   /* t0/t2/t3/t4 */
-double yon_rt_xsimplex_triangle_width(void) { return 10.0; }  /* distinct points */
+double yon_rt_xsimplex_pair_width(void)     { return 12.0; }  /* dense subtypes */
+double yon_rt_xsimplex_triangle_width(void) { return 95.0; }  /* realized keys (sampled) */
 
 
 
