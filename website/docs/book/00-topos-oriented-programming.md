@@ -81,7 +81,7 @@ computation, so three syntactic copies of `(3 + 4) * 2` in the source
 become one computation in the IR, collapse by structure, before any
 classical optimization runs. The same philosophy returns at every level:
 **Co₀-orbit canonicalization** collapses heap contents equivalent under the
-Leech-lattice symmetries (chapter 11), η/unit rules collapse trivial
+Leech-lattice symmetries (chapter 14), η/unit rules collapse trivial
 coherence cells, and verified laws (chapter 5) license algebraic rewrites
 that an unverified `add` could never justify.
 

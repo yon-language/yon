@@ -12,7 +12,7 @@ code.
 
 ## Collections and streams
 
-`List`, `Map`, `Set`, `HashSet`, `XSet` are immutable collections over the
+`List`, `Vec`, `HashMap`, `HashSet`, `XSet` are immutable collections over the
 content-addressed heap. Streams chain with methods, and their combinators
 **require inline lambdas** (the fusion happens at emission, so the body must
 be visible):
@@ -64,9 +64,21 @@ fun main(): number {
 }
 ```
 
+A `Vec` is a persistent dynamic array: `push` appends, `get`/`set` read and
+overwrite by index, and each returns a fresh handle, so the source is never
+mutated.
+
+```yon
+fun main(): number {
+  be v holds Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
+  be v2 holds Vec.set(v, 1, 5)                   // new handle; v is untouched
+  return Vec.size(v) * 10 + Vec.get(v, 1) + Vec.get(v2, 1)   // 30 + 20 + 5 = 55
+}
+```
+
 ## The exotic corner
 
-Three modules are distinctly Yon. `Merkle` builds content-addressed Merkle
+Three modules are distinctly Yon. `MerkleTree` builds content-addressed Merkle
 trees. `VoyagerList`, above, is a Golay-sealed list, error-correcting
 storage, à la Voyager probe (`corrupt_at` exists precisely so you can watch
 it heal). And `Magma` (with `verify P`, chapter 5) turns a law-verified place

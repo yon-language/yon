@@ -37,7 +37,7 @@ shapes. The benchmark sources ship with the repository.
 | Space cell set+get pair (the cost of `becomes`) | 2M pairs | 25 ms | ~12.5 ns |
 | Merkle build, 4,096 leaves (fresh) | 1 tree | 2 ms |  |
 | Merkle build, identical tree (all dedup hits) | 1 tree | 1 ms |  |
-| `Merkle.equal`, two 4,096-leaf trees | 1 comparison | &lt;1 ms | O(1) |
+| `MerkleTree.equal`, two 4,096-leaf trees | 1 comparison | &lt;1 ms | O(1) |
 
 ## What the shapes mean
 

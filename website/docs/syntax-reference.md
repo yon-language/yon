@@ -395,8 +395,9 @@ effects, move/morphism gating) with opt-in physical heap separation
 | `Math` | `sqrt, abs, floor, ceil, round, min, max, pow, log, log2, log10, exp, sin, cos, sinh, cosh, tanh, atan2, modulo, gcd, lcm, pi, e` |
 | `Bits` | `and, or, xor, not, shl, shr, popcount, fold, *_64` |
 | `Crypto` | `fnv1a, hash_int` |
-| `List` / `Map` / `Set` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
-| `Merkle` | Content-addressed Merkle trees |
+| `List` / `HashMap` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
+| `Vec` | `empty, push, get, set, size`, a persistent dynamic array (v1 copy-on-write) |
+| `MerkleTree` | Content-addressed Merkle trees |
 | `VoyagerList` | Golay-sealed list (error-correcting) |
 | `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog`, with `verify P` |
 | `Stream` | `from_list, map, filter, fold, iterate, take` |
