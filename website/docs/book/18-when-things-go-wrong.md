@@ -48,7 +48,7 @@ everything else.
 At the stdlib boundary, absence is in-band (chapter 10): a missing file, an
 unset variable, an out-of-range index all return the `0.0` handle. You test
 it like any number. The compiler does its part *before* runtime: a false
-`law` is rejected by MagmaSolve, a missing subsumption mono is rejected by
+`law` is rejected by AlgebraVerifier, a missing subsumption mono is rejected by
 the checker, a string in a cross-Space signature never compiles, entire
 categories of "going wrong" are moved from runtime to the type checker.
 

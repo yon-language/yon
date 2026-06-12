@@ -24,7 +24,7 @@ forbidden. Choose Erlang for distributed systems today; Yon's bet is that
 a narrower door makes a stronger wall.
 
 **From Haskell.** Typeclass laws in Haskell are documentation; Yon's
-`law` declarations are *checked*, MagmaSolve rejects a false
+`law` declarations are *checked*, AlgebraVerifier rejects a false
 `commutative` at compile time (chapter 5). The price: a closed catalog of
 algebras, not arbitrary laws. Where Haskell says "trust the instance",
 Yon says "prove it or don't claim it", for the algebras it knows.

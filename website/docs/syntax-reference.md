@@ -322,7 +322,7 @@ function that `visits E` requires the caller to cover `E`, by declaring
 | `operation op(a: T): U` | ✓ | Operation (1-cell) |
 | `functorial operation op(...)` | ✓ | Operation lifted along world morphisms (Yoneda lifting) |
 | `operation op(...) uses algebra Additive` | ✓ | Bind to a catalog algebra; laws certified by the compiler |
-| `law commutative` etc. | ✓ | Declared law, verified (MagmaSolve) |
+| `law commutative` etc. | ✓ | Declared law, verified (AlgebraVerifier) |
 | `cell c from e1 to e2` | ✓ | Higher cell between lower cells (CaTT witness) |
 | `place P = pullback(f, g)` / `pushout(f, g)` | ✓ | Place as a limit / colimit |
 

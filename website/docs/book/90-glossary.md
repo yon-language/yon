@@ -95,7 +95,7 @@ symmetry group; the orbital collections store one representative per orbit.
 flips.
 
 **law**, an algebraic property declared on a place's operation and
-*verified* at compile time by MagmaSolve; a false law does not compile.
+*verified* at compile time by AlgebraVerifier; a false law does not compile.
 
 **solve**, the keyword that hands you a law-verified place as a runnable
 algebraic structure (a Magma with closure, reachability, certificates).

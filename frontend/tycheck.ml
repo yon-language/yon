@@ -2374,7 +2374,7 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
            ok ()
        | FoLaw _ ->
            (* Declared algebraic laws. The real verification (against the
-            * certified catalog) happens in the MLIR MagmaSolve pass, not here.
+            * certified catalog) happens in the MLIR AlgebraVerifier pass, not here.
             * At this layer the law is only known to be syntactically
             * well-formed. *)
            ok ())
