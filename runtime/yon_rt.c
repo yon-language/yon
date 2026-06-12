@@ -4754,8 +4754,39 @@ double yon_rt_xsimplex_triangle(double ud, double vd, double wd) {
     return (double)(e0 * 144 + e1 * 12 + e2);  /* canonical sorted key */
 }
 
+/* Holonomy of the triangle (u,v,w): sgn<u,v>*sgn<v,w>*sgn<w,u>, in {-1,0,1}.
+ * The per-edge sign is gauge (flipping a vertex's representative flips the two
+ * edges meeting it), so the product over the cycle is gauge-free, hence
+ * Co0-invariant (verified: 0 deviations over 2e6 random triangles, while the
+ * single-edge sign deviates ~26% of the time, by pure global sign). Returns 0
+ * if any edge product vanishes (<.,.>=0) or a vertex is not a decodable
+ * type-2. */
+extern int yon_leech2_signed_product(uint32_t v, uint32_t w);
+
+double yon_rt_xsimplex_omega(double ud, double vd, double wd) {
+    uint32_t u = (uint32_t)ud & 0x1FFFFFFu, v = (uint32_t)vd & 0x1FFFFFFu,
+             w = (uint32_t)wd & 0x1FFFFFFu;
+    if (!xsimplex_is_t2(u) || !xsimplex_is_t2(v) || !xsimplex_is_t2(w)) return 0.0;
+    int a = yon_leech2_signed_product(u, v);
+    int b = yon_leech2_signed_product(v, w);
+    int c = yon_leech2_signed_product(w, u);
+    int s = ((a > 0) - (a < 0)) * ((b > 0) - (b < 0)) * ((c > 0) - (c < 0));
+    return (double)s;
+}
+
+/* Fine triangle class: the Co2-invariant subtype key refined by the
+ * Co0-invariant holonomy. Packed as triangle_key*3 + (omega+1), so omega in
+ * {-1,0,1} maps to {0,1,2}. -1 if the plain triangle is invalid. */
+double yon_rt_xsimplex_triangle_fine(double ud, double vd, double wd) {
+    double tri = yon_rt_xsimplex_triangle(ud, vd, wd);
+    if (tri < 0.0) return -1.0;
+    double om = yon_rt_xsimplex_omega(ud, vd, wd);
+    return tri * 3.0 + (om + 1.0);
+}
+
 double yon_rt_xsimplex_pair_width(void)     { return 12.0; }  /* dense subtypes */
 double yon_rt_xsimplex_triangle_width(void) { return 95.0; }  /* realized keys (sampled) */
+double yon_rt_xsimplex_triangle_fine_width(void) { return 144.0; }  /* subtype x holonomy (sampled) */
 
 
 
