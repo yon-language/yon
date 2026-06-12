@@ -19,6 +19,7 @@
 #include "leech_theta.h"
 #include "yon_mmap.h"
 #include "yon_arena.h"
+#include "yon_curtis_frame.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -4349,6 +4350,23 @@ double yon_rt_xrel_class(double id, double v) {
     yon_xrel_t *x = xrel_lookup(id);
     if (!x) return -1.0;
     return xrel_class_of(x, v);
+}
+
+/* Build an XRel pre-loaded with the first n_refs octads of the Curtis frame
+ * (see yon_curtis_frame.h). n_refs is clamped to [1, YON_CURTIS_FRAME_N].
+ * Additive: uses only the existing XRel API, changes no existing behaviour.
+ * Returns the new XRel id, or -1.0 on failure. */
+double yon_rt_xrel_curtis(double n_refs) {
+    uint32_t k;
+    if (n_refs < 1.0) k = 1u;
+    else if (n_refs > (double)YON_CURTIS_FRAME_N) k = YON_CURTIS_FRAME_N;
+    else k = (uint32_t)n_refs;
+    double id = yon_rt_xrel_empty();
+    if (id < 0.0) return -1.0;
+    for (uint32_t i = 0; i < k; i++) {
+        if (yon_rt_xrel_add_ref(id, (double)YON_CURTIS_FRAME[i]) < 0.0) return -1.0;
+    }
+    return id;
 }
 
 /* ============================================================== */
