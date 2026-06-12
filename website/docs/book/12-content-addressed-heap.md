@@ -58,11 +58,10 @@ by private memory or POSIX shared memory interchangeably.
 The lattice is not just sizing. Through the vendored mmgroup core, the runtime exposes
 **canonicalization under the lattice symmetries**: sign patterns canonical
 under the Golay-code stabilizer, M₂₄ orbit representatives, orbit ids. The
-orbital variants of the collections use them, `HashMap.orbital_set` stores
-the *orbit representative* of a key, so keys equivalent under the symmetry
-collapse to one entry. Two contents that are "the same up to symmetry"
-become literally the same address: content addressing, extended from bytes
-to orbits.
+**Arena** surfaces them directly, `Arena.orbit` returns the orbit id of a
+content and `Arena.same_orbit` tests two contents for equivalence under the
+symmetry group, so contents that are "the same up to symmetry" can be
+recognized as one. Content addressing, extended from bytes to orbits.
 
 ## The heap chain (HeapRef)
 
@@ -96,5 +95,5 @@ re-derivation through the chain.
 
 One asymmetry to know about: orbit canonicalization (the vendored mmgroup
 machinery below) operates on heap 0, where the lattice indexing lives.
-Orbital collections are a heap-0 feature; plain content addressing spans
-the whole chain.
+The Arena's orbit operations are a heap-0 feature; plain content addressing
+spans the whole chain.

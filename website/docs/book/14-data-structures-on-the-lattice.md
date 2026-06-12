@@ -12,8 +12,10 @@ handle, and sharing makes that cheap.
 
 **List** is the classic cons chain: `List.cons(x, rest)` puts one new node;
 the rest is shared by address. **HashMap / HashSet** are persistent maps
-with the orbital variants from chapter 11 (`orbital_set`/`orbital_get`
-canonicalize keys to their lattice-orbit representative before storing).
+backed by the content-addressed directory: every `set`/`add` returns a new
+handle and shares the unchanged structure by address. **Vec** is a
+persistent dynamic array: `Vec.push` appends and `Vec.get`/`Vec.set` read
+and overwrite by position, each returning a fresh handle.
 
 ## Choosing a structure
 
@@ -24,6 +26,10 @@ What distinguishes them is what they make cheap:
 - **List**, the workhorse: an immutable cons list of `f64`. Use it for
   pipelines, accumulation, anything sequential. Structural sharing is
   automatic: two lists with the same tail *are* the same tail.
+- **Vec**, a persistent dynamic array indexed by position. `Vec.push`
+  appends, `Vec.get`/`Vec.set` read and overwrite by index, each returning
+  a fresh handle and leaving the source untouched. v1 copies on write
+  (O(n) push); it is the building block for an indexed map.
 - **HashMap**, `f64 → f64`, with string handles as keys when you need
   them (a handle is a number). The directory starts at 4,096 slots and
   doubles with a rehash at 70% load, up to 2²⁰; entries spill across
@@ -34,29 +40,30 @@ What distinguishes them is what they make cheap:
   than cost, configuration, ledger heads, calibration constants. The
   seal costs roughly a factor of two over a raw cell read (Appendix D),
   which is nothing for what it buys.
-- **Merkle**, trees whose identity is their content. Use it for
+- **MerkleTree**, trees whose identity is their content. Use it for
   expression DAGs, audit trails, snapshots: building the same tree twice
   costs almost nothing (every node is a dedup hit), and comparing two
   4,096-leaf trees is one comparison.
 - **Cells**, not a collection: the one mechanism with identity
   (chapter 12). `becomes` and every loop are built on them; ~12 ns per
   set+get pair, 1,024 per process.
-- **Orbital variants**, `HashMap.orbital_set` and friends store the M₂₄
-  orbit representative of the key: equality up to symmetry as storage
-  semantics (chapter 18 shows it collapsing).
+- **Arena**, the Leech-indexed pool: `Arena.orbit` returns the M₂₄ orbit
+  id of a content and `Arena.same_orbit` tests two contents for
+  equivalence under the symmetry group, equality up to symmetry made
+  explicit (chapter 18 shows it at work).
 
-## Merkle: content addressing made visible
+## MerkleTree: content addressing made visible
 
 A Merkle tree is what the heap already does, surfaced as an API, every node
 is addressed by the content of its children:
 
 ```yon
 fun main(): number {
-  be l1 holds Merkle.leaf(7)
-  be l2 holds Merkle.leaf(9)
-  be t holds Merkle.child(l1, l2)
-  be t2 holds Merkle.child(Merkle.leaf(7), Merkle.leaf(9))
-  be same holds Merkle.equal(t, t2)    // same content, same tree, same slot
+  be l1 holds MerkleTree.leaf(7)
+  be l2 holds MerkleTree.leaf(9)
+  be t holds MerkleTree.child(l1, l2)
+  be t2 holds MerkleTree.child(MerkleTree.leaf(7), MerkleTree.leaf(9))
+  be same holds MerkleTree.equal(t, t2)    // same content, same tree, same slot
   return if same then 42 else 0
 }
 ```

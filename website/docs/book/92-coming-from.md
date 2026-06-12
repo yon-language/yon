@@ -47,7 +47,7 @@ are vastly more mature; that is not in dispute.
 
 **What has no counterpart anywhere**, stated once and narrowly:
 allocation-as-deduplication with O(1) deep equality as a language
-guarantee; orbit-canonical collections (equality up to a symmetry group as
+guarantee; orbit canonicalization in the Arena (equality up to a symmetry group as
 storage semantics); `verify` returning verified algebras as runnable
 objects; trit-valued integers with per-bit certainty; error-correcting
 storage in the standard library; topos constructs as compiled primitives

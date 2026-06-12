@@ -60,7 +60,7 @@ description of Yon 1.0, then follow the book:
 
 12. [The content-addressed heap](./book/12-content-addressed-heap.md), addresses are content, equality for free, the Leech lattice.
 13. [Values, cells, and lifetime](./book/13-values-cells-lifetime.md), immutability, identity, types at runtime, no-GC by design.
-14. [Data structures on the lattice](./book/14-data-structures-on-the-lattice.md), persistent collections, Merkle, Golay-sealed storage, cells across processes.
+14. [Data structures on the lattice](./book/14-data-structures-on-the-lattice.md), persistent collections, MerkleTree, Golay-sealed storage, cells across processes.
 
 **Part III, the system:**
 
