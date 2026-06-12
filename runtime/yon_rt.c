@@ -4392,13 +4392,14 @@ double yon_rt_voyagerlist_corrupt(double codeword24_f64, double n_bits_f64) {
  * Le 3 builtin esistenti (yon_rt_voyagerlist_seal/open/corrupt) restano
  * come funzioni pure utility per backward-compat. */
 
-/* 2026-06-04: DYNAMIC capacity, doubling via realloc, no cap
- * (limit = memory; guard on arithmetic overflow only). */
+/* DYNAMIC capacity, doubling on an arena strip (no malloc): grow allocates a
+ * new strip, copies, and trims the old strip's whole pages back to the OS.
+ * No cap (limit = arena; guard on arithmetic overflow only). */
 #define YON_VL_MAX_LISTS  256u
 #define YON_VL_INIT       1024u
 
 typedef struct {
-    uint32_t *codewords;   /* 24-bit codeword in basso; cresce lazy */
+    uint32_t cw_off;       /* arena offset of the codeword strip (uint32 each) */
     uint32_t cap;
     uint32_t n_entries;
     uint32_t is_used;
@@ -4407,7 +4408,13 @@ typedef struct {
 static ds_voyagerlist_t g_voyagerlists[YON_VL_MAX_LISTS];
 static uint32_t g_n_voyagerlists = 0;
 
+/* Writable codeword array for a list: the arena strip at cw_off. */
+static uint32_t *vl_cw(const ds_voyagerlist_t *vl) {
+    return (uint32_t *)yon_xheap_strip_at(g_yon_heap, vl->cw_off);
+}
+
 double yon_rt_voyagerlist_empty(void) {
+    ensure_init();
     if (g_n_voyagerlists >= YON_VL_MAX_LISTS) {
         fprintf(stderr, "[YON-RT] voyagerlist_empty: pool exhausted\n");
         return 0.0;
@@ -4415,9 +4422,10 @@ double yon_rt_voyagerlist_empty(void) {
     uint32_t id = g_n_voyagerlists++;
     ds_voyagerlist_t *vl = &g_voyagerlists[id];
     vl->cap = YON_VL_INIT;
-    vl->codewords = (uint32_t *)malloc(vl->cap * sizeof(uint32_t));
-    if (!vl->codewords) {
-        fprintf(stderr, "[YON-RT] voyagerlist_empty: out of memory\n");
+    vl->cw_off = yon_xheap_strip_alloc(g_yon_heap,
+                                       vl->cap * (uint32_t)sizeof(uint32_t));
+    if (vl->cw_off == 0) {
+        fprintf(stderr, "[YON-RT] voyagerlist_empty: arena exhausted\n");
         g_n_voyagerlists--;
         return 0.0;
     }
@@ -4427,6 +4435,7 @@ double yon_rt_voyagerlist_empty(void) {
 }
 
 static ds_voyagerlist_t *voyagerlist_lookup(double vl_id) {
+    ensure_init();
     if (vl_id < 0.5) return NULL;
     uint32_t shifted = (uint32_t)vl_id;
     if (shifted == 0 || shifted > g_n_voyagerlists) return NULL;
@@ -4450,20 +4459,25 @@ double yon_rt_voyagerlist_append(double vl_id, double data12_f64) {
             fprintf(stderr, "[YON-RT] voyagerlist_append: capacity overflow\n");
             return vl_id;
         }
-        uint32_t *nc = (uint32_t *)realloc(vl->codewords,
-                                           new_cap * sizeof(uint32_t));
-        if (!nc) {
-            fprintf(stderr, "[YON-RT] voyagerlist_append: out of memory\n");
+        uint32_t new_off = yon_xheap_strip_alloc(g_yon_heap,
+                                       new_cap * (uint32_t)sizeof(uint32_t));
+        if (new_off == 0) {
+            fprintf(stderr, "[YON-RT] voyagerlist_append: arena exhausted\n");
             return vl_id;
         }
-        vl->codewords = nc;
+        uint32_t *src = vl_cw(vl);
+        uint32_t *dst = (uint32_t *)yon_xheap_strip_at(g_yon_heap, new_off);
+        for (uint32_t i = 0; i < vl->n_entries; i++) dst[i] = src[i];
+        yon_xheap_strip_trim(g_yon_heap, vl->cw_off, 0u,
+                             vl->cap * (uint32_t)sizeof(uint32_t));
+        vl->cw_off = new_off;
         vl->cap = new_cap;
     }
     /* Auto-seal: data12 -> codeword24 Golay */
     uint32_t data = (uint32_t)data12_f64;
     if (data >= 4096) data &= 0xFFF;
     uint32_t codeword = mat24_gcode_to_vect(data);
-    vl->codewords[vl->n_entries++] = codeword;
+    vl_cw(vl)[vl->n_entries++] = codeword;
     return vl_id;
 }
 
@@ -4477,7 +4491,7 @@ double yon_rt_voyagerlist_get(double vl_id, double idx_f64) {
         return 0.0;
     }
     /* Auto-open: codeword24 -> data12 with error correction. */
-    uint32_t codeword = vl->codewords[idx];
+    uint32_t codeword = vl_cw(vl)[idx];
     uint32_t syndrome = mat24_syndrome(codeword, 24);
     uint32_t corrected = codeword ^ syndrome;
     uint32_t gcode = mat24_vect_to_gcode(corrected);
@@ -4497,9 +4511,9 @@ double yon_rt_voyagerlist_corrupt_at(double vl_id, double idx_f64, double n_bits
     uint32_t idx = (uint32_t)idx_f64;
     if (idx >= vl->n_entries) return vl_id;
     /* Reuse yon_rt_voyagerlist_corrupt, which works on a single codeword. */
-    double cw_f = (double)vl->codewords[idx];
+    double cw_f = (double)vl_cw(vl)[idx];
     double corrupted = yon_rt_voyagerlist_corrupt(cw_f, n_bits_f64);
-    vl->codewords[idx] = (uint32_t)corrupted;
+    vl_cw(vl)[idx] = (uint32_t)corrupted;
     return vl_id;
 }
 
@@ -4511,7 +4525,7 @@ double yon_rt_voyagerlist_to_list(double vl_id) {
     /* Iterate in reverse to get the list in chronological order (cons
      * accumulates head-first, so reverse iteration = append order). */
     for (int32_t i = (int32_t)vl->n_entries - 1; i >= 0; i--) {
-        uint32_t codeword = vl->codewords[i];
+        uint32_t codeword = vl_cw(vl)[i];
         uint32_t syndrome = mat24_syndrome(codeword, 24);
         uint32_t corrected = codeword ^ syndrome;
         uint32_t gcode = mat24_vect_to_gcode(corrected);
