@@ -260,14 +260,17 @@ yon_section_t yon_rt_new(uint32_t heap_id,
         uint8_t stack_buf[256];
         uint8_t *combined = stack_buf;
         size_t combined_size = sizeof(uint32_t) + n_bytes;
+        uint32_t cmb_off = 0;
         if (combined_size > sizeof(stack_buf)) {
-            combined = malloc(combined_size);
-            if (!combined) return YON_SECTION_INVALID;
+            cmb_off = yon_xheap_strip_alloc(h, (uint32_t)combined_size);
+            if (cmb_off == 0) return YON_SECTION_INVALID;
+            combined = (uint8_t *)yon_xheap_strip_at(h, cmb_off);
         }
         memcpy(combined, &heap_id, sizeof(uint32_t));
         memcpy(combined + sizeof(uint32_t), payload_bytes, n_bytes);
         slot_idx = yon_xheap_put(h, combined, (uint32_t)combined_size, YON_TAG_USER1);
-        if (combined != stack_buf) free(combined);
+        if (cmb_off != 0)
+            yon_xheap_strip_trim(h, cmb_off, 0u, (uint32_t)combined_size);
     } else {
         slot_idx = yon_xheap_put(h, payload_bytes, n_bytes, YON_TAG_USER1);
     }
@@ -779,15 +782,18 @@ yon_section_t yon_rt_new_v(uint32_t heap_id,
         uint8_t stack_buf[256];
         uint8_t *combined = stack_buf;
         size_t combined_size = sizeof(uint32_t) + n_bytes;
+        uint32_t cmb_off = 0;
         if (combined_size > sizeof(stack_buf)) {
-            combined = malloc(combined_size);
-            if (!combined) return YON_SECTION_INVALID;
+            cmb_off = yon_xheap_strip_alloc(h, (uint32_t)combined_size);
+            if (cmb_off == 0) return YON_SECTION_INVALID;
+            combined = (uint8_t *)yon_xheap_strip_at(h, cmb_off);
         }
         memcpy(combined, &heap_id, sizeof(uint32_t));
         memcpy(combined + sizeof(uint32_t), payload_bytes, n_bytes);
         slot_idx = yon_xheap_put_v(h, combined, (uint32_t)combined_size,
                                     YON_TAG_USER1, schema_version);
-        if (combined != stack_buf) free(combined);
+        if (cmb_off != 0)
+            yon_xheap_strip_trim(h, cmb_off, 0u, (uint32_t)combined_size);
     } else {
         slot_idx = yon_xheap_put_v(h, payload_bytes, n_bytes,
                                     YON_TAG_USER1, schema_version);
@@ -855,15 +861,18 @@ int yon_rt_field_load_v(yon_section_t sec,
     /* Allocate a temporary buffer for the migrated payload */
     uint8_t stack_buf[512];
     uint8_t *new_buf = stack_buf;
+    uint32_t nb_off = 0;
     if (m->new_payload_size > sizeof(stack_buf)) {
-        new_buf = malloc(m->new_payload_size);
-        if (!new_buf) return -1;
+        ensure_init();
+        nb_off = yon_xheap_strip_alloc(g_yon_heap, m->new_payload_size);
+        if (nb_off == 0) return -1;
+        new_buf = (uint8_t *)yon_xheap_strip_at(g_yon_heap, nb_off);
     }
 
     int rc = m->fn(src_payload + prefix_skip, raw_size,
                    new_buf, m->new_payload_size);
     if (rc != 0) {
-        if (new_buf != stack_buf) free(new_buf);
+        if (nb_off != 0) yon_xheap_strip_trim(g_yon_heap, nb_off, 0u, m->new_payload_size);
         fprintf(stderr, "[YON-RT #89] migration fn failed rc=%d\n", rc);
         return -1;
     }
@@ -874,11 +883,11 @@ int yon_rt_field_load_v(yon_section_t sec,
 
     /* Read from the migrated buffer */
     if (offset + size > m->new_payload_size) {
-        if (new_buf != stack_buf) free(new_buf);
+        if (nb_off != 0) yon_xheap_strip_trim(g_yon_heap, nb_off, 0u, m->new_payload_size);
         return -1;
     }
     memcpy(out, new_buf + offset, size);
-    if (new_buf != stack_buf) free(new_buf);
+    if (nb_off != 0) yon_xheap_strip_trim(g_yon_heap, nb_off, 0u, m->new_payload_size);
     return 0;
 }
 
@@ -3867,17 +3876,22 @@ double yon_rt_merkle_to_list(double root_id) {
      * dropped children past the bound. The Merkle DAG is acyclic by
      * construction (children are allocated before parents), so the visit
      * terminates; the stack only has to be able to grow. */
+    ensure_init();
     uint32_t cap = YON_MERKLE_DFS_MAX;
-    uint32_t *stack = (uint32_t *)malloc(cap * sizeof(uint32_t));
-    if (!stack) return list_id;
+    uint32_t off = yon_xheap_strip_alloc(g_yon_heap, cap * (uint32_t)sizeof(uint32_t));
+    if (off == 0) return list_id;
+    uint32_t *stack = (uint32_t *)yon_xheap_strip_at(g_yon_heap, off);
     int sp = 0;
     stack[sp++] = (uint32_t)root_id;
     while (sp > 0) {
         if ((uint32_t)sp + 2 >= cap) {
             uint32_t nc = cap * 2;
-            uint32_t *ns = (uint32_t *)realloc(stack, nc * sizeof(uint32_t));
-            if (!ns) break;
-            stack = ns; cap = nc;
+            uint32_t noff = yon_xheap_strip_alloc(g_yon_heap, nc * (uint32_t)sizeof(uint32_t));
+            if (noff == 0) break;
+            uint32_t *ns = (uint32_t *)yon_xheap_strip_at(g_yon_heap, noff);
+            memcpy(ns, stack, cap * sizeof(uint32_t));
+            yon_xheap_strip_trim(g_yon_heap, off, 0u, cap * (uint32_t)sizeof(uint32_t));
+            stack = ns; off = noff; cap = nc;
         }
         uint32_t slot = stack[--sp];
         const yon_xheap_slot_t *s = yon_xheap_get_chain(slot);
@@ -3894,7 +3908,7 @@ double yon_rt_merkle_to_list(double root_id) {
             stack[sp++] = n->child1_slot;
         }
     }
-    free(stack);
+    yon_xheap_strip_trim(g_yon_heap, off, 0u, cap * (uint32_t)sizeof(uint32_t));
     return list_id;
 }
 
