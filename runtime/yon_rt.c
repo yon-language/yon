@@ -58,9 +58,9 @@ static int g_initialized = 0;
  * characteristic of the topos itself, not of the dispatch). The cross-space
  * relations are in the g_geom_morphisms[] registry. */
 static struct {
-    char         *name;
+    char          name[256];       /* inline (was strdup) */
     uint32_t      occupancy;
-    char         *fold_name;       /* NULL if no fold declared */
+    char          fold_name[256];  /* empty string = no fold declared */
     yon_xheap_t  *heap;
     /* Tracking of the current accumulator section. When the space has a fold
      * declared, each `new` calls fold with this as prev. Initially
@@ -99,9 +99,9 @@ void yon_rt_init(void) {
         abort();
     }
     /* heap_id 0 = __Default, always present. */
-    g_spaces[0].name = strdup("__Default");
+    snprintf(g_spaces[0].name, sizeof(g_spaces[0].name), "%s", "__Default");
     g_spaces[0].occupancy = 0;
-    g_spaces[0].fold_name = NULL;
+    g_spaces[0].fold_name[0] = '\0';
     g_spaces[0].accumulator = YON_SECTION_INVALID;
     /* L2_SEPARATE/SHM: heap_id 0 ha il proprio heap. */
     if (g_backend == YON_BACKEND_L2_SEPARATE) {
@@ -144,9 +144,9 @@ uint32_t yon_rt_register_space(const char *name) {
         return YON_HEAP_ID_INVALID;
     }
     uint32_t id = g_n_spaces++;
-    g_spaces[id].name = strdup(name);
+    snprintf(g_spaces[id].name, sizeof(g_spaces[id].name), "%s", name);
     g_spaces[id].occupancy = 0;
-    g_spaces[id].fold_name = NULL;
+    g_spaces[id].fold_name[0] = '\0';
     g_spaces[id].accumulator = YON_SECTION_INVALID;
     /* Each space has its own physical heap under SEPARATE/SHM. In L1_SHARED it
      * stays NULL (heap_for returns g_yon_heap). */
@@ -184,8 +184,7 @@ uint32_t yon_rt_register_space_with_fold(const char *name, const char *fold_name
     uint32_t id = yon_rt_register_space(name);
     if (id == YON_HEAP_ID_INVALID) return id;
     if (fold_name) {
-        if (g_spaces[id].fold_name) free(g_spaces[id].fold_name);
-        g_spaces[id].fold_name = strdup(fold_name);
+        snprintf(g_spaces[id].fold_name, sizeof(g_spaces[id].fold_name), "%s", fold_name);
         fprintf(stderr,
                 "[YON-RT] space '%s' (heap=%u) with fold '%s'\n",
                 name, id, fold_name);
@@ -563,7 +562,7 @@ yon_section_t yon_rt_fold_named(uint32_t heap_id,
      * singleton heap may have slot=0 occupied by a non-fold payload, so it is
      * disabled. */
     if (prev == YON_SECTION_INVALID && heap_id < g_n_spaces
-        && g_spaces[heap_id].fold_name != NULL) {
+        && g_spaces[heap_id].fold_name[0] != '\0') {
         /* Process-local accumulator first */
         if (g_spaces[heap_id].accumulator != YON_SECTION_INVALID) {
             prev = g_spaces[heap_id].accumulator;

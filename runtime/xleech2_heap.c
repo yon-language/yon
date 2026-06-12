@@ -65,7 +65,7 @@ typedef struct {
     yon_xheap_t        *heap;
     yon_heap_backing_t  kind;
     int                 fd;
-    char               *name;
+    char                name[256];   /* inline (was strdup) */
 } heap_meta_t;
 
 #define MAX_HEAP_META 256
@@ -85,14 +85,13 @@ static heap_meta_t *meta_alloc(yon_xheap_t *h) {
     m->heap = h;
     m->kind = YON_HEAP_BACKING_PRIVATE;
     m->fd = -1;
-    m->name = NULL;
+    m->name[0] = '\0';
     return m;
 }
 
 static void meta_free(yon_xheap_t *h) {
     for (int i = 0; i < g_n_heap_meta; i++) {
         if (g_heap_meta[i].heap == h) {
-            free(g_heap_meta[i].name);
             for (int j = i; j < g_n_heap_meta - 1; j++) {
                 g_heap_meta[j] = g_heap_meta[j+1];
             }
@@ -224,7 +223,7 @@ yon_xheap_t *yon_xheap_create_with_backing(yon_heap_backing_t kind,
         }
         m->kind = kind;
         m->fd = fd;
-        m->name = strdup(shm_name);
+        snprintf(m->name, sizeof(m->name), "%s", shm_name);
         registry_register(h); /* chain support */
         return h;
     } else {
@@ -242,7 +241,7 @@ yon_xheap_t *yon_xheap_create_with_backing(yon_heap_backing_t kind,
     }
     m->kind = kind;
     m->fd = -1;
-    m->name = NULL;
+    m->name[0] = '\0';
     registry_register(h); /* chain support */
     return h;
 }
@@ -676,15 +675,19 @@ static uint32_t g_cidx_n = 0;
 static void cidx_ensure(void) {
     if (g_cidx) return;
     g_cidx_cap = 1u << 17;
-    g_cidx = (yon_cidx_entry_t *)malloc((size_t)g_cidx_cap * sizeof(yon_cidx_entry_t));
-    if (!g_cidx) { g_cidx_cap = 0; return; }
+    size_t bytes = (size_t)g_cidx_cap * sizeof(yon_cidx_entry_t);
+    g_cidx = (yon_cidx_entry_t *)mmap(NULL, bytes, PROT_READ | PROT_WRITE,
+                                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (g_cidx == MAP_FAILED) { g_cidx = NULL; g_cidx_cap = 0; return; }
     for (uint32_t i = 0; i < g_cidx_cap; i++) g_cidx[i].ref = YON_HEAPREF_INVALID;
 }
 
 static void cidx_grow(void) {
     uint32_t new_cap = g_cidx_cap * 2;
-    yon_cidx_entry_t *nt = (yon_cidx_entry_t *)malloc((size_t)new_cap * sizeof(yon_cidx_entry_t));
-    if (!nt) return;   /* without growth the index degrades, never lies */
+    size_t new_bytes = (size_t)new_cap * sizeof(yon_cidx_entry_t);
+    yon_cidx_entry_t *nt = (yon_cidx_entry_t *)mmap(NULL, new_bytes, PROT_READ | PROT_WRITE,
+                                                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (nt == MAP_FAILED) return;   /* without growth the index degrades, never lies */
     for (uint32_t i = 0; i < new_cap; i++) nt[i].ref = YON_HEAPREF_INVALID;
     for (uint32_t i = 0; i < g_cidx_cap; i++) {
         if (g_cidx[i].ref == YON_HEAPREF_INVALID) continue;
@@ -694,7 +697,7 @@ static void cidx_grow(void) {
             if (nt[idx].ref == YON_HEAPREF_INVALID) { nt[idx] = g_cidx[i]; break; }
         }
     }
-    free(g_cidx);
+    munmap(g_cidx, (size_t)g_cidx_cap * sizeof(yon_cidx_entry_t));
     g_cidx = nt;
     g_cidx_cap = new_cap;
 }
