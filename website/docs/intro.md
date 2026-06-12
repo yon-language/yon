@@ -68,7 +68,7 @@ description of Yon 1.0, then follow the book:
 16. [How Spaces talk](./book/16-how-spaces-talk.md), the dispatch symbol, spawn, the shared-memory channel, epochs and recovery, backends.
 17. [The project: a ledger in three packages](./book/17-the-project.md), everything at once: a git dependency, a service, a client over the wire.
 18. [When things go wrong](./book/18-when-things-go-wrong.md), errors as places, failure as a value, process failure, the Heyting horizon.
-19. [Showpieces](./book/19-showpieces.md), optimization as algebra with certificates; equality up to symmetry.
+19. [Showpieces](./book/19-showpieces.md).
 20. [Capabilities](./book/20-capabilities.md), authority attached to arrows, never ambient.
 21. [Tooling](./book/21-tooling.md), yon-doc, the language server, inspecting the compiler.
 
