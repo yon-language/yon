@@ -4267,6 +4267,85 @@ double yon_rt_pq_size(double id) {
 }
 
 /* ============================================================== */
+/* XRel: relational equivariant class of a type-2 vector over a     */
+/* frame of type-2 references. The class of v is the base-4 packed  */
+/* tuple ( type(v ^ ref_i) ) over the frame; each coordinate is     */
+/* gen_leech2_type in {0,2,3,4} mapped to 2 bits. Invariant under   */
+/* the common stabilizer of the frame, and equivariant under all of */
+/* Co0: class(g.v ; g.frame) == class(v ; frame), because           */
+/* type((g.v)^(g.ref)) = type(g.(v^ref)) = type(v^ref). A one-ref   */
+/* frame gives the 4 Co2 shells |<v,ref>| in {4,2,1,0}; adding refs  */
+/* refines continuously toward the 196560 points. The frame is small */
+/* and lives inline in the pool slot (no arena strips).             */
+/* ============================================================== */
+#define YON_XREL_MAX        256u
+#define YON_XREL_MAX_REFS    26u   /* 26 * 2 bits = 52 <= the 53-bit mantissa */
+
+typedef struct {
+    uint32_t refs[YON_XREL_MAX_REFS];
+    uint32_t n_refs;
+    uint32_t is_used;
+} yon_xrel_t;
+
+static yon_xrel_t g_xrels[YON_XREL_MAX];
+static uint32_t g_n_xrels = 0;
+
+static yon_xrel_t *xrel_lookup(double id) {
+    if (id < 0.5) return NULL;
+    uint32_t s = (uint32_t)id;
+    if (s == 0 || s > g_n_xrels) return NULL;
+    yon_xrel_t *x = &g_xrels[s - 1];
+    return x->is_used ? x : NULL;
+}
+
+double yon_rt_xrel_empty(void) {
+    ds_ensure_init();
+    if (g_n_xrels >= YON_XREL_MAX) {
+        fprintf(stderr, "[YON-RT] xrel_empty: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_xrels++;
+    yon_xrel_t *x = &g_xrels[id];
+    x->n_refs = 0;
+    x->is_used = 1;
+    return (double)(id + 1);
+}
+
+/* Add a type-2 reference to the frame. Returns the new frame size, or -1 on a
+ * full frame, a bad id, or a non-type-2 reference. */
+double yon_rt_xrel_add_ref(double id, double v) {
+    yon_xrel_t *x = xrel_lookup(id);
+    if (!x || x->n_refs >= YON_XREL_MAX_REFS) return -1.0;
+    uint32_t vv = ((uint32_t)v) & YON_XCOORD_VALID_MASK;
+    if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
+    x->refs[x->n_refs++] = vv;
+    return (double)x->n_refs;
+}
+
+double yon_rt_xrel_frame_size(double id) {
+    yon_xrel_t *x = xrel_lookup(id);
+    return x ? (double)x->n_refs : -1.0;
+}
+
+/* The relational class of a type-2 vector v: the base-4 packed tuple of
+ * type(v ^ ref_i) over the frame. Returns -1 for a bad id or a non-type-2 v. */
+double yon_rt_xrel_class(double id, double v) {
+    extern uint32_t gen_leech2_type(uint64_t);
+    yon_xrel_t *x = xrel_lookup(id);
+    if (!x) return -1.0;
+    uint32_t vv = ((uint32_t)v) & YON_XCOORD_VALID_MASK;
+    if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
+    uint64_t key = 0;
+    for (uint32_t i = 0; i < x->n_refs; i++) {
+        uint32_t s = (vv ^ x->refs[i]) & 0x1FFFFFFu;
+        uint32_t t = gen_leech2_type((uint64_t)s) & 0x7u;
+        uint32_t c = (t == 0) ? 0u : (t == 2) ? 1u : (t == 3) ? 2u : 3u;
+        key = key * 4u + c;
+    }
+    return (double)key;
+}
+
+/* ============================================================== */
 /* FrozenMap: immutable map with FKS two-level perfect hashing,     */
 /* built from an IndexedHeapMap. O(1) worst-case lookup (two        */
 /* multiply-shift hashes, no probing). All tables on arena strips,  */
