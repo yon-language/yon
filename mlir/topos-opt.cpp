@@ -21,7 +21,7 @@
 #include "passes/MoveComposition.h"
 #include "passes/PlaceFusion.h"
 #include "passes/MagmaSolve.h"
-#include "passes/ClusterCollapse.h"
+#include "passes/StructuralVN.h"
 #include "passes/ReductionInlining.h"
 #include "passes/StructuralPasses.h"
 #include "passes/WorldSpecialization.h"
@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
   mlir::topos::registerMoveCompositionPass();
   mlir::topos::registerCPSConversionPass();
   mlir::topos::registerPlaceFusionPass();
-  mlir::topos::registerClusterCollapsePass();
+  mlir::topos::registerStructuralVNPass();
   mlir::topos::registerCCCEquationsCheckPass();
 
   // Batch C: 10 structural / analysis passes that implement the verifier

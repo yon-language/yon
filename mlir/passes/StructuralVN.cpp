@@ -1,6 +1,6 @@
-//===- ClusterCollapse.cpp - structural value numbering ---------*- C++ -*-===//
+//===- StructuralVN.cpp - structural value numbering ---------*- C++ -*-===//
 
-#include "passes/ClusterCollapse.h"
+#include "passes/StructuralVN.h"
 #include "TopDialect.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -20,7 +20,7 @@ namespace {
 
 // Structural fingerprint of a Pure operation, a candidate for collapse.
 // Two ops with the same fingerprint compute the same value: it is the
-// structural cluster-equivalence relation. Includes:
+// structural structural-equivalence relation. Includes:
 //   - operation name
 //   - operands by SSA identity (a stable Value pointer in the module)
 //   - attributes (name=value)
@@ -99,13 +99,13 @@ static bool isCollapsible(Operation *op) {
   return false;
 }
 
-struct ClusterCollapsePass
-    : public PassWrapper<ClusterCollapsePass, OperationPass<ModuleOp>> {
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(ClusterCollapsePass)
+struct StructuralVNPass
+    : public PassWrapper<StructuralVNPass, OperationPass<ModuleOp>> {
+  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(StructuralVNPass)
 
-  StringRef getArgument() const final { return "cluster-collapse"; }
+  StringRef getArgument() const final { return "structural-value-numbering"; }
   StringRef getDescription() const final {
-    return "Structural value numbering — cluster-equivalent "
+    return "Structural value numbering — structurally-equivalent "
            "Pure ops share one computation";
   }
 
@@ -117,7 +117,7 @@ struct ClusterCollapsePass
     // block. We number the Values as we go to give a stable identity to the
     // operands (already-canonicalized results inherit the canonical's id,
     // propagating the collapse in cascade — like the forward closure of a
-    // cluster).
+    // structural equivalence class).
     module.walk([&](func::FuncOp func) {
       DenseMap<Value, unsigned> valueId;
       unsigned nextId = 0;
@@ -145,7 +145,7 @@ struct ClusterCollapsePass
           std::string fp = computeOpFingerprint(op, valueId);
           auto it = canonical.find(fp);
           if (it != canonical.end()) {
-            // Cluster-equivalent to an op already seen: replace and erase.
+            // Structurally equivalent to an op already seen: replace and erase.
             Value canon = it->second;
             op->getResult(0).replaceAllUsesWith(canon);
             // The erased result inherits the canonical id (cascade).
@@ -161,8 +161,8 @@ struct ClusterCollapsePass
     });
 
     if (collapsed > 0)
-      llvm::errs() << "[cluster-collapse] collassate " << collapsed
-                   << " operazioni cluster-equivalenti\n";
+      llvm::errs() << "[structural-value-numbering] collassate " << collapsed
+                   << " operazioni structurally-equivalenti\n";
   }
 };
 
@@ -171,11 +171,11 @@ struct ClusterCollapsePass
 namespace mlir {
 namespace topos {
 
-std::unique_ptr<Pass> createClusterCollapsePass() {
-  return std::make_unique<ClusterCollapsePass>();
+std::unique_ptr<Pass> createStructuralVNPass() {
+  return std::make_unique<StructuralVNPass>();
 }
 
-void registerClusterCollapsePass() { PassRegistration<ClusterCollapsePass>(); }
+void registerStructuralVNPass() { PassRegistration<StructuralVNPass>(); }
 
 } // namespace topos
 } // namespace mlir

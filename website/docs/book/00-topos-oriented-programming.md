@@ -75,7 +75,7 @@ says so.)
 ## What the compiler does with it
 
 The categorical structure is not decoration, the optimizer consumes it.
-The `cluster-collapse` pass performs a *structure-guided* global value
+The `structural-value-numbering` pass performs a *structure-guided* global value
 numbering: pure operations with the same structural fingerprint share one
 computation, so three syntactic copies of `(3 + 4) * 2` in the source
 become one computation in the IR, collapse by structure, before any
