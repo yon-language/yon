@@ -61,5 +61,22 @@ else
   echo "DIFFERENCES vs baseline:"; diff "$ROOT/regression/baseline_exitcodes.txt" "$OUT"
 fi
 
+# Conway-chains runtime suite (decoder certificate, outside the .yon baseline).
+# Pins the XLeech2 coordinate decoder against the orders of the sporadic and
+# classical groups in the Conway chain (Co2 and Co3 stabilisers: McL, HS,
+# U6(2), M23, U4(3):2, 2^10:M22, ...). A sign error in any of the decoder's
+# three shapes breaks at least one identity; a failure here falsifies the suite.
+CONWAY_SRC="$FT/yon_test_conway_chains.c"
+CONWAY_BIN=/tmp/yon_test_conway_chains
+if "$CC" -std=c11 -O2 -I"$FT" -I"$FT/vendor/mmgroup" "$CONWAY_SRC" $RTSET -lpthread -lm $NOPIE -o "$CONWAY_BIN" 2>/tmp/conway_cc.txt; then
+  if "$CONWAY_BIN" >/tmp/conway_out.txt 2>&1; then
+    echo "CONWAY-CHAINS OK: $(grep -c '\[PASS\]' /tmp/conway_out.txt) checks passed."
+  else
+    echo "CONWAY-CHAINS FAIL:"; cat /tmp/conway_out.txt; exit 1
+  fi
+else
+  echo "CONWAY-CHAINS BUILD FAIL:"; cat /tmp/conway_cc.txt; exit 1
+fi
+
 # Cross-Space suite (multi-process, outside the 112 baseline)
 "$(dirname "$0")/cross_space/run.sh" || exit 1
