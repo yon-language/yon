@@ -4369,6 +4369,16 @@ double yon_rt_xrel_curtis(double n_refs) {
     return id;
 }
 
+/* Fill an empty frame with the default Curtis frame (all 26 octads). No-op if
+ * the frame already carries references. Used by XRelMap/XRelSet freeze so that
+ * a map/set built without an explicit frame keys on the canonical Curtis
+ * classes. */
+static void xrel_default_curtis(yon_xrel_t *f) {
+    if (f->n_refs != 0) return;
+    for (uint32_t i = 0; i < YON_CURTIS_FRAME_N; i++) f->refs[i] = YON_CURTIS_FRAME[i];
+    f->n_refs = YON_CURTIS_FRAME_N;
+}
+
 /* ============================================================== */
 /* XRelMap: equivariant map keyed by relational class, stored on    */
 /* the Leech arena (MPHF-indexed), not a generic hash. At freeze, a  */
@@ -4419,6 +4429,7 @@ static int xrelmap_ci_cmp(const void *a, const void *b) {
  * the first element of each class group is the representative. */
 static int xrelmap_freeze(yon_xrelmap_t *m) {
     if (m->frozen) return 1;
+    xrel_default_curtis(&m->frame);
     uint32_t N = YON_LEECH_TYPE2_COUNT;
     xrelmap_ci_t *ci = (xrelmap_ci_t *)yon_map((size_t)N * sizeof(xrelmap_ci_t));
     for (uint32_t i = 0; i < N; i++) {
@@ -4567,6 +4578,7 @@ static void xrelset_build_canon(const yon_xrel_t *frame, uint32_t *canon) {
 
 static int xrelset_freeze(yon_xrelset_t *x) {
     if (x->frozen) return 1;
+    xrel_default_curtis(&x->frame);
     x->canon = (uint32_t *)yon_map((size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
     x->bits  = (uint32_t *)yon_map((size_t)YON_XRELSET_WORDS * sizeof(uint32_t));
     xrelset_build_canon(&x->frame, x->canon);
