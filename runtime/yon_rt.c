@@ -20,6 +20,7 @@
 #include "yon_mmap.h"
 #include "yon_arena.h"
 #include "yon_curtis_frame.h"
+#include "yon_curtis_canon.h"
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -4379,6 +4380,16 @@ static void xrel_default_curtis(yon_xrel_t *f) {
     f->n_refs = YON_CURTIS_FRAME_N;
 }
 
+/* True iff the frame is exactly the full 26-octad Curtis frame, in which case
+ * the precomputed canon LUTs (yon_curtis_canon.c) apply and no runtime qsort
+ * is needed. A partial or custom frame returns 0 and builds canon at runtime. */
+static int xrel_is_curtis(const yon_xrel_t *f) {
+    if (f->n_refs != YON_CURTIS_FRAME_N) return 0;
+    for (uint32_t i = 0; i < YON_CURTIS_FRAME_N; i++)
+        if (f->refs[i] != YON_CURTIS_FRAME[i]) return 0;
+    return 1;
+}
+
 /* ============================================================== */
 /* XRelMap: equivariant map keyed by relational class, stored on    */
 /* the Leech arena (MPHF-indexed), not a generic hash. At freeze, a  */
@@ -4402,6 +4413,7 @@ typedef struct {
     uint32_t   *canon;      /* [196560] MPHF idx -> representative xcoord (freeze) */
     uint32_t    n_classes;  /* distinct populated classes */
     uint32_t    frozen;     /* 1 once canon + arena are built */
+    uint32_t    canon_static; /* 1 if canon points at a precomputed const LUT */
     uint32_t    is_used;
 } yon_xrelmap_t;
 
@@ -4430,6 +4442,13 @@ static int xrelmap_ci_cmp(const void *a, const void *b) {
 static int xrelmap_freeze(yon_xrelmap_t *m) {
     if (m->frozen) return 1;
     xrel_default_curtis(&m->frame);
+    if (xrel_is_curtis(&m->frame)) {
+        m->canon = (uint32_t *)YON_CURTIS_CANON_XC;  /* precomputed, read-only */
+        m->canon_static = 1;
+        m->arena = yon_arena_create(g_ds_heap);
+        m->frozen = 1;
+        return 1;
+    }
     uint32_t N = YON_LEECH_TYPE2_COUNT;
     xrelmap_ci_t *ci = (xrelmap_ci_t *)yon_map((size_t)N * sizeof(xrelmap_ci_t));
     for (uint32_t i = 0; i < N; i++) {
@@ -4467,6 +4486,7 @@ double yon_rt_xrelmap_empty(void) {
     m->canon = NULL;
     m->n_classes = 0;
     m->frozen = 0;
+    m->canon_static = 0;
     m->is_used = 1;
     return (double)(id + 1);
 }
@@ -4537,6 +4557,7 @@ typedef struct {
     uint32_t  *bits;        /* bitmap over representative idx (freeze) */
     uint32_t   n_classes;   /* present classes (set bits) */
     uint32_t   frozen;
+    uint32_t   canon_static; /* 1 if canon points at a precomputed const LUT */
     uint32_t   is_used;
 } yon_xrelset_t;
 
@@ -4579,8 +4600,14 @@ static void xrelset_build_canon(const yon_xrel_t *frame, uint32_t *canon) {
 static int xrelset_freeze(yon_xrelset_t *x) {
     if (x->frozen) return 1;
     xrel_default_curtis(&x->frame);
-    x->canon = (uint32_t *)yon_map((size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
     x->bits  = (uint32_t *)yon_map((size_t)YON_XRELSET_WORDS * sizeof(uint32_t));
+    if (xrel_is_curtis(&x->frame)) {
+        x->canon = (uint32_t *)YON_CURTIS_CANON_IDX;  /* precomputed, read-only */
+        x->canon_static = 1;
+        x->frozen = 1;
+        return 1;
+    }
+    x->canon = (uint32_t *)yon_map((size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
     xrelset_build_canon(&x->frame, x->canon);
     x->frozen = 1;
     return 1;
@@ -4602,7 +4629,7 @@ double yon_rt_xrelset_empty(void) {
     yon_xrelset_t *x = &g_xrelsets[id];
     x->frame.n_refs = 0;
     x->canon = NULL; x->bits = NULL;
-    x->n_classes = 0; x->frozen = 0; x->is_used = 1;
+    x->n_classes = 0; x->frozen = 0; x->canon_static = 0; x->is_used = 1;
     return (double)(id + 1);
 }
 
