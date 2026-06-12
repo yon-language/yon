@@ -86,7 +86,7 @@ order:
 - **`x.f becomes e`**, field mutation (sections are immutable; today you
   mutate through cells).
 - **Static capability checking** (`requires` is enforced at runtime; the
-  caller-side static rule is design, chapter 20).
+  caller-side static rule is design, chapter 19).
 - **Value-level construction of comprehension types** (the type and its
   coercion are live, chapter 9).
 - **True parallel execution of `for every` / `when here`** (sequential
