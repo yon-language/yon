@@ -46,6 +46,7 @@ INTERP primes_bertrand exit=0
 INTERP route_history exit=0
 INTERP shm_backpressure exit=0
 INTERP shm_stream exit=0
+INTERP solve_algebra exit=0
 INTERP spawn_parallel_collect exit=0
 INTERP stdlib_extended exit=0
 INTERP stdlib_showcase exit=0
