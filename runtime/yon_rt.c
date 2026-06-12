@@ -4357,10 +4357,11 @@ double yon_rt_xrel_class(double id, double v) {
 /* canon_map LUT sends every type-2 (by MPHF index) to the canonical */
 /* representative of its relational class -- the class member with   */
 /* the smallest MPHF index, found by sorting (no hashing). insert(v) */
-/* writes the value's HeapRef into the arena slot of that rep; v and */
+/* writes the value inline into the arena slot of that rep; v and    */
 /* v' in the same class collapse onto one slot because they share a  */
-/* representative. Indexing lives entirely on the lattice; only the  */
-/* value payloads sit in the content-addressed heap. No malloc.      */
+/* representative. Both index and value live on the lattice: the     */
+/* slot is MPHF-addressed and the value sits inline in it (repr),    */
+/* like yon_rt_arena_put. No content-addressed heap, no malloc.      */
 /* ============================================================== */
 #define YON_XRELMAP_MAX  256u
 
@@ -4459,9 +4460,8 @@ double yon_rt_xrelmap_insert(double id, double v, double value) {
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t rep = m->canon[idx];
     if (!yon_arena_occupied(m->arena, (yon_xcoord_t)rep)) m->n_classes++;
-    uint32_t href = yon_xheap_put_chain(g_ds_heap, &value, sizeof(value), YON_TAG_USER1);
-    if (href == YON_HEAPREF_INVALID) return 0.0;
-    yon_arena_put_repr(m->arena, (yon_xcoord_t)rep, href);
+    /* value lives inline in the lattice slot (repr), like yon_rt_arena_put; no heap */
+    yon_arena_put_repr(m->arena, (yon_xcoord_t)rep, (uint32_t)value);
     return id;
 }
 
@@ -4471,12 +4471,8 @@ double yon_rt_xrelmap_get(double id, double v) {
     uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t rep = m->canon[idx];
-    uint32_t href = yon_arena_get_repr(m->arena, (yon_xcoord_t)rep);
-    if (href == YON_HEAPREF_INVALID) return 0.0;
-    const void *p = yon_xheap_payload_chain(href);
-    if (!p) return 0.0;
-    double out; memcpy(&out, p, sizeof(out));
-    return out;
+    if (!yon_arena_occupied(m->arena, (yon_xcoord_t)rep)) return 0.0;
+    return (double)yon_arena_get_repr(m->arena, (yon_xcoord_t)rep);
 }
 
 double yon_rt_xrelmap_contains(double id, double v) {
