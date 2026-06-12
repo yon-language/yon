@@ -4147,6 +4147,125 @@ double yon_rt_deque_size(double id) {
     return d ? (double)d->count : 0.0;
 }
 
+/* ============================================================== */
+/* PriorityQueue: binary min-heap on an arena strip. No malloc.     */
+/* The double value is its own priority; pop_min removes the least. */
+/* ============================================================== */
+#define YON_PQ_MAX       256u
+#define YON_PQ_INIT_CAP  16u
+
+typedef struct {
+    uint32_t buf_off;    /* strip: capacity doubles (binary heap) */
+    uint32_t capacity;
+    uint32_t count;
+    uint32_t is_used;
+} yon_pq_t;
+
+static yon_pq_t g_pqs[YON_PQ_MAX];
+static uint32_t g_n_pqs = 0;
+
+static double *pq_buf(const yon_pq_t *q) {
+    return (double *)yon_xheap_strip_at(g_ds_heap, q->buf_off);
+}
+static yon_pq_t *pq_lookup(double id) {
+    if (id < 0.5) return NULL;
+    uint32_t s = (uint32_t)id;
+    if (s == 0 || s > g_n_pqs) return NULL;
+    yon_pq_t *q = &g_pqs[s - 1];
+    return q->is_used ? q : NULL;
+}
+
+double yon_rt_pq_empty(void) {
+    ds_ensure_init();
+    ensure_init();
+    if (g_n_pqs >= YON_PQ_MAX) {
+        fprintf(stderr, "[YON-RT] pq_empty: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_pqs++;
+    yon_pq_t *q = &g_pqs[id];
+    q->capacity = YON_PQ_INIT_CAP;
+    q->buf_off = yon_xheap_strip_alloc(g_ds_heap,
+                     q->capacity * (uint32_t)sizeof(double));
+    if (q->buf_off == 0) {
+        fprintf(stderr, "[YON-RT] pq_empty: arena exhausted\n");
+        g_n_pqs--;
+        return 0.0;
+    }
+    q->count = 0;
+    q->is_used = 1;
+    return (double)(id + 1);
+}
+
+static int pq_grow(yon_pq_t *q) {
+    uint32_t new_cap = q->capacity * 2u;
+    uint32_t off = yon_xheap_strip_alloc(g_ds_heap,
+                       new_cap * (uint32_t)sizeof(double));
+    if (off == 0) return 0;
+    double *nb = (double *)yon_xheap_strip_at(g_ds_heap, off);
+    double *ob = pq_buf(q);
+    for (uint32_t i = 0; i < q->count; i++) nb[i] = ob[i];
+    yon_xheap_strip_trim(g_ds_heap, q->buf_off, 0u,
+                         q->capacity * (uint32_t)sizeof(double));
+    q->buf_off = off;
+    q->capacity = new_cap;
+    return 1;
+}
+
+double yon_rt_pq_push(double id, double v) {
+    ds_ensure_init();
+    yon_pq_t *q = (id < 0.5) ? NULL : pq_lookup(id);
+    if (!q) {
+        double nid = yon_rt_pq_empty();
+        q = pq_lookup(nid);
+        if (!q) return 0.0;
+        id = nid;
+    }
+    if (q->count >= q->capacity) {
+        if (!pq_grow(q)) return id;
+    }
+    double *b = pq_buf(q);
+    uint32_t i = q->count;
+    b[i] = v;
+    while (i > 0) {                       /* sift up */
+        uint32_t p = (i - 1u) / 2u;
+        if (b[p] <= b[i]) break;
+        double t = b[p]; b[p] = b[i]; b[i] = t;
+        i = p;
+    }
+    q->count++;
+    return id;
+}
+
+double yon_rt_pq_pop_min(double id) {
+    yon_pq_t *q = pq_lookup(id);
+    if (!q || q->count == 0) return 0.0;
+    double *b = pq_buf(q);
+    double mn = b[0];
+    q->count--;
+    b[0] = b[q->count];
+    uint32_t i = 0;
+    for (;;) {                            /* sift down */
+        uint32_t l = 2u * i + 1u, r = 2u * i + 2u, sm = i;
+        if (l < q->count && b[l] < b[sm]) sm = l;
+        if (r < q->count && b[r] < b[sm]) sm = r;
+        if (sm == i) break;
+        double t = b[sm]; b[sm] = b[i]; b[i] = t;
+        i = sm;
+    }
+    return mn;
+}
+
+double yon_rt_pq_peek_min(double id) {
+    yon_pq_t *q = pq_lookup(id);
+    if (!q || q->count == 0) return 0.0;
+    return pq_buf(q)[0];
+}
+double yon_rt_pq_size(double id) {
+    yon_pq_t *q = pq_lookup(id);
+    return q ? (double)q->count : 0.0;
+}
+
 /* ---- XSet -------------------------------------------------------- */
 /* MPHF-backed set: elements are type-2 xcoords of the 24D Leech lattice.
  * Backing: a bitmap of 196560 bits (= 24570 bytes = ~24 KB) per set.
