@@ -56,9 +56,9 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       announcementBar: {
-        id: 'wip',
+        id: 'refactor-2026',
         content:
-          'These docs are a work in progress, written incrementally behind the implementation.',
+          'Active development: Yon is under heavy refactoring and new capabilities land continuously. Examples and docs may briefly lag the compiler; rough edges are expected.',
         isCloseable: true,
       },
       image: 'img/social-card.png',
