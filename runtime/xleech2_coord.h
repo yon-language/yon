@@ -91,10 +91,16 @@ static inline int yon_xcoord_sign(yon_xcoord_t v) {
  *
  * Returns 0 if ok, -1 if v is not a valid short vector.
  *
- * Not implemented yet — a stub that returns -1. A future implementation via
- * gen_leech2_to_int24 (if it exists in mmgroup) or manual decoding via
- * sections 6.1-6.2 of the Seysen 2020 paper.
+ * Implemented via mmgroup's short-vector encoding (see xleech2_coord.c): the
+ * box identifies the shape (4^2 / 2^8 / 3.1^23) and the code carries positions
+ * and signs with the theta correction already applied. Coordinates are in
+ * {-4..4}; the Leech inner product is (sum a[i]*b[i]) / 8.
  */
 int yon_xcoord_to_int24(yon_xcoord_t v, int16_t out[24]);
+
+/* Real Leech inner product <v,w> in {0,+-1,+-2,+-4}, or 0x7fffffff if either
+ * vector is not a decodable type-2. The per-edge sign is gauge (not
+ * Co0-invariant alone); combine three edges into a holonomy for invariance. */
+int yon_leech2_signed_product(yon_xcoord_t v, yon_xcoord_t w);
 
 #endif /* YON_XLEECH2_COORD_H */
