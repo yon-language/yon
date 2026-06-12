@@ -3331,8 +3331,8 @@ double yon_rt_map_to_list(double map_id) {
 #define YON_HS_MAX_SETS  256u
 
 typedef struct {
-    double *keys;
-    uint32_t *occupied;   /* bitmap 1 bit per slot */
+    uint32_t keys_off;    /* arena strip: dir_slots doubles                */
+    uint32_t occ_off;     /* arena strip: bitmap, dir_slots/32 uint32 each */
     uint32_t dir_slots;
     uint32_t n_entries;
     uint32_t is_used;
@@ -3340,6 +3340,13 @@ typedef struct {
 
 static ds_hashset_t g_hashsets[YON_HS_MAX_SETS];
 static uint32_t g_n_hashsets = 0;
+
+static double *hs_keys(const ds_hashset_t *hs) {
+    return (double *)yon_xheap_strip_at(g_yon_heap, hs->keys_off);
+}
+static uint32_t *hs_occ(const ds_hashset_t *hs) {
+    return (uint32_t *)yon_xheap_strip_at(g_yon_heap, hs->occ_off);
+}
 
 static inline int hs_bit_get(const uint32_t *bm, uint32_t idx) {
     return (bm[idx >> 5] >> (idx & 31)) & 1;
@@ -3350,6 +3357,7 @@ static inline void hs_bit_set(uint32_t *bm, uint32_t idx) {
 
 double yon_rt_hashset_empty(void) {
     ds_ensure_init();
+    ensure_init();
     if (g_n_hashsets >= YON_HS_MAX_SETS) {
         fprintf(stderr, "[YON-RT] hashset_empty: pool exhausted\n");
         return 0.0;
@@ -3357,14 +3365,16 @@ double yon_rt_hashset_empty(void) {
     uint32_t id = g_n_hashsets++;
     ds_hashset_t *hs = &g_hashsets[id];
     hs->dir_slots = YON_HS_DIR_INIT;
-    hs->keys = (double *)malloc(hs->dir_slots * sizeof(double));
-    hs->occupied = (uint32_t *)calloc(hs->dir_slots / 32, sizeof(uint32_t));
-    if (!hs->keys || !hs->occupied) {
-        fprintf(stderr, "[YON-RT] hashset_empty: out of memory\n");
-        free(hs->keys); free(hs->occupied);
+    hs->keys_off = yon_xheap_strip_alloc(g_yon_heap,
+                       hs->dir_slots * (uint32_t)sizeof(double));
+    hs->occ_off  = yon_xheap_strip_alloc(g_yon_heap,
+                       (hs->dir_slots / 32u) * (uint32_t)sizeof(uint32_t));
+    if (hs->keys_off == 0 || hs->occ_off == 0) {
+        fprintf(stderr, "[YON-RT] hashset_empty: arena exhausted\n");
         g_n_hashsets--;
         return 0.0;
     }
+    memset(hs_occ(hs), 0, (hs->dir_slots / 32u) * sizeof(uint32_t));
     hs->n_entries = 0;
     hs->is_used = 1;
     return (double)(id + 1);
@@ -3382,19 +3392,29 @@ static ds_hashset_t *hashset_lookup(double set_id) {
 static int hashset_grow(ds_hashset_t *hs) {
     uint32_t new_slots = hs->dir_slots * 2;
     if (new_slots <= hs->dir_slots) return 0;
-    double *nk = (double *)malloc(new_slots * sizeof(double));
-    uint32_t *no = (uint32_t *)calloc(new_slots / 32, sizeof(uint32_t));
-    if (!nk || !no) { free(nk); free(no); return 0; }
+    uint32_t nk_off = yon_xheap_strip_alloc(g_yon_heap,
+                          new_slots * (uint32_t)sizeof(double));
+    uint32_t no_off = yon_xheap_strip_alloc(g_yon_heap,
+                          (new_slots / 32u) * (uint32_t)sizeof(uint32_t));
+    if (nk_off == 0 || no_off == 0) return 0;
+    double   *nk = (double *)yon_xheap_strip_at(g_yon_heap, nk_off);
+    uint32_t *no = (uint32_t *)yon_xheap_strip_at(g_yon_heap, no_off);
+    memset(no, 0, (new_slots / 32u) * sizeof(uint32_t));
+    double   *ok = hs_keys(hs);
+    uint32_t *oo = hs_occ(hs);
     for (uint32_t i = 0; i < hs->dir_slots; i++) {
-        if (!hs_bit_get(hs->occupied, i)) continue;
-        uint32_t h = hash_f64(hs->keys[i]);
+        if (!hs_bit_get(oo, i)) continue;
+        uint32_t h = hash_f64(ok[i]);
         for (uint32_t j = 0; j < new_slots; j++) {
             uint32_t idx = (h + j) % new_slots;
-            if (!hs_bit_get(no, idx)) { nk[idx] = hs->keys[i]; hs_bit_set(no, idx); break; }
+            if (!hs_bit_get(no, idx)) { nk[idx] = ok[i]; hs_bit_set(no, idx); break; }
         }
     }
-    free(hs->keys); free(hs->occupied);
-    hs->keys = nk; hs->occupied = no; hs->dir_slots = new_slots;
+    yon_xheap_strip_trim(g_yon_heap, hs->keys_off, 0u,
+                         hs->dir_slots * (uint32_t)sizeof(double));
+    yon_xheap_strip_trim(g_yon_heap, hs->occ_off, 0u,
+                         (hs->dir_slots / 32u) * (uint32_t)sizeof(uint32_t));
+    hs->keys_off = nk_off; hs->occ_off = no_off; hs->dir_slots = new_slots;
     return 1;
 }
 
@@ -3411,15 +3431,17 @@ double yon_rt_hashset_add(double set_id, double elem) {
         (void)hashset_grow(hs);
     }
     uint32_t h = hash_f64(elem);
+    double *keys = hs_keys(hs);
+    uint32_t *occ = hs_occ(hs);
     for (uint32_t i = 0; i < hs->dir_slots; i++) {
         uint32_t idx = (h + i) % hs->dir_slots;
-        if (!hs_bit_get(hs->occupied, idx)) {
-            hs->keys[idx] = elem;
-            hs_bit_set(hs->occupied, idx);
+        if (!hs_bit_get(occ, idx)) {
+            keys[idx] = elem;
+            hs_bit_set(occ, idx);
             hs->n_entries++;
             return set_id;
         }
-        if (hs->keys[idx] == elem) return set_id;  /* dedup */
+        if (keys[idx] == elem) return set_id;  /* dedup */
     }
     fprintf(stderr, "[YON-RT] hashset_add: directory full\n");
     return set_id;
@@ -3429,10 +3451,12 @@ double yon_rt_hashset_contains(double set_id, double elem) {
     ds_hashset_t *hs = hashset_lookup(set_id);
     if (!hs) return 0.0;
     uint32_t h = hash_f64(elem);
+    double *keys = hs_keys(hs);
+    uint32_t *occ = hs_occ(hs);
     for (uint32_t i = 0; i < hs->dir_slots; i++) {
         uint32_t idx = (h + i) % hs->dir_slots;
-        if (!hs_bit_get(hs->occupied, idx)) return 0.0;
-        if (hs->keys[idx] == elem) return 1.0;
+        if (!hs_bit_get(occ, idx)) return 0.0;
+        if (keys[idx] == elem) return 1.0;
     }
     return 0.0;
 }
@@ -3448,9 +3472,11 @@ double yon_rt_hashset_to_list(double set_id) {
     ds_hashset_t *hs = hashset_lookup(set_id);
     if (!hs) return yon_rt_list_empty(0.0);
     double list_id = yon_rt_list_empty(0.0);
+    double *keys = hs_keys(hs);
+    uint32_t *occ = hs_occ(hs);
     for (uint32_t i = 0; i < hs->dir_slots; i++) {
-        if (hs_bit_get(hs->occupied, i)) {
-            list_id = yon_rt_list_cons(hs->keys[i], list_id);
+        if (hs_bit_get(occ, i)) {
+            list_id = yon_rt_list_cons(keys[i], list_id);
         }
     }
     return list_id;
@@ -5584,15 +5610,17 @@ double yon_rt_hashset_try_add(double set_id, double elem) {
         (void)hashset_grow(hs);
     }
     uint32_t h = hash_f64(elem);
+    double *keys = hs_keys(hs);
+    uint32_t *occ = hs_occ(hs);
     for (uint32_t i = 0; i < hs->dir_slots; i++) {
         uint32_t idx = (h + i) % hs->dir_slots;
-        if (!hs_bit_get(hs->occupied, idx)) {
-            hs->keys[idx] = elem;
-            hs_bit_set(hs->occupied, idx);
+        if (!hs_bit_get(occ, idx)) {
+            keys[idx] = elem;
+            hs_bit_set(occ, idx);
             hs->n_entries++;
             return 1.0;  /* new */
         }
-        if (hs->keys[idx] == elem) return 0.0;  /* already present */
+        if (keys[idx] == elem) return 0.0;  /* already present */
     }
     return -1.0;  /* directory full */
 }
@@ -5607,8 +5635,8 @@ double yon_rt_hashset_at_bucket(double set_id, double idx_d) {
     if (!hs) return -1.0;
     uint32_t idx = (uint32_t)idx_d;
     if (idx >= hs->dir_slots) return -1.0;
-    if (!hs_bit_get(hs->occupied, idx)) return -1.0;
-    return hs->keys[idx];
+    if (!hs_bit_get(hs_occ(hs), idx)) return -1.0;
+    return hs_keys(hs)[idx];
 }
 
 /* Directory capacity of the given set (dynamic, per-set). */
