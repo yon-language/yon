@@ -64,15 +64,18 @@ fun main(): number {
 }
 ```
 
-A `Vec` is a persistent dynamic array: `push` appends, `get`/`set` read and
-overwrite by index, and each returns a fresh handle, so the source is never
-mutated.
+A `Vec` is a dynamic array on an arena strip — no `malloc`. `push` appends in
+place into spare capacity, or reallocates a doubled strip past capacity and
+returns a new handle (so always use the handle `push` returns), handing the
+old strip's whole pages back to the OS; `get`/`set` are O(1) and `set` mutates
+in place.
 
 ```yon
 fun main(): number {
-  be v holds Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
-  be v2 holds Vec.set(v, 1, 5)                   // new handle; v is untouched
-  return Vec.size(v) * 10 + Vec.get(v, 1) + Vec.get(v2, 1)   // 30 + 20 + 5 = 55
+  be a holds Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
+  be b holds Vec.push(Vec.push(a, 40), 50)       // grows past the initial cap of 4
+  be c holds Vec.set(b, 0, 7)                     // in-place; c is b
+  return Vec.size(c) + Vec.get(c, 0) + Vec.get(c, 4)   // 5 + 7 + 50 = 62
 }
 ```
 

@@ -1,15 +1,11 @@
-/* Vec: persistent dynamic array. push/set return a new handle, leaving the
- * source untouched. Build [10, 20, 30], read and overwrite index 1, and check
- * that the original is unchanged after set (copy-on-write persistence). */
+/* Vec on an arena strip, in-place mutable, no malloc. push appends into spare
+ * capacity or reallocs a doubled strip past capacity (returning a new handle
+ * and trimming the old strip back to the OS); get/set are O(1); size reads the
+ * header. We grow past the initial capacity of 4 (the push of 50 reallocates),
+ * then mutate index 0 in place, and combine size/get into a small exit code. */
 fun main(): number {
-  be v0 holds Vec.empty()
-  be v1 holds Vec.push(v0, 10)
-  be v2 holds Vec.push(v1, 20)
-  be v3 holds Vec.push(v2, 30)
-  be n holds Vec.size(v3)
-  be x holds Vec.get(v3, 1)
-  be v4 holds Vec.set(v3, 1, 5)
-  be y holds Vec.get(v4, 1)
-  be z holds Vec.get(v3, 1)
-  return n + x + y + z
+  be a holds Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
+  be b holds Vec.push(Vec.push(a, 40), 50)
+  be c holds Vec.set(b, 0, 7)
+  return Vec.size(c) + Vec.get(c, 0) + Vec.get(c, 4)
 }

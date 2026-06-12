@@ -826,8 +826,9 @@ double yon_rt_list_head(double list_id);
 double yon_rt_list_tail(double list_id);
 double yon_rt_list_length(double list_id);
 
-/* Vec: persistent dynamic array (v1 copy-on-write). push/set return a fresh
- * handle; the source is untouched. Building block for FxIndexMap. */
+/* Vec: dynamic array on an arena strip (no malloc). In-place mutable: set()
+ * writes a slot, push() appends into spare capacity or reallocs a doubled
+ * strip and returns a NEW handle (always use the returned handle). */
 double yon_rt_vec_empty(void);
 double yon_rt_vec_size(double vec_id);
 double yon_rt_vec_get(double vec_id, double idx);

@@ -396,7 +396,7 @@ effects, move/morphism gating) with opt-in physical heap separation
 | `Bits` | `and, or, xor, not, shl, shr, popcount, fold, *_64` |
 | `Crypto` | `fnv1a, hash_int` |
 | `List` / `HashMap` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
-| `Vec` | `empty, push, get, set, size`, a persistent dynamic array (v1 copy-on-write) |
+| `Vec` | `empty, push, get, set, size`, a dynamic array on an arena strip (in-place mutable, no malloc) |
 | `MerkleTree` | Content-addressed Merkle trees |
 | `VoyagerList` | Golay-sealed list (error-correcting) |
 | `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog`, with `verify P` |
