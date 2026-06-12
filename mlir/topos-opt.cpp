@@ -20,7 +20,7 @@
 #include "passes/LowerToposToStandard.h"
 #include "passes/MoveComposition.h"
 #include "passes/PlaceFusion.h"
-#include "passes/MagmaSolve.h"
+#include "passes/AlgebraVerifier.h"
 #include "passes/StructuralVN.h"
 #include "passes/ReductionInlining.h"
 #include "passes/StructuralPasses.h"
@@ -108,7 +108,7 @@ int main(int argc, char **argv) {
   mlir::topos::registerCoherenceEliminationPass();
   mlir::topos::registerReductionInliningPass();
   mlir::topos::registerWorldSpecializationPass();
-  mlir::topos::registerMagmaSolvePass();
+  mlir::topos::registerAlgebraVerifierPass();
   mlir::topos::registerMoveCompositionPass();
   mlir::topos::registerCPSConversionPass();
   mlir::topos::registerPlaceFusionPass();

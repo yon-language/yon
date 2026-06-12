@@ -251,7 +251,7 @@ let add_place (env : env) (pd : place_decl) : env =
   let env = { env with places = (pd.pd_name, pd) :: env.places } in
   (* If an operation of the place instantiates a catalog algebra (op_algebra),
    * register the function <P>_instantiate : () -> Magma. This is the function
-   * the MagmaSolve pass generates; the type checker must know it because
+   * the AlgebraVerifier pass generates; the type checker must know it because
    * `solve P` calls it. *)
   let has_algebra =
     List.exists (function FoOp o -> o.op_algebra <> None | _ -> false) pd.pd_members

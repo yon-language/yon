@@ -75,7 +75,7 @@ fun main(): number {
 }
 ```
 
-`law commutative` is not a comment: the MagmaSolve pass checks the declared
+`law commutative` is not a comment: the AlgebraVerifier pass checks the declared
 laws against the algebra (`Additive`, `Multiplicative`, `TropicalMax`,
 `TropicalMin`, `BooleanOr`, `BooleanAnd`, `Gcd`) and **rejects a false
 claim** at compile time. `solve P` then hands you the verified structure as a

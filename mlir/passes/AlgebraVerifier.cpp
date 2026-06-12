@@ -1,6 +1,6 @@
-//===- MagmaSolve.cpp - Algebraic solver as a topos pass -------*- C++ -*-===//
+//===- AlgebraVerifier.cpp - algebra law verifier --------------*- C++ -*-===//
 
-#include "passes/MagmaSolve.h"
+#include "passes/AlgebraVerifier.h"
 #include "TopDialect.h"
 
 #include "mlir/Dialect/Func/IR/FuncOps.h"
@@ -47,13 +47,13 @@ static const CatalogEntry *lookupCatalog(StringRef name) {
   return nullptr;
 }
 
-struct MagmaSolvePass
-    : public PassWrapper<MagmaSolvePass, OperationPass<ModuleOp>> {
+struct AlgebraVerifierPass
+    : public PassWrapper<AlgebraVerifierPass, OperationPass<ModuleOp>> {
 
-  StringRef getArgument() const final { return "magma-solve"; }
+  StringRef getArgument() const final { return "algebra-verifier"; }
   StringRef getDescription() const final {
-    return "Categorical grafting: verify the declared laws of an algebraic "
-           "place against the certified catalog.";
+    return "Verify the declared algebraic laws of a place against the "
+           "certified catalog.";
   }
 
   void runOnOperation() override {
@@ -156,10 +156,10 @@ struct MagmaSolvePass
 
 } // namespace
 
-std::unique_ptr<Pass> mlir::topos::createMagmaSolvePass() {
-  return std::make_unique<MagmaSolvePass>();
+std::unique_ptr<Pass> mlir::topos::createAlgebraVerifierPass() {
+  return std::make_unique<AlgebraVerifierPass>();
 }
 
-void mlir::topos::registerMagmaSolvePass() {
-  PassRegistration<MagmaSolvePass>();
+void mlir::topos::registerAlgebraVerifierPass() {
+  PassRegistration<AlgebraVerifierPass>();
 }

@@ -1,6 +1,6 @@
-//===- MagmaSolve.h - Algebraic solver as a topos pass ---------*- C++ -*-===//
+//===- AlgebraVerifier.h - algebra law verifier ----------------*- C++ -*-===//
 //
-// Pass: categorical grafting of the algebraic solver into the topos dialect.
+// Pass: verifies the declared algebraic laws of a place against the certified catalog.
 // A `topos.place` that instantiates a catalog algebra declares it with an
 // attribute `algebra = "<Name>"` on its `topos.operation`. The place's laws are
 // declared as unit attributes (`law_commutative`, `law_associative`,
@@ -19,8 +19,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef TOPOS_MAGMA_SOLVE_H
-#define TOPOS_MAGMA_SOLVE_H
+#ifndef TOPOS_ALGEBRA_VERIFIER_H
+#define TOPOS_ALGEBRA_VERIFIER_H
 
 #include "mlir/Pass/Pass.h"
 #include <memory>
@@ -28,8 +28,8 @@
 namespace mlir {
 namespace topos {
 
-std::unique_ptr<Pass> createMagmaSolvePass();
-void registerMagmaSolvePass();
+std::unique_ptr<Pass> createAlgebraVerifierPass();
+void registerAlgebraVerifierPass();
 
 } // namespace topos
 } // namespace mlir

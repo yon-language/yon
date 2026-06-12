@@ -92,7 +92,7 @@ add_mlir_library(MLIRToposPasses
   passes/MoveComposition.cpp
   passes/CPSConversion.cpp
   passes/PlaceFusion.cpp
-  passes/MagmaSolve.cpp
+  passes/AlgebraVerifier.cpp
   passes/StructuralVN.cpp
   passes/CCCEquationsCheck.cpp
   passes/StructuralPasses.cpp
