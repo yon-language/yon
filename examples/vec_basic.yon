@@ -1,0 +1,15 @@
+/* Vec: persistent dynamic array. push/set return a new handle, leaving the
+ * source untouched. Build [10, 20, 30], read and overwrite index 1, and check
+ * that the original is unchanged after set (copy-on-write persistence). */
+fun main(): number {
+  be v0 holds Vec.empty()
+  be v1 holds Vec.push(v0, 10)
+  be v2 holds Vec.push(v1, 20)
+  be v3 holds Vec.push(v2, 30)
+  be n holds Vec.size(v3)
+  be x holds Vec.get(v3, 1)
+  be v4 holds Vec.set(v3, 1, 5)
+  be y holds Vec.get(v4, 1)
+  be z holds Vec.get(v3, 1)
+  return n + x + y + z
+}

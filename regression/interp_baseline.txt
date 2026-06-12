@@ -56,6 +56,7 @@ INTERP syslog_demo exit=0
 INTERP system_io exit=0
 INTERP terminal_pure exit=0
 INTERP v1_control_flow exit=0
+INTERP vec_basic exit=0
 INTERP verify_algebra exit=0
 INTERP while_loop exit=0
 INTERP wire_eof exit=0

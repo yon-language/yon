@@ -1144,6 +1144,8 @@ call_or_new_stmt:
     { SCall (obj ^ "__map", args, mk_loc $startpos $endpos) }
   | obj = IDENT DOT FOLD LPAREN args = expr_list RPAREN
     { SCall (obj ^ "__fold", args, mk_loc $startpos $endpos) }
+  | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN
+    { SCall (obj ^ "__push", args, mk_loc $startpos $endpos) }
   | name = IDENT LPAREN args = expr_list RPAREN
     { SCall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
@@ -1420,11 +1422,14 @@ expr_atom:
   (* MAP, FOLD, and FILTER are keyword tokens (used by the type map<K,V> and
    * by space-decl `with fold "..."`), so they do not match IDENT in method-name
    * position. We add explicit rules for Class.map/fold/filter(args) as a
-   * method call. *)
+   * method call. PUSH is a keyword too (geometric-morphism f_lower_star), so
+   * Vec.push(...) needs the same treatment. *)
   | obj = IDENT DOT MAP LPAREN args = expr_list RPAREN
     { ECall (obj ^ "__map", args, mk_loc $startpos $endpos) }
   | obj = IDENT DOT FOLD LPAREN args = expr_list RPAREN
     { ECall (obj ^ "__fold", args, mk_loc $startpos $endpos) }
+  | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN
+    { ECall (obj ^ "__push", args, mk_loc $startpos $endpos) }
   | name = IDENT LPAREN args = expr_list RPAREN IN space = IDENT
     { (* syntax `f(args) in S`.
        *

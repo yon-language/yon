@@ -384,6 +384,13 @@ let stdlib_registry : (string * (string list * string)) list = [
   "List__tail",   (["f64"], "f64");
   "List__length", (["f64"], "f64");
 
+  (* Vec: persistent dynamic array (v1 copy-on-write); the handle is an f64. *)
+  "Vec__empty", ([], "f64");
+  "Vec__push",  (["f64"; "f64"], "f64");
+  "Vec__get",   (["f64"; "f64"], "f64");
+  "Vec__set",   (["f64"; "f64"; "f64"], "f64");
+  "Vec__size",  (["f64"], "f64");
+
   (* Space: a mutable cell kept in a static BSS registry, its id passed as f64. *)
   "Space__make", (["f64"], "f64");
   "Space__set",  (["f64"; "f64"], "f64");
@@ -1556,6 +1563,10 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_arena_empty() : () -> f64" v);
+      (v, "f64")
+  | C.Var "Vec__empty" ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_vec_empty() : () -> f64" v);
       (v, "f64")
   | C.Var "__set_empty" ->
       let v = fresh_ssa e in
@@ -3043,6 +3054,35 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hashset_dir_capacity(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  (* Vec: persistent dynamic array. push/set return a fresh handle. *)
+  | C.App (C.App (C.Var "Vec__push", a), b) ->
+      let (va, _) = emit_term e env funcs a in
+      let (vb, _) = emit_term e env funcs b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_vec_push(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "Vec__get", a), b) ->
+      let (va, _) = emit_term e env funcs a in
+      let (vb, _) = emit_term e env funcs b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_vec_get(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.App (C.Var "Vec__set", a), b), c) ->
+      let (va, _) = emit_term e env funcs a in
+      let (vb, _) = emit_term e env funcs b in
+      let (vc, _) = emit_term e env funcs c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_vec_set(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.Var "Vec__size", a) ->
+      let (va, _) = emit_term e env funcs a in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_vec_size(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.App (C.App (C.App (C.Var "MerkleTree__node3", a_l), a_c1), a_c2), a_c3) ->
       let (vl, _) = emit_term e env funcs a_l in
@@ -5668,6 +5708,13 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_set_add(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_set_contains(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_set_size(f64) -> f64";
+  (* Vec: persistent dynamic array; always declared like Map/Set so any program
+     can call it without depending on used_list. *)
+  emit_line e "func.func private @yon_rt_vec_empty() -> f64";
+  emit_line e "func.func private @yon_rt_vec_size(f64) -> f64";
+  emit_line e "func.func private @yon_rt_vec_get(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_vec_push(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_vec_set(f64, f64, f64) -> f64";
   (* fallback list_* declarations when used_list was empty *)
   if not list_decls_emitted_in_conditional then begin
     emit_line e "func.func private @yon_rt_list_empty(f64) -> f64";
