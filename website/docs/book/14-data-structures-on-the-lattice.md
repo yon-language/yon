@@ -13,9 +13,9 @@ handle, and sharing makes that cheap.
 **List** is the classic cons chain: `List.cons(x, rest)` puts one new node;
 the rest is shared by address. **HashMap / HashSet** are persistent maps
 backed by the content-addressed directory: every `set`/`add` returns a new
-handle and shares the unchanged structure by address. **Vec** is a
-persistent dynamic array: `Vec.push` appends and `Vec.get`/`Vec.set` read
-and overwrite by position, each returning a fresh handle.
+handle and shares the unchanged structure by address. **Vec** is a dynamic array on an arena strip (no `malloc`): `push` appends in
+place or reallocates a doubled strip on growth, and `get`/`set` are O(1) with
+`set` mutating in place.
 
 ## Choosing a structure
 
@@ -26,10 +26,11 @@ What distinguishes them is what they make cheap:
 - **List**, the workhorse: an immutable cons list of `f64`. Use it for
   pipelines, accumulation, anything sequential. Structural sharing is
   automatic: two lists with the same tail *are* the same tail.
-- **Vec**, a persistent dynamic array indexed by position. `Vec.push`
-  appends, `Vec.get`/`Vec.set` read and overwrite by index, each returning
-  a fresh handle and leaving the source untouched. v1 copies on write
-  (O(n) push); it is the building block for an indexed map.
+- **Vec**, a dynamic array indexed by position, stored on an arena strip
+  (no `malloc`). `push` appends in place into spare capacity, or reallocates
+  a doubled strip past capacity — returning a new handle and handing the old
+  strip's whole pages back to the OS via `madvise`; `get`/`set` are O(1).
+  It is the building block for an indexed map.
 - **HashMap**, `f64 → f64`, with string handles as keys when you need
   them (a handle is a number). The directory starts at 4,096 slots and
   doubles with a rehash at 70% load, up to 2²⁰; entries spill across

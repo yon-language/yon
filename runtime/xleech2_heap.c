@@ -273,6 +273,35 @@ static uint32_t arena_alloc(yon_xheap_t *h, uint32_t n_bytes) {
     return off;
 }
 
+/* ---- Strip allocation (in-place mutable structures, e.g. Vec) -------- */
+
+uint32_t yon_xheap_strip_alloc(yon_xheap_t *h, uint32_t n_bytes) {
+    if (!h) return 0;
+    return arena_alloc(h, n_bytes);
+}
+
+void *yon_xheap_strip_at(yon_xheap_t *h, uint32_t off) {
+    if (!h || off == 0) return NULL;
+    return h->arena + off;
+}
+
+void yon_xheap_strip_trim(yon_xheap_t *h, uint32_t off,
+                          uint32_t live_bytes, uint32_t total_bytes) {
+    if (!h || off == 0 || total_bytes <= live_bytes) return;
+    long pg = sysconf(_SC_PAGESIZE);
+    if (pg <= 0) return;
+    uintptr_t page  = (uintptr_t)pg;
+    uintptr_t base  = (uintptr_t)(h->arena + off);
+    /* Page-align the dead tail inward: round the start up, the end down, so we
+     * only ever hand back pages that lie ENTIRELY inside the unused tail. */
+    uintptr_t a_start = (base + live_bytes  + page - 1u) & ~(page - 1u);
+    uintptr_t a_end   = (base + total_bytes)            & ~(page - 1u);
+    if (a_end > a_start) {
+        /* Best-effort: reclaims physical RAM. The live prefix is untouched. */
+        madvise((void *)a_start, (size_t)(a_end - a_start), MADV_DONTNEED);
+    }
+}
+
 /* ============================================================== */
 /* Content index operations                                        */
 /* ============================================================== */

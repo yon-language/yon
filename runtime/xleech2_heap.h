@@ -129,6 +129,27 @@ void yon_xheap_destroy(yon_xheap_t *h);
 int  yon_xheap_unlink_shm(const char *shm_name);
 
 /* ============================================================== */
+/* Strip allocation (in-place mutable structures, e.g. Vec)         */
+/* ============================================================== */
+
+/* Hand out a contiguous, bump-allocated byte range in the arena - no dedup,
+ * no content_index entry, no malloc. For in-place mutable structures that own
+ * their storage (Vec). Returns the arena offset, or 0 on exhaustion (offset 0
+ * is the "no payload" sentinel, so a live strip never starts at 0). */
+uint32_t yon_xheap_strip_alloc(yon_xheap_t *h, uint32_t n_bytes);
+
+/* Writable pointer into the arena at a strip offset (NULL if off == 0). */
+void *yon_xheap_strip_at(yon_xheap_t *h, uint32_t off);
+
+/* Return the unused tail of a strip to the OS. Releases, via
+ * madvise(MADV_DONTNEED), only the whole page-aligned pages that fall entirely
+ * within [off+live_bytes, off+total_bytes): physical RAM is reclaimed, the
+ * virtual bump pointer is never rewound (O(1) bump, no fragmentation). A no-op
+ * when the dead tail is smaller than one page. */
+void yon_xheap_strip_trim(yon_xheap_t *h, uint32_t off,
+                          uint32_t live_bytes, uint32_t total_bytes);
+
+/* ============================================================== */
 /* Basic operations                                                */
 /* ============================================================== */
 

@@ -4616,109 +4616,123 @@ double yon_rt_list_length(double list_id) {
 }
 
 /* ============================================================== */
-/* Vec: persistent dynamic array (v1: copy-on-write).               */
+/* Vec: dynamic array on an arena strip (no malloc).                */
 /*                                                                  */
-/* Handle-based like the other collections: the handle is an f64    */
-/* (id + 1), so a 0.0 handle reads as "none". push/set are          */
-/* persistent - they copy the backing array and return a fresh      */
-/* handle, leaving the source untouched (the immutable discipline   */
-/* shared by List/HashMap/HashSet). v1 copies the whole array on    */
-/* every push (O(n)); a future v2 will back this with a trie for    */
-/* O(log n) structural sharing. The building block for FxIndexMap.  */
+/* Storage is a contiguous strip handed out by the xheap arena      */
+/* (yon_xheap_strip_alloc). The handle is the f64 arena offset of   */
+/* the strip; offset 0 is the "no strip" sentinel, so 0.0 reads as  */
+/* "none". The strip carries its own header, no external registry:  */
+/*   [0..3] uint32_t n     (live element count)                     */
+/*   [4..7] uint32_t cap   (capacity in elements)                   */
+/*   [8..]  cap doubles                                             */
+/*                                                                  */
+/* Mutability is in-place: set() writes the slot and push() appends */
+/* into spare capacity, both keeping the same handle. This preserves */
+/* the arena's bump budget (a persistent copy-on-write Vec would    */
+/* burn through the 64 MB virtual arena, which never rewinds). When */
+/* push() runs out of capacity it allocates a doubled strip, copies, */
+/* and hands the old strip's whole pages back to the OS via          */
+/* madvise(MADV_DONTNEED) - so the returned handle CHANGES on growth */
+/* and callers must always use the handle push() returns (like a     */
+/* std::vector reallocation).                                        */
 /* ============================================================== */
-#define YON_VEC_MAX 256u   /* max concurrent vecs; mirrors the other pools */
+#define YON_VEC_INIT_CAP 4u
 
-typedef struct {
-    double  *data;   /* element storage (cap may exceed n) */
-    uint32_t n;      /* number of live elements            */
-    uint32_t cap;    /* allocated capacity in elements     */
-    int      is_used;
-} ds_vec_t;
-
-static ds_vec_t g_vecs[YON_VEC_MAX];
-static uint32_t g_n_vecs = 0;
-
-/* Allocate a fresh vec slot with the given initial capacity; returns the
- * f64 handle (id + 1), or 0.0 on pool/heap exhaustion. */
-static double vec_alloc(uint32_t cap) {
-    ds_ensure_init();
-    if (g_n_vecs >= YON_VEC_MAX) {
-        fprintf(stderr, "[YON-RT] vec: pool exhausted\n");
+/* Allocate a fresh strip with `cap` capacity; returns the f64 handle (arena
+ * offset), or 0.0 on arena exhaustion. */
+static double vec_make(uint32_t cap) {
+    ensure_init();
+    if (cap < YON_VEC_INIT_CAP) cap = YON_VEC_INIT_CAP;
+    uint32_t bytes = 8u + cap * 8u;          /* header + cap doubles */
+    uint32_t off = yon_xheap_strip_alloc(g_yon_heap, bytes);
+    if (off == 0) {
+        fprintf(stderr, "[YON-RT] vec: arena exhausted\n");
         return 0.0;
     }
-    if (cap < 4u) cap = 4u;
-    uint32_t id = g_n_vecs++;
-    ds_vec_t *v = &g_vecs[id];
-    v->data = (double *)malloc((size_t)cap * sizeof(double));
-    if (!v->data) {
-        fprintf(stderr, "[YON-RT] vec: out of memory\n");
-        g_n_vecs--;
-        return 0.0;
-    }
-    v->n = 0;
-    v->cap = cap;
-    v->is_used = 1;
-    return (double)(id + 1);
+    uint32_t *hdr = (uint32_t *)yon_xheap_strip_at(g_yon_heap, off);
+    hdr[0] = 0u;     /* n   */
+    hdr[1] = cap;    /* cap */
+    return (double)off;
 }
 
-static ds_vec_t *vec_lookup(double vec_id) {
-    uint32_t shifted = (uint32_t)vec_id;
-    if (shifted == 0 || shifted > g_n_vecs) return NULL;
-    ds_vec_t *v = &g_vecs[shifted - 1];
-    return v->is_used ? v : NULL;
+static uint32_t *vec_hdr(double handle) {
+    ensure_init();
+    uint32_t off = (uint32_t)handle;
+    if (off == 0) return NULL;
+    return (uint32_t *)yon_xheap_strip_at(g_yon_heap, off);
+}
+
+static double *vec_data(uint32_t *hdr) {
+    return (double *)((uint8_t *)hdr + 8u);
 }
 
 /* empty() -> handle of a fresh, zero-length vec. */
 double yon_rt_vec_empty(void) {
-    return vec_alloc(4u);
+    return vec_make(YON_VEC_INIT_CAP);
 }
 
 /* size(h) -> element count (0 for an invalid handle). */
-double yon_rt_vec_size(double vec_id) {
-    ds_vec_t *v = vec_lookup(vec_id);
-    return v ? (double)v->n : 0.0;
+double yon_rt_vec_size(double handle) {
+    uint32_t *hdr = vec_hdr(handle);
+    return hdr ? (double)hdr[0] : 0.0;
 }
 
 /* get(h, idx) -> element at idx, or 0.0 if handle/index is out of range. */
-double yon_rt_vec_get(double vec_id, double idx_d) {
-    ds_vec_t *v = vec_lookup(vec_id);
-    if (!v || idx_d < 0.0) return 0.0;
+double yon_rt_vec_get(double handle, double idx_d) {
+    uint32_t *hdr = vec_hdr(handle);
+    if (!hdr || idx_d < 0.0) return 0.0;
     uint32_t idx = (uint32_t)idx_d;
-    if (idx >= v->n) return 0.0;
-    return v->data[idx];
+    if (idx >= hdr[0]) return 0.0;
+    return vec_data(hdr)[idx];
 }
 
-/* push(h, value) -> a NEW handle: the source elements followed by value.
- * The source vec is left untouched (persistent). An invalid source handle
- * is treated as the empty vec, yielding a one-element result. */
-double yon_rt_vec_push(double vec_id, double value) {
-    ds_vec_t *src = vec_lookup(vec_id);
-    uint32_t src_n = src ? src->n : 0u;
-    double out = vec_alloc(src_n + 1u);
-    if (out < 0.5) return 0.0;
-    /* src and dst are distinct, stable slots in the static registry. */
-    ds_vec_t *dst = vec_lookup(out);
-    for (uint32_t i = 0; i < src_n; i++) dst->data[i] = src->data[i];
-    dst->data[src_n] = value;
-    dst->n = src_n + 1u;
-    return out;
+/* set(h, idx, value) -> in-place write; returns the same handle. */
+double yon_rt_vec_set(double handle, double idx_d, double value) {
+    uint32_t *hdr = vec_hdr(handle);
+    if (!hdr || idx_d < 0.0) return handle;
+    uint32_t idx = (uint32_t)idx_d;
+    if (idx < hdr[0]) vec_data(hdr)[idx] = value;
+    return handle;
 }
 
-/* set(h, idx, value) -> a NEW handle equal to the source with element idx
- * replaced by value; an out-of-range idx yields an unchanged copy. */
-double yon_rt_vec_set(double vec_id, double idx_d, double value) {
-    ds_vec_t *src = vec_lookup(vec_id);
-    uint32_t src_n = src ? src->n : 0u;
-    double out = vec_alloc(src_n > 0u ? src_n : 1u);
-    if (out < 0.5) return 0.0;
-    ds_vec_t *dst = vec_lookup(out);
-    for (uint32_t i = 0; i < src_n; i++) dst->data[i] = src->data[i];
-    dst->n = src_n;
-    if (idx_d >= 0.0) {
-        uint32_t idx = (uint32_t)idx_d;
-        if (idx < dst->n) dst->data[idx] = value;
+/* push(h, value) -> append. Fast path is in-place into spare capacity (same
+ * handle). On a full strip it allocates a doubled strip, copies, appends,
+ * trims the old strip back to the OS, and returns the NEW handle. An invalid
+ * source handle starts a fresh one-element vec. */
+double yon_rt_vec_push(double handle, double value) {
+    uint32_t *hdr = vec_hdr(handle);
+    if (!hdr) {
+        double nh = vec_make(YON_VEC_INIT_CAP);
+        uint32_t *nhdr = vec_hdr(nh);
+        if (!nhdr) return 0.0;
+        vec_data(nhdr)[0] = value;
+        nhdr[0] = 1u;
+        return nh;
     }
-    return out;
+    uint32_t n = hdr[0], cap = hdr[1];
+    if (n < cap) {                           /* fast path: in-place append */
+        vec_data(hdr)[n] = value;
+        hdr[0] = n + 1u;
+        return handle;
+    }
+    /* grow: doubled strip, copy, append, trim the old strip */
+    uint32_t new_cap = (cap == 0u) ? YON_VEC_INIT_CAP : cap * 2u;
+    if (new_cap <= cap) {                    /* uint32 overflow guard */
+        fprintf(stderr, "[YON-RT] vec: capacity overflow\n");
+        return handle;
+    }
+    double nh = vec_make(new_cap);
+    uint32_t *nhdr = vec_hdr(nh);
+    if (!nhdr) return handle;                /* arena exhausted: keep old vec */
+    hdr = vec_hdr(handle);                   /* re-fetch: strip_at recomputes  */
+    double *src = vec_data(hdr);
+    double *dst = vec_data(nhdr);
+    for (uint32_t i = 0; i < n; i++) dst[i] = src[i];
+    dst[n] = value;
+    nhdr[0] = n + 1u;
+    /* hand the old strip's whole pages back to the OS (no-op if < 1 page) */
+    yon_xheap_strip_trim(g_yon_heap, (uint32_t)handle, 0u, 8u + cap * 8u);
+    return nh;
 }
 
 /* ============================================================== */
