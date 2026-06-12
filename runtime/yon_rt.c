@@ -3125,7 +3125,7 @@ typedef struct {
 typedef struct {
     /* Directory: for each directory slot, the xheap slot of the entry.
      * SLOT_INVALID = empty bucket. Allocata lazy, cresce con rehash. */
-    uint32_t *entry_slot;
+    uint32_t dir_off;     /* arena strip on g_ds_heap: dir_slots HeapRefs */
     uint32_t dir_slots;
     uint32_t n_entries;
     uint32_t is_used;  /* 1 = HashMap instantiated */
@@ -3133,6 +3133,10 @@ typedef struct {
 
 static ds_hashmap_t g_hashmaps[YON_HM_MAX_MAPS];
 static uint32_t g_n_hashmaps = 0;
+
+static uint32_t *hm_dir(const ds_hashmap_t *hm) {
+    return (uint32_t *)yon_xheap_strip_at(g_ds_heap, hm->dir_off);
+}
 
 /* FNV1a hash su 8 byte (f64 bit pattern) */
 static uint32_t hash_f64(double key) {
@@ -3157,14 +3161,17 @@ double yon_rt_map_empty(void) {
     uint32_t id = g_n_hashmaps++;
     ds_hashmap_t *hm = &g_hashmaps[id];
     hm->dir_slots = YON_HM_DIR_INIT;
-    hm->entry_slot = (uint32_t *)malloc(hm->dir_slots * sizeof(uint32_t));
-    if (!hm->entry_slot) {
-        fprintf(stderr, "[YON-RT] map_empty: out of memory\n");
+    hm->dir_off = yon_xheap_strip_alloc(g_ds_heap,
+                      hm->dir_slots * (uint32_t)sizeof(uint32_t));
+    if (hm->dir_off == 0) {
+        fprintf(stderr, "[YON-RT] map_empty: arena exhausted\n");
         g_n_hashmaps--;
         return 0.0;
     }
-    for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        hm->entry_slot[i] = YON_HEAP_SLOT_INVALID;
+    {
+        uint32_t *dir = hm_dir(hm);
+        for (uint32_t i = 0; i < hm->dir_slots; i++)
+            dir[i] = YON_HEAP_SLOT_INVALID;
     }
     hm->n_entries = 0;
     hm->is_used = 1;
@@ -3185,12 +3192,15 @@ static ds_hashmap_t *hashmap_lookup(double map_id) {
 static int hashmap_grow(ds_hashmap_t *hm) {
     uint32_t new_slots = hm->dir_slots * 2;
     if (new_slots <= hm->dir_slots) return 0;   /* arithmetic overflow only */
-    uint32_t *nd = (uint32_t *)malloc(new_slots * sizeof(uint32_t));
-    if (!nd) return 0;
+    uint32_t nd_off = yon_xheap_strip_alloc(g_ds_heap,
+                          new_slots * (uint32_t)sizeof(uint32_t));
+    if (nd_off == 0) return 0;
+    uint32_t *nd = (uint32_t *)yon_xheap_strip_at(g_ds_heap, nd_off);
     for (uint32_t i = 0; i < new_slots; i++) nd[i] = YON_HEAP_SLOT_INVALID;
     uint32_t live = 0;
+    uint32_t *od = hm_dir(hm);
     for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        uint32_t slot = hm->entry_slot[i];
+        uint32_t slot = od[i];
         if (slot == YON_HEAP_SLOT_INVALID) continue;
         const ds_hashmap_entry_t *e =
             (const ds_hashmap_entry_t *)yon_xheap_payload_chain(slot);
@@ -3201,8 +3211,9 @@ static int hashmap_grow(ds_hashmap_t *hm) {
             if (nd[idx] == YON_HEAP_SLOT_INVALID) { nd[idx] = slot; live++; break; }
         }
     }
-    free(hm->entry_slot);
-    hm->entry_slot = nd;
+    yon_xheap_strip_trim(g_ds_heap, hm->dir_off, 0u,
+                         hm->dir_slots * (uint32_t)sizeof(uint32_t));
+    hm->dir_off = nd_off;
     hm->dir_slots = new_slots;
     hm->n_entries = live;
     return 1;
@@ -3236,21 +3247,22 @@ double yon_rt_map_put(double map_id, double key, double value) {
     }
     /* Linear probing in the directory. */
     uint32_t h = hash_f64(key);
+    uint32_t *dir = hm_dir(hm);
     for (uint32_t i = 0; i < hm->dir_slots; i++) {
         uint32_t idx = (h + i) % hm->dir_slots;
-        if (hm->entry_slot[idx] == YON_HEAP_SLOT_INVALID) {
+        if (dir[idx] == YON_HEAP_SLOT_INVALID) {
             /* Slot libero: inserisci. */
-            hm->entry_slot[idx] = slot;
+            dir[idx] = slot;
             hm->n_entries++;
             return map_id;
         }
         /* Slot occupied: check if it is the same key (update value). */
         {
             const ds_hashmap_entry_t *e =
-                (const ds_hashmap_entry_t *)yon_xheap_payload_chain(hm->entry_slot[idx]);
+                (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[idx]);
             if (e && e->occupied == 1 && e->key == key) {
                 /* Same key: overwrite with a new slot. */
-                hm->entry_slot[idx] = slot;
+                dir[idx] = slot;
                 return map_id;
             }
         }
@@ -3264,11 +3276,12 @@ double yon_rt_map_get(double map_id, double key) {
     ds_hashmap_t *hm = hashmap_lookup(map_id);
     if (!hm) return 0.0;
     uint32_t h = hash_f64(key);
+    uint32_t *dir = hm_dir(hm);
     for (uint32_t i = 0; i < hm->dir_slots; i++) {
         uint32_t idx = (h + i) % hm->dir_slots;
-        if (hm->entry_slot[idx] == YON_HEAP_SLOT_INVALID) return 0.0;  /* not found */
+        if (dir[idx] == YON_HEAP_SLOT_INVALID) return 0.0;  /* not found */
         const ds_hashmap_entry_t *e =
-            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(hm->entry_slot[idx]);
+            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[idx]);
         if (!e) continue;
         if (e->occupied == 1 && e->key == key) return e->value;
     }
@@ -3280,11 +3293,12 @@ double yon_rt_map_contains(double map_id, double key) {
     ds_hashmap_t *hm = hashmap_lookup(map_id);
     if (!hm) return 0.0;
     uint32_t h = hash_f64(key);
+    uint32_t *dir = hm_dir(hm);
     for (uint32_t i = 0; i < hm->dir_slots; i++) {
         uint32_t idx = (h + i) % hm->dir_slots;
-        if (hm->entry_slot[idx] == YON_HEAP_SLOT_INVALID) return 0.0;
+        if (dir[idx] == YON_HEAP_SLOT_INVALID) return 0.0;
         const ds_hashmap_entry_t *e =
-            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(hm->entry_slot[idx]);
+            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[idx]);
         if (!e) continue;
         if (e->occupied == 1 && e->key == key) return 1.0;
     }
@@ -3304,10 +3318,11 @@ double yon_rt_map_to_list(double map_id) {
     ds_hashmap_t *hm = hashmap_lookup(map_id);
     if (!hm) return yon_rt_list_empty(0.0);
     double list_id = yon_rt_list_empty(0.0);
+    uint32_t *dir = hm_dir(hm);
     for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        if (hm->entry_slot[i] == YON_HEAP_SLOT_INVALID) continue;
+        if (dir[i] == YON_HEAP_SLOT_INVALID) continue;
         const ds_hashmap_entry_t *e =
-            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(hm->entry_slot[i]);
+            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[i]);
         if (!e || e->occupied != 1) continue;
         list_id = yon_rt_list_cons(e->value, list_id);
     }
