@@ -3540,6 +3540,274 @@ double yon_rt_hashset_to_list(double set_id) {
     return list_id;
 }
 
+/* ============================================================== */
+/* IndexedHeapMap (FxIndexMap): insertion-ordered map, no malloc.   */
+/* Three layers, all on g_ds_heap arena strips:                     */
+/*   - keys interned via put_chain -> stable u32 key_ref (the "Fx")  */
+/*   - entry strip: (key_ref, value) in insertion order              */
+/*   - index strip: cap*2 u32 open-addressing slots (50% load),      */
+/*     hash = Fibonacci-spread of key_ref (key_ref is sequential,    */
+/*     so the multiply is necessary, not a plain mask).              */
+/* Removal leaves tombstones; rehash compacts them. */
+/* ============================================================== */
+#define YON_IHMAP_MAX        256u
+#define YON_IHMAP_INIT_CAP   16u          /* power of two */
+#define YON_IHMAP_INVALID    0xFFFFFFFFu
+#define YON_IHMAP_TOMBSTONE  0xFFFFFFFEu
+
+typedef struct {
+    uint32_t key_ref;     /* interned HeapRef; TOMBSTONE = dead entry */
+    double   value;
+} yon_ihmap_entry_t;
+
+typedef struct {
+    uint32_t index_off;   /* strip: (capacity*2) u32 index slots          */
+    uint32_t entry_off;   /* strip: capacity yon_ihmap_entry_t, in order  */
+    uint32_t capacity;    /* power of two                                 */
+    uint32_t n;           /* positions used (live + tombstones)           */
+    uint32_t live;        /* live entries (n minus tombstones)            */
+    uint32_t is_used;
+} yon_ihmap_t;
+
+static yon_ihmap_t g_ihmaps[YON_IHMAP_MAX];
+static uint32_t g_n_ihmaps = 0;
+
+static inline uint32_t ihmap_fx(uint32_t key_ref, uint32_t mask) {
+    return (key_ref * 2654435761u) & mask;   /* Fibonacci spread (necessary) */
+}
+static uint32_t *ihmap_index(const yon_ihmap_t *m) {
+    return (uint32_t *)yon_xheap_strip_at(g_ds_heap, m->index_off);
+}
+static yon_ihmap_entry_t *ihmap_entries(const yon_ihmap_t *m) {
+    return (yon_ihmap_entry_t *)yon_xheap_strip_at(g_ds_heap, m->entry_off);
+}
+/* Intern a double key into the content-addressed heap -> stable u32 ref. */
+static uint32_t ihmap_intern(double key) {
+    return yon_xheap_put_chain(g_ds_heap, &key, (uint32_t)sizeof(double), YON_TAG_USER1);
+}
+static yon_ihmap_t *ihmap_lookup(double map_id) {
+    if (map_id < 0.5) return NULL;
+    uint32_t shifted = (uint32_t)map_id;
+    if (shifted == 0 || shifted > g_n_ihmaps) return NULL;
+    yon_ihmap_t *m = &g_ihmaps[shifted - 1];
+    return m->is_used ? m : NULL;
+}
+
+double yon_rt_ihmap_empty(void) {
+    ds_ensure_init();
+    ensure_init();
+    if (g_n_ihmaps >= YON_IHMAP_MAX) {
+        fprintf(stderr, "[YON-RT] ihmap_empty: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_ihmaps++;
+    yon_ihmap_t *m = &g_ihmaps[id];
+    m->capacity = YON_IHMAP_INIT_CAP;
+    uint32_t index_slots = m->capacity * 2u;
+    m->index_off = yon_xheap_strip_alloc(g_ds_heap,
+                       index_slots * (uint32_t)sizeof(uint32_t));
+    m->entry_off = yon_xheap_strip_alloc(g_ds_heap,
+                       m->capacity * (uint32_t)sizeof(yon_ihmap_entry_t));
+    if (m->index_off == 0 || m->entry_off == 0) {
+        fprintf(stderr, "[YON-RT] ihmap_empty: arena exhausted\n");
+        g_n_ihmaps--;
+        return 0.0;
+    }
+    uint32_t *idx = ihmap_index(m);
+    for (uint32_t i = 0; i < index_slots; i++) idx[i] = YON_IHMAP_INVALID;
+    m->n = 0;
+    m->live = 0;
+    m->is_used = 1;
+    return (double)(id + 1);
+}
+
+/* Place (key_ref -> pos) into a fresh/grown index via Fx open-addressing. */
+static void ihmap_index_put(uint32_t *idx, uint32_t mask,
+                            uint32_t key_ref, uint32_t pos) {
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        if (idx[s] == YON_IHMAP_INVALID || idx[s] == YON_IHMAP_TOMBSTONE) {
+            idx[s] = pos;
+            return;
+        }
+    }
+}
+
+/* Double capacity, compact out tombstones, rebuild the index. */
+static int ihmap_grow(yon_ihmap_t *m) {
+    uint32_t new_cap = m->capacity * 2u;
+    uint32_t new_index_slots = new_cap * 2u;
+    uint32_t ni_off = yon_xheap_strip_alloc(g_ds_heap,
+                          new_index_slots * (uint32_t)sizeof(uint32_t));
+    uint32_t ne_off = yon_xheap_strip_alloc(g_ds_heap,
+                          new_cap * (uint32_t)sizeof(yon_ihmap_entry_t));
+    if (ni_off == 0 || ne_off == 0) return 0;
+    uint32_t *nidx = (uint32_t *)yon_xheap_strip_at(g_ds_heap, ni_off);
+    yon_ihmap_entry_t *nent = (yon_ihmap_entry_t *)yon_xheap_strip_at(g_ds_heap, ne_off);
+    for (uint32_t i = 0; i < new_index_slots; i++) nidx[i] = YON_IHMAP_INVALID;
+    yon_ihmap_entry_t *oent = ihmap_entries(m);
+    uint32_t new_mask = new_index_slots - 1u;
+    uint32_t w = 0;
+    for (uint32_t i = 0; i < m->n; i++) {
+        if (oent[i].key_ref == YON_IHMAP_TOMBSTONE) continue;
+        nent[w] = oent[i];
+        ihmap_index_put(nidx, new_mask, nent[w].key_ref, w);
+        w++;
+    }
+    yon_xheap_strip_trim(g_ds_heap, m->index_off, 0u,
+                         (m->capacity * 2u) * (uint32_t)sizeof(uint32_t));
+    yon_xheap_strip_trim(g_ds_heap, m->entry_off, 0u,
+                         m->capacity * (uint32_t)sizeof(yon_ihmap_entry_t));
+    m->index_off = ni_off;
+    m->entry_off = ne_off;
+    m->capacity = new_cap;
+    m->n = w;
+    m->live = w;
+    return 1;
+}
+
+double yon_rt_ihmap_insert(double map_id, double key, double value) {
+    ds_ensure_init();
+    yon_ihmap_t *m = (map_id < 0.5) ? NULL : ihmap_lookup(map_id);
+    if (!m) {
+        double nid = yon_rt_ihmap_empty();
+        m = ihmap_lookup(nid);
+        if (!m) return 0.0;
+        map_id = nid;
+    }
+    uint32_t key_ref = ihmap_intern(key);
+    uint32_t *idx = ihmap_index(m);
+    uint32_t mask = (m->capacity * 2u) - 1u;
+    yon_ihmap_entry_t *ent = ihmap_entries(m);
+    /* probe: update in place if the key is already present */
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t pos = idx[s];
+        if (pos == YON_IHMAP_INVALID) break;        /* not present */
+        if (pos == YON_IHMAP_TOMBSTONE) continue;
+        if (ent[pos].key_ref == key_ref) {
+            ent[pos].value = value;
+            return map_id;
+        }
+    }
+    /* append to the order strip; grow if the dense array is full */
+    if (m->n >= m->capacity) {
+        if (!ihmap_grow(m)) return map_id;          /* degrade, never lie */
+        idx  = ihmap_index(m);
+        mask = (m->capacity * 2u) - 1u;
+        ent  = ihmap_entries(m);
+    }
+    uint32_t pos = m->n;
+    ent[pos].key_ref = key_ref;
+    ent[pos].value   = value;
+    ihmap_index_put(idx, mask, key_ref, pos);
+    m->n++;
+    m->live++;
+    return map_id;
+}
+
+double yon_rt_ihmap_get(double map_id, double key) {
+    ds_ensure_init();
+    yon_ihmap_t *m = ihmap_lookup(map_id);
+    if (!m) return 0.0;
+    uint32_t key_ref = ihmap_intern(key);
+    uint32_t *idx = ihmap_index(m);
+    uint32_t mask = (m->capacity * 2u) - 1u;
+    yon_ihmap_entry_t *ent = ihmap_entries(m);
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t pos = idx[s];
+        if (pos == YON_IHMAP_INVALID) return 0.0;
+        if (pos == YON_IHMAP_TOMBSTONE) continue;
+        if (ent[pos].key_ref == key_ref) return ent[pos].value;
+    }
+    return 0.0;
+}
+
+double yon_rt_ihmap_contains(double map_id, double key) {
+    ds_ensure_init();
+    yon_ihmap_t *m = ihmap_lookup(map_id);
+    if (!m) return 0.0;
+    uint32_t key_ref = ihmap_intern(key);
+    uint32_t *idx = ihmap_index(m);
+    uint32_t mask = (m->capacity * 2u) - 1u;
+    yon_ihmap_entry_t *ent = ihmap_entries(m);
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t pos = idx[s];
+        if (pos == YON_IHMAP_INVALID) return 0.0;
+        if (pos == YON_IHMAP_TOMBSTONE) continue;
+        if (ent[pos].key_ref == key_ref) return 1.0;
+    }
+    return 0.0;
+}
+
+double yon_rt_ihmap_remove(double map_id, double key) {
+    ds_ensure_init();
+    yon_ihmap_t *m = ihmap_lookup(map_id);
+    if (!m) return 0.0;
+    uint32_t key_ref = ihmap_intern(key);
+    uint32_t *idx = ihmap_index(m);
+    uint32_t mask = (m->capacity * 2u) - 1u;
+    yon_ihmap_entry_t *ent = ihmap_entries(m);
+    uint32_t h = ihmap_fx(key_ref, mask);
+    for (uint32_t i = 0; i <= mask; i++) {
+        uint32_t s = (h + i) & mask;
+        uint32_t pos = idx[s];
+        if (pos == YON_IHMAP_INVALID) return 0.0;   /* not present */
+        if (pos == YON_IHMAP_TOMBSTONE) continue;
+        if (ent[pos].key_ref == key_ref) {
+            ent[pos].key_ref = YON_IHMAP_TOMBSTONE; /* dead entry  */
+            idx[s] = YON_IHMAP_TOMBSTONE;           /* index tombstone */
+            m->live--;
+            return 1.0;
+        }
+    }
+    return 0.0;
+}
+
+double yon_rt_ihmap_size(double map_id) {
+    yon_ihmap_t *m = ihmap_lookup(map_id);
+    if (!m) return 0.0;
+    return (double)m->live;
+}
+
+/* Insertion-order accessors (raw position 0..n-1). A tombstoned slot
+ * returns 0.0; callers iterate 0..entry_count and skip via contains/get
+ * or by tracking liveness. entry_count includes not-yet-compacted holes. */
+double yon_rt_ihmap_entry_count(double map_id) {
+    yon_ihmap_t *m = ihmap_lookup(map_id);
+    if (!m) return 0.0;
+    return (double)m->n;
+}
+double yon_rt_ihmap_value_at(double map_id, double pos_d) {
+    yon_ihmap_t *m = ihmap_lookup(map_id);
+    if (!m) return 0.0;
+    uint32_t pos = (uint32_t)pos_d;
+    if (pos >= m->n) return 0.0;
+    yon_ihmap_entry_t *ent = ihmap_entries(m);
+    if (ent[pos].key_ref == YON_IHMAP_TOMBSTONE) return 0.0;
+    return ent[pos].value;
+}
+double yon_rt_ihmap_key_at(double map_id, double pos_d) {
+    yon_ihmap_t *m = ihmap_lookup(map_id);
+    if (!m) return 0.0;
+    uint32_t pos = (uint32_t)pos_d;
+    if (pos >= m->n) return 0.0;
+    yon_ihmap_entry_t *ent = ihmap_entries(m);
+    if (ent[pos].key_ref == YON_IHMAP_TOMBSTONE) return 0.0;
+    /* de-intern: the key_ref's payload is the original 8-byte double */
+    const void *p = yon_xheap_payload_chain(ent[pos].key_ref);
+    if (!p) return 0.0;
+    double key;
+    memcpy(&key, p, sizeof(double));
+    return key;
+}
+
 /* ---- XSet -------------------------------------------------------- */
 /* MPHF-backed set: elements are type-2 xcoords of the 24D Leech lattice.
  * Backing: a bitmap of 196560 bits (= 24570 bytes = ~24 KB) per set.
