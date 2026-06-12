@@ -1,7 +1,7 @@
 ---
 id: capabilities
-title: "20. Capabilities"
-sidebar_position: 20
+title: "19. Capabilities"
+sidebar_position: 19
 ---
 
 # Capabilities
