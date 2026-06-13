@@ -78,5 +78,21 @@ else
   echo "CONWAY-CHAINS BUILD FAIL:"; cat /tmp/conway_cc.txt; exit 1
 fi
 
+# Quantizer guard (closest type-2, outside the .yon baseline). Pins
+# yon_leech2_quantize against the brute-force argmax over all 196560 minimal
+# vectors with the identical MPHF-min tie-break, on continuous, integer
+# (tie-heavy) and ultra-sparse queries. Exact vector identity, not just score.
+QZ_SRC="$FT/yon_test_quantizer.c"
+QZ_BIN=/tmp/yon_test_quantizer
+if "$CC" -std=c11 -O2 -I"$FT" -I"$FT/vendor/mmgroup" "$QZ_SRC" $RTSET -lpthread -lm $NOPIE -o "$QZ_BIN" 2>/tmp/qz_cc.txt; then
+  if "$QZ_BIN" >/tmp/qz_out.txt 2>&1; then
+    echo "QUANTIZER OK: $(grep -c '\[PASS\]' /tmp/qz_out.txt) checks passed."
+  else
+    echo "QUANTIZER FAIL:"; cat /tmp/qz_out.txt; exit 1
+  fi
+else
+  echo "QUANTIZER BUILD FAIL:"; cat /tmp/qz_cc.txt; exit 1
+fi
+
 # Cross-Space suite (multi-process, outside the 112 baseline)
 "$(dirname "$0")/cross_space/run.sh" || exit 1

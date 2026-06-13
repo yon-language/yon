@@ -103,4 +103,12 @@ int yon_xcoord_to_int24(yon_xcoord_t v, int16_t out[24]);
  * Co0-invariant alone); combine three edges into a holonomy for invariance. */
 int yon_leech2_signed_product(yon_xcoord_t v, yon_xcoord_t w);
 
+/* Closest type-2 quantizer: map an arbitrary q in R^24 to the nearest minimal
+ * (norm-4) Leech vector, i.e. the type-2 maximising <q,v>. Exact and O(1)
+ * (no scan of the 196560 shell). Deterministic on every Voronoi boundary: at
+ * equal score the type-2 of minimum MPHF index wins, across shapes and across
+ * the full sign orbit on spent (q_k = 0) coordinates. Returns its xcoord, or
+ * YON_XCOORD_INVALID if no candidate could be reconstructed. */
+yon_xcoord_t yon_leech2_quantize(const double q[24]);
+
 #endif /* YON_XLEECH2_COORD_H */
