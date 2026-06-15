@@ -1,5 +1,7 @@
+EMITFAIL false_coherence
 RAN arena_basic exit=6
 RAN capability_flow_demo exit=110
+RAN circle_hit exit=42
 RAN cluster_a_ast_commutative exit=81
 RAN collections_ext exit=42
 RAN comprehension_carrier exit=0
@@ -21,6 +23,7 @@ RAN geom_morphism_cell exit=0
 RAN geom_morphism_inspect exit=0
 RAN handle_lambdas exit=44
 RAN hermetic_scope exit=42
+RAN id_endpoint_coherence exit=0
 RAN iter_loop exit=5
 RAN kw_geomorph_full exit=0
 RAN kw_heyting exit=42

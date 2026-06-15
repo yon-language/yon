@@ -5,7 +5,7 @@ fun main(): number {
   be deposits holds List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
   be total holds 0
   for every d in deposits {
-    total becomes total + deposit_net(d)
+    total = total + deposit_net(d)
   }
   be usd holds rates::eur_to_usd(total)
   be _p holds IO.print_num(usd)

@@ -1786,6 +1786,58 @@ let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
   let lam = curry_lam params body in
   (fn.S.fn_name, lam)
 
+(* Run a thunk with every mutable desugar-state ref snapshotted and restored,
+ * so a desugaring done outside the main pass (e.g. during type-checking, for
+ * definitional equality) cannot perturb lambda-lifting counters or the
+ * synthesized-function accumulators. *)
+let with_saved_state (f : unit -> 'a) : 'a =
+  let s_counter = !synth_counter and s_moves = !synth_moves
+  and s_reductions = !synth_reductions and s_morphs = !synth_morphs
+  and s_funs = !synth_funs and s_compose = !compose_synth_bodies
+  and s_fun_sigs = !user_fun_sigs and s_handles = !handle_bindings
+  and s_topos = !topos_to_first_place and s_locals = !current_locals_ref
+  and s_produce = !produce_counter and s_spawn = !spawn_counter in
+  let restore () =
+    synth_counter := s_counter; synth_moves := s_moves;
+    synth_reductions := s_reductions; synth_morphs := s_morphs;
+    synth_funs := s_funs; compose_synth_bodies := s_compose;
+    user_fun_sigs := s_fun_sigs; handle_bindings := s_handles;
+    topos_to_first_place := s_topos; current_locals_ref := s_locals;
+    produce_counter := s_produce; spawn_counter := s_spawn
+  in
+  Fun.protect ~finally:restore f
+
+(* Side-effect-free desugaring of a PURE surface expression to Core. Returns
+ * None for effectful/lift-requiring expressions (sound: the caller then has
+ * no Core term to normalize and treats the comparison conservatively). Used
+ * by the definitional-equality endpoint conversion. *)
+let desugar_expr_pure (env : Tyenv.env) (e : S.expr) : C.term option =
+  with_saved_state (fun () ->
+    if Tyenv.is_pure_expr env e then Some (desugar_expr e) else None)
+
+(* Build the delta-rule of a user function: its body as a CURRIED LAMBDA in
+ * Core, so that unfolding f(args) is just beta on (lambda params. body) args.
+ *
+ * Side-effect-free (with_saved_state). The Core term used in definitional
+ * equality is therefore the *same* term the function denotes at runtime:
+ * identity by behaviour (Yoneda), not a parallel surface heuristic.
+ *
+ * Returns None unless the body is a single pure `return e`. Anything effectful
+ * or lift-requiring (move/morph/produce/spawn) yields no delta-rule, so the
+ * equality judgment leaves such calls opaque — sound. No fuel, no heuristics,
+ * no magic numbers. *)
+let delta_rule_of_fun (env : Tyenv.env) (fn : S.fun_decl) : C.term option =
+  with_saved_state (fun () ->
+    match fn.S.fn_body with
+    | [ S.SReturn (rexpr, _) ] when Tyenv.is_pure_expr env rexpr ->
+        let params =
+          List.map
+            (fun (p : S.param) -> (p.S.param_name, desugar_ty p.S.param_ty))
+            fn.S.fn_params
+        in
+        Some (curry_lam params (desugar_expr rexpr))
+    | _ -> None)
+
 (* Process a top-level declaration, updating the desugar_result. *)
 let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_result =
   match td with
@@ -1818,9 +1870,9 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
          effect tracking aligned first). *)
       let term =
         match !current_env, fn.S.fn_return with
-        | Some e, Some ret when Tycheck.is_terminal_ty e ret ->
+        | Some e, Some ret when Tyenv.is_terminal_ty e ret ->
             (match fn.S.fn_body with
-             | [ S.SReturn (rexpr, _) ] when Tycheck.is_pure_expr e rexpr ->
+             | [ S.SReturn (rexpr, _) ] when Tyenv.is_pure_expr e rexpr ->
                  (* rebuild the lambda with the same params but a Unit body *)
                  let params =
                    List.map (fun p -> (p.S.param_name, desugar_ty p.S.param_ty))

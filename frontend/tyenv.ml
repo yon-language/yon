@@ -43,6 +43,13 @@ type env = {
   worlds : (string * world_decl) list;
   reductions : (string * reduction_decl) list;
   funs : (string * fun_sig) list;
+  (* delta-rules: the desugared CORE body of each user function — the
+   * rewrite rule used by definitional equality, distinct from `funs`
+   * (its type signature). A function's *meaning*, not its *type*. Holds
+   * Ast.term (Core), unlike the surface-typed fields above. Populated
+   * once, side-effect-free; consumed by the kernel reducer's delta-step
+   * (only for SCT-certified functions). *)
+  delta : (string * Ast.term) list;
   ops : (string * op_sig) list;
   current_effects : string list;
   active_handlers : string list;
@@ -80,6 +87,7 @@ let empty : env = {
   worlds = [];
   reductions = [];
   funs = [];
+  delta = [];
   ops = [];
   current_effects = [];
   active_handlers = [];
@@ -212,6 +220,38 @@ let lookup_reduction (env : env) (name : string) : reduction_decl option =
 
 let lookup_fun (env : env) (name : string) : fun_sig option =
   List.assoc_opt name env.funs
+
+(* Purity predicate over surface expressions. A call is pure iff the callee
+ * declares no effects (fs_visits = []); unknown callees are conservatively
+ * effectful. Lives here (not in Tycheck) because it needs only the env and
+ * surface types — keeping it low lets Desugar consult it without a module
+ * cycle through Tycheck. *)
+let rec is_pure_expr (env : env) (e : expr) : bool =
+  match e with
+  | ELit _ | EVar _ -> true
+  | EField (e1, _, _) | EParen (e1, _) | EFst (e1, _) | ESnd (e1, _)
+  | ENot (e1, _) | ERefl (e1, _) -> is_pure_expr env e1
+  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) ->
+      is_pure_expr env a && is_pure_expr env b
+  | EJ (a, b, c, _) ->
+      is_pure_expr env a && is_pure_expr env b && is_pure_expr env c
+  | EIfThenElse (c, t, el, _) ->
+      is_pure_expr env c && is_pure_expr env t && is_pure_expr env el
+  | ECall (name, args, _) ->
+      (match lookup_fun env name with
+       | Some fs -> fs.fs_visits = [] && List.for_all (is_pure_expr env) args
+       | None -> false)
+  | ENew _ | ENewIn _ | EIn _ | EAll _
+  | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _ | EViewLam _
+  | ELam _ | EPullback _ | EPushout _ | EPullbackVal _ -> false
+  | _ -> false
+
+(* Recognize the terminal object 1: a `TyUser p` whose place has no data
+ * fields. Lives here for the same layering reason as is_pure_expr. *)
+let is_terminal_ty (env : env) (t : ty) : bool =
+  match t with
+  | TyUser name -> name_is_terminal env name
+  | _ -> false
 
 let lookup_op (env : env) (qualified : string) : op_sig option =
   List.assoc_opt qualified env.ops
@@ -349,6 +389,19 @@ let find_target_place_for_source
 
 let add_fun (env : env) (name : string) (sig_ : fun_sig) : env =
   { env with funs = (name, sig_) :: env.funs }
+
+(* Register a delta-rule: the desugared CORE body of a user function.
+ * Additive and pure — does not desugar here; the caller supplies an
+ * already-produced Ast.term. Consumed by the kernel reducer's delta-step
+ * once SCT (sct.ml) has certified the function terminates. *)
+let add_delta (env : env) (name : string) (body : Ast.term) : env =
+  { env with delta = (name, body) :: env.delta }
+
+(* Look up a delta-rule body by function name. None = no rewrite rule
+ * (e.g. a builtin, or a function not captured): the reducer leaves the
+ * call opaque, sound. *)
+let lookup_delta (env : env) (name : string) : Ast.term option =
+  List.assoc_opt name env.delta
 
 (* Compute the "surface tag" of a type. Two incompatible representations
  * (TyPrim "number" vs TyUser "number") collapse to the same tag. Used
