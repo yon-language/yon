@@ -5,8 +5,8 @@ fun main(): number {
   be i holds 0
   while i < 8 do {
     be v holds Wire.await_shm(w)
-    total becomes total + v
-    i becomes i + 1
+    total = total + v
+    i = i + 1
   }
   return total          // 1+2+...+8 = 36
 }

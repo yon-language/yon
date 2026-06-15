@@ -34,6 +34,11 @@ type ctx = {
   active_handlers : (string * reduction_decl) list;  (* stack, top first *)
   current_place : string option;   (* current place for proposition evaluation *)
   visibility_table : (string * string list) list;  (* place_name -> visible names *)
+  (* delta-rules: SCT-certified function definitions, name -> Core body
+   * (a curried lambda). The reducer unfolds f to its body alongside beta.
+   * Only certified-terminating rules are placed here, so normalization
+   * needs no fuel. Empty for evaluation contexts that don't want unfolding. *)
+  deltas : (string * term) list;
 }
 
 let empty_ctx = {
@@ -42,6 +47,7 @@ let empty_ctx = {
   active_handlers = [];
   current_place = None;
   visibility_table = [];
+  deltas = [];
 }
 
 (* World-tag setter: a hook the reducer calls when entering/leaving a
@@ -497,23 +503,33 @@ let rec step ctx t =
        | Some scrut' -> Some (HITElim (branches, scrut'))
        | None -> None)
   | HITConstr _ -> None        (* value: no head reduction *)
+  | Var f when List.mem_assoc f ctx.deltas ->
+      (* delta-step: unfold a certified function to its Core body. Beta then
+       * drives any application; SCT certification guarantees this terminates,
+       * so no fuel is needed. *)
+      Some (List.assoc f ctx.deltas)
   | Var _ | Place _ | Reduction _ | Unit -> None
 
 (* ─── Multi-step reduction ─────────────────────────────────────────── *)
 
-(* Reduce until normal form. Bound the number of steps to detect non-termination
- * in the prototype (a real implementation would prove termination instead).
- *)
-let rec reduce ?(fuel = 1000) ctx t =
-  if fuel <= 0 then t  (* gave up — should not happen on well-typed terms *)
-  else
-    match step ctx t with
-    | Some t' -> reduce ~fuel:(fuel - 1) ctx t'
-    | None -> t
+(* Reduce to normal form. NO FUEL, no step cap, no magic number.
+ *
+ * On the conversion path every delta-rule in ctx is SCT-certified and beta on
+ * well-typed terms terminates, so a normal form is reached in finitely many
+ * steps by THEOREM. On the evaluation path ctx.deltas is empty (no unfolding)
+ * and reduction follows the term's own beta-structure. The old `fuel = 1000`
+ * crutch silently returned a non-normal term on overrun (unsound); removing it
+ * means reduction is either a true normal form or it does not return — honest. *)
+let rec reduce ctx t =
+  match step ctx t with
+  | Some t' -> reduce ctx t'
+  | None -> t
 
-(* Big-step evaluation: reduce to a value or get stuck.
- *)
-let eval ?(fuel = 1000) ctx t =
-  let result = reduce ~fuel ctx t in
+(* normalize = reduce; the name marks intent on the definitional-equality path. *)
+let normalize = reduce
+
+(* Big-step evaluation: reduce to a value or get stuck. *)
+let eval ctx t =
+  let result = reduce ctx t in
   if is_value result || (match result with Var _ -> true | _ -> false) then result
   else result  (* return whatever we got; caller can inspect *)

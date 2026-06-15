@@ -222,19 +222,48 @@ let rec rename_ty (old_n : string) (new_n : string) (t : ty) : ty =
  * normalization: a call g(f a) is inlined/folded so it can match a when f, g
  * are inverse. Empty when comparison happens outside program registration
  * (e.g. unit-test oracles), in which case we fall back to syntactic equality. *)
-let surface_fun_idx : (string * Surface_ast.fun_decl) list ref = ref []
+(* SCT-certified delta-rules from the environment, in the form the reducer
+ * expects (name -> curried-lambda Core body). Only certified-terminating
+ * functions are included, so kernel normalization with these needs no fuel
+ * and no step cap. *)
+let certified_deltas (env : Tyenv.env) : (string * Ast.term) list =
+  let peel t =
+    let rec go acc = function
+      | Ast.Lam (x, _, b) -> go (x :: acc) b
+      | other -> (List.rev acc, other)
+    in
+    go [] t
+  in
+  let fundefs =
+    List.map
+      (fun (name, lam) ->
+         let params, body = peel lam in
+         Sct.{ name; params; body })
+      env.Tyenv.delta
+  in
+  let certified = Sct.certify fundefs in
+  List.filter (fun (name, _) -> List.mem name certified) env.Tyenv.delta
 
-(* Endpoint equality: two path endpoints (ty_terms) are equal iff their
- * underlying expressions match after normalization (inline + fold to a fixed
- * point), modulo location and bound-variable name. *)
-let ty_term_equal (t1 : ty_term) (t2 : ty_term) : bool =
+(* Endpoint equality: two path endpoints are equal iff their underlying
+ * expressions are syntactically equal, or become equal after KERNEL
+ * normalization with delta-conversion. The delta-rules are the SCT-certified
+ * function definitions from the environment; normalization is fuel-free
+ * because certification guarantees termination. This replaces the old surface
+ * inliner (Naturality_symcheck.normalize with its magic-number cap of 50) and
+ * the global surface_fun_idx ref: one normalizer (the kernel), no parallel
+ * surface path, no cap. *)
+let ty_term_equal
+    (env : Tyenv.env) (ctx : Reduce.ctx) (t1 : ty_term) (t2 : ty_term) : bool =
   match t1, t2 with
   | TyTermExpr e1, TyTermExpr e2 ->
       if Naturality_symcheck.expr_equal e1 e2 then true
       else
-        let n1 = Naturality_symcheck.normalize !surface_fun_idx e1 in
-        let n2 = Naturality_symcheck.normalize !surface_fun_idx e2 in
-        Naturality_symcheck.expr_equal n1 n2
+        (match Desugar.desugar_expr_pure env e1,
+               Desugar.desugar_expr_pure env e2 with
+         | Some c1, Some c2 ->
+             let dctx = { ctx with Reduce.deltas = certified_deltas env } in
+             Ast.term_equal (Reduce.normalize dctx c1) (Reduce.normalize dctx c2)
+         | _ -> false)
 
 let rec type_equal
     (env : Tyenv.env)
@@ -302,7 +331,7 @@ let rec type_equal
        * lift_to_cubical, which discards the endpoints — so any two paths over
        * the same carrier compared equal, and the coherence check was empty. *)
       type_equal env ctx a1 a2
-      && ty_term_equal x1 x2 && ty_term_equal y1 y2
+      && ty_term_equal env ctx x1 x2 && ty_term_equal env ctx y1 y2
   | TyPi (v1, d1, c1), TyPi (v2, d2, c2) ->
       (* Dependent function types, compared up to the bound variable name. *)
       type_equal env ctx d1 d2

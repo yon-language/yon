@@ -38,6 +38,6 @@ let run_with_trace ?(fuel = 1000) ctx t =
   go fuel t []
 
 (* Just evaluate without trace. *)
-let run ?(fuel = 1000) ctx t = reduce ~fuel ctx t
+let run ctx t = reduce ctx t
 
 (* Pretty-print a trace for debugging. *)

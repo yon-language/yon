@@ -112,42 +112,19 @@ let ty_of_literal (l : literal) : ty =
    This predicate is deliberately CONSERVATIVE: anything whose effect status is
    not obviously pure is treated as effectful. Cost of a false "effectful":
    a missed zero-bit optimization. Cost of a false "pure": a deleted effect.
-   We never risk the latter. *)
-let rec is_pure_expr (env : Tyenv.env) (e : expr) : bool =
-  match e with
-  (* Manifestly pure leaves. *)
-  | ELit _ | EVar _ -> true
-  (* Pure if the subexpressions are pure. *)
-  | EField (e1, _, _) | EParen (e1, _) | EFst (e1, _) | ESnd (e1, _)
-  | ENot (e1, _) | ERefl (e1, _) -> is_pure_expr env e1
-  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) ->
-      is_pure_expr env a && is_pure_expr env b
-  | EJ (a, b, c, _) ->
-      is_pure_expr env a && is_pure_expr env b && is_pure_expr env c
-  | EIfThenElse (c, t, el, _) ->
-      is_pure_expr env c && is_pure_expr env t && is_pure_expr env el
-  (* A function call is pure iff the callee declares no effects (fs_visits = []).
-     Unknown callee -> conservatively effectful. *)
-  | ECall (name, args, _) ->
-      (match Tyenv.lookup_fun env name with
-       | Some fs -> fs.fs_visits = [] && List.for_all (is_pure_expr env) args
-       | None -> false)
-  (* Manifestly effectful or allocation/cross-space/scaffolding: never collapse. *)
-  | ENew _ | ENewIn _ | EIn _ | EAll _
-  | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _ | EViewLam _
-  | ELam _ | EPullback _ | EPushout _ | EPullbackVal _ -> false
-  (* Any other form: conservatively effectful. *)
-  | _ -> false
+   We never risk the latter.
+
+   Moved to Tyenv (it needs only the env and surface types) so Desugar can use
+   it without a module cycle; re-exported here for in-module callers. *)
+let is_pure_expr = Tyenv.is_pure_expr
 
 (* Recognize the terminal object 1: the type `TyUser p` where the place p has
    no data fields. This is the derived terminal (no TyUnit primitive); the rest
    of the checker can ask "is this type 1?" without committing to a constructor.
    Subsequent steps use this to type the unique map `!_A : A -> 1` and to give
-   the eta law (every t : 1 equals ()). *)
-let is_terminal_ty (env : Tyenv.env) (t : ty) : bool =
-  match t with
-  | TyUser name -> Tyenv.name_is_terminal env name
-  | _ -> false
+   the eta law (every t : 1 equals ()). Definition moved to Tyenv (same layering
+   reason); re-exported here. *)
+let is_terminal_ty = Tyenv.is_terminal_ty
 
 (* Mere proposition predicate: isProp P := Pi(x:P). Pi(y:P). Id_P(x,y).
    A type is a mere proposition when all its inhabitants are equal. This is the
@@ -2182,9 +2159,13 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         fs_visits = fn.fn_visits;
         fs_partial = fn.fn_partial;
       } in
-      Dispatcher.surface_fun_idx :=
-        (fn.fn_name, fn) :: List.remove_assoc fn.fn_name !Dispatcher.surface_fun_idx;
-      Tyenv.add_fun env fn.fn_name sig_
+      let env1 = Tyenv.add_fun env fn.fn_name sig_ in
+      (* Register the delta-rule (Core body) for definitional equality.
+       * Side-effect-free; None for non-pure-return bodies (sound: no rule,
+       * call stays opaque). *)
+      (match Desugar.delta_rule_of_fun env1 fn with
+       | Some body -> Tyenv.add_delta env1 fn.fn_name body
+       | None -> env1)
   | TopMove _ -> env
   | TopView vd -> Tyenv.add_view env vd
   | TopReduction rd -> Tyenv.add_reduction env rd
