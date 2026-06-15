@@ -19,7 +19,6 @@ type fmt = { buf : Buffer.t; mutable indent : int }
 let mk () = { buf = Buffer.create 1024; indent = 0 }
 let pad f = Buffer.add_string f.buf (String.make (f.indent * 2) ' ')
 let line f s = pad f; Buffer.add_string f.buf s; Buffer.add_char f.buf '\n'
-let raw f s = Buffer.add_string f.buf s
 
 (* ─── Tipi ──────────────────────────────────────────────────────────── *)
 
@@ -143,6 +142,7 @@ let pattern_str = function
   | PatPresent -> "present"
   | PatAbsent -> "absent"
   | PatUnknown -> "unknown"
+  | PatType t -> fmt_ty t
 
 let rec cond_str (c : condition) : string =
   match c with

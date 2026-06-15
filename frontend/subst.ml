@@ -58,6 +58,18 @@ let rec subst x u t =
   | Snd t' -> Snd (subst x u t')
   | StreamCons (h, k) -> StreamCons (subst x u h, subst x u k)
   | Unit -> Unit
+  | PLam (i, t') -> PLam (i, subst x u t')
+  | PApp (p, r) -> PApp (subst x u p, r)
+  | Transp ((i, a), t') -> Transp ((i, a), subst x u t')
+  | Comp (ty, phi, sides, base) ->
+      Comp (ty, phi, List.map (fun (i, f, t') -> (i, f, subst x u t')) sides, subst x u base)
+  | HComp (ty, phi, sides, base) ->
+      HComp (ty, phi, List.map (fun (i, f, t') -> (i, f, subst x u t')) sides, subst x u base)
+  | GlueElem (phi, t', a') -> GlueElem (phi, subst x u t', subst x u a')
+  | Unglue t' -> Unglue (subst x u t')
+  | HITElim (branches, scrut) ->
+      HITElim (List.map (fun (n, b) -> (n, subst x u b)) branches, subst x u scrut)
+  | HITConstr (n, args) -> HITConstr (n, List.map (subst x u) args)
 
 (* Substitute through a handler clause.
  * Handler parameters bind names in the body, so the same shadowing
@@ -96,3 +108,50 @@ and subst_handler x u h =
       { h with
         hc_params = params';
         hc_body = subst x u body_renamed }
+
+(* ─────────────────────────────────────────────────────────────────────────
+ * subst_term_in_ty x u t  =  t[x := u]  where x is a TERM variable occurring
+ * inside the term-carrying type formers. In Yon a type depends on a term only
+ * through TyId (its endpoints), TyEl (its code), and TyGlue (its equivalences);
+ * everywhere else the recursion is structural. This is the type-level dependent
+ * substitution the checker was missing — "motive application": if a motive's
+ * body is a dependent type C(x), then C(arg) = subst_term_in_ty x arg C_body.
+ * Capture-avoiding at the dependent binders TyPi / TySigma.
+ * ───────────────────────────────────────────────────────────────────────── *)
+let rec subst_term_in_ty (x : string) (u : term) (t : ty) : ty =
+  let module S = Set.Make (String) in
+  match t with
+  | TyType _ | TyDirUniverse _ | TyPlace _ | TyBase _ -> t
+  | TyArrow (a, b) ->
+      TyArrow (subst_term_in_ty x u a, subst_term_in_ty x u b)
+  | TyStream a -> TyStream (subst_term_in_ty x u a)
+  | TyId (a, t1, t2) ->
+      TyId (subst_term_in_ty x u a, subst x u t1, subst x u t2)
+  | TyEl c -> TyEl (subst x u c)
+  | TyGlue (a, phi, pairs) ->
+      TyGlue (subst_term_in_ty x u a, phi,
+              List.map (fun (ty_i, e) ->
+                (subst_term_in_ty x u ty_i, subst x u e)) pairs)
+  | TyPathP ((i, a), l, r) ->
+      (* i is an interval binder, not a term var; no capture on x *)
+      TyPathP ((i, subst_term_in_ty x u a), subst x u l, subst x u r)
+  | TyPi (y, a, b) ->
+      let a' = subst_term_in_ty x u a in
+      if x = y then TyPi (y, a', b)                          (* binder shadows b *)
+      else if not (S.mem y (free_vars u))
+      then TyPi (y, a', subst_term_in_ty x u b)              (* no capture *)
+      else                                                   (* rename y to fresh *)
+        let avoid = S.add x (S.add y (free_vars u)) in
+        let y' = fresh_var avoid in
+        let b' = subst_term_in_ty y (Var y') b in
+        TyPi (y', a', subst_term_in_ty x u b')
+  | TySigma (y, a, b) ->
+      let a' = subst_term_in_ty x u a in
+      if x = y then TySigma (y, a', b)
+      else if not (S.mem y (free_vars u))
+      then TySigma (y, a', subst_term_in_ty x u b)
+      else
+        let avoid = S.add x (S.add y (free_vars u)) in
+        let y' = fresh_var avoid in
+        let b' = subst_term_in_ty y (Var y') b in
+        TySigma (y', a', subst_term_in_ty x u b')

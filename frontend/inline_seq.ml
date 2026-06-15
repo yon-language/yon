@@ -38,6 +38,19 @@ let rec count_occurrences (x : string) (t : term) : int =
   | Fst e | Snd e -> count_occurrences x e
   | StreamCons (h, t) -> count_occurrences x h + count_occurrences x t
   | Place _ | Reduction _ | Unit -> 0
+  | PLam (_, b) -> count_occurrences x b
+  | PApp (p, _) -> count_occurrences x p
+  | Transp (_, b) -> count_occurrences x b
+  | Comp (_, _, sides, base) | HComp (_, _, sides, base) ->
+      List.fold_left (fun a (_, _, t) -> a + count_occurrences x t)
+        (count_occurrences x base) sides
+  | GlueElem (_, t, a) -> count_occurrences x t + count_occurrences x a
+  | Unglue t -> count_occurrences x t
+  | HITElim (branches, scrut) ->
+      List.fold_left (fun acc (_, b) -> acc + count_occurrences x b)
+        (count_occurrences x scrut) branches
+  | HITConstr (_, args) ->
+      List.fold_left (fun acc a -> acc + count_occurrences x a) 0 args
 
 (* Recognize whether a term is a Seq.* pipeline (from_list/map/filter or a
  * wrapper of them). *)
@@ -80,3 +93,15 @@ let rec inline_seq_lets (t : term) : term =
   | Snd e -> Snd (inline_seq_lets e)
   | StreamCons (h, tl) -> StreamCons (inline_seq_lets h, inline_seq_lets tl)
   | Var _ | Place _ | Reduction _ | Unit -> t
+  | PLam (i, b) -> PLam (i, inline_seq_lets b)
+  | PApp (p, r) -> PApp (inline_seq_lets p, r)
+  | Transp (i, b) -> Transp (i, inline_seq_lets b)
+  | Comp (ty, phi, sides, base) ->
+      Comp (ty, phi, List.map (fun (j, f, t) -> (j, f, inline_seq_lets t)) sides, inline_seq_lets base)
+  | HComp (ty, phi, sides, base) ->
+      HComp (ty, phi, List.map (fun (j, f, t) -> (j, f, inline_seq_lets t)) sides, inline_seq_lets base)
+  | GlueElem (phi, t, a) -> GlueElem (phi, inline_seq_lets t, inline_seq_lets a)
+  | Unglue t -> Unglue (inline_seq_lets t)
+  | HITElim (branches, scrut) ->
+      HITElim (List.map (fun (n, b) -> (n, inline_seq_lets b)) branches, inline_seq_lets scrut)
+  | HITConstr (n, args) -> HITConstr (n, List.map inline_seq_lets args)

@@ -8,6 +8,12 @@
  *)
 
 (* Source location for error reporting and diagnostics. *)
+
+type dim =
+  | DI0
+  | DI1
+  | DIVar of string
+
 type location = {
   start_line : int;
   start_col : int;
@@ -66,6 +72,8 @@ type ty =
   | TyPi of string * ty * ty                          (* Pi(x:A). B(x) — dependent function *)
   | TySigma of string * ty * ty                       (* Sigma(x:A). B(x) — dependent pair *)
   | TyId of ty * ty_term * ty_term                    (* Id_A(a, b) — identity / path type *)
+  | TyPathP of (string * ty) * ty_term * ty_term      (* PathP (<i> A) x y : dependent path; i binds in A, endpoints are terms *)
+  | TyEl of ty_term                                   (* El(c): c is the CaTT code-index (derived El) *)
   (* The Heyt-int type, parametric in the number of trits. Each "trit" is
    * {Present, Absent, Unknown}. Surface syntax: heyt_int<N> with N trits.
    * MLIR lowering: tuple<i64, i64> = (value, mask). Intuitionistic bit-by-bit
@@ -97,7 +105,7 @@ type ty =
  * type (e.g., the endpoints of Id_A(a,b)). At surface level, we keep
  * this as the expression AST (which we'll define below); we forward-
  * reference it here via abstraction over expr. *)
-and ty_term = TyTermExpr of string                   (* canonical name of a term constant *)
+and ty_term = TyTermExpr of expr                     (* a Surface term-tree appearing inside a type (Tarski code) *)
 
 and variant = {
   v_name : string;
@@ -111,7 +119,7 @@ and stream_modifier =
 
 (* ─── Expressions ──────────────────────────────────────────────────── *)
 
-type literal =
+and literal =
   | LitNumber of float
   | LitString of string
   | LitBool of bool
@@ -121,16 +129,21 @@ type literal =
   | LitHeytAbsent                                     (* absent as value *)
   | LitHeytUnknown                                    (* unknown as value *)
 
-type binop =
+and binop =
   | OpAdd | OpSub | OpMul | OpDiv | OpMod
   | OpLt | OpGt | OpLeq | OpGeq | OpEq | OpNeq
   | OpAnd | OpOr
 
-type expr =
+and expr =
   | ELit of literal * location
   | EVar of string * location
   | EField of expr * string * location                (* "obj.field" *)
   | ECall of string * expr list * location            (* "f(a, b, c)" *)
+  | EApp of expr * expr list * location               (* general application: head is an expr (a name, a lambda, ...) applied to args *)
+  | EHITElim of expr * (string * expr) list * expr * location
+  | EPathApp of expr * dim * location
+  | EPathAbs of string * expr * location              (* plam i => e : path abstraction <i> e *)
+  | EHITConstr of string * expr list * location       (* hit(base), hit(loop), hit(merid, a): HIT constructor *)
   | EWireTo of string * location                      (* "wire to Space": open the transport toward a Space *)
   | EProduce of stmt list * location                  (* "produce { ... }" as an expression: the value is the stream id *)
   | ESpawn of expr option * stmt list * location      (* "spawn { ... }" / "spawn in N parallel { ... }": value is the collection stream; None = single replica, Some e = e replicas *)
@@ -146,6 +159,8 @@ type expr =
   | EFst of expr * location                           (* fst(p) *)
   | ESnd of expr * location                           (* snd(p) *)
   | EJ of expr * expr * expr * location               (* ind_path(C, d, p) *)
+  | EQuote of ty_term * expr * location               (* quote(c, a) : El(c), a : carrier(c) — B intro *)
+  | EElMatch of expr * expr * expr * location         (* el_match(target, ret, body): B eliminator, binds carrier *)
   (* pullback / pushout as an expression. Categorically: given f : A -> C and
    * g : B -> C, pullback(f, g) is the universal limit (A x_C B). Operationally
    * in Yon the expression produces a runtime handle to the pullback registered
@@ -280,6 +295,18 @@ and lvalue =
 and for_kind =
   | ForParallel       (* "for every x in xs" *)
   | ForWhenHere       (* "for every x in xs when here" — stream consumption *)
+
+(* Canonical NAME of a Tarski code term (for carrier lookup, pretty-printing,
+ * El_<name> mangling). Simple codes are variables, exactly the old string;
+ * applied codes (ECall / ERefl) get a readable synthesized name. *)
+let rec ty_term_to_name (e : expr) : string =
+  match e with
+  | EVar (s, _) -> s
+  | EParen (e, _) -> ty_term_to_name e
+  | ERefl (t, _) -> "refl(" ^ ty_term_to_name t ^ ")"
+  | ECall (f, args, _) ->
+      f ^ "(" ^ String.concat "," (List.map ty_term_to_name args) ^ ")"
+  | _ -> "_code"
 
 (* ─── Declarations ─────────────────────────────────────────────────── *)
 

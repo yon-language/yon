@@ -124,6 +124,14 @@ let is_value t =
   | J _ -> false         (* J is an eliminator: it reduces *)
   | Fst _ -> false       (* projections reduce *)
   | Snd _ -> false
+  | PLam _ -> true       (* <i> t is a canonical path value *)
+  | PApp _ -> false      (* path application reduces *)
+  | Transp _ -> false    (* transport reduces *)
+  | Comp _ | HComp _ -> false  (* composition reduces *)
+  | GlueElem _ -> true         (* glue-elem is a value *)
+  | Unglue _ -> false          (* unglue reduces *)
+  | HITElim _ -> false         (* reduces via the cubical engine *)
+  | HITConstr _ -> true        (* a HIT constructor is a value *)
 
 (* ─── Family 4: Place equivalence ──────────────────────────────────── *)
 
@@ -465,6 +473,30 @@ let rec step ctx t =
            | Some t'' -> Some (Snd t'')
            | None -> None)
 
+  | PLam (i, t') ->
+      (match step ctx t' with Some t'' -> Some (PLam (i, t'')) | None -> None)
+  | PApp (Refl t, _) -> Some t   (* refl-beta: refl(t) @ i = t for every i *)
+  | PApp (p, r) ->
+      (match step ctx p with Some p' -> Some (PApp (p', r)) | None -> None)
+  | Transp ((i, a), t') ->
+      (match step ctx t' with Some t'' -> Some (Transp ((i, a), t'')) | None -> None)
+  | Comp (ty, phi, sides, base) ->
+      (match step ctx base with Some b' -> Some (Comp (ty, phi, sides, b')) | None -> None)
+  | HComp (ty, phi, sides, base) ->
+      (match step ctx base with Some b' -> Some (HComp (ty, phi, sides, b')) | None -> None)
+  | GlueElem (phi, t', a') ->
+      (match step ctx t' with
+       | Some t'' -> Some (GlueElem (phi, t'', a'))
+       | None ->
+           (match step ctx a' with
+            | Some a'' -> Some (GlueElem (phi, t', a''))
+            | None -> None))
+  | Unglue t' -> (match step ctx t' with Some t'' -> Some (Unglue t'') | None -> None)
+  | HITElim (branches, scrut) ->
+      (match step ctx scrut with
+       | Some scrut' -> Some (HITElim (branches, scrut'))
+       | None -> None)
+  | HITConstr _ -> None        (* value: no head reduction *)
   | Var _ | Place _ | Reduction _ | Unit -> None
 
 (* ─── Multi-step reduction ─────────────────────────────────────────── *)

@@ -20,6 +20,10 @@ let rec pp_ty t =
   | TyPlace n -> n
   | TyStream t' -> Printf.sprintf "stream of %s" (pp_ty t')
   | TyBase n -> n
+  | TyDirUniverse n -> Printf.sprintf "U_omega_%d" n
+  | TyEl _ -> "El(...)"
+  | TyGlue (a, _, _) -> Printf.sprintf "Glue(%s)" (pp_ty a)
+  | TyPathP ((i, a), _, _) -> Printf.sprintf "PathP(<%s> %s)" i (pp_ty a)
 
 let pp_op_sig op =
   let params_str =
@@ -27,6 +31,14 @@ let pp_op_sig op =
       (List.map (fun (n, t) -> Printf.sprintf "%s: %s" n (pp_ty t)) op.op_params)
   in
   Printf.sprintf "operation %s(%s): %s" op.op_name params_str (pp_ty op.op_return)
+
+let rec pp_interval = function
+  | I0 -> "0"
+  | I1 -> "1"
+  | IVar i -> i
+  | IMin (a, b) -> Printf.sprintf "(%s /\\ %s)" (pp_interval a) (pp_interval b)
+  | IMax (a, b) -> Printf.sprintf "(%s \\/ %s)" (pp_interval a) (pp_interval b)
+  | INeg a -> Printf.sprintf "~%s" (pp_interval a)
 
 let rec pp_term ?(indent = 0) t =
   let prefix = String.make indent ' ' in
@@ -80,6 +92,21 @@ let rec pp_term ?(indent = 0) t =
   | StreamCons (h, k) ->
       Printf.sprintf "%s :: %s" (pp_term ~indent h) (pp_term ~indent k)
   | Unit -> "()"
+  | PLam (i, t') -> Printf.sprintf "<%s> %s" i (pp_term ~indent t')
+  | PApp (p, r) -> Printf.sprintf "(%s @ %s)" (pp_term ~indent p) (pp_interval r)
+  | Transp ((i, a), t') ->
+      Printf.sprintf "transp <%s>%s %s" i (pp_ty a) (pp_term ~indent t')
+  | Comp (_, _, _, base) -> Printf.sprintf "comp[..] %s" (pp_term ~indent base)
+  | HComp (_, _, _, base) -> Printf.sprintf "hcomp[..] %s" (pp_term ~indent base)
+  | GlueElem (_, t', a') -> Printf.sprintf "glue(%s, %s)" (pp_term ~indent t') (pp_term ~indent a')
+  | Unglue t' -> Printf.sprintf "unglue(%s)" (pp_term ~indent t')
+  | HITElim (branches, scrut) ->
+      Printf.sprintf "hit_elim([%s], %s)"
+        (String.concat "; "
+           (List.map (fun (n, b) -> Printf.sprintf "%s => %s" n (pp_term ~indent b)) branches))
+        (pp_term ~indent scrut)
+  | HITConstr (n, args) ->
+      Printf.sprintf "%s(%s)" n (String.concat ", " (List.map (pp_term ~indent) args))
 
 and pp_handler ?(indent = 0) h =
   let _ = indent in

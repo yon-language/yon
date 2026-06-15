@@ -60,11 +60,14 @@ let rec apply_subst (sigma : subst) (t : ty) : ty =
   | TyPi (x, a, b) -> TyPi (x, apply_subst sigma a, apply_subst sigma b)
   | TySigma (x, a, b) -> TySigma (x, apply_subst sigma a, apply_subst sigma b)
   | TyId (a, x, y) -> TyId (apply_subst sigma a, x, y)
+  | TyPathP ((i, a), x, y) -> TyPathP ((i, apply_subst sigma a), x, y)
   | TyArrow (a, b) -> TyArrow (apply_subst sigma a, apply_subst sigma b)
   | TyMoveHandle (_, _) -> t   (* move handles contain no meta-variables *)
   | TyReductionHandle _ -> t   (* reduction handles contain no meta-variables *)
   | TyMorphHandle (_, _) -> t  (* morph handles do not contain metavars *)
   | TyViewHandle _ -> t        (* view handles do not contain metavars *)
+  | TyWire _ -> t              (* wire handle carries only a Space name *)
+  | TySubscription (sp, inner) -> TySubscription (sp, apply_subst sigma inner)
   | TySum variants ->
       TySum (List.map (fun v ->
         { v with v_args = List.map (apply_subst sigma) v.v_args }) variants)
@@ -72,7 +75,7 @@ let rec apply_subst (sigma : subst) (t : ty) : ty =
       TySumIn (List.map (fun v ->
         { v with v_args = List.map (apply_subst sigma) v.v_args }) variants, ws)
   | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _
-  | TyUniverse _ | TyHeytInt _ -> t
+  | TyUniverse _ | TyHeytInt _ | TyEl _ -> t
 
 (* compose_subst sigma1 sigma2: equivalent to "apply sigma1 after sigma2".
  * Result: { x |-> sigma1(t) | (x,t) in sigma2 } union { (x,t) in sigma1 | x not in dom(sigma2) }
@@ -99,15 +102,18 @@ let rec free_metavars (t : ty) : int list =
   | TyStream (inner, _) -> free_metavars inner
   | TyPi (_, a, b) | TySigma (_, a, b) -> free_metavars a @ free_metavars b
   | TyId (a, _, _) -> free_metavars a
+  | TyPathP ((_, a), _, _) -> free_metavars a
   | TyArrow (a, b) -> free_metavars a @ free_metavars b
   | TyMoveHandle (_, _) -> []
   | TyReductionHandle _ -> []
   | TyMorphHandle (_, _) -> []
   | TyViewHandle _ -> []
+  | TyWire _ -> []
+  | TySubscription (_, inner) -> free_metavars inner
   | TySum variants | TySumIn (variants, _) ->
       List.concat_map (fun v -> List.concat_map free_metavars v.v_args) variants
   | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _
-  | TyUniverse _ | TyHeytInt _ -> []
+  | TyUniverse _ | TyHeytInt _ | TyEl _ -> []
 
 let uniq (xs : 'a list) : 'a list =
   List.fold_left (fun acc x -> if List.mem x acc then acc else x :: acc) [] xs

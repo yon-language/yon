@@ -5,7 +5,7 @@ fun main(): number {
   be s holds produce { emit 7 }
   be total holds 0
   for every v in s {
-    total becomes total + v
+    total = total + v
   }
   return total      // 7
 }
