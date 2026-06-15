@@ -368,6 +368,8 @@ let rec type_tag (t : ty) : string =
   | TyPi (_, _, _) -> "Pi"
   | TySigma (_, _, _) -> "Sigma"
   | TyId (a, _, _) -> "Id_" ^ type_tag a
+  | TyPathP ((_, a), _, _) -> "PathP_" ^ type_tag a
+  | TyEl (TyTermExpr e) -> "El_" ^ ty_term_to_name e
   | TySum _ | TySumIn _ -> "sum"
   | TyHeytInt n -> "heyt_int_" ^ string_of_int n
   | TyArrow (a, b) -> "arrow_" ^ type_tag a ^ "_" ^ type_tag b
@@ -482,8 +484,12 @@ let rec ty_to_string (t : ty) : string =
   | TySigma (x, a, b) ->
       Printf.sprintf "Sigma(%s : %s). %s" x (ty_to_string a) (ty_to_string b)
   | TyId (a, x, y) ->
-      let ts = function TyTermExpr s -> s in
+      let ts = function TyTermExpr e -> ty_term_to_name e in
       Printf.sprintf "Id_%s(%s, %s)" (ty_to_string a) (ts x) (ts y)
+  | TyPathP ((i, a), x, y) ->
+      let ts = function TyTermExpr e -> ty_term_to_name e in
+      Printf.sprintf "PathP(<%s> %s, %s, %s)" i (ty_to_string a) (ts x) (ts y)
+  | TyEl (TyTermExpr e) -> Printf.sprintf "El(%s)" (ty_term_to_name e)
   | TyList inner -> "list of " ^ ty_to_string inner
   | TyMap (k, v) -> "map of " ^ ty_to_string k ^ " to " ^ ty_to_string v
   | TyStream (inner, _) -> "stream of " ^ ty_to_string inner

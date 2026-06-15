@@ -143,7 +143,7 @@
 %token ITER_KW DO_KW WHILE_KW
 
 /* Statement keywords */
-%token HOLDS BECOMES
+%token HOLDS
 
 /* Boolean operators */
 %token AND OR ALL WHERE
@@ -181,6 +181,9 @@
 
 /* HoTT / dependent types */
 %token TYPE_KW PI SIGMA ID REFL PAIR FST SND IND_PATH
+%token EL QUOTE EL_MATCH
+%token HIT_ELIM LBRACKET RBRACKET
+%token ATSIGN I0 I1 PLAM PATHP HIT_KW
 /* heyt_int<N> type keyword. */
 %token HEYT_INT_KW
 %token <int> TYPE_LEVEL
@@ -217,6 +220,7 @@
 %nonassoc UMINUS
 %nonassoc UNOT
 %nonassoc UTILDE
+%left ATSIGN              /* path application p @ i, binds tight */
 
 /* Precedence for IS pattern test. */
 %nonassoc IS
@@ -848,8 +852,12 @@ type_atom:
     { TyPi (x, a, b) }
   | SIGMA LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
     { TySigma (x, a, b) }
-  | ID LPAREN a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
+  | ID LPAREN a = type_expr COMMA x = expr COMMA y = expr RPAREN
     { TyId (a, TyTermExpr x, TyTermExpr y) }
+  | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
+    { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
+  | EL LPAREN c = IDENT RPAREN
+    { TyEl (TyTermExpr (EVar (c, mk_loc $startpos $endpos))) }
   | name = IDENT
     { TyUser name }
   | name = IDENT IN ids = ident_list
@@ -887,6 +895,10 @@ type_atom:
      (proposition-as-type, HoTT reading), keeping types and terms separated. *)
   | LBRACE x = IDENT COLON a = type_expr WHERE p = type_expr RBRACE
     { TySigma (x, a, p) }
+
+hit_branch:
+  | ctor = IDENT FATARROW v = expr { (ctor, v) }
+
 
 variant:
   | name = IDENT
@@ -1124,10 +1136,10 @@ let_stmt:
     { SLet (name, e, mk_loc $startpos $endpos) }
 
 assign_stmt:
-  | lv = lvalue BECOMES e = expr
-    { (* State mutation in Yon is `becomes`, which updates the
-         content-addressed space content. There is no SSA reassignment `x = e`:
-         local variables (`be x holds e`) are immutable bindings. *)
+  | lv = lvalue EQ e = expr
+    { (* State mutation in Yon is `=`, which updates the content-addressed
+         space content. This is NOT SSA reassignment of a local: local bindings
+         (`be x holds e`) stay immutable; `=` mutates a Space cell. *)
       SAssignBecomes (lv, e, mk_loc $startpos $endpos) }
 
 lvalue:
@@ -1408,6 +1420,24 @@ expr_atom:
     { ESnd (e, mk_loc $startpos $endpos) }
   | IND_PATH LPAREN c = expr COMMA d = expr COMMA p = expr RPAREN
     { EJ (c, d, p, mk_loc $startpos $endpos) }
+  | QUOTE LPAREN c = IDENT COMMA a = expr RPAREN
+    { EQuote (TyTermExpr (EVar (c, mk_loc $startpos $endpos)), a, mk_loc $startpos $endpos) }
+  | EL_MATCH LPAREN t = expr COMMA r = expr COMMA b = expr RPAREN
+    { EElMatch (t, r, b, mk_loc $startpos $endpos) }
+  | HIT_ELIM LPAREN c = expr COMMA LBRACKET branches = separated_list(COMMA, hit_branch) RBRACKET COMMA x = expr RPAREN
+    { EHITElim (c, branches, x, mk_loc $startpos $endpos) }
+  | e = expr_atom ATSIGN I0
+    { EPathApp (e, DI0, mk_loc $startpos $endpos) }
+  | e = expr_atom ATSIGN I1
+    { EPathApp (e, DI1, mk_loc $startpos $endpos) }
+  | e = expr_atom ATSIGN id = IDENT
+    { EPathApp (e, DIVar id, mk_loc $startpos $endpos) }
+  | PLAM i = IDENT FATARROW body = expr
+    { EPathAbs (i, body, mk_loc $startpos $endpos) }
+  | HIT_KW LPAREN ctor = IDENT RPAREN
+    { EHITConstr (ctor, [], mk_loc $startpos $endpos) }
+  | HIT_KW LPAREN ctor = IDENT COMMA args = separated_nonempty_list(COMMA, expr) RPAREN
+    { EHITConstr (ctor, args, mk_loc $startpos $endpos) }
   | PULLBACK LPAREN f = IDENT COMMA g = IDENT RPAREN
     { (* pullback as expression scaffolding *)
       EPullback (f, g, mk_loc $startpos $endpos) }

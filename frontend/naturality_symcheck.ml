@@ -52,6 +52,10 @@ let rec expr_equal (a : S.expr) (b : S.expr) : bool =
       && List.for_all2 expr_equal asa asb
   | S.EBinop (opa, la, ra, _), S.EBinop (opb, lb, rb, _) ->
       opa = opb && expr_equal la lb && expr_equal ra rb
+  | S.EApp (ha, asa, _), S.EApp (hb, asb, _) ->
+      expr_equal ha hb
+      && List.length asa = List.length asb
+      && List.for_all2 expr_equal asa asb
   | S.EParen (ea, _), eb -> expr_equal ea eb
   | ea, S.EParen (eb, _) -> expr_equal ea eb
   | _ -> false  (* altre forme: pessimistico *)

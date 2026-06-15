@@ -1,15 +1,20 @@
-/* yon_rt.c — implementation of the cross-space single-process runtime API.
+/* yon_rt.c — implementation of the cross-space runtime API.
  *
- * Multiple logical heaps, all mapped to a single physical backing heap
- * (yon_xheap_t). The differentiation is in the content-addressing:
+ * A program has multiple logical Spaces. Each Space owns a SEPARATE heap; the
+ * g_spaces[] table holds only the per-Space metadata (name, occupancy, fold,
+ * accumulator) plus a pointer to that heap. Space data never lives inline in
+ * the table — it lives in the heap the pointer refers to, so the table is a
+ * registry (name -> heap), not a data store.
  *
- *   effective_xcoord = fnv1a(heap_id || payload)
+ * Backend (selected via YON_BACKEND, default shm):
+ *   L2_SHM      — each Space heap is backed by a named POSIX shared-memory
+ *                 segment "/yon_space_<NAME>": process-per-Space, no shared
+ *                 address space (PostgreSQL-style). Falls back to a private
+ *                 heap if the shm segment cannot be created.
+ *   L2_SEPARATE — each Space gets its own private yon_xheap_t in-process
+ *                 (test/debug).
  *
- * so that the same payload in different heaps produces different xcoords — an
- * implicit partitioning without separate physical heaps.
- *
- * Later this function changes: g_heaps[heap_id] becomes a separate yon_xheap_t
- * and the xcoord is computed only from the payload. The ABI is unchanged.
+ * The ABI is identical across backends; only the heap backing differs.
  */
 
 #define _GNU_SOURCE  /* for strdup */
@@ -4787,6 +4792,125 @@ double yon_rt_xsimplex_triangle_fine(double ud, double vd, double wd) {
 double yon_rt_xsimplex_pair_width(void)     { return 12.0; }  /* dense subtypes */
 double yon_rt_xsimplex_triangle_width(void) { return 95.0; }  /* realized keys (sampled) */
 double yon_rt_xsimplex_triangle_fine_width(void) { return 144.0; }  /* subtype x holonomy (sampled) */
+
+/* ============================================================== */
+/* XSimplex histogram container: a shape spectrum over the finite   */
+/* alphabet of Co0/Co2 edge classes, living entirely on the Leech.  */
+/* Each of the 12 edge classes gets a canonical type-2 REPRESENTATIVE */
+/* -- the MPHF-minimal point r such that edge(anchor, r) = class --   */
+/* and the per-class count lives inline in that representative's      */
+/* arena slot via put_repr/get_repr, the same lattice store XRelMap   */
+/* uses. No inline C array: the key is a point of Lambda_2, the value */
+/* sits on the xheap-backed arena. The public index 0..11 is only the */
+/* interface; the datum lives on the lattice. O(1) add and read.      */
+/* ============================================================== */
+#define YON_XSIMPLEX_HIST_MAX     256u
+#define YON_XSIMPLEX_EDGE_CLASSES 12
+
+/* canonical type-2 representative of each edge class, derived from the lattice */
+static uint32_t g_xsimplex_edge_rep[YON_XSIMPLEX_EDGE_CLASSES];
+static int      g_xsimplex_edge_rep_ready = 0;
+
+static void xsimplex_edge_reps_init(void) {
+    if (g_xsimplex_edge_rep_ready) return;
+    for (int c = 0; c < YON_XSIMPLEX_EDGE_CLASSES; c++) g_xsimplex_edge_rep[c] = 0xFFFFFFFFu;
+    uint32_t anchor = (uint32_t)yon_mphf_unindex(0);   /* fixed type-2 anchor */
+    int found = 0;
+    for (uint32_t i = 1; i < YON_LEECH_TYPE2_COUNT && found < YON_XSIMPLEX_EDGE_CLASSES; i++) {
+        uint32_t r = (uint32_t)yon_mphf_unindex(i);
+        double cd = yon_rt_xsimplex_pair((double)anchor, (double)r);
+        if (cd < 0.0) continue;
+        int c = (int)cd;
+        if (c >= 0 && c < YON_XSIMPLEX_EDGE_CLASSES && g_xsimplex_edge_rep[c] == 0xFFFFFFFFu) {
+            g_xsimplex_edge_rep[c] = r; found++;
+        }
+    }
+    g_xsimplex_edge_rep_ready = 1;
+}
+
+typedef struct {
+    ds_arena_t *arena;   /* lattice slot store: rep(class) -> count, inline repr */
+    uint32_t    is_used;
+} yon_xsimplex_hist_t;
+
+static yon_xsimplex_hist_t g_xsimplex_hist[YON_XSIMPLEX_HIST_MAX];
+static uint32_t g_n_xsimplex_hist = 0;
+
+static yon_xsimplex_hist_t *xsimplex_hist_lookup(double id) {
+    if (id < 0.5) return NULL;
+    uint32_t s = (uint32_t)id;
+    if (s == 0 || s > g_n_xsimplex_hist) return NULL;
+    yon_xsimplex_hist_t *h = &g_xsimplex_hist[s - 1];
+    return h->is_used ? h : NULL;
+}
+
+double yon_rt_xsimplex_empty(void) {
+    ds_ensure_init();
+    xsimplex_edge_reps_init();
+    if (g_n_xsimplex_hist >= YON_XSIMPLEX_HIST_MAX) {
+        fprintf(stderr, "[YON-RT] xsimplex_empty: pool exhausted\n");
+        return 0.0;
+    }
+    uint32_t id = g_n_xsimplex_hist++;
+    yon_xsimplex_hist_t *h = &g_xsimplex_hist[id];
+    h->arena = yon_arena_create(g_ds_heap);
+    h->is_used = 1;
+    return (double)(id + 1);
+}
+
+/* read the count of edge class c from its representative's lattice slot */
+static uint64_t xsimplex_bin_get(yon_xsimplex_hist_t *h, int c) {
+    uint32_t rep = g_xsimplex_edge_rep[c];
+    if (rep == 0xFFFFFFFFu) return 0;
+    if (!yon_arena_occupied(h->arena, (yon_xcoord_t)rep)) return 0;
+    return (uint64_t)yon_arena_get_repr(h->arena, (yon_xcoord_t)rep);
+}
+
+/* add the pair (a,b): classify its edge (0..11), bump that class's lattice slot.
+ * Edges outside the realized 12 (or not both type-2) are ignored. Returns id. */
+double yon_rt_xsimplex_add(double id, double ad, double bd) {
+    yon_xsimplex_hist_t *h = xsimplex_hist_lookup(id);
+    if (!h) return 0.0;
+    double cls = yon_rt_xsimplex_pair(ad, bd);   /* 0..11, or -1.0 */
+    if (cls >= 0.0) {
+        int c = (int)cls;
+        if (c >= 0 && c < YON_XSIMPLEX_EDGE_CLASSES) {
+            uint32_t rep = g_xsimplex_edge_rep[c];
+            if (rep != 0xFFFFFFFFu) {
+                uint64_t cur = xsimplex_bin_get(h, c);
+                yon_arena_put_repr(h->arena, (yon_xcoord_t)rep, (uint32_t)(cur + 1));
+            }
+        }
+    }
+    return id;
+}
+
+double yon_rt_xsimplex_count(double id, double kd) {
+    yon_xsimplex_hist_t *h = xsimplex_hist_lookup(id);
+    if (!h) return 0.0;
+    int k = (int)kd;
+    if (k < 0 || k >= YON_XSIMPLEX_EDGE_CLASSES) return 0.0;
+    return (double)xsimplex_bin_get(h, k);
+}
+
+double yon_rt_xsimplex_dominant(double id) {
+    yon_xsimplex_hist_t *h = xsimplex_hist_lookup(id);
+    if (!h) return -1.0;
+    int best = -1; uint64_t bc = 0;
+    for (int c = 0; c < YON_XSIMPLEX_EDGE_CLASSES; c++) {
+        uint64_t v = xsimplex_bin_get(h, c);
+        if (v > bc) { bc = v; best = c; }
+    }
+    return (double)best;
+}
+
+double yon_rt_xsimplex_size(double id) {
+    yon_xsimplex_hist_t *h = xsimplex_hist_lookup(id);
+    if (!h) return 0.0;
+    uint64_t tot = 0;
+    for (int c = 0; c < YON_XSIMPLEX_EDGE_CLASSES; c++) tot += xsimplex_bin_get(h, c);
+    return (double)tot;
+}
 
 
 

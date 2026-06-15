@@ -112,7 +112,7 @@
 
       (* `be x holds e` is the sole binding form (immutable). It maps to the
          LET token because the core IR still calls such bindings let-bindings;
-         mutation goes through `becomes`, not rebinding. *)
+         mutation goes through `=`, not rebinding. *)
       "be", LET;
       "partial", PARTIAL;
 
@@ -180,7 +180,6 @@
       
       (* Statement keywords *)
       "holds", HOLDS;
-      "becomes", BECOMES;
       
       (* Operators (word form) *)
       "and", AND;
@@ -227,6 +226,15 @@
       "fst", FST;
       "snd", SND;
       "ind_path", IND_PATH;     (* J-eliminator at surface level *)
+      "El", EL;
+      "quote", QUOTE;
+      "el_match", EL_MATCH;
+      "hit_elim", HIT_ELIM;
+      "hit", HIT_KW;             (* HIT constructor: hit(base), hit(merid, a) *)
+      "I0", I0;                  (* interval endpoint 0 *)
+      "I1", I1;                  (* interval endpoint 1 *)
+      "plam", PLAM;              (* path abstraction <i> e *)
+      "PathP", PATHP;            (* dependent path type *)
       
       (* Note: duration units (ms, s, min, h, d, y) are NOT registered as
          keywords here because identifiers like "s" are too common as
@@ -314,6 +322,9 @@ rule token = parse
   | "=>"             { FATARROW }
   | "->"             { ARROW }   (* function type T -> U *)
   (* Single-character punctuation *)
+  | '@'              { ATSIGN }
+  | '['              { LBRACKET }
+  | ']'              { RBRACKET }
   | '!'              { BANG }
   | '&'              { AMP }
   | '^'              { CARET }

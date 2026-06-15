@@ -146,6 +146,9 @@ let formula_holds (phi : face_formula) (sub : (string * interval) list) : bool =
 type ctype =
   | CTBase of ty                                          (* a surface type *)
   | CTPath of ctype * cterm * cterm                       (* Path A x y *)
+  | CTPathP of (string * ctype) * cterm * cterm          (* PathP (<i> A i) x y :
+                                                            dependent path over a line of
+                                                            types A(i); x : A 0, y : A 1 *)
   | CTGlue of ctype * face_formula * (ctype * cterm) list (* Glue [φ ↦ (T, e)] A *)
   | CTQuotient of ctype * (cterm * cterm) list            (* A / ~ via path constructors *)
   | CTHIT of string * cterm list                          (* user-defined HIT *)
@@ -159,11 +162,24 @@ and cterm =
             * cterm                                       (* base u_0 *)
   | CHComp of ctype * face_formula
              * (string * face * cterm) list * cterm       (* homogeneous comp *)
-  | CGlueElem of cterm                                    (* glue-elem constructor *)
+  | CGlueElem of face_formula * cterm * cterm             (* glue [phi |-> t] a *)
   | CUnglue of cterm                                      (* unglue projector *)
   | CTransport of (string * ctype) * cterm                (* transp <i>A i_0 t *)
   | CInhabitant of cterm                                  (* lift a non-cubical term *)
+  | CCore of Ast.term                                     (* opaque lift of a core term:
+                                                             carries an Ast.term the engine
+                                                             never inspects; the bridge
+                                                             unfolds it back on the way out.
+                                                             Invariant: lifted terms do not
+                                                             mention the cubical dimensions
+                                                             active in the surrounding comp/
+                                                             transp (equivalences and maps are
+                                                             dimension-closed), so dimension
+                                                             substitution treats it opaquely. *)
   | CHITConstr of string * cterm list                     (* HIT constructor application *)
+  | CHITElim of (string * cterm) list * cterm             (* generic HIT eliminator:
+                                                             branches (constructor name |-> case)
+                                                             applied to a scrutinee *)
 
 (* ─── Path types and path computation ──────────────────────────────── *)
 
@@ -189,32 +205,41 @@ let rec subst_interval_in_cterm
   | CComp (ty, phi, sides, base) ->
       let ty' = subst_interval_in_ctype var replacement ty in
       let phi' = subst_interval_in_formula var replacement phi in
-      let sides' = List.map
+      let sides' = List.filter_map
         (fun (i, face, term) ->
-           (i, subst_interval_in_face var replacement face,
-            subst_interval_in_cterm var replacement term))
+           match subst_interval_in_face var replacement face with
+           | None -> None
+           | Some f' -> Some (i, f', subst_interval_in_cterm var replacement term))
         sides in
       let base' = subst_interval_in_cterm var replacement base in
       CComp (ty', phi', sides', base')
   | CHComp (ty, phi, sides, base) ->
       let ty' = subst_interval_in_ctype var replacement ty in
       let phi' = subst_interval_in_formula var replacement phi in
-      let sides' = List.map
+      let sides' = List.filter_map
         (fun (i, face, term) ->
-           (i, subst_interval_in_face var replacement face,
-            subst_interval_in_cterm var replacement term))
+           match subst_interval_in_face var replacement face with
+           | None -> None
+           | Some f' -> Some (i, f', subst_interval_in_cterm var replacement term))
         sides in
       let base' = subst_interval_in_cterm var replacement base in
       CHComp (ty', phi', sides', base')
-  | CGlueElem t' -> CGlueElem (subst_interval_in_cterm var replacement t')
+  | CGlueElem (phi, t', a') ->
+      CGlueElem (subst_interval_in_formula var replacement phi,
+                 subst_interval_in_cterm var replacement t',
+                 subst_interval_in_cterm var replacement a')
   | CUnglue t' -> CUnglue (subst_interval_in_cterm var replacement t')
   | CTransport ((i, ty), t') ->
       let ty' = if i = var then ty
                 else subst_interval_in_ctype var replacement ty in
       CTransport ((i, ty'), subst_interval_in_cterm var replacement t')
   | CInhabitant _ -> t
+  | CCore _ -> t   (* dimension-closed by invariant: no active dimension occurs *)
   | CHITConstr (n, args) ->
       CHITConstr (n, List.map (subst_interval_in_cterm var replacement) args)
+  | CHITElim (branches, scrut) ->
+      CHITElim (List.map (fun (n, c) -> (n, subst_interval_in_cterm var replacement c)) branches,
+                subst_interval_in_cterm var replacement scrut)
 
 and subst_interval_in_ctype
     (var : string) (replacement : interval) (ty : ctype) : ctype =
@@ -224,6 +249,12 @@ and subst_interval_in_ctype
       CTPath (subst_interval_in_ctype var replacement a,
               subst_interval_in_cterm var replacement x,
               subst_interval_in_cterm var replacement y)
+  | CTPathP ((i, a), x, y) ->
+      let a' = if i = var then a
+               else subst_interval_in_ctype var replacement a in
+      CTPathP ((i, a'),
+               subst_interval_in_cterm var replacement x,
+               subst_interval_in_cterm var replacement y)
   | CTGlue (base, phi, partial) ->
       CTGlue (subst_interval_in_ctype var replacement base,
               subst_interval_in_formula var replacement phi,
@@ -241,21 +272,28 @@ and subst_interval_in_ctype
       CTHIT (n, List.map (subst_interval_in_cterm var replacement) args)
 
 and subst_interval_in_face
-    (var : string) (replacement : interval) (f : face) : face =
-  (* Faces are atomic; if the bound var is mentioned, attempt to resolve. *)
-  List.filter_map
-    (fun (x, b) ->
-       if x = var then
-         match normalize_interval replacement with
-         | I0 -> if b then None else Some (x, b) (* contradiction with i = 1? *)
-         | I1 -> if b then Some (x, b) else None
-         | _ -> Some (x, b)
-       else Some (x, b))
-    f
+    (var : string) (replacement : interval) (f : face) : face option =
+  (* Resolve the bound var inside a face (a conjunction of atoms (x,b),
+     b=true meaning x=1, b=false meaning x=0).
+     - a satisfied atom is dropped (an empty result face = tautology, holds);
+     - a contradicted atom makes the whole face FALSE -> None (drop it from
+       the disjunction);
+     - an atom on another/symbolic dimension is kept. *)
+  let rec go acc = function
+    | [] -> Some (List.rev acc)
+    | (x, b) :: rest ->
+        if x = var then
+          (match normalize_interval replacement with
+           | I1 -> if b then go acc rest else None
+           | I0 -> if b then None else go acc rest
+           | _ -> go ((x, b) :: acc) rest)
+        else go ((x, b) :: acc) rest
+  in
+  go [] f
 
 and subst_interval_in_formula
     (var : string) (replacement : interval) (phi : face_formula) : face_formula =
-  List.map (subst_interval_in_face var replacement) phi
+  List.filter_map (subst_interval_in_face var replacement) phi
 
 (* Path application — the key reduction rule of path types. *)
 let path_app (p : cterm) (j : interval) : cterm =
@@ -273,11 +311,11 @@ let glue_type
     (partial : (ctype * cterm) list) : ctype =
   CTGlue (base, phi, partial)
 
-let glue_elem (t : cterm) : cterm = CGlueElem t
+let glue_elem (phi : face_formula) (t : cterm) (a : cterm) : cterm = CGlueElem (phi, t, a)
 
 let unglue (t : cterm) : cterm =
   match t with
-  | CGlueElem inner -> inner
+  | CGlueElem (_, _, a) -> a
   | _ -> CUnglue t
 
 (* ─── Composition operation ────────────────────────────────────────── *)
@@ -301,6 +339,11 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
   match phi with
   | [] -> base                            (* empty disjunction = false *)
   | _ ->
+      (* face-active rule: a tautological face ([]) is always on, so the
+         system is solved by that side (CCHM adjacency). *)
+      match List.find_opt (fun (_, fc, _) -> fc = []) sides with
+      | Some (_, _, v) -> v
+      | None ->
       match ty with
       | CTPath (inner_ty, p_left, p_right) ->
           (* comp at Path type: build a path-abstraction whose body
@@ -317,6 +360,20 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
           CPathLam (j,
             reduce_comp inner_ty extended_phi extended_sides base_at_j)
 
+      | CTPathP ((pi, a), p_left, p_right) ->
+          (* comp at a DEPENDENT path type. Same shape as comp at Path,
+           * but the inner line of types a = A(pi) varies along the path
+           * binder pi; the composition happens in that varying type. *)
+          let extended_phi =
+            phi @ [ [(pi, false)]; [(pi, true)] ] in
+          let extended_sides =
+            sides
+            @ [ ("_pathpbnd_l", [(pi, false)], p_left);
+                ("_pathpbnd_r", [(pi, true)], p_right) ] in
+          let base_at_pi = path_app base (IVar pi) in
+          CPathLam (pi,
+            reduce_comp a extended_phi extended_sides base_at_pi)
+
       | CTGlue (base_ty, glue_phi, partial_pairs) ->
           (match partial_pairs with
            | [] ->
@@ -326,17 +383,17 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
                  List.map (fun (i, f, t) -> (i, f, unglue t)) sides in
                let base_u0 = unglue base in
                let combined_phi = phi @ glue_phi in
-               CGlueElem (reduce_comp base_ty combined_phi base_sides base_u0)
+               let a_comp = reduce_comp base_ty combined_phi base_sides base_u0 in
+               CGlueElem ([], a_comp, a_comp)  (* degenerate: empty face, no T part *)
            | _ ->
-               (* Non-degenerate Glue: the CCHM comp-Glue rule needs the
-                * isEquiv proofs of the partial equivalences (the pres /
-                * equiv-fixing steps use contractibility of the fibers). This
-                * prototype tracks only the underlying maps, not isEquiv, so it
-                * CANNOT compute this rule. Stay STUCK — return the canonical,
-                * unreduced comp — rather than silently dropping the partial
-                * equivalences and emitting a wrong glued element. Unblocks when
-                * real equivalences land (research item: true comp-Glue). *)
-               CComp (ty, phi, sides, base))
+               (* Non-degenerate Glue at a constant type: composition at a type
+                * that does not vary along the dimension IS the homogeneous rule
+                * (comp = hcomp). The heterogeneous case — a Glue varying along
+                * i, i.e. ua(e) — is handled by the transp-Glue rule, which
+                * applies the forward map. So comp-Glue delegates to hcomp-Glue,
+                * which pushes the composition into T and A with a w.f coherence
+                * patch (no isEquiv needed). *)
+               reduce_hcomp ty phi sides base)
 
       | CTQuotient (underlying_ty, _path_constructors) ->
           (* comp at quotient: compose in the underlying type, then
@@ -385,22 +442,56 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
                    else CComp (ty, phi, sides, base)
                | _ -> CComp (ty, phi, sides, base))
 
-      | CTBase t ->
-          (* comp at primitive: composition over a constant type is
-           * the identity. For user types we treat the same way at
-           * the prototype level. *)
-          (match t with
-           | Surface_ast.TyPrim _ | Surface_ast.TyPrimIn _ -> base
-           | Surface_ast.TyUser _ -> base
-           | _ -> CComp (ty, phi, sides, base))
+      | CTBase _ ->
+          (* comp at a constant (base) type IS hcomp at that type. With a
+           * non-trivial phi it is NOT the base, so delegate to hcomp, which
+           * keeps the faces (the face-active rule fires once a face becomes
+           * tautological, e.g. after a path-beta specializes the dimension).
+           * The phi = [] (false) case already returned base above. *)
+          reduce_hcomp ty phi sides base
 
 (* Homogeneous composition: type doesn't vary along the dimension. *)
-let reduce_hcomp (ty : ctype) (phi : face_formula)
+and reduce_hcomp (ty : ctype) (phi : face_formula)
                  (sides : (string * face * cterm) list)
                  (base : cterm) : cterm =
   match phi with
   | [] -> base
-  | _ -> CHComp (ty, phi, sides, base)
+  | _ ->
+      (match List.find_opt (fun (_, fc, _) -> fc = []) sides with
+       | Some (_, _, v) -> v
+       | None ->
+      match ty with
+      | CTGlue (a_ty, gphi, partial) ->
+          (match partial with
+           | [] ->
+               (* degenerate Glue = base type A: hcomp in A, re-wrap *)
+               let u_sides = List.map (fun (nm, f, u) -> (nm, f, unglue u)) sides in
+               let a1 = reduce_hcomp a_ty phi u_sides (unglue base) in
+               CGlueElem ([], a1, a1)
+           | (t_ty, equiv) :: _ ->
+               (* CCHM homogeneous composition at a Glue type. The type is
+                * constant along the dimension, so this needs only the forward
+                * map w.f (no isEquiv): push the hcomp into the T-component and
+                * the A-component, and patch coherence on gphi with the path
+                * l |-> w.f (hfill_T @ l), connecting w.f(t0) to w.f(t1). *)
+               let tpart v = match v with CGlueElem (_, t, _) -> t | _ -> v in
+               let t_sides = List.map (fun (nm, f, u) -> (nm, f, tpart u)) sides in
+               let t0 = tpart base in
+               (* t1 : T = hcomp T [phi |-> t-part u] t0 *)
+               let t1 = reduce_hcomp t_ty phi t_sides t0 in
+               (* hfill_T @ l = hcomp T [phi |-> t-part u, (l=0) |-> t0] t0 :
+                * equals t0 at l=0 (the (l=0) side fires) and t1 at l=1. *)
+               let l = "_hg_l" in
+               let hfill_at_l =
+                 reduce_hcomp t_ty (phi @ [[(l, false)]])
+                   (t_sides @ [("_hg_fill", [(l, false)], t0)]) t0 in
+               let wf x = CHITConstr ("__equiv_fwd", [equiv; x]) in
+               (* a1 : A = hcomp A [phi |-> unglue u, gphi |-> <l> w.f(hfill_T)] (unglue base) *)
+               let u_sides = List.map (fun (nm, f, u) -> (nm, f, unglue u)) sides in
+               let coh_sides = List.map (fun g -> (l, g, wf hfill_at_l)) gphi in
+               let a1 = reduce_hcomp a_ty (phi @ gphi) (u_sides @ coh_sides) (unglue base) in
+               CGlueElem (gphi, t1, a1))
+      | _ -> CHComp (ty, phi, sides, base))
 
 (* ─── Transport ────────────────────────────────────────────────────── *)
 
@@ -426,6 +517,19 @@ let reduce_transport ((i, ty) : string * ctype) (t : cterm) : cterm =
       let fresh_j = "_transp_j" in
       CPathLam (fresh_j,
         reduce_comp a
+          [[(fresh_j, false)]; [(fresh_j, true)]]
+          [(i, [(fresh_j, false)], x);
+           (i, [(fresh_j, true)], y)]
+          (path_app t (IVar fresh_j)))
+  | CTPathP ((pi, a), x, y) ->
+      (* transp <i> (PathP (<pi> A i pi) x y) t.
+       * Rename the path binder off the transport dimension i, then
+       * comp in the (doubly-varying) line with the endpoints as the
+       * boundary along the fresh path dimension. *)
+      let fresh_j = "_transp_j" in
+      let a_j = subst_interval_in_ctype pi (IVar fresh_j) a in
+      CPathLam (fresh_j,
+        reduce_comp a_j
           [[(fresh_j, false)]; [(fresh_j, true)]]
           [(i, [(fresh_j, false)], x);
            (i, [(fresh_j, true)], y)]
@@ -515,9 +619,11 @@ let rec normalize_cterm (t : cterm) : cterm =
   | CPathApp (p, j) ->
       let p' = normalize_cterm p in
       let j' = normalize_interval j in
-      (match p' with
-       | CPathLam (i, body) ->
+      (match p', j' with
+       | CPathLam (i, body), _ ->
            normalize_cterm (subst_interval_in_cterm i j' body)
+       | CHITConstr ("loop", []), I0 -> CHITConstr ("base", [])  (* loop @ 0 = base *)
+       | CHITConstr ("loop", []), I1 -> CHITConstr ("base", [])  (* loop @ 1 = base *)
        | _ -> CPathApp (p', j'))
   | CComp (ty, phi, sides, base) ->
       let result = reduce_comp ty phi sides base in
@@ -529,11 +635,11 @@ let rec normalize_cterm (t : cterm) : cterm =
       (match result with
        | CHComp _ -> result
        | other -> normalize_cterm other)
-  | CGlueElem t' -> CGlueElem (normalize_cterm t')
+  | CGlueElem (phi, t', a') -> CGlueElem (phi, normalize_cterm t', normalize_cterm a')
   | CUnglue t' ->
       let t'' = normalize_cterm t' in
       (match t'' with
-       | CGlueElem inner -> inner
+       | CGlueElem (_, _, a) -> a
        | _ -> CUnglue t'')
   | CTransport ((i, ty), t') ->
       let result = reduce_transport (i, ty) (normalize_cterm t') in
@@ -541,6 +647,41 @@ let rec normalize_cterm (t : cterm) : cterm =
        | CTransport _ -> result
        | other -> normalize_cterm other)
   | CInhabitant _ -> t
+  | CCore _ -> t   (* opaque: the core reducer handles it after of_cterm *)
+  | CHITElim (branches, scrut) ->
+      (* generic HIT eliminator, any dimension. For any HIT, given a case per
+       * constructor:
+       *   elim (c a1..an)        = (case_c) a1 .. an
+       *   elim (p a1..an @r1..@rk) = ((case_p) a1 .. an) @ r1 .. @ rk
+       * Argument application is deferred to the core via "__app"; path
+       * applications (one per path dimension) are peeled off and re-applied,
+       * so 1-dim (loop, merid, quot, inj) and 2-dim (S2 surf) are uniform. *)
+      let scrut' = normalize_cterm scrut in
+      let apply_args case args =
+        List.fold_left (fun f a -> CHITConstr ("__app", [f; a])) case args in
+      (* peel nested path applications down to the head HIT constructor,
+       * collecting the interval arguments outermost-application-first *)
+      let rec peel t acc =
+        match t with
+        | CPathApp (inner, j) -> peel inner (j :: acc)
+        | CHITConstr (pname, pargs) -> Some (pname, pargs, acc)
+        | _ -> None in
+      (match scrut' with
+       | CHITConstr (cname, cargs) ->
+           (match List.assoc_opt cname branches with
+            | Some case -> normalize_cterm (apply_args case cargs)
+            | None -> CHITElim (branches, scrut'))
+       | CPathApp _ ->
+           (match peel scrut' [] with
+            | Some (pname, pargs, ints) ->
+                (match List.assoc_opt pname branches with
+                 | Some case ->
+                     let applied = apply_args case pargs in
+                     normalize_cterm
+                       (List.fold_left (fun acc j -> path_app acc j) applied ints)
+                 | None -> CHITElim (branches, scrut'))
+            | None -> CHITElim (branches, scrut'))
+       | _ -> CHITElim (branches, scrut'))
   | CHITConstr (n, args) -> CHITConstr (n, List.map normalize_cterm args)
 
 let rec cterm_equal (t1 : cterm) (t2 : cterm) : bool =
@@ -557,7 +698,8 @@ and cterm_syntactic_equal (t1 : cterm) (t2 : cterm) : bool =
       cterm_syntactic_equal b1 b2'
   | CPathApp (p1, j1), CPathApp (p2, j2) ->
       cterm_syntactic_equal p1 p2 && interval_equal j1 j2
-  | CGlueElem t1, CGlueElem t2 -> cterm_syntactic_equal t1 t2
+  | CGlueElem (p1, t1, a1), CGlueElem (p2, t2, a2) ->
+      p1 = p2 && cterm_syntactic_equal t1 t2 && cterm_syntactic_equal a1 a2
   | CUnglue t1, CUnglue t2 -> cterm_syntactic_equal t1 t2
   | CTransport ((i1, ty1), t1), CTransport ((i2, ty2), t2) ->
       let ty2' = subst_interval_in_ctype i2 (IVar i1) ty2 in
@@ -569,6 +711,11 @@ and cterm_syntactic_equal (t1 : cterm) (t2 : cterm) : bool =
       && List.for_all2 cterm_syntactic_equal a1 a2
   | CComp _, CComp _ | CHComp _, CHComp _ ->
       t1 = t2                                (* structural after normalization *)
+  | CCore a, CCore b -> Ast.term_equal_env [] a b
+  | CHITElim (b1, s1), CHITElim (b2, s2) ->
+      List.length b1 = List.length b2
+      && List.for_all2 (fun (n1, c1) (n2, c2) -> n1 = n2 && cterm_syntactic_equal c1 c2) b1 b2
+      && cterm_syntactic_equal s1 s2
   | _, _ -> false
 
 and ctype_equal (a : ctype) (b : ctype) : bool =
@@ -579,6 +726,9 @@ and ctype_equal (a : ctype) (b : ctype) : bool =
       ctype_equal a1 a2
       && cterm_equal x1 x2
       && cterm_equal y1 y2
+  | CTPathP ((i1, a1), x1, y1), CTPathP ((i2, a2), x2, y2) ->
+      let a2' = subst_interval_in_ctype i2 (IVar i1) a2 in
+      ctype_equal a1 a2' && cterm_equal x1 x2 && cterm_equal y1 y2
   | CTGlue (a1, phi1, p1), CTGlue (a2, phi2, p2) ->
       ctype_equal a1 a2
       && phi1 = phi2
@@ -649,6 +799,7 @@ let type_as_term (t : ctype) : cterm =
     match t with
     | CTBase _ -> CVar "__type_base"
     | CTPath _ -> CVar "__type_path"
+    | CTPathP _ -> CVar "__type_pathp"
     | CTGlue _ -> CVar "__type_glue"
     | CTQuotient _ -> CVar "__type_quot"
     | CTHIT (n, _) -> CVar ("__type_hit_" ^ n)

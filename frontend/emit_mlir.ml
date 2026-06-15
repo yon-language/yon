@@ -262,6 +262,8 @@ let rec emit_ty (t : C.ty) : string =
       if core_is_comprehension t then emit_ty a
       else Printf.sprintf "!llvm.struct<(%s, %s)>" (emit_ty a) (emit_ty b)
   | C.TyId _ -> "!topos.cell<1, \"id\">"
+  | C.TyPathP _ -> "!topos.cell<1, \"pathp\">"
+  | C.TyGlue (a, _, _) -> emit_ty a
   | C.TyDirUniverse _ ->
       (* The directed universe U_omega is a static, purely formal classifier
          (like TyType). It carries no runtime payload: a pointer-sized opaque
@@ -727,6 +729,17 @@ let rec collect_string_literals (t : C.term) : unit =
   | C.J (_, _, a, b, c, d) ->
       collect_string_literals a; collect_string_literals b;
       collect_string_literals c; collect_string_literals d
+  | C.PLam (_, b) | C.Transp (_, b) -> collect_string_literals b
+  | C.PApp (p, _) -> collect_string_literals p
+  | C.Comp (_, _, sides, base) | C.HComp (_, _, sides, base) ->
+      collect_string_literals base;
+      List.iter (fun (_, _, t) -> collect_string_literals t) sides
+  | C.GlueElem (_, t, a) -> collect_string_literals t; collect_string_literals a
+  | C.Unglue t -> collect_string_literals t
+  | C.HITElim (branches, scrut) ->
+      List.iter (fun (_, b) -> collect_string_literals b) branches;
+      collect_string_literals scrut
+  | C.HITConstr (_, args) -> List.iter collect_string_literals args
 
 (* Free variables of a Core term. Used to build the EXPLICIT capture list of
  * topos.scope_with_yield: under IsolatedFromAbove the region may not refer
@@ -749,6 +762,18 @@ let rec term_free_vars (t : C.term) : SS.t =
   | C.Pair (a, b) | C.StreamCons (a, b) ->
       SS.union (term_free_vars a) (term_free_vars b)
   | C.Place _ | C.Reduction _ | C.Unit -> SS.empty
+  | C.PLam (_, b) | C.Transp (_, b) -> term_free_vars b
+  | C.PApp (p, _) -> term_free_vars p
+  | C.Comp (_, _, sides, base) | C.HComp (_, _, sides, base) ->
+      List.fold_left (fun acc (_, _, t) -> SS.union acc (term_free_vars t))
+        (term_free_vars base) sides
+  | C.GlueElem (_, t, a) -> SS.union (term_free_vars t) (term_free_vars a)
+  | C.Unglue t -> term_free_vars t
+  | C.HITElim (branches, scrut) ->
+      List.fold_left (fun acc (_, b) -> SS.union acc (term_free_vars b))
+        (term_free_vars scrut) branches
+  | C.HITConstr (_, args) ->
+      List.fold_left (fun acc a -> SS.union acc (term_free_vars a)) SS.empty args
 
 type func_sig = {
   fn_name   : string;
@@ -922,6 +947,9 @@ let rec infer_mlir_ty (e : emitter)
   | C.Var "HashMap__empty" -> "f64"
   | C.Var "HashSet__empty" -> "f64"
   | C.Var "XSet__empty" -> "f64"
+  | C.Var "XRelSet__empty" -> "f64"
+  | C.Var "XRelMap__empty" -> "f64"
+  | C.Var "XSimplex__empty" -> "f64"
   | C.Var "VoyagerList__empty" -> "f64"
   | C.Var "Arena__empty" -> "f64"
   | C.Var "__set_empty" -> "f64"
@@ -1000,6 +1028,22 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.App (C.Var "XSet__intersect", _), _) -> "f64"
   | C.App (C.Var "XSet__size", _) -> "f64"
   | C.App (C.Var "XSet__to_stream", _) -> "f64"
+  | C.App (C.App (C.Var "XRelSet__contains", _), _) -> "i1"
+  | C.App (C.App (C.Var "XRelSet__add", _), _) -> "f64"
+  | C.App (C.App (C.Var "XRelSet__union", _), _) -> "f64"
+  | C.App (C.App (C.Var "XRelSet__intersect", _), _) -> "f64"
+  | C.App (C.Var "XRelSet__size", _) -> "f64"
+  | C.App (C.App (C.Var "XRelMap__contains", _), _) -> "i1"
+  | C.App (C.App (C.Var "XRelMap__get", _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "XRelMap__insert", _), _), _) -> "f64"
+  | C.App (C.Var "XRelMap__size", _) -> "f64"
+  | C.App (C.App (C.Var "XSimplex__of2", _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "XSimplex__triangle", _), _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "XSimplex__omega", _), _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "XSimplex__add", _), _), _) -> "f64"
+  | C.App (C.App (C.Var "XSimplex__count", _), _) -> "f64"
+  | C.App (C.Var "XSimplex__dominant", _) -> "f64"
+  | C.App (C.Var "XSimplex__size", _) -> "f64"
   | C.App (C.App (C.App (C.Var "__merkle_node2", _), _), _) -> "f64"
   | C.App (C.App (C.Var op, _), _) when
       (op = "__map_get" || op = "__map_contains"
@@ -1312,6 +1356,20 @@ let rec infer_mlir_ty (e : emitter)
   | C.Scope (_, body) ->
       (* hermetic scope yields its body value; same type (81b) *)
       infer_mlir_ty e env funcs body
+  | C.PApp _ as pt ->
+      (* path application: reduce-then-look, like J. refl(x)@i = x computes;
+       * a path stuck after normalization is not decided at runtime. *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx pt with
+       | C.PApp _ -> failwith "[emit_mlir infer] path application stuck on a non-reducible path."
+       | t' -> infer_mlir_ty e env funcs t')
+  | C.HITElim _ as ht ->
+      (* HIT eliminator: reduce-then-look. hit_elim on a constructor computes
+       * to a branch; stuck only if the scrutinee is not a constructor. *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx ht with
+       | C.HITElim _ -> failwith "[emit_mlir infer] hit_elim stuck (scrutinee is not a constructor)."
+       | t' -> infer_mlir_ty e env funcs t')
+  | C.HITConstr _ ->
+      failwith "[emit_mlir infer] a bare HIT constructor has no runtime type (it is a homotopy value); use it through hit_elim."
   | _ ->
       failwith "[emit_mlir infer] term form cannot be analyzed for type inference."
 
@@ -1553,6 +1611,18 @@ let rec emit_term (e : emitter)
   | C.Var "XSet__empty" ->
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_xset_empty() : () -> f64" v);
+      (v, "f64")
+  | C.Var "XRelSet__empty" ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_xrelset_empty() : () -> f64" v);
+      (v, "f64")
+  | C.Var "XRelMap__empty" ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_xrelmap_empty() : () -> f64" v);
+      (v, "f64")
+  | C.Var "XSimplex__empty" ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_xsimplex_empty() : () -> f64" v);
       (v, "f64")
   | C.Var "VoyagerList__empty" ->
       let v = fresh_ssa e in
@@ -2070,6 +2140,126 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_add(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "XRelSet__add", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelset_add(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "XRelSet__contains", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v_f64 = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelset_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
+      let v_zero = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
+      let v_i1 = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
+      (v_i1, "i1")
+  | C.App (C.App (C.Var "XRelSet__union", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelset_union(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "XRelSet__intersect", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelset_intersect(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.Var "XRelSet__size", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelset_size(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.App (C.App (C.Var "XRelMap__insert", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelmap_insert(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.App (C.Var "XRelMap__get", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelmap_get(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "XRelMap__contains", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v_f64 = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelmap_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
+      let v_zero = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
+      let v_i1 = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
+      (v_i1, "i1")
+  | C.App (C.Var "XRelMap__size", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelmap_size(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.App (C.Var "XSimplex__of2", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_pair(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.App (C.Var "XSimplex__triangle", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_triangle(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.App (C.App (C.Var "XSimplex__omega", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_omega(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.App (C.App (C.Var "XSimplex__add", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_add(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.App (C.Var "XSimplex__count", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_count(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.Var "XSimplex__dominant", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_dominant(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.Var "XSimplex__size", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_size(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.App (C.Var "XSet__union", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
@@ -4527,6 +4717,18 @@ let rec emit_term (e : emitter)
        | C.J _ ->
            failwith "[emit_mlir] ind_path stuck on a non-refl path: path induction over non-trivial paths is compile-time only; the runtime does not decide path equality."
        | t' -> emit_term e env funcs t')
+  | (C.PLam _ | C.PApp _ | C.Transp _ | C.Comp _ | C.HComp _
+    | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _) as ct ->
+      (* comp-in-MLIR (B2). A cubical term in emission position is normalized
+         via the cubical bridge: closed paths/comp/transport compute and their
+         result lowers to MLIR. A term still cubical after normalization is not
+         decided at runtime — loud error, exactly as with a stuck J. *)
+      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
+      (match reduced with
+       | C.PLam _ | C.PApp _ | C.Transp _ | C.Comp _ | C.HComp _
+       | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _ ->
+           failwith "[emit_mlir] cubical term stuck after normalization: not decided at runtime."
+       | t' -> emit_term e env funcs t')
   (* P7-frontend A2: Sigma pair (Pair, Fst, Snd) --> !llvm.struct *)
   | C.Pair (a, b) ->
       let (va, ta) = emit_term e env funcs a in
@@ -5176,6 +5378,14 @@ let collect_target_spaces (t : C.term) : string list =
     | C.Snd p -> walk p
     | C.StreamCons (a, b) -> walk a; walk b
     | C.Place _ | C.Reduction _ | C.Unit -> ()
+    | C.PLam (_, b) | C.Transp (_, b) -> walk b
+    | C.PApp (p, _) -> walk p
+    | C.Comp (_, _, sides, base) | C.HComp (_, _, sides, base) ->
+        walk base; List.iter (fun (_, _, t) -> walk t) sides
+    | C.GlueElem (_, t, a) -> walk t; walk a
+    | C.Unglue t -> walk t
+    | C.HITElim (branches, scrut) -> List.iter (fun (_, b) -> walk b) branches; walk scrut
+    | C.HITConstr (_, args) -> List.iter walk args
   in
   walk t;
   !acc

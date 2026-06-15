@@ -117,6 +117,12 @@ let rec collect_names (e : expr) : string list =
   | ENewIn (place_name, _space, fas, _) ->
       place_name :: List.concat_map (fun fa -> collect_names fa.fa_value) fas
   | EBinop (_, a, b, _) -> collect_names a @ collect_names b
+  | EApp (f, args, _) -> collect_names f @ List.concat_map collect_names args
+  | EHITElim (c, branches, x, _) ->
+      collect_names c @ List.concat_map (fun (_, e) -> collect_names e) branches @ collect_names x
+  | EPathApp (p, _, _) -> collect_names p
+  | EPathAbs (_, e, _) -> collect_names e
+  | EHITConstr (_, args, _) -> List.concat_map collect_names args
   | EParen (inner, _) -> collect_names inner
   | EAll (place_name, _, _) -> [place_name]
   | EIn (inner, _, _) -> collect_names inner
@@ -146,6 +152,11 @@ let rec collect_names (e : expr) : string list =
   | EComposeWith (h1, h2, _) ->
       (* compose h1 with h2 — entrambe le sub-expr *)
       collect_names h1 @ collect_names h2
+  | ESpawn (count, _body, _) ->
+      (match count with Some e -> collect_names e | None -> [])
+  | EQuote (_c, a, _) -> collect_names a
+  | EElMatch (target, ret, body, _) ->
+      collect_names target @ collect_names ret @ collect_names body
 
 (* Are all names mentioned in this expression visible from the current
  * place? A name is visible if:

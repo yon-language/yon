@@ -55,6 +55,8 @@ type ty =
   | TyPlace of string                          (* a named place, e.g. Order *)
   | TyStream of ty                             (* stream of T *)
   | TyBase of string                           (* base types: text, number, boolean *)
+  | TyGlue of ty * face_formula * (ty * term) list  (* Glue [phi |-> (T, e)] A *)
+  | TyPathP of (string * ty) * term * term     (* PathP (<i> A) x y : dependent path; i binds in A, x:A0, y:A1 *)
 
 (* Operations on a place-with-effects: name + parameter types + return type.
  *)
@@ -73,18 +75,24 @@ and handler_clause = {
   hc_body : term;
 }
 
+and interval =
+  | I0
+  | I1
+  | IVar of string
+  | IMin of interval * interval
+  | IMax of interval * interval
+  | INeg of interval
+
+and face_atom = string * bool
+and face = face_atom list
+and face_formula = face list
+
 and term =
   | Var of string
-  (* Locally-nameless representation (de Bruijn migration, stadio 1).
-   * BVar i: a BOUND variable, the de Bruijn index — how many binders out
-   *         from the use site its binder sits. Carries no name; this is what
-   *         makes alpha-equivalence become textual equality.
-   * FVar x: a FREE / GLOBAL name — builtins (Spawn__open, Stream__make),
-   *         top-level functions — resolved by name downstream (emit_mlir).
-   * The legacy `Var of string` stays alive until every producer/consumer has
-   * migrated; nothing constructs BVar/FVar yet (stadio 1 is purely additive). *)
-  | BVar of int
-  | FVar of string
+  (* Locally-nameless (de Bruijn) migration is SUSPENDED: the BVar/FVar
+   * constructors and their shift/open/close machinery live in
+   * locally_nameless.ml, kept out of the build until the migration is wired
+   * into the pipeline. The kernel term type stays on the legacy `Var`. *)
   | Lam of string * ty * term
   | App of term * term
   | Place of place_decl
@@ -99,6 +107,18 @@ and term =
   | Snd of term
   | StreamCons of term * term
   | Unit
+  | PLam of string * term            (* <i> t — path abstraction *)
+  | PApp of term * interval          (* p @ r — path application *)
+  | Transp of (string * ty) * term   (* transport along type line <i>A *)
+  | Comp of ty * face_formula * (string * face * term) list * term
+  | HComp of ty * face_formula * (string * face * term) list * term
+  | GlueElem of face_formula * term * term  (* glue [phi |-> t] a *)
+  | Unglue of term                          (* unglue projector *)
+  | HITElim of (string * term) list * term  (* generic HIT eliminator: branches
+                                               by constructor name, scrutinee;
+                                               no motive (typing-only) *)
+  | HITConstr of string * term list         (* HIT constructor application:
+                                               base, loop, north, merid x, ... *)
 
 and place_decl = {
   p_name : string;
@@ -142,11 +162,19 @@ let var_alpha env x y =
   | None, None -> x = y              (* both free: by name *)
   | _ -> false                       (* one bound, one free: distinct *)
 
+let rec interval_equal i1 i2 =
+  match i1, i2 with
+  | I0, I0 | I1, I1 -> true
+  | IVar a, IVar b -> a = b
+  | IMin (a1, b1), IMin (a2, b2)
+  | IMax (a1, b1), IMax (a2, b2) ->
+      interval_equal a1 a2 && interval_equal b1 b2
+  | INeg a, INeg b -> interval_equal a b
+  | _ -> false
+
 let rec term_equal_env env t1 t2 =
   match t1, t2 with
   | Var x, Var y -> var_alpha env x y
-  | BVar i, BVar j -> i = j
-  | FVar x, FVar y -> x = y
   | Lam (x, tx, b1), Lam (y, ty', b2) ->
       ty_equal_env env tx ty' && term_equal_env ((x, y) :: env) b1 b2
   | App (f1, a1), App (f2, a2) ->
@@ -168,6 +196,32 @@ let rec term_equal_env env t1 t2 =
   | StreamCons (h1, k1), StreamCons (h2, k2) ->
       term_equal_env env h1 h2 && term_equal_env env k1 k2
   | Unit, Unit -> true
+  | PLam (i1, b1), PLam (i2, b2) ->
+      i1 = i2 && term_equal_env env b1 b2
+  | PApp (p1, r1), PApp (p2, r2) ->
+      term_equal_env env p1 p2 && interval_equal r1 r2
+  | Transp ((i1, a1), b1), Transp ((i2, a2), b2) ->
+      i1 = i2 && ty_equal_env env a1 a2 && term_equal_env env b1 b2
+  | Comp (a1, p1, s1, b1), Comp (a2, p2, s2, b2)
+  | HComp (a1, p1, s1, b1), HComp (a2, p2, s2, b2) ->
+      ty_equal_env env a1 a2 && p1 = p2
+      && List.length s1 = List.length s2
+      && List.for_all2
+           (fun (i1, f1, t1) (i2, f2, t2) ->
+             i1 = i2 && f1 = f2 && term_equal_env env t1 t2)
+           s1 s2
+      && term_equal_env env b1 b2
+  | GlueElem (p1, t1, a1), GlueElem (p2, t2, a2) ->
+      p1 = p2 && term_equal_env env t1 t2 && term_equal_env env a1 a2
+  | Unglue a, Unglue b -> term_equal_env env a b
+  | HITElim (br1, s1), HITElim (br2, s2) ->
+      List.length br1 = List.length br2
+      && List.for_all2
+           (fun (n1, b1) (n2, b2) -> n1 = n2 && term_equal_env env b1 b2) br1 br2
+      && term_equal_env env s1 s2
+  | HITConstr (n1, a1), HITConstr (n2, a2) ->
+      n1 = n2 && List.length a1 = List.length a2
+      && List.for_all2 (term_equal_env env) a1 a2
   | _ -> false
 
 and ty_equal_env env t1 t2 =
@@ -230,8 +284,6 @@ let rec free_vars t =
   let module S = Set.Make (String) in
   match t with
   | Var x -> S.singleton x
-  | BVar _ -> S.empty                 (* a bound variable is not free *)
-  | FVar x -> S.singleton x           (* a free/global name is free *)
   | Lam (x, _, b) -> S.remove x (free_vars b)
   | App (f, a) -> S.union (free_vars f) (free_vars a)
   | Place _ -> S.empty
@@ -257,6 +309,19 @@ let rec free_vars t =
   | Snd t' -> free_vars t'
   | StreamCons (h, k) -> S.union (free_vars h) (free_vars k)
   | Unit -> S.empty
+  | PLam (_i, t') -> free_vars t'
+  | PApp (p, _r) -> free_vars p
+  | Transp ((_i, _a), t') -> free_vars t'
+  | Comp (_, _, sides, base) | HComp (_, _, sides, base) ->
+      List.fold_left (fun acc (_, _, t') -> S.union acc (free_vars t'))
+        (free_vars base) sides
+  | GlueElem (_, t', a') -> S.union (free_vars t') (free_vars a')
+  | Unglue t' -> free_vars t'
+  | HITElim (branches, scrut) ->
+      List.fold_left (fun acc (_, b) -> S.union acc (free_vars b))
+        (free_vars scrut) branches
+  | HITConstr (_, args) ->
+      List.fold_left (fun acc a -> S.union acc (free_vars a)) S.empty args
 
 (* Generate a fresh variable not in a given set.
  * Used by substitution for alpha-renaming on the fly.
