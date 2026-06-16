@@ -228,6 +228,7 @@ from the call sites.
 | `functor(x) => e from W to V [law id]*` | ✓ | function, and `apply_move` accepts a locally bound move-lambda. |
 | `morph(s) => e from S1 to S2` | ✓ | Functor laws are checkable |
 | `compose h1 with h2` | ✓ | Handle composition, `(compose f with g)(x) = g(f(x))`. Kind discipline enforced: e.g. `reduction ∘ reduction` is rejected (the eliminator lands in `number`) |
+| *morphism body is closed* | ✓ | A `move`/`functor`/`view`/`reduction`/`morph` body may use only its parameters and top-level definitions; capturing an enclosing local is a compile-time error (it could not survive crossing a Space). A plain `fun` lambda, by contrast, captures enclosing locals at any nesting depth |
 | `f(args) in S` | ✓ | Call in a Space context (`apply_move ... in S`, morph dispatch) |
 | `all P where cond` | ✓ | Quantification over the sections of a place |
 | `verify P` | ✓ | Instantiate a law-verified place as a Magma handle |

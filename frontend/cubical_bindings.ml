@@ -165,7 +165,12 @@ let infer_unglue (arg_tys : ty list) : infer_result =
  *)
 let infer_ua (arg_tys : ty list) : infer_result =
   match arg_tys with
-  | [_equiv] -> ok_ty (mk_path_ty universe_ty)
+  | [TyUser "Equiv"] -> ok_ty (mk_path_ty universe_ty)
+  | [_other] ->
+      (* SOUNDNESS GATE: ua needs a genuine equivalence, not a bare function.
+       * Build one with equiv(f, g, eta, eps) or idEquiv(A). *)
+      fail_ty (mk_path_ty universe_ty)
+        "ua expects an equivalence (Equiv), not a bare function; build one with equiv(f, g, eta, eps) or idEquiv(A)"
   | _ -> fail_ty (mk_path_ty universe_ty)
            (Printf.sprintf "ua expects 1 argument, got %d"
               (List.length arg_tys))
@@ -224,6 +229,46 @@ let infer_path_app (arg_tys : ty list) : infer_result =
            (Printf.sprintf "path_app expects 2 arguments, got %d"
               (List.length arg_tys))
 
+(* equiv : (f : A -> B) (g : B -> A) (eta : g o f ~ id) (eps : f o g ~ id) -> Equiv A B
+ * Sound constructor for an equivalence. The forward map alone is NOT enough:
+ * to assert A ~= B one must supply the inverse g and the homotopies eta, eps.
+ * The monomorphic checker verifies the SHAPES (f, g functions; eta, eps paths);
+ * full coherence of the homotopies is dependent-typed checking, the next grade.
+ * Arity 4.
+ *)
+let infer_equiv (arg_tys : ty list) : infer_result =
+  let is_fun = function
+    | TyArrow _ | TyPi _ | TyPrim "fun" | TyUser "fun" -> true | _ -> false in
+  let is_path = function
+    | TyUser "Path" | TyUser "Identity" | TyUser "Eq" | TyId _ | TyPathP _ -> true
+    | _ -> false in
+  match arg_tys with
+  | [f; g; eta; eps] ->
+      let errs = [] in
+      let errs = if is_fun f then errs
+                 else "equiv: forward map (arg 1) must be a function A -> B" :: errs in
+      let errs = if is_fun g then errs
+                 else "equiv: inverse (arg 2) must be a function B -> A" :: errs in
+      let errs = if is_path eta then errs
+                 else "equiv: retraction eta (arg 3) must be a path g(f a) = a" :: errs in
+      let errs = if is_path eps then errs
+                 else "equiv: section eps (arg 4) must be a path f(g b) = b" :: errs in
+      if errs = [] then ok_ty (TyUser "Equiv")
+      else { result_ty = TyUser "Equiv"; errors = List.rev errs }
+  | _ -> fail_ty (TyUser "Equiv")
+           (Printf.sprintf "equiv expects 4 arguments (f, g, eta, eps), got %d"
+              (List.length arg_tys))
+
+(* idEquiv : (A : U) -> Equiv A A — the identity equivalence, built soundly.
+ * Arity 1.
+ *)
+let infer_id_equiv (arg_tys : ty list) : infer_result =
+  match arg_tys with
+  | [_a] -> ok_ty (TyUser "Equiv")
+  | _ -> fail_ty (TyUser "Equiv")
+           (Printf.sprintf "idEquiv expects 1 argument (the type), got %d"
+              (List.length arg_tys))
+
 (* ─── Dispatch table ───────────────────────────────────────────────── *)
 
 (* Map from cubical primitive name to (arity, inference function). *)
@@ -238,6 +283,8 @@ let cubical_primitive_table : (string * (int * (ty list -> infer_result))) list 
   "glue",      (2, infer_glue);
   "unglue",    (1, infer_unglue);
   "ua",        (1, infer_ua);
+  "equiv",     (4, infer_equiv);
+  "idEquiv",   (1, infer_id_equiv);
   "ap",        (2, infer_ap);
   "concat",    (2, infer_concat);
   "inv",       (1, infer_inv);

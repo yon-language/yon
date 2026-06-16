@@ -117,9 +117,16 @@ let rec classify_expr (e : expr) : fragment =
   | ENot _ -> FragCATT
   | EIfThenElse _ -> FragCATT
   | ELam _ -> FragCATT  (* lambda funzionale, base *)
+  | EApp _ -> FragCATT  (* general application *)
+  | EHITElim _ -> FragCubical  (* HIT eliminator *)
+  | EPathApp _ -> FragCubical  (* path application p @ i *)
+  | EPathAbs _ -> FragCubical  (* path abstraction plam i => e *)
+  | EHITConstr _ -> FragCubical  (* HIT constructor hit(...) *)
   | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _ -> FragCATT
   | EViewLam _ -> FragCATT  (* 5o handle lambda *)
   | EComposeWith _ -> FragCATT  (* handle composition *)
+  | ESpawn _ -> FragCATT
+  | EQuote _ | EElMatch _ -> FragCubical
 
 (* ─── Equality dispatcher ──────────────────────────────────────────── *)
 
@@ -146,6 +153,10 @@ let rec lift_to_cubical (t : ty) : Cubical.ctype =
       Cubical.CTPath (lift_to_cubical a,
                       Cubical.CInhabitant (Cubical.CVar "__endpoint_x"),
                       Cubical.CInhabitant (Cubical.CVar "__endpoint_y"))
+  | TyPathP ((i, a), _, _) ->
+      Cubical.CTPathP ((i, lift_to_cubical a),
+                       Cubical.CInhabitant (Cubical.CVar "__endpoint_x"),
+                       Cubical.CInhabitant (Cubical.CVar "__endpoint_y"))
   | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _ | TyMetaVar _
   | TyUniverse _ | TyPi _ | TySigma _ ->
       Cubical.CTBase t
@@ -159,6 +170,7 @@ let rec lift_to_cubical (t : ty) : Cubical.ctype =
   | TyReductionHandle _ -> Cubical.CTBase t
   | TyMorphHandle _ -> Cubical.CTBase t
   | TyViewHandle _ -> Cubical.CTBase t
+  | TyWire _ | TySubscription _ | TyEl _ -> Cubical.CTBase t
 
 (* Decidable type equality across the federation.
  *
@@ -173,6 +185,85 @@ let rec lift_to_cubical (t : ty) : Cubical.ctype =
  * Both fragments are decidable independently (Rice 2025 for CATT_R_Yon,
  * CCHM 2016 for Cubical), so the union of the two algorithms remains
  * decidable. *)
+
+(* Alpha-renaming of a free variable inside an expression / type, so that
+ * dependent types (TyPi / TyId) can be compared up to the bound-variable
+ * name. Needed by the equiv coherence check below. *)
+let rec rename_evar (old_n : string) (new_n : string) (e : expr) : expr =
+  let r = rename_evar old_n new_n in
+  match e with
+  | EVar (n, loc) -> if String.equal n old_n then EVar (new_n, loc) else e
+  | EApp (h, args, loc) -> EApp (r h, List.map r args, loc)
+  | ECall (n, args, loc) -> ECall (n, List.map r args, loc)
+  | EField (obj, fld, loc) -> EField (r obj, fld, loc)
+  | EBinop (op, l, ri, loc) -> EBinop (op, r l, r ri, loc)
+  | EParen (inner, loc) -> EParen (r inner, loc)
+  | _ -> e
+
+let rename_ty_term (old_n : string) (new_n : string) (tt : ty_term) : ty_term =
+  match tt with TyTermExpr ex -> TyTermExpr (rename_evar old_n new_n ex)
+
+let rec rename_ty (old_n : string) (new_n : string) (t : ty) : ty =
+  let r = rename_ty old_n new_n in
+  let rt = rename_ty_term old_n new_n in
+  match t with
+  | TyId (a, x, y) -> TyId (r a, rt x, rt y)
+  | TyEl c -> TyEl (rt c)
+  | TyArrow (a, b) -> TyArrow (r a, r b)
+  | TyPi (v, d, c) ->
+      if String.equal v old_n then TyPi (v, r d, c) else TyPi (v, r d, r c)
+  | TySigma (v, d, c) ->
+      if String.equal v old_n then TySigma (v, r d, c) else TySigma (v, r d, r c)
+  | TyPathP ((i, a), x, y) -> TyPathP ((i, r a), rt x, rt y)
+  | _ -> t
+
+(* Index of user function declarations (with bodies), populated by the type
+ * checker at registration time. Used to compare path endpoints UP TO
+ * normalization: a call g(f a) is inlined/folded so it can match a when f, g
+ * are inverse. Empty when comparison happens outside program registration
+ * (e.g. unit-test oracles), in which case we fall back to syntactic equality. *)
+(* SCT-certified delta-rules from the environment, in the form the reducer
+ * expects (name -> curried-lambda Core body). Only certified-terminating
+ * functions are included, so kernel normalization with these needs no fuel
+ * and no step cap. *)
+let certified_deltas (env : Tyenv.env) : (string * Ast.term) list =
+  let peel t =
+    let rec go acc = function
+      | Ast.Lam (x, _, b) -> go (x :: acc) b
+      | other -> (List.rev acc, other)
+    in
+    go [] t
+  in
+  let fundefs =
+    List.map
+      (fun (name, lam) ->
+         let params, body = peel lam in
+         Sct.{ name; params; body })
+      env.Tyenv.delta
+  in
+  let certified = Sct.certify fundefs in
+  List.filter (fun (name, _) -> List.mem name certified) env.Tyenv.delta
+
+(* Endpoint equality: two path endpoints are equal iff their underlying
+ * expressions are syntactically equal, or become equal after KERNEL
+ * normalization with delta-conversion. The delta-rules are the SCT-certified
+ * function definitions from the environment; normalization is fuel-free
+ * because certification guarantees termination. This replaces the old surface
+ * inliner (Naturality_symcheck.normalize with its magic-number cap of 50) and
+ * the global surface_fun_idx ref: one normalizer (the kernel), no parallel
+ * surface path, no cap. *)
+let ty_term_equal
+    (env : Tyenv.env) (ctx : Reduce.ctx) (t1 : ty_term) (t2 : ty_term) : bool =
+  match t1, t2 with
+  | TyTermExpr e1, TyTermExpr e2 ->
+      if Naturality_symcheck.expr_equal e1 e2 then true
+      else
+        (match Desugar.desugar_expr_pure env e1,
+               Desugar.desugar_expr_pure env e2 with
+         | Some c1, Some c2 ->
+             let dctx = { ctx with Reduce.deltas = certified_deltas env } in
+             Ast.term_equal (Reduce.normalize dctx c1) (Reduce.normalize dctx c2)
+         | _ -> false)
 
 let rec type_equal
     (env : Tyenv.env)
@@ -228,6 +319,24 @@ let rec type_equal
       (match pa, pb with
        | None, _ | _, None -> true
        | Some n1, Some n2 -> n1 = n2)
+  | TyEl c1, TyEl c2 ->
+      (* El(c1) = El(c2) iff the decoded carriers are equal. *)
+      let nm c = (match c with Surface_ast.TyTermExpr e -> Surface_ast.ty_term_to_name e) in
+      Catt_r_yon.el_equal env ctx
+        (Catt_r_yon.TmVar (nm c1)) (Catt_r_yon.TmVar (nm c2))
+  | TyId (a1, x1, y1), TyId (a2, x2, y2) ->
+      (* Identity types are equal iff the carriers AND both endpoints match.
+       * This is what makes equiv's coherence check non-vacuous: the type
+       * g(f a) = a is NOT the same as a = a. Previously TyId fell through to
+       * lift_to_cubical, which discards the endpoints — so any two paths over
+       * the same carrier compared equal, and the coherence check was empty. *)
+      type_equal env ctx a1 a2
+      && ty_term_equal env ctx x1 x2 && ty_term_equal env ctx y1 y2
+  | TyPi (v1, d1, c1), TyPi (v2, d2, c2) ->
+      (* Dependent function types, compared up to the bound variable name. *)
+      type_equal env ctx d1 d2
+      && (let c2' = if String.equal v1 v2 then c2 else rename_ty v2 v1 c2 in
+          type_equal env ctx c1 c2')
   | _ ->
   let f1 = classify_ty t1 in
   let f2 = classify_ty t2 in

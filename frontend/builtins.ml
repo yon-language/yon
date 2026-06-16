@@ -624,6 +624,144 @@ let rec deep_reduce_builtin (t : term) : term =
   | StreamCons (h, k) -> StreamCons (deep_reduce_builtin h, deep_reduce_builtin k)
   | other -> other
 
+(* ─── Cubical bridge ──────────────────────────────────────────────────
+ * Path/transport are core kernel terms; their head reductions are computed
+ * by the cubical engine. Translate the path skeleton to cterm, normalize
+ * there, translate back. Core terms the engine cannot represent are caught
+ * and the term is left stuck (try/with -> None), never silently mangled. *)
+
+let rec to_cinterval (r : interval) : Cubical.interval =
+  match r with
+  | I0 -> Cubical.I0
+  | I1 -> Cubical.I1
+  | IVar i -> Cubical.IVar i
+  | IMin (a, b) -> Cubical.IMin (to_cinterval a, to_cinterval b)
+  | IMax (a, b) -> Cubical.IMax (to_cinterval a, to_cinterval b)
+  | INeg a -> Cubical.INeg (to_cinterval a)
+
+let rec of_cinterval (r : Cubical.interval) : interval =
+  match r with
+  | Cubical.I0 -> I0
+  | Cubical.I1 -> I1
+  | Cubical.IVar i -> IVar i
+  | Cubical.IMin (a, b) -> IMin (of_cinterval a, of_cinterval b)
+  | Cubical.IMax (a, b) -> IMax (of_cinterval a, of_cinterval b)
+  | Cubical.INeg a -> INeg (of_cinterval a)
+
+let rec ast_ty_to_surface (a : ty) : Surface_ast.ty =
+  match a with
+  | TyBase n -> Surface_ast.TyPrim n
+  | TyPlace n -> Surface_ast.TyUser n
+  | TyType n -> Surface_ast.TyUniverse n
+  | TyStream t -> Surface_ast.TyStream (ast_ty_to_surface t, [])
+  | TyArrow (x, y) -> Surface_ast.TyArrow (ast_ty_to_surface x, ast_ty_to_surface y)
+  | TyPi (x, p, q) -> Surface_ast.TyPi (x, ast_ty_to_surface p, ast_ty_to_surface q)
+  | TySigma (x, p, q) -> Surface_ast.TySigma (x, ast_ty_to_surface p, ast_ty_to_surface q)
+  | _ -> failwith "[cubical bridge] core type not convertible (transport on this type not wired)"
+
+let rec surface_ty_to_ast (a : Surface_ast.ty) : ty =
+  match a with
+  | Surface_ast.TyPrim n -> TyBase n
+  | Surface_ast.TyUser n -> TyPlace n
+  | Surface_ast.TyUniverse n -> TyType n
+  | Surface_ast.TyStream (t, _) -> TyStream (surface_ty_to_ast t)
+  | Surface_ast.TyArrow (x, y) -> TyArrow (surface_ty_to_ast x, surface_ty_to_ast y)
+  | Surface_ast.TyPi (x, p, q) -> TyPi (x, surface_ty_to_ast p, surface_ty_to_ast q)
+  | Surface_ast.TySigma (x, p, q) -> TySigma (x, surface_ty_to_ast p, surface_ty_to_ast q)
+  | _ -> failwith "[cubical bridge] surface type not convertible back to core"
+
+let rec to_cterm (t : term) : Cubical.cterm =
+  match t with
+  | PLam (i, b) -> Cubical.CPathLam (i, to_cterm b)
+  | PApp (p, r) -> Cubical.CPathApp (to_cterm p, to_cinterval r)
+  | Transp ((i, a), b) -> Cubical.CTransport ((i, to_ctype a), to_cterm b)
+  | Comp (a, phi, sides, base) ->
+      Cubical.CComp (to_ctype a, phi,
+                     List.map (fun (j, f, t') -> (j, f, to_cterm t')) sides,
+                     to_cterm base)
+  | HComp (a, phi, sides, base) ->
+      Cubical.CHComp (to_ctype a, phi,
+                      List.map (fun (j, f, t') -> (j, f, to_cterm t')) sides,
+                      to_cterm base)
+  | GlueElem (phi, t', a') -> Cubical.CGlueElem (phi, to_cterm t', to_cterm a')
+  | Unglue t' -> Cubical.CUnglue (to_cterm t')
+  | HITElim (branches, scrut) ->
+      Cubical.CHITElim (List.map (fun (n, b) -> (n, to_cterm b)) branches, to_cterm scrut)
+  | HITConstr (n, args) -> Cubical.CHITConstr (n, List.map to_cterm args)
+  | Var x -> Cubical.CInhabitant (Cubical.CVar x)
+  | t -> Cubical.CCore t
+      (* opaque lift: any non-cubical core term (equivalence Pair, lambdas,
+       * projections, applications) crosses the engine intact and is unfolded
+       * by of_cterm on the way back. *)
+
+and to_ctype (a : ty) : Cubical.ctype =
+  match a with
+  | TyId (carrier, x, y) ->
+      (* the structured case: a Path/Id type, whose endpoints may mention the
+       * interval variable, so the engine sees the dependence. *)
+      Cubical.CTPath (to_ctype carrier, to_cterm x, to_cterm y)
+  | TyGlue (a, phi, pairs) ->
+      Cubical.CTGlue (to_ctype a, phi,
+                      List.map (fun (t', e) -> (to_ctype t', to_cterm e)) pairs)
+  | TyPathP ((i, a), x, y) ->
+      Cubical.CTPathP ((i, to_ctype a), to_cterm x, to_cterm y)
+  | _ -> Cubical.CTBase (ast_ty_to_surface a)
+
+and of_cterm (c : Cubical.cterm) : term =
+  match c with
+  | Cubical.CPathLam (i, b) -> PLam (i, of_cterm b)
+  | Cubical.CPathApp (p, r) -> PApp (of_cterm p, of_cinterval r)
+  | Cubical.CTransport ((i, ct), b) -> Transp ((i, of_ctype ct), of_cterm b)
+  | Cubical.CComp (ct, phi, sides, base) ->
+      Comp (of_ctype ct, phi,
+            List.map (fun (j, f, t') -> (j, f, of_cterm t')) sides,
+            of_cterm base)
+  | Cubical.CHComp (ct, phi, sides, base) ->
+      HComp (of_ctype ct, phi,
+             List.map (fun (j, f, t') -> (j, f, of_cterm t')) sides,
+             of_cterm base)
+  | Cubical.CGlueElem (phi, t', a') -> GlueElem (phi, of_cterm t', of_cterm a')
+  | Cubical.CUnglue t' -> Unglue (of_cterm t')
+  | Cubical.CHITConstr ("__app", [f; a]) -> App (of_cterm f, of_cterm a)
+  | Cubical.CHITConstr ("__equiv_fwd", [e; t']) ->
+      (* equivalence = Pair (f, (g, (eta, eps))) in the core; the forward map is
+       * Fst e. The engine has no first-class App/Fst at its layer, so it emits
+       * the marker and the projection + application happen in the core. *)
+      App (Fst (of_cterm e), of_cterm t')
+  | Cubical.CHITConstr ("__equiv_bwd", [e; t']) ->
+      (* backward map g = Fst (Snd e) of the quasi-inverse Pair *)
+      App (Fst (Snd (of_cterm e)), of_cterm t')
+  | Cubical.CHITConstr (name, args) ->
+      (* generic HIT constructor: base, loop, north, merid x, ... — now a
+       * first-class core term, no longer stuck at the bridge. *)
+      HITConstr (name, List.map of_cterm args)
+  | Cubical.CHITElim (branches, scrut) ->
+      HITElim (List.map (fun (n, b) -> (n, of_cterm b)) branches, of_cterm scrut)
+  | Cubical.CCore t -> t
+  | Cubical.CInhabitant (Cubical.CVar x) -> Var x
+  | Cubical.CVar x -> Var x
+  | _ -> failwith "[cubical bridge] cterm not lowerable to a core term"
+
+and of_ctype (ct : Cubical.ctype) : ty =
+  match ct with
+  | Cubical.CTBase a -> surface_ty_to_ast a
+  | Cubical.CTPath (c, x, y) -> TyId (of_ctype c, of_cterm x, of_cterm y)
+  | Cubical.CTGlue (a, phi, pairs) ->
+      TyGlue (of_ctype a, phi,
+              List.map (fun (t', e) -> (of_ctype t', of_cterm e)) pairs)
+  | Cubical.CTPathP ((i, ct), x, y) ->
+      TyPathP ((i, of_ctype ct), of_cterm x, of_cterm y)
+  | _ -> failwith "[cubical bridge] ctype not lowerable to a core type"
+
+let try_cubical (t : term) : term option =
+  match t with
+  | PApp _ | Transp _ | Comp _ | HComp _ | GlueElem _ | Unglue _ | HITElim _ ->
+      (try
+         let t' = of_cterm (Cubical.normalize_cterm (to_cterm t)) in
+         if term_equal_env [] t' t then None else Some t'
+       with _ -> None)
+  | _ -> None
+
 let rec reduce_with_builtins ?(fuel = 1000) (ctx : Reduce.ctx) (t : term) : term =
   if fuel <= 0 then t
   else
@@ -635,6 +773,10 @@ let rec reduce_with_builtins ?(fuel = 1000) (ctx : Reduce.ctx) (t : term) : term
         match Reduce.step ctx t with
         | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ctx t'
         | None ->
+            (* Path/transport: reduce via the cubical engine bridge. *)
+            match try_cubical t with
+            | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ctx t'
+            | None ->
             (* No more reductions possible at the head. Try ONE pass of
              * pure (non-side-effectful) deep builtin reduction, then stop.
              * Side-effectful operations (Space, Lattice, Map, Output) are

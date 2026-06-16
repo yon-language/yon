@@ -25,7 +25,12 @@ resolves it from the call sites. Type parameters use angle brackets
 
 **Lambdas and pipes.** `fun(x) => e` is the inline lambda. The pipe
 `a |> f(args)` passes `a` as the *first* argument of the call. Method
-chaining also reads naturally: `recv.m(args)` is `m(recv, args)`.
+chaining also reads naturally: `recv.m(args)` is `m(recv, args)`. An inline
+lambda captures the locals in scope around it, at any nesting depth: a lambda
+written inside another sees both the enclosing lambda's parameters and the
+surrounding function's locals. (A *morphism* lambda — `move`, `functor`,
+`view`, `reduction` — is the deliberate exception: it must be closed, see
+[Arrows are closed](/book/arrows#arrows-are-closed).)
 
 **Modifiers.** `internal fun` is not exported across a package boundary, 
 from outside, it is indistinguishable from a function that does not exist.

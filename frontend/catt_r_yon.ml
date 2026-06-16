@@ -1302,6 +1302,30 @@ let cell_of_geom_morphism_with_witness (gm : geom_morphism_decl)
   let c_target = TmVar gm.gm_target_site in
   dir_incl_intro c_source c_target (witness_of_core_proof core_pull_witness)
 
+(* ─── El: decode a CaTT code into the carrier type it denotes ──────────
+   El is DERIVED, not a new primitive (chosen model): a code is a CaTT term and
+   El(c) is the carrier Surface type it names.
+     0-cell site code   TmVar s            ↦ nominal carrier  TyPrim s
+     directed 1-cell    s ->_{*} t (geom)  ↦ arrow            El(s) -> El(t)
+   What El does not recognize stays undecoded (None): no invented carrier.
+   Equality of El codes rests on the existing decidable (R_Yon) equality:
+   El(c1) ≡ El(c2)  iff  decidable_equal holds on the decoded carriers. *)
+let rec el_decode (c : term) : Surface_ast.ty option =
+  match dir_incl_parts c with
+  | Some (src, tgt, _w) ->
+      (match el_decode src, el_decode tgt with
+       | Some a, Some b -> Some (Surface_ast.TyArrow (a, b))
+       | _ -> None)
+  | None ->
+      (match c with
+       | TmVar s -> Some (Surface_ast.TyPrim s)
+       | _ -> None)
+
+let el_equal (env : Tyenv.env) (ctx : Reduce.ctx) (c1 : term) (c2 : term) : bool =
+  match el_decode c1, el_decode c2 with
+  | Some t1, Some t2 -> decidable_equal env ctx t1 t2
+  | _ -> false
+
 (* ─── Kripke-Joyal forcing: stage |- P ──────────────────────────────────────
 
    Per the user's answers: a "stage" is a STATE (of a place / node / time —

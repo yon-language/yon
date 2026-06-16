@@ -549,6 +549,38 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "to_stream", [TyUser "Map"], tlist tnum;
     ];
+    (* XRelSet: set of Co0/M24 equivalence classes (Leech 24D).
+     * Elements are type-2 points (xcoord -> f64); membership is by class. *)
+    "XRelSet", [
+      "empty", [], TyUser "Map";
+      "add", [TyUser "Map"; tnum], TyUser "Map";
+      "contains", [TyUser "Map"; tnum], tbool;
+      "size", [TyUser "Map"], tnum;
+      "union", [TyUser "Map"; TyUser "Map"], TyUser "Map";
+      "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
+    ];
+    (* XRelMap: map keyed by Co0/M24 equivalence class (Leech 24D).
+     * insert(m, point, value): the key is the class of point, not the specimen. *)
+    "XRelMap", [
+      "empty", [], TyUser "Map";
+      "insert", [TyUser "Map"; tnum; tnum], TyUser "Map";
+      "get", [TyUser "Map"; tnum], tnum;
+      "contains", [TyUser "Map"; tnum], tbool;
+      "size", [TyUser "Map"], tnum;
+    ];
+    (* XSimplex: stateless classifier of a configuration of type-2 points.
+     * triangle/omega take three points; pair (two points) is pending a surface
+     * name because the method name 'pair' clashes with the reserved keyword. *)
+    "XSimplex", [
+      "of2", [tnum; tnum], tnum;
+      "triangle", [tnum; tnum; tnum], tnum;
+      "omega", [tnum; tnum; tnum], tnum;
+      "empty", [], TyUser "Map";
+      "add", [TyUser "Map"; tnum; tnum], TyUser "Map";
+      "count", [TyUser "Map"; tnum], tnum;
+      "dominant", [TyUser "Map"], tnum;
+      "size", [TyUser "Map"], tnum;
+    ];
     (* Merkle DAG as a stdlib place.
      * Surface API: MerkleTree.{leaf, node2, label, child, equal, to_stream}.
      * Backing: ds_merkle_node_t in xheap content-addressed.

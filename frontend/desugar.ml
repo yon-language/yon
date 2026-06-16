@@ -80,8 +80,21 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.EVar (n, _) when not (List.mem n bound) -> [n]
   | S.EVar _ | S.ELit _ -> []
   | S.ECall (n, args, _) ->
+      (* Method-call encoding: `recv.method(args)` is parsed as
+         ECall("recv__method", args) (parser.mly), so the receiver identifier
+         is BAKED INTO the call name and is invisible as a plain variable. We
+         recover it as the prefix before the first "__": for `ys.fold(...)`
+         that prefix is `ys`, a real local that must be captured. Builtins
+         ("__band") have an empty prefix; module-qualified calls ("Seq__fold")
+         have a non-local prefix — both are harmlessly dropped by the caller's
+         intersection with current_locals. *)
+      let recv =
+        match Str.bounded_split_delim (Str.regexp "__") n 2 with
+        | [pfx; _] when pfx <> "" && not (List.mem pfx bound) -> [pfx]
+        | _ -> []
+      in
       let base = if List.mem n bound then [] else [n] in
-      base @ List.concat_map (free_vars_in_expr bound) args
+      recv @ base @ List.concat_map (free_vars_in_expr bound) args
   | S.EField (sub, _, _) -> free_vars_in_expr bound sub
   | S.ENew (_, fas, _) | S.ENewIn (_, _, fas, _) ->
       List.concat_map (fun fa -> free_vars_in_expr bound fa.S.fa_value) fas
@@ -110,6 +123,24 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
       free_vars_in_expr bound' body
   | S.EComposeWith (h1, h2, _) ->
       free_vars_in_expr bound h1 @ free_vars_in_expr bound h2
+  (* General application — e.g. a method call `recv.fold(init, lam)` parses as
+     EApp(EField(recv,"fold"), [init; lam]). Before this case fell through to
+     `| _ -> []`, the receiver and arguments of a nested combinator call inside
+     a lambda body were invisible to capture analysis: an outer lambda whose
+     body contained `ys.fold(...)` never captured `ys`, so the lifted function
+     crashed at emit with "variable 'ys' not in scope". Traversing EApp threads
+     the capture through every nesting level. Over-approximation is safe: the
+     caller intersects the result with `current_locals`, so non-local names
+     (top-level functions, handles) are filtered out. *)
+  | S.EApp (f, args, _) ->
+      free_vars_in_expr bound f @ List.concat_map (free_vars_in_expr bound) args
+  | S.ENot (sub, _) -> free_vars_in_expr bound sub
+  | S.EIn (sub, _, _) -> free_vars_in_expr bound sub
+  | S.ERefl (sub, _) -> free_vars_in_expr bound sub
+  | S.EPair (a, b, _) ->
+      free_vars_in_expr bound a @ free_vars_in_expr bound b
+  | S.EFst (sub, _) | S.ESnd (sub, _) -> free_vars_in_expr bound sub
+  | S.ESpawn (Some e, _, _) -> free_vars_in_expr bound e
   | _ -> []
 
 let uniq_strs (xs : string list) : string list =
@@ -162,6 +193,10 @@ let rec desugar_ty (t : S.ty) : C.ty =
        * for representation purposes (the kernel keeps them as TyId
        * with actual terms, populated only by HoTT primitives). *)
       C.TyId (desugar_ty a, C.Unit, C.Unit)
+  | S.TyPathP ((i, a), _, _) ->
+      (* dependent path; the line A binds i. Endpoints dropped to Unit at IR
+       * level, like TyId; populated by the cubical primitives. *)
+      C.TyPathP ((i, desugar_ty a), C.Unit, C.Unit)
   | S.TyHeytInt _n ->
       (* TyHeytInt<N> is opaque to the core AST for now; the real MLIR
          lowering to tuple<i64, i64> comes later. *)
@@ -188,6 +223,23 @@ let rec desugar_ty (t : S.ty) : C.ty =
   | S.TyViewHandle _p ->
       (* TyViewHandle is lowered to an opaque string in the Core. *)
       C.TyBase "view_handle"
+  | S.TyWire _ ->
+      (* Wire handle: opaque runtime handle in the Core. *)
+      C.TyBase "wire_handle"
+  | S.TySubscription (_, _inner) ->
+      (* Subscription handle: opaque; the stream element type is recovered at
+       * the await site, not carried by the lowered handle. *)
+      C.TyBase "subscription_handle"
+  | S.TyEl (S.TyTermExpr (S.EVar (cname, _))) ->
+      (* simple code: a bare name decodes to its carrier (legacy behaviour);
+       * defensive fallback if it does not decode. *)
+      (match Catt_r_yon.el_decode (Catt_r_yon.TmVar cname) with
+       | Some carrier -> desugar_ty carrier
+       | None -> C.TyBase ("El_" ^ cname))
+  | S.TyEl (S.TyTermExpr e) ->
+      (* applied / structured Tarski code: lower the term natively and keep it
+       * as El(term) — exactly the Ast world where subst_term_in_ty operates. *)
+      C.TyEl (desugar_expr e)
 
 and ty_name (t : S.ty) : string =
   match t with
@@ -200,6 +252,7 @@ and ty_name (t : S.ty) : string =
   | S.TyPi (x, _, _) -> "Pi_" ^ x
   | S.TySigma (x, _, _) -> "Sigma_" ^ x
   | S.TyId _ -> "Id"
+  | S.TyPathP _ -> "PathP"
   | S.TyList _ -> "list"
   | S.TyMap _ -> "map"
   | S.TyStream _ -> "stream"
@@ -210,27 +263,39 @@ and ty_name (t : S.ty) : string =
   | S.TyReductionHandle _ -> "reduction_handle"
   | S.TyMorphHandle _ -> "morph_handle"
   | S.TyViewHandle _ -> "view_handle"
+  | S.TyWire _ -> "wire_handle"
+  | S.TySubscription _ -> "subscription_handle"
+  | S.TyEl c -> (match c with S.TyTermExpr e -> "El_" ^ S.ty_term_to_name e)
 
 (* ─── Helper: build a chain of lambda applications ─────────────────── *)
 
 (* curry_apply f [a;b;c] = App(App(App(f, a), b), c) *)
-let rec curry_apply f args =
+and curry_apply f args =
   match args with
   | [] -> f
   | a :: rest -> curry_apply (C.App (f, a)) rest
 
 (* curry_lam [(x,T);(y,U)] body = Lam("x", T, Lam("y", U, body)) *)
-let rec curry_lam params body =
+and curry_lam params body =
   match params with
   | [] -> body
   | (n, t) :: rest -> C.Lam (n, t, curry_lam rest body)
 
 (* ─── Expression translation ───────────────────────────────────────── *)
 
-let rec desugar_expr (e : S.expr) : C.term =
+and desugar_expr (e : S.expr) : C.term =
   match e with
   | S.ELit (lit, _) -> desugar_literal lit
   | S.EVar (x, _) -> C.Var x
+  | S.EApp (f, args, _) ->
+      curry_apply (desugar_expr f) (List.map desugar_expr args)
+  | S.EHITElim (_motive, branches, x, _) ->
+      C.HITElim (List.map (fun (n, e) -> (n, desugar_expr e)) branches, desugar_expr x)
+  | S.EPathApp (p, d, _) ->
+      let i = (match d with S.DI0 -> C.I0 | S.DI1 -> C.I1 | S.DIVar s -> C.IVar s) in
+      C.PApp (desugar_expr p, i)
+  | S.EPathAbs (i, e, _) -> C.PLam (i, desugar_expr e)
+  | S.EHITConstr (ctor, args, _) -> C.HITConstr (ctor, List.map desugar_expr args)
   | S.EField (obj, fld, _) ->
       (* "obj.field" translates to a projection function applied to obj.
          In Core we model this as application of a named projection. *)
@@ -403,6 +468,12 @@ let rec desugar_expr (e : S.expr) : C.term =
       C.Fst (desugar_expr p)
   | S.ESnd (p, _) ->
       C.Snd (desugar_expr p)
+  | S.EQuote (_c, a, _) ->
+      (* quote(c, a) lowers to a. *)
+      desugar_expr a
+  | S.EElMatch (target, _ret, body, _) ->
+      (* el_match lowers to (body target); ret is dropped. *)
+      C.App (desugar_expr body, desugar_expr target)
   | S.EJ (c, d, p, _) ->
       (* Surface ind_path(C, d, p) desugars to kernel J.
        * The motive binder name is synthesized; the carrier type is
@@ -1009,6 +1080,18 @@ and desugar_produce_block (body : S.stmt list) : C.term =
     | C.Fst e -> C.Fst (rw e)
     | C.Snd e -> C.Snd (rw e)
     | C.StreamCons (a, b) -> C.StreamCons (rw a, rw b)
+    | C.PLam (i, b) -> C.PLam (i, rw b)
+    | C.PApp (p, r) -> C.PApp (rw p, r)
+    | C.Transp (i, b) -> C.Transp (i, rw b)
+    | C.Comp (ty, phi, sides, base) ->
+        C.Comp (ty, phi, List.map (fun (j, fc, t) -> (j, fc, rw t)) sides, rw base)
+    | C.HComp (ty, phi, sides, base) ->
+        C.HComp (ty, phi, List.map (fun (j, fc, t) -> (j, fc, rw t)) sides, rw base)
+    | C.GlueElem (phi, t, a) -> C.GlueElem (phi, rw t, rw a)
+    | C.Unglue t -> C.Unglue (rw t)
+    | C.HITElim (branches, scrut) ->
+        C.HITElim (List.map (fun (n, b) -> (n, rw b)) branches, rw scrut)
+    | C.HITConstr (n, args) -> C.HITConstr (n, List.map rw args)
   in
   let body' = rw body_term in
   (* (lam sid. (lam _. (lam __c. sid) (Stream__close sid)) body')
@@ -1060,6 +1143,18 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
     | C.Fst e -> C.Fst (rw e)
     | C.Snd e -> C.Snd (rw e)
     | C.StreamCons (a, b) -> C.StreamCons (rw a, rw b)
+    | C.PLam (i, b) -> C.PLam (i, rw b)
+    | C.PApp (p, r) -> C.PApp (rw p, r)
+    | C.Transp (i, b) -> C.Transp (i, rw b)
+    | C.Comp (ty, phi, sides, base) ->
+        C.Comp (ty, phi, List.map (fun (j, fc, t) -> (j, fc, rw t)) sides, rw base)
+    | C.HComp (ty, phi, sides, base) ->
+        C.HComp (ty, phi, List.map (fun (j, fc, t) -> (j, fc, rw t)) sides, rw base)
+    | C.GlueElem (phi, t, a) -> C.GlueElem (phi, rw t, rw a)
+    | C.Unglue t -> C.Unglue (rw t)
+    | C.HITElim (branches, scrut) ->
+        C.HITElim (List.map (fun (n, b) -> (n, rw b)) branches, rw scrut)
+    | C.HITConstr (n, args) -> C.HITConstr (n, List.map rw args)
   in
   let body' = rw body_term in
   (* child: run body' (for its promotes), then exit; sequence via (lam _. exit) body' *)
@@ -1592,6 +1687,12 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   | S.EVar _ | S.ELit _ | S.EPullback _ | S.EPushout _ -> e
   | S.EField (o, f, loc) -> S.EField (r o, f, loc)
   | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
+  | S.EApp (f, args, loc) -> S.EApp (r f, List.map r args, loc)
+  | S.EHITElim (c, branches, x, loc) ->
+      S.EHITElim (r c, List.map (fun (n, e) -> (n, r e)) branches, r x, loc)
+  | S.EPathApp (p, d, loc) -> S.EPathApp (r p, d, loc)
+  | S.EPathAbs (i, e, loc) -> S.EPathAbs (i, r e, loc)
+  | S.EHITConstr (ctor, args, loc) -> S.EHITConstr (ctor, List.map r args, loc)
   | S.ENew (n, fas, loc) ->
       S.ENew (n, List.map (fun fa -> { fa with S.fa_value = r fa.S.fa_value }) fas, loc)
   | S.ENewIn (n, sp, fas, loc) ->
@@ -1632,6 +1733,8 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
                 v1_cell_stmts cells b, loc)
   | S.EWireTo _ -> e
   | S.EComposeWith (a, b, loc) -> S.EComposeWith (r a, r b, loc)
+  | S.EQuote (c, a, loc) -> S.EQuote (c, r a, loc)
+  | S.EElMatch (tgt, ret, bod, loc) -> S.EElMatch (r tgt, r ret, r bod, loc)
 
 and v1_cell_cond cells (c : S.condition) : S.condition =
   match c with
@@ -1714,6 +1817,58 @@ let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
   let lam = curry_lam params body in
   (fn.S.fn_name, lam)
 
+(* Run a thunk with every mutable desugar-state ref snapshotted and restored,
+ * so a desugaring done outside the main pass (e.g. during type-checking, for
+ * definitional equality) cannot perturb lambda-lifting counters or the
+ * synthesized-function accumulators. *)
+let with_saved_state (f : unit -> 'a) : 'a =
+  let s_counter = !synth_counter and s_moves = !synth_moves
+  and s_reductions = !synth_reductions and s_morphs = !synth_morphs
+  and s_funs = !synth_funs and s_compose = !compose_synth_bodies
+  and s_fun_sigs = !user_fun_sigs and s_handles = !handle_bindings
+  and s_topos = !topos_to_first_place and s_locals = !current_locals_ref
+  and s_produce = !produce_counter and s_spawn = !spawn_counter in
+  let restore () =
+    synth_counter := s_counter; synth_moves := s_moves;
+    synth_reductions := s_reductions; synth_morphs := s_morphs;
+    synth_funs := s_funs; compose_synth_bodies := s_compose;
+    user_fun_sigs := s_fun_sigs; handle_bindings := s_handles;
+    topos_to_first_place := s_topos; current_locals_ref := s_locals;
+    produce_counter := s_produce; spawn_counter := s_spawn
+  in
+  Fun.protect ~finally:restore f
+
+(* Side-effect-free desugaring of a PURE surface expression to Core. Returns
+ * None for effectful/lift-requiring expressions (sound: the caller then has
+ * no Core term to normalize and treats the comparison conservatively). Used
+ * by the definitional-equality endpoint conversion. *)
+let desugar_expr_pure (env : Tyenv.env) (e : S.expr) : C.term option =
+  with_saved_state (fun () ->
+    if Tyenv.is_pure_expr env e then Some (desugar_expr e) else None)
+
+(* Build the delta-rule of a user function: its body as a CURRIED LAMBDA in
+ * Core, so that unfolding f(args) is just beta on (lambda params. body) args.
+ *
+ * Side-effect-free (with_saved_state). The Core term used in definitional
+ * equality is therefore the *same* term the function denotes at runtime:
+ * identity by behaviour (Yoneda), not a parallel surface heuristic.
+ *
+ * Returns None unless the body is a single pure `return e`. Anything effectful
+ * or lift-requiring (move/morph/produce/spawn) yields no delta-rule, so the
+ * equality judgment leaves such calls opaque — sound. No fuel, no heuristics,
+ * no magic numbers. *)
+let delta_rule_of_fun (env : Tyenv.env) (fn : S.fun_decl) : C.term option =
+  with_saved_state (fun () ->
+    match fn.S.fn_body with
+    | [ S.SReturn (rexpr, _) ] when Tyenv.is_pure_expr env rexpr ->
+        let params =
+          List.map
+            (fun (p : S.param) -> (p.S.param_name, desugar_ty p.S.param_ty))
+            fn.S.fn_params
+        in
+        Some (curry_lam params (desugar_expr rexpr))
+    | _ -> None)
+
 (* Process a top-level declaration, updating the desugar_result. *)
 let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_result =
   match td with
@@ -1746,9 +1901,9 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
          effect tracking aligned first). *)
       let term =
         match !current_env, fn.S.fn_return with
-        | Some e, Some ret when Tycheck.is_terminal_ty e ret ->
+        | Some e, Some ret when Tyenv.is_terminal_ty e ret ->
             (match fn.S.fn_body with
-             | [ S.SReturn (rexpr, _) ] when Tycheck.is_pure_expr e rexpr ->
+             | [ S.SReturn (rexpr, _) ] when Tyenv.is_pure_expr e rexpr ->
                  (* rebuild the lambda with the same params but a Unit body *)
                  let params =
                    List.map (fun p -> (p.S.param_name, desugar_ty p.S.param_ty))
@@ -2186,6 +2341,7 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
      terminal absorber (B.3) consults it to collapse a pure, terminal-returning
      function body to the unique inhabitant `()`. When None the absorber stays
      inert, so behavior is identical to before. *)
+  let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
   current_env := env;
   (* Pre-rewriting that propagates tp_at_space to the `new P { ... }`
    * expressions inside functions. *)
@@ -3273,6 +3429,16 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
     | C.J (_, _, a, b, c, d) ->
         free_names (free_names (free_names (free_names acc a) b) c) d
     | C.Place _ | C.Reduction _ | C.Unit -> acc
+    | C.PLam (_, b) -> free_names acc b
+    | C.PApp (p, _) -> free_names acc p
+    | C.Transp (_, b) -> free_names acc b
+    | C.Comp (_, _, sides, base) | C.HComp (_, _, sides, base) ->
+        List.fold_left (fun a (_, _, t) -> free_names a t) (free_names acc base) sides
+    | C.GlueElem (_, t, a) -> free_names (free_names acc t) a
+    | C.Unglue t -> free_names acc t
+    | C.HITElim (branches, scrut) ->
+        List.fold_left (fun acc (_, b) -> free_names acc b) (free_names acc scrut) branches
+    | C.HITConstr (_, args) -> List.fold_left free_names acc args
   in
   (* Transitive closure: starting from main's free names, pull in the free names
    * of each reached function, until fixpoint. *)

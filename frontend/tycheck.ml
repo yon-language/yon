@@ -112,42 +112,19 @@ let ty_of_literal (l : literal) : ty =
    This predicate is deliberately CONSERVATIVE: anything whose effect status is
    not obviously pure is treated as effectful. Cost of a false "effectful":
    a missed zero-bit optimization. Cost of a false "pure": a deleted effect.
-   We never risk the latter. *)
-let rec is_pure_expr (env : Tyenv.env) (e : expr) : bool =
-  match e with
-  (* Manifestly pure leaves. *)
-  | ELit _ | EVar _ -> true
-  (* Pure if the subexpressions are pure. *)
-  | EField (e1, _, _) | EParen (e1, _) | EFst (e1, _) | ESnd (e1, _)
-  | ENot (e1, _) | ERefl (e1, _) -> is_pure_expr env e1
-  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) ->
-      is_pure_expr env a && is_pure_expr env b
-  | EJ (a, b, c, _) ->
-      is_pure_expr env a && is_pure_expr env b && is_pure_expr env c
-  | EIfThenElse (c, t, el, _) ->
-      is_pure_expr env c && is_pure_expr env t && is_pure_expr env el
-  (* A function call is pure iff the callee declares no effects (fs_visits = []).
-     Unknown callee -> conservatively effectful. *)
-  | ECall (name, args, _) ->
-      (match Tyenv.lookup_fun env name with
-       | Some fs -> fs.fs_visits = [] && List.for_all (is_pure_expr env) args
-       | None -> false)
-  (* Manifestly effectful or allocation/cross-space/scaffolding: never collapse. *)
-  | ENew _ | ENewIn _ | EIn _ | EAll _
-  | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _ | EViewLam _
-  | ELam _ | EPullback _ | EPushout _ | EPullbackVal _ -> false
-  (* Any other form: conservatively effectful. *)
-  | _ -> false
+   We never risk the latter.
+
+   Moved to Tyenv (it needs only the env and surface types) so Desugar can use
+   it without a module cycle; re-exported here for in-module callers. *)
+let is_pure_expr = Tyenv.is_pure_expr
 
 (* Recognize the terminal object 1: the type `TyUser p` where the place p has
    no data fields. This is the derived terminal (no TyUnit primitive); the rest
    of the checker can ask "is this type 1?" without committing to a constructor.
    Subsequent steps use this to type the unique map `!_A : A -> 1` and to give
-   the eta law (every t : 1 equals ()). *)
-let is_terminal_ty (env : Tyenv.env) (t : ty) : bool =
-  match t with
-  | TyUser name -> Tyenv.name_is_terminal env name
-  | _ -> false
+   the eta law (every t : 1 equals ()). Definition moved to Tyenv (same layering
+   reason); re-exported here. *)
+let is_terminal_ty = Tyenv.is_terminal_ty
 
 (* Mere proposition predicate: isProp P := Pi(x:P). Pi(y:P). Id_P(x,y).
    A type is a mere proposition when all its inhabitants are equal. This is the
@@ -159,7 +136,7 @@ let is_terminal_ty (env : Tyenv.env) (t : ty) : bool =
 let isprop_ty (carrier : ty) : ty =
   TyPi ("x", carrier,
     TyPi ("y", carrier,
-      TyId (carrier, TyTermExpr "x", TyTermExpr "y")))
+      TyId (carrier, TyTermExpr (EVar ("x", dummy_loc)), TyTermExpr (EVar ("y", dummy_loc)))))
 
 (* The subobject classifier Omega := Sigma(P:Type_0). isProp(P): the type of
    mere propositions, derived as the (-1)-truncated bottom of the object
@@ -364,6 +341,100 @@ let forbid_handle_in_body
          composition."
         outer_kind inner_kind)
 
+(* Free value-variables of a surface expression, binder-aware. Used by the
+   closed-morphism discipline to detect capture of an enclosing local. Binders
+   that introduce value variables (lambda/handle parameters, path abstraction,
+   HIT-elim branch binders) are subtracted, so a name bound *inside* the body
+   is never reported. ECall callees are top-level names (not free value-vars),
+   so they are not collected. Produce/spawn statement blocks are not descended
+   into (conservative): this can only miss a capture, never invent one. *)
+let free_vars_expr (e0 : expr) : string list =
+  let rec go bound e =
+    let s = go bound in
+    match e with
+    | ELit _ -> []
+    | EVar (x, _) -> if List.mem x bound then [] else [x]
+    | EField (e, _, _) -> s e
+    | ECall (n, args, _) ->
+        (* `recv.method(args)` is parsed as ECall("recv__method", args), so the
+           receiver is baked into the call name. Recover it as the prefix before
+           the first "__" so the closed-morphism gate sees a local captured
+           through a method call (e.g. `ys.fold(...)` in a move body). Builtins
+           ("__band") and module calls ("Seq__fold") yield an empty or non-local
+           prefix and are dropped downstream by lookup_var. *)
+        let recv =
+          match Str.bounded_split_delim (Str.regexp "__") n 2 with
+          | [pfx; _] when pfx <> "" && not (List.mem pfx bound) -> [pfx]
+          | _ -> []
+        in
+        recv @ List.concat_map s args
+    | EApp (h, args, _) -> s h @ List.concat_map s args
+    | EHITElim (t, branches, m, _) ->
+        s t @ List.concat_map (fun (v, e) -> go (v :: bound) e) branches @ s m
+    | EPathApp (e, _, _) -> s e
+    | EPathAbs (i, e, _) -> go (i :: bound) e
+    | EHITConstr (_, args, _) -> List.concat_map s args
+    | EWireTo _ -> []
+    | EProduce (_, _) -> []
+    | ESpawn (eo, _, _) -> (match eo with Some e -> s e | None -> [])
+    | ENew (_, fas, _) -> List.concat_map (fun (fa : field_assignment) -> s fa.fa_value) fas
+    | ENewIn (_, _, fas, _) -> List.concat_map (fun (fa : field_assignment) -> s fa.fa_value) fas
+    | EBinop (_, a, b, _) -> s a @ s b
+    | EParen (e, _) -> s e
+    | EAll (_, _, _) -> []
+    | EIn (e, _, _) -> s e
+    | ERefl (e, _) -> s e
+    | EPair (a, b, _) -> s a @ s b
+    | EFst (e, _) -> s e
+    | ESnd (e, _) -> s e
+    | EJ (a, b, c, _) -> s a @ s b @ s c
+    | EQuote (_, e, _) -> s e
+    | EElMatch (a, b, c, _) -> s a @ s b @ s c
+    | EPullback (_, _, _) -> []
+    | EPushout (_, _, _) -> []
+    | EPullbackVal (_, _, a, b, _) -> s a @ s b
+    | ENot (e, _) -> s e
+    | EIfThenElse (a, b, c, _) -> s a @ s b @ s c
+    | ELam (ps, body, _) -> go (List.map fst ps @ bound) body
+    | EMoveLam (ps, body, _, _, _) -> go (List.map fst ps @ bound) body
+    | EReductionLam (ps, body, _, _) -> go (List.map fst ps @ bound) body
+    | EMorphLam (ps, body, _, _, _) -> go (List.map fst ps @ bound) body
+    | EFunctorLam (ps, body, _, _, _, _) -> go (List.map fst ps @ bound) body
+    | EViewLam (ps, body, _, _) -> go (List.map fst ps @ bound) body
+    | EComposeWith (a, b, _) -> s a @ s b
+  in
+  go [] e0
+
+(* Closed-morphism discipline. The body of a handle lambda (move / reduction /
+   morph / functor / view) must be CLOSED: it may reference only its own
+   parameters and top-level definitions, never a local from the enclosing
+   scope. Capturing an enclosing local is rejected here, at type-check, with a
+   clear message — rather than crashing later in emit ("variable not in
+   scope"). Handle bodies are not closure-converted: a morphism escapes its
+   definition site (it is composed and applied elsewhere, possibly across a
+   Space boundary) and cannot carry an environment by reference. *)
+let forbid_local_capture
+    (kind : string) (params : (string * ty) list) (body : expr)
+    (env : Tyenv.env) (loc : location) : unit tc_result =
+  let param_names = List.map fst params in
+  let captured =
+    free_vars_expr body
+    |> List.filter (fun x ->
+         (not (List.mem x param_names)) && Tyenv.lookup_var env x <> None)
+  in
+  match captured with
+  | [] -> ok ()
+  | x :: _ ->
+      err loc (Printf.sprintf
+        "closed-morphism discipline: the body of this '%s' lambda captures the \
+         enclosing local '%s'. A morphism may use only its own parameters and \
+         top-level definitions (functions, places, worlds) \226\128\148 never a \
+         local from the surrounding scope, because a morphism escapes its \
+         definition site (it is composed and applied elsewhere, possibly across \
+         a Space boundary) and is not closure-converted. Workaround: pass '%s' \
+         as a parameter, or lift it to a top-level definition."
+        kind x x)
+
 (* Forward reference: infer (this rec group) reaches the statement
    checker of the later group, for produce blocks in expression
    position. Initialized right after check_stmts is defined. *)
@@ -391,6 +462,159 @@ let in_spawn_depth : int ref = ref 0
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
+
+  | EApp (f, args, loc) ->
+      let* f_ty = infer env ctx f in
+      let rec apply ft = function
+        | [] -> ok ft
+        | _ :: rest ->
+            (match ft with
+             | TyArrow (_, cod) -> apply cod rest
+             | TyPi (_, _, cod) -> apply cod rest
+             | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
+             | other ->
+                 err loc (Printf.sprintf
+                   "application: head is not a function, got %s"
+                   (Tyenv.ty_to_string other)))
+      in apply f_ty args
+
+  | EHITElim (c, branches, x, loc) ->
+      (* hit_elim(C, [ctor => v, ...], x), Tarski-typed.
+       *   target x : a HIT (known by name in Hit_env)
+       *   motive C : HIT -> Type   (lands in the universe)
+       *   point ctor: v : El(C ctor)
+       *   result    : El(C x)
+       * Path constructors carry a dependent (path-over) type that Surface
+       * cannot yet express (no PathP in Surface_ast.ty); their branches are
+       * inferred and accepted, the full dependent path-over check being the
+       * next refinement. *)
+      let* x_ty = infer env ctx x in
+      let hit_name =
+        match x_ty with
+        | TyPrim n | TyPrimIn (n, _) | TyUser n -> Some n
+        | _ -> None in
+      (match hit_name with
+       | None ->
+           err loc (Printf.sprintf "hit_elim: target is not a higher inductive type (got %s)"
+                      (Tyenv.ty_to_string x_ty))
+       | Some hname ->
+           (match Hit_env.lookup Hit_env.builtin_env hname with
+            | None -> err loc (Printf.sprintf "hit_elim: %s is not a known HIT" hname)
+            | Some sig_ ->
+                let* c_ty = infer env ctx c in
+                let rec lands_in_universe = function
+                  | TyArrow (_, cod) | TyPi (_, _, cod) -> lands_in_universe cod
+                  | TyUniverse _ -> true
+                  | _ -> false in
+                let point_names =
+                  List.map (fun (p : Hit_env.point_constructor) -> p.Hit_env.pc_name)
+                    sig_.Hit_env.hit_points in
+                if lands_in_universe c_ty then
+                  (* Tarski dependent eliminator: point branch : El(C ctor),
+                   * path branch : El(C(ctor@i)) (path-over), result : El(C x). *)
+                  let rec check_branches = function
+                    | [] -> ok ()
+                    | (ctor, v) :: rest ->
+                        if List.mem ctor point_names then
+                          let expected =
+                            TyEl (TyTermExpr (EApp (c, [EVar (ctor, loc)], loc))) in
+                          let* () = check env ctx v expected in
+                          check_branches rest
+                        else
+                          (match v with
+                           | EPathAbs (i, body, _) ->
+                               let line_i =
+                                 TyEl (TyTermExpr
+                                         (EApp (c,
+                                                [EPathApp (EVar (ctor, loc),
+                                                           DIVar i, loc)],
+                                                loc))) in
+                               let* () = check env ctx body line_i in
+                               check_branches rest
+                           | _ ->
+                               err loc (Printf.sprintf
+                                 "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
+                                 ctor))
+                  in
+                  let* () = check_branches branches in
+                  ok (TyEl (TyTermExpr (EApp (c, [x], loc))))
+                else
+                  (* non-dependent recursor: motive C : HIT -> T for a concrete
+                   * T. Point branch : T; path branch plam i => body, body : T
+                   * (constant line); result : T. *)
+                  (match c_ty with
+                   | TyArrow (_, cod) | TyPi (_, _, cod) ->
+                       let rec check_rec = function
+                         | [] -> ok ()
+                         | (ctor, v) :: rest ->
+                             if List.mem ctor point_names then
+                               let* () = check env ctx v cod in
+                               check_rec rest
+                             else
+                               (match v with
+                                | EPathAbs (_, body, _) ->
+                                    let* () = check env ctx body cod in
+                                    check_rec rest
+                                | _ ->
+                                    err loc (Printf.sprintf
+                                      "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
+                                      ctor))
+                       in
+                       let* () = check_rec branches in
+                       ok cod
+                   | _ -> err loc "hit_elim: motive must be a function from the HIT")))
+
+  | EPathApp (p, _d, loc) ->
+      (* path application p @ d. p must be a path (Id type); the result is a
+       * point of the carrier. The exact endpoint (p@0 = x, p@1 = y) is decided
+       * by reduction in the core (PApp); the *type* is the carrier either way. *)
+      let* p_ty = infer env ctx p in
+      (match p_ty with
+       | TyId (carrier, _x, _y) -> ok carrier
+       | _ -> err loc "path application (@): the head is not a path (Id type)")
+
+  | EPathAbs (_i, e, _loc) ->
+      (* plam i => e : a path <i> e. Non-dependent typing: the body has type A
+       * (the carrier); the path runs e[i:=0] ~> e[i:=1], computed in the core
+       * via PApp beta. Endpoints carry placeholders here, exactly as refl does
+       * (the precise term-encoder is the same missing piece). The dependent
+       * PathP typing arrives with TyPathP. *)
+      let* a_ty = infer env ctx e in
+      ok (TyId (a_ty, TyTermExpr (EVar ("path_arg", dummy_loc)),
+                TyTermExpr (EVar ("path_arg", dummy_loc))))
+
+  | EHITConstr (ctor, args, loc) ->
+      (* hit(ctor, args): a HIT constructor. Look it up in the registry.
+       *   point constructor -> the HIT itself
+       *   path  constructor -> a path Id(HIT, left, right) between its endpoints *)
+      let found =
+        List.fold_left (fun acc (_name, sig_) ->
+          match acc with
+          | Some _ -> acc
+          | None ->
+              if List.exists (fun (p : Hit_env.point_constructor) ->
+                                p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points
+              then Some (sig_, `Point)
+              else if List.exists (fun (p : Hit_env.path_constructor) ->
+                                     p.Hit_env.hpc_name = ctor) sig_.Hit_env.hit_paths
+              then Some (sig_, `Path)
+              else None)
+          None Hit_env.builtin_env in
+      (match found with
+       | None -> err loc (Printf.sprintf "hit: unknown HIT constructor %s" ctor)
+       | Some (sig_, `Point) ->
+           let p = List.find (fun (p : Hit_env.point_constructor) ->
+                                p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points in
+           if List.length args <> List.length p.Hit_env.pc_params then
+             err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+                        ctor (List.length p.Hit_env.pc_params) (List.length args))
+           else ok (TyUser sig_.Hit_env.hit_name)
+       | Some (sig_, `Path) ->
+           let p = List.find (fun (p : Hit_env.path_constructor) ->
+                                p.Hit_env.hpc_name = ctor) sig_.Hit_env.hit_paths in
+           ok (TyId (TyUser sig_.Hit_env.hit_name,
+                     TyTermExpr p.Hit_env.hpc_left,
+                     TyTermExpr p.Hit_env.hpc_right)))
 
   | EVar (x, loc) ->
       (* HM let-polymorphism, with priority to the scheme store. If x is bound
@@ -533,7 +757,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                      err floc (Printf.sprintf
                        "Space %s does not declare '%s' (or it is not \
 imported: import <module>::%s from %s)" sp fname fname sp)
-                 | Some (sp', m) when sp' <> sp ->
+                 | Some (sp', _m) when sp' <> sp ->
                      err floc (Printf.sprintf
                        "'%s' is imported from Space %s, not %s" fname sp' sp)
                  | Some (_, m) ->
@@ -702,7 +926,7 @@ got %s" (Tyenv.ty_to_string other)))
         | [first; second] ->
             let _ = first in
             let* second_ty = infer env ctx second in
-            check_call env ctx name [TyPrim "unknown"; second_ty] loc
+            check_call env ctx name args [TyPrim "unknown"; second_ty] loc
         | _ -> err loc (Printf.sprintf "%s expects exactly 2 arguments" name)
       end else if is_seq_with_fun_arg then begin
         (* The last argument is a top-level function name. We skip type
@@ -719,7 +943,7 @@ got %s" (Tyenv.ty_to_string other)))
                 ok (tys @ [t])
               ) (ok []) rest
             in
-            check_call env ctx name (rest_tys @ [TyPrim "unknown"]) loc
+            check_call env ctx name args (rest_tys @ [TyPrim "unknown"]) loc
         | [] -> err loc (Printf.sprintf "%s expects arguments" name)
       end else if is_morph_in_space then begin
         (* The morph-in-space transport accepts input from any space. It type
@@ -732,7 +956,7 @@ got %s" (Tyenv.ty_to_string other)))
             ok (tys @ [t])
           ) (ok []) args
         in
-        check_call env ctx name arg_tys loc
+        check_call env ctx name args arg_tys loc
       end else begin
       (* Cross-space arg leakage detection. If the argument is an EVar bound in
        * an explicit space, the function call would try to read its fields from
@@ -783,7 +1007,7 @@ got %s" (Tyenv.ty_to_string other)))
           (ok []) args
       in
       let* arg_tys = arg_tys_result in
-      check_call env ctx name arg_tys loc
+      check_call env ctx name args arg_tys loc
       end
 
   | EWireTo (sp, loc) ->
@@ -877,16 +1101,11 @@ got %s" (Tyenv.ty_to_string other)))
 
   (* ── HoTT term constructors ──────────────────────────────────── *)
   | ERefl (e, _loc) ->
-      (* refl(t) : Id_A(t, t) where t : A.
-       * We don't yet have full term-level reflection of expressions
-       * into TyId carrier endpoints (that needs a small term-encoder).
-       * For the typechecker we infer the carrier type and return
-       * TyId (A, _, _) with placeholder endpoints — sufficient for
-       * checking subsequent uses against TyId. *)
+      (* refl(t) : Id_A(t, t) — the endpoints ARE the argument t, tracked
+       * faithfully (no placeholder). Endpoint comparison in type_equal is
+       * now structural, so the real term must appear here. *)
       let* a_ty = infer env ctx e in
-      (* TyId in surface uses ty_term placeholders; we mark both
-       * endpoints with a canonical "refl_arg" placeholder name. *)
-      ok (TyId (a_ty, TyTermExpr "refl_arg", TyTermExpr "refl_arg"))
+      ok (TyId (a_ty, TyTermExpr e, TyTermExpr e))
   | EPair (a, b, _loc) ->
       let* a_ty = infer env ctx a in
       let* b_ty = infer env ctx b in
@@ -911,33 +1130,74 @@ got %s" (Tyenv.ty_to_string other)))
            err loc (Printf.sprintf "snd expects Sigma type, got %s"
                       (Tyenv.ty_to_string other)))
   | EJ (c, d, p, loc) ->
-      (* ind_path(C, d, p) : path elimination.
-       *
-       * Yon's J is, today, the NON-dependent computational eliminator:
-       * on refl it reduces to d applied at the basepoint,
-       *   J(C, d, refl(a)) = d(a).
-       * The full dependent eliminator would require
-       *   C : Pi(x:A). Pi(y:A). Pi(p:Id_A(x,y)). Type_n   (a real motive)
-       *   d : Pi(x:A). C(x, x, refl(x))
-       *   result : C(a, b, p)                              (motive applied)
-       * which needs type-level motive application (a dependent substitution
-       * the checker does not have) and a real motive (call sites pass a
-       * placeholder). So we type J HONESTLY for what it is here: infer
-       * p : Id_A, require d to be a function out of A, and return its
-       * codomain R. This replaces the prototype's opaque "unknown" with the
-       * actual result type, without pretending the eliminator is dependent. *)
+      (* Tarski motive engine. A GENUINE motive C is a term (a name or a
+       * lambda) whose type is a function landing in the universe (U_omega /
+       * Type). When C is such, J is typed dependently (Paulin-Mohring/based):
+       *   p : Id_A(a, x)
+       *   d : El(C a (refl a))      (base case)
+       *   J(C, d, p) : El(C x p)    (motive applied to the far endpoint + path)
+       * The applied codes live as Surface EApp inside TyEl and desugar natively
+       * into Ast.TyEl(App ...), the world where subst_term_in_ty operates.
+       * If C is NOT a genuine motive (e.g. a placeholder literal that some call
+       * sites still pass), keep the honest non-dependent typing — read d's
+       * codomain — so existing programs are preserved without faking it. *)
+      let rec lands_in_universe = function
+        | TyArrow (_, cod) | TyPi (_, _, cod) -> lands_in_universe cod
+        | TyUniverse _ -> true
+        | _ -> false
+      in
       let* p_ty = infer env ctx p in
       (match p_ty with
-       | TyId (_a_ty, _x, _y) ->
-           let* _c_ty = infer env ctx c in   (* motive present but not constrained in this mode *)
-           let* d_ty = infer env ctx d in
-           (match d_ty with
-            | TyArrow (_dom, cod) -> ok cod
-            | TyPi (_, _dom, cod) -> ok cod
-            | _ -> ok (TyPrim "unknown"))     (* d not a function we can read: stay opaque, never wrong *)
+       | TyId (_a_ty, TyTermExpr e_a, TyTermExpr e_x) ->
+           let* c_ty = infer env ctx c in
+           if lands_in_universe c_ty then begin
+             (* genuine motive: dependent (Tarski) J *)
+             let refl_a = ERefl (e_a, loc) in
+             let expected_d = TyEl (TyTermExpr (EApp (c, [e_a; refl_a], loc))) in
+             let* () = check env ctx d expected_d in
+             ok (TyEl (TyTermExpr (EApp (c, [e_x; p], loc))))
+           end else begin
+             (* placeholder motive: honest non-dependent typing *)
+             let* d_ty = infer env ctx d in
+             (match d_ty with
+              | TyArrow (_dom, cod) -> ok cod
+              | TyPi (_, _dom, cod) -> ok cod
+              | _ -> ok (TyPrim "unknown"))
+           end
        | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
        | other ->
            err loc (Printf.sprintf "ind_path expects Id type as 3rd arg, got %s"
+                      (Tyenv.ty_to_string other)))
+  | EQuote (c, a, loc) ->
+      (* quote(c, a) : El(c). Check the inhabitant against the decoded carrier;
+       * reject a code that does not decode. *)
+      let cname = (match c with TyTermExpr e -> ty_term_to_name e) in
+      (match Catt_r_yon.el_decode (Catt_r_yon.TmVar cname) with
+       | Some carrier ->
+           let* a_ty = infer env ctx a in
+           if Dispatcher.type_equal env ctx a_ty carrier
+           then ok (TyEl c)
+           else err loc (Printf.sprintf
+             "quote: inhabitant has type %s but El(%s) carrier is %s"
+             (Tyenv.ty_to_string a_ty) cname (Tyenv.ty_to_string carrier))
+       | None ->
+           err loc (Printf.sprintf
+             "El(%s): code does not decode to a carrier (only 0/1-cells supported)" cname))
+  | EElMatch (target, ret, body, loc) ->
+      (* el_match(target, ret, body): infer target : El(_), accept ret, require
+       * body to be a function and return its codomain. *)
+      let* tgt_ty = infer env ctx target in
+      (match tgt_ty with
+       | TyEl _ ->
+           let* _ret_ty = infer env ctx ret in
+           let* body_ty = infer env ctx body in
+           (match body_ty with
+            | TyArrow (_dom, cod) -> ok cod
+            | TyPi (_, _dom, cod) -> ok cod
+            | _ -> ok (TyPrim "unknown"))
+       | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
+       | other ->
+           err loc (Printf.sprintf "el_match expects El(...) as 1st arg, got %s"
                       (Tyenv.ty_to_string other)))
   | EPullback (_f, _g, _loc) ->
       (* pullback(f, g) as an expression. We return TyPrim "number" (a runtime
@@ -985,7 +1245,7 @@ got %s" (Tyenv.ty_to_string other)))
       in
       ok result_ty
 
-  | EMoveLam (_params, body, from_p, to_p, loc) ->
+  | EMoveLam (params, body, from_p, to_p, loc) ->
       (* A lambda of type move from P1 to P2. The body type-check is done on
        * the synthetic fun generated by the desugar; here we return the handle
        * type directly.
@@ -995,14 +1255,17 @@ got %s" (Tyenv.ty_to_string other)))
        * static structures of the topos, not dynamic values built from other
        * morphisms. A functional ELam is allowed (it is a computational
        * endomorphism internal to the place). *)
+      let* () = forbid_local_capture "move" params body env loc in
       let* () = forbid_handle_in_body "move" body loc in
       ok (TyMoveHandle (Some from_p, Some to_p))
 
-  | EReductionLam (_params, body, of_p, loc) ->
+  | EReductionLam (params, body, of_p, loc) ->
+      let* () = forbid_local_capture "reduction" params body env loc in
       let* () = forbid_handle_in_body "reduction" body loc in
       ok (TyReductionHandle (Some of_p))
 
-  | EMorphLam (_params, body, from_s, to_s, loc) ->
+  | EMorphLam (params, body, from_s, to_s, loc) ->
+      let* () = forbid_local_capture "morph" params body env loc in
       let* () = forbid_handle_in_body "morph" body loc in
       ok (TyMorphHandle (Some from_s, Some to_s))
 
@@ -1013,6 +1276,7 @@ got %s" (Tyenv.ty_to_string other)))
        *   (2) semantic: by construction, analyzing the use of the input
        *       variable in the body. F(x)=>body is functorial if the body uses
        *       x in a way that preserves identity and composition. *)
+      let* () = forbid_local_capture "functor" params body env loc in
       let* () = forbid_handle_in_body "functor" body loc in
       let rec check_law_names = function
         | [] -> ok ()
@@ -1076,9 +1340,10 @@ got %s" (Tyenv.ty_to_string other)))
       let _ = from_w and _ = to_w in
       ok (TyMorphHandle (Some from_w, Some to_w))
 
-  | EViewLam (_params, body, of_p, loc) ->
+  | EViewLam (params, body, of_p, loc) ->
       (* TyViewHandle (Some P) per single-projection
        * view inline `view(s: P) => expr of P`. *)
+      let* () = forbid_local_capture "view" params body env loc in
       let* () = forbid_handle_in_body "view" body loc in
       ok (TyViewHandle (Some of_p))
 
@@ -1175,11 +1440,19 @@ and location_of_expr (e : expr) : location =
   | EFunctorLam (_, _, _, _, _, l) -> l
   | EViewLam (_, _, _, l) -> l
   | EComposeWith (_, _, l) -> l
+  | ESpawn (_, _, l) -> l
+  | EQuote (_, _, l) -> l
+  | EElMatch (_, _, _, l) -> l
+  | EApp (_, _, l) -> l
+  | EHITElim (_, _, _, l) -> l
+  | EPathApp (_, _, l) -> l
+  | EPathAbs (_, _, l) -> l
+  | EHITConstr (_, _, l) -> l
 
 (* ─── Call checking ────────────────────────────────────────────────── *)
 
 and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
-               (name : string) (arg_tys : ty list) (loc : location) : ty tc_result =
+               (name : string) (args : expr list) (arg_tys : ty list) (loc : location) : ty tc_result =
   (* Builtin: apply_move(MoveName, source) — applies a registered move.
    * __apply_move_in_<S> respects the same signature. *)
   let is_apply_move =
@@ -1265,6 +1538,35 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
         * the classic way in current Yon; we leave it open as unknown. *)
        ok (TyPrim "unknown")
    | _ ->
+  (* SOUNDNESS: equiv(f, g, eta, eps) — full coherence check. The homotopies
+   * must connect the right endpoints, verified with the actual terms f, g:
+   *   eta : forall (a:A). Id(A, g(f a), a)
+   *   eps : forall (b:B). Id(B, f(g b), b)
+   * This is the dependent check above the structural gate: it does not merely
+   * require eta/eps to be paths, it requires them to be the RIGHT paths. *)
+  if name = "equiv" then
+    (match args, arg_tys with
+     | [f_e; g_e; eta_e; eps_e], [f_ty; g_ty; _; _] ->
+         (match f_ty, g_ty with
+          | (TyArrow (a_ty, _) | TyPi (_, a_ty, _)),
+            (TyArrow (b_ty, _) | TyPi (_, b_ty, _)) ->
+              let a = "__eq_a" and b = "__eq_b" in
+              let eta_expected =
+                TyPi (a, a_ty,
+                      TyId (a_ty,
+                            TyTermExpr (EApp (g_e, [EApp (f_e, [EVar (a, loc)], loc)], loc)),
+                            TyTermExpr (EVar (a, loc)))) in
+              let eps_expected =
+                TyPi (b, b_ty,
+                      TyId (b_ty,
+                            TyTermExpr (EApp (f_e, [EApp (g_e, [EVar (b, loc)], loc)], loc)),
+                            TyTermExpr (EVar (b, loc)))) in
+              let* () = check env ctx eta_e eta_expected in
+              let* () = check env ctx eps_e eps_expected in
+              ok (TyUser "Equiv")
+          | _ -> err loc "equiv: forward map (arg 1) and inverse (arg 2) must be functions")
+     | _ -> err loc "equiv expects 4 arguments (f, g, eta, eps)")
+  else
   (* First, try cubical primitives. *)
   if Cubical_bindings.is_primitive name then
     match Cubical_bindings.check_call name arg_tys with
@@ -1608,7 +1910,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
                   (ok []) args
                 in
                 let* arg_tys = arg_tys_result in
-                let* _ = check_call env ctx name arg_tys loc in
+                let* _ = check_call env ctx name args arg_tys loc in
                 ok env)
        | _ ->
       let arg_tys_result = List.fold_left
@@ -1619,7 +1921,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
         (ok []) args
       in
       let* arg_tys = arg_tys_result in
-      let* _ = check_call env ctx name arg_tys loc in
+      let* _ = check_call env ctx name args arg_tys loc in
       ok env)
 
   | SNew (place_name, fas, loc) ->
@@ -1862,6 +2164,7 @@ let rec level_of_type (t : ty) : int =
   | TyPi (_, a, b) | TySigma (_, a, b) ->
       max (level_of_type a) (level_of_type b)
   | TyId (a, _, _) -> level_of_type a
+  | TyPathP ((_, a), _, _) -> level_of_type a
   | TyList inner | TyStream (inner, _) -> level_of_type inner
   | TyMap (k, v) -> max (level_of_type k) (level_of_type v)
   | TySum vs | TySumIn (vs, _) ->
@@ -1878,6 +2181,9 @@ let rec level_of_type (t : ty) : int =
   | TyReductionHandle _ -> 0
   | TyMorphHandle _ -> 0
   | TyViewHandle _ -> 0
+  | TyWire _ -> 0
+  | TySubscription (_, inner) -> level_of_type inner
+  | TyEl _ -> 0
 
 (* ─── Place subtyping (row polymorphism) ─────────────────────────── *)
 
@@ -1952,7 +2258,13 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         fs_visits = fn.fn_visits;
         fs_partial = fn.fn_partial;
       } in
-      Tyenv.add_fun env fn.fn_name sig_
+      let env1 = Tyenv.add_fun env fn.fn_name sig_ in
+      (* Register the delta-rule (Core body) for definitional equality.
+       * Side-effect-free; None for non-pure-return bodies (sound: no rule,
+       * call stays opaque). *)
+      (match Desugar.delta_rule_of_fun env1 fn with
+       | Some body -> Tyenv.add_delta env1 fn.fn_name body
+       | None -> env1)
   | TopMove _ -> env
   | TopView vd -> Tyenv.add_view env vd
   | TopReduction rd -> Tyenv.add_reduction env rd
@@ -1962,7 +2274,21 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   | TopImportFrom _ -> env   (* cross-Space import: handled at lowering *)
   | TopSpaceInit _ -> env   (* package Space declaration: metadata *)
   | TopLet _ -> env
-  | TopGeomMorphism _ -> env   (* registered separately when wiring up runtime *)
+  | TopGeomMorphism gm ->
+      (* The morphism's type is El(code) = El(src) -> El(tgt), derived from its
+         CaTT code; register the name as a typed arrow so call sites are checked
+         against it. Runtime wiring stays separate, at lowering. *)
+      (match Catt_r_yon.el_decode (Catt_r_yon.cell_of_geom_morphism gm) with
+       | Some (TyArrow (a, b)) ->
+           Tyenv.add_fun env gm.gm_name
+             ({ fs_params = [("x", a)]; fs_return = b;
+                fs_visits = []; fs_partial = false } : E.fun_sig)
+       | _ ->
+           (* Code does not decode (El) to a 1-cell arrow. Leave the name
+              unregistered: the coherence check below is the SOLE arbiter and
+              rejects this case with a located error. Env-building stays
+              best-effort and never raises, so the two phases agree. *)
+           env)
   | TopPullback _ -> env       (* kernel-only *)
   | TopPushout _ -> env
   | TopTopology _ -> env       (* kernel-only *)
@@ -2081,9 +2407,20 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
       let* () = match gm.gm_pull with
         | Some pull -> check_fun_decl env ctx pull
         | None -> ok () in
-      (match gm.gm_push with
+      let* () = (match gm.gm_push with
        | Some push -> check_fun_decl env ctx push
-       | None -> ok ())
+       | None -> ok ()) in
+      (* Derived-El coherence: the morphism's CaTT code must decode (El) to the
+         directed arrow El(src) -> El(tgt). This wires el_decode into the
+         checker; a well-formed morphism satisfies it by construction. *)
+      let cell = Catt_r_yon.cell_of_geom_morphism gm in
+      (match Catt_r_yon.el_decode cell with
+       | Some (TyArrow (_, _)) -> ok ()
+       | _ ->
+           err gm.gm_loc
+             (Printf.sprintf
+                "geom morphism %s: code does not decode (El) to a directed arrow El(%s) -> El(%s)"
+                gm.gm_name gm.gm_source_site gm.gm_target_site))
   | TopPullback _ -> ok ()
   | TopPushout _ -> ok ()
   | TopTopology _ -> ok ()  (* kernel-only *)
@@ -2400,7 +2737,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    * `fun f(R: Space): ...` and `fun g(m: Map): ...` without having to register
    * them with `place`. *)
   let runtime_builtin = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH";
-                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "MerkleTree";
+                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "MerkleTree";
                          "VoyagerList"; "PerfectMap"; "String"] in
   match t with
   | TyPrim n | TyPrimIn (n, _) ->
@@ -2433,6 +2770,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
       (* Endpoints are checked separately when constructed; here we
        * just verify the carrier type is well-formed. *)
       check_type_well_formed env a loc
+  | TyPathP ((_, a), _, _) -> check_type_well_formed env a loc
   | TyList inner | TyStream (inner, _) ->
       check_type_well_formed env inner loc
   | TyMap (k, v) ->
@@ -2491,6 +2829,20 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
        | Some n ->
            if Tyenv.lookup_place env n <> None then ok ()
            else err loc (Printf.sprintf "unknown place '%s' in view handle" n))
+  | TyWire _ ->
+      (* Wire handle: opaque runtime handle, well-formed by construction. *)
+      ok ()
+  | TySubscription (_, inner) ->
+      (* A subscription carries a stream element type; check that. *)
+      check_type_well_formed env inner loc
+  | TyEl c ->
+      (* El(c) is well-formed iff the code decodes to a carrier. *)
+      let cname = (match c with TyTermExpr e -> ty_term_to_name e) in
+      (match Catt_r_yon.el_decode (Catt_r_yon.TmVar cname) with
+       | Some _ -> ok ()
+       | None ->
+           err loc (Printf.sprintf
+             "El(%s): code does not decode to a carrier (only 0/1-cells supported)" cname))
 
 and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit tc_result =
   (* Step 1: rebind TyUser -> TyVar wherever the parser produced TyUser
@@ -3047,6 +3399,14 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | ESpawn (count, body, _) ->
         (match count with Some e -> walk_expr e | None -> ());
         List.iter walk_stmt body
+    | EQuote (_, a, _) -> walk_expr a
+    | EElMatch (tgt, ret, bod, _) -> walk_expr tgt; walk_expr ret; walk_expr bod
+    | EApp (f, args, _) -> walk_expr f; List.iter walk_expr args
+    | EHITElim (c, branches, x, _) ->
+        walk_expr c; List.iter (fun (_, e) -> walk_expr e) branches; walk_expr x
+    | EPathApp (p, _, _) -> walk_expr p
+    | EPathAbs (_, e, _) -> walk_expr e
+    | EHITConstr (_, args, _) -> List.iter walk_expr args
     | ELit _ | EVar _ -> ()
   and walk_stmt s =
     match s with
@@ -3229,6 +3589,7 @@ let infer_fun_signatures (p : program) : (program, type_error) result =
         | SForces (_, _, body, _) -> List.iter walk_stmt body
         | SIter (n, body, _) -> walk_expr n; List.iter walk_stmt body
         | SWhile (c, body, _) -> walk_expr c; List.iter walk_stmt body
+        | SPromote (e, _) -> walk_expr e
       in
       List.iter (function
         | TopFun other_fn -> List.iter walk_stmt other_fn.fn_body
@@ -3319,6 +3680,9 @@ let infer_effects (env : Tyenv.env) (p : program) : Tyenv.env =
   { env with Tyenv.funs = updated_funs }
 
 let check_program (p : program) : check_result =
+  (* Method-call sugar (`s.add(...)`) is normalized away before any checking.
+     Idempotent, so it is also safe to run at the start of desugar_program. *)
+  let p = Method_sugar.normalize_program p in
   reset_scheme_env ();  (* let-poly schemes reset *)
   collect_wire_knowledge p;
   Ty_subst.reset_metavars ();

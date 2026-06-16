@@ -1,0 +1,16 @@
+// Hand-written path-endpoint coherence, end to end from source.
+// Exercises two things now closed in the type checker:
+//   1. Id endpoints may be expressions, not just identifiers:
+//      the return type Id(number, g(f(a)), a) parses.
+//   2. Endpoint comparison is up to normalization: with f and g the
+//      identity, g(f(a)) reduces to a, so refl(a) : Id(number, a, a)
+//      inhabits Id(number, g(f(a)), a). Syntactically the endpoints
+//      differ; up to conversion they agree.
+fun f(x: number): number { return x }
+fun g(x: number): number { return x }
+
+fun coherence(a: number): Id(number, g(f(a)), a) {
+  return refl(a)
+}
+
+fun main(): number { return 0 }

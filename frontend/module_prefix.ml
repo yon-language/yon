@@ -268,7 +268,6 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.SWith (r, pl, b, ll) -> S.SWith (r, pl, rb b, ll)
       | S.SProduce (b, ll) -> S.SProduce (rb b, ll)
       | S.SForces (stg, c, b, ll) -> S.SForces (stg, rwc c, rb b, ll)
-      | other -> other
     in
     List.map (function
       | S.TopFun fn -> S.TopFun { fn with fn_body = List.map rws fn.S.fn_body }

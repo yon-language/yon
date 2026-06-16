@@ -4,7 +4,7 @@
 fun total(xs: list of number): number {
   be acc holds 0
   for every x in xs when here {
-    acc becomes acc + x
+    acc = acc + x
   }
   return acc
 }

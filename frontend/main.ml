@@ -3650,8 +3650,8 @@ let test_id_path_unification () =
   (* Build a synthetic TyId and lift it. *)
   let carrier = Surface_ast.TyPrim "number" in
   let id_ty = Surface_ast.TyId (carrier,
-                                Surface_ast.TyTermExpr "zero",
-                                Surface_ast.TyTermExpr "one") in
+                                Surface_ast.TyTermExpr (Surface_ast.EVar ("zero", Surface_ast.dummy_loc)),
+                                Surface_ast.TyTermExpr (Surface_ast.EVar ("one", Surface_ast.dummy_loc))) in
   let lifted = Dispatcher.lift_to_cubical id_ty in
   (match lifted with
    | Cubical.CTPath (_, _, _) ->
@@ -4169,7 +4169,7 @@ let test_comp_empty_phi () =
 let test_glue_unglue () =
   Printf.printf "\n=== Test 156: Glue types: unglue o glue = id ===\n";
   let t = Cubical.CVar "t" in
-  let glued = Cubical.glue_elem t in
+  let glued = Cubical.glue_elem [] t t in
   let unglued = Cubical.unglue glued in
   if unglued = t then
     (Printf.printf "  unglue(glue_elem t) = t\n";
