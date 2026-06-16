@@ -20,11 +20,11 @@ function Banner() {
       fontSize: '0.9rem',
       lineHeight: 1.55,
     }}>
-      <strong>Active development.</strong> Yon is under heavy refactoring and new
-      capabilities land continuously, so an example, a doc page, or an API name may
-      be briefly out of step with the compiler — rough edges are expected. The source
-      and the benchmarks are public; what these pages describe is what compiles and
-      runs today.
+      <strong>Active development — 1.1 lands soon.</strong> Yon is mid-refactor on
+      the road to <strong>1.1</strong>: a handful of known errors are still being
+      corrected, so an example, a doc page, or an API name may be briefly out of step
+      with the compiler — rough edges are expected. The source and the benchmarks are
+      public; what these pages describe is what compiles and runs today.
     </div>
   );
 }
@@ -128,6 +128,30 @@ function Topos() {
   );
 }
 
+function ClosedArrows() {
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionIn}>
+        <div className={styles.panel}>
+          <span className={styles.kicker}>The discipline</span>
+          <h2 className={styles.h2}>An arrow carries only what its type says.</h2>
+          <p className={styles.lede}>
+            A morphism — a <code>move</code>, a <code>functor</code>, a <code>view</code> — is
+            <strong> closed</strong>: its body may use its own parameters and top-level definitions, and nothing
+            else. Capturing a local from the surrounding scope is a compile-time error, not a runtime surprise.
+            The reason is the border: an arrow is bound, composed, and applied elsewhere — possibly on the far
+            side of a <strong>Space</strong> boundary, in another address space — where a captured local would
+            have nothing to point at. So the only thing that crosses between Spaces is a closed arrow applied to
+            transported data. A plain <code>fun</code> is the opposite by design: a value combinator captures
+            freely, at any nesting depth, because it lives and dies on the spot.
+          </p>
+          <Link className={styles.arrowlink} to="/book/arrows#arrows-are-closed">Read “Arrows are closed” <Arrow /></Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const ABSENT = [
   ['No garbage collector', 'Slots are stable for the life of the process; the heap grows with distinct content only.'],
   ['No threads', 'The unit of concurrency is the process. Spaces talk over a shared-memory wire.'],
@@ -215,6 +239,7 @@ export default function Home() {
         <Sets />
         <Voyager />
         <Topos />
+        <ClosedArrows />
         <Execution />
       </main>
     </Layout>

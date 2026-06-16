@@ -184,6 +184,59 @@ is enforced**: composing two reductions is rejected (the eliminator lands in
 with a `fun` are fine. A bound or composed handle is applied like a function,
 and `apply_move` accepts a locally bound move-lambda.
 
+## Arrows are closed
+
+A handle lambda is a *morphism*, and a morphism's body must be **closed**: it
+may use only its own parameters and top-level definitions — functions, places,
+worlds — never a local from the surrounding scope. This is enforced, and a
+capture is a compile-time error:
+
+```yon
+fun main(): number {
+  be base holds 7
+  be m holds move(s: P) => new Q { v base } from P to Q   // rejected
+  return 0
+}
+```
+
+```
+closed-morphism discipline: the body of this 'move' lambda captures the
+enclosing local 'base'. A morphism may use only its own parameters and
+top-level definitions ... Workaround: pass 'base' as a parameter, or lift it
+to a top-level definition.
+```
+
+The reason is structural, not a restriction bolted on. An arrow *escapes* the
+place it is written: you bind it, `compose` it, and apply it elsewhere —
+possibly on the far side of a Space boundary, in a different address space. A
+captured local would have nothing to point at there. So Yon does not let a
+morphism close over local state at all; it carries only what its type says it
+carries — its parameters — and that is exactly what makes a `move` a sound
+border crossing between Spaces. Write the morphism over its parameter
+(`move(s: P) => new Q { v s.v } from P to Q`), or lift the value to a top-level
+`fun`.
+
+A plain `fun` is the opposite case, and deliberately so. A value combinator —
+the lambda you hand to `fold` — *does* capture enclosing locals, at any nesting
+depth: an inner lambda sees the parameters of the lambda that encloses it and
+the locals of the function around that.
+
+```yon
+fun main(): number {
+  be base holds 10
+  be xs holds List.cons(1, List.cons(2, List.empty(0)))
+  be ys holds List.cons(1, List.cons(2, List.empty(0)))
+  be total holds xs.fold(0, fun(a: number, v: number) =>
+                   a + ys.fold(0, fun(b: number, w: number) => b + w + v + base))
+  return total                 // 52
+}
+```
+
+The inner lambda captures `v` (the outer lambda's parameter) and `base` (a
+local of `main`); the outer one captures `ys` and `base`. That is fine: a `fun`
+lives and dies on the spot, so capture is free. A morphism travels, so it must
+be closed. The distinction *is* the discipline.
+
 ## Between worlds
 
 A `morph F from W to V` block gives a functor by components
