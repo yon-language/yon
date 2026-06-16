@@ -341,6 +341,100 @@ let forbid_handle_in_body
          composition."
         outer_kind inner_kind)
 
+(* Free value-variables of a surface expression, binder-aware. Used by the
+   closed-morphism discipline to detect capture of an enclosing local. Binders
+   that introduce value variables (lambda/handle parameters, path abstraction,
+   HIT-elim branch binders) are subtracted, so a name bound *inside* the body
+   is never reported. ECall callees are top-level names (not free value-vars),
+   so they are not collected. Produce/spawn statement blocks are not descended
+   into (conservative): this can only miss a capture, never invent one. *)
+let free_vars_expr (e0 : expr) : string list =
+  let rec go bound e =
+    let s = go bound in
+    match e with
+    | ELit _ -> []
+    | EVar (x, _) -> if List.mem x bound then [] else [x]
+    | EField (e, _, _) -> s e
+    | ECall (n, args, _) ->
+        (* `recv.method(args)` is parsed as ECall("recv__method", args), so the
+           receiver is baked into the call name. Recover it as the prefix before
+           the first "__" so the closed-morphism gate sees a local captured
+           through a method call (e.g. `ys.fold(...)` in a move body). Builtins
+           ("__band") and module calls ("Seq__fold") yield an empty or non-local
+           prefix and are dropped downstream by lookup_var. *)
+        let recv =
+          match Str.bounded_split_delim (Str.regexp "__") n 2 with
+          | [pfx; _] when pfx <> "" && not (List.mem pfx bound) -> [pfx]
+          | _ -> []
+        in
+        recv @ List.concat_map s args
+    | EApp (h, args, _) -> s h @ List.concat_map s args
+    | EHITElim (t, branches, m, _) ->
+        s t @ List.concat_map (fun (v, e) -> go (v :: bound) e) branches @ s m
+    | EPathApp (e, _, _) -> s e
+    | EPathAbs (i, e, _) -> go (i :: bound) e
+    | EHITConstr (_, args, _) -> List.concat_map s args
+    | EWireTo _ -> []
+    | EProduce (_, _) -> []
+    | ESpawn (eo, _, _) -> (match eo with Some e -> s e | None -> [])
+    | ENew (_, fas, _) -> List.concat_map (fun (fa : field_assignment) -> s fa.fa_value) fas
+    | ENewIn (_, _, fas, _) -> List.concat_map (fun (fa : field_assignment) -> s fa.fa_value) fas
+    | EBinop (_, a, b, _) -> s a @ s b
+    | EParen (e, _) -> s e
+    | EAll (_, _, _) -> []
+    | EIn (e, _, _) -> s e
+    | ERefl (e, _) -> s e
+    | EPair (a, b, _) -> s a @ s b
+    | EFst (e, _) -> s e
+    | ESnd (e, _) -> s e
+    | EJ (a, b, c, _) -> s a @ s b @ s c
+    | EQuote (_, e, _) -> s e
+    | EElMatch (a, b, c, _) -> s a @ s b @ s c
+    | EPullback (_, _, _) -> []
+    | EPushout (_, _, _) -> []
+    | EPullbackVal (_, _, a, b, _) -> s a @ s b
+    | ENot (e, _) -> s e
+    | EIfThenElse (a, b, c, _) -> s a @ s b @ s c
+    | ELam (ps, body, _) -> go (List.map fst ps @ bound) body
+    | EMoveLam (ps, body, _, _, _) -> go (List.map fst ps @ bound) body
+    | EReductionLam (ps, body, _, _) -> go (List.map fst ps @ bound) body
+    | EMorphLam (ps, body, _, _, _) -> go (List.map fst ps @ bound) body
+    | EFunctorLam (ps, body, _, _, _, _) -> go (List.map fst ps @ bound) body
+    | EViewLam (ps, body, _, _) -> go (List.map fst ps @ bound) body
+    | EComposeWith (a, b, _) -> s a @ s b
+  in
+  go [] e0
+
+(* Closed-morphism discipline. The body of a handle lambda (move / reduction /
+   morph / functor / view) must be CLOSED: it may reference only its own
+   parameters and top-level definitions, never a local from the enclosing
+   scope. Capturing an enclosing local is rejected here, at type-check, with a
+   clear message — rather than crashing later in emit ("variable not in
+   scope"). Handle bodies are not closure-converted: a morphism escapes its
+   definition site (it is composed and applied elsewhere, possibly across a
+   Space boundary) and cannot carry an environment by reference. *)
+let forbid_local_capture
+    (kind : string) (params : (string * ty) list) (body : expr)
+    (env : Tyenv.env) (loc : location) : unit tc_result =
+  let param_names = List.map fst params in
+  let captured =
+    free_vars_expr body
+    |> List.filter (fun x ->
+         (not (List.mem x param_names)) && Tyenv.lookup_var env x <> None)
+  in
+  match captured with
+  | [] -> ok ()
+  | x :: _ ->
+      err loc (Printf.sprintf
+        "closed-morphism discipline: the body of this '%s' lambda captures the \
+         enclosing local '%s'. A morphism may use only its own parameters and \
+         top-level definitions (functions, places, worlds) \226\128\148 never a \
+         local from the surrounding scope, because a morphism escapes its \
+         definition site (it is composed and applied elsewhere, possibly across \
+         a Space boundary) and is not closure-converted. Workaround: pass '%s' \
+         as a parameter, or lift it to a top-level definition."
+        kind x x)
+
 (* Forward reference: infer (this rec group) reaches the statement
    checker of the later group, for produce blocks in expression
    position. Initialized right after check_stmts is defined. *)
@@ -1151,7 +1245,7 @@ got %s" (Tyenv.ty_to_string other)))
       in
       ok result_ty
 
-  | EMoveLam (_params, body, from_p, to_p, loc) ->
+  | EMoveLam (params, body, from_p, to_p, loc) ->
       (* A lambda of type move from P1 to P2. The body type-check is done on
        * the synthetic fun generated by the desugar; here we return the handle
        * type directly.
@@ -1161,14 +1255,17 @@ got %s" (Tyenv.ty_to_string other)))
        * static structures of the topos, not dynamic values built from other
        * morphisms. A functional ELam is allowed (it is a computational
        * endomorphism internal to the place). *)
+      let* () = forbid_local_capture "move" params body env loc in
       let* () = forbid_handle_in_body "move" body loc in
       ok (TyMoveHandle (Some from_p, Some to_p))
 
-  | EReductionLam (_params, body, of_p, loc) ->
+  | EReductionLam (params, body, of_p, loc) ->
+      let* () = forbid_local_capture "reduction" params body env loc in
       let* () = forbid_handle_in_body "reduction" body loc in
       ok (TyReductionHandle (Some of_p))
 
-  | EMorphLam (_params, body, from_s, to_s, loc) ->
+  | EMorphLam (params, body, from_s, to_s, loc) ->
+      let* () = forbid_local_capture "morph" params body env loc in
       let* () = forbid_handle_in_body "morph" body loc in
       ok (TyMorphHandle (Some from_s, Some to_s))
 
@@ -1179,6 +1276,7 @@ got %s" (Tyenv.ty_to_string other)))
        *   (2) semantic: by construction, analyzing the use of the input
        *       variable in the body. F(x)=>body is functorial if the body uses
        *       x in a way that preserves identity and composition. *)
+      let* () = forbid_local_capture "functor" params body env loc in
       let* () = forbid_handle_in_body "functor" body loc in
       let rec check_law_names = function
         | [] -> ok ()
@@ -1242,9 +1340,10 @@ got %s" (Tyenv.ty_to_string other)))
       let _ = from_w and _ = to_w in
       ok (TyMorphHandle (Some from_w, Some to_w))
 
-  | EViewLam (_params, body, of_p, loc) ->
+  | EViewLam (params, body, of_p, loc) ->
       (* TyViewHandle (Some P) per single-projection
        * view inline `view(s: P) => expr of P`. *)
+      let* () = forbid_local_capture "view" params body env loc in
       let* () = forbid_handle_in_body "view" body loc in
       ok (TyViewHandle (Some of_p))
 

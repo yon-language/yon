@@ -80,8 +80,21 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.EVar (n, _) when not (List.mem n bound) -> [n]
   | S.EVar _ | S.ELit _ -> []
   | S.ECall (n, args, _) ->
+      (* Method-call encoding: `recv.method(args)` is parsed as
+         ECall("recv__method", args) (parser.mly), so the receiver identifier
+         is BAKED INTO the call name and is invisible as a plain variable. We
+         recover it as the prefix before the first "__": for `ys.fold(...)`
+         that prefix is `ys`, a real local that must be captured. Builtins
+         ("__band") have an empty prefix; module-qualified calls ("Seq__fold")
+         have a non-local prefix — both are harmlessly dropped by the caller's
+         intersection with current_locals. *)
+      let recv =
+        match Str.bounded_split_delim (Str.regexp "__") n 2 with
+        | [pfx; _] when pfx <> "" && not (List.mem pfx bound) -> [pfx]
+        | _ -> []
+      in
       let base = if List.mem n bound then [] else [n] in
-      base @ List.concat_map (free_vars_in_expr bound) args
+      recv @ base @ List.concat_map (free_vars_in_expr bound) args
   | S.EField (sub, _, _) -> free_vars_in_expr bound sub
   | S.ENew (_, fas, _) | S.ENewIn (_, _, fas, _) ->
       List.concat_map (fun fa -> free_vars_in_expr bound fa.S.fa_value) fas
@@ -110,6 +123,24 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
       free_vars_in_expr bound' body
   | S.EComposeWith (h1, h2, _) ->
       free_vars_in_expr bound h1 @ free_vars_in_expr bound h2
+  (* General application — e.g. a method call `recv.fold(init, lam)` parses as
+     EApp(EField(recv,"fold"), [init; lam]). Before this case fell through to
+     `| _ -> []`, the receiver and arguments of a nested combinator call inside
+     a lambda body were invisible to capture analysis: an outer lambda whose
+     body contained `ys.fold(...)` never captured `ys`, so the lifted function
+     crashed at emit with "variable 'ys' not in scope". Traversing EApp threads
+     the capture through every nesting level. Over-approximation is safe: the
+     caller intersects the result with `current_locals`, so non-local names
+     (top-level functions, handles) are filtered out. *)
+  | S.EApp (f, args, _) ->
+      free_vars_in_expr bound f @ List.concat_map (free_vars_in_expr bound) args
+  | S.ENot (sub, _) -> free_vars_in_expr bound sub
+  | S.EIn (sub, _, _) -> free_vars_in_expr bound sub
+  | S.ERefl (sub, _) -> free_vars_in_expr bound sub
+  | S.EPair (a, b, _) ->
+      free_vars_in_expr bound a @ free_vars_in_expr bound b
+  | S.EFst (sub, _) | S.ESnd (sub, _) -> free_vars_in_expr bound sub
+  | S.ESpawn (Some e, _, _) -> free_vars_in_expr bound e
   | _ -> []
 
 let uniq_strs (xs : string list) : string list =

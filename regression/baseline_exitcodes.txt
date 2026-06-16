@@ -1,3 +1,4 @@
+EMITFAIL closed_morphism_capture
 EMITFAIL false_coherence
 RAN arena_basic exit=6
 RAN capability_flow_demo exit=110
@@ -44,6 +45,7 @@ RAN land_reach exit=113
 RAN math_ext exit=39
 RAN merkle_noncommutative exit=11
 RAN nat_transform_functor exit=0
+RAN nested_lambda_capture exit=52
 RAN net_stream exit=0
 RAN primes_bertrand exit=8
 RAN route_history exit=31
