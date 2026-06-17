@@ -71,9 +71,17 @@ let () =
   let env_good = Tyenv.add_vars Tyenv.empty
       [("f", fnt); ("g", fnt); ("eta", eta_good); ("eps", eps_good)] in
   (match Tycheck.infer env_good ctx call with
-   | Ok (TyUser "Equiv") -> check "equiv with CORRECT coherences accepted" true
+   | Ok (TySigma (_, TyArrow (TyPrim "number", TyPrim "number"), _)) ->
+       check "equiv with CORRECT coherences accepted (structured Equiv, endpoints A=B=number)" true
    | Ok other -> check (Printf.sprintf "coherence: unexpected %s" (Tyenv.ty_to_string other)) false
    | Error e -> check (Printf.sprintf "coherence: good rejected: %s" (Tycheck.error_to_string e)) false);
+
+  (* Stage 0: the structured Equiv flows into ua — the chain equiv -> ua types. *)
+  let structured_equiv =
+    (match Tycheck.infer env_good ctx call with Ok t -> t | Error _ -> TyPrim "unit") in
+  let r_ua_struct = Cubical_bindings.infer_ua [structured_equiv] in
+  check "ua(structured equiv from equiv(...)) accepted (endpoints present)"
+    (r_ua_struct.Cubical_bindings.errors = []);
 
   (* eta with WRONG endpoints: Id(num, a, a) instead of Id(num, g(f a), a) *)
   let eta_bad = TyPi ("__eq_a", num, TyId (num, TyTermExpr (EVar ("__eq_a", dl)), TyTermExpr (EVar ("__eq_a", dl)))) in

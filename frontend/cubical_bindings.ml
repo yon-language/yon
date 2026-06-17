@@ -52,9 +52,12 @@ let mk_path_ty (base_ty : ty) : ty =
   ignore base_ty;
   TyUser "Path"
 
-(* Construct an equivalence type A ~= B. *)
-let mk_equiv_ty (_a : ty) (_b : ty) : ty =
-  TyUser "Equiv"
+(* Construct an equivalence type A ~= B as the canonical Sigma it is in HoTT:
+ * Sigma(f : A -> B). (B -> A), carrying the endpoints A, B in the head arrow.
+ * No new primitive: equivalence is expressed through the existing Sigma/Arrow
+ * formers, and ua reads A, B from the head. *)
+let mk_equiv_ty (a : ty) (b : ty) : ty =
+  TySigma ("f", TyArrow (a, b), TyArrow (b, a))
 
 (* The universe type. *)
 let universe_ty : ty = TyUser "U"
@@ -164,13 +167,18 @@ let infer_unglue (arg_tys : ty list) : infer_result =
  * Arity 1.
  *)
 let infer_ua (arg_tys : ty list) : infer_result =
+  let is_equiv_shape = function
+    (* canonical equivalence: a Sigma headed by the forward map f : A -> B *)
+    | TySigma (_, (TyArrow _ | TyPi _), _) -> true
+    (* abstract / named equivalence (idEquiv, an Equiv-typed variable) *)
+    | TyUser "Equiv" -> true
+    | _ -> false in
   match arg_tys with
-  | [TyUser "Equiv"] -> ok_ty (mk_path_ty universe_ty)
+  | [e] when is_equiv_shape e -> ok_ty (mk_path_ty universe_ty)
   | [_other] ->
-      (* SOUNDNESS GATE: ua needs a genuine equivalence, not a bare function.
-       * Build one with equiv(f, g, eta, eps) or idEquiv(A). *)
+      (* SOUNDNESS GATE: ua needs a genuine equivalence, not a bare function. *)
       fail_ty (mk_path_ty universe_ty)
-        "ua expects an equivalence (Equiv), not a bare function; build one with equiv(f, g, eta, eps) or idEquiv(A)"
+        "ua expects an equivalence (Equiv = Sigma(f:A->B). ...), not a bare function; build one with equiv(f, g, eta, eps) or idEquiv(A)"
   | _ -> fail_ty (mk_path_ty universe_ty)
            (Printf.sprintf "ua expects 1 argument, got %d"
               (List.length arg_tys))
@@ -253,8 +261,14 @@ let infer_equiv (arg_tys : ty list) : infer_result =
                  else "equiv: retraction eta (arg 3) must be a path g(f a) = a" :: errs in
       let errs = if is_path eps then errs
                  else "equiv: section eps (arg 4) must be a path f(g b) = b" :: errs in
-      if errs = [] then ok_ty (TyUser "Equiv")
-      else { result_ty = TyUser "Equiv"; errors = List.rev errs }
+      if errs = [] then
+        (* One canonical Equiv shape (matches tycheck's equiv path): a Sigma
+         * headed by f : A -> B, with the endpoints read from the forward map. *)
+        (match f with
+         | TyArrow (a, b) | TyPi (_, a, b) -> ok_ty (mk_equiv_ty a b)
+         | _ -> ok_ty (mk_equiv_ty (TyPrim "unit") (TyPrim "unit")))
+      else { result_ty = mk_equiv_ty (TyPrim "unit") (TyPrim "unit");
+             errors = List.rev errs }
   | _ -> fail_ty (TyUser "Equiv")
            (Printf.sprintf "equiv expects 4 arguments (f, g, eta, eps), got %d"
               (List.length arg_tys))
