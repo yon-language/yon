@@ -19,7 +19,7 @@ let check name cond =
 let () =
   Printf.printf "=== motive application (subst_term_in_ty) oracle ===\n\n";
 
-  let a = TyBase "A" in
+  let a = TyPlace "A" in
   let s = Subst.subst_term_in_ty in
 
   (* (1) TyId endpoints: C(x) = Id_A(x, y); C(a) substitutes the left endpoint *)
@@ -33,7 +33,7 @@ let () =
      | TyEl (Var "a") -> true | _ -> false);
 
   (* (3) structural former with no term: untouched *)
-  check "TyBase / TyPlace: no term, untouched"
+  check "TyPlace / TyPlace: no term, untouched"
     (s "x" (Var "a") (TyPlace "S1") = TyPlace "S1");
 
   (* (4) TyPi binder SHADOWS: Pi(x:A). Id_A(x,y) [x := a] leaves the body alone *)

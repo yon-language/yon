@@ -453,13 +453,23 @@ let rec step ctx t =
                        | None -> None)
 
   | Pair (a, b) ->
+      (* eta-Sigma (surjective pairing), as a CONTRACTION: Pair(Fst t, Snd t) ~> t
+         when the two projections are of the same term (up to alpha). Strictly
+         size-decreasing — t is smaller than Pair(Fst t, Snd t) — so the
+         termination of the deterministic strategy is preserved. This makes the
+         binary products of Syn(Yon) STRICT (the pairing mediator is unique),
+         not merely weak. Checked BEFORE reducing the components so it fires on a
+         neutral t (e.g. a variable), which is the case that matters. *)
+      (match a, b with
+       | Fst t1, Snd t2 when term_equal t1 t2 -> Some t1
+       | _ ->
       (* Reduce components left-to-right. *)
       (match step ctx a with
        | Some a' -> Some (Pair (a', b))
        | None ->
            match step ctx b with
            | Some b' -> Some (Pair (a, b'))
-           | None -> None)
+           | None -> None))
 
   | Fst t' ->
       (* Sigma first projection. beta-rule: fst (a, b) == a. *)

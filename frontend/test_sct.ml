@@ -13,7 +13,7 @@ let check name cond =
   if cond then (incr pass; Printf.printf "  [PASS] %s\n" name)
   else (incr fail; Printf.printf "  [FAIL] %s\n" name)
 
-let num = TyBase "number"
+let num = TyPlace "number"
 
 (* helper to build a fundef *)
 let fn name params body : Sct.fundef = { Sct.name; params; body }

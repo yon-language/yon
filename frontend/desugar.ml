@@ -170,17 +170,17 @@ let rec desugar_ty (t : S.ty) : C.ty =
      emit_ty, layouts, __new constructors) sees the already-fused type.
      Fixing this at the emit layer instead caused signature/call splits
      (the monomorphizer keyed on the divergent type strings). *)
-  | S.TyUser "String" -> C.TyBase "text"
+  | S.TyUser "String" -> C.TyPlace "text"
   | S.TyPrim n | S.TyPrimIn (n, _) ->
       (match n with
-       | "text" | "number" | "boolean" | "money" -> C.TyBase n
-       | other -> C.TyBase other)
+       | "text" | "number" | "boolean" | "money" -> C.TyPlace n
+       | other -> C.TyPlace other)
   | S.TySum _ | S.TySumIn _ ->
       (* Sum types compile to base types in the prototype; a full
          translation would unfold into tagged unions. *)
-      C.TyBase "sum"
-  | S.TyList inner -> C.TyBase ("list_of_" ^ ty_name inner)
-  | S.TyMap (_, _) -> C.TyBase "map"
+      C.TyPlace "sum"
+  | S.TyList inner -> C.TyPlace ("list_of_" ^ ty_name inner)
+  | S.TyMap (_, _) -> C.TyPlace "map"
   | S.TyStream (inner, _mods) -> C.TyStream (desugar_ty inner)
   | S.TyUser n -> C.TyPlace n
   | S.TyVar n -> C.TyPlace n   (* type vars compile to opaque place at IR level *)
@@ -200,7 +200,7 @@ let rec desugar_ty (t : S.ty) : C.ty =
   | S.TyHeytInt _n ->
       (* TyHeytInt<N> is opaque to the core AST for now; the real MLIR
          lowering to tuple<i64, i64> comes later. *)
-      C.TyBase "heyt_int"
+      C.TyPlace "heyt_int"
   | S.TyArrow (a, b) ->
       (* preservo
        * struttura nested TyArrow per supportare signature multi-arg
@@ -212,30 +212,30 @@ let rec desugar_ty (t : S.ty) : C.ty =
   | S.TyMoveHandle (_w1, _w2) ->
       (* TyMoveHandle is lowered to an opaque string in the Core (the move name
        * is resolved at the call site via inlining). *)
-      C.TyBase "move_handle"
+      C.TyPlace "move_handle"
   | S.TyReductionHandle _po ->
       (* TyReductionHandle is lowered to an opaque string in the Core (the
        * reduction name is resolved at the call site via inlining). *)
-      C.TyBase "reduction_handle"
+      C.TyPlace "reduction_handle"
   | S.TyMorphHandle (_s1, _s2) ->
       (* TyMorphHandle is lowered to an opaque string in the Core. *)
-      C.TyBase "morph_handle"
+      C.TyPlace "morph_handle"
   | S.TyViewHandle _p ->
       (* TyViewHandle is lowered to an opaque string in the Core. *)
-      C.TyBase "view_handle"
+      C.TyPlace "view_handle"
   | S.TyWire _ ->
       (* Wire handle: opaque runtime handle in the Core. *)
-      C.TyBase "wire_handle"
+      C.TyPlace "wire_handle"
   | S.TySubscription (_, _inner) ->
       (* Subscription handle: opaque; the stream element type is recovered at
        * the await site, not carried by the lowered handle. *)
-      C.TyBase "subscription_handle"
+      C.TyPlace "subscription_handle"
   | S.TyEl (S.TyTermExpr (S.EVar (cname, _))) ->
       (* simple code: a bare name decodes to its carrier (legacy behaviour);
        * defensive fallback if it does not decode. *)
       (match Catt_r_yon.el_decode (Catt_r_yon.TmVar cname) with
        | Some carrier -> desugar_ty carrier
-       | None -> C.TyBase ("El_" ^ cname))
+       | None -> C.TyPlace ("El_" ^ cname))
   | S.TyEl (S.TyTermExpr e) ->
       (* applied / structured Tarski code: lower the term natively and keep it
        * as El(term) — exactly the Ast world where subst_term_in_ty operates. *)
@@ -1043,11 +1043,11 @@ and desugar_stmts_with_locals (locals : string list) (stmts : S.stmt list) : C.t
        | _ -> ());
       let value_term = desugar_expr e in
       let rest_term = desugar_stmts_with_locals (name :: locals) rest in
-      C.App (C.Lam (name, C.TyBase "unit", rest_term), value_term)
+      C.App (C.Lam (name, C.TyPlace "unit", rest_term), value_term)
   | stmt :: rest ->
       let stmt_term = desugar_stmt_or_return stmt in
       let rest_term = desugar_stmts_with_locals locals rest in
-      C.App (C.Lam ("_", C.TyBase "unit", rest_term), stmt_term)
+      C.App (C.Lam ("_", C.TyPlace "unit", rest_term), stmt_term)
 
 and desugar_stmt_or_return (s : S.stmt) : C.term =
   match s with
@@ -1100,9 +1100,9 @@ and desugar_produce_block (body : S.stmt list) : C.term =
      more, by construction, so the wire closes itself. Queued values
      stay readable; a drained closed wire answers recv with the EOF
      sentinel (the fused pipelines' end marker). *)
-  C.App (C.Lam (sid, C.TyBase "number",
-           C.App (C.Lam ("_", C.TyBase "number",
-                    C.App (C.Lam ("__c", C.TyBase "number", C.Var sid),
+  C.App (C.Lam (sid, C.TyPlace "number",
+           C.App (C.Lam ("_", C.TyPlace "number",
+                    C.App (C.Lam ("__c", C.TyPlace "number", C.Var sid),
                            C.App (C.Var "Stream__close", C.Var sid))),
                   body')),
          C.App (C.Var "Stream__make", Builtins.encode_number 0.0))
@@ -1159,7 +1159,7 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
   let body' = rw body_term in
   (* child: run body' (for its promotes), then exit; sequence via (lam _. exit) body' *)
   let child =
-    C.App (C.Lam ("_", C.TyBase "number",
+    C.App (C.Lam ("_", C.TyPlace "number",
              C.App (C.Var "Spawn__child_exit", C.Var ch)),
            body') in
   let parent = C.App (C.Var "Spawn__join_stream", C.Var ch) in
@@ -1171,7 +1171,7 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
     match count with
     | Some e -> desugar_expr e
     | None -> Builtins.encode_number 1.0 in
-  C.App (C.Lam (ch, C.TyBase "number",
+  C.App (C.Lam (ch, C.TyPlace "number",
            curry_apply (C.Var "__if_expr") [cond; child; parent]),
          C.App (C.Var "Spawn__open", n_term))
 
@@ -1206,7 +1206,7 @@ and desugar_stmt (s : S.stmt) : C.term =
       desugar_for_every kind x e body
   | S.SInSequence (x, e, body, _) ->
       (* in_sequence over x in xs { body } — foldl style *)
-      let body_lam = C.Lam (x, C.TyBase "unit", desugar_stmts body) in
+      let body_lam = C.Lam (x, C.TyPlace "unit", desugar_stmts body) in
       curry_apply (C.Var "__foldl") [body_lam; desugar_expr e]
   | S.SRepeat (n, body, _otherwise, _) ->
       let body_term = desugar_stmts body in
@@ -1218,7 +1218,7 @@ and desugar_stmt (s : S.stmt) : C.term =
       let scope_name = match name with Some n -> n | None -> "_anon" in
       let body_term = desugar_stmts body in
       let ret_term = desugar_expr ret_expr in
-      C.Scope (scope_name, C.App (C.Lam ("_", C.TyBase "unit", ret_term), body_term))
+      C.Scope (scope_name, C.App (C.Lam ("_", C.TyPlace "unit", ret_term), body_term))
   | S.SWith (r, _of_place, body, _) ->
       let body_term = desugar_stmts body in
       C.With (r, body_term)
@@ -1257,7 +1257,7 @@ and desugar_stmt (s : S.stmt) : C.term =
        * does not receive an index here; the body is repeated N times. *)
       let n_term = desugar_expr n_expr in
       let body_term = desugar_stmts body in
-      let body_lam = C.Lam ("_idx", C.TyBase "unit", body_term) in
+      let body_lam = C.Lam ("_idx", C.TyPlace "unit", body_term) in
       curry_apply (C.Var "__iter_n") [n_term; body_lam]
   | S.SWhile (cond_expr, body, _) ->
       (* while cond do { body }: a general loop that may not terminate.
@@ -1265,8 +1265,8 @@ and desugar_stmt (s : S.stmt) : C.term =
          the condition re-evaluated each turn. *)
       let cond_term = desugar_expr cond_expr in
       let body_term = desugar_stmts body in
-      let cond_thunk = C.Lam ("_", C.TyBase "unit", cond_term) in
-      let body_thunk = C.Lam ("_", C.TyBase "unit", body_term) in
+      let cond_thunk = C.Lam ("_", C.TyPlace "unit", cond_term) in
+      let body_thunk = C.Lam ("_", C.TyPlace "unit", body_term) in
       curry_apply (C.Var "__while_loop") [cond_thunk; body_thunk]
 
 and desugar_when c body elifs otherwise =
@@ -1287,7 +1287,7 @@ and desugar_when c body elifs otherwise =
   curry_apply (C.Var "__if") [cond_term; body_term; else_term]
 
 and desugar_for_every kind x e body =
-  let body_lam = C.Lam (x, C.TyBase "unit", desugar_stmts body) in
+  let body_lam = C.Lam (x, C.TyPlace "unit", desugar_stmts body) in
   let combinator = match kind with
     | S.ForParallel -> "__for_every"
     | S.ForWhenHere -> "__for_every_stream"
@@ -1409,7 +1409,7 @@ let desugar_place_decl (pd : S.place_decl) : C.place_decl =
              C.op_params = List.map (fun p -> (p.S.param_name, desugar_ty p.S.param_ty)) o.S.op_params;
              C.op_return = (match o.S.op_return with
                             | Some t -> desugar_ty t
-                            | None -> C.TyBase "unit");
+                            | None -> C.TyPlace "unit");
            } in
            (fs, op_sig :: os)
        | S.FoCell _ ->
@@ -3473,7 +3473,7 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
               * the compiled output. *)
              if name = "main" then body
              else if not (List.mem name reach) then body
-             else C.App (C.Lam (name, C.TyBase "fun", body), fn_term))
+             else C.App (C.Lam (name, C.TyPlace "fun", body), fn_term))
           main_body
           res.functions
       in

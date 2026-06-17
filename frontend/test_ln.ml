@@ -13,7 +13,7 @@ let check name cond =
   if cond then (incr pass; Printf.printf "  [PASS] %s\n" name)
   else (incr fail; Printf.printf "  [FAIL] %s\n" name)
 
-let num = TyBase "number"
+let num = TyPlace "number"
 
 let () =
   Printf.printf "=== locally-nameless primitives oracle (stadio 2) ===\n\n";

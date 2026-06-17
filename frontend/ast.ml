@@ -54,7 +54,6 @@ type ty =
                                                   term, exactly as TyId already does. *)
   | TyPlace of string                          (* a named place, e.g. Order *)
   | TyStream of ty                             (* stream of T *)
-  | TyBase of string                           (* base types: text, number, boolean *)
   | TyGlue of ty * face_formula * (ty * term) list  (* Glue [phi |-> (T, e)] A *)
   | TyPathP of (string * ty) * term * term     (* PathP (<i> A) x y : dependent path; i binds in A, x:A0, y:A1 *)
 
@@ -239,7 +238,6 @@ and ty_equal_env env t1 t2 =
   | TyEl c1, TyEl c2 -> term_equal_env env c1 c2
   | TyPlace n1, TyPlace n2 -> n1 = n2
   | TyStream t1', TyStream t2' -> ty_equal_env env t1' t2'
-  | TyBase n1, TyBase n2 -> n1 = n2
   | _ -> false
 
 and term_equal t1 t2 = term_equal_env [] t1 t2

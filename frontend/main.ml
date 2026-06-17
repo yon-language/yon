@@ -145,8 +145,8 @@ let test_with_handle () =
     p_fields = [];
     p_operations = [{
       op_name = "read";
-      op_params = [("path", TyBase "text")];
-      op_return = TyBase "text"; op_algebra = None;
+      op_params = [("path", TyPlace "text")];
+      op_return = TyPlace "text"; op_algebra = None;
     }];
     p_laws = [];
   } in
@@ -155,7 +155,7 @@ let test_with_handle () =
     r_target = "Disk";
     r_handlers = [{
       hc_op = "read";
-      hc_params = [("path", TyBase "text")];
+      hc_params = [("path", TyPlace "text")];
       hc_body = v "path";
     }];
     r_multi_shot = false;
@@ -180,21 +180,21 @@ let test_place_equivalence () =
   let p1 = {
     p_name = "Order";
     p_site = TyPlace "Commerce";
-    p_fields = [("id", TyBase "text"); ("amount", TyBase "number")];
+    p_fields = [("id", TyPlace "text"); ("amount", TyPlace "number")];
     p_operations = [];
     p_laws = [];
   } in
   let p2 = {
     p_name = "Order";
     p_site = TyPlace "Commerce";
-    p_fields = [("id", TyBase "text"); ("amount", TyBase "number")];
+    p_fields = [("id", TyPlace "text"); ("amount", TyPlace "number")];
     p_operations = [];
     p_laws = [];
   } in
   let p3 = {
     p_name = "Order";
     p_site = TyPlace "Commerce";
-    p_fields = [("id", TyBase "text")];  (* different! *)
+    p_fields = [("id", TyPlace "text")];  (* different! *)
     p_operations = [];
     p_laws = [];
   } in
@@ -217,8 +217,8 @@ let test_nested_handlers () =
     p_fields = [];
     p_operations = [{
       op_name = "read";
-      op_params = [("path", TyBase "text")];
-      op_return = TyBase "text"; op_algebra = None;
+      op_params = [("path", TyPlace "text")];
+      op_return = TyPlace "text"; op_algebra = None;
     }];
     p_laws = [];
   } in
@@ -227,7 +227,7 @@ let test_nested_handlers () =
     r_target = "Disk";
     r_handlers = [{
       hc_op = "read";
-      hc_params = [("path", TyBase "text")];
+      hc_params = [("path", TyPlace "text")];
       hc_body = v "path";  (* identity *)
     }];
     r_multi_shot = false;
@@ -238,7 +238,7 @@ let test_nested_handlers () =
     r_target = "Disk";
     r_handlers = [{
       hc_op = "read";
-      hc_params = [("path", TyBase "text")];
+      hc_params = [("path", TyPlace "text")];
       hc_body = Unit;  (* always Unit, distinct from Outer *)
     }];
     r_multi_shot = false;
@@ -1544,13 +1544,13 @@ let test_move_mapping () =
   Printf.printf "\n=== Test 56: Move engine — apply mapping move ===\n";
   let open Ast in
   (* Register a "double" function: takes one arg, returns 2x. *)
-  let double_fn = Lam ("x", TyBase "number",
+  let double_fn = Lam ("x", TyPlace "number",
     App (App (Var "__mul",
               Builtins.encode_number 2.0),
          Var "x")) in
   Move_engine.register_user_fun "double" double_fn;
   Move_engine.register_user_fun "identity"
-    (Lam ("x", TyBase "number", Var "x"));
+    (Lam ("x", TyPlace "number", Var "x"));
   (* Register a move: from W1 to W2, mapping value->cost via double. *)
   let move_decl = {
     Surface_ast.mv_name = "ToTarget";
@@ -1604,11 +1604,11 @@ let test_move_merge () =
   Printf.printf "\n=== Test 57: Move engine — merge two records ===\n";
   let open Ast in
   Move_engine.register_user_fun "max_resolver"
-    (Lam ("a", TyBase "number",
-      Lam ("b", TyBase "number",
+    (Lam ("a", TyPlace "number",
+      Lam ("b", TyPlace "number",
         App (App (Var "__if",
                   App (App (Var "__gt", Var "a"), Var "b")),
-             App (Lam ("_", TyBase "unit", Var "a"), Var "b")))));
+             App (Lam ("_", TyPlace "unit", Var "a"), Var "b")))));
   let move_decl = {
     Surface_ast.mv_name = "Unify";
     mv_from = ["W1"; "W2"];
@@ -1989,7 +1989,7 @@ let test_catt_term_equiv () =
   Printf.printf "\n=== Test 66: CATT_R_Yon term equivalence via normalization ===\n";
   let open Ast in
   let ctx = Reduce.empty_ctx in
-  let t1 = App (Lam ("x", TyBase "number", Var "x"),
+  let t1 = App (Lam ("x", TyPlace "number", Var "x"),
                 Builtins.encode_number 42.0) in
   let t2 = Builtins.encode_number 42.0 in
   let eq1 = Catt_r_yon.r_yon_term_equiv ctx t1 t2 in

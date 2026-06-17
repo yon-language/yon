@@ -200,6 +200,11 @@ let () =
     exit 3
   end;
   let desugared = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) prog in
+  (* Erase type-level (universe-typed) parameters before codegen: a type
+     argument is a compile-time citizen and must not reach the carrier/backend
+     as runtime data. Coordinated drop of binders and matching call arguments;
+     this keeps the carrier functor within its domain (no TyType reaches emit). *)
+  let desugared = Type_erase.erase desugared in
   (* TEMP DIAGNOSTIC: dump the Core IR under YON_DUMP_CORE=1 *)
   (try if Sys.getenv "YON_DUMP_CORE" = "1" then begin
     List.iter (fun (name, body) ->

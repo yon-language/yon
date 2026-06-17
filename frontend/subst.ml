@@ -121,7 +121,7 @@ and subst_handler x u h =
 let rec subst_term_in_ty (x : string) (u : term) (t : ty) : ty =
   let module S = Set.Make (String) in
   match t with
-  | TyType _ | TyDirUniverse _ | TyPlace _ | TyBase _ -> t
+  | TyType _ | TyDirUniverse _ | TyPlace _ -> t
   | TyArrow (a, b) ->
       TyArrow (subst_term_in_ty x u a, subst_term_in_ty x u b)
   | TyStream a -> TyStream (subst_term_in_ty x u a)

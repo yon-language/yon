@@ -14,3 +14,6 @@ docs/goal_full_history_backup.md
 /docs/
 website/.docusaurus/
 website.zip
+
+__pycache__/
+*.pyc

@@ -39,13 +39,13 @@ let () =
 
   (* transport along a CONSTANT type line is the identity: transp (<i> A) t = t *)
   let v = Var "v" in
-  let tr = Transp (("i", TyBase "number"), v) in
+  let tr = Transp (("i", TyPlace "number"), v) in
   check "transp (<i> number) v  reduces to  v (constant transport)"
     (term_equal_env [] (nf tr) v);
 
   (* hcomp with no sides reduces to the base — comp computes via the bridge *)
   let b = Var "b" in
-  let hc = HComp (TyBase "number", [], [], b) in
+  let hc = HComp (TyPlace "number", [], [], b) in
   check "hcomp with no sides  reduces to  base"
     (term_equal_env [] (nf hc) b);
 
@@ -53,7 +53,7 @@ let () =
    * TyId as CTPath, so the engine turns transp into a composition (a path),
    * never mistaking it for the identity. *)
   let pth = Var "p" in
-  let path_line = TyId (TyBase "A", Var "x", Var "y") in
+  let path_line = TyId (TyPlace "A", Var "x", Var "y") in
   let trp = Transp (("i", path_line), pth) in
   check "transp along a Path reduces to a path abstraction (structured, not constant)"
     (match nf trp with PLam _ -> true | _ -> false);
@@ -69,7 +69,7 @@ let () =
   (* equivalence convention: e = Pair (f, (g, (eta, eps))), forward map = Fst e.
    * For the identity equivalence (f = id) the forward map applied to a point
    * computes to that point — the quasi-inverse Pair layout is sound. *)
-  let idfun = Lam ("x", TyBase "A", Var "x") in
+  let idfun = Lam ("x", TyPlace "A", Var "x") in
   let h = Refl (Var "x") in
   let equiv_id = Pair (idfun, Pair (idfun, Pair (h, h))) in
   let fwd_applied = App (Fst equiv_id, Var "w") in
@@ -82,7 +82,7 @@ let () =
    * content of ua. Composed with the case above (forward of the identity equiv
    * computes to the point), this is univalence computing end-to-end. *)
   let e = Var "e" in
-  let glue_ty = TyGlue (TyBase "A", [[("i", true)]], [(TyBase "T", e)]) in
+  let glue_ty = TyGlue (TyPlace "A", [[("i", true)]], [(TyPlace "T", e)]) in
   let tr_glue = Transp (("i", glue_ty), Var "t") in
   check "transp along Glue applies the equivalence forward map (univalence computes)"
     (term_equal_env [] (nf tr_glue) (App (Fst e, Var "t")));
@@ -91,9 +91,9 @@ let () =
    * cross the engine opaquely: transp applies the forward map (Fst), and for
    * the identity equivalence the whole thing computes to the point. *)
   let equiv_inline =
-    Pair (Lam ("x", TyBase "T", Var "x"),
+    Pair (Lam ("x", TyPlace "T", Var "x"),
           Pair (Var "g", Pair (Refl (Var "x"), Refl (Var "x")))) in
-  let glue_inline = TyGlue (TyBase "A", [[("i", true)]], [(TyBase "T", equiv_inline)]) in
+  let glue_inline = TyGlue (TyPlace "A", [[("i", true)]], [(TyPlace "T", equiv_inline)]) in
   let tr_inline = Transp (("i", glue_inline), Var "t") in
   check "transp along Glue with INLINE equivalence Pair computes (CCore lift)"
     (term_equal_env [] (nf tr_inline) (Var "t"));
@@ -101,7 +101,7 @@ let () =
   (* hcomp at a non-degenerate Glue: the CCHM homogeneous rule redistributes
    * the composition into the T-component and the A-component (it no longer
    * stays a stuck whole-Glue hcomp), and unglue commutes into an hcomp in A. *)
-  let a_ty = TyBase "A" and t_ty = TyBase "T" in
+  let a_ty = TyPlace "A" and t_ty = TyPlace "T" in
   let gphi = [[("i", true)]] in
   let glue_ty = TyGlue (a_ty, gphi, [(t_ty, Var "e")]) in
   let base_g = GlueElem (gphi, Var "t0", Var "a0") in

@@ -108,51 +108,17 @@ let fresh_ssa e =
 
 (* ─── Mapping tipi Yon --> tipi MLIR ──────────────────────────────────── *)
 
-let is_prim_name = function
-  | "text" | "number" | "boolean" | "money" | "unit" | "proposition"
-  | "i1" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64"
-  (* "arrow" is a concrete base type (an LLVM function pointer). The four
-     handle kinds (move/reduction/morph/view) stay type variables: they are
-     inlined rather than turned into function pointers, because they have
-     category-specific semantics. *)
-  | "arrow" -> true
-  (* "unknown" is a concrete type (it defaults to f64), not a type variable.
-     We need it concrete so that synthesized lifted lambdas with captured
-     variables can be emitted with a real MLIR type. *)
-  | "unknown" -> true
-  | _ -> false
+(* Single home: the carrier module. emit aliases it so call sites are unchanged
+   and the prim-name predicate has one definition. *)
+let is_prim_name = Carrier.is_prim_name
 
-let prim_to_mlir = function
-  (* String fusion (2026-06-03): ONE representation. A text/String value is a
-     section of the builtin String place: an xheap handle on g_ds_heap,
-     carried as f64. Literals are interned at runtime (content-addressed:
-     same literal, same slot). The old literal representation was a NULL
-     !llvm.ptr — the bytes never reached the runtime. *)
-  | "text"        -> "f64"
-  | "number"      -> "f64"
-  (* "boolean" is an alias of "proposition", the subobject classifier Omega of
-     the ambient Heyting algebra; semantically they are the same object. The
-     code generator still maps "boolean" to i1, because the whole comparison
-     and control path (__lt, __if, arith.cmpf, scf.if) is built on i1. Moving
-     fully to !topos.proposition would touch that entire pipeline, so i1 stays
-     here as a documented compromise rather than a hidden one. *)
-  | "boolean"     -> "i1"
-  | "money"       -> "f64"
-  | "unit"        -> "i1"
-  | "proposition" -> "!topos.proposition"
-  | "i1"          -> "i1"
-  | "i8"          -> "i8"
-  | "i16"         -> "i16"
-  | "i32"         -> "i32"
-  | "i64"         -> "i64"
-  | "f32"         -> "f32"
-  | "f64"         -> "f64"
-  (* unknown -> f64 default. *)
-  | "unknown"     -> "f64"
-  (* arrow base type -> func ptr
-   * (assumendo signature mono-arg per MVP). *)
-  | "arrow"       -> "(f64) -> f64"
-  | n             -> Printf.sprintf "!topos.section<\"%s\">" n
+(* prim_to_mlir: the SCHEMA string for a primitive place (or a section handle
+   for a non-primitive name). The primitive classification lives once in
+   Carrier.prim_carrier; this is just its printer on the schema side. *)
+let prim_to_mlir n =
+  match Carrier.prim_carrier n with
+  | Some c -> Carrier.to_mlir c
+  | None -> Printf.sprintf "!topos.section<\"%s\">" n
 
 (* Wire DTO transport (seal 2): the per-place field-tag descriptor and its
    structural schema id, computed recursively. number/money -> SCALAR (8 bytes),
@@ -173,7 +139,7 @@ let rec wire_field_desc (places : C.place_decl list) (depth : int)
                         ((_, ty) : string * C.ty) : (int * int) option =
   if depth > 8 then None   (* refuse pathological or cyclic nesting *)
   else match ty with
-  | C.TyBase n | C.TyPlace n ->
+  | C.TyPlace n ->
       (match n with
        | "text" -> Some (wire_tag_string, 0)
        | "number" | "money" -> Some (wire_tag_scalar, 0)
@@ -233,21 +199,11 @@ let wire_schema_id_of_place (places : C.place_decl list) (pd : C.place_decl) : i
    irrelevance lets us represent the subobject by its carrier A alone: the proof
    field is a mere proposition, carries no computational content, and lowers to
    zero bits. So { x : A where P } has exactly A's runtime representation. *)
-let core_is_isprop_fibre (carrier : C.ty) (fibre : C.ty) : bool =
-  match fibre with
-  | C.TyPi (_, c1, C.TyPi (_, c2, C.TyId (c3, _, _))) ->
-      c1 = carrier && c2 = carrier && c3 = carrier
-  | _ -> false
-
-let core_is_comprehension (t : C.ty) : bool =
-  match t with
-  | C.TySigma (_, carrier, fibre) -> core_is_isprop_fibre carrier fibre
-  | _ -> false
+let core_is_isprop_fibre = Carrier.core_is_isprop_fibre
+let core_is_comprehension = Carrier.core_is_comprehension
 
 let rec emit_ty (t : C.ty) : string =
   match t with
-  | C.TyBase n when is_prim_name n -> prim_to_mlir n
-  | C.TyBase n -> Printf.sprintf "!topos.section<\"%s\">" n
   | C.TyPlace n when is_prim_name n -> prim_to_mlir n
   | C.TyPlace n -> Printf.sprintf "!topos.section<\"%s\">" n
   | C.TyArrow (a, b) ->
@@ -286,76 +242,18 @@ let rec emit_ty (t : C.ty) : string =
       "f64"
   | C.TyType _ -> "!llvm.ptr"
 
-let rec core_ty_to_mlir_simple (t : C.ty) : string =
-  match t with
-  | C.TyBase "number" | C.TyPlace "number" -> "f64"
-  (* boolean = i1 at the MLIR level (see prim_to_mlir). The semantic alias with
-   * proposition stays in the tyenv. *)
-  | C.TyBase "boolean" | C.TyPlace "boolean" -> "i1"
-  | C.TyBase "money" | C.TyPlace "money" -> "f64"
-  | C.TyBase "proposition" | C.TyPlace "proposition" -> "!topos.proposition"
-  | C.TyBase "text" | C.TyPlace "text" -> "f64"  (* String fusion: handle *)
-  | C.TyBase "unit" | C.TyPlace "unit" -> "i1"
-  | C.TyBase "i1" | C.TyPlace "i1" -> "i1"
-  | C.TyBase "i32" | C.TyPlace "i32" -> "i32"
-  | C.TyBase "f64" | C.TyPlace "f64" -> "f64"
-  (* "unknown" is the wildcard type that synthesized lifted lambdas give to
-     captured parameters. It defaults to f64, Yon's main runtime type. Without
-     this mapping the synth functions would emit !topos.section<"unknown">,
-     which clashes with the f64 their callers expect. *)
-  | C.TyBase "unknown" | C.TyPlace "unknown" -> "f64"
-  | C.TyBase "arrow" | C.TyPlace "arrow" ->
-      (* A bare "arrow" stands for the single-argument function pointer
-         signature (f64) -> f64. *)
-      "(f64) -> f64"
-  | C.TyArrow (_, _) as ta ->
-      (* A curried arrow type a -> b -> c is flattened to a single MLIR
-         signature (a, b) -> c. We peel off argument types until what is left
-         is the return type. *)
-      let rec uncurry params t =
-        match t with
-        | C.TyArrow (a, b) -> uncurry (a :: params) b
-        | other -> (List.rev params, other)
-      in
-      let (params, ret) = uncurry [] ta in
-      Printf.sprintf "(%s) -> %s"
-        (String.concat ", " (List.map core_ty_to_mlir_simple params))
-        (core_ty_to_mlir_simple ret)
-  | C.TyPlace name when not (is_prim_name name) ->
-      Printf.sprintf "!topos.section<\"%s\">" name
-  | C.TyBase name when not (is_prim_name name) ->
-      Printf.sprintf "!topos.section<\"%s\">" name
-  | C.TySigma (_, a, b) ->
-      (* Same rule as emit_ty: comprehension subobject -> carrier alone (proof
-         is zero-bit); generic dependent pair -> honest two-field struct. *)
-      if core_is_comprehension t then core_ty_to_mlir_simple a
-      else Printf.sprintf "!llvm.struct<(%s, %s)>"
-             (core_ty_to_mlir_simple a) (core_ty_to_mlir_simple b)
-  | C.TyDirUniverse _ -> "!llvm.ptr"   (* directed universe: static opaque handle *)
-  | C.TyEl c ->
-      (* El(c) degrades to the carrier the code denotes (choice alpha). *)
-      (match c with
-       | C.Place pd -> Printf.sprintf "!topos.section<\"%s\">" pd.C.p_name
-       | C.Var name -> Printf.sprintf "!topos.section<\"%s\">" name
-       | _ -> "!llvm.ptr")
-  | C.TyId (a, _, _) ->
-      (* A path value lowers to its erased witness, which carries the
-         endpoint type: refl(x) is operationally x (see the C.Refl case
-         in emit_term). The arbiter of path EQUALITY stays the reducer
-         (Syn(Yon) formalization sec. 16); no equation is decided here. *)
-      core_ty_to_mlir_simple a
-  | C.TyType _ ->
-      (* A universe-typed parameter is an inert runtime token: types are
-         compile-time citizens, the runtime never inspects one. *)
-      "f64"
-  | C.TyStream _ ->
-      (* a stream value at runtime IS its id (f64): the queue lives in
-         the runtime tables *)
-      "f64"
-  | _ ->
-      failwith (Printf.sprintf
-                  "[emit_mlir] unhandled type in body lowering: %s. Handled: number, boolean, money, proposition, text, unit, and user-defined place types."
-                  (emit_ty t))
+(* REFACTOR (Stage 1): the runtime value carrier moved to Carrier.of_core_ty;
+   this is now a thin wrapper that realizes a Core type to its carrier and
+   prints it to MLIR. The flattening of curried arrows and the scalar/section/
+   struct choices all live in Carrier now. The defensive failwith is preserved
+   verbatim: a type with no carrier (NoCarrier) reports the offending subterm
+   through emit_ty, exactly as before. *)
+let core_ty_to_mlir_simple (t : C.ty) : string =
+  try Carrier.to_mlir (Carrier.of_core_ty t)
+  with Carrier.NoCarrier bad ->
+    failwith (Printf.sprintf
+                "[emit_mlir] unhandled type in body lowering: %s. Handled: number, boolean, money, proposition, text, unit, and user-defined place types."
+                (emit_ty bad))
 
 (* ─── Body lowering ─────────────────────────────────────────────────── *)
 
@@ -1375,7 +1273,7 @@ let rec infer_mlir_ty (e : emitter)
 
 let rec subst_ty (subst : (string * C.ty) list) (t : C.ty) : C.ty =
   match t with
-  | C.TyBase n | C.TyPlace n when List.mem_assoc n subst ->
+  | C.TyPlace n when List.mem_assoc n subst ->
       List.assoc n subst
   | C.TyArrow (a, b) -> C.TyArrow (subst_ty subst a, subst_ty subst b)
   | C.TyPi (x, a, b) -> C.TyPi (x, subst_ty subst a, subst_ty subst b)
@@ -1410,10 +1308,10 @@ let specialize_func (fs : func_sig)
   (* Build a substitution mapping each type parameter to a concrete C.ty. To do
    * this it converts the MLIR strings back to C.ty. *)
   let mlir_to_cty s =
-    if s = "f64" then C.TyBase "number"
-    else if s = "i1" then C.TyBase "boolean"
-    else if s = "!topos.proposition" then C.TyBase "proposition"
-    else if s = "!llvm.ptr" then C.TyBase "text"
+    if s = "f64" then C.TyPlace "number"
+    else if s = "i1" then C.TyPlace "boolean"
+    else if s = "!topos.proposition" then C.TyPlace "proposition"
+    else if s = "!llvm.ptr" then C.TyPlace "text"
     else
       (* Section type -> estrai nome place *)
       let prefix = "!topos.section<\"" in
@@ -3919,28 +3817,28 @@ let rec emit_term (e : emitter)
            List.mem_assoc fname funcs
            && List.exists (fun (_, t) ->
                 match t with
-                | C.TyBase "arrow"
+                | C.TyPlace "arrow"
                 | C.TyArrow _   (* also nested TyArrow *)
-                | C.TyBase "move_handle"
-                | C.TyBase "reduction_handle"
-                | C.TyBase "morph_handle"
-                | C.TyBase "view_handle" -> true
+                | C.TyPlace "move_handle"
+                | C.TyPlace "reduction_handle"
+                | C.TyPlace "morph_handle"
+                | C.TyPlace "view_handle" -> true
                 | _ -> false
               ) (List.assoc fname funcs).fn_params
            && List.length args = List.length (List.assoc fname funcs).fn_params
            && (let fs = List.assoc fname funcs in
                List.for_all2 (fun (_, ptype) arg ->
                  match ptype with
-                 | C.TyBase "arrow"
+                 | C.TyPlace "arrow"
                  | C.TyArrow _ ->
                      (match arg with
                       | C.Var aname -> List.mem_assoc aname funcs
                       | C.Lam _ -> true
                       | _ -> false)
-                 | C.TyBase "move_handle"
-                 | C.TyBase "reduction_handle"
-                 | C.TyBase "morph_handle"
-                 | C.TyBase "view_handle" ->
+                 | C.TyPlace "move_handle"
+                 | C.TyPlace "reduction_handle"
+                 | C.TyPlace "morph_handle"
+                 | C.TyPlace "view_handle" ->
                      true
                  | _ -> true
                ) fs.fn_params args) ->
@@ -3979,7 +3877,7 @@ let rec emit_term (e : emitter)
                        failwith (Printf.sprintf
                                    "[emit_mlir A5] type parameter '%s' of '%s' cannot be resolved from the arguments."
                                    tv fname)
-                   | (_, C.TyBase n) :: _ when n = tv ->
+                   | (_, C.TyPlace n) :: _ when n = tv ->
                        snd (List.nth arg_vals idx)
                    | (_, C.TyPlace n) :: _ when n = tv ->
                        snd (List.nth arg_vals idx)
@@ -4909,7 +4807,7 @@ let collect_type_params (e : emitter)
   let acc = ref [] in
   let visit_ty t =
     match t with
-    | C.TyBase n | C.TyPlace n ->
+    | C.TyPlace n ->
         if is_type_var e n && not (List.mem n !acc) then
           acc := n :: !acc
     | _ -> ()
@@ -4951,17 +4849,17 @@ let extract_func_sig (e : emitter)
   let env = List.fold_left (fun env (n, t) ->
     Env.add n ("(unused)", core_ty_to_mlir_simple t) env
   ) Env.empty params in
-  (* For higher-order functions (a parameter TyArrow C.TyBase "arrow"), we
+  (* For higher-order functions (a parameter TyArrow C.TyPlace "arrow"), we
    * cannot infer the return type from the body (the calls f(x) are irreducible
    * without knowing f). We use f64 as default; the function is not emitted
    * anyway (it is inlined at the call site). *)
   let is_hof = List.exists (fun (_, t) ->
     match t with
-    | C.TyBase "arrow"
-    | C.TyBase "move_handle"
-    | C.TyBase "reduction_handle"
-    | C.TyBase "morph_handle"
-    | C.TyBase "view_handle" -> true
+    | C.TyPlace "arrow"
+    | C.TyPlace "move_handle"
+    | C.TyPlace "reduction_handle"
+    | C.TyPlace "morph_handle"
+    | C.TyPlace "view_handle" -> true
     | _ -> false
   ) params in
   let ret_ty_mlir =
@@ -4979,7 +4877,7 @@ let extract_func_sig (e : emitter)
      * body knows about. *)
     let use_hint_for hint =
       match hint with
-      | C.TyPlace n | C.TyBase n ->
+      | C.TyPlace n ->
           not (is_prim_name n) && not (is_type_var e n)
       | _ -> false
     in
@@ -6472,10 +6370,10 @@ let emit_program (dr : Desugar.desugar_result) : string =
      * TyArrow base and nested: NOT skipped (emitted as real func.func). *)
     List.exists (fun (_, t) ->
       match t with
-      | C.TyBase "move_handle"
-      | C.TyBase "reduction_handle"
-      | C.TyBase "morph_handle"
-      | C.TyBase "view_handle" -> true
+      | C.TyPlace "move_handle"
+      | C.TyPlace "reduction_handle"
+      | C.TyPlace "morph_handle"
+      | C.TyPlace "view_handle" -> true
       | _ -> false
     ) fs.fn_params
   in

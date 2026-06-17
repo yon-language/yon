@@ -19,7 +19,6 @@ let rec pp_ty t =
       Printf.sprintf "Id_%s" (pp_ty a)
   | TyPlace n -> n
   | TyStream t' -> Printf.sprintf "stream of %s" (pp_ty t')
-  | TyBase n -> n
   | TyDirUniverse n -> Printf.sprintf "U_omega_%d" n
   | TyEl _ -> "El(...)"
   | TyGlue (a, _, _) -> Printf.sprintf "Glue(%s)" (pp_ty a)

@@ -188,19 +188,19 @@ let console_reduction : reduction_decl = {
   r_fold_name = None;
   r_handlers = [
     { hc_op = "print";
-      hc_params = [("s", TyBase "text")];
+      hc_params = [("s", TyPlace "text")];
       hc_body = print_handler_body; }
   ];
 }
 
 let output_place : place_decl = {
   p_name = "Output";
-  p_site = TyBase "world";
+  p_site = TyPlace "world";
   p_fields = [];
   p_operations = [
     { op_name = "print";
-      op_params = [("s", TyBase "text")];
-      op_return = TyBase "unit"; op_algebra = None; }
+      op_params = [("s", TyPlace "text")];
+      op_return = TyPlace "unit"; op_algebra = None; }
   ];
   p_laws = [];
 }
@@ -650,8 +650,13 @@ let rec of_cinterval (r : Cubical.interval) : interval =
 
 let rec ast_ty_to_surface (a : ty) : Surface_ast.ty =
   match a with
-  | TyBase n -> Surface_ast.TyPrim n
-  | TyPlace n -> Surface_ast.TyUser n
+  | TyPlace n ->
+      (* A primitive place (number/text/...) maps to a surface primitive; any
+         other place maps to a user type. Primitiveness is a property of the
+         name now that TyBase is gone (a primitive is a place whose name is
+         primitive). *)
+      if Carrier.is_prim_name n then Surface_ast.TyPrim n
+      else Surface_ast.TyUser n
   | TyType n -> Surface_ast.TyUniverse n
   | TyStream t -> Surface_ast.TyStream (ast_ty_to_surface t, [])
   | TyArrow (x, y) -> Surface_ast.TyArrow (ast_ty_to_surface x, ast_ty_to_surface y)
@@ -661,7 +666,7 @@ let rec ast_ty_to_surface (a : ty) : Surface_ast.ty =
 
 let rec surface_ty_to_ast (a : Surface_ast.ty) : ty =
   match a with
-  | Surface_ast.TyPrim n -> TyBase n
+  | Surface_ast.TyPrim n -> TyPlace n
   | Surface_ast.TyUser n -> TyPlace n
   | Surface_ast.TyUniverse n -> TyType n
   | Surface_ast.TyStream (t, _) -> TyStream (surface_ty_to_ast t)
