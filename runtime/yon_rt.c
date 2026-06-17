@@ -279,7 +279,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
         memset(out, 0, size);
         return -1;
     }
-    if (offset + size > slot->payload_size) {
+    if (offset > slot->payload_size || size > slot->payload_size - offset) {
         memset(out, 0, size);
         fprintf(stderr,
                 "[YON-RT] field_load OOB: offset=%u size=%u payload_size=%u\n",
@@ -293,7 +293,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
     }
     /* L2 backends use physically separate heaps per space, no payload prefix. */
     uint32_t prefix_skip = 0;
-    if (offset + size + prefix_skip > slot->payload_size) {
+    if (prefix_skip > slot->payload_size - offset - size) {
         memset(out, 0, size);
         fprintf(stderr,
                 "[YON-RT] field_load OOB (with prefix): offset=%u size=%u payload_size=%u prefix=%u\n",
@@ -702,8 +702,7 @@ int yon_rt_register_migration(const char *place_name,
         }
     }
     migration_entry_t *m = &g_migrations[g_n_migrations++];
-    strncpy(m->place_name, place_name, sizeof(m->place_name) - 1);
-    m->place_name[sizeof(m->place_name) - 1] = '\0';
+    snprintf(m->place_name, sizeof(m->place_name), "%s", place_name);
     m->v_from = v_from;
     m->v_to = v_to;
     m->new_payload_size = new_payload_size;
@@ -910,11 +909,9 @@ int yon_rt_register_geom_morphism(const char *name,
         }
     }
     geom_morphism_entry_t *e = &g_geom_morphisms[g_n_geom_morphisms++];
-    strncpy(e->name, name, sizeof(e->name) - 1); e->name[sizeof(e->name)-1] = '\0';
-    strncpy(e->source_topos, source_topos, sizeof(e->source_topos) - 1);
-    e->source_topos[sizeof(e->source_topos)-1] = '\0';
-    strncpy(e->target_topos, target_topos, sizeof(e->target_topos) - 1);
-    e->target_topos[sizeof(e->target_topos)-1] = '\0';
+    snprintf(e->name, sizeof(e->name), "%s", name);
+    snprintf(e->source_topos, sizeof(e->source_topos), "%s", source_topos);
+    snprintf(e->target_topos, sizeof(e->target_topos), "%s", target_topos);
     e->props = *props;
     e->occupied = 1;
     fprintf(stderr,
