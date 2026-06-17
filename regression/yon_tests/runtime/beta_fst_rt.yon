@@ -1,0 +1,1 @@
+fun main(): number { return fst(pair(20, 22)) - 20 }

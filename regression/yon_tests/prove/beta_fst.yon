@@ -1,0 +1,3 @@
+// fst(pair(a,b)) = a, in Yon: the proof type-checks iff beta-fst holds
+fun beta_fst(a: number, b: number): Id(number, fst(pair(a, b)), a) { return refl(a) }
+fun main(): number { return 0 }

@@ -1,0 +1,2 @@
+internal fun secret(x: number): number { return x + 1 }
+fun main(): number { return secret(41) }

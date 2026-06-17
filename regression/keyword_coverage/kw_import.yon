@@ -1,0 +1,3 @@
+// coverage: `import` of a local module
+import "kw_import_mod.yon"
+fun main(): number { return 0 }

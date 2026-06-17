@@ -1,0 +1,2 @@
+partial fun risky(x: number): number { return x }
+fun main(): number { return risky(7) }

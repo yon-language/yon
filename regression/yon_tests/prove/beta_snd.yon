@@ -1,0 +1,2 @@
+fun beta_snd(a: number, b: number): Id(number, snd(pair(a, b)), b) { return refl(b) }
+fun main(): number { return 0 }
