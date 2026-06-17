@@ -1563,7 +1563,9 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                             TyTermExpr (EVar (b, loc)))) in
               let* () = check env ctx eta_e eta_expected in
               let* () = check env ctx eps_e eps_expected in
-              ok (TyUser "Equiv")
+              (* endpoints a_ty, b_ty (extracted for the coherence check) are
+               * what the equivalence type must carry, so ua can name them *)
+              ok (Cubical_bindings.mk_equiv_ty a_ty b_ty)
           | _ -> err loc "equiv: forward map (arg 1) and inverse (arg 2) must be functions")
      | _ -> err loc "equiv expects 4 arguments (f, g, eta, eps)")
   else
