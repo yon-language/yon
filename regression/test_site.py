@@ -64,6 +64,13 @@ PROPERTIES = [
     "desugar world = User / SameCohort: GenQuotient (User, SameCohort)",
     "desugar world subset of Region: GenSubset Region",
     "desugar world = A * B: NO generator (product is a limit, not a cover)",
+    # filesystem layout: folder = world, file = space (deduction + reconstruction):
+    "layout: main.yon is a space in the ROOT world",
+    "layout: Orders.yon is space Orders in world Commerce",
+    "layout: world.yon is flagged as the world header file of Commerce",
+    "reconstruct: emits the world header `world Commerce { Code is Order }`",
+    "reconstruct: emits `space Orders in Commerce`",
+    "reconstruct: the rebuilt explicit text PARSES with today's parser",
 ]
 
 

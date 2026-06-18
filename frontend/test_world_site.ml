@@ -93,5 +93,47 @@ let () =
     (Site.get_J d_prod = []);
   check "desugar product: objects = the factors" (d_prod.w_objects = ["A"; "B"]);
 
+  (* ─── filesystem layout: folder = world, file = space (deduce + reconstruct) ─
+   * Build a tiny src/ fixture, check the path->（world,space) deduction, and
+   * check the reconstructed explicit text PARSES with today's parser. *)
+  Random.self_init ();
+  let root = Filename.concat (Filename.get_temp_dir_name ())
+               (Printf.sprintf "yon_layout_%d" (Random.bits ())) in
+  let cdir = Filename.concat root "Commerce" in
+  Sys.mkdir root 0o755; Sys.mkdir cdir 0o755;
+  let write p s = let oc = open_out p in output_string oc s; close_out oc in
+  write (Filename.concat root "main.yon") "fun main(): number { return 0 }\n";
+  write (Filename.concat cdir "world.yon") "Code is Order\n";
+  write (Filename.concat cdir "Orders.yon") "place Order { id text }\n";
+
+  let units = Package_layout.layout ~root in
+  let find sp = List.find_opt (fun u -> u.Package_layout.ul_space = sp) units in
+  check "layout: main.yon is a space in the ROOT world"
+    (match find "main" with Some u -> u.Package_layout.ul_world = "" | None -> false);
+  check "layout: Orders.yon is space Orders in world Commerce"
+    (match find "Orders" with Some u -> u.Package_layout.ul_world = "Commerce" | None -> false);
+  check "layout: world.yon is flagged as the world header file of Commerce"
+    (match find "world" with
+     | Some u -> u.Package_layout.ul_is_world && u.Package_layout.ul_world = "Commerce"
+     | None -> false);
+
+  let txt = Package_layout.reconstruct ~root in
+  let has re_s = try ignore (Str.search_forward (Str.regexp re_s) txt 0); true
+                 with Not_found -> false in
+  check "reconstruct: emits the world header `world Commerce { Code is Order }`"
+    (has "world Commerce { Code is Order }");
+  check "reconstruct: emits `space Orders in Commerce`"
+    (has "space Orders in Commerce");
+  check "reconstruct: the rebuilt explicit text PARSES with today's parser"
+    (try ignore (Parser.program Lexer.token (Lexing.from_string txt)); true
+     with _ -> false);
+
+  (try
+     Sys.remove (Filename.concat root "main.yon");
+     Sys.remove (Filename.concat cdir "world.yon");
+     Sys.remove (Filename.concat cdir "Orders.yon");
+     Sys.rmdir cdir; Sys.rmdir root
+   with _ -> ());
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1
