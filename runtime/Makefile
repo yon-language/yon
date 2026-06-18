@@ -3,7 +3,16 @@
 # under vendor/mmgroup (BSD-2-Clause, see PROVENANCE.md there).
 # No Python, no pip, no external shared libraries.
 CC ?= gcc
-CFLAGS ?= -std=c11 -D_DARWIN_C_SOURCE -O2 -Wall -Wextra -Werror -Ivendor/mmgroup
+# Platform feature macros: Darwin needs _DARWIN_C_SOURCE, Linux needs
+# _GNU_SOURCE (madvise/MADV_DONTNEED, ftruncate). Without this the build is
+# Mac-only despite the "portable" claim.
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  PLATFORM_DEFS := -D_DARWIN_C_SOURCE
+else
+  PLATFORM_DEFS := -D_GNU_SOURCE
+endif
+CFLAGS ?= -std=c11 $(PLATFORM_DEFS) -O2 -Wall -Wextra -Werror -Ivendor/mmgroup
 VENDOR_SRCS = vendor/mmgroup/mat24_tables.c vendor/mmgroup/mat24_functions.c \
               vendor/mmgroup/gen_leech.c vendor/mmgroup/gen_leech3.c \
               vendor/mmgroup/gen_leech_type.c vendor/mmgroup/gen_leech_reduce.c \

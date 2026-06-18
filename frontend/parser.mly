@@ -496,7 +496,7 @@ pushout_decl:
 
 (* Geometric morphism as a first-class construct.
  *
- *   geom_morphism F from SiteA to SiteB {
+ *   geomorph F from SiteA to SiteB {
  *     pull(x: TypeFromB): TypeInA { ... }
  *     push(x: TypeFromA): TypeInB { ... }
  *   }

@@ -1,7 +1,9 @@
 /* yon_mmap.c — the one allocation primitive of the Yon runtime. See yon_mmap.h.
  * mmap always; private anonymous by default, named shared as the sole
  * exception for cross-Space structures. */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE  /* ftruncate on glibc; harmless under _DARWIN_C_SOURCE */
+#endif
 #include "yon_mmap.h"
 
 #include <sys/mman.h>

@@ -204,7 +204,16 @@ let () =
      argument is a compile-time citizen and must not reach the carrier/backend
      as runtime data. Coordinated drop of binders and matching call arguments;
      this keeps the carrier functor within its domain (no TyType reaches emit). *)
-  let desugared = Type_erase.erase desugared in
+  let desugared =
+    try Type_erase.erase desugared
+    with Type_erase.Higher_order_type_param fname ->
+      Printf.eprintf
+        "TYPE ERROR: function `%s` has type parameters and is used outside a \
+         direct call (passed as a value, aliased, or partially applied). \
+         Higher-order type-argument erasure is not lowered, so this is \
+         rejected at compile time rather than miscompiled.\n" fname;
+      exit 3
+  in
   (* TEMP DIAGNOSTIC: dump the Core IR under YON_DUMP_CORE=1 *)
   (try if Sys.getenv "YON_DUMP_CORE" = "1" then begin
     List.iter (fun (name, body) ->

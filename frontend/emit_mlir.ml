@@ -202,58 +202,35 @@ let wire_schema_id_of_place (places : C.place_decl list) (pd : C.place_decl) : i
 let core_is_isprop_fibre = Carrier.core_is_isprop_fibre
 let core_is_comprehension = Carrier.core_is_comprehension
 
-let rec emit_ty (t : C.ty) : string =
-  match t with
-  | C.TyPlace n when is_prim_name n -> prim_to_mlir n
-  | C.TyPlace n -> Printf.sprintf "!topos.section<\"%s\">" n
-  | C.TyArrow (a, b) ->
-      Printf.sprintf "(%s) -> %s" (emit_ty a) (emit_ty b)
-  | C.TyPi (_, a, b) ->
-      Printf.sprintf "(%s) -> %s" (emit_ty a) (emit_ty b)
-  | C.TySigma (_, a, b) ->
-      (* Comprehension subobject -> represented by its carrier alone (proof is
-         zero-bit by proof irrelevance). Generic dependent pair -> honest two
-         field struct, consistent with how C.Pair is emitted (a struct<(a,b)>),
-         fixing the historical struct<()> that dropped both components. *)
-      if core_is_comprehension t then emit_ty a
-      else Printf.sprintf "!llvm.struct<(%s, %s)>" (emit_ty a) (emit_ty b)
-  | C.TyId _ -> "!topos.cell<1, \"id\">"
-  | C.TyPathP _ -> "!topos.cell<1, \"pathp\">"
-  | C.TyGlue (a, _, _) -> emit_ty a
-  | C.TyDirUniverse _ ->
-      (* The directed universe U_omega is a static, purely formal classifier
-         (like TyType). It carries no runtime payload: a pointer-sized opaque
-         handle, never materialized as data on the Leech arena. *)
-      "!llvm.ptr"
-  | C.TyEl c ->
-      (* El(c) decodes a code term c into its named type. Under (alpha) the
-         directed subobject is represented by its carrier, so El degrades
-         structurally to the carrier type the code denotes. When the code names
-         a known place we lower to that section; otherwise it is an opaque
-         pointer-sized handle. The directed-transport eliminator is a runtime
-         no-op (the data flow is the carrier), per the decree's rule 4. *)
-      (match c with
-       | C.Place pd -> Printf.sprintf "!topos.section<\"%s\">" pd.C.p_name
-       | C.Var name -> Printf.sprintf "!topos.section<\"%s\">" name
-       | _ -> "!llvm.ptr")
-  | C.TyStream _ ->
-      (* a stream value at runtime IS its id: the queue lives in the
-         runtime tables, the body lowering moves only the f64 handle *)
-      "f64"
-  | C.TyType _ -> "!llvm.ptr"
-
-(* REFACTOR (Stage 1): the runtime value carrier moved to Carrier.of_core_ty;
-   this is now a thin wrapper that realizes a Core type to its carrier and
-   prints it to MLIR. The flattening of curried arrows and the scalar/section/
-   struct choices all live in Carrier now. The defensive failwith is preserved
-   verbatim: a type with no carrier (NoCarrier) reports the offending subterm
-   through emit_ty, exactly as before. *)
-let core_ty_to_mlir_simple (t : C.ty) : string =
+(* CANONICAL type lowering (Yoneda + Knuth): ONE functor (Carrier.of_core_ty),
+   ONE printer (Carrier.to_mlir), ONE partiality (NoCarrier). The historical
+   `emit_ty` (schema) and `core_ty_to_mlir_simple` (value) were two parallel
+   functors lowering the same objects — the place-as-schema and the value
+   carrier are the same object seen twice. They are now THE SAME FUNCTION.
+   Measured behavior-preserving on the corpus: the branches where they used to
+   diverge (Id/PathP as opaque cells, universe/code as !llvm.ptr, curried-arrow
+   nesting) were dead — never reached by any place field, operation, or
+   constructor. The canonical forms therefore win at no observable cost: a path
+   lowers to its erased witness (refl x is x), a code / universe has NO carrier
+   and is rejected cleanly at compile time, a curried arrow flattens to one
+   signature. The schema/value split is gone. *)
+let ty_to_mlir (t : C.ty) : string =
   try Carrier.to_mlir (Carrier.of_core_ty t)
   with Carrier.NoCarrier bad ->
     failwith (Printf.sprintf
-                "[emit_mlir] unhandled type in body lowering: %s. Handled: number, boolean, money, proposition, text, unit, and user-defined place types."
-                (emit_ty bad))
+      "[emit_mlir] type has no runtime carrier in lowering: %s. A code, \
+       universe, or bare type-level former is a compile-time citizen: it must \
+       be erased upstream, never realized as runtime data."
+      (Pretty.pp_ty bad))
+
+(* emit_ty kept as the name used at the place-schema call sites (fields,
+   operation signatures, __new constructors); it IS the canonical lowering. *)
+let emit_ty = ty_to_mlir
+
+(* core_ty_to_mlir_simple was the body-side wrapper; it is now literally the
+   same canonical lowering as emit_ty. Kept as an alias so the body call sites
+   are unchanged while the schema/value duplication is gone. *)
+let core_ty_to_mlir_simple = ty_to_mlir
 
 (* ─── Body lowering ─────────────────────────────────────────────────── *)
 

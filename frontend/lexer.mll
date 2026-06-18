@@ -36,7 +36,7 @@
       "cell", CELL;             (* higher-cell inside a place (CATT-style) *)
 
       (* Constructions that build new objects from old ones, named after their
-         universal property. A `geom_morphism` is a map between two whole
+         universal property. A `geomorph` is a map between two whole
          worlds (categories). `pullback`/`pushout` are the categorical limit/
          colimit: a pullback glues two maps over a shared target, a pushout
          over a shared source. `over X` builds the slice category — objects

@@ -26,6 +26,15 @@
 
 module C = Ast
 
+(* A function with type parameters used OUTSIDE a direct call (passed as a
+   value, aliased, or partially applied) cannot have its type arguments erased
+   coherently yet — higher-order erasure is not lowered. Per the 2026-06-17
+   decree ("reject at compile time, not failwith"), this is a clean
+   compile-time rejection on the canonical error channel (exit 3): a well-typed
+   term with no realizable lowering is refused with a diagnostic, never
+   crashed on with a raw failwith. Carries the offending function name. *)
+exception Higher_order_type_param of string
+
 (* Is this binder type a universe (a code / type-level classifier)? *)
 let is_universe_ty (t : C.ty) : bool =
   match t with
@@ -81,10 +90,7 @@ let rewrite (positions_of : string -> int list option) (t0 : C.term) : C.term =
     | C.Var x ->
         (match positions_of x with
          | Some _ ->
-             failwith (Printf.sprintf
-               "[type_erase] function `%s` has type parameters and is used \
-                outside a direct call (passed as a value / aliased / partially \
-                applied); higher-order erasure is not lowered yet" x)
+             raise (Higher_order_type_param x)
          | None -> t)
     | C.Lam (x, ty, b) -> C.Lam (x, ty, go b)
     | C.Place _ -> t

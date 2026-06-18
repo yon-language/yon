@@ -95,12 +95,14 @@ let rec of_core_ty (ty : C.ty) : t =
       (* a primitive place gets its fixed carrier; any other named place is a
          section handle. *)
       (match prim_carrier name with Some c -> c | None -> Section name)
-  | C.TyArrow (_, _) as ta ->
-      (* a curried arrow a -> b -> c flattens to one signature (a, b) -> c;
+  | (C.TyArrow (_, _) | C.TyPi (_, _, _)) as ta ->
+      (* a curried arrow a -> b -> c (or a dependent Pi, whose dependency is
+         erased at runtime) flattens to one signature (a, b) -> c;
          the flattening is a printing detail over one structural carrier. *)
       let rec uncurry params u =
         match u with
         | C.TyArrow (a, b) -> uncurry (a :: params) b
+        | C.TyPi (_, a, b) -> uncurry (a :: params) b
         | other -> (List.rev params, other)
       in
       let (params, ret) = uncurry [] ta in
@@ -127,7 +129,12 @@ let rec of_core_ty (ty : C.ty) : t =
       of_core_ty a
   | C.TyType _ -> raise (NoCarrier ty)          (* a code/type: no runtime value (erased upstream) *)
   | C.TyStream _ -> Scalar W_f64        (* a stream value at runtime is its id (f64) *)
-  | _ -> raise (NoCarrier ty)
+  | C.TyGlue (a, _, _) -> of_core_ty a
+      (* Glue [phi |-> (T,e)] A carries A's layout: the equivalence is erased;
+         univalence computes in the reducer, not in the runtime layout. *)
+  | C.TyPathP ((_, a), _, _) -> of_core_ty a
+      (* a dependent path lowers to the carrier of its fibre, like TyId: the
+         path value is operationally its witness. *)
 
 let width_to_mlir = function
   | W_f64 -> "f64"

@@ -17,7 +17,9 @@
  * The ABI is identical across backends; only the heap backing differs.
  */
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE  /* for strdup */
+#endif
 #include "yon_rt.h"
 #include "xleech2_heap.h"
 #include "xleech2_handler_stack.h"

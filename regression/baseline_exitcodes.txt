@@ -48,6 +48,7 @@ RAN nat_transform_functor exit=0
 RAN nested_lambda_capture exit=52
 RAN net_stream exit=0
 RAN primes_bertrand exit=8
+RAN reduction_fold exit=7
 RAN route_history exit=31
 RAN shm_backpressure exit=0
 RAN shm_stream exit=0
