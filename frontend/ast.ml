@@ -96,6 +96,9 @@ and term =
   | App of term * term
   | Place of place_decl
   | Reduction of reduction_decl
+  | World of world_decl                        (* a reified site C(W): its
+                                                  objects and the generators of
+                                                  its Grothendieck topology J *)
   | Scope of string * term
   | With of string * term
   | Emit of term
@@ -133,6 +136,32 @@ and reduction_decl = {
   r_handlers : handler_clause list;
   r_multi_shot : bool;
   r_fold_name : string option;       (* P8 #86: nome fold CRDT inferita *)
+}
+
+(* A generator of the Grothendieck topology J on the site C(W). Each way of
+ * BUILDING a world contributes one covering generator; J(W) is the join of
+ * these in the (complete) lattice of topologies. A bare world (only objects,
+ * no construction) has NO generators: J is trivial, Sh = PSh, every place is
+ * vacuously a sheaf. The categorical PRODUCT (a limit, not a colimit) is
+ * intentionally NOT a generator — only colimit-style constructions cover. *)
+and site_generator =
+  | GenCoproduct of string list                (* world C = A + B + ... : the
+                                                  injections cover disjointly *)
+  | GenQuotient of string * string             (* world Q = W / Rel : the R-classes
+                                                  cover W (quotient topology) *)
+  | GenCoequalizer of string * string * string (* world Q = coeq(f,g : A -> B) *)
+  | GenSubset of string                        (* world S subset of V : the dense
+                                                  inclusion S ↪ V generates a cover *)
+
+(* A reified site C(W): the world as a first-class Core citizen, alongside
+ * place_decl. Its objects are the world's inhabitants (the carriers of C(W));
+ * its topology J is given intensionally by its generators (get_J reads them).
+ * A place living in W is a presheaf on this site; "P is a sheaf" is then a
+ * predicate of P against w_generators (the Yoneda continuity condition). *)
+and world_decl = {
+  w_name : string;
+  w_objects : string list;           (* the inhabitants of W = objects of C(W) *)
+  w_generators : site_generator list;(* the generators of the topology J(W) *)
 }
 
 (* For testing and debugging, define a way to make terms readable.
@@ -180,6 +209,7 @@ let rec term_equal_env env t1 t2 =
       term_equal_env env f1 f2 && term_equal_env env a1 a2
   | Place p1, Place p2 -> place_equal p1 p2
   | Reduction r1, Reduction r2 -> reduction_equal r1 r2
+  | World w1, World w2 -> world_equal w1 w2
   | Scope (s1, b1), Scope (s2, b2) -> s1 = s2 && term_equal_env env b1 b2
   | With (r1, b1), With (r2, b2) -> r1 = r2 && term_equal_env env b1 b2
   | Emit t1', Emit t2' -> term_equal_env env t1' t2'
@@ -276,6 +306,11 @@ and handler_equal h1 h2 =
        h1.hc_params h2.hc_params
   && term_equal h1.hc_body h2.hc_body
 
+and world_equal w1 w2 =
+  w1.w_name = w2.w_name
+  && w1.w_objects = w2.w_objects
+  && w1.w_generators = w2.w_generators
+
 (* Free variables of a term. Used by substitution to detect capture.
  *)
 let rec free_vars t =
@@ -285,6 +320,7 @@ let rec free_vars t =
   | Lam (x, _, b) -> S.remove x (free_vars b)
   | App (f, a) -> S.union (free_vars f) (free_vars a)
   | Place _ -> S.empty
+  | World _ -> S.empty
   | Reduction r ->
       List.fold_left
         (fun acc h ->

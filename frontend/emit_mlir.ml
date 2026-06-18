@@ -596,7 +596,7 @@ let rec collect_string_literals (t : C.term) : unit =
         Hashtbl.replace g_strlits content sym;
         g_strlit_order := content :: !g_strlit_order
       end
-  | C.Var _ | C.Place _ | C.Reduction _ | C.Unit -> ()
+  | C.Var _ | C.Place _ | C.Reduction _ | C.World _ | C.Unit -> ()
   | C.Lam (_, _, b) | C.Scope (_, b) | C.With (_, b) | C.Emit b
   | C.Refl b | C.Fst b | C.Snd b -> collect_string_literals b
   | C.App (a, b) | C.Pair (a, b) | C.StreamCons (a, b) ->
@@ -636,7 +636,7 @@ let rec term_free_vars (t : C.term) : SS.t =
            (SS.union (term_free_vars c) (term_free_vars d)))
   | C.Pair (a, b) | C.StreamCons (a, b) ->
       SS.union (term_free_vars a) (term_free_vars b)
-  | C.Place _ | C.Reduction _ | C.Unit -> SS.empty
+  | C.Place _ | C.Reduction _ | C.World _ | C.Unit -> SS.empty
   | C.PLam (_, b) | C.Transp (_, b) -> term_free_vars b
   | C.PApp (p, _) -> term_free_vars p
   | C.Comp (_, _, sides, base) | C.HComp (_, _, sides, base) ->
@@ -4519,6 +4519,8 @@ let rec emit_term (e : emitter)
       failwith "[emit_mlir] Place as a term-value not supported."
   | C.Reduction _ ->
       failwith "[emit_mlir] Reduction as a term-value not supported."
+  | C.World _ ->
+      failwith "[emit_mlir] World as a term-value not supported."
   | C.Scope (sname, body) ->
       (* 81b — hermetic scope, formal layer. `scope S { ... }` becomes a
        * topos.scope_with_yield region: IsolatedFromAbove makes any implicit
@@ -5252,7 +5254,7 @@ let collect_target_spaces (t : C.term) : string list =
     | C.Fst p -> walk p
     | C.Snd p -> walk p
     | C.StreamCons (a, b) -> walk a; walk b
-    | C.Place _ | C.Reduction _ | C.Unit -> ()
+    | C.Place _ | C.Reduction _ | C.World _ | C.Unit -> ()
     | C.PLam (_, b) | C.Transp (_, b) -> walk b
     | C.PApp (p, _) -> walk p
     | C.Comp (_, _, sides, base) | C.HComp (_, _, sides, base) ->

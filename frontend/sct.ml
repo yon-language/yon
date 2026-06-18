@@ -149,7 +149,7 @@ let collect (known : string list) (f : fundef) : scg list =
     | _ ->
         (* not a known-call spine: ordinary structural recursion *)
         (match t with
-         | A.Var _ | A.Place _ | A.Reduction _ | A.Unit -> acc
+         | A.Var _ | A.Place _ | A.Reduction _ | A.World _ | A.Unit -> acc
          | A.Lam (v, _, b) -> go (SMap.remove v de) b acc
          | A.App (a, b) -> go de a (go de b acc)
          | A.Scope (_, b) | A.With (_, b) | A.Emit b | A.Refl b

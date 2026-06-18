@@ -31,7 +31,7 @@ let rec subst x u t =
         let body' = subst y (Var y') body in
         Lam (y', ty, subst x u body')
   | App (f, a) -> App (subst x u f, subst x u a)
-  | Place _ -> t                                        (* place declarations are closed *)
+  | Place _ | World _ -> t                              (* place/world declarations are closed *)
   | Reduction r ->
       let handlers' = List.map (subst_handler x u) r.r_handlers in
       Reduction { r with r_handlers = handlers' }

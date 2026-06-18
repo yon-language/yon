@@ -93,7 +93,7 @@ let rewrite (positions_of : string -> int list option) (t0 : C.term) : C.term =
              raise (Higher_order_type_param x)
          | None -> t)
     | C.Lam (x, ty, b) -> C.Lam (x, ty, go b)
-    | C.Place _ -> t
+    | C.Place _ | C.World _ -> t
     | C.Reduction r ->
         C.Reduction { r with
           C.r_handlers =

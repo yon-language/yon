@@ -1069,7 +1069,7 @@ and desugar_produce_block (body : S.stmt list) : C.term =
     match t with
     | C.Emit e ->
         C.App (C.App (C.Var "Stream__send", C.Var sid), rw e)
-    | C.Var _ | C.Unit | C.Place _ | C.Reduction _ -> t
+    | C.Var _ | C.Unit | C.Place _ | C.Reduction _ | C.World _ -> t
     | C.Lam (x, ty, b) -> C.Lam (x, ty, rw b)
     | C.App (f, a) -> C.App (rw f, rw a)
     | C.Scope (n, b) -> C.Scope (n, rw b)
@@ -1132,7 +1132,7 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
         C.App (C.App (C.Var "Spawn__promote", C.Var ch), rw e)
     | C.Var "spawn_index" ->
         C.App (C.Var "Spawn__index", C.Var ch)
-    | C.Var _ | C.Unit | C.Place _ | C.Reduction _ -> t
+    | C.Var _ | C.Unit | C.Place _ | C.Reduction _ | C.World _ -> t
     | C.Lam (x, ty, b) -> C.Lam (x, ty, rw b)
     | C.App (f, a) -> C.App (rw f, rw a)
     | C.Scope (n, b) -> C.Scope (n, rw b)
@@ -3428,7 +3428,7 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
     | C.Pair (a, b) | C.StreamCons (a, b) -> free_names (free_names acc a) b
     | C.J (_, _, a, b, c, d) ->
         free_names (free_names (free_names (free_names acc a) b) c) d
-    | C.Place _ | C.Reduction _ | C.Unit -> acc
+    | C.Place _ | C.Reduction _ | C.World _ | C.Unit -> acc
     | C.PLam (_, b) -> free_names acc b
     | C.PApp (p, _) -> free_names acc p
     | C.Transp (_, b) -> free_names acc b

@@ -87,7 +87,7 @@ let declare_reduction ctx r = { ctx with reductions = (r.r_name, r) :: ctx.reduc
 let is_value t =
   match t with
   | Lam _ -> true
-  | Place _ -> true
+  | Place _ | World _ -> true
   | Reduction _ -> true
   | StreamCons _ -> true
   | Unit -> true
@@ -518,7 +518,7 @@ let rec step ctx t =
        * drives any application; SCT certification guarantees this terminates,
        * so no fuel is needed. *)
       Some (List.assoc f ctx.deltas)
-  | Var _ | Place _ | Reduction _ | Unit -> None
+  | Var _ | Place _ | Reduction _ | World _ | Unit -> None
 
 (* ─── Multi-step reduction ─────────────────────────────────────────── *)
 

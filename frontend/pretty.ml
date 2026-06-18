@@ -47,6 +47,20 @@ let rec pp_term ?(indent = 0) t =
       Printf.sprintf "lambda%s:%s. %s" x (pp_ty ty) (pp_term ~indent body)
   | App (f, a) ->
       Printf.sprintf "(%s %s)" (pp_term ~indent f) (pp_term ~indent a)
+  | World w ->
+      let gen_str = function
+        | GenCoproduct xs -> "coproduct(" ^ String.concat "+" xs ^ ")"
+        | GenQuotient (b, r) -> "quotient(" ^ b ^ "/" ^ r ^ ")"
+        | GenCoequalizer (a, b, c) ->
+            Printf.sprintf "coeq(%s,%s,%s)" a b c
+        | GenSubset v -> "subset(" ^ v ^ ")"
+      in
+      let gens =
+        if w.w_generators = [] then "trivial"
+        else String.concat ", " (List.map gen_str w.w_generators)
+      in
+      Printf.sprintf "world %s { objects: %s | J: %s }"
+        w.w_name (String.concat ", " w.w_objects) gens
   | Place p ->
       let fields_str =
         if p.p_fields = [] then ""

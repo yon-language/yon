@@ -37,7 +37,7 @@ let rec count_occurrences (x : string) (t : term) : int =
   | Pair (a, b) -> count_occurrences x a + count_occurrences x b
   | Fst e | Snd e -> count_occurrences x e
   | StreamCons (h, t) -> count_occurrences x h + count_occurrences x t
-  | Place _ | Reduction _ | Unit -> 0
+  | Place _ | Reduction _ | World _ | Unit -> 0
   | PLam (_, b) -> count_occurrences x b
   | PApp (p, _) -> count_occurrences x p
   | Transp (_, b) -> count_occurrences x b
@@ -92,7 +92,7 @@ let rec inline_seq_lets (t : term) : term =
   | Fst e -> Fst (inline_seq_lets e)
   | Snd e -> Snd (inline_seq_lets e)
   | StreamCons (h, tl) -> StreamCons (inline_seq_lets h, inline_seq_lets tl)
-  | Var _ | Place _ | Reduction _ | Unit -> t
+  | Var _ | Place _ | Reduction _ | World _ | Unit -> t
   | PLam (i, b) -> PLam (i, inline_seq_lets b)
   | PApp (p, r) -> PApp (inline_seq_lets p, r)
   | Transp (i, b) -> Transp (i, inline_seq_lets b)
