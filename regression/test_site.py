@@ -71,6 +71,14 @@ PROPERTIES = [
     "reconstruct: emits the world header `world Commerce { Code is Order }`",
     "reconstruct: emits `space Orders in Commerce`",
     "reconstruct: the rebuilt explicit text PARSES with today's parser",
+    # the sheaf predicate for the quotient generator (factor through canon):
+    "sheaf: salary = f(cohort u) factors through canon -> sheaf",
+    "sheaf: salary reading u directly does NOT factor -> rejected",
+    "sheaf: a constant field factors trivially -> sheaf",
+    "sheaf: a field using u both via canon AND directly does NOT factor",
+    "sheaf: identity canon (trivial Rel) accepts every field (Sh = PSh)",
+    "sheaf: total Rel (constant canon) rejects a non-constant field",
+    "sheaf: total Rel accepts a constant field",
 ]
 
 

@@ -135,5 +135,41 @@ let () =
      Sys.rmdir cdir; Sys.rmdir root
    with _ -> ());
 
+  (* ─── sheaf predicate: a field is a sheaf section iff it factors through canon ─
+   * canon : W -> Q models the quotient map (the Rel-class of an element). Here
+   * canon is symbolic. A field is a valid section of the quotient sheaf iff it
+   * reads its argument only through canon -- the salary counterexample, live. *)
+  let sctx = Reduce.empty_ctx in
+  let cohort u = App (Var "cohort", u) in
+  let canon = Lam ("u", TyPlace "User", cohort (Var "u")) in
+  let ff = Sheaf.field_factors_through sctx in
+
+  let salary_good = Lam ("u", TyPlace "User", App (Var "scale", cohort (Var "u"))) in
+  check "sheaf: salary = f(cohort u) factors through canon -> sheaf"
+    (ff ~canon ~field:salary_good);
+
+  let salary_bad = Lam ("u", TyPlace "User", App (Var "base_salary", Var "u")) in
+  check "sheaf: salary reading u directly does NOT factor -> rejected"
+    (not (ff ~canon ~field:salary_bad));
+
+  let salary_const = Lam ("u", TyPlace "User", Builtins.encode_number 1000.0) in
+  check "sheaf: a constant field factors trivially -> sheaf"
+    (ff ~canon ~field:salary_const);
+
+  let salary_mixed = Lam ("u", TyPlace "User",
+    App (App (Var "combine", cohort (Var "u")), Var "u")) in
+  check "sheaf: a field using u both via canon AND directly does NOT factor"
+    (not (ff ~canon ~field:salary_mixed));
+
+  let canon_id = Lam ("u", TyPlace "User", Var "u") in
+  check "sheaf: identity canon (trivial Rel) accepts every field (Sh = PSh)"
+    (ff ~canon:canon_id ~field:salary_bad);
+
+  let canon_total = Lam ("u", TyPlace "User", Builtins.encode_number 0.0) in
+  check "sheaf: total Rel (constant canon) rejects a non-constant field"
+    (not (ff ~canon:canon_total ~field:salary_good));
+  check "sheaf: total Rel accepts a constant field"
+    (ff ~canon:canon_total ~field:salary_const);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1
