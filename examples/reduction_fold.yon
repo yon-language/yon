@@ -1,0 +1,17 @@
+// Second reduction example, complementary to kw_reduction_modifiers (which
+// exercises the modifier battery). Here: a `forward` reduction with an
+// explicit `fold` and a place carrying an effectful operation. The forward
+// direction is otherwise only in keyword_coverage; this puts it in the
+// native corpus with a definite exit code.
+world W { Code is X }
+place Counter in W with effects {
+  count number
+  operation tick(n: number): number
+}
+reduction forward Accumulate of Counter fold "sum_f64" {
+  be seed holds 0
+  on tick(n: number) {
+    return n
+  }
+}
+fun main(): number { return 7 }
