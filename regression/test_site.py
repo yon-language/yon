@@ -58,6 +58,12 @@ PROPERTIES = [
     "join is order-insensitive as a topology",
     "join is idempotent (duplicate generator = same J)",
     "same_topology ignores objects (coarser than world_equal)",
+    # step 2 — TopWorld reifies the surface world into the Core site:
+    "desugar bare world { Code is X }: trivial J",
+    "desugar world = A + B: GenCoproduct [A;B]",
+    "desugar world = User / SameCohort: GenQuotient (User, SameCohort)",
+    "desugar world subset of Region: GenSubset Region",
+    "desugar world = A * B: NO generator (product is a limit, not a cover)",
 ]
 
 

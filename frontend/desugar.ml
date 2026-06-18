@@ -1447,6 +1447,47 @@ let desugar_reduction_decl (rd : S.reduction_decl) : C.reduction_decl =
     C.r_multi_shot = rd.S.rd_multi_shot;
     C.r_fold_name = rd.S.rd_fold_name; }
 
+(* desugar_world_decl: reify a surface world into the Core site C(W). The
+ * topology J is read off the CONSTRUCTION (Stage 1 of the Yoneda rebuild made
+ * the world a Core citizen; here TopWorld stops being no-op and fills it):
+ *
+ *   world C = A + B        -> GenCoproduct [A; B]   (disjoint cover)
+ *   world Q = W / Rel      -> GenQuotient (W, Rel)  (the R-classes cover)
+ *   world Q = coeq(a,b,c)  -> GenCoequalizer (a,b,c)
+ *   world S subset of V    -> GenSubset V           (dense inclusion)
+ *   world P = A * B        -> NO generator (product is a limit, not a cover)
+ *   world W { Code is X }  -> no generator (bare site: J trivial, Sh = PSh)
+ *
+ * Objects of C(W): the inhabitants if the world is declared with braces; else
+ * the factors named by the construction. Generators only ever come from the
+ * covering (colimit) constructions; the product contributes objects, not J. *)
+let desugar_world_decl (wd : S.world_decl) : C.world_decl =
+  let generators =
+    let g = [] in
+    let g = if wd.S.wd_coproduct_of <> []
+            then C.GenCoproduct wd.S.wd_coproduct_of :: g else g in
+    let g = match wd.S.wd_quotient_of with
+            | Some (b, r) -> C.GenQuotient (b, r) :: g | None -> g in
+    let g = match wd.S.wd_coequalizer_of with
+            | Some (a, b, c) -> C.GenCoequalizer (a, b, c) :: g | None -> g in
+    let g = match wd.S.wd_subset_of with
+            | Some p -> C.GenSubset p :: g | None -> g in
+    (* wd_product_of intentionally contributes NO generator. *)
+    List.rev g
+  in
+  let objects =
+    if wd.S.wd_places <> []
+    then List.map (fun (wp : S.world_place) -> wp.S.wp_name) wd.S.wd_places
+    else
+      wd.S.wd_product_of
+      @ wd.S.wd_coproduct_of
+      @ (match wd.S.wd_quotient_of with Some (b, _) -> [b] | None -> [])
+      @ (match wd.S.wd_subset_of with Some p -> [p] | None -> [])
+  in
+  { C.w_name = wd.S.wd_name;
+    C.w_objects = objects;
+    C.w_generators = generators }
+
 (* ===================================================================
  * v1.0 surface sugar lowering (2026-06-04).
  *
@@ -1878,10 +1919,12 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
       if List.mem sp res.space_imports then res
       else { res with space_imports = sp :: res.space_imports }
   | S.TopSpaceInit (name, _) -> { res with space_init_name = Some name }
-  | S.TopWorld _wd ->
-      (* World declarations don't produce Core terms; they're metadata.
-         A future version may track them in the context. *)
-      res
+  | S.TopWorld wd ->
+      (* Reify the world as the Core site C(W) and register it: a place will
+       * find its site via p_site, and the sheaf predicate reads J off the
+       * world's generators. No longer no-op metadata. *)
+      let core_wd = desugar_world_decl wd in
+      { res with ctx = Reduce.declare_world res.ctx core_wd }
   | S.TopPlace pd ->
       let core_pd = desugar_place_decl pd in
       { res with ctx = Reduce.declare_place res.ctx core_pd }

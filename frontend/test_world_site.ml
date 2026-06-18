@@ -59,5 +59,39 @@ let () =
   check "same_topology ignores objects (coarser than world_equal)"
     (Site.same_topology a b && not (world_equal a b));
 
+  (* ─── desugar: surface world -> Core site C(W), J read off the construction ─ *)
+  let dummy = Surface_ast.dummy_loc in
+  let mk_world ?(places=[]) ?(product=[]) ?(coproduct=[]) ?(coeq=None)
+               ?(quotient=None) ?(subset=None) name : Surface_ast.world_decl =
+    { Surface_ast.wd_name = name; wd_places = places;
+      wd_product_of = product; wd_coproduct_of = coproduct;
+      wd_coequalizer_of = coeq; wd_quotient_of = quotient;
+      wd_subset_of = subset; wd_loc = dummy } in
+  let wp name : Surface_ast.world_place =
+    { Surface_ast.wp_name = name;
+      wp_descriptor = Surface_ast.PdIdList ["X"]; wp_loc = dummy } in
+  let dsg = Desugar.desugar_world_decl in
+
+  let d_base = dsg (mk_world ~places:[wp "Code"] "Ledger") in
+  check "desugar bare world { Code is X }: trivial J" (Site.get_J d_base = []);
+  check "desugar bare world: objects = inhabitants" (d_base.w_objects = ["Code"]);
+
+  let d_copro = dsg (mk_world ~coproduct:["A"; "B"] "Either") in
+  check "desugar world = A + B: GenCoproduct [A;B]"
+    (Site.get_J d_copro = [GenCoproduct ["A"; "B"]]);
+
+  let d_quot = dsg (mk_world ~quotient:(Some ("User", "SameCohort")) "Anon") in
+  check "desugar world = User / SameCohort: GenQuotient (User, SameCohort)"
+    (Site.get_J d_quot = [GenQuotient ("User", "SameCohort")]);
+
+  let d_sub = dsg (mk_world ~subset:(Some "Region") "EU") in
+  check "desugar world subset of Region: GenSubset Region"
+    (Site.get_J d_sub = [GenSubset "Region"]);
+
+  let d_prod = dsg (mk_world ~product:["A"; "B"] "Prod") in
+  check "desugar world = A * B: NO generator (product is a limit, not a cover)"
+    (Site.get_J d_prod = []);
+  check "desugar product: objects = the factors" (d_prod.w_objects = ["A"; "B"]);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

@@ -31,6 +31,9 @@ open Ast
 type ctx = {
   places : (string * place_decl) list;
   reductions : (string * reduction_decl) list;
+  (* worlds = the reified sites C(W). A place finds its site by p_site here;
+   * the sheaf predicate reads the topology J off the world's generators. *)
+  worlds : (string * world_decl) list;
   active_handlers : (string * reduction_decl) list;  (* stack, top first *)
   current_place : string option;   (* current place for proposition evaluation *)
   visibility_table : (string * string list) list;  (* place_name -> visible names *)
@@ -44,6 +47,7 @@ type ctx = {
 let empty_ctx = {
   places = [];
   reductions = [];
+  worlds = [];
   active_handlers = [];
   current_place = None;
   visibility_table = [];
@@ -77,6 +81,7 @@ let lookup_visibility (ctx : ctx) (place : string) : string list option =
 
 let declare_place ctx p = { ctx with places = (p.p_name, p) :: ctx.places }
 let declare_reduction ctx r = { ctx with reductions = (r.r_name, r) :: ctx.reductions }
+let declare_world ctx w = { ctx with worlds = (w.w_name, w) :: ctx.worlds }
 
 (* ─── Value predicate ──────────────────────────────────────────────── *)
 
