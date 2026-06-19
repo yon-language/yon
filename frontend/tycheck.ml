@@ -2650,6 +2650,35 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
     | None -> err pd.pd_loc
         (Printf.sprintf "place %s refers to unknown world %s" pd.pd_name pd.pd_world)
   in
+  (* Sheaf coherence on a quotient world. If the place's world is Q = W / Rel,
+   * every field of the place must be invariant under Rel: it must factor
+   * through the relation field's projection (canon = λu. u.Rel, via Sheaf). A
+   * field that reads W finer than Rel identifies makes the place fail to
+   * descend to the quotient -- two W-elements the relation calls equal could
+   * carry different values -- a static sheaf-coherence violation, rejected here
+   * on the existing diagnostics channel (cr_errors / exit 3). *)
+  let* () =
+    match Tyenv.lookup_world env pd.pd_world with
+    | Some wd ->
+        (match wd.wd_quotient_of with
+         | Some (base, rel_field) ->
+             let fields =
+               List.filter_map
+                 (function FoField fd -> Some fd.fd_name | _ -> None)
+                 pd.pd_members in
+             (match Sheaf.quotient_violations ctx ~world:base ~rel_field ~fields with
+              | [] -> ok ()
+              | viol -> err pd.pd_loc (Printf.sprintf
+                  "place `%s` is not a sheaf on the quotient world `%s = %s / %s`: \
+                   field(s) %s are not invariant under `%s`. On a quotient world \
+                   every field must be determined by the relation field `%s` \
+                   (two elements the relation identifies would otherwise carry \
+                   different values)."
+                  pd.pd_name pd.pd_world base rel_field
+                  (String.concat ", " viol) rel_field rel_field))
+         | None -> ok ())
+    | None -> ok ()
+  in
   (* Check the monomorphism `place A extends B`. A is a sub-object of B
    * (A -> B) iff A has all the fields of B (structural subsumption). Reuses
    * place_is_subtype: place_is_subtype env ctx B A == true iff A has all the

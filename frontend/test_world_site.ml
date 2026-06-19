@@ -171,5 +171,27 @@ let () =
   check "sheaf: total Rel accepts a constant field"
     (ff ~canon:canon_total ~field:salary_const);
 
+  (* ─── aggancio: violazioni di fascio di un place su un world-quoziente ─────
+   * world Q = W / rel: rel è un campo di W (canon = fun u -> u.rel); ogni campo
+   * del place deve fattorizzare -> i campi che non fattorizzano sono violazioni. *)
+  check "quotient_violations: salary & age violate, cohort (the rel) does not"
+    (List.sort compare
+       (Sheaf.quotient_violations sctx ~world:"User" ~rel_field:"cohort"
+          ~fields:["cohort"; "salary"; "age"]) = ["age"; "salary"]);
+  check "quotient_violations: a place with only the relation field is a sheaf"
+    (Sheaf.quotient_violations sctx ~world:"User" ~rel_field:"cohort"
+       ~fields:["cohort"] = []);
+
+  let site_q = { w_name = "Anon"; w_objects = ["User"];
+                 w_generators = [GenQuotient ("User", "cohort")] } in
+  let pl = { p_name = "Profile"; p_site = TyPlace "Anon";
+             p_fields = [("cohort", TyPlace "number"); ("salary", TyPlace "number")];
+             p_operations = []; p_laws = [] } in
+  check "place_violations: a place on User/cohort flags salary as non-invariant"
+    (Sheaf.place_violations sctx site_q pl = ["salary"]);
+  let site_triv = { w_name = "Plain"; w_objects = []; w_generators = [] } in
+  check "place_violations: no quotient generator -> no constraint (empty)"
+    (Sheaf.place_violations sctx site_triv pl = []);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

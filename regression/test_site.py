@@ -79,6 +79,11 @@ PROPERTIES = [
     "sheaf: identity canon (trivial Rel) accepts every field (Sh = PSh)",
     "sheaf: total Rel (constant canon) rejects a non-constant field",
     "sheaf: total Rel accepts a constant field",
+    # surface binding: a place on a quotient world (canon = the rel field projection):
+    "quotient_violations: salary & age violate, cohort (the rel) does not",
+    "quotient_violations: a place with only the relation field is a sheaf",
+    "place_violations: a place on User/cohort flags salary as non-invariant",
+    "place_violations: no quotient generator -> no constraint (empty)",
 ]
 
 
@@ -87,3 +92,30 @@ def test_site_property(prop):
     """Each generated-topology property is asserted PASS in the oracle output."""
     _, out = _run()
     assert f"[PASS] {prop}" in out, f"property not PASS: {prop!r}\n{out[-2000:]}"
+
+
+# ── end-to-end from source: a place on a quotient world is checked at compile time ──
+# These prove the WHOLE thread (filesystem deduction is separate; here the place
+# verb is the sheaf reject wired into tycheck on cr_errors / exit 3).
+EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
+
+
+def _emit_rc(src):
+    return subprocess.run([str(EMIT), str(src)], capture_output=True, timeout=60).returncode
+
+
+def test_sheaf_quotient_rejected():
+    """A place on `Anon = User / cohort` with a non-invariant field `salary` is
+    rejected at compile time (exit 3): it is not a sheaf on the quotient."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    src = ROOT / "regression" / "yon_tests" / "negative" / "sheaf_quotient.yon"
+    assert _emit_rc(src) == 3
+
+
+def test_sheaf_quotient_ok():
+    """A place carrying only the relation field `cohort` is a sheaf -> exit 0."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    src = ROOT / "regression" / "yon_tests" / "prove" / "sheaf_quotient_ok.yon"
+    assert _emit_rc(src) == 0

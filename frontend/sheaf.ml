@@ -73,3 +73,50 @@ let field_factors_through
   let abstracted =
     replace_subterm ~target:cx ~replacement:(C.Var fresh_class) fx in
   not (S.mem x (C.free_vars abstracted))
+
+(* ─── Surface binding: a place on a quotient world ──────────────────────────
+ * In  world Q = W / Rel  the relation Rel is a FIELD of W -- the canonicalizing
+ * key -- and the quotient map is its projection:  canon = fun u -> u.Rel. A
+ * surface field access  u.f  desugars to  __field_f u  (desugar.ml), so a field
+ * of the place, seen as the map W -> V it denotes, is  fun u -> __field_f u. The
+ * place is a sheaf for the quotient generator iff every field factors through
+ * canon, i.e. is determined by Rel. The non-factoring fields are the
+ * violations. *)
+
+let proj (field_name : string) (u : C.term) : C.term =
+  C.App (C.Var ("__field_" ^ field_name), u)
+
+(* canon : W -> Q for a quotient W / rel_field (the relation field's projection) *)
+let quotient_canon ~(world : string) ~(rel_field : string) : C.term =
+  C.Lam ("u", C.TyPlace world, proj rel_field (C.Var "u"))
+
+(* a field of the place as the map W -> V it denotes *)
+let field_map ~(world : string) ~(field_name : string) : C.term =
+  C.Lam ("u", C.TyPlace world, proj field_name (C.Var "u"))
+
+(* the fields that BREAK the sheaf condition for  world W / rel_field: those not
+   invariant under the relation. [] means the place is a sheaf for this
+   generator. The relation field itself trivially factors (through itself). *)
+let quotient_violations
+      (ctx : Reduce.ctx) ~(world : string) ~(rel_field : string)
+      ~(fields : string list) : string list =
+  let canon = quotient_canon ~world ~rel_field in
+  List.filter
+    (fun f -> not (field_factors_through ctx ~canon
+                     ~field:(field_map ~world ~field_name:f)))
+    fields
+
+(* the sheaf violations of a place given the reified site: if the place's world
+   carries a quotient generator W / rel, every field must factor through the rel
+   projection. [] if the world has no quotient generator, or no violations. *)
+let place_violations
+      (ctx : Reduce.ctx) (site : C.world_decl) (pd : C.place_decl) : string list =
+  match
+    List.find_map
+      (function C.GenQuotient (base, rel) -> Some (base, rel) | _ -> None)
+      site.C.w_generators
+  with
+  | None -> []
+  | Some (base, rel_field) ->
+      quotient_violations ctx ~world:base ~rel_field
+        ~fields:(List.map fst pd.C.p_fields)
