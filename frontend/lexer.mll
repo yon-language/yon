@@ -22,6 +22,7 @@
       "world", WORLD;
       "place", PLACE;
       "space", SPACE;
+      "nat", NAT;
 
       (* The four kinds of "handle": values that name a map in the category.
          `move` and `view` map between objects; `reduction` folds a structure

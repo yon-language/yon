@@ -121,6 +121,7 @@
 /* First-class topos constructs. */
 %token TOPOS_KW OBJECTS_KW MORPHISMS_KW TERMINAL_KW PROP_KW
 %token MORPH_KW VIA_KW
+%token NAT
 %token ADJUNCTION_KW EXACT_KW
 (* OVER is already declared below in the WHEN/SEQUENCE token group *)
 
@@ -448,11 +449,10 @@ morph_item:
  * is a two-word contextual phrase, not a reserved keyword pair: `nat`
  * and `transform` stay free as user identifiers. *)
 nat_transform_decl:
-  | tag = IDENT kind = IDENT name = IDENT FROM src = IDENT TO tgt = IDENT
+  | NAT kind = IDENT name = IDENT FROM src = IDENT TO tgt = IDENT
     LBRACE bindings = list(nat_transform_binding) RBRACE
-    { if tag <> "nat" || kind <> "transform" then
-        failwith ("expected 'nat transform' declaration, got '"
-                  ^ tag ^ " " ^ kind ^ "'");
+    { if kind <> "transform" then
+        failwith ("expected 'nat transform' declaration, got 'nat " ^ kind ^ "'");
       { nt_name = name;
         nt_source_morph = src;
         nt_target_morph = tgt;
@@ -747,6 +747,7 @@ place_member:
   | vd = view_decl                        { Parser_state.push_decl (TopView vd); None }
   | rd = reduction_decl                   { Parser_state.push_decl (TopReduction rd); None }
   | mp = morph_decl                       { Parser_state.push_decl (TopMorph mp); None }
+  | nt = nat_transform_decl               { Parser_state.push_decl (TopNatTransform nt); None }
 
 
 field_decl:
