@@ -1364,31 +1364,10 @@ let stage_forces (stage : string) (cond_code : term) : bool =
    are all present somewhere in the family. Per the user's answers, this is a
    COMPILE-TIME check: we verify coverage statically; nothing runs on a network.
 
-   sheaf_covers: do the registered pieces (across all stages) include every
-   required piece? sheaf_gaps: which required pieces are NOT locally available on
-   ANY stage — these are exactly the cases that, at runtime in a distributed
-   system (N>1), would need to be fetched from another node. At N=1 a gap means
-   the piece is simply absent; the marking is what (b) will hang the fetch on. *)
-
-(* All pieces present across the whole family (union over stages). *)
-let all_forced_pieces () : term list =
-  Hashtbl.fold (fun _stage codes acc -> codes @ acc) forcing_registry []
-
-(* Does the family cover the required pieces? required = the sub-object codes
-   that, together, must reconstruct the whole. *)
-let sheaf_covers (required : term list) : bool =
-  let have = all_forced_pieces () in
-  List.for_all
-    (fun r -> List.exists (fun h -> canonical_equal h r) have)
-    required
-
-(* The gaps: required pieces no stage forces locally. These are the
-   "fetch-from-another-node" points — marked here, fetched (b) later. *)
-let sheaf_gaps (required : term list) : term list =
-  let have = all_forced_pieces () in
-  List.filter
-    (fun r -> not (List.exists (fun h -> canonical_equal h r) have))
-    required
+   (The pseudo sheaf-condition sheaf_covers/sheaf_gaps once lived here. It was
+   FALSIFIED and removed: it confused the presheaf's fields with the covering's
+   pieces and ignored the overlap. The real sheaf check is in sheaf.ml, on the
+   reified site. forcing_registry below still serves stage_serving.) *)
 
 (* Which stage (if any) locally has a given piece — the node that could serve it.
    Used by (b) to know WHERE to fetch from. Returns the first stage found. *)

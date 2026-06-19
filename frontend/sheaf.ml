@@ -108,7 +108,20 @@ let quotient_violations
 
 (* the sheaf violations of a place given the reified site: if the place's world
    carries a quotient generator W / rel, every field must factor through the rel
-   projection. [] if the world has no quotient generator, or no violations. *)
+   projection. [] if the world has no quotient generator, or no violations.
+
+   WHY ONLY THE QUOTIENT. Of the three covering generators, only the quotient
+   imposes a condition expressible as a constraint on a place's fields:
+   - quotient W / Rel: canon identifies elements, so a field must be Rel-invariant
+     (factor through canon). Real content -> checked here.
+   - coproduct A + B: a DISJOINT cover, no overlap, so sections glue freely; the
+     sheaf condition P(A+B) = P(A) x P(B) puts NO constraint on a single place's
+     fields. Vacuous on fields.
+   - subset S < V (dense): the condition P(V) = P(S) is unique EXTENSION from a
+     dense part, not a factorization of fields; with total field projections it
+     imposes nothing on a single place's fields. Vacuous on fields.
+   So place_violations returns [] for a non-quotient world BY DESIGN, not by
+   omission: there is genuinely no field-level reject to raise for those two. *)
 let place_violations
       (ctx : Reduce.ctx) (site : C.world_decl) (pd : C.place_decl) : string list =
   match

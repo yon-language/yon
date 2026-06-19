@@ -84,6 +84,8 @@ PROPERTIES = [
     "quotient_violations: a place with only the relation field is a sheaf",
     "place_violations: a place on User/cohort flags salary as non-invariant",
     "place_violations: no quotient generator -> no constraint (empty)",
+    "place_violations: coproduct world imposes nothing on fields (vacuous)",
+    "place_violations: subset world imposes nothing on fields (vacuous)",
 ]
 
 

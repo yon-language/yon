@@ -193,5 +193,17 @@ let () =
   check "place_violations: no quotient generator -> no constraint (empty)"
     (Sheaf.place_violations sctx site_triv pl = []);
 
+  (* coproduct/subset are vacuous on a place's fields (no field-level reject):
+     a disjoint cover glues freely; a dense subset is unique extension. Only the
+     quotient constrains fields. These confirm the closure is intentional. *)
+  let site_copro = { w_name = "Either"; w_objects = ["A"; "B"];
+                     w_generators = [GenCoproduct ["A"; "B"]] } in
+  check "place_violations: coproduct world imposes nothing on fields (vacuous)"
+    (Sheaf.place_violations sctx site_copro pl = []);
+  let site_sub = { w_name = "EU"; w_objects = ["Region"];
+                   w_generators = [GenSubset "Region"] } in
+  check "place_violations: subset world imposes nothing on fields (vacuous)"
+    (Sheaf.place_violations sctx site_sub pl = []);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1
