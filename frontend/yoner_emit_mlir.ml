@@ -141,26 +141,6 @@ let () =
       (Package_layout.layout ~root:path)
   else
     List.iter (load "") yon_files;
-  (* The entrypoint is declared in the manifest: [package] entry = "<Place>".
-     It must name a place that exists in the project (a <Place>.yon file); a
-     manifest that points at a non-existent entry is rejected here, on the same
-     exit-3 channel as the other manifest errors. *)
-  (match project_wm with
-   | Some wm ->
-       (match wm.Manifest.pkg_entry with
-        | Some e ->
-            let exists =
-              List.exists (fun u ->
-                Package_layout.place_of ~path:u.Package_layout.ul_path = e)
-                (Package_layout.layout ~root:path) in
-            if not exists then begin
-              Printf.eprintf
-                "MANIFEST ERROR: [package] entry = \"%s\" names no place \
-                 (there is no %s.yon in the project)\n" e e;
-              exit 3
-            end
-        | None -> ())
-   | None -> ());
   (* The order: imported files (dependencies) first, main files after. We use
    * the reverse insertion order: the leaves loaded first. *)
   let all_sources = Hashtbl.fold (fun fn (m, src) acc -> (fn, m, src) :: acc) loaded [] in
@@ -173,6 +153,8 @@ let () =
      space (directory) of the file; key it by the same canon path as `loaded`. *)
   let pw_pairs = ref [] in
   let wire_errs = ref [] in
+  let place_acc = ref [] in   (* (place_name, file, space) for every project place *)
+  let main_files = ref [] in  (* files that define `fun main` *)
   let space_of_path =
     match project_wm with
     | Some _ ->
@@ -197,6 +179,18 @@ let () =
           (match project_wm with
            | Some wm when Hashtbl.mem space_of_path filename ->
                let sp = Hashtbl.find space_of_path filename in
+               (* entrypoint collection: every project file (root included).
+                  Record each declared place (name, file, space) and whether the
+                  file defines `main`, so the Entry constraints below can be
+                  checked on the whole project. *)
+               List.iter (function
+                 | Surface_ast.TopPlace pd ->
+                     place_acc := (pd.Surface_ast.pd_name, filename, sp) :: !place_acc
+                 | Surface_ast.TopFun fd when fd.Surface_ast.fn_name = "main" ->
+                     main_files := filename :: !main_files
+                 | _ -> ()) decls;
+               (* place->world + wire boundary: only for files whose space is
+                  in a world (root files inherit no world). *)
                let sender_world = Manifest.world_of_space wm sp in
                (match sender_world with
                 | Some w ->
@@ -236,6 +230,34 @@ let () =
         Manifest.world_decls wm @ Package_layout.space_decls ~root:path @ prog
     | None -> prog
   in
+  (* The entrypoint is the place `Entry`: declared once, in the project root,
+     and the file that declares it carries `main`. The name defaults to "Entry"
+     and may be set by [package] entry. In project mode these four conditions
+     are enforced; outside project mode `main` keeps its top-level meaning. *)
+  (match project_wm with
+   | None -> ()
+   | Some wm ->
+       let entry_name = match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry" in
+       let entries = List.filter (fun (n, _, _) -> n = entry_name) !place_acc in
+       let fail msg = Printf.eprintf "ENTRYPOINT ERROR: %s\n" msg; exit 3 in
+       (match entries with
+        | [] ->
+            fail (Printf.sprintf
+              "the project declares no entrypoint: add `place %s` in the project \
+               root, in the file that defines main" entry_name)
+        | _ :: _ :: _ ->
+            fail (Printf.sprintf
+              "the entrypoint place `%s` must be unique; it is declared %d times"
+              entry_name (List.length entries))
+        | [ (_, file, sp) ] ->
+            if sp <> "" then
+              fail (Printf.sprintf
+                "the entrypoint place `%s` must live in the project root, not in \
+                 space `%s`" entry_name sp)
+            else if not (List.mem file !main_files) then
+              fail (Printf.sprintf
+                "the entrypoint place `%s` must contain main: its file defines no \
+                 `fun main`" entry_name)));
   (* Resolve selective-import aliases (geo_scale -> geometria::scale), then
    * mangle qualified names (a::b -> a_NS_b) so MLIR symbols are valid. *)
   (* Wire subscriptions: load the SIGNATURES of every module named in a

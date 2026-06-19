@@ -180,7 +180,7 @@ def test_wire_cross_world_rejected(tmp_path):
     proj = _make_project(tmp_path / "cross", toml, {
         "Orders/Order.yon": "place Order { id text }\nimport Mod::feed from Reports\n",
         "Reports/Report.yon": "place Report { v number }\n",
-        "Main.yon": "fun main(): number { return 0 }\n",
+        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 3
 
@@ -197,7 +197,7 @@ def test_wire_intra_world_ok(tmp_path):
     proj = _make_project(tmp_path / "intra", toml, {
         "Orders/Order.yon": "place Order { id text }\nimport Mod::feed from Billing\n",
         "Billing/Account.yon": "place Account { balance number }\n",
-        "Main.yon": "fun main(): number { return 0 }\n",
+        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
 
@@ -211,32 +211,81 @@ def test_wire_orphan_space_rejected(tmp_path):
     proj = _make_project(tmp_path / "orphan", toml, {
         "Orders/Order.yon": "place Order { id text }\n",
         "Ghost/Lost.yon": "place Lost { x number }\n",
-        "Main.yon": "fun main(): number { return 0 }\n",
+        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 3
 
 
-def test_entry_valid_compiles(tmp_path):
-    """[package] entry naming a real place compiles (exit 0)."""
+def test_entry_default_compiles(tmp_path):
+    """No [package] entry: the entrypoint defaults to `place Entry` in the root,
+    in the file that defines main (exit 0)."""
     if not EMIT.exists():
         pytest.skip("frontend not built")
-    toml = ("[package]\nname = \"x\"\nentry = \"Main\"\n"
+    toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
-    proj = _make_project(tmp_path / "entry_ok", toml, {
+    proj = _make_project(tmp_path / "entry_default", toml, {
         "Orders/Order.yon": "place Order in Commerce { id text }\n",
-        "Main.yon": "fun main(): number { return 0 }\n",
+        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
 
 
-def test_entry_missing_rejected(tmp_path):
-    """[package] entry naming a non-existent place is rejected (exit 3)."""
+def test_entry_custom_name_compiles(tmp_path):
+    """[package] entry sets the entrypoint place name (exit 0)."""
     if not EMIT.exists():
         pytest.skip("frontend not built")
-    toml = ("[package]\nname = \"x\"\nentry = \"Ghost\"\n"
+    toml = ("[package]\nname = \"x\"\nentry = \"Boot\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
-    proj = _make_project(tmp_path / "entry_ghost", toml, {
+    proj = _make_project(tmp_path / "entry_custom", toml, {
         "Orders/Order.yon": "place Order in Commerce { id text }\n",
-        "Main.yon": "fun main(): number { return 0 }\n",
+        "Boot.yon": "place Boot { }\nfun main(): number { return 0 }\n",
+    })
+    assert _emit_rc(proj) == 0
+
+
+def test_entry_absent_rejected(tmp_path):
+    """No `place Entry` anywhere -> rejected (exit 3)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
+    proj = _make_project(tmp_path / "entry_absent", toml, {
+        "Orders/Order.yon": "place Order in Commerce { id text }\n",
+        "Main.yon": "fun main(): number { return 0 }\n",   # no place Entry
+    })
+    assert _emit_rc(proj) == 3
+
+
+def test_entry_duplicate_rejected(tmp_path):
+    """Two `place Entry` declarations -> rejected (exit 3)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = "[package]\nname = \"x\"\n"
+    proj = _make_project(tmp_path / "entry_dup", toml, {
+        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+        "Entry2.yon": "place Entry { }\n",
+    })
+    assert _emit_rc(proj) == 3
+
+
+def test_entry_in_space_rejected(tmp_path):
+    """`place Entry` inside a space (not the root) -> rejected (exit 3)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
+    proj = _make_project(tmp_path / "entry_space", toml, {
+        "Orders/Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+    })
+    assert _emit_rc(proj) == 3
+
+
+def test_entry_no_main_rejected(tmp_path):
+    """`place Entry` whose file has no `fun main` -> rejected (exit 3)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = "[package]\nname = \"x\"\n"
+    proj = _make_project(tmp_path / "entry_nomain", toml, {
+        "Entry.yon": "place Entry { }\n",   # no main
     })
     assert _emit_rc(proj) == 3
