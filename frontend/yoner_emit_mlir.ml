@@ -114,7 +114,33 @@ let () =
       ) imports
     end
   in
-  List.iter (load "") yon_files;
+  (* Project mode (filesystem as declaration): a directory carrying yon.toml is
+   * a package. Instead of concatenating the raw .yon files (with their surface
+   * keywords), reconstruct the explicit form from src/, deducing world from the
+   * directory and space from the file. The single-file path and a directory
+   * WITHOUT yon.toml keep the classic raw-concatenation behavior. *)
+  let is_project_dir =
+    Sys.file_exists path && Sys.is_directory path
+    && Package_layout.is_project ~dir:path
+  in
+  if is_project_dir then begin
+    if not (Sys.file_exists (Package_layout.src_dir ~root:path)
+            && Sys.is_directory (Package_layout.src_dir ~root:path)) then begin
+      Printf.eprintf
+        "yon: project '%s' has %s but no src/ directory\n"
+        path Package_layout.manifest_name;
+      exit 1
+    end;
+    let block = Package_layout.project_source ~root:path in
+    let (stripped, imports) = strip_imports block in
+    Hashtbl.replace loaded path ("", stripped);
+    List.iter (fun spec ->
+      let files = resolve_import path spec in
+      let m = module_name_of_spec spec in
+      List.iter (load m) files
+    ) imports
+  end else
+    List.iter (load "") yon_files;
   (* The order: imported files (dependencies) first, main files after. We use
    * the reverse insertion order: the leaves loaded first. *)
   let all_sources = Hashtbl.fold (fun fn (m, src) acc -> (fn, m, src) :: acc) loaded [] in

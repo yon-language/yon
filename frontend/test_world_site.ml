@@ -135,6 +135,39 @@ let () =
      Sys.rmdir cdir; Sys.rmdir root
    with _ -> ());
 
+  (* ─── project mode: yon.toml marks the root; the src/ tree compiles via the
+   * reconstruct path (dir = world, file = space). This is the binding that
+   * connects package_layout to the real driver pipeline. *)
+  let proot = Filename.concat (Filename.get_temp_dir_name ())
+                (Printf.sprintf "yon_proj_%d" (Random.bits ())) in
+  let psrc = Filename.concat proot "src" in
+  let pcom = Filename.concat psrc "Commerce" in
+  Sys.mkdir proot 0o755; Sys.mkdir psrc 0o755; Sys.mkdir pcom 0o755;
+  let writep p s = let oc = open_out p in output_string oc s; close_out oc in
+  writep (Filename.concat proot "yon.toml") "[package]\nname = \"shop\"\n";
+  writep (Filename.concat psrc "main.yon") "fun main(): number { return 0 }\n";
+  writep (Filename.concat pcom "world.yon") "Code is Order\n";
+  writep (Filename.concat pcom "Orders.yon") "place Order { id text }\n";
+  check "project: yon.toml marks the directory as a project root"
+    (Package_layout.is_project ~dir:proot);
+  let psrc_txt = Package_layout.project_source ~root:proot in
+  let phas re_s = try ignore (Str.search_forward (Str.regexp re_s) psrc_txt 0); true
+                  with Not_found -> false in
+  check "project: src/ reconstructs `world Commerce` (folder = world)"
+    (phas "world Commerce");
+  check "project: src/ reconstructs `space Orders in Commerce` (file = space)"
+    (phas "space Orders in Commerce");
+  check "project: the reconstructed project source PARSES with today's parser"
+    (try ignore (Parser.program Lexer.token (Lexing.from_string psrc_txt)); true
+     with _ -> false);
+  (try
+     Sys.remove (Filename.concat proot "yon.toml");
+     Sys.remove (Filename.concat psrc "main.yon");
+     Sys.remove (Filename.concat pcom "world.yon");
+     Sys.remove (Filename.concat pcom "Orders.yon");
+     Sys.rmdir pcom; Sys.rmdir psrc; Sys.rmdir proot
+   with _ -> ());
+
   (* ─── sheaf predicate: a field is a sheaf section iff it factors through canon ─
    * canon : W -> Q models the quotient map (the Rel-class of an element). Here
    * canon is symbolic. A field is a valid section of the quotient sheaf iff it

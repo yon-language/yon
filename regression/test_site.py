@@ -121,3 +121,14 @@ def test_sheaf_quotient_ok():
         pytest.skip("frontend not built")
     src = ROOT / "regression" / "yon_tests" / "prove" / "sheaf_quotient_ok.yon"
     assert _emit_rc(src) == 0
+
+
+def test_project_mode_compiles():
+    """A package directory (yon.toml + src/) compiles end-to-end. The driver
+    enters project mode on the manifest, deduces world from the folder and space
+    from the file (filesystem as declaration), reconstructs the explicit form,
+    and emits MLIR -> exit 0. The src/ files carry no world/space keywords."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    proj = ROOT / "regression" / "yon_tests" / "project_min"
+    assert _emit_rc(proj) == 0

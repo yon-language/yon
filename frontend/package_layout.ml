@@ -108,3 +108,21 @@ let reconstruct ~(root : string) : string =
       end) wunits)
     worlds;
   Buffer.contents buf
+
+(* A package is a directory carrying the manifest yon.toml at its root. Its
+   presence marks the project root (Cargo/Go model): yonc on the directory
+   compiles the whole project, yonc on a single .yon compiles just that file. *)
+let manifest_name = "yon.toml"
+let is_project ~(dir : string) : bool =
+  Sys.file_exists (Filename.concat dir manifest_name)
+
+(* The sources of a project live under src/, where directory = world and
+   file = space (filesystem as declaration). *)
+let src_dir ~(root : string) : string = Filename.concat root "src"
+
+(* Project source: reconstruct the explicit form the parser accepts from the
+   src/ tree, deducing world/space from the path. No fallback -- a project
+   whose src/ is missing is a hard error, surfaced by the caller before this
+   is reached. *)
+let project_source ~(root : string) : string =
+  reconstruct ~root:(src_dir ~root)
