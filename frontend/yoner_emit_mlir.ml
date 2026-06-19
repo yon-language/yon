@@ -225,6 +225,19 @@ let () =
       cr.Tycheck.cr_errors;
     exit 3
   end;
+  (* Propagate the inferred place->world binding to codegen. check_program runs
+   * infer_place_worlds to resolve each unannotated place's world (e.g. Order in
+   * Commerce via `Code is Order` in the world), but keeps that rewrite internal
+   * -- the desugar otherwise sees the original __INFER marker, which the backend
+   * maps to __Default. Re-running the pass here is idempotent (the tycheck above
+   * already validated it: a real inference failure exited at cr_errors), so the
+   * Error arm is unreachable and kept only to stay total. With this, a place in
+   * a world-bearing folder lands in that world instead of __Default. *)
+  let prog =
+    match Tycheck.infer_place_worlds prog with
+    | Ok p -> p
+    | Error _ -> prog
+  in
   let desugared = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) prog in
   (* Erase type-level (universe-typed) parameters before codegen: a type
      argument is a compile-time citizen and must not reach the carrier/backend
