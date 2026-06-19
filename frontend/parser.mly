@@ -21,6 +21,26 @@
     | last :: rest -> (String.concat sep (List.rev rest), last)
     | [] -> ("", q)
 
+  (* `recv.f(args)` dispatch on the case of the receiver head, the ML-like
+   * convention shared by the corpus. An UPPERCASE head is a MODULE / namespace
+   * (String, List, Wire, Space, ...): the call is the qualified function
+   * `Module__f(args)`, the receiver is a prefix of the name, not a value. A
+   * lowercase head is a VALUE — a place section, a stream/wire handle: the
+   * receiver enters as the FIRST ARGUMENT, recv.f(args) = f(recv, args). That
+   * second branch is the Yoneda reading (f composed with recv), and it is the
+   * single representation, identical in statement and expression position — no
+   * name mangling for values, no string-splitting downstream. *)
+  let dot_is_module (obj : string) : bool =
+    String.length obj > 0 && obj.[0] >= 'A' && obj.[0] <= 'Z'
+
+  let dot_call_expr obj fld args loc =
+    if dot_is_module obj then ECall (obj ^ "__" ^ fld, args, loc)
+    else ECall (fld, EVar (obj, loc) :: args, loc)
+
+  let dot_call_stmt obj fld args loc =
+    if dot_is_module obj then SCall (obj ^ "__" ^ fld, args, loc)
+    else SCall (fld, EVar (obj, loc) :: args, loc)
+
   (* support `by fun(...)` inline lambda in move
    * conversion/mapping. Lifting via Parser_state module (esposto). *)
   let lift_inline_lambda_to_fun = Parser_state.lift_inline_lambda_to_fun
@@ -1170,13 +1190,13 @@ return_stmt:
 
 call_or_new_stmt:
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
-    { SCall (obj ^ "__" ^ fld, args, mk_loc $startpos $endpos) }
+    { dot_call_stmt obj fld args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT MAP LPAREN args = expr_list RPAREN
-    { SCall (obj ^ "__map", args, mk_loc $startpos $endpos) }
+    { dot_call_stmt obj "map" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT FOLD LPAREN args = expr_list RPAREN
-    { SCall (obj ^ "__fold", args, mk_loc $startpos $endpos) }
+    { dot_call_stmt obj "fold" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN
-    { SCall (obj ^ "__push", args, mk_loc $startpos $endpos) }
+    { dot_call_stmt obj "push" args (mk_loc $startpos $endpos) }
   | name = IDENT LPAREN args = expr_list RPAREN
     { SCall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
@@ -1467,18 +1487,18 @@ expr_atom:
   | PUSHOUT LPAREN f = IDENT COMMA g = IDENT RPAREN
     { EPushout (f, g, mk_loc $startpos $endpos) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
-    { ECall (obj ^ "__" ^ fld, args, mk_loc $startpos $endpos) }
+    { dot_call_expr obj fld args (mk_loc $startpos $endpos) }
   (* MAP, FOLD, and FILTER are keyword tokens (used by the type map<K,V> and
    * by space-decl `with fold "..."`), so they do not match IDENT in method-name
    * position. We add explicit rules for Class.map/fold/filter(args) as a
    * method call. PUSH is a keyword too (geometric-morphism f_lower_star), so
    * Vec.push(...) needs the same treatment. *)
   | obj = IDENT DOT MAP LPAREN args = expr_list RPAREN
-    { ECall (obj ^ "__map", args, mk_loc $startpos $endpos) }
+    { dot_call_expr obj "map" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT FOLD LPAREN args = expr_list RPAREN
-    { ECall (obj ^ "__fold", args, mk_loc $startpos $endpos) }
+    { dot_call_expr obj "fold" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN
-    { ECall (obj ^ "__push", args, mk_loc $startpos $endpos) }
+    { dot_call_expr obj "push" args (mk_loc $startpos $endpos) }
   | name = IDENT LPAREN args = expr_list RPAREN IN space = IDENT
     { (* syntax `f(args) in S`.
        *
