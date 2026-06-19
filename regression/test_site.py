@@ -151,3 +151,65 @@ def test_project_place_world_binding():
                          capture_output=True, timeout=60).stdout.decode(errors="replace")
     assert "topos.place @Order in @Commerce" in out
     assert "@__Default" not in out
+
+
+# ── wire boundary end-to-end: the world from the toml cuts the wire ──────────
+# A place inherits the world of its space (directory -> toml). A wire may only
+# reach a space of the place's own world; crossing is rejected (exit 3).
+
+def _make_project(d, toml, files):
+    """files: dict of relpath -> content; writes yon.toml + files under d."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "yon.toml").write_text(toml)
+    for rel, content in files.items():
+        p = d / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content)
+    return d
+
+
+def test_wire_cross_world_rejected(tmp_path):
+    """Orders (world Commerce) wiring to Reports (world Analytics) crosses a
+    world boundary -> rejected at compile time (exit 3, case C)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\n[runtime]\nbackend = \"memory\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n"
+            "[world.Analytics]\nspaces = [\"Reports\"]\nobjects = [\"Report\"]\n")
+    proj = _make_project(tmp_path / "cross", toml, {
+        "Orders/Order.yon": "place Order { id text }\nimport Mod::feed from Reports\n",
+        "Reports/Report.yon": "place Report { v number }\n",
+        "Main.yon": "fun main(): number { return 0 }\n",
+    })
+    assert _emit_rc(proj) == 3
+
+
+def test_wire_intra_world_ok(tmp_path):
+    """Two spaces in the same world wire freely (exit 0). Also exercises the
+    place->space->world inheritance: with two spaces the place world is not
+    unique, yet each place is bound through its directory."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\n[runtime]\nbackend = \"memory\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\", \"Billing\"]\n"
+            "objects = [\"Order\", \"Account\"]\n")
+    proj = _make_project(tmp_path / "intra", toml, {
+        "Orders/Order.yon": "place Order { id text }\nimport Mod::feed from Billing\n",
+        "Billing/Account.yon": "place Account { balance number }\n",
+        "Main.yon": "fun main(): number { return 0 }\n",
+    })
+    assert _emit_rc(proj) == 0
+
+
+def test_wire_orphan_space_rejected(tmp_path):
+    """A space directory not listed in any [world] is rejected (exit 3, case D)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\n[runtime]\nbackend = \"memory\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
+    proj = _make_project(tmp_path / "orphan", toml, {
+        "Orders/Order.yon": "place Order { id text }\n",
+        "Ghost/Lost.yon": "place Lost { x number }\n",
+        "Main.yon": "fun main(): number { return 0 }\n",
+    })
+    assert _emit_rc(proj) == 3

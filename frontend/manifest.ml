@@ -292,6 +292,23 @@ let check_targets (wm : world_map) ~(sender_world : string option)
    per-target cases (B, C) are checked per file by the driver, where the
    sending place's space -- hence its world -- is known. With no [world]
    declared the manifest is opt-in and nothing is constrained. *)
+(* The place inherits the world of its space. A place declared in a file that
+   sits in a space directory takes that space's world (from the toml). This
+   rewrites the AST before type-checking: an unannotated place (pd_world =
+   "__INFER") whose name the filesystem maps to a world is bound to it, so the
+   place->space->world chain is resolved structurally rather than left to the
+   unique-world heuristic (which cannot disambiguate across several worlds).
+   A place already annotated, or one the map does not know, is left untouched. *)
+let assign_place_worlds
+    (world_of_place : string -> string option) (p : program) : program =
+  List.map (function
+    | TopPlace pd when pd.pd_world = "__INFER" ->
+        (match world_of_place pd.pd_name with
+         | Some w -> TopPlace { pd with pd_world = w }
+         | None -> TopPlace pd)
+    | other -> other
+  ) p
+
 let check_program (wm : world_map) (p : program) : (location * string) list =
   if is_empty wm then []
   else

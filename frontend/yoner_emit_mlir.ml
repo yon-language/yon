@@ -217,6 +217,38 @@ let () =
   (* View declarations expand to synthetic place + constructor BEFORE
      tycheck, so the view name resolves as a normal function. *)
   let prog = Desugar.expand_views prog in
+  (* The place inherits its space's world (filesystem -> toml): bind each
+     unannotated place to the world of its directory before type-checking, so a
+     multi-world project resolves structurally instead of relying on the
+     unique-world heuristic (which cannot disambiguate across worlds). Project
+     mode only; each file is re-parsed alone to find the place names it
+     declares and the space (directory) it lives in. *)
+  let prog =
+    if is_project_dir then begin
+      let manifest_path = Filename.concat path Package_layout.manifest_name in
+      if Sys.file_exists manifest_path then begin
+        let wm =
+          try Manifest.parse_file manifest_path
+          with Manifest.Manifest_error _ -> Manifest.empty_world_map () in
+        let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
+        List.iter (fun u ->
+          match Manifest.world_of_space wm u.Package_layout.ul_space with
+          | None -> ()
+          | Some w ->
+              (try
+                 let src = Package_layout.read_file u.Package_layout.ul_path in
+                 let (stripped, _) = strip_imports src in
+                 let pf = Parser.program Lexer.token (Lexing.from_string stripped) in
+                 List.iter (function
+                   | Surface_ast.TopPlace pd ->
+                       Hashtbl.replace pw pd.Surface_ast.pd_name w
+                   | _ -> ()) pf
+               with _ -> ())
+        ) (Package_layout.layout ~root:path);
+        Manifest.assign_place_worlds (fun n -> Hashtbl.find_opt pw n) prog
+      end else prog
+    end else prog
+  in
   let cr = Tycheck.check_program prog in
   if cr.Tycheck.cr_errors <> [] then begin
     List.iter (fun e ->

@@ -339,5 +339,32 @@ let () =
     (obj = "world Commerce { Code is Order Code is Invoice }");
   check "synth objects parses" (parses obj);
 
+  (* place inherits the world of its space (filesystem -> toml). A bare
+     `place Order` parses with pd_world = "__INFER"; assign_place_worlds binds
+     it to the world the filesystem maps its name to. *)
+  let parse_one s = Parser.program Lexer.token (Lexing.from_string s) in
+  let world_of_place_in prog name =
+    List.find_map (function
+      | Surface_ast.TopPlace pd when pd.Surface_ast.pd_name = name ->
+          Some pd.Surface_ast.pd_world
+      | _ -> None) prog in
+  let bare = parse_one "place Order { id text }" in
+  check "assign: bare place parses as __INFER"
+    (world_of_place_in bare "Order" = Some "__INFER");
+  let assigned =
+    Manifest.assign_place_worlds
+      (fun n -> if n = "Order" then Some "Commerce" else None) bare in
+  check "assign: place Order inherits Commerce from its space"
+    (world_of_place_in assigned "Order" = Some "Commerce");
+  let unknown =
+    Manifest.assign_place_worlds (fun _ -> None) bare in
+  check "assign: a place the filesystem does not map stays __INFER"
+    (world_of_place_in unknown "Order" = Some "__INFER");
+  let annotated = parse_one "place Order in Analytics { id text }" in
+  let kept =
+    Manifest.assign_place_worlds (fun _ -> Some "Commerce") annotated in
+  check "assign: an already-annotated place is left untouched"
+    (world_of_place_in kept "Order" = Some "Analytics");
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1
