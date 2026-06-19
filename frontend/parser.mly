@@ -1510,7 +1510,7 @@ expr_atom:
     { ENew (name, fas, mk_loc $startpos $endpos) }
   | NEW name = IDENT IN space = IDENT LBRACE fas = field_assign_list RBRACE
     { ENewIn (name, space, fas, mk_loc $startpos $endpos) }
-  | WIRE TO sp = IDENT
+  | WIRE TO SPACE sp = IDENT
     { EWireTo (sp, mk_loc $startpos $endpos) }
   | PRODUCE LBRACE body = list(stmt) RBRACE
     { EProduce (body, mk_loc $startpos $endpos) }
