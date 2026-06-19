@@ -238,5 +238,65 @@ let () =
   check "place_violations: subset world imposes nothing on fields (vacuous)"
     (Sheaf.place_violations sctx site_sub pl = []);
 
+  (* ── manifest [world] parsing + wire-boundary checks ─────────────────
+     A world is a module declared in yon.toml listing the spaces that may
+     wire to each other. The four error cases the compiler must catch:
+     A) a space in two worlds, B) a wire to a space in no world,
+     C) a wire crossing a world boundary, D) a space in no world. *)
+  Printf.printf "\n=== manifest [world] / wire boundary ===\n\n";
+
+  let toml_ok =
+    "[package]\nname = \"shop\"\n\n\
+     [world.Commerce]\nspaces = [\"Orders\", \"Billing\"]\n\n\
+     [world.Analytics]\nspaces = [\"Reports\"]\n" in
+  let wm = Manifest.parse_string toml_ok in
+  check "manifest: Orders -> Commerce"
+    (Manifest.world_of_space wm "Orders" = Some "Commerce");
+  check "manifest: Billing -> Commerce"
+    (Manifest.world_of_space wm "Billing" = Some "Commerce");
+  check "manifest: Reports -> Analytics"
+    (Manifest.world_of_space wm "Reports" = Some "Analytics");
+  check "manifest: an unlisted space maps to no world"
+    (Manifest.world_of_space wm "Ghost" = None);
+  check "manifest: [package]/[world] split is honoured (not is_empty)"
+    (not (Manifest.is_empty wm));
+
+  (* Case A: a space claimed by two worlds is rejected at parse time. *)
+  let toml_dup =
+    "[world.Commerce]\nspaces = [\"Orders\"]\n\
+     [world.Analytics]\nspaces = [\"Orders\"]\n" in
+  let raised_a =
+    try let _ = Manifest.parse_string toml_dup in false
+    with Manifest.Manifest_error _ -> true in
+  check "manifest A: a space in two worlds is rejected at parse" raised_a;
+
+  let imp m n sp = Surface_ast.TopImportFrom (m, n, sp, Surface_ast.dummy_loc) in
+  let init s = Surface_ast.TopSpaceInit (s, Surface_ast.dummy_loc) in
+
+  (* Happy path: sender Orders (Commerce) wires to Billing (Commerce). *)
+  let prog_ok = [ init "Orders"; imp "Billing" "stream" "Billing" ] in
+  check "boundary: intra-world wire is accepted (no error)"
+    (Manifest.check_program wm prog_ok = []);
+
+  (* Case C: sender Orders (Commerce) wires to Reports (Analytics). *)
+  let prog_c = [ init "Orders"; imp "Reports" "stream" "Reports" ] in
+  check "boundary C: cross-world wire is rejected"
+    (List.length (Manifest.check_program wm prog_c) = 1);
+
+  (* Case B: a wire to a space no world declares. *)
+  let prog_b = [ init "Orders"; imp "Ghost" "stream" "Ghost" ] in
+  check "boundary B: wire to a space in no world is rejected"
+    (List.length (Manifest.check_program wm prog_b) = 1);
+
+  (* Case D: the package initialises a space that belongs to no world. *)
+  let prog_d = [ init "Lonely" ] in
+  check "boundary D: an initialised space in no world is rejected"
+    (List.length (Manifest.check_program wm prog_d) = 1);
+
+  (* Opt-in: with no [world] declared at all, nothing is constrained. *)
+  let wm_empty = Manifest.parse_string "[package]\nname = \"x\"\n" in
+  check "boundary: no [world] declared -> checks are vacuous"
+    (Manifest.check_program wm_empty prog_c = []);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

@@ -225,6 +225,31 @@ let () =
       cr.Tycheck.cr_errors;
     exit 3
   end;
+  (* World boundary (yon.toml [world] sections): a wire may only reach a space
+   * in the sender's own world. Project mode only -- the manifest lives at the
+   * project root. Reuses the parsed program and the same exit-3 channel as
+   * type errors. Opt-in: with no [world] declared, the checks are vacuous. *)
+  if is_project_dir then begin
+    let manifest_path = Filename.concat path Package_layout.manifest_name in
+    if Sys.file_exists manifest_path then begin
+      let wm =
+        try Manifest.parse_file manifest_path
+        with Manifest.Manifest_error msg ->
+          Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3
+      in
+      (match Manifest.check_program wm prog with
+       | [] -> ()
+       | errs ->
+           List.iter (fun (loc, msg) ->
+             if loc.Surface_ast.start_line > 0 then
+               Printf.eprintf "WORLD BOUNDARY ERROR: %d:%d: %s\n"
+                 loc.Surface_ast.start_line loc.Surface_ast.start_col msg
+             else
+               Printf.eprintf "WORLD BOUNDARY ERROR: %s\n" msg
+           ) errs;
+           exit 3)
+    end
+  end;
   (* Propagate the inferred place->world binding to codegen. check_program runs
    * infer_place_worlds to resolve each unannotated place's world (e.g. Order in
    * Commerce via `Code is Order` in the world), but keeps that rewrite internal
