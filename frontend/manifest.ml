@@ -263,55 +263,42 @@ let declared_spaces (p : program) : string list =
 (* Run the boundary checks. Returns a list of (location, message) errors; an
    empty list means the program respects the world boundaries. The manifest
    itself (case A) is enforced at parse time and raises before this runs. *)
-let check_program (wm : world_map) (p : program) : (location * string) list =
+(* Case B + C for one sender. Each wire target must be a space some world
+   declares (B); when the sending place's world is known, the target must lie
+   in that same world (C). The sender is the place that holds the wire, and a
+   place's world is the world of its space (its directory, via the toml). *)
+let check_targets (wm : world_map) ~(sender_world : string option)
+    (targets : (string * location) list) : (location * string) list =
   if is_empty wm then []                       (* no [world] declared: opt-in *)
-  else begin
-    let errors = ref [] in
-    let add loc msg = errors := (loc, msg) :: !errors in
+  else
+  List.filter_map (fun (target, loc) ->
+    match world_of_space wm target with
+    | None ->
+        Some (loc, Printf.sprintf
+          "wire target space '%s' is not listed in any [world.<Name>] in \
+           yon.toml" target)
+    | Some tw ->
+        (match sender_world with
+         | Some sw when sw <> tw ->
+             Some (loc, Printf.sprintf
+               "wire crosses a world boundary: the sending place lives in \
+                world '%s' but space '%s' belongs to world '%s'; spaces in \
+                different worlds cannot wire to each other (use a geometric \
+                morphism to cross worlds)" sw target tw)
+         | _ -> None)
+  ) targets
 
-    (* The sender world: the world of the space the package initialises. If
-       the package does not declare its own space, the cross-boundary case (C)
-       cannot be decided here and only the target cases (B) apply. *)
-    let sender_world =
-      match sender_spaces p with
-      | s :: _ -> world_of_space wm s
-      | []     -> None
-    in
-
-    (* Case D: a declared/initialised space that belongs to no world. *)
-    List.iter (fun s ->
+(* Case D: a declared or initialised space that belongs to no world. The
+   per-target cases (B, C) are checked per file by the driver, where the
+   sending place's space -- hence its world -- is known. With no [world]
+   declared the manifest is opt-in and nothing is constrained. *)
+let check_program (wm : world_map) (p : program) : (location * string) list =
+  if is_empty wm then []
+  else
+    List.filter_map (fun s ->
       if world_of_space wm s = None then
-        add dummy_loc (Printf.sprintf
-          "space '%s' is initialised by this package but is not listed in any \
-           [world.<Name>] in yon.toml; every space must belong to exactly one \
-           world" s)
-    ) (sender_spaces p);
-    List.iter (fun s ->
-      if world_of_space wm s = None then
-        add dummy_loc (Printf.sprintf
+        Some (dummy_loc, Printf.sprintf
           "space '%s' is declared but is not listed in any [world.<Name>] in \
            yon.toml; every space must belong to exactly one world" s)
-    ) (declared_spaces p);
-
-    (* Cases B and C, per wire target. *)
-    List.iter (fun (target, loc) ->
-      match world_of_space wm target with
-      | None ->
-          (* Case B: the wire names a space no world declares. *)
-          add loc (Printf.sprintf
-            "wire target space '%s' is not listed in any [world.<Name>] in \
-             yon.toml" target)
-      | Some tw ->
-          (* Case C: a wire crossing the sender's world boundary. *)
-          (match sender_world with
-           | Some sw when sw <> tw ->
-               add loc (Printf.sprintf
-                 "wire crosses a world boundary: this package lives in world \
-                  '%s' but space '%s' belongs to world '%s'; spaces in \
-                  different worlds cannot wire to each other (use a geometric \
-                  morphism to cross worlds)" sw target tw)
-           | _ -> ())
-    ) (import_targets p);
-
-    List.rev !errors
-  end
+      else None
+    ) (sender_spaces p @ declared_spaces p)

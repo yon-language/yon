@@ -236,7 +236,29 @@ let () =
         with Manifest.Manifest_error msg ->
           Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3
       in
-      (match Manifest.check_program wm prog with
+      (* D (orphan spaces) is global; B + C are per file: the sending place's
+         space is its directory (layout), its world comes from the toml, and a
+         wire in that file may only reach a space of the same world. Each file
+         is re-parsed alone (imports stripped) to attribute its wire targets to
+         the right sender; a file that does not parse alone is left to the
+         global type-check above to report. *)
+      let per_file =
+        List.concat_map (fun u ->
+          let sender_world =
+            Manifest.world_of_space wm u.Package_layout.ul_space in
+          match
+            (try
+               let src = Package_layout.read_file u.Package_layout.ul_path in
+               let (stripped, _) = strip_imports src in
+               Some (Parser.program Lexer.token (Lexing.from_string stripped))
+             with _ -> None)
+          with
+          | Some pf ->
+              Manifest.check_targets wm ~sender_world (Manifest.import_targets pf)
+          | None -> []
+        ) (Package_layout.layout ~root:path)
+      in
+      (match Manifest.check_program wm prog @ per_file with
        | [] -> ()
        | errs ->
            List.iter (fun (loc, msg) ->

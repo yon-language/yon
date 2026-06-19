@@ -275,33 +275,31 @@ let () =
     with Manifest.Manifest_error _ -> true in
   check "manifest A: a space in two worlds is rejected at parse" raised_a;
 
-  let imp m n sp = Surface_ast.TopImportFrom (m, n, sp, Surface_ast.dummy_loc) in
   let init s = Surface_ast.TopSpaceInit (s, Surface_ast.dummy_loc) in
+  let tgt s = [ (s, Surface_ast.dummy_loc) ] in
 
-  (* Happy path: sender Orders (Commerce) wires to Billing (Commerce). *)
-  let prog_ok = [ init "Orders"; imp "Billing" "stream" "Billing" ] in
-  check "boundary: intra-world wire is accepted (no error)"
-    (Manifest.check_program wm prog_ok = []);
-
-  (* Case C: sender Orders (Commerce) wires to Reports (Analytics). *)
-  let prog_c = [ init "Orders"; imp "Reports" "stream" "Reports" ] in
-  check "boundary C: cross-world wire is rejected"
-    (List.length (Manifest.check_program wm prog_c) = 1);
-
-  (* Case B: a wire to a space no world declares. *)
-  let prog_b = [ init "Orders"; imp "Ghost" "stream" "Ghost" ] in
+  (* B + C are per-sender: the sender is the place that holds the wire, and a
+     place's world is the world of its space (its directory, via the toml). *)
+  check "boundary: intra-world wire is accepted (Commerce -> Billing)"
+    (Manifest.check_targets wm ~sender_world:(Some "Commerce") (tgt "Billing") = []);
+  check "boundary C: cross-world wire is rejected (Commerce -> Reports)"
+    (List.length
+       (Manifest.check_targets wm ~sender_world:(Some "Commerce") (tgt "Reports")) = 1);
   check "boundary B: wire to a space in no world is rejected"
-    (List.length (Manifest.check_program wm prog_b) = 1);
+    (List.length
+       (Manifest.check_targets wm ~sender_world:(Some "Commerce") (tgt "Ghost")) = 1);
+  check "boundary C: same-world wire across two spaces is fine (Reports->Reports)"
+    (Manifest.check_targets wm ~sender_world:(Some "Analytics") (tgt "Reports") = []);
 
-  (* Case D: the package initialises a space that belongs to no world. *)
-  let prog_d = [ init "Lonely" ] in
+  (* Case D: a declared/initialised space that belongs to no world (global). *)
   check "boundary D: an initialised space in no world is rejected"
-    (List.length (Manifest.check_program wm prog_d) = 1);
+    (List.length (Manifest.check_program wm [ init "Lonely" ]) = 1);
 
   (* Opt-in: with no [world] declared at all, nothing is constrained. *)
   let wm_empty = Manifest.parse_string "[package]\nname = \"x\"\n" in
   check "boundary: no [world] declared -> checks are vacuous"
-    (Manifest.check_program wm_empty prog_c = []);
+    (Manifest.check_program wm_empty [ init "Lonely" ] = []
+     && Manifest.check_targets wm_empty ~sender_world:(Some "X") (tgt "Reports") = []);
 
   (* world structure -> explicit surface form: must equal the expected text
      AND parse with today's grammar. *)
