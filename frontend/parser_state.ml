@@ -13,6 +13,13 @@ let reset () =
   inline_counter := 0;
   synth_decls := []
 
+(* Emit a synthetic top-level declaration. Used to lift the arrows declared
+   inside a place body (fun/move/functor/geom_morphism/nat_transform/view/
+   reduction) to the top level: a place groups them syntactically, but the
+   front-end downstream sees them as ordinary top-level declarations. *)
+let push_decl (d : Surface_ast.top_decl) : unit =
+  synth_decls := d :: !synth_decls
+
 (* Add a synthetic fun to the pool. The synthetic fun wraps a lambda passed as
  * a `by`. *)
 let lift_inline_block_lambda_to_fun

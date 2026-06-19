@@ -654,7 +654,7 @@ place_decl:
     over = option(over_clause)
     ext = option(extends_clause)
     oerr = option(on_error_clause)
-    LBRACE members = field_and_cell_list RBRACE
+    LBRACE members = place_member_list RBRACE
     { { pd_name = name;
         pd_world = (match in_world with Some w -> w | None -> "__INFER");
         pd_with_effects = false;
@@ -729,6 +729,24 @@ field_and_cell_list:
 field_or_cell:
   | f = field_decl                          { FoField f }
   | c = cell_decl                           { FoCell c }
+
+(* The body of a place: it groups its data members (fields, cells) and its
+   behaviour (the arrows). Data members stay in pd_members; each arrow is
+   emitted as a synthetic top-level declaration via Parser_state, so the rest
+   of the front-end sees it as an ordinary top-level arrow while the source
+   keeps it inside the place. *)
+place_member_list:
+  | items = list(place_member)            { List.filter_map (fun x -> x) items }
+
+place_member:
+  | fc = field_or_cell                    { Some fc }
+  | fd = fun_decl                         { Parser_state.push_decl (TopFun fd); None }
+  | md = move_decl                        { Parser_state.push_decl (TopMove md); None }
+  | fct = functor_decl                    { Parser_state.push_decl fct; None }
+  | gm = geom_morphism_decl               { Parser_state.push_decl (TopGeomMorphism gm); None }
+  | vd = view_decl                        { Parser_state.push_decl (TopView vd); None }
+  | rd = reduction_decl                   { Parser_state.push_decl (TopReduction rd); None }
+  | mp = morph_decl                       { Parser_state.push_decl (TopMorph mp); None }
 
 
 field_decl:

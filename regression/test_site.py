@@ -289,3 +289,20 @@ def test_entry_no_main_rejected(tmp_path):
         "Entry.yon": "place Entry { }\n",   # no main
     })
     assert _emit_rc(proj) == 3
+
+
+def test_entry_main_inside_place(tmp_path):
+    """A place body accepts fun: `place Entry { fun main() ... }` puts main
+    inside the place, and the entrypoint check is satisfied (exit 0)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
+    proj = _make_project(tmp_path / "entry_inside", toml, {
+        "Orders/Order.yon": "place Order in Commerce { id text }\n",
+        "Entry.yon": ("place Entry {\n"
+                      "  fun helper(x: number): number { return x + 1 }\n"
+                      "  fun main(): number { return helper(41) }\n"
+                      "}\n"),
+    })
+    assert _emit_rc(proj) == 0
