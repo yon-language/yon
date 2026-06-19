@@ -858,7 +858,7 @@ got %s" (Tyenv.ty_to_string other)))
         | "map" -> ("__stream_map", args)
         | "filter" -> ("__stream_filter", args)
         | "fold" -> ("__stream_fold", args)
-        (* no prefix Stream.X bare. *)
+        | "for_every" -> ("__stream_for_every", args)
         | "iterate" -> ("__stream_iterate", args)
         | "take" -> ("__stream_take", args)
         | "sum_take" -> ("__stream_sum_take", args)
@@ -1874,30 +1874,27 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
            ok env)
 
   | SCall (name, args, loc) ->
-      (* Stream method in STATEMENT position: s.for_every(f) / s.fold(i, f).
-         The receiver lives in the mangled name (parser: obj__fld); if it
-         types as a stream, register the site for the drain lowering and
-         skip the normal call resolution (the lambda argument is checked
-         loosely, like the fused pipelines do). *)
-      let has_suffix suf =
-        let ln = String.length name and ls = String.length suf in
-        ln > ls && String.sub name (ln - ls) ls = suf
-      in
+      (* Stream method in STATEMENT position: s.for_every(f) / s.fold(init, f).
+         In the unified form the receiver is the FIRST argument (parser:
+         recv.f(args) = f(recv, args) for a value receiver), so for_every(s, f)
+         and fold(s, init, f). If the receiver types as a stream, register the
+         site for the drain lowering and skip the normal call resolution (the
+         lambda argument is checked loosely, like the fused pipelines do). *)
       let stream_method =
-        if has_suffix "__for_every" then Some ("__for_every", 1)
-        else if has_suffix "__fold" then Some ("__fold", 2)
+        if name = "for_every" then Some ("__for_every", 2)
+        else if name = "fold" then Some ("__fold", 3)
         else None
       in
       (match stream_method with
        | Some (suf, n_args) when List.length args = n_args ->
-           let prefix = String.sub name 0 (String.length name - String.length suf) in
-           let* recv_ty = infer env ctx (EVar (prefix, loc)) in
+           let recv = List.hd args in
+           let* recv_ty = infer env ctx recv in
            (match recv_ty with
             | TyStream _ ->
                 Hashtbl.replace stream_method_table (loc.start_line, loc.start_col) ();
                 (* fold's init is a value: check it; the lambda is loose *)
                 let* _ = (match suf, args with
-                          | "__fold", init :: _ -> infer env ctx init
+                          | "__fold", _recv :: init :: _ -> infer env ctx init
                           | _ -> ok (TyPrim "number")) in
                 ok env
             | _ when suf = "__for_every" ->

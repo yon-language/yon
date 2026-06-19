@@ -80,21 +80,12 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.EVar (n, _) when not (List.mem n bound) -> [n]
   | S.EVar _ | S.ELit _ -> []
   | S.ECall (n, args, _) ->
-      (* Method-call encoding: `recv.method(args)` is parsed as
-         ECall("recv__method", args) (parser.mly), so the receiver identifier
-         is BAKED INTO the call name and is invisible as a plain variable. We
-         recover it as the prefix before the first "__": for `ys.fold(...)`
-         that prefix is `ys`, a real local that must be captured. Builtins
-         ("__band") have an empty prefix; module-qualified calls ("Seq__fold")
-         have a non-local prefix — both are harmlessly dropped by the caller's
-         intersection with current_locals. *)
-      let recv =
-        match Str.bounded_split_delim (Str.regexp "__") n 2 with
-        | [pfx; _] when pfx <> "" && not (List.mem pfx bound) -> [pfx]
-        | _ -> []
-      in
+      (* A value method call `recv.f(args)` is parsed as f(recv, args): the
+         receiver is a plain first argument, captured by the args walk below.
+         Module-qualified calls (Seq__fold) and builtins (__band) carry no
+         receiver variable. No name parsing is needed. *)
       let base = if List.mem n bound then [] else [n] in
-      recv @ base @ List.concat_map (free_vars_in_expr bound) args
+      base @ List.concat_map (free_vars_in_expr bound) args
   | S.EField (sub, _, _) -> free_vars_in_expr bound sub
   | S.ENew (_, fas, _) | S.ENewIn (_, _, fas, _) ->
       List.concat_map (fun fa -> free_vars_in_expr bound fa.S.fa_value) fas
@@ -369,6 +360,7 @@ and desugar_expr (e : S.expr) : C.term =
         | "map" -> ("__stream_map", args)
         | "filter" -> ("__stream_filter", args)
         | "fold" -> ("__stream_fold", args)
+        | "for_every" -> ("__stream_for_every", args)
         (* The Stream.X prefix is removed. iterate/take/sum_take become bare
          * builtins; to_stream is a semantic no-op (the list is already a
          * stream). *)
@@ -1543,23 +1535,19 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
   | S.SWith (r, p, b, loc) -> [S.SWith (r, p, body b, loc)]
   | S.SProduce (b, loc) -> [S.SProduce (body b, loc)]
   | S.SForces (stg, c, b, loc) -> [S.SForces (stg, c, body b, loc)]
-  | S.SCall (n, [f], loc)
-    when v1_has_suffix n "__for_every"
-      && Hashtbl.mem S.stream_method_table (loc.S.start_line, loc.S.start_col) ->
-      v1_lower_stream_for_every (v1_strip n "__for_every") f loc
-  | S.SLet (x, S.ECall (n, [f], eloc), loc)
-    when v1_has_suffix n "__for_every"
-      && Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
-      v1_lower_stream_for_every (v1_strip n "__for_every") f loc
+  | S.SCall ("for_every", [S.EVar (recv, _); f], loc)
+    when Hashtbl.mem S.stream_method_table (loc.S.start_line, loc.S.start_col) ->
+      v1_lower_stream_for_every recv f loc
+  | S.SLet (x, S.ECall ("for_every", [S.EVar (recv, _); f], eloc), loc)
+    when Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
+      v1_lower_stream_for_every recv f loc
       @ [S.SLet (x, v1_num 0.0, loc)]
-  | S.SCall (n, [init; f], loc)
-    when v1_has_suffix n "__fold"
-      && Hashtbl.mem S.stream_method_table (loc.S.start_line, loc.S.start_col) ->
-      fst (v1_lower_stream_fold (v1_strip n "__fold") init f loc)
-  | S.SLet (x, S.ECall (n, [init; f], eloc), loc)
-    when v1_has_suffix n "__fold"
-      && Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
-      let (stmts, result) = v1_lower_stream_fold (v1_strip n "__fold") init f loc in
+  | S.SCall ("fold", [S.EVar (recv, _); init; f], loc)
+    when Hashtbl.mem S.stream_method_table (loc.S.start_line, loc.S.start_col) ->
+      fst (v1_lower_stream_fold recv init f loc)
+  | S.SLet (x, S.ECall ("fold", [S.EVar (recv, _); init; f], eloc), loc)
+    when Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
+      let (stmts, result) = v1_lower_stream_fold recv init f loc in
       stmts @ [S.SLet (x, result, loc)]
   | S.SLet (sub, S.ECall (n, [S.EVar _], eloc), loc)
     when v1_has_suffix n "__awaits"
@@ -1651,8 +1639,6 @@ and v1_lower_foreach_stream x e b loc =
 and v1_has_suffix n suf =
   let ln = String.length n and ls = String.length suf in
   ln > ls && String.sub n (ln - ls) ls = suf
-
-and v1_strip n suf = String.sub n 0 (String.length n - String.length suf)
 
 and v1_lower_stream_for_every recv f loc =
   (* s.for_every(f): drain the stream, calling f on each value. The
