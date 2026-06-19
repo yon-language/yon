@@ -64,13 +64,16 @@ PROPERTIES = [
     "desugar world = User / SameCohort: GenQuotient (User, SameCohort)",
     "desugar world subset of Region: GenSubset Region",
     "desugar world = A * B: NO generator (product is a limit, not a cover)",
-    # filesystem layout: folder = world, file = space (deduction + reconstruction):
-    "layout: main.yon is a space in the ROOT world",
-    "layout: Orders.yon is space Orders in world Commerce",
-    "layout: world.yon is flagged as the world header file of Commerce",
-    "reconstruct: emits the world header `world Commerce { Code is Order }`",
-    "reconstruct: emits `space Orders in Commerce`",
+    # filesystem layout: folder = space, file = place; world from the toml:
+    "layout: Order.yon is a place in space Orders (directory = space)",
+    "layout: Main.yon is under the root, in no space",
+    "reconstruct: materialises the world from the toml (`world Commerce`)",
+    "reconstruct: declares the space bare (`space Orders`)",
+    "reconstruct: does NOT re-emit membership (`space Orders in ...`)",
+    "reconstruct: keeps the place body (`place Order`)",
     "reconstruct: the rebuilt explicit text PARSES with today's parser",
+    "project: reconstructs the world from the toml (`world Commerce`)",
+    "project: reconstructs the space bare (`space Orders`)",
     # the sheaf predicate for the quotient generator (factor through canon):
     "sheaf: salary = f(cohort u) factors through canon -> sheaf",
     "sheaf: salary reading u directly does NOT factor -> rejected",
@@ -124,10 +127,11 @@ def test_sheaf_quotient_ok():
 
 
 def test_project_mode_compiles():
-    """A package directory (yon.toml + src/) compiles end-to-end. The driver
-    enters project mode on the manifest, deduces world from the folder and space
-    from the file (filesystem as declaration), reconstructs the explicit form,
-    and emits MLIR -> exit 0. The src/ files carry no world/space keywords."""
+    """A package directory (yon.toml at the root, folders = spaces, files =
+    places) compiles end-to-end. The driver enters project mode on the
+    manifest, materialises the worlds from the toml, declares each space bare,
+    keeps the place bodies, reconstructs the explicit form, and emits MLIR ->
+    exit 0. The files carry no world keyword; the space is the folder."""
     if not EMIT.exists():
         pytest.skip("frontend not built")
     proj = ROOT / "regression" / "yon_tests" / "project_min"
@@ -136,10 +140,10 @@ def test_project_mode_compiles():
 
 def test_project_place_world_binding():
     """The inferred place->world binding reaches codegen. In project_min the
-    folder Commerce is the only world, so `place Order` (in src/Commerce/) is
-    inferred into Commerce and the emitted MLIR binds it there -- not __Default.
-    This is the propagation fix: the tycheck resolved the world all along, but
-    the desugar/emit used to see the raw __INFER marker."""
+    folder Orders is the only space and the toml puts it in world Commerce, so
+    `place Order` (in Orders/) is inferred into Commerce and the emitted MLIR
+    binds it there -- not __Default. This is the propagation fix: the tycheck
+    resolved the world all along, but the desugar/emit used to see __INFER."""
     if not EMIT.exists():
         pytest.skip("frontend not built")
     proj = ROOT / "regression" / "yon_tests" / "project_min"

@@ -16,10 +16,27 @@
 
 open Surface_ast
 
-(* space name -> world name, plus world name -> spaces in declaration order. *)
+(* The categorical structure of a world, as declared in [world.<Name>]: its
+   objects (Code is X) and at most one construction (= A+B, = A*B, W / R,
+   subset of V). All empty = a trivial world over its objects. *)
+type world_struct = {
+  ws_objects   : string list;
+  ws_coproduct : string list;
+  ws_product   : string list;
+  ws_quotient  : (string * string) option;
+  ws_subset_of : string option;
+}
+
+let empty_struct = {
+  ws_objects = []; ws_coproduct = []; ws_product = [];
+  ws_quotient = None; ws_subset_of = None;
+}
+
+(* space -> world, world -> spaces (declaration order), world -> its structure. *)
 type world_map = {
   space_world  : (string, string) Hashtbl.t;
   world_spaces : (string, string list) Hashtbl.t;
+  wstructs     : (string, world_struct) Hashtbl.t;
 }
 
 (* A problem in the [world] sections. The manifest has no .yon source
@@ -29,6 +46,7 @@ exception Manifest_error of string
 let empty_world_map () = {
   space_world  = Hashtbl.create 16;
   world_spaces = Hashtbl.create 8;
+  wstructs     = Hashtbl.create 8;
 }
 
 (* ─── small string helpers ─────────────────────────────────────────── *)
@@ -103,7 +121,9 @@ let parse_string (text : string) : world_map =
       | Some w ->
           current := Some w;
           if not (Hashtbl.mem wm.world_spaces w) then
-            Hashtbl.replace wm.world_spaces w []
+            Hashtbl.replace wm.world_spaces w [];
+          if not (Hashtbl.mem wm.wstructs w) then
+            Hashtbl.replace wm.wstructs w empty_struct
       | None ->
           if is_section_header line then current := None    (* left [world.*] *)
           else begin
@@ -116,23 +136,50 @@ let parse_string (text : string) : world_map =
                      let key = trim (String.sub line 0 i) in
                      let rhs =
                        String.sub line (i + 1) (String.length line - i - 1) in
-                     if key = "spaces" then begin
-                       let names = parse_spaces_value rhs in
-                       List.iter (fun sp ->
-                         (match Hashtbl.find_opt wm.space_world sp with
-                          | Some w' when w' <> w ->
-                              raise (Manifest_error (Printf.sprintf
-                                "yon.toml: space '%s' is declared in two \
-                                 worlds ('%s' and '%s'); a space belongs to \
-                                 exactly one world" sp w' w))
-                          | _ -> ());
-                         Hashtbl.replace wm.space_world sp w
-                       ) names;
-                       let prev =
-                         match Hashtbl.find_opt wm.world_spaces w with
-                         | Some l -> l | None -> [] in
-                       Hashtbl.replace wm.world_spaces w (prev @ names)
-                     end
+                     let upd f =
+                       let s = match Hashtbl.find_opt wm.wstructs w with
+                         | Some s -> s | None -> empty_struct in
+                       Hashtbl.replace wm.wstructs w (f s)
+                     in
+                     (match key with
+                      | "spaces" ->
+                          let names = parse_spaces_value rhs in
+                          List.iter (fun sp ->
+                            (match Hashtbl.find_opt wm.space_world sp with
+                             | Some w' when w' <> w ->
+                                 raise (Manifest_error (Printf.sprintf
+                                   "yon.toml: space '%s' is declared in two \
+                                    worlds ('%s' and '%s'); a space belongs to \
+                                    exactly one world" sp w' w))
+                             | _ -> ());
+                            Hashtbl.replace wm.space_world sp w
+                          ) names;
+                          let prev =
+                            match Hashtbl.find_opt wm.world_spaces w with
+                            | Some l -> l | None -> [] in
+                          Hashtbl.replace wm.world_spaces w (prev @ names)
+                      | "objects" ->
+                          upd (fun s -> { s with ws_objects = parse_spaces_value rhs })
+                      | "coproduct" ->
+                          upd (fun s -> { s with ws_coproduct = parse_spaces_value rhs })
+                      | "product" ->
+                          upd (fun s -> { s with ws_product = parse_spaces_value rhs })
+                      | "quotient" ->
+                          (match parse_spaces_value rhs with
+                           | [base; rel] ->
+                               upd (fun s -> { s with ws_quotient = Some (base, rel) })
+                           | _ ->
+                               raise (Manifest_error (Printf.sprintf
+                                 "yon.toml: world '%s' quotient must be a pair \
+                                  [Base, Relation]" w)))
+                      | "subset_of" ->
+                          (match parse_spaces_value rhs with
+                           | [v] -> upd (fun s -> { s with ws_subset_of = Some v })
+                           | _ ->
+                               raise (Manifest_error (Printf.sprintf
+                                 "yon.toml: world '%s' subset_of must be a \
+                                  single \"Parent\"" w)))
+                      | _ -> ())
                  | None -> ())
           end
     end
@@ -153,6 +200,41 @@ let world_of_space (wm : world_map) (sp : string) : string option =
 
 let is_empty (wm : world_map) : bool =
   Hashtbl.length wm.space_world = 0
+
+(* ── synthesise the explicit world declaration the parser accepts ───── *)
+
+(* Render a world's [world.<Name>] structure as the surface text parser and
+   tycheck already accept. At most one construction applies (coproduct >
+   product > quotient > subset); with none, the world is the trivial site
+   over its objects, each rendered "Code is <obj>". This is how a
+   manifest-declared world reaches the existing front-end unchanged. *)
+let world_decl_text (name : string) (ws : world_struct) : string =
+  match ws.ws_coproduct, ws.ws_product, ws.ws_quotient, ws.ws_subset_of with
+  | (_ :: _ as cs), _, _, _ ->
+      Printf.sprintf "world %s = %s" name (String.concat " + " cs)
+  | _, (_ :: _ as ps), _, _ ->
+      Printf.sprintf "world %s = %s" name (String.concat " * " ps)
+  | _, _, Some (base, rel), _ ->
+      Printf.sprintf "world %s = %s / %s" name base rel
+  | _, _, _, Some parent ->
+      Printf.sprintf "world %s subset of %s" name parent
+  | [], [], None, None ->
+      let body =
+        String.concat " "
+          (List.map (fun o -> Printf.sprintf "Code is %s" o) ws.ws_objects) in
+      Printf.sprintf "world %s { %s }" name body
+
+(* Every manifest-declared world, one declaration per line, name-sorted for a
+   stable reconstruction. *)
+let all_world_decls (wm : world_map) : string =
+  Hashtbl.fold (fun name ws acc -> (name, ws) :: acc) wm.wstructs []
+  |> List.sort (fun (a, _) (b, _) -> compare a b)
+  |> List.map (fun (name, ws) -> world_decl_text name ws)
+  |> String.concat "\n"
+
+(* The spaces a world groups, in declaration order. *)
+let spaces_of_world (wm : world_map) (w : string) : string list =
+  match Hashtbl.find_opt wm.world_spaces w with Some l -> l | None -> []
 
 (* ─── boundary check over a program ─────────────────────────────────── *)
 

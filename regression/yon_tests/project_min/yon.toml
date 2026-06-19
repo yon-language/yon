@@ -3,3 +3,7 @@ name = "project_min"
 
 [runtime]
 backend = "memory"
+
+[world.Commerce]
+spaces  = ["Orders"]
+objects = ["Order"]

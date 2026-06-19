@@ -93,79 +93,84 @@ let () =
     (Site.get_J d_prod = []);
   check "desugar product: objects = the factors" (d_prod.w_objects = ["A"; "B"]);
 
-  (* ─── filesystem layout: folder = world, file = space (deduce + reconstruct) ─
-   * Build a tiny src/ fixture, check the path->（world,space) deduction, and
-   * check the reconstructed explicit text PARSES with today's parser. *)
+  (* ─── filesystem layout: folder = space, file = place; world from the toml ─
+   * Build a tiny fixture (a Space directory holding a place file, plus a
+   * Main file under the root), check the path->space deduction, and check the
+   * reconstructed explicit text PARSES. The world is materialised from the
+   * manifest; the space is declared bare (membership lives in the toml). *)
   Random.self_init ();
   let root = Filename.concat (Filename.get_temp_dir_name ())
                (Printf.sprintf "yon_layout_%d" (Random.bits ())) in
-  let cdir = Filename.concat root "Commerce" in
-  Sys.mkdir root 0o755; Sys.mkdir cdir 0o755;
+  let odir = Filename.concat root "Orders" in
+  Sys.mkdir root 0o755; Sys.mkdir odir 0o755;
   let write p s = let oc = open_out p in output_string oc s; close_out oc in
-  write (Filename.concat root "main.yon") "fun main(): number { return 0 }\n";
-  write (Filename.concat cdir "world.yon") "Code is Order\n";
-  write (Filename.concat cdir "Orders.yon") "place Order { id text }\n";
+  write (Filename.concat root "Main.yon") "fun main(): number { return 0 }\n";
+  write (Filename.concat odir "Order.yon") "place Order { id text }\n";
 
   let units = Package_layout.layout ~root in
-  let find sp = List.find_opt (fun u -> u.Package_layout.ul_space = sp) units in
-  check "layout: main.yon is a space in the ROOT world"
-    (match find "main" with Some u -> u.Package_layout.ul_world = "" | None -> false);
-  check "layout: Orders.yon is space Orders in world Commerce"
-    (match find "Orders" with Some u -> u.Package_layout.ul_world = "Commerce" | None -> false);
-  check "layout: world.yon is flagged as the world header file of Commerce"
-    (match find "world" with
-     | Some u -> u.Package_layout.ul_is_world && u.Package_layout.ul_world = "Commerce"
-     | None -> false);
+  let find_path base =
+    List.find_opt (fun u ->
+      Filename.basename u.Package_layout.ul_path = base) units in
+  check "layout: Order.yon is a place in space Orders (directory = space)"
+    (match find_path "Order.yon" with
+     | Some u -> u.Package_layout.ul_space = "Orders" | None -> false);
+  check "layout: Main.yon is under the root, in no space"
+    (match find_path "Main.yon" with
+     | Some u -> u.Package_layout.ul_space = "" | None -> false);
 
-  let txt = Package_layout.reconstruct ~root in
+  let wm_fix = Manifest.parse_string
+    "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n" in
+  let txt = Package_layout.reconstruct ~root ~wm:wm_fix in
   let has re_s = try ignore (Str.search_forward (Str.regexp re_s) txt 0); true
                  with Not_found -> false in
-  check "reconstruct: emits the world header `world Commerce { Code is Order }`"
+  check "reconstruct: materialises the world from the toml (`world Commerce`)"
     (has "world Commerce { Code is Order }");
-  check "reconstruct: emits `space Orders in Commerce`"
-    (has "space Orders in Commerce");
+  check "reconstruct: declares the space bare (`space Orders`)"
+    (has "space Orders");
+  check "reconstruct: does NOT re-emit membership (`space Orders in ...`)"
+    (not (has "space Orders in"));
+  check "reconstruct: keeps the place body (`place Order`)"
+    (has "place Order");
   check "reconstruct: the rebuilt explicit text PARSES with today's parser"
     (try ignore (Parser.program Lexer.token (Lexing.from_string txt)); true
      with _ -> false);
 
   (try
-     Sys.remove (Filename.concat root "main.yon");
-     Sys.remove (Filename.concat cdir "world.yon");
-     Sys.remove (Filename.concat cdir "Orders.yon");
-     Sys.rmdir cdir; Sys.rmdir root
+     Sys.remove (Filename.concat root "Main.yon");
+     Sys.remove (Filename.concat odir "Order.yon");
+     Sys.rmdir odir; Sys.rmdir root
    with _ -> ());
 
-  (* ─── project mode: yon.toml marks the root; the src/ tree compiles via the
-   * reconstruct path (dir = world, file = space). This is the binding that
-   * connects package_layout to the real driver pipeline. *)
+  (* ─── project mode: yon.toml marks the root; the tree compiles via the
+   * reconstruct path (dir = space, file = place, world from the toml). This is
+   * the binding that connects package_layout to the real driver pipeline. *)
   let proot = Filename.concat (Filename.get_temp_dir_name ())
                 (Printf.sprintf "yon_proj_%d" (Random.bits ())) in
-  let psrc = Filename.concat proot "src" in
-  let pcom = Filename.concat psrc "Commerce" in
-  Sys.mkdir proot 0o755; Sys.mkdir psrc 0o755; Sys.mkdir pcom 0o755;
+  let pcom = Filename.concat proot "Orders" in
+  Sys.mkdir proot 0o755; Sys.mkdir pcom 0o755;
   let writep p s = let oc = open_out p in output_string oc s; close_out oc in
-  writep (Filename.concat proot "yon.toml") "[package]\nname = \"shop\"\n";
-  writep (Filename.concat psrc "main.yon") "fun main(): number { return 0 }\n";
-  writep (Filename.concat pcom "world.yon") "Code is Order\n";
-  writep (Filename.concat pcom "Orders.yon") "place Order { id text }\n";
+  writep (Filename.concat proot "yon.toml")
+    "[package]\nname = \"shop\"\n\n[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n";
+  writep (Filename.concat proot "Main.yon") "fun main(): number { return 0 }\n";
+  writep (Filename.concat pcom "Order.yon") "place Order { id text }\n";
   check "project: yon.toml marks the directory as a project root"
     (Package_layout.is_project ~dir:proot);
-  let psrc_txt = Package_layout.project_source ~root:proot in
+  let pwm = Manifest.parse_file (Filename.concat proot "yon.toml") in
+  let psrc_txt = Package_layout.project_source ~root:proot ~wm:pwm in
   let phas re_s = try ignore (Str.search_forward (Str.regexp re_s) psrc_txt 0); true
                   with Not_found -> false in
-  check "project: src/ reconstructs `world Commerce` (folder = world)"
+  check "project: reconstructs the world from the toml (`world Commerce`)"
     (phas "world Commerce");
-  check "project: src/ reconstructs `space Orders in Commerce` (file = space)"
-    (phas "space Orders in Commerce");
+  check "project: reconstructs the space bare (`space Orders`)"
+    (phas "space Orders" && not (phas "space Orders in"));
   check "project: the reconstructed project source PARSES with today's parser"
     (try ignore (Parser.program Lexer.token (Lexing.from_string psrc_txt)); true
      with _ -> false);
   (try
      Sys.remove (Filename.concat proot "yon.toml");
-     Sys.remove (Filename.concat psrc "main.yon");
-     Sys.remove (Filename.concat pcom "world.yon");
-     Sys.remove (Filename.concat pcom "Orders.yon");
-     Sys.rmdir pcom; Sys.rmdir psrc; Sys.rmdir proot
+     Sys.remove (Filename.concat proot "Main.yon");
+     Sys.remove (Filename.concat pcom "Order.yon");
+     Sys.rmdir pcom; Sys.rmdir proot
    with _ -> ());
 
   (* ─── sheaf predicate: a field is a sheaf section iff it factors through canon ─
@@ -297,6 +302,44 @@ let () =
   let wm_empty = Manifest.parse_string "[package]\nname = \"x\"\n" in
   check "boundary: no [world] declared -> checks are vacuous"
     (Manifest.check_program wm_empty prog_c = []);
+
+  (* world structure -> explicit surface form: must equal the expected text
+     AND parse with today's grammar. *)
+  let parses s =
+    try ignore (Parser.program Lexer.token (Lexing.from_string s)); true
+    with _ -> false in
+  let ws_of toml w =
+    let m = Manifest.parse_string toml in
+    match Hashtbl.find_opt m.Manifest.wstructs w with
+    | Some s -> s | None -> Manifest.empty_struct in
+
+  let cop = Manifest.world_decl_text "Either"
+              (ws_of "[world.Either]\ncoproduct = [\"A\", \"B\"]\n" "Either") in
+  check "synth coproduct = world Either = A + B" (cop = "world Either = A + B");
+  check "synth coproduct parses" (parses cop);
+
+  let prod = Manifest.world_decl_text "Pair"
+               (ws_of "[world.Pair]\nproduct = [\"A\", \"B\"]\n" "Pair") in
+  check "synth product = world Pair = A * B" (prod = "world Pair = A * B");
+  check "synth product parses" (parses prod);
+
+  let quo = Manifest.world_decl_text "Cohort"
+              (ws_of "[world.Cohort]\nquotient = [\"User\", \"SameCohort\"]\n" "Cohort") in
+  check "synth quotient = world Cohort = User / SameCohort"
+    (quo = "world Cohort = User / SameCohort");
+  check "synth quotient parses" (parses quo);
+
+  let sub = Manifest.world_decl_text "EU"
+              (ws_of "[world.EU]\nsubset_of = \"Region\"\n" "EU") in
+  check "synth subset = world EU subset of Region"
+    (sub = "world EU subset of Region");
+  check "synth subset parses" (parses sub);
+
+  let obj = Manifest.world_decl_text "Commerce"
+              (ws_of "[world.Commerce]\nobjects = [\"Order\", \"Invoice\"]\n" "Commerce") in
+  check "synth objects = world Commerce { Code is Order Code is Invoice }"
+    (obj = "world Commerce { Code is Order Code is Invoice }");
+  check "synth objects parses" (parses obj);
 
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

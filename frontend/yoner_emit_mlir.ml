@@ -124,14 +124,13 @@ let () =
     && Package_layout.is_project ~dir:path
   in
   if is_project_dir then begin
-    if not (Sys.file_exists (Package_layout.src_dir ~root:path)
-            && Sys.is_directory (Package_layout.src_dir ~root:path)) then begin
-      Printf.eprintf
-        "yon: project '%s' has %s but no src/ directory\n"
-        path Package_layout.manifest_name;
-      exit 1
-    end;
-    let block = Package_layout.project_source ~root:path in
+    let manifest_path = Filename.concat path Package_layout.manifest_name in
+    let wm =
+      try Manifest.parse_file manifest_path
+      with Manifest.Manifest_error msg ->
+        Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3
+    in
+    let block = Package_layout.project_source ~root:path ~wm in
     let (stripped, imports) = strip_imports block in
     Hashtbl.replace loaded path ("", stripped);
     List.iter (fun spec ->

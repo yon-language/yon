@@ -22,15 +22,15 @@
  * __INFER path and is not forced here. *)
 
 type unit_loc = {
-  ul_world : string;     (* "" = the root world *)
-  ul_space : string;
+  ul_space : string;     (* "" = a file directly under the project root *)
   ul_path  : string;
-  ul_is_world : bool;    (* the conventional world.yon header file *)
 }
 
-(* world of a file path relative to the package root: the first path segment
-   under root, or "" for a file directly under root (the root world). *)
-let world_of ~(root : string) ~(path : string) : string =
+(* The space a file belongs to: the first path segment under the root, i.e.
+   the directory it sits in (directory = space). A file directly under the
+   root belongs to no space (ul_space = ""): the entrypoint area, e.g.
+   Main.yon. *)
+let space_of ~(root : string) ~(path : string) : string =
   let r = if Filename.check_suffix root "/" then root else root ^ "/" in
   let rel =
     if String.length path >= String.length r
@@ -39,13 +39,13 @@ let world_of ~(root : string) ~(path : string) : string =
     else Filename.basename path
   in
   match String.split_on_char '/' rel with
-  | dir :: _ :: _ -> dir          (* root/<dir>/.../file.yon -> world <dir> *)
-  | _ -> ""                       (* root/file.yon          -> root world  *)
+  | dir :: _ :: _ -> dir          (* root/<dir>/file.yon -> space <dir> *)
+  | _ -> ""                       (* root/file.yon       -> no space (root) *)
 
-let space_of ~(path : string) : string =
+(* The place a file declares is its basename (informative; the place's real
+   name is whatever the file's `place P` body says). *)
+let place_of ~(path : string) : string =
   Filename.remove_extension (Filename.basename path)
-
-let is_world_file ~(path : string) : bool = space_of ~path = "world"
 
 (* walk the tree, deterministic order, skipping yon_modules (explicit deps). *)
 let rec walk (dir : string) : string list =
@@ -58,55 +58,44 @@ let rec walk (dir : string) : string list =
 
 let layout ~(root : string) : unit_loc list =
   walk root
-  |> List.map (fun p ->
-       { ul_world = world_of ~root ~path:p;
-         ul_space = space_of ~path:p;
-         ul_path  = p;
-         ul_is_world = is_world_file ~path:p })
+  |> List.map (fun p -> { ul_space = space_of ~root ~path:p; ul_path = p })
 
 let read_file fn =
   let ic = open_in fn in
   let s = really_input_string ic (in_channel_length ic) in
   close_in ic; s
 
-(* a world.yon body becomes a world header in the right surface form:
-     starts with '=' or '/'  -> construction (= A + B, / Rel)
-     starts with "subset"     -> subset of R
-     otherwise                -> `world W { <inhabitants> }`
-     empty / absent           -> `world W { }` *)
-let world_header (w : string) (body : string option) : string =
-  match body with
-  | None -> Printf.sprintf "world %s { }" w
-  | Some b ->
-      let t = String.trim b in
-      if t = "" then Printf.sprintf "world %s { }" w
-      else if t.[0] = '=' || t.[0] = '/' then Printf.sprintf "world %s %s" w t
-      else if String.length t >= 6 && String.sub t 0 6 = "subset"
-      then Printf.sprintf "world %s %s" w t
-      else Printf.sprintf "world %s { %s }" w t
-
-(* reconstruct the explicit declarative text the existing parser accepts. *)
-let reconstruct ~(root : string) : string =
+(* Reconstruct the explicit declarative text the existing parser accepts.
+   The worlds come from the manifest; each space is a directory; each place
+   is a file. The space->world membership is NOT re-emitted here: it lives in
+   the manifest ([world.W] spaces = [...]), the single source of truth, so a
+   space is declared bare as `space S`. Files directly under the root (the
+   entrypoint area, e.g. Main.yon) are emitted last, outside any space. *)
+let reconstruct ~(root : string) ~(wm : Manifest.world_map) : string =
   let units = layout ~root in
-  let worlds = List.sort_uniq compare (List.map (fun u -> u.ul_world) units) in
   let buf = Buffer.create 1024 in
-  List.iter (fun w ->
-    let wunits = List.filter (fun u -> u.ul_world = w) units in
-    if w <> "" then begin
-      let body =
-        match List.find_opt (fun u -> u.ul_is_world) wunits with
-        | Some u -> Some (read_file u.ul_path) | None -> None in
-      Buffer.add_string buf (world_header w body);
-      Buffer.add_char buf '\n'
-    end;
+  (* 1. the worlds, materialised from the manifest *)
+  let wd = Manifest.all_world_decls wm in
+  if wd <> "" then (Buffer.add_string buf wd; Buffer.add_char buf '\n');
+  (* 2. each space (a directory), declared bare, then the place files it holds *)
+  let spaces =
+    List.sort_uniq compare
+      (List.filter_map (fun u ->
+         if u.ul_space = "" then None else Some u.ul_space) units) in
+  List.iter (fun s ->
+    Buffer.add_string buf (Printf.sprintf "space %s\n" s);
     List.iter (fun u ->
-      if not u.ul_is_world then begin
-        if w <> "" then
-          Buffer.add_string buf (Printf.sprintf "space %s in %s\n" u.ul_space w);
+      if u.ul_space = s then begin
         Buffer.add_string buf (read_file u.ul_path);
         Buffer.add_char buf '\n'
-      end) wunits)
-    worlds;
+      end) units
+  ) spaces;
+  (* 3. files directly under the root (entrypoint area: Main.yon, ...) *)
+  List.iter (fun u ->
+    if u.ul_space = "" then begin
+      Buffer.add_string buf (read_file u.ul_path);
+      Buffer.add_char buf '\n'
+    end) units;
   Buffer.contents buf
 
 (* A package is a directory carrying the manifest yon.toml at its root. Its
@@ -116,13 +105,9 @@ let manifest_name = "yon.toml"
 let is_project ~(dir : string) : bool =
   Sys.file_exists (Filename.concat dir manifest_name)
 
-(* The sources of a project live under src/, where directory = world and
-   file = space (filesystem as declaration). *)
-let src_dir ~(root : string) : string = Filename.concat root "src"
-
 (* Project source: reconstruct the explicit form the parser accepts from the
-   src/ tree, deducing world/space from the path. No fallback -- a project
-   whose src/ is missing is a hard error, surfaced by the caller before this
-   is reached. *)
-let project_source ~(root : string) : string =
-  reconstruct ~root:(src_dir ~root)
+   project tree rooted at the package directory. Directory = space, file =
+   place; the worlds and the space->world membership come from the manifest
+   (wm). No src/ convention: the package root IS the source tree. *)
+let project_source ~(root : string) ~(wm : Manifest.world_map) : string =
+  reconstruct ~root ~wm
