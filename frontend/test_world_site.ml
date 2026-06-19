@@ -118,22 +118,32 @@ let () =
     (match find_path "Main.yon" with
      | Some u -> u.Package_layout.ul_space = "" | None -> false);
 
+  (* world_decls + space_decls: the toml worlds become TopWorld AST nodes and
+     each directory becomes a bare TopSpace -- no surface text, no re-parse. *)
   let wm_fix = Manifest.parse_string
     "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n" in
-  let txt = Package_layout.reconstruct ~root ~wm:wm_fix in
-  let has re_s = try ignore (Str.search_forward (Str.regexp re_s) txt 0); true
-                 with Not_found -> false in
-  check "reconstruct: materialises the world from the toml (`world Commerce`)"
-    (has "world Commerce { Code is Order }");
-  check "reconstruct: declares the space bare (`space Orders`)"
-    (has "space Orders");
-  check "reconstruct: does NOT re-emit membership (`space Orders in ...`)"
-    (not (has "space Orders in"));
-  check "reconstruct: keeps the place body (`place Order`)"
-    (has "place Order");
-  check "reconstruct: the rebuilt explicit text PARSES with today's parser"
-    (try ignore (Parser.program Lexer.token (Lexing.from_string txt)); true
-     with _ -> false);
+  check "world_decls: the toml world becomes a TopWorld named Commerce"
+    (match Manifest.world_decls wm_fix with
+     | [ Surface_ast.TopWorld wd ] -> wd.Surface_ast.wd_name = "Commerce"
+     | _ -> false);
+  check "world_decls: Commerce carries object Code is Order as a world_place"
+    (match Manifest.world_decls wm_fix with
+     | [ Surface_ast.TopWorld wd ] ->
+         (match wd.Surface_ast.wd_places with
+          | [ { Surface_ast.wp_name = "Code";
+                wp_descriptor = Surface_ast.PdIdList ["Order"]; _ } ] -> true
+          | _ -> false)
+     | _ -> false);
+  let sds = Package_layout.space_decls ~root in
+  check "space_decls: the Orders directory becomes a bare TopSpace (no world)"
+    (List.exists (function
+       | Surface_ast.TopSpace sd ->
+           sd.Surface_ast.sd_name = "Orders" && sd.Surface_ast.sd_world = None
+       | _ -> false) sds);
+  check "space_decls: a root file contributes no space"
+    (not (List.exists (function
+       | Surface_ast.TopSpace sd -> sd.Surface_ast.sd_name = "Main"
+       | _ -> false) sds));
 
   (try
      Sys.remove (Filename.concat root "Main.yon");
@@ -141,37 +151,29 @@ let () =
      Sys.rmdir odir; Sys.rmdir root
    with _ -> ());
 
-  (* ─── project mode: yon.toml marks the root; the tree compiles via the
-   * reconstruct path (dir = space, file = place, world from the toml). This is
-   * the binding that connects package_layout to the real driver pipeline. *)
-  let proot = Filename.concat (Filename.get_temp_dir_name ())
-                (Printf.sprintf "yon_proj_%d" (Random.bits ())) in
-  let pcom = Filename.concat proot "Orders" in
-  Sys.mkdir proot 0o755; Sys.mkdir pcom 0o755;
-  let writep p s = let oc = open_out p in output_string oc s; close_out oc in
-  writep (Filename.concat proot "yon.toml")
-    "[package]\nname = \"shop\"\n\n[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n";
-  writep (Filename.concat proot "Main.yon") "fun main(): number { return 0 }\n";
-  writep (Filename.concat pcom "Order.yon") "place Order { id text }\n";
-  check "project: yon.toml marks the directory as a project root"
-    (Package_layout.is_project ~dir:proot);
-  let pwm = Manifest.parse_file (Filename.concat proot "yon.toml") in
-  let psrc_txt = Package_layout.project_source ~root:proot ~wm:pwm in
-  let phas re_s = try ignore (Str.search_forward (Str.regexp re_s) psrc_txt 0); true
-                  with Not_found -> false in
-  check "project: reconstructs the world from the toml (`world Commerce`)"
-    (phas "world Commerce");
-  check "project: reconstructs the space bare (`space Orders`)"
-    (phas "space Orders" && not (phas "space Orders in"));
-  check "project: the reconstructed project source PARSES with today's parser"
-    (try ignore (Parser.program Lexer.token (Lexing.from_string psrc_txt)); true
-     with _ -> false);
-  (try
-     Sys.remove (Filename.concat proot "yon.toml");
-     Sys.remove (Filename.concat proot "Main.yon");
-     Sys.remove (Filename.concat pcom "Order.yon");
-     Sys.rmdir pcom; Sys.rmdir proot
-   with _ -> ());
+  (* world_decl_of: the categorical construction goes straight into the
+     world_decl record -- no surface text, no re-parse. *)
+  let ws_of toml w =
+    match Hashtbl.find_opt (Manifest.parse_string toml).Manifest.wstructs w with
+    | Some s -> s | None -> Manifest.empty_struct in
+  let wd name ws = Manifest.world_decl_of name ws in
+  check "world_decl_of coproduct: wd_coproduct_of = [A; B]"
+    ((wd "Either" (ws_of "[world.Either]\ncoproduct = [\"A\",\"B\"]\n" "Either"))
+       .Surface_ast.wd_coproduct_of = ["A"; "B"]);
+  check "world_decl_of product: wd_product_of = [A; B]"
+    ((wd "Pair" (ws_of "[world.Pair]\nproduct = [\"A\",\"B\"]\n" "Pair"))
+       .Surface_ast.wd_product_of = ["A"; "B"]);
+  check "world_decl_of quotient: wd_quotient_of = (User, SameCohort)"
+    ((wd "Cohort" (ws_of "[world.Cohort]\nquotient = [\"User\",\"SameCohort\"]\n" "Cohort"))
+       .Surface_ast.wd_quotient_of = Some ("User", "SameCohort"));
+  check "world_decl_of subset: wd_subset_of = Region"
+    ((wd "EU" (ws_of "[world.EU]\nsubset_of = \"Region\"\n" "EU"))
+       .Surface_ast.wd_subset_of = Some "Region");
+  check "world_decl_of objects: a bare world has no construction, only places"
+    (let w = wd "Bare" (ws_of "[world.Bare]\nobjects = [\"X\"]\n" "Bare") in
+     w.Surface_ast.wd_coproduct_of = [] && w.Surface_ast.wd_product_of = []
+     && w.Surface_ast.wd_quotient_of = None && w.Surface_ast.wd_subset_of = None
+     && List.length w.Surface_ast.wd_places = 1);
 
   (* ─── sheaf predicate: a field is a sheaf section iff it factors through canon ─
    * canon : W -> Q models the quotient map (the Rel-class of an element). Here
@@ -300,44 +302,6 @@ let () =
   check "boundary: no [world] declared -> checks are vacuous"
     (Manifest.check_program wm_empty [ init "Lonely" ] = []
      && Manifest.check_targets wm_empty ~sender_world:(Some "X") (tgt "Reports") = []);
-
-  (* world structure -> explicit surface form: must equal the expected text
-     AND parse with today's grammar. *)
-  let parses s =
-    try ignore (Parser.program Lexer.token (Lexing.from_string s)); true
-    with _ -> false in
-  let ws_of toml w =
-    let m = Manifest.parse_string toml in
-    match Hashtbl.find_opt m.Manifest.wstructs w with
-    | Some s -> s | None -> Manifest.empty_struct in
-
-  let cop = Manifest.world_decl_text "Either"
-              (ws_of "[world.Either]\ncoproduct = [\"A\", \"B\"]\n" "Either") in
-  check "synth coproduct = world Either = A + B" (cop = "world Either = A + B");
-  check "synth coproduct parses" (parses cop);
-
-  let prod = Manifest.world_decl_text "Pair"
-               (ws_of "[world.Pair]\nproduct = [\"A\", \"B\"]\n" "Pair") in
-  check "synth product = world Pair = A * B" (prod = "world Pair = A * B");
-  check "synth product parses" (parses prod);
-
-  let quo = Manifest.world_decl_text "Cohort"
-              (ws_of "[world.Cohort]\nquotient = [\"User\", \"SameCohort\"]\n" "Cohort") in
-  check "synth quotient = world Cohort = User / SameCohort"
-    (quo = "world Cohort = User / SameCohort");
-  check "synth quotient parses" (parses quo);
-
-  let sub = Manifest.world_decl_text "EU"
-              (ws_of "[world.EU]\nsubset_of = \"Region\"\n" "EU") in
-  check "synth subset = world EU subset of Region"
-    (sub = "world EU subset of Region");
-  check "synth subset parses" (parses sub);
-
-  let obj = Manifest.world_decl_text "Commerce"
-              (ws_of "[world.Commerce]\nobjects = [\"Order\", \"Invoice\"]\n" "Commerce") in
-  check "synth objects = world Commerce { Code is Order Code is Invoice }"
-    (obj = "world Commerce { Code is Order Code is Invoice }");
-  check "synth objects parses" (parses obj);
 
   (* place inherits the world of its space (filesystem -> toml). A bare
      `place Order` parses with pd_world = "__INFER"; assign_place_worlds binds

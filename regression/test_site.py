@@ -67,13 +67,10 @@ PROPERTIES = [
     # filesystem layout: folder = space, file = place; world from the toml:
     "layout: Order.yon is a place in space Orders (directory = space)",
     "layout: Main.yon is under the root, in no space",
-    "reconstruct: materialises the world from the toml (`world Commerce`)",
-    "reconstruct: declares the space bare (`space Orders`)",
-    "reconstruct: does NOT re-emit membership (`space Orders in ...`)",
-    "reconstruct: keeps the place body (`place Order`)",
-    "reconstruct: the rebuilt explicit text PARSES with today's parser",
-    "project: reconstructs the world from the toml (`world Commerce`)",
-    "project: reconstructs the space bare (`space Orders`)",
+    "world_decls: the toml world becomes a TopWorld named Commerce",
+    "world_decls: Commerce carries object Code is Order as a world_place",
+    "space_decls: the Orders directory becomes a bare TopSpace (no world)",
+    "space_decls: a root file contributes no space",
     # the sheaf predicate for the quotient generator (factor through canon):
     "sheaf: salary = f(cohort u) factors through canon -> sheaf",
     "sheaf: salary reading u directly does NOT factor -> rejected",

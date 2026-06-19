@@ -65,38 +65,19 @@ let read_file fn =
   let s = really_input_string ic (in_channel_length ic) in
   close_in ic; s
 
-(* Reconstruct the explicit declarative text the existing parser accepts.
-   The worlds come from the manifest; each space is a directory; each place
-   is a file. The space->world membership is NOT re-emitted here: it lives in
-   the manifest ([world.W] spaces = [...]), the single source of truth, so a
-   space is declared bare as `space S`. Files directly under the root (the
-   entrypoint area, e.g. Main.yon) are emitted last, outside any space. *)
-let reconstruct ~(root : string) ~(wm : Manifest.world_map) : string =
-  let units = layout ~root in
-  let buf = Buffer.create 1024 in
-  (* 1. the worlds, materialised from the manifest *)
-  let wd = Manifest.all_world_decls wm in
-  if wd <> "" then (Buffer.add_string buf wd; Buffer.add_char buf '\n');
-  (* 2. each space (a directory), declared bare, then the place files it holds *)
-  let spaces =
-    List.sort_uniq compare
-      (List.filter_map (fun u ->
-         if u.ul_space = "" then None else Some u.ul_space) units) in
-  List.iter (fun s ->
-    Buffer.add_string buf (Printf.sprintf "space %s\n" s);
-    List.iter (fun u ->
-      if u.ul_space = s then begin
-        Buffer.add_string buf (read_file u.ul_path);
-        Buffer.add_char buf '\n'
-      end) units
-  ) spaces;
-  (* 3. files directly under the root (entrypoint area: Main.yon, ...) *)
-  List.iter (fun u ->
-    if u.ul_space = "" then begin
-      Buffer.add_string buf (read_file u.ul_path);
-      Buffer.add_char buf '\n'
-    end) units;
-  Buffer.contents buf
+(* The project's spaces as native TopSpace decls: one per directory that holds
+   .yon files. The space->world membership is NOT set here (sd_world = None):
+   it lives in the manifest. Files directly under the root belong to no space
+   and contribute none. The worlds (TopWorld) come from Manifest.world_decls;
+   the place files are parsed as themselves -- nothing is rendered as text. *)
+let space_decls ~(root : string) : Surface_ast.top_decl list =
+  layout ~root
+  |> List.filter_map (fun u -> if u.ul_space = "" then None else Some u.ul_space)
+  |> List.sort_uniq compare
+  |> List.map (fun s ->
+       Surface_ast.TopSpace
+         { Surface_ast.sd_name = s; sd_world = None; sd_fold = None;
+           sd_loc = Surface_ast.dummy_loc })
 
 (* A package is a directory carrying the manifest yon.toml at its root. Its
    presence marks the project root (Cargo/Go model): yonc on the directory
@@ -104,10 +85,3 @@ let reconstruct ~(root : string) ~(wm : Manifest.world_map) : string =
 let manifest_name = "yon.toml"
 let is_project ~(dir : string) : bool =
   Sys.file_exists (Filename.concat dir manifest_name)
-
-(* Project source: reconstruct the explicit form the parser accepts from the
-   project tree rooted at the package directory. Directory = space, file =
-   place; the worlds and the space->world membership come from the manifest
-   (wm). No src/ convention: the package root IS the source tree. *)
-let project_source ~(root : string) ~(wm : Manifest.world_map) : string =
-  reconstruct ~root ~wm

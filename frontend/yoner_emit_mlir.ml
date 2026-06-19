@@ -115,30 +115,30 @@ let () =
     end
   in
   (* Project mode (filesystem as declaration): a directory carrying yon.toml is
-   * a package. Instead of concatenating the raw .yon files (with their surface
-   * keywords), reconstruct the explicit form from src/, deducing world from the
-   * directory and space from the file. The single-file path and a directory
-   * WITHOUT yon.toml keep the classic raw-concatenation behavior. *)
+   * a package: the directory IS the source tree. Each .yon file is parsed as
+   * itself (no text reconstruction); the worlds come from the toml as AST
+   * nodes and each directory becomes a space, both prepended below. A
+   * directory WITHOUT yon.toml and the single-file path keep classic behavior. *)
   let is_project_dir =
     Sys.file_exists path && Sys.is_directory path
     && Package_layout.is_project ~dir:path
   in
-  if is_project_dir then begin
-    let manifest_path = Filename.concat path Package_layout.manifest_name in
-    let wm =
-      try Manifest.parse_file manifest_path
-      with Manifest.Manifest_error msg ->
-        Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3
-    in
-    let block = Package_layout.project_source ~root:path ~wm in
-    let (stripped, imports) = strip_imports block in
-    Hashtbl.replace loaded path ("", stripped);
-    List.iter (fun spec ->
-      let files = resolve_import path spec in
-      let m = module_name_of_spec spec in
-      List.iter (load m) files
-    ) imports
-  end else
+  let project_wm =
+    if is_project_dir then begin
+      let manifest_path = Filename.concat path Package_layout.manifest_name in
+      if Sys.file_exists manifest_path then
+        (try Some (Manifest.parse_file manifest_path)
+         with Manifest.Manifest_error msg ->
+           Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3)
+      else None
+    end else None
+  in
+  if is_project_dir then
+    (* load every .yon under the package root; each is parsed on its own by the
+       common path below, contributing its own top_decls. *)
+    List.iter (fun u -> load "" u.Package_layout.ul_path)
+      (Package_layout.layout ~root:path)
+  else
     List.iter (load "") yon_files;
   (* The order: imported files (dependencies) first, main files after. We use
    * the reverse insertion order: the leaves loaded first. *)
@@ -171,6 +171,16 @@ let () =
           Printf.eprintf "Lex/parse failure in %s: %s\n" filename msg;
           exit 2
     ) all_sources
+  in
+  (* In project mode the worlds and spaces are not in any .yon file: the worlds
+     come from the toml (as native TopWorld nodes) and each directory is a
+     space (a native TopSpace). Prepend them to the parsed place files -- no
+     text, no re-parse. *)
+  let prog =
+    match project_wm with
+    | Some wm ->
+        Manifest.world_decls wm @ Package_layout.space_decls ~root:path @ prog
+    | None -> prog
   in
   (* Resolve selective-import aliases (geo_scale -> geometria::scale), then
    * mangle qualified names (a::b -> a_NS_b) so MLIR symbols are valid. *)
@@ -224,12 +234,8 @@ let () =
      mode only; each file is re-parsed alone to find the place names it
      declares and the space (directory) it lives in. *)
   let prog =
-    if is_project_dir then begin
-      let manifest_path = Filename.concat path Package_layout.manifest_name in
-      if Sys.file_exists manifest_path then begin
-        let wm =
-          try Manifest.parse_file manifest_path
-          with Manifest.Manifest_error _ -> Manifest.empty_world_map () in
+    match project_wm with
+    | Some wm ->
         let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
         List.iter (fun u ->
           match Manifest.world_of_space wm u.Package_layout.ul_space with
@@ -246,8 +252,7 @@ let () =
                with _ -> ())
         ) (Package_layout.layout ~root:path);
         Manifest.assign_place_worlds (fun n -> Hashtbl.find_opt pw n) prog
-      end else prog
-    end else prog
+    | None -> prog
   in
   let cr = Tycheck.check_program prog in
   if cr.Tycheck.cr_errors <> [] then begin
@@ -260,14 +265,9 @@ let () =
    * in the sender's own world. Project mode only -- the manifest lives at the
    * project root. Reuses the parsed program and the same exit-3 channel as
    * type errors. Opt-in: with no [world] declared, the checks are vacuous. *)
-  if is_project_dir then begin
-    let manifest_path = Filename.concat path Package_layout.manifest_name in
-    if Sys.file_exists manifest_path then begin
-      let wm =
-        try Manifest.parse_file manifest_path
-        with Manifest.Manifest_error msg ->
-          Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3
-      in
+  (match project_wm with
+   | None -> ()
+   | Some wm ->
       (* D (orphan spaces) is global; B + C are per file: the sending place's
          space is its directory (layout), its world comes from the toml, and a
          wire in that file may only reach a space of the same world. Each file
@@ -300,9 +300,7 @@ let () =
              else
                Printf.eprintf "WORLD BOUNDARY ERROR: %s\n" msg
            ) errs;
-           exit 3)
-    end
-  end;
+           exit 3));
   (* Propagate the inferred place->world binding to codegen. check_program runs
    * infer_place_worlds to resolve each unannotated place's world (e.g. Order in
    * Commerce via `Code is Order` in the world), but keeps that rewrite internal

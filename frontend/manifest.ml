@@ -201,36 +201,37 @@ let world_of_space (wm : world_map) (sp : string) : string option =
 let is_empty (wm : world_map) : bool =
   Hashtbl.length wm.space_world = 0
 
-(* ── synthesise the explicit world declaration the parser accepts ───── *)
+(* ── build the world declarations as native AST nodes ───────────────── *)
 
-(* Render a world's [world.<Name>] structure as the surface text parser and
-   tycheck already accept. At most one construction applies (coproduct >
-   product > quotient > subset); with none, the world is the trivial site
-   over its objects, each rendered "Code is <obj>". This is how a
-   manifest-declared world reaches the existing front-end unchanged. *)
-let world_decl_text (name : string) (ws : world_struct) : string =
+(* A world's [world.<Name>] structure as a world_decl record. At most one
+   construction applies (coproduct > product > quotient > subset); with none,
+   the world is the trivial site over its objects, each an `is` world_place
+   named "Code". This is built directly on the AST -- no surface text, no
+   re-parse. *)
+let world_decl_of (name : string) (ws : world_struct) : world_decl =
+  let base = {
+    wd_name = name; wd_places = [];
+    wd_product_of = []; wd_coproduct_of = [];
+    wd_coequalizer_of = None; wd_quotient_of = None; wd_subset_of = None;
+    wd_loc = dummy_loc;
+  } in
   match ws.ws_coproduct, ws.ws_product, ws.ws_quotient, ws.ws_subset_of with
-  | (_ :: _ as cs), _, _, _ ->
-      Printf.sprintf "world %s = %s" name (String.concat " + " cs)
-  | _, (_ :: _ as ps), _, _ ->
-      Printf.sprintf "world %s = %s" name (String.concat " * " ps)
-  | _, _, Some (base, rel), _ ->
-      Printf.sprintf "world %s = %s / %s" name base rel
-  | _, _, _, Some parent ->
-      Printf.sprintf "world %s subset of %s" name parent
+  | (_ :: _ as cs), _, _, _ -> { base with wd_coproduct_of = cs }
+  | _, (_ :: _ as ps), _, _ -> { base with wd_product_of = ps }
+  | _, _, Some q, _         -> { base with wd_quotient_of = Some q }
+  | _, _, _, Some s         -> { base with wd_subset_of = Some s }
   | [], [], None, None ->
-      let body =
-        String.concat " "
-          (List.map (fun o -> Printf.sprintf "Code is %s" o) ws.ws_objects) in
-      Printf.sprintf "world %s { %s }" name body
+      let places =
+        List.map (fun o ->
+          { wp_name = "Code"; wp_descriptor = PdIdList [o]; wp_loc = dummy_loc })
+          ws.ws_objects in
+      { base with wd_places = places }
 
-(* Every manifest-declared world, one declaration per line, name-sorted for a
-   stable reconstruction. *)
-let all_world_decls (wm : world_map) : string =
+(* Every manifest-declared world as a TopWorld decl, name-sorted for stability. *)
+let world_decls (wm : world_map) : top_decl list =
   Hashtbl.fold (fun name ws acc -> (name, ws) :: acc) wm.wstructs []
   |> List.sort (fun (a, _) (b, _) -> compare a b)
-  |> List.map (fun (name, ws) -> world_decl_text name ws)
-  |> String.concat "\n"
+  |> List.map (fun (name, ws) -> TopWorld (world_decl_of name ws))
 
 (* The spaces a world groups, in declaration order. *)
 let spaces_of_world (wm : world_map) (w : string) : string list =
