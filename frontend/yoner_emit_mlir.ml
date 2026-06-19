@@ -100,8 +100,9 @@ let () =
     | [] -> spec
   in
   let loaded : (string, string * string) Hashtbl.t = Hashtbl.create 16 in
+  let canon_path fn = try Filename.concat (Sys.getcwd ()) fn with _ -> fn in
   let rec load modname fn =
-    let canon = try Filename.concat (Sys.getcwd ()) fn with _ -> fn in
+    let canon = canon_path fn in
     if Hashtbl.mem loaded canon then ()
     else begin
       let raw = read_file fn in
@@ -147,6 +148,22 @@ let () =
   (* parse each file (import-stripped source), accumulate the top_decls,
    * prefixing each imported module's declarations with `module::`. *)
   let internals = ref [] in
+  (* Project mode: collect each place's world and each file's wire targets while
+     the file is parsed below -- no second parse. The place->world map needs the
+     space (directory) of the file; key it by the same canon path as `loaded`. *)
+  let pw_pairs = ref [] in
+  let wire_errs = ref [] in
+  let space_of_path =
+    match project_wm with
+    | Some _ ->
+        let t = Hashtbl.create 16 in
+        List.iter (fun u ->
+          Hashtbl.replace t (canon_path u.Package_layout.ul_path)
+            u.Package_layout.ul_space)
+          (Package_layout.layout ~root:path);
+        t
+    | None -> Hashtbl.create 1
+  in
   let prog =
     List.concat_map (fun (filename, modname, src) ->
       let lexbuf = Lexing.from_string src in
@@ -156,7 +173,24 @@ let () =
         let p = Parser.program Lexer.token lexbuf in
         let synth = Parser_state.drain () in
         let decls = synth @ p in
-        if modname = "" then decls
+        if modname = "" then begin
+          (match project_wm with
+           | Some wm when Hashtbl.mem space_of_path filename ->
+               let sp = Hashtbl.find space_of_path filename in
+               let sender_world = Manifest.world_of_space wm sp in
+               (match sender_world with
+                | Some w ->
+                    List.iter (function
+                      | Surface_ast.TopPlace pd ->
+                          pw_pairs := (pd.Surface_ast.pd_name, w) :: !pw_pairs
+                      | _ -> ()) decls
+                | None -> ());
+               wire_errs :=
+                 Manifest.check_targets wm ~sender_world
+                   (Manifest.import_targets decls) @ !wire_errs
+           | _ -> ());
+          decls
+        end
         else begin
           internals := Module_prefix.internal_qualified_names modname decls @ !internals;
           Module_prefix.prefix_decls modname decls
@@ -235,22 +269,9 @@ let () =
      declares and the space (directory) it lives in. *)
   let prog =
     match project_wm with
-    | Some wm ->
+    | Some _ ->
         let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
-        List.iter (fun u ->
-          match Manifest.world_of_space wm u.Package_layout.ul_space with
-          | None -> ()
-          | Some w ->
-              (try
-                 let src = Package_layout.read_file u.Package_layout.ul_path in
-                 let (stripped, _) = strip_imports src in
-                 let pf = Parser.program Lexer.token (Lexing.from_string stripped) in
-                 List.iter (function
-                   | Surface_ast.TopPlace pd ->
-                       Hashtbl.replace pw pd.Surface_ast.pd_name w
-                   | _ -> ()) pf
-               with _ -> ())
-        ) (Package_layout.layout ~root:path);
+        List.iter (fun (n, w) -> Hashtbl.replace pw n w) !pw_pairs;
         Manifest.assign_place_worlds (fun n -> Hashtbl.find_opt pw n) prog
     | None -> prog
   in
@@ -268,29 +289,9 @@ let () =
   (match project_wm with
    | None -> ()
    | Some wm ->
-      (* D (orphan spaces) is global; B + C are per file: the sending place's
-         space is its directory (layout), its world comes from the toml, and a
-         wire in that file may only reach a space of the same world. Each file
-         is re-parsed alone (imports stripped) to attribute its wire targets to
-         the right sender; a file that does not parse alone is left to the
-         global type-check above to report. *)
-      let per_file =
-        List.concat_map (fun u ->
-          let sender_world =
-            Manifest.world_of_space wm u.Package_layout.ul_space in
-          match
-            (try
-               let src = Package_layout.read_file u.Package_layout.ul_path in
-               let (stripped, _) = strip_imports src in
-               Some (Parser.program Lexer.token (Lexing.from_string stripped))
-             with _ -> None)
-          with
-          | Some pf ->
-              Manifest.check_targets wm ~sender_world (Manifest.import_targets pf)
-          | None -> []
-        ) (Package_layout.layout ~root:path)
-      in
-      (match Manifest.check_program wm prog @ per_file with
+      (* D (orphan spaces) is global, from the whole program; B + C were
+         collected per file during parsing (wire_errs). No second parse. *)
+      (match Manifest.check_program wm prog @ List.rev !wire_errs with
        | [] -> ()
        | errs ->
            List.iter (fun (loc, msg) ->
