@@ -86,6 +86,10 @@ PROPERTIES = [
     "place_violations: no quotient generator -> no constraint (empty)",
     "place_violations: coproduct world imposes nothing on fields (vacuous)",
     "place_violations: subset world imposes nothing on fields (vacuous)",
+    # [package] entry: the entrypoint place, declared in the manifest:
+    "manifest: [package] entry is parsed into pkg_entry",
+    "manifest: no entry declared -> pkg_entry = None",
+    "manifest: entry survives alongside [world.*] sections",
 ]
 
 
@@ -207,6 +211,32 @@ def test_wire_orphan_space_rejected(tmp_path):
     proj = _make_project(tmp_path / "orphan", toml, {
         "Orders/Order.yon": "place Order { id text }\n",
         "Ghost/Lost.yon": "place Lost { x number }\n",
+        "Main.yon": "fun main(): number { return 0 }\n",
+    })
+    assert _emit_rc(proj) == 3
+
+
+def test_entry_valid_compiles(tmp_path):
+    """[package] entry naming a real place compiles (exit 0)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\nentry = \"Main\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
+    proj = _make_project(tmp_path / "entry_ok", toml, {
+        "Orders/Order.yon": "place Order in Commerce { id text }\n",
+        "Main.yon": "fun main(): number { return 0 }\n",
+    })
+    assert _emit_rc(proj) == 0
+
+
+def test_entry_missing_rejected(tmp_path):
+    """[package] entry naming a non-existent place is rejected (exit 3)."""
+    if not EMIT.exists():
+        pytest.skip("frontend not built")
+    toml = ("[package]\nname = \"x\"\nentry = \"Ghost\"\n"
+            "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
+    proj = _make_project(tmp_path / "entry_ghost", toml, {
+        "Orders/Order.yon": "place Order in Commerce { id text }\n",
         "Main.yon": "fun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 3

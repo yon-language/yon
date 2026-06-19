@@ -141,6 +141,26 @@ let () =
       (Package_layout.layout ~root:path)
   else
     List.iter (load "") yon_files;
+  (* The entrypoint is declared in the manifest: [package] entry = "<Place>".
+     It must name a place that exists in the project (a <Place>.yon file); a
+     manifest that points at a non-existent entry is rejected here, on the same
+     exit-3 channel as the other manifest errors. *)
+  (match project_wm with
+   | Some wm ->
+       (match wm.Manifest.pkg_entry with
+        | Some e ->
+            let exists =
+              List.exists (fun u ->
+                Package_layout.place_of ~path:u.Package_layout.ul_path = e)
+                (Package_layout.layout ~root:path) in
+            if not exists then begin
+              Printf.eprintf
+                "MANIFEST ERROR: [package] entry = \"%s\" names no place \
+                 (there is no %s.yon in the project)\n" e e;
+              exit 3
+            end
+        | None -> ())
+   | None -> ());
   (* The order: imported files (dependencies) first, main files after. We use
    * the reverse insertion order: the leaves loaded first. *)
   let all_sources = Hashtbl.fold (fun fn (m, src) acc -> (fn, m, src) :: acc) loaded [] in

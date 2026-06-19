@@ -37,6 +37,7 @@ type world_map = {
   space_world  : (string, string) Hashtbl.t;
   world_spaces : (string, string list) Hashtbl.t;
   wstructs     : (string, world_struct) Hashtbl.t;
+  mutable pkg_entry : string option;   (* [package] entry = "<Place>" *)
 }
 
 (* A problem in the [world] sections. The manifest has no .yon source
@@ -47,6 +48,7 @@ let empty_world_map () = {
   space_world  = Hashtbl.create 16;
   world_spaces = Hashtbl.create 8;
   wstructs     = Hashtbl.create 8;
+  pkg_entry    = None;
 }
 
 (* ─── small string helpers ─────────────────────────────────────────── *)
@@ -112,6 +114,7 @@ let parse_spaces_value (rhs : string) : string list =
 let parse_string (text : string) : world_map =
   let wm = empty_world_map () in
   let current = ref None in                          (* current world, if any *)
+  let in_package = ref false in                      (* inside [package] *)
   let lines = String.split_on_char '\n' text in
   List.iter (fun raw ->
     let line = trim (strip_comment raw) in
@@ -119,13 +122,29 @@ let parse_string (text : string) : world_map =
     else begin
       match world_header line with
       | Some w ->
-          current := Some w;
+          current := Some w; in_package := false;
           if not (Hashtbl.mem wm.world_spaces w) then
             Hashtbl.replace wm.world_spaces w [];
           if not (Hashtbl.mem wm.wstructs w) then
             Hashtbl.replace wm.wstructs w empty_struct
       | None ->
-          if is_section_header line then current := None    (* left [world.*] *)
+          if is_section_header line then begin
+            current := None;                          (* left [world.*] *)
+            in_package := (line = "[package]")
+          end
+          else if !in_package then begin
+            (* inside [package]: pick up `entry = "<Space>"` *)
+            match String.index_opt line '=' with
+            | Some i when trim (String.sub line 0 i) = "entry" ->
+                let rhs =
+                  String.sub line (i + 1) (String.length line - i - 1) in
+                (match parse_spaces_value rhs with
+                 | [v] -> wm.pkg_entry <- Some v
+                 | _ ->
+                     raise (Manifest_error
+                       "yon.toml: [package] entry must be a single \"<Place>\""))
+            | _ -> ()
+          end
           else begin
             match !current with
             | None -> ()                             (* a line outside a world *)

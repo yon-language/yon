@@ -175,6 +175,17 @@ let () =
      && w.Surface_ast.wd_quotient_of = None && w.Surface_ast.wd_subset_of = None
      && List.length w.Surface_ast.wd_places = 1);
 
+  (* [package] entry: the entrypoint place, declared in the manifest. *)
+  check "manifest: [package] entry is parsed into pkg_entry"
+    ((Manifest.parse_string "[package]\nname = \"x\"\nentry = \"Main\"\n").Manifest.pkg_entry
+       = Some "Main");
+  check "manifest: no entry declared -> pkg_entry = None"
+    ((Manifest.parse_string "[world.W]\nobjects = [\"X\"]\n").Manifest.pkg_entry = None);
+  check "manifest: entry survives alongside [world.*] sections"
+    ((Manifest.parse_string
+        "[package]\nentry = \"Main\"\n\n[world.Commerce]\nspaces = [\"Orders\"]\n")
+       .Manifest.pkg_entry = Some "Main");
+
   (* ─── sheaf predicate: a field is a sheaf section iff it factors through canon ─
    * canon : W -> Q models the quotient map (the Rel-class of an element). Here
    * canon is symbolic. A field is a valid section of the quotient sheaf iff it
