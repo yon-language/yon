@@ -53,6 +53,9 @@ type env = {
   ops : (string * op_sig) list;
   current_effects : string list;
   active_handlers : string list;
+  (* Place pairs transportable only while checking a geometric morphism's
+   * pull/push bodies. This is scoped typing evidence, not global subtyping. *)
+  transport_pairs : (string * string) list;
   (* For each variable bound via `let x holds new P in EU { ... }`, track its
    * explicit space. Variables created with `new P { ... }` (without `in`) and
    * function parameters have no entry (implicitly "in __Default", or passed
@@ -91,6 +94,7 @@ let empty : env = {
   ops = [];
   current_effects = [];
   active_handlers = [];
+  transport_pairs = [];
   var_spaces = [];
   declared_spaces = [];
   declared_morphs = [];
@@ -170,47 +174,31 @@ let simple_ty_compatible (t1 : ty) (t2 : ty) : bool =
     | TyPrimIn (n1, _), TyPrimIn (n2, _) -> n1 = n2
     | _ -> t1 = t2
 
-(* Depth-aware version: when comparing two TyUser field types, recurse
- * into place_is_subtype rather than requiring nominal identity. This
- * realizes width + depth subtyping ("rows with subsumed entries"). *)
-let rec place_field_ty_subtype (env : env) (super_ty : ty) (sub_ty : ty) : bool =
-  if simple_ty_compatible super_ty sub_ty then true
-  else
-    match super_ty, sub_ty with
-    | TyUser n_super, TyUser n_sub ->
-        (* Depth covariance: sub's field can be a more specific place. *)
-        place_is_subtype_depth env n_super n_sub
-    | TyList a, TyList b ->
-        place_field_ty_subtype env a b
-    | TyMap (ka, va), TyMap (kb, vb) ->
-        place_field_ty_subtype env ka kb && place_field_ty_subtype env va vb
-    | _ -> false
+(* Declared place substitution. A value of [p_sub] is usable where [p_super]
+ * is expected exactly when the reflexive-transitive [subcontains] chain says
+ * so. The visited set makes malformed declaration cycles fail closed. *)
+let place_subcontains (env : env) (p_sub : string) (p_super : string) : bool =
+  let rec walk visited current =
+    if current = p_super then true
+    else if List.mem current visited then false
+    else
+      match lookup_place env current with
+      | Some pd ->
+          (match pd.pd_subcontains with
+           | Some parent -> walk (current :: visited) parent
+           | None -> false)
+      | None -> false
+  in
+  walk [] p_sub
 
-and place_is_subtype_depth (env : env) (p_super_name : string) (p_sub_name : string) : bool =
-  if p_super_name = p_sub_name then true
-  else
-    let extract_fields p =
-      List.filter_map
-        (function FoField f -> Some f | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
-        p.pd_members
-    in
-    match lookup_place env p_super_name, lookup_place env p_sub_name with
-    | Some pd_super, Some pd_sub ->
-        let super_fields = extract_fields pd_super in
-        let sub_fields   = extract_fields pd_sub in
-        List.for_all
-          (fun sf ->
-             match List.find_opt (fun f -> f.fd_name = sf.fd_name) sub_fields with
-             | Some f ->
-                 (* Width: same field name found.
-                  * Depth: field's own type may be subtyped recursively. *)
-                 place_field_ty_subtype env sf.fd_ty f.fd_ty
-             | None -> false)
-          super_fields
-    | _ -> false
+let with_transport_pair (env : env) (left : string) (right : string) : env =
+  { env with transport_pairs = (left, right) :: env.transport_pairs }
 
-(* Public entry: use the depth-aware version. *)
-let place_is_subtype = place_is_subtype_depth
+let place_transportable (env : env) (left : string) (right : string) : bool =
+  List.exists
+    (fun (a, b) ->
+       (a = left && b = right) || (a = right && b = left))
+    env.transport_pairs
 
 let lookup_world (env : env) (name : string) : world_decl option =
   List.assoc_opt name env.worlds
@@ -461,7 +449,7 @@ let with_builtins (env : env) : env =
     pd_members = [FoOp output_op_decl];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = dummy_loc;

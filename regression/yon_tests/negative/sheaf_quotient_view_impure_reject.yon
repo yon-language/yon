@@ -1,0 +1,15 @@
+world User { Person is text }
+world Anon = User / cohort
+
+place Profile in Anon {
+  cohort number
+  secret number
+}
+
+fun tap(x: number): number visits Output { return x }
+
+view PublicProfile of Profile {
+  show bucket = tap(cohort)
+}
+
+fun main(): number { return 0 }

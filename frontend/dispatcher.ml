@@ -350,16 +350,16 @@ let rec type_equal
         Cubical.decidable_equal_cubical c1 c2
         || Catt_r_yon.decidable_equal env ctx t1 t2
   in
-  (* Try basic structural equality first. If that fails, try place
-   * width subtyping: a value of place P_sub is acceptable where
-   * P_super is expected, provided P_sub has all fields of P_super
-   * with compatible types (row polymorphism). *)
+  (* Try basic equality first. If that fails, place substitution follows only
+   * the declared [subcontains] chain; structural field coincidence does not
+   * create an implicit inclusion. *)
   if base_equal () then true
   else
     match t1, t2 with
     | TyUser p_super, TyUser p_sub ->
-        (* Expected = t1, actual = t2: actual must be subtype of expected. *)
-        Tyenv.place_is_subtype env p_super p_sub
+        (* Expected = t1, actual = t2: actual must declare inclusion in expected. *)
+        Tyenv.place_subcontains env p_sub p_super
+        || Tyenv.place_transportable env p_sub p_super
     | _ -> false
 
 (* ─── Term equality dispatcher ─────────────────────────────────────── *)
@@ -378,19 +378,19 @@ let cubical_term_equal (t1 : Cubical.cterm) (t2 : Cubical.cterm) : bool =
 (* ─── Place/reduction/move/view equality dispatcher ────────────────── *)
 
 (* These constructs only live in CATT_R_Yon. The dispatcher delegates
- * directly to the corresponding family check. *)
+ * directly to the corresponding per-construct equality check. *)
 
 let place_equal (p1 : place_decl) (p2 : place_decl) : bool =
-  Catt_r_yon.family4_place_equiv p1 p2
+  Catt_r_yon.structural_place_equiv p1 p2
 
 let reduction_equal (r1 : reduction_decl) (r2 : reduction_decl) : bool =
-  Catt_r_yon.family5_reduction_equiv r1 r2
+  Catt_r_yon.reduction_equiv r1 r2
 
 let move_equal (m1 : move_decl) (m2 : move_decl) : bool =
-  Catt_r_yon.family6_move_equiv m1 m2
+  Catt_r_yon.move_equiv m1 m2
 
 let view_equal (v1 : view_decl) (v2 : view_decl) : bool =
-  Catt_r_yon.family7_view_equiv v1 v2
+  Catt_r_yon.view_equiv v1 v2
 
 (* ─── Fragment summary for diagnostics ─────────────────────────────── *)
 

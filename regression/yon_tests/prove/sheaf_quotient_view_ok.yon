@@ -1,0 +1,15 @@
+world User { Person is text }
+world Anon = User / cohort
+
+place Profile in Anon {
+  cohort number
+  secret number
+}
+
+fun classify(x: number): number { return x }
+
+view PublicProfile of Profile {
+  show bucket = classify(cohort)
+}
+
+fun main(): number { return 0 }

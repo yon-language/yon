@@ -1,4 +1,4 @@
 world W { Code is X }
 place Error in W { message number }
-place SyntaxError in W extends Error { message number line number }
+place SyntaxError in W subcontains Error { message number line number }
 fun main(): number { return 0 }

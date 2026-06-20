@@ -31,17 +31,19 @@
  * element only through its canonical class. Same universal property, two
  * regimes -- runtime decides it on data, the compiler proves it on functions.
  *
- * STAGE NOTE. This is the pure kernel engine: it takes canon and field as Core
- * terms and is exercised by an oracle on symbolic terms. Wiring it to the
- * surface -- how `world Q = W / Rel` produces canon, and how a place's fields
- * are presented as W -> V maps -- is a separate, surface-level representation
- * choice and is deliberately not made here. *)
+ * The pure kernel engine takes canon and field as Core terms. Surface views
+ * over quotient worlds are wired to it by Tycheck.check_view_decl. *)
 
 module C = Ast
 module S = Set.Make (String)
 
 let fresh_point = "__sheaf_x"
 let fresh_class = "__sheaf_z"
+let canon_arg = "__sheaf_s"
+
+let quotient_canon ~(rel : string) ~(domain : C.ty) : C.term =
+  C.Lam (canon_arg, domain,
+    C.App (C.Var ("__field_" ^ rel), C.Var canon_arg))
 
 (* Replace every subterm alpha-equal to [target] with [replacement]. Sound and
    conservative: we stop at a binder that would capture a variable of target,

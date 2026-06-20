@@ -381,14 +381,14 @@ type place_decl = {
   pd_members : field_or_op list;
   pd_over : string option;          (* slice category C/X: a place fibered over X *)
   pd_laws : string list;            (* algebraic laws declared on the place *)
-  pd_extends : string option;       (* `place A extends B` declares the injection
+  pd_subcontains : string option;       (* `place A subcontains B` declares the injection
                                        A -> B (A is a sub-object of B). A is usable
                                        wherever B is expected (subsumption).
                                        Checked: A must have all of B's fields. *)
-  pd_is_error : bool;                (* `error E extends Base` is a place marked as an
+  pd_is_error : bool;                (* `error E subcontains Base` is a place marked as an
                                        error. An error place is the target of the
                                        `on_error` error morphism. It reuses the whole
-                                       place structure (fields, extends, subsumption). *)
+                                       place structure (fields, subcontains, subsumption). *)
   pd_on_error : string option;       (* `place P ... on_error E` declares the error
                                        morphism P -> E. On failure, place P is
                                        transformed into the error E. The effect is

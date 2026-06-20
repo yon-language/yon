@@ -108,8 +108,8 @@ New objects from old ones, named after their universal property.
 
 | Keyword | Status | What it does |
 |---|---|---|
-| `error` | example | `error E extends Base { }`: an error is a place that is a subobject of Base |
-| `extends` | example | Subobject mono `P into B`; every E is a Base |
+| `error` | example | `error E subcontains Base { }`: an error is a place that is a subobject of Base |
+| `subcontains` | example | Subobject mono `P into B`; every E is a Base |
 
 ## Binding and mutation
 
@@ -232,4 +232,3 @@ bodies, and the policy words `oldest` / `newest` after `drop`.
 Duration suffixes `ms`, `s`, `min`, `h`, `d`, `y` (`2s + 500ms`; a
 duration is a `number` of milliseconds) and `Type_N` for universe
 levels.
-

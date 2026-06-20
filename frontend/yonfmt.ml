@@ -229,10 +229,15 @@ let fmt_world (f : fmt) (wd : world_decl) : unit =
   line f "}"
 
 let fmt_place (f : fmt) (pd : place_decl) : unit =
+  let subcontains = match pd.pd_subcontains with
+    | Some base -> " subcontains " ^ base
+    | None -> "" in
   let hdr =
     if pd.pd_with_effects
-    then Printf.sprintf "place %s in %s with effects {" pd.pd_name pd.pd_world
-    else Printf.sprintf "place %s in %s {" pd.pd_name pd.pd_world in
+    then Printf.sprintf "place %s in %s%s with effects {"
+           pd.pd_name pd.pd_world subcontains
+    else Printf.sprintf "place %s in %s%s {"
+           pd.pd_name pd.pd_world subcontains in
   line f hdr;
   f.indent <- f.indent + 1;
   List.iter (fun m ->

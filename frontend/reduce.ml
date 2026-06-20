@@ -7,7 +7,7 @@
  *
  * (B) The seven families of R_Yon from Yon Core §4:
  *     1. Alpha-renaming (implicit in Subst, no explicit rule needed)
- *     2. Beta-reduction (Family 2 = operational beta; treated as equality)
+ *     2. Beta-reduction (operational beta; treated as equality)
  *     3. Eta-equivalence
  *     4. Place equivalence
  *     5. Reduction equivalence
@@ -17,7 +17,7 @@
  * The dispatcher specified in v0.3 §6.4.1 orders reductions:
  *     structural (Families 4-7) -> cubical -> computational (Families 1-3)
  * For this prototype, we have Families 1-5, no cubical layer yet, so the
- * dispatcher is: Family 4 + 5 first (place/reduction equivalence), then
+ * dispatcher is: place and reduction equivalence first, then
  * beta+eta. This gives deterministic, terminating reduction.
  *)
 
@@ -144,28 +144,28 @@ let is_value t =
   | HITElim _ -> false         (* reduces via the cubical engine *)
   | HITConstr _ -> true        (* a HIT constructor is a value *)
 
-(* ─── Family 4: Place equivalence ──────────────────────────────────── *)
+(* ─── Place equivalence ──────────────────────────────────── *)
 
-(* Two places are equal under R_Yon Family 4 if their signatures match.
+(* Two places are equal under R_Yon structural place equivalence if their signatures match.
  * "Signature" = name, site, fields, operations. This is what
  * Ast.place_equal already computes.
  *
- * Family 4 is idempotent: applying it produces a canonical representative.
+ * Structural place equivalence is idempotent: applying it produces a canonical representative.
  * Since we identify by name + signature, the canonical form is the
  * place with that signature; no transformation needed beyond confirmation.
  *)
-let family4_equivalent p1 p2 = place_equal p1 p2
+let place_equivalent p1 p2 = place_equal p1 p2
 
-(* ─── Family 5: Reduction equivalence ──────────────────────────────── *)
+(* ─── Reduction equivalence ──────────────────────────────── *)
 
-(* Two reductions are equal under Family 5 if their handler bodies are
+(* Two reductions are equal under reduction equivalence if their handler bodies are
  * beta-eta equivalent pointwise. For the prototype we check syntactic
  * equality (modulo our subst which is alpha-aware); a full implementation
  * would normalize each body with Families 2-3 and then compare.
  *)
-let family5_equivalent r1 r2 = reduction_equal r1 r2
+let reduction_equivalent r1 r2 = reduction_equal r1 r2
 
-(* ─── Family 3: Eta-equivalence ────────────────────────────────────── *)
+(* ─── Eta-equivalence ────────────────────────────────────── *)
 
 (* η-reduction: lambdax:T. (f x) -> f, provided x not-in FV(f).
  *
@@ -178,7 +178,7 @@ let try_eta t =
       if not (S.mem x (free_vars f)) then Some f else None
   | _ -> None
 
-(* ─── Family 2: Beta-reduction (operational) ───────────────────────── *)
+(* ─── Beta-reduction (operational) ───────────────────────── *)
 
 (* beta-redex: ((lambdax:T.body) arg) -> body[x ↦ arg]
  *)
@@ -306,7 +306,7 @@ let rec uncurry t =
  * the term is a normal form (or stuck).
  *
  * Dispatcher order (per v0.3 §6.4.1 and Yon Core §8.2):
- *   1. Structural reductions first (Family 4/5) — handled at construction
+ *   1. Structural reductions first (place/reduction equivalence) — handled at construction
  *      since we identify places/reductions by signature; no in-term rules.
  *   2. Cubical reductions — omitted in this prototype.
  *   3. Computational reductions — beta, eta, scope-exit, with-return,

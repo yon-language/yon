@@ -22,7 +22,7 @@
  *
  * For Yon, the cubical layer handles:
  *   - Identity types between values of base types (text, number, ...).
- *   - Univalence-via-equivalence between places that are R_Yon Family-4
+ *   - Univalence-via-equivalence between places that are R_Yon structural place equivalence
  *     equivalent (delegated to CATT_R_Yon for actual signature check).
  *   - Quotient types (e.g., Currency / equivalent_currency_set).
  *

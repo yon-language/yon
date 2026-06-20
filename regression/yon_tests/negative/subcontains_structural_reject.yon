@@ -1,0 +1,11 @@
+world W { Code is X }
+
+place B in W { value number }
+place A in W { value number }
+
+fun read(b: B): number { return b.value }
+
+fun main(): number {
+  be a holds new A { value 7 }
+  return read(a)
+}

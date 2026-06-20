@@ -47,8 +47,8 @@ let doc_world (w : S.world_decl) =
 
 let doc_place (p : S.place_decl) =
   line (Printf.sprintf "### place `%s` in `%s`" p.S.pd_name p.S.pd_world);
-  (match p.S.pd_extends with
-   | Some b -> line (Printf.sprintf "- extends (sub-object of): `%s`" b) | None -> ());
+  (match p.S.pd_subcontains with
+   | Some b -> line (Printf.sprintf "- subcontains (sub-object of): `%s`" b) | None -> ());
   (match p.S.pd_over with
    | Some x -> line (Printf.sprintf "- fibered over: `%s`" x) | None -> ());
   let fields = List.filter_map (function S.FoField f -> Some f | _ -> None) p.S.pd_members in

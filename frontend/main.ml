@@ -171,12 +171,12 @@ let test_with_handle () =
     ~term
     ~expected:Unit
 
-(* ─── Test 7: Family 4 place equivalence ───────────────────────────── *)
-(* Two places with identical signatures should be equal under Family 4. *)
+(* ─── Test 7: place equivalence ───────────────────────────── *)
+(* Two places with identical signatures should be equal under structural place equivalence. *)
 (* This test verifies the equality function used by the dispatcher.    *)
 
 let test_place_equivalence () =
-  Printf.printf "\n=== Test: Family 4 (Place equivalence) ===\n";
+  Printf.printf "\n=== Test: place equivalence ===\n";
   let p1 = {
     p_name = "Order";
     p_site = TyPlace "Commerce";
@@ -198,8 +198,8 @@ let test_place_equivalence () =
     p_operations = [];
     p_laws = [];
   } in
-  let eq12 = Reduce.family4_equivalent p1 p2 in
-  let eq13 = Reduce.family4_equivalent p1 p3 in
+  let eq12 = Reduce.place_equivalent p1 p2 in
+  let eq13 = Reduce.place_equivalent p1 p3 in
   Printf.printf "Same signature => equivalent:    %b (expected true)\n" eq12;
   Printf.printf "Different fields => not equivalent: %b (expected false)\n" (not eq13);
   let ok = eq12 && not eq13 in
@@ -1009,9 +1009,9 @@ let test_tycheck_place_fields () =
            cr.cr_errors;
          false)
 
-(* Test 32: CATT_R_Yon Family 4 — place equivalence by signature. *)
-let test_catt_family4 () =
-  Printf.printf "\n=== Test 32: CATT_R_Yon Family 4 (place equivalence) ===\n";
+(* Test 32: CATT_R_Yon — place equivalence by signature. *)
+let test_catt_place_equiv () =
+  Printf.printf "\n=== Test 32: CATT_R_Yon (place equivalence) ===\n";
   let mk_place name fields = {
     Surface_ast.pd_name = name;
     pd_world = "W";
@@ -1021,7 +1021,7 @@ let test_catt_family4 () =
     }) fields;
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = Surface_ast.dummy_loc;
@@ -1032,8 +1032,8 @@ let test_catt_family4 () =
                           ("y", Surface_ast.TyPrim "text")] in
   let p3 = mk_place "C" [("x", Surface_ast.TyPrim "number");
                           ("y", Surface_ast.TyPrim "boolean")] in
-  let eq12 = Catt_r_yon.family4_place_equiv p1 p2 in
-  let eq13 = Catt_r_yon.family4_place_equiv p1 p3 in
+  let eq12 = Catt_r_yon.structural_place_equiv p1 p2 in
+  let eq13 = Catt_r_yon.structural_place_equiv p1 p3 in
   Printf.printf "  Place A and B (same signature): equiv = %b (expected true)\n" eq12;
   Printf.printf "  Place A and C (different y type): equiv = %b (expected false)\n" eq13;
   if eq12 && not eq13 then
@@ -1754,14 +1754,14 @@ let test_diagnostics_type_mismatch () =
 (* Helpers for building reduction/move/view AST values directly. *)
 let mk_loc = Surface_ast.dummy_loc
 
-(* Test 62: CATT_R_Yon Family 5 — reduction equivalence by handler beta-η.
+(* Test 62: CATT_R_Yon — reduction equivalence by handler beta-η.
  *
  * Two reductions that target the same place and have matching handler
  * signatures are equivalent. We construct two reductions with same
  * handlers and verify equivalence; then change a parameter type and
  * verify non-equivalence. *)
-let test_catt_family5 () =
-  Printf.printf "\n=== Test 62: CATT_R_Yon Family 5 (reduction equivalence) ===\n";
+let test_catt_reduction_equiv () =
+  Printf.printf "\n=== Test 62: CATT_R_Yon (reduction equivalence) ===\n";
   let open Surface_ast in
   let mk_clause op_name param_ty = RcOn (
     op_name,
@@ -1813,9 +1813,9 @@ let test_catt_family5 () =
   } in
   (* r4 targets a different place *)
   let r4 = { r1 with rd_of = "OtherState" } in
-  let eq12 = Catt_r_yon.family5_reduction_equiv r1 r2 in
-  let eq13 = Catt_r_yon.family5_reduction_equiv r1 r3 in
-  let eq14 = Catt_r_yon.family5_reduction_equiv r1 r4 in
+  let eq12 = Catt_r_yon.reduction_equiv r1 r2 in
+  let eq13 = Catt_r_yon.reduction_equiv r1 r3 in
+  let eq14 = Catt_r_yon.reduction_equiv r1 r4 in
   Printf.printf "  RedA == RedB (same target, same handlers): %b (expected true)\n" eq12;
   Printf.printf "  RedA == RedC (different put param type): %b (expected false)\n" eq13;
   Printf.printf "  RedA == RedD (different target place): %b (expected false)\n" eq14;
@@ -1824,12 +1824,12 @@ let test_catt_family5 () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 63: CATT_R_Yon Family 6 — move equivalence by geometric morphism.
+(* Test 63: CATT_R_Yon — move equivalence by geometric morphism.
  *
  * Two moves with the same source/target and same mapping set (modulo
  * order) are equivalent. *)
-let test_catt_family6 () =
-  Printf.printf "\n=== Test 63: CATT_R_Yon Family 6 (move equivalence) ===\n";
+let test_catt_move_equiv () =
+  Printf.printf "\n=== Test 63: CATT_R_Yon (move equivalence) ===\n";
   let open Surface_ast in
   let mk_mapping from_ kind to_ by_ = {
     m_from = from_; m_kind = kind; m_to = to_; m_by = by_;
@@ -1879,9 +1879,9 @@ let test_catt_family6 () =
     mv_requires_caps = [];
     mv_loc = mk_loc;
   } in
-  let eq12 = Catt_r_yon.family6_move_equiv m1 m2 in
-  let eq13 = Catt_r_yon.family6_move_equiv m1 m3 in
-  let eq14 = Catt_r_yon.family6_move_equiv m1 m4 in
+  let eq12 = Catt_r_yon.move_equiv m1 m2 in
+  let eq13 = Catt_r_yon.move_equiv m1 m3 in
+  let eq14 = Catt_r_yon.move_equiv m1 m4 in
   Printf.printf "  M1 == M2 (same mappings, different order): %b (expected true)\n" eq12;
   Printf.printf "  M1 == M3 (different `by` function): %b (expected false)\n" eq13;
   Printf.printf "  M1 == M4 (different body form): %b (expected false)\n" eq14;
@@ -1890,9 +1890,9 @@ let test_catt_family6 () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 64: CATT_R_Yon Family 6 — merge form equivalence. *)
-let test_catt_family6_merge () =
-  Printf.printf "\n=== Test 64: CATT_R_Yon Family 6 (merge form equivalence) ===\n";
+(* Test 64: CATT_R_Yon — merge form equivalence. *)
+let test_catt_move_merge_equiv () =
+  Printf.printf "\n=== Test 64: CATT_R_Yon (merge form equivalence) ===\n";
   let open Surface_ast in
   let m1 = {
     mv_name = "U1"; mv_from = ["W1"; "W2"]; mv_to = None;
@@ -1929,8 +1929,8 @@ let test_catt_family6_merge () =
     mv_requires_caps = [];
     mv_loc = mk_loc;
   } in
-  let eq12 = Catt_r_yon.family6_move_equiv m1 m2 in
-  let eq13 = Catt_r_yon.family6_move_equiv m1 m3 in
+  let eq12 = Catt_r_yon.move_equiv m1 m2 in
+  let eq13 = Catt_r_yon.move_equiv m1 m3 in
   Printf.printf "  U1 == U2 (shares reordered): %b (expected true)\n" eq12;
   Printf.printf "  U1 == U3 (different conflict resolver): %b (expected false)\n" eq13;
   if eq12 && not eq13 then
@@ -1938,12 +1938,12 @@ let test_catt_family6_merge () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 65: CATT_R_Yon Family 7 — view equivalence by representable functor.
+(* Test 65: CATT_R_Yon — view equivalence by representable functor.
  *
  * Two views of the same place that project the same fields with the
  * same labels are equivalent. *)
-let test_catt_family7 () =
-  Printf.printf "\n=== Test 65: CATT_R_Yon Family 7 (view equivalence) ===\n";
+let test_catt_view_equiv () =
+  Printf.printf "\n=== Test 65: CATT_R_Yon (view equivalence) ===\n";
   let open Surface_ast in
   let v1 = {
     vw_name = "V1"; vw_of = "Item";
@@ -1973,9 +1973,9 @@ let test_catt_family7 () =
   } in
   (* v4: different place *)
   let v4 = { v1 with vw_of = "OtherItem" } in
-  let eq12 = Catt_r_yon.family7_view_equiv v1 v2 in
-  let eq13 = Catt_r_yon.family7_view_equiv v1 v3 in
-  let eq14 = Catt_r_yon.family7_view_equiv v1 v4 in
+  let eq12 = Catt_r_yon.view_equiv v1 v2 in
+  let eq13 = Catt_r_yon.view_equiv v1 v3 in
+  let eq14 = Catt_r_yon.view_equiv v1 v4 in
   Printf.printf "  V1 == V2 (same projection, same labels): %b (expected true)\n" eq12;
   Printf.printf "  V1 == V3 (different label): %b (expected false)\n" eq13;
   Printf.printf "  V1 == V4 (different target place): %b (expected false)\n" eq14;
@@ -2230,7 +2230,7 @@ let test_place_visibility () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = dummy_loc;
@@ -2281,7 +2281,7 @@ let test_place_relative_unknown () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = dummy_loc;
@@ -2332,7 +2332,7 @@ let test_place_proposition_propagation () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = dummy_loc;
@@ -2344,7 +2344,7 @@ let test_place_proposition_propagation () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = dummy_loc;
@@ -2411,7 +2411,7 @@ let test_excluded_middle_failure () =
     pd_members = [];   (* sees nothing *)
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = dummy_loc;
@@ -3668,7 +3668,7 @@ let test_id_path_unification () =
  * omega-category), their composition is f ; g : x -> z, built as
  * a coherence applied to the standard composition pasting scheme.
  *
- * Family 1 of CATT_R_Yon constructive composition: produces a
+ * CATT_R_Yon constructive cell composition: produces a
  * witness term (TmCoh ps_comp_2 ...) when boundaries match,
  * None when they don't. *)
 let test_cell_composition_positive () =
@@ -3809,7 +3809,7 @@ let test_place_isomorphism () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = Surface_ast.dummy_loc;
@@ -3824,7 +3824,7 @@ let test_place_isomorphism () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = Surface_ast.dummy_loc;
@@ -3857,7 +3857,7 @@ let test_place_isomorphism_negative () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = Surface_ast.dummy_loc;
@@ -3871,7 +3871,7 @@ let test_place_isomorphism_negative () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = Surface_ast.dummy_loc;
@@ -4292,7 +4292,7 @@ let test_cell_custom_in_place () =
     ];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = loc;
@@ -4380,7 +4380,7 @@ let test_slice_place () =
     ];
     pd_over = Some "Customer";
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = loc;
@@ -4680,7 +4680,7 @@ let test_default_world_inference () =
     pd_members = [];
     pd_over = None;
     pd_laws = [];
-    pd_extends = None;
+    pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = Surface_ast.dummy_loc;
@@ -5056,7 +5056,7 @@ let () =
     test_tycheck_bad_field_access;
     test_tycheck_reduction_coverage;
     test_tycheck_place_fields;
-    test_catt_family4;
+    test_catt_place_equiv;
     test_cubical_interval;
     test_cubical_path;
     test_full_pipeline_typed;
@@ -5084,10 +5084,10 @@ let () =
     test_diagnostics_suggestion;
     test_diagnostics_format;
     test_diagnostics_type_mismatch;
-    test_catt_family5;
-    test_catt_family6;
-    test_catt_family6_merge;
-    test_catt_family7;
+    test_catt_reduction_equiv;
+    test_catt_move_equiv;
+    test_catt_move_merge_equiv;
+    test_catt_view_equiv;
     test_catt_term_equiv;
     test_parser_world_list;
     test_parser_when_chain;

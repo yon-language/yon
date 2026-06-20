@@ -50,7 +50,7 @@ and ps_ctx = (string * cell) list                (* a pasting context *)
 
 and subst = (string * term) list                 (* substitution by name *)
 
-(* ─── Family 1: alpha-renaming (alpha-equivalence) ─────────────────────── *)
+(* ─── alpha-renaming (alpha-equivalence) ─────────────────────── *)
 
 (* Two terms are alpha-equivalent if they agree up to renaming of bound
  * variables. In our globular setting, only TmCoh binds variables (via
@@ -104,7 +104,7 @@ and alpha_equiv_cell (c1 : cell) (c2 : cell) (renaming : (string * string) list)
       && alpha_equiv_cell a1 a2 renaming
   | _, _ -> false
 
-let family1_alpha_equiv t1 t2 = alpha_equiv_term t1 t2 []
+let alpha_equiv t1 t2 = alpha_equiv_term t1 t2 []
 
 (* ─── Name-invariant canonicalization (weak de Bruijn) ──────────────────────
 
@@ -339,7 +339,7 @@ let incremental_unchanged (name : string) (cell : term) : bool =
 let incremental_stats () = (!incremental_skips, !incremental_checks)
 
 
-(* ─── Family 2: beta-reduction ────────────────────────────────────────── *)
+(* ─── beta-reduction ────────────────────────────────────────── *)
 
 (* beta-reduction in the surface Yon language is handled by the kernel
  * Reduce module on Yon Core terms. At the CATT level, beta-like
@@ -374,10 +374,10 @@ and subst_in_cell (c : cell) (sub : subst) : cell =
   | CellArr (s, t, a) ->
       CellArr (subst_in_term s sub, subst_in_term t sub, subst_in_cell a sub)
 
-let family2_beta_step (t : term) (sub : subst) : term =
+let beta_step (t : term) (sub : subst) : term =
   subst_in_term t sub
 
-(* ─── Family 3: η-equivalence ──────────────────────────────────────── *)
+(* ─── η-equivalence ──────────────────────────────────────── *)
 
 (* η in CATT: a coherence coh_Gamma : A [identity_sub] reduces to a simpler
  * form if its ps-context and substitution are trivial.
@@ -395,7 +395,7 @@ let is_identity_sub (sub : subst) (ps : ps_ctx) : bool =
        (fun (k1, v) (k2, _) -> k1 = k2 && (match v with TmVar n -> n = k1 | _ -> false))
        sub ps
 
-let family3_eta_step (t : term) : term =
+let eta_step (t : term) : term =
   match t with
   | TmCoh (ps, _ty, sub) when is_identity_sub sub ps ->
       (* η: identity coherence is the identity, reduces to the var.
@@ -407,9 +407,9 @@ let family3_eta_step (t : term) : term =
        | _ -> t)
   | _ -> t
 
-(* ─── Family 4: Place equivalence by signature ─────────────────────── *)
+(* ─── Place equivalence by signature ─────────────────────── *)
 
-(* Two places are equivalent under R_Yon Family 4 if they have the
+(* Two places are equivalent under R_Yon structural place equivalence if they have the
  * same signature: same fields (with same types in same order) and
  * same operations (with same param/return signatures).
  *
@@ -507,7 +507,7 @@ and variant_eq (v1 : variant) (v2 : variant) : bool =
   && List.length v1.v_args = List.length v2.v_args
   && List.for_all2 ty_structural_eq v1.v_args v2.v_args
 
-let family4_place_equiv (p1 : place_decl) (p2 : place_decl) : bool =
+let structural_place_equiv (p1 : place_decl) (p2 : place_decl) : bool =
   let extract_fields p =
     List.filter_map (function FoField f -> Some f | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None) p.pd_members
   in
@@ -521,11 +521,11 @@ let family4_place_equiv (p1 : place_decl) (p2 : place_decl) : bool =
   && List.for_all2 field_equiv fs1 fs2
   && List.for_all2 op_equiv ops1 ops2
 
-(* ─── Family 4 (constructive): place isomorphism ───────────────
+(* ─── place isomorphism ───────────────
  *
  * Two places are *isomorphic* in the structure category when there
  * exists a bijective renaming of their fields/operations preserving
- * types. This generalizes family4_place_equiv (which required
+ * types. This generalizes structural_place_equiv (which required
  * positionally-aligned identity) to permit any reordering plus name
  * renaming.
  *
@@ -605,10 +605,10 @@ let place_isomorphism (p1 : place_decl) (p2 : place_decl)
 
 (* Yoneda-coherent place equivalence: two places are equivalent iff
  * there's an isomorphism between them. *)
-let family4_place_iso (p1 : place_decl) (p2 : place_decl) : bool =
+let places_isomorphic (p1 : place_decl) (p2 : place_decl) : bool =
   place_isomorphism p1 p2 <> None
 
-(* ─── Family 5 (constructive): Eckmann-Hilton swap ────────────
+(* ─── Eckmann-Hilton swap ────────────
  *
  * In an omega-category, for two 2-cells alpha, beta : id_x ==> id_x on the
  * identity 1-cell at x, the interchange law forces:
@@ -667,7 +667,7 @@ let test_eckmann_hilton () =
        | _ -> false)
   | _ -> false
 
-(* ─── Family 6 (constructive): pasting diagrams as terms ─────
+(* ─── pasting diagrams as terms ─────
  *
  * The ps_ctx type above is the *linear telescope* representation: a
  * flat list of named cells. Batanin-Maltsiniotis give the general
@@ -745,7 +745,7 @@ let test_pd_suspend () =
 
 let pd_comp_2 : pasting_diagram = PPaste (PDisk 1, PDisk 1, 0)
 
-(* ─── Family 7 (constructive): universal cells for limit/colimit ──────
+(* ─── universal cells for limit/colimit ──────
  *
  * A universal cell in an omega-category is one that encodes
  * a universal property — e.g., the projection from a limit object,
@@ -842,7 +842,7 @@ let test_non_universal_no_factor () =
   factor_through plain (TmVar "X") (TmVar "k") = None
 
 
-(* ─── Family 5: Reduction equivalence by beta-η of handlers ───────────── *)
+(* ─── Reduction equivalence by beta-η of handlers ───────────── *)
 
 (* Two reductions are equivalent if they target the same place and
  * each pair of corresponding handlers is beta-η-equivalent.
@@ -870,12 +870,12 @@ let handler_equiv (h1 : reduction_clause) (h2 : reduction_clause) : bool =
   | RcLet (n1, _, _), RcLet (n2, _, _) -> n1 = n2
   | _, _ -> false
 
-let family5_reduction_equiv (r1 : reduction_decl) (r2 : reduction_decl) : bool =
+let reduction_equiv (r1 : reduction_decl) (r2 : reduction_decl) : bool =
   r1.rd_of = r2.rd_of
   && List.length r1.rd_clauses = List.length r2.rd_clauses
   && List.for_all2 handler_equiv r1.rd_clauses r2.rd_clauses
 
-(* ─── Family 6: Move equivalence by geometric morphism ─────────────── *)
+(* ─── Move equivalence by geometric morphism ─────────────── *)
 
 (* A move between worlds W1 -> W2 induces a geometric morphism between
  * their topoi. Two moves are equivalent if they induce the same
@@ -896,7 +896,7 @@ let mapping_set_eq (ms1 : mapping_decl list) (ms2 : mapping_decl list) : bool =
   List.length ms1 = List.length ms2
   && List.for_all (fun m1 -> List.exists (mapping_eq m1) ms2) ms1
 
-let family6_move_equiv (m1 : move_decl) (m2 : move_decl) : bool =
+let move_equiv (m1 : move_decl) (m2 : move_decl) : bool =
   m1.mv_from = m2.mv_from && m1.mv_to = m2.mv_to
   && (match m1.mv_body, m2.mv_body with
       | MoveMapping ms1, MoveMapping ms2 -> mapping_set_eq ms1 ms2
@@ -907,7 +907,7 @@ let family6_move_equiv (m1 : move_decl) (m2 : move_decl) : bool =
              = List.sort compare mg2.merge_conflicts
       | _, _ -> false)
 
-(* ─── Family 7: View equivalence by representable functor ──────────── *)
+(* ─── View equivalence by representable functor ──────────── *)
 
 (* A view of place P is a representable functor Hom(P, -) into Set.
  * Two views of the same place are equivalent if their show clauses
@@ -922,33 +922,22 @@ let view_item_eq (v1 : view_item) (v2 : view_item) : bool =
   | VShowLabel (n1, l1), VShowLabel (n2, l2) -> n1 = n2 && l1 = l2
   | _, _ -> false
 
-let family7_view_equiv (v1 : view_decl) (v2 : view_decl) : bool =
+let view_equiv (v1 : view_decl) (v2 : view_decl) : bool =
   v1.vw_of = v2.vw_of
   && List.length v1.vw_items = List.length v2.vw_items
   && List.for_all2 view_item_eq v1.vw_items v2.vw_items
 
 (* ─── The R_Yon equivalence relation on types ──────────────────────── *)
 
-(* Two surface types are R_Yon-equal if they are structurally equal
- * (modulo Family 4, which equates user types referring to equivalent
- * places). The dispatcher uses this when comparing types in
- * synthesis/checking.
- *
- * For user types referencing place declarations, we delegate to
- * Family 4 by looking up the place in the environment.
- *)
+(* Two surface types are R_Yon-equal iff structurally equal. For user types,
+ * equality is NOMINAL: distinct place names are not equated by structural
+ * coincidence. Substitution between distinct places is mediated downstream by
+ * the declared [subcontains] inclusion (Dispatcher.type_equal), not here;
+ * structural_place_equiv stays available as an explicit isomorphism tool. *)
 
 let r_yon_ty_equal
-    (env : Tyenv.env) (t1 : ty) (t2 : ty) : bool =
-  if ty_structural_eq t1 t2 then true
-  else
-    match t1, t2 with
-    | TyUser n1, TyUser n2 when n1 <> n2 ->
-        (match Tyenv.lookup_place env n1,
-               Tyenv.lookup_place env n2 with
-         | Some p1, Some p2 -> family4_place_equiv p1 p2
-         | _, _ -> false)
-    | _, _ -> false
+    (_env : Tyenv.env) (t1 : ty) (t2 : ty) : bool =
+  ty_structural_eq t1 t2
 
 (* ─── Decidability witness ─────────────────────────────────────────── *)
 
@@ -1040,7 +1029,7 @@ let decidable_equal
  * beta, eta) iteratively to a term until a fixpoint. Families 4-7
  * operate at the place/reduction/move/view level (not term-level), so
  * they don't participate in term normalization but in their dedicated
- * equality checks (already exposed via family4_ to family7_).
+ * equality checks (already exposed via the per-construct equality checks).
  *
  * Termination: each step is either a substitution (beta) or a
  * structural reduction (eta) — both strictly decreasing under a
@@ -1053,11 +1042,11 @@ let rec normalize_coherence_step (t : term) : term =
   | TmId (inner, c) ->
       TmId (normalize_coherence_step inner, c)
   | TmCoh (ps, ty, sub) ->
-      (* Try family 3 (eta) first: identity coherence collapses. *)
-      let step3 = family3_eta_step (TmCoh (ps, ty, sub)) in
+      (* Try eta-equivalence first: identity coherence collapses. *)
+      let step3 = eta_step (TmCoh (ps, ty, sub)) in
       if not (alpha_equiv_term step3 t []) then step3
       else
-        (* Family 2 (beta): substitute when the substitution is fully
+        (* beta-reduction: substitute when the substitution is fully
          * defined. We don't have a separate beta-reducible witness, so
          * we apply substitution into the carried ty if appropriate. *)
         let sub_normalized = List.map
@@ -1158,7 +1147,7 @@ let dir_incl_compose (m_f : term) (m_g : term) : term option =
    dimension up: it lives over the inclusion sort dir_incl_sort(c_P, c_Q) and
    has m_f, m_g as its source/target. This is again a globular cell in CaTT
    (CellArr nests), so the engine's substitution, alpha-equivalence, and the
-   Family-5 interchange (Eckmann-Hilton) all apply WITHOUT new machinery — the
+   Eckmann-Hilton interchange all apply WITHOUT new machinery — the
    higher coherence is inherited, not rebuilt. Non-invertibility persists at
    every level: CaTT never inverts, so a 2-cell m_f => m_g never yields m_g => m_f. *)
 
@@ -1356,40 +1345,6 @@ let stage_forces (stage : string) (cond_code : term) : bool =
   | Some codes -> List.exists (fun c -> canonical_equal c cond_code) codes
   | None -> false
 
-(* ─── (a) Sheaf condition, static: covering check + gap marking ─────────────
-
-   The pieces ARE the sub-objects {x:A where P} that each stage (node) forces;
-   the forcing_registry records, per stage, which pieces it has. A family of
-   pieces COVERS the whole `whole_code` (the code of A) when the required pieces
-   are all present somewhere in the family. Per the user's answers, this is a
-   COMPILE-TIME check: we verify coverage statically; nothing runs on a network.
-
-   sheaf_covers: do the registered pieces (across all stages) include every
-   required piece? sheaf_gaps: which required pieces are NOT locally available on
-   ANY stage — these are exactly the cases that, at runtime in a distributed
-   system (N>1), would need to be fetched from another node. At N=1 a gap means
-   the piece is simply absent; the marking is what (b) will hang the fetch on. *)
-
-(* All pieces present across the whole family (union over stages). *)
-let all_forced_pieces () : term list =
-  Hashtbl.fold (fun _stage codes acc -> codes @ acc) forcing_registry []
-
-(* Does the family cover the required pieces? required = the sub-object codes
-   that, together, must reconstruct the whole. *)
-let sheaf_covers (required : term list) : bool =
-  let have = all_forced_pieces () in
-  List.for_all
-    (fun r -> List.exists (fun h -> canonical_equal h r) have)
-    required
-
-(* The gaps: required pieces no stage forces locally. These are the
-   "fetch-from-another-node" points — marked here, fetched (b) later. *)
-let sheaf_gaps (required : term list) : term list =
-  let have = all_forced_pieces () in
-  List.filter
-    (fun r -> not (List.exists (fun h -> canonical_equal h r) have))
-    required
-
 (* Which stage (if any) locally has a given piece — the node that could serve it.
    Used by (b) to know WHERE to fetch from. Returns the first stage found. *)
 let stage_serving (piece : term) : string option =
@@ -1470,9 +1425,9 @@ let test_decidable_different () =
                   [("y", TmVar "y"); ("z", TmVar "z")]) in
   not (r_yon_decidable_term_equal t1 t2)
 
-(* ─── Family 1 (constructive): cell composition with globular witness ───
+(* ─── cell composition with globular witness ───
  *
- * The first family of CATT_R_Yon is cell composition. Given
+ * Cell composition in CATT_R_Yon. Given
  * two cells f : s ->_A t and g : t ->_A u (matching boundaries),
  * their composition f ; g : s ->_A u is built as a coherence:
  *
@@ -1579,7 +1534,7 @@ let test_cell_composition_incompat () =
   | None -> true
   | _ -> false
 
-(* ─── Family 2 (constructive): identity coherences ────────────────────
+(* ─── identity coherences ────────────────────
  *
  * In an omega-category, for every cell f : x -> y there exist:
  *
@@ -1703,7 +1658,7 @@ let test_associator () =
       && List.length sub = 7  (* w, x, y, z, h, g, f *)
   | _ -> false
 
-(* ─── Family 3 (constructive): higher-dimensional associativity ──────
+(* ─── higher-dimensional associativity ──────
  *
  * The 1-dimensional associator is just the K_3 polytope (a
  * triangle). The next dimension is the K_4 pentagonator (5 vertices,
@@ -1840,7 +1795,7 @@ let test_stasheff_general n =
       && alpha_equiv_term t (TmVar (Printf.sprintf "x%d" n)) []
   | _ -> false
 
-(* ─── Family 8 (constructive): strict omega-functoriality ────
+(* ─── strict omega-functoriality ────
  *
  * For every builtin F (binary op, coercion, move-application), strict
  * omega-functoriality demands:

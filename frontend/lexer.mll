@@ -100,7 +100,7 @@
       "adjunction", ADJUNCTION_KW;
       "exact", EXACT_KW;
 
-      (* Error model. `error E extends Base { ... }` declares an error as a
+      (* Error model. `error E subcontains Base { ... }` declares an error as a
          place that is a sub-object of Base (an injection E -> Base: every E
          is a Base, so E can be used wherever a Base is expected). `place P
          on error E` declares the error morphism P -> E: on failure, P is
@@ -108,7 +108,7 @@
          (e.g. .rollback instead of .commit). `on error` is a two-word
          contextual phrase, not a reserved keyword. *)
       "error", ERROR_KW;
-      "extends", EXTENDS;
+      "subcontains", SUBCONTAINS;
 
       (* `be x holds e` is the sole binding form (immutable). It maps to the
          LET token because the core IR still calls such bindings let-bindings;

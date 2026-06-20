@@ -130,7 +130,7 @@
 %token USES
 %token ALGEBRA
 %token VERIFY
-%token EXTENDS
+%token SUBCONTAINS
 %token ERROR_KW
 %token INVERTIBLE
 /* The tokens BACKED_BY/POL_DIRECT/POL_SHARDED/POL_PAXOS/POL_CRDT were removed:
@@ -672,7 +672,7 @@ place_descriptor:
 place_decl:
   | PLACE name = IDENT in_world = option(in_world_clause)
     over = option(over_clause)
-    ext = option(extends_clause)
+    ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     LBRACE members = field_and_cell_list RBRACE
     { { pd_name = name;
@@ -681,13 +681,13 @@ place_decl:
         pd_members = members;
         pd_over = over;
         pd_laws = [];
-        pd_extends = ext;
+        pd_subcontains = ext;
         pd_is_error = false;
         pd_on_error = oerr;
         pd_loc = mk_loc $startpos $endpos } }
   | PLACE name = IDENT in_world = option(in_world_clause)
     over = option(over_clause)
-    ext = option(extends_clause)
+    ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     WITH EFFECTS
     LBRACE members = field_or_op_list RBRACE
@@ -697,16 +697,16 @@ place_decl:
         pd_members = members;
         pd_over = over;
         pd_laws = List.filter_map (function FoLaw l -> Some l | _ -> None) members;
-        pd_extends = ext;
+        pd_subcontains = ext;
         pd_is_error = false;
         pd_on_error = oerr;
         pd_loc = mk_loc $startpos $endpos } }
 
-(* error E (in W)? (extends Base)? { fields } — an error place. Reuses
+(* error E (in W)? (subcontains Base)? { fields } — an error place. Reuses
  * place_decl with pd_is_error=true. The target of the `on error` morphism. *)
 error_decl:
   | ERROR_KW name = IDENT in_world = option(in_world_clause)
-    ext = option(extends_clause)
+    ext = option(subcontains_clause)
     LBRACE members = field_and_cell_list RBRACE
     { { pd_name = name;
         pd_world = (match in_world with Some w -> w | None -> "__INFER");
@@ -714,7 +714,7 @@ error_decl:
         pd_members = members;
         pd_over = None;
         pd_laws = [];
-        pd_extends = ext;
+        pd_subcontains = ext;
         pd_is_error = true;
         pd_on_error = None;
         pd_loc = mk_loc $startpos $endpos } }
@@ -726,9 +726,9 @@ in_world_clause:
 over_clause:
   | OVER base = IDENT  { base }
 
-(* place A extends B declares A as a sub-object of B. *)
-extends_clause:
-  | EXTENDS base = IDENT  { base }
+(* place A subcontains B declares A as a sub-object of B. *)
+subcontains_clause:
+  | SUBCONTAINS base = IDENT  { base }
 
 (* place P ... on error E — an error morphism P -> E. `on` is read as a
  * plain identifier and validated contextually, the same scheme used by

@@ -17,3 +17,7 @@ website.zip
 
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Local agent handoff state and scratch orchestration files.
+swarm/

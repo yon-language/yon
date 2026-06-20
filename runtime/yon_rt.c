@@ -2273,8 +2273,15 @@ void *yon_rt_spawn_open(double n_replicas_f64) {
     memset(ctx, 0, sizeof(*ctx));
     ctx->in_use = 1;
     ctx->n = n;
-    snprintf(ctx->name, sizeof(ctx->name), "spawncollect_%d_%u",
-             (int)getpid(), g_yon_spawn_counter++);
+    /* macOS caps POSIX shm names at 31 chars (PSHMNAMLEN, slash included).
+     * yon_rpc2_queue_map_init prepends "/yon_stream_" (12), leaving 19 for this
+     * name. The old "spawncollect_%d_%u" overran (e.g.
+     * "/yon_stream_spawncollect_<pid>_<n>" = 32 bytes) so shm_open failed before
+     * fork on Darwin and the parent folded an invalid stream (hang). Hex bounds
+     * the width: pid <= 6 hex (PID_MAX), counter <= 8 hex (u32) => "sc_%x_%x" is
+     * <= 18 chars, total <= 30. Same fix family as the reply_name cap. */
+    snprintf(ctx->name, sizeof(ctx->name), "sc_%x_%x",
+             (unsigned)getpid(), g_yon_spawn_counter++);
     /* Parent is the consumer: create and claim the queue BEFORE forking so the
      * children inherit the same PROCESS_SHARED mapping. */
     int created = 0;

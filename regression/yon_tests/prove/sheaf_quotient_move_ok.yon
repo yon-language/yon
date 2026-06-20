@@ -1,0 +1,19 @@
+world User { Person is text }
+world Anon = User / cohort
+
+place Profile in Anon {
+  cohort number
+  secret number
+}
+
+place PublicProfile in Anon {
+  bucket number
+}
+
+fun identity(x: number): number { return x }
+
+move Publish from Profile to PublicProfile {
+  cohort maps to bucket by identity
+}
+
+fun main(): number { return 0 }

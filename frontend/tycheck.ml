@@ -19,6 +19,7 @@
 
 open Surface_ast
 module E = Tyenv
+module C = Ast
 
 (* ─── Let-poly HM: scheme storage ──────────────────────────────────── *)
 
@@ -355,19 +356,8 @@ let free_vars_expr (e0 : expr) : string list =
     | ELit _ -> []
     | EVar (x, _) -> if List.mem x bound then [] else [x]
     | EField (e, _, _) -> s e
-    | ECall (n, args, _) ->
-        (* `recv.method(args)` is parsed as ECall("recv__method", args), so the
-           receiver is baked into the call name. Recover it as the prefix before
-           the first "__" so the closed-morphism gate sees a local captured
-           through a method call (e.g. `ys.fold(...)` in a move body). Builtins
-           ("__band") and module calls ("Seq__fold") yield an empty or non-local
-           prefix and are dropped downstream by lookup_var. *)
-        let recv =
-          match Str.bounded_split_delim (Str.regexp "__") n 2 with
-          | [pfx; _] when pfx <> "" && not (List.mem pfx bound) -> [pfx]
-          | _ -> []
-        in
-        recv @ List.concat_map s args
+    | ECall (_, args, _) ->
+        List.concat_map s args
     | EApp (h, args, _) -> s h @ List.concat_map s args
     | EHITElim (t, branches, m, _) ->
         s t @ List.concat_map (fun (v, e) -> go (v :: bound) e) branches @ s m
@@ -739,18 +729,20 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
            (Printf.sprintf "field access requires a place; got %s"
               (Tyenv.ty_to_string other)))
 
-  | ECall (name, args, loc) when
-      (let ln = String.length name in
-       ln > 8 && String.sub name (ln - 8) 8 = "__awaits") ->
+  | ECall (name, args, loc) when name = "awaits" ->
       (* w.awaits(producer): the receiver must be a wire to a Space; the
          argument is a producer FUNCTION NAME, imported from that same
          Space and declared `stream of T`. All three are compile errors
          otherwise (design note, locked). *)
-      let prefix = String.sub name 0 (String.length name - 8) in
-      let* recv_ty = infer env ctx (EVar (prefix, loc)) in
+      (* Unified value-receiver form: `w.awaits(producer)` lowers to
+         ECall("awaits", [EVar w; EVar producer]). The receiver is the first
+         argument; the producer is the rest (a single producer function name). *)
+      let recv_e, prod_args =
+        (match args with r :: rest -> (r, rest) | [] -> (EVar ("", loc), [])) in
+      let* recv_ty = infer env ctx recv_e in
       (match recv_ty with
        | TyWire sp ->
-           (match args with
+           (match prod_args with
             | [EVar (fname, floc)] ->
                 (match Hashtbl.find_opt wire_imports fname with
                  | None ->
@@ -832,28 +824,7 @@ got %s" (Tyenv.ty_to_string other)))
          | [_name] -> ok (TyPrim "boolean")
          | _ -> err loc "directed_cell expects 1 argument: (morphism_name)")
       else
-      (* Method-chaining rewriting. Equivalent to the rewrite in desugar,
-       * needed here to avoid "unknown function a__fold" before desugar is
-       * called. *)
       let (name, args) =
-        let try_chain_rewrite () =
-          try
-            let idx = Str.search_forward (Str.regexp "__") name 0 in
-            let prefix = String.sub name 0 idx in
-            let suffix = String.sub name (idx + 2) (String.length name - idx - 2) in
-            let is_method = (suffix = "map" || suffix = "filter"
-                          || suffix = "fold" || suffix = "take"
-                          || suffix = "sum_take" || suffix = "to_stream"
-                          || suffix = "for_every") in
-            let is_lower = String.length prefix > 0
-              && let c = prefix.[0] in c >= 'a' && c <= 'z'
-            in
-            if is_method && is_lower then
-              Some ("__stream_" ^ suffix, EVar (prefix, loc) :: args)
-            else
-              None
-          with Not_found -> None
-        in
         match name with
         | "map" -> ("__stream_map", args)
         | "filter" -> ("__stream_filter", args)
@@ -870,10 +841,7 @@ got %s" (Tyenv.ty_to_string other)))
         | "Stream__iterate" -> ("__stream_iterate", args)
         | "Stream__take" -> ("__stream_take", args)
         | "Stream__sum_take" -> ("__stream_sum_take", args)
-        | _ ->
-            (match try_chain_rewrite () with
-             | Some (n, a) -> (n, a)
-             | None -> (name, args))
+        | _ -> (name, args)
       in
       (* Special-case: apply_move's first argument is a move name (not
        * a value); skip type-inferring it as a regular variable.
@@ -2403,11 +2371,14 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
        * Lawfulness (adjunction pull-push, left exactness of pull) is
        * verified separately by the topos kernel; at this layer we
        * check syntactic well-formedness only. *)
+      let gm_env =
+        Tyenv.with_transport_pair env gm.gm_source_site gm.gm_target_site
+      in
       let* () = match gm.gm_pull with
-        | Some pull -> check_fun_decl env ctx pull
+        | Some pull -> check_fun_decl gm_env ctx pull
         | None -> ok () in
       let* () = (match gm.gm_push with
-       | Some push -> check_fun_decl env ctx push
+       | Some push -> check_fun_decl gm_env ctx push
        | None -> ok ()) in
       (* Derived-El coherence: the morphism's CaTT code must decode (El) to the
          directed arrow El(src) -> El(tgt). This wires el_decode into the
@@ -2475,6 +2446,46 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                    fn_loc = pr.pr_loc;
                  } in
                  let* () = check_fun_decl env_with_objs ctx fn in
+                 let body_core = Desugar.desugar_expr_pure env_with_objs body in
+                 let sheaf_ctx =
+                   { ctx with Reduce.deltas = env_with_objs.Tyenv.delta }
+                 in
+                 let* () = List.fold_left
+                   (fun acc (param_name, param_ty) ->
+                      let* () = acc in
+                      match param_ty with
+                      | TyUser place_name ->
+                          (match Tyenv.lookup_place env_with_objs place_name with
+                           | Some pd ->
+                               (match Tyenv.lookup_world env_with_objs pd.pd_world with
+                                | Some wd ->
+                                    (match quotient_rel_of_world wd with
+                                     | Some rel ->
+                                         let domain = C.TyPlace place_name in
+                                         let canon =
+                                           Sheaf.quotient_canon ~rel ~domain
+                                         in
+                                         (match body_core with
+                                          | Some core ->
+                                              let field =
+                                                C.Lam (param_name, domain, core)
+                                              in
+                                              if Sheaf.field_factors_through
+                                                   sheaf_ctx ~canon ~field
+                                              then ok ()
+                                              else err pr.pr_loc (Printf.sprintf
+                                                "prop %s parameter %s reads finer than %s and does not descend through quotient world %s"
+                                                pr.pr_name param_name rel wd.wd_name)
+                                          | None ->
+                                              err pr.pr_loc (Printf.sprintf
+                                                "prop %s parameter %s cannot be proven to descend through %s"
+                                                pr.pr_name param_name rel))
+                                     | None -> ok ())
+                                | None -> ok ())
+                           | None -> ok ())
+                      | _ -> ok ())
+                   (ok ()) pr.pr_params
+                 in
                  check_props rest)
       in
       check_props td.tp_props
@@ -2647,23 +2658,23 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
     | None -> err pd.pd_loc
         (Printf.sprintf "place %s refers to unknown world %s" pd.pd_name pd.pd_world)
   in
-  (* Check the monomorphism `place A extends B`. A is a sub-object of B
+  (* Check the monomorphism `place A subcontains B`. A is a sub-object of B
    * (A -> B) iff A has all the fields of B (structural subsumption). Reuses
    * place_is_subtype: place_is_subtype env ctx B A == true iff A has all the
    * fields of B. If A does not, the mono does not exist -> error. *)
   let* () =
-    match pd.pd_extends with
+    match pd.pd_subcontains with
     | None -> ok ()
     | Some base ->
         (match Tyenv.lookup_place env base with
          | None ->
              err pd.pd_loc (Printf.sprintf
-               "place %s extends %s, but %s is not declared."
+               "place %s subcontains %s, but %s is not declared."
                pd.pd_name base base)
          | Some _ ->
              if place_is_subtype env ctx base pd.pd_name then ok ()
              else err pd.pd_loc (Printf.sprintf
-               "invalid place %s extends %s: %s does not have all the fields \
+               "invalid place %s subcontains %s: %s does not have all the fields \
                 of %s. A sub-object A -> B requires A to have at least the \
                 structure of B (subsumption: A is usable wherever B is expected)."
                pd.pd_name base pd.pd_name base))
@@ -3034,7 +3045,7 @@ and check_reduction_decl (env : Tyenv.env) (ctx : Reduce.ctx) (rd : reduction_de
   ignore !handled;
   ok ()
 
-and check_move_decl (env : Tyenv.env) (_ctx : Reduce.ctx) (md : move_decl) : unit tc_result =
+and check_move_decl (env : Tyenv.env) (ctx : Reduce.ctx) (md : move_decl) : unit tc_result =
   (* Form A move: from P to Q with mappings on individual fields.
    * Form B move: merge P, Q, R (no target).
    *
@@ -3109,7 +3120,7 @@ and check_move_decl (env : Tyenv.env) (_ctx : Reduce.ctx) (md : move_decl) : uni
                      match Tyenv.lookup_fun env m.m_by with
                      | None ->
                          (* Pass-through: types must match directly. *)
-                         if Dispatcher.type_equal env _ctx st tt then ok ()
+                         if Dispatcher.type_equal env ctx st tt then ok ()
                          else err m.m_loc (Printf.sprintf
                            "move %s: field '%s' (%s) to '%s' (%s) without handler — types incompatible"
                            md.mv_name m.m_from (Tyenv.ty_to_string st)
@@ -3123,8 +3134,8 @@ and check_move_decl (env : Tyenv.env) (_ctx : Reduce.ctx) (md : move_decl) : uni
                          else
                            let (_, param_ty) = List.hd fs.fs_params in
                            let ret_ty = fs.fs_return in
-                           let ok_in = Dispatcher.type_equal env _ctx st param_ty in
-                           let ok_out = Dispatcher.type_equal env _ctx ret_ty tt in
+                           let ok_in = Dispatcher.type_equal env ctx st param_ty in
+                           let ok_out = Dispatcher.type_equal env ctx ret_ty tt in
                            if ok_in && ok_out then ok ()
                            else err m.m_loc (Printf.sprintf
                              "move %s: handler '%s' has signature %s -> %s, expected %s -> %s"
@@ -3134,6 +3145,36 @@ and check_move_decl (env : Tyenv.env) (_ctx : Reduce.ctx) (md : move_decl) : uni
                              (Tyenv.ty_to_string st)
                              (Tyenv.ty_to_string tt)))
               (ok ()) mappings
+            in
+            let* () =
+              match Tyenv.lookup_world env src.pd_world with
+              | Some wd ->
+                  (match quotient_rel_of_world wd with
+                   | Some rel ->
+                       let domain = C.TyPlace src_name in
+                       let canon = Sheaf.quotient_canon ~rel ~domain in
+                       let sheaf_ctx =
+                         { ctx with Reduce.deltas = env.Tyenv.delta }
+                       in
+                       List.fold_left
+                         (fun acc m ->
+                            let* () = acc in
+                            let point = "__move_s" in
+                            let field =
+                              C.Lam (point, domain,
+                                C.App
+                                  (C.Var ("__field_" ^ m.m_from),
+                                   C.Var point))
+                            in
+                            if Sheaf.field_factors_through sheaf_ctx
+                                 ~canon ~field
+                            then ok ()
+                            else err m.m_loc (Printf.sprintf
+                              "move %s source field '%s' reads finer than %s and does not descend through quotient world %s"
+                              md.mv_name m.m_from rel wd.wd_name))
+                         (ok ()) mappings
+                   | None -> ok ())
+              | None -> ok ()
             in
             (* Row polymorphism / width check:
              * Verify that for every target field T NOT in the mapping
@@ -3153,7 +3194,7 @@ and check_move_decl (env : Tyenv.env) (_ctx : Reduce.ctx) (md : move_decl) : uni
                  if List.mem f.fd_name mapped_targets then ok ()
                  else
                    match field_ty_of src f.fd_name with
-                   | Some src_ty when Dispatcher.type_equal env _ctx src_ty f.fd_ty ->
+                   | Some src_ty when Dispatcher.type_equal env ctx src_ty f.fd_ty ->
                        (* Pass-through: source has matching field. *)
                        ok ()
                    | Some src_ty ->
@@ -3169,11 +3210,58 @@ and check_move_decl (env : Tyenv.env) (_ctx : Reduce.ctx) (md : move_decl) : uni
         | _ -> ok ())  (* Places not found, already reported above *)
    | _ -> ok ())
 
-and check_view_decl (env : Tyenv.env) (_ctx : Reduce.ctx) (vd : view_decl) : unit tc_result =
+and quotient_rel_of_world (wd : world_decl) : string option =
+  match wd.wd_quotient_of with
+  | Some (_, rel) -> Some rel
+  | None -> None
+
+and view_field_expr_to_core
+    (env : Tyenv.env) (fields : (string * ty) list)
+    (place_name : string) (expr : expr) : C.term option =
+  let expr' = Desugar.rewrite_view_fields fields expr in
+  match Desugar.desugar_expr_pure env expr' with
+  | Some body -> Some (C.Lam ("__view_s", C.TyPlace place_name, body))
+  | None -> None
+
+and check_view_decl (env : Tyenv.env) (ctx : Reduce.ctx) (vd : view_decl) : unit tc_result =
   match Tyenv.lookup_place env vd.vw_of with
   | None -> err vd.vw_loc
       (Printf.sprintf "view %s of unknown place %s" vd.vw_name vd.vw_of)
-  | Some _ -> ok ()
+  | Some pd ->
+      match Tyenv.lookup_world env pd.pd_world with
+      | None -> ok ()
+      | Some wd ->
+          match quotient_rel_of_world wd with
+          | None -> ok ()
+          | Some rel ->
+              let fields =
+                Tyenv.place_fields pd
+                |> List.map (fun f -> (f.fd_name, f.fd_ty))
+              in
+              let canon =
+                Sheaf.quotient_canon ~rel ~domain:(C.TyPlace vd.vw_of)
+              in
+              let sheaf_ctx = { ctx with Reduce.deltas = env.Tyenv.delta } in
+              List.fold_left
+                (fun acc item ->
+                   let* () = acc in
+                   match item with
+                   | VShowSimple _ | VShowLabel _ -> ok ()
+                   | VShowAs (field, expr) ->
+                       (match view_field_expr_to_core env fields vd.vw_of expr with
+                        | Some field_term
+                          when Sheaf.field_factors_through sheaf_ctx
+                            ~canon ~field:field_term ->
+                            ok ()
+                        | Some _ ->
+                            err vd.vw_loc (Printf.sprintf
+                              "view %s show %s reads finer than %s; views over quotient world %s must factor through %s"
+                              vd.vw_name field rel wd.wd_name rel)
+                        | None ->
+                            err vd.vw_loc (Printf.sprintf
+                              "view %s show %s cannot be proven to factor through %s"
+                              vd.vw_name field rel)))
+                (ok ()) vd.vw_items
 
 
 (* ─── Program-level entry point ────────────────────────────────────── *)

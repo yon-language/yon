@@ -1549,9 +1549,8 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
     when Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
       let (stmts, result) = v1_lower_stream_fold recv init f loc in
       stmts @ [S.SLet (x, result, loc)]
-  | S.SLet (sub, S.ECall (n, [S.EVar _], eloc), loc)
-    when v1_has_suffix n "__awaits"
-      && Hashtbl.mem S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) ->
+  | S.SLet (sub, S.ECall ("awaits", [S.EVar _; S.EVar _], eloc), loc)
+    when Hashtbl.mem S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) ->
       (* be sub holds w.awaits(producer): create the shm channel
          (creator side, id = the producer's dispatch selector, nominal
          by construction), send the reserved-selector subscription
@@ -1635,10 +1634,6 @@ and v1_lower_foreach_stream x e b loc =
       @ [ S.SLet (v1_fresh "adv",
                   v1_call "Space__set" [S.EVar (cur, l); recv ()], loc) ],
       loc) ]
-
-and v1_has_suffix n suf =
-  let ln = String.length n and ls = String.length suf in
-  ln > ls && String.sub n (ln - ls) ls = suf
 
 and v1_lower_stream_for_every recv f loc =
   (* s.for_every(f): drain the stream, calling f on each value. The
@@ -2293,6 +2288,17 @@ let rewrite_top_decl (m : (string * string) list) (td : S.top_decl) : S.top_decl
               * a stmt body are rewritten to their real position after expansion
               * (where applicable). *)
 
+let rec rewrite_view_fields fields e =
+  let r = rewrite_view_fields fields in
+  match e with
+  | S.EVar (n, loc) when List.mem_assoc n fields ->
+      S.EField (S.EVar ("__view_s", loc), n, loc)
+  | S.EBinop (op, a, b, loc) -> S.EBinop (op, r a, r b, loc)
+  | S.EParen (e1, loc) -> S.EParen (r e1, loc)
+  | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
+  | S.EField (e1, f, loc) -> S.EField (r e1, f, loc)
+  | other -> other
+
 (* View declaration lowering (KEYWORDS.md work map item 2): each
    `view V of P { show ... }` expands into a synthetic record place V
    (one field per show clause) plus a constructor function V(s: P): V
@@ -2307,20 +2313,18 @@ let place_info = List.filter_map (function
           | _ -> None) pd.S.pd_members in
         Some (pd.S.pd_name, (pd.S.pd_world, fields))
     | _ -> None) p in
-  let rec rw_fields fields e =
-    let r = rw_fields fields in
-    match e with
-    | S.EVar (n, loc) when List.mem_assoc n fields ->
-        S.EField (S.EVar ("__view_s", loc), n, loc)
-    | S.EBinop (op, a, b, loc) -> S.EBinop (op, r a, r b, loc)
-    | S.EParen (e1, loc) -> S.EParen (r e1, loc)
-    | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
-    | S.EField (e1, f, loc) -> S.EField (r e1, f, loc)
-    | other -> other
+  let already_expanded view_name =
+    List.exists (function
+      | S.TopPlace pd -> pd.S.pd_name = view_name
+      | _ -> false) p
+    && List.exists (function
+      | S.TopFun fd -> fd.S.fn_name = view_name
+      | _ -> false) p
   in
   List.concat_map (function
     | S.TopView vd ->
-        (match List.assoc_opt vd.S.vw_of place_info with
+        if already_expanded vd.S.vw_name then [S.TopView vd]
+        else (match List.assoc_opt vd.S.vw_of place_info with
          | None -> [S.TopView vd]   (* unknown target: tycheck reports *)
          | Some (world, fields) ->
              let loc = vd.S.vw_loc in
@@ -2331,7 +2335,7 @@ let place_info = List.filter_map (function
                      | Some t -> t | None -> num in
                    (f, ty,
                     S.EField (S.EVar ("__view_s", loc), f, loc))
-               | S.VShowAs (f, e) -> (f, num, rw_fields fields e)
+               | S.VShowAs (f, e) -> (f, num, rewrite_view_fields fields e)
              ) vd.S.vw_items in
              let synth_place : S.place_decl = {
                S.pd_name = vd.S.vw_name;
@@ -2341,7 +2345,7 @@ let place_info = List.filter_map (function
                  S.FoField { S.fd_name = f; fd_ty = ty; fd_loc = loc }) shown;
                pd_over = None;
                pd_laws = [];
-               pd_extends = None;
+               pd_subcontains = None;
                pd_is_error = false;
                pd_on_error = None;
                pd_loc = loc } in
@@ -2359,7 +2363,7 @@ let place_info = List.filter_map (function
                fn_body = [ S.SReturn
                  (S.ENew (vd.S.vw_name, assigns, loc), loc) ];
                fn_loc = loc } in
-             [S.TopPlace synth_place; S.TopFun synth_fun])
+             [S.TopView vd; S.TopPlace synth_place; S.TopFun synth_fun])
     | d -> [d]) p
 
 let () = produce_block_ref := desugar_produce_block

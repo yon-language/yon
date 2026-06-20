@@ -1,0 +1,14 @@
+world Base { Person is text }
+world Anon = Base / cohort
+
+topos Public in Anon where {
+  objects {
+    place State in Anon {
+      cohort number
+      secret number
+    }
+  }
+  prop leaks_secret(s: State): proposition = s.secret < 1
+}
+
+fun main(): number { return 0 }
