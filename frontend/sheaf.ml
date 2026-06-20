@@ -75,3 +75,59 @@ let field_factors_through
   let abstracted =
     replace_subterm ~target:cx ~replacement:(C.Var fresh_class) fx in
   not (S.mem x (C.free_vars abstracted))
+
+(* ─── Surface binding: a place on a quotient world ──────────────────────────
+ * In  world Q = W / Rel  the relation Rel is a FIELD of W -- the canonicalizing
+ * key -- and the quotient map is its projection:  canon = fun u -> u.Rel. A
+ * surface field access  u.f  desugars to  __field_f u  (desugar.ml), so a field
+ * of the place, seen as the map W -> V it denotes, is  fun u -> __field_f u. The
+ * place is a sheaf for the quotient generator iff every field factors through
+ * canon, i.e. is determined by Rel. The non-factoring fields are the
+ * violations. *)
+
+let proj (field_name : string) (u : C.term) : C.term =
+  C.App (C.Var ("__field_" ^ field_name), u)
+
+(* a field of the place as the map W -> V it denotes *)
+let field_map ~(world : string) ~(field_name : string) : C.term =
+  C.Lam ("u", C.TyPlace world, proj field_name (C.Var "u"))
+
+(* the fields that BREAK the sheaf condition for  world W / rel_field: those not
+   invariant under the relation. [] means the place is a sheaf for this
+   generator. The relation field itself trivially factors (through itself). *)
+let quotient_violations
+      (ctx : Reduce.ctx) ~(world : string) ~(rel_field : string)
+      ~(fields : string list) : string list =
+  let canon = quotient_canon ~rel:rel_field ~domain:(C.TyPlace world) in
+  List.filter
+    (fun f -> not (field_factors_through ctx ~canon
+                     ~field:(field_map ~world ~field_name:f)))
+    fields
+
+(* the sheaf violations of a place given the reified site: if the place's world
+   carries a quotient generator W / rel, every field must factor through the rel
+   projection. [] if the world has no quotient generator, or no violations.
+
+   WHY ONLY THE QUOTIENT. Of the three covering generators, only the quotient
+   imposes a condition expressible as a constraint on a place's fields:
+   - quotient W / Rel: canon identifies elements, so a field must be Rel-invariant
+     (factor through canon). Real content -> checked here.
+   - coproduct A + B: a DISJOINT cover, no overlap, so sections glue freely; the
+     sheaf condition P(A+B) = P(A) x P(B) puts NO constraint on a single place's
+     fields. Vacuous on fields.
+   - subset S < V (dense): the condition P(V) = P(S) is unique EXTENSION from a
+     dense part, not a factorization of fields; with total field projections it
+     imposes nothing on a single place's fields. Vacuous on fields.
+   So place_violations returns [] for a non-quotient world BY DESIGN, not by
+   omission: there is genuinely no field-level reject to raise for those two. *)
+let place_violations
+      (ctx : Reduce.ctx) (site : C.world_decl) (pd : C.place_decl) : string list =
+  match
+    List.find_map
+      (function C.GenQuotient (base, rel) -> Some (base, rel) | _ -> None)
+      site.C.w_generators
+  with
+  | None -> []
+  | Some (base, rel_field) ->
+      quotient_violations ctx ~world:base ~rel_field
+        ~fields:(List.map fst pd.C.p_fields)

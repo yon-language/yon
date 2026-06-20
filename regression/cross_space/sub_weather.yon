@@ -4,7 +4,7 @@ world W { Code is X }
 place Reading in W { temp number label text }
 
 fun main(): number {
-  be w holds wire to Weather
+  be w holds wire to space Weather
   be sub holds w.awaits(forecasts)
   be s holds sub.stream
   be total holds s.fold(0, fun(a: number, r: Reading) => a + r.temp + String.length(r.label))

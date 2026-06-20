@@ -1,3 +1,5 @@
+// a place on a quotient world carries only the relation field; a prop that reads
+// only that field factors through the relation and is accepted.
 world Base { Person is text }
 world Anon = Base / cohort
 
@@ -5,7 +7,6 @@ topos Public in Anon where {
   objects {
     place State in Anon {
       cohort number
-      secret number
     }
   }
   prop is_public(s: State): proposition = s.cohort < 1

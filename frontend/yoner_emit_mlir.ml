@@ -100,8 +100,9 @@ let () =
     | [] -> spec
   in
   let loaded : (string, string * string) Hashtbl.t = Hashtbl.create 16 in
+  let canon_path fn = try Filename.concat (Sys.getcwd ()) fn with _ -> fn in
   let rec load modname fn =
-    let canon = try Filename.concat (Sys.getcwd ()) fn with _ -> fn in
+    let canon = canon_path fn in
     if Hashtbl.mem loaded canon then ()
     else begin
       let raw = read_file fn in
@@ -114,7 +115,32 @@ let () =
       ) imports
     end
   in
-  List.iter (load "") yon_files;
+  (* Project mode (filesystem as declaration): a directory carrying yon.toml is
+   * a package: the directory IS the source tree. Each .yon file is parsed as
+   * itself (no text reconstruction); the worlds come from the toml as AST
+   * nodes and each directory becomes a space, both prepended below. A
+   * directory WITHOUT yon.toml and the single-file path keep classic behavior. *)
+  let is_project_dir =
+    Sys.file_exists path && Sys.is_directory path
+    && Package_layout.is_project ~dir:path
+  in
+  let project_wm =
+    if is_project_dir then begin
+      let manifest_path = Filename.concat path Package_layout.manifest_name in
+      if Sys.file_exists manifest_path then
+        (try Some (Manifest.parse_file manifest_path)
+         with Manifest.Manifest_error msg ->
+           Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3)
+      else None
+    end else None
+  in
+  if is_project_dir then
+    (* load every .yon under the package root; each is parsed on its own by the
+       common path below, contributing its own top_decls. *)
+    List.iter (fun u -> load "" u.Package_layout.ul_path)
+      (Package_layout.layout ~root:path)
+  else
+    List.iter (load "") yon_files;
   (* The order: imported files (dependencies) first, main files after. We use
    * the reverse insertion order: the leaves loaded first. *)
   let all_sources = Hashtbl.fold (fun fn (m, src) acc -> (fn, m, src) :: acc) loaded [] in
@@ -122,6 +148,24 @@ let () =
   (* parse each file (import-stripped source), accumulate the top_decls,
    * prefixing each imported module's declarations with `module::`. *)
   let internals = ref [] in
+  (* Project mode: collect each place's world and each file's wire targets while
+     the file is parsed below -- no second parse. The place->world map needs the
+     space (directory) of the file; key it by the same canon path as `loaded`. *)
+  let pw_pairs = ref [] in
+  let wire_errs = ref [] in
+  let place_acc = ref [] in   (* (place_name, file, space) for every project place *)
+  let main_files = ref [] in  (* files that define `fun main` *)
+  let space_of_path =
+    match project_wm with
+    | Some _ ->
+        let t = Hashtbl.create 16 in
+        List.iter (fun u ->
+          Hashtbl.replace t (canon_path u.Package_layout.ul_path)
+            u.Package_layout.ul_space)
+          (Package_layout.layout ~root:path);
+        t
+    | None -> Hashtbl.create 1
+  in
   let prog =
     List.concat_map (fun (filename, modname, src) ->
       let lexbuf = Lexing.from_string src in
@@ -131,7 +175,36 @@ let () =
         let p = Parser.program Lexer.token lexbuf in
         let synth = Parser_state.drain () in
         let decls = synth @ p in
-        if modname = "" then decls
+        if modname = "" then begin
+          (match project_wm with
+           | Some wm when Hashtbl.mem space_of_path filename ->
+               let sp = Hashtbl.find space_of_path filename in
+               (* entrypoint collection: every project file (root included).
+                  Record each declared place (name, file, space) and whether the
+                  file defines `main`, so the Entry constraints below can be
+                  checked on the whole project. *)
+               List.iter (function
+                 | Surface_ast.TopPlace pd ->
+                     place_acc := (pd.Surface_ast.pd_name, filename, sp) :: !place_acc
+                 | Surface_ast.TopFun fd when fd.Surface_ast.fn_name = "main" ->
+                     main_files := filename :: !main_files
+                 | _ -> ()) decls;
+               (* place->world + wire boundary: only for files whose space is
+                  in a world (root files inherit no world). *)
+               let sender_world = Manifest.world_of_space wm sp in
+               (match sender_world with
+                | Some w ->
+                    List.iter (function
+                      | Surface_ast.TopPlace pd ->
+                          pw_pairs := (pd.Surface_ast.pd_name, w) :: !pw_pairs
+                      | _ -> ()) decls
+                | None -> ());
+               wire_errs :=
+                 Manifest.check_targets wm ~sender_world
+                   (Manifest.import_targets decls) @ !wire_errs
+           | _ -> ());
+          decls
+        end
         else begin
           internals := Module_prefix.internal_qualified_names modname decls @ !internals;
           Module_prefix.prefix_decls modname decls
@@ -147,6 +220,44 @@ let () =
           exit 2
     ) all_sources
   in
+  (* In project mode the worlds and spaces are not in any .yon file: the worlds
+     come from the toml (as native TopWorld nodes) and each directory is a
+     space (a native TopSpace). Prepend them to the parsed place files -- no
+     text, no re-parse. *)
+  let prog =
+    match project_wm with
+    | Some wm ->
+        Manifest.world_decls wm @ Package_layout.space_decls ~root:path @ prog
+    | None -> prog
+  in
+  (* The entrypoint is the place `Entry`: declared once, in the project root,
+     and the file that declares it carries `main`. The name defaults to "Entry"
+     and may be set by [package] entry. In project mode these four conditions
+     are enforced; outside project mode `main` keeps its top-level meaning. *)
+  (match project_wm with
+   | None -> ()
+   | Some wm ->
+       let entry_name = match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry" in
+       let entries = List.filter (fun (n, _, _) -> n = entry_name) !place_acc in
+       let fail msg = Printf.eprintf "ENTRYPOINT ERROR: %s\n" msg; exit 3 in
+       (match entries with
+        | [] ->
+            fail (Printf.sprintf
+              "the project declares no entrypoint: add `place %s` in the project \
+               root, in the file that defines main" entry_name)
+        | _ :: _ :: _ ->
+            fail (Printf.sprintf
+              "the entrypoint place `%s` must be unique; it is declared %d times"
+              entry_name (List.length entries))
+        | [ (_, file, sp) ] ->
+            if sp <> "" then
+              fail (Printf.sprintf
+                "the entrypoint place `%s` must live in the project root, not in \
+                 space `%s`" entry_name sp)
+            else if not (List.mem file !main_files) then
+              fail (Printf.sprintf
+                "the entrypoint place `%s` must contain main: its file defines no \
+                 `fun main`" entry_name)));
   (* Resolve selective-import aliases (geo_scale -> geometria::scale), then
    * mangle qualified names (a::b -> a_NS_b) so MLIR symbols are valid. *)
   (* Wire subscriptions: load the SIGNATURES of every module named in a
@@ -192,6 +303,20 @@ let () =
   (* View declarations expand to synthetic place + constructor BEFORE
      tycheck, so the view name resolves as a normal function. *)
   let prog = Desugar.expand_views prog in
+  (* The place inherits its space's world (filesystem -> toml): bind each
+     unannotated place to the world of its directory before type-checking, so a
+     multi-world project resolves structurally instead of relying on the
+     unique-world heuristic (which cannot disambiguate across worlds). Project
+     mode only; each file is re-parsed alone to find the place names it
+     declares and the space (directory) it lives in. *)
+  let prog =
+    match project_wm with
+    | Some _ ->
+        let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
+        List.iter (fun (n, w) -> Hashtbl.replace pw n w) !pw_pairs;
+        Manifest.assign_place_worlds (fun n -> Hashtbl.find_opt pw n) prog
+    | None -> prog
+  in
   let cr = Tycheck.check_program prog in
   if cr.Tycheck.cr_errors <> [] then begin
     List.iter (fun e ->
@@ -199,6 +324,39 @@ let () =
       cr.Tycheck.cr_errors;
     exit 3
   end;
+  (* World boundary (yon.toml [world] sections): a wire may only reach a space
+   * in the sender's own world. Project mode only -- the manifest lives at the
+   * project root. Reuses the parsed program and the same exit-3 channel as
+   * type errors. Opt-in: with no [world] declared, the checks are vacuous. *)
+  (match project_wm with
+   | None -> ()
+   | Some wm ->
+      (* D (orphan spaces) is global, from the whole program; B + C were
+         collected per file during parsing (wire_errs). No second parse. *)
+      (match Manifest.check_program wm prog @ List.rev !wire_errs with
+       | [] -> ()
+       | errs ->
+           List.iter (fun (loc, msg) ->
+             if loc.Surface_ast.start_line > 0 then
+               Printf.eprintf "WORLD BOUNDARY ERROR: %d:%d: %s\n"
+                 loc.Surface_ast.start_line loc.Surface_ast.start_col msg
+             else
+               Printf.eprintf "WORLD BOUNDARY ERROR: %s\n" msg
+           ) errs;
+           exit 3));
+  (* Propagate the inferred place->world binding to codegen. check_program runs
+   * infer_place_worlds to resolve each unannotated place's world (e.g. Order in
+   * Commerce via `Code is Order` in the world), but keeps that rewrite internal
+   * -- the desugar otherwise sees the original __INFER marker, which the backend
+   * maps to __Default. Re-running the pass here is idempotent (the tycheck above
+   * already validated it: a real inference failure exited at cr_errors), so the
+   * Error arm is unreachable and kept only to stay total. With this, a place in
+   * a world-bearing folder lands in that world instead of __Default. *)
+  let prog =
+    match Tycheck.infer_place_worlds prog with
+    | Ok p -> p
+    | Error _ -> prog
+  in
   let desugared = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) prog in
   (* Erase type-level (universe-typed) parameters before codegen: a type
      argument is a compile-time citizen and must not reach the carrier/backend

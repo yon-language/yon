@@ -1,9 +1,12 @@
+// a place on a quotient world is a pure sheaf: it carries only the relation
+// field (the class label). Derived quantities live in a VIEW, which must factor
+// through the relation -- here `bucket` is a pure function of `cohort`, so the
+// view descends to the quotient and the program is accepted.
 world User { Person is text }
 world Anon = User / cohort
 
 place Profile in Anon {
   cohort number
-  secret number
 }
 
 fun classify(x: number): number { return x }

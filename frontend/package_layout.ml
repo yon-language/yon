@@ -22,15 +22,15 @@
  * __INFER path and is not forced here. *)
 
 type unit_loc = {
-  ul_world : string;     (* "" = the root world *)
-  ul_space : string;
+  ul_space : string;     (* "" = a file directly under the project root *)
   ul_path  : string;
-  ul_is_world : bool;    (* the conventional world.yon header file *)
 }
 
-(* world of a file path relative to the package root: the first path segment
-   under root, or "" for a file directly under root (the root world). *)
-let world_of ~(root : string) ~(path : string) : string =
+(* The space a file belongs to: the first path segment under the root, i.e.
+   the directory it sits in (directory = space). A file directly under the
+   root belongs to no space (ul_space = ""): the entrypoint area, e.g.
+   Main.yon. *)
+let space_of ~(root : string) ~(path : string) : string =
   let r = if Filename.check_suffix root "/" then root else root ^ "/" in
   let rel =
     if String.length path >= String.length r
@@ -39,13 +39,13 @@ let world_of ~(root : string) ~(path : string) : string =
     else Filename.basename path
   in
   match String.split_on_char '/' rel with
-  | dir :: _ :: _ -> dir          (* root/<dir>/.../file.yon -> world <dir> *)
-  | _ -> ""                       (* root/file.yon          -> root world  *)
+  | dir :: _ :: _ -> dir          (* root/<dir>/file.yon -> space <dir> *)
+  | _ -> ""                       (* root/file.yon       -> no space (root) *)
 
-let space_of ~(path : string) : string =
+(* The place a file declares is its basename (informative; the place's real
+   name is whatever the file's `place P` body says). *)
+let place_of ~(path : string) : string =
   Filename.remove_extension (Filename.basename path)
-
-let is_world_file ~(path : string) : bool = space_of ~path = "world"
 
 (* walk the tree, deterministic order, skipping yon_modules (explicit deps). *)
 let rec walk (dir : string) : string list =
@@ -58,53 +58,30 @@ let rec walk (dir : string) : string list =
 
 let layout ~(root : string) : unit_loc list =
   walk root
-  |> List.map (fun p ->
-       { ul_world = world_of ~root ~path:p;
-         ul_space = space_of ~path:p;
-         ul_path  = p;
-         ul_is_world = is_world_file ~path:p })
+  |> List.map (fun p -> { ul_space = space_of ~root ~path:p; ul_path = p })
 
 let read_file fn =
   let ic = open_in fn in
   let s = really_input_string ic (in_channel_length ic) in
   close_in ic; s
 
-(* a world.yon body becomes a world header in the right surface form:
-     starts with '=' or '/'  -> construction (= A + B, / Rel)
-     starts with "subset"     -> subset of R
-     otherwise                -> `world W { <inhabitants> }`
-     empty / absent           -> `world W { }` *)
-let world_header (w : string) (body : string option) : string =
-  match body with
-  | None -> Printf.sprintf "world %s { }" w
-  | Some b ->
-      let t = String.trim b in
-      if t = "" then Printf.sprintf "world %s { }" w
-      else if t.[0] = '=' || t.[0] = '/' then Printf.sprintf "world %s %s" w t
-      else if String.length t >= 6 && String.sub t 0 6 = "subset"
-      then Printf.sprintf "world %s %s" w t
-      else Printf.sprintf "world %s { %s }" w t
+(* The project's spaces as native TopSpace decls: one per directory that holds
+   .yon files. The space->world membership is NOT set here (sd_world = None):
+   it lives in the manifest. Files directly under the root belong to no space
+   and contribute none. The worlds (TopWorld) come from Manifest.world_decls;
+   the place files are parsed as themselves -- nothing is rendered as text. *)
+let space_decls ~(root : string) : Surface_ast.top_decl list =
+  layout ~root
+  |> List.filter_map (fun u -> if u.ul_space = "" then None else Some u.ul_space)
+  |> List.sort_uniq compare
+  |> List.map (fun s ->
+       Surface_ast.TopSpace
+         { Surface_ast.sd_name = s; sd_world = None; sd_fold = None;
+           sd_loc = Surface_ast.dummy_loc })
 
-(* reconstruct the explicit declarative text the existing parser accepts. *)
-let reconstruct ~(root : string) : string =
-  let units = layout ~root in
-  let worlds = List.sort_uniq compare (List.map (fun u -> u.ul_world) units) in
-  let buf = Buffer.create 1024 in
-  List.iter (fun w ->
-    let wunits = List.filter (fun u -> u.ul_world = w) units in
-    if w <> "" then begin
-      let body =
-        match List.find_opt (fun u -> u.ul_is_world) wunits with
-        | Some u -> Some (read_file u.ul_path) | None -> None in
-      Buffer.add_string buf (world_header w body);
-      Buffer.add_char buf '\n'
-    end;
-    List.iter (fun u ->
-      if not u.ul_is_world then begin
-        if w <> "" then
-          Buffer.add_string buf (Printf.sprintf "space %s in %s\n" u.ul_space w);
-        Buffer.add_string buf (read_file u.ul_path);
-        Buffer.add_char buf '\n'
-      end) wunits)
-    worlds;
-  Buffer.contents buf
+(* A package is a directory carrying the manifest yon.toml at its root. Its
+   presence marks the project root (Cargo/Go model): yonc on the directory
+   compiles the whole project, yonc on a single .yon compiles just that file. *)
+let manifest_name = "yon.toml"
+let is_project ~(dir : string) : bool =
+  Sys.file_exists (Filename.concat dir manifest_name)
