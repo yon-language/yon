@@ -909,10 +909,15 @@ let move_equiv (m1 : move_decl) (m2 : move_decl) : bool =
 
 (* ─── View equivalence by representable functor ──────────── *)
 
-(* A view of place P is a representable functor Hom(P, -) into Set.
- * Two views of the same place are equivalent if their show clauses
- * project the same fields with the same labels.
- *)
+(* Two arrows here, kept distinct to avoid a variance confusion:
+ *  - the Yoneda EMBEDDING of a place P is よP = Hom(-, P), the representable
+ *    PRESHEAF (contravariant); this is what the first-class view HANDLE denotes
+ *    (see surface_ast: "the representable functor Hom(-, P)"). It is the object
+ *    the full-faithfulness lemma is about.
+ *  - a `view V of P { show ... }` is a PROJECTION P -> V, i.e. an element of the
+ *    covariant Hom(P, -). view_equiv compares two such projections OF THE SAME P:
+ *    they are equivalent iff their show clauses project the same fields with the
+ *    same labels. This is an equality of projections, not the embedding itself. *)
 
 let view_item_eq (v1 : view_item) (v2 : view_item) : bool =
   match v1, v2 with
