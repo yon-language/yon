@@ -1,0 +1,6 @@
+[package]
+name = "extends_subobject"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

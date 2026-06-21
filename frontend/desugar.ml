@@ -2177,8 +2177,18 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
            topos_to_first_place :=
              (td.S.tp_name, pd.S.pd_name) :: !topos_to_first_place
        | [] -> ());
+      (* A topos `T in W` gives its objects world W when they don't name one.
+         Under toml-only the inner places carry no `in W`, so without this they
+         would stay __INFER (no world) and fail the checks. *)
       let res_with_objs = List.fold_left
-        (fun acc obj -> process_top_decl acc (S.TopPlace obj))
+        (fun acc obj ->
+           let obj =
+             if obj.S.pd_world = "__INFER" then
+               (match td.S.tp_world with
+                | Some w -> { obj with S.pd_world = w }
+                | None -> obj)
+             else obj in
+           process_top_decl acc (S.TopPlace obj))
         res
         td.S.tp_objects
       in

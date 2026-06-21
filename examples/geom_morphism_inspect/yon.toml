@@ -1,0 +1,6 @@
+[package]
+name = "geom_morphism_inspect"
+
+[world.Shop]
+objects = ["X"]
+spaces  = ["shop"]

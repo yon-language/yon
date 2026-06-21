@@ -1,0 +1,6 @@
+[package]
+name = "geom_morphism_cell"
+
+[world.Shop]
+objects = ["X"]
+spaces  = ["shop"]

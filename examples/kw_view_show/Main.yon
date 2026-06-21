@@ -1,0 +1,7 @@
+place Entry { }
+fun main(): number {
+  be acc holds new Account { balance 50
+    fee 8 }
+  be snap holds Snapshot(acc)
+  return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
+}

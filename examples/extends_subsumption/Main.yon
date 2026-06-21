@@ -1,0 +1,6 @@
+place Entry { }
+fun handle_err(e: Error): number { return 1 }
+fun process(s: SyntaxError): number {
+  return handle_err(s)
+}
+fun main(): number { return 0 }

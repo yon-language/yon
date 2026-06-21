@@ -1,0 +1,3 @@
+view PublicProfile of Profile {
+  show bucket = classify(cohort)
+}

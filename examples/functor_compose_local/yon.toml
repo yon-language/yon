@@ -1,0 +1,11 @@
+[package]
+name = "functor_compose_local"
+
+[world.W]
+objects = ["X"]
+
+[world.V]
+objects = ["Y"]
+
+[world.U]
+objects = ["Z"]

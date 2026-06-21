@@ -1,0 +1,6 @@
+[package]
+name = "kw_view_show"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

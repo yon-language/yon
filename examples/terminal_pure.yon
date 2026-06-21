@@ -1,7 +1,0 @@
-world W { Code is X }
-place Unit in W { }
-place Account in W { balance number }
-
-fun discard_pure(a: Account): Unit { return a }
-
-fun main(): number { return 0 }

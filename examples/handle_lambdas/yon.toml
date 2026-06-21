@@ -1,0 +1,6 @@
+[package]
+name = "handle_lambdas"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

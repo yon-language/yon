@@ -1,0 +1,6 @@
+[package]
+name = "terminal_pure"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

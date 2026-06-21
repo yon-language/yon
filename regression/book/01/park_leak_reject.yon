@@ -1,0 +1,18 @@
+// Book ch.1 — the impossible public record (NEGATIVE test: must be rejected).
+// On the cohort-quotient, a public record may carry only cohort-invariant data.
+// Putting individual identity on it is a sheaf-coherence violation, rejected at
+// compile time by the place-level gate (tycheck.ml ~2787):
+//   "place `PublicDino` is not a sheaf on the quotient world
+//    `PublicPark = Park / cohort`: field(s) individual_id are not invariant
+//    under `cohort`."
+// Expected: type error / non-zero exit.
+world Park { Dino is Species }
+
+world PublicPark = Park / cohort
+
+place PublicDino in PublicPark {
+  cohort number
+  individual_id number
+}
+
+fun main(): number { return 0 }

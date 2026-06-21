@@ -1,0 +1,10 @@
+place Entry { }
+topos Public in Anon where {
+  objects {
+    place State {
+      cohort number
+    }
+  }
+  prop is_public(s: State): proposition = s.cohort < 1
+}
+fun main(): number { return 0 }

@@ -1,0 +1,6 @@
+[package]
+name = "subcontains_structural_reject"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

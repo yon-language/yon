@@ -1,0 +1,9 @@
+[package]
+name = "sheaf_quotient_ok"
+
+[world.User]
+objects = ["Account"]
+
+[world.Anon]
+quotient = ["User", "cohort"]
+spaces  = ["anon"]

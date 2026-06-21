@@ -1,0 +1,6 @@
+[package]
+name = "closed_morphism_capture"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

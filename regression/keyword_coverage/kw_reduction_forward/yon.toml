@@ -1,0 +1,6 @@
+[package]
+name = "kw_reduction_forward"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

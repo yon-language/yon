@@ -115,7 +115,7 @@ def test_sheaf_quotient_rejected():
     rejected at compile time (exit 3): it is not a sheaf on the quotient."""
     if not EMIT.exists():
         pytest.skip("frontend not built")
-    src = ROOT / "regression" / "yon_tests" / "negative" / "sheaf_quotient.yon"
+    src = ROOT / "regression" / "yon_tests" / "negative" / "sheaf_quotient"
     assert _emit_rc(src) == 3
 
 
@@ -123,7 +123,7 @@ def test_sheaf_quotient_ok():
     """A place carrying only the relation field `cohort` is a sheaf -> exit 0."""
     if not EMIT.exists():
         pytest.skip("frontend not built")
-    src = ROOT / "regression" / "yon_tests" / "prove" / "sheaf_quotient_ok.yon"
+    src = ROOT / "regression" / "yon_tests" / "prove" / "sheaf_quotient_ok"
     assert _emit_rc(src) == 0
 
 
@@ -224,7 +224,7 @@ def test_entry_default_compiles(tmp_path):
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_default", toml, {
-        "Orders/Order.yon": "place Order in Commerce { id text }\n",
+        "Orders/Order.yon": "place Order { id text }\n",
         "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
@@ -237,7 +237,7 @@ def test_entry_custom_name_compiles(tmp_path):
     toml = ("[package]\nname = \"x\"\nentry = \"Boot\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_custom", toml, {
-        "Orders/Order.yon": "place Order in Commerce { id text }\n",
+        "Orders/Order.yon": "place Order { id text }\n",
         "Boot.yon": "place Boot { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
@@ -250,7 +250,7 @@ def test_entry_absent_rejected(tmp_path):
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_absent", toml, {
-        "Orders/Order.yon": "place Order in Commerce { id text }\n",
+        "Orders/Order.yon": "place Order { id text }\n",
         "Main.yon": "fun main(): number { return 0 }\n",   # no place Entry
     })
     assert _emit_rc(proj) == 3
@@ -299,7 +299,7 @@ def test_entry_main_inside_place(tmp_path):
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_inside", toml, {
-        "Orders/Order.yon": "place Order in Commerce { id text }\n",
+        "Orders/Order.yon": "place Order { id text }\n",
         "Entry.yon": ("place Entry {\n"
                       "  fun helper(x: number): number { return x + 1 }\n"
                       "  fun main(): number { return helper(41) }\n"

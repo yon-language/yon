@@ -1,0 +1,6 @@
+[package]
+name = "extends_subsumption"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

@@ -1,0 +1,10 @@
+place Entry { }
+functor Identity(x: number) from W to V
+  law identity
+  law composition
+{
+  return x
+}
+fun main(): number {
+  return 0
+}

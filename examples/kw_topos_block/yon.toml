@@ -1,0 +1,5 @@
+[package]
+name = "kw_topos_block"
+
+[world.Ledger]
+objects = ["X"]

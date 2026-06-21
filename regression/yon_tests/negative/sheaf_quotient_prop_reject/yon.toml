@@ -1,0 +1,8 @@
+[package]
+name = "sheaf_quotient_prop_reject"
+
+[world.Base]
+objects = ["text"]
+
+[world.Anon]
+quotient = ["Base", "cohort"]

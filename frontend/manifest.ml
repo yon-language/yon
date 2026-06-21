@@ -326,6 +326,17 @@ let assign_place_worlds
         (match world_of_place pd.pd_name with
          | Some w -> TopPlace { pd with pd_world = w }
          | None -> TopPlace pd)
+    | TopTopos td ->
+        (* A topos `T in W` gives its objects world W when they carry no `in W`
+           (under toml-only the inner places have none). Resolve here, before
+           tycheck, just like bare places. *)
+        let objs = List.map (fun pd ->
+          if pd.pd_world = "__INFER" then
+            (match td.tp_world with
+             | Some w -> { pd with pd_world = w }
+             | None -> pd)
+          else pd) td.tp_objects in
+        TopTopos { td with tp_objects = objs }
     | other -> other
   ) p
 

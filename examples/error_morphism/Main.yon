@@ -1,0 +1,6 @@
+place Entry { }
+fun handle(e: Error): number { return 1 }
+fun on_query_fail(q: QueryError): number {
+  return handle(q)
+}
+fun main(): number { return 0 }

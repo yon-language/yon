@@ -1,0 +1,13 @@
+[package]
+name = "park_project"
+
+[runtime]
+backend = "memory"
+
+[world.Park]
+spaces  = ["herd"]
+objects = ["Species"]
+
+[world.PublicPark]
+spaces   = ["public"]
+quotient = ["Park", "cohort"]

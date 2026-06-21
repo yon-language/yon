@@ -1,0 +1,27 @@
+// Book ch.1 — the allowed shape.
+// The full animal lives in the BASE world Park: Science sees everything.
+// The public/legal world is Park up to cohort; a record there may carry ONLY
+// cohort-invariant data, and a view must factor through cohort. This satisfies
+// the sheaf condition. Modeled on regression/yon_tests/prove/sheaf_quotient_view_ok.yon
+// Expected: compiles, exit 0.
+world Park { Dino is Species }
+
+place Dinosaur in Park {
+  individual_id number
+  cohort number
+  heart_rate number
+}
+
+world PublicPark = Park / cohort
+
+place PublicDino in PublicPark {
+  cohort number
+}
+
+fun bucket_of(c: number): number { return c }
+
+view LegalLens of PublicDino {
+  show bucket = bucket_of(cohort)
+}
+
+fun main(): number { return 0 }

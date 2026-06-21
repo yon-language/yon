@@ -1,0 +1,3 @@
+view PublicProfile of Profile {
+  show leak = secret
+}

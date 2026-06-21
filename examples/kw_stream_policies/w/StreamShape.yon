@@ -1,0 +1,2 @@
+place StreamShape { events stream of number
+  tail stream of number }

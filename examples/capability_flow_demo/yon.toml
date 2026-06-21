@@ -1,0 +1,6 @@
+[package]
+name = "capability_flow_demo"
+
+[world.Region]
+objects = ["EU", "US"]
+spaces  = ["EU", "US"]

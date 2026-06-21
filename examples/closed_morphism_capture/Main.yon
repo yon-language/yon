@@ -1,0 +1,8 @@
+place Entry { }
+fun main(): number {
+  be base holds 7
+  be m holds move(s: P) => new Q { v base } from P to Q
+  be sp holds new P { v 0 }
+  be sq holds m(sp)
+  return sq.v
+}

@@ -1,0 +1,5 @@
+place Entry { }
+fun main(): number {
+  be p holds new Plain { count 33 }
+  return p.count
+}

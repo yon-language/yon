@@ -1,0 +1,3 @@
+place Account_USD {
+  balance number
+}

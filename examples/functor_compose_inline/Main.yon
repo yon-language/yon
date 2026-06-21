@@ -1,0 +1,5 @@
+place Entry { }
+fun main(): number {
+  be h holds compose (functor (x: number) => x from W to V) with (functor (y: number) => y from V to U)
+  return 0
+}

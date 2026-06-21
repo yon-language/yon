@@ -1,9 +1,0 @@
-// coverage: `forward` reduction modifier
-world W { Code is X }
-place Tally in W with effects { total number
-  operation add(x: number): number }
-reduction forward Sum of Tally {
-  be seed holds 0
-  on add(x: number) { return x }
-}
-fun main(): number { return 0 }

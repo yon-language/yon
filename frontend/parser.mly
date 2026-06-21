@@ -112,7 +112,7 @@
 %token <string> QIDENT
 
 /* Top-level keywords */
-%token WORLD PLACE FUN MOVE VIEW REDUCTION OPERATION LET PARTIAL
+%token PLACE FUN MOVE VIEW REDUCTION OPERATION LET PARTIAL
 %token SPACE
 /* The BACKED token was removed (it was `space backed by reduction`). */
 %token CELL
@@ -263,7 +263,6 @@ program:
   | decls = list(top_decl) EOF        { decls }
 
 top_decl:
-  | wd = world_decl                   { TopWorld wd }
   | fnd = functor_decl                { fnd }
   | IMPORT s = STR_LIT                 { TopImport (s, mk_loc $startpos $endpos) }
   | IMPORT q = QIDENT                  { let (m,n) = split_qident q in
@@ -275,7 +274,6 @@ top_decl:
   | INIT name = IDENT AS kind = IDENT  { if kind <> "Space" then
                                            failwith "[parser] init expects 'as Space'";
                                          TopSpaceInit (name, mk_loc $startpos $endpos) }
-  | sd = space_decl                   { TopSpace sd }
   | pd = place_decl                   { TopPlace pd }
   | ed = error_decl                   { TopPlace ed }
   | fd = fun_decl                     { TopFun fd }
@@ -558,122 +556,16 @@ top_let:
   | LET name = IDENT HOLDS e = expr
     { TopLet (name, e, mk_loc $startpos $endpos) }
 
-/* --- Space declaration (cross-Space) --- */
-/*
- *   space EU
- *   space EU in Region            // bind to a world
- *
- * The space is a logical runtime heap. In single-process mode it is a slot in
- * g_spaces[]. Later it will be a separate yon_xheap_t (or a remote node).
- */
-
-space_decl:
-  | SPACE name = IDENT
-    fold_opt = space_fold_opt
-    { { sd_name = name; sd_world = None;
-        sd_fold = fold_opt;
-        sd_loc = mk_loc $startpos $endpos } }
-  | SPACE name = IDENT IN world = IDENT
-    fold_opt = space_fold_opt
-    { { sd_name = name; sd_world = Some world;
-        sd_fold = fold_opt;
-        sd_loc = mk_loc $startpos $endpos } }
-
-(* The optional declaration of the space's semilattice fold.
- *   space TALLY with fold "sum_f64"
- * The name is validated against the runtime whitelist (see
- * validate_fold_name). For a space without a fold, sd_fold = None. *)
-space_fold_opt:
-  |                                  { None }
-  | WITH FOLD name = STR_LIT         { Some (validate_fold_name name $startpos(name)) }
-
-/* ─── World declaration ─────────────────────────────────────────────── */
-
-world_decl:
-  | WORLD name = IDENT LBRACE places = list(world_place) RBRACE
-    { { wd_name = name; wd_places = places;
-        wd_product_of = [];
-        wd_coproduct_of = [];
-        wd_coequalizer_of = None;
-        wd_quotient_of = None;
-        wd_subset_of = None;
-        wd_loc = mk_loc $startpos $endpos } }
-  | WORLD name = IDENT EQ first = IDENT rest = nonempty_list(world_product_rest)
-    (* Cartesian product world: world Combined = A * B * C *)
-    { { wd_name = name;
-        wd_places = [];
-        wd_product_of = first :: rest;
-        wd_coproduct_of = [];
-        wd_coequalizer_of = None;
-        wd_quotient_of = None;
-        wd_subset_of = None;
-        wd_loc = mk_loc $startpos $endpos } }
-  | WORLD name = IDENT EQ first = IDENT rest = nonempty_list(world_coproduct_rest)
-    (* world coproduct: world Either = A + B + C *)
-    { { wd_name = name;
-        wd_places = [];
-        wd_product_of = [];
-        wd_coproduct_of = first :: rest;
-        wd_coequalizer_of = None;
-        wd_quotient_of = None;
-        wd_subset_of = None;
-        wd_loc = mk_loc $startpos $endpos } }
-  | WORLD name = IDENT EQ base = IDENT SLASH rel = IDENT
-    (* world quotient: world Anonymized = User / EquivByCohort *)
-    { { wd_name = name;
-        wd_places = [];
-        wd_product_of = [];
-        wd_coproduct_of = [];
-        wd_coequalizer_of = None;
-        wd_quotient_of = Some (base, rel);
-        wd_subset_of = None;
-        wd_loc = mk_loc $startpos $endpos } }
-  | WORLD name = IDENT tag = IDENT OF parent = IDENT
-    (* world hierarchy: `world EU_Region subset of Region`. `subset` is a
-     * two-word contextual phrase with the existing OF token, not a
-     * reserved keyword: it stays free as a user identifier. *)
-    { if tag <> "subset" then
-        failwith ("expected 'subset of' clause in world header, got '"
-                  ^ tag ^ " of'"); { wd_name = name;
-        wd_places = [];
-        wd_product_of = [];
-        wd_coproduct_of = [];
-        wd_coequalizer_of = None;
-        wd_quotient_of = None;
-        wd_subset_of = Some parent;
-        wd_loc = mk_loc $startpos $endpos } }
-
-world_product_rest:
-  | STAR name = IDENT  { name }
-
-world_coproduct_rest:
-  | PLUS name = IDENT  { name }
-
-world_place:
-  | name = IDENT IS desc = place_descriptor
-    { { wp_name = name; wp_descriptor = desc;
-        wp_loc = mk_loc $startpos $endpos } }
-
-place_descriptor:
-  | BY name = IDENT
-    { PdBy name }
-  | items = separated_nonempty_list(COMMA, IDENT)
-    { PdIdList items }
-
-/* Note: type-as-descriptor case ("Color is text") is unified with the
- * ident-list case. The desugarer or type checker distinguishes primitive
- * type names from user identifiers. */
-
 /* ─── Place declaration ─────────────────────────────────────────────── */
 
 place_decl:
-  | PLACE name = IDENT in_world = option(in_world_clause)
+  | PLACE name = IDENT
     over = option(over_clause)
     ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     LBRACE members = place_member_list RBRACE
     { { pd_name = name;
-        pd_world = (match in_world with Some w -> w | None -> "__INFER");
+        pd_world = "__INFER";
         pd_with_effects = false;
         pd_members = members;
         pd_over = over;
@@ -682,14 +574,14 @@ place_decl:
         pd_is_error = false;
         pd_on_error = oerr;
         pd_loc = mk_loc $startpos $endpos } }
-  | PLACE name = IDENT in_world = option(in_world_clause)
+  | PLACE name = IDENT
     over = option(over_clause)
     ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     WITH EFFECTS
     LBRACE members = field_or_op_list RBRACE
     { { pd_name = name;
-        pd_world = (match in_world with Some w -> w | None -> "__INFER");
+        pd_world = "__INFER";
         pd_with_effects = true;
         pd_members = members;
         pd_over = over;
@@ -699,14 +591,14 @@ place_decl:
         pd_on_error = oerr;
         pd_loc = mk_loc $startpos $endpos } }
 
-(* error E (in W)? (subcontains Base)? { fields } — an error place. Reuses
+(* error E (subcontains Base)? { fields } — an error place. Reuses
  * place_decl with pd_is_error=true. The target of the `on error` morphism. *)
 error_decl:
-  | ERROR_KW name = IDENT in_world = option(in_world_clause)
+  | ERROR_KW name = IDENT
     ext = option(subcontains_clause)
     LBRACE members = field_and_cell_list RBRACE
     { { pd_name = name;
-        pd_world = (match in_world with Some w -> w | None -> "__INFER");
+        pd_world = "__INFER";
         pd_with_effects = false;
         pd_members = members;
         pd_over = None;
@@ -716,8 +608,6 @@ error_decl:
         pd_on_error = None;
         pd_loc = mk_loc $startpos $endpos } }
 
-in_world_clause:
-  | IN world = IDENT  { world }
 (* Slice category: a place over X. The inhabitants of the place carry a
  * canonical reference to an instance of X. *)
 over_clause:

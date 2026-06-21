@@ -1,0 +1,6 @@
+[package]
+name = "geomorph_transport_no_leak"
+
+[world.Shop]
+objects = ["X"]
+spaces  = ["shop"]

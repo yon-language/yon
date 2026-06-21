@@ -1,0 +1,6 @@
+[package]
+name = "forcing_demo"
+
+[world.Net]
+objects = ["X"]
+spaces  = ["net"]

@@ -1,0 +1,3 @@
+place Account_EUR {
+  balance number
+}

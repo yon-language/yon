@@ -1,0 +1,4 @@
+place Profile {
+  cohort number
+  secret number
+}

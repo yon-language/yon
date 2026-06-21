@@ -1,0 +1,6 @@
+[package]
+name = "kw_stream_policies"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

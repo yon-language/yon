@@ -1,0 +1,3 @@
+place Entry { }
+fun classify(x: number): number { return x }
+fun main(): number { return 0 }

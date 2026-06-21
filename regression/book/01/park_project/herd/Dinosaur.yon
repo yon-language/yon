@@ -1,0 +1,6 @@
+// Full animal — inherits world Park from its directory (the "herd" space).
+place Dinosaur {
+  individual_id number
+  cohort number
+  heart_rate number
+}

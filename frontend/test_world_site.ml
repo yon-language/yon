@@ -348,11 +348,8 @@ let () =
     Manifest.assign_place_worlds (fun _ -> None) bare in
   check "assign: a place the filesystem does not map stays __INFER"
     (world_of_place_in unknown "Order" = Some "__INFER");
-  let annotated = parse_one "place Order in Analytics { id text }" in
-  let kept =
-    Manifest.assign_place_worlds (fun _ -> Some "Commerce") annotated in
-  check "assign: an already-annotated place is left untouched"
-    (world_of_place_in kept "Order" = Some "Analytics");
+  (* (removed) "an already-annotated place is left untouched": under toml-only
+     `place P in W` is no longer surface-expressible, so the scenario is moot. *)
 
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

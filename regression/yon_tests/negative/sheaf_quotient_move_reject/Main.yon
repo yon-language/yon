@@ -1,0 +1,6 @@
+place Entry { }
+fun identity(x: number): number { return x }
+move Leak from Profile to PublicProfile {
+  secret maps to leaked by identity
+}
+fun main(): number { return 0 }

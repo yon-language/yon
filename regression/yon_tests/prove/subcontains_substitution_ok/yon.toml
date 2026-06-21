@@ -1,0 +1,6 @@
+[package]
+name = "subcontains_substitution_ok"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

@@ -19,7 +19,6 @@
          allocated and addressed. *)
       "import", IMPORT;
       "internal", INTERNAL;
-      "world", WORLD;
       "place", PLACE;
       "space", SPACE;
       "nat", NAT;

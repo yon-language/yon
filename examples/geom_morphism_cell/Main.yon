@@ -1,0 +1,5 @@
+place Entry { }
+geomorph LiftEU from Account to AccountEU {
+  pull(a: AccountEU): Account { return a }
+}
+fun main(): number { return 0 }

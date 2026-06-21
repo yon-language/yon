@@ -1,0 +1,4 @@
+place A subcontains B {
+  value number
+  extra number
+}

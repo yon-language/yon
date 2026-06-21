@@ -1,0 +1,9 @@
+place Entry { }
+fun f(x: number): number { return x * 2 }
+fun g(y: number): number { return y + 6 }
+fun main(): number {
+  be p holds pullback(f, g, 6, 6)      // f(6)=12, g(6)=12: compatible
+  be a holds __pullback_pi1(p)
+  be b holds __pullback_pi2(p)
+  return a + b                          // 12
+}

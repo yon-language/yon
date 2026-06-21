@@ -1,0 +1,8 @@
+[package]
+name = "functor_toplevel"
+
+[world.W]
+objects = ["X"]
+
+[world.V]
+objects = ["Y"]

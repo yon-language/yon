@@ -1,5 +1,0 @@
-// a place carrying only the relation field is trivially a sheaf on the quotient.
-world User { Person is Account }
-world Anon = User / cohort
-place Tag in Anon { cohort number }
-fun main(): number { return 0 }

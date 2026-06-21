@@ -1,7 +1,0 @@
-// a place on a quotient world must be a sheaf: every field invariant under the
-// relation. `salary` is not determined by `cohort`, so two users the relation
-// identifies could differ -> the place is not a sheaf -> rejected at compile time.
-world User { Person is Account }
-world Anon = User / cohort
-place Profile in Anon { cohort number salary number }
-fun main(): number { return 0 }

@@ -1,0 +1,3 @@
+place Entry { }
+fun tap(x: number): number visits Output { return x }
+fun main(): number { return 0 }

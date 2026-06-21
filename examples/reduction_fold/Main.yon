@@ -1,0 +1,8 @@
+place Entry { }
+reduction forward Accumulate of Counter fold "sum_f64" {
+  be seed holds 0
+  on tick(n: number) {
+    return n
+  }
+}
+fun main(): number { return 7 }

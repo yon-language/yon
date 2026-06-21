@@ -1,0 +1,6 @@
+[package]
+name = "kw_morph"
+
+[world.Shop]
+objects = ["X"]
+spaces  = ["shop"]
