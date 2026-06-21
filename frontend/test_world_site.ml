@@ -186,6 +186,19 @@ let () =
         "[package]\nentry = \"Main\"\n\n[world.Commerce]\nspaces = [\"Orders\"]\n")
        .Manifest.pkg_entry = Some "Main");
 
+  let entry_prog =
+    Parser.program Lexer.token
+      (Lexing.from_string "place Entry { } fun main(): number { return 0 }") in
+  let without_entry =
+    Manifest.remove_entrypoint_container ~entry_name:"Entry" entry_prog in
+  check "entrypoint container is removed before world inference, main remains"
+    (not (List.exists (function
+       | Surface_ast.TopPlace pd when pd.Surface_ast.pd_name = "Entry" -> true
+       | _ -> false) without_entry)
+     && List.exists (function
+       | Surface_ast.TopFun fd when fd.Surface_ast.fn_name = "main" -> true
+       | _ -> false) without_entry);
+
   (* ─── sheaf predicate: a field is a sheaf section iff it factors through canon ─
    * canon : W -> Q models the quotient map (the Rel-class of an element). Here
    * canon is symbolic. A field is a valid section of the quotient sheaf iff it

@@ -234,10 +234,15 @@ let () =
      and the file that declares it carries `main`. The name defaults to "Entry"
      and may be set by [package] entry. In project mode these four conditions
      are enforced; outside project mode `main` keeps its top-level meaning. *)
-  (match project_wm with
-   | None -> ()
-   | Some wm ->
-       let entry_name = match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry" in
+  let project_entry_name =
+    match project_wm with
+    | None -> None
+    | Some wm ->
+        Some (match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry")
+  in
+  (match project_wm, project_entry_name with
+   | None, _ -> ()
+   | Some _, Some entry_name ->
        let entries = List.filter (fun (n, _, _) -> n = entry_name) !place_acc in
        let fail msg = Printf.eprintf "ENTRYPOINT ERROR: %s\n" msg; exit 3 in
        (match entries with
@@ -257,7 +262,17 @@ let () =
             else if not (List.mem file !main_files) then
               fail (Printf.sprintf
                 "the entrypoint place `%s` must contain main: its file defines no \
-                 `fun main`" entry_name)));
+                 `fun main`" entry_name))
+   | Some _, None -> assert false);
+  (* Entry is a validated package container, not a site object. Keeping it as
+     TopPlace would force a root world in multi-world packages and would emit a
+     fictitious topos.place. main remains as the actual executable entry. *)
+  let prog =
+    match project_entry_name with
+    | Some entry_name ->
+        Manifest.remove_entrypoint_container ~entry_name prog
+    | None -> prog
+  in
   (* Resolve selective-import aliases (geo_scale -> geometria::scale), then
    * mangle qualified names (a::b -> a_NS_b) so MLIR symbols are valid. *)
   (* Wire subscriptions: load the SIGNATURES of every module named in a
@@ -300,9 +315,6 @@ let () =
   let prog = Module_prefix.resolve_aliases prog in
   Module_prefix.check_visibility !internals prog;
   let prog = Module_prefix.mangle_decls prog in
-  (* View declarations expand to synthetic place + constructor BEFORE
-     tycheck, so the view name resolves as a normal function. *)
-  let prog = Desugar.expand_views prog in
   (* The place inherits its space's world (filesystem -> toml): bind each
      unannotated place to the world of its directory before type-checking, so a
      multi-world project resolves structurally instead of relying on the
@@ -317,6 +329,10 @@ let () =
         Manifest.assign_place_worlds (fun n -> Hashtbl.find_opt pw n) prog
     | None -> prog
   in
+  (* Expand views only after filesystem world assignment. The synthetic view
+     place copies its source place's world; expanding earlier would freeze
+     __INFER and orphan the view in multi-world projects. *)
+  let prog = Desugar.expand_views prog in
   let cr = Tycheck.check_program prog in
   if cr.Tycheck.cr_errors <> [] then begin
     List.iter (fun e ->

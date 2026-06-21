@@ -329,6 +329,16 @@ let assign_place_worlds
     | other -> other
   ) p
 
+(* The project entrypoint place is filesystem/package metadata: the driver has
+   already proved that it is unique, lives at the package root, and shares its
+   file with [main].  It is not an object of any declared world, so after that
+   validation it must not enter world inference or Core place emission. *)
+let remove_entrypoint_container ~(entry_name : string) (p : program) : program =
+  List.filter (function
+    | TopPlace pd when pd.pd_name = entry_name -> false
+    | _ -> true)
+    p
+
 let check_program (wm : world_map) (p : program) : (location * string) list =
   if is_empty wm then []
   else
