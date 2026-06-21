@@ -221,6 +221,8 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
   | ENot (e1, _) | ERefl (e1, _) -> is_pure_expr env e1
   | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) ->
       is_pure_expr env a && is_pure_expr env b
+  | EApp (head, args, _) ->
+      is_pure_expr env head && List.for_all (is_pure_expr env) args
   | EJ (a, b, c, _) ->
       is_pure_expr env a && is_pure_expr env b && is_pure_expr env c
   | EIfThenElse (c, t, el, _) ->

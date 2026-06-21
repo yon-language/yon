@@ -272,6 +272,59 @@ and curry_lam params body =
   | [] -> body
   | (n, t) :: rest -> C.Lam (n, t, curry_lam rest body)
 
+(* Decode the surface fragment that denotes a type code.  Stage 3a only needs
+   nominal codes; structured and computed universe paths are handled when the
+   general ua transport lowering is introduced. *)
+and expr_as_ty (e : S.expr) : C.ty option =
+  match e with
+  | S.EVar (name, _) -> Some (C.TyPlace name)
+  | S.EParen (inner, _) -> expr_as_ty inner
+  | _ -> None
+
+and identity_equiv (carrier : C.ty) : C.term =
+  let x = "__id_x" in
+  let id = C.Lam (x, carrier, C.Var x) in
+  let h = C.Lam (x, carrier, C.Refl (C.Var x)) in
+  C.Pair (id, C.Pair (id, C.Pair (h, h)))
+
+and ua_identity_line (carrier : C.ty) : string * C.ty =
+  let i = "__ua_i" in
+  let equiv = identity_equiv carrier in
+  (i,
+   C.TyGlue
+     (carrier,
+      [[(i, false)]; [(i, true)]],
+      [(carrier, equiv); (carrier, identity_equiv carrier)]))
+
+and equivalence_term (f : S.expr) (g : S.expr)
+    (eta : S.expr) (eps : S.expr) : C.term =
+  C.Pair
+    (desugar_expr f,
+     C.Pair
+       (desugar_expr g,
+        C.Pair (desugar_expr eta, desugar_expr eps)))
+
+and forward_carriers (f : S.expr) : (C.ty * C.ty) option =
+  match f, !current_env with
+  | S.EVar (name, _), Some env ->
+      (match Tyenv.lookup_fun env name with
+       | Some fs ->
+           (match fs.Tyenv.fs_params with
+            | (_, source) :: _ ->
+                Some (desugar_ty source, desugar_ty fs.Tyenv.fs_return)
+            | [] -> None)
+       | None -> None)
+  | _ -> None
+
+and ua_equiv_line (source : C.ty) (target : C.ty)
+    (equiv : C.term) : string * C.ty =
+  let i = "__ua_i" in
+  (i,
+   C.TyGlue
+     (target,
+      [[(i, false)]; [(i, true)]],
+      [(source, equiv); (target, identity_equiv target)]))
+
 (* ─── Expression translation ───────────────────────────────────────── *)
 
 and desugar_expr (e : S.expr) : C.term =
@@ -333,6 +386,50 @@ and desugar_expr (e : S.expr) : C.term =
        * resolution analyze_handle uses for compose. Declared moves keep the
        * registered apply_move dispatch below. *)
       C.App (C.Var vname, desugar_expr arg)
+  | S.ECall ("transport", [S.ERefl (type_code, _); value], _) ->
+      (* Constant type-line transport is a real cubical term.  Its reduction
+         goes through Builtins.try_cubical/Cubical.reduce_transport, where a
+         CTBase line computes to the supplied value.  Non-static paths retain
+         the existing surface fallback until Stage 3d lowers ua/Glue lines. *)
+      (match expr_as_ty type_code with
+       | Some line_ty -> C.Transp (("__ti", line_ty), desugar_expr value)
+       | None ->
+           curry_apply (C.Var "transport")
+             [desugar_expr (S.ERefl (type_code, S.dummy_loc));
+              desugar_expr value])
+  | S.ECall
+      ("transport",
+       [S.ECall ("ua", [S.ECall ("idEquiv", [type_code], _)], _); value], _) ->
+      (* The endpoints are syntactically recoverable for idEquiv(T), so retain
+         the full universe line as TyGlue instead of the lossy __type_glue tag
+         used by Cubical.ua's standalone type-as-term prototype.  Transport
+         then crosses the cubical bridge and computes by the Glue forward map. *)
+      (match expr_as_ty type_code with
+       | Some carrier -> C.Transp (ua_identity_line carrier, desugar_expr value)
+       | None ->
+           curry_apply (C.Var "transport")
+             [desugar_expr
+                (S.ECall
+                   ("ua", [S.ECall ("idEquiv", [type_code], S.dummy_loc)],
+                    S.dummy_loc));
+              desugar_expr value])
+  | S.ECall
+      ("transport",
+       [S.ECall
+          ("ua", [S.ECall ("equiv", [f; g; eta; eps], _)], _);
+        value], _) ->
+      let equiv = equivalence_term f g eta eps in
+      (match forward_carriers f with
+       | Some (source, target) ->
+           C.Transp (ua_equiv_line source target equiv, desugar_expr value)
+       | None ->
+           curry_apply (C.Var "transport")
+             [curry_apply (C.Var "ua")
+                [curry_apply (C.Var "equiv")
+                   (List.map desugar_expr [f; g; eta; eps])];
+              desugar_expr value])
+  | S.ECall ("equiv", [f; g; eta; eps], _) ->
+      equivalence_term f g eta eps
   | S.ECall (name, args, loc) ->
       (* Rename Seq -> __stream_. The "Seq" prefix is removed from the internal
        * naming. The surface still accepts Seq.X as a deprecated alias

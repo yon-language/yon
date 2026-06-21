@@ -449,6 +449,56 @@ let spawn_promote_ty : ty option ref = ref None
    body so promote is rejected outside a spawn, and so nested spawns compose. *)
 let in_spawn_depth : int ref = ref 0
 
+let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
+  let r = subst_dim_in_expr i d in
+  match e with
+  | EPathApp (q, DIVar j, loc) when j = i -> EPathApp (r q, d, loc)
+  | EPathApp (q, dd, loc) -> EPathApp (r q, dd, loc)
+  | EPathAbs (j, b, loc) ->
+      if j = i then e else EPathAbs (j, r b, loc)
+  | EApp (h, args, loc) -> EApp (r h, List.map r args, loc)
+  | ECall (name, args, loc) -> ECall (name, List.map r args, loc)
+  | EHITElim (motive, branches, scrutinee, loc) ->
+      EHITElim (r motive,
+        List.map (fun (name, body) -> (name, r body)) branches,
+        r scrutinee, loc)
+  | EHITConstr (ctor, args, loc) -> EHITConstr (ctor, List.map r args, loc)
+  | ENew (name, fields, loc) ->
+      ENew (name, List.map (fun fa -> { fa with fa_value = r fa.fa_value }) fields, loc)
+  | ENewIn (name, space, fields, loc) ->
+      ENewIn (name, space,
+        List.map (fun fa -> { fa with fa_value = r fa.fa_value }) fields, loc)
+  | EBinop (op, a, b, loc) -> EBinop (op, r a, r b, loc)
+  | EParen (x, loc) -> EParen (r x, loc)
+  | EField (x, field, loc) -> EField (r x, field, loc)
+  | EIn (x, context, loc) -> EIn (r x, context, loc)
+  | ERefl (x, loc) -> ERefl (r x, loc)
+  | EPair (a, b, loc) -> EPair (r a, r b, loc)
+  | EFst (x, loc) -> EFst (r x, loc)
+  | ESnd (x, loc) -> ESnd (r x, loc)
+  | EJ (c, base, path, loc) -> EJ (r c, r base, r path, loc)
+  | EQuote (code, x, loc) -> EQuote (code, r x, loc)
+  | EElMatch (target, ret, body, loc) ->
+      EElMatch (r target, r ret, r body, loc)
+  | EPullbackVal (f, g, a, b, loc) -> EPullbackVal (f, g, r a, r b, loc)
+  | ENot (x, loc) -> ENot (r x, loc)
+  | EIfThenElse (a, b, c, loc) -> EIfThenElse (r a, r b, r c, loc)
+  | ELam (params, body, loc) -> ELam (params, r body, loc)
+  | EMoveLam (params, body, from_p, to_p, loc) ->
+      EMoveLam (params, r body, from_p, to_p, loc)
+  | EReductionLam (params, body, place, loc) ->
+      EReductionLam (params, r body, place, loc)
+  | EMorphLam (params, body, from_s, to_s, loc) ->
+      EMorphLam (params, r body, from_s, to_s, loc)
+  | EFunctorLam (params, body, from_w, to_w, laws, loc) ->
+      EFunctorLam (params, r body, from_w, to_w, laws, loc)
+  | EViewLam (params, body, place, loc) ->
+      EViewLam (params, r body, place, loc)
+  | EComposeWith (a, b, loc) -> EComposeWith (r a, r b, loc)
+  | ESpawn (count, body, loc) -> ESpawn (Option.map r count, body, loc)
+  | (ELit _ | EVar _ | EWireTo _ | EProduce _ | EAll _
+    | EPullback _ | EPushout _) -> e
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -563,15 +613,14 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        | TyId (carrier, _x, _y) -> ok carrier
        | _ -> err loc "path application (@): the head is not a path (Id type)")
 
-  | EPathAbs (_i, e, _loc) ->
+  | EPathAbs (i, e, _loc) ->
       (* plam i => e : a path <i> e. Non-dependent typing: the body has type A
-       * (the carrier); the path runs e[i:=0] ~> e[i:=1], computed in the core
-       * via PApp beta. Endpoints carry placeholders here, exactly as refl does
-       * (the precise term-encoder is the same missing piece). The dependent
-       * PathP typing arrives with TyPathP. *)
+       * (the carrier); the path runs e[i:=0] ~> e[i:=1]. Keep the actual
+       * endpoint expressions so Dispatcher conversion can normalize path
+       * applications and certified deltas. *)
       let* a_ty = infer env ctx e in
-      ok (TyId (a_ty, TyTermExpr (EVar ("path_arg", dummy_loc)),
-                TyTermExpr (EVar ("path_arg", dummy_loc))))
+      ok (TyId (a_ty, TyTermExpr (subst_dim_in_expr i DI0 e),
+                TyTermExpr (subst_dim_in_expr i DI1 e)))
 
   | EHITConstr (ctor, args, loc) ->
       (* hit(ctor, args): a HIT constructor. Look it up in the registry.
@@ -613,6 +662,12 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       (match lookup_scheme x with
        | Some scheme -> ok (Ty_subst.instantiate scheme)
        | None ->
+      if Carrier.is_prim_name x then
+        (* A primitive type name in term position is its Tarski code.  This is
+           the surface entry point for paths in the universe, e.g.
+           refl(number) : Id(Type_0, number, number). *)
+        ok (TyUniverse 0)
+      else
       match Tyenv.lookup_var env x with
        | Some t -> ok t
        | None ->
@@ -1382,12 +1437,47 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
      leaving every other checking judgement unchanged. *)
   if is_terminal_ty env expected then ok ()
   else
-  let* actual = infer env ctx e in
-  if Dispatcher.type_equal env ctx actual expected
-     || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
-  else err (location_of_expr e)
-    (Printf.sprintf "type mismatch: expected %s, got %s"
-       (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual))
+  let fallback env e expected =
+    let* actual = infer env ctx e in
+    if Dispatcher.type_equal env ctx actual expected
+       || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
+    else err (location_of_expr e)
+      (Printf.sprintf "type mismatch: expected %s, got %s"
+         (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual))
+  in
+  match e, expected with
+  | ELam (params, body, _), (TyPi _ | TyArrow _) ->
+      (* Bidirectional lambda checking.  A dependent expected type carries the
+         information needed to type an unannotated surface lambda and to align
+         its binder with endpoint terms in the codomain. *)
+      let rec go env params expected =
+        match params, expected with
+        | [], _ -> check env ctx body expected
+        | (pn, annotated) :: rest, TyPi (x, dom, cod) ->
+            if annotated <> TyPrim "unknown"
+               && not (Dispatcher.type_equal env ctx annotated dom) then
+              err (location_of_expr e)
+                (Printf.sprintf "lambda parameter %s: expected %s, got %s"
+                   pn (Tyenv.ty_to_string dom) (Tyenv.ty_to_string annotated))
+            else
+              let env' = Tyenv.add_var env pn dom in
+              let cod' =
+                if String.equal x pn then cod
+                else Dispatcher.rename_ty x pn cod
+              in
+              go env' rest cod'
+        | (pn, annotated) :: rest, TyArrow (dom, cod) ->
+            if annotated <> TyPrim "unknown"
+               && not (Dispatcher.type_equal env ctx annotated dom) then
+              err (location_of_expr e)
+                (Printf.sprintf "lambda parameter %s: expected %s, got %s"
+                   pn (Tyenv.ty_to_string dom) (Tyenv.ty_to_string annotated))
+            else
+              go (Tyenv.add_var env pn dom) rest cod
+        | _ -> fallback env e expected
+      in
+      go env params expected
+  | _ -> fallback env e expected
 
 and location_of_expr (e : expr) : location =
   match e with

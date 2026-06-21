@@ -1,0 +1,4 @@
+fun main(): number {
+  be x holds transport(refl(number), 5)
+  return x - 5
+}

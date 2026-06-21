@@ -1231,11 +1231,21 @@ let rec infer_mlir_ty (e : emitter)
   | C.Scope (_, body) ->
       (* hermetic scope yields its body value; same type (81b) *)
       infer_mlir_ty e env funcs body
-  | C.PApp _ as pt ->
-      (* path application: reduce-then-look, like J. refl(x)@i = x computes;
-       * a path stuck after normalization is not decided at runtime. *)
-      (match Builtins.reduce_with_builtins Reduce.empty_ctx pt with
-       | C.PApp _ -> failwith "[emit_mlir infer] path application stuck on a non-reducible path."
+  | C.PLam (_, body) ->
+      (* Paths are proof-erased at runtime and carry the representation of
+         their endpoint carrier. *)
+      infer_mlir_ty e env funcs body
+  | C.PApp (p, _) ->
+      infer_mlir_ty e env funcs p
+  | (C.Transp _ | C.Comp _ | C.HComp _
+    | C.GlueElem _ | C.Unglue _) as ct ->
+      (* A let-bound cubical value needs its normalized carrier type before
+         emit_term is entered.  Use the same kernel reduction discipline as
+         emission; a genuinely stuck cubical term remains a loud error. *)
+      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
+      (match reduced with
+       | C.Transp _ | C.Comp _ | C.HComp _ | C.GlueElem _ | C.Unglue _ ->
+           failwith "[emit_mlir infer] cubical term stuck after normalization."
        | t' -> infer_mlir_ty e env funcs t')
   | C.HITElim _ as ht ->
       (* HIT eliminator: reduce-then-look. hit_elim on a constructor computes
@@ -4594,7 +4604,11 @@ let rec emit_term (e : emitter)
        | C.J _ ->
            failwith "[emit_mlir] ind_path stuck on a non-refl path: path induction over non-trivial paths is compile-time only; the runtime does not decide path equality."
        | t' -> emit_term e env funcs t')
-  | (C.PLam _ | C.PApp _ | C.Transp _ | C.Comp _ | C.HComp _
+  | C.PLam (_, body) ->
+      emit_term e env funcs body
+  | C.PApp (p, _) ->
+      emit_term e env funcs p
+  | (C.Transp _ | C.Comp _ | C.HComp _
     | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _) as ct ->
       (* comp-in-MLIR (B2). A cubical term in emission position is normalized
          via the cubical bridge: closed paths/comp/transport compute and their
@@ -4602,7 +4616,7 @@ let rec emit_term (e : emitter)
          decided at runtime — loud error, exactly as with a stuck J. *)
       let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
       (match reduced with
-       | C.PLam _ | C.PApp _ | C.Transp _ | C.Comp _ | C.HComp _
+       | C.Transp _ | C.Comp _ | C.HComp _
        | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _ ->
            failwith "[emit_mlir] cubical term stuck after normalization: not decided at runtime."
        | t' -> emit_term e env funcs t')

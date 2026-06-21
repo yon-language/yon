@@ -244,6 +244,32 @@ let certified_deltas (env : Tyenv.env) : (string * Ast.term) list =
   let certified = Sct.certify fundefs in
   List.filter (fun (name, _) -> List.mem name certified) env.Tyenv.delta
 
+(* Reify only the closed arithmetic fragment left after certified delta
+ * unfolding.  Returning [None] for every other Core constructor keeps the
+ * ring fallback conservative: it can prove polynomial identities, never
+ * reinterpret an arbitrary kernel term as arithmetic. *)
+let rec arith_of_ast (t : Ast.term) : Surface_ast.expr option =
+  let module S = Surface_ast in
+  let loc = S.dummy_loc in
+  let binop op a b =
+    match arith_of_ast a, arith_of_ast b with
+    | Some a', Some b' -> Some (S.EBinop (op, a', b', loc))
+    | _ -> None
+  in
+  match t with
+  | Ast.App (Ast.App (Ast.Var "__add", a), b) -> binop S.OpAdd a b
+  | Ast.App (Ast.App (Ast.Var "__sub", a), b) -> binop S.OpSub a b
+  | Ast.App (Ast.App (Ast.Var "__mul", a), b) -> binop S.OpMul a b
+  | Ast.App (Ast.App (Ast.Var "__div", a), b) -> binop S.OpDiv a b
+  | Ast.Var name when String.length name > 6
+                       && String.sub name 0 6 = "__num_" ->
+      (try
+         let suffix = String.sub name 6 (String.length name - 6) in
+         Some (S.ELit (S.LitNumber (float_of_string suffix), loc))
+       with Failure _ -> None)
+  | Ast.Var name -> Some (S.EVar (name, loc))
+  | _ -> None
+
 (* Endpoint equality: two path endpoints are equal iff their underlying
  * expressions are syntactically equal, or become equal after KERNEL
  * normalization with delta-conversion. The delta-rules are the SCT-certified
@@ -262,7 +288,14 @@ let ty_term_equal
                Desugar.desugar_expr_pure env e2 with
          | Some c1, Some c2 ->
              let dctx = { ctx with Reduce.deltas = certified_deltas env } in
-             Ast.term_equal (Reduce.normalize dctx c1) (Reduce.normalize dctx c2)
+             let nf1 = Reduce.normalize dctx c1 in
+             let nf2 = Reduce.normalize dctx c2 in
+             if Ast.term_equal nf1 nf2 then true
+             else
+               (match arith_of_ast nf1, arith_of_ast nf2 with
+                | Some a1, Some a2 ->
+                    Naturality_symcheck.ring_equal a1 a2 = Some true
+                | _ -> false)
          | _ -> false)
 
 let rec type_equal
