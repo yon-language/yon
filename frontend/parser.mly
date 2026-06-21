@@ -150,6 +150,8 @@
 %token WIRE
 %token SPAWN PROMOTE PARALLEL
 %token COMPOSE
+%token HCOMP
+%token COMP
 %token SHARE RESOLVES
 
 /* Stream modifiers */
@@ -1443,6 +1445,29 @@ expr_atom:
    * Semantics: result(x) = h2(h1(x)). *)
   | COMPOSE h1 = expr_atom WITH h2 = expr_atom
     { EComposeWith (h1, h2, mk_loc $startpos $endpos) }
+  | HCOMP ty_name = IDENT LBRACKET
+      sides = separated_list(COMMA, hcomp_side) RBRACKET base = hcomp_base
+    {
+      let loc = mk_loc $startpos $endpos in
+      let encoded_sides = List.map (fun (face_var, at_one, binder, body) ->
+        let tag = if at_one then "__hcomp_side_i1" else "__hcomp_side_i0" in
+        ECall (tag,
+          [EVar (face_var, loc); EPathAbs (binder, body, loc)], loc)) sides in
+      ECall ("__hcomp_surface",
+        [EVar (ty_name, loc); ECall ("__hcomp_system", encoded_sides, loc); base],
+        loc)
+    }
+  | COMP LPAREN line = expr RPAREN LBRACKET
+      sides = separated_list(COMMA, hcomp_side) RBRACKET base = hcomp_base
+    {
+      let loc = mk_loc $startpos $endpos in
+      let encoded_sides = List.map (fun (face_var, at_one, binder, body) ->
+        let tag = if at_one then "__hcomp_side_i1" else "__hcomp_side_i0" in
+        ECall (tag,
+          [EVar (face_var, loc); EPathAbs (binder, body, loc)], loc)) sides in
+      ECall ("__comp_surface",
+        [line; ECall ("__hcomp_system", encoded_sides, loc); base], loc)
+    }
   | PRESENT
     { ELit (LitHeytPresent, mk_loc $startpos $endpos) }
   | ABSENT
@@ -1499,6 +1524,7 @@ expr_atom:
     { dot_call_expr obj "fold" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN
     { dot_call_expr obj "push" args (mk_loc $startpos $endpos) }
+
   | name = IDENT LPAREN args = expr_list RPAREN IN space = IDENT
     { (* syntax `f(args) in S`.
        *
@@ -1566,6 +1592,17 @@ expr_atom:
       EIfThenElse (c, a, b, mk_loc $startpos $endpos) }
   | ALL name = IDENT WHERE c = condition  %prec LOWEST                             
     { EAll (name, c, mk_loc $startpos $endpos) }
+
+hcomp_side:
+  | face_var = IDENT EQ I0 FATARROW PLAM binder = IDENT FATARROW body = expr
+    { (face_var, false, binder, body) }
+  | face_var = IDENT EQ I1 FATARROW PLAM binder = IDENT FATARROW body = expr
+    { (face_var, true, binder, body) }
+
+hcomp_base:
+  | l = literal { ELit (l, mk_loc $startpos $endpos) }
+  | x = IDENT { EVar (x, mk_loc $startpos $endpos) }
+  | LPAREN e = expr RPAREN { EParen (e, mk_loc $startpos $endpos) }
 
 expr_list:
   | items = separated_list(COMMA, expr)       { items }

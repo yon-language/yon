@@ -325,6 +325,35 @@ and ua_equiv_line (source : C.ty) (target : C.ty)
       [[(i, false)]; [(i, true)]],
       [(source, equiv); (target, identity_equiv target)]))
 
+and type_line_of_expr (line : S.expr) : (string * C.ty) option =
+  match line with
+  | S.ERefl (type_code, _) ->
+      Option.map (fun carrier -> ("__comp_i", carrier))
+        (expr_as_ty type_code)
+  | S.ECall ("ua", [S.ECall ("idEquiv", [type_code], _)], _) ->
+      Option.map ua_identity_line (expr_as_ty type_code)
+  | S.ECall ("ua", [S.ECall ("equiv", [f; g; eta; eps], _)], _) ->
+      (match forward_carriers f with
+       | Some (source, target) ->
+           Some (ua_equiv_line source target (equivalence_term f g eta eps))
+       | None -> None)
+  | S.EParen (inner, _) -> type_line_of_expr inner
+  | _ -> None
+
+and decode_composition_system (clauses : S.expr list)
+    : (C.face_formula * (string * C.face * C.term) list) option =
+  let decode_clause = function
+    | S.ECall (tag,
+        [S.EVar (face_var, _); S.EPathAbs (binder, body, _)], _)
+      when tag = "__hcomp_side_i0" || tag = "__hcomp_side_i1" ->
+        let face = [(face_var, tag = "__hcomp_side_i1")] in
+        Some (face, (binder, face, desugar_expr body))
+    | _ -> None
+  in
+  let decoded = List.filter_map decode_clause clauses in
+  if List.length decoded <> List.length clauses then None
+  else Some (List.map fst decoded, List.map snd decoded)
+
 (* ─── Expression translation ───────────────────────────────────────── *)
 
 and desugar_expr (e : S.expr) : C.term =
@@ -376,6 +405,19 @@ and desugar_expr (e : S.expr) : C.term =
        | v :: _proof :: _ -> desugar_expr v
        | [v] -> desugar_expr v
        | [] -> C.Unit)
+  | S.ECall ("__hcomp_surface",
+      [S.EVar (type_name, _); S.ECall ("__hcomp_system", clauses, _); base], _) ->
+      let carrier = C.TyPlace type_name in
+      (match decode_composition_system clauses with
+       | Some (phi, sides) -> C.HComp (carrier, phi, sides, desugar_expr base)
+       | None -> failwith "[desugar] malformed hcomp partial system")
+  | S.ECall ("__comp_surface",
+      [line; S.ECall ("__hcomp_system", clauses, _); base], _) ->
+      (match type_line_of_expr line, decode_composition_system clauses with
+       | Some (_binder, line_ty), Some (phi, sides) ->
+           C.Comp (line_ty, phi, sides, desugar_expr base)
+       | None, _ -> failwith "[desugar] comp type-line is not a supported refl/ua path"
+       | _, None -> failwith "[desugar] malformed comp partial system")
   | S.ECall ("apply_move", [S.EVar (vname, _); arg], _)
     when Move_engine.lookup_move vname = None
          && (match List.assoc_opt vname !handle_bindings with

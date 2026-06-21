@@ -1037,6 +1037,11 @@ let rec infer_mlir_ty (e : emitter)
        | _ -> infer_mlir_ty e env funcs g)
   | C.App (C.Lam (x, _, rest), value) ->
       (match value with
+       | C.PLam _ ->
+           let specialized = Subst.subst x value rest in
+           let reduced =
+             Builtins.reduce_with_builtins Reduce.empty_ctx specialized in
+           infer_mlir_ty e env funcs reduced
        | C.Lam _ ->
            if List.mem_assoc x funcs then
              infer_mlir_ty e env funcs rest
@@ -3697,6 +3702,15 @@ let rec emit_term (e : emitter)
          alias it in the env and ignore the redundant Lam; otherwise we fail
          loudly. *)
       (match value with
+       | C.PLam _ ->
+           (* Paths are proof-erased, but their endpoint can carry genuine
+              computation. Substitute the path before erasure so `p @ I0/I1`
+              specializes interval faces and lets the cubical kernel decide
+              hcomp/comp rather than materializing a symbolic path value. *)
+           let specialized = Subst.subst x value rest in
+           let reduced =
+             Builtins.reduce_with_builtins Reduce.empty_ctx specialized in
+           emit_term e env funcs reduced
        | C.Lam _ ->
            if List.mem_assoc x funcs then
              (* x names a user function. The binding only matters for typing

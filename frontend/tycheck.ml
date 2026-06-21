@@ -863,6 +863,42 @@ got %s" (Tyenv.ty_to_string other)))
          type as v (the carrier). The cell/witness live in the CaTT reducer (B.1,
          B.3); here we only type the surface form and let desugar lower it to v.
          We accept exactly two arguments and return the type of the first. *)
+      if name = "__hcomp_surface" || name = "__comp_surface" then
+        (match args with
+         | [line_or_type; ECall ("__hcomp_system", sides, _); base] ->
+             let* base_ty = infer env ctx base in
+             let* () =
+               if name = "__hcomp_surface" then
+                 (match line_or_type with
+                  | EVar (type_name, _) ->
+                      let declared_ty =
+                        if Carrier.is_prim_name type_name then TyPrim type_name
+                        else TyUser type_name in
+                      if Dispatcher.type_equal env ctx declared_ty base_ty then ok ()
+                      else err loc (Printf.sprintf
+                        "hcomp base has type %s, expected %s"
+                        (Tyenv.ty_to_string base_ty)
+                        (Tyenv.ty_to_string declared_ty))
+                  | _ -> err loc "hcomp expects a nominal carrier type")
+               else
+                 let* line_ty = infer env ctx line_or_type in
+                 (match line_ty with
+                  | TyId _ | TyUser "Path" -> ok ()
+                  | other -> err loc (Printf.sprintf
+                      "comp expects a path in the universe, got %s"
+                      (Tyenv.ty_to_string other)))
+             in
+               let rec check_sides = function
+                 | [] -> ok base_ty
+                 | ECall (("__hcomp_side_i0" | "__hcomp_side_i1"),
+                          [_face; EPathAbs (_binder, body, _)], _) :: rest ->
+                     let* () = check env ctx body base_ty in
+                     check_sides rest
+                 | _ -> err loc "malformed hcomp partial system"
+               in
+               check_sides sides
+         | _ -> err loc "malformed hcomp surface form")
+      else
       if name = "coerce_incl" then
         (match args with
          | [v; _proof] -> infer env ctx v

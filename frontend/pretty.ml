@@ -109,8 +109,10 @@ let rec pp_term ?(indent = 0) t =
   | PApp (p, r) -> Printf.sprintf "(%s @ %s)" (pp_term ~indent p) (pp_interval r)
   | Transp ((i, a), t') ->
       Printf.sprintf "transp <%s>%s %s" i (pp_ty a) (pp_term ~indent t')
-  | Comp (_, _, _, base) -> Printf.sprintf "comp[..] %s" (pp_term ~indent base)
-  | HComp (_, _, _, base) -> Printf.sprintf "hcomp[..] %s" (pp_term ~indent base)
+  | Comp (ty, _, _, base) ->
+      Printf.sprintf "comp[%s] %s" (pp_ty ty) (pp_term ~indent base)
+  | HComp (ty, _, _, base) ->
+      Printf.sprintf "hcomp[%s] %s" (pp_ty ty) (pp_term ~indent base)
   | GlueElem (_, t', a') -> Printf.sprintf "glue(%s, %s)" (pp_term ~indent t') (pp_term ~indent a')
   | Unglue t' -> Printf.sprintf "unglue(%s)" (pp_term ~indent t')
   | HITElim (branches, scrut) ->

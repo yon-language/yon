@@ -848,4 +848,9 @@ and deep_reduce_pure (t : term) : term =
     | With (r, body) -> With (r, deep_reduce_pure body)
     | Emit body -> Emit (deep_reduce_pure body)
     | StreamCons (h, k) -> StreamCons (deep_reduce_pure h, deep_reduce_pure k)
+    | (PApp _ | Transp _ | Comp _ | HComp _
+      | GlueElem _ | Unglue _ | HITElim _) as ct ->
+        (match try_cubical ct with
+         | Some v -> deep_reduce_pure v
+         | None -> ct)
     | other -> other

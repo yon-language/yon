@@ -136,6 +136,8 @@
       "init", INIT;
       "with", WITH;
       "compose", COMPOSE;
+      "hcomp", HCOMP;
+      "comp", COMP;
       "effects", EFFECTS;
       "unifies", UNIFIES;
       "requires", REQUIRES;
