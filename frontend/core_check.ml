@@ -6,6 +6,15 @@ exception Check_error of string
 
 let rctx = Reduce.empty_ctx
 
+(* Unified conversion reducer. The checker's definitional equality uses the SAME
+ * engine as the evaluator, so conversion now includes cubical computation
+ * (transport / Glue / hcomp) and builtin arithmetic, not only beta/eta/J.
+ * reduce_with_builtins is a strict superset of Reduce.reduce (it falls back to
+ * Reduce.step), so the non-cubical fragment — Yoneda/J/eta witnesses — is
+ * unchanged; the fuel bound gives conservative incompleteness, never
+ * unsoundness. This removes the two-reducers split (one canonical conversion). *)
+let reduce_full (t : term) : term = Builtins.reduce_with_builtins rctx t
+
 let rec norm_ty (t : ty) : ty =
   match t with
   | TyType _ | TyDirUniverse _ | TyPlace _ -> t
@@ -13,8 +22,8 @@ let rec norm_ty (t : ty) : ty =
   | TyPi (x, a, b) -> TyPi (x, norm_ty a, norm_ty b)
   | TySigma (x, a, b) -> TySigma (x, norm_ty a, norm_ty b)
   | TyId (a, t1, t2) ->
-      TyId (norm_ty a, Reduce.reduce rctx t1, Reduce.reduce rctx t2)
-  | TyEl c -> TyEl (Reduce.reduce rctx c)
+      TyId (norm_ty a, reduce_full t1, reduce_full t2)
+  | TyEl c -> TyEl (reduce_full c)
   | TyStream a -> TyStream (norm_ty a)
   | other -> other
 
@@ -106,7 +115,7 @@ and infer (g : tctx) (tm : term) : ty =
            if not (ty_conv [] ty_p ty_a) then
              raise (Check_error "J: path carrier mismatch");
            if not (term_equal_env []
-                     (Reduce.reduce rctx b_far) (Reduce.reduce rctx b)) then
+                     (reduce_full b_far) (reduce_full b)) then
              raise (Check_error "J: path far-endpoint mismatch");
            let z = Ast.fresh_var (Ast.free_vars c) in
            let diag_ty =
