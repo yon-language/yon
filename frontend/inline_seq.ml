@@ -47,7 +47,8 @@ let rec count_occurrences (x : string) (t : term) : int =
   | GlueElem (_, t, a) -> count_occurrences x t + count_occurrences x a
   | Unglue t -> count_occurrences x t
   | HITElim (branches, scrut) ->
-      List.fold_left (fun acc (_, b) -> acc + count_occurrences x b)
+      List.fold_left (fun acc (_, vars, b) ->
+        acc + if List.mem x vars then 0 else count_occurrences x b)
         (count_occurrences x scrut) branches
   | HITConstr (_, args) ->
       List.fold_left (fun acc a -> acc + count_occurrences x a) 0 args
@@ -103,5 +104,7 @@ let rec inline_seq_lets (t : term) : term =
   | GlueElem (phi, t, a) -> GlueElem (phi, inline_seq_lets t, inline_seq_lets a)
   | Unglue t -> Unglue (inline_seq_lets t)
   | HITElim (branches, scrut) ->
-      HITElim (List.map (fun (n, b) -> (n, inline_seq_lets b)) branches, inline_seq_lets scrut)
+      HITElim
+        (List.map (fun (n, vs, b) -> (n, vs, inline_seq_lets b)) branches,
+         inline_seq_lets scrut)
   | HITConstr (n, args) -> HITConstr (n, List.map inline_seq_lets args)

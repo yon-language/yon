@@ -116,9 +116,8 @@ and term =
   | HComp of ty * face_formula * (string * face * term) list * term
   | GlueElem of face_formula * term * term  (* glue [phi |-> t] a *)
   | Unglue of term                          (* unglue projector *)
-  | HITElim of (string * term) list * term  (* generic HIT eliminator: branches
-                                               by constructor name, scrutinee;
-                                               no motive (typing-only) *)
+  | HITElim of (string * string list * term) list * term
+      (* generic HIT eliminator: constructor, payload binders, branch body *)
   | HITConstr of string * term list         (* HIT constructor application:
                                                base, loop, north, merid x, ... *)
 
@@ -246,7 +245,9 @@ let rec term_equal_env env t1 t2 =
   | HITElim (br1, s1), HITElim (br2, s2) ->
       List.length br1 = List.length br2
       && List.for_all2
-           (fun (n1, b1) (n2, b2) -> n1 = n2 && term_equal_env env b1 b2) br1 br2
+           (fun (n1, vs1, b1) (n2, vs2, b2) ->
+             n1 = n2 && List.length vs1 = List.length vs2
+             && term_equal_env (List.combine vs1 vs2 @ env) b1 b2) br1 br2
       && term_equal_env env s1 s2
   | HITConstr (n1, a1), HITConstr (n2, a2) ->
       n1 = n2 && List.length a1 = List.length a2
@@ -352,7 +353,9 @@ let rec free_vars t =
   | GlueElem (_, t', a') -> S.union (free_vars t') (free_vars a')
   | Unglue t' -> free_vars t'
   | HITElim (branches, scrut) ->
-      List.fold_left (fun acc (_, b) -> S.union acc (free_vars b))
+      List.fold_left (fun acc (_, vars, b) ->
+        let fv = List.fold_left (fun s v -> S.remove v s) (free_vars b) vars in
+        S.union acc fv)
         (free_vars scrut) branches
   | HITConstr (_, args) ->
       List.fold_left (fun acc a -> S.union acc (free_vars a)) S.empty args

@@ -119,7 +119,7 @@ let rewrite (positions_of : string -> int list option) (t0 : C.term) : C.term =
     | C.GlueElem (ff, t', a') -> C.GlueElem (ff, go t', go a')
     | C.Unglue t' -> C.Unglue (go t')
     | C.HITElim (branches, scrut) ->
-        C.HITElim (List.map (fun (n, b) -> (n, go b)) branches, go scrut)
+        C.HITElim (List.map (fun (n, vs, b) -> (n, vs, go b)) branches, go scrut)
     | C.HITConstr (n, args) -> C.HITConstr (n, List.map go args)
   in
   go t0

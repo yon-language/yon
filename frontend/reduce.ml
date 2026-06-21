@@ -300,6 +300,33 @@ let rec uncurry t =
       (head, args @ [ a ])
   | _ -> (t, [])
 
+(* Simultaneous substitution for constructor payloads. Renaming every branch
+ * binder to a fresh temporary first prevents one payload from being captured
+ * or rewritten by the substitution for another binder. *)
+let subst_hit_payloads body vars args =
+  let module S = Set.Make (String) in
+  let avoid =
+    List.fold_left
+      (fun acc t -> S.union acc (free_vars t))
+      (free_vars body) args
+  in
+  let temps, _ =
+    List.fold_left
+      (fun (rev, avoid) _ ->
+         let fresh = fresh_var avoid in
+         (fresh :: rev, S.add fresh avoid))
+      ([], avoid) vars
+  in
+  let temps = List.rev temps in
+  let renamed =
+    List.fold_left2
+      (fun acc var fresh -> Subst.subst var (Var fresh) acc)
+      body vars temps
+  in
+  List.fold_left2
+    (fun acc fresh arg -> Subst.subst fresh arg acc)
+    renamed temps args
+
 (* ─── The small-step reducer ───────────────────────────────────────── *)
 
 (* One step of reduction. Returns Some t' if a step was taken, None if
@@ -514,9 +541,23 @@ let rec step ctx t =
             | None -> None))
   | Unglue t' -> (match step ctx t' with Some t'' -> Some (Unglue t'') | None -> None)
   | HITElim (branches, scrut) ->
-      (match step ctx scrut with
-       | Some scrut' -> Some (HITElim (branches, scrut'))
-       | None -> None)
+      let rec peel_path t dims =
+        match t with
+        | PApp (inner, dim) -> peel_path inner (dim :: dims)
+        | HITConstr (ctor, args) -> Some (ctor, args, dims)
+        | _ -> None
+      in
+      (match peel_path scrut [] with
+       | Some (ctor, args, dims) ->
+           (match List.find_opt (fun (name, _, _) -> name = ctor) branches with
+            | Some (_, vars, body) when List.length vars = List.length args ->
+                let branch = subst_hit_payloads body vars args in
+                Some (List.fold_left (fun p dim -> PApp (p, dim)) branch dims)
+            | _ -> None)
+       | _ ->
+           (match step ctx scrut with
+            | Some scrut' -> Some (HITElim (branches, scrut'))
+            | None -> None))
   | HITConstr _ -> None        (* value: no head reduction *)
   | Var f when List.mem_assoc f ctx.deltas ->
       (* delta-step: unfold a certified function to its Core body. Beta then

@@ -612,7 +612,7 @@ let rec collect_string_literals (t : C.term) : unit =
   | C.GlueElem (_, t, a) -> collect_string_literals t; collect_string_literals a
   | C.Unglue t -> collect_string_literals t
   | C.HITElim (branches, scrut) ->
-      List.iter (fun (_, b) -> collect_string_literals b) branches;
+      List.iter (fun (_, _, b) -> collect_string_literals b) branches;
       collect_string_literals scrut
   | C.HITConstr (_, args) -> List.iter collect_string_literals args
 
@@ -645,7 +645,9 @@ let rec term_free_vars (t : C.term) : SS.t =
   | C.GlueElem (_, t, a) -> SS.union (term_free_vars t) (term_free_vars a)
   | C.Unglue t -> term_free_vars t
   | C.HITElim (branches, scrut) ->
-      List.fold_left (fun acc (_, b) -> SS.union acc (term_free_vars b))
+      List.fold_left (fun acc (_, vars, b) ->
+        let fv = List.fold_left (fun s v -> SS.remove v s) (term_free_vars b) vars in
+        SS.union acc fv)
         (term_free_vars scrut) branches
   | C.HITConstr (_, args) ->
       List.fold_left (fun acc a -> SS.union acc (term_free_vars a)) SS.empty args
@@ -5289,7 +5291,8 @@ let collect_target_spaces (t : C.term) : string list =
         walk base; List.iter (fun (_, _, t) -> walk t) sides
     | C.GlueElem (_, t, a) -> walk t; walk a
     | C.Unglue t -> walk t
-    | C.HITElim (branches, scrut) -> List.iter (fun (_, b) -> walk b) branches; walk scrut
+    | C.HITElim (branches, scrut) ->
+        List.iter (fun (_, _, b) -> walk b) branches; walk scrut
     | C.HITConstr (_, args) -> List.iter walk args
   in
   walk t;

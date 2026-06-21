@@ -96,7 +96,7 @@ let () =
   (* ── muro 3: the GENERIC HIT eliminator, S1 as one instance ────────── *)
   let b = CVar "b" in
   let lpath = CPathLam ("i", CPathApp (CVar "q", IVar "i")) in
-  let elim sc = CHITElim ([("base", b); ("loop", lpath)], sc) in
+  let elim sc = CHITElim ([("base", [], b); ("loop", [], lpath)], sc) in
 
   check "S1: loop@0 = base"
     (cterm_equal (CPathApp (CHITConstr ("loop", []), I0)) (CHITConstr ("base", [])));
@@ -114,14 +114,16 @@ let () =
      elim {inj |-> f} (inj a) defers (f a) to the core via the __app marker. *)
   check "generic elim (Quotient): inj a fires the inj branch, applies f to a"
     (cterm_syntactic_equal
-       (normalize_cterm (CHITElim ([("inj", CVar "f")], CHITConstr ("inj", [CVar "a"]))))
+       (normalize_cterm
+          (CHITElim ([("inj", [], CVar "f")],
+                     CHITConstr ("inj", [CVar "a"]))))
        (CHITConstr ("__app", [CVar "f"; CVar "a"])));
 
   (* same eliminator, Suspension — a parametric PATH ctor: merid x @ r = (m x)@r *)
   check "generic elim (Suspension): merid x @ r computes to (m x)@r"
     (cterm_syntactic_equal
        (normalize_cterm
-          (CHITElim ([("merid", CVar "m")],
+          (CHITElim ([("merid", [], CVar "m")],
                      CPathApp (CHITConstr ("merid", [CVar "x"]), IVar "r"))))
        (CPathApp (CHITConstr ("__app", [CVar "m"; CVar "x"]), IVar "r")));
 
@@ -129,7 +131,7 @@ let () =
   check "generic elim (S2): surf @ r @ s computes to (case)@r@s (2-dim path)"
     (cterm_syntactic_equal
        (normalize_cterm
-          (CHITElim ([("surf", CVar "sf")],
+          (CHITElim ([("surf", [], CVar "sf")],
                      CPathApp (CPathApp (CHITConstr ("surf", []), IVar "r"), IVar "s"))))
        (CPathApp (CPathApp (CVar "sf", IVar "r"), IVar "s")));
 

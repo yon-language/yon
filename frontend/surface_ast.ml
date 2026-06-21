@@ -139,7 +139,7 @@ and expr =
   | EField of expr * string * location                (* "obj.field" *)
   | ECall of string * expr list * location            (* "f(a, b, c)" *)
   | EApp of expr * expr list * location               (* general application: head is an expr (a name, a lambda, ...) applied to args *)
-  | EHITElim of expr * (string * expr) list * expr * location
+  | EHITElim of expr * (string * string list * expr) list * expr * location
   | EPathApp of expr * dim * location
   | EPathAbs of string * expr * location              (* plam i => e : path abstraction <i> e *)
   | EHITConstr of string * expr list * location       (* hit(base), hit(loop), hit(merid, a): HIT constructor *)

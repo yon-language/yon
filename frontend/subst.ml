@@ -68,7 +68,11 @@ let rec subst x u t =
   | GlueElem (phi, t', a') -> GlueElem (phi, subst x u t', subst x u a')
   | Unglue t' -> Unglue (subst x u t')
   | HITElim (branches, scrut) ->
-      HITElim (List.map (fun (n, b) -> (n, subst x u b)) branches, subst x u scrut)
+      HITElim
+        (List.map (fun (n, vars, b) ->
+           if List.mem x vars then (n, vars, b)
+           else (n, vars, subst x u b)) branches,
+         subst x u scrut)
   | HITConstr (n, args) -> HITConstr (n, List.map (subst x u) args)
 
 (* Substitute through a handler clause.

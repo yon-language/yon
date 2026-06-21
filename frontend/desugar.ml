@@ -363,7 +363,9 @@ and desugar_expr (e : S.expr) : C.term =
   | S.EApp (f, args, _) ->
       curry_apply (desugar_expr f) (List.map desugar_expr args)
   | S.EHITElim (_motive, branches, x, _) ->
-      C.HITElim (List.map (fun (n, e) -> (n, desugar_expr e)) branches, desugar_expr x)
+      C.HITElim
+        (List.map (fun (n, vars, e) -> (n, vars, desugar_expr e)) branches,
+         desugar_expr x)
   | S.EPathApp (p, d, _) ->
       let i = (match d with S.DI0 -> C.I0 | S.DI1 -> C.I1 | S.DIVar s -> C.IVar s) in
       C.PApp (desugar_expr p, i)
@@ -1221,7 +1223,7 @@ and desugar_produce_block (body : S.stmt list) : C.term =
     | C.GlueElem (phi, t, a) -> C.GlueElem (phi, rw t, rw a)
     | C.Unglue t -> C.Unglue (rw t)
     | C.HITElim (branches, scrut) ->
-        C.HITElim (List.map (fun (n, b) -> (n, rw b)) branches, rw scrut)
+        C.HITElim (List.map (fun (n, vs, b) -> (n, vs, rw b)) branches, rw scrut)
     | C.HITConstr (n, args) -> C.HITConstr (n, List.map rw args)
   in
   let body' = rw body_term in
@@ -1284,7 +1286,7 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
     | C.GlueElem (phi, t, a) -> C.GlueElem (phi, rw t, rw a)
     | C.Unglue t -> C.Unglue (rw t)
     | C.HITElim (branches, scrut) ->
-        C.HITElim (List.map (fun (n, b) -> (n, rw b)) branches, rw scrut)
+        C.HITElim (List.map (fun (n, vs, b) -> (n, vs, rw b)) branches, rw scrut)
     | C.HITConstr (n, args) -> C.HITConstr (n, List.map rw args)
   in
   let body' = rw body_term in
@@ -1850,7 +1852,8 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
   | S.EApp (f, args, loc) -> S.EApp (r f, List.map r args, loc)
   | S.EHITElim (c, branches, x, loc) ->
-      S.EHITElim (r c, List.map (fun (n, e) -> (n, r e)) branches, r x, loc)
+      S.EHITElim
+        (r c, List.map (fun (n, vs, e) -> (n, vs, r e)) branches, r x, loc)
   | S.EPathApp (p, d, loc) -> S.EPathApp (r p, d, loc)
   | S.EPathAbs (i, e, loc) -> S.EPathAbs (i, r e, loc)
   | S.EHITConstr (ctor, args, loc) -> S.EHITConstr (ctor, List.map r args, loc)
@@ -3609,7 +3612,14 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
     | C.GlueElem (_, t, a) -> free_names (free_names acc t) a
     | C.Unglue t -> free_names acc t
     | C.HITElim (branches, scrut) ->
-        List.fold_left (fun acc (_, b) -> free_names acc b) (free_names acc scrut) branches
+        List.fold_left
+          (fun acc (_, vars, b) ->
+             let inner = free_names [] b in
+             List.fold_left
+               (fun a n ->
+                  if List.mem n vars || List.mem n a then a else n :: a)
+               acc inner)
+          (free_names acc scrut) branches
     | C.HITConstr (_, args) -> List.fold_left free_names acc args
   in
   (* Transitive closure: starting from main's free names, pull in the free names

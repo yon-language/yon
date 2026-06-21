@@ -118,7 +118,9 @@ let rec pp_term ?(indent = 0) t =
   | HITElim (branches, scrut) ->
       Printf.sprintf "hit_elim([%s], %s)"
         (String.concat "; "
-           (List.map (fun (n, b) -> Printf.sprintf "%s => %s" n (pp_term ~indent b)) branches))
+           (List.map (fun (n, vars, b) ->
+              let ps = if vars = [] then "" else "(" ^ String.concat "," vars ^ ")" in
+              Printf.sprintf "%s%s => %s" n ps (pp_term ~indent b)) branches))
         (pp_term ~indent scrut)
   | HITConstr (n, args) ->
       Printf.sprintf "%s(%s)" n (String.concat ", " (List.map (pp_term ~indent) args))

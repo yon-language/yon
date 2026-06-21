@@ -175,11 +175,20 @@ let collect (known : string list) (f : fundef) : scg list =
              let sdesc = descent_of de scrut in
              let acc = go de scrut acc in
              List.fold_left
-               (fun acc (_ctor, bterm) ->
+               (fun acc (_ctor, vars, bterm) ->
                   (* the leading Lam binders of a branch bind the
                    * constructor's components: strict subterms of the
                    * scrutinee, hence strict descendants of whatever the
                    * scrutinee descends from. *)
+                  let de =
+                    List.fold_left
+                      (fun de v ->
+                         match sdesc with
+                         | Some (p, _) ->
+                             SMap.add v (p, Strict) (SMap.remove v de)
+                         | None -> SMap.remove v de)
+                      de vars
+                  in
                   let rec peel de bt =
                     match bt with
                     | A.Lam (v, _, body) ->

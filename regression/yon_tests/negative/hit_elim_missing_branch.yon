@@ -1,0 +1,5 @@
+fun motive(q: Quotient): number { return 0 }
+
+fun main(): number {
+  return hit_elim(motive, [inj(x) => x], hit(inj, 7))
+}

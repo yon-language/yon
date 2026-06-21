@@ -1,0 +1,14 @@
+fun quotient_motive(q: Quotient): number { return 0 }
+fun suspension_motive(s: Suspension): number { return 0 }
+
+fun main(): number {
+  be payload holds hit_elim(
+    quotient_motive,
+    [inj(x) => x, quot(a, b, r) => plam i => 0],
+    hit(inj, 7))
+  be side holds hit_elim(
+    suspension_motive,
+    [north => 3, south => 4, merid(a) => plam i => 3],
+    hit(south))
+  return payload + side - 11
+}

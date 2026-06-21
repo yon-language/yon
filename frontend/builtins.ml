@@ -691,7 +691,9 @@ let rec to_cterm (t : term) : Cubical.cterm =
   | GlueElem (phi, t', a') -> Cubical.CGlueElem (phi, to_cterm t', to_cterm a')
   | Unglue t' -> Cubical.CUnglue (to_cterm t')
   | HITElim (branches, scrut) ->
-      Cubical.CHITElim (List.map (fun (n, b) -> (n, to_cterm b)) branches, to_cterm scrut)
+      Cubical.CHITElim
+        (List.map (fun (n, vs, b) -> (n, vs, to_cterm b)) branches,
+         to_cterm scrut)
   | HITConstr (n, args) -> Cubical.CHITConstr (n, List.map to_cterm args)
   | Var x -> Cubical.CInhabitant (Cubical.CVar x)
   | t -> Cubical.CCore t
@@ -741,7 +743,9 @@ and of_cterm (c : Cubical.cterm) : term =
        * first-class core term, no longer stuck at the bridge. *)
       HITConstr (name, List.map of_cterm args)
   | Cubical.CHITElim (branches, scrut) ->
-      HITElim (List.map (fun (n, b) -> (n, of_cterm b)) branches, of_cterm scrut)
+      HITElim
+        (List.map (fun (n, vs, b) -> (n, vs, of_cterm b)) branches,
+         of_cterm scrut)
   | Cubical.CCore t -> t
   | Cubical.CInhabitant (Cubical.CVar x) -> Var x
   | Cubical.CVar x -> Var x

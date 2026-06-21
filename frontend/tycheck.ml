@@ -360,7 +360,9 @@ let free_vars_expr (e0 : expr) : string list =
         List.concat_map s args
     | EApp (h, args, _) -> s h @ List.concat_map s args
     | EHITElim (t, branches, m, _) ->
-        s t @ List.concat_map (fun (v, e) -> go (v :: bound) e) branches @ s m
+        s t
+        @ List.concat_map (fun (_, vars, e) -> go (vars @ bound) e) branches
+        @ s m
     | EPathApp (e, _, _) -> s e
     | EPathAbs (i, e, _) -> go (i :: bound) e
     | EHITConstr (_, args, _) -> List.concat_map s args
@@ -460,7 +462,7 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
   | ECall (name, args, loc) -> ECall (name, List.map r args, loc)
   | EHITElim (motive, branches, scrutinee, loc) ->
       EHITElim (r motive,
-        List.map (fun (name, body) -> (name, r body)) branches,
+        List.map (fun (name, vars, body) -> (name, vars, r body)) branches,
         r scrutinee, loc)
   | EHITConstr (ctor, args, loc) -> EHITConstr (ctor, List.map r args, loc)
   | ENew (name, fields, loc) ->
@@ -546,35 +548,88 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                   | TyArrow (_, cod) | TyPi (_, _, cod) -> lands_in_universe cod
                   | TyUniverse _ -> true
                   | _ -> false in
-                let point_names =
-                  List.map (fun (p : Hit_env.point_constructor) -> p.Hit_env.pc_name)
-                    sig_.Hit_env.hit_points in
+                let handled = List.map (fun (name, _, _) -> name) branches in
+                let missing = Hit_env.missing_constructors sig_ handled in
+                let rec duplicate = function
+                  | [] -> None
+                  | n :: ns -> if List.mem n ns then Some n else duplicate ns
+                in
+                let* () =
+                  match duplicate handled with
+                  | Some name ->
+                      err loc (Printf.sprintf
+                        "hit_elim: duplicate branch for constructor %s" name)
+                  | None -> ok ()
+                in
+                let* () =
+                  match missing with
+                  | [] -> ok ()
+                  | names ->
+                      err loc (Printf.sprintf
+                        "hit_elim: missing branch(es): %s"
+                        (String.concat ", " names))
+                in
+                let concrete_param_types ctor params =
+                  match x with
+                  | EHITConstr (scrut_ctor, args, _) when scrut_ctor = ctor
+                    && List.length args = List.length params ->
+                      let rec infer_all acc = function
+                        | [] -> ok (List.rev acc)
+                        | arg :: rest ->
+                            let* ty = infer env ctx arg in
+                            infer_all (ty :: acc) rest
+                      in
+                      infer_all [] args
+                  | _ -> ok (List.map snd params)
+                in
+                let constructor ctor =
+                  match Hit_env.find_constructor [hname, sig_] ctor with
+                  | Some (_, kind) -> ok kind
+                  | None -> err loc (Printf.sprintf
+                      "hit_elim: constructor %s does not belong to %s"
+                      ctor hname)
+                in
+                let branch_env ctor vars params =
+                  if List.length vars <> List.length params then
+                    err loc (Printf.sprintf
+                      "hit_elim: branch %s expects %d payload binder(s), got %d"
+                      ctor (List.length params) (List.length vars))
+                  else
+                    let* tys = concrete_param_types ctor params in
+                    ok (Tyenv.add_vars env (List.combine vars tys))
+                in
                 if lands_in_universe c_ty then
                   (* Tarski dependent eliminator: point branch : El(C ctor),
                    * path branch : El(C(ctor@i)) (path-over), result : El(C x). *)
                   let rec check_branches = function
                     | [] -> ok ()
-                    | (ctor, v) :: rest ->
-                        if List.mem ctor point_names then
-                          let expected =
-                            TyEl (TyTermExpr (EApp (c, [EVar (ctor, loc)], loc))) in
-                          let* () = check env ctx v expected in
-                          check_branches rest
-                        else
-                          (match v with
-                           | EPathAbs (i, body, _) ->
-                               let line_i =
-                                 TyEl (TyTermExpr
-                                         (EApp (c,
-                                                [EPathApp (EVar (ctor, loc),
-                                                           DIVar i, loc)],
-                                                loc))) in
-                               let* () = check env ctx body line_i in
-                               check_branches rest
-                           | _ ->
-                               err loc (Printf.sprintf
-                                 "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
-                                 ctor))
+                    | (ctor, vars, v) :: rest ->
+                        let* kind = constructor ctor in
+                        let params = Hit_env.constructor_params kind in
+                        let* branch_env = branch_env ctor vars params in
+                        let ctor_expr =
+                          EHITConstr
+                            (ctor, List.map (fun name -> EVar (name, loc)) vars, loc)
+                        in
+                        (match kind with
+                         | Hit_env.KPoint _ ->
+                             let expected =
+                               TyEl (TyTermExpr (EApp (c, [ctor_expr], loc))) in
+                             let* () = check branch_env ctx v expected in
+                             check_branches rest
+                         | Hit_env.KPath _ ->
+                             (match v with
+                              | EPathAbs (i, body, _) ->
+                                  let line_i =
+                                    TyEl (TyTermExpr
+                                      (EApp (c,
+                                        [EPathApp (ctor_expr, DIVar i, loc)], loc)))
+                                  in
+                                  let* () = check branch_env ctx body line_i in
+                                  check_branches rest
+                              | _ -> err loc (Printf.sprintf
+                                  "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
+                                  ctor)))
                   in
                   let* () = check_branches branches in
                   ok (TyEl (TyTermExpr (EApp (c, [x], loc))))
@@ -586,19 +641,22 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                    | TyArrow (_, cod) | TyPi (_, _, cod) ->
                        let rec check_rec = function
                          | [] -> ok ()
-                         | (ctor, v) :: rest ->
-                             if List.mem ctor point_names then
-                               let* () = check env ctx v cod in
-                               check_rec rest
-                             else
-                               (match v with
-                                | EPathAbs (_, body, _) ->
-                                    let* () = check env ctx body cod in
-                                    check_rec rest
-                                | _ ->
-                                    err loc (Printf.sprintf
-                                      "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
-                                      ctor))
+                         | (ctor, vars, v) :: rest ->
+                             let* kind = constructor ctor in
+                             let params = Hit_env.constructor_params kind in
+                             let* branch_env = branch_env ctor vars params in
+                             (match kind with
+                              | Hit_env.KPoint _ ->
+                                  let* () = check branch_env ctx v cod in
+                                  check_rec rest
+                              | Hit_env.KPath _ ->
+                                  (match v with
+                                   | EPathAbs (_, body, _) ->
+                                       let* () = check branch_env ctx body cod in
+                                       check_rec rest
+                                   | _ -> err loc (Printf.sprintf
+                                       "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
+                                       ctor)))
                        in
                        let* () = check_rec branches in
                        ok cod
@@ -3656,7 +3714,9 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | EElMatch (tgt, ret, bod, _) -> walk_expr tgt; walk_expr ret; walk_expr bod
     | EApp (f, args, _) -> walk_expr f; List.iter walk_expr args
     | EHITElim (c, branches, x, _) ->
-        walk_expr c; List.iter (fun (_, e) -> walk_expr e) branches; walk_expr x
+        walk_expr c;
+        List.iter (fun (_, _, e) -> walk_expr e) branches;
+        walk_expr x
     | EPathApp (p, _, _) -> walk_expr p
     | EPathAbs (_, e, _) -> walk_expr e
     | EHITConstr (_, args, _) -> List.iter walk_expr args

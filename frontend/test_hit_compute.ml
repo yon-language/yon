@@ -23,15 +23,45 @@ let () =
 
   (* point constructor: hit_elim(.., base) reduces to the base branch *)
   let elim_base =
-    HITElim ([("base", Var "vb"); ("loop", Var "vl")], HITConstr ("base", [])) in
+    HITElim
+      ([("base", [], Var "vb"); ("loop", [], Var "vl")],
+       HITConstr ("base", [])) in
   let r_base = Builtins.reduce_with_builtins ctx elim_base in
   check "hit_elim([base=>vb, loop=>vl], base) = vb" (r_base = Var "vb");
 
   (* path constructor: hit_elim(.., loop) reduces to the loop branch *)
   let elim_loop =
-    HITElim ([("base", Var "vb"); ("loop", Var "vl")], HITConstr ("loop", [])) in
+    HITElim
+      ([("base", [], Var "vb"); ("loop", [], Var "vl")],
+       HITConstr ("loop", [])) in
   let r_loop = Builtins.reduce_with_builtins ctx elim_loop in
   check "hit_elim([base=>vb, loop=>vl], loop) = vl" (r_loop = Var "vl");
+
+  (* Payload binders are substituted directly by the core beta rule. *)
+  let elim_payload =
+    HITElim
+      ([("inj", ["x"], Var "x")], HITConstr ("inj", [Var "payload"]))
+  in
+  check "hit_elim([inj(x)=>x], inj(payload)) = payload"
+    (Builtins.reduce_with_builtins ctx elim_payload = Var "payload");
+
+  (* Substitution is simultaneous: the free y in the first payload must not be
+     captured by the second branch binder y. *)
+  let elim_no_capture =
+    HITElim
+      ([("pair", ["x"; "y"], Var "x")],
+       HITConstr ("pair", [Var "y"; Var "replacement"]))
+  in
+  check "HIT payload beta is simultaneous (no cross-binder capture)"
+    (Builtins.reduce_with_builtins ctx elim_no_capture = Var "y");
+
+  let elim_path_payload =
+    HITElim
+      ([("merid", ["x"], PLam ("i", Var "x"))],
+       PApp (HITConstr ("merid", [Var "endpoint"]), I0))
+  in
+  check "path-constructor elimination substitutes payload before path beta"
+    (Builtins.reduce_with_builtins ctx elim_path_payload = Var "endpoint");
 
   (* bridge round-trip: of_cterm (to_cterm (HITConstr ..)) = HITConstr .. *)
   let c = HITConstr ("merid", [Var "a"]) in

@@ -177,7 +177,7 @@ and cterm =
                                                              dimension-closed), so dimension
                                                              substitution treats it opaquely. *)
   | CHITConstr of string * cterm list                     (* HIT constructor application *)
-  | CHITElim of (string * cterm) list * cterm             (* generic HIT eliminator:
+  | CHITElim of (string * string list * cterm) list * cterm (* generic HIT eliminator:
                                                              branches (constructor name |-> case)
                                                              applied to a scrutinee *)
 
@@ -238,7 +238,8 @@ let rec subst_interval_in_cterm
   | CHITConstr (n, args) ->
       CHITConstr (n, List.map (subst_interval_in_cterm var replacement) args)
   | CHITElim (branches, scrut) ->
-      CHITElim (List.map (fun (n, c) -> (n, subst_interval_in_cterm var replacement c)) branches,
+      CHITElim (List.map (fun (n, vs, c) ->
+        (n, vs, subst_interval_in_cterm var replacement c)) branches,
                 subst_interval_in_cterm var replacement scrut)
 
 and subst_interval_in_ctype
@@ -668,14 +669,14 @@ let rec normalize_cterm (t : cterm) : cterm =
         | _ -> None in
       (match scrut' with
        | CHITConstr (cname, cargs) ->
-           (match List.assoc_opt cname branches with
-            | Some case -> normalize_cterm (apply_args case cargs)
+           (match List.find_opt (fun (name, _, _) -> name = cname) branches with
+            | Some (_, _, case) -> normalize_cterm (apply_args case cargs)
             | None -> CHITElim (branches, scrut'))
        | CPathApp _ ->
            (match peel scrut' [] with
             | Some (pname, pargs, ints) ->
-                (match List.assoc_opt pname branches with
-                 | Some case ->
+                (match List.find_opt (fun (name, _, _) -> name = pname) branches with
+                 | Some (_, _, case) ->
                      let applied = apply_args case pargs in
                      normalize_cterm
                        (List.fold_left (fun acc j -> path_app acc j) applied ints)
@@ -714,7 +715,8 @@ and cterm_syntactic_equal (t1 : cterm) (t2 : cterm) : bool =
   | CCore a, CCore b -> Ast.term_equal_env [] a b
   | CHITElim (b1, s1), CHITElim (b2, s2) ->
       List.length b1 = List.length b2
-      && List.for_all2 (fun (n1, c1) (n2, c2) -> n1 = n2 && cterm_syntactic_equal c1 c2) b1 b2
+      && List.for_all2 (fun (n1, vs1, c1) (n2, vs2, c2) ->
+           n1 = n2 && vs1 = vs2 && cterm_syntactic_equal c1 c2) b1 b2
       && cterm_syntactic_equal s1 s2
   | _, _ -> false
 

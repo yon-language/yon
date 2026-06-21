@@ -933,7 +933,9 @@ type_atom:
     { TySigma (x, a, p) }
 
 hit_branch:
-  | ctor = IDENT FATARROW v = expr { (ctor, v) }
+  | ctor = IDENT FATARROW v = expr { (ctor, [], v) }
+  | ctor = IDENT LPAREN vars = separated_list(COMMA, IDENT) RPAREN FATARROW v = expr
+    { (ctor, vars, v) }
 
 
 variant:

@@ -23,9 +23,8 @@ let fn name params body : Sct.fundef = { Sct.name; params; body }
  * scrutinee `scrut_var`). *)
 let list_rec scrut_var callee =
   HITElim
-    ( [ ("nil", Unit);
-        ("cons",
-         Lam ("h", num, Lam ("t", num, App (Var callee, Var "t")))) ],
+    ( [ ("nil", [], Unit);
+        ("cons", ["h"; "t"], App (Var callee, Var "t")) ],
       Var scrut_var )
 
 let () =
