@@ -105,7 +105,7 @@
 %token <float> NUM_LIT
 %token <string> STR_LIT
 %token <bool> BOOL_LIT
-%token <float * string> DUR_LIT
+/* DUR_LIT (duration literals 100ms/5s) removed in v1.1 — see lexer.mll. */
 
 /* Identifiers */
 %token <string> IDENT
@@ -181,10 +181,8 @@
 /* intuitionistic logic symbols with a `?` tag.
  * Lowering: dispatch su algebra Heyt (h_and/h_or/h_not/h_imp). */
 %token AMPAMPQ PIPEPIPEQ BANGQ FATARROWQ
-/* Intuitionistic bitwise ops with the `?` tag.
- * Honest upfront: the semantics is currently the same as the classic ones
- * (syntactic aliases). The bit-by-bit semantics with Unknown propagation
- * needs a (value, mask) pair infrastructure. */
+/* Intuitionistic bitwise ops with the `?` tag. They lower to topos.heyt_int_*
+ * ops on !topos.heyt_int<64> carrying a (value, mask) pair (see emit_mlir). */
 %token AMPQ PIPEQ CARETQ TILDEQ
 
 /* View keywords */
@@ -1502,15 +1500,13 @@ expr_atom:
     { EHITConstr (ctor, [], mk_loc $startpos $endpos) }
   | HIT_KW LPAREN ctor = IDENT COMMA args = separated_nonempty_list(COMMA, expr) RPAREN
     { EHITConstr (ctor, args, mk_loc $startpos $endpos) }
-  | PULLBACK LPAREN f = IDENT COMMA g = IDENT RPAREN
-    { (* pullback as expression scaffolding *)
-      EPullback (f, g, mk_loc $startpos $endpos) }
   | PULLBACK LPAREN f = IDENT COMMA g = IDENT COMMA a = expr COMMA b = expr RPAREN
     { (* Runtime pullback. pullback(f, g, a, b) builds the compatible pair
-       * (a, b) with the constraint f(a) == g(b) checked at runtime. *)
+       * (a, b) with the constraint f(a) == g(b) checked at runtime. The no-arg
+       * pullback(f,g)/pushout(f,g) EXPRESSION forms were removed in v1.1 — they
+       * lowered to a 0.0 placeholder. The universal property lives in the
+       * `place P = pullback(f,g)` declaration (still supported). *)
       EPullbackVal (f, g, a, b, mk_loc $startpos $endpos) }
-  | PUSHOUT LPAREN f = IDENT COMMA g = IDENT RPAREN
-    { EPushout (f, g, mk_loc $startpos $endpos) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
     { dot_call_expr obj fld args (mk_loc $startpos $endpos) }
   (* MAP, FOLD, and FILTER are keyword tokens (used by the type map<K,V> and
@@ -1608,8 +1604,6 @@ expr_list:
   | items = separated_list(COMMA, expr)       { items }
 
 literal:
-  | d = DUR_LIT                               
-    { let (n, u) = d in LitDuration (n, u) }
   | n = NUM_LIT                               { LitNumber n }
   | s = STR_LIT                               { LitString s }
   | b = BOOL_LIT                              { LitBool b }

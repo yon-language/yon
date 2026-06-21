@@ -11,7 +11,7 @@ fun main(): number {
   repeat at most 3 times { acc = acc + 2 }        // 30
   otherwise { acc = acc + 1 }                     // 31
 
-  be d holds 2s + 500ms                                 // 2500 (ms)
+  be d holds 2000 + 500                                 // 2500 (duration literals dropped in v1.1)
   when d == 2500 { acc = acc + 10 }               // 41
 
   be i holds 0

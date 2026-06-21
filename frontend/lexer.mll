@@ -239,23 +239,13 @@
       "plam", PLAM;              (* path abstraction <i> e *)
       "PathP", PATHP;            (* dependent path type *)
       
-      (* Note: duration units (ms, s, min, h, d, y) are NOT registered as
-         keywords here because identifiers like "s" are too common as
-         parameter names. Duration literals are recognized as a single
-         token at the lex rule level via numeric prefix. *)
+      (* Note: duration literals (100ms/5s/3min) were removed in v1.1. `s`,
+         `ms`, etc. are now ordinary identifiers; `2s` lexes as NUM_LIT + IDENT. *)
     ]
   
   let ident_or_keyword s =
     try Hashtbl.find keyword_table s
     with Not_found -> IDENT s
-  
-  (* Currency codes — recognized after a number literal followed immediately by uppercase letters.
-     We handle them specially in the parser via the CURRENCY_CODE token. *)
-  let is_currency_code s =
-    String.length s = 3
-    && (let all_upper = ref true in
-        String.iter (fun c -> if c < 'A' || c > 'Z' then all_upper := false) s;
-        !all_upper)
 }
 
 let digit = ['0'-'9']
@@ -272,24 +262,10 @@ rule token = parse
   | "//" [^ '\n']*   { token lexbuf }   (* line comment *)
   | "/*"             { block_comment lexbuf; token lexbuf }
   
-  (* Duration literals — must come BEFORE generic number to win the
-     longest-match competition. No whitespace allowed between number
-     and unit suffix; "100 ms" is two tokens (NUM_LIT + IDENT). *)
-  | (digit+ ('.' digit+)?) "min" as s
-                     { let n = float_of_string (String.sub s 0 (String.length s - 3)) in
-                       DUR_LIT (n, "min") }
-  | (digit+ ('.' digit+)?) "ms" as s
-                     { let n = float_of_string (String.sub s 0 (String.length s - 2)) in
-                       DUR_LIT (n, "ms") }
-  | (digit+ ('.' digit+)?) ('s' | 'h' | 'd' | 'y') as s
-                     { let n = float_of_string (String.sub s 0 (String.length s - 1)) in
-                       let u = String.sub s (String.length s - 1) 1 in
-                       DUR_LIT (n, u) }
-  
-  (* Currency literals are recognized at the parser level (NUM_LIT
-     followed by 3-uppercase IDENT). The lexer just produces both
-     tokens separately. *)
-  
+  (* Duration literals (100ms / 5s / 3min) and currency codes were removed in
+     v1.1: a duration was just a number (milliseconds) and the distinction
+     earned no test. `2s` now lexes as NUM_LIT 2 + IDENT s — the general rule. *)
+
   (* Numbers *)
   | digit+ '.' digit+ as n  { NUM_LIT (float_of_string n) }
   | digit+ as n              { NUM_LIT (float_of_string n) }
@@ -311,12 +287,13 @@ rule token = parse
   | "||?"            { PIPEPIPEQ }
   | "=>?"            { FATARROWQ }
   | "!?"             { BANGQ }
-  (* Bitwise operators in the intuitionistic setting, tagged with `?`. *)
+  (* Bitwise operators in the intuitionistic setting, tagged with `?`.
+     These lower to topos.heyt_int_* ops on !topos.heyt_int<64> (value,mask). *)
   | "&?"             { AMPQ }
   | "|?"             { PIPEQ }
   | "^?"             { CARETQ }
   | "~?"             { TILDEQ }
-  
+
   (* `&&` / `||` accepted as aliases for the word forms `and` / `or`.
    * The multi-char tokens MUST come before the single-char ones for max-munch. *)
   | "&&"             { AMPAMP }
