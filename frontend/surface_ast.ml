@@ -62,7 +62,7 @@ type ty =
   | TySumIn of variant list * string list             (* "(...) in W" *)
   | TyList of ty                                      (* "list of T" *)
   | TyMap of ty * ty                                  (* "map of K to V" *)
-  | TyStream of ty * stream_modifier list             (* "stream of T buffer N drop_newest" *)
+  | TyStream of ty                                    (* "stream of T" *)
   | TyWire of string                                  (* the handle of "wire to Space"; carries the Space name *)
   | TySubscription of string * ty                     (* the handle of w.awaits(f); carries the Space name and the stream element type *)
   | TyUser of string                                  (* user-defined place name *)
@@ -112,10 +112,9 @@ and variant = {
   v_args : ty list;
 }
 
-and stream_modifier =
-  | StreamBuffer of int
-  | StreamDropOldest
-  | StreamDropNewest
+(* Stream back-pressure modifiers (buffer/drop) were removed entirely in v1.1:
+   the surface syntax was parsed but never consumed, so a stream type is now
+   just `stream of T` (TyStream of ty). *)
 
 (* ─── Expressions ──────────────────────────────────────────────────── *)
 

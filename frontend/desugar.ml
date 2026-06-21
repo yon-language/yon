@@ -172,7 +172,7 @@ let rec desugar_ty (t : S.ty) : C.ty =
       C.TyPlace "sum"
   | S.TyList inner -> C.TyPlace ("list_of_" ^ ty_name inner)
   | S.TyMap (_, _) -> C.TyPlace "map"
-  | S.TyStream (inner, _mods) -> C.TyStream (desugar_ty inner)
+  | S.TyStream inner -> C.TyStream (desugar_ty inner)
   | S.TyUser n -> C.TyPlace n
   | S.TyVar n -> C.TyPlace n   (* type vars compile to opaque place at IR level *)
   | S.TyMetaVar n -> C.TyPlace (Printf.sprintf "alpha%d" n)  (* HM meta-var, same lowering *)

@@ -147,10 +147,8 @@
          where the logic is not assumed two-valued. *)
       "heyting", HEYT_INT_KW;
 
-      (* Stream back-pressure policy: bound the buffer, or drop old/new items. *)
-      "buffer", BUFFER;
-      "drop", DROP;             (* `drop oldest` / `drop newest`: the
-                                   policy word after `drop` is contextual *)
+      (* Stream back-pressure modifiers (buffer/drop) were removed in v1.1:
+         they were parsed but never consumed (TyStream had no policy field). *)
 
       (* Control flow *)
       "when", WHEN;
@@ -187,7 +185,8 @@
       (* Operators (word form) *)
       "and", AND;
       "or", OR;
-      "all", ALL;
+      (* `all` (EAll, "all P where c") removed in v1.1: the condition was
+         dropped at desugar and the construct had no lowering. *)
       "where", WHERE;
       
       (* View keywords *)

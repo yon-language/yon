@@ -658,7 +658,7 @@ let rec ast_ty_to_surface (a : ty) : Surface_ast.ty =
       if Carrier.is_prim_name n then Surface_ast.TyPrim n
       else Surface_ast.TyUser n
   | TyType n -> Surface_ast.TyUniverse n
-  | TyStream t -> Surface_ast.TyStream (ast_ty_to_surface t, [])
+  | TyStream t -> Surface_ast.TyStream (ast_ty_to_surface t)
   | TyArrow (x, y) -> Surface_ast.TyArrow (ast_ty_to_surface x, ast_ty_to_surface y)
   | TyPi (x, p, q) -> Surface_ast.TyPi (x, ast_ty_to_surface p, ast_ty_to_surface q)
   | TySigma (x, p, q) -> Surface_ast.TySigma (x, ast_ty_to_surface p, ast_ty_to_surface q)
@@ -669,7 +669,7 @@ let rec surface_ty_to_ast (a : Surface_ast.ty) : ty =
   | Surface_ast.TyPrim n -> TyPlace n
   | Surface_ast.TyUser n -> TyPlace n
   | Surface_ast.TyUniverse n -> TyType n
-  | Surface_ast.TyStream (t, _) -> TyStream (surface_ty_to_ast t)
+  | Surface_ast.TyStream t -> TyStream (surface_ty_to_ast t)
   | Surface_ast.TyArrow (x, y) -> TyArrow (surface_ty_to_ast x, surface_ty_to_ast y)
   | Surface_ast.TyPi (x, p, q) -> TyPi (x, surface_ty_to_ast p, surface_ty_to_ast q)
   | Surface_ast.TySigma (x, p, q) -> TySigma (x, surface_ty_to_ast p, surface_ty_to_ast q)

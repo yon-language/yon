@@ -1,11 +1,10 @@
-// Micro-example: stream back-pressure modifiers in type position.
-// `buffer N` bounds the queue; `drop oldest` / `drop newest` choose
-// the drop policy (the policy word after `drop` is contextual). The
-// place carries the modified stream types through the full chain;
-// instantiation of stream-typed fields is a separate capability.
+// Micro-example: `stream of T` in type position. Back-pressure modifiers
+// (buffer N / drop oldest|newest) were removed in v1.1 — they were parsed
+// but never consumed (TyStream carried no policy). A place can still hold
+// stream-typed fields; instantiation of those fields is a separate capability.
 world W { Code is X }
-place StreamShape in W { events stream of number buffer 4 drop oldest
-  tail stream of number drop newest }
+place StreamShape in W { events stream of number
+  tail stream of number }
 place Plain in W { count number }
 fun main(): number {
   be p holds new Plain { count 33 }

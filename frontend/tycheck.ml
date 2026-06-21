@@ -736,7 +736,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
         | _ -> 0
       in
       Hashtbl.replace substream_site_table (loc.start_line, loc.start_col) n_bytes;
-      ok (TyStream (elem, []))
+      ok (TyStream elem)
 
   | EField (obj, fld, loc) ->
       (* Cross-space field-access detection. If obj is a variable bound in an
@@ -821,7 +821,7 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                        | None -> Hashtbl.find_opt wire_fun_returns bare
                      in
                      (match ret with
-                      | Some (Some (TyStream (elem, _))) ->
+                      | Some (Some (TyStream elem)) ->
                           let sel = Module_prefix.op_selector bare in
                           (* The wire carries a variable-length frame, not the
                              raw payload, so the channel slot is a generous cap
@@ -1086,7 +1086,7 @@ got %s" (Tyenv.ty_to_string other)))
       let* _ = !produce_check_ref env ctx body None in
       let elem = (match !produce_emit_ty with Some t -> t | None -> TyPrim "number") in
       produce_emit_ty := saved;
-      ok (TyStream (elem, []))
+      ok (TyStream elem)
   | ESpawn (count, body, loc) ->
       (* spawn { ... } / spawn in N parallel { ... } as an expression: the body
          runs in one or N isolated forked replicas; each `promote E` contributes
@@ -1107,7 +1107,7 @@ got %s" (Tyenv.ty_to_string other)))
       (match !spawn_promote_ty with
        | Some elem ->
            spawn_promote_ty := saved;
-           ok (TyStream (elem, []))
+           ok (TyStream elem)
        | None ->
            spawn_promote_ty := saved;
            err loc "spawn block has no promote: it must promote at least one value")
@@ -2060,7 +2060,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       let* coll_ty = infer env ctx collection in
       let elem_ty = match coll_ty with
         | TyList inner -> Some inner
-        | TyStream (inner, _) ->
+        | TyStream inner ->
             (* stream collection: the desugar drains the wire instead of
                walking cons cells; register the site. *)
             Hashtbl.replace stream_foreach_table (loc.start_line, loc.start_col) ();
@@ -2258,7 +2258,7 @@ let rec level_of_type (t : ty) : int =
       max (level_of_type a) (level_of_type b)
   | TyId (a, _, _) -> level_of_type a
   | TyPathP ((_, a), _, _) -> level_of_type a
-  | TyList inner | TyStream (inner, _) -> level_of_type inner
+  | TyList inner | TyStream inner -> level_of_type inner
   | TyMap (k, v) -> max (level_of_type k) (level_of_type v)
   | TySum vs | TySumIn (vs, _) ->
       List.fold_left
@@ -2333,7 +2333,7 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         | TyUser n when List.mem n fn.fn_type_params -> TyVar n
         | TyList inner -> TyList (rebind_ty inner)
         | TyMap (k, v) -> TyMap (rebind_ty k, rebind_ty v)
-        | TyStream (inner, ms) -> TyStream (rebind_ty inner, ms)
+        | TyStream inner -> TyStream (rebind_ty inner)
         | TySum vs ->
             TySum (List.map
               (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs)
@@ -2947,7 +2947,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
        * just verify the carrier type is well-formed. *)
       check_type_well_formed env a loc
   | TyPathP ((_, a), _, _) -> check_type_well_formed env a loc
-  | TyList inner | TyStream (inner, _) ->
+  | TyList inner | TyStream inner ->
       check_type_well_formed env inner loc
   | TyMap (k, v) ->
       let* () = check_type_well_formed env k loc in
@@ -3030,7 +3030,7 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
     | TyUser n when List.mem n fn.fn_type_params -> TyVar n
     | TyList inner -> TyList (rebind_ty inner)
     | TyMap (k, v) -> TyMap (rebind_ty k, rebind_ty v)
-    | TyStream (inner, ms) -> TyStream (rebind_ty inner, ms)
+    | TyStream inner -> TyStream (rebind_ty inner)
     | TySum vs ->
         TySum (List.map
           (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs)
@@ -3102,7 +3102,7 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     | TyUser n when List.mem n fn.fn_type_params -> TyVar n
     | TyList inner -> TyList (rebind_ty inner)
     | TyMap (k, v) -> TyMap (rebind_ty k, rebind_ty v)
-    | TyStream (inner, ms) -> TyStream (rebind_ty inner, ms)
+    | TyStream inner -> TyStream (rebind_ty inner)
     | TySum vs ->
         TySum (List.map
           (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs)

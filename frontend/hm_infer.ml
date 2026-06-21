@@ -266,7 +266,7 @@ let rec metavar_to_unknown (t : ty) : ty =
   | TyMetaVar _ -> TyPrim "unknown"
   | TyList inner -> TyList (metavar_to_unknown inner)
   | TyMap (k, v) -> TyMap (metavar_to_unknown k, metavar_to_unknown v)
-  | TyStream (inner, m) -> TyStream (metavar_to_unknown inner, m)
+  | TyStream inner -> TyStream (metavar_to_unknown inner)
   | TyArrow (a, b) -> TyArrow (metavar_to_unknown a, metavar_to_unknown b)
   | TyPi (x, a, b) -> TyPi (x, metavar_to_unknown a, metavar_to_unknown b)
   | TySigma (x, a, b) -> TySigma (x, metavar_to_unknown a, metavar_to_unknown b)

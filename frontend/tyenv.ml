@@ -407,7 +407,7 @@ let rec type_tag (t : ty) : string =
   | TyUniverse n -> Printf.sprintf "Type_%d" n
   | TyList inner -> "list_" ^ type_tag inner
   | TyMap (k, v) -> "map_" ^ type_tag k ^ "_" ^ type_tag v
-  | TyStream (inner, _) -> "stream_" ^ type_tag inner
+  | TyStream inner -> "stream_" ^ type_tag inner
   | TyPi (_, _, _) -> "Pi"
   | TySigma (_, _, _) -> "Sigma"
   | TyId (a, _, _) -> "Id_" ^ type_tag a
@@ -535,7 +535,7 @@ let rec ty_to_string (t : ty) : string =
   | TyEl (TyTermExpr e) -> Printf.sprintf "El(%s)" (ty_term_to_name e)
   | TyList inner -> "list of " ^ ty_to_string inner
   | TyMap (k, v) -> "map of " ^ ty_to_string k ^ " to " ^ ty_to_string v
-  | TyStream (inner, _) -> "stream of " ^ ty_to_string inner
+  | TyStream inner -> "stream of " ^ ty_to_string inner
   | TySum variants ->
       String.concat " | " (List.map variant_to_string variants)
   | TySumIn (variants, ws) ->

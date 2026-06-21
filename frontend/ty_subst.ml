@@ -56,7 +56,7 @@ let rec apply_subst (sigma : subst) (t : ty) : ty =
        | None -> t)
   | TyList inner -> TyList (apply_subst sigma inner)
   | TyMap (k, v) -> TyMap (apply_subst sigma k, apply_subst sigma v)
-  | TyStream (inner, mods) -> TyStream (apply_subst sigma inner, mods)
+  | TyStream inner -> TyStream (apply_subst sigma inner)
   | TyPi (x, a, b) -> TyPi (x, apply_subst sigma a, apply_subst sigma b)
   | TySigma (x, a, b) -> TySigma (x, apply_subst sigma a, apply_subst sigma b)
   | TyId (a, x, y) -> TyId (apply_subst sigma a, x, y)
@@ -99,7 +99,7 @@ let rec free_metavars (t : ty) : int list =
   | TyMetaVar n -> [n]
   | TyList inner -> free_metavars inner
   | TyMap (k, v) -> free_metavars k @ free_metavars v
-  | TyStream (inner, _) -> free_metavars inner
+  | TyStream inner -> free_metavars inner
   | TyPi (_, a, b) | TySigma (_, a, b) -> free_metavars a @ free_metavars b
   | TyId (a, _, _) -> free_metavars a
   | TyPathP ((_, a), _, _) -> free_metavars a
@@ -167,7 +167,7 @@ let rec unify (a : ty) (b : ty) : subst =
       let s1 = unify k1 k2 in
       let s2 = unify (apply_subst s1 v1) (apply_subst s1 v2) in
       compose_subst s2 s1
-  | TyStream (i1, m1), TyStream (i2, m2) when m1 = m2 -> unify i1 i2
+  | TyStream i1, TyStream i2 -> unify i1 i2
   | TyPi (_, a1, b1), TyPi (_, a2, b2)
   | TySigma (_, a1, b1), TySigma (_, a2, b2) ->
       let s1 = unify a1 a2 in

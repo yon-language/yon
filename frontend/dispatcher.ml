@@ -53,7 +53,7 @@ let is_cubical_name (n : string) : bool =
 let rec classify_ty (t : ty) : fragment =
   match t with
   | TyUser n when is_cubical_name n -> FragCubical
-  | TyList inner | TyStream (inner, _) -> classify_ty inner
+  | TyList inner | TyStream inner -> classify_ty inner
   | TyMap (k, v) ->
       (match classify_ty k, classify_ty v with
        | FragCubical, _ | _, FragCubical -> FragCubical
@@ -162,7 +162,7 @@ let rec lift_to_cubical (t : ty) : Cubical.ctype =
       Cubical.CTBase t
   | TyList inner -> Cubical.CTBase (TyList inner)
   | TyMap (k, v) -> Cubical.CTBase (TyMap (k, v))
-  | TyStream (inner, ms) -> Cubical.CTBase (TyStream (inner, ms))
+  | TyStream inner -> Cubical.CTBase (TyStream inner)
   | TySum _ | TySumIn _ -> Cubical.CTBase t
   | TyHeytInt _ -> Cubical.CTBase t
   | TyArrow _ -> Cubical.CTBase t

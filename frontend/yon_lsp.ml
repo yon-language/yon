@@ -80,7 +80,7 @@ let rec ty_str (t : Surface_ast.ty) : string =
   | Surface_ast.TySumIn _ -> "sum"
   | Surface_ast.TyList t -> "list of " ^ ty_str t
   | Surface_ast.TyMap (k, v) -> "map of " ^ ty_str k ^ " to " ^ ty_str v
-  | Surface_ast.TyStream (t, _) -> "stream of " ^ ty_str t
+  | Surface_ast.TyStream t -> "stream of " ^ ty_str t
   | Surface_ast.TyUser s -> s
   | Surface_ast.TyVar s -> s
   | Surface_ast.TyMetaVar n -> Printf.sprintf "?%d" n

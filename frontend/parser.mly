@@ -154,8 +154,7 @@
 %token COMP
 %token SHARE RESOLVES
 
-/* Stream modifiers */
-%token BUFFER DROP
+/* Stream back-pressure modifiers (BUFFER/DROP) removed in v1.1 — were inert. */
 
 /* Control flow */
 %token WHEN OTHERWISE FOR EVERY EACH HERE SEQUENCE OVER REPEAT AT MOST TIMES
@@ -169,7 +168,8 @@
 %token HOLDS
 
 /* Boolean operators */
-%token AND OR ALL WHERE
+/* ALL removed in v1.1 (EAll "all P where c" dropped — condition was inert). */
+%token AND OR WHERE
 /* The symbols &&/|| as aliases for and/or. */
 %token AMPAMP PIPEPIPE
 /* ! as an alias for unary `not`.
@@ -250,9 +250,6 @@
 %nonassoc NO_ELIF
 %nonassoc WHEN
 
-/* Precedence for stream modifiers (innermost binding). */
-%nonassoc NO_STREAM_MOD
-%nonassoc BUFFER DROP
 
 /* ─── Start symbol ──────────────────────────────────────────────────── */
 
@@ -881,8 +878,8 @@ type_atom:
     { TyList t }
   | MAP OF k = type_atom TO v = type_atom
     { TyMap (k, v) }
-  | STREAM OF t = type_atom ms = stream_mod_list
-    { TyStream (t, ms) }
+  | STREAM OF t = type_atom
+    { TyStream t }
   | TYPE_KW
     { TyUniverse 0 }
   | n = TYPE_LEVEL
@@ -945,23 +942,7 @@ variant:
   | name = IDENT LPAREN args = separated_list(COMMA, type_expr) RPAREN
     { { v_name = name; v_args = args } }
 
-stream_modifier:
-  | BUFFER n = NUM_LIT                          { StreamBuffer (int_of_float n) }
-  (* `drop oldest` / `drop newest`: DROP is a keyword (a bare two-word
-   * contextual form would be ambiguous with `name type` field pairs in
-   * type position), the policy word is contextual. *)
-  | DROP which = IDENT
-    { match which with
-      | "oldest" -> StreamDropOldest
-      | "newest" -> StreamDropNewest
-      | w -> failwith ("expected 'drop oldest' or 'drop newest', got 'drop "
-                       ^ w ^ "'") }
-
-stream_mod_list:
-  | /* empty */                                 %prec NO_STREAM_MOD
-    { [] }
-  | m = stream_modifier rest = stream_mod_list
-    { m :: rest }
+(* stream_modifier / stream_mod_list removed in v1.1 (BUFFER/DROP were inert). *)
 
 ident_list:
   | items = separated_nonempty_list(COMMA, IDENT)  { items }
@@ -1586,8 +1567,8 @@ expr_atom:
        * value. Low precedence: captures as much of the expression to the right
        * as possible. *)
       EIfThenElse (c, a, b, mk_loc $startpos $endpos) }
-  | ALL name = IDENT WHERE c = condition  %prec LOWEST                             
-    { EAll (name, c, mk_loc $startpos $endpos) }
+  (* EAll ("all P where c") removed in v1.1: condition was dropped at desugar,
+     __all had no lowering, unused in the corpus. *)
 
 hcomp_side:
   | face_var = IDENT EQ I0 FATARROW PLAM binder = IDENT FATARROW body = expr

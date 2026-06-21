@@ -478,7 +478,7 @@ and ty_structural_eq (t1 : ty) (t2 : ty) : bool =
   | TyList a, TyList b -> ty_structural_eq a b
   | TyMap (k1, v1), TyMap (k2, v2) ->
       ty_structural_eq k1 k2 && ty_structural_eq v1 v2
-  | TyStream (a, _), TyStream (b, _) -> ty_structural_eq a b
+  | TyStream a, TyStream b -> ty_structural_eq a b
   | TySum vs1, TySum vs2 ->
       List.length vs1 = List.length vs2
       && List.for_all2 variant_eq vs1 vs2
