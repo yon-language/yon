@@ -530,20 +530,45 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        * cannot yet express (no PathP in Surface_ast.ty); their branches are
        * inferred and accepted, the full dependent path-over check being the
        * next refinement. *)
-      let* x_ty = infer env ctx x in
-      let hit_name =
+      let* c_ty = infer env ctx c in
+      let* x_ty =
+        match c_ty with
+        | TyArrow (domain, _) | TyPi (_, domain, _) ->
+            let* () = check env ctx x domain in
+            ok domain
+        | _ -> err loc "hit_elim: motive must be a function from the HIT"
+      in
+      let hit_signature =
         match x_ty with
-        | TyPrim n | TyPrimIn (n, _) | TyUser n -> Some n
+        | TySum variants | TySumIn (variants, _) ->
+            let name = Tyenv.type_tag x_ty in
+            let points =
+              List.map
+                (fun variant ->
+                   let params =
+                     List.mapi
+                       (fun i ty -> (Printf.sprintf "arg%d" i, ty))
+                       variant.v_args
+                   in
+                   { Hit_env.pc_name = variant.v_name;
+                     pc_params = params;
+                     pc_result = x_ty })
+                variants
+            in
+            Some (name,
+              { Hit_env.hit_name = name;
+                hit_type_params = [];
+                hit_points = points;
+                hit_paths = [] })
+        | TyPrim n | TyPrimIn (n, _) | TyUser n ->
+            Option.map (fun sig_ -> (n, sig_))
+              (Hit_env.lookup Hit_env.builtin_env n)
         | _ -> None in
-      (match hit_name with
+      (match hit_signature with
        | None ->
            err loc (Printf.sprintf "hit_elim: target is not a higher inductive type (got %s)"
                       (Tyenv.ty_to_string x_ty))
-       | Some hname ->
-           (match Hit_env.lookup Hit_env.builtin_env hname with
-            | None -> err loc (Printf.sprintf "hit_elim: %s is not a known HIT" hname)
-            | Some sig_ ->
-                let* c_ty = infer env ctx c in
+       | Some (hname, sig_) ->
                 let rec lands_in_universe = function
                   | TyArrow (_, cod) | TyPi (_, _, cod) -> lands_in_universe cod
                   | TyUniverse _ -> true
@@ -660,7 +685,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                        in
                        let* () = check_rec branches in
                        ok cod
-                   | _ -> err loc "hit_elim: motive must be a function from the HIT")))
+                   | _ -> err loc "hit_elim: motive must be a function from the HIT"))
 
   | EPathApp (p, _d, loc) ->
       (* path application p @ d. p must be a path (Id type); the result is a
@@ -698,7 +723,33 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
               else None)
           None Hit_env.builtin_env in
       (match found with
-       | None -> err loc (Printf.sprintf "hit: unknown HIT constructor %s" ctor)
+       | None ->
+           (match Tyenv.lookup_sum_constructor env ctor with
+            | [] -> err loc (Printf.sprintf "hit: unknown HIT constructor %s" ctor)
+            | [(variants, variant)] ->
+                if List.length args <> List.length variant.v_args then
+                  err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+                    ctor (List.length variant.v_args) (List.length args))
+                else
+                  let rec check_args actual expected =
+                    match actual, expected with
+                    | [], [] -> ok ()
+                    | arg :: actual, ty :: expected ->
+                        let* () = check env ctx arg ty in
+                        check_args actual expected
+                    | _ -> assert false
+                  in
+                  let* () = check_args args variant.v_args in
+                  ok (TySum variants)
+            | candidates ->
+                let signatures =
+                  List.map
+                    (fun (variants, _) -> Tyenv.ty_to_string (TySum variants))
+                    candidates
+                in
+                err loc (Printf.sprintf
+                  "hit(%s): ambiguous sum constructor; candidates: %s"
+                  ctor (String.concat "; " signatures)))
        | Some (sig_, `Point) ->
            let p = List.find (fun (p : Hit_env.point_constructor) ->
                                 p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points in
@@ -1540,6 +1591,25 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
          (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual))
   in
   match e, expected with
+  | EHITConstr (ctor, args, loc), (TySum variants | TySumIn (variants, _)) ->
+      (match List.find_opt (fun variant -> variant.v_name = ctor) variants with
+       | None -> err loc (Printf.sprintf
+           "hit(%s): constructor does not belong to expected sum %s"
+           ctor (Tyenv.ty_to_string expected))
+       | Some variant ->
+           if List.length args <> List.length variant.v_args then
+             err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+               ctor (List.length variant.v_args) (List.length args))
+           else
+             let rec check_args actual expected =
+               match actual, expected with
+               | [], [] -> ok ()
+               | arg :: actual, ty :: expected ->
+                   let* () = check env ctx arg ty in
+                   check_args actual expected
+               | _ -> assert false
+             in
+             check_args args variant.v_args)
   | ELam (params, body, _), (TyPi _ | TyArrow _) ->
       (* Bidirectional lambda checking.  A dependent expected type carries the
          information needed to type an unannotated surface lambda and to align
@@ -2377,10 +2447,46 @@ let place_is_subtype (env : Tyenv.env) (ctx : Reduce.ctx)
         place_field_subset env ctx pd_super pd_sub
     | _ -> false
 
+let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
+  match t with
+  | TySum variants | TySumIn (variants, _) ->
+      List.fold_left
+        (fun env variant ->
+           List.fold_left register_sum_types_in_ty env variant.v_args)
+        (Tyenv.add_sum_type env variants) variants
+  | TyList inner | TyStream inner | TySubscription (_, inner) ->
+      register_sum_types_in_ty env inner
+  | TyMap (key, value) | TyArrow (key, value) ->
+      register_sum_types_in_ty (register_sum_types_in_ty env key) value
+  | TyPi (_, domain, codomain) | TySigma (_, domain, codomain) ->
+      register_sum_types_in_ty (register_sum_types_in_ty env domain) codomain
+  | TyId (carrier, _, _) | TyPathP ((_, carrier), _, _) ->
+      register_sum_types_in_ty env carrier
+  | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _ | TyMetaVar _
+  | TyUniverse _ | TyHeytInt _ | TyMoveHandle _ | TyReductionHandle _
+  | TyMorphHandle _ | TyViewHandle _ | TyWire _ | TyEl _ -> env
+
 let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   match td with
   | TopWorld wd -> Tyenv.add_world env wd
-  | TopPlace pd -> Tyenv.add_place env pd
+  | TopPlace pd ->
+      let env =
+        List.fold_left
+          (fun acc -> function
+             | FoField field -> register_sum_types_in_ty acc field.fd_ty
+             | FoOp op ->
+                 let acc =
+                   List.fold_left
+                     (fun acc p -> register_sum_types_in_ty acc p.param_ty)
+                     acc op.op_params
+                 in
+                 (match op.op_return with
+                  | Some ty -> register_sum_types_in_ty acc ty
+                  | None -> acc)
+             | FoCell _ | FoLaw _ -> acc)
+          env pd.pd_members
+      in
+      Tyenv.add_place env pd
   | TopFun fn ->
       (* Rebind TyUser -> TyVar wherever a TyUser refers to a generic
        * type parameter declared in fn_type_params. Same logic as in
@@ -2400,12 +2506,21 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
               (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs, ws)
         | other -> other
       in
+      let rebound_params = List.map
+        (fun p -> (p.param_name, rebind_ty p.param_ty)) fn.fn_params in
+      let rebound_return =
+        match fn.fn_return with
+        | Some t -> rebind_ty t
+        | None -> TyPrim "unit"
+      in
+      let env =
+        List.fold_left
+          (fun acc (_, t) -> register_sum_types_in_ty acc t)
+          (register_sum_types_in_ty env rebound_return) rebound_params
+      in
       let sig_ : E.fun_sig = {
-        fs_params = List.map
-          (fun p -> (p.param_name, rebind_ty p.param_ty)) fn.fn_params;
-        fs_return = (match fn.fn_return with
-                     | Some t -> rebind_ty t
-                     | None -> TyPrim "unit");
+        fs_params = rebound_params;
+        fs_return = rebound_return;
         fs_visits = fn.fn_visits;
         fs_partial = fn.fn_partial;
       } in
@@ -2419,7 +2534,15 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   | TopMove _ -> env
   | TopView vd -> Tyenv.add_view env vd
   | TopReduction rd -> Tyenv.add_reduction env rd
-  | TopOperation _ -> env
+  | TopOperation op ->
+      let env =
+        List.fold_left
+          (fun acc p -> register_sum_types_in_ty acc p.param_ty)
+          env op.op_params
+      in
+      (match op.op_return with
+       | Some ty -> register_sum_types_in_ty env ty
+       | None -> env)
   | TopImport _ -> env   (* import resolved physically pre-parse; no-op here *)
   | TopImportSym _ -> env   (* selective import: handled in 4b *)
   | TopImportFrom _ -> env   (* cross-Space import: handled at lowering *)

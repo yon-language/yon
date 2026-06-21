@@ -38,6 +38,9 @@ type op_sig = {
 
 type env = {
   vars : (string * ty) list;
+  (* Structural sum signatures visible in the program. Each sum is the
+     point-only HIT determined by its ordered constructor list. *)
+  sum_types : variant list list;
   intervals : interval_var list;
   places : (string * place_decl) list;
   worlds : (string * world_decl) list;
@@ -85,6 +88,7 @@ type env = {
 
 let empty : env = {
   vars = [];
+  sum_types = [];
   intervals = [];
   places = [];
   worlds = [];
@@ -261,6 +265,19 @@ let add_var (env : env) (x : string) (t : ty) : env =
 let add_vars (env : env) (bindings : (string * ty) list) : env =
   { env with vars = bindings @ env.vars }
 
+let add_sum_type (env : env) (variants : variant list) : env =
+  if List.exists (( = ) variants) env.sum_types then env
+  else { env with sum_types = variants :: env.sum_types }
+
+let lookup_sum_constructor (env : env) (name : string)
+    : (variant list * variant) list =
+  List.filter_map
+    (fun variants ->
+       match List.find_opt (fun v -> v.v_name = name) variants with
+       | Some variant -> Some (variants, variant)
+       | None -> None)
+    env.sum_types
+
 (* Bind a variable together with an explicit originating space. Used by
    `let x holds new P in EU { ... }`. *)
 let add_var_in_space (env : env) (x : string) (t : ty) (space : string) : env =
@@ -413,7 +430,19 @@ let rec type_tag (t : ty) : string =
   | TyId (a, _, _) -> "Id_" ^ type_tag a
   | TyPathP ((_, a), _, _) -> "PathP_" ^ type_tag a
   | TyEl (TyTermExpr e) -> "El_" ^ ty_term_to_name e
-  | TySum _ | TySumIn _ -> "sum"
+  | TySum variants | TySumIn (variants, _) ->
+      let frame s = string_of_int (String.length s) ^ ":" ^ s in
+      let variant_tag v =
+        frame v.v_name
+        ^ string_of_int (List.length v.v_args) ^ "["
+        ^ String.concat "" (List.map (fun arg -> frame (type_tag arg)) v.v_args)
+        ^ "]"
+      in
+      let signature =
+        string_of_int (List.length variants) ^ "__"
+        ^ String.concat "" (List.map variant_tag variants)
+      in
+      "sum_" ^ Digest.to_hex (Digest.string signature)
   | TyHeytInt n -> "heyt_int_" ^ string_of_int n
   | TyArrow (a, b) -> "arrow_" ^ type_tag a ^ "_" ^ type_tag b
   | TyMoveHandle (w1, w2) ->

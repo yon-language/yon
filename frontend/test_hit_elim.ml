@@ -76,5 +76,42 @@ let () =
    | Error _ -> check "non-HIT target rejected" true
    | Ok _ -> check "wrongly accepted non-HIT target" false);
 
+  let sum_ab =
+    TySum
+      [{ v_name = "A"; v_args = [] };
+       { v_name = "B"; v_args = [TyPrim "number"] }]
+  in
+  let sum_ac =
+    TySum
+      [{ v_name = "A"; v_args = [] };
+       { v_name = "C"; v_args = [TyPrim "number"] }]
+  in
+  check "distinct sum signatures have distinct Core carriers"
+    (Desugar.desugar_ty sum_ab <> Desugar.desugar_ty sum_ac);
+  let sum_env = Tyenv.add_sum_type Tyenv.empty
+      (match sum_ab with TySum variants -> variants | _ -> assert false) in
+  (match Tycheck.infer sum_env ctx
+           (EHITConstr ("B", [ELit (LitNumber 7., dl)], dl)) with
+   | Ok inferred -> check "sum constructor synthesizes its declared sum type"
+       (Dispatcher.type_equal sum_env ctx inferred sum_ab)
+   | Error e -> check (Printf.sprintf "sum constructor failed: %s"
+       (Tycheck.error_to_string e)) false);
+  let sum_ab_text =
+    TySum
+      [{ v_name = "A"; v_args = [] };
+       { v_name = "B"; v_args = [TyPrim "text"] }]
+  in
+  let ambiguous_env =
+    match sum_ab, sum_ab_text with
+    | TySum first, TySum second ->
+        Tyenv.add_sum_type (Tyenv.add_sum_type Tyenv.empty first) second
+    | _ -> assert false
+  in
+  (match Tycheck.check ambiguous_env ctx
+           (EHITConstr ("B", [ELit (LitNumber 7., dl)], dl)) sum_ab with
+   | Ok () -> check "expected sum disambiguates a shared constructor name" true
+   | Error e -> check (Printf.sprintf "sum disambiguation failed: %s"
+       (Tycheck.error_to_string e)) false);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

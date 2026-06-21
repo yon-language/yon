@@ -166,10 +166,11 @@ let rec desugar_ty (t : S.ty) : C.ty =
       (match n with
        | "text" | "number" | "boolean" | "money" -> C.TyPlace n
        | other -> C.TyPlace other)
-  | S.TySum _ | S.TySumIn _ ->
-      (* Sum types compile to base types in the prototype; a full
-         translation would unfold into tagged unions. *)
-      C.TyPlace "sum"
+  | (S.TySum _ | S.TySumIn _) as sum_ty ->
+      (* A surface sum is the point-only HIT determined by its constructors.
+         Its Core carrier is content-addressed by that signature instead of
+         collapsing every distinct sum to the old nominal stub "sum". *)
+      C.TyPlace (Tyenv.type_tag sum_ty)
   | S.TyList inner -> C.TyPlace ("list_of_" ^ ty_name inner)
   | S.TyMap (_, _) -> C.TyPlace "map"
   | S.TyStream inner -> C.TyStream (desugar_ty inner)
@@ -247,7 +248,7 @@ and ty_name (t : S.ty) : string =
   | S.TyList _ -> "list"
   | S.TyMap _ -> "map"
   | S.TyStream _ -> "stream"
-  | S.TySum _ | S.TySumIn _ -> "sum"
+  | (S.TySum _ | S.TySumIn _) as sum_ty -> Tyenv.type_tag sum_ty
   | S.TyHeytInt n -> Printf.sprintf "heyt_int_%d" n
   | S.TyArrow _ -> "arrow"
   | S.TyMoveHandle _ -> "move_handle"
