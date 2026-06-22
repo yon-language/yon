@@ -2995,6 +2995,14 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_file_exists(%s) : (f64) -> f64" v va);
       (v, "f64")
+  | C.App (C.Var "__stream_from_list", l) ->
+      (* Uno stream costruito da una lista, usato come VALORE (return/bind): il
+       * runtime non ha un costruttore di stream separato — lo stream È l'handle
+       * della lista. Nelle pipeline Seq (fold/filter/map) questo nodo viene
+       * spacchettato prima da `collect source`; qui copriamo l'uso standalone,
+       * che altrimenti cadeva nel throw "unknown function". *)
+      let (vl, _) = emit_term e env funcs l in
+      (vl, "f64")
   | C.App (C.Var "Seq__range", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
