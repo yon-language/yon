@@ -553,6 +553,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
      * Elements are type-2 points (xcoord -> f64); membership is by class. *)
     "XRelSet", [
       "empty", [], TyUser "Map";
+      "add_ref", [TyUser "Map"; tnum], tnum;   (* costruisce il frame di riferimento prima del freeze *)
       "add", [TyUser "Map"; tnum], TyUser "Map";
       "contains", [TyUser "Map"; tnum], tbool;
       "size", [TyUser "Map"], tnum;
@@ -563,6 +564,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
      * insert(m, point, value): the key is the class of point, not the specimen. *)
     "XRelMap", [
       "empty", [], TyUser "Map";
+      "add_ref", [TyUser "Map"; tnum], tnum;   (* costruisce il frame di riferimento prima del freeze *)
       "insert", [TyUser "Map"; tnum; tnum], TyUser "Map";
       "get", [TyUser "Map"; tnum], tnum;
       "contains", [TyUser "Map"; tnum], tbool;

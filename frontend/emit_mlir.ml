@@ -907,6 +907,8 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "XSet__to_stream", _) -> "f64"
   | C.App (C.App (C.Var "XRelSet__contains", _), _) -> "i1"
   | C.App (C.App (C.Var "XRelSet__add", _), _) -> "f64"
+  | C.App (C.App (C.Var "XRelSet__add_ref", _), _) -> "f64"
+  | C.App (C.App (C.Var "XRelMap__add_ref", _), _) -> "f64"
   | C.App (C.App (C.Var "XRelSet__union", _), _) -> "f64"
   | C.App (C.App (C.Var "XRelSet__intersect", _), _) -> "f64"
   | C.App (C.Var "XRelSet__size", _) -> "f64"
@@ -2039,6 +2041,20 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelset_add(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "XRelSet__add_ref", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelset_add_ref(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "XRelMap__add_ref", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xrelmap_add_ref(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XRelSet__contains", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
@@ -5860,12 +5876,14 @@ let emit_program (dr : Desugar.desugar_result) : string =
      -> il verifier rifiutava (build-fail su 0 copertura, regressione silenziosa).
      Le def esistono tutte in yon_rt.c. *)
   emit_line e "func.func private @yon_rt_xrelset_empty() -> f64";
+  emit_line e "func.func private @yon_rt_xrelset_add_ref(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelset_add(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelset_contains(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelset_size(f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelset_union(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelset_intersect(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_empty() -> f64";
+  emit_line e "func.func private @yon_rt_xrelmap_add_ref(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_insert(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_get(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_contains(f64, f64) -> f64";
