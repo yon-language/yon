@@ -1,6 +1,9 @@
 [package]
 name = "nested_svc"
 
+[runtime]
+backend = "shm"
+
 [world.W]
 objects = ["X"]
 spaces  = ["w"]

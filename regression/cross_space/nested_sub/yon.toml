@@ -1,6 +1,9 @@
 [package]
 name = "nested_sub"
 
+[runtime]
+backend = "shm"
+
 [world.W]
 objects = ["X"]
 spaces  = ["w", "Nested"]

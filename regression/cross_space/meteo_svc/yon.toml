@@ -1,6 +1,9 @@
 [package]
 name = "meteo_svc"
 
+[runtime]
+backend = "shm"
+
 [world.W]
 objects = ["X"]
 spaces  = ["w"]

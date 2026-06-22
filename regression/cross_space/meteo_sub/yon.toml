@@ -1,6 +1,9 @@
 [package]
 name = "meteo_sub"
 
+[runtime]
+backend = "shm"
+
 [world.W]
 objects = ["X"]
 spaces  = ["w", "Meteo"]

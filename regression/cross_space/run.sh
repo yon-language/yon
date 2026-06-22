@@ -7,6 +7,12 @@ YONC="$DIR/../../toolchain/yonc"
 TMP=$(mktemp -d)
 cp -r "$DIR/yon_modules" "$TMP/"
 cp "$DIR"/*.yon "$TMP/"
+for project in \
+  meteo_svc meteo_sub weather_svc weather_sub \
+  weatherbig_svc weatherbig_sub nested_svc nested_sub
+do
+  cp -r "$DIR/$project" "$TMP/"
+done
 cd "$TMP"
 fail=0
 "$YONC" bank.yon -o "$TMP/Bank_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: bank does not compile"; exit 1; }
@@ -42,8 +48,8 @@ timeout 20 ./subscriber >/dev/null 2>&1; rc=$?
 # crosses the process boundary by value: the pump flattens it to bytes, the
 # drain rebuilds it in the consumer's own heap. Seal 1 of the wire-DTO wormhole.
 rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
-"$YONC" meteo.yon -o "$TMP/Meteo_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: meteo does not compile"; exit 1; }
-"$YONC" sub_meteo.yon -o "$TMP/sub_meteo" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_meteo does not compile"; exit 1; }
+"$YONC" meteo_svc -o "$TMP/Meteo_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: meteo_svc does not compile"; exit 1; }
+"$YONC" meteo_sub -o "$TMP/sub_meteo" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: meteo_sub does not compile"; exit 1; }
 timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: DTO-place scenario rc=$rc (expected 36)"; fail=1; }
 # Scenario 6: a place with a STRING field crosses the wire. The Weather Space
@@ -53,8 +59,8 @@ timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
 # recursive length-prefixed frame carries the string content by value, rebuilt
 # in the consumer's own ds heap; (10+11+15) + length("ok")*3 = 36 + 6 = 42.
 rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
-"$YONC" weather.yon -o "$TMP/Weather_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather does not compile"; exit 1; }
-"$YONC" sub_weather.yon -o "$TMP/sub_weather" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_weather does not compile"; exit 1; }
+"$YONC" weather_svc -o "$TMP/Weather_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather_svc does not compile"; exit 1; }
+"$YONC" weather_sub -o "$TMP/sub_weather" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather_sub does not compile"; exit 1; }
 timeout 20 ./sub_weather >/dev/null 2>&1; rc=$?
 [ "$rc" = "42" ] || { echo "CROSS-SPACE FAIL: DTO-string scenario rc=$rc (expected 42)"; fail=1; }
 # Scenario 7: a DTO frame larger than the old 256-byte slot cap. The WeatherBig
@@ -63,8 +69,8 @@ timeout 20 ./sub_weather >/dev/null 2>&1; rc=$?
 # 250 = 255. Under seal 2b this frame could not cross (serialize > slot -> the
 # pump truncated); the dense byte ring of seal 2c carries it whole.
 rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
-"$YONC" weather_big.yon -o "$TMP/WeatherBig_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather_big does not compile"; exit 1; }
-"$YONC" sub_weather_big.yon -o "$TMP/sub_weather_big" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_weather_big does not compile"; exit 1; }
+"$YONC" weatherbig_svc -o "$TMP/WeatherBig_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weatherbig_svc does not compile"; exit 1; }
+"$YONC" weatherbig_sub -o "$TMP/sub_weather_big" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weatherbig_sub does not compile"; exit 1; }
 timeout 20 ./sub_weather_big >/dev/null 2>&1; rc=$?
 [ "$rc" = "255" ] || { echo "CROSS-SPACE FAIL: DTO-large-frame scenario rc=$rc (expected 255)"; fail=1; }
 # Scenario 8: a nested DTO. The Nested Space emits Outer {tag number, inner
@@ -74,8 +80,8 @@ timeout 20 ./sub_weather_big >/dev/null 2>&1; rc=$?
 # and rebuilt in the consumer's heap; the schema registry resolves the
 # sub-descriptor from the sub-frame's own id.
 rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
-"$YONC" nested_prod.yon -o "$TMP/Nested_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: nested_prod does not compile"; exit 1; }
-"$YONC" sub_nested.yon -o "$TMP/sub_nested" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: sub_nested does not compile"; exit 1; }
+"$YONC" nested_svc -o "$TMP/Nested_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: nested_svc does not compile"; exit 1; }
+"$YONC" nested_sub -o "$TMP/sub_nested" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: nested_sub does not compile"; exit 1; }
 timeout 20 ./sub_nested >/dev/null 2>&1; rc=$?
 [ "$rc" = "26" ] || { echo "CROSS-SPACE FAIL: nested-DTO scenario rc=$rc (expected 26)"; fail=1; }
 rm -rf "$TMP"
