@@ -53,8 +53,8 @@ let decode_bool (t : term) : bool option =
 
 let decode_string (t : term) : string option =
   match t with
-  | Var name when String.length name > 6 && String.sub name 0 6 = "__str_" ->
-      Some (String.sub name 6 (String.length name - 6))
+  | Var name when String.length name >= 6 && String.sub name 0 6 = "__str_" ->
+      Some (String.sub name 6 (String.length name - 6))   (* >= 6: la stringa vuota e' "__str_" *)
   | _ -> None
 
 (* ─── Observable output buffer ─────────────────────────────────────── *)

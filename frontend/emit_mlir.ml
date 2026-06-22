@@ -589,7 +589,7 @@ let g_strlit_order : string list ref = ref []
 
 let rec collect_string_literals (t : C.term) : unit =
   match t with
-  | C.Var x when String.length x > 6 && String.sub x 0 6 = "__str_" ->
+  | C.Var x when String.length x >= 6 && String.sub x 0 6 = "__str_" ->
       let content = String.sub x 6 (String.length x - 6) in
       if not (Hashtbl.mem g_strlits content) then begin
         let sym = Printf.sprintf "yon_strlit_%d" (Hashtbl.length g_strlits) in
@@ -853,7 +853,7 @@ let rec infer_mlir_ty (e : emitter)
                  | None ->
                      (* Otherwise: a string literal, an stdlib builtin, or a
                         place instantiation handle. *)
-                     if String.length x > 6 && String.sub x 0 6 = "__str_"
+                     if String.length x >= 6 && String.sub x 0 6 = "__str_"
                      then "f64"  (* String fusion: interned handle *)
                      else if is_stdlib_builtin x then
                        let (_, ret) = List.assoc x stdlib_registry in ret
@@ -1598,7 +1598,7 @@ let rec emit_term (e : emitter)
                 (* A string literal __str_X — String fusion: emit the
                  * address of its module global and intern it at runtime to
                  * an xheap handle (content-addressed: idempotent). *)
-                if String.length x > 6 && String.sub x 0 6 = "__str_" then begin
+                if String.length x >= 6 && String.sub x 0 6 = "__str_" then begin
                   let content = String.sub x 6 (String.length x - 6) in
                   let sym =
                     match Hashtbl.find_opt g_strlits content with
