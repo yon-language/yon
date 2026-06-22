@@ -5855,6 +5855,29 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_xset_union(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xset_intersect(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xset_to_list(f64) -> f64";
+  (* XRelSet / XRelMap / XSimplex — Leech-class collections. Le declaration
+     mancavano: il MLIR chiamava @yon_rt_xrel*/@yon_rt_xsimplex_* senza dichiararle
+     -> il verifier rifiutava (build-fail su 0 copertura, regressione silenziosa).
+     Le def esistono tutte in yon_rt.c. *)
+  emit_line e "func.func private @yon_rt_xrelset_empty() -> f64";
+  emit_line e "func.func private @yon_rt_xrelset_add(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelset_contains(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelset_size(f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelset_union(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelset_intersect(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelmap_empty() -> f64";
+  emit_line e "func.func private @yon_rt_xrelmap_insert(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelmap_get(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelmap_contains(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelmap_size(f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_empty() -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_pair(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_triangle(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_omega(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_add(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_count(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_dominant(f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_size(f64) -> f64";
   (* to_stream conversions *)
   emit_line e "func.func private @yon_rt_map_to_list(f64) -> f64";
   emit_line e "func.func private @yon_rt_set_to_list(f64) -> f64";
