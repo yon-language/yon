@@ -1,0 +1,6 @@
+[package]
+name = "nested_sub"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w", "Nested"]

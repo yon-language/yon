@@ -1,0 +1,6 @@
+[package]
+name = "weatherbig_svc"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

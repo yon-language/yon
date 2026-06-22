@@ -1,0 +1,6 @@
+[package]
+name = "nested_svc"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

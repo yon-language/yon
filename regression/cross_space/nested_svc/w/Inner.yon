@@ -1,0 +1,4 @@
+place Inner {
+  a number
+  b text
+}

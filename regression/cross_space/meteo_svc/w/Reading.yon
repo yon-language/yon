@@ -1,0 +1,13 @@
+place Reading {
+  temp number
+  humidity number
+
+  fun samples(): stream of Reading {
+    be s holds produce {
+      emit new Reading { temp 10 humidity 50 }
+      emit new Reading { temp 11 humidity 51 }
+      emit new Reading { temp 15 humidity 52 }
+    }
+    return s
+  }
+}

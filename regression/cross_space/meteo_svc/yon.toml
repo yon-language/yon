@@ -1,0 +1,6 @@
+[package]
+name = "meteo_svc"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]

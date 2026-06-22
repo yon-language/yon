@@ -1,0 +1,13 @@
+place Reading {
+  temp number
+  label text
+
+  fun forecasts(): stream of Reading {
+    be s holds produce {
+      emit new Reading { temp 10 label "ok" }
+      emit new Reading { temp 11 label "ok" }
+      emit new Reading { temp 15 label "ok" }
+    }
+    return s
+  }
+}

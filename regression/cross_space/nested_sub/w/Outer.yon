@@ -1,0 +1,4 @@
+place Outer {
+  tag number
+  inner Inner
+}

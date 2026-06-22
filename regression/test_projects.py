@@ -25,7 +25,7 @@ EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
 
 def _projects():
     roots = ["examples", "regression/yon_tests", "regression/book",
-             "regression/keyword_coverage"]
+             "regression/keyword_coverage", "regression/cross_space"]
     dirs = set()
     for r in roots:
         for toml in glob.glob(str(ROOT / r / "**" / "yon.toml"), recursive=True):

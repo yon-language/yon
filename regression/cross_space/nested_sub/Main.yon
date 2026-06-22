@@ -1,0 +1,11 @@
+import nested_prod::pairs from Nested
+
+place Entry {
+  fun main(): number {
+    be w holds wire to space Nested
+    be sub holds w.awaits(pairs)
+    be s holds sub.stream
+    be total holds s.fold(0, fun(acc: number, o: Outer) => acc + o.tag + o.inner.a + String.length(o.inner.b))
+    return total
+  }
+}

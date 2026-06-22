@@ -1,0 +1,4 @@
+place Reading {
+  temp number
+  label text
+}

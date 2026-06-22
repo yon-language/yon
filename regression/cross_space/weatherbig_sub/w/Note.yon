@@ -1,0 +1,4 @@
+place Note {
+  id number
+  body text
+}

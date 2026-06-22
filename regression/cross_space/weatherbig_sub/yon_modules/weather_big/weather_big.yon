@@ -1,0 +1,5 @@
+/* Interface of the WeatherBig producer (nominal cross-Space import). */
+fun bulletins(): stream of Note {
+  be s holds produce { emit new Note { id 5 body "x" } }
+  return s
+}

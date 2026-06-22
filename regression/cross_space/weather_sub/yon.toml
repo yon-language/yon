@@ -1,0 +1,6 @@
+[package]
+name = "weather_sub"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w", "Weather"]

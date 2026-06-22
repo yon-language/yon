@@ -55,7 +55,7 @@ def _exercised_tokens():
         + list(COVERAGE.glob("**/*.yon"))                     # incl. coverage project dirs
         + list((COVERAGE / "yon_modules").glob("*.yon"))
         + list((ROOT / "regression" / "yon_tests").glob("**/*.yon"))   # migrated projects
-        + list((ROOT / "regression" / "cross_space").glob("**/*.yon"))  # wire/space keywords
+        + list((ROOT / "regression" / "cross_space").glob("*/**/*.yon"))  # gated cross_space PROJECTS only (not loose files)
     )
     text = " ".join(p.read_text() for p in srcs)
     return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", text))
