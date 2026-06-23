@@ -1324,8 +1324,8 @@ int yon_rt_stream_shm_emit(yon_shm_stream_t *s, const void *value_ptr) {
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
     flock(s->fd, LOCK_EX);
     int rc;
-    if (hdr->count >= hdr->capacity) {
-        rc = -1;  /* full */
+    if (hdr->capacity == 0 || hdr->count >= hdr->capacity) {
+        rc = -1;  /* invalid header (capacity 0, untrusted shm) or full */
     } else {
         memcpy(buf + (size_t)hdr->tail * hdr->slot_size, value_ptr,
                hdr->slot_size);
@@ -1344,8 +1344,8 @@ int yon_rt_stream_shm_await(yon_shm_stream_t *s, void *out_ptr) {
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
     flock(s->fd, LOCK_EX);
     int rc;
-    if (hdr->count == 0) {
-        rc = -1;  /* empty */
+    if (hdr->count == 0 || hdr->capacity == 0) {
+        rc = -1;  /* empty, or invalid header (capacity 0, untrusted shm) -> no mod-by-zero */
     } else {
         memcpy(out_ptr, buf + (size_t)hdr->head * hdr->slot_size,
                hdr->slot_size);
