@@ -270,6 +270,16 @@ yon_section_t yon_rt_new(uint32_t heap_id,
     return result;
 }
 
+/* Safe f64 -> uint32 al confine non fidato della superficie: NaN, Inf e double
+ * fuori range (una computazione utente come 5/0 dà Inf) castati a uint32_t sono
+ * UNDEFINED BEHAVIOUR in C. Clampa a 0 (handle invalido / indice fuori-bound,
+ * che i lookup a valle rifiutano) invece dell'UB. */
+static inline uint32_t yon_u32(double d) {
+    if (d != d) return 0u;                          /* NaN */
+    if (d < 0.0 || d >= 4294967296.0) return 0u;    /* Inf / out of [0, 2^32) */
+    return (uint32_t)d;
+}
+
 int yon_rt_field_load(yon_section_t sec, uint32_t offset,
                       uint32_t size, void *out) {
     ensure_init();
@@ -1169,20 +1179,20 @@ double yon_rt_stream_make_f64(double target_heap_f64) {
     static uint32_t anon_counter = 0;
     char name[32];
     snprintf(name, sizeof(name), "__anon_stream_%u", anon_counter++);
-    uint32_t target_heap = (uint32_t)target_heap_f64;
+    uint32_t target_heap = yon_u32(target_heap_f64);
     uint32_t id = yon_rt_stream_create(name, target_heap, sizeof(double));
     if (id == YON_STREAM_INVALID) return -1.0;
     return (double)id;
 }
 
 double yon_rt_stream_emit_f64(double stream_id_f64, double value) {
-    uint32_t id = (uint32_t)stream_id_f64;
+    uint32_t id = yon_u32(stream_id_f64);
     int rc = yon_rt_stream_emit(id, &value);
     return (double)rc;
 }
 
 double yon_rt_stream_await_f64(double stream_id_f64) {
-    uint32_t id = (uint32_t)stream_id_f64;
+    uint32_t id = yon_u32(stream_id_f64);
     double out = 0.0;
     int rc = yon_rt_stream_await(id, &out);
     if (rc == -2) return (double)0xFFFFFFFFu;  /* EOF sentinel, same as the
@@ -1557,7 +1567,7 @@ static uint32_t g_n_shm_streams = 0;
  * makes it. Returns the id as f64, or -1.0 on failure. Both processes call
  * with the same id to rendezvous on the same shared region. */
 double yon_rt_stream_shm_open_f64(double id_f64, double create_f64) {
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) {
         for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
@@ -1583,8 +1593,8 @@ double yon_rt_stream_shm_open_f64(double id_f64, double create_f64) {
 
 double yon_rt_stream_shm_open_sized_f64(double id_f64, double create_f64,
                                         double slot_size_f64) {
-    uint32_t id = (uint32_t)id_f64;
-    uint32_t ss = (uint32_t)slot_size_f64;
+    uint32_t id = yon_u32(id_f64);
+    uint32_t ss = yon_u32(slot_size_f64);
     if (ss > 256u) return -1.0;
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) {
@@ -1610,14 +1620,14 @@ double Stream__make_shm_sized(double id, double create, double slot_size) {
 }
 
 double yon_rt_stream_shm_send_f64(double id_f64, double value) {
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) return -1.0;
     return (double)yon_rt_stream_shm_emit(g_shm_stream_handles[slot], &value);
 }
 
 double yon_rt_stream_shm_recv_f64(double id_f64) {
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) return -1.0;
     double out = 0.0;
@@ -1632,13 +1642,13 @@ double Stream__recv_shm(double id)                 { return yon_rt_stream_shm_re
 /* Blocking (back-pressure) f64 wrappers + aliases. produce waits for room,
  * await waits for a value, both with a bounded timeout (-1 on timeout). */
 double yon_rt_stream_shm_produce_f64(double id_f64, double value) {
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) return -1.0;
     return (double)yon_rt_stream_shm_produce_blocking(g_shm_stream_handles[slot], &value);
 }
 double yon_rt_stream_shm_await_blocking_f64(double id_f64) {
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) return -1.0;
     double out = 0.0;
@@ -1655,7 +1665,7 @@ double Stream__await_shm(double id)             { return yon_rt_stream_shm_await
  * the EOF sentinel (-2 at C level) once the buffer drains, instead of timing
  * out — clean shutdown vs dead peer. */
 double yon_rt_stream_shm_close_write_f64(double id_f64) {
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     int slot = yon_rt_shm_slot_of(id);
     if (slot < 0) return -1.0;
     return (double)yon_rt_stream_shm_close_write(g_shm_stream_handles[slot]);
@@ -2956,7 +2966,7 @@ static void net_streams_ensure_init(void) {
 double yon_rt_stream_net_open_f64(double id_f64, double port_f64,
                                   double is_server_f64) {
     net_streams_ensure_init();
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     if (id >= YON_MAX_NET_STREAMS) return -1.0;
     uint16_t port = (uint16_t)port_f64;
     int fd = ((int)is_server_f64)
@@ -2971,7 +2981,7 @@ double yon_rt_stream_net_open_f64(double id_f64, double port_f64,
  * double into the frame payload (Strato 2). */
 double yon_rt_stream_net_send_f64(double id_f64, double value) {
     net_streams_ensure_init();
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     if (id >= YON_MAX_NET_STREAMS || g_net_stream_fds[id] < 0) return -1.0;
     return (double)yon_rt_net_send_frame(g_net_stream_fds[id], &value,
                                          (uint32_t)sizeof(double));
@@ -2980,7 +2990,7 @@ double yon_rt_stream_net_send_f64(double id_f64, double value) {
 /* Receive a value. Golden rules already enforced inside recv_frame. */
 double yon_rt_stream_net_recv_f64(double id_f64) {
     net_streams_ensure_init();
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     if (id >= YON_MAX_NET_STREAMS || g_net_stream_fds[id] < 0) return -1.0;
     uint8_t buf[YON_NET_MAX_SLOT];
     uint32_t len = 0;
@@ -2993,7 +3003,7 @@ double yon_rt_stream_net_recv_f64(double id_f64) {
 
 double yon_rt_stream_net_close_f64(double id_f64) {
     net_streams_ensure_init();
-    uint32_t id = (uint32_t)id_f64;
+    uint32_t id = yon_u32(id_f64);
     if (id >= YON_MAX_NET_STREAMS || g_net_stream_fds[id] < 0) return -1.0;
     yon_rt_net_close(g_net_stream_fds[id]);
     g_net_stream_fds[id] = -1;
@@ -4275,7 +4285,7 @@ double yon_rt_xrel_empty(void) {
 double yon_rt_xrel_add_ref(double id, double v) {
     yon_xrel_t *x = xrel_lookup(id);
     if (!x || x->n_refs >= YON_XREL_MAX_REFS) return -1.0;
-    uint32_t vv = ((uint32_t)v) & YON_XCOORD_VALID_MASK;
+    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
     if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
     x->refs[x->n_refs++] = vv;
     return (double)x->n_refs;
@@ -4292,7 +4302,7 @@ double yon_rt_xrel_frame_size(double id) {
  * frame; -1.0 for a non-type-2 v. */
 static double xrel_class_of(const yon_xrel_t *x, double v) {
     extern uint32_t gen_leech2_type(uint64_t);
-    uint32_t vv = ((uint32_t)v) & YON_XCOORD_VALID_MASK;
+    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
     if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
     uint64_t key = 0;
     for (uint32_t i = 0; i < x->n_refs; i++) {
@@ -4452,7 +4462,7 @@ double yon_rt_xrelmap_empty(void) {
 double yon_rt_xrelmap_add_ref(double id, double v) {
     yon_xrelmap_t *m = xrelmap_lookup(id);
     if (!m || m->frozen || m->frame.n_refs >= YON_XREL_MAX_REFS) return -1.0;
-    uint32_t vv = ((uint32_t)v) & YON_XCOORD_VALID_MASK;
+    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
     if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
     m->frame.refs[m->frame.n_refs++] = vv;
     return (double)m->frame.n_refs;
@@ -4462,7 +4472,7 @@ double yon_rt_xrelmap_insert(double id, double v, double value) {
     yon_xrelmap_t *m = xrelmap_lookup(id);
     if (!m) return 0.0;
     if (!m->frozen && !xrelmap_freeze(m)) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
+    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t rep = m->canon[idx];
     if (!yon_arena_occupied(m->arena, (yon_xcoord_t)rep)) m->n_classes++;
@@ -4474,7 +4484,7 @@ double yon_rt_xrelmap_insert(double id, double v, double value) {
 double yon_rt_xrelmap_get(double id, double v) {
     yon_xrelmap_t *m = xrelmap_lookup(id);
     if (!m || !m->frozen) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
+    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t rep = m->canon[idx];
     if (!yon_arena_occupied(m->arena, (yon_xcoord_t)rep)) return 0.0;
@@ -4484,7 +4494,7 @@ double yon_rt_xrelmap_get(double id, double v) {
 double yon_rt_xrelmap_contains(double id, double v) {
     yon_xrelmap_t *m = xrelmap_lookup(id);
     if (!m || !m->frozen) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
+    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t rep = m->canon[idx];
     return yon_arena_occupied(m->arena, (yon_xcoord_t)rep) ? 1.0 : 0.0;
@@ -4593,7 +4603,7 @@ double yon_rt_xrelset_empty(void) {
 double yon_rt_xrelset_add_ref(double id, double v) {
     yon_xrelset_t *x = xrelset_lookup(id);
     if (!x || x->frozen || x->frame.n_refs >= YON_XREL_MAX_REFS) return -1.0;
-    uint32_t vv = ((uint32_t)v) & YON_XCOORD_VALID_MASK;
+    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
     if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
     x->frame.refs[x->frame.n_refs++] = vv;
     return (double)x->frame.n_refs;
@@ -4603,7 +4613,7 @@ double yon_rt_xrelset_add(double id, double v) {
     yon_xrelset_t *x = xrelset_lookup(id);
     if (!x) return 0.0;
     if (!x->frozen && !xrelset_freeze(x)) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
+    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t ri = x->canon[idx];
     uint32_t w = ri >> 5, b = ri & 31u;
@@ -4614,7 +4624,7 @@ double yon_rt_xrelset_add(double id, double v) {
 double yon_rt_xrelset_contains(double id, double v) {
     yon_xrelset_t *x = xrelset_lookup(id);
     if (!x || !x->frozen) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(((uint32_t)v) & YON_XCOORD_VALID_MASK));
+    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t ri = x->canon[idx];
     return ((x->bits[ri >> 5] >> (ri & 31u)) & 1u) ? 1.0 : 0.0;
@@ -5216,7 +5226,7 @@ double yon_rt_xset_add(double set_id, double xcoord_f64) {
         set_id = new_id;
     }
     /* xcoord as f64 -> uint32. Range 0..2^25 fits exactly in f64. */
-    uint32_t xc = (uint32_t)xcoord_f64;
+    uint32_t xc = yon_u32(xcoord_f64);
     uint32_t idx = yon_mphf_index(xc);
     if (idx == YON_MPHF_INVALID) {
         /* non type-2 xcoord -> silently ignore. */
@@ -5233,7 +5243,7 @@ double yon_rt_xset_add(double set_id, double xcoord_f64) {
 double yon_rt_xset_contains(double set_id, double xcoord_f64) {
     ds_xset_t *xs = xset_lookup(set_id);
     if (!xs) return 0.0;
-    uint32_t xc = (uint32_t)xcoord_f64;
+    uint32_t xc = yon_u32(xcoord_f64);
     uint32_t idx = yon_mphf_index(xc);
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint64_t mask = 1ULL << (idx & 63);
@@ -5637,7 +5647,7 @@ double yon_rt_leech_m24_orbit(double v_f64) {
     ds_ensure_init();
     /* full xcoord (incl. the sign bit) — the MPHF is over 25-bit leech2, so we
      * must NOT mask to 24 bits the way the old (w_g,w_c) version did. */
-    uint32_t v = (uint32_t)v_f64;
+    uint32_t v = yon_u32(v_f64);
     uint32_t canonical = yon_leech_m24_orbit_pure(v);  /* pure M24 orbit in [0,12), or INVALID */
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, &canonical, sizeof(canonical),
                                   YON_TAG_USER1);
@@ -5854,8 +5864,8 @@ double yon_rt_leech_transport(double v_f64, double w_f64) {
         fprintf(stderr, "[YON-RT] leech_transport: pool exhausted\n");
         return 0.0;
     }
-    uint32_t v = ((uint32_t)v_f64) & 0xFFFFFFu;
-    uint32_t w = ((uint32_t)w_f64) & 0xFFFFFFu;
+    uint32_t v = (yon_u32(v_f64)) & 0xFFFFFFu;
+    uint32_t w = (yon_u32(w_f64)) & 0xFFFFFFu;
     uint32_t gv[32], gw[32];
     int32_t lv = gen_leech2_reduce_type2(v, gv);
     int32_t lw = gen_leech2_reduce_type2(w, gw);
@@ -5872,11 +5882,11 @@ double yon_rt_leech_transport(double v_f64, double w_f64) {
 double yon_rt_leech_transport_apply(double x_f64, double transport_id_f64) {
     extern uint32_t gen_leech2_op_word_leech2(uint32_t, uint32_t *, uint32_t, uint32_t);
     if (transport_id_f64 < 0.5) return 0.0;
-    uint32_t id = (uint32_t)transport_id_f64;
+    uint32_t id = yon_u32(transport_id_f64);
     if (id == 0 || id > g_n_transports) return 0.0;
     ds_transport_t *t = &g_transports[id - 1];
     if (!t->used) return 0.0;
-    uint32_t x = ((uint32_t)x_f64) & 0xFFFFFFu;
+    uint32_t x = (yon_u32(x_f64)) & 0xFFFFFFu;
     uint32_t res = gen_leech2_op_word_leech2(x, t->word, t->len, 0);
     return (double)(res & 0xFFFFFFu);
 }
@@ -5913,7 +5923,7 @@ double yon_rt_observe(double slot_id_f64,
                        double gm_kind,
                        double default_val) {
     ds_ensure_init();
-    uint32_t shifted = (uint32_t)slot_id_f64;
+    uint32_t shifted = yon_u32(slot_id_f64);
     if (shifted == 0) return default_val;  /* slot=0 reserved = "not allocated" */
     uint32_t slot = shifted - 1;  /* unshift */
     const yon_xheap_slot_t *s = yon_xheap_get_chain(slot);
@@ -6162,7 +6172,7 @@ double yon_rt_voyagerlist_append(double vl_id, double data12_f64) {
 double yon_rt_voyagerlist_get(double vl_id, double idx_f64) {
     ds_voyagerlist_t *vl = voyagerlist_lookup(vl_id);
     if (!vl) return 0.0;
-    uint32_t idx = (uint32_t)idx_f64;
+    uint32_t idx = yon_u32(idx_f64);
     if (idx >= vl->n_entries) {
         fprintf(stderr, "[YON-RT] voyagerlist_get: idx %u out of range (%u)\n",
                 idx, vl->n_entries);
@@ -6186,7 +6196,7 @@ double yon_rt_voyagerlist_size(double vl_id) {
 double yon_rt_voyagerlist_corrupt_at(double vl_id, double idx_f64, double n_bits_f64) {
     ds_voyagerlist_t *vl = voyagerlist_lookup(vl_id);
     if (!vl) return vl_id;
-    uint32_t idx = (uint32_t)idx_f64;
+    uint32_t idx = yon_u32(idx_f64);
     if (idx >= vl->n_entries) return vl_id;
     /* Reuse yon_rt_voyagerlist_corrupt, which works on a single codeword. */
     double cw_f = (double)vl_cw(vl)[idx];
@@ -6589,7 +6599,7 @@ double yon_rt_conway_seal_slot(double slot_id_f64, double key_id) {
         fprintf(stderr, "[YON-RT] conway_seal_slot: key invalida\n");
         return YON_RT_LOCKEDRING_KEY_INVALID;
     }
-    uint32_t slot_idx = (uint32_t)slot_id_f64;
+    uint32_t slot_idx = yon_u32(slot_id_f64);
     if (slot_idx >= 196560u) {
         fprintf(stderr, "[YON-RT] conway_seal_slot: slot_idx %u fuori range Leech type-2\n",
                 slot_idx);
@@ -6629,7 +6639,7 @@ double yon_rt_conway_unseal_slot(double sealed_id_f64, double key_id) {
         fprintf(stderr, "[YON-RT] conway_unseal_slot: key invalida\n");
         return YON_RT_LOCKEDRING_KEY_INVALID;
     }
-    uint32_t sealed_idx = (uint32_t)sealed_id_f64;
+    uint32_t sealed_idx = yon_u32(sealed_id_f64);
     if (sealed_idx >= 196560u) {
         fprintf(stderr, "[YON-RT] conway_unseal_slot: sealed_idx %u fuori range\n",
                 sealed_idx);
