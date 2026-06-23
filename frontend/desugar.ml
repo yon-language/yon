@@ -480,6 +480,24 @@ and desugar_expr (e : S.expr) : C.term =
        * naming. The surface still accepts Seq.X as a deprecated alias
        * (auto-mapped). *)
       let (name', args') =
+        (* Auto-wrap: la funzione di fold/map/filter passata per NOME nudo
+         * (`Seq.fold(s,0,g)`) viene avvolta in una lambda inline
+         * `fun(__sf0,..) => g(__sf0,..)` — cioè esattamente la forma suggerita
+         * `fun(a,b)=>g(a,b)`. Senza, l'emitter falliva con un'eccezione OCaml
+         * invece di accettare la funzione per nome. Le lambda gia' inline
+         * (non-EVar) passano intatte. *)
+        let stream_fn_arity = function
+          | "fold" -> 2 | "map" | "filter" -> 1 | _ -> 0 in
+        let wrap_fn (arity : int) (args : S.expr list) : S.expr list =
+          if arity = 0 then args
+          else match List.rev args with
+            | S.EVar (n, vloc) :: rest_rev ->
+                let ps = List.init arity
+                    (fun i -> (Printf.sprintf "__sf%d" i, S.TyPrim "unknown")) in
+                let call_args = List.map (fun (pn, _) -> S.EVar (pn, vloc)) ps in
+                List.rev (S.ELam (ps, S.ECall (n, call_args, vloc), vloc) :: rest_rev)
+            | _ -> args
+        in
         let try_chain_rewrite () =
           try
             let idx = Str.search_forward (Str.regexp "__") name 0 in
@@ -493,15 +511,16 @@ and desugar_expr (e : S.expr) : C.term =
               && let c = prefix.[0] in c >= 'a' && c <= 'z'
             in
             if is_method && is_lower then
-              Some ("__stream_" ^ suffix, S.EVar (prefix, loc) :: args)
+              Some ("__stream_" ^ suffix,
+                    wrap_fn (stream_fn_arity suffix) (S.EVar (prefix, loc) :: args))
             else
               None
           with Not_found -> None
         in
         match name with
-        | "map" -> ("__stream_map", args)
-        | "filter" -> ("__stream_filter", args)
-        | "fold" -> ("__stream_fold", args)
+        | "map" -> ("__stream_map", wrap_fn 1 args)
+        | "filter" -> ("__stream_filter", wrap_fn 1 args)
+        | "fold" -> ("__stream_fold", wrap_fn 2 args)
         | "for_every" -> ("__stream_for_every", args)
         (* The Stream.X prefix is removed. iterate/take/sum_take become bare
          * builtins; to_stream is a semantic no-op (the list is already a
@@ -511,9 +530,9 @@ and desugar_expr (e : S.expr) : C.term =
         | "sum_take" -> ("__stream_sum_take", args)
         | "to_stream" -> ("__stream_to_stream", args)
         (* Backward-compat: Seq.X e Stream.X surface syntax. *)
-        | "Seq__map" -> ("__stream_map", args)
-        | "Seq__filter" -> ("__stream_filter", args)
-        | "Seq__fold" -> ("__stream_fold", args)
+        | "Seq__map" -> ("__stream_map", wrap_fn 1 args)
+        | "Seq__filter" -> ("__stream_filter", wrap_fn 1 args)
+        | "Seq__fold" -> ("__stream_fold", wrap_fn 2 args)
         | "Seq__from_list" -> ("__stream_from_list", args)
         (* Seq.range(n) desugara a stream da list. *)
         | "Seq__range" ->
@@ -3120,56 +3139,82 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
   (* The runtime universal pullback. Detection: scan the original surface
    * program (pre-desugar) for EPullbackVal. If present, synthesize
    * __pullback_pack, _pi1, _pi2. *)
-  let rec walk_surface_expr_for_pb (e : S.expr) : bool =
-    match e with
+  (* Traversata ESAUSTIVA su expr/stmt: true se `pred` vale su QUALSIASI
+   * sotto-espressione, ovunque — dentro loop, when, lambda, produce, spawn,
+   * scope, condizioni. Sostituisce i due walker parziali che saltavano il
+   * controllo di flusso e gli expr annidati (bug confermato: `floor`/synth
+   * builtin dentro un loop non veniva rilevato → "unknown function 'floor'").
+   * Niente `_ -> false`: il match è esaustivo, così l'aggiunta di un nuovo
+   * costruttore in surface_ast forza un aggiornamento qui invece di reintrodurre
+   * silenziosamente il buco. *)
+  let rec expr_any (pred : S.expr -> bool) (e : S.expr) : bool =
+    pred e ||
+    (let go = expr_any pred in
+     match e with
+     | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> false
+     | S.EField (e,_,_) | S.EParen (e,_) | S.ENot (e,_) | S.ERefl (e,_)
+     | S.EFst (e,_) | S.ESnd (e,_) | S.EPathAbs (_,e,_) | S.EPathApp (e,_,_)
+     | S.EIn (e,_,_) | S.EQuote (_,e,_) | S.ELam (_,e,_)
+     | S.EMoveLam (_,e,_,_,_) | S.EReductionLam (_,e,_,_)
+     | S.EMorphLam (_,e,_,_,_) | S.EFunctorLam (_,e,_,_,_,_)
+     | S.EViewLam (_,e,_,_) -> go e
+     | S.ECall (_,args,_) | S.EHITConstr (_,args,_) -> List.exists go args
+     | S.EApp (h,args,_) -> go h || List.exists go args
+     | S.EBinop (_,a,b,_) | S.EPair (a,b,_) | S.EComposeWith (a,b,_)
+     | S.EPullbackVal (_,_,a,b,_) -> go a || go b
+     | S.EJ (a,b,c,_) | S.EElMatch (a,b,c,_) | S.EIfThenElse (a,b,c,_) ->
+         go a || go b || go c
+     | S.EHITElim (scrut, branches, last, _) ->
+         go scrut || List.exists (fun (_,_,be) -> go be) branches || go last
+     | S.EProduce (ss,_) -> stmts_any pred ss
+     | S.ESpawn (eo, ss, _) ->
+         (match eo with Some e -> go e | None -> false) || stmts_any pred ss
+     | S.ENew (_, fas, _) | S.ENewIn (_,_,fas,_) ->
+         List.exists (fun fa -> go fa.S.fa_value) fas
+     | S.EAll (_, c, _) -> cond_any pred c)
+  and cond_any (pred : S.expr -> bool) (c : S.condition) : bool =
+    match c with
+    | S.CondExpr e | S.CondIs (e,_) | S.CondIsNot (e,_) -> expr_any pred e
+    | S.CondAnd (a,b) | S.CondOr (a,b) -> cond_any pred a || cond_any pred b
+  and stmt_any (pred : S.expr -> bool) (s : S.stmt) : bool =
+    let go = expr_any pred in
+    let gos = stmts_any pred in
+    match s with
+    | S.SLet (_,e,_) | S.SReturn (e,_) | S.SEmit (e,_) | S.SPromote (e,_)
+    | S.SAssignHolds (_,e,_) | S.SAssignBecomes (_,e,_) -> go e
+    | S.SCall (_,args,_) -> List.exists go args
+    | S.SNew (_, fas, _) | S.SNewIn (_,_,fas,_) ->
+        List.exists (fun fa -> go fa.S.fa_value) fas
+    | S.SWhen (c, ss, branches, oth, _) ->
+        cond_any pred c || gos ss
+        || List.exists (fun (c2, ss2) -> cond_any pred c2 || gos ss2) branches
+        || (match oth with Some ss3 -> gos ss3 | None -> false)
+    | S.SForEvery (_,_, e, ss, _) | S.SInSequence (_, e, ss, _)
+    | S.SIter (e, ss, _) | S.SWhile (e, ss, _) -> go e || gos ss
+    | S.SRepeat (_, ss, oth, _) ->
+        gos ss || (match oth with Some s2 -> gos s2 | None -> false)
+    | S.SForever (ss,_) | S.SProduce (ss,_) | S.SWith (_,_, ss, _) -> gos ss
+    | S.SScope (_, ss, e, _) -> gos ss || go e
+    | S.SForces (_, c, ss, _) -> cond_any pred c || gos ss
+  and stmts_any (pred : S.expr -> bool) (ss : S.stmt list) : bool =
+    List.exists (stmt_any pred) ss
+  in
+  let fn_body_any (pred : S.expr -> bool) (fd : S.fun_decl) : bool =
+    stmts_any pred fd.S.fn_body
+  in
+  let pred_pb = function
     | S.EPullbackVal _ -> true
     | S.ECall ("__pullback_pack", _, _) -> true
-    | S.ECall (_, args, _) -> List.exists walk_surface_expr_for_pb args
-    | S.EBinop (_, a, b, _) -> walk_surface_expr_for_pb a || walk_surface_expr_for_pb b
-    | S.EParen (e, _) -> walk_surface_expr_for_pb e
-    | S.EField (e, _, _) -> walk_surface_expr_for_pb e
-    | S.ENew (_, fas, _) | S.ENewIn (_, _, fas, _) ->
-        List.exists (fun fa -> walk_surface_expr_for_pb fa.S.fa_value) fas
-    | _ -> false
-  in
-  let walk_stmt_for_pb (s : S.stmt) : bool =
-    match s with
-    | S.SLet (_, e, _) | S.SReturn (e, _) -> walk_surface_expr_for_pb e
-    | S.SCall (_, args, _) -> List.exists walk_surface_expr_for_pb args
     | _ -> false
   in
   let needs_pullback_builtins =
-    List.exists (function
-      | S.TopFun fd -> List.exists walk_stmt_for_pb fd.S.fn_body
-      | _ -> false
-    ) p
+    List.exists (function S.TopFun fd -> fn_body_any pred_pb fd | _ -> false) p
   in
-  (* Detection of shift/floor/pow2 builtins. Look for calls to the funs
-   * `floor`, `__shl`, `__shr`, `__pow2`. *)
-  let rec walk_for_name (name : string) (e : S.expr) : bool =
-    match e with
-    | S.ECall (n, _, _) when n = name -> true
-    | S.ECall (_, args, _) -> List.exists (walk_for_name name) args
-    | S.EBinop (_, a, b, _) -> walk_for_name name a || walk_for_name name b
-    | S.EParen (e, _) -> walk_for_name name e
-    | S.EField (e, _, _) -> walk_for_name name e
-    | S.ENew (_, fas, _) | S.ENewIn (_, _, fas, _) ->
-        List.exists (fun fa -> walk_for_name name fa.S.fa_value) fas
-    | _ -> false
-  in
-  let walk_stmts_for_name (name : string) (ss : S.stmt list) : bool =
-    let walk_stmt s = match s with
-      | S.SLet (_, e, _) | S.SReturn (e, _) -> walk_for_name name e
-      | S.SCall (_, args, _) -> List.exists (walk_for_name name) args
-      | _ -> false
-    in
-    List.exists walk_stmt ss
-  in
+  (* Detection of shift/floor/pow2 builtins: cerca call a `floor`/`__shl`/
+   * `__shr`/`__pow2` ovunque nel corpo (loop/when/lambda inclusi). *)
   let prog_uses_name (name : string) : bool =
-    List.exists (function
-      | S.TopFun fd -> walk_stmts_for_name name fd.S.fn_body
-      | _ -> false
-    ) p
+    let pred = function S.ECall (n,_,_) when n = name -> true | _ -> false in
+    List.exists (function S.TopFun fd -> fn_body_any pred fd | _ -> false) p
   in
   let needs_floor = prog_uses_name "floor" in
   let needs_pow2 = prog_uses_name "__pow2" in

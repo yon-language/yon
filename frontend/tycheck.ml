@@ -3226,6 +3226,28 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
   in
   let rebound_return = Option.map rebind_ty fn.fn_return in
   let fn = { fn with fn_params = rebound_params; fn_return = rebound_return } in
+  (* Reject duplicate parameter names: il secondo altrimenti shadowa il primo
+   * silenziosamente e si va in build-fail a valle. *)
+  let* () =
+    let rec dups seen = function
+      | [] -> ok ()
+      | p :: rest ->
+          if List.mem p.param_name seen then
+            err fn.fn_loc (Printf.sprintf
+              "function %s: duplicate parameter '%s'" fn.fn_name p.param_name)
+          else dups (p.param_name :: seen) rest
+    in
+    dups [] fn.fn_params
+  in
+  (* Reject empty body con tipo di ritorno dichiarato: altrimenti l'emit crasha
+   * ("term form cannot be analyzed") non avendo un valore da inferire. *)
+  let* () =
+    if fn.fn_body = [] && fn.fn_return <> None then
+      err fn.fn_loc (Printf.sprintf
+        "function %s: empty body but a return type is declared (must return a value)"
+        fn.fn_name)
+    else ok ()
+  in
   (* Step 2: well-formedness checks. TyVar is always well-formed. *)
   let* () = List.fold_left
     (fun acc p ->
@@ -3300,6 +3322,19 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
   let fn = { fn with fn_params = rebound_params; fn_return = rebound_return } in
   let errs = ref [] in
   let collect r = match r with Ok () -> () | Error e -> errs := e :: !errs in
+  (* Reject duplicate parameter names (come check_fun_decl). *)
+  (let rec dups seen = function
+     | [] -> ()
+     | p :: rest ->
+         if List.mem p.param_name seen then
+           collect (err fn.fn_loc (Printf.sprintf
+             "function %s: duplicate parameter '%s'" fn.fn_name p.param_name))
+         else dups (p.param_name :: seen) rest
+   in
+   dups [] fn.fn_params);
+  (if fn.fn_body = [] && fn.fn_return <> None then
+     collect (err fn.fn_loc (Printf.sprintf
+       "function %s: empty body but a return type is declared" fn.fn_name)));
   List.iter
     (fun p -> collect (check_type_well_formed env p.param_ty fn.fn_loc))
     fn.fn_params;
