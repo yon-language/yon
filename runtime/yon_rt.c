@@ -281,7 +281,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
         memset(out, 0, size);
         return -1;
     }
-    if (offset + size > slot->payload_size) {
+    if ((uint64_t)offset + (uint64_t)size > slot->payload_size) {  /* 64-bit: no uint32 wrap */
         memset(out, 0, size);
         fprintf(stderr,
                 "[YON-RT] field_load OOB: offset=%u size=%u payload_size=%u\n",
@@ -295,7 +295,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
     }
     /* L2 backends use physically separate heaps per space, no payload prefix. */
     uint32_t prefix_skip = 0;
-    if (offset + size + prefix_skip > slot->payload_size) {
+    if ((uint64_t)offset + (uint64_t)size + (uint64_t)prefix_skip > slot->payload_size) {  /* 64-bit: no wrap */
         memset(out, 0, size);
         fprintf(stderr,
                 "[YON-RT] field_load OOB (with prefix): offset=%u size=%u payload_size=%u prefix=%u\n",
@@ -833,7 +833,7 @@ int yon_rt_field_load_v(yon_section_t sec,
             place_name, slot_version, requested_version, slot_idx);
 
     /* Read from the migrated buffer */
-    if (offset + size > m->new_payload_size) {
+    if ((uint64_t)offset + (uint64_t)size > m->new_payload_size) {  /* 64-bit: no uint32 wrap */
         if (nb_off != 0) yon_xheap_strip_trim(g_yon_heap, nb_off, 0u, m->new_payload_size);
         return -1;
     }
@@ -7465,7 +7465,7 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
             if (cur + 8u > payload_len) return YON_SECTION_INVALID;
             uint32_t sub_pl;
             memcpy(&sub_pl, p + cur + 4u, 4u);
-            uint32_t sub_frame_len = 8u + sub_pl;
+            uint64_t sub_frame_len = (uint64_t)8u + (uint64_t)sub_pl;  /* 64-bit: no wrap, bounds-checked below */
             if ((uint64_t)cur + sub_frame_len > (uint64_t)payload_len)
                 return YON_SECTION_INVALID;
             yon_section_t sub = yon_rt_deserialize(p + cur, sub_frame_len, heap_id);
