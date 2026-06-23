@@ -23,12 +23,27 @@ open Ast
 
 (* ─── Concrete value encoding ──────────────────────────────────────── *)
 
+(* Shortest decimal string that round-trips to the SAME IEEE double. encode and
+ * decode must be mutual inverses on every finite double — a faithful key, not a
+ * lossy display. The old code used %g (6 significant digits, so 1.0/.3.0 became
+ * 0.333333) and int_of_float (which overflows past 2^62 for large integer-valued
+ * floats); both broke encode∘decode = id. We pick the least precision in
+ * {15,16,17} that round-trips: 15 keeps common decimals pretty (0.1 -> "0.1",
+ * 5.0 -> "5"), higher precision kicks in only when needed (1/3). No int cast, so
+ * no overflow. Caller (with_numbers) guards finiteness, so n is always finite. *)
+let float_to_yon_string (n : float) : string =
+  let try_prec p =
+    let s = Printf.sprintf "%.*g" p n in
+    if float_of_string s = n then Some s else None
+  in
+  match try_prec 15 with
+  | Some s -> s
+  | None -> (match try_prec 16 with
+             | Some s -> s
+             | None -> Printf.sprintf "%.17g" n)
+
 let encode_number (n : float) : term =
-  (* Integer-valued floats are printed without decimal point for clarity. *)
-  if Float.is_integer n then
-    Var (Printf.sprintf "__num_%d" (int_of_float n))
-  else
-    Var (Printf.sprintf "__num_%g" n)
+  Var ("__num_" ^ float_to_yon_string n)
 
 let encode_string (s : string) : term =
   Var (Printf.sprintf "__str_%s" s)
@@ -89,7 +104,12 @@ let append_output (s : string) =
 let rec try_eval_binop (op : string) (a : term) (b : term) : term option =
   let with_numbers f =
     match decode_number a, decode_number b with
-    | Some x, Some y -> Some (encode_number (f x y))
+    | Some x, Some y ->
+        let r = f x y in
+        (* Stay stuck on a non-finite result (overflow to Inf, 0/0-style NaN)
+         * rather than encoding a poison value that would silently corrupt every
+         * downstream comparison and emit an invalid MLIR literal. *)
+        if Float.is_finite r then Some (encode_number r) else None
     | _ -> None
   in
   let with_number_to_bool f =
@@ -113,6 +133,7 @@ let rec try_eval_binop (op : string) (a : term) (b : term) : term option =
        | _ -> None)
   | "__mod" ->
       (match decode_number a, decode_number b with
+       | Some _, Some 0.0 -> None  (* modulo by zero — stuck, like __div (no NaN leak) *)
        | Some x, Some y -> Some (encode_number (Float.rem x y))
        | _ -> None)
   | "__lt"  -> with_number_to_bool ( < )

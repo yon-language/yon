@@ -1453,11 +1453,16 @@ let rec emit_term (e : emitter)
   | C.Var x when String.length x > 6 && String.sub x 0 6 = "__num_" ->
       let nstr = String.sub x 6 (String.length x - 6) in
       let v = fresh_ssa e in
-      (* Append ".0" only when nstr is an integer (has no dot); otherwise the
-         literal is already float-formatted. *)
+      (* MLIR f64 literals need a decimal point. nstr may be a bare integer
+         ("5"), a decimal ("0.333..."), or — with the round-trip encoder — an
+         exponent form ("1e+19", "1e-07"). Normalize so there is always a '.':
+         insert ".0" before any exponent marker, else append it. *)
       let formatted =
         if String.contains nstr '.' then nstr
-        else nstr ^ ".0"
+        else match String.index_opt nstr 'e', String.index_opt nstr 'E' with
+          | Some i, _ | None, Some i ->
+              String.sub nstr 0 i ^ ".0" ^ String.sub nstr i (String.length nstr - i)
+          | None, None -> nstr ^ ".0"
       in
       emit_line e (Printf.sprintf "%s = arith.constant %s : f64" v formatted);
       (v, "f64")

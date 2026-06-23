@@ -467,9 +467,14 @@ let rec step ctx t =
        * first. If neither makes progress, the J term is stuck (waiting
        * for its arguments to canonicalize). *)
       (match p with
-       | Refl _ ->
-           (* J(C, d, refl(a), a) == d a *)
-           Some (App (d, b))
+       | Refl a' ->
+           (* J(C, d, refl(a)) == d a — take the basepoint from the REDEX
+            * (the refl's own argument), not from the stored field b: desugar
+            * freezes b = Unit for any path that is not syntactically refl(...)
+            * but REDUCES to a refl, so trusting b yields d(Unit) instead of
+            * d(a). Reading a' from `Refl a'` is the single source of truth and
+            * is meaning-preserving (when the path is literally refl(a), a' = b). *)
+           Some (App (d, a'))
        | _ ->
            match step ctx p with
            | Some p' -> Some (J (x, ty, c, d, p', b))
