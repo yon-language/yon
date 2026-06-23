@@ -345,6 +345,17 @@ let poly_const (c : coeff) : polynomial =
 let poly_atom (key : string) : polynomial =
   poly_add_term poly_zero (AtomMap.singleton key 1) (mk_coeff 1 1)
 
+(* Raised when an opaque leaf has no INJECTIVE printed key, i.e. it contains a
+   form outside the rendered fragment (a non-arithmetic operator, or a
+   constructor not in [render]'s explicit list). Such a leaf must NOT be keyed
+   to a shared sentinel ("?"): two distinct un-renderable leaves would then
+   alias to the same atom and could make [poly_equal] report a FALSE Proven.
+   We signal the gap instead; [to_poly] turns it into None, the leaf leaves the
+   ring, and the verdict degrades to Inconclusive. Sound by construction:
+   never a false Proven, only the (correct) loss of a claim we cannot justify
+   injectively. *)
+exception Opaque_unrenderable
+
 (* Try to read an expression as a polynomial over its opaque leaves. Returns
    None when the expression leaves the ring fragment in a way we will not model
    (for example OpMod, or a non-integer/non-constant division), so the caller
@@ -388,8 +399,12 @@ let rec to_poly (e : S.expr) : polynomial option =
   | _ ->
       (* Any other leaf (variable, field access, opaque call) is an opaque
          indeterminate. We key it by its canonical printed form, so two
-         syntactically identical leaves are the same atom. *)
-      Some (poly_atom (expr_to_atom_key e))
+         syntactically identical leaves are the same atom. If the leaf has no
+         injective key (Opaque_unrenderable), it leaves the ring -> None, which
+         the caller reads as Inconclusive. Never a false Proven via alias. *)
+      (match expr_to_atom_key e with
+       | exception Opaque_unrenderable -> None
+       | key -> Some (poly_atom key))
 
 (* Canonical string for an opaque leaf, reusing canonicalize so that two leaves
    equal up to operator commutativity hash to the same atom. *)
@@ -407,9 +422,10 @@ and expr_to_atom_key (e : S.expr) : string =
     | S.EBinop (op, l, r, _) ->
         let ops = (match op with
           | S.OpAdd -> "+" | S.OpSub -> "-" | S.OpMul -> "*"
-          | S.OpDiv -> "/" | S.OpMod -> "%" | _ -> "?") in
+          | S.OpDiv -> "/" | S.OpMod -> "%"
+          | _ -> raise Opaque_unrenderable) in
         "(" ^ render l ^ ops ^ render r ^ ")"
-    | _ -> "?"
+    | _ -> raise Opaque_unrenderable
   in
   render (canonicalize e)
 
