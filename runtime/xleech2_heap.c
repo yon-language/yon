@@ -265,10 +265,14 @@ int yon_xheap_unlink_shm(const char *shm_name) {
 /* ============================================================== */
 
 static uint32_t arena_alloc(yon_xheap_t *h, uint32_t n_bytes) {
-    uint32_t aligned = (n_bytes + 7u) & ~7u;
-    if (h->arena_used + aligned > YON_HEAP_ARENA_BYTES) return 0;
+    /* Widen to uint64_t before the align/compare so the bound check is sound
+     * regardless of caller (a 32-bit  used + aligned  could wrap and pass the
+     * test). Same class fixed in yon_rt.c; pure widening, no behaviour change
+     * on any in-range input. */
+    uint64_t aligned = ((uint64_t)n_bytes + 7u) & ~(uint64_t)7u;
+    if ((uint64_t)h->arena_used + aligned > (uint64_t)YON_HEAP_ARENA_BYTES) return 0;
     uint32_t off = h->arena_used;
-    h->arena_used += aligned;
+    h->arena_used += (uint32_t)aligned;
     return off;
 }
 

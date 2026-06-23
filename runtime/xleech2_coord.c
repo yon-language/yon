@@ -59,6 +59,11 @@ int yon_xcoord_to_int24(yon_xcoord_t v, int16_t out[24]) {
         uint32_t gf = code >= 768u;
         uint32_t c  = code - (gf ? 768u : 0u);
         uint32_t i = c >> 5, j = c & 31u;
+        /* j is a 5-bit field (0..31) but out[] has 24 lanes: a valid type-2
+         * short always has j<24, yet we make local soundness independent of
+         * that upstream invariant by failing closed on the function's own
+         * "-1 = not decodable" contract rather than risking an OOB write. */
+        if (i >= 24u || j >= 24u) return -1;
         out[i] = 4;
         out[j] = gf ? -4 : 4;
     } else if ((box == 1u && code >= 1536u && code < 2496u)

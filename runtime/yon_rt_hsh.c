@@ -151,7 +151,12 @@ double yon_rt_hsh_backward(double store_id, double goal, double weights_list) {
     for (int i = (int)n; i >= 1; i--) {
         double a = st->axiom[i];   /* a_i registered at step i */
         if (v >= a && yon_rt_hashset_contains(st->levels[i-1].hash_set_id, v - a) >= 0.5) {
-            mask |= (1ULL << (i - 1)); v -= a;
+            /* The witness bitmask holds 64 bits: a shift count >= 64 is UB in C
+             * (and cannot be represented anyway). Guard it — the reachability
+             * decision below (v reduced to 0) is unaffected; only the explicit
+             * bit-witness is necessarily lossy past 64 levels. */
+            if (i - 1 < 64) mask |= (1ULL << (i - 1));
+            v -= a;
         }
     }
     if (v != 0.0) return 0.0;
