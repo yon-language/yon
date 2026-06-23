@@ -4,3 +4,6 @@ name = "kw_reduction_modifiers"
 [world.W]
 objects = ["X"]
 spaces  = ["w"]
+
+[runtime]
+backend = "memory"

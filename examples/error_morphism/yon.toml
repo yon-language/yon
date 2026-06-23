@@ -4,3 +4,6 @@ name = "error_morphism"
 [world.Db]
 objects = ["X"]
 spaces  = ["db"]
+
+[runtime]
+backend = "memory"

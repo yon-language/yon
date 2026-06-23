@@ -4,3 +4,6 @@ name = "kw_merge_move"
 [world.W]
 objects = ["X"]
 spaces  = ["w"]
+
+[runtime]
+backend = "memory"

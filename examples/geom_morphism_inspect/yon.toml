@@ -4,3 +4,6 @@ name = "geom_morphism_inspect"
 [world.Shop]
 objects = ["X"]
 spaces  = ["shop"]
+
+[runtime]
+backend = "memory"

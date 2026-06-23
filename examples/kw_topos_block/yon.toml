@@ -3,3 +3,6 @@ name = "kw_topos_block"
 
 [world.Ledger]
 objects = ["X"]
+
+[runtime]
+backend = "memory"

@@ -4,3 +4,6 @@ name = "terminal_pure"
 [world.W]
 objects = ["X"]
 spaces  = ["w"]
+
+[runtime]
+backend = "memory"

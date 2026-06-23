@@ -4,3 +4,6 @@ name = "directed_transport"
 [world.W]
 objects = ["X"]
 spaces  = ["w"]
+
+[runtime]
+backend = "memory"

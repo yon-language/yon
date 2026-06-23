@@ -4,3 +4,6 @@ name = "reduction_fold"
 [world.W]
 objects = ["X"]
 spaces  = ["w"]
+
+[runtime]
+backend = "memory"

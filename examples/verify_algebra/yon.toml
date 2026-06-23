@@ -4,3 +4,6 @@ name = "verify_algebra"
 [world.Alg]
 objects = ["X"]
 spaces  = ["alg"]
+
+[runtime]
+backend = "memory"

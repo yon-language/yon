@@ -4,3 +4,6 @@ name = "kw_morph"
 [world.Shop]
 objects = ["X"]
 spaces  = ["shop"]
+
+[runtime]
+backend = "memory"

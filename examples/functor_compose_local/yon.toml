@@ -9,3 +9,6 @@ objects = ["Y"]
 
 [world.U]
 objects = ["Z"]
+
+[runtime]
+backend = "memory"

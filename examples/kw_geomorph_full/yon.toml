@@ -4,3 +4,6 @@ name = "kw_geomorph_full"
 [world.Shop]
 objects = ["X"]
 spaces  = ["shop"]
+
+[runtime]
+backend = "memory"
