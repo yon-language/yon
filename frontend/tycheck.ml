@@ -4163,6 +4163,35 @@ let check_program (p : program) : check_result =
       { cr_env = Tyenv.with_builtins Tyenv.empty;
         cr_errors = [e] }
   | Ok p ->
+  (* Pre-check PRIMA di infer_fun_signatures/Hm_infer (che su questi input vanno
+   * in failwith/crash): nome di funzione top-level duplicato, e tipo di ritorno
+   * funzionale `: T -> U` (un closure ritornato — non supportato, crasherebbe a
+   * emit con un'arità sballata). Rifiuto pulito invece di crash/build-fail. *)
+  let fun_decls = List.filter_map (function TopFun fd -> Some fd | _ -> None) p in
+  let dup_fun =
+    let rec go seen = function
+      | [] -> None
+      | fd :: rest ->
+          if List.mem fd.fn_name seen then Some fd else go (fd.fn_name :: seen) rest
+    in go [] fun_decls
+  in
+  match dup_fun with
+  | Some fd ->
+      { cr_env = Tyenv.with_builtins Tyenv.empty;
+        cr_errors = [ { err_loc = fd.fn_loc;
+                        err_msg = Printf.sprintf
+                          "duplicate top-level function '%s'" fd.fn_name } ] }
+  | None ->
+  match List.find_opt
+          (fun fd -> match fd.fn_return with Some (TyArrow _) -> true | _ -> false)
+          fun_decls with
+  | Some fd ->
+      { cr_env = Tyenv.with_builtins Tyenv.empty;
+        cr_errors = [ { err_loc = fd.fn_loc;
+                        err_msg = Printf.sprintf
+                          "function '%s': a functional return type (T -> U) is not \
+                           supported; return a value or use a handle" fd.fn_name } ] }
+  | None ->
   (* HM-light for fun
    * signatures with "_" param or missing return type. Heuristic best-effort
    * on call-sites. *)
