@@ -484,12 +484,14 @@ and ty_structural_eq (t1 : ty) (t2 : ty) : bool =
       && List.for_all2 variant_eq vs1 vs2
   (* HoTT type equivalences with cumulative subtyping for universes. *)
   | TyUniverse n1, TyUniverse n2 ->
-      (* Cumulativity: Type_n <: Type_m whenever n <= m.
-       * Equivalence (used here as a coarse approximation of typing)
-       * accepts when EITHER level can be lifted to match the other. *)
-      n1 = n2 || n1 < n2 || n2 < n1  (* always true if both universes;
-                                       * cumulative subtyping is symmetric
-                                       * in the equivalence check. *)
+      (* This is a SYMMETRIC conversion/equality check, so universes are equal
+       * iff they are the SAME level: Type_n ≡ Type_m  ⇔  n = m. The old
+       * `n1=n2 || n1<n2 || n2<n1` was a trichotomy tautology — always true —
+       * so it accepted Type_0 ≡ Type_5, collapsing the universe hierarchy
+       * (a Girard-flavoured soundness hole, not "cumulativity"). Cumulative
+       * SUBTYPING (Type_n <: Type_m for n ≤ m) is a DIRECTED relation and, if
+       * ever needed, belongs at the subtyping site, not in this symmetric eq. *)
+      n1 = n2
   | TyPi (_x1, a1, b1), TyPi (_x2, a2, b2) ->
       (* Two Pi-types equivalent iff their domain and codomain are. *)
       ty_structural_eq a1 a2 && ty_structural_eq b1 b2
