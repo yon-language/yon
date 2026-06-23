@@ -68,10 +68,16 @@ let rec subst x u t =
   | GlueElem (phi, t', a') -> GlueElem (phi, subst x u t', subst x u a')
   | Unglue t' -> Unglue (subst x u t')
   | HITElim (branches, scrut) ->
+      (* A branch (n, vars, b) binds the payload variables [vars] over [b],
+       * exactly like a handler clause binds its params. Substitution must be
+       * capture-avoiding HERE TOO: if x is not shadowed by [vars] but some
+       * v ∈ vars is free in u, naively recursing into b would CAPTURE v.
+       * Route through the single multi-binder helper so this binder is
+       * capture-proof by construction, like Lam and the handler clauses. *)
       HITElim
         (List.map (fun (n, vars, b) ->
-           if List.mem x vars then (n, vars, b)
-           else (n, vars, subst x u b)) branches,
+           let (vars', b') = subst_under_binders x u vars b in
+           (n, vars', b')) branches,
          subst x u scrut)
   | HITConstr (n, args) -> HITConstr (n, List.map (subst x u) args)
 
@@ -80,38 +86,50 @@ let rec subst x u t =
  * logic as Lam applies, but for multiple binders.
  *)
 and subst_handler x u h =
+  (* Handler parameters bind names over the body; the same multi-binder
+   * shadowing logic as HIT-eliminator branches applies. Single source of
+   * truth: subst_under_binders. The param TYPES are not term-substituted
+   * (unchanged from the original behaviour); only names can be freshened,
+   * positionally, so re-pairing with the original types is order-correct. *)
+  let names = List.map fst h.hc_params in
+  let tys   = List.map snd h.hc_params in
+  let (names', body') = subst_under_binders x u names h.hc_body in
+  { h with hc_params = List.combine names' tys; hc_body = body' }
+
+(* Capture-avoiding substitution under a LIST of binders [vars] that scope over
+ * [body], computing  body[x ↦ u]  with [vars] in scope. Generalizes the Lam
+ * case-3 rename to many simultaneous binders, and is THE shared routine for
+ * every multi-binder form (handler clauses, HIT-eliminator branches):
+ *   - x ∈ vars            → x is shadowed; body is left untouched.
+ *   - no v ∈ vars in FV(u)→ no capture possible; recurse into body.
+ *   - some v ∈ vars in FV(u) → those v would capture; alpha-rename each such v
+ *                              to a fresh name (avoiding x, FV(body), FV(u) and
+ *                              the names already chosen), rewrite body, then
+ *                              substitute. Capture-proof by construction.
+ * Renaming is positional (List.map preserves order), so a caller carrying
+ * per-binder annotations can re-pair them with [vars'] safely. *)
+and subst_under_binders x u vars body =
   let module S = Set.Make (String) in
-  let bound_names = List.map fst h.hc_params in
-  (* If x is bound by the handler parameters, no substitution happens in the body. *)
-  if List.mem x bound_names then h
+  if List.mem x vars then (vars, body)
   else
-    (* Check whether any handler parameter would capture a variable in u. *)
     let fv_u = free_vars u in
-    let needs_rename =
-      List.exists (fun (p, _) -> S.mem p fv_u) h.hc_params
-    in
-    if not needs_rename then
-      { h with hc_body = subst x u h.hc_body }
-    else
-      (* Alpha-rename each conflicting parameter to fresh. *)
-      let avoid = ref (S.union (free_vars h.hc_body) fv_u) in
-      avoid := S.add x !avoid;
+    if not (List.exists (fun v -> S.mem v fv_u) vars)
+    then (vars, subst x u body)
+    else begin
+      let avoid = ref (S.add x (S.union (free_vars body) fv_u)) in
       let renamings = ref [] in
-      let params' = List.map (fun (p, ty) ->
-        if S.mem p fv_u then begin
-          let p' = fresh_var !avoid in
-          avoid := S.add p' !avoid;
-          renamings := (p, p') :: !renamings;
-          (p', ty)
-        end else (p, ty)
-      ) h.hc_params in
-      (* Apply all renamings to the body. *)
+      let vars' = List.map (fun v ->
+        if S.mem v fv_u then begin
+          let v' = fresh_var !avoid in
+          avoid := S.add v' !avoid;
+          renamings := (v, v') :: !renamings;
+          v'
+        end else v) vars in
       let body_renamed = List.fold_left
-        (fun b (old_name, new_name) -> subst old_name (Var new_name) b)
-        h.hc_body !renamings in
-      { h with
-        hc_params = params';
-        hc_body = subst x u body_renamed }
+        (fun b (oldn, newn) -> subst oldn (Var newn) b)
+        body !renamings in
+      (vars', subst x u body_renamed)
+    end
 
 (* ─────────────────────────────────────────────────────────────────────────
  * subst_term_in_ty x u t  =  t[x := u]  where x is a TERM variable occurring
