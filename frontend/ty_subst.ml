@@ -151,10 +151,18 @@ let rec unify (a : ty) (b : ty) : subst =
       if occur_check n t then
         raise (Unify_failure (UOccurCheck (n, t)))
       else [(n, t)]
-  (* TyVar (a generic binder) unifies with anything, but does NOT generate a
-   * substitution, because TyVar is an existential placeholder (a forall
-   * parameter in an explicit signature), not a meta-variable. *)
-  | TyVar _, _ | _, TyVar _ -> empty_subst
+  (* A TyVar is a RIGID generic binder (a ∀-parameter): it unifies only with
+   * itself, never with a concrete type — the System-F skolem discipline that
+   * makes `fun<A> f(x:A){ return x+1 }` ill-typed (A is abstract in the body).
+   * The OLD `TyVar _, _ -> empty_subst` was a wildcard that erased the
+   * constraint, an unsound footgun. NB: in the live pipeline no TyVar reaches
+   * unify (the parser/stdlib never emit TyVar, and tycheck — which does the
+   * TyUser→TyVar rebind — never calls unify), so this is a safety floor, not a
+   * hot path. Generic call-sites stay sound via instantiation, which freshens
+   * ∀-bound vars to meta-variables before they ever reach here. *)
+  | TyVar a, TyVar b -> if a = b then empty_subst
+                        else raise (Unify_failure (UMismatch (TyVar a, TyVar b)))
+  | TyVar _, _ | _, TyVar _ -> raise (Unify_failure (UMismatch (a, b)))
   (* Primitive types: strict equality of name *)
   | TyPrim n1, TyPrim n2 when n1 = n2 -> empty_subst
   (* "unknown" unifies with anything (a generic placeholder) *)
