@@ -206,11 +206,24 @@ let parse_string (text : string) : world_map =
   wm
 
 let parse_file (path : string) : world_map =
-  let ic = open_in path in
-  let n = in_channel_length ic in
-  let s = really_input_string ic n in
-  close_in ic;
-  parse_string s
+  (* open_in / really_input_string raise Sys_error if yon.toml is a directory,
+     unreadable, or removed after the existence check. Re-raise as the typed
+     Manifest_error so the driver's existing handler reports it cleanly instead
+     of crashing with a raw Sys_error. *)
+  let ic =
+    try open_in path
+    with Sys_error msg ->
+      raise (Manifest_error (Printf.sprintf "cannot read manifest '%s': %s" path msg))
+  in
+  match
+    (try
+       let n = in_channel_length ic in
+       let s = really_input_string ic n in
+       close_in ic; s
+     with Sys_error msg ->
+       (try close_in ic with _ -> ());
+       raise (Manifest_error (Printf.sprintf "cannot read manifest '%s': %s" path msg)))
+  with s -> parse_string s
 
 (* ─── queries ───────────────────────────────────────────────────────── *)
 
@@ -222,11 +235,18 @@ let is_empty (wm : world_map) : bool =
 
 (* ── build the world declarations as native AST nodes ───────────────── *)
 
-(* A world's [world.<Name>] structure as a world_decl record. At most one
-   construction applies (coproduct > product > quotient > subset); with none,
-   the world is the trivial site over its objects, each an `is` world_place
-   named "Code". This is built directly on the AST -- no surface text, no
-   re-parse. *)
+(* A world's [world.<Name>] structure as a world_decl record. Every declared
+   construction is carried through INDEPENDENTLY: desugar_world_decl emits one
+   site generator per non-empty field, and the sheaf checker consumes each.
+   (Previously this collapsed to AT MOST ONE by a priority order coproduct >
+   product > quotient > subset, silently dropping the others -- so a world with
+   both a coproduct and a quotient lost its quotient generator and the
+   quotient's Rel-invariance sheaf condition was NEVER checked, a vacuous-check
+   soundness hole. The world_decl record has a separate field per construction
+   precisely so all can coexist; the manifest now matches desugar instead of
+   diverging from it.) With no construction, the world is the trivial site over
+   its objects, each an `is` world_place named "Code". Built directly on the
+   AST -- no surface text, no re-parse. *)
 let world_decl_of (name : string) (ws : world_struct) : world_decl =
   let base = {
     wd_name = name; wd_places = [];
@@ -234,17 +254,21 @@ let world_decl_of (name : string) (ws : world_struct) : world_decl =
     wd_coequalizer_of = None; wd_quotient_of = None; wd_subset_of = None;
     wd_loc = dummy_loc;
   } in
-  match ws.ws_coproduct, ws.ws_product, ws.ws_quotient, ws.ws_subset_of with
-  | (_ :: _ as cs), _, _, _ -> { base with wd_coproduct_of = cs }
-  | _, (_ :: _ as ps), _, _ -> { base with wd_product_of = ps }
-  | _, _, Some q, _         -> { base with wd_quotient_of = Some q }
-  | _, _, _, Some s         -> { base with wd_subset_of = Some s }
-  | [], [], None, None ->
-      let places =
-        List.map (fun o ->
-          { wp_name = "Code"; wp_descriptor = PdIdList [o]; wp_loc = dummy_loc })
-          ws.ws_objects in
-      { base with wd_places = places }
+  let has_construction =
+    ws.ws_coproduct <> [] || ws.ws_product <> []
+    || ws.ws_quotient <> None || ws.ws_subset_of <> None in
+  if has_construction then
+    { base with
+      wd_coproduct_of = ws.ws_coproduct;
+      wd_product_of   = ws.ws_product;
+      wd_quotient_of  = ws.ws_quotient;
+      wd_subset_of    = ws.ws_subset_of }
+  else
+    let places =
+      List.map (fun o ->
+        { wp_name = "Code"; wp_descriptor = PdIdList [o]; wp_loc = dummy_loc })
+        ws.ws_objects in
+    { base with wd_places = places }
 
 (* Every manifest-declared world as a TopWorld decl, name-sorted for stability. *)
 let world_decls (wm : world_map) : top_decl list =

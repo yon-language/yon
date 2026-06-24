@@ -47,14 +47,24 @@ let space_of ~(root : string) ~(path : string) : string =
 let place_of ~(path : string) : string =
   Filename.remove_extension (Filename.basename path)
 
-(* walk the tree, deterministic order, skipping yon_modules (explicit deps). *)
+(* walk the tree, deterministic order, skipping yon_modules (explicit deps).
+   Both Sys.readdir and Sys.is_directory raise Sys_error on an unreadable
+   directory or a broken symlink; guard each so a malformed project tree yields
+   a skip-with-warning instead of an uncaught crash. *)
 let rec walk (dir : string) : string list =
-  Sys.readdir dir |> Array.to_list |> List.sort compare
-  |> List.concat_map (fun e ->
+  let entries =
+    try Sys.readdir dir |> Array.to_list |> List.sort compare
+    with Sys_error msg ->
+      Printf.eprintf
+        "[yon] warning: cannot read directory '%s' (%s) — skipped\n" dir msg;
+      []
+  in
+  entries |> List.concat_map (fun e ->
        let full = Filename.concat dir e in
-       if Sys.is_directory full then
-         (if e = "yon_modules" then [] else walk full)
-       else if Filename.check_suffix e ".yon" then [full] else [])
+       match (try Some (Sys.is_directory full) with Sys_error _ -> None) with
+       | None -> []                                   (* broken symlink / unreadable: skip *)
+       | Some true -> if e = "yon_modules" then [] else walk full
+       | Some false -> if Filename.check_suffix e ".yon" then [full] else [])
 
 let layout ~(root : string) : unit_loc list =
   walk root
