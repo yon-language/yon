@@ -2322,6 +2322,43 @@ and check_stmts_accum (env : Tyenv.env) (ctx : Reduce.ctx)
        | Error e -> (env', e :: errs))
     (env, []) stmts
 
+(* Implicit-return tail check. A function body's VALUE is desugar_stmt of its
+ * LAST statement (desugar_stmt_or_return): for a tail that is NOT a `return`,
+ * that value must still inhabit the declared return type. tycheck only checks
+ * `return e` statements against expected_ret, so a body ending in e.g.
+ * `let y holds 3` while declaring a place return type silently produces the
+ * wrong value. We check the tails whose value is a plain expression we can
+ * infer (let / x holds e / a bare call), evaluated in the post-body env (the
+ * tail's own binding never feeds its own RHS), and ONLY when both the inferred
+ * type and the declared type are CONCRETE — never the `unknown` f64-handle
+ * placeholder, never a terminal (fieldless) place — so the loose handle
+ * boundary is left untouched. Control-flow / effect tails (when / loops / scope
+ * / emit / new) are not checked: conservative, no false reject. *)
+and check_implicit_tail_return (env_after : Tyenv.env) (ctx : Reduce.ctx)
+                               (body : stmt list) (rt : ty) : type_error list =
+  if rt = TyPrim "unknown" || is_terminal_ty env_after rt then []
+  else match List.rev body with
+  | [] -> []
+  | last :: _ ->
+      let tail = match last with
+        | SReturn _ -> None
+        | SLet (_, e, loc) | SAssignHolds (_, e, loc) -> Some (e, loc)
+        | SCall (name, args, loc) -> Some (ECall (name, args, loc), loc)
+        | _ -> None
+      in
+      (match tail with
+       | None -> []
+       | Some (e, loc) ->
+           (match infer env_after ctx e with
+            | Error _ -> []
+            | Ok t ->
+                if t = TyPrim "unknown" then []
+                else if Dispatcher.subtype env_after ctx ~sub:t ~super:rt then []
+                else [{ err_loc = loc; err_msg = Printf.sprintf
+                          "function declares return type %s but its body ends with \
+                           a value of type %s (add an explicit `return`)"
+                          (Tyenv.ty_to_string rt) (Tyenv.ty_to_string t) }]))
+
 and type_of_lvalue (env : Tyenv.env) (ctx : Reduce.ctx)
                    (lv : lvalue) (loc : location) : ty tc_result =
   ignore ctx;
@@ -3289,8 +3326,11 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
   (* Body stmts: accumulate errors instead of stopping at first.
    * This gives the user the full picture of what's wrong, instead
    * of a one-error-at-a-time edit-fix-recompile cycle. *)
-  let (_, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
-  match body_errs with
+  let (final_env, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
+  let tail_errs = match expected_ret with
+    | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
+    | None -> [] in
+  match body_errs @ tail_errs with
   | [] -> ok ()
   | e :: _ ->
       (* Return only the first; multi-error report is at program level *)
@@ -3365,8 +3405,11 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     |> (fun e -> Tyenv.set_effects e fn.fn_visits)
   in
   let expected_ret = fn.fn_return in
-  let (_, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
-  List.rev_append body_errs (List.rev !errs)
+  let (final_env, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
+  let tail_errs = match expected_ret with
+    | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
+    | None -> [] in
+  List.rev_append (body_errs @ tail_errs) (List.rev !errs)
 
 and check_reduction_decl (env : Tyenv.env) (ctx : Reduce.ctx) (rd : reduction_decl) : unit tc_result =
   (* The target place must exist and have effects. *)
