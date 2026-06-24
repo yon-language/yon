@@ -311,21 +311,12 @@ let rec type_equal
    * Bidirectional, like boolean/proposition. *)
   | TyPrim "text", TyUser "String" -> true
   | TyUser "String", TyPrim "text" -> true
-  (* Subtyping number <: heyt_int. A Yon number is implicitly promotable to
-   * heyt_int<N> with mask=0 (all bits certain, no Unknown). The coercion is
-   * handled at emit time by inserting an automatic topos.heyt_int_make.
-   * Bidirectional because type_equal is called both (expected, actual) and
-   * (param, arg) at different points in the type checker. *)
-  | TyHeytInt _, TyPrim "number" -> true
-  | TyPrim "number", TyHeytInt _ -> true
-  (* Subtyping heyt_int <: proposition. Needed because __heyt_imp has signature
-   * (prop, prop) -> prop and we want to write `a =>? b` with a, b of type
-   * heyt_int. The actual bit-by-bit dispatch happens at emit time by checking
-   * the runtime MLIR type. Honest upfront: this is a pragmatic kludge; the
-   * bit-by-bit semantics and the scalar PROP semantics differ
-   * algebraically. *)
-  | TyHeytInt _, TyPrim "proposition" -> true
-  | TyPrim "proposition", TyHeytInt _ -> true
+  (* NB: the one-way PROMOTIONS  number <: heyt_int  and  heyt_int <: proposition
+   * used to live here as SYMMETRIC arms, which unsoundly also accepted the
+   * reverse (a heyt_int where a number is expected, a prop where a heyt_int is
+   * expected). type_equal is now strict equality; the directional promotions
+   * moved to `subtype` below and are applied only at value-flow sites
+   * (argument passing, return, assignment, field store). *)
   (* Structural equality on TyArrow. *)
   | TyArrow (a1, b1), TyArrow (a2, b2) ->
       type_equal env ctx a1 a2 && type_equal env ctx b1 b2
@@ -394,6 +385,27 @@ let rec type_equal
         Tyenv.place_subcontains env p_sub p_super
         || Tyenv.place_transportable env p_sub p_super
     | _ -> false
+
+(* ─── Directional subtyping  sub <: super ──────────────────────────────
+ * `subtype ~sub ~super` holds when a value of type [sub] may be used where a
+ * value of type [super] is expected. It is EQUALITY (via type_equal, whose
+ * place arm is already directional with t1=super, t2=sub — hence the argument
+ * order below) OR a sound one-way PROMOTION:
+ *     number      <: heyt_int<N>   (mask=0: every bit certain; coerced at emit)
+ *     heyt_int<N> <: proposition   (bit-by-bit lowered to scalar PROP at emit)
+ *     number      <: proposition   (by transitivity)
+ * These promotions previously lived as SYMMETRIC arms in type_equal, which
+ * unsoundly accepted the reverse direction (a heyt_int where a number is
+ * expected). Routing them through this directional relation, used only at
+ * value-flow sites, removes that hole while keeping the legitimate coercions.
+ * CATT/HoTT conversion (type_equal's dispatch) is untouched. *)
+let subtype (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : bool =
+  type_equal env ctx super sub
+  || (match sub, super with
+      | TyPrim "number", TyHeytInt _ -> true
+      | TyHeytInt _, TyPrim "proposition" -> true
+      | TyPrim "number", TyPrim "proposition" -> true
+      | _ -> false)
 
 (* ─── Term equality dispatcher ─────────────────────────────────────── *)
 

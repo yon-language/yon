@@ -1584,7 +1584,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
   else
   let fallback env e expected =
     let* actual = infer env ctx e in
-    if Dispatcher.type_equal env ctx actual expected
+    if Dispatcher.subtype env ctx ~sub:actual ~super:expected
        || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
     else err (location_of_expr e)
       (Printf.sprintf "type mismatch: expected %s, got %s"
@@ -1706,7 +1706,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
        let rec apply_arrow t args =
          match t, args with
          | TyArrow (param, ret), arg :: rest ->
-             if Dispatcher.type_equal env ctx param arg
+             if Dispatcher.subtype env ctx ~sub:arg ~super:param
                 || param = TyPrim "unknown"
                 || arg = TyPrim "unknown"
              then apply_arrow ret rest
@@ -1866,7 +1866,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                         | (pname, pty) :: prest, aty :: arest ->
                             if is_type_param pty
                             then check_args (prest, arest)
-                            else if Dispatcher.type_equal env ctx pty aty
+                            else if Dispatcher.subtype env ctx ~sub:aty ~super:pty
                             then check_args (prest, arest)
                             else err loc
                               (Printf.sprintf
@@ -1937,7 +1937,7 @@ and check_call_signature (env : Tyenv.env) (ctx : Reduce.ctx)
     let rec check_args = function
       | [], [] -> ok ()
       | (pname, pty) :: prest, aty :: arest ->
-          if Dispatcher.type_equal env ctx pty aty
+          if Dispatcher.subtype env ctx ~sub:aty ~super:pty
              || comprehension_coerces_to env ctx ~sub:aty ~super:pty
           then check_args (prest, arest)
           else err loc
@@ -3501,8 +3501,8 @@ and check_move_decl (env : Tyenv.env) (ctx : Reduce.ctx) (md : move_decl) : unit
                      (* Check handler function (if registered). *)
                      match Tyenv.lookup_fun env m.m_by with
                      | None ->
-                         (* Pass-through: types must match directly. *)
-                         if Dispatcher.type_equal env ctx st tt then ok ()
+                         (* Pass-through: source field must be usable as target. *)
+                         if Dispatcher.subtype env ctx ~sub:st ~super:tt then ok ()
                          else err m.m_loc (Printf.sprintf
                            "move %s: field '%s' (%s) to '%s' (%s) without handler — types incompatible"
                            md.mv_name m.m_from (Tyenv.ty_to_string st)
@@ -3516,8 +3516,8 @@ and check_move_decl (env : Tyenv.env) (ctx : Reduce.ctx) (md : move_decl) : unit
                          else
                            let (_, param_ty) = List.hd fs.fs_params in
                            let ret_ty = fs.fs_return in
-                           let ok_in = Dispatcher.type_equal env ctx st param_ty in
-                           let ok_out = Dispatcher.type_equal env ctx ret_ty tt in
+                           let ok_in = Dispatcher.subtype env ctx ~sub:st ~super:param_ty in
+                           let ok_out = Dispatcher.subtype env ctx ~sub:ret_ty ~super:tt in
                            if ok_in && ok_out then ok ()
                            else err m.m_loc (Printf.sprintf
                              "move %s: handler '%s' has signature %s -> %s, expected %s -> %s"
@@ -3576,7 +3576,7 @@ and check_move_decl (env : Tyenv.env) (ctx : Reduce.ctx) (md : move_decl) : unit
                  if List.mem f.fd_name mapped_targets then ok ()
                  else
                    match field_ty_of src f.fd_name with
-                   | Some src_ty when Dispatcher.type_equal env ctx src_ty f.fd_ty ->
+                   | Some src_ty when Dispatcher.subtype env ctx ~sub:src_ty ~super:f.fd_ty ->
                        (* Pass-through: source has matching field. *)
                        ok ()
                    | Some src_ty ->
