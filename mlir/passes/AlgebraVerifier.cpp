@@ -56,6 +56,17 @@ struct AlgebraVerifierPass
            "certified catalog.";
   }
 
+  // On success this pass MATERIALIZES func.func / func.call / func.return ops
+  // (the @<Place>_instantiate bridge + the yon_rt_magma_from_algebra decl), so
+  // the Func (and Arith) dialects must be declared as dependencies. Without
+  // this, running the pass in ISOLATION (`topos-opt --algebra-verifier`)
+  // aborts with "Building op `func.func` but it isn't known in this
+  // MLIRContext"; in the full pipeline it was masked because other passes had
+  // already loaded Func.
+  void getDependentDialects(DialectRegistry &registry) const override {
+    registry.insert<func::FuncDialect, arith::ArithDialect>();
+  }
+
   void runOnOperation() override {
     ModuleOp module = getOperation();
     bool failed = false;
