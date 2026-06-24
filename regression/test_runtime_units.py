@@ -44,6 +44,13 @@ C_UNIT_TESTS = [
     ("quantizer",     "yon_test_quantizer.c",     b"QUANTIZER: PASS",     False),
     ("arena",         "yon_arena_test.c",         b"ALL PASS",            True),
     ("spawn_collect", "test_spawn_collect.c",     b"spawn facade: OK",    True),
+    # Memory-safety unit tests for attacker-influenceable runtime paths. Each
+    # links the full RTSET (which includes yon_rt.o -> needs the __yon_dispatch
+    # stub) and prints a unique final marker.
+    ("field_load",    "test_unit_field_load.c",   b"FIELD_LOAD: PASS",    True),
+    ("coord_decode",  "test_unit_coord_decode.c", b"COORD_DECODE: PASS",  True),
+    ("xheap_bounds",  "test_unit_xheap_bounds.c", b"XHEAP_BOUNDS: PASS",  True),
+    ("hsh",           "test_unit_hsh.c",          b"HSH: PASS",           True),
 ]
 
 
