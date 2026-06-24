@@ -1,0 +1,6 @@
+// coverage: a parameter of arrow type `number -> number` (TyArrow)
+fun apply(g: number -> number, x: number): number { return g(x) }
+fun main(): number {
+  be inc holds fun(n: number) => n + 1
+  return apply(inc, 41)
+}

@@ -1,0 +1,3 @@
+// coverage: a generic function `fun identity<T>(x: T): T` (type_params_opt)
+fun identity<T>(x: T): T { return x }
+fun main(): number { return identity(42) }

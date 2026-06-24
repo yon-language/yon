@@ -1,0 +1,3 @@
+// coverage: a parameter of `map of text to number` type (TyMap)
+fun size(m: map of text to number): number { return 0 }
+fun main(): number { return 0 }

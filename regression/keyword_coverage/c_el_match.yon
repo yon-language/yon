@@ -1,0 +1,8 @@
+// coverage: EElMatch `el_match(target, ret, body)` (El eliminator). Grammar:
+// EL_MATCH LPAREN expr COMMA expr COMMA expr RPAREN (parser.mly).
+// target must be an El(_): here quote(number, 0) : El(number). body is a
+// function; el_match returns its codomain. Lowers to (body target) in desugar.
+fun main(): number {
+  be e holds el_match(quote(number, 0), 0, fun(z: number) => z)
+  return e
+}

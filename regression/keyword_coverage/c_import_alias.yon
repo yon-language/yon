@@ -1,0 +1,5 @@
+// coverage: selective import with an alias `import M::name as alias`
+// (TopImportSym with Some alias). The alias is declared; not calling it keeps
+// the micro-test self-contained (no remote module signature to resolve).
+import Bank::deposit as bank_deposit
+fun main(): number { return 0 }

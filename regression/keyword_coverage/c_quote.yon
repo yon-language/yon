@@ -1,0 +1,9 @@
+// coverage: EQuote `quote(c, a)` (intro for El). Grammar:
+// QUOTE LPAREN IDENT COMMA expr RPAREN (parser.mly).
+// quote(number, 0) : El(number) — the inhabitant 0 is checked against the
+// decoded carrier TyPrim "number". The handle is bound and the function
+// returns a plain number (quote lowers to its inhabitant `a` in desugar).
+fun main(): number {
+  be q holds quote(number, 0)
+  return 0
+}
