@@ -325,7 +325,20 @@ let () =
     match project_wm with
     | Some _ ->
         let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
-        List.iter (fun (n, w) -> Hashtbl.replace pw n w) !pw_pairs;
+        List.iter (fun (n, w) ->
+          match Hashtbl.find_opt pw n with
+          | Some w' when w' <> w ->
+              (* Bare-name keying would silently bind BOTH places named [n] to the
+                 last world written, so one place gets checked against the wrong
+                 sheaf condition. A place name resolves to a single world; reject
+                 the cross-world clash loudly (place symbols aren't space-qualified
+                 downstream either, so two same-named places can't coexist). *)
+              Printf.eprintf
+                "place '%s' is declared in two different worlds ('%s' and '%s'); \
+                 a place name must resolve to a single world — rename or move one.\n"
+                n w' w;
+              exit 6
+          | _ -> Hashtbl.replace pw n w) !pw_pairs;
         Manifest.assign_place_worlds (fun n -> Hashtbl.find_opt pw n) prog
     | None -> prog
   in
