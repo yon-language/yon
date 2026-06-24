@@ -45,17 +45,39 @@ let rec rw_expr (rename : string -> string) (e : S.expr) : S.expr =
   | S.ENot (e1, l) -> S.ENot (r e1, l)
   | S.EIfThenElse (c, a, b, l) -> S.EIfThenElse (r c, r a, r b, l)
   | S.ELam (ps, body, l) -> S.ELam (ps, r body, l)
+  | S.EMoveLam (ps, b, p1, p2, l) -> S.EMoveLam (ps, r b, p1, p2, l)
+  | S.EReductionLam (ps, b, pl, l) -> S.EReductionLam (ps, r b, pl, l)
+  | S.EMorphLam (ps, b, s1, s2, l) -> S.EMorphLam (ps, r b, s1, s2, l)
+  | S.EFunctorLam (ps, b, w1, w2, laws, l) -> S.EFunctorLam (ps, r b, w1, w2, laws, l)
+  | S.EViewLam (ps, b, pl, l) -> S.EViewLam (ps, r b, pl, l)
   | S.EComposeWith (a, b, l) -> S.EComposeWith (r a, r b, l)
   | S.EPullbackVal (f, g, a, b, l) -> S.EPullbackVal (f, g, r a, r b, l)
-  (* Constructors that carry no function-call subexpressions to rewrite, or
-   * that refer to morph/reduction/view names resolved elsewhere: leave as-is. *)
-  | _ -> e
+  (* Previously dropped by `_ -> e`: a call inside any of these (esp. a
+   * produce/spawn EXPRESSION block or a categorical-lambda body in an imported
+   * module) was left un-namespaced → wrong-target binding on collision, or the
+   * `internal` visibility check was bypassed. Now exhaustive (no `_`), so a new
+   * constructor forces a compile error instead of a silent leak. *)
+  | S.EApp (h, args, l) -> S.EApp (r h, List.map r args, l)
+  | S.EHITElim (scrut, branches, ret, l) ->
+      S.EHITElim (r scrut, List.map (fun (n, vs, b) -> (n, vs, r b)) branches, r ret, l)
+  | S.EHITConstr (n, args, l) -> S.EHITConstr (n, List.map r args, l)
+  | S.EPathApp (e1, d, l) -> S.EPathApp (r e1, d, l)
+  | S.EPathAbs (i, e1, l) -> S.EPathAbs (i, r e1, l)
+  | S.EQuote (c, e1, l) -> S.EQuote (c, r e1, l)
+  | S.EElMatch (t, ret, body, l) -> S.EElMatch (r t, r ret, r body, l)
+  | S.EProduce (body, l) -> S.EProduce (List.map (rw_stmt rename) body, l)
+  | S.ESpawn (count, body, l) ->
+      S.ESpawn ((match count with Some c -> Some (r c) | None -> None),
+                List.map (rw_stmt rename) body, l)
+  (* Leaves / names resolved elsewhere: wire handle, pullback/pushout
+   * scaffolding. (EAll is handled above.) *)
+  | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> e
 
 and rw_fas rename fas =
   List.map (fun (fa : S.field_assignment) ->
     { fa with S.fa_value = rw_expr rename fa.S.fa_value }) fas
 
-let rec rw_stmt (rename : string -> string) (s : S.stmt) : S.stmt =
+and rw_stmt (rename : string -> string) (s : S.stmt) : S.stmt =
   let re = rw_expr rename in
   let rs = List.map (rw_stmt rename) in
   match s with
@@ -106,32 +128,55 @@ let module_of (qname : string) : string option =
 let rec refs_in_expr (e : S.expr) : string list =
   let r = refs_in_expr in
   match e with
-  | S.EVar (n, _) | S.ECall (n, _, _) when String.length n > 0 ->
-      n :: (match e with S.ECall (_, args, _) -> List.concat_map r args | _ -> [])
+  | S.EVar (n, _) -> if String.length n > 0 then [n] else []
+  | S.ECall (n, args, _) ->
+      (if String.length n > 0 then [n] else []) @ List.concat_map r args
+  | S.EApp (h, args, _) -> r h @ List.concat_map r args
   | S.EField (e1, _, _) | S.EParen (e1, _) | S.ERefl (e1, _)
-  | S.EFst (e1, _) | S.ESnd (e1, _) | S.ENot (e1, _) | S.ELam (_, e1, _) -> r e1
+  | S.EFst (e1, _) | S.ESnd (e1, _) | S.ENot (e1, _) | S.ELam (_, e1, _)
+  | S.EIn (e1, _, _) | S.EMoveLam (_, e1, _, _, _) | S.EReductionLam (_, e1, _, _)
+  | S.EMorphLam (_, e1, _, _, _) | S.EFunctorLam (_, e1, _, _, _, _)
+  | S.EViewLam (_, e1, _, _) | S.EPathApp (e1, _, _) | S.EPathAbs (_, e1, _)
+  | S.EQuote (_, e1, _) -> r e1
   | S.EBinop (_, a, b, _) | S.EPair (a, b, _) | S.EComposeWith (a, b, _) -> r a @ r b
-  | S.EJ (a, b, c, _) | S.EIfThenElse (a, b, c, _) -> r a @ r b @ r c
+  | S.EJ (a, b, c, _) | S.EIfThenElse (a, b, c, _)
+  | S.EElMatch (a, b, c, _) -> r a @ r b @ r c
   | S.EPullbackVal (_, _, a, b, _) -> r a @ r b
-  | _ -> []
+  | S.EHITElim (scrut, branches, ret, _) ->
+      r scrut @ List.concat_map (fun (_, _, b) -> r b) branches @ r ret
+  | S.EHITConstr (_, args, _) -> List.concat_map r args
+  | S.ENew (_, fas, _) | S.ENewIn (_, _, fas, _) ->
+      List.concat_map (fun (fa : S.field_assignment) -> r fa.S.fa_value) fas
+  | S.EProduce (body, _) -> List.concat_map refs_in_stmt body
+  | S.ESpawn (count, body, _) ->
+      (match count with Some c -> r c | None -> []) @ List.concat_map refs_in_stmt body
+  | S.EAll (_, c, _) -> refs_in_cond c
+  | S.ELit _ | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> []
 
-let rec refs_in_stmt (s : S.stmt) : string list =
+and refs_in_cond (c : S.condition) : string list =
+  match c with
+  | S.CondExpr e | S.CondIs (e, _) | S.CondIsNot (e, _) -> refs_in_expr e
+  | S.CondAnd (a, b) | S.CondOr (a, b) -> refs_in_cond a @ refs_in_cond b
+
+and refs_in_stmt (s : S.stmt) : string list =
   let re = refs_in_expr and rs = List.concat_map refs_in_stmt in
   match s with
   | S.SLet (_, e, _) | S.SAssignHolds (_, e, _) | S.SAssignBecomes (_, e, _)
   | S.SReturn (e, _) | S.SEmit (e, _) -> re e
   | S.SPromote (e, _) -> re e
   | S.SCall (n, args, _) -> n :: List.concat_map re args
-  | S.SWhen (_, b, brs, ow, _) ->
-      rs b @ List.concat_map (fun (_, x) -> rs x) brs
+  | S.SNew (_, fas, _) | S.SNewIn (_, _, fas, _) ->
+      List.concat_map (fun (fa : S.field_assignment) -> re fa.S.fa_value) fas
+  | S.SWhen (c, b, brs, ow, _) ->
+      refs_in_cond c @ rs b
+      @ List.concat_map (fun (cc, x) -> refs_in_cond cc @ rs x) brs
       @ (match ow with Some o -> rs o | None -> [])
   | S.SForEvery (_, _, e, b, _) | S.SInSequence (_, e, b, _)
   | S.SIter (e, b, _) | S.SWhile (e, b, _) -> re e @ rs b
   | S.SScope (_, b, e, _) -> rs b @ re e
-  | S.SForces (_, _, b, _) | S.SForever (b, _) | S.SProduce (b, _)
-  | S.SWith (_, _, b, _) -> rs b
+  | S.SForces (_, c, b, _) -> refs_in_cond c @ rs b
+  | S.SForever (b, _) | S.SProduce (b, _) | S.SWith (_, _, b, _) -> rs b
   | S.SRepeat (_, b, ow, _) -> rs b @ (match ow with Some o -> rs o | None -> [])
-  | _ -> []
 
 let check_visibility (internals : string list) (decls : S.top_decl list) : unit =
   if internals = [] then ()
