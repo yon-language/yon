@@ -283,13 +283,9 @@ let spaces_of_world (wm : world_map) (w : string) : string list =
 (* ─── boundary check over a program ─────────────────────────────────── *)
 
 (* The mailbox name is the bare space name; "wire to S" and "be s holds X.s"
-   both name the target space directly. The sender space, when the package
-   declares it via "init Name as Space", is that name. *)
-
-let sender_spaces (p : program) : string list =
-  List.filter_map (function
-    | TopSpaceInit (name, _) -> Some name
-    | _ -> None) p
+   both name the target space directly. A package's own space is now derived
+   from the filesystem (directory = space, via package_layout), so there is no
+   longer a surface `init Name as Space` declaration to read. *)
 
 (* Wire targets reached through "be s holds X.stream" (TopImportFrom: the
    third field is the target space) together with their source location. *)
@@ -383,4 +379,4 @@ let check_program (wm : world_map) (p : program) : (location * string) list =
           "space '%s' is declared but is not listed in any [world.<Name>] in \
            yon.toml; every space must belong to exactly one world" s)
       else None
-    ) (sender_spaces p @ declared_spaces p)
+    ) (declared_spaces p)

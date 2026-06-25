@@ -301,7 +301,6 @@ let () =
     with Manifest.Manifest_error _ -> true in
   check "manifest A: a space in two worlds is rejected at parse" raised_a;
 
-  let init s = Surface_ast.TopSpaceInit (s, Surface_ast.dummy_loc) in
   let tgt s = [ (s, Surface_ast.dummy_loc) ] in
 
   (* B + C are per-sender: the sender is the place that holds the wire, and a
@@ -317,15 +316,10 @@ let () =
   check "boundary C: same-world wire across two spaces is fine (Reports->Reports)"
     (Manifest.check_targets wm ~sender_world:(Some "Analytics") (tgt "Reports") = []);
 
-  (* Case D: a declared/initialised space that belongs to no world (global). *)
-  check "boundary D: an initialised space in no world is rejected"
-    (List.length (Manifest.check_program wm [ init "Lonely" ]) = 1);
-
   (* Opt-in: with no [world] declared at all, nothing is constrained. *)
   let wm_empty = Manifest.parse_string "[package]\nname = \"x\"\n" in
   check "boundary: no [world] declared -> checks are vacuous"
-    (Manifest.check_program wm_empty [ init "Lonely" ] = []
-     && Manifest.check_targets wm_empty ~sender_world:(Some "X") (tgt "Reports") = []);
+    (Manifest.check_targets wm_empty ~sender_world:(Some "X") (tgt "Reports") = []);
 
   (* place inherits the world of its space (filesystem -> toml). A bare
      `place Order` parses with pd_world = "__INFER"; assign_place_worlds binds

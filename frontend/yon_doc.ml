@@ -101,7 +101,6 @@ let gen (title : string) (prog : S.program) : string =
     | S.TopImportSym (m, n, None, _) -> Some (Printf.sprintf "- `%s::%s`" m n)
     | S.TopImportFrom (m, n, sp, _) ->
         Some (Printf.sprintf "- `%s::%s` from Space `%s` (cross-Space)" m n sp)
-    | S.TopSpaceInit (n, _) -> Some (Printf.sprintf "- this package is Space `%s`" n)
     | _ -> None) prog in
   if imports <> [] then begin
     line "## Imports"; line "";

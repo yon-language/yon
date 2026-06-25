@@ -1498,7 +1498,6 @@ type desugar_result = {
   (* The spaces declared in the program, passed to the emitter so it can
      generate yon_rt_register_space at startup. *)
   spaces : S.space_decl list;
-  space_init_name : string option;  (* Some name if `init Name as Space` present *)
   space_imports : string list;      (* Space names imported via `import f from Space` *)
   internal_funs : string list;      (* names of `internal fun`s: not exported cross-Space *)
   (* Surface reduction declarations indexed by name. Kept separate from
@@ -1537,7 +1536,6 @@ let empty_result : desugar_result = {
   fn_ret_hints = [];
   main = None;
   spaces = [];
-  space_init_name = None;
   space_imports = [];
   internal_funs = [];
   reductions_surface = [];
@@ -2061,7 +2059,6 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
   | S.TopImportFrom (_, _, sp, _) ->
       if List.mem sp res.space_imports then res
       else { res with space_imports = sp :: res.space_imports }
-  | S.TopSpaceInit (name, _) -> { res with space_init_name = Some name }
   | S.TopWorld wd ->
       (* Reify the world as the Core site C(W) and register it: a place will
        * find its site via p_site, and the sheaf predicate reads J off the

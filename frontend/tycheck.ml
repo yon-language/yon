@@ -2583,7 +2583,6 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   | TopImport _ -> env   (* import resolved physically pre-parse; no-op here *)
   | TopImportSym _ -> env   (* selective import: handled in 4b *)
   | TopImportFrom _ -> env   (* cross-Space import: handled at lowering *)
-  | TopSpaceInit _ -> env   (* package Space declaration: metadata *)
   | TopLet _ -> env
   | TopGeomMorphism gm ->
       (* The morphism's type is El(code) = El(src) -> El(tgt), derived from its
@@ -2706,7 +2705,6 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
   | TopImport _ -> ok ()   (* import resolved physically pre-parse; no-op here *)
   | TopImportSym _ -> ok ()   (* selective import: handled in 4b *)
   | TopImportFrom _ -> ok ()   (* cross-Space import: handled at lowering *)
-  | TopSpaceInit _ -> ok ()   (* package Space declaration: metadata *)
   | TopLet (_, e, _) ->
       let* _ = infer env ctx e in
       ok ()

@@ -323,8 +323,6 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
         | None   -> line f (Printf.sprintf "import %s::%s" m name))
    | TopImportFrom (m, name, sp, _) ->
        line f (Printf.sprintf "import %s::%s from %s" m name sp)
-   | TopSpaceInit (name, _) ->
-       line f (Printf.sprintf "init %s as Space" name)
    | TopGeomMorphism gm ->
        line f (Printf.sprintf "geomorph %s from %s to %s {"
                  gm.gm_name gm.gm_source_site gm.gm_target_site);

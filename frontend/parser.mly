@@ -123,7 +123,6 @@
 %token FUNCTOR
 %token IMPORT
 %token INTERNAL
-%token INIT
 %token FORWARD BACKWARD BI
 %token LAWFUL
 %token LAW
@@ -271,9 +270,6 @@ top_decl:
                                          TopImportSym (m, n, Some a, mk_loc $startpos $endpos) }
   | IMPORT q = QIDENT FROM sp = IDENT  { let (m,n) = split_qident q in
                                          TopImportFrom (m, n, sp, mk_loc $startpos $endpos) }
-  | INIT name = IDENT AS kind = IDENT  { if kind <> "Space" then
-                                           failwith "[parser] init expects 'as Space'";
-                                         TopSpaceInit (name, mk_loc $startpos $endpos) }
   | pd = place_decl                   { TopPlace pd }
   | ed = error_decl                   { TopPlace ed }
   | fd = fun_decl                     { TopFun fd }

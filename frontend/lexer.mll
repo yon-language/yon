@@ -132,7 +132,6 @@
       "not", NOT;
       "by", BY;
       "from", FROM;
-      "init", INIT;
       "with", WITH;
       "compose", COMPOSE;
       "hcomp", HCOMP;

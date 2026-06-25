@@ -148,9 +148,6 @@ let symbols_of_program (prog : Surface_ast.program) : symbol list =
         Some { s_name = n; s_kind = 2 (* Module *);
                s_detail = Printf.sprintf "import %s::%s from Space %s" m n sp;
                s_loc = loc }
-    | Surface_ast.TopSpaceInit (n, loc) ->
-        Some { s_name = n; s_kind = 2 (* Module *);
-               s_detail = "Space (this package)"; s_loc = loc }
     | _ -> None
   ) prog
 

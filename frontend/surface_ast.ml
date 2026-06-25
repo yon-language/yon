@@ -694,7 +694,6 @@ type top_decl =
       (* import mod::name [as alias]: module, name, optional local alias *)
   | TopImportFrom of string * string * string * location
       (* import mod::name from Space: module, name, Space — cross-package RPC *)
-  | TopSpaceInit of string * location                 (* init Name as Space — package IS this Space *)
 
 (* space declaration.
  *   space EU
