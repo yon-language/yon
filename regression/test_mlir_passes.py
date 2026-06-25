@@ -104,6 +104,20 @@ CHECKERS = [
         "TOPOS-E0102",
         id="topos-progress",
     ),
+    pytest.param(
+        "topos-localisation-decomp",
+        "localisation_decomp_accept.mlir",
+        "localisation_decomp_reject.mlir",
+        "TOPOS-E0504",
+        id="topos-localisation-decomp",
+    ),
+    pytest.param(
+        "topos-internal-lang",
+        "internal_lang_accept.mlir",
+        "internal_lang_reject.mlir",
+        "TOPOS-E0505",
+        id="topos-internal-lang",
+    ),
 ]
 
 
@@ -134,8 +148,12 @@ def test_checker_rejects(flag, accept, reject, diag):
 # Rewrite / lowering passes: in -> exit 0 + stdout regex assertions
 # ---------------------------------------------------------------------------
 #
-# (flag, in_fixture, [(regex, present)])  -- present=True: regex MUST match
-# stdout; present=False: regex MUST NOT match (op was eliminated/lowered).
+# (flag, in_fixture, [(regex, present)], stderr_substr)
+#   - present=True: regex MUST match stdout; present=False: regex MUST NOT match
+#     (op was eliminated/lowered).
+#   - stderr_substr (optional, default None): if given, this literal substring
+#     MUST appear in stderr. Some rewrite passes (e.g. structural value
+#     numbering) report their effect only on stderr, not in the printed IR.
 REWRITES = [
     pytest.param(
         "heyting-short-circuit",
@@ -143,6 +161,7 @@ REWRITES = [
         [
             (r"topos\.heyt_and", False),  # AND(true,false) folded away
         ],
+        None,
         id="heyting-short-circuit",
     ),
     pytest.param(
@@ -152,6 +171,7 @@ REWRITES = [
             (r"topos\.heyt", False),   # whole topos dialect gone
             (r"arith\.", True),        # replaced by arith ops
         ],
+        None,
         id="lower-topos-to-standard",
     ),
     pytest.param(
@@ -160,6 +180,7 @@ REWRITES = [
         [
             (r"topos\.coherence", False),  # dead coherence erased
         ],
+        None,
         id="coherence-elimination",
     ),
     pytest.param(
@@ -169,6 +190,7 @@ REWRITES = [
             (r"topos\.apply_move", False),  # identity move application elided
             (r"topos\.move @m", True),      # the move declaration stays
         ],
+        None,
         id="move-composition",
     ),
     pytest.param(
@@ -178,13 +200,67 @@ REWRITES = [
             (r"@P_b", False),  # duplicate place fused away
             (r"@P_a", True),   # canonical (lex-smallest) place survives
         ],
+        None,
         id="place-fusion",
+    ),
+    pytest.param(
+        "reduction-inlining",
+        "reduction_inlining_in.mlir",
+        [
+            # The no-op handler body is inlined and the with_handler erased. We
+            # assert only its disappearance: the inner op (a pure, unused
+            # topos.heyt) is legitimately DCE'd, so asserting its survival is
+            # fragile — the load-bearing effect is that the handler is gone.
+            (r"topos\.with_handler", False),
+        ],
+        None,
+        id="reduction-inlining",
+    ),
+    # (reduction-inlining KEEP negative dropped: it needs a valid topos.op_apply
+    #  in the handler body, whose custom assembly format couldn't be grounded
+    #  blind; the inline-happens case above already exercises the pass.)
+    pytest.param(
+        "world-specialization",
+        "world_specialization_single_in.mlir",
+        [
+            (r"topos\.static_world", True),  # single-world: place gets the attr
+        ],
+        None,
+        id="world-specialization-single",
+    ),
+    pytest.param(
+        "world-specialization",
+        "world_specialization_multi_in.mlir",
+        [
+            (r"topos\.static_world", False),  # multi-world: nothing marked
+        ],
+        None,
+        id="world-specialization-multi",
+    ),
+    pytest.param(
+        "structural-value-numbering",
+        "structural_vn_in.mlir",
+        [
+            (r"topos\.heyt_or", True),  # consumer rewired, still present
+        ],
+        # The collapse itself is reported only on stderr; assert the tally.
+        "collassate 1",
+        id="structural-value-numbering",
+    ),
+    pytest.param(
+        "lower-topos-extensions",
+        "lower_topos_extensions_in.mlir",
+        [
+            (r"topos\.canonical_subplace", False),  # erased (F5a)
+        ],
+        None,
+        id="lower-topos-extensions",
     ),
 ]
 
 
-@pytest.mark.parametrize("flag,fixture,checks", REWRITES)
-def test_rewrite(flag, fixture, checks):
+@pytest.mark.parametrize("flag,fixture,checks,stderr_substr", REWRITES)
+def test_rewrite(flag, fixture, checks, stderr_substr):
     r = _run(flag, fixture)
     assert r.returncode == 0, (
         f"--{flag} on {fixture} should succeed (exit 0) but exited "
@@ -203,3 +279,9 @@ def test_rewrite(flag, fixture, checks):
                 f"--{flag} on {fixture}: expected {pat!r} to be gone from "
                 f"stdout, still present.\nSTDOUT:\n{out[-2000:]}"
             )
+    if stderr_substr is not None:
+        err = _txt(r.stderr)
+        assert stderr_substr in err, (
+            f"--{flag} on {fixture}: expected {stderr_substr!r} in stderr, "
+            f"absent.\nSTDERR:\n{err[-2000:]}"
+        )

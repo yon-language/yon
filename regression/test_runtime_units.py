@@ -51,6 +51,12 @@ C_UNIT_TESTS = [
     ("coord_decode",  "test_unit_coord_decode.c", b"COORD_DECODE: PASS",  True),
     ("xheap_bounds",  "test_unit_xheap_bounds.c", b"XHEAP_BOUNDS: PASS",  True),
     ("hsh",           "test_unit_hsh.c",          b"HSH: PASS",           True),
+    # Functional unit tests for untested runtime families (string pool, Golay
+    # VoyagerList, open-addressed HashMap). Each links the full RTSET (includes
+    # yon_rt.o -> needs the __yon_dispatch stub) and prints a unique marker.
+    ("string",        "test_unit_string.c",       b"STRING: PASS",        True),
+    ("voyagerlist",   "test_unit_voyagerlist.c",  b"VOYAGERLIST: PASS",   True),
+    ("map",           "test_unit_map.c",          b"MAP: PASS",           True),
 ]
 
 
