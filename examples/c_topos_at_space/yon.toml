@@ -1,0 +1,9 @@
+[package]
+name = "c_topos_at_space"
+
+[world.Ledger]
+objects = ["X"]
+spaces  = ["Vault"]
+
+[runtime]
+backend = "memory"

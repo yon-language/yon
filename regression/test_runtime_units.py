@@ -57,6 +57,13 @@ C_UNIT_TESTS = [
     ("string",        "test_unit_string.c",       b"STRING: PASS",        True),
     ("voyagerlist",   "test_unit_voyagerlist.c",  b"VOYAGERLIST: PASS",   True),
     ("map",           "test_unit_map.c",          b"MAP: PASS",           True),
+    # Functional unit tests for the linear collections (Vec/Deque/PQ), the
+    # Merkle content-addressing DAG, and the bits/crypto hashing families. Each
+    # links the full RTSET (includes yon_rt.o -> needs the __yon_dispatch stub)
+    # and prints a unique final marker.
+    ("vec",           "test_unit_vec.c",          b"VEC: PASS",           True),
+    ("merkle",        "test_unit_merkle.c",       b"MERKLE: PASS",        True),
+    ("bits",          "test_unit_bits.c",         b"BITS: PASS",          True),
 ]
 
 

@@ -1,0 +1,8 @@
+[package]
+name = "c_place_over"
+
+[world.Ledger]
+objects = ["X"]
+
+[runtime]
+backend = "memory"

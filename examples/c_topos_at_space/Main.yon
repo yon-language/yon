@@ -1,0 +1,8 @@
+place Entry { }
+topos Bank at Vault where {
+  objects {
+    place State { balance number }
+  }
+  prop is_positive(s: State): proposition = s.balance > 0
+}
+fun main(): number { return 0 }

@@ -1,0 +1,8 @@
+[package]
+name = "c_prop_abstract"
+
+[world.Ledger]
+objects = ["X"]
+
+[runtime]
+backend = "memory"

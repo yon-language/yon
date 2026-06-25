@@ -340,6 +340,7 @@ let check_targets (wm : world_map) ~(sender_world : string option)
    unique-world heuristic (which cannot disambiguate across several worlds).
    A place already annotated, or one the map does not know, is left untouched. *)
 let assign_place_worlds
+    ?(world_of_space : string -> string option = fun _ -> None)
     (world_of_place : string -> string option) (p : program) : program =
   List.map (function
     | TopPlace pd when pd.pd_world = "__INFER" ->
@@ -347,14 +348,26 @@ let assign_place_worlds
          | Some w -> TopPlace { pd with pd_world = w }
          | None -> TopPlace pd)
     | TopTopos td ->
-        (* A topos `T in W` gives its objects world W when they carry no `in W`
-           (under toml-only the inner places have none). Resolve here, before
-           tycheck, just like bare places. *)
+        (* A topos gives its inline objects a world when they carry none (under
+           the toml+filesystem model the inner places have no `in W`). Two
+           residences, resolved here before tycheck, just like bare places:
+             - `topos T in W`      -> the objects' world is W.
+             - `topos T at Space`  -> the objects reside at Space, whose world
+               comes from the toml ([world.X] spaces=[...]); resolve it via
+               world_of_space. Without this the inner places stay __INFER and
+               fail "refers to unknown world __INFER" (only the `in W` branch
+               was handled before). *)
         let objs = List.map (fun pd ->
           if pd.pd_world = "__INFER" then
             (match td.tp_world with
              | Some w -> { pd with pd_world = w }
-             | None -> pd)
+             | None ->
+                 (match td.tp_at_space with
+                  | Some sp ->
+                      (match world_of_space sp with
+                       | Some w -> { pd with pd_world = w }
+                       | None -> pd)
+                  | None -> pd))
           else pd) td.tp_objects in
         TopTopos { td with tp_objects = objs }
     | other -> other

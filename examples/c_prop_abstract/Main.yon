@@ -1,0 +1,8 @@
+place Entry { }
+topos Bank in Ledger where {
+  objects {
+    place State { balance number }
+  }
+  prop is_overdrawn(s: State): proposition
+}
+fun main(): number { return 0 }

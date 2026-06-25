@@ -1,0 +1,9 @@
+[package]
+name = "c_morph_on_morphism"
+
+[world.Shop]
+objects = ["X"]
+spaces  = ["shop"]
+
+[runtime]
+backend = "memory"

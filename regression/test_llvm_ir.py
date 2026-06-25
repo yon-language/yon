@@ -97,7 +97,17 @@ def _run(cmd, **kw):
 #   arena_basic            : pure arithmetic / arena, no spawn/stream
 #   spawn_parallel_collect : exercises Spawn__* and Stream__* runtime calls
 #   net_stream             : exercises Stream__*_net send/recv runtime calls
-EXAMPLES = ["arena_basic", "spawn_parallel_collect", "net_stream"]
+#   string_literals        : exercises yon_rt_string_lit + String.* family
+#   collections_ext        : exercises yon_rt_hashset_* (set union/intersect)
+#   merkle_noncommutative  : exercises yon_rt_merkle_* (node2 / commutative)
+# An example name absent from examples/ makes _emit_ll() return None and the
+# node skips, so adding a name that is not built is harmless.
+EXAMPLES = ["arena_basic", "spawn_parallel_collect", "net_stream",
+            "string_literals", "collections_ext", "merkle_noncommutative"]
+
+# Examples that exercise the spawn machinery (child fork + child_exit). Only
+# these are relevant to the child-exit node; others have no such call site.
+SPAWN_EXAMPLES = ["spawn_parallel_collect"]
 
 
 # ── skip fixture: skip cleanly if any required stage tool is unavailable ──
@@ -148,6 +158,23 @@ def _emit_ll(name, tmp):
     return t.stdout.decode(errors="replace")
 
 
+def _emit_obj(name, tmp):
+    """Carry one example all the way to a relocatable object: _emit_ll() then
+    `llc -filetype=obj <name>.ll -o <name>.o` (the exact llc invocation from
+    test_yon_pipeline.py::_build_and_run). Returns the Path to the .o, or None
+    if the IR could not be produced or llc failed/produced no file (caller
+    skips). This is the last artifact BEFORE the slow link step."""
+    ll = _emit_ll(name, tmp)
+    if ll is None:
+        return None
+    llf, obj = tmp / f"{name}.ll", tmp / f"{name}.o"
+    llf.write_text(ll)
+    r = _run([LLC, "-filetype=obj", str(llf), "-o", str(obj)])
+    if r.returncode != 0 or not obj.exists() or obj.stat().st_size == 0:
+        return None
+    return obj
+
+
 # ── helpers ──────────────────────────────────────────────────────────────
 def _norm(sym):
     """Strip at most one leading underscore (macOS nm mangling) so an IR
@@ -168,6 +195,26 @@ def _module_defines(ll):
 
 def _runtime_refs(ll):
     return {_norm(m) for m in _RT_FAMILY.findall(ll)}
+
+
+# The child-exit facade. desugar.ml:1316 lowers a spawn body's child arm to
+# `Spawn__child_exit(ch)`; runtime/yon_rt.c:2344-2347 has
+# `void yon_rt_spawn_child_exit(void *h){ _exit(0); }` and yon_rt.c:2454
+# `double Spawn__child_exit(double id){ yon_rt_spawn_child_exit(...); ... }`.
+# Both names may appear in @-position depending on inlining, so we match either.
+_CHILD_EXIT = re.compile(
+    r"@(Spawn__child_exit|yon_rt_spawn_child_exit)\b")
+
+
+def _ll_lines(ll):
+    """The .ll split into non-empty, comment-stripped logical lines, preserving
+    order. LLVM ';' starts a comment to end of line."""
+    out = []
+    for raw in ll.splitlines():
+        line = raw.split(";", 1)[0].rstrip()
+        if line.strip():
+            out.append(line)
+    return out
 
 
 _NM_CACHE = {"set": None}
@@ -305,4 +352,192 @@ def test_ll_f64_abi(name, tmp_path):
     assert not bad, (
         f"{name}: facade call site(s) without a `double` operand/return, "
         f"contradicting the f64 runtime ABI: {sorted(set(bad))}"
+    )
+
+
+@pytest.mark.parametrize("name", SPAWN_EXAMPLES)
+def test_ll_child_exit_unreachable(name, tmp_path):
+    """HIGH-VALUE concurrency/UB node. A spawn body's child arm ends in a call
+    to the child-exit facade (desugar.ml:1316 -> @Spawn__child_exit, whose body
+    yon_rt.c:2344 calls `_exit(0)`), so control NEVER returns from that call:
+    the child process is gone. The latent bug this guards against is the
+    compiler emitting code that *resumes the parent's continuation* after the
+    call — i.e. the call's result feeding a live computation, or the call not
+    being terminal in its block.
+
+    We DON'T require the literal `unreachable` opcode: the current lowering does
+    not mark the facade `noreturn`, so it emits the call followed by the normal
+    `__if_expr` merge and the call's result is simply discarded (dead) — which
+    is the safe shape, because `_exit` means the merge is never reached at run
+    time. The invariant we actually assert, tolerantly, is the SAFE one:
+
+      for each `call ... @<child_exit>(...)`:
+        - if the next significant line is `unreachable`/`ret`/a call to another
+          noreturn (abort/exit/_exit/llvm.trap)  -> ideal, pass;
+        - else the call's SSA result (if any) must NOT be consumed by a later
+          instruction in the same block (it is dead, never resumed)  -> pass;
+        - else (result feeds a live op after the call)  -> FAIL: the parent
+          continuation runs in the child, the UB this node exists to catch.
+
+    Skips cleanly if the chosen example's IR has no child-exit call site."""
+    ll = _emit_ll(name, tmp_path)
+    if ll is None:
+        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
+
+    lines = _ll_lines(ll)
+    # A call to the child-exit facade. Capture an optional SSA result name.
+    call_re = re.compile(
+        r"^\s*(?:(%[A-Za-z0-9_.]+)\s*=\s*)?"     # optional `%r =`
+        r"(?:tail\s+|musttail\s+|notail\s+)?call\b"
+        r"[^\n]*@(?:Spawn__child_exit|yon_rt_spawn_child_exit)\b")
+    # opcodes that make the post-call line a clean terminal/no-return
+    terminal_re = re.compile(
+        r"^\s*(unreachable\b|ret\b|br\b|call[^\n]*@(?:abort|exit|_exit|"
+        r"llvm\.trap|llvm\.debugtrap)\b)")
+    # the block boundary: a label line `name:` or a terminator we've passed.
+    label_re = re.compile(r"^[A-Za-z0-9_.\"$-]+:\s*$")
+
+    sites = 0
+    bad = []
+    for i, line in enumerate(lines):
+        m = call_re.match(line)
+        if not m:
+            continue
+        sites += 1
+        res = m.group(1)
+        # collect the rest of this basic block (until next label or end).
+        rest = []
+        for nxt in lines[i + 1:]:
+            if label_re.match(nxt):
+                break
+            rest.append(nxt)
+            if re.match(r"^\s*(ret\b|br\b|unreachable\b|switch\b|"
+                        r"indirectbr\b|resume\b)", nxt):
+                break  # block terminator reached
+        # 1) ideal: the very next significant line is terminal / no-return.
+        if rest and terminal_re.match(rest[0]):
+            continue
+        # 2) safe-by-deadness: the call's result is never used downstream.
+        if res is None:
+            continue  # void/unused call: nothing can resume on its value
+        # word-boundary search for the SSA name being consumed after the call.
+        used = any(re.search(re.escape(res) + r"\b", r) for r in rest)
+        if not used:
+            continue
+        bad.append((res, rest[0].strip()))
+
+    if sites == 0:
+        pytest.skip(f"{name}: IR has no @Spawn__child_exit / "
+                    f"@yon_rt_spawn_child_exit call site")
+    assert not bad, (
+        f"{name}: child-exit call result is consumed by a live instruction "
+        f"after the (no-return) call — the parent continuation would run in "
+        f"the exited child (concurrency UB). Offending sites: {bad}"
+    )
+
+
+def _nm_undefined(obj):
+    """The set of UNDEFINED symbols ('U') in an object file, normalized
+    (one leading underscore stripped). Returns None if nm fails to read it."""
+    r = _run([NM, str(obj)])
+    if r.returncode != 0:
+        return None
+    undef = set()
+    for line in r.stdout.decode(errors="replace").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[-2].upper() == "U":
+            undef.add(_norm(parts[-1]))
+    return undef
+
+
+def _nm_defined(obj):
+    """The set of DEFINED text/data symbols (type letter not 'U'/'u'/'-') in an
+    object file, normalized. Returns None if nm fails."""
+    r = _run([NM, str(obj)])
+    if r.returncode != 0:
+        return None
+    defined = set()
+    for line in r.stdout.decode(errors="replace").splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[-2].upper() not in ("U",):
+            defined.add(_norm(parts[-1]))
+    return defined
+
+
+# libc / libm / pthread / compiler-builtin symbols an object may legitimately
+# leave undefined: the system linker resolves them, not our RTSET objects.
+# Tolerant: prefixes + an exact-name set. Anything matching here is NOT required
+# to be in the runtime-provided set.
+_SYS_PREFIXES = ("pthread_", "__", "_ZSt", "llvm.", "sem_", "atomic_")
+_SYS_EXACT = {
+    "memcpy", "memmove", "memset", "memcmp", "strlen", "strcmp", "strncmp",
+    "strcpy", "strncpy", "strcat", "strdup", "printf", "fprintf", "snprintf",
+    "sprintf", "vsnprintf", "puts", "putchar", "fputs", "fwrite", "fputc",
+    "fflush", "malloc", "calloc", "realloc", "free", "abort", "exit", "_exit",
+    "_Exit", "qsort", "memchr", "strchr", "strrchr", "strstr", "getenv",
+    "open", "close", "read", "write", "lseek", "mmap", "munmap", "ftruncate",
+    "fopen", "fclose", "fread", "feof", "ferror", "perror", "errno",
+    "__errno_location", "stderr", "stdout", "stdin", "sqrt", "pow", "fabs",
+    "floor", "ceil", "round", "fmod", "log", "exp", "sin", "cos", "nan",
+    "shm_open", "shm_unlink", "usleep", "sleep", "nanosleep", "fork", "waitpid",
+    "kill", "getpid", "socket", "bind", "listen", "accept", "connect", "send",
+    "recv", "setsockopt", "htons", "ntohs", "inet_pton", "dprintf",
+    "clock_gettime", "gettimeofday",
+}
+
+
+def _is_system_symbol(sym):
+    return sym in _SYS_EXACT or sym.startswith(_SYS_PREFIXES)
+
+
+@pytest.mark.parametrize("name", ["arena_basic", "spawn_parallel_collect"])
+def test_ll_object_symbol_split(name, tmp_path):
+    """LINK-TIME invariant asserted BEFORE the slow link. Carry the example to a
+    relocatable object (_emit_obj: _emit_ll -> `llc -filetype=obj`) and `nm` it.
+    Assert the two halves of a clean link:
+
+      (a) the program entry is DEFINED here — `main` (or macOS `_main`) shows as
+          a text symbol (`T`/`t`), so the object actually provides an entry;
+      (b) every UNDEFINED ('U') symbol is resolvable: it is either provided by
+          the RTSET runtime objects (nm union of those .o) OR a tolerated
+          system symbol (libc/libm/pthread/compiler-builtin allowlist).
+
+    A 'U' that is neither runtime-provided nor a system symbol is precisely the
+    undefined reference that would blow up the link — caught here, named, and
+    localized to one symbol. All comparisons are over normalized symbol sets
+    (one leading `_` stripped for macOS), never exact IR text.
+
+    Skips cleanly if llc or nm is unavailable, if the IR/object cannot be built,
+    or if nm cannot read the runtime objects."""
+    if not (shutil.which(LLC) or Path(LLC).exists()):
+        pytest.skip(f"llc not found on PATH: {LLC}")
+    obj = _emit_obj(name, tmp_path)
+    if obj is None:
+        pytest.skip(f"{name}: could not build object (pre-LLVM stage or llc)")
+
+    defined = _nm_defined(obj)
+    undef = _nm_undefined(obj)
+    if defined is None or undef is None:
+        pytest.skip(f"{name}: nm could not read the emitted object")
+
+    # (a) entry defined. Accept either `main` or the macOS `_main` (post-_norm
+    # both collapse to `main`), and tolerate the dispatch scaffolding as entry.
+    assert ("main" in defined) or ("__yon_dispatch" in defined), (
+        f"{name}: object defines neither `main` nor `__yon_dispatch` as a text "
+        f"symbol; defined sample: {sorted(defined)[:20]}"
+    )
+
+    # (b) every undefined symbol must be resolvable.
+    provided = _provided_symbols()
+    if provided is None:
+        pytest.skip("nm could not read any runtime .o (cannot build provided set)")
+
+    unresolved = sorted(
+        s for s in undef
+        if s not in provided and not _is_system_symbol(s)
+    )
+    assert not unresolved, (
+        f"{name}: object has UNDEFINED symbol(s) that neither the runtime "
+        f"objects nor the system allowlist provide: {unresolved}. This is the "
+        f"link-time 'undefined reference' the IR/object stage should localize."
     )

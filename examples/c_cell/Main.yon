@@ -1,0 +1,6 @@
+place Entry { }
+place Circle {
+  base number
+  cell loop from base to base
+}
+fun main(): number { return 0 }

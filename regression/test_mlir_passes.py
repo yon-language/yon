@@ -145,6 +145,54 @@ def test_checker_rejects(flag, accept, reject, diag):
 
 
 # ---------------------------------------------------------------------------
+# Accept-only (smoke) checker passes: a well-formed module -> exit 0.
+# ---------------------------------------------------------------------------
+#
+# (flag, accept_fixture)
+#
+# These passes have NO textually-expressible reject case, so they are exercised
+# as accept-only smoke. Each entry's docstring (in the fixture) records WHY the
+# reject is unreachable; here we only assert the well-formed module exits 0,
+# proving the pass is registered, parses the fixture, and runs to completion.
+#
+#   * topos-type-equiv-sanity (E0103): SectionType is a uniqued MLIR type, so two
+#     sections of the same place ALWAYS share an identical Type pointer; the
+#     `it->second != t` branch (StructuralPasses.cpp ~L184) can't fire.
+#   * topos-accessibility (W0503): warning-only, never signals failure; the
+#     warning needs a >1024-place world (StructuralPasses.cpp ~L363), so we
+#     assert exit 0 WITHOUT requiring the warning.
+#   * topos-simpson6 (E0502): FromSiteOp::verify (TopOps.cpp ~L2319) already
+#     rejects an unresolved topology with E0279 at op-verify time, so the pass'
+#     own E0502 is unreachable; we smoke the converse (a resolving from_site).
+ACCEPT_ONLY = [
+    pytest.param(
+        "topos-type-equiv-sanity",
+        "type_equiv_sanity_accept.mlir",
+        id="topos-type-equiv-sanity",
+    ),
+    pytest.param(
+        "topos-accessibility",
+        "accessibility_accept.mlir",
+        id="topos-accessibility",
+    ),
+    pytest.param(
+        "topos-simpson6",
+        "simpson6_accept.mlir",
+        id="topos-simpson6",
+    ),
+]
+
+
+@pytest.mark.parametrize("flag,accept", ACCEPT_ONLY)
+def test_checker_accepts_only(flag, accept):
+    r = _run(flag, accept)
+    assert r.returncode == 0, (
+        f"--{flag} on {accept} should accept (exit 0) but exited "
+        f"{r.returncode}\nSTDERR:\n{_txt(r.stderr)[-2000:]}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Rewrite / lowering passes: in -> exit 0 + stdout regex assertions
 # ---------------------------------------------------------------------------
 #
@@ -255,6 +303,20 @@ REWRITES = [
         ],
         None,
         id="lower-topos-extensions",
+    ),
+    pytest.param(
+        "topos-cps-conversion",
+        "cps_conversion_in.mlir",
+        [
+            # The two-apply_move chain is wrapped in a scope_with_yield whose
+            # body yields the final result (CPSConversion.cpp L89-119)...
+            (r"topos\.scope_with_yield", True),
+            (r"topos\.scope_yield", True),
+            # ...and the converted func is tagged (CPSConversion.cpp L174-175).
+            (r"topos\.cps_converted", True),
+        ],
+        None,
+        id="topos-cps-conversion",
     ),
 ]
 

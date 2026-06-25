@@ -1,0 +1,4 @@
+// Path application (@) of a non-path value. The head 5 infers to number, not an
+// Id type, so the EPathApp case in infer rejects: "the head is not a path"
+// -> exit 3. Mirrors the existing path_app_nonpath.yon.
+fun main(): number { return 5 @ I0 }

@@ -323,7 +323,7 @@ let () =
      declares and the space (directory) it lives in. *)
   let prog =
     match project_wm with
-    | Some _ ->
+    | Some wm ->
         let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
         List.iter (fun (n, w) ->
           match Hashtbl.find_opt pw n with
@@ -339,7 +339,9 @@ let () =
                 n w' w;
               exit 6
           | _ -> Hashtbl.replace pw n w) !pw_pairs;
-        Manifest.assign_place_worlds (fun n -> Hashtbl.find_opt pw n) prog
+        Manifest.assign_place_worlds
+          ~world_of_space:(Manifest.world_of_space wm)
+          (fun n -> Hashtbl.find_opt pw n) prog
     | None -> prog
   in
   (* Expand views only after filesystem world assignment. The synthetic view

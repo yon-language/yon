@@ -1,0 +1,9 @@
+place Entry { }
+fun deposit_eu(b: number): number { return b }
+morph LiftEU from Account to AccountEU {
+  on object(s: Account): AccountEU {
+    return new AccountEU { balance s.balance }
+  }
+  on morphism deposit via deposit_eu
+}
+fun main(): number { return 0 }
