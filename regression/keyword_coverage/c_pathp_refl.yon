@@ -1,0 +1,18 @@
+// PathP type-equality / reflexivity — the DISCRIMINATING red->green for the
+// TyPathP arm in Dispatcher.type_equal.
+//
+// Returning a value of type PathP(i, number, a, b) where the SAME type is the
+// declared return type must be ACCEPTED (exit 0). Before the explicit TyPathP
+// arm, type_equal had no PathP case and fell through to base_equal -> the
+// FragCATT decidable `ty_structural_eq` (catt_r_yon.ml) ALSO has no PathP case,
+// so it returns false for ANY two PathP — meaning even IDENTICAL PathP were
+// FALSELY REJECTED (a false-reject on all path types, not the false-accept the
+// old note claimed). classify_ty routes TyPathP to FragCATT, so the cubical
+// fallback never runs for two PathP.
+//
+// With the arm (carrier up-to the bound interval-variable name + BOTH endpoints,
+// modeled on the TyId arm + TyPi rename), identical PathP compare equal -> the
+// program type-checks -> exit 0. The companion negative neg_pathp_endpoint.yon
+// pins the other direction (different end endpoint -> rejected).
+fun reflPath(q: PathP(i, number, a, b)): PathP(i, number, a, b) { return q }
+fun main(): number { return 0 }

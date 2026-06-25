@@ -1,0 +1,16 @@
+// PathP endpoint soundness (companion to neg_return_type_mismatch.yon).
+//
+// `q` has type PathP(i, number, a, c); the declared return type is
+// PathP(i, number, a, b). Same carrier (number) and same START endpoint (a),
+// but a DIFFERENT END endpoint (c vs b) — these are NOT the same path type
+// (a path from a to b is not a path from a to c).
+//
+// The SReturn check routes through Dispatcher.subtype -> type_equal, whose
+// TyPathP arm compares the carrier (up to the bound interval-variable name)
+// AND both endpoints, exactly like the TyId arm. Before that arm existed,
+// TyPathP fell through to lift_to_cubical, which discards the endpoints
+// (replacing them with the fixed placeholders __endpoint_x/_y), so the
+// mismatch was silently ACCEPTED — the same endpoint-blind hole TyId had
+// before e44e5f9. With the endpoint-aware arm, c != b is rejected -> exit 3.
+fun coerce(q: PathP(i, number, a, c)): PathP(i, number, a, b) { return q }
+fun main(): number { return 0 }

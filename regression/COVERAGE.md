@@ -45,8 +45,22 @@ REMAINING:
       categorical core, entirely untested).
 - [ ] handle-type STRATIFICATION negatives (plain lambda where a move/reduction/
       morph handle TYPE is required → must reject) — need declared places → projects.
-- [ ] `neg_pathp_endpoint` — BLOCKED by a real gap: Dispatcher.type_equal is
-      endpoint-blind for TyPathP (see to-fix); today the mismatch is accepted.
+- [x] PathP type-equality — RESOLVED, and the original note was INVERTED.
+      The real gap: Dispatcher.type_equal had NO TyPathP arm, so two PathP fell
+      to base_equal; classify_ty routes TyPathP to FragCATT, whose decidable
+      (catt_r_yon.ml `ty_structural_eq`) ALSO has no PathP case → returns false
+      for ANY two PathP. So the actual bug was a FALSE-REJECT on all path types
+      (identical PathP rejected too), NOT the false-accept the old note claimed.
+      Verified empirically: neg_pathp_endpoint was rejected WITH and WITHOUT the
+      change (it never discriminated). Fix: explicit endpoint-aware TyPathP arm
+      (carrier up-to interval-var name + both endpoints, mirroring the TyId arm
+      + TyPi rename), so PathP equality is correct BOTH ways.
+      Red→green oracle is POSITIVE: `keyword_coverage/c_pathp_refl.yon`
+      (identical PathP → exit 0; falsely rejected pre-fix). Companion negative
+      `neg_pathp_endpoint.yon` pins the other direction (different endpoint →
+      exit 3). NB latent: ty_structural_eq's TyId case also drops endpoints and
+      PathP has no case at all — both now bypassed by the explicit type_equal
+      arms, but worth a follow-up if anything calls ty_structural_eq directly.
 
 DEAD / vestigial — do NOT test: SAssignHolds (no production), EPullback/EPushout
 expr, EAll, LitDuration/LitCurrency, TopWorld/TopSpace from grammar (manifest/
@@ -67,8 +81,9 @@ leech_theta, sct. Each oracle's internal [PASS]/[FAIL] is one pytest node
 (test_oracle_checks.py).
 
 REMAINING:
-- [ ] prop_eval — the Ω evaluator (test_heyting covers the algebra, not the
-      evaluator that applies it). A single test_prop_eval.ml known-answer.
+- [x] prop_eval — DONE: test_prop_eval.ml is wired in frontend/dune (built and
+      run; its [PASS]/[FAIL] lines become test_oracle_checks.py nodes). The Ω
+      evaluator known-answer oracle, distinct from test_heyting (the algebra).
 - [ ] desugar — a Surface→Core oracle (let→App(Lam,v); inline-lambda lift).
 Pipeline-sufficient (skip): pretty, emit_mlir, carrier, drivers, tooling,
 manifest/layout/module_prefix.
@@ -129,6 +144,9 @@ crypto/bits/time/random, rpc, fold/checkpoint families of yon_rt.c.
 ---
 
 ## Next, by return-on-effort
+0. [DONE] Soundness: PathP endpoint-blind type_equal closed (neg_pathp_endpoint,
+   red→green). This came BEFORE coverage — an active false type-equality beats
+   covering a healthy feature.
 1. Layer 1 mini-projects, starting with `morph on morphism` (HIGH — untested core).
-2. Layer 2 prop_eval oracle.
+2. [DONE] Layer 2 prop_eval oracle (wired in dune).
 3. Layer 4 child_exit→unreachable, then object-symbol-split, then broaden examples.

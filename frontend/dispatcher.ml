@@ -356,6 +356,22 @@ let rec type_equal
        * the same carrier compared equal, and the coherence check was empty. *)
       type_equal env ctx a1 a2
       && ty_term_equal env ctx x1 x2 && ty_term_equal env ctx y1 y2
+  | TyPathP ((i1, a1), x1, y1), TyPathP ((i2, a2), x2, y2) ->
+      (* Same soundness reason as the TyId arm above: a path from p to q is NOT
+       * the same type as a path from p to r, so the carrier AND both endpoints
+       * must match. Without this arm TyPathP fell through to lift_to_cubical,
+       * which discards the endpoints (replacing them with the fixed placeholders
+       * __endpoint_x/_y at L156), so any two PathP over the same carrier
+       * compared equal — the exact endpoint-blind hole TyId had before e44e5f9.
+       *
+       * Difference from TyId: PathP binds an interval variable i in the carrier
+       * line (i. A), so the carriers are compared UP TO the bound interval-name,
+       * as TyPi does for its bound variable (rename_ty below). The endpoints
+       * x, y live at the i=0/i=1 boundary, OUTSIDE the i-binding, so they carry
+       * no free i and are compared directly — exactly like TyId. *)
+      let a2' = if String.equal i1 i2 then a2 else rename_ty i2 i1 a2 in
+      type_equal env ctx a1 a2'
+      && ty_term_equal env ctx x1 x2 && ty_term_equal env ctx y1 y2
   | TyPi (v1, d1, c1), TyPi (v2, d2, c2) ->
       (* Dependent function types, compared up to the bound variable name. *)
       type_equal env ctx d1 d2
