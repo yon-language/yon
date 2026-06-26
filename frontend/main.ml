@@ -264,12 +264,10 @@ let test_parse_reduction () =
     }
     
     fun greet(): text {
-      with Console of Output {
-        return Output.print("hello")
-      }
+      return Output.print("hello")
     }
   |} in
-  Printf.printf "\n=== Test 10: parse reduction + with block ===\n";
+  Printf.printf "\n=== Test 10: parse reduction ===\n";
   match parse_string src with
   | Error msg ->
       Printf.printf "FAIL — %s\n" msg;
@@ -669,37 +667,7 @@ let test_conditional_program () =
            false)
 
 (* Test 22: end-to-end program with Output.print and observable output. *)
-let test_hello_world () =
-  let src = {|
-    fun main() {
-      with __Console of Output {
-        Output.print("hello, world")
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 22: Hello World — verify Output buffer ===\n";
-  Builtins.reset_output ();
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL parsing — %s\n" msg;
-      false
-  | Ok prog ->
-      let result = Desugar.desugar_program prog in
-      (match result.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins result.Desugar.ctx in
-           let _final = Builtins.reduce_with_builtins ctx term in
-           let output = Builtins.get_output () in
-           Printf.printf "Captured output: %s\n" (String.trim output);
-           if String.trim output = "hello, world" then
-             (Printf.printf "Status: PASS\n"; true)
-           else
-             (Printf.printf "Expected 'hello, world', got '%s'\n"
-                (String.trim output);
-              false)
-       | None ->
-           Printf.printf "No main function\n";
-           false)
+(* test_hello_world removed: Output via the dropped 'with' handler-scope *)
 
 (* ─── Type checker tests ───────────────────────────────────────────── *)
 
@@ -833,26 +801,7 @@ let test_tycheck_with_visits () =
          false)
 
 (* Test 28: type-check accepts effect via with-block (handler active). *)
-let test_tycheck_with_handler () =
-  let src = {|
-    fun greet() {
-      with __Console of Output {
-        Output.print("hello")
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 28: type-check accepts effect via handler ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "0 errors. Status: PASS\n"; true)
-      else
-        (Printf.printf "Got unexpected errors:\n";
-         List.iter (fun e ->
-           Printf.printf "  %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
+(* test_tycheck_with_handler removed: tested type-check of the dropped 'with' construct *)
 
 (* Test 29: type-check catches field access on non-place. *)
 let test_tycheck_bad_field_access () =
@@ -3183,42 +3132,7 @@ let test_row_polymorphism_reject () =
  *
  * No separate class/instance keyword machinery is needed: the
  * paradigm already expresses it through its primary constructs. *)
-let test_yoneda_typeclass_dispatch () =
-  let src = {|
-    world Compare { Kind is num }
-    place Ord in Compare with effects {
-      operation compare(a: number, b: number): number
-    }
-    reduction NumberOrd of Ord {
-      on compare(a: number, b: number) {
-        return a - b
-      }
-    }
-    fun call_min(a: number, b: number): number visits Ord {
-      let d holds Ord.compare(a, b)
-      return d
-    }
-    fun main(): number {
-      with NumberOrd {
-        return call_min(10, 7)
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 113: Yoneda-native typeclass dispatch (place + reduction) ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 3.0 ->
-                Printf.printf "  with NumberOrd { call_min(10, 7) } = 3 via handler dispatch\n";
-                Printf.printf "Status: PASS — typeclass realized via place + reduction\n"; true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
+(* test_yoneda_typeclass_dispatch removed: dispatch via the dropped 'with' handler-scope *)
 
 (* Test 114: World inference — unique-world rule.
  *
@@ -3364,61 +3278,9 @@ let test_multi_error_diagnostics () =
  *
  * Without transitive inference, middle_fn would have to declare visits Log
  * explicitly. With inference, it derives this from the call graph. *)
-let test_effect_inference_transitive () =
-  let src = {|
-    world W { K is x }
-    place Log in W with effects {
-      operation write(msg: number): number
-    }
-    reduction LogReducer of Log {
-      on write(msg: number) { return msg }
-    }
-    fun inner(): number visits Log {
-      let r holds Log.write(7)
-      return r
-    }
-    fun middle(): number {
-      return inner()
-    }
-    fun outer(): number {
-      return middle()
-    }
-    fun main(): number {
-      with LogReducer {
-        return outer()
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 118: Effect inference — transitive closure ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let cr = Tycheck.check_program prog in
-      if cr.cr_errors <> [] then
-        (List.iter (fun e ->
-           Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
-      else
-        let r = Desugar.desugar_program prog in
-        (match r.Desugar.main with
-         | Some term ->
-             let ctx = Builtins.with_builtins r.Desugar.ctx in
-             let final = Builtins.reduce_with_builtins ctx term in
-             (match Builtins.decode_number final with
-              | Some 7.0 ->
-                  (* Also check that middle and outer NOW carry visits Log *)
-                  (match Tyenv.lookup_fun cr.cr_env "middle",
-                         Tyenv.lookup_fun cr.cr_env "outer" with
-                   | Some mid, Some out
-                     when List.mem "Log" mid.fs_visits
-                       && List.mem "Log" out.fs_visits ->
-                       Printf.printf "  middle, outer carry inferred visits Log\n";
-                       Printf.printf "Status: PASS — transitive effect inference\n"; true
-                   | _ ->
-                       Printf.printf "FAIL — visits Log not propagated\n"; false)
-              | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-         | None -> false)
+(* test_effect_inference_transitive removed: drove effect inference through the
+   dropped 'with' handler-scope. Effect-inference coverage (visits propagation)
+   should be re-added as a 'with'-free test if wanted. *)
 
 (* Test 119: Depth subtyping — place fields with subtypeable values.
  *
@@ -4770,53 +4632,8 @@ let test_shot_ordering () =
  * In a block `with R1 of P { with R2 of P { ... } }`, R2 is looked up first
  * (top of stack, LIFO). The prototype keeps `active_handlers` as a list with
  * the top at the head: the innermost handler wins. *)
-let test_nested_with_stack () =
-  Printf.printf "\n=== Test 183: stack of nested reductions ===\n";
-  let ctx = Reduce.empty_ctx in
-  let rd_outer : Surface_ast.reduction_decl = {
-    rd_name = "OuterR";
-    rd_of = "P";
-    rd_multi_shot = false;
-    rd_direction = RdForward;
-    rd_lawful = false;
-    rd_shot_ordering = OrdSequential;
-    rd_clauses = [];
-    rd_type_params = [];
-    rd_invertible = false;
-    rd_fold_name = None;
-    rd_loc = Surface_ast.dummy_loc;
-  } in
-  let rd_inner : Surface_ast.reduction_decl = {
-    rd_name = "InnerR";
-    rd_of = "P";
-    rd_multi_shot = false;
-    rd_direction = RdForward;
-    rd_lawful = false;
-    rd_shot_ordering = OrdSequential;
-    rd_clauses = [];
-    rd_type_params = [];
-    rd_invertible = false;
-    rd_fold_name = None;
-    rd_loc = Surface_ast.dummy_loc;
-  } in
-  let core_outer = Desugar.desugar_reduction_decl rd_outer in
-  let core_inner = Desugar.desugar_reduction_decl rd_inner in
-  let ctx1 = Reduce.declare_reduction ctx core_outer in
-  let ctx2 = Reduce.declare_reduction ctx1 core_inner in
-  (* simulate the nested activation: outer first, then inner *)
-  let ctx_outer_active = {
-    ctx2 with active_handlers = ("OuterR", core_outer) :: ctx2.active_handlers
-  } in
-  let ctx_inner_active = {
-    ctx_outer_active with
-    active_handlers = ("InnerR", core_inner) :: ctx_outer_active.active_handlers
-  } in
-  match ctx_inner_active.active_handlers with
-  | ("InnerR", _) :: ("OuterR", _) :: _ ->
-      Printf.printf "  stack [InnerR; OuterR] — innermost first (LIFO)\n";
-      Printf.printf "  with R1 { with R2 { op() } } — R2 vince lookup\n";
-      Printf.printf "Status: PASS\n"; true
-  | _ -> Printf.printf "FAIL\n"; false
+(* test_nested_with_stack removed: exercised active_handlers, the LIFO stack the
+   dropped 'with' construct populated. *)
 
 (* Test 184: Reduction polymorphism.
  *
@@ -4953,13 +4770,11 @@ let () =
     test_parse_partial_forever;
     test_arithmetic_program;
     test_conditional_program;
-    test_hello_world;
     test_tycheck_wellformed;
     test_tycheck_wrong_arity;
     test_tycheck_wrong_type;
     test_tycheck_missing_effect;
     test_tycheck_with_visits;
-    test_tycheck_with_handler;
     test_tycheck_bad_field_access;
     test_tycheck_reduction_coverage;
     test_tycheck_place_fields;
@@ -5041,12 +4856,10 @@ let () =
     test_pi_type_parse;
     test_row_polymorphism_accept;
     test_row_polymorphism_reject;
-    test_yoneda_typeclass_dispatch;
     test_world_inference_unique;
     test_world_inference_via_visits;
     test_world_inference_conflict;
     test_multi_error_diagnostics;
-    test_effect_inference_transitive;
     test_depth_subtyping;
     test_depth_subtyping_reject;
     test_bool_prop_coercion;
@@ -5111,7 +4924,6 @@ let () =
     test_reduction_compose;
     test_reduction_lawful;
     test_shot_ordering;
-    test_nested_with_stack;
     test_reduction_polymorphism;
     test_default_reduction;
     test_reduction_invertible;
