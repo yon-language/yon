@@ -1,0 +1,8 @@
+[package]
+name = "slice_over_undeclared_reject"
+
+[world.Ledger]
+objects = ["X"]
+
+[runtime]
+backend = "memory"

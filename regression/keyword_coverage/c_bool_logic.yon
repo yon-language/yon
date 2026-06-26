@@ -1,0 +1,11 @@
+// coverage: boolean literals `true`/`false` and the boolean operators
+// `and`/`or`. These keywords were exercised by NOTHING in code (only mentioned
+// in comments) until this micro-test — found via the comment-stripped coverage
+// audit. VERIFIED: emits MLIR (exit 0).
+fun main(): number {
+  be t holds true
+  be f holds false
+  be conj holds (t and f)
+  be disj holds (t or f)
+  return 0
+}

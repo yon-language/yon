@@ -1,0 +1,9 @@
+// FINDING (v1.2 red->green oracle, NOT gate-wired): abstract-prop signature
+// typing is a STUB. Mutation of examples/c_prop_abstract: the prop's param type
+// is `Ghost` (undeclared) instead of the declared place State. VERIFIED today:
+// emit -> exit 0 (ACCEPTED). A bodyless `prop p(...): proposition` does NOT
+// typecheck its parameter types (the body-bearing form, desugaring to a fun,
+// would). A sound check would reject the unknown type -> exit != 0.
+topos Bank where {
+  prop is_bad(s: Ghost): proposition
+}

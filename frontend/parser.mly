@@ -140,7 +140,7 @@
 /* First-class topos constructs. */
 /* MORPHISM_KW (singular): keyword for a single morphism declaration inside a
  * topos `morphisms { }` block, and for the `on morphism N via M` clause. */
-%token TOPOS_KW OBJECTS_KW MORPHISMS_KW MORPHISM_KW TERMINAL_KW PROP_KW
+%token TOPOS_KW MORPHISMS_KW MORPHISM_KW TERMINAL_KW PROP_KW
 %token MORPH_KW VIA_KW
 %token NAT
 %token ADJUNCTION_KW EXACT_KW

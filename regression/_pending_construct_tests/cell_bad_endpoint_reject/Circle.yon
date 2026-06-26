@@ -1,0 +1,10 @@
+// FINDING (v1.2 red->green oracle, NOT gate-wired): cell-endpoint existence is a
+// STUB. Mutation of examples/c_cell: the endpoints `ghost` are not members of
+// Circle (the valid version is `from base to base`). VERIFIED today: emit ->
+// exit 0 (ACCEPTED). desugar.ml drops FoCell as pure metadata (no Core
+// fields/ops, no endpoint resolution), so a 1-cell whose dom/cod name undeclared
+// members is not rejected. A sound check would reject this -> exit != 0.
+place Circle {
+  base number
+  cell loop from ghost to ghost
+}

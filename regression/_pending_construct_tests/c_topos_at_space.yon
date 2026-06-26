@@ -1,7 +1,0 @@
-// TODO: single-file test — revisit under the per-directory topos model
-// coverage: the `topos T at SpaceName where { }` residence form (topos_at_opt)
-place State { balance number }
-topos Bank where {
-  prop is_positive(s: State): proposition = s.balance > 0
-}
-fun main(): number { return 0 }

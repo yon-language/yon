@@ -1,0 +1,8 @@
+// FINDING (v1.2 red->green oracle, NOT gate-wired): slice-base existence is a
+// STUB. Mutation of examples/c_place_over with Base.yon REMOVED, so `over Ghost`
+// names an undeclared base. Project context supplies the world, isolating the
+// slice-base check. VERIFIED today: emit -> exit 0 (ACCEPTED). A sound check
+// (pd_over base must be a declared place) would reject this -> exit != 0.
+// pd_over is currently read only by a hardcoded Some "Customer" branch in
+// main.ml + yon_doc; no general base-existence check exists.
+place Slice over Ghost { weight number }

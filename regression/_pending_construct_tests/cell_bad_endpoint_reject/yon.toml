@@ -1,0 +1,8 @@
+[package]
+name = "cell_bad_endpoint_reject"
+
+[world.Ledger]
+objects = ["X"]
+
+[runtime]
+backend = "memory"

@@ -85,7 +85,9 @@
          transformation) is a map *between two functors* F and G: for each
          object it gives a map F(X) -> G(X), coherently. *)
       "topos", TOPOS_KW;
-      "objects", OBJECTS_KW;
+      (* `objects` (OBJECTS_KW) RETIRED with topos-per-space: a topos no longer
+       * declares an inline `objects { }` block; objects are filesystem-derived.
+       * The token had no grammar production left (orphan) -> removed. *)
       "morphisms", MORPHISMS_KW;
       (* `morphism` (singular): keyword declaring a single morphism inside a
          topos's `morphisms { }` block, and used in `on morphism N via M`. *)

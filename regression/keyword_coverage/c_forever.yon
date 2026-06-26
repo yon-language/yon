@@ -1,0 +1,11 @@
+// coverage: the `forever { }` non-terminating loop statement (forever_stmt,
+// desugars to __forever(body)). It was mentioned only in a comment in
+// v1_control_flow.yon — exercised by NO code until this micro-test (found via
+// the comment-stripped coverage audit). VERIFIED: emits MLIR (exit 0).
+fun spin(): number visits Output {
+  forever {
+    be _ holds String.print("tick")
+  }
+}
+
+fun main(): number { return 0 }

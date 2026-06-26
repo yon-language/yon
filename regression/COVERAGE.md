@@ -26,25 +26,68 @@ test_oracle_checks.py), functional in the middle, integration the tip.
 
 ---
 
-## Layer 1 — Yon surface (every construct)   [biggest remaining gap]
+## Layer 1 — Yon surface (every construct)
+
+COVERAGE MODEL: test_yon_coverage.py enforces that EVERY lexer keyword is
+exercised by compiling code (examples/ + keyword_coverage/ + yon_tests/ +
+cross_space/) or a kernel oracle. HARDENED this pass: the exercised-token scan
+now STRIPS comments first — previously a keyword appearing only in a comment
+counted as covered (phantom coverage). The comment-stripped audit found 6
+phantoms: `forever`, `and`, `or`, `true`, `false` (live constructs, exercised by
+NO code) and `objects` (dead). Resolution:
+  - `forever` -> keyword_coverage/c_forever.yon (forever_stmt, real code).
+  - `and`/`or`/`true`/`false` -> keyword_coverage/c_bool_logic.yon (real code;
+    all four VERIFIED to lower, exit 0).
+  - `objects` (OBJECTS_KW) -> DROPPED: orphan token (no grammar production left
+    after the topos-per-space milestone removed inline `objects { }`); removed
+    from lexer.mll + parser.mly %token.
 
 DONE — single-file construct micro-tests (regression/keyword_coverage/c_*.yon,
 functional): scope-anon, repeat-otherwise, lambda-block, arrow/map/El/PathP/
-heyt-int/morph-handle types, generics `fun id<A>`, import-alias, quote, el_match.
+heyt-int/morph-handle types, generics `fun id<A>`, import-alias, quote, el_match,
+bool-logic (true/false/and/or), forever.
 DONE — negatives (regression/yon_tests/negative/neg_*.yon): return-mismatch,
 return-tail, dup-param, empty-body, arity, unbound-var, path-app-nonpath,
 quote-carrier-mismatch.
 DROPPED (was UNCOVERED) — `init Name as Space`: vestigial, superseded by the
 filesystem project model; removed from the language.
 
-REMAINING:
-- [ ] project-context constructs as MINI-PROJECTS (need yon.toml world/place):
-      `place P over X` (slice), `cell n from src to tgt` (HIT path ctor),
-      abstract `prop p(..): proposition`, `topos T at Space`,
-      `morph M { on morphism src via tgt }`  ← HIGH (functor-on-arrows, the
-      categorical core, entirely untested).
-- [ ] handle-type STRATIFICATION negatives (plain lambda where a move/reduction/
-      morph handle TYPE is required → must reject) — need declared places → projects.
+DONE — project-context constructs POSITIVES, gate-wired example projects
+(test_projects.py globs examples/**/yon.toml, asserts compile-accept):
+`place P over X` (examples/c_place_over), `cell .. from .. to ..`
+(examples/c_cell), abstract `prop p(..): proposition` (examples/c_prop_abstract),
+topos decl in a space `Topos.yon` (examples/c_prop_abstract, kw_topos_block, +
+every project). NB `topos T at Space` was DROPPED with the topos-per-space
+milestone (residence is filesystem-inferred); the construct is the plain topos
+decl, covered everywhere.
+DONE — handle-type STRATIFICATION negative: a plain arrow where a
+`morph from S1 to S2` handle is required is rejected (exit 3); wired
+`yon_tests/negative/neg_handle_plain_fn.yon` (the handle opacity is confined to
+the topos identifiers, not the argument's arrow-vs-handle distinction).
+DONE — morph on-morphism FUNCTORIALITY hardened (W6): `yon_tests/negative/
+neg_morph_functoriality.yon` rejects an `on morphism .. via wrong_sig` whose
+signature is not F(dom) -> F(cod). (Earlier STUB note now resolved.)
+
+REMAINING — construct-specific semantic checks that are STUBS (accept-all on the
+structural/categorical content; VERIFIED this pass: each accepted in project
+context, exit 0). NOT wireable as negatives until hardened — wiring would be a
+false-green. Red→green oracles staged in `_pending_construct_tests/` (collected
+by nothing), each a minimal mutation of its passing example, verified ACCEPTED
+today; hardening must be Mac-gated against the example corpus (false-reject risk,
+per the PathP/morph saga):
+- [ ] slice-base existence — `place P over Ghost` accepted; `pd_over` is read
+      only by a hardcoded Some "Customer" branch (main.ml) + yon_doc, no general
+      base-existence check. Oracle: `slice_over_undeclared_reject/`.
+- [ ] cell-endpoint existence — `cell loop from ghost to ghost` accepted;
+      desugar.ml drops FoCell as pure metadata (no endpoint resolution).
+      Oracle: `cell_bad_endpoint_reject/`.
+- [ ] abstract-prop signature typing — bodyless `prop p(s: Ghost): proposition`
+      accepted; the bodyless form does not typecheck its param types (the
+      body-bearing form, desugaring to a fun, would). Oracle:
+      `prop_bad_param_reject/`.
+- [ ] morph via-signature (v1.2) — `on morphism deposit via wrong_sig` with
+      incompatible wrong_sig still accepted by `check_via_bindings` when the
+      source topos is out of scope. Oracle: `neg_morph_via_signature.yon`.
 - [x] PathP type-equality — RESOLVED, and the original note was INVERTED.
       The real gap: Dispatcher.type_equal had NO TyPathP arm, so two PathP fell
       to base_equal; classify_ty routes TyPathP to FragCATT, whose decidable
@@ -113,17 +156,29 @@ Note: lower-topos-to-llvm is an arith/scf→llvm lowering (not Topos-specific).
 
 ## Layer 4 — LLVM lowering (regression/test_llvm_ir.py)   [thin — to thicken]
 
-DONE — 4 node types × 3 examples (arena_basic, spawn_parallel_collect, net_stream):
-ll-emits (valid IR), has-entry (@main/@__yon_dispatch), no-undefined-runtime-refs
-(nm-checked: every @yon_rt_*/@Spawn__*/@__yon_dispatch referenced is provided),
-f64-abi (value-facade calls are double; void-control calls excluded).
+DONE — 6 examples (arena_basic, spawn_parallel_collect, net_stream,
+string_literals, collections_ext, merkle_noncommutative) ×: ll-emits (valid IR),
+has-entry (@main/@__yon_dispatch), no-undefined-runtime-refs (nm-checked),
+f64-abi (value-facade calls are double; void-control calls excluded). PLUS
+test_ll_object_symbol_split (nm the .o: `main` defined, undefined ⊆ RTSET+libc —
+link invariant before the slow link) and test_ll_child_exit_unreachable
+(TOLERANT form, see below).
 
-REMAINING (real semantic value, not cosmetic):
-- [ ] child_exit → unreachable: a `call ... @Spawn__child_exit`/`yon_rt_spawn_child_exit`
-      must be followed by `unreachable` (it _exit()s). Protects a nasty concurrency bug.
-- [ ] object-symbol-split: after llc -filetype=obj, `nm` the .o — `main` defined,
-      undefined ⊆ RTSET+libc. The link-time invariant, before the slow link.
-- [ ] broaden from 3 example programs to ~10 touching more runtime families.
+REMAINING:
+- [ ] child_exit NORETURN — the test exists but asserts only the WEAK
+      "safe-by-deadness" invariant, by design, because the lowering does NOT mark
+      the facade noreturn. The real fix: in emit_mlir.ml (~L5715) emit
+      `Spawn__child_exit` declaration with a noreturn passthrough so mlir-translate
+      emits the LLVM `@Spawn__child_exit` declaration with the `noreturn` attribute;
+      then strengthen the node to assert the declaration carries `noreturn`.
+      Red→green on the Mac (pre: no noreturn; post: present). CAUTION: must confirm
+      mlir-opt/topos-opt accept the attribute and func→llvm forwards it — if the
+      func verifier rejects it, ALL examples' lowering breaks, so gate carefully.
+      NB: literal `unreachable` after the call is an LLVM SimplifyCFG opt, NOT
+      emitted by mlir-translate, so assert the noreturn ATTRIBUTE, not `unreachable`.
+- [ ] broaden from 6 example programs to ~10 (low value; harness skips any example
+      whose pre-LLVM stage fails, so adding names is safe but only helps if they lower).
+- [x] object-symbol-split — DONE (test_ll_object_symbol_split).
 LEAVE (refinements, not gaps): has-entry's `@main` OR `@__yon_dispatch`, and
 f64-abi's auto-skip — tightening risks false-fail for little gain.
 
@@ -147,6 +202,11 @@ crypto/bits/time/random, rpc, fold/checkpoint families of yon_rt.c.
 0. [DONE] Soundness: PathP endpoint-blind type_equal closed (neg_pathp_endpoint,
    red→green). This came BEFORE coverage — an active false type-equality beats
    covering a healthy feature.
-1. Layer 1 mini-projects, starting with `morph on morphism` (HIGH — untested core).
+1. `morph on morphism` — FINDING: the functor-on-arrows check is a STUB
+   (accept-all on functoriality; see Layer 1). HIGHEST remaining value, same
+   class as PathP. Needs a Mac-gated red→green (can't harden blind: ~10 morph
+   examples + undeclared-topoi risk).
 2. [DONE] Layer 2 prop_eval oracle (wired in dune).
-3. Layer 4 child_exit→unreachable, then object-symbol-split, then broaden examples.
+3. child_exit NORETURN fix (emit a noreturn passthrough on Spawn__child_exit,
+   strengthen the node to assert the attribute). object-symbol-split DONE.
+   Broaden examples 6→~10 is low value.

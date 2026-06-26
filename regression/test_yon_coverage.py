@@ -49,6 +49,15 @@ def _keywords():
     return sorted(set(re.findall(r'"([A-Za-z_][A-Za-z0-9_]*)"', txt)))
 
 
+def _strip_comments(s):
+    """Remove // line and /* */ block comments. A keyword that appears ONLY in a
+    comment is NOT exercised — counting it would be phantom coverage (this audit
+    found forever/and/or/true/false hiding in comments, now real micro-tests)."""
+    s = re.sub(r"/\*.*?\*/", "", s, flags=re.S)
+    s = re.sub(r"//[^\n]*", "", s)
+    return s
+
+
 def _exercised_tokens():
     srcs = (
         list(EXAMPLES.glob("**/*.yon"))                       # incl. project dirs
@@ -57,7 +66,7 @@ def _exercised_tokens():
         + list((ROOT / "regression" / "yon_tests").glob("**/*.yon"))   # migrated projects
         + list((ROOT / "regression" / "cross_space").glob("*/**/*.yon"))  # gated cross_space PROJECTS only (not loose files)
     )
-    text = " ".join(p.read_text() for p in srcs)
+    text = " ".join(_strip_comments(p.read_text()) for p in srcs)
     return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", text))
 
 
