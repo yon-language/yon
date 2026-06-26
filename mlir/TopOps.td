@@ -701,28 +701,6 @@ def Topos_ScopeYieldOp : Topos_Op<"scope_yield", [
 // With handler, Heyting, coherence, path operations
 //===----------------------------------------------------------------------===//
 
-// topos.with_handler @reduction { ... }
-// Activates a handler (reduction) for the duration of the body.
-def Topos_WithHandlerOp : Topos_Op<"with_handler", [
-    NoTerminator,
-    SingleBlock
-  ]> {
-  let summary = "Install a reduction handler for the duration of a block";
-  let description = [{
-    Equivalent of `with R of P { ... }` in Yon surface. Pushes the handler on
-    the stack (LIFO); pops at the end of the body. Operations invoked inside the
-    body use this handler for the lookup.
-  }];
-  let arguments = (ins
-    FlatSymbolRefAttr:$reduction,
-    OptionalAttr<FlatSymbolRefAttr>:$of_place
-  );
-  let regions = (region SizedRegion<1>:$body);
-  let assemblyFormat = [{
-    $reduction (`of` $of_place^)? attr-dict-with-keyword $body
-  }];
-}
-
 // topos.op_apply @op on %instance(%args...)
 // Invokes an operation of a place on an instance. Goes through the stack of
 // active handlers.

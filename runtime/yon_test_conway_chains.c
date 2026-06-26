@@ -57,7 +57,7 @@
  * BUILD (from runtime/, after `make`):
  *   cc -std=c11 -O2 -I. -Ivendor/mmgroup yon_test_conway_chains.c \
  *      yon_rt.o yon_mmap.o leech_orbits.o yon_arena.o yon_curtis_canon.o \
- *      xleech2_coord.o xleech2_handler_stack.o xleech2_heap.o xleech2_mphf.o \
+ *      xleech2_coord.o xleech2_heap.o xleech2_mphf.o \
  *      vendor/mmgroup/[all object files] -lpthread -lm -o yon_test_conway_chains
  * Run from run_regression.sh; exit code 0 iff every check passes.
  * ========================================================================= */

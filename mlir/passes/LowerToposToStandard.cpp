@@ -1712,62 +1712,6 @@ struct LowerFieldLoadOp : public OpConversionPattern<FieldLoadOp> {
 // inlined structurally by LowerToposExtensions (Step 2b) BEFORE this
 // conversion runs; the arena model is retired. No scope patterns here.
 
-//
-// Lowering:
-//   topos.with_handler @reduction { body }
-//   ->
-//   call @yon_handler_push(@reduction_name_ptr) (M4 simplification: no
-//     reduction handle to lookup; just a token).
-//   { body inlined }
-//   call @yon_handler_pop()
-//
-// For the baseline, the referenced "reduction" is not yet a runtime function —
-// it is just a name. We pass it as void for now; the reduction-lowering pass (a
-// future handler-dispatch pass) will materialize it as a function pointer and
-// pass it to push.
-
-struct LowerWithHandlerOp : public OpConversionPattern<WithHandlerOp> {
-  using OpConversionPattern<WithHandlerOp>::OpConversionPattern;
-  LogicalResult matchAndRewrite(WithHandlerOp op, OpAdaptor /*adaptor*/,
-                                ConversionPatternRewriter &rewriter) const override {
-    Location loc = op.getLoc();
-
-    auto module = op->getParentOfType<ModuleOp>();
-    auto ensureFunc = [&](StringRef name, FunctionType type) {
-      if (auto existing = module.lookupSymbol<func::FuncOp>(name)) {
-        (void)existing;
-        return;
-      }
-      PatternRewriter::InsertionGuard guard(rewriter);
-      rewriter.setInsertionPointToEnd(module.getBody());
-      auto fn = rewriter.create<func::FuncOp>(loc, name, type);
-      fn.setPrivate();
-    };
-    // Minimal version: push/pop without payload. The payload arrives in future
-    // passes when the reduction is lowered to a func pointer.
-    ensureFunc("yon_handler_push",
-               rewriter.getFunctionType({}, {}));
-    ensureFunc("yon_handler_pop",
-               rewriter.getFunctionType({}, {}));
-
-    // Push.
-    rewriter.create<func::CallOp>(loc, "yon_handler_push",
-                                  TypeRange{}, ValueRange{});
-
-    // Inline body.
-    Block &srcBlock = op.getBody().front();
-    Block *destBlock = rewriter.getInsertionBlock();
-    auto insertPt = rewriter.getInsertionPoint();
-    rewriter.inlineBlockBefore(&srcBlock, destBlock, insertPt);
-
-    // Pop.
-    rewriter.create<func::CallOp>(loc, "yon_handler_pop",
-                                  TypeRange{}, ValueRange{});
-
-    rewriter.eraseOp(op);
-    return success();
-  }
-};
 
 //===----------------------------------------------------------------------===//
 // Il Pass
@@ -1957,8 +1901,7 @@ struct LowerToposToStandardPass
                         MoveOp, ApplyMoveOp,
                         ReduceOp,
                         GeomMorphismOp, ForcesOp,
-                        ProbeConstructOp, ProbeApplyOp,
-                        WithHandlerOp>();
+                        ProbeConstructOp, ProbeApplyOp>();
 
     // Func dialect: legal if the signature is already converted.
     target.addDynamicallyLegalOp<func::FuncOp>([&](func::FuncOp op) {
@@ -2002,7 +1945,6 @@ struct LowerToposToStandardPass
     patterns.add<MaterializeReduceOp>(typeConverter, ctx, layouts);
     patterns.add<MaterializeGeomMorphismOp>(typeConverter, ctx);
     patterns.add<LowerForcesOp>(typeConverter, ctx);
-    patterns.add<LowerWithHandlerOp>(typeConverter, ctx);
 
     // F2b — closure conversion for probes that escape their
     // construct site. Trampoline headers are synthesised eagerly

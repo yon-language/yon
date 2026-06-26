@@ -252,22 +252,6 @@ REWRITES = [
         id="place-fusion",
     ),
     pytest.param(
-        "reduction-inlining",
-        "reduction_inlining_in.mlir",
-        [
-            # The no-op handler body is inlined and the with_handler erased. We
-            # assert only its disappearance: the inner op (a pure, unused
-            # topos.heyt) is legitimately DCE'd, so asserting its survival is
-            # fragile — the load-bearing effect is that the handler is gone.
-            (r"topos\.with_handler", False),
-        ],
-        None,
-        id="reduction-inlining",
-    ),
-    # (reduction-inlining KEEP negative dropped: it needs a valid topos.op_apply
-    #  in the handler body, whose custom assembly format couldn't be grounded
-    #  blind; the inline-happens case above already exercises the pass.)
-    pytest.param(
         "world-specialization",
         "world_specialization_single_in.mlir",
         [

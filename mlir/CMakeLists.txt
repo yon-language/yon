@@ -87,7 +87,6 @@ add_mlir_library(MLIRToposPasses
   passes/LowerToposToLLVM.cpp
   passes/HeytingShortCircuit.cpp
   passes/CoherenceElimination.cpp
-  passes/ReductionInlining.cpp
   passes/WorldSpecialization.cpp
   passes/MoveComposition.cpp
   passes/CPSConversion.cpp

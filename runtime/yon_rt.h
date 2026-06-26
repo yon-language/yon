@@ -22,7 +22,6 @@
 
 #include "xleech2_coord.h"
 #include "xleech2_heap.h"
-#include "xleech2_handler_stack.h"
 #include <stdint.h>
 
 #ifdef __cplusplus

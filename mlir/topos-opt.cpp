@@ -22,7 +22,6 @@
 #include "passes/PlaceFusion.h"
 #include "passes/AlgebraVerifier.h"
 #include "passes/StructuralVN.h"
-#include "passes/ReductionInlining.h"
 #include "passes/StructuralPasses.h"
 #include "passes/WorldSpecialization.h"
 #include "mlir/Conversion/ArithToLLVM/ArithToLLVM.h"
@@ -106,7 +105,6 @@ int main(int argc, char **argv) {
   mlir::topos::registerLowerToposToLLVMPass();
   mlir::topos::registerHeytingShortCircuitPass();
   mlir::topos::registerCoherenceEliminationPass();
-  mlir::topos::registerReductionInliningPass();
   mlir::topos::registerWorldSpecializationPass();
   mlir::topos::registerAlgebraVerifierPass();
   mlir::topos::registerMoveCompositionPass();

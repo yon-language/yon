@@ -37,7 +37,7 @@ MLIROPT="${YONC_MLIR_OPT:-$(find_llvm_tool mlir-opt)}"
 CC="${YONC_CC:-gcc}"
 NOPIE="-no-pie"; [ "$(uname -s)" = "Darwin" ] && NOPIE=""
 
-RTSET="$FT/yon_rt.o $FT/yon_mmap.o $FT/leech_orbits.o $FT/yon_arena.o $FT/yon_curtis_canon.o $FT/xleech2_coord.o $FT/xleech2_handler_stack.o $FT/xleech2_heap.o $FT/xleech2_mphf.o $FT/vendor/mmgroup/mat24_tables.o $FT/vendor/mmgroup/mat24_functions.o $FT/vendor/mmgroup/gen_leech.o $FT/vendor/mmgroup/gen_leech3.o $FT/vendor/mmgroup/gen_leech_type.o $FT/vendor/mmgroup/gen_leech_reduce.o $FT/vendor/mmgroup/gen_xi_functions.o $FT/vendor/mmgroup/mm_group_n.o $FT/vendor/mmgroup/mm_index.o"
+RTSET="$FT/yon_rt.o $FT/yon_mmap.o $FT/leech_orbits.o $FT/yon_arena.o $FT/yon_curtis_canon.o $FT/xleech2_coord.o $FT/xleech2_heap.o $FT/xleech2_mphf.o $FT/vendor/mmgroup/mat24_tables.o $FT/vendor/mmgroup/mat24_functions.o $FT/vendor/mmgroup/gen_leech.o $FT/vendor/mmgroup/gen_leech3.o $FT/vendor/mmgroup/gen_leech_type.o $FT/vendor/mmgroup/gen_leech_reduce.o $FT/vendor/mmgroup/gen_xi_functions.o $FT/vendor/mmgroup/mm_group_n.o $FT/vendor/mmgroup/mm_index.o"
 LOWER="--convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm --convert-arith-to-llvm --reconcile-unrealized-casts"
 EMIT="$FE/_build/default/yoner_emit_mlir.exe"
 OUT=/tmp/regression_now.txt; > "$OUT"

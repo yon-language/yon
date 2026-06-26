@@ -22,7 +22,6 @@
 #endif
 #include "yon_rt.h"
 #include "xleech2_heap.h"
-#include "xleech2_handler_stack.h"
 #include "leech_theta.h"
 #include "yon_mmap.h"
 #include "yon_arena.h"
@@ -3018,25 +3017,6 @@ double Stream__send_net(double id, double v) { return yon_rt_stream_net_send_f64
 double Stream__recv_net(double id)           { return yon_rt_stream_net_recv_f64(id); }
 double Stream__close_net(double id)          { return yon_rt_stream_net_close_f64(id); }
 
-
-/* ============================================================== */
-/* Handler dispatch (thin wrappers)                                */
-/* ============================================================== */
-
-int yon_rt_handler_push(uint64_t hash, void *fn_ptr) {
-    ensure_init();
-    return yon_handler_push(hash, fn_ptr);
-}
-
-int yon_rt_handler_pop(uint64_t hash) {
-    ensure_init();
-    return yon_handler_pop(hash);
-}
-
-void *yon_rt_handler_lookup(uint64_t hash) {
-    ensure_init();
-    return yon_handler_lookup(hash);
-}
 
 /* ============================================================== */
 /* Stdlib coercions                                                */

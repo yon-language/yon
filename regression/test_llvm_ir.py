@@ -79,7 +79,7 @@ LOWER = ("--convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm "
 
 _RT_NAMES = [
     "yon_rt.o", "yon_mmap.o", "leech_orbits.o", "yon_arena.o", "yon_curtis_canon.o",
-    "xleech2_coord.o", "xleech2_handler_stack.o", "xleech2_heap.o", "xleech2_mphf.o",
+    "xleech2_coord.o", "xleech2_heap.o", "xleech2_mphf.o",
     "vendor/mmgroup/mat24_tables.o", "vendor/mmgroup/mat24_functions.o",
     "vendor/mmgroup/gen_leech.o", "vendor/mmgroup/gen_leech3.o",
     "vendor/mmgroup/gen_leech_type.o", "vendor/mmgroup/gen_leech_reduce.o",

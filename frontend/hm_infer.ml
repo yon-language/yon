@@ -236,7 +236,7 @@ and infer_stmt (env : env) (cs : constraint_set) (return_ty : ty)
   | SForever (body, _) ->
       let _ = infer_stmts env cs return_ty body in env
   | _ ->
-      (* Other statements (SNew, SForEvery, SWith, etc.) are not handled here;
+      (* Other statements (SNew, SForEvery, etc.) are not handled here;
        * the env is unchanged. They are caught by the main type checker. *)
       env
 
