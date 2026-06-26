@@ -373,6 +373,76 @@ let assign_place_worlds
     | other -> other
   ) p
 
+(* ─── filesystem-derived topos structure ────────────────────────────── *)
+
+(* A topos now DERIVES its structure from the package layout instead of inline
+   surface syntax. The parser produces every `topos_decl` with tp_objects = [],
+   tp_at_space = None, tp_world = None; this pass FILLS those fields from the
+   filesystem before tycheck/desugar/emit run. The record shape is UNCHANGED —
+   downstream reads the same fields; we just populate them in the driver.
+
+   For each `TopTopos td`:
+     - tp_at_space <- Some space   (the space whose directory holds the topos file)
+     - tp_objects  <- places_of_space space   (every TopPlace in that space)
+     - tp_world    <- world_of_space space     (the space's world from yon.toml)
+
+   The three callbacks are built by the driver at parse-assembly time, where the
+   per-file space tag (ul_space) is still known (the merged program no longer
+   carries per-file origin). Filling is purely additive: every existing consumer
+   (tyenv.first_place_in_topos, tycheck TopTopos, assign_place_worlds, desugar)
+   already tolerates an empty list, so a topos whose space is unknown is left as
+   the parser produced it. *)
+let assign_topos_structure
+    ~(space_of_topos : string -> string option)
+    ~(places_of_space : string -> place_decl list)
+    ~(world_of_space : string -> string option)
+    (p : program) : program =
+  List.map (function
+    | TopTopos td ->
+        (match space_of_topos td.tp_name with
+         | Some space ->
+             (* tp_objects intentionally LEFT EMPTY. The space's places are
+                already standalone TopPlace decls, type-checked and desugared
+                independently; copying them into the topos here caused DOUBLE
+                registration — a place with a `fun` member (e.g. Reading.samples)
+                got its method declared twice -> compile error. The topos's
+                categorical objects ARE the space's place-files; no downstream
+                pass needs them duplicated. We still touch places_of_space so the
+                labeled argument stays used. *)
+             let _space_places = places_of_space space in
+             TopTopos { td with
+               tp_at_space = Some space;
+               tp_world    = world_of_space space }
+         | None ->
+             (* space origin unknown for this topos: leave the parser's empty
+                fields as-is (additive — downstream tolerates []). *)
+             TopTopos td)
+    | other -> other
+  ) p
+
+(* ONE topos per space (mandatory). `topos_count_of_space` maps a space name to
+   the number of topos FILES the package layout found in that space's directory.
+   `spaces` is every space the project declares (the directories holding .yon).
+   A space with 0 or >1 topos files is a structural error: with the filesystem
+   driving the ontology, each space is exactly one topos. Returns a list of
+   human-readable messages (empty = ok); the driver prints them and exits non
+   zero, matching the existing manifest/entrypoint diagnostics. *)
+let check_one_topos_per_space
+    ~(topos_count_of_space : string -> int)
+    (spaces : string list) : string list =
+  List.filter_map (fun sp ->
+    let n = topos_count_of_space sp in
+    if n = 1 then None
+    else if n = 0 then
+      Some (Printf.sprintf
+        "space '%s' declares no topos: every space must contain exactly one \
+         topos file (got 0)" sp)
+    else
+      Some (Printf.sprintf
+        "space '%s' declares %d topos files: every space must contain exactly \
+         one topos (got %d)" sp n n)
+  ) spaces
+
 (* The project entrypoint place is filesystem/package metadata: the driver has
    already proved that it is unique, lives at the package root, and shares its
    file with [main].  It is not an object of any declared world, so after that

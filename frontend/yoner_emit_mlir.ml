@@ -155,6 +155,12 @@ let () =
   let wire_errs = ref [] in
   let place_acc = ref [] in   (* (place_name, file, space) for every project place *)
   let main_files = ref [] in  (* files that define `fun main` *)
+  (* Filesystem-derived topos structure (Agent M). Captured per file at
+     parse-assembly time, where the file's space tag (ul_space) is still known;
+     the merged program below no longer carries per-file origin. *)
+  let places_by_space = ref [] in  (* (space, place_decl) for every project TopPlace *)
+  let topos_space = ref [] in      (* (topos_name, space) for every TopTopos file *)
+  let topos_count = ref [] in      (* (space, n) topos-file count per space *)
   let space_of_path =
     match project_wm with
     | Some _ ->
@@ -183,12 +189,28 @@ let () =
                   Record each declared place (name, file, space) and whether the
                   file defines `main`, so the Entry constraints below can be
                   checked on the whole project. *)
+               (* Filesystem-derived topos structure (Agent M): in this same
+                  pass capture, per space, (a) the full place_decl of every
+                  TopPlace — these become the topos's tp_objects — and (b) each
+                  TopTopos's name->space binding plus a per-space topos-file
+                  count (for one-topos-per-space enforcement). sp is "" for root
+                  files, which belong to no space/topos. *)
+               let local_topos_in_file = ref 0 in
                List.iter (function
                  | Surface_ast.TopPlace pd ->
-                     place_acc := (pd.Surface_ast.pd_name, filename, sp) :: !place_acc
+                     place_acc := (pd.Surface_ast.pd_name, filename, sp) :: !place_acc;
+                     if sp <> "" then
+                       places_by_space := (sp, pd) :: !places_by_space
+                 | Surface_ast.TopTopos td ->
+                     if sp <> "" then begin
+                       topos_space := (td.Surface_ast.tp_name, sp) :: !topos_space;
+                       incr local_topos_in_file
+                     end
                  | Surface_ast.TopFun fd when fd.Surface_ast.fn_name = "main" ->
                      main_files := filename :: !main_files
                  | _ -> ()) decls;
+               if sp <> "" && !local_topos_in_file > 0 then
+                 topos_count := (sp, !local_topos_in_file) :: !topos_count;
                (* place->world + wire boundary: only for files whose space is
                   in a world (root files inherit no world). *)
                let sender_world = Manifest.world_of_space wm sp in
@@ -315,6 +337,55 @@ let () =
   let prog = Module_prefix.resolve_aliases prog in
   Module_prefix.check_visibility !internals prog;
   let prog = Module_prefix.mangle_decls prog in
+  (* Filesystem-derived topos structure (Agent M). The parser now produces every
+     topos with tp_objects=[], tp_at_space=None, tp_world=None; FILL those from
+     the package layout before assign_place_worlds (which reads tp_world /
+     tp_at_space to world the inner objects). Project mode only. Names are
+     unqualified here (local module, no "::"), so they survived mangle_decls
+     intact — same assumption assign_place_worlds already relies on. The maps
+     were built per file at parse-assembly time, where each file's space tag was
+     still known. Enforce one-topos-per-space first, before populating. *)
+  let prog =
+    match project_wm with
+    | Some wm ->
+        (* one topos per space (mandatory): every declared space must hold
+           exactly one topos file. space_decls gives the declared spaces. *)
+        let declared_spaces =
+          Package_layout.space_decls ~root:path
+          |> List.filter_map (function
+               | Surface_ast.TopSpace sd -> Some sd.Surface_ast.sd_name
+               | _ -> None)
+        in
+        (* per-space topos-file count, summed across that space's files *)
+        let count_tbl : (string, int) Hashtbl.t = Hashtbl.create 16 in
+        List.iter (fun (sp, n) ->
+          let prev = match Hashtbl.find_opt count_tbl sp with Some k -> k | None -> 0 in
+          Hashtbl.replace count_tbl sp (prev + n)) !topos_count;
+        let topos_count_of_space sp =
+          match Hashtbl.find_opt count_tbl sp with Some k -> k | None -> 0 in
+        (match Manifest.check_one_topos_per_space ~topos_count_of_space declared_spaces with
+         | [] -> ()
+         | errs ->
+             List.iter (fun m -> Printf.eprintf "TOPOS LAYOUT ERROR: %s\n" m) errs;
+             exit 3);
+        (* topos_name -> space *)
+        let ts_tbl : (string, string) Hashtbl.t = Hashtbl.create 16 in
+        List.iter (fun (tn, sp) -> Hashtbl.replace ts_tbl tn sp) !topos_space;
+        let space_of_topos tn = Hashtbl.find_opt ts_tbl tn in
+        (* space -> place_decl list (objects), in source order *)
+        let ps_tbl : (string, Surface_ast.place_decl list) Hashtbl.t =
+          Hashtbl.create 16 in
+        List.iter (fun (sp, pd) ->
+          let prev = match Hashtbl.find_opt ps_tbl sp with Some l -> l | None -> [] in
+          Hashtbl.replace ps_tbl sp (prev @ [pd])) (List.rev !places_by_space);
+        let places_of_space sp =
+          match Hashtbl.find_opt ps_tbl sp with Some l -> l | None -> [] in
+        Manifest.assign_topos_structure
+          ~space_of_topos ~places_of_space
+          ~world_of_space:(Manifest.world_of_space wm)
+          prog
+    | None -> prog
+  in
   (* The place inherits its space's world (filesystem -> toml): bind each
      unannotated place to the world of its directory before type-checking, so a
      multi-world project resolves structurally instead of relying on the

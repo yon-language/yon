@@ -196,7 +196,9 @@ def test_wire_intra_world_ok(tmp_path):
             "objects = [\"Order\", \"Account\"]\n")
     proj = _make_project(tmp_path / "intra", toml, {
         "Orders/Order.yon": "place Order { id text }\nimport Mod::feed from Billing\n",
+        "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
         "Billing/Account.yon": "place Account { balance number }\n",
+        "Billing/Topos.yon": "topos BillingCat where {\n}\n",
         "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
@@ -225,6 +227,7 @@ def test_entry_default_compiles(tmp_path):
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_default", toml, {
         "Orders/Order.yon": "place Order { id text }\n",
+        "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
         "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
@@ -238,6 +241,7 @@ def test_entry_custom_name_compiles(tmp_path):
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_custom", toml, {
         "Orders/Order.yon": "place Order { id text }\n",
+        "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
         "Boot.yon": "place Boot { }\nfun main(): number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
@@ -300,6 +304,7 @@ def test_entry_main_inside_place(tmp_path):
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_inside", toml, {
         "Orders/Order.yon": "place Order { id text }\n",
+        "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
         "Entry.yon": ("place Entry {\n"
                       "  fun helper(x: number): number { return x + 1 }\n"
                       "  fun main(): number { return helper(41) }\n"

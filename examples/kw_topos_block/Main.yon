@@ -1,13 +1,9 @@
 place Entry { }
-topos Bank in Ledger where {
-  objects {
-    place State { balance number }
-    place Unit1 { u number }
-  }
+topos Bank where {
   terminal Unit1
   morphisms {
-    operation tag(s: State): number
-    functorial operation lift(s: State): number
+    morphism tag(s: State): number
+    functorial morphism lift(s: State): number
   }
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }

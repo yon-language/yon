@@ -1,0 +1,12 @@
+// coverage: a `morph` with the functor-on-arrows clause `on morphism N via M`.
+// The `via` target must be a fun (or reduction clause) in scope.
+place Account { balance number }
+place AccountEU { balance number }
+fun deposit_eu(a: AccountEU): AccountEU { return a }
+morph LiftEU from Account to AccountEU {
+  on object(s: Account): AccountEU {
+    return new AccountEU { balance s.balance }
+  }
+  on morphism deposit via deposit_eu
+}
+fun main(): number { return 0 }

@@ -1,0 +1,7 @@
+// TODO: single-file test — revisit under the per-directory topos model
+// coverage: an abstract `prop p(...): proposition` (signature only, no body)
+place State { balance number }
+topos Bank where {
+  prop is_overdrawn(s: State): proposition
+}
+fun main(): number { return 0 }

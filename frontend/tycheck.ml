@@ -2831,7 +2831,56 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
         | [] -> ok ()
         | (n_src, m_tgt) :: rest ->
             (match Tyenv.lookup_fun env m_tgt with
-             | Some _ -> check_via_bindings rest
+             | Some fs ->
+                 (* Functoriality (W6): when the source topos is DECLARED and
+                  * n_src is one of its morphisms, the via-target M must have the
+                  * signature F applied to n_src's, where F is the object action
+                  * (on_object: src_obj |-> tgt_obj). Skips (accepts) when the
+                  * topos is undeclared / n_src is not a declared morphism / there
+                  * is no on_object — so morphs over undeclared topoi (the
+                  * f64-handle placeholder convention, e.g. c_morph_on_morphism)
+                  * are untouched. *)
+                 let* () =
+                   (match Tyenv.lookup_topos env mp.mp_source, mp.mp_on_object with
+                    | Some src_topos, Some on_obj ->
+                        (match
+                           List.find_opt
+                             (fun (op : operation_decl) -> op.op_name = n_src)
+                             src_topos.tp_morphisms,
+                           on_obj.fn_params, on_obj.fn_return
+                         with
+                         | Some op, src_param :: _, Some tgt_obj ->
+                             let src_obj = src_param.param_ty in
+                             let apply_f t =
+                               if Dispatcher.type_equal env ctx t src_obj
+                               then tgt_obj else t in
+                             let exp_params =
+                               List.map (fun (p : param) -> apply_f p.param_ty)
+                                 op.op_params in
+                             let exp_ret =
+                               (match op.op_return with
+                                | Some r -> apply_f r | None -> TyPrim "number") in
+                             let act_params = List.map snd fs.Tyenv.fs_params in
+                             let params_ok =
+                               List.length exp_params = List.length act_params
+                               && List.for_all2
+                                    (fun e a -> Dispatcher.type_equal env ctx e a)
+                                    exp_params act_params in
+                             if params_ok
+                                && Dispatcher.type_equal env ctx exp_ret
+                                     fs.Tyenv.fs_return
+                             then ok ()
+                             else err mp.mp_loc (Printf.sprintf
+                               "morph %s: 'on morphism %s via %s' violates \
+                                functoriality. The object action maps %s to %s, \
+                                so %s must have type F(dom)->F(cod) of %s."
+                               mp.mp_name n_src m_tgt
+                               (Tyenv.ty_to_string src_obj)
+                               (Tyenv.ty_to_string tgt_obj) m_tgt n_src)
+                         | _ -> ok ())
+                    | _ -> ok ())
+                 in
+                 check_via_bindings rest
              | None ->
                  match Tyenv.lookup_reduction env m_tgt with
                  | Some rd ->

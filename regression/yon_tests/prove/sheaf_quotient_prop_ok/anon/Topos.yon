@@ -1,0 +1,3 @@
+topos Public where {
+  prop is_public(s: State): proposition = s.cohort < 1
+}

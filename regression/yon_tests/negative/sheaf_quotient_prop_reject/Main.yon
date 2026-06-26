@@ -1,11 +1,5 @@
 place Entry { }
-topos Public in Anon where {
-  objects {
-    place State {
-      cohort number
-      secret number
-    }
-  }
+topos Public where {
   prop leaks_secret(s: State): proposition = s.secret < 1
 }
 fun main(): number { return 0 }

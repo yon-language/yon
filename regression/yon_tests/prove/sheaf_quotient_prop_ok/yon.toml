@@ -5,4 +5,5 @@ name = "sheaf_quotient_prop_ok"
 objects = ["text"]
 
 [world.Anon]
+spaces = ["anon"]
 quotient = ["Base", "cohort"]

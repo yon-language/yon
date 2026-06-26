@@ -1,0 +1,33 @@
+// morph on-morphism FUNCTORIALITY (W6) — red→green for the tycheck hardening.
+// New topos model: a topos has NO inline `objects { }` (objects come from the
+// filesystem). Single-file test: the objects are declared as top-level places,
+// and each topos carries only its `morphisms { }` block. The functoriality check
+// uses the source topos's tp_morphisms (the parser fills it) + the on_object
+// action — NOT tp_objects — so it fires here even without filesystem objects.
+//
+// `deposit : State → State` is a morphism of the DECLARED source topos Account,
+// and the functor's object action maps State ↦ EUState (`on object`). By
+// functoriality F(deposit) must be EUState → EUState. The `via` target
+// `wrong_sig` is number → number — INCOMPATIBLE → must be REJECTED (exit 3).
+place State { balance number }
+place EUState { balance number }
+
+fun wrong_sig(x: number): number { return x }
+
+topos Account where {
+  morphisms {
+    morphism deposit(s: State): State
+  }
+}
+
+topos AccountEU where {
+}
+
+morph LiftEU from Account to AccountEU {
+  on object(s: State): EUState {
+    return new EUState { balance s.balance }
+  }
+  on morphism deposit via wrong_sig
+}
+
+fun main(): number { return 0 }

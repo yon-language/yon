@@ -138,7 +138,9 @@
 %token FOLD  /* explicit fold name, e.g. fold "sum_f64" */
 
 /* First-class topos constructs. */
-%token TOPOS_KW OBJECTS_KW MORPHISMS_KW TERMINAL_KW PROP_KW
+/* MORPHISM_KW (singular): keyword for a single morphism declaration inside a
+ * topos `morphisms { }` block, and for the `on morphism N via M` clause. */
+%token TOPOS_KW OBJECTS_KW MORPHISMS_KW MORPHISM_KW TERMINAL_KW PROP_KW
 %token MORPH_KW VIA_KW
 %token NAT
 %token ADJUNCTION_KW EXACT_KW
@@ -303,31 +305,31 @@ top_decl:
  * desugars internally to a fun_decl with return type proposition, but
  * syntactically it signals the categorical intent (a sub-object versus an
  * arbitrary function). *)
+(* v1.1 topos-per-space: a topos no longer declares `objects { }`, nor `at
+ * Space`, nor `in World` in the surface. The objects are inferred from the
+ * filesystem (one source file per object) by a separate agent; the at/in
+ * bindings are likewise inferred. The parser therefore produces a well-formed
+ * topos_decl with empty objects and no at/in: tp_objects = [], tp_at_space =
+ * None, tp_world = None. The `morphisms`, `terminal` and `props` blocks stay. *)
 topos_decl:
   | TOPOS_KW name = IDENT
-    world_opt = topos_world_opt
-    at_opt = topos_at_opt
     WHERE LBRACE
-      OBJECTS_KW LBRACE objs = list(place_decl) RBRACE
       term_opt = topos_terminal_opt
       morph_opt = topos_morphisms_opt
       props = list(topos_prop_decl)
     RBRACE
     { { tp_name = name;
-        tp_world = world_opt;
-        tp_at_space = at_opt;
-        tp_objects = objs;
+        tp_world = None;            (* inferred from the filesystem *)
+        tp_at_space = None;         (* inferred from the filesystem *)
+        tp_objects = [];            (* inferred from the filesystem *)
         tp_terminal = term_opt;
         tp_morphisms = morph_opt;
         tp_props = props;
         tp_loc = mk_loc $startpos $endpos } }
 
-(* The optional annotation `at <SPACE>` that binds a topos to its residence
- * space. When absent, the topos is purely formal (compile-time) with no
- * dedicated heap. *)
-topos_at_opt:
-  |                     { None }
-  | AT s = IDENT        { Some s }
+(* v1.1 topos-per-space: `topos_at_opt` (the `at <SPACE>` annotation) was
+ * removed — the residence space is now inferred from the filesystem, so the
+ * topos surface no longer carries it. *)
 
 (* prop declaration as a subobject classifier.
  *   prop NAME(p1: T1, ..., pn: Tn): proposition = EXPR
@@ -353,17 +355,21 @@ topos_prop_decl:
         pr_body_opt = None;
         pr_loc = mk_loc $startpos $endpos } }
 
-topos_world_opt:
-  |                          { None }
-  | IN w = IDENT             { Some w }
+(* v1.1 topos-per-space: `topos_world_opt` (the `in <World>` annotation) was
+ * removed — the world is now inferred from the filesystem. The IN token stays
+ * declared and is still used elsewhere (`place P in W`, `new P in Space`). *)
 
 topos_terminal_opt:
   |                            { None }
   | TERMINAL_KW t = IDENT      { Some t }
 
+(* v1.1: the `morphisms { }` block now declares its members with the singular
+ * `morphism` keyword (morphism_decl), not the place-level `operation`. The
+ * result is still a list of operation_decl, so the rest of the compiler is
+ * unchanged. *)
 topos_morphisms_opt:
   |                                                 { [] }
-  | MORPHISMS_KW LBRACE ops = list(standalone_op) RBRACE   { ops }
+  | MORPHISMS_KW LBRACE ops = list(morphism_decl) RBRACE   { ops }
 
 (* morph_decl.
  *
@@ -439,10 +445,13 @@ morph_item:
                  fn_body = [SReturn (body_expr, loc)];
                  fn_loc = loc } in
       MItemOnObject fd }
-  | tag = IDENT kind = IDENT src_op = IDENT VIA_KW tgt_op = IDENT
-    { if tag <> "on" || kind <> "morphism" then
+  (* v1.1: `morphism` is now a keyword (MORPHISM_KW), so the `on morphism N via
+   * M` clause consumes the keyword directly instead of reading it as an IDENT
+   * with a string check. `on` stays a plain IDENT (it is NOT a keyword). *)
+  | tag = IDENT MORPHISM_KW src_op = IDENT VIA_KW tgt_op = IDENT
+    { if tag <> "on" then
         failwith ("expected 'on morphism' clause in morph body, got '"
-                  ^ tag ^ " " ^ kind ^ "'");
+                  ^ tag ^ " morphism'");
       MItemOnMorphism (src_op, tgt_op) }
 
 (* natural transformation.
@@ -688,6 +697,27 @@ operation_decl:
     ret = option(return_type_decl)
     (* A cross-world functorial operation. The operation is lifted
      * automatically along world morphisms via the Yoneda lifting. *)
+    { { op_name = name; op_params = params; op_return = ret;
+        op_functorial = true;
+        op_algebra = None;
+        op_loc = mk_loc $startpos $endpos } }
+
+(* v1.1: a topos's morphism declaration. Mirrors operation_decl but uses the
+ * `morphism` keyword (MORPHISM_KW) instead of `operation`, and produces the
+ * SAME operation_decl record (op_functorial = false, op_algebra = None). This
+ * keeps `operation` for place members and `morphism` for topos morphisms,
+ * while the downstream compiler keeps seeing operation_decl. *)
+morphism_decl:
+  | MORPHISM_KW name = IDENT LPAREN params = param_list RPAREN
+    ret = option(return_type_decl)
+    { { op_name = name; op_params = params; op_return = ret;
+        op_functorial = false;
+        op_algebra = None;
+        op_loc = mk_loc $startpos $endpos } }
+  (* `functorial morphism` — cross-world functorial morphism, lifted along
+     world morphisms via Yoneda. Mirrors `functorial operation`. *)
+  | FUNCTORIAL MORPHISM_KW name = IDENT LPAREN params = param_list RPAREN
+    ret = option(return_type_decl)
     { { op_name = name; op_params = params; op_return = ret;
         op_functorial = true;
         op_algebra = None;

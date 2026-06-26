@@ -1,0 +1,44 @@
+// ─────────────────────────────────────────────────────────────────────────
+// DEMONSTRATING NEGATIVE — morph on-morphism functoriality gap.
+// NOT gate-wired (lives under _pending_construct_tests/, collected by nothing):
+// it is ACCEPTED today, so wiring it into the negative suite would fail the gate.
+// This is the red→green oracle for the v1.2 hardening of the functor check.
+// ─────────────────────────────────────────────────────────────────────────
+//
+// THE GAP (tycheck.ml `check_via_bindings`, ~L2852): the `on morphism N via M`
+// check only verifies that the `via` TARGET M exists as a fun or a
+// reduction-with-clause. It does NOT verify functoriality — that M's signature
+// is F(dom N) → F(cod N), where F is the functor's object action (mp_on_object).
+//
+// Here `deposit` (a morphism of the source topos Account, which under the
+// on-object map F: Account ↦ AccountEU should act as AccountEU → AccountEU) is
+// mapped `via wrong_sig`, whose signature is number → number — INCOMPATIBLE.
+//
+//   TODAY  : accepted → exit 0   (wrong_sig exists as a fun; nothing else checked)
+//   SOUND  : rejected → exit 3   (signature is not F(dom) → F(cod))
+//
+// Manual verify (the red): emit this file → exit 0.
+//
+// HARDENING (v1.2, must be sound-first — DO NOT false-reject the ~10 existing
+// morph/functor examples, several of which reference UNDECLARED topoi):
+//   1. existence of the source arrow N in topos mp.mp_source, BUT degrade
+//      gracefully (skip) when the source topos is not in scope;
+//   2. functoriality: require M : F(dom N) → F(cod N), compared via
+//      Dispatcher.subtype (the relation already hardened for PathP), never a
+//      bespoke equality, and never stronger than F(f): F(X)→F(Y) (over-
+//      constraining = the PathP false-reject bug, inverted).
+// The positive must-not-regress set: c_morph_on_morphism + geom_morphism_* +
+// functor_compose_* + nat_transform_functor must all still compile.
+
+place Entry { }
+
+fun wrong_sig(x: number): number { return x }
+
+morph LiftEU from Account to AccountEU {
+  on object(s: Account): AccountEU {
+    return new AccountEU { balance s.balance }
+  }
+  on morphism deposit via wrong_sig
+}
+
+fun main(): number { return 0 }
