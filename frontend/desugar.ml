@@ -1037,8 +1037,6 @@ and subst_var_in_stmt (old_n : string) (new_n : string) (s : S.stmt) : S.stmt =
                       else List.map (subst_var_in_stmt old_n new_n) b), loc)
   | S.SScope (n, b, r, loc) ->
       S.SScope (n, List.map (subst_var_in_stmt old_n new_n) b, goe r, loc)
-  | S.SWith (r, p, b, loc) ->
-      S.SWith (r, p, List.map (subst_var_in_stmt old_n new_n) b, loc)
   | S.SProduce (b, loc) ->
       S.SProduce (List.map (subst_var_in_stmt old_n new_n) b, loc)
   | S.SForever (b, loc) ->
@@ -1226,7 +1224,6 @@ and desugar_produce_block (body : S.stmt list) : C.term =
     | C.Lam (x, ty, b) -> C.Lam (x, ty, rw b)
     | C.App (f, a) -> C.App (rw f, rw a)
     | C.Scope (n, b) -> C.Scope (n, rw b)
-    | C.With (n, b) -> C.With (n, rw b)
     | C.Refl e -> C.Refl (rw e)
     | C.J (x, ty, a, b, c, d) -> C.J (x, ty, rw a, rw b, rw c, rw d)
     | C.Pair (a, b) -> C.Pair (rw a, rw b)
@@ -1289,7 +1286,6 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
     | C.Lam (x, ty, b) -> C.Lam (x, ty, rw b)
     | C.App (f, a) -> C.App (rw f, rw a)
     | C.Scope (n, b) -> C.Scope (n, rw b)
-    | C.With (n, b) -> C.With (n, rw b)
     | C.Refl e -> C.Refl (rw e)
     | C.J (x, ty, a, b, c, d) -> C.J (x, ty, rw a, rw b, rw c, rw d)
     | C.Pair (a, b) -> C.Pair (rw a, rw b)
@@ -1372,9 +1368,6 @@ and desugar_stmt (s : S.stmt) : C.term =
       let body_term = desugar_stmts body in
       let ret_term = desugar_expr ret_expr in
       C.Scope (scope_name, C.App (C.Lam ("_", C.TyPlace "unit", ret_term), body_term))
-  | S.SWith (r, _of_place, body, _) ->
-      let body_term = desugar_stmts body in
-      C.With (r, body_term)
   | S.SProduce (body, _) ->
       desugar_produce_block body
   | S.SEmit (e, _) ->
@@ -1691,7 +1684,6 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
   | S.SIter (n, b, loc) -> [S.SIter (n, body b, loc)]
   | S.SWhile (c, b, loc) -> [S.SWhile (c, body b, loc)]
   | S.SScope (n, b, r, loc) -> [S.SScope (n, body b, r, loc)]
-  | S.SWith (r, p, b, loc) -> [S.SWith (r, p, body b, loc)]
   | S.SProduce (b, loc) -> [S.SProduce (body b, loc)]
   | S.SForces (stg, c, b, loc) -> [S.SForces (stg, c, body b, loc)]
   | S.SCall ("for_every", [S.EVar (recv, _); f], loc)
@@ -1851,7 +1843,7 @@ and v1_targets_stmt acc st =
       let acc = List.fold_left (fun a (_, b2) -> v1_targets_stmts a b2) acc elifs in
       (match oth with None -> acc | Some o -> v1_targets_stmts acc o)
   | S.SIter (_, b, _) | S.SWhile (_, b, _) | S.SScope (_, b, _, _)
-  | S.SWith (_, _, b, _) | S.SProduce (b, _) | S.SForces (_, _, b, _)
+  | S.SProduce (b, _) | S.SForces (_, _, b, _)
   | S.SForever (b, _) -> v1_targets_stmts acc b
   | S.SForEvery (_, _, _, b, _) | S.SInSequence (_, _, b, _) ->
       v1_targets_stmts acc b
@@ -1954,7 +1946,6 @@ and v1_cell_stmt cells st =
   | S.SIter (n, b, loc) -> S.SIter (re n, rb b, loc)
   | S.SWhile (c, b, loc) -> S.SWhile (re c, rb b, loc)
   | S.SScope (n, b, r, loc) -> S.SScope (n, rb b, re r, loc)
-  | S.SWith (r2, p, b, loc) -> S.SWith (r2, p, rb b, loc)
   | S.SProduce (b, loc) -> S.SProduce (rb b, loc)
   | S.SEmit (e, loc) -> S.SEmit (re e, loc)
   | S.SPromote (e, loc) -> S.SPromote (re e, loc)
@@ -2416,8 +2407,6 @@ let rec rewrite_stmt (m : (string * string) list) (s : S.stmt) : S.stmt =
   | S.SForever (body, loc) -> S.SForever (stmts body, loc)
   | S.SScope (name_opt, body, e, loc) ->
       S.SScope (name_opt, stmts body, rewrite_expr m e, loc)
-  | S.SWith (r, p_opt, body, loc) ->
-      S.SWith (r, p_opt, stmts body, loc)
   | S.SProduce (body, loc) -> S.SProduce (stmts body, loc)
   | S.SEmit (e, loc) -> S.SEmit (rewrite_expr m e, loc)
   | S.SPromote (e, loc) -> S.SPromote (rewrite_expr m e, loc)
@@ -3190,7 +3179,7 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
     | S.SIter (e, ss, _) | S.SWhile (e, ss, _) -> go e || gos ss
     | S.SRepeat (_, ss, oth, _) ->
         gos ss || (match oth with Some s2 -> gos s2 | None -> false)
-    | S.SForever (ss,_) | S.SProduce (ss,_) | S.SWith (_,_, ss, _) -> gos ss
+    | S.SForever (ss,_) | S.SProduce (ss,_) -> gos ss
     | S.SScope (_, ss, e, _) -> gos ss || go e
     | S.SForces (_, c, ss, _) -> cond_any pred c || gos ss
   and stmts_any (pred : S.expr -> bool) (ss : S.stmt list) : bool =
@@ -3651,7 +3640,7 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
         List.fold_left (fun a n -> if n = x || List.mem n a then a else n :: a)
           acc inner
     | C.App (f, a) -> free_names (free_names acc f) a
-    | C.Scope (_, b) | C.With (_, b) | C.Emit b
+    | C.Scope (_, b) | C.Emit b
     | C.Fst b | C.Snd b | C.Refl b -> free_names acc b
     | C.Pair (a, b) | C.StreamCons (a, b) -> free_names (free_names acc a) b
     | C.J (_, _, a, b, c, d) ->

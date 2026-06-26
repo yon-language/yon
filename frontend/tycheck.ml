@@ -2237,28 +2237,6 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       let* _ = check_stmts env ctx body expected_return in
       ok env
 
-  | SWith (reduction_name, _of_place, body, loc) ->
-      (* The name may be:
-       *  - a declared reduction: the usual case
-       *  - a local variable of type TyReductionHandle: a handler
-       *    resolved at the call site via inlining (i.e. the real name
-       *    of the reduction passed as an argument). *)
-      (match Tyenv.lookup_reduction env reduction_name with
-       | Some _rd ->
-           let env' = Tyenv.activate_handler env reduction_name in
-           let* _ = check_stmts env' ctx body expected_return in
-           ok env
-       | None ->
-           (match Tyenv.lookup_var env reduction_name with
-            | Some (TyReductionHandle _) ->
-                (* OK: the body will use the place's operations; at the call
-                 * site, inlining replaces the name with the real handler. *)
-                let* _ = check_stmts env ctx body expected_return in
-                ok env
-            | _ ->
-                err loc (Printf.sprintf
-                  "unknown reduction %s in with block" reduction_name)))
-
   | SProduce (body, _) ->
       (* produce { ... } — body emits values; result is a stream type. *)
       let* _ = check_stmts env ctx body expected_return in
@@ -3940,7 +3918,6 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
         (match otherwise with Some os -> List.iter walk_stmt os | None -> ())
     | SForever (body, _) -> List.iter walk_stmt body
     | SScope (_, body, e, _) -> List.iter walk_stmt body; walk_expr e
-    | SWith (_, _, body, _) -> List.iter walk_stmt body
     | SProduce (body, _) -> List.iter walk_stmt body
     | SEmit (e, _) -> walk_expr e
     | SPromote (e, _) -> walk_expr e
@@ -4096,7 +4073,6 @@ let infer_fun_signatures (p : program) : (program, type_error) result =
             (match otherwise with Some os -> List.iter walk_stmt os | None -> ())
         | SForever (body, _) -> List.iter walk_stmt body
         | SScope (_, body, e, _) -> List.iter walk_stmt body; walk_expr e
-        | SWith (_, _, body, _) -> List.iter walk_stmt body
         | SProduce (body, _) -> List.iter walk_stmt body
         | SForces (_, _, body, _) -> List.iter walk_stmt body
         | SIter (n, body, _) -> walk_expr n; List.iter walk_stmt body

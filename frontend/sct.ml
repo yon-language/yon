@@ -152,7 +152,7 @@ let collect (known : string list) (f : fundef) : scg list =
          | A.Var _ | A.Place _ | A.Reduction _ | A.World _ | A.Unit -> acc
          | A.Lam (v, _, b) -> go (SMap.remove v de) b acc
          | A.App (a, b) -> go de a (go de b acc)
-         | A.Scope (_, b) | A.With (_, b) | A.Emit b | A.Refl b
+         | A.Scope (_, b) | A.Emit b | A.Refl b
          | A.Unglue b | A.Transp (_, b) -> go de b acc
          | A.PLam (v, b) -> go (SMap.remove v de) b acc
          | A.PApp (p, _) -> go de p acc

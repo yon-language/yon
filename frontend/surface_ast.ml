@@ -269,7 +269,6 @@ and stmt =
   | SRepeat of int * stmt list * stmt list option * location  (* "repeat at most N times { ... } (otherwise { ... })?" *)
   | SForever of stmt list * location
   | SScope of string option * stmt list * expr * location     (* "scope S? { ... return e }" *)
-  | SWith of string * string option * stmt list * location    (* "with R (of P)? { ... }" *)
   | SProduce of stmt list * location                  (* "produce { ... }" *)
   | SEmit of expr * location
   | SPromote of expr * location

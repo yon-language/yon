@@ -569,7 +569,6 @@ let rec collect_used_builtins (acc : (string, unit) Hashtbl.t) (t : C.term) : un
   | C.J (_, _, c, d, p, b) ->
       List.iter (collect_used_builtins acc) [c; d; p; b]
   | C.Scope (_, body) -> collect_used_builtins acc body
-  | C.With (_, body) -> collect_used_builtins acc body
   | C.Emit x -> collect_used_builtins acc x
   | C.StreamCons (a, b) ->
       collect_used_builtins acc a;
@@ -597,7 +596,7 @@ let rec collect_string_literals (t : C.term) : unit =
         g_strlit_order := content :: !g_strlit_order
       end
   | C.Var _ | C.Place _ | C.Reduction _ | C.World _ | C.Unit -> ()
-  | C.Lam (_, _, b) | C.Scope (_, b) | C.With (_, b) | C.Emit b
+  | C.Lam (_, _, b) | C.Scope (_, b) | C.Emit b
   | C.Refl b | C.Fst b | C.Snd b -> collect_string_literals b
   | C.App (a, b) | C.Pair (a, b) | C.StreamCons (a, b) ->
       collect_string_literals a; collect_string_literals b
@@ -627,7 +626,7 @@ let rec term_free_vars (t : C.term) : SS.t =
   | C.Var x -> SS.singleton x
   | C.Lam (x, _, b) -> SS.remove x (term_free_vars b)
   | C.App (a, b) -> SS.union (term_free_vars a) (term_free_vars b)
-  | C.Scope (_, b) | C.With (_, b) | C.Emit b | C.Refl b
+  | C.Scope (_, b) | C.Emit b | C.Refl b
   | C.Fst b | C.Snd b -> term_free_vars b
   | C.J (x, _, a, b, c, d) ->
       SS.remove x
@@ -1234,9 +1233,6 @@ let rec infer_mlir_ty (e : emitter)
        | C.J _ ->
            failwith "[emit_mlir infer] ind_path stuck on a non-refl path."
        | t' -> infer_mlir_ty e env funcs t')
-  | C.With (_, body) ->
-      (* handler activation passes through; the type is the type of the body *)
-      infer_mlir_ty e env funcs body
   | C.Scope (_, body) ->
       (* hermetic scope yields its body value; same type (81b) *)
       infer_mlir_ty e env funcs body
@@ -4622,14 +4618,6 @@ let rec emit_term (e : emitter)
       pop_indent e;
       emit_line e "}";
       (v, res_ty)
-  | C.With (_, body) ->
-      (* `with HANDLER of PLACE { body }` as passthrough.
-       * The Topos dialect has `topos.with_handler` to activate a handler
-       * scope, but the cross-space XLeech2 runtime is not yet connected. For
-       * now we evaluate the body directly: this is correct for programs with
-       * no real side effects on the handlers, and fails loudly when an inner
-       * body calls an operation that requires the handler. *)
-      emit_term e env funcs body
   | C.Emit _ ->
       failwith "[emit_mlir] Emit not handled."
   | C.Refl x ->
@@ -5304,7 +5292,6 @@ let collect_target_spaces (t : C.term) : string list =
     | C.Var _ -> ()
     | C.App (a, b) -> walk a; walk b
     | C.Lam (_, _, body) -> walk body
-    | C.With (_, body) -> walk body
     | C.Scope (_, body) -> walk body
     | C.Emit b -> walk b
     | C.Refl e -> walk e

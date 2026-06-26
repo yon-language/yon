@@ -128,7 +128,6 @@ let is_value t =
            starts_with "__new_"
        | None -> false)
   | Scope _ -> false
-  | With _ -> false
   | Emit _ -> false
   | Refl _ -> true       (* refl(t) is a canonical witness — a value *)
   | Pair _ -> true       (* (a, b) is a value when components are values *)
@@ -224,16 +223,6 @@ let try_beta t =
 let try_scope_exit t =
   match t with
   | Scope (_, v) when is_value v -> Some v
-  | _ -> None
-
-(* ─── With-return ──────────────────────────────────────────────────── *)
-
-(* When a with-block body is a value (no more operations to handle),
- * the with-block reduces to that value.
- *)
-let try_with_return t =
-  match t with
-  | With (_, v) when is_value v -> Some v
   | _ -> None
 
 (* ─── Operation dispatch (with-handle) ─────────────────────────────── *)
@@ -407,31 +396,6 @@ let rec step ctx t =
            (match step ctx body with
             | Some body' -> Some (Scope (s, body'))
             | None -> None))
-
-  | With (r_name, body) ->
-      (match try_with_return t with
-       | Some t' -> Some t'
-       | None ->
-           (* Activate r and reduce body. The current place becomes the
-            * reduction's target place: a `with R of P { ... }` enters
-            * the place P for proposition evaluation. Also notify the
-            * world-tag setter so Space allocations get the right tag. *)
-           (match List.assoc_opt r_name ctx.reductions with
-            | None -> None  (* unknown reduction; stuck *)
-            | Some r ->
-                let previous_tag = ctx.current_place in
-                !world_tag_setter (Some r.r_target);
-                let ctx' = {
-                  ctx with
-                  active_handlers = (r_name, r) :: ctx.active_handlers;
-                  current_place = Some r.r_target;
-                } in
-                let result = step ctx' body in
-                (* Restore previous tag after the inner step. *)
-                !world_tag_setter previous_tag;
-                match result with
-                | Some body' -> Some (With (r_name, body'))
-                | None -> None))
 
   | Emit t' ->
       (* If inner term reduces, propagate; otherwise emit is a leaf node. *)

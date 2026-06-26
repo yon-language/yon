@@ -1019,7 +1019,6 @@ stmt:
   | s = repeat_stmt                       { s }
   | s = forever_stmt                      { s }
   | s = scope_stmt                        { s }
-  | s = with_stmt                         { s }
   | s = produce_stmt                      { s }
   | s = emit_stmt                         { s }
   | s = promote_stmt                      { s }
@@ -1136,12 +1135,6 @@ scope_stmt:
     { SScope (None, body,
               ELit (LitHeytPresent, dummy_loc),
               mk_loc $startpos $endpos) }
-
-with_stmt:
-  | WITH r = IDENT OF p = IDENT LBRACE body = list(stmt) RBRACE
-    { SWith (r, Some p, body, mk_loc $startpos $endpos) }
-  | WITH r = IDENT LBRACE body = list(stmt) RBRACE
-    { SWith (r, None, body, mk_loc $startpos $endpos) }
 
 produce_stmt:
   | PRODUCE LBRACE body = list(stmt) RBRACE

@@ -90,8 +90,6 @@ let rec pp_term ?(indent = 0) t =
         multi_str prefix handlers_str prefix
   | Scope (s, body) ->
       Printf.sprintf "⟨%s⟩_%s" (pp_term ~indent body) s
-  | With (r, body) ->
-      Printf.sprintf "with %s in %s" r (pp_term ~indent body)
   | Emit t' -> Printf.sprintf "emit %s" (pp_term ~indent t')
   | Refl t' -> Printf.sprintf "refl(%s)" (pp_term ~indent t')
   | J (x, ty, c, d, p, b) ->

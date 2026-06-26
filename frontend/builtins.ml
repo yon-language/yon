@@ -640,7 +640,6 @@ let rec deep_reduce_builtin (t : term) : term =
        | None -> result)
   | Lam (x, ty, body) -> Lam (x, ty, deep_reduce_builtin body)
   | Scope (s, body) -> Scope (s, deep_reduce_builtin body)
-  | With (r, body) -> With (r, deep_reduce_builtin body)
   | Emit body -> Emit (deep_reduce_builtin body)
   | StreamCons (h, k) -> StreamCons (deep_reduce_builtin h, deep_reduce_builtin k)
   | other -> other
@@ -870,7 +869,6 @@ and deep_reduce_pure (t : term) : term =
               | None -> result))
     | Lam (x, ty, body) -> Lam (x, ty, deep_reduce_pure body)
     | Scope (s, body) -> Scope (s, deep_reduce_pure body)
-    | With (r, body) -> With (r, deep_reduce_pure body)
     | Emit body -> Emit (deep_reduce_pure body)
     | StreamCons (h, k) -> StreamCons (deep_reduce_pure h, deep_reduce_pure k)
     | (PApp _ | Transp _ | Comp _ | HComp _

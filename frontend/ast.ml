@@ -100,7 +100,6 @@ and term =
                                                   objects and the generators of
                                                   its Grothendieck topology J *)
   | Scope of string * term
-  | With of string * term
   | Emit of term
   | Refl of term
   | J of string * ty * term * term * term * term
@@ -210,7 +209,6 @@ let rec term_equal_env env t1 t2 =
   | Reduction r1, Reduction r2 -> reduction_equal r1 r2
   | World w1, World w2 -> world_equal w1 w2
   | Scope (s1, b1), Scope (s2, b2) -> s1 = s2 && term_equal_env env b1 b2
-  | With (r1, b1), With (r2, b2) -> r1 = r2 && term_equal_env env b1 b2
   | Emit t1', Emit t2' -> term_equal_env env t1' t2'
   | Refl t1', Refl t2' -> term_equal_env env t1' t2'
   | J (x1, a1, c1, d1, p1, b1), J (x2, a2, c2, d2, p2, b2) ->
@@ -331,7 +329,6 @@ let rec free_vars t =
           S.union acc body_fv')
         S.empty r.r_handlers
   | Scope (_, b) -> free_vars b
-  | With (_, b) -> free_vars b
   | Emit t' -> free_vars t'
   | Refl t' -> free_vars t'
   | J (_x, _a, c, d, p, b) ->

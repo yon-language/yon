@@ -82,7 +82,6 @@ and norm_nested (prov : prov) (s : S.stmt) : S.stmt =
   | S.SForEvery (k, x, e, b, loc) -> S.SForEvery (k, x, e, norm_stmts prov b, loc)
   | S.SInSequence (x, e, b, loc)  -> S.SInSequence (x, e, norm_stmts prov b, loc)
   | S.SScope (n, b, r, loc)       -> S.SScope (n, norm_stmts prov b, r, loc)
-  | S.SWith (r, p, b, loc)        -> S.SWith (r, p, norm_stmts prov b, loc)
   | S.SProduce (b, loc)           -> S.SProduce (norm_stmts prov b, loc)
   | S.SForever (b, loc)           -> S.SForever (norm_stmts prov b, loc)
   | S.SRepeat (n, b, oth, loc)    ->

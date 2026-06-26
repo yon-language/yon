@@ -36,15 +36,6 @@ let rec subst x u t =
       let handlers' = List.map (subst_handler x u) r.r_handlers in
       Reduction { r with r_handlers = handlers' }
   | Scope (s, body) -> Scope (s, subst x u body)
-  | With (r, body) ->
-      (* If we are substituting x with a Var "realname" and x = r (the name of
-       * the reduction inside `with r { ... }`), then r must become "realname".
-       * This enables the higher-order inlining of a reduction handle. *)
-      let r' = match u with
-        | Var realname when x = r -> realname
-        | _ -> r
-      in
-      With (r', subst x u body)
   | Emit t' -> Emit (subst x u t')
   | Refl t' -> Refl (subst x u t')
   | J (mx, ty, c, d, p, b) ->

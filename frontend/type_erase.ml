@@ -100,7 +100,6 @@ let rewrite (positions_of : string -> int list option) (t0 : C.term) : C.term =
             List.map (fun h -> { h with C.hc_body = go h.C.hc_body })
               r.C.r_handlers }
     | C.Scope (s, b) -> C.Scope (s, go b)
-    | C.With (s, b) -> C.With (s, go b)
     | C.Emit t' -> C.Emit (go t')
     | C.Refl t' -> C.Refl (go t')
     | C.J (x, a, c, d, p, b) -> C.J (x, a, go c, go d, go p, go b)

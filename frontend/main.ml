@@ -138,38 +138,7 @@ let test_scope () =
 (* Program: with MockDisk in (read Unit)                                 *)
 (* Expected: Unit (the handler returned its argument)                    *)
 
-let test_with_handle () =
-  let disk = {
-    p_name = "Disk";
-    p_site = TyType 0;
-    p_fields = [];
-    p_operations = [{
-      op_name = "read";
-      op_params = [("path", TyPlace "text")];
-      op_return = TyPlace "text"; op_algebra = None;
-    }];
-    p_laws = [];
-  } in
-  let mock_disk = {
-    r_name = "MockDisk";
-    r_target = "Disk";
-    r_handlers = [{
-      hc_op = "read";
-      hc_params = [("path", TyPlace "text")];
-      hc_body = v "path";
-    }];
-    r_multi_shot = false;
-    r_fold_name = None;
-  } in
-  let ctx = empty_ctx in
-  let ctx = declare_place ctx disk in
-  let ctx = declare_reduction ctx mock_disk in
-  let term = With ("MockDisk", app (v "read") Unit) in
-  run_test
-    ~name:"With-handle (operation dispatched to handler)"
-    ~ctx
-    ~term
-    ~expected:Unit
+(* test_with_handle removed: tested the dropped 'with R { }' construct *)
 
 (* ─── Test 7: place equivalence ───────────────────────────── *)
 (* Two places with identical signatures should be equal under structural place equivalence. *)
@@ -210,50 +179,7 @@ let test_place_equivalence () =
 (* with Outer in (with Inner in (read Unit))                            *)
 (* should dispatch to Inner.read first (innermost handler wins).        *)
 
-let test_nested_handlers () =
-  let disk = {
-    p_name = "Disk";
-    p_site = TyType 0;
-    p_fields = [];
-    p_operations = [{
-      op_name = "read";
-      op_params = [("path", TyPlace "text")];
-      op_return = TyPlace "text"; op_algebra = None;
-    }];
-    p_laws = [];
-  } in
-  let outer_disk = {
-    r_name = "Outer";
-    r_target = "Disk";
-    r_handlers = [{
-      hc_op = "read";
-      hc_params = [("path", TyPlace "text")];
-      hc_body = v "path";  (* identity *)
-    }];
-    r_multi_shot = false;
-    r_fold_name = None;
-  } in
-  let inner_disk = {
-    r_name = "Inner";
-    r_target = "Disk";
-    r_handlers = [{
-      hc_op = "read";
-      hc_params = [("path", TyPlace "text")];
-      hc_body = Unit;  (* always Unit, distinct from Outer *)
-    }];
-    r_multi_shot = false;
-    r_fold_name = None;
-  } in
-  let ctx = empty_ctx in
-  let ctx = declare_place ctx disk in
-  let ctx = declare_reduction ctx outer_disk in
-  let ctx = declare_reduction ctx inner_disk in
-  let term = With ("Outer", With ("Inner", app (v "read") (v "some_path"))) in
-  run_test
-    ~name:"Nested with-blocks (innermost handler wins)"
-    ~ctx
-    ~term
-    ~expected:Unit  (* Inner handler always returns Unit *)
+(* test_nested_handlers removed: tested the dropped 'with R { }' construct *)
 
 (* ─── Surface Yon parsing + desugaring tests ───────────────────────── *)
 
@@ -2612,24 +2538,7 @@ let test_reduce_visibility_table () =
     (Printf.printf "Status: FAIL\n"; false)
 
 (* Test 90: end-to-end — `with R of P { ... }` sets current_place. *)
-let test_reduce_with_propagation () =
-  Printf.printf "\n=== Test 90: With-block sets current_place during reduction ===\n";
-  let open Ast in
-  let r = {
-    r_name = "MyR";
-    r_target = "MyPlace";
-    r_multi_shot = false;
-    r_fold_name = None;
-    r_handlers = [];
-  } in
-  let ctx = Reduce.declare_reduction Reduce.empty_ctx r in
-  let with_t = With ("MyR", Unit) in
-  let result = Builtins.reduce_with_builtins ctx with_t in
-  let ok = result = Unit in
-  Printf.printf "  Reduces 'with MyR { () }' to Unit: %b\n" ok;
-  Printf.printf "  (current_place is set to MyPlace internally during reduction)\n";
-  if ok then (Printf.printf "Status: PASS\n"; true)
-  else (Printf.printf "Status: FAIL\n"; false)
+(* test_reduce_with_propagation removed: tested the dropped 'with R { }' construct *)
 
 (* ─── proposition type integration ──────────────────────────────────── *)
 
@@ -5030,9 +4939,7 @@ let () =
     test_eta;
     test_capture_avoidance;
     test_scope;
-    test_with_handle;
     test_place_equivalence;
-    test_nested_handlers;
     test_parse_minimal;
     test_parse_reduction;
     test_pipeline;
@@ -5112,7 +5019,6 @@ let () =
     test_and_bridges_heyt;
     test_reduce_ctx_with_place;
     test_reduce_visibility_table;
-    test_reduce_with_propagation;
     test_proposition_type;
     test_boolean_proposition_alias;
     test_proposition_heyting_values;

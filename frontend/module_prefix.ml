@@ -99,7 +99,6 @@ and rw_stmt (rename : string -> string) (s : S.stmt) : S.stmt =
                  (match otherwise with Some o -> Some (rs o) | None -> None), l)
   | S.SForever (body, l) -> S.SForever (rs body, l)
   | S.SScope (so, body, e, l) -> S.SScope (so, rs body, re e, l)
-  | S.SWith (r1, r2, body, l) -> S.SWith (r1, r2, rs body, l)
   | S.SProduce (body, l) -> S.SProduce (rs body, l)
   | S.SEmit (e, l) -> S.SEmit (re e, l)
   | S.SPromote (e, l) -> S.SPromote (re e, l)
@@ -175,7 +174,7 @@ and refs_in_stmt (s : S.stmt) : string list =
   | S.SIter (e, b, _) | S.SWhile (e, b, _) -> re e @ rs b
   | S.SScope (_, b, e, _) -> rs b @ re e
   | S.SForces (_, c, b, _) -> refs_in_cond c @ rs b
-  | S.SForever (b, _) | S.SProduce (b, _) | S.SWith (_, _, b, _) -> rs b
+  | S.SForever (b, _) | S.SProduce (b, _) -> rs b
   | S.SRepeat (_, b, ow, _) -> rs b @ (match ow with Some o -> rs o | None -> [])
 
 let check_visibility (internals : string list) (decls : S.top_decl list) : unit =
@@ -310,7 +309,6 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.SRepeat (n, b, oth, ll) ->
           S.SRepeat (n, rb b, (match oth with None -> None | Some o -> Some (rb o)), ll)
       | S.SScope (n, b, r, ll) -> S.SScope (n, rb b, rwe r, ll)
-      | S.SWith (r, pl, b, ll) -> S.SWith (r, pl, rb b, ll)
       | S.SProduce (b, ll) -> S.SProduce (rb b, ll)
       | S.SForces (stg, c, b, ll) -> S.SForces (stg, rwc c, rb b, ll)
     in

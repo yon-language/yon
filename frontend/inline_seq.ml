@@ -28,7 +28,6 @@ let rec count_occurrences (x : string) (t : term) : int =
       else count_occurrences x body
   | App (f, a) -> count_occurrences x f + count_occurrences x a
   | Scope (_, body) -> count_occurrences x body
-  | With (_, body) -> count_occurrences x body
   | Emit e -> count_occurrences x e
   | Refl e -> count_occurrences x e
   | J (_y, _ty, mot, dval, p, e) ->
@@ -83,7 +82,6 @@ let rec inline_seq_lets (t : term) : term =
   | App (f, a) -> App (inline_seq_lets f, inline_seq_lets a)
   | Lam (y, ty, body) -> Lam (y, ty, inline_seq_lets body)
   | Scope (n, body) -> Scope (n, inline_seq_lets body)
-  | With (r, body) -> With (r, inline_seq_lets body)
   | Emit e -> Emit (inline_seq_lets e)
   | Refl e -> Refl (inline_seq_lets e)
   | J (y, ty, mot, dval, p, e) ->

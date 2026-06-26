@@ -239,7 +239,6 @@ let hover_at (prog : Surface_ast.program) (line0 : int) (col0 : int)
         (match otherwise with Some b -> List.iter walk_stmt b | None -> ())
     | SForever (body, _) -> List.iter walk_stmt body
     | SScope (_, body, e, _) -> List.iter walk_stmt body; consider e
-    | SWith (_, _, body, _) -> List.iter walk_stmt body
     | SProduce (body, _) -> List.iter walk_stmt body
     | SForces (_, _, body, _) -> List.iter walk_stmt body
     | SIter (e, body, _) -> consider e; List.iter walk_stmt body
