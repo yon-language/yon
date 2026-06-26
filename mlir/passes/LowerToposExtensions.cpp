@@ -174,18 +174,20 @@ static LogicalResult lowerComposeReductions(ModuleOp module) {
     //   left  :  B -> C
     FunctionType leftType = leftFn.getFunctionType();
     FunctionType rightType = rightFn.getFunctionType();
+    // Composition `left o right`: `right` MAY take multiple inputs (they
+    // become the composition's inputs); it must produce exactly ONE result,
+    // which `left` consumes. `left` must be unary (one input = right's
+    // result; one output = the composition's result).
     if (leftType.getNumInputs() != 1 || leftType.getNumResults() != 1
-        || rightType.getNumInputs() != 1
         || rightType.getNumResults() != 1) {
       op.emitOpError(
           "[TOPOS-E0803] compose_reductions '")
           << op.getSymName()
-          << "': each component reduction must be unary (one input, "
-             "one result). Multi-argument reductions are not yet "
-             "supported by composition.\n"
-             "  fix: ensure each component is a `topos.reduce` over "
-             "a place whose section type maps to a single "
-             "memref operand.";
+          << "': in `left o right`, `left` must be unary (one input, one "
+             "result) and `right` must produce exactly one result (which "
+             "`left` consumes). `right` may take multiple inputs.\n"
+             "  fix: ensure `left` is a unary `topos.reduce`, and `right` "
+             "produces a single result.";
       return failure();
     }
     if (leftType.getInput(0) != rightType.getResult(0)) {
@@ -216,8 +218,9 @@ static LogicalResult lowerComposeReductions(ModuleOp module) {
       return failure();
     }
 
+    // The composition takes ALL of right's inputs and returns left's result.
     auto composedType = builder.getFunctionType(
-        {rightType.getInput(0)}, {leftType.getResult(0)});
+        rightType.getInputs(), {leftType.getResult(0)});
 
     builder.setInsertionPointToEnd(module.getBody());
     auto fn = builder.create<func::FuncOp>(op.getLoc(), composedName,
@@ -236,9 +239,12 @@ static LogicalResult lowerComposeReductions(ModuleOp module) {
 
     Block *entry = fn.addEntryBlock();
     builder.setInsertionPointToStart(entry);
-    Value x = entry->getArgument(0);
+    // Forward ALL composition arguments to `right` (it may be multi-input);
+    // `right`'s single result feeds the unary `left`.
+    SmallVector<Value> rightArgs;
+    for (Value a : entry->getArguments()) rightArgs.push_back(a);
     auto callRight = builder.create<func::CallOp>(
-        op.getLoc(), rightFn, ValueRange{x});
+        op.getLoc(), rightFn, rightArgs);
     auto callLeft = builder.create<func::CallOp>(
         op.getLoc(), leftFn, callRight.getResults());
     builder.create<func::ReturnOp>(op.getLoc(),

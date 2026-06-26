@@ -289,6 +289,19 @@ REWRITES = [
         id="lower-topos-extensions",
     ),
     pytest.param(
+        "lower-topos-extensions",
+        "compose_multiarg_in.mlir",
+        [
+            # right (R1) has TWO inputs: the composition is generalized to take
+            # all of right's inputs -> @C__reduce(%a,%b) is created...
+            (r"@C__reduce", True),
+            # ...and the topos.compose_reductions op is consumed (no longer E0803).
+            (r"topos\.compose_reductions", False),
+        ],
+        None,
+        id="compose-reductions-multiarg",
+    ),
+    pytest.param(
         "topos-cps-conversion",
         "cps_conversion_in.mlir",
         [
