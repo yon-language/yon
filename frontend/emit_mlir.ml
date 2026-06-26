@@ -5699,8 +5699,16 @@ let emit_program (dr : Desugar.desugar_result) : string =
         || (String.length name >= 7 && String.sub name 0 7 = "yon_rt_")
       in
       if is_external_runtime then begin
-        emit_line e (Printf.sprintf "func.func private @%s(%s) -> %s"
-                       name param_decl ret)
+        (* Spawn__child_exit calls _exit(0) (yon_rt.c) and NEVER returns; mark
+           its declaration noreturn so the func->llvm lowering forwards the
+           LLVM `noreturn` function attribute. Without it the parent's
+           continuation could be (mis)emitted as reachable after the call — the
+           concurrency UB this guards against. *)
+        let noret =
+          if name = "Spawn__child_exit"
+          then " attributes {passthrough = [\"noreturn\"]}" else "" in
+        emit_line e (Printf.sprintf "func.func private @%s(%s) -> %s%s"
+                       name param_decl ret noret)
       end else begin
       emit_line e (Printf.sprintf "func.func @%s(%s) -> %s {"
                      name param_decl ret);

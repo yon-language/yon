@@ -554,10 +554,17 @@ struct LowerToposExtensionsPass
     // both F2 and F3 here.
     //
     // The transformation matches each (probe_construct, probe_apply)
-    // pair and replaces it with a single `topos.op_apply`. After
-    // this step, any remaining `topos.probe_construct` indicates an
-    // escaping probe (closure conversion not yet supported); we
-    // surface a precise diagnostic and fail the pass.
+    // pair and replaces it with a single `topos.op_apply`.
+    //
+    // Reachability note (2026-06): the canonical frontend (emit_mlir)
+    // does NOT emit `topos.probe_construct`; this fusion is dialect-
+    // level support exercised only by hand-written MLIR. A
+    // `probe_construct` whose uses are not all `probe_apply` is an
+    // escaping probe: it is LEFT in place here (no E0701 check exists —
+    // closure conversion / F2b is RETIRED with the arena model). If one
+    // ever survived, the `addIllegalOp<ProbeConstructOp, ProbeApplyOp>`
+    // guard in LowerToposToStandard fails the conversion. We do not
+    // fail here.
     // ----------------------------------------------------------------
     {
       // Iterate over every `topos.probe_construct`. For each one,
@@ -569,8 +576,10 @@ struct LowerToposExtensionsPass
       //
       // A use that is not a `probe_apply` indicates an escaping
       // probe (the probe is stored, returned, or passed to a
-      // function that accepts a `!topos.probe`); we surface it
-      // below in the "stranded probe" check.
+      // function that accepts a `!topos.probe`); such a construct is
+      // left in place (see reachability note above) and, if it ever
+      // reaches LowerToposToStandard, is caught by the illegal-op guard
+      // there. No stranded-probe diagnostic is emitted in this pass.
       SmallVector<ProbeConstructOp> constructs;
       module.walk([&](ProbeConstructOp c) { constructs.push_back(c); });
 
@@ -586,8 +595,8 @@ struct LowerToposExtensionsPass
         }
 
         // If any use is not a probe_apply, the probe escapes;
-        // leave the construct in place so the stranded-probe
-        // check below reports it with [TOPOS-E0701].
+        // leave the construct in place (the illegal-op guard in
+        // LowerToposToStandard fails the conversion if it survives).
         if (hasNonApplyUse)
           continue;
 
@@ -609,11 +618,12 @@ struct LowerToposExtensionsPass
 
       // Note: a `topos.probe_apply` that consumes a probe NOT
       // produced by a local `topos.probe_construct` (e.g. a block
-      // argument) is no longer an error at this stage. The
-      // subsequent `--lower-topos-to-standard` pass owns F2b
-      // (closure conversion + runtime dispatcher) and will rewrite
-      // such applies into calls to `@yon_probe_dispatch`. We leave
-      // them in place here.
+      // argument) is not an error at this stage; it is left in place.
+      // F2b (closure conversion + runtime dispatcher) is RETIRED with
+      // the arena model, so there is no downstream rewrite into
+      // `@yon_probe_dispatch`. Such an apply, if it ever appeared,
+      // would be rejected by the illegal-op guard in
+      // LowerToposToStandard. The canonical frontend never produces it.
 
       // probe_collapse %instance is the devirtualisation directive
       // that the instance is already flat. After F2 has fused the
@@ -626,11 +636,11 @@ struct LowerToposExtensionsPass
       }
     }
 
-    // Note: a `topos.probe_construct` that escapes its function
-    // (its uses are not all `topos.probe_apply`) is no longer an
-    // error at this stage. The subsequent `--lower-topos-to-standard`
-    // pass owns F2b (closure conversion) and will materialise the
-    // closure and trampoline. We leave such constructs in place.
+    // Note: a `topos.probe_construct` that escapes its function (its
+    // uses are not all `topos.probe_apply`) is left in place. F2b
+    // (closure conversion / trampoline) is RETIRED; the illegal-op
+    // guard in LowerToposToStandard catches any survivor. The canonical
+    // frontend never emits probe_construct, so this never fires.
 
     // ----------------------------------------------------------------
     // Step 2: F3 — lower `topos.compose_reductions` to chained

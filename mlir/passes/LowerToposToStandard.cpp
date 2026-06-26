@@ -1173,146 +1173,29 @@ static Value ptrOffset(OpBuilder &b, Location loc,
 
 
 //===----------------------------------------------------------------------===//
-// F2b (closure conversion): topos.probe_construct that escapes its
-// function — and every topos.probe_apply that consumes a non-local
-// probe — must be lowered into a memref-encoded closure plus a
-// trampoline function that the runtime resolves via MPHF.
-//
-// Closure layout (memref<closureSize x i8>):
-//
-//   offset 0..7      : trampoline name hash (i64)
-//   offset 8..7+srcN : captured instance (the section that the probe
-//                      was constructed from), copied in-line.
-//
-// The trampoline is a private `func.func` synthesised on demand:
-//
-//   func.func private @Place__op__trampoline(
-//       memref<closureSize x i8>,        // closure (env + hash)
-//       arg1, ..., argN
-//   ) -> result
-//
-// Its body reads the captured instance from the closure and calls
-// `@Place__op(instance, args...)`. The runtime is not strictly
-// required for the trampoline itself (it's a regular func.func), but
-// the *hash* slot exists so that downstream LLVM lowering can switch
-// between trampolines stored in the MPHF table when probes flow
-// through truly opaque interfaces.
-//
-// The arena of the closure is, for now, the stack frame of the
-// function that constructs the probe: we emit `memref.alloca`. When
-// the probe is returned, this allocation is unsafe because the
-// stack frame ends. The dialect-level contract is that the caller
-// is in the same hermetic Space as the construct site (the user
-// confirmed this design choice — Space ermetici, Tortoise stage 8
-// for lambdas/xi extension). A future pass can detect cross-Space
-// flow and insert `topos.promote` before this lowering runs.
-//
-// Failure modes:
-//   - [TOPOS-E0704] probe constructed from a non-section operand
-//     (e.g. block arg of unknown type): cannot recover the layout.
+// F2b (escaping-probe closure conversion: memref-encoded closures +
+// MPHF-resolved trampolines) — RETIRED (81b, 2026-06-03) with the arena
+// model. The lowering patterns and their helpers (closureSizeFor,
+// trampolineNameFor) were removed. `topos.probe_construct` /
+// `topos.probe_apply` are never produced by the canonical frontend; they
+// are listed in `addIllegalOp` below as a hard invariant, so any survivor
+// fails the conversion (no pattern makes it legal) rather than being
+// rewritten into a trampoline or a `@yon_probe_dispatch` indirect call.
 //===----------------------------------------------------------------------===//
 
-// Helper: compute the closure size in bytes for a probe captured
-// over a section of place `placeName`. Returns std::nullopt when
-// the layout is unknown.
-static std::optional<int64_t>
-closureSizeFor(StringRef placeName,
-               const llvm::StringMap<PlaceLayout> &layouts) {
-  auto it = layouts.find(placeName);
-  if (it == layouts.end() || it->second.totalSize == 0)
-    return std::nullopt;
-  return 8 + static_cast<int64_t>(it->second.totalSize);
-}
-
-// Helper: name-mangle the trampoline for (place, op).
-static std::string trampolineNameFor(StringRef place, StringRef op) {
-  return (place + "__" + op + "__trampoline").str();
-}
-
-// Lower `topos.probe_construct "op" on %instance` into:
-//   %clos = memref.alloca() : memref<closureSize x i8>
-//   memref.store hash, %clos[0..7]
-//   memref.store %instance bytes, %clos[8..]
-//
-// The trampoline function is synthesised lazily by walking the
-// module once before the conversion runs (see the pre-step in
-// `runOnOperation`).
-
-
-// Lower `topos.probe_apply %probe(%arg)` into a call to the
-// trampoline associated with the probe. The trampoline name was
-// hashed into the closure header, but at lowering time we already
-// know which probe construct produced it through type information
-// — and for *stranded* applies (consuming a block argument or a
-// returned value), we cannot know that statically. In that case
-// we emit an indirect call dispatched by the runtime through
-// `@yon_probe_dispatch(closure_ptr, arg_count, arg0_ptr, ...)`.
-//
-// We support only the simple case for now: the probe operand's
-// defining op is reachable as a `ProbeConstructOp` even after
-// closure conversion has rewritten its result type. When the
-// defining op is gone (escaped through a function boundary), the
-// trampoline must be reached through the runtime dispatcher.
-
-
-// 81b resolution (2026-06-03): the escaping-probe trampoline machinery
-// (arena-ABI closure conversion) is RETIRED with the arena model. The
-// canonical pipeline already rejects escaping probes in
-// LowerToposExtensions (Step 1) with a precise diagnostic.
-
 //===----------------------------------------------------------------------===//
-// topos.restrict -> memref copy from source layout
-// to sub-layout.
+// topos.section / topos.restrict / topos.glue — arena-section lowerings.
 //
-// Semantics:
-//   %r = topos.restrict %src to @sub : (!topos.section<P>) -> !topos.section<Q>
-//
-// At the standard layer, %src is a `memref<srcN x i8>` with the
-// source place layout, and %r becomes a fresh `memref<subN x i8>`
-// containing each field declared by the subplace, read from %src
-// at its offset there and written to the new memref at its offset
-// in the sub-layout. This is the operational reading of the
-// inverse-image functor f^* on representable presheaves.
-//
-// Failure modes (all reported with [TOPOS-Exxxx] diagnostics):
-//   - the subplace symbol does not resolve to a known PlaceLayout
-//   - the subplace declares a field whose name is not present in
-//     the source layout
-//   - the source and target field types disagree (no implicit
-//     conversion is inserted; the user must adjust the dialect-
-//     level types so they match)
-//===----------------------------------------------------------------------===//
-
-
-
-//===----------------------------------------------------------------------===//
-// topos.glue -> memref copy from disjoint local
-// sections into a global section.
-//
-// Semantics:
-//   %g = topos.glue %s_1, %s_2, ... over @covering
-//        : (!topos.section<Q_1>, ..., !topos.section<Q_n>)
-//          -> !topos.section<P>
-//
-// In the sheaf-theoretic reading P is the global place and each
-// Q_i is a sub-place; the result is the unique global section that
-// restricts to each %s_i on its sub-place. This pass implements the
-// case where the {Q_i} cover P disjointly: every field of P appears
-// in exactly one of the Q_i. Under that hypothesis the glue reduces
-// to copying each field from the unique covering section.
-//
-// Failure modes (all reported with [TOPOS-Exxxx] diagnostics):
-//   - a field of P is not declared by any of the Q_i (uncovered);
-//   - a field of P is declared by two or more Q_i (overlapping
-//     covering): a runtime compatibility check would be required
-//     to discharge the sheaf condition, which is not yet emitted
-//     by this pass;
-//   - the type of a field disagrees between P and the Q_i.
-//
-// The `@covering` attribute is the symbolic name of the covering
-// family; it is informational metadata at this layer (no operational
-// effect on the lowering, which works directly from the section
-// types).
+// RETIRED (81b, 2026-06-03) together with the arena memref model. There
+// is NO LowerSectionOp / LowerRestrictOp / LowerGlueOp pattern. These
+// three ops are listed in `addIllegalOp` below as a hard invariant: the
+// canonical frontend (emit_mlir) never emits them, so they never reach
+// this pass; if one ever did, the conversion fails (no pattern to make
+// it legal) rather than passing through un-lowered. The earlier
+// memref-copy lowering (inverse-image f^* for restrict, disjoint-cover
+// gluing for glue, including the open question of overlapping covers and
+// the sheaf compatibility check) lived here and was removed with the
+// arena model; the sheaf condition is discharged at the verifier layer.
 //===----------------------------------------------------------------------===//
 
 
@@ -1946,16 +1829,11 @@ struct LowerToposToStandardPass
     patterns.add<MaterializeGeomMorphismOp>(typeConverter, ctx);
     patterns.add<LowerForcesOp>(typeConverter, ctx);
 
-    // F2b — closure conversion for probes that escape their
-    // construct site. Trampoline headers are synthesised eagerly
-    // before applyFullConversion so they are visible to both the
-    // per-op function lowering (LowerOperationOp emits @Place__op
-    // which the trampoline calls) and the probe construct rewrite
-    // (which hashes the trampoline name into the closure header).
-    // The trampoline bodies are filled in AFTER the conversion,
-    // because LowerOperationOp emits @Place__op during the
-    // conversion itself; only after that the per-op function is
-    // visible in the module's symbol table.
+    // F2b (escaping-probe closure conversion / trampolines) is RETIRED
+    // with the arena model (81b, 2026-06-03). No trampoline synthesis
+    // happens here. Escaping probes cannot be produced by the canonical
+    // frontend; any survivor is rejected by the addIllegalOp guard for
+    // ProbeConstructOp/ProbeApplyOp below.
 
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(
         patterns, typeConverter);

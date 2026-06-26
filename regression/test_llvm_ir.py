@@ -103,7 +103,12 @@ def _run(cmd, **kw):
 # An example name absent from examples/ makes _emit_ll() return None and the
 # node skips, so adding a name that is not built is harmless.
 EXAMPLES = ["arena_basic", "spawn_parallel_collect", "net_stream",
-            "string_literals", "collections_ext", "merkle_noncommutative"]
+            "string_literals", "collections_ext", "merkle_noncommutative",
+            # broadened to touch more runtime families (math, iteration,
+            # history/route). Any name absent or failing a pre-LLVM stage skips.
+            # (primes_bertrand omitted: it has a facade call the best-effort
+            # f64-abi heuristic flags — out of scope for a coverage broaden.)
+            "math_ext", "iter_loop", "route_history"]
 
 # Examples that exercise the spawn machinery (child fork + child_exit). Only
 # these are relevant to the child-exit node; others have no such call site.
@@ -434,6 +439,39 @@ def test_ll_child_exit_unreachable(name, tmp_path):
         f"after the (no-return) call — the parent continuation would run in "
         f"the exited child (concurrency UB). Offending sites: {bad}"
     )
+
+
+@pytest.mark.parametrize("name", SPAWN_EXAMPLES)
+def test_ll_child_exit_noreturn(name, tmp_path):
+    """STRENGTHENED child-exit invariant. emit_mlir now marks the
+    `Spawn__child_exit` facade declaration with a noreturn passthrough, which
+    func->llvm forwards to the LLVM `noreturn` function attribute. We assert the
+    emitted `.ll` declares the child-exit symbol carrying `noreturn` — encoding
+    "control never resumes after child exit" in the IR rather than leaving it to
+    deadness. Pre-fix: no noreturn -> red; post-fix -> green. mlir-translate may
+    put the attribute inline on the declare/define OR in an `attributes #N`
+    group; we accept either."""
+    ll = _emit_ll(name, tmp_path)
+    if ll is None:
+        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
+    m = re.search(
+        r"^\s*(?:declare|define)[^\n]*@(?:Spawn__child_exit|"
+        r"yon_rt_spawn_child_exit)\b[^\n]*$", ll, re.MULTILINE)
+    if m is None:
+        pytest.skip(f"{name}: IR has no @Spawn__child_exit declaration")
+    line = m.group(0)
+    if "noreturn" in line:
+        return  # inline attribute — invariant satisfied
+    grp = re.search(r"#(\d+)\b", line)
+    assert grp is not None, (
+        f"{name}: @Spawn__child_exit has neither an inline `noreturn` nor an "
+        f"attribute group:\n{line}")
+    n = grp.group(1)
+    attrs = re.search(rf"^attributes #{n} = \{{[^}}\n]*\}}", ll, re.MULTILINE)
+    assert attrs is not None and "noreturn" in attrs.group(0), (
+        f"{name}: attribute group #{n} of @Spawn__child_exit lacks `noreturn` "
+        f"(the noreturn passthrough did not reach the IR):\n"
+        f"{attrs.group(0) if attrs else '(group #' + n + ' not found)'}")
 
 
 def _nm_undefined(obj):

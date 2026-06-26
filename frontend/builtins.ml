@@ -537,7 +537,11 @@ let rec try_reduce_builtin (t : term) : term option =
                           in
                           Some result_term)
                  | Surface_ast.MoveMerge _ ->
-                     (* Merge form not yet wired through surface; skip *)
+                     (* Merge (Form B) is fully wired: the surface MoveMerge is
+                      * lowered at the call site by emit_mlir (Move__merge,
+                      * ~line 4208). The builtin reducer just does not
+                      * constant-fold it — returning None leaves the call intact
+                      * for emit to handle. *)
                      None)
             | _ -> None)
        | _ -> None)
