@@ -2,6 +2,7 @@
 name = "c_prop_abstract"
 
 [world.Ledger]
+spaces  = ["bank"]
 objects = ["X"]
 
 [runtime]

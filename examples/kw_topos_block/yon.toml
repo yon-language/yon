@@ -2,6 +2,7 @@
 name = "kw_topos_block"
 
 [world.Ledger]
+spaces  = ["bank"]
 objects = ["X"]
 
 [runtime]

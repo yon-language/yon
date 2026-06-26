@@ -3,7 +3,7 @@ name = "c_topos_at_space"
 
 [world.Ledger]
 objects = ["X"]
-spaces  = ["Vault"]
+spaces  = ["Vault", "bank"]
 
 [runtime]
 backend = "memory"

@@ -161,6 +161,12 @@ let () =
   let places_by_space = ref [] in  (* (space, place_decl) for every project TopPlace *)
   let topos_space = ref [] in      (* (topos_name, space) for every TopTopos file *)
   let topos_count = ref [] in      (* (space, n) topos-file count per space *)
+  (* Agent ENF: mandatory file-layout violations, collected per file in the
+     loop below (project mode only). One message per rule violation; printed and
+     exit-3'd after the loop, matching the check_one_topos_per_space convention.
+     Collecting here (not from the merged program) keeps per-file origin —
+     filename/decls are in scope in the per-file parse. *)
+  let layout_errs = ref [] in
   let space_of_path =
     match project_wm with
     | Some _ ->
@@ -211,6 +217,28 @@ let () =
                  | _ -> ()) decls;
                if sp <> "" && !local_topos_in_file > 0 then
                  topos_count := (sp, !local_topos_in_file) :: !topos_count;
+               (* Agent ENF: mandatory file-layout checks. Gather this file's
+                  per-file facts (basename, declared place names, whether it
+                  declares a topos) HERE, where filename + decls are in scope,
+                  and run them through Manifest.check_file_layout. Applies to
+                  every project file (root and space files alike): the basename
+                  is the filename without ".yon"; the rules themselves exempt
+                  zero-place files. Project mode only (this whole branch is
+                  gated on project_wm = Some wm). *)
+               let basename =
+                 Filename.remove_extension (Filename.basename filename) in
+               let file_place_names =
+                 List.filter_map (function
+                   | Surface_ast.TopPlace pd -> Some pd.Surface_ast.pd_name
+                   | _ -> None) decls in
+               let file_has_topos =
+                 List.exists (function
+                   | Surface_ast.TopTopos _ -> true
+                   | _ -> false) decls in
+               layout_errs :=
+                 Manifest.check_file_layout ~basename
+                   ~place_names:file_place_names ~has_topos:file_has_topos
+                 @ !layout_errs;
                (* place->world + wire boundary: only for files whose space is
                   in a world (root files inherit no world). *)
                let sender_world = Manifest.world_of_space wm sp in
@@ -242,6 +270,18 @@ let () =
           exit 2
     ) all_sources
   in
+  (* Agent ENF: mandatory file-layout enforcement. The per-file loop above has
+     now populated layout_errs (it ran eagerly: List.concat_map forces every
+     element). Project mode only: layout_errs is only ever appended to inside
+     the `project_wm = Some wm` branch, so for a single-file `EMIT some.yon`
+     (project_wm = None) it stays empty and this is vacuous — the negative-test
+     harness runs single files and is exempt. Collect ALL violations across the
+     project's files, print them, exit 3 — matching check_one_topos_per_space. *)
+  (match List.rev !layout_errs with
+   | [] -> ()
+   | errs ->
+       List.iter (fun m -> Printf.eprintf "TOPOS LAYOUT ERROR: %s\n" m) errs;
+       exit 3);
   (* In project mode the worlds and spaces are not in any .yon file: the worlds
      come from the toml (as native TopWorld nodes) and each directory is a
      space (a native TopSpace). Prepend them to the parsed place files -- no

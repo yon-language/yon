@@ -1,4 +1,0 @@
-place Entry { }
-place Base { tag number }
-place Slice over Base { weight number }
-fun main(): number { return 0 }

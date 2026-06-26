@@ -443,6 +443,83 @@ let check_one_topos_per_space
          one topos (got %d)" sp n n)
   ) spaces
 
+(* ─── mandatory file-layout checks (project mode only) ──────────────────
+   Four structural rules tying each .yon FILE to the place/topos it declares.
+   These are enforced ONLY for a project compile (a directory with yon.toml);
+   a single-file `EMIT some.yon` is exempt (the driver gates the call on
+   `project_wm <> None`). All inputs are per-file facts the driver already has
+   in scope in its per-file parse loop:
+     - [basename]: the file name without ".yon" (e.g. "Account.yon" -> "Account")
+     - [place_names]: the names of every TopPlace the file declares, in order
+     - [has_topos]: whether the file declares a TopTopos
+
+   The rules (a place file is a file declaring >= 1 place):
+     1. ONE place per file: a file declaring places declares exactly 1 TopPlace.
+     2. filename == place name: a file with exactly one place P must be P.yon.
+        (A file declaring ZERO places — e.g. Topos.yon, or a root entry file
+        with only `fun main` — is exempt from rules 1, 2 and the place half of 4.)
+     3. topos file == Topos.yon: a file declaring a TopTopos must be Topos.yon.
+     4. no "place" substring (case-insensitive) in a declared place NAME, or in
+        a place file's basename.
+
+   Returns a list of human-readable messages (empty = ok); the driver prints
+   each with the "TOPOS LAYOUT ERROR:" prefix and exits 3, exactly like
+   check_one_topos_per_space / the entrypoint diagnostics. *)
+let contains_place_ci (s : string) : bool =
+  (* case-insensitive substring test for "place" — no Str dependency *)
+  let s = String.lowercase_ascii s in
+  let needle = "place" in
+  let ns = String.length needle and ls = String.length s in
+  let rec scan i =
+    if i + ns > ls then false
+    else if String.sub s i ns = needle then true
+    else scan (i + 1)
+  in
+  scan 0
+
+let check_file_layout
+    ~(basename : string)
+    ~(place_names : string list)
+    ~(has_topos : bool) : string list =
+  let errs = ref [] in
+  let add m = errs := m :: !errs in
+  let nplaces = List.length place_names in
+  (* Rule 3: a topos-declaring file must be Topos.yon. *)
+  if has_topos && basename <> "Topos" then
+    add (Printf.sprintf
+      "file '%s.yon' declares a topos but a topos must live in 'Topos.yon'"
+      basename);
+  (* Rules 1, 2 and the place half of rule 4 apply only to PLACE files
+     (files declaring at least one place). A file with zero places is exempt. *)
+  if nplaces >= 1 then begin
+    (* Rule 1: exactly one place per file. *)
+    if nplaces > 1 then
+      add (Printf.sprintf
+        "file '%s.yon' declares %d places but a file may declare at most one \
+         place" basename nplaces);
+    (* Rule 4 (basename half): a place file's basename must not contain "place". *)
+    if contains_place_ci basename then
+      add (Printf.sprintf
+        "place file '%s.yon' has a basename containing the substring 'place' \
+         (case-insensitive), which is forbidden" basename);
+    (* Rule 2: when exactly one place P is declared, the file must be P.yon. *)
+    (match place_names with
+     | [p] when p <> basename ->
+         add (Printf.sprintf
+           "file '%s.yon' declares place '%s' but the filename must equal the \
+            place name ('%s.yon')" basename p p)
+     | _ -> ())
+  end;
+  (* Rule 4 (place-name half): no declared place NAME may contain "place". This
+     is checked for every declared place, independent of the one-place rule. *)
+  List.iter (fun p ->
+    if contains_place_ci p then
+      add (Printf.sprintf
+        "file '%s.yon' declares place '%s' whose name contains the substring \
+         'place' (case-insensitive), which is forbidden" basename p)
+  ) place_names;
+  List.rev !errs
+
 (* The project entrypoint place is filesystem/package metadata: the driver has
    already proved that it is unique, lives at the package root, and shares its
    file with [main].  It is not an object of any declared world, so after that
