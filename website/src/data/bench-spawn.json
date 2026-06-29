@@ -1,0 +1,13 @@
+{
+  "source": "regression/book/jp/bench/spawn_scaling, gated by regression/test_spawn_scaling.py",
+  "machine": "Apple M1 (8 cores: 4 performance + 4 efficiency)",
+  "backend": "L2_SHM (fork + shared memory)",
+  "per_replica_task": "8,000,000-iteration accumulate loop",
+  "commit": "1c44e79",
+  "date": "2026-06-29",
+  "Ns": [1, 2, 4, 8, 16],
+  "wall_ms": [255, 263, 266, 283, 349],
+  "speedup": [1.0, 1.9, 3.8, 7.2, 11.7],
+  "cores_total": 8,
+  "cores_performance": 4
+}

@@ -1,0 +1,8 @@
+[package]
+name = "ch05_taxa_full"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

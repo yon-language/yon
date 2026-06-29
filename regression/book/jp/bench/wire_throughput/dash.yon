@@ -1,0 +1,15 @@
+// Wire throughput bench, CONSUMER. Attaches to the shared-memory wire, drains N messages,
+// prints ns/message: the end-to-end cost of moving one message across the process boundary
+// over shared memory. Run with sensor.yon producing in the background.
+fun main(): number visits Output {
+  be w holds Wire.make_shm(9, 0)
+  be i holds 0
+  be t0 holds Time.now_ns(0)
+  while i < 200000 do {
+    be v holds Wire.await_shm(w)
+    i = i + 1
+  }
+  be t1 holds Time.now_ns(0)
+  be _p holds Output.print(String.from_int((t1 - t0) / 200000))
+  return 0
+}

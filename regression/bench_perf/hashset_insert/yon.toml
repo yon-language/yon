@@ -1,0 +1,4 @@
+[package]
+name="hashset_insert"
+[runtime]
+backend="memory"

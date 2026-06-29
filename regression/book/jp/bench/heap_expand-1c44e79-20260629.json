@@ -1,0 +1,21 @@
+{
+  "schema": [
+    "guard(=1000000)",
+    "distinct@100k_ns",
+    "distinct@1M_ns",
+    "same@1M_ns"
+  ],
+  "median": [
+    1000000,
+    234,
+    290,
+    98
+  ],
+  "runs": 3,
+  "chain_extensions_at_1M": 5,
+  "heap_generation_slots": 196560,
+  "note": "distinct interning is amortized O(1) across heap-generation chaining; identical content dedups to one slot",
+  "machine": "Apple M1",
+  "commit": "1c44e79",
+  "date": "2026-06-29"
+}

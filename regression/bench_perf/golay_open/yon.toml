@@ -1,0 +1,4 @@
+[package]
+name="golay_open"
+[runtime]
+backend="memory"

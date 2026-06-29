@@ -1,0 +1,4 @@
+[package]
+name = "vec"
+[runtime]
+backend = "memory"

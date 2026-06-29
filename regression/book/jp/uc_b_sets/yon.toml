@@ -1,0 +1,8 @@
+[package]
+name = "uc_b_sets"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

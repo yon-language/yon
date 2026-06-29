@@ -1,0 +1,43 @@
+place Entry { }
+
+// Classifying the animals on the Leech lattice -- FINAL trace for the 2.3 viz.
+//
+// Four dinosaur "genomes" are distinct, valid type-2 lattice points, used as
+// LITERALS so the trace is 100% reproducible (no xi_apply/co0_step/m24_orbit,
+// all of which were found build-UNSTABLE: their surface output is not
+// build-canonical, the same way orbit ids are not). of2 of fixed values IS
+// canonical -- the pure mmgroup leech2 subtype -- so this matrix is the rock.
+//   A = 1536        B = 1280        C = 25167360        D = 512
+//
+// of2(a,b) = XSimplex.of2 = the leech2 subtype of a^b, a CATEGORICAL class in
+// 0..11 (or -1 if outside the realized 12). A label of the RELATION, not an
+// ordered distance: the dense index packs {0x00,0x2x,0x3x,0x4x} subtypes
+// (runtime/yon_rt.c:4720), so a smaller class does NOT mean "closer". of2 is
+// symmetric, deterministic, and stable across builds. The code certifies it as
+// Co2-invariant (yon_rt.c:4706), NOT Co0 -- but that boundary lives in the prose,
+// because its only runtime witness (apply a Co0 generator, watch a class move) is
+// itself build-unstable and so cannot be a shipped number.
+//
+// Output order (one integer per line), 10 lines:
+//   [1-4]  A, B, C, D                      -- the genome xcoords
+//   [5-10] of2: AB, AC, AD, BC, BD, CD     -- the relation classes (1,11,7,1,1,7)
+
+fun main(): number visits Output {
+  be a holds 1536
+  be b holds 1280
+  be c holds 25167360
+  be d holds 512
+
+  be _1 holds Output.print(String.from_int(a))
+  be _2 holds Output.print(String.from_int(b))
+  be _3 holds Output.print(String.from_int(c))
+  be _4 holds Output.print(String.from_int(d))
+
+  be _5  holds Output.print(String.from_int(XSimplex.of2(a, b)))
+  be _6  holds Output.print(String.from_int(XSimplex.of2(a, c)))
+  be _7  holds Output.print(String.from_int(XSimplex.of2(a, d)))
+  be _8  holds Output.print(String.from_int(XSimplex.of2(b, c)))
+  be _9  holds Output.print(String.from_int(XSimplex.of2(b, d)))
+  be _10 holds Output.print(String.from_int(XSimplex.of2(c, d)))
+  return 0
+}

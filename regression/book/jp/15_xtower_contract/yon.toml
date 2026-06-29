@@ -1,0 +1,8 @@
+[package]
+name = "ch05_xtower_contract"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

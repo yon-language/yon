@@ -1,0 +1,109 @@
+---
+title: "The Clones Are Real"
+sidebar_label: "2.1 · The Clones Are Real"
+sidebar_position: 1
+---
+
+import LeechShells from '@site/src/components/LeechShells';
+
+:::note DRAFT (prose), code ✓
+The `.yon` below is **native-gated** (`regression/book/jp/uc_lattice`, `toolchain/yonc`: stdout
+`196560 12 1 2`). The kissing-number theorem is re-derived every build
+(`frontend/test_leech_theta.ml:26,33`, `N(2) = 196560`, `type2_count = 196560`); the perfect hash is
+proven exhaustively in `runtime/test_mphf.c` (a bijection to `[0, 196560)`, zero collisions, full
+cover); `196560` fits in 18 bits (`runtime/yon_rt.c:3077`). The LEECH SHELLS player replays the
+shell counts.
+:::
+
+## The scene
+
+The helicopter drops below the ridge and Grant sees it before his mind will accept it: a real
+animal, fifty feet of it, rearing up against a tree it is eating, a living dinosaur, here, now,
+standing in a particular place on a particular hillside. Not a fossil, not a drawing, not a number
+in a file. A thing in the world, with a position. By the lagoon there is a herd of them, and each
+one is *somewhere*; you could point. The clones are real, and the first thing real things do is take
+up room.
+
+In the last chapter a genome was a value, and two identical values were one, addressed by their
+content, named by a hash. That is true and it is not everything. A hash gives a thing a *name*. It
+does not give it a *place*. And these animals, however they were copied, are unmistakably in places.
+There is a second way to be addressed, and the park is about to need it.
+
+## The idea
+
+There are two ways to give a thing an address: by what it is called, and by where it is.
+
+**On the philosophical plane.** A name and a place answer different questions. A name (a hash) is
+made *from* the thing, change the thing and the name changes, and two things with the same name were
+the same thing. A place is a slot in a space that exists before any thing is put in it. The space has
+a shape of its own, distances, neighbours, symmetries, and once a value is set down in it, those
+relations are suddenly facts about the value. The catch, and we will keep returning to it, is that
+the value did not bring the geometry; the space did. What a position *means* is a question for the
+chapters ahead. That there are exactly so many positions, perfectly addressed, is a fact for this one.
+
+**In the language.** The space is the **Leech lattice**, a grid of points in twenty-four dimensions.
+Among all its points, the closest ones to any given point, its true neighbours, the minimal vectors, 
+number exactly **196,560**. This is the *kissing number* in twenty-four dimensions: the most unit
+spheres that can touch one central sphere at once, the densest such arrangement known, and a theorem,
+not a measurement. Yon re-derives it every build (`test_leech_theta.ml`). Those 196,560 points are the
+addresses. A value is *placed* on the lattice, set down at its nearest point, and they organise
+themselves into just **12** symmetry classes under the lattice's own group of motions (the Mathieu
+group `M24`, a slice of Conway's `Co₀`). Twelve kinds of place; a hundred and ninety-six thousand
+places.
+
+**On the silicon.** Here is the part a hash cannot match. Each of the 196,560 points maps to a unique
+slot in `[0, 196560)` by a **minimal perfect hash**, a bijection, zero collisions, full cover, proven
+exhaustively (`test_mphf.c`). Where FNV had to compare bytes whenever two hashes collided, the lattice
+*never* collides: there is nothing to resolve, because the address function is exact by construction.
+And 196,560 fits in eighteen bits (`yon_rt.c:3077`), so the whole universe of addresses is a bitmap of
+24 kilobytes, every possible place a value could be, held in the space of a small photograph. FNV
+takes any content and hashes it; the lattice takes only its own 196,560 points, and in exchange gives
+a perfect, compact, collision-free address.
+
+<LeechShells />
+
+## The code
+
+We can ask the space its own size, name a point's class, and watch two genomes take their places.
+
+```yon
+// Entry.yon, the lattice as an address space
+place Entry { }
+
+fun main(): number visits Output {
+  be kn   holds XTower.width(3)         // 196560, the whole address space
+  be m24n holds XTower.width(2)         // 12, the M24 symmetry classes
+  be cls  holds Leech.m24_orbit(1536)   // 1, this point's class, one of the twelve
+
+  be a holds Leech.embed(100247, 0)     // a genome, placed at its nearest point
+  be b holds Leech.embed(100247, 0)     // the same genome → the same point
+  be c holds Leech.embed(555, 0)        // a different genome → a different point
+  be s holds XSet.add(XSet.add(XSet.add(XSet.empty(), a), b), c)
+
+  be _1 holds Output.print(String.from_int(kn))
+  be _2 holds Output.print(String.from_int(m24n))
+  be _3 holds Output.print(String.from_int(cls))
+  be _4 holds Output.print(String.from_int(XSet.size(s)))   // 2, the dup is gone
+  return 0
+}
+```
+
+It prints `196560 12 1 2`. The first number is the size of the address space, the kissing number
+itself, not a constant someone typed but the count the build proves. The second is the twelve
+classes; the third is that the point `1536` lives in class `1`, one of those twelve. The last number
+is the one that rhymes with the chapter before it: two genomes placed on the lattice, the duplicate
+landing on the same point and so the same address, leaving two distinct places, not three. Content-
+addressing again, *same content, same slot*, but now the slot is a position in a geometry, perfect
+and collision-free, instead of a hash with a fallback.
+
+`Leech.embed` is the act of placing: it takes a value and sets it down at the nearest lattice point.
+It is also where the honesty lives. The lattice will faithfully tell you that two placed values are
+near, or share a class, or differ, but *near in the geometry the space brought*, not in any meaning
+you have not yet put there. The address is free and exact; the meaning of the address is earned, and
+earning it is the work of the chapters to come.
+
+There is a quiet seam worth marking before we leave. The 196,560 points are organised by the same
+mathematics, the Golay code, woven into the lattice, that the next chapter uses to keep a damaged
+genome whole. The space the clones live in and the armour their genomes wear are cut from one cloth.
+The fractal has been redrawn a plane deeper: content has an address by name *and* by place, and the
+two will not stay separate forever.

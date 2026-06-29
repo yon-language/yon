@@ -1,0 +1,12 @@
+place Entry { }
+
+// The Leech lattice answering "is this a legal point?" by computation, not a threshold.
+// 255 is a codeword (syndrome 0); 1 is not (syndrome != 0). Expected stdout: 0 then 1.
+// (Verified pattern: examples/stdlib_showcase.yon has syndrome(255)=0, syndrome(1)=1.)
+fun main(): number visits Output {
+  be a holds Leech.syndrome(255)
+  be b holds Leech.syndrome(1)
+  be _1 holds Output.print(String.from_int(a))
+  be _2 holds Output.print(String.from_int(b))
+  return 0
+}

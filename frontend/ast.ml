@@ -133,7 +133,7 @@ and reduction_decl = {
   r_target : string;
   r_handlers : handler_clause list;
   r_multi_shot : bool;
-  r_fold_name : string option;       (* P8 #86: nome fold CRDT inferita *)
+  r_fold_name : string option;       (* canonical fold name, declared explicitly via `fold "..."` (no longer inferred) *)
 }
 
 (* A generator of the Grothendieck topology J on the site C(W). Each way of

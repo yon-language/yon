@@ -1,0 +1,244 @@
+---
+id: benchmarks
+title: "Appendix D. Benchmarks"
+sidebar_position: 93
+slug: /book/benchmarks
+description: "Measured per-operation timings for Yon's data structures on Apple M1, with the full method: pytest-benchmark, baseline subtraction, machine and round count stated."
+---
+
+import ParallelScaling from '@site/src/components/ParallelScaling';
+import HeapGenerations from '@site/src/components/HeapGenerations';
+
+# Appendix D, Benchmarks
+
+Numbers before claims, and the method before the numbers. A timing without its method is
+not a benchmark, it is a number someone saw once.
+
+## How these were measured
+
+Each operation is two tiny Yon programs: one that does N of the operation and exits, and a
+baseline that does the same loop without the operation. The native binaries are timed by
+**pytest-benchmark** over several rounds; the per-operation cost is the per-iteration
+difference, `op_median / N_op` minus `base_median / N_base`, so process startup and loop
+overhead cancel. The programs live in `regression/bench_perf/` and are run with:
+
+```
+.venv/bin/python -m pytest regression/bench_perf/test_perf.py \
+    --benchmark-min-rounds=8 --benchmark-json=/tmp/perf.json
+python regression/bench_perf/summarize.py /tmp/perf.json
+```
+
+| | |
+|---|---|
+| **Machine** | Apple M1, Darwin arm64 |
+| **Build** | runtime compiled `-O2`, warm cache |
+| **Tool** | pytest-benchmark 5.2.3, median over at least 15 rounds |
+| **Per-op** | baseline-subtracted, `(op − base) / N` |
+| **Commit** | `1c44e79`, measured 2026-06-29 |
+
+A timing without a commit is not reproducible, since the code it measures moves; the commit
+and date above pin exactly what was run.
+
+Two rules, learned the hard way in this suite, keep the per-op numbers honest. The baseline must be
+an **exact twin**, everything the op does except the one operation, including any address generation,
+or it leaves that step's cost inside the result. And a **one-time cost must be separated from a
+per-operation cost**: an operation that touches a lazily-initialized structure (the mmgroup tables,
+the heap built on first use) pays that init once per process, and divided by a small N it masquerades
+as a huge per-op number while divided by a large N it vanishes. Anything timed at small N or in a
+fresh subprocess must warm the init away, or it reports a constant in disguise. The operations that
+hit either fault, the three arena ops and the two heap builders, are measured in-process with exact
+twins (`regression/bench/arena_ops`, `regression/bench/ds_ops`) rather than in the subprocess harness.
+
+:::note A different category from the rest of the book
+The book's pact is that every number is a Yon run re-derived on every build (the kissing
+number, for instance, is re-proved by `test_leech_theta` each time). A timing cannot do that:
+it depends on the machine and the run. So these figures are marked plainly, **measured on the
+machine above, not re-derived each build.** What *is* re-derived every build is their
+**correctness**: the benchmark programs are gated by `regression/test_benchmarks.py` and the
+guards in `regression/bench_perf/` (each loop must run and return the right shape), so a
+benchmark cannot silently rot into measuring nothing. The shapes below are reproducible; the
+exact nanoseconds are this machine's, and yours will differ in the constants, not the shapes.
+:::
+
+## Per-operation timings
+
+| Operation | Apple M1 |
+|---|---|
+| `String.equal` (1-char and 32,768-char) | below floor |
+| `MerkleTree.equal` (two equal trees) | below floor |
+| `VoyagerList.seal` (Golay encode) | below floor |
+| `Vec.push` | below floor |
+| `Vec.get` | ~1.4 ns |
+| `HashSet.contains` | ~6 ns |
+| `HashMap.get` | ~7 ns |
+| `List.head` | ~8 ns |
+| `VoyagerList.open` (Golay decode + correct) | ~10 ns |
+| `Arena.get` (lattice address) | ~41 ns |
+| `HashSet.add` | ~69 ns |
+| `List.cons` (hash-cons, flat in N) | ~70 ns |
+| `Arena.put` (certified insert, O(1) in fill) | ~80 ns |
+| `MerkleTree.node2` (repeated build) | ~138 ns |
+| `HashMap.set` (grows with the map) | ~130 to ~340 ns |
+| `Arena.same_orbit` (recomputes the M24 relation) | ~1.17 µs |
+
+The fastest operations sit **below this harness's floor**, and the suite says so rather than
+printing noise. Five of them, the two string and the Merkle equalities, the Golay seal, and the
+vector push, came out with a baseline-subtracted net at or below zero: the operation costs less than
+the run-to-run variance of its baseline, so subprocess timing cannot resolve it. These are
+sub-nanosecond. The in-process gate (`regression/bench/eq_constant`) is finer and does resolve
+`String.equal`, at about 1 ns, and the same 1 ns at 1 and at 32,768 characters. Equality is flat in
+the size of the value; it is just faster than this harness can see from outside.
+
+The heavier numbers tell their own truth, and the gaps between them are the proof. `Arena.get` is
+about 41 ns, the cost of finding a value at a lattice address. `Arena.same_orbit` is about 1.17 µs,
+and the roughly 1,130 ns between the two is the M24 orbit recomputation: the symmetry-group
+calculation, made visible. The heavy number is not slowness, it is the certificate doing real work,
+and the difference measures exactly how much. `List.cons` (~70 ns, flat) and `HashMap.set`
+(~130 to ~340 ns, growing with the map) each content-address their payload on the FNV heap, the
+hash-cons price that buys structural sharing, where `Vec.push` and `HashSet.add` store inline and skip
+it. (The three arena ops are measured in-process net of an exact `Leech.point` twin, since the arena
+is addressed by lattice points and the address generation must be subtracted, not left in.)
+
+`MerkleTree.node2` at ~138 ns is given with a caveat: it rebuilds one identical tree, so it is a
+deduplication hit, not a fresh insert.
+
+### cons and set, run through the same protocol
+
+In the subprocess harness `List.cons` read ~204 ns and `HashMap.set` ~525 ns. Both put on the
+content-addressed heap, but a cause read from the source is a hypothesis, not a measurement, so both
+went through the protocol of the `Arena.put` story below: read the code, measure with an exact twin
+at several N, publish per the outcome. They landed differently. `List.cons` is real but **flat at
+~70 ns**; the 204 was the one-time heap creation (`ds_ensure_init`) smearing over the small N a cons
+list allows, the Space-only baseline never paying it. `HashMap.set` is real and **grows with the
+map**, ~130 ns at 10k entries to ~340 ns by a million, because it content-addresses each `(key,value)`
+entry on the chaining heap and the probe resolves heaprefs across generations; `HashSet.add`, storing
+inline, stays flat at ~70 ns, which both proves the cause and names the optimization (a map that
+needs no sharing could store inline and stay flat). One corrected down to a clean number, one
+corrected into a curve. (`regression/bench/ds_ops`.)
+
+### Arena.put is O(1), and the number that said otherwise
+
+An earlier run put `Arena.put` at about 31 µs and made it look super-linear, 1 µs at N=2,000 against
+31 µs at N=10,000, and it was kept out of the book until it was understood. Two methodological faults
+were stacked, neither in Yon. The baseline was not an exact twin: the put loop calls `Leech.point` to
+build the address, the baseline did not, so the subtraction left that cost in. And the first
+`Leech.point`/`Arena.put` in a process pays a one-time mmgroup table init of about 200 ms (the first
+put measures 198 ms, every later put 105 ns); over a put loop of only N=10,000, all an arena of
+196,560 slots invites, that fixed cost smears to ~20 µs per op, which a non-twin baseline cannot
+remove. The runtime confirms put is O(1): `yon_arena_put_repr` (`runtime/yon_arena.c:60`) is a
+perfect-hash index plus four slot writes, no resize, no probing, the orbit sealed per point. Measured
+in-process net of an exact twin, with min-over-reps to drop the one-time init, it is flat in the fill:
+
+| N | 2,000 | 5,000 | 10,000 | 20,000 |
+|---|---|---|---|---|
+| `Arena.put` ns/op | 65 | 75 | 79 | 81 |
+
+About 80 ns, O(1), the same order as `Arena.get`. The 31 µs was a measurement artifact, named and
+removed, not a property of the store. (`regression/bench/arena_ops`.)
+
+## Equality is flat in the size of the value
+
+The headline of the content-addressed heap is that equality does not grow with the data. The
+`eq_constant` benchmark builds strings of 1, 1024, and 32,768 characters and times `String.equal`
+at each, net of the loop baseline:
+
+| String length | per-call |
+|---|---|
+| 1 | ~1.0 ns |
+| 1,024 | ~1.0 ns |
+| 32,768 | ~1.0 ns |
+
+A value 32,768 times larger costs the same to compare, because the comparison is one integer
+test on the heap address, not a walk over the bytes. This is the O(1) structural equality of the
+content-addressing chapter, measured. (`regression/bench/eq_constant`, gated: the lengths are
+asserted before any timing, so the benchmark cannot compare invalid handles.)
+
+## Set algebra is bit-parallel
+
+An `XSet` is a fixed 196,560-bit bitmap over the type-2 lattice points, so `intersect` and
+`union` are a machine-word AND or OR over about 3,072 words, **independent of how many elements
+the sets hold**. A `HashSet` must iterate, so its cost is O(N). The interesting number is not a
+single ratio but how the ratio behaves as the sets grow:
+
+| Set size N | `XSet.intersect` | `HashSet.intersect` | XSet advantage |
+|---|---|---|---|
+| 100 | 4.5 µs | 16 µs | 4× |
+| 1,000 | 4.9 µs | 43 µs | 9× |
+| 10,000 | 4.5 µs | 768 µs | 169× |
+| 100,000 | 4.6 µs | 47.7 ms | **10,454×** |
+
+`union` tells the same story, from 6× at N=100 to **33,776×** at N=100,000, where the HashSet union
+reaches about 168 ms against the same flat XSet cost. The XSet cost is **flat** across three orders
+of magnitude of set size, 4.5 to 5.0 µs throughout; the HashSet cost grows with N. So the advantage
+is not a fixed multiplier that happens to be large, it is asymptotic: the gap widens without bound as
+the sets grow, because one side is O(1) in the cardinality and the other is O(N). At small N the
+fixed bitmap is overhead and the lattice barely wins; it earns its keep as the sets grow, which is
+exactly when a constant-time set operation is worth most. That is the shape of the lattice's set
+algebra, and it is the reason the structures live on the lattice at all. (`regression/bench/xset_scaling`,
+median of nine runs. The XSet pool is a bounded prototype allocator, 256 sets, so the allocating ops
+are timed once over a small batch; the bitmap representation has no such bound.)
+
+## Parallelism is multicore, for free
+
+`spawn in N parallel { ... }` forks N isolated process replicas over a shared-memory collection
+stream; each runs the body, `promote`s its result, and the parent folds. The replicas are real OS
+processes, so they run on real cores at once. Each replica does the same fixed CPU-bound task; the
+wall-clock as N grows, on the 8-core M1 (4 performance, 4 efficiency):
+
+| Replicas N | wall time | total work | speedup |
+|---|---|---|---|
+| 1 | 255 ms | 1x | 1.0x |
+| 2 | 263 ms | 2x | 1.9x |
+| 4 | 266 ms | 4x | 3.8x |
+| 8 | 283 ms | 8x | **7.2x** |
+| 16 | 349 ms | 16x | 11.7x |
+
+The wall-clock is nearly flat from one replica to eight: eight times the total work in about 1.1
+times the time, a 7.2-fold speedup on eight cores, the speedup tracking N until it meets the core
+count. Past eight, replicas oversubscribe the cores and the wall-clock rises. The shape, speedup
+rising with N up to the core count then bending, is the property; the milliseconds are this machine's.
+(`regression/book/jp/bench/spawn_scaling`, gated by `regression/test_spawn_scaling.py`, which skips
+where fork and shared memory are unavailable.)
+
+<ParallelScaling />
+
+The same shared memory is the wire between Spaces. Two separate processes, a producer pushing
+messages onto a shared-memory `Wire` and a consumer draining them, move a message across the process
+boundary in about **1.1 µs**, roughly **900,000 messages a second** end to end (the consumer times
+itself draining 200,000 messages). That is a real inter-process hop, not a function call, and it is
+what lets one Space talk to another without a socket or a serializer in the path.
+(`regression/book/jp/bench/wire_throughput`, gated by `regression/test_wire_throughput.py`,
+IPC-guarded like the spawn bench. Method note: the in-process stream is a bounded prototype, a fixed
+64-slot ring that silently drops past capacity, so it cannot be timed at high volume; the cross-process
+wire, with a real buffer and blocking back-pressure, is the honest measurement.)
+
+## Content addressing, in time and in memory
+
+The content-addressed (FNV) heap holds one generation of slots; distinct content past a generation
+chains into a successor, so interning is unbounded. The property shows up in time first. Interning
+strings (`String.from_int(k)`) costs, per item:
+
+| | ns / intern |
+|---|---|
+| distinct content, 100k (one generation) | ~234 |
+| distinct content, 1M (chains ~5 generations) | ~290 |
+| identical content, 1M (dedup to one slot) | ~98 |
+
+A million distinct interns chain the heap about five times and still cost ~290 ns each, only modestly
+above one generation's 234 ns: expansion is amortized O(1), not a cliff. Identical content dedups to
+one slot at ~98 ns. (`regression/bench/heap_expand`, gated.)
+
+And the same property is memory. Interning two million strings, by the operating system's resident
+set size (`/usr/bin/time -l`):
+
+| Two million interns of… | Resident memory |
+|---|---|
+| the **same** content | ~8 MB (one slot, deduplicated) |
+| **distinct** content | ~175 MB (about 87 bytes each) |
+
+Identical content costs one slot however many times it is written; distinct content grows the
+heap linearly, with no garbage collector and no collection pause. Beyond a generation's 196,560
+slots the heap chains into a successor, so there is no fixed ceiling, only real memory, mapped a
+generation at a time.
+
+<HeapGenerations />

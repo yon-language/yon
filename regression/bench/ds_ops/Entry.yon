@@ -1,0 +1,90 @@
+place Entry { }
+// BENCHMARK — heap-backed structure builders, net of an EXACT-TWIN (Space-threading)
+// baseline, in-process, min-over-reps. The subprocess harness mismeasures these: every op
+// that puts on the content-addressed heap pays a one-time g_yon_heap creation
+// (ds_ensure_init -> yon_xheap_create) the Space-only baselines never pay; at the small N
+// a cons list allows (~196,560, one generation) that one-time cost smears into the per-op
+// (it inflated cons to ~204 ns in subprocess timing). min-over-reps drops the init; the
+// exact twin removes the loop/threading; what remains is the op.
+//
+// cons content-addresses one cell each (flat in N). set content-addresses each
+// (key,value) entry on the heap AND probes it back across heap generations, so it GROWS
+// with the map (10k vs 100k here; ~340 ns by 1M, see the artifact). add stores inline in
+// the directory (no heap), the flat contrast proving set's growth is the content-addressed
+// entry path, not the directory. N capped at 100k to bound the non-reclaiming heap.
+// Stdout schema (5 ints, ns/op): cons@10k cons@100k set@10k set@100k add@100k
+fun mn(a: number, b: number): number { return if a < b then a else b }
+fun warm(): number visits Output {
+  be l holds Space.make(List.empty(0))
+  be _a holds Space.set(l, List.cons(Space.get(l), 1))
+  be m holds Space.make(HashMap.empty())
+  be _b holds Space.set(m, HashMap.set(Space.get(m), 1, 1))
+  be s holds Space.make(HashSet.empty())
+  be _c holds Space.set(s, HashSet.add(Space.get(s), 1))
+  return 0
+}
+fun twin(n: number): number visits Output {
+  be acc holds Space.make(0)
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(acc, Space.get(acc) + k)
+              be _2 holds Space.set(i, k + 1) }
+  return Time.now_ns(0) - t0
+}
+fun cons_loop(n: number): number visits Output {
+  be l holds Space.make(List.empty(0))
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(l, List.cons(Space.get(l), k))
+              be _2 holds Space.set(i, k + 1) }
+  return Time.now_ns(0) - t0
+}
+fun set_loop(n: number): number visits Output {
+  be m holds Space.make(HashMap.empty())
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(m, HashMap.set(Space.get(m), k, k))
+              be _2 holds Space.set(i, k + 1) }
+  return Time.now_ns(0) - t0
+}
+fun add_loop(n: number): number visits Output {
+  be s holds Space.make(HashSet.empty())
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(s, HashSet.add(Space.get(s), k))
+              be _2 holds Space.set(i, k + 1) }
+  return Time.now_ns(0) - t0
+}
+fun mtwin(n: number): number visits Output {
+  be x holds Space.make(twin(n))
+  iter 2 do { be _ holds Space.set(x, mn(Space.get(x), twin(n))) }
+  return Space.get(x)
+}
+fun min_cons(n: number): number visits Output {
+  be x holds Space.make(cons_loop(n))
+  iter 2 do { be _ holds Space.set(x, mn(Space.get(x), cons_loop(n))) }
+  return (Space.get(x) - mtwin(n)) / n
+}
+fun min_set(n: number): number visits Output {
+  be x holds Space.make(set_loop(n))
+  iter 2 do { be _ holds Space.set(x, mn(Space.get(x), set_loop(n))) }
+  return (Space.get(x) - mtwin(n)) / n
+}
+fun min_add(n: number): number visits Output {
+  be x holds Space.make(add_loop(n))
+  iter 2 do { be _ holds Space.set(x, mn(Space.get(x), add_loop(n))) }
+  return (Space.get(x) - mtwin(n)) / n
+}
+fun main(): number visits Output {
+  be _w holds warm()
+  be _1 holds Output.print(String.from_int(min_cons(10000)))
+  be _2 holds Output.print(String.from_int(min_cons(100000)))
+  be _3 holds Output.print(String.from_int(min_set(10000)))
+  be _4 holds Output.print(String.from_int(min_set(100000)))
+  be _5 holds Output.print(String.from_int(min_add(100000)))
+  return 0
+}

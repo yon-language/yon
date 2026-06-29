@@ -1,0 +1,6 @@
+[package]
+name = "uc_hashmap"
+[world.Park]
+objects = ["Dinosaur"]
+[runtime]
+backend = "memory"

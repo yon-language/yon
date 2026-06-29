@@ -383,6 +383,9 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Leech__co0_orbit_size", (["f64"; "f64"], "f64");
   "Leech__transport",       (["f64"; "f64"], "f64");
   "Leech__transport_apply", (["f64"; "f64"], "f64");
+  "Leech__embed",          (["f64"; "f64"], "f64");
+  "Leech__point",          (["f64"], "f64");
+  "Leech__pair_subtype",   (["f64"; "f64"], "f64");
   (* Capabilities and schema-version tracking. *)
   "Cap__grant",   (["f64"], "f64");
   "Cap__check",   (["f64"], "f64");
@@ -490,6 +493,9 @@ let stdlib_registry : (string * (string list * string)) list = [
   "VoyagerList__get",        (["f64"; "f64"], "f64");
   "VoyagerList__size",       (["f64"], "f64");
   "VoyagerList__corrupt_at", (["f64"; "f64"; "f64"], "f64");
+  "VoyagerList__seal",       (["f64"], "f64");
+  "VoyagerList__open",       (["f64"], "f64");
+  "VoyagerList__corrupt",    (["f64"; "f64"], "f64");
   "VoyagerList__to_stream",  (["f64"], "f64");
   "Arena__empty",        ([], "f64");
   "Arena__put",          (["f64"; "f64"; "f64"], "f64");
@@ -826,6 +832,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.Var "XRelSet__empty" -> "f64"
   | C.Var "XRelMap__empty" -> "f64"
   | C.Var "XSimplex__empty" -> "f64"
+  | C.Var "XTower__depth" -> "f64"
   | C.Var "VoyagerList__empty" -> "f64"
   | C.Var "Arena__empty" -> "f64"
   | C.Var "__set_empty" -> "f64"
@@ -917,11 +924,15 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "XRelMap__size", _) -> "f64"
   | C.App (C.App (C.Var "XSimplex__of2", _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "XSimplex__triangle", _), _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "XSimplex__triangle_fine", _), _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "XSimplex__omega", _), _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "XSimplex__add", _), _), _) -> "f64"
   | C.App (C.App (C.Var "XSimplex__count", _), _) -> "f64"
   | C.App (C.Var "XSimplex__dominant", _) -> "f64"
   | C.App (C.Var "XSimplex__size", _) -> "f64"
+  | C.App (C.App (C.Var "XTower__class", _), _) -> "f64"
+  | C.App (C.App (C.App (C.Var "XTower__same_branch", _), _), _) -> "f64"
+  | C.App (C.Var "XTower__width", _) -> "f64"
   | C.App (C.App (C.App (C.Var "__merkle_node2", _), _), _) -> "f64"
   | C.App (C.App (C.Var op, _), _) when
       (op = "__map_get" || op = "__map_contains"
@@ -962,6 +973,9 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.App (C.Var "VoyagerList__get", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__size", _) -> "f64"
   | C.App (C.App (C.App (C.Var "VoyagerList__corrupt_at", _), _), _) -> "f64"
+  | C.App (C.Var "VoyagerList__seal", _) -> "f64"
+  | C.App (C.Var "VoyagerList__open", _) -> "f64"
+  | C.App (C.App (C.Var "VoyagerList__corrupt", _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "Arena__put", _), _), _) -> "f64"
   | C.App (C.App (C.Var "Arena__get", _), _) -> "f64"
   | C.App (C.App (C.Var "Arena__occupied", _), _) -> "f64"
@@ -1518,6 +1532,10 @@ let rec emit_term (e : emitter)
   | C.Var "XSimplex__empty" ->
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_xsimplex_empty() : () -> f64" v);
+      (v, "f64")
+  | C.Var "XTower__depth" ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_xtower_depth() : () -> f64" v);
       (v, "f64")
   | C.Var "VoyagerList__empty" ->
       let v = fresh_ssa e in
@@ -2135,6 +2153,14 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xsimplex_triangle(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
+  | C.App (C.App (C.App (C.Var "XSimplex__triangle_fine", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xsimplex_triangle_fine(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
   | C.App (C.App (C.App (C.Var "XSimplex__omega", arg_a), arg_b), arg_c) ->
       let (va, _) = emit_term e env funcs arg_a in
       let (vb, _) = emit_term e env funcs arg_b in
@@ -2169,6 +2195,27 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xsimplex_size(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.App (C.Var "XTower__class", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xtower_class(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.App (C.Var "XTower__same_branch", arg_a), arg_b), arg_c) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let (vc, _) = emit_term e env funcs arg_c in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xtower_same_branch(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+      (v, "f64")
+  | C.App (C.Var "XTower__width", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_xtower_width(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.App (C.Var "XSet__union", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
@@ -2620,6 +2667,26 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_leech_transport_apply(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.App (C.Var "Leech__embed", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_leech_embed_bits(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.Var "Leech__point", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_leech_point(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.App (C.Var "Leech__pair_subtype", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_leech_pair_subtype(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.Var "Leech__co0_step", arg) ->
       let (va, _) = emit_term e env funcs arg in
@@ -3286,6 +3353,25 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_voyagerlist_size(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.Var "VoyagerList__seal", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_voyagerlist_seal(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.Var "VoyagerList__open", arg) ->
+      let (va, _) = emit_term e env funcs arg in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_voyagerlist_open(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  | C.App (C.App (C.Var "VoyagerList__corrupt", arg_a), arg_b) ->
+      let (va, _) = emit_term e env funcs arg_a in
+      let (vb, _) = emit_term e env funcs arg_b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_voyagerlist_corrupt(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.App (C.Var "VoyagerList__corrupt_at", arg_a), arg_b), arg_c) ->
       let (va, _) = emit_term e env funcs arg_a in
@@ -5899,11 +5985,18 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_xsimplex_empty() -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_pair(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_triangle(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xsimplex_triangle_fine(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_omega(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_add(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_count(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_dominant(f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_size(f64) -> f64";
+  (* XTower — the nested stabilizer tower (Co0 superset N superset M24 superset id).
+     Defs in yon_rt.c: yon_rt_xtower_class/same_branch/width/depth. *)
+  emit_line e "func.func private @yon_rt_xtower_class(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xtower_same_branch(f64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xtower_width(f64) -> f64";
+  emit_line e "func.func private @yon_rt_xtower_depth() -> f64";
   (* to_stream conversions *)
   emit_line e "func.func private @yon_rt_map_to_list(f64) -> f64";
   emit_line e "func.func private @yon_rt_set_to_list(f64) -> f64";
@@ -5934,6 +6027,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_leech_transport_apply(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_leech_co0_canonical(f64) -> f64";
   emit_line e "func.func private @yon_rt_leech_co0_orbit_size(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_leech_embed_bits(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_leech_point(f64) -> f64";
+  emit_line e "func.func private @yon_rt_leech_pair_subtype(f64, f64) -> f64";
   (* Capability + schema evolution. *)
   emit_line e "func.func private @yon_rt_cap_grant(f64) -> f64";
   emit_line e "func.func private @yon_rt_cap_check(f64) -> f64";

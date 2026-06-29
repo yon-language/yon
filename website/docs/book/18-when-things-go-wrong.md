@@ -14,16 +14,14 @@ them *values or declarations*.
 ## Errors are places
 
 An `error` declaration is a place whose meaning is failure. Errors form
-their own sub-object hierarchy with `extends` (chapter 4's monomorphisms),
+their own sub-object hierarchy with `subcontains` (chapter 4's monomorphisms),
 and a place can declare its error morphism with `on error`:
 
 ```yon
-world Db { Code is X }
+error Error { message number }
+error QueryError subcontains Error { message number  sqlstate number }
 
-error Error in Db { message number }
-error QueryError in Db extends Error { message number  sqlstate number }
-
-place QueryInsert in Db on error QueryError { sql number }
+place QueryInsert on error QueryError { sql number }
 
 fun handle(e: Error): number { return e.message }
 fun on_query_fail(q: QueryError): number {
@@ -31,7 +29,7 @@ fun on_query_fail(q: QueryError): number {
 }
 
 fun main(): number {
-  be q holds new QueryError { message 40 sqlstate 23505 }
+  be q holds new QueryError { message 40  sqlstate 23505 }
   return on_query_fail(q) + 2    // 42
 }
 ```
@@ -68,7 +66,7 @@ answer or the operation is not exported
 ## On the horizon
 
 The third shape is the most Yon of all and is openly *in progress*: the
-Heyting unwrapping. Ω already has the three states (chapter 7); the plan is
+Heyting unwrapping. Ω already has the three states (chapter 8); the plan is
 a result discipline where an operation's outcome is **Provato / Assurdo /
 Indeterminato**, proven, absurd, undecided, so "it failed" and "it has
 not decided yet" stop being the same thing. The trit machinery

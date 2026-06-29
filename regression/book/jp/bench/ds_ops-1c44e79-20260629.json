@@ -1,0 +1,23 @@
+{
+  "schema": [
+    "cons@10k",
+    "cons@100k",
+    "set@10k",
+    "set@100k",
+    "add@100k"
+  ],
+  "median_ns": [
+    50,
+    71,
+    130,
+    237,
+    79
+  ],
+  "set_at_1M_ns_exploratory": 335,
+  "runs": 3,
+  "method": "in-process Time.now_ns, exact Space-threading twin, min-over-reps, warm",
+  "finding": "cons ~70 ns flat (subprocess 204 was one-time-init smear); set grows with the map (content-addressed entry on chaining heap + cross-generation probe); HashSet.add inline stays flat",
+  "machine": "Apple M1",
+  "commit": "1c44e79",
+  "date": "2026-06-29"
+}

@@ -12,7 +12,10 @@ const yonCodeTheme = {
     { types: ['string', 'char', 'attr-value', 'regex', 'inserted'], style: { color: '#9fe3b8' } },
     { types: ['number', 'boolean', 'constant', 'symbol'], style: { color: '#f0bf72' } },
     { types: ['function', 'function-variable', 'method'], style: { color: '#c9c0ff' } },
-    { types: ['class-name', 'maybe-class-name', 'namespace', 'type', 'tag'], style: { color: '#8fb6ff' } },
+    {
+      types: ['class-name', 'maybe-class-name', 'namespace', 'type', 'tag'],
+      style: { color: '#8fb6ff' },
+    },
     { types: ['property', 'attr-name', 'selector'], style: { color: '#c9c0ff' } },
     { types: ['variable', 'parameter'], style: { color: '#EBE6FF' } },
     { types: ['deleted'], style: { color: '#e08aa0' } },
@@ -36,7 +39,7 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
-          routeBasePath: '/',          // docs-only mode; the home "/" is src/pages/index.js
+          routeBasePath: '/', // docs-only mode; the home "/" is src/pages/index.js
           sidebarPath: './sidebars.js',
         },
         blog: false,
@@ -45,12 +48,15 @@ const config = {
     ],
   ],
   themes: [
-    ["@easyops-cn/docusaurus-search-local", {
-      hashed: true,
-      indexBlog: false,
-      docsRouteBasePath: "/",
-      highlightSearchTermsOnTargetPage: true,
-    }],
+    [
+      '@easyops-cn/docusaurus-search-local',
+      {
+        hashed: true,
+        indexBlog: false,
+        docsRouteBasePath: '/',
+        highlightSearchTermsOnTargetPage: true,
+      },
+    ],
   ],
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
@@ -63,8 +69,12 @@ const config = {
       },
       image: 'img/social-card.png',
       metadata: [
-        {name: 'keywords', content: 'topos programming language, category theory, MLIR, LLVM, content-addressed memory, Leech lattice, HoTT'},
-        {name: 'twitter:card', content: 'summary_large_image'},
+        {
+          name: 'keywords',
+          content:
+            'topos programming language, category theory, MLIR, LLVM, content-addressed memory, Leech lattice, HoTT',
+        },
+        { name: 'twitter:card', content: 'summary_large_image' },
       ],
       colorMode: {
         defaultMode: 'dark',
@@ -98,7 +108,10 @@ const config = {
             items: [
               { label: 'GitHub', href: 'https://github.com/yon-language/yon' },
               { label: 'r/YonLang', href: 'https://reddit.com/r/YonLang' },
-              { label: 'LLVM Discourse', href: 'https://discourse.llvm.org/t/yon-a-new-research-language-compiling-to-native-code-via-mlir-and-llvm/90994' },
+              {
+                label: 'LLVM Discourse',
+                href: 'https://discourse.llvm.org/t/yon-a-new-research-language-compiling-to-native-code-via-mlir-and-llvm/90994',
+              },
             ],
           },
         ],

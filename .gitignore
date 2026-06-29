@@ -21,3 +21,12 @@ __pycache__/
 
 # Local agent handoff state and scratch orchestration files.
 swarm/
+
+# Build artifacts and large local references (kept on disk, never committed).
+*.out
+a.out
+*.epub
+
+# yonc --emit intermediate dumps (written to CWD)
+*.topos.mlir
+*.standard.mlir

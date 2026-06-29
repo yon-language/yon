@@ -1,0 +1,6 @@
+[package]
+name = "uc_vec"
+[world.Park]
+objects = ["Dinosaur"]
+[runtime]
+backend = "memory"

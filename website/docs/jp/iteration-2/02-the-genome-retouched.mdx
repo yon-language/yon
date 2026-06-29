@@ -1,0 +1,130 @@
+---
+title: "The Genome, Retouched"
+sidebar_label: "2.2 · The Genome, Retouched"
+sidebar_position: 2
+---
+
+import GenomeGolay from '@site/src/components/GenomeGolay';
+import Mutation from '@site/src/components/Mutation';
+
+:::note DRAFT (prose), code ✓
+The `.yon` below is **native-gated** (`regression/book/jp/04_genome_golay`, `toolchain/yonc`:
+stdout `1445`). Golay (24,12,8) correction is also proven in `runtime/test_unit_voyagerlist.c`.
+The GENOME and MUTATION players are embedded below.
+Source: `manuscript/chapters/04-the-genome-retouched.md`.
+:::
+
+## The scene
+
+Wu shows them the lab where the dinosaurs are made. The DNA comes from insects trapped in
+amber, and it comes in fragments, with gaps where time ate the strands. To make a whole
+animal you must fill the gaps, and Wu fills them with what he has: pieces of frog, of bird,
+of reptile, best guesses spliced into the holes. He is proud of it. The animals carry
+version numbers, 4.1, 4.3, 4.4, like software, because each time the lab finds a bad join
+it ships a new cut. Grant asks what is real in an animal assembled this way, and Wu has no
+answer, because the question has none. The gaps were filled to look right, not to be right.
+And one of those frog-shaped guesses, the book will later learn, is why the animals that
+cannot breed are breeding.
+
+## The idea
+
+There are two ways to face a damaged message, and the park is the story of choosing the
+wrong one.
+
+**On the philosophical plane.** Integrity can be a property of the data itself, not a guard
+bolted onto it. A checksum tells you something broke. A code lets you put it back, because
+the legal messages are spread far enough apart that a damaged one still has exactly one
+nearest neighbour. Correction stops being a repair and becomes a decoding: you do not guess
+what was meant, you compute it.
+
+**In the language.** Yon's `VoyagerList` is such a code, Golay (24,12,8). A number sealed
+into it is carried as 24 bits, of which 12 are data, and the legal codewords are at least 8
+apart. Flip one bit, or two, or three, and the result is still closer to the original than
+to any other codeword, so opening it returns the number whole. The corruption is not
+repaired by hand; it is decoded away.
+
+**On the silicon.** This is not a toy code. Golay (24,12,8) is the code Voyager carried, the
+one that sent photographs of Jupiter and Saturn back across the solar system through
+deep-space noise that would have shredded a plain signal. The same structure that recovered
+a picture of a moon from a billion kilometres of static recovers a gene from a flipped bit.
+
+## The code
+
+Seal a gene, corrupt two of its bits, and read it back. It comes back whole.
+
+```yon
+fun main(): number visits Output {
+  be genome holds VoyagerList.empty()
+  be g1 holds VoyagerList.append(genome, 1445)      // a gene, sealed as a Golay codeword
+  be damaged holds VoyagerList.corrupt_at(g1, 0, 2)  // two bits flipped, as in a bad join
+  be read holds VoyagerList.get(damaged, 0)          // opening is decoding
+  be _ holds Output.print(String.from_int(read))     // 1445, recovered
+  return 0
+}
+```
+
+`append` seals the number into a codeword. `corrupt_at` flips two of its bits, the kind of
+damage a bad join leaves behind. `get` opens the codeword, and opening is decoding: Golay's
+distance of 8 leaves room for up to three errors, so two flipped bits still decode to the
+gene that was sealed. The printed line is `1445`, the number we put in, returned through the
+damage.
+
+<GenomeGolay />
+
+## The short leash
+
+This is an analogy, and it has a limit the book will not cross. Yon does not repair DNA, and
+it does not claim to. What it shows is the difference between InGen's kind of correction and
+a code's. InGen filled the gaps with guesses chosen to look like an animal, and a guess that
+looks right can be wrong in a way nothing detects until it breeds. A code does not guess. It
+decodes to the one message its structure allows, or, past its limit, it fails rather than
+inventing. The lesson is the shape of the two, not a promise that Golay would have saved the
+park. The frog DNA was not noise on a good signal; it was a wrong signal sent on purpose, and
+no decoder corrects that. What Yon offers is the other path: when integrity is built into the
+data as structure, recovery is a computation, not a hope.
+
+## The mutation
+
+I said a code fails rather than invents. That is *almost* true, and the gap inside *almost* is
+where the park gets loose.
+
+Seal `1445` and damage it one bit at a time. For a while the story holds: one flip, two, three,
+and `open` returns `1445`, certain. Push to four and the decoder does the honest thing: it
+raises a flag, a refusal, *this is too far gone to call*. At six, the same refusal. But at
+**five**, something quieter happens. The damaged word is no longer nearest to `1445`; it has
+drifted closer to a *different* legal codeword, and the decoder, which asks only *which lawful
+word is nearest*, answers truthfully and wrong. It returns `2361`, another gene, whole, valid,
+and flagless.
+
+```yon
+be cw   holds VoyagerList.seal(1445)
+be safe holds VoyagerList.open(VoyagerList.corrupt(cw, 3))   // -> 1445, whole (inside the radius)
+be flag holds VoyagerList.open(VoyagerList.corrupt(cw, 4))   // -> 2147483647, a refuse-to-guess sentinel
+be mut  holds VoyagerList.open(VoyagerList.corrupt(cw, 5))   // -> 2361, a different gene, silently
+```
+
+<Mutation />
+
+That `2361` is the mutation that gets into the park. Not a torn signal the system would have
+caught, a clean, legal gene the system *prefers*, because correction's whole job is to snap the
+damaged toward the nearest lawful thing, and past the radius the nearest lawful thing is simply
+someone else. I trusted the correction. It was working exactly as designed; it was the design
+that had an edge I had not walked to. "Life finds a way" is no magic here. It is a decoder doing
+its job one bit too far.
+
+:::note future work
+This traces one gene at one ladder of distances. The full picture, every corruption distance,
+across the whole space of genes, splitting the cases into *corrects* / *refuses* / *silently
+mutates*, is a pass we have not made yet. What is gated here is that the silent case **exists**
+(`regression/book/jp/11_mutation`, `k = 5 → 2361`); charting all of it is its own chapter.
+:::
+
+## What holds
+
+Golay (24,12,8) is verified. `runtime/test_unit_voyagerlist.c` seals every 12-bit value and
+opens it back exactly, then corrupts one and two bits of a codeword and confirms it still
+decodes to the original (distance 8 corrects up to three errors). The program above is built
+from the same pieces; build it with `toolchain/yonc` and it prints `1445`, the gene returned
+through two flipped bits. And `regression/book/jp/11_mutation` runs one gene through one to six
+flips, `1445, 1445, 1445`, a refusal flag, `2361`, a refusal flag, so the silent `2361` at
+five is not a story device but a gated fact.

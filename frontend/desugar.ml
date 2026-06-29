@@ -1327,13 +1327,13 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
 and desugar_stmt (s : S.stmt) : C.term =
   match s with
   | S.SLet (_name, e, _) ->
-      (* "let x holds e; rest" — but we handle this in the sequence
+      (* "be x holds e; rest" — but we handle this in the sequence
          translation; here we just produce the value of e. The binding
          is established by the surrounding lambda. *)
       desugar_expr e
   | S.SAssignHolds (_lv, e, _) -> desugar_expr e
   | S.SAssignBecomes (lv, e, _) ->
-      (* "x.f becomes new_value" -> Space.update_here(id_of(x), x with f := new_value) *)
+      (* "x.f = new_value" -> Space.update_here(id_of(x), x with f := new_value) *)
       let new_val = desugar_expr e in
       let target = match lv with
         | S.LVar x -> C.Var x
@@ -1637,9 +1637,9 @@ let desugar_world_decl (wd : S.world_decl) : C.world_decl =
  *
  * for every / in sequence over / repeat at most / forever are lowered
  * STRUCTURALLY onto the verified primitives: while, iter and Space cells
- * (the one mutation mechanism of 1.0). `x becomes e` promotes the binding
+ * (the one mutation mechanism of 1.0). `x = e` promotes the binding
  * of x to a Space cell: `be x holds e0` -> `be x holds Space.make(e0)`,
- * every read of x -> `Space.get(x)`, every becomes -> `Space.set(x, e)`.
+ * every read of x -> `Space.get(x)`, every `x = e` -> `Space.set(x, e)`.
  * The promotion is uniform per function (every binding of a becomes-target
  * name allocates a cell), which makes it shadowing-safe; lambda parameters
  * shadow as usual and are excluded inside their bodies.
@@ -1652,9 +1652,68 @@ let v1_fresh p = incr v1_ctr; Printf.sprintf "__v1_%s_%d" p !v1_ctr
 let v1_call name args = S.ECall (name, args, S.dummy_loc)
 let v1_num n = S.ELit (S.LitNumber n, S.dummy_loc)
 
+(* A `s.fold(...)` on a produce/emit STREAM (marked in stream_method_table by its call
+   site) lowers to STATEMENTS (a Stream__recv drain into an accumulator cell), so it only
+   works as a bare statement or the direct RHS of `be x holds` / `return` (the cases in
+   v1_lower_stmt). In any NESTED position — an operand of `+`, a call argument — it would
+   fall through to the Seq/list fold and read the stream handle as a list, yielding 0. This
+   pass lifts each such nested fold to `be __sf holds s.fold(...)` (which then hits the
+   correct statement lowering) and leaves a variable in its place. Only the common
+   transparent wrappers are walked; an unwalked constructor keeps today's behaviour. *)
+let is_stream_fold_call = function
+  | S.ECall ("fold", [S.EVar _; _; _], eloc) ->
+      Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col)
+  | _ -> false
+
+(* v1_hoist_operand: a bare stream fold in a sub-position IS hoisted to a fresh binding.
+   v1_hoist_expr: recurse into transparent wrappers; a bare fold at the TOP is left in
+   place for v1_lower_stmt's direct `return` / `be holds` cases to lower. *)
+let rec v1_hoist_operand (e : S.expr) : S.stmt list * S.expr =
+  if is_stream_fold_call e then
+    let t = v1_fresh "sf" in
+    let l = S.dummy_loc in
+    ([S.SLet (t, e, l)], S.EVar (t, l))
+  else v1_hoist_expr e
+and v1_hoist_expr (e : S.expr) : S.stmt list * S.expr =
+  match e with
+  | S.EBinop (op, a, b, l) ->
+      let (pa, a') = v1_hoist_operand a in
+      let (pb, b') = v1_hoist_operand b in
+      (pa @ pb, S.EBinop (op, a', b', l))
+  | S.EParen (a, l) -> let (p, a') = v1_hoist_expr a in (p, S.EParen (a', l))
+  | S.ENot (a, l) -> let (p, a') = v1_hoist_operand a in (p, S.ENot (a', l))
+  | S.EIfThenElse (c, t, f, l) ->
+      let (pc, c') = v1_hoist_operand c in
+      let (pt, t') = v1_hoist_operand t in
+      let (pf, f') = v1_hoist_operand f in
+      (pc @ pt @ pf, S.EIfThenElse (c', t', f', l))
+  | S.ECall (f, args, l) when not (is_stream_fold_call e) ->
+      let (ps, args') = List.split (List.map v1_hoist_operand args) in
+      (List.concat ps, S.ECall (f, args', l))
+  | S.EApp (h, args, l) ->
+      let (ps, args') = List.split (List.map v1_hoist_operand args) in
+      (List.concat ps, S.EApp (h, args', l))
+  | _ -> ([], e)
+
+(* Lift nested stream folds out of a statement, returning the prelude bindings plus the
+   rewritten statement; None when there is nothing nested to hoist (a bare top-level fold
+   is left for the direct cases). *)
+let v1_try_hoist_stmt (st : S.stmt) : S.stmt list option =
+  let wrap pre rebuilt = if pre = [] then None else Some (pre @ [rebuilt]) in
+  match st with
+  | S.SReturn (e, l) -> let (pre, e') = v1_hoist_expr e in wrap pre (S.SReturn (e', l))
+  | S.SLet (x, e, l) -> let (pre, e') = v1_hoist_expr e in wrap pre (S.SLet (x, e', l))
+  | S.SCall (name, args, l) when name <> "fold" && name <> "for_every" ->
+      let (ps, args') = List.split (List.map v1_hoist_operand args) in
+      wrap (List.concat ps) (S.SCall (name, args', l))
+  | _ -> None
+
 (* ---- pass 1: structural loop lowering (stmt -> stmt list) ---- *)
 let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
   let body ss = List.concat_map v1_lower_stmt ss in
+  match v1_try_hoist_stmt st with
+  | Some stmts -> List.concat_map v1_lower_stmt stmts
+  | None ->
   match st with
   | S.SForever (b, loc) ->
       [S.SWhile (S.ELit (S.LitBool true, loc), body b, loc)]
@@ -1700,6 +1759,15 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
     when Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
       let (stmts, result) = v1_lower_stream_fold recv init f loc in
       stmts @ [S.SLet (x, result, loc)]
+  | S.SReturn (S.ECall ("fold", [S.EVar (recv, _); init; f], eloc), loc)
+    when Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
+      (* `return s.fold(...)`: a stream fold drains via Stream__recv into an
+         accumulator cell, which needs statement context. Hoist the drain (the
+         same lowering as `be x holds s.fold(...)`) and return its result.
+         Without this the fold fell through to the Seq/list fold, which read the
+         stream handle as a list and yielded 0. *)
+      let (stmts, result) = v1_lower_stream_fold recv init f loc in
+      stmts @ [S.SReturn (result, loc)]
   | S.SLet (sub, S.ECall ("awaits", [S.EVar _; S.EVar _], eloc), loc)
     when Hashtbl.mem S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) ->
       (* be sub holds w.awaits(producer): create the shm channel
@@ -1929,7 +1997,7 @@ and v1_cell_stmt cells st =
   | S.SAssignBecomes (S.LVar x, e, loc) when V1SS.mem x cells ->
       S.SCall ("Space__set", [S.EVar (x, S.dummy_loc); re e], loc)
   | S.SAssignBecomes (S.LField _, _, _) ->
-      failwith ("[desugar v1.0] `x.f becomes e` is not implemented: place " ^
+      failwith ("[desugar v1.0] `x.f = e` is not implemented: place " ^
                 "sections are immutable; mutate through Space cells.")
   | S.SAssignBecomes (lv, e, loc) -> S.SAssignBecomes (lv, re e, loc)
   | S.SAssignHolds (lv, e, loc) -> S.SAssignHolds (lv, re e, loc)
@@ -2247,7 +2315,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
        *                                                       per on_morphism
        *
        * The short alias `LiftEU` lets user code write
-       *   let usd holds LiftEU(eu)
+       *   be usd holds LiftEU(eu)
        * directly, without exposing the compiler's synthesis.
        *
        * The `LiftEU__<N>` wrappers realize the static dispatch of the
@@ -2925,8 +2993,8 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
    * `for each obj by handler`, and for each morphism N common to the
    * mp_on_morphism_map of F and G, we synthesize a function
    *   fun __check_naturality_<eta>__<N>(input: number): number {
-   *     let lhs holds <eta>__<obj>(F__N(input))
-   *     let rhs holds G__N(<eta>__<obj>(input))
+   *     be lhs holds <eta>__<obj>(F__N(input))
+   *     be rhs holds G__N(<eta>__<obj>(input))
    *     when lhs - rhs == 0 { return 1 }
    *     otherwise { return 0 }
    *   }
@@ -3033,9 +3101,9 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
    * For each nat_transform for which a `__check_naturality_<eta>__<N>` was
    * synthesized, we also synthesize
    *   fun __check_naturality_<η>__<N>_pbt(seed: number): number {
-   *     let i0 holds __check_naturality_<η>__<N>(seed)
-   *     let i1 holds __check_naturality_<η>__<N>(seed + 1)
-   *     let i2 holds __check_naturality_<η>__<N>(seed * 2)
+   *     be i0 holds __check_naturality_<η>__<N>(seed)
+   *     be i1 holds __check_naturality_<η>__<N>(seed + 1)
+   *     be i2 holds __check_naturality_<η>__<N>(seed * 2)
    *     ...
    *     return i0 * i1 * i2 * ... * i9
    *   }

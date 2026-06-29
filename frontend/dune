@@ -1,7 +1,7 @@
 (ocamllex lexer)
 (menhir (modules parser))
 (executables
- (names main run_example yoner_emit_mlir eval_runner yon_lsp yonfmt yon_lint yon_doc test_el test_path test_glue test_quote test_path_core test_motive test_j_tarski test_hit_elim test_cubical_surface test_hit_compute test_isequiv test_eta_sigma test_yoneda_lemma test_yoneda_typed test_core_check test_o6 test_type_erase test_world_site test_ty_subst test_kernel_alpha test_leech_theta test_sct test_builtins test_reduce test_subst test_tycheck test_dispatcher test_sheaf test_hm_infer test_prop_eval test_desugar)
+ (names main run_example yoner_emit_mlir eval_runner yon_lsp yonfmt yon_lint yon_doc test_el test_path test_glue test_quote test_path_core test_motive test_j_tarski test_hit_elim test_cubical_surface test_hit_compute test_isequiv test_eta_sigma test_yoneda_lemma test_yoneda_typed test_core_check test_o6 test_type_erase test_world_site test_ty_subst test_kernel_alpha test_leech_theta test_sct test_builtins test_reduce test_subst test_tycheck test_dispatcher test_sheaf test_hm_infer test_prop_eval test_desugar test_xtower_surface)
  (libraries str)
  ; test_ln stays excluded: it opens Locally_nameless, the SUSPENDED locally-nameless
  ; migration module (not in the build). Re-enable both together when LN is revived.

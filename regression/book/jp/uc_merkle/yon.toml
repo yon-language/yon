@@ -1,0 +1,6 @@
+[package]
+name = "uc_merkle"
+[world.Park]
+objects = ["Dinosaur"]
+[runtime]
+backend = "memory"

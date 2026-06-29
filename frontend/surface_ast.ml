@@ -150,7 +150,7 @@ and expr =
   | ENewIn of string * string * field_assignment list * location  (* "new P in Space { ... }" *)
   | EBinop of binop * expr * expr * location
   | EParen of expr * location
-  | EAll of string * condition * location             (* "all P where cond" *)
+  | EAll of string * condition * location             (* retired: the `all P where cond` surface form was removed in v1.1; constructor kept for exhaustive matches *)
   | EIn of expr * string * location                   (* "e in Context" *)
   (* HoTT-level term constructors *)
   | ERefl of expr * location                          (* refl(t) *)
@@ -161,13 +161,15 @@ and expr =
   | EQuote of ty_term * expr * location               (* quote(c, a) : El(c), a : carrier(c) — B intro *)
   | EElMatch of expr * expr * expr * location         (* el_match(target, ret, body): B eliminator, binds carrier *)
   (* pullback / pushout as an expression. Categorically: given f : A -> C and
-   * g : B -> C, pullback(f, g) is the universal limit (A x_C B). Operationally
-   * in Yon the expression produces a runtime handle to the pullback registered
-   * by the compiler. The minimal implementation uses an i32 nullable handle (a
-   * semantic placeholder); the full universal dispatch would need runtime
-   * tables. *)
-  | EPullback of string * string * location            (* "pullback(f, g)" — scaffolding *)
-  | EPushout of string * string * location             (* "pushout(f, g)" — scaffolding *)
+   * g : B -> C, pullback(f, g) is the universal limit (A x_C B).
+   * RETIRED at the surface: the no-arg `pullback(f,g)` / `pushout(f,g)`
+   * expression forms were removed in v1.1 (they lowered to a 0.0 placeholder);
+   * the parser no longer produces these constructors. The universal property
+   * now lives in the `place P = pullback(f,g)` declaration, and the runtime
+   * pullback in EPullbackVal (the 4-arg form). The constructors are kept only
+   * so downstream pattern matches stay exhaustive. *)
+  | EPullback of string * string * location            (* retired surface form, no longer produced *)
+  | EPushout of string * string * location             (* retired surface form, no longer produced *)
   (* The runtime universal pullback. Syntax: pullback(f, g, a, b) builds the
    * pair (a, b) in A x B, checking the constraint f(a) == g(b) at runtime. If
    * it holds, return a valid handle (encoded as a tagged number); if not, a
@@ -255,7 +257,7 @@ and pattern =
 and stmt =
   | SLet of string * expr * location                  (* "let x holds e" *)
   | SAssignHolds of lvalue * expr * location          (* "x holds e" or "x.f holds e" *)
-  | SAssignBecomes of lvalue * expr * location        (* "x becomes e" or "x.f becomes e" *)
+  | SAssignBecomes of lvalue * expr * location        (* "x = e" or "x.f = e" (the `becomes` surface token is retired; this node is internal-only) *)
   | SReturn of expr * location
   | SCall of string * expr list * location            (* function call as statement *)
   | SNew of string * field_assignment list * location (* "new P { ... }" *)
@@ -695,23 +697,17 @@ type top_decl =
       (* import mod::name from Space: module, name, Space — cross-package RPC *)
 
 (* space declaration.
- *   space EU
- *   space EU in Region
- *   space EU backed by ReductionName             (* P8 #82 *)
- *   space EU in Region backed by ReductionName   (* P8 #82 *)
  *
- * The space is a logical runtime heap. sd_world optionally declares that the
- * space is a physical instance of a specific world (e.g. EU and US are
- * instances of Region).
+ * There is NO surface `space ...` syntax: a space is a directory (filesystem-
+ * derived; package_layout.space_decls builds one space_decl per directory).
+ * The space is a logical runtime heap. sd_world optionally records the world
+ * the space belongs to (from the toml), e.g. EU and US under Region.
  *
- * sd_reduction associates a reduction with the space. The reduction determines
- * the cross-space transfer policy:
- *   - strong (default) -> synchronous apply_move, ack
- *   - idempotent       -> CRDT-merge (no overwrite, fold)
- *   - weak             -> eventually-consistent (buffered)
- *
- * The mapping reduction.kind -> policy is done by the compiler via the existing
- * `reduction_kind` flag. *)
+ * RETIRED model (kept for context, no longer in the record): a `sd_reduction`
+ * field once bound the space to a reduction via the `backed by` keyword,
+ * mapping a reduction policy to a cross-space transfer policy
+ * (strong/idempotent/weak). Both the field and the `backed by` syntax are gone;
+ * the current model is described just below. *)
 (* space_decl pulito.
  *
  * Previously `sd_reduction` bound the space to a reduction via the `backed by`

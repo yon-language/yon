@@ -1,0 +1,8 @@
+[package]
+name = "ch05_xrel_contract"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

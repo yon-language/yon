@@ -1426,7 +1426,7 @@ LogicalResult CplElementOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// AdjointCheckOp (Lambek-Scott Part II Th 15.4)
+// AdjointCheckOp (Lambek-Scott Part II, sec. 15-16)
 //===----------------------------------------------------------------------===//
 
 LogicalResult AdjointCheckOp::verify() {

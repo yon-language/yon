@@ -1,0 +1,39 @@
+place Entry { }
+// BENCHMARK — the content-addressed (FNV) heap and its expansion. A heap holds one
+// generation of slots; distinct content past a generation chains into a successor heap
+// (the [YON-XHEAP] "chain extended" event), so interning is unbounded. Distinct content
+// takes a fresh slot each time; identical content dedups to one slot. We intern strings
+// (String.from_int(k)) and measure ns/intern: distinct below one generation (100k), and
+// distinct across several generations (1M, which chains ~5 times) to show expansion is
+// amortized O(1); and identical content (dedup) for contrast.
+// Stdout schema (4 ints): guard(=1000000), distinct@100k ns, distinct@1M ns, same@1M ns
+fun intern_distinct(n: number): number visits Output {
+  be acc holds Space.make(0)
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be s holds String.from_int(k)
+              be _ holds Space.set(acc, Space.get(acc) + String.length(s))
+              be _2 holds Space.set(i, k + 1) }
+  return Time.now_ns(0) - t0
+}
+fun intern_same(n: number): number visits Output {
+  be acc holds Space.make(0)
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be s holds String.from_int(7)
+              be _ holds Space.set(acc, Space.get(acc) + String.length(s))
+              be _2 holds Space.set(i, k + 1) }
+  return Time.now_ns(0) - t0
+}
+fun main(): number visits Output {
+  be _g holds Output.print(String.from_int(1000000))
+  be d100k holds intern_distinct(100000)
+  be d1m holds intern_distinct(1000000)
+  be s1m holds intern_same(1000000)
+  be _1 holds Output.print(String.from_int(d100k / 100000))
+  be _2 holds Output.print(String.from_int(d1m / 1000000))
+  be _3 holds Output.print(String.from_int(s1m / 1000000))
+  return 0
+}

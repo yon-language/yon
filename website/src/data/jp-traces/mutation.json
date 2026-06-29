@@ -1,0 +1,16 @@
+{
+  "_comment": "Real Yon run, regression/book/jp/11_mutation (toolchain/yonc). Gene 1445 sealed into a Golay (24,12,8) codeword; open(corrupt(cw, k)) for k=1..6. <=3 errors: corrected back to 1445. k=4,6: DETECTED (open returns INT_MAX = a refuse-to-guess flag). k=5: a SILENT MUTATION -> 2361, a different but valid gene, no flag. The silent one is the one that gets into the park. Genes are illustrative numbers.",
+  "source": "regression/book/jp/11_mutation",
+  "gene": 1445,
+  "radius": 3,
+  "mutant": 2361,
+  "flag": 2147483647,
+  "steps": [
+    { "k": 1, "out": 1445, "kind": "corrected" },
+    { "k": 2, "out": 1445, "kind": "corrected" },
+    { "k": 3, "out": 1445, "kind": "corrected" },
+    { "k": 4, "out": 2147483647, "kind": "detected" },
+    { "k": 5, "out": 2361, "kind": "mutated" },
+    { "k": 6, "out": 2147483647, "kind": "detected" }
+  ]
+}

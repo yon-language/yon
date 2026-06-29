@@ -6,32 +6,28 @@ sidebar_position: 20
 
 # Tooling
 
-Beyond `yonc` and `yon-pkg` (chapters 1, 14), the toolchain ships two
+Beyond `yonc` and `yon-pkg` (chapters 1, 15), the toolchain ships two
 developer-facing pieces.
 
 ## yon-doc, API reference from source
 
 `yon-doc file.yon -o doc.md` walks the surface AST and emits a Markdown
-API reference, worlds, places (with fields and their `extends`
-sub-object lines), functions with signatures. Run on chapter 4's
-subsumption example it produces, verbatim:
+API reference: places (with fields and their `subcontains`
+sub-object lines), functions with signatures. The world is inferred from
+the filesystem, so it prints as `__INFER`. Run on the `SyntaxError.yon`
+file of chapter 4's subsumption example it produces, verbatim:
 
 ```markdown
-# API Reference, extends_subsumption
-
-## Worlds
-
-### world `W`
+# API Reference — SyntaxError
 
 ## Places
 
-### place `Error` in `W`
+### place `SyntaxError` in `__INFER`
+- subcontains (sub-object of): `Error`
 
 Fields:
 - `message`: number
-
-### place `SyntaxError` in `W`
-- extends (sub-object of): `Error`
+- `line`: number
 ```
 
 It reads declarations, not comments, what it prints is what the checker

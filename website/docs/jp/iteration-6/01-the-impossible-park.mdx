@@ -1,0 +1,165 @@
+---
+title: "The Impossible Park"
+sidebar_label: "6.1 · The Impossible Park (draft)"
+sidebar_position: 1
+---
+
+:::caution DRAFT, Iteration 6 material
+This chapter belongs to the Sixth Iteration (sheaf, descent, privacy as a typing rule). It is parked
+here in draft while the earlier Iterations are written; its full proof is the sheaf chapter. The
+guarantee below is gated (`regression/book/01/park_project` compiles, `park_project_leak` is rejected
+at compile time), but the prose is not yet final.
+:::
+
+A hundred thousand dinosaurs move through the park, and each is two things at once: an animal with a
+heartbeat and a position, and a row of data someone wants to query. Storing them isn't the hard part.
+The hard part is that the biologist, security, and legal look at the *same* animal and must see
+*different* things, and none of the three may see what isn't theirs.
+
+The biologist needs the genome, the biometrics, the feeding curve. Security needs the position and the
+containment status, and nothing about the genome. Legal needs to answer "how many animals are in
+cohort 7?" without ever touching an individual's identity: that is the whole point of the privacy
+regime they operate under. Three lenses, one animal. The lenses are not a feature you bolt on at the
+end. They are the shape of the problem.
+
+Here is the claim this book will make good on: in every mainstream language, "the legal view may not
+see individual identity" is a *promise*, written in a comment, guarded by code review, and broken the
+first afternoon someone is in a hurry. In Yon it is something the compiler **refuses to betray**.
+
+## The promise in a comment
+
+Watch how the promise is made in Java. We have a dinosaur, and a "legal view" whose job is to expose
+aggregates without identity.
+
+```java
+// The "legal" projection. RULE: never expose individual identity.
+final class LegalView {
+    private final Dinosaur dino;
+    LegalView(Dinosaur dino) { this.dino = dino; }
+
+    int cohort() { return dino.cohort(); }          // allowed: it's an aggregate key
+    // ... and nothing else. That's the rule.
+}
+```
+
+The rule lives in a comment and in the discipline of whoever reads it. Nothing in the language knows
+the rule exists. Six months later, a new analyst needs "just the id, for a one-off join," and writes:
+
+```java
+int id() { return dino.individualId(); }            // ships. compiles. reviewed on a Friday.
+```
+
+It compiles. It passes the tests, because the tests encode the same intentions the comment did. The
+invariant, *the legal lens never sees identity*, was never a fact the machine could check. It was a
+hope. The data leak you would pay a regulatory fine for is, at the level of the language,
+indistinguishable from correct code.
+
+Python, Go, TypeScript do no better: the projection is a method, and a method can return whatever its
+author types. SQL gets closer with views and column grants, but the guarantee stops at the database
+boundary and says nothing about the program that reads it. The pattern is the same everywhere: *the
+invariant is enforced by people, not by the language.*
+
+## What if the compiler refused
+
+Now the same scene in Yon. The three lenses are not three classes that redact different fields. They
+come from the *structure* of the problem, and in Yon you don't write that structure in code: the
+project's shape is the declaration. The park is a directory tree, and the worlds live in its manifest,
+`yon.toml`:
+
+```toml
+# yon.toml
+[world.Park]
+objects = ["Dinosaur"]
+
+[world.PublicPark]
+quotient = ["Park", "cohort"]      # PublicPark is Park "up to cohort"
+```
+
+```
+park/
+  yon.toml
+  Entry.yon                # the entrypoint (a place Entry + fun main)
+  herd/Dinosaur.yon        # the "herd" space, attached to world Park
+  public/PublicDino.yon    # the "public" space, attached to world PublicPark
+```
+
+A directory is a **space**; a file in it is a **place**; the space is attached to a **world** in
+`yon.toml`. Science works in `Park`, and the whole animal lives in the `herd/` space:
+
+```yon
+// herd/Dinosaur.yon, a place in the herd/ space (attached to world Park)
+place Dinosaur {
+  individual_id number
+  cohort number
+  heart_rate number
+}
+```
+
+The legal lens lives in the `public/` space, attached to `PublicPark = Park / cohort`, the park seen
+**up to cohort**. Here is the move with no equivalent in a mainstream language: in that space a place
+may carry *only* data invariant under the relation. A public dinosaur may know its cohort, and nothing
+that tells one individual from another:
+
+```yon
+// public/PublicDino.yon, a place in the public/ space (attached to PublicPark, a quotient of Park)
+fun bucket_of(c: number): number { return c }
+
+place PublicDino {
+  cohort number                    // the relation field: invariant, allowed
+}
+
+view LegalLens of PublicDino {
+  show bucket = bucket_of(cohort)  // a function of cohort: it descends
+}
+```
+
+This compiles. Now try to give the public place an identity, adding one line to
+`public/PublicDino.yon`:
+
+```yon
+place PublicDino {
+  cohort number
+  individual_id number             // NOT determined by cohort
+}
+```
+
+It **does not compile**. Not "fails a test," not "warns": the type checker rejects it.
+
+> place `PublicDino` is not a sheaf on the quotient world
+> `PublicPark = Park / cohort`: field(s) individual_id are not invariant under
+> `cohort`.
+
+Read what that means, because it is stronger than redaction. The world is not a keyword you write; it
+is set, in `yon.toml`, on the space your file lives in. The `public/` space is attached to
+`PublicPark`. You cannot put identity into a place in that space, because the space's world forbids it.
+The Friday-afternoon leak is not a bug that ships: it is a data model that never builds. The thing the
+Java comment *asked* for, Yon makes impossible to violate.
+
+:::tip Key idea
+On a quotient world `A / r`, here the `public/` space, **every field of a place must be invariant under
+`r`**, and every view must factor through `r`. Data that distinguishes individuals the relation calls
+equal simply cannot live there. This is the sheaf/descent condition, enforced as a typing rule, at the
+place level, not only the view. Privacy stops being a convention and becomes a property the compiler
+checks for you. (The full story is the sheaf chapter, later in this Iteration.)
+:::
+
+## Run it yourself
+
+Every claim in this book ships with something you can build. This chapter's guarantee is a project:
+
+- `regression/book/01/park_project/`, the park as a directory tree (`yon.toml`, `herd/Dinosaur.yon`,
+  `public/PublicDino.yon`). It compiles (exit 0); `Dinosaur` lands in world `Park`, `PublicDino` and
+  `LegalLens` in `PublicPark`.
+- `regression/book/01/park_project_leak/`, the same tree with one extra line (`individual_id` on
+  `public/PublicDino.yon`), rejected at compile time (exit 3, not a sheaf on the quotient).
+
+The project must build, the leak variant must be rejected. If a future change to Yon ever let the leak
+compile, the suite goes red. The book and the compiler are kept honest by the same gate.
+
+## Where we are, where we go next
+
+You have seen the shape of the whole book in one scene: a domain whose *correctness is structural*, and
+a compiler that enforces the structure instead of trusting a comment. Three words carried the weight
+here, **world**, **place**, **view**, and one idea, the **quotient**. The earlier Iterations give them
+their proper vocabulary; this Iteration returns to this exact park and proves the sheaf condition in
+full.

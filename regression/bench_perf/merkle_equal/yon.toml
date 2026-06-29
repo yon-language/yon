@@ -1,0 +1,4 @@
+[package]
+name="merkle_equal"
+[runtime]
+backend="memory"

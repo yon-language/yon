@@ -6,36 +6,60 @@ sidebar_position: 10
 
 # Spaces and packages
 
-A **Space** is a hermetic tenant: a named heap where sections live.
+A **Space** is a hermetic tenant: a named heap where sections live. A Space is
+not a surface keyword; it is a **directory** under the project root, declared
+to a world in `yon.toml`. A **place** is a file inside it, and a place
+inherits its world from the directory it lives in. So the project on disk *is*
+the ontology:
+
+```
+region/
+  yon.toml
+  Entry.yon          // main, plus the cross-Space move
+  eu/                // the Space "eu"
+    Topos.yon        // topos RegionTopos where { }
+    EUR.yon          // place EUR { balance number }
+    USD.yon          // place USD { balance number }
+```
+
+```toml
+# yon.toml
+[package]
+name = "region"
+
+[runtime]
+backend = "memory"
+
+[world.Region]
+spaces  = ["eu"]
+objects = ["Money"]
+```
 
 ```yon
-space EU
-space US
+// eu/EUR.yon  (and eu/USD.yon, the same shape)
+place EUR {
+  balance number
+}
+```
 
-world Region { Code is EU, US }
-place EUR in Region { balance number }
-place USD in Region { balance number }
-
+```yon
+// Entry.yon
+place Entry { }
+fun scale(x: number): number { return x * 110 / 100 }
 move EurToUsd from EUR to USD {
   balance converts to balance by scale
 }
-fun scale(x: number): number { return x * 110 / 100 }
-
 fun main(): number {
-  be alice holds new EUR in EU { balance 40 }
+  be alice holds new EUR { balance 40 }
   be moved holds apply_move(EurToUsd, alice)
   return moved.balance        // 44: read on the transported instance
 }
 ```
 
-Try to read `alice.balance` directly and the type checker stops you:
-
-```
-TYPE ERROR: [TOPOS-E1110] cross-Space field access: 'alice' lives in space
-'EU' and its field 'balance' cannot be read directly from outside that
-space. Use apply_move(M, alice) to transport it via a declared geometric
-morphism, then access the field on the moved instance.
-```
+Try to read `alice.balance` across a Space boundary and the type checker stops
+you: a value that lives in one Space cannot have its field read directly from
+outside that Space. You must `apply_move(M, alice)` to transport it via a
+declared move, then read the field on the moved instance.
 
 That is hermeticity as a *type discipline*: within one binary, visibility,
 `internal`, effects and the move/morphism gating decide what crosses

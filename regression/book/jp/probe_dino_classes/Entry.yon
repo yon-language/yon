@@ -1,0 +1,54 @@
+place Entry { }
+
+// DISCOVERY probe (not a book asset): find genuinely distinct type-2 points that
+// spread across several of2 relation-classes, so the dino set isn't {antipode,
+// same-class}. Each generator below is known to return a type-2 xcoord; we filter
+// validity by m24_orbit (196560 = not type-2) and read the class spread.
+//
+// Candidates (p0 = anchor 1536):
+//   p0 = 1536
+//   p1 = 1280
+//   p2 = xi(1536)
+//   p3 = xi(1280)
+//   p4 = co0_step(1536)
+//   p5 = transport_apply(1536, 1280)
+//   p6 = sign_canonical(1536, 1365)     // 1365 = 0x555
+//
+// Output order (one integer per line):
+//   orbit p0..p6                                   (7 lines: 196560 = invalid)
+//   of2(p0,p1), of2(p0,p2), of2(p0,p3),
+//   of2(p0,p4), of2(p0,p5), of2(p0,p6)             (6 lines: class spread from anchor)
+//   of2(p1,p2), of2(p2,p4), of2(p4,p5), of2(p3,p6) (4 lines: cross-pairs)
+//   of2(p2,p3)                                     (1 line: xi-invariance check vs of2(p0,p1))
+
+fun main(): number visits Output {
+  be p0 holds 1536
+  be p1 holds 1280
+  be p2 holds Leech.xi_apply(1536)
+  be p3 holds Leech.xi_apply(1280)
+  be p4 holds Leech.co0_step(1536)
+  be p5 holds Leech.transport_apply(1536, 1280)
+  be p6 holds Leech.sign_canonical(1536, 1365)
+
+  be _0 holds Output.print(String.from_int(Leech.m24_orbit(p0)))
+  be _1 holds Output.print(String.from_int(Leech.m24_orbit(p1)))
+  be _2 holds Output.print(String.from_int(Leech.m24_orbit(p2)))
+  be _3 holds Output.print(String.from_int(Leech.m24_orbit(p3)))
+  be _4 holds Output.print(String.from_int(Leech.m24_orbit(p4)))
+  be _5 holds Output.print(String.from_int(Leech.m24_orbit(p5)))
+  be _6 holds Output.print(String.from_int(Leech.m24_orbit(p6)))
+
+  be _7  holds Output.print(String.from_int(XSimplex.of2(p0, p1)))
+  be _8  holds Output.print(String.from_int(XSimplex.of2(p0, p2)))
+  be _9  holds Output.print(String.from_int(XSimplex.of2(p0, p3)))
+  be _10 holds Output.print(String.from_int(XSimplex.of2(p0, p4)))
+  be _11 holds Output.print(String.from_int(XSimplex.of2(p0, p5)))
+  be _12 holds Output.print(String.from_int(XSimplex.of2(p0, p6)))
+
+  be _13 holds Output.print(String.from_int(XSimplex.of2(p1, p2)))
+  be _14 holds Output.print(String.from_int(XSimplex.of2(p2, p4)))
+  be _15 holds Output.print(String.from_int(XSimplex.of2(p4, p5)))
+  be _16 holds Output.print(String.from_int(XSimplex.of2(p3, p6)))
+  be _17 holds Output.print(String.from_int(XSimplex.of2(p2, p3)))
+  return 0
+}

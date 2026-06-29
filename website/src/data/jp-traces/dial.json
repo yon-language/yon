@@ -1,0 +1,12 @@
+{
+  "_comment": "Real Yon run, regression/book/jp/12_xtower_dial (toolchain/yonc) + 08_xtower_surface (widths). XTower is the dial of equality: same_branch(a,b,level) asks 'same?' at a grain you turn, Co0 (all one) -> N -> M24 (XRelSet's classes) -> id (XSet's individuals). The mutant 2361 is the SAME as 1445 at the coarse end (Co0, N) and DIFFERENT once the grain is fine (M24, id): same_branch = 1,1,0,0. The blind spot is the LEVEL, not the structure. Orbit labels are build-unstable; same_branch (the partition) is stable. xtower_class(1445) and the widths refine as you turn.",
+  "source": "regression/book/jp/12_xtower_dial",
+  "orig": 1445,
+  "mutant": 2361,
+  "levels": [
+    { "level": 0, "name": "Co0", "width": 1,      "class": 0,     "same": 1 },
+    { "level": 1, "name": "N",   "width": 3,      "class": 1,     "same": 1 },
+    { "level": 2, "name": "M24", "width": 12,     "class": 10,    "same": 0 },
+    { "level": 3, "name": "id",  "width": 196560, "class": 99172, "same": 0 }
+  ]
+}

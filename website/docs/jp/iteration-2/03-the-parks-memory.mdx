@@ -1,0 +1,289 @@
+---
+title: "The Park's Memory"
+sidebar_label: "2.3 · The Park's Memory"
+sidebar_position: 3
+---
+
+import XSetBitmap from '@site/src/components/XSetBitmap';
+import XTowerDial from '@site/src/components/XTowerDial';
+import OmegaInvariant from '@site/src/components/OmegaInvariant';
+import HashIdentity from '@site/src/components/HashIdentity';
+import HashMapTag from '@site/src/components/HashMapTag';
+import MerklePedigree from '@site/src/components/MerklePedigree';
+import DescentChain from '@site/src/components/DescentChain';
+import HerdCount from '@site/src/components/HerdCount';
+import VoyagerListCorrect from '@site/src/components/VoyagerListCorrect';
+import ArenaOrbit from '@site/src/components/ArenaOrbit';
+import OrbitClass from '@site/src/components/OrbitClass';
+
+The control room remembers things, and the way it remembers decides what it can answer.
+"Is this exact animal here?" and "do I have one of this kind?" and "are these two related?"
+are different questions, and each wants a different structure. Yon gives the park a toolkit,
+and the toolkit runs on two engines: a hash (FNV, content-addressed, takes anything) and the
+Leech lattice (24-dimensional, takes only its own points). They are not rivals. They answer
+different questions, and the honest skill is knowing which.
+
+Every number below is a real Yon run (the `regression/book/jp/uc_*` projects, compiled and run with
+`toolchain/yonc`). All eleven structures are built and gated, nothing here is merely declared.
+
+| structure | engine | the park's question | a dinosaur example |
+|---|---|---|---|
+| `HashSet` | FNV | is this **exact** genome on file? | "have we already sequenced specimen #1445?" |
+| `HashMap` | FNV | tag each genome (any key type) | "#1445 → species *Velociraptor*" |
+| `MerkleTree` | content-DAG | are two **pedigrees** identical, by content? | "do these two samples carry the exact same descent tree?" |
+| `List` | plain | an ordered **descent chain** (prepend) | "the lineage newest→founder: hatchling 1445, parent 1280, founder 1207" |
+| `Vec` | plain | **count** the individuals, indexed | "the herd head-count, every animal, duplicates kept" |
+| `VoyagerList` | Golay | keep a **gene whole** through damage | "read #1445's gene back after three corrupted bits" |
+| `Arena` | Leech | store at a lattice address, know its **kind**, **fuse** lineages | "two raptors of the same kind; certify a bred fusion" |
+| `XSet` | Leech bitmap | what do two **paddocks** share? | "which animals are in **both** paddock A and B" |
+| `XRelSet`, `XRelMap` | Leech orbit | one of this **kind**? / tag a kind | "a specimen and its mirror count as the same animal" |
+| `XSimplex` | Leech | which **characters** distinguish two? orientation of three? | "what trait separates *Velociraptor* from *Tyrannosaurus*" |
+| `XTower` | Leech | at what **grain** are these the same? | "turn the dial: same genus? species? individual?" |
+
+## Exact identity: the hash
+
+The first question is the plainest: *is this exact thing already here?* The hash answers it for
+anything, in O(1), and it is exact because on a collision it compares the bytes.
+
+```yon
+be inv holds HashSet.empty()
+inv = HashSet.add(inv, 1445)
+inv = HashSet.add(inv, 1445)   // the same genome twice
+inv = HashSet.add(inv, 2361)
+inv = HashSet.add(inv, 100)
+inv = HashSet.add(inv, 200)
+be n holds HashSet.size(inv)          // -> 4 distinct
+```
+
+A `HashMap` tags each one: `set(1445, 1)`, `get(1445)` → `1`, `has(9999)` → `false`, `size` → `2`.
+The hash takes any value, a number, a string, an object, and never asks you to translate it
+first. For pure identity, this is the tool; the lattice can do it too, but only after you map the
+value onto it, and that mapping is the rest of this chapter.
+
+<HashIdentity />
+
+<HashMapTag />
+
+## Content of a structure: the Merkle tree
+
+Sometimes the thing you want to compare is not a value but a *shape*: a pedigree, a tree of
+descent. `MerkleTree` content-addresses the whole structure, so two trees built from the same
+parts are equal, and one differing leaf breaks it.
+
+```yon
+be t1 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
+be t2 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
+be t3 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(9999))
+be _1 holds MerkleTree.equal(t1, t2)   // -> true  (same content, equal)
+be _2 holds MerkleTree.equal(t1, t3)   // -> false (one leaf differs)
+```
+
+The comparison is by content, not by pointer: `t1` and `t2` are different objects in memory and
+the same tree to the park.
+
+<MerklePedigree />
+
+## Counting: the vector
+
+`Vec` is the honest head count. It keeps every entry, in order, indexed: `push` adds, `get`/`set`
+address by position, `size` counts events with no deduplication.
+
+```yon
+be v holds Vec.empty()
+v = Vec.push(v, 1445)
+v = Vec.push(v, 1280)
+v = Vec.push(v, 1445)     // the duplicate is kept
+be _ holds Vec.size(v)           // -> 3  (events, not distinct)
+```
+
+`Vec.get(v, 0)` → `1445`; `Vec.set(v, 1, 9999)` then `get(v, 1)` → `9999`. When the question is
+*how many animals*, not *how many kinds*, the vector is what counts them, one per entry.
+
+<HerdCount />
+
+## The descent chain: the list
+
+A `Vec` is an indexed array; a `List` is the other shape, a chain you grow from the front. The park
+uses it for a lineage: `cons` prepends the newest generation, `head` is the newest, `tail` the
+ancestors behind it.
+
+```yon
+be l holds List.empty(0)
+l = List.cons(1207, l)    // the founder
+l = List.cons(1280, l)    // its offspring
+l = List.cons(1445, l)    // the newest hatchling
+be _1 holds List.length(l)               // -> 3 generations
+be _2 holds List.head(l)                 // -> 1445, the newest
+be _3 holds List.head(List.tail(l))      // -> 1280, its parent
+be _4 holds List.head(List.reverse(l))   // -> 1207, the founder, oldest-first
+```
+
+`reverse` turns the chain founder-first, and `tail` walks back up the pedigree one generation at a
+time. Where the `Vec` answers *how many*, the `List` keeps the *order of descent*.
+
+<DescentChain />
+
+## Keeping a gene whole: Golay
+
+A genome in the park is sealed in a Golay (24,12,8) codeword, the error-correcting frame of the
+last chapter. It survives up to three flipped bits: `seal`, damage it, `open`, and the gene comes
+back.
+
+```yon
+be cw   holds VoyagerList.seal(1445)
+be back holds VoyagerList.open(VoyagerList.corrupt(cw, 2))   // 2 bits flipped -> 1445
+```
+
+A `VoyagerList` does it for a whole list, auto-sealing on append and auto-correcting on read:
+corrupt three bits of an element and `get` still returns `1445`. (Past three the correction can
+fail silently, the mutation of the previous chapter. The list is safe inside the radius and only
+inside it.)
+
+<VoyagerListCorrect />
+
+## Storing on the lattice: the arena
+
+The `Arena` is the type-2 arena itself: it stores a value at a lattice address, knows that
+address's *kind* (its M24 orbit), and can record a certified fusion of two lineages.
+
+```yon
+be a holds Arena.put(Arena.empty(), 1536, 42)
+be _v holds Arena.get(a, 1536)                  // -> 42
+be _k holds Arena.same_orbit(a, 1536, 1280)     // -> 1  (same kind)
+be _d holds Arena.same_orbit(a, 1536, 16778752) // -> 0  (different)
+a = Arena.fuse(a, 1536, 99, 7)          // record a certified fusion
+be _f holds Arena.fusion_count(a, 1536)         // -> 1
+```
+
+`1536` and `1280` are different individuals of the same kind; `Arena.fuse` records, with a
+Conway-group certificate, that two lineages have been merged, a thing no hash can do, because a
+hash has no notion of kind, only of equal-or-not.
+
+<ArenaOrbit />
+
+## What two paddocks share: the bitmap
+
+This is where the lattice earns its keep without any conditions. Because the type-2 points are a
+finite set of exactly 196,560 addresses, an `XSet` is a 196,560-bit bitmap, and set algebra is a
+parallel bit-operation over it, a fixed bit-sweep instead of a per-element scan of a hash set.
+
+```yon
+be a holds XSet.empty()                       // paddock A: {7, 11, 63}
+a = XSet.add(a, Leech.embed(7, 0))
+a = XSet.add(a, Leech.embed(11, 0))
+a = XSet.add(a, Leech.embed(63, 0))
+be b holds XSet.empty()                       // paddock B: {11, 63, 99}
+b = XSet.add(b, Leech.embed(11, 0))
+b = XSet.add(b, Leech.embed(63, 0))
+b = XSet.add(b, Leech.embed(99, 0))
+be _common holds XSet.size(XSet.intersect(a, b))   // -> 2  (11 and 63), a bit-AND
+be _all    holds XSet.size(XSet.union(a, b))       // -> 4, a bit-OR
+```
+
+And the address is compact: every point is an integer in `[0, 196560)`, exactly 18 bits, with no
+collisions, the perfect hash of the lattice. The 196,560 is not a round number someone chose; it
+is the kissing number of the densest packing in twenty-four dimensions, a theorem the build
+re-derives.
+
+<XSetBitmap />
+
+## One of this kind: the orbit
+
+`XRelSet` and `XRelMap` do not key on the exact point but on its **orbit class**, its form up to
+a symmetry of the lattice. Two points in the same class count as one; a map keyed by class is
+retrieved by any of its representatives.
+
+```yon
+be m  holds XRelMap.empty()
+be _r holds XRelMap.add_ref(m, 1536)              // register the reference point
+m = XRelMap.insert(m, 1536, 100)          // key = the class of 1536
+be v1 holds XRelMap.get(m, 16778752)              // -> 100  (same class, the antipode)
+be v2 holds XRelMap.get(m, 1280)                  // -> miss (a different class)
+```
+
+The `add_ref` comes first for a reason: it fixes the frame the orbit class is computed against.
+`XRelMap` is **Co2**, relative to that reference, the same gauge-dependence the next section's `omega`
+escapes by closing the loop. Change the reference and the classes can rename; the partition into kinds
+is what the reference pins down.
+
+This is a genuine quotient: insert with one representative, recall with another. But read it
+honestly, the *class* is the lattice's symmetry class, not a meaning you put there. It groups
+points the geometry calls related, which is a fact about the lattice, not about your data, unless
+your data was placed so that the two coincide.
+
+<OrbitClass />
+
+## How they are related: the relation
+
+`XSimplex` classifies a configuration of points. `of2(a, b)` gives the class of a pair's relation,
+and it is symmetric. `omega(a, b, c)` gives the orientation of a triple, and `omega` is the one
+invariant in the family that no change of frame can move.
+
+<OmegaInvariant />
+
+The pairwise class is frame-relative; the triangle's holonomy is absolute, the gauge cancelling on
+the closed cycle. It is the one number the park can state about three animals that does not depend
+on where it is standing.
+
+## Constructing the meaning: the clade reader
+
+Every class above is the lattice's own symmetry class: true about the lattice, silent about
+dinosaurs, *unless your data was placed so the two coincide.* So let us place it, and build the
+map where they do.
+
+Encode each animal as a bitvector of derived characters, bit 0 *bipedal*, 1 *feathered*,
+2 *carnivore*, 3 *crested*, 4 *armored*, and drop it onto the lattice with the **linear** gcode
+embedding, `Leech.embed(bits, 3)`. Now `Leech.pair_subtype` reads the class of the *symmetric
+difference* of two animals' bits: **which characters distinguish them**, the synapomorphy set.
+
+```yon
+be R  holds Leech.embed(1, 3)    // {bipedal}
+be V  holds Leech.embed(7, 3)    // {bipedal, feathered, carnivore} = Velociraptor
+be S  holds Leech.embed(8, 3)    // {crested}
+be SV holds Leech.embed(14, 3)   // {crested, feathered, carnivore}
+
+be _0 holds Leech.pair_subtype(V, Leech.embed(7, 3))  // -> 0   identical clade, nothing distinguishes
+be _1 holds Leech.pair_subtype(R, V)                  // -> 34  distinguished by {feathered, carnivore}
+be _2 holds Leech.pair_subtype(S, SV)                 // -> 34  the SAME distinguishing pair, different base
+be _3 holds Leech.pair_subtype(R, Leech.embed(19, 3)) // -> 70  distinguished by {feathered, armored}
+```
+
+The `34` lands twice on purpose: `R→V` and `S→SV` are different animals, but the characters that
+*distinguish* each pair are the same, `{feathered, carnivore}`, and `pair_subtype` is a function
+of that difference alone, not of the animals. A different synapomorphy, `{feathered, armored}`,
+reads a different class, `70`: the map resolves. (`regression/book/jp/uc_clade`, self-checking,
+exit 0.)
+
+Read the boundary as honestly as the win: `pair_subtype` returns the Golay subtype-*class* of the
+difference, coarser than the exact set, so two unrelated character-sets can land in the same class.
+It separates "same clade" (`0`) from "distinct" cleanly and resolves many differences, not all. And
+the lattice never invented *feathered*, we built a bit to mean it; the lattice then operates that
+meaning, fast and frame-stable, better than a comparison written by hand, but only the meaning we
+put in.
+
+## At what grain: the dial
+
+`XTower` unifies the others into one axis. Its `same_branch(a, b, level)` asks *are these the
+same?* at a grain you turn, from Co0 (one class, all the same) through M24 (the kinds) to id (each
+its own address, 196,560 of them). The exact head count and the count-by-kind are not separate
+structures; they are two settings of this dial.
+
+<XTowerDial />
+
+A finer cell sits always inside a coarser one, so turning toward the coarse end only ever loses
+individuals, the blindness is measured, and it is the level you stop at, not the structure.
+
+## When to use which
+
+Two engines, and the honest division between them:
+
+- **Identity, any type, exact**, the hash. `HashSet`/`HashMap`/`MerkleTree` take anything, need no
+  translation, and never lie about equality. For "is this here," the lattice adds nothing it does
+  not also charge for.
+- **A finite, ordered universe, sets and a compact address**, the lattice, unconditionally.
+  `XSet`'s bit-parallel algebra and 18-bit index are real wins the moment your things are lattice
+  points, and need no meaning to be true.
+- **Kind, relation, grain, the absolute invariant**, the lattice, conditionally. `XRelSet`,
+  `XSimplex`, `XTower`, `omega` are meaningful only for points that come from the lattice, or that
+  you placed so the geometry matches your meaning. The lattice does not manufacture that meaning;
+  it operates it, better than any structure you could pick by hand, once you have it.

@@ -7,9 +7,9 @@ import siteConfig from '@generated/docusaurus.config';
 
 export default function prismIncludeLanguages(PrismObject) {
   const {
-    themeConfig: {prism},
+    themeConfig: { prism },
   } = siteConfig;
-  const {additionalLanguages} = prism;
+  const { additionalLanguages } = prism;
   // prism-react-renderer uses its own Prism instance; Prism's language
   // components register onto globalThis.Prism, so mount it temporarily.
   globalThis.Prism = PrismObject;
@@ -43,8 +43,8 @@ export default function prismIncludeLanguages(PrismObject) {
       // morphism, oldest, newest, subset, conflict, nat, transform) are
       // free identifiers and stay uncolored on purpose.
       '\\b(?:' +
-      'absent|adjunction|aggregates|algebra|all|and|as|at|backward|be|becomes|bi|buffer|by|cell|compose|converts|do|drop|each|effects|else|emit|error|every|exact|extends|fold|for|forces|forever|forward|from|fst|fun|functor|functorial|geomorph|here|heyting|holds|if|import|in|ind_path|init|internal|invertible|is|iter|law|lawful|list|map|maps|morph|morphisms|most|move|multishot|new|not|objects|of|operation|or|otherwise|over|pair|partial|place|present|produce|prop|pull|pullback|push|pushout|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|verify|space|stream|terminal|then|times|to|topology|topos|unifies|unknown|uses|via|view|visits|when|where|while|wire|with|world' +
-      ')\\b'
+        'absent|adjunction|aggregates|algebra|all|and|as|at|backward|be|becomes|bi|buffer|by|cell|compose|converts|do|drop|each|effects|else|emit|error|every|exact|extends|fold|for|forces|forever|forward|from|fst|fun|functor|functorial|geomorph|here|heyting|holds|if|import|in|ind_path|init|internal|invertible|is|iter|law|lawful|list|map|maps|morph|morphisms|most|move|multishot|new|not|objects|of|operation|or|otherwise|over|pair|partial|place|present|produce|prop|pull|pullback|push|pushout|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|verify|space|stream|terminal|then|times|to|topology|topos|unifies|unknown|uses|via|view|visits|when|where|while|wire|with|world' +
+        ')\\b',
     ),
     boolean: /\b(?:true|false)\b/,
     function: /\b[a-z_][A-Za-z0-9_]*(?=\s*\()/,

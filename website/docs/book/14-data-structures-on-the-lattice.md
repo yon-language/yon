@@ -28,7 +28,7 @@ What distinguishes them is what they make cheap:
   automatic: two lists with the same tail *are* the same tail.
 - **Vec**, a dynamic array indexed by position, stored on an arena strip
   (no `malloc`). `push` appends in place into spare capacity, or reallocates
-  a doubled strip past capacity — returning a new handle and handing the old
+  a doubled strip past capacity, returning a new handle and handing the old
   strip's whole pages back to the OS via `madvise`; `get`/`set` are O(1).
   It is the building block for an indexed map.
 - **HashMap**, `f64 → f64`, with string handles as keys when you need
@@ -46,7 +46,7 @@ What distinguishes them is what they make cheap:
   costs almost nothing (every node is a dedup hit), and comparing two
   4,096-leaf trees is one comparison.
 - **Cells**, not a collection: the one mechanism with identity
-  (chapter 12). `becomes` and every loop are built on them; ~12 ns per
+  (chapter 12). The `=` assignment and every loop are built on them; ~12 ns per
   set+get pair, 1,024 per process.
 - **Arena**, the Leech-indexed pool: `Arena.orbit` returns the M₂₄ orbit
   id of a content and `Arena.same_orbit` tests two contents for

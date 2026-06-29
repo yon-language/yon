@@ -1,0 +1,13 @@
+place Entry { }
+// §1 HashSet (FNV) — "is this exact genome on file?". add dedups by byte-compare;
+// the same genome twice counts once. Stdout: [1] size = 4 distinct (1445 dup dropped).
+fun main(): number visits Output {
+  be inv holds HashSet.empty()
+  inv = HashSet.add(inv, 1445)
+  inv = HashSet.add(inv, 1445)
+  inv = HashSet.add(inv, 2361)
+  inv = HashSet.add(inv, 100)
+  inv = HashSet.add(inv, 200)
+  be _1 holds Output.print(String.from_int(HashSet.size(inv)))
+  return 0
+}

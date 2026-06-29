@@ -1,0 +1,74 @@
+{
+  "meta": {
+    "machine": "Apple M1",
+    "system": "Darwin arm64",
+    "tool": "pytest-benchmark 5.2.3",
+    "rounds_min": 15,
+    "build": "runtime -O2, warm cache",
+    "commit": "1c44e79",
+    "generated_utc": "2026-06-29",
+    "note": "timings measured on this machine on the date above, at the commit above; NOT re-derived each build. The correctness gate (regression/bench/*) IS re-derived every build."
+  },
+  "per_op": {
+    "vec_push": {
+      "label": "Vec.push",
+      "ns": -5.14,
+      "n": 1000000
+    },
+    "equality": {
+      "label": "String.equal (1-char)",
+      "ns": -2.16,
+      "n": 10000000
+    },
+    "equality_big": {
+      "label": "String.equal (32768-char)",
+      "ns": -2.16,
+      "n": 10000000
+    },
+    "golay_seal": {
+      "label": "VoyagerList.seal",
+      "ns": -1.23,
+      "n": 10000000
+    },
+    "merkle_equal": {
+      "label": "MerkleTree.equal",
+      "ns": -0.42,
+      "n": 10000000
+    },
+    "vec_get": {
+      "label": "Vec.get",
+      "ns": 1.39,
+      "n": 10000000
+    },
+    "hashset_lookup": {
+      "label": "HashSet.contains",
+      "ns": 6.1,
+      "n": 10000000
+    },
+    "hashmap_get": {
+      "label": "HashMap.get",
+      "ns": 7.14,
+      "n": 10000000
+    },
+    "list_head": {
+      "label": "List.head",
+      "ns": 8.16,
+      "n": 10000000
+    },
+    "golay_open": {
+      "label": "VoyagerList.open (corrected)",
+      "ns": 9.71,
+      "n": 10000000
+    },
+    "hashset_insert": {
+      "label": "HashSet.add",
+      "ns": 69.3,
+      "n": 1000000
+    },
+    "merkle_construct": {
+      "label": "MerkleTree.node2 (build)",
+      "ns": 137.77,
+      "n": 1000000
+    }
+  }
+}

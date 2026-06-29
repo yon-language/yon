@@ -252,11 +252,9 @@ struct HMInferencePass
 // Giraud axiom check (structural)
 //
 // Giraud's theorem characterises Grothendieck topoi by five axioms.
-// We check here only the trivial structural ones at the MLIR layer:
+// We check here only the trivial structural one at the MLIR layer:
 //   - the world has at least one place (existence of a generating
-//     family is the witness that the topos is non-trivial);
-//   - if the world is declared as `quotient_of`, the relation and
-//     base world must both exist.
+//     family is the witness that the topos is non-trivial).
 // The full Giraud check is delegated to a future analysis.
 //===----------------------------------------------------------------------===//
 

@@ -501,6 +501,31 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
   | (ELit _ | EVar _ | EWireTo _ | EProduce _ | EAll _
     | EPullback _ | EPushout _) -> e
 
+(* Stop-gap (1.1): `=` (Space-cell assign) inside a produce / spawn body desugars to
+   __space_update_here, which has no lowering — the cells promotion that turns `be x holds`
+   into a Space cell and rewrites `x = e` into `Space.set` does not reach these
+   expression-context blocks, so emit_mlir would crash with a Fatal error. Until the full
+   fix lands with the produce rework in 1.2, reject it with a clean compile-time error.
+   Walks loop / when bodies but not nested produce/spawn (those run their own check). *)
+let rec first_assign_loc (ss : stmt list) : location option =
+  List.fold_left (fun acc s ->
+    match acc with
+    | Some _ -> acc
+    | None ->
+      match s with
+      | SAssignBecomes (_, _, l) -> Some l
+      | SIter (_, b, _) | SWhile (_, b, _) | SForEvery (_, _, _, b, _) -> first_assign_loc b
+      | SWhen (_, b, elifs, oth, _) ->
+          (match first_assign_loc b with
+           | Some _ as r -> r
+           | None ->
+             let r = List.fold_left (fun a (_, b2) ->
+                       match a with Some _ -> a | None -> first_assign_loc b2) None elifs in
+             (match r with
+              | Some _ -> r
+              | None -> (match oth with Some o -> first_assign_loc o | None -> None)))
+      | _ -> None) None ss
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -849,7 +874,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
 
   | EField (obj, fld, loc) ->
       (* Cross-space field-access detection. If obj is a variable bound in an
-       * explicit space (`let x holds new P in EU { ... }`), the field access is
+       * explicit space (`be x holds new P in EU { ... }`), the field access is
        * a forbidden cross-space dereference. The only legitimate channel to
        * extract information from a foreign section is to pass it to
        * `apply_move(M, x)`, which transports it into the current space via the
@@ -1190,12 +1215,19 @@ got %s" (Tyenv.ty_to_string other)))
          a number, same convention as the Stream.* API. The stream's
          element type is inferred from the emits (number if none), and
          is checked against the declared return type by the caller. *)
-      let saved = !produce_emit_ty in
-      produce_emit_ty := None;
-      let* _ = !produce_check_ref env ctx body None in
-      let elem = (match !produce_emit_ty with Some t -> t | None -> TyPrim "number") in
-      produce_emit_ty := saved;
-      ok (TyStream elem)
+      (match first_assign_loc body with
+       | Some l ->
+           err l "`=` (Space-cell assignment) is not yet supported inside a `produce` \
+                  block. Use `Space.set(cell, value)`, or compute the value before the \
+                  block and bind it with `be`. (Full support lands with the produce \
+                  rework in 1.2.)"
+       | None ->
+         let saved = !produce_emit_ty in
+         produce_emit_ty := None;
+         let* _ = !produce_check_ref env ctx body None in
+         let elem = (match !produce_emit_ty with Some t -> t | None -> TyPrim "number") in
+         produce_emit_ty := saved;
+         ok (TyStream elem))
   | ESpawn (count, body, loc) ->
       (* spawn { ... } / spawn in N parallel { ... } as an expression: the body
          runs in one or N isolated forked replicas; each `promote E` contributes
@@ -1204,6 +1236,13 @@ got %s" (Tyenv.ty_to_string other)))
          the parent before fork). A block with no promote is an error. *)
       let* () = (match count with
         | Some n -> let* _ = check env ctx n (TyPrim "number") in ok ()
+        | None -> ok ()) in
+      let* () = (match first_assign_loc body with
+        | Some l ->
+            err l "`=` (Space-cell assignment) is not yet supported inside a `spawn` \
+                   block. Use `Space.set(cell, value)`, or compute the value before the \
+                   block and bind it with `be`. (Full support lands with the produce \
+                   rework in 1.2.)"
         | None -> ok ()) in
       let saved = !spawn_promote_ty in
       spawn_promote_ty := None;
@@ -2037,10 +2076,35 @@ and check_pattern (env : Tyenv.env) (ctx : Reduce.ctx)
  * expected_return; a `return e` statement checks e against it.
  *)
 
+(* Declare-once-per-scope (rule 1 of the `be holds` / `=` split, model A: every
+   `be x holds e` binds a fresh mutable local, and `x = e` reassigns it). Re-binding
+   the SAME name with `be ... holds` in the SAME block is a mistake, not a reassign;
+   the fix is `x = ...`. A stack of frames, one per open block, records the names a
+   block bound with `be ... holds`. check_stmts pushes a frame per nested block;
+   check_stmts_accum resets and pushes at function entry. Names that begin with `_`
+   are throwaways by convention (`_`, `_p`, `_1`) and are exempt. (Rule 2, `=` on an
+   undeclared name, is already enforced by type_of_lvalue's "unbound variable".) *)
+let scope_frames : string list ref list ref = ref []
+let scope_reset () = scope_frames := []
+let scope_push () = scope_frames := ref [] :: !scope_frames
+let scope_pop () = match !scope_frames with _ :: t -> scope_frames := t | [] -> ()
+let scope_throwaway name = String.length name = 0 || name.[0] = '_'
+let scope_has name =
+  match !scope_frames with f :: _ -> List.mem name !f | [] -> false
+let scope_add name =
+  match !scope_frames with f :: _ -> f := name :: !f | [] -> ()
+
 let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
                    (s : stmt) (expected_return : ty option) : Tyenv.env tc_result =
   match s with
+  | SLet (name, e, loc) when (not (scope_throwaway name)) && scope_has name ->
+      ignore e;
+      err loc (Printf.sprintf
+        "'%s' is already bound in this scope; use `%s = ...` to reassign it, \
+         not `be %s holds ...` again"
+        name name name)
   | SLet (name, e, _) ->
+      scope_add name;
       let* t = infer env ctx e in
       (* HM let-polymorphism: if the value is a lambda (ELam), generalize the
        * inferred type into a polymorphic scheme. Every meta-variable free in
@@ -2280,11 +2344,16 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
 
 and check_stmts (env : Tyenv.env) (ctx : Reduce.ctx)
                 (stmts : stmt list) (expected_return : ty option) : Tyenv.env tc_result =
-  List.fold_left
-    (fun acc s ->
-       let* env' = acc in
-       check_stmt env' ctx s expected_return)
-    (ok env) stmts
+  scope_push ();
+  let result =
+    List.fold_left
+      (fun acc s ->
+         let* env' = acc in
+         check_stmt env' ctx s expected_return)
+      (ok env) stmts
+  in
+  scope_pop ();
+  result
 
 (* Variant of check_stmts that accumulates errors across statements
  * instead of stopping at the first one. Each failing stmt contributes
@@ -2293,20 +2362,26 @@ and check_stmts (env : Tyenv.env) (ctx : Reduce.ctx)
 and check_stmts_accum (env : Tyenv.env) (ctx : Reduce.ctx)
                       (stmts : stmt list) (expected_return : ty option)
     : Tyenv.env * type_error list =
-  List.fold_left
-    (fun (env', errs) s ->
-       match check_stmt env' ctx s expected_return with
-       | Ok env'' -> (env'', errs)
-       | Error e -> (env', e :: errs))
-    (env, []) stmts
+  scope_reset ();
+  scope_push ();
+  let result =
+    List.fold_left
+      (fun (env', errs) s ->
+         match check_stmt env' ctx s expected_return with
+         | Ok env'' -> (env'', errs)
+         | Error e -> (env', e :: errs))
+      (env, []) stmts
+  in
+  scope_pop ();
+  result
 
 (* Implicit-return tail check. A function body's VALUE is desugar_stmt of its
  * LAST statement (desugar_stmt_or_return): for a tail that is NOT a `return`,
  * that value must still inhabit the declared return type. tycheck only checks
  * `return e` statements against expected_ret, so a body ending in e.g.
- * `let y holds 3` while declaring a place return type silently produces the
+ * `be y holds 3` while declaring a place return type silently produces the
  * wrong value. We check the tails whose value is a plain expression we can
- * infer (let / x holds e / a bare call), evaluated in the post-body env (the
+ * infer (be / x holds e / a bare call), evaluated in the post-body env (the
  * tail's own binding never feeds its own RHS), and ONLY when both the inferred
  * type and the declared type are CONCRETE — never the `unknown` f64-handle
  * placeholder, never a terminal (fieldless) place — so the loose handle
@@ -3156,8 +3231,8 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    * `fun f(R: Space): ...` and `fun g(m: Map): ...` without having to register
    * them with `place`. *)
   let runtime_builtin = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH";
-                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "MerkleTree";
-                         "VoyagerList"; "PerfectMap"; "String"] in
+                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower"; "MerkleTree";
+                         "VoyagerList"; "String"] in
   match t with
   | TyPrim n | TyPrimIn (n, _) ->
       if List.mem n primitives then ok ()

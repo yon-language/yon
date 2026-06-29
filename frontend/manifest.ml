@@ -294,7 +294,8 @@ let import_targets (p : program) : (string * location) list =
     | TopImportFrom (_, _, sp, loc) -> Some (sp, loc)
     | _ -> None) p
 
-(* Spaces the program declares with "space S ..." (TopSpace). *)
+(* The program's spaces (TopSpace). There is no surface `space S` syntax; these
+   nodes are filesystem-derived (package_layout.space_decls: one per directory). *)
 let declared_spaces (p : program) : string list =
   List.filter_map (function
     | TopSpace sd -> Some sd.sd_name

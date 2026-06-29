@@ -1,0 +1,4 @@
+[package]
+name = "eq_constant"
+[runtime]
+backend = "memory"

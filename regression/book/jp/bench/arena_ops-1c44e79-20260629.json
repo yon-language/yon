@@ -1,0 +1,23 @@
+{
+  "schema": [
+    "put@2k",
+    "put@5k",
+    "put@10k",
+    "put@20k",
+    "get@20k",
+    "same_orbit@20k"
+  ],
+  "median_ns": [
+    65,
+    75,
+    79,
+    81,
+    41,
+    1174
+  ],
+  "runs": 3,
+  "method": "in-process Time.now_ns, exact Leech.point twin, min-over-reps; warm (one-time mmgroup init excluded)",
+  "machine": "Apple M1",
+  "commit": "1c44e79",
+  "date": "2026-06-29"
+}

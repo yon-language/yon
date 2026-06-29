@@ -1,0 +1,8 @@
+[package]
+name = "ch04_genome_golay"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

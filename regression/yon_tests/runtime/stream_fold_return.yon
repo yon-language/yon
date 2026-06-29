@@ -1,0 +1,19 @@
+// Soundness gate for the stream-fold-in-expression-position fix (desugar.ml: the SReturn
+// case in v1_lower_stmt plus the v1_try_hoist_stmt / v1_hoist_expr nested-fold hoist).
+// A `s.fold(...)` on a produce/emit stream lowers to statements (a Stream__recv drain); in
+// any non-statement position it used to fall through to the Seq/list fold, read the stream
+// handle as a list, and return 0. `folded` exercises the DIRECT return position; `nested`
+// exercises a fold nested in an arithmetic expression. Each must equal 42; main returns
+// (42-42) + (42-42) = 0 (exit 0 = pass). With the bug each folded value was 0, so main
+// returned a non-zero exit.
+fun folded(): number {
+  be s holds produce { emit 41 emit 1 }
+  return s.fold(0, fun(a: number, v: number) => a + v)
+}
+fun nested(): number {
+  be s holds produce { emit 10 emit 20 }
+  return s.fold(0, fun(a: number, v: number) => a + v) + 12
+}
+fun main(): number {
+  return (folded() - 42) + (nested() - 42)
+}

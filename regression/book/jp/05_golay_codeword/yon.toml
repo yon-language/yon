@@ -1,0 +1,8 @@
+[package]
+name = "ch04_golay_codeword"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

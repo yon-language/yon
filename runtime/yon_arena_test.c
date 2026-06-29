@@ -25,7 +25,7 @@ static void collect(uint32_t value, uint32_t sigma, void *ctx) {
     if (c->n < MAXF) { c->val[c->n] = value; c->sig[c->n] = sigma; c->n++; }
 }
 
-static char seen_orbit[8192];   /* orbit invariant <= (24<<8)|24 = 6168 */
+static char seen_orbit[8192];   /* pure M24 orbit id in [0,12); 8192 is ample */
 
 int main(void) {
     printf("=== Leech type-2 arena oracle (road 3, bricks 1-4) ===\n\n");

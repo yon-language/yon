@@ -1,0 +1,6 @@
+place Entry { }
+
+fun main(): number {
+  be substrate holds 0
+  return substrate
+}

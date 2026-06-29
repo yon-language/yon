@@ -1,0 +1,63 @@
+place Entry { }
+
+// XRelSet / XRelMap / XSimplex functional contracts — SELF-CHECKING. Return =
+// number of failed checks; exit 0 means all three contracts hold. Raw type-2
+// points 1536, 1280, 16778752 (=-1536). The class equivalence is the sign-orbit
+// (Leech.same_orbit): 1536 ~ 16778752, 1536 not~ 1280. Gated values (regression
+// run): 1, 2, 2, 100, 0, 100, 1, 1, 1, 2, 1.
+//
+// Stdout (the 11 observed values); exit code = failures.
+
+fun main(): number visits Output {
+  // XRelSet — dedup by orbit class
+  be r holds XRelSet.empty()
+  be _r0 holds XRelSet.add_ref(r, 1536)
+  r = XRelSet.add(r, 1536)
+  r = XRelSet.add(r, 1536)
+  be v1 holds XRelSet.size(r)                 // a class, deduped -> 1
+  r = XRelSet.add(r, 1280)
+  be v2 holds XRelSet.size(r)                 // 1280 is a different class -> 2
+  r = XRelSet.add(r, 16778752)
+  be v3 holds XRelSet.size(r)                 // 16778752 is 1536's class -> still 2
+
+  // XRelMap — key = class, not specimen
+  be m holds XRelMap.empty()
+  be _m0 holds XRelMap.add_ref(m, 1536)
+  m = XRelMap.insert(m, 1536, 100)
+  be v4 holds XRelMap.get(m, 1536)            // exact point -> 100
+  be v5 holds XRelMap.get(m, 1280)            // different class -> miss (0)
+  be v6 holds XRelMap.get(m, 16778752)        // same class (antipode) -> 100
+
+  // XSimplex — classify relations
+  be v7 holds XSimplex.of2(1536, 1280)
+  be v8 holds XSimplex.of2(1280, 1536)        // symmetric -> v8 == v7
+  be v9 holds XSimplex.omega(1536, 1280, 16778752)   // -1/0/+1
+  be acc holds XSimplex.empty()
+  acc = XSimplex.add(acc, 1536, 1280)
+  acc = XSimplex.add(acc, 1280, 16778752)
+  be v10 holds XSimplex.size(acc)             // 2 edges
+  be v11 holds XSimplex.dominant(acc)
+
+  be _1 holds Output.print(String.from_int(v1))
+  be _2 holds Output.print(String.from_int(v2))
+  be _3 holds Output.print(String.from_int(v3))
+  be _4 holds Output.print(String.from_int(v4))
+  be _5 holds Output.print(String.from_int(v5))
+  be _6 holds Output.print(String.from_int(v6))
+  be _7 holds Output.print(String.from_int(v7))
+  be _8 holds Output.print(String.from_int(v8))
+  be _9 holds Output.print(String.from_int(v9))
+  be _10 holds Output.print(String.from_int(v10))
+  be _11 holds Output.print(String.from_int(v11))
+
+  be f holds (if v1 == 1 then 0 else 1)
+           + (if v2 == 2 then 0 else 1)
+           + (if v3 == 2 then 0 else 1)
+           + (if v4 == 100 then 0 else 1)
+           + (if v5 == 100 then 1 else 0)        // FAIL if a different class hit
+           + (if v6 == 100 then 0 else 1)
+           + (if v7 == v8 then 0 else 1)          // of2 symmetric
+           + (if v9 == 1 then 0 else 1)
+           + (if v10 == 2 then 0 else 1)
+  return f
+}

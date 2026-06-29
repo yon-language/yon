@@ -1,0 +1,4 @@
+[package]
+name = "arena_ops"
+[runtime]
+backend = "memory"

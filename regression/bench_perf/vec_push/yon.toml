@@ -1,0 +1,4 @@
+[package]
+name="vec_push"
+[runtime]
+backend="memory"

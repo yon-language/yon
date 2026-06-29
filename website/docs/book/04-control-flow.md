@@ -10,31 +10,30 @@ sidebar_position: 4
 fun main(): number {
   be x holds present
   be acc holds 0
-  when x is present { acc becomes 10 }
-  otherwise { acc becomes 1 }
+  when x is present { acc = 10 }
+  otherwise { acc = 1 }
 
   be grade holds if acc > 5 then 2 else 3            // expression form
-  acc becomes acc + grade                            // 12
+  acc = acc + grade                                  // 12
 
-  iter 3 do { acc becomes acc + 1 }                  // 15
+  iter 3 do { acc = acc + 1 }                        // 15
   be i holds 0
   while i < 2 do {
-    acc becomes acc + 5                              // 25
-    i becomes i + 1
+    acc = acc + 5                                    // 25
+    i = i + 1
   }
   for every n in List.cons(8, List.cons(9, List.empty(0))) {
-    acc becomes acc + n                              // 42
+    acc = acc + n                                    // 42
   }
   return acc
 }
 ```
 
-**`becomes` is the one mutation.** A binding that is ever the target of
-`becomes` is *promoted to a Space cell*, a mutable cell over the
-content-addressed heap. Its `be` allocates the cell, every read goes through
-it, every `becomes` updates it. You never see the cell; you just get a
-variable that can change. (The cells are also usable directly as
-`Space.make / set / get`.)
+**`=` is the one mutation.** A binding that is ever the target of `=` is
+*promoted to a Space cell*, a mutable cell over the content-addressed heap.
+Its `be` allocates the cell, every read goes through it, every `=` updates
+it. You never see the cell; you just get a variable that can change. (The
+cells are also usable directly as `Space.make / set / get`.)
 
 **`when` is the statement conditional.** It chains (`when c1 { } when c2 { }
 otherwise { }`) and accepts *pattern conditions*: `x is present`,
@@ -56,21 +55,20 @@ To *select a value*, use the expression form `if c then a else b`.
 fun main(): number {
   be acc holds 0
   be lst holds List.cons(5, List.cons(7, List.empty(0)))
-  in sequence over y in lst { acc becomes acc + 1 }     // 2
-  repeat at most 3 times { acc becomes acc + 2 }        // 8
-  otherwise { acc becomes acc + 1 }                     // 9
+  in sequence over y in lst { acc = acc + 1 }     // 2
+  repeat at most 3 times { acc = acc + 2 }        // 8
+  otherwise { acc = acc + 1 }                     // 9
   return acc
 }
 ```
 
-A `forever` in flight (the loop body is doing 7.6 million iterations per
-second here, printing as it goes):
+A `forever` in flight (the loop runs without bound, printing as it goes):
 
 ```yon
 fun main(): number {
   be n holds 0
   forever {
-    n becomes n + 1
+    n = n + 1
     when n > 3 { be _p holds IO.print_num(n) }
   }
   return 0

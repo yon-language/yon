@@ -37,8 +37,9 @@ fun main(): number {
 ```
 
 Two cells with the same content are *different cells*, exactly the opposite
-of values, where same content is the same thing. `becomes` (chapter 3) is
-surface sugar over precisely this: a mutable variable **is** a cell.
+of values, where same content is the same thing. Assignment with `=` (chapter
+3) is surface sugar over precisely this: a variable you reassign with `x = e`
+**is** a cell.
 
 ## Types at runtime
 

@@ -1,0 +1,18 @@
+{
+  "schema": "ns_per_message (end-to-end, 200000 messages over the SHM wire)",
+  "ns_per_message_min": 1111,
+  "messages": 200000,
+  "runs_ns": [
+    1111,
+    1182,
+    1237,
+    1290,
+    1335
+  ],
+  "messages_per_sec": 900090,
+  "channel": "shared-memory Wire (Wire.make_shm / produce_shm / await_shm)",
+  "backend": "L2_SHM (fork + shared memory)",
+  "machine": "Apple M1",
+  "commit": "1c44e79",
+  "date": "2026-06-29"
+}

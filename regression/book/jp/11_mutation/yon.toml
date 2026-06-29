@@ -1,0 +1,8 @@
+[package]
+name = "ch05_mutation"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

@@ -174,7 +174,7 @@ let map_size (m : term) : term option =
  * Space is genuinely mutable: set/get modify the cell in place.
  *
  * This is the kernel-level primitive for state in Yon. The functional
- * surface (let-binding, becomes) compiles to Space operations.
+ * surface (`be x holds e` init, `x = e` assign) compiles to Space operations.
  *
  * World-indexed Space (Yoneda multi-tenancy realization):
  * 
@@ -291,80 +291,6 @@ let stream_recv (sid : term) : term option =
            Some (Queue.pop q)
        | _ -> Some (encode_number (-1.0)))
 
-(* ─── PerfectMap runtime ───────────────────────────────────────────── *)
-
-(* PerfectMap: like Map but with construction-time key set, enabling
- * O(1) reads without collisions. For the prototype, we implement
- * the Direct reduction: when keys are bounded integers, store in an
- * array.
- *
- * In a real implementation, CHD (compress-hash-displace) would build
- * a perfect hash function at construction; we approximate with a
- * plain Hashtbl but record the construction-time keys so that the
- * "perfect" property could be enforced.
- *)
-
-type perfect_map = {
-  pm_table : (term, term) Hashtbl.t;
-  pm_keys : term list;        (* construction-time key set *)
-}
-
-let pmap_store : (int, perfect_map) Hashtbl.t = Hashtbl.create 64
-
-let encode_pmap (id : int) : term = Var (Printf.sprintf "__pmap_%d" id)
-
-let decode_pmap_id (t : term) : int option =
-  match t with
-  | Var name when String.length name > 7 && String.sub name 0 7 = "__pmap_" ->
-      (try Some (int_of_string (String.sub name 7 (String.length name - 7)))
-       with _ -> None)
-  | _ -> None
-
-(* Build a PerfectMap from a list of (key, value) pairs. The keys must
- * all be distinct; we check this and return None if violated. *)
-let pmap_build (entries : (term * term) list) : term option =
-  let keys = List.map fst entries in
-  let unique = List.sort_uniq compare keys in
-  if List.length unique <> List.length keys then None
-  else
-    let tbl = Hashtbl.create (List.length entries * 2) in
-    List.iter (fun (k, v) -> Hashtbl.add tbl k v) entries;
-    let pm = { pm_table = tbl; pm_keys = keys } in
-    let id = fresh_id () in
-    Hashtbl.add pmap_store id pm;
-    Some (encode_pmap id)
-
-let pmap_get (m : term) (k : term) : term option =
-  match decode_pmap_id m with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt pmap_store id with
-       | None -> None
-       | Some pm ->
-           match Hashtbl.find_opt pm.pm_table k with
-           | Some v -> Some v
-           | None -> Some (Var "__absent"))
-
-let pmap_keys (m : term) : term option =
-  match decode_pmap_id m with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt pmap_store id with
-       | None -> None
-       | Some pm ->
-           (* Build a list out of the keys. *)
-           let lst_id = fresh_id () in
-           Hashtbl.add list_store lst_id pm.pm_keys;
-           Some (encode_list lst_id))
-
-let pmap_size (m : term) : term option =
-  match decode_pmap_id m with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt pmap_store id with
-       | None -> None
-       | Some pm -> Some (encode_number (float_of_int (List.length pm.pm_keys))))
-
 (* ─── Hook into Builtins.try_reduce_builtin ────────────────────────── *)
 
 (* We expose a try_reduce_stdlib function that the main evaluator
@@ -437,25 +363,6 @@ let try_reduce_stdlib (t : term) : term option =
       stream_send sid v
   | App (Var "Stream__recv", sid) ->
       stream_recv sid
-
-  (* PerfectMap operations.
-     We expose PerfectMap__build only with a list-of-pairs encoded as
-     two lists (keys + values) for simplicity. *)
-  | App (App (Var "PerfectMap__build_from", keys_lst), values_lst) ->
-      (match decode_list_id keys_lst, decode_list_id values_lst with
-       | Some kid, Some vid ->
-           let keys = try Hashtbl.find list_store kid with Not_found -> [] in
-           let vals = try Hashtbl.find list_store vid with Not_found -> [] in
-           if List.length keys = List.length vals then
-             pmap_build (List.combine keys vals)
-           else None
-       | _ -> None)
-  | App (App (Var "PerfectMap__get", m), k) ->
-      pmap_get m k
-  | App (Var "PerfectMap__keys", m) ->
-      pmap_keys m
-  | App (Var "PerfectMap__size", m) ->
-      pmap_size m
 
   | _ -> None
 
@@ -576,12 +483,27 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     "XSimplex", [
       "of2", [tnum; tnum], tnum;
       "triangle", [tnum; tnum; tnum], tnum;
+      "triangle_fine", [tnum; tnum; tnum], tnum;
       "omega", [tnum; tnum; tnum], tnum;
       "empty", [], TyUser "Map";
       "add", [TyUser "Map"; tnum; tnum], TyUser "Map";
       "count", [TyUser "Map"; tnum], tnum;
       "dominant", [TyUser "Map"], tnum;
       "size", [TyUser "Map"], tnum;
+    ];
+    (* XTower: the nested stabilizer tower Co0 superset N superset M24 superset id
+     * (levels 1/3/12/196560, each refining the previous). Where XSimplex
+     * classifies pairs/triples, XTower classifies a SINGLE type-2 point into the
+     * refining tree. class(point, level) -> class id at that level (level 0 -> 0;
+     * level 2 -> 0..11; -1 if not type-2). same_branch(a, b, level) -> 1.0 if a,b
+     * share the branch down to that level, 0.0 if not, -1.0 if either is not
+     * type-2. width(level) -> 1/3/12/196560. depth() -> 4. Runtime: yon_rt_xtower_*
+     * (runtime/yon_rt.c). *)
+    "XTower", [
+      "class", [tnum; tnum], tnum;
+      "same_branch", [tnum; tnum; tnum], tnum;
+      "width", [tnum], tnum;
+      "depth", [], tnum;
     ];
     (* Merkle DAG as a stdlib place.
      * Surface API: MerkleTree.{leaf, node2, label, child, equal, to_stream}.
@@ -618,6 +540,20 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       (* Co_0 transport (Curtis): sigma with v*sigma == w; apply runs the word. *)
       "transport", [tnum; tnum], tnum;
       "transport_apply", [tnum; tnum], tnum;
+      (* embed(bits, mode): map an up-to-12-bit character vector to the nearest
+       * type-2 point (yon_leech2_quantize), so XSimplex.of2 can classify the
+       * relation between two vectors by their BIT pattern. mode in {0,1,2}
+       * selects the bits->R^24 embedding (duplicate / golay / sparse). The
+       * purpose-built taxonomy map; whether Hamming survives into of2 is gated,
+       * not assumed (regression/book/jp/probe_embed_maps). *)
+      "embed", [tnum; tnum], tnum;
+      "point", [tnum], tnum;
+
+      (* pair_subtype(a, b): the raw leech2 subtype of a^b, NO type-2 gate (unlike
+       * XSimplex.of2). With the linear gcode embedding (embed mode 3) this reads
+       * WHICH characters differ (the symmetric difference, via Golay) rather than
+       * the popcount/grade — the clade reader. *)
+      "pair_subtype", [tnum; tnum], tnum;
     ];
     (* VoyagerList as a collection. A Golay (24,12,8) codeword: auto-seal on
      * append, auto-open on get, with error correction up to 3 bits per
@@ -628,6 +564,9 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "get", [TyUser "VoyagerList"; tnum], tnum;
       "size", [TyUser "VoyagerList"], tnum;
       "corrupt_at", [TyUser "VoyagerList"; tnum; tnum], TyUser "VoyagerList";
+      "seal", [tnum], tnum;
+      "open", [tnum], tnum;
+      "corrupt", [tnum; tnum], tnum;
       "to_stream", [TyUser "VoyagerList"], tlist tnum;
     ];
     (* Arena: the Leech type-2 arena as a first-class structure. Points are
@@ -652,12 +591,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     (* The Lattice module was removed (dead code). No example uses it; the
      * example topos_heyt_int_lattice.yon uses the __heyt_int_make builtins
      * directly, not the Lattice surface API. *)
-    "PerfectMap", [
-      "build_from", [tlist tunk; tlist tunk], TyUser "PerfectMap";
-      "get", [TyUser "PerfectMap"; tunk], tunk;
-      "keys", [TyUser "PerfectMap"], tlist tunk;
-      "size", [TyUser "PerfectMap"], tnum;
-    ];
     (* Capability registry MVP. *)
     "Cap", [
       "grant", [tnum], tnum;

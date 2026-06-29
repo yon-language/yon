@@ -1,0 +1,9 @@
+place Entry { }
+
+fun main(): number visits Output {
+  be herd0 holds HashSet.empty()
+  be herd1 holds HashSet.add(herd0, 100247)
+  be herd2 holds HashSet.add(herd1, 100247)
+  be _printed holds Output.print(String.from_int(HashSet.size(herd2)))
+  return 0
+}
