@@ -1,10 +1,14 @@
 (* cubical.ml — Cubical Type Theory fragment for Yon.
  *
- * Implements the (∞,1)-decidable layer of the federation, per
+ * A prototype of the (∞,1)-decidable layer of the federation, modelled on
  * Cohen-Coquand-Huber-Mörtberg 2016 "Cubical Type Theory: a
- * constructive interpretation of the univalence axiom."
+ * constructive interpretation of the univalence axiom." Scoped to a future
+ * version (1.2): the composition/transport/glue rules below handle the basic
+ * cases and fall back to a canonical form for the rest (see the "prototype"
+ * notes in reduce_comp and the HIT comp), so this is not a complete CCHM
+ * implementation.
  *
- * The cubical layer provides:
+ * The cubical layer provides (in prototype form):
  *
  *   1. The interval I with endpoints 0 and 1, and connections
  *      (min, max, negation) for face formulas.
@@ -27,8 +31,9 @@
  *   - Quotient types (e.g., Currency / equivalent_currency_set).
  *
  * The cubical fragment is decidable because cubical type checking is
- * decidable (the original CCHM result). The composition and glue
- * operations all reduce to canonical forms.
+ * decidable (the original CCHM result). In this prototype the composition
+ * and glue operations reduce to canonical forms on the basic cases and are
+ * left as a canonical (un-reduced) form otherwise.
  *)
 
 open Surface_ast

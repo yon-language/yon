@@ -1,0 +1,8 @@
+[package]
+name = "probe_orbit_spread"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

@@ -1,0 +1,8 @@
+[package]
+name = "ch01_1_unreadable"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

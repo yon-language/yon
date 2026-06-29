@@ -23,7 +23,8 @@ the category).
 slot index of its content in the content-addressed heap.
 
 **cell**, the one thing in Yon with identity instead of content: a mutable
-register whose current value is a handle; `becomes` is sugar over cells.
+register whose current value is a handle; the assignment `x = e` is sugar
+over cells.
 
 **arrow**, anything that maps; every arrow has a kind, and the kinds live
 at different levels (see chapter 6's ladder).
@@ -48,11 +49,11 @@ per object (a natural transformation; a 2-cell).
 morphism: the adjunction `f* ⊣ f∗`).
 
 **monomorphism (mono)**, an arrow that loses nothing; all Yon subtyping is
-travel along a mono: `extends` declares one, comprehension's coercion is
+travel along a mono: `subcontains` declares one, comprehension's coercion is
 one, `boolean → proposition` is one.
 
 **subobject**, a part of an object carved out by a property; in Yon, a
-comprehension type `{x : A where P}` or a `place ... extends` declaration.
+comprehension type `{x : A where P}` or a `place ... subcontains` declaration.
 
 **Ω (the classifier)**, the type of truth values; in Yon a Heyting algebra
 with `present`, `absent`, `unknown` (the subobject classifier of a topos, 

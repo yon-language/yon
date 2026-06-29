@@ -89,7 +89,7 @@ fun main(): number {
   be deposits holds List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
   be total holds 0
   for every d in deposits {
-    total becomes total + deposit_net(d)     // three calls cross the wire
+    total = total + deposit_net(d)           // three calls cross the wire
   }
   be usd holds rates::eur_to_usd(total)      // 190 EUR -> 209 USD
   be _p holds IO.print_num(usd)
@@ -110,7 +110,7 @@ What just happened, end to end: the first `deposit_net(100)` **forked and
 spawned `./Bank_srv`**; each iteration sent a selector and one `f64` through
 `/yon_stream_Bank` and waited for one `f64` back; `audit_key` was never on
 the wire (`internal`); the totals accumulated through a promoted cell
-(`becomes`); the conversion came from a git-pinned dependency under its
+(the `=` assignment); the conversion came from a git-pinned dependency under its
 `rates::` prefix; and when the program exited, the server it had spawned
 went down with it.
 

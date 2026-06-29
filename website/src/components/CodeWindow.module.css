@@ -1,32 +1,70 @@
 /* The landing code window, extracted for reuse in the docs.
    Same hairlines, dots and output bar as src/pages/index.module.css. */
 .code {
-  border: 1px solid var(--yon-hair, rgba(140,130,200,.22));
-  border-radius: 14px; overflow: hidden;
+  border: 1px solid var(--yon-hair, rgba(140, 130, 200, 0.22));
+  border-radius: 14px;
+  overflow: hidden;
   background: var(--yon-disc, #14112b);
-  box-shadow: 0 30px 60px -34px rgba(0,0,0,.6);
+  box-shadow: 0 30px 60px -34px rgba(0, 0, 0, 0.6);
   margin: 1.2rem 0 1.6rem;
 }
 .codeBar {
-  display: flex; align-items: center; gap: 8px; padding: 12px 16px;
-  border-bottom: 1px solid var(--yon-hair-2, rgba(140,130,200,.14));
-  font-family: var(--ifm-font-family-monospace); font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--yon-hair-2, rgba(140, 130, 200, 0.14));
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 12px;
   color: var(--yon-lav-dim, #8d86b8);
 }
-.dots { display: flex; gap: 6px; }
-.dots i { width: 10px; height: 10px; border-radius: 50%; display: block; }
-.dots i:nth-child(1){ background: #E8A33D; }
-.dots i:nth-child(2){ background: #6A5FC0; }
-.dots i:nth-child(3){ background: #3a2f72; }
-.body { margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
-.body pre { margin: 0; border-radius: 0; }
-.codeOut {
-  border-top: 1px solid var(--yon-hair-2, rgba(140,130,200,.14));
-  padding: 14px 22px; font-family: var(--ifm-font-family-monospace);
-  font-size: 12.5px; color: var(--yon-lav, #b9b2dd);
-  display: flex; flex-direction: column; gap: 6px;
-  white-space: nowrap; overflow-x: auto;
+.dots {
+  display: flex;
+  gap: 6px;
 }
-.pmt { color: var(--yon-ring, #E8A33D); }
-.res { color: var(--yon-light, #efeaff); }
-.res::before { content: "\\203A\\00a0\\00a0"; color: var(--yon-lav-dim, #8d86b8); }
+.dots i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: block;
+}
+.dots i:nth-child(1) {
+  background: #e8a33d;
+}
+.dots i:nth-child(2) {
+  background: #6a5fc0;
+}
+.dots i:nth-child(3) {
+  background: #3a2f72;
+}
+.body {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+.body pre {
+  margin: 0;
+  border-radius: 0;
+}
+.codeOut {
+  border-top: 1px solid var(--yon-hair-2, rgba(140, 130, 200, 0.14));
+  padding: 14px 22px;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 12.5px;
+  color: var(--yon-lav, #b9b2dd);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.pmt {
+  color: var(--yon-ring, #e8a33d);
+}
+.res {
+  color: var(--yon-light, #efeaff);
+}
+.res::before {
+  content: '\\203A\\00a0\\00a0';
+  color: var(--yon-lav-dim, #8d86b8);
+}

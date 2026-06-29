@@ -1,0 +1,67 @@
+{
+  "_comment": "The 50-taxon (48 here, per the band lists) single lineage archosaur -> gull. Each taxon has a 12-bit cladistic character vector (one bit per character, in evolutionary order). ILLUSTRATIVE: states assigned from the literature in broad strokes to test the MECHANISM, NOT a peer-reviewed TWG matrix. This is the ONE swappable source of vectors; the .yon trace and every viz read these. of2/triangle/omega/XTower operate on Leech.embed(vector, 0), the quantizer-backed map (mode 0 duplicate), the only candidate that yields valid type-2 with a usable spread (probe_embed_maps). of2 is a relation class (Co2), NOT an ordered distance and NOT a biological ruler; the tree is the orbit/XTower classification (the core).",
+  "characters": ["bipedal", "hollow_bones", "furcula", "three_fingered_hand", "semilunate_carpal", "filamentous_feathers", "pennaceous_feathers", "asymmetric_feathers", "extensive_pneumatization", "pygostyle", "fused_tarsometatarsus", "reversed_hallux"],
+  "embed_mode": 0,
+  "bands": [
+    { "band": 0, "name": "basal archosaurs / root", "taxa": [
+      { "name": "Euparkeria",       "v": 0 },
+      { "name": "Marasuchus",       "v": 1 },
+      { "name": "Eoraptor",         "v": 1 },
+      { "name": "Herrerasaurus",    "v": 1 }
+    ]},
+    { "band": 1, "name": "basal theropods", "taxa": [
+      { "name": "Coelophysis",      "v": 3 },
+      { "name": "Dilophosaurus",    "v": 3 },
+      { "name": "Ceratosaurus",     "v": 259 },
+      { "name": "Allosaurus",       "v": 263 },
+      { "name": "Sinraptor",        "v": 263 },
+      { "name": "Spinosaurus",      "v": 259 },
+      { "name": "Megalosaurus",     "v": 263 },
+      { "name": "Cryolophosaurus",  "v": 259 }
+    ]},
+    { "band": 2, "name": "tyrannosauroids + ornithomimosaurs", "taxa": [
+      { "name": "Tyrannosaurus",    "v": 295 },
+      { "name": "Gorgosaurus",      "v": 295 },
+      { "name": "Dilong",           "v": 295 },
+      { "name": "Compsognathus",    "v": 303 },
+      { "name": "Ornithomimus",     "v": 303 },
+      { "name": "Gallimimus",       "v": 303 }
+    ]},
+    { "band": 3, "name": "non-avian maniraptorans (the core)", "taxa": [
+      { "name": "Oviraptor",        "v": 383 },
+      { "name": "Citipati",         "v": 383 },
+      { "name": "Caudipteryx",      "v": 383 },
+      { "name": "Therizinosaurus",  "v": 319 },
+      { "name": "Velociraptor",     "v": 2431 },
+      { "name": "Deinonychus",      "v": 2431 },
+      { "name": "Microraptor",      "v": 2559 },
+      { "name": "Anchiornis",       "v": 2559 },
+      { "name": "Sinornithosaurus", "v": 2559 },
+      { "name": "Buitreraptor",     "v": 2431 }
+    ]},
+    { "band": 4, "name": "basal / fossil birds (the bridge)", "taxa": [
+      { "name": "Archaeopteryx",    "v": 2559 },
+      { "name": "Jeholornis",       "v": 2559 },
+      { "name": "Sapeornis",        "v": 3071 },
+      { "name": "Confuciusornis",   "v": 3071 },
+      { "name": "Enantiornis",      "v": 4095 },
+      { "name": "Iberomesornis",    "v": 4095 },
+      { "name": "Hesperornis",      "v": 4095 },
+      { "name": "Ichthyornis",      "v": 4095 },
+      { "name": "Gansus",           "v": 4095 },
+      { "name": "Patagopteryx",     "v": 4095 },
+      { "name": "Rahonavis",        "v": 2559 },
+      { "name": "Vegavis",          "v": 4095 }
+    ]},
+    { "band": 5, "name": "modern birds", "taxa": [
+      { "name": "Struthio",         "v": 2047 },
+      { "name": "Gallus",           "v": 4095 },
+      { "name": "Anas",             "v": 4095 },
+      { "name": "Columba",          "v": 4095 },
+      { "name": "Corvus",           "v": 4095 },
+      { "name": "Pelecanus",        "v": 4095 },
+      { "name": "Apteryx",          "v": 2047 },
+      { "name": "Larus michahellis","v": 4095 }
+    ]}
+  ]
+}

@@ -1,0 +1,14 @@
+place Entry { }
+// §3 MerkleTree — "are these two pedigrees identical, by content?". Two trees built from
+// the same genomes are equal by content-address; one differing leaf breaks it.
+// Stdout: [1] equal(t1,t2)=1 (same content), [2] equal(t1,t3)=0 (one leaf differs),
+// [3] label(t1) = the content-address of the whole tree.
+fun main(): number visits Output {
+  be t1 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
+  be t2 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
+  be t3 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(9999))
+  be _1 holds Output.print(String.from_int(if MerkleTree.equal(t1, t2) then 1 else 0))
+  be _2 holds Output.print(String.from_int(if MerkleTree.equal(t1, t3) then 1 else 0))
+  be _3 holds Output.print(String.from_int(MerkleTree.label(t1)))
+  return 0
+}

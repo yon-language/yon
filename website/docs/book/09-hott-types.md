@@ -43,8 +43,8 @@ fun main(): number {
 The most Yon-flavoured citizen is the **comprehension**:
 
 ```yon
-world W { Code is X }
-place Account in W { v number }
+// Account.yon, a place file in the site's space directory
+place Account { v number }
 
 /* The comprehension type: the subobject of Account carved out by the
  * (here, contractibility-flavoured) fibre. Declaring it type-checks;

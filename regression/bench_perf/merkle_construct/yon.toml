@@ -1,0 +1,4 @@
+[package]
+name="merkle_construct"
+[runtime]
+backend="memory"

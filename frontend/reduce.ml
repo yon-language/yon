@@ -16,9 +16,11 @@
  *
  * The dispatcher specified in v0.3 §6.4.1 orders reductions:
  *     structural (Families 4-7) -> cubical -> computational (Families 1-3)
- * For this prototype, we have Families 1-5, no cubical layer yet, so the
- * dispatcher is: place and reduction equivalence first, then
- * beta+eta. This gives deterministic, terminating reduction.
+ * We have Families 1-5; the cubical AST nodes (PLam/PApp/Transp/Comp/HComp/
+ * Glue/HIT) are matched here for congruence and refl-beta, with their head
+ * computation delegated to the Cubical engine via the bridge in builtins.ml.
+ * The dispatcher is: place and reduction equivalence first, then beta+eta.
+ * This gives deterministic, terminating reduction.
  *)
 
 open Ast
@@ -109,7 +111,6 @@ let is_value t =
       || starts_with "__bool_" || starts_with "__heyt_"
       || starts_with "__dur_" || starts_with "__space_"
       || starts_with "__list_" || starts_with "__map_"
-      || starts_with "__pmap_"
       || starts_with "__coh_"
   | App _ ->
       (* Check if the outermost App is a constructor application
@@ -194,7 +195,7 @@ let rec has_side_effect t =
         && String.sub name 0 (String.length p) = p
       in
       prefix "Space__"
-      || prefix "PerfectMap__" || prefix "Output__"
+      || prefix "Output__"
       || prefix "Stream__"
       (* List__, Map__ are pure: each op produces a new id without
        * mutating state, so they don't need strict ordering.
@@ -324,7 +325,8 @@ let subst_hit_payloads body vars args =
  * Dispatcher order (per v0.3 §6.4.1 and Yon Core §8.2):
  *   1. Structural reductions first (place/reduction equivalence) — handled at construction
  *      since we identify places/reductions by signature; no in-term rules.
- *   2. Cubical reductions — omitted in this prototype.
+ *   2. Cubical reductions — congruence and refl-beta handled here; full
+ *      head computation delegated to the Cubical engine (via builtins.ml).
  *   3. Computational reductions — beta, eta, scope-exit, with-return,
  *      with-handle, emit.
  *)

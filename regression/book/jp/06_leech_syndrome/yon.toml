@@ -1,0 +1,8 @@
+[package]
+name = "ch05_leech_syndrome"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

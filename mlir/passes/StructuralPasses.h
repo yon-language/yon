@@ -1,6 +1,6 @@
 //===- StructuralPasses.h - Batch C -----------------------------*- C++ -*-===//
 //
-// Declares 9 analysis passes that perform structural/categorical
+// Declares 10 analysis passes that perform structural/categorical
 // well-formedness checks beyond what TableGen verifiers can express.
 //
 // These passes do not modify the IR; they only emit diagnostics.

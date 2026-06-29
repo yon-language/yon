@@ -1,0 +1,10 @@
+place Entry { }
+fun main(): number visits Output {
+  be h holds Space.make(HashSet.empty())
+  be i holds Space.make(0)
+  iter 1000000 do { be k holds Space.get(i)
+               be _ holds Space.set(h, HashSet.add(Space.get(h), k))
+               be _2 holds Space.set(i, k + 1) }
+  be _p holds Output.print(String.from_int(HashSet.size(Space.get(h))))
+  return 0
+}

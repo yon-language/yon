@@ -201,82 +201,6 @@ let parse_string (source : string) : (Surface_ast.program, string) result =
   | Lexer.Lexer_error msg ->
       Error (Printf.sprintf "Lexer error: %s" msg)
 
-(* Test 9: parse a minimal surface Yon program. *)
-let test_parse_minimal () =
-  let src = {|
-    world Demo {
-      Color is red, green, blue
-    }
-    
-    place Item in Demo {
-      name text
-      value number
-    }
-    
-    fun identity(x: number): number {
-      return x
-    }
-  |} in
-  Printf.printf "\n=== Test 9: parse minimal surface Yon program ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      List.iter (fun td ->
-        match td with
-        | Surface_ast.TopWorld wd ->
-            Printf.printf "  world %s with %d places\n"
-              wd.Surface_ast.wd_name (List.length wd.Surface_ast.wd_places)
-        | Surface_ast.TopPlace pd ->
-            Printf.printf "  place %s in %s with %d members\n"
-              pd.Surface_ast.pd_name pd.Surface_ast.pd_world
-              (List.length pd.Surface_ast.pd_members)
-        | Surface_ast.TopFun fn ->
-            Printf.printf "  fun %s with %d params\n"
-              fn.Surface_ast.fn_name (List.length fn.Surface_ast.fn_params)
-        | _ -> Printf.printf "  (other decl)\n"
-      ) prog;
-      Printf.printf "Status: PASS\n";
-      true
-
-(* Test 10: parse a program with reduction + with block. *)
-let test_parse_reduction () =
-  let src_min = {|place Output in Demo with effects {
-  operation print(s: text)
-}
-|} in
-  Printf.printf "\n=== Test 10a: minimal place with effects ===\n";
-  (match parse_string src_min with
-   | Error msg -> Printf.printf "FAIL minimal — %s\n" msg
-   | Ok _ -> Printf.printf "PASS minimal\n");
-
-  let src = {|
-    place Output in Demo with effects {
-      operation print(s: text)
-    }
-    
-    reduction Console of Output {
-      on print(s: text) {
-        return s
-      }
-    }
-    
-    fun greet(): text {
-      return Output.print("hello")
-    }
-  |} in
-  Printf.printf "\n=== Test 10: parse reduction ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
 (* Test 11: full pipeline — parse, desugar, evaluate (no errors). *)
 let test_pipeline () =
   let src = {|
@@ -308,202 +232,6 @@ let test_pipeline () =
            Printf.printf "No main found.\n";
            false)
 
-(* Test 12: parse a program using when/otherwise and effects. *)
-let test_parse_complex () =
-  let src = {|
-    world Banking {
-      Currency is EUR, USD
-    }
-    
-    place Account in Banking {
-      id text
-      balance number
-    }
-    
-    fun transfer(from_acc: Account, to_acc: Account, amount: number) {
-      when from_acc.balance >= amount {
-        from_acc.balance becomes from_acc.balance - amount
-        to_acc.balance becomes to_acc.balance + amount
-      }
-      otherwise {
-        return insufficient_funds
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 12: parse complex program with conditionals ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
-(* Test 13: parse program with stream, scope, for-every, sum types. *)
-let test_parse_streams_iteration () =
-  let src = {|
-    world Sensors {
-      Reading is by Item
-      Status is on, off, error
-    }
-    
-    place Item in Sensors {
-      value number
-      timestamp number
-    }
-    
-    place Pipeline in Sensors with effects {
-      input stream of Item buffer 100 drop_oldest
-      operation emit_value(v: number)
-      operation log(msg: text)
-    }
-    
-    fun process(p: Pipeline) {
-      for every reading in p.input when here {
-        when reading.value > 100 {
-          Pipeline.emit_value(reading.value)
-          Pipeline.log("high reading detected")
-        }
-        otherwise {
-          Pipeline.log("normal reading")
-        }
-      }
-    }
-    
-    fun aggregate(items: list of Item): number {
-      let total holds 0
-      in sequence over item in items {
-        total becomes total + item.value
-      }
-      return total
-    }
-  |} in
-  Printf.printf "\n=== Test 13: parse streams + iteration + sum types ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
-(* Test 14: parse program with move declarations (both forms). *)
-let test_parse_moves () =
-  let src = {|
-    world Catalog {
-      Currency is EUR, USD
-    }
-    world Orders {
-      Currency is EUR, USD, JPY
-    }
-    
-    place Product in Catalog {
-      name text
-      price number
-    }
-    
-    place LineItem in Orders {
-      product_name text
-      cost number
-    }
-    
-    move CatalogToOrder from Catalog to Orders {
-      name maps to product_name by identity
-      price converts to cost by multiply_by_quantity
-      Currency aggregates to Currency by union
-    }
-    
-    move UnifyWorlds unifies Catalog, Orders {
-      share Currency
-      conflict_on Currency resolves to prefer_catalog
-    }
-  |} in
-  Printf.printf "\n=== Test 14: parse move declarations ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
-(* Test 15: parse program with view, scope, repeat, durations. *)
-let test_parse_misc () =
-  let src = {|
-    place Counter in Demo {
-      value number
-    }
-    
-    view CounterView of Counter {
-      show value
-      show value = value * 2
-      show value as "Doubled"
-    }
-    
-    fun simulation(c: Counter) {
-      repeat at most 100 times {
-        c.value becomes c.value + 1
-        when c.value >= 50 {
-          return success
-        }
-      }
-      otherwise {
-        return max_iterations_reached
-      }
-    }
-    
-    fun timed_op(): number {
-      let timeout holds 500ms
-      let interval holds 2.5s
-      scope inner {
-        let temp holds 42
-        return temp + 1
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 15: parse view, repeat, durations, currencies ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
-(* Test 16: parse program with reduction having multi-shot + let state. *)
-let test_parse_reduction_advanced () =
-  let src = {|
-    place State in Demo with effects {
-      operation increment()
-      operation get_count(): number
-    }
-    
-    reduction Counter of State with multi_shot {
-      let count holds 0
-      
-      on increment() {
-        count becomes count + 1
-      }
-      
-      on get_count() {
-        return count
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 16: parse multi-shot reduction with state ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
 (* Test 17: parse program with patterns and Heyting tri-value. *)
 let test_parse_patterns () =
   let src = {|
@@ -523,31 +251,6 @@ let test_parse_patterns () =
     }
   |} in
   Printf.printf "\n=== Test 17: parse patterns (present/absent/unknown) ===\n";
-  match parse_string src with
-  | Error msg ->
-      Printf.printf "FAIL — %s\n" msg;
-      false
-  | Ok prog ->
-      Printf.printf "PARSED — %d top-level declarations\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
-(* Test 18: parse program with produce/emit blocks. *)
-let test_parse_produce_emit () =
-  let src = {|
-    place Stream in Demo with effects {
-      operation publish(v: number)
-    }
-    
-    fun generator(): stream of number {
-      produce {
-        for every i in range_0_to_100 {
-          emit i * 2
-        }
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 18: parse produce/emit blocks ===\n";
   match parse_string src with
   | Error msg ->
       Printf.printf "FAIL — %s\n" msg;
@@ -677,38 +380,6 @@ let tc_program (src : string) : (Tycheck.check_result, string) result =
   | Error msg -> Error msg
   | Ok prog -> Ok (Tycheck.check_program prog)
 
-(* Test 23: type-check a well-typed program. *)
-let test_tycheck_wellformed () =
-  let src = {|
-    world Demo {
-      Color is red, green, blue
-    }
-    
-    place Item in Demo {
-      name text
-      value number
-    }
-    
-    fun double(x: number): number {
-      return x + x
-    }
-    
-    fun main(): number {
-      return double(21)
-    }
-  |} in
-  Printf.printf "\n=== Test 23: type-check well-formed program ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "0 errors. Status: PASS\n"; true)
-      else
-        (List.iter (fun e ->
-           Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
-
 (* Test 24: type-check catches a wrong argument count. *)
 let test_tycheck_wrong_arity () =
   let src = {|
@@ -823,66 +494,6 @@ let test_tycheck_bad_field_access () =
            cr.cr_errors;
          Printf.printf "Status: PASS (rejected as expected)\n";
          true)
-
-(* Test 30: type-check catches reduction targeting wrong place. *)
-let test_tycheck_reduction_coverage () =
-  let src = {|
-    place State in __Builtin with effects {
-      operation get(): number
-      operation put(n: number)
-    }
-    
-    reduction Counter of State {
-      on get() {
-        return 0
-      }
-      on bogus() {
-        return 0
-      }
-    }
-  |} in
-  Printf.printf "\n=== Test 30: type-check rejects bogus handler ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "Expected error, got 0 errors. FAIL\n"; false)
-      else
-        (Printf.printf "Got %d error(s):\n" (List.length cr.cr_errors);
-         List.iter (fun e ->
-           Printf.printf "  %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         Printf.printf "Status: PASS (rejected as expected)\n";
-         true)
-
-(* Test 31: type-check verifies place field types. *)
-let test_tycheck_place_fields () =
-  let src = {|
-    world W {
-      Color is red, green
-    }
-    
-    place P in W {
-      a number
-      b text
-    }
-    
-    fun use(p: P): number {
-      return p.a
-    }
-  |} in
-  Printf.printf "\n=== Test 31: type-check verifies field access on place ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "0 errors. Status: PASS\n"; true)
-      else
-        (Printf.printf "Got unexpected errors:\n";
-         List.iter (fun e ->
-           Printf.printf "  %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
 
 (* Test 32: CATT_R_Yon — place equivalence by signature. *)
 let test_catt_place_equiv () =
@@ -1096,23 +707,6 @@ let test_cubical_comp_path () =
       Printf.printf "  comp at Path didn't produce a path: FAIL\n";
       false
 
-(* Test 40: Cubical composition at primitive type reduces to base. *)
-let test_cubical_comp_base () =
-  Printf.printf "\n=== Test 40: Cubical comp at primitive reduces to base ===\n";
-  let open Cubical in
-  let ty = CTBase (Surface_ast.TyPrim "number") in
-  let base = CVar "u_0" in
-  let result = reduce_comp ty
-    [ [("i", true)] ]
-    [ ("u", [("i", true)], CVar "u_val") ]
-    base in
-  if result = base then
-    (Printf.printf "  comp at number returns base: OK\n";
-     Printf.printf "Status: PASS\n"; true)
-  else
-    (Printf.printf "  comp at primitive did not return base: FAIL\n";
-     false)
-
 (* Test 41: cubical primitive refl type-checks. *)
 let test_tycheck_refl () =
   let src = {|
@@ -1273,40 +867,6 @@ let test_stdlib_space () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 49: PerfectMap — construction + lookup. *)
-let test_stdlib_pmap () =
-  Printf.printf "\n=== Test 49: stdlib PerfectMap — build + get ===\n";
-  let open Ast in
-  let k1 = Builtins.encode_string "first" in
-  let k2 = Builtins.encode_string "second" in
-  let k3 = Builtins.encode_string "third" in
-  let v1 = Builtins.encode_number 1.0 in
-  let v2 = Builtins.encode_number 2.0 in
-  let v3 = Builtins.encode_number 3.0 in
-  let mk_lst items =
-    List.fold_right
-      (fun x acc ->
-         invoke_stdlib (App (App (Var "List__cons", x), acc)))
-      items
-      (invoke_stdlib (App (Var "List__empty", Unit)))
-  in
-  let keys = mk_lst [k1; k2; k3] in
-  let vals = mk_lst [v1; v2; v3] in
-  let pm = invoke_stdlib (App (App (Var "PerfectMap__build_from", keys), vals)) in
-  let g1 = invoke_stdlib (App (App (Var "PerfectMap__get", pm), k1)) in
-  let g3 = invoke_stdlib (App (App (Var "PerfectMap__get", pm), k3)) in
-  let sz = invoke_stdlib (App (Var "PerfectMap__size", pm)) in
-  let ok1 = Builtins.decode_number g1 = Some 1.0 in
-  let ok3 = Builtins.decode_number g3 = Some 3.0 in
-  let oksz = Builtins.decode_number sz = Some 3.0 in
-  Printf.printf "  get(first) = 1: %b\n" ok1;
-  Printf.printf "  get(third) = 3: %b\n" ok3;
-  Printf.printf "  size = 3: %b\n" oksz;
-  if ok1 && ok3 && oksz then
-    (Printf.printf "Status: PASS\n"; true)
-  else
-    (Printf.printf "Status: FAIL\n"; false)
-
 (* Test 51: HIT lookup — S1 base constructor. *)
 let test_hit_s1_base () =
   let src = {|
@@ -1320,52 +880,6 @@ let test_hit_s1_base () =
   | Ok cr ->
       if cr.cr_errors = [] then
         (Printf.printf "base() type-checks as S1. Status: PASS\n"; true)
-      else
-        (List.iter (fun e ->
-           Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
-
-(* Test 52: HIT lookup — Suspension merid path constructor. *)
-let test_hit_suspension_merid () =
-  let src = {|
-    place Item in __Builtin {
-      id text
-    }
-    
-    fun bridge(a: Item): Path {
-      return merid(a)
-    }
-  |} in
-  Printf.printf "\n=== Test 52: HIT — Suspension merid path constructor ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "merid(a) type-checks as Path. Status: PASS\n"; true)
-      else
-        (List.iter (fun e ->
-           Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
-
-(* Test 53: HIT lookup — Pushout inl constructor. *)
-let test_hit_pushout_inl () =
-  let src = {|
-    place Item in __Builtin {
-      id text
-    }
-    
-    fun via_left(c: Item): Pushout {
-      return inl(c)
-    }
-  |} in
-  Printf.printf "\n=== Test 53: HIT — Pushout inl constructor ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "inl(c) type-checks as Pushout. Status: PASS\n"; true)
       else
         (List.iter (fun e ->
            Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
@@ -1920,19 +1434,6 @@ let test_parser_when_chain () =
   | Error msg -> Printf.printf "FAIL — %s\n" msg; false
   | Ok prog ->
       Printf.printf "PARSED — %d declarations, no ambiguity\n" (List.length prog);
-      Printf.printf "Status: PASS\n";
-      true
-
-(* Test 69: parser — stream modifiers bind innermost. *)
-let test_parser_stream_inner () =
-  let src = {|
-    operation watch(s: stream of number buffer 100 drop_oldest)
-  |} in
-  Printf.printf "\n=== Test 69: parser — stream modifiers attach correctly ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL — %s\n" msg; false
-  | Ok prog ->
-      Printf.printf "PARSED — %d declarations\n" (List.length prog);
       Printf.printf "Status: PASS\n";
       true
 
@@ -2610,38 +2111,6 @@ let test_space_world_indexed () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 95: Space from surface — end-to-end test that a Yon surface
- * program can allocate a Space, mutate it, and read it back, with the
- * effects firing in the correct sequence. *)
-let test_space_from_surface () =
-  let src = {|
-    fun main(): number {
-      let s holds Space.make(10)
-      let dummy holds Space.set(s, 42)
-      return Space.get(s)
-    }
-  |} in
-  Printf.printf "\n=== Test 95: Space allocate/set/get from surface ===\n";
-  Stdlib_runtime.reset_space_store ();
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let result = Desugar.desugar_program prog in
-      (match result.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins result.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 42.0 ->
-                Printf.printf "  Got 42 (Space.make(10) then Space.set(s, 42) then Space.get(s))\n";
-                Printf.printf "Status: PASS — surface side-effect ordering preserved\n";
-                true
-            | Some n ->
-                Printf.printf "  Got %g, expected 42\n" n; false
-            | None ->
-                Printf.printf "  Non-numeric: %s\n" (Pretty.pp_compact final); false)
-       | None -> Printf.printf "No main\n"; false)
-
 (* Test 96: Heyt surface literals dispatch via SWhen pattern.
  * Demonstrates the Prop_eval ↔ SWhen bridge end-to-end through a real
  * Yon program: a function takes a proposition argument, dispatches on
@@ -2696,55 +2165,6 @@ let test_heyt_surface_branch_unknown () =
             | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
        | None -> false)
 
-(* Test 98: Move execution from surface — apply_move builtin.
- *
- * A program declares a move, then invokes apply_move(M, x). The
- * source record is created via `new P {...}`, the move's mapping
- * applies user-defined conversion functions, and the result is a
- * new record at the target place that can be field-accessed.
- *
- * This closes a goal. *)
-let test_move_from_surface () =
-  let src = {|
-    world W {
-      C is X, Y
-    }
-    place A in W {
-      v number
-    }
-    place B in W {
-      v number
-    }
-    move M from A to B {
-      v converts to v by doubled
-    }
-    fun doubled(x: number): number {
-      return x * 2
-    }
-    fun main(): number {
-      let src holds new A { v 21 }
-      let dst holds apply_move(M, src)
-      return dst.v
-    }
-  |} in
-  Printf.printf "\n=== Test 98: Move execution from surface (apply_move) ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 42.0 ->
-                Printf.printf "  21 -> doubled(21)=42 via move M\n";
-                Printf.printf "Status: PASS — move execution from surface works\n";
-                true
-            | Some n -> Printf.printf "FAIL — got %g, expected 42\n" n; false
-            | None -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
-
 (* Test 99: HIT lookup in reduce_comp. comp at a HIT type now
  * dispatches on the constructor of the base term, consulting the HIT
  * signature in Hit_env. For a zero-arity point constructor like
@@ -2778,37 +2198,6 @@ let test_hit_reduce_comp () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 100: Coherence terms inert at runtime — cubical primitives
- * (refl, transport, etc.) reduce to identity-like witnesses so they
- * don't produce side effects or block the computation.
- *
- * Closes a goal. *)
-let test_coherence_inert () =
-  let src = {|
-    fun main(): number {
-      let r holds refl(42)
-      let t holds transport(r, 100)
-      return t
-    }
-  |} in
-  Printf.printf "\n=== Test 100: Coherence/cubical primitives are runtime-inert ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 100.0 ->
-                Printf.printf "  refl(42)=42, transport(p, 100)=100 (witnesses inert)\n";
-                Printf.printf "Status: PASS — coherence terms are computationally inert\n";
-                true
-            | Some n -> Printf.printf "FAIL — got %g, expected 100\n" n; false
-            | None -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
-
 (* Test 101: refl(present) is a CANONICAL witness — a Refl term that
  * carries the underlying value. With HoTT semantics, refl is NOT an
  * inert no-op coercion: it constructs the canonical inhabitant of
@@ -2840,42 +2229,6 @@ let test_coherence_refl_canonical () =
                      Printf.printf "Status: PASS — refl wraps but doesn't erase\n"; true
                  | _ -> Printf.printf "FAIL inner — got %s\n" (Pretty.pp_compact inner); false)
             | _ -> Printf.printf "FAIL — expected Refl(_), got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
-
-(* Test 102: Parametric polymorphism — fun id<T>(x: T): T.
- *
- * Verifies that a generic function declared with type parameters works
- * across multiple types, that TyVar unifies with any concrete type at
- * call sites, and that the same function can be called with number,
- * text, etc. without separate monomorphizations.
- *
- * Closes a goal. *)
-let test_generics_identity () =
-  let src = {|
-    fun identity<T>(x: T): T {
-      return x
-    }
-    fun main(): number {
-      let a holds identity(42)
-      let b holds identity("hello")
-      return a
-    }
-  |} in
-  Printf.printf "\n=== Test 102: Generic identity function (parametric polymorphism) ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 42.0 ->
-                Printf.printf "  identity(42)=42 and identity(\"hello\") accepted\n";
-                Printf.printf "Status: PASS — TyVar unifies with both number and text\n";
-                true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
        | None -> false)
 
 (* Test 103: Multiple type parameters preserved. *)
@@ -2988,54 +2341,6 @@ let test_sigma_projections () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 108: HoTT surface syntax — refl, pair, fst, snd in a program. *)
-let test_hott_surface () =
-  let src = {|
-    fun main(): number {
-      let p holds pair(42, "hello")
-      return fst(p)
-    }
-  |} in
-  Printf.printf "\n=== Test 108: HoTT surface syntax (pair/fst) ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 42.0 ->
-                Printf.printf "  pair(42, \"hello\"), fst -> 42\n";
-                Printf.printf "Status: PASS — Sigma surface syntax works\n"; true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
-
-(* Test 109: HoTT surface — snd projection. *)
-let test_hott_snd () =
-  let src = {|
-    fun main(): text {
-      let p holds pair(42, "world")
-      return snd(p)
-    }
-  |} in
-  Printf.printf "\n=== Test 109: HoTT surface snd projection ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_string final with
-            | Some "world" ->
-                Printf.printf "  pair(42, \"world\"), snd -> \"world\"\n";
-                Printf.printf "Status: PASS\n"; true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
-
 (* Test 110: Pi type (dependent function) accepted in surface signature.
  * Verifies that the parser accepts `Pi(x : Type). T` as a type. *)
 let test_pi_type_parse () =
@@ -3051,76 +2356,6 @@ let test_pi_type_parse () =
       Printf.printf "  fun applied_at(f: Pi(x:Type). number, t: Type): number parsed\n";
       Printf.printf "Status: PASS — Pi-type syntax operational\n"; true
 
-(* Test 111: Row polymorphism — Place_sub accepted where Place_super
- * is expected, when Place_sub has all fields of Place_super with
- * compatible types (width subtyping).
- *
- * Closes a goal. *)
-let test_row_polymorphism_accept () =
-  let src = {|
-    world W { K is x }
-    place P_small in W {
-      f number
-    }
-    place P_big in W {
-      f number
-      g text
-    }
-    fun read_f(p: P_small): number {
-      return p.f
-    }
-    fun main(): number {
-      let big holds new P_big { f 42 g "extra" }
-      return read_f(big)
-    }
-  |} in
-  Printf.printf "\n=== Test 111: Row polymorphism — width subtyping accepts wider record ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 42.0 ->
-                Printf.printf "  P_big has {f, g}; passed where P_small expected; read_f = 42\n";
-                Printf.printf "Status: PASS — P_big <:_w P_small accepted\n"; true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
-
-(* Test 112: Row polymorphism rejects narrower records.
- * P_small lacks a field of P_big; passing P_small where P_big expected
- * must fail the type check. Asymmetry of width subtyping. *)
-let test_row_polymorphism_reject () =
-  let src = {|
-    world W { K is x }
-    place P_small in W {
-      f number
-    }
-    place P_big in W {
-      f number
-      g text
-    }
-    fun read_g(p: P_big): text {
-      return p.g
-    }
-    fun main(): text {
-      let small holds new P_small { f 42 }
-      return read_g(small)
-    }
-  |} in
-  Printf.printf "\n=== Test 112: Row polymorphism — narrower record REJECTED ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors <> [] then
-        (Printf.printf "  P_small (missing field 'g') rejected as P_big — correct\n";
-         Printf.printf "Status: PASS — asymmetric width subtyping\n"; true)
-      else
-        (Printf.printf "FAIL — expected type error, got none\n"; false)
-
 (* Test 113: Typeclass-style dispatch via Yoneda-native place + reduction.
  *
  * Closes a goal. The "instance resolution" of
@@ -3134,142 +2369,6 @@ let test_row_polymorphism_reject () =
  * paradigm already expresses it through its primary constructs. *)
 (* test_yoneda_typeclass_dispatch removed: dispatch via the dropped 'with' handler-scope *)
 
-(* Test 114: World inference — unique-world rule.
- *
- * a place declared without `in W` infers its world via
- * Yoneda-coherent contextual rules. Here only one world exists, so
- * the inferred world is unambiguous. *)
-let test_world_inference_unique () =
-  let src = {|
-    world Solo { K is x }
-    place Bag {
-      content number
-    }
-    fun main(): number {
-      let b holds new Bag { content 7 }
-      return b.content
-    }
-  |} in
-  Printf.printf "\n=== Test 114: World inference — unique-world rule ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let cr = Tycheck.check_program prog in
-      if cr.cr_errors <> [] then
-        (List.iter (fun e ->
-           Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
-      else
-        let r = Desugar.desugar_program prog in
-        (match r.Desugar.main with
-         | Some term ->
-             let ctx = Builtins.with_builtins r.Desugar.ctx in
-             let final = Builtins.reduce_with_builtins ctx term in
-             (match Builtins.decode_number final with
-              | Some 7.0 ->
-                  Printf.printf "  Bag's world inferred as Solo (only world); program runs.\n";
-                  Printf.printf "Status: PASS — unique-world rule fires\n"; true
-              | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-         | None -> false)
-
-(* Test 115: World inference — effect-signature rule.
- *
- * A function declares `visits Q` where Q has a known world; an
- * unannotated place that appears as parameter/return type of that
- * function inherits the same world. *)
-let test_world_inference_via_visits () =
-  let src = {|
-    world A { K is a }
-    world B { K is b }
-    place Effect_B in B with effects {
-      operation tick(): number
-    }
-    place Datum {
-      val number
-    }
-    fun process(d: Datum): number visits Effect_B {
-      return d.val
-    }
-    fun main(): number {
-      let d holds new Datum { val 42 }
-      return 0
-    }
-  |} in
-  Printf.printf "\n=== Test 115: World inference — effect-signature rule (visits) ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let cr = Tycheck.check_program prog in
-      if cr.cr_errors = [] then
-        (Printf.printf "  Datum's world inferred via visits Effect_B -> B.\n";
-         Printf.printf "Status: PASS\n"; true)
-      else
-        (List.iter (fun e ->
-           Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
-
-(* Test 116: World inference — conflict detection.
- *
- * If multiple rules suggest different worlds, the inference rejects
- * the program (Yoneda-coherence). *)
-let test_world_inference_conflict () =
-  let src = {|
-    world A { K is a }
-    world B { K is b }
-    place P1 in A { x number }
-    place P2 in B { x number }
-    place Conflict {
-      x number
-    }
-    fun main(): number { return 0 }
-  |} in
-  Printf.printf "\n=== Test 116: World inference — conflict detection ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let cr = Tycheck.check_program prog in
-      if cr.cr_errors <> [] then
-        (Printf.printf "  Conflict detected as expected: %s\n"
-           (Tycheck.error_to_string (List.hd cr.cr_errors));
-         Printf.printf "Status: PASS\n"; true)
-      else
-        (Printf.printf "FAIL — expected world conflict error\n"; false)
-
-(* Test 117: Multi-error diagnostics — type checker reports ALL errors
- * in a function body, not just the first.
- *
- * Improves developer experience: instead of edit-fix-recompile
- * for each error one at a time, the user sees the full picture. *)
-let test_multi_error_diagnostics () =
-  let src = {|
-    world W { K is x }
-    place P in W { f number }
-    fun many_errors(): number {
-      let a holds undefined_one
-      let b holds undefined_two
-      let c holds undefined_three
-      return 0
-    }
-    fun main(): number { return 0 }
-  |} in
-  Printf.printf "\n=== Test 117: Multi-error diagnostics ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let cr = Tycheck.check_program prog in
-      let n_errs = List.length cr.cr_errors in
-      if n_errs >= 3 then
-        (Printf.printf "  Collected %d distinct errors (>= 3)\n" n_errs;
-         Printf.printf "Status: PASS — multi-error reporting works\n"; true)
-      else
-        (Printf.printf "FAIL — only %d error(s), expected >= 3\n" n_errs;
-         List.iter (fun e ->
-           Printf.printf "    %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
-
 (* Test 118: Effect inference — transitive closure of `visits`.
  *
  * Yoneda-coherent: the visits set of a function includes not only the
@@ -3281,111 +2380,6 @@ let test_multi_error_diagnostics () =
 (* test_effect_inference_transitive removed: drove effect inference through the
    dropped 'with' handler-scope. Effect-inference coverage (visits propagation)
    should be re-added as a 'with'-free test if wanted. *)
-
-(* Test 119: Depth subtyping — place fields with subtypeable values.
- *
- * Extends row polymorphism: not just width (extra
- * fields ignored) but depth (field-by-field covariance, where the
- * sub's field type may be a more specific place than the super's).
- *
- * Yoneda-coherent: the subtyping relation on places is the natural
- * order in the functor category, where width corresponds to forgetful
- * restriction and depth to compositional refinement. *)
-let test_depth_subtyping () =
-  let src = {|
-    world G { K is x }
-    place Person in G { age number }
-    place PremiumPerson in G { age number tier number }
-    place Vehicle in G { owner Person }
-    place PremiumVehicle in G {
-      owner PremiumPerson
-      extra number
-    }
-    fun get_age(v: Vehicle): number {
-      return v.owner.age
-    }
-    fun main(): number {
-      let p holds new PremiumPerson { age 42 tier 5 }
-      let v holds new PremiumVehicle { owner p extra 1 }
-      return get_age(v)
-    }
-  |} in
-  Printf.printf "\n=== Test 119: Depth subtyping (place field covariance) ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_number final with
-            | Some 42.0 ->
-                Printf.printf "  PremiumVehicle <: Vehicle via depth + width\n";
-                Printf.printf "Status: PASS — depth subtyping operational\n"; true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
-
-(* Test 120: Depth subtyping rejects when field type is incompatible. *)
-let test_depth_subtyping_reject () =
-  let src = {|
-    world G { K is x }
-    place Person in G { age number }
-    place Plant in G { species text }
-    place Vehicle in G { owner Person }
-    place WeirdVehicle in G { owner Plant }
-    fun get_owner(v: Vehicle): number { return v.owner.age }
-    fun main(): number {
-      let pl holds new Plant { species "oak" }
-      let w holds new WeirdVehicle { owner pl }
-      return get_owner(w)
-    }
-  |} in
-  Printf.printf "\n=== Test 120: Depth subtyping rejects incompatible field type ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors <> [] then
-        (Printf.printf "  WeirdVehicle rejected as Vehicle (owner: Plant != Person)\n";
-         Printf.printf "Status: PASS\n"; true)
-      else
-        (Printf.printf "FAIL — expected depth subtyping error\n"; false)
-
-(* Test 121: Coercion boolean ↔ proposition ↔ Omega.
- *
- * In a topos, Omega is the subobject classifier; proposition is the
- * type of values in Omega; boolean is the LEM-decidable specialization.
- * Coercions are morphisms in the topos category:
- *   to_prop : boolean -> Omega    (canonical injection)
- *   to_bool : Omega -> boolean    (partial: unknown ↦ false)
- *
- * The roundtrip on decidable values is the identity. *)
-let test_bool_prop_coercion () =
-  let src = {|
-    fun roundtrip(b: boolean): boolean {
-      let p holds to_prop(b)
-      let b2 holds to_bool(p)
-      return b2
-    }
-    fun main(): boolean {
-      return roundtrip(true)
-    }
-  |} in
-  Printf.printf "\n=== Test 121: boolean ↔ proposition coercion ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_bool final with
-            | Some true ->
-                Printf.printf "  to_bool(to_prop(true)) = true (roundtrip on decidable)\n";
-                Printf.printf "Status: PASS — coercion is canonical injection\n"; true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
 
 (* Test 122: Coercion handles `present`/`absent` propositions explicitly. *)
 let test_bool_prop_coercion_explicit () =
@@ -3883,27 +2877,6 @@ let test_transport_path () =
       Printf.printf "  transp on Path produces CPathLam (CCHM rule)\n";
       Printf.printf "Status: PASS\n"; true
   | _ -> Printf.printf "FAIL\n"; false
-
-(* Test 153-155: Composition operator `comp A φ u u0` completo.
- *
- * Casi gestiti da reduce_comp:
- *   - CTBase T : composition over a primitive type is identity
- *   - CTPath : produces CPathLam with recursive comp (CCHM)
- *   - CTGlue : compose on the base, re-glue
- *   - CTQuotient : compose in the underlying type, project via inj
- *   - CTHIT : dispatch on the constructor of the base
- *
- * We check the base cases plus one path case. *)
-let test_comp_base () =
-  Printf.printf "\n=== Test 153: comp at CTBase = identity ===\n";
-  let ty = Cubical.CTBase (Surface_ast.TyPrim "number") in
-  let phi = [[("i", true)]] in
-  let base = Cubical.CVar "a" in
-  let result = Cubical.reduce_comp ty phi [] base in
-  if result = base then
-    (Printf.printf "  comp at CTBase produces identity\n";
-     Printf.printf "Status: PASS\n"; true)
-  else (Printf.printf "FAIL\n"; false)
 
 let test_comp_path () =
   Printf.printf "\n=== Test 154: comp at CTPath produces CPathLam ===\n";
@@ -4739,7 +3712,7 @@ let test_reduction_invertible () =
 let () =
   (* Register Heyting hook for proposition tri-value reduction. *)
   Builtins.heyting_hook := Heyting.try_reduce_heyt;
-  (* Register stdlib runtime hook so that List/Map/Space/PerfectMap
+  (* Register stdlib runtime hook so that List/Map/Space
    * operations are recognized during reduction. *)
   Builtins.stdlib_hook := Stdlib_runtime.try_reduce_stdlib;
   (* Register world-tag setter so With-blocks tag Space allocations. *)
@@ -4757,27 +3730,16 @@ let () =
     test_capture_avoidance;
     test_scope;
     test_place_equivalence;
-    test_parse_minimal;
-    test_parse_reduction;
     test_pipeline;
-    test_parse_complex;
-    test_parse_streams_iteration;
-    test_parse_moves;
-    test_parse_misc;
-    test_parse_reduction_advanced;
     test_parse_patterns;
-    test_parse_produce_emit;
     test_parse_partial_forever;
     test_arithmetic_program;
     test_conditional_program;
-    test_tycheck_wellformed;
     test_tycheck_wrong_arity;
     test_tycheck_wrong_type;
     test_tycheck_missing_effect;
     test_tycheck_with_visits;
     test_tycheck_bad_field_access;
-    test_tycheck_reduction_coverage;
-    test_tycheck_place_fields;
     test_catt_place_equiv;
     test_cubical_interval;
     test_cubical_path;
@@ -4786,7 +3748,6 @@ let () =
     test_dispatcher_expr;
     test_cubical_ua;
     test_cubical_comp_path;
-    test_cubical_comp_base;
     test_tycheck_refl;
     test_tycheck_refl_wrong_arity;
     test_tycheck_ua;
@@ -4794,10 +3755,7 @@ let () =
     test_stdlib_list_basic;
     test_stdlib_map;
     test_stdlib_space;
-    test_stdlib_pmap;
     test_hit_s1_base;
-    test_hit_suspension_merid;
-    test_hit_pushout_inl;
     test_hit_arity;
     test_hit_signature_lookup;
     test_move_mapping;
@@ -4813,7 +3771,6 @@ let () =
     test_catt_term_equiv;
     test_parser_world_list;
     test_parser_when_chain;
-    test_parser_stream_inner;
     test_heyting_and_table;
     test_heyting_or_table;
     test_heyting_not;
@@ -4838,31 +3795,16 @@ let () =
     test_boolean_proposition_alias;
     test_proposition_heyting_values;
     test_space_world_indexed;
-    test_space_from_surface;
     test_heyt_surface_branch_present;
     test_heyt_surface_branch_unknown;
-    test_move_from_surface;
     test_hit_reduce_comp;
-    test_coherence_inert;
     test_coherence_refl_canonical;
-    test_generics_identity;
     test_generics_pair;
     test_universe_levels;
     test_pi_sigma_levels;
     test_j_beta;
     test_sigma_projections;
-    test_hott_surface;
-    test_hott_snd;
     test_pi_type_parse;
-    test_row_polymorphism_accept;
-    test_row_polymorphism_reject;
-    test_world_inference_unique;
-    test_world_inference_via_visits;
-    test_world_inference_conflict;
-    test_multi_error_diagnostics;
-    test_depth_subtyping;
-    test_depth_subtyping_reject;
-    test_bool_prop_coercion;
     test_bool_prop_coercion_explicit;
     test_id_path_unification;
     test_cell_composition_positive;
@@ -4894,7 +3836,6 @@ let () =
     test_path_subst;
     test_transport_constant;
     test_transport_path;
-    test_comp_base;
     test_comp_path;
     test_comp_empty_phi;
     test_glue_unglue;

@@ -15,7 +15,7 @@ LLVM → native ELF/ARM64. Content-addressed runtime heap (xleech2).
   content-addressed Merkle sharing between versions, and historical navigation.
 - **Leech-native** — XSet, VoyagerList, Arena (196,560 type-2 vectors, pure
   M24 orbits).
-- **Ordinary** — List, HashMap, HashSet, Merkle, Stream, Seq, PerfectMap.
+- **Ordinary** — List, HashMap, HashSet, Merkle, Stream, Seq.
 
 ## Note on earlier framing
 

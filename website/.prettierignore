@@ -1,0 +1,7 @@
+# The book prose is hand-wrapped; never let prettier reflow it.
+docs/
+build/
+.docusaurus/
+node_modules/
+static/
+package-lock.json

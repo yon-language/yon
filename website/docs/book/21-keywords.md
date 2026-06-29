@@ -6,31 +6,29 @@ import CodeWindow from '@site/src/components/CodeWindow';
 
 # Keywords, one by one
 
-Every reserved word of Yon, explained next to a compiling example.
-Each snippet on this page is a file from `examples/` in the
-repository: it builds and runs in the regression suite, with the exit
-code shown.
+Every reserved word of Yon, explained next to an example.
 
 This chapter answers *what does it mean?* For the normative table of
 valid forms, with status per construct, see the
 [Syntax Reference](/syntax-reference); for the maintainers' census,
 `KEYWORDS.md` in the repository root.
 
+:::note Reading the snippets
+Some snippets below predate the v1.1 filesystem ontology and show several
+declarations together for compactness. In the real project model a world is
+declared in `yon.toml` (`[world.Name]`, there is no surface `world` keyword),
+a Space is a directory, and each file declares a single `place` whose basename
+is the place name. The `examples/` projects that back these constructs follow
+that layout; the inline form here is illustrative.
+:::
+
 ## Top-level declarations
 
 A Yon program is a list of these.
 
-#### `world`
-
-Declares a category: a collection of objects (places) and the structure-preserving maps between them. Every place lives in a world, and the world's `Code is X` clause names its coordinate enum.
-
 #### `place`
 
-An object living in a world: named fields, and operations when declared `with effects`. Instances are built with `new P { field value }`.
-
-#### `space`
-
-A runtime heap where instances of a place are allocated and addressed; equality inside a Space is the content-addressed single comparison of the xleech2 heap.
+An object living in a world: named fields, and operations when declared `with effects`. Instances are built with `new P { field value }`. One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to <space>` (see `wire`).
 
 #### `import`
 
@@ -44,15 +42,15 @@ Marks a function as not exported across Spaces: it never enters the cross-Space 
 
 #### `be`
 
-The only binding form, and it is immutable: `be x holds e`. There is no `let` and no rebinding.
+The only binding form, and it is immutable: `be x holds e`. There is no `let` and no rebinding. Writing `be x holds e` a second time for a name already bound in the same scope is a compile error ("`x` is already bound in this scope; use `x = ...` to reassign it"); the fix is `x = e`. Shadowing in a nested scope (a loop or `when` body) is allowed, and names that begin with `_` are exempt as throwaways.
 
 #### `holds`
 
-The "equals" of the binding: it reads as English and it means *holds this value, permanently*.
+The "equals" of the binding: it reads as English and it means *holds this value at this point*. A later `x = e` is a separate act (promotion to a Space cell), not a rebinding of the `be` name.
 
-#### `becomes`
+#### `=` (assignment)
 
-Mutation, reserved to cells: `x becomes e`. Where `be` is a promise, `becomes` is an update; rebinding a `be` name does not exist.
+Mutation, reserved to Space cells: `x = e`. Where `be` is a promise, `=` is an update; the surface has no `becomes` word (the older `becomes` keyword is retired, it survives only as an internal AST node). Rebinding a `be` name does not exist.
 
 #### `partial`
 
@@ -135,18 +133,18 @@ The infinite loop, typically wrapped around effects: a server, a producer, a hea
   be acc holds 0
   be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
 
-  for every x in lst { acc becomes acc + x }            // 21
-  in sequence over y in lst { acc becomes acc + 1 }     // 24
-  repeat at most 3 times { acc becomes acc + 2 }        // 30
-  otherwise { acc becomes acc + 1 }                     // 31
+  for every x in lst { acc = acc + x }            // 21
+  in sequence over y in lst { acc = acc + 1 }     // 24
+  repeat at most 3 times { acc = acc + 2 }        // 30
+  otherwise { acc = acc + 1 }                     // 31
 
-  be d holds 2s + 500ms                                 // 2500 (ms)
-  when d == 2500 { acc becomes acc + 10 }               // 41
+  be d holds 2000 + 500                           // 2500
+  when d == 2500 { acc = acc + 10 }               // 41
 
   be i holds 0
   while i < 1 do {
-    acc becomes acc + 1                                 // 42
-    i becomes i + 1
+    acc = acc + 1                                 // 42
+    i = i + 1
   }
   return acc
 }`}
@@ -227,13 +225,9 @@ Conjunction, in expressions and in pattern conditions: `when a is present and b 
 
 Disjunction, same positions as `and`.
 
-#### `all`
-
-Quantification over the sections of a place: `all P where cond`.
-
 #### `where`
 
-The constraint of `all`, of the `topos ... where { }` block, and of the comprehension `{ x : A where P }`: the subobject carved out by the fibre P. With a mere-proposition fibre the comprehension is exactly the classified subobject of the formalization.
+The constraint of the `topos ... where { }` block, and of the comprehension `{ x : A where P }`: the subobject carved out by the fibre P. With a mere-proposition fibre the comprehension is exactly the classified subobject of the formalization. (The older `all P where cond` quantifier is retired.)
 
 <CodeWindow file="comprehension_carrier.yon"
             run="yonc comprehension_carrier.yon -o comprehension_carrier && ./comprehension_carrier; echo $?"
@@ -299,7 +293,7 @@ Inside a view declaration: `show f` exposes the field, `show f = e` a derived va
 
 #### `as`
 
-The aliasing word: `import q as a`, `init X as Space`, `show f as "label"`.
+The aliasing word: `import q as a`, `show f as "label"`.
 
 <CodeWindow file="kw_view_show.yon"
             run="yonc kw_view_show.yon -o view_show && ./view_show; echo $?"
@@ -492,15 +486,15 @@ fun main(): number { return 0 }`}
 
 #### `topos`
 
-The first-class declaration: a category rich enough to do logic inside, with its objects, terminal, morphisms and props in one `where` block.
-
-#### `objects`
-
-Lists the objects of the topos: place declarations.
+The first-class declaration: a category rich enough to do logic inside, with its terminal, morphisms and props in one `where` block. With topos-per-space, the objects are inferred from the filesystem (the place files in the Space), so a topos no longer carries an inline `objects { }` block (that keyword is retired).
 
 #### `morphisms`
 
-Lists the maps of the topos: operation signatures.
+Lists the maps of the topos: operation signatures (the block that holds `morphism` declarations).
+
+#### `morphism`
+
+A single map inside a topos's `morphisms { }` block, and the contextual word in `on morphism N via M`.
 
 #### `terminal`
 
@@ -658,25 +652,27 @@ The slice: `place P over X` declares objects equipped with a chosen map down to 
 
 #### `error`
 
-`error E extends Base { }`: an error is a place that is a subobject of Base, every E is a Base. A place declares its error morphism with the two-word phrase `on error E`.
+`error E subcontains Base { }`: an error is a place that is a subobject of Base, every E is a Base. A place declares its error morphism with the two-word phrase `on error E`.
 
-#### `extends`
+#### `subcontains`
 
-The subobject mono P into B.
+The subobject mono P into B (the older `extends` keyword is retired).
 
-<CodeWindow file="error_morphism.yon"
-            run="yonc error_morphism.yon -o error_morphism && ./error_morphism; echo $?"
-            out={["0"]}>
-{`world Db { Code is X }
-error Error in Db { message number }
-error QueryError in Db extends Error { message number sqlstate number }
-place QueryInsert in Db on error QueryError { sql number }
+```yon
+// error_morphism, split one place per file under the db/ space:
+//   db/Error.yon
+error Error { message number }
+//   db/QueryError.yon
+error QueryError subcontains Error { message number sqlstate number }
+//   db/QueryInsert.yon
+place QueryInsert on error QueryError { sql number }
+//   Entry.yon
 fun handle(e: Error): number { return 1 }
 fun on_query_fail(q: QueryError): number {
   return handle(q)
 }
-fun main(): number { return 0 }`}
-</CodeWindow>
+fun main(): number { return 0 }   // exit 0
+```
 
 ## Connectives and type words
 
@@ -688,7 +684,7 @@ These read as English in declarations.
 
 #### `in`
 
-`place P in W`, `space S in W`, `for every x in e`, `new P in S { }`.
+`for every x in e`, `new P in S { }` (allocate the instance in Space S).
 
 #### `to`
 
@@ -704,7 +700,7 @@ The source of a move, morph, geomorph or import.
 
 #### `is`
 
-The pattern condition `e is pattern` (a variable, a literal, `present`, `absent`, `unknown`) and the world coordinate clause `Code is X`. Literal and text equality compile to the single content-addressed comparison.
+The pattern condition `e is pattern` (a variable, a literal, `present`, `absent`, `unknown`). Literal and text equality compile to the single content-addressed comparison.
 
 <CodeWindow file="kw_is_literal.yon"
             run="yonc kw_is_literal.yon -o is_literal && ./is_literal; echo $?"
@@ -749,10 +745,6 @@ fun main(): number visits Output {
 
 `move m ... requires CAP1, CAP2`: the capabilities a move demands.
 
-#### `init`
-
-`init X as Space`: initializes a Space at program start.
-
 #### `list`
 
 The list type: `list of T`.
@@ -767,7 +759,7 @@ The map type: `map of K to V`.
 {`fun total(xs: list of number): number {
   be acc holds 0
   for every x in xs when here {
-    acc becomes acc + x
+    acc = acc + x
   }
   return acc
 }
@@ -807,26 +799,7 @@ fun main(): number {
 
 </CodeWindow>
 
-#### `buffer`
-
-`buffer N` bounds the stream queue.
-
-#### `drop`
-
-`drop oldest` / `drop newest`: the drop policy; the policy word after `drop` is contextual, not reserved.
-
-<CodeWindow file="kw_stream_policies.yon"
-            run="yonc kw_stream_policies.yon -o stream_policies && ./stream_policies; echo $?"
-            out={["33"]}>
-{`world W { Code is X }
-place StreamShape in W { events stream of number buffer 4 drop oldest
-  tail stream of number drop newest }
-place Plain in W { count number }
-fun main(): number {
-  be p holds new Plain { count 33 }
-  return p.count
-}`}
-</CodeWindow>
+The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed in v1.1: `buffer` and `drop` are no longer reserved words.
 
 ## Three-valued logic and effects
 

@@ -1,0 +1,8 @@
+[package]
+name = "uc_arena"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

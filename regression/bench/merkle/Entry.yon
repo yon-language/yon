@@ -1,0 +1,65 @@
+place Entry { }
+// BENCHMARK — MerkleTree.equal is O(1) content-address compare, like String.equal.
+// node2/leaf hash-cons their content into an integer label; equal(t1,t2) compares
+// the two labels (one integer compare), so two trees built from the SAME parts
+// cost the same to compare regardless of how big the tree is. Method: time 1e6
+// equal() calls, take the MIN over 11 reps (least-interrupted run = true cost),
+// subtract the MIN of an identical loop+accumulator baseline. The accumulator is
+// printed (=1000000) so LLVM cannot elide the work. We compare two structurally
+// equal trees t1,t2 built from the same leaf labels (1445,1280,9999,...).
+//
+// Stdout schema (4 ints): same_guard, diff_guard, label_t1, net_equal_ns
+//   same_guard   = equal(t1,t2)=1            (two equal trees, content compare)
+//   diff_guard   = equal(t1,t3)=0            (t3 has one differing leaf)
+//   label_t1     = MerkleTree.label(t1)      (content-address of the whole tree)
+//   net_equal_ns = min ns for 1e6 equal() calls, baseline-subtracted (/1e6 = ns/equal)
+fun timed_base(iters: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter iters do { be _ holds Space.set(acc, Space.get(acc) + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun timed_eq(a: MerkleTree, b: MerkleTree, iters: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter iters do { be e holds (if MerkleTree.equal(a, b) then 1 else 0)
+                  be _ holds Space.set(acc, Space.get(acc) + e) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun min_base(reps: number, iters: number): number visits Output {
+  be m holds Space.make(timed_base(iters))
+  iter reps do { be t holds timed_base(iters)
+                 be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
+  return Space.get(m)
+}
+fun min_eq(a: MerkleTree, b: MerkleTree, reps: number, iters: number): number visits Output {
+  be m holds Space.make(timed_eq(a, b, iters))
+  iter reps do { be t holds timed_eq(a, b, iters)
+                 be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
+  return Space.get(m)
+}
+// A deep-ish tree built from the same leaf labels both times => content-equal.
+fun build_tree(x: number): MerkleTree {
+  be l1 holds MerkleTree.leaf(1445)
+  be l2 holds MerkleTree.leaf(1280)
+  be l3 holds MerkleTree.leaf(9999)
+  be l4 holds MerkleTree.leaf(x)
+  be a holds MerkleTree.node2(0, l1, l2)
+  be b holds MerkleTree.node2(0, l3, l4)
+  return MerkleTree.node2(7, a, b)
+}
+fun main(): number visits Output {
+  be t1 holds build_tree(555)
+  be t2 holds build_tree(555)         // same parts => content-equal to t1
+  be t3 holds build_tree(556)         // one leaf differs => not equal
+  be reps holds 11
+  be n holds 1000000
+  be base holds min_base(reps, n)
+  be _1 holds Output.print(String.from_int(if MerkleTree.equal(t1, t2) then 1 else 0))
+  be _2 holds Output.print(String.from_int(if MerkleTree.equal(t1, t3) then 1 else 0))
+  be _3 holds Output.print(String.from_int(MerkleTree.label(t1)))
+  be _4 holds Output.print(String.from_int(min_eq(t1, t2, reps, n) - base))
+  return 0
+}

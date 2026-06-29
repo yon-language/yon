@@ -1,0 +1,4 @@
+[package]
+name="hashmap_get"
+[runtime]
+backend="memory"

@@ -42,8 +42,9 @@
 //
 // Families 1-4 (HeytImplies / Yoneda probes / ComposeReductions /
 // Restrict+Glue) are pure structural lowerings; see each section.
-// This first delivery implements F1 and the F5 layer in full; F2-F4
-// will follow once F1+F5 build clean and are validated.
+// This file implements F2 (Yoneda probes), F3 (ComposeReductions),
+// and the F5 layer; F1 (HeytImplies) lives in LowerToposToStandard
+// and F4 (Restrict+Glue) is not lowered here.
 //
 //===----------------------------------------------------------------------===//
 
@@ -170,7 +171,7 @@ static LogicalResult lowerComposeReductions(ModuleOp module) {
     }
 
     // The composition `(left o right)` is well-typed iff:
-    //   right :  A -> B
+    //   right :  A... -> B   (right may take multiple inputs)
     //   left  :  B -> C
     FunctionType leftType = leftFn.getFunctionType();
     FunctionType rightType = rightFn.getFunctionType();

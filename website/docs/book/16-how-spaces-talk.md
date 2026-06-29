@@ -87,11 +87,11 @@ this language.
 
 What crosses, recursively:
 
-- **scalars** (`number`, `money`, durations) as their `f64`;
+- **scalars** (`number`, `money`) as their `f64`;
 - **strings**, length-prefixed, re-interned into the consumer's `String` place
   on arrival, so a string that left as one slot arrives as one slot again;
-- **nested places**: a field that is itself a transportable place becomes a
-  **sub-frame** with its own schema id, serialized inline and rebuilt by a
+- **nested places**: a field that is itself a transportable place is serialized
+  as a **sub-frame** with its own schema id, written inline and rebuilt by a
   recursive descent, so a chain like `o.inner.b` survives the crossing intact.
 
 Each place that travels registers a small **schema**, its field tags and a
@@ -102,10 +102,10 @@ mismatched schema is an error, never a silent mis-read.
 In the language this is the subscription pipeline:
 
 ```
-import forecasts from Weather
+import weather::forecasts from Weather
 
 fun main(): number {
-  be w holds wire to Weather
+  be w holds wire to space Weather
   be sub holds w.awaits(forecasts)        // forecasts: fun(): stream of Reading
   be total holds sub.stream.fold(0, sum_reading)
   return total

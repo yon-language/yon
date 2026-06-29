@@ -16,7 +16,7 @@
  *   xleech2_heap.c:404-411  dedup: same content -> the existing slot (idempotence).
  *   xleech2_heap.c:480-485  get: bound check then FREE check.
  *   xleech2_heap.c:487-491  yon_xheap_slot_payload: NULL slot / offset 0 -> NULL.
- *   xleech2_coord.h:63 (enum YON_TAG_* in xleech2_heap.h:56) — YON_TAG_FREE = 0. */
+ *   xleech2_heap.h:56  (enum YON_TAG_*) — YON_TAG_FREE = 0. */
 
 #include "xleech2_heap.h"
 #include <stdio.h>

@@ -27,7 +27,7 @@
  *
  * SIZING:
  *   N_SLOTS         = 196,560 (the rational maximum = #type-2 vectors)
- *   N_INDEX         = 294,912 (prime > N_SLOTS/0.66, a healthy load factor)
+ *   N_INDEX         = 294,913 (~1.5x N_SLOTS, load factor ~2/3 when full)
  *   ARENA_BYTES     = 64 MB
  *   Total           ~70.5 MB per heap (~same as the previous design)
  */
@@ -41,7 +41,7 @@
 #include <stdbool.h>
 
 #define YON_HEAP_N_SLOTS      196560u
-#define YON_HEAP_N_INDEX      294913u    /* prime > 196560/0.66 */
+#define YON_HEAP_N_INDEX      294913u    /* ~1.5x 196560, load factor ~2/3 */
 #define YON_HEAP_ARENA_BYTES  (64u * 1024u * 1024u)
 #define YON_HEAP_MAGIC        0x594F4E48u  /* "YONH" */
 #define YON_HEAP_VERSION      2u           /* bumped for the hybrid design */

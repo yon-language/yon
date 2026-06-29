@@ -89,9 +89,9 @@ int main(void) {
     check(yon_rt_map_size(0.0) == 0.0, "size on invalid id -> 0.0");
     check(yon_rt_map_get(1e9, 10.0) == 0.0, "get on huge bogus id -> 0.0");
 
-    /* growth under load: insert enough distinct keys to force at least one
-     * rehash (DIR_INIT growth at 70% load, yon_rt.c:3257) and confirm every
-     * value survives the rehash. */
+    /* growth under load: insert many distinct keys (fewer than the 70%-load
+     * rehash threshold of the YON_HM_DIR_INIT=4096 directory) and confirm every
+     * value is retrievable and the size is exact. */
     {
         double g = yon_rt_map_empty();
         int N = 200;

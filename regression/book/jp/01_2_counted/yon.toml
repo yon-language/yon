@@ -1,0 +1,8 @@
+[package]
+name = "ch01_2_counted"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

@@ -28,8 +28,8 @@ resolves it from the call sites. Type parameters use angle brackets
 chaining also reads naturally: `recv.m(args)` is `m(recv, args)`. An inline
 lambda captures the locals in scope around it, at any nesting depth: a lambda
 written inside another sees both the enclosing lambda's parameters and the
-surrounding function's locals. (A *morphism* lambda — `move`, `functor`,
-`view`, `reduction` — is the deliberate exception: it must be closed, see
+surrounding function's locals. (A *morphism* lambda, `move`, `functor`,
+`view`, `reduction`, is the deliberate exception: it must be closed, see
 [Arrows are closed](/book/arrows#arrows-are-closed).)
 
 **Modifiers.** `internal fun` is not exported across a package boundary, 
@@ -38,7 +38,7 @@ from outside, it is indistinguishable from a function that does not exist.
 
 ```yon
 partial fun spin(n: number): number {
-  forever { n becomes n + 1 }
+  forever { n = n + 1 }
   return n
 }
 ```
@@ -77,16 +77,15 @@ Yon has three forms of polymorphism, and deliberately lacks a fourth.
 **Parametric.** Type parameters on functions: `fun id<A>(x: A): A`. No
 constraints, no bounds, a type parameter is honest ignorance.
 
-**Sub-objects.** `place A in W extends B` does *not* declare inheritance: it
+**Sub-objects.** `place A subcontains B` does *not* declare inheritance: it
 declares a **monomorphism** `A → B`, and the checker verifies it
 structurally, `A` must carry at least all of `B`'s fields (*subsumption*),
 or the mono does not exist and the program is rejected. Where it holds, an
 `A` is usable wherever a `B` is expected:
 
 ```yon
-world W { Code is X }
-place Error in W { message number }
-place SyntaxError in W extends Error { message number  line number }
+place Error { message number }
+place SyntaxError subcontains Error { message number  line number }
 
 fun describe(e: Error): number { return e.message }   // accepts any sub-object
 
@@ -97,7 +96,7 @@ fun main(): number {
 ```
 
 Nothing is inherited, there are no methods to inherit, and no overriding,
-because places have no behaviour of their own (chapter 0). `extends` is a
+because places have no behaviour of their own (chapter 0). `subcontains` is a
 *claim about structure* that the compiler checks, exactly like a `law`.
 
 **Coercions along monos.** The same direction appears twice more: the
@@ -108,6 +107,6 @@ derived monomorphism, never an implicit conversion.
 **What is missing, on purpose.** There are no interfaces, traits or
 typeclasses, and no virtual dispatch. The Yoneda stance of chapter 0 is the
 replacement: a place's interface *is* the bundle of arrows defined on it
-(views, moves, reductions), and "implementing an interface" becomes
+(views, moves, reductions), and "implementing an interface" is just
 *providing arrows*, which compose, are first-class, and can carry checked
 laws, none of which an interface declaration gives you.

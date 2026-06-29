@@ -1,12 +1,12 @@
 //===- MoveComposition.h ----------------------------------*- C++ -*-===//
 //
 // Pass: erases identity topos.apply_move, where the declared move is from @P
-// to @P with an empty body (the lowering would render it as a trivial
-// memref.copy). In that case, we replace apply_move %src with %src directly.
+// to @P (the lowering would render it as a trivial identity function that
+// returns its input). In that case, we replace apply_move %src with %src directly.
 //
 // Strategy:
 //   1. Walk the module, identify all identity topos.move:
-//      source_place == target_place AND empty body.
+//      source_place == target_place (MoveOp has no body).
 //   2. For each topos.apply_move that references an identity move, replace_op
 //      with the source operand.
 //

@@ -40,19 +40,20 @@ undecided.
 
 ## Ω as a place to do topology
 
-A `topos` block declares objects together with their **subobject
-classifiers**, each `prop` is a map into Ω you can evaluate:
+A `topos` block declares **subobject classifiers** over the objects of its
+space (the objects are the place files in that directory), each `prop` is a
+map into Ω you can evaluate:
 
 ```yon
-world Ledger { Code is X }
+// in the space directory: State.yon
+place State { balance number }
 
-topos Bank in Ledger where {
-  objects {
-    place State in Ledger { balance number }
-  }
+// in the same directory: Topos.yon
+topos Bank where {
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
 
+// Entry.yon
 fun main(): number {
   be s holds new State { balance 5 }
   be bad holds is_overdrawn(s)
@@ -76,8 +77,10 @@ place, and the statement is a pattern condition, the same patterns that
 drive `when`:
 
 ```yon
-world Net { Code is X }
-place NodeA in Net { value number }
+// NodeA.yon, a place file in the site's space directory
+place NodeA { value number }
+
+// Entry.yon
 fun guard(): number {
   forces NodeA value is number {
     return 1

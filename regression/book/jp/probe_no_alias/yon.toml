@@ -1,0 +1,8 @@
+[package]
+name = "probe_no_alias"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

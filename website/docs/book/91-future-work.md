@@ -83,8 +83,8 @@ order:
   sub-runtimes into streams.
 - **`ind_path(C, d, p)`**, the J eliminator (the runnable HoTT fragment
   is `refl`/`pair`/`fst`/`snd`).
-- **`x.f becomes e`**, field mutation (sections are immutable; today you
-  mutate through cells).
+- **`x.f = e`**, field mutation (sections are immutable; today you
+  mutate through cells, and `x.f = e` is rejected by design).
 - **Static capability checking** (`requires` is enforced at runtime; the
   caller-side static rule is design, chapter 19).
 - **Value-level construction of comprehension types** (the type and its

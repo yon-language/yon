@@ -1,0 +1,58 @@
+place Entry { }
+
+// Does a LINEAR embedding read WHICH characters (clade) instead of HOW MANY (grade)?
+//
+// Six vectors, ALL popcount 2, different bit-patterns:
+//   v=3    bits {0,1}     v=5    bits {0,2}     v=17   bits {0,4}
+//   v=2049 bits {0,11}    v=96   bits {5,6}     v=2560 bits {9,11}
+//
+// THE DISEASE (mode 0, the quantizer, non-linear): m24_orbit(embed(v,0)) — if all
+//   six are the SAME orbit, mode 0 sees only the popcount (grade), as suspected.
+// THE CURE (mode 3, linear gcode embedding, read by Leech.pair_subtype = the raw
+//   subtype of a^b, no type-2 gate): pair_subtype(embed(3,3), embed(v,3)) — if these
+//   VARY across the six patterns, the linear map reads WHICH bits differ (clade).
+// THE PROOF it is a function of v^w: pair_subtype(embed(3,3),embed(5,3)) and
+//   pair_subtype(embed(1,3),embed(7,3)) share v^w = 6, so they MUST be equal.
+//
+// Stdout (14 ints):
+//  [1-6]  mode 0 m24_orbit: v=3,5,17,2049,96,2560     (all equal => grade-only)
+//  [7-12] mode 3 pair_subtype from anchor 3: v=3,5,17,2049,96,2560  (vary => clade)
+//  [13-14] xor-function check: (3,5) and (1,7), both v^w=6  (must be equal)
+
+fun main(): number visits Output {
+  // mode 0 — the suspected popcount collapse
+  be o0 holds Leech.m24_orbit(Leech.embed(3, 0))
+  be o1 holds Leech.m24_orbit(Leech.embed(5, 0))
+  be o2 holds Leech.m24_orbit(Leech.embed(17, 0))
+  be o3 holds Leech.m24_orbit(Leech.embed(2049, 0))
+  be o4 holds Leech.m24_orbit(Leech.embed(96, 0))
+  be o5 holds Leech.m24_orbit(Leech.embed(2560, 0))
+  be _o0 holds Output.print(String.from_int(o0))
+  be _o1 holds Output.print(String.from_int(o1))
+  be _o2 holds Output.print(String.from_int(o2))
+  be _o3 holds Output.print(String.from_int(o3))
+  be _o4 holds Output.print(String.from_int(o4))
+  be _o5 holds Output.print(String.from_int(o5))
+
+  // mode 3 — linear, read by pair_subtype from anchor v=3
+  be a holds Leech.embed(3, 3)
+  be s0 holds Leech.pair_subtype(a, Leech.embed(3, 3))
+  be s1 holds Leech.pair_subtype(a, Leech.embed(5, 3))
+  be s2 holds Leech.pair_subtype(a, Leech.embed(17, 3))
+  be s3 holds Leech.pair_subtype(a, Leech.embed(2049, 3))
+  be s4 holds Leech.pair_subtype(a, Leech.embed(96, 3))
+  be s5 holds Leech.pair_subtype(a, Leech.embed(2560, 3))
+  be _s0 holds Output.print(String.from_int(s0))
+  be _s1 holds Output.print(String.from_int(s1))
+  be _s2 holds Output.print(String.from_int(s2))
+  be _s3 holds Output.print(String.from_int(s3))
+  be _s4 holds Output.print(String.from_int(s4))
+  be _s5 holds Output.print(String.from_int(s5))
+
+  // proof it depends only on v^w: (3,5) and (1,7) both have xor 6
+  be x0 holds Leech.pair_subtype(Leech.embed(3, 3), Leech.embed(5, 3))
+  be x1 holds Leech.pair_subtype(Leech.embed(1, 3), Leech.embed(7, 3))
+  be _x0 holds Output.print(String.from_int(x0))
+  be _x1 holds Output.print(String.from_int(x1))
+  return 0
+}

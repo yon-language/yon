@@ -1,0 +1,4 @@
+[package]
+name="golay_seal"
+[runtime]
+backend="memory"

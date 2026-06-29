@@ -327,9 +327,8 @@ rule token = parse
   | ')'              { RPAREN }
   | '{'              { LBRACE }
   | '}'              { RBRACE }
-  (* Square brackets not currently used by the Yon v0.3 grammar;
-   * they are reserved for future use (e.g., tensor indexing,
-   * cubical face formulas in surface syntax). *)
+  (* Square brackets (LBRACKET/RBRACKET, lexed above) carry the cubical face
+   * systems of hcomp/comp and the branch list of hit_elim (see parser.mly). *)
   
   (* Universe level token: Type_n for n=0,1,2,... — must come BEFORE
      the generic identifier rule because "Type" alone is also a

@@ -9,9 +9,8 @@ sidebar_position: 19
 A move can demand more than well-typed fields: it can demand **authority**.
 
 ```yon
-world Region { Code is EU, US }
-place EUR in Region { balance number }
-place USD in Region { balance number }
+place EUR { balance number }
+place USD { balance number }
 
 move EurToUsd from EUR to USD requires MoneyTransfer {
   balance converts to balance by scale
@@ -38,4 +37,4 @@ Honest status for 1.0: the check is enforced at **runtime** at each
 *static* rule, a caller of a `requires` move must itself declare the
 capability, is the production design, not yet wired into the checker.
 The syntax and the runtime gate are stable; treat the static half as
-arriving, like the Heyting unwrapping of chapter 17.
+arriving, like the Heyting unwrapping of chapter 18.

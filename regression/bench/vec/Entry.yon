@@ -1,0 +1,73 @@
+place Entry { }
+// BENCHMARK — Vec (indexed dynamic array): push throughput + get latency.
+// PUSH: thread the vec handle through a Space cell, push N entries, time it net of a
+// baseline loop (same cell-threading, no push). GET: build a vec of N once, then time
+// M get() probes (min-of-K, baseline-subtracted) like the equality bench.
+// DCE guard: final size / accumulated get-value are printed.
+//
+// Stdout schema (4 ints): final_size, push_net_ns_per_N, get_acc, get_net_ns_per_M
+//   push: N = 100000 (net/N = ns/push) ; get: M = 1000000, K = 11 reps (net/M = ns/get).
+fun timed_push(n: number): number visits Output {
+  be vc holds Space.make(Vec.empty())
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(vc, Vec.push(Space.get(vc), k))
+              be _2 holds Space.set(i, k + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun timed_push_base(n: number): number visits Output {
+  be i holds Space.make(0)
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(acc, k)
+              be _2 holds Space.set(i, k + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun build_vec(n: number): number {
+  be vc holds Space.make(Vec.empty())
+  be i holds Space.make(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(vc, Vec.push(Space.get(vc), k))
+              be _2 holds Space.set(i, k + 1) }
+  return Space.get(vc)
+}
+fun timed_get(v: number, m: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter m do { be h holds Vec.get(v, 42)
+              be _ holds Space.set(acc, Space.get(acc) + h) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun timed_get_base(m: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter m do { be _ holds Space.set(acc, Space.get(acc) + 42) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun min2(f0: number, f1: number): number { return if f0 < f1 then f0 else f1 }
+fun main(): number visits Output {
+  be n holds 100000
+  // push throughput: min over a few reps, net of baseline
+  be psh holds Space.make(timed_push(n))
+  iter 4 do { be _ holds Space.set(psh, min2(Space.get(psh), timed_push(n))) }
+  be pshb holds Space.make(timed_push_base(n))
+  iter 4 do { be _ holds Space.set(pshb, min2(Space.get(pshb), timed_push_base(n))) }
+  be v holds build_vec(n)
+  be sz holds Vec.size(v)
+  be m holds 1000000
+  be gt holds Space.make(timed_get(v, m))
+  iter 11 do { be _ holds Space.set(gt, min2(Space.get(gt), timed_get(v, m))) }
+  be gtb holds Space.make(timed_get_base(m))
+  iter 11 do { be _ holds Space.set(gtb, min2(Space.get(gtb), timed_get_base(m))) }
+  be _1 holds Output.print(String.from_int(sz))                                  // final_size = N
+  be _2 holds Output.print(String.from_int((Space.get(psh) - Space.get(pshb)))) // push net ns for N
+  be _3 holds Output.print(String.from_int(Vec.get(v, 42)))                      // get guard (=42)
+  be _4 holds Output.print(String.from_int((Space.get(gt) - Space.get(gtb))))    // get net ns for M
+  return 0
+}

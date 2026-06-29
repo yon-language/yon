@@ -1,0 +1,36 @@
+{
+  "schema": [
+    "wall_ms@N=1",
+    "@N=2",
+    "@N=4",
+    "@N=8",
+    "@N=16"
+  ],
+  "wall_ms": [
+    255,
+    263,
+    266,
+    283,
+    349
+  ],
+  "Ns": [
+    1,
+    2,
+    4,
+    8,
+    16
+  ],
+  "per_replica_task": "8,000,000-iter accumulate loop",
+  "runs": 3,
+  "speedup_vs_serial": [
+    1.0,
+    1.9,
+    3.8,
+    7.2,
+    11.7
+  ],
+  "machine": "Apple M1 (8 cores: 4P+4E)",
+  "backend": "L2_SHM (fork + shared memory)",
+  "commit": "1c44e79",
+  "date": "2026-06-29"
+}

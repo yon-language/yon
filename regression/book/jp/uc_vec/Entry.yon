@@ -1,0 +1,15 @@
+place Entry { }
+// §4 Vec — "count the individuals, indexed". push keeps every entry (events, no dedup);
+// get/set are O(1) indexed. Stdout: [1] size=3 (1445,1280,1445 dup kept), [2] get(0)=1445,
+// [3] after set(1,9999): get(1)=9999.
+fun main(): number visits Output {
+  be v holds Vec.empty()
+  v = Vec.push(v, 1445)
+  v = Vec.push(v, 1280)
+  v = Vec.push(v, 1445)
+  be _1 holds Output.print(String.from_int(Vec.size(v)))
+  be _2 holds Output.print(String.from_int(Vec.get(v, 0)))
+  v = Vec.set(v, 1, 9999)
+  be _3 holds Output.print(String.from_int(Vec.get(v, 1)))
+  return 0
+}

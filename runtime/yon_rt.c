@@ -211,18 +211,12 @@ uint32_t yon_rt_space_count(void) {
 }
 
 /* ============================================================== */
-/* Payload header: 4-byte length + 4-byte heap_id + payload         */
+/* Payload storage (no separate header)                             */
 /* ============================================================== */
 
-/* Layout:
- *   [uint32_t length][uint32_t heap_id][... length bytes of payload ...]
- *
- * The heap_id in the blob lets field_load validate that the access is
- * consistent with the heap the caller thinks it is reading.
- */
-
 /* The blob helpers (alloc_payload_blob, blob_bytes, blob_length,
- * blob_heap_id) were retired. The heap stores payloads directly in its
+ * blob_heap_id) were retired, along with the old 4-byte length + 4-byte
+ * heap_id payload header. The heap stores payloads directly in its
  * internal arena; yon_xheap_slot_t has payload_offset and payload_size with no
  * separate header. */
 
@@ -253,9 +247,8 @@ yon_section_t yon_rt_new(uint32_t heap_id,
      * content_index.
      *
      * In L2_SEPARATE/SHM each heap_id has its own yon_xheap_t (and thus its own
-     * content_index and slot space) — physical partition. In L1_SHARED a single
-     * heap for all — global dedup by content. To preserve the logical partition
-     * even in L1_SHARED, we prefix the payload with heap_id (4 bytes). */
+     * content_index and slot space) — physical partition. The payload is stored
+     * raw, with no heap_id prefix. */
     yon_xheap_t *h = heap_for(heap_id);
     uint32_t slot_idx = yon_xheap_put(h, payload_bytes, n_bytes, YON_TAG_USER1);
 
@@ -319,8 +312,8 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
 /* Flatten: a place's content as position-independent bytes        */
 /* ============================================================== */
 
-/* The outbound half of the wormhole. Copy the section's raw payload (minus
- * the L1_SHARED heap_id prefix) into out_buf and return the byte count, or -1
+/* The outbound half of the wormhole. Copy the section's raw payload (stored
+ * with no heap_id prefix) into out_buf and return the byte count, or -1
  * on error / if cap is too small. The bytes are pure content, valid in any
  * heap: rebuild with yon_rt_new(consumer_heap, buf, n) in the consumer's own
  * heap. Scalar fields live inline in the payload, so for an all-scalar place
@@ -969,7 +962,7 @@ uint32_t yon_rt_begin_cross_space_op(const uint32_t *heap_ids, uint32_t n) {
     ensure_init();
     /* If there are registered geometric morphisms connecting the topoi
      * involved, derive the coordination shape categorically. Otherwise fall
-     * back to the policy enum table (yon_rt_derive_coordination).
+     * back to LOCAL (no cross-space coordination).
      *
      * Lookup strategy: for each pair (heap_a, heap_b) with a != b in the set,
      * look for a gm a -> b or b -> a among the registered ones. If found (at
@@ -4277,9 +4270,8 @@ double yon_rt_xrel_frame_size(double id) {
 }
 
 /* The relational class of a type-2 vector v: the base-4 packed tuple of
- * type(v ^ ref_i) over the frame. Returns -1 for a bad id or a non-type-2 v. */
-/* Shared class computation: base-4 packed tuple of type(v ^ ref_i) over the
- * frame; -1.0 for a non-type-2 v. */
+ * type(v ^ ref_i) over the frame. Returns -1 for a non-type-2 v (the bad-id
+ * check lives in the yon_rt_xrel_class wrapper below, which takes the id). */
 static double xrel_class_of(const yon_xrel_t *x, double v) {
     extern uint32_t gen_leech2_type(uint64_t);
     uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
@@ -5317,7 +5309,7 @@ typedef struct {
     double label;
     uint32_t child1_slot;
     uint32_t child2_slot;
-    uint32_t arity;  /* 0=leaf, 1=unary, 2=binary */
+    uint32_t arity;  /* 0=leaf, 2=binary */
     uint32_t pad;
 } ds_merkle_node_t;
 
@@ -5474,8 +5466,8 @@ double yon_rt_merkle_equal(double a, double b) {
 }
 
 /* ---- Merkle DAG.to_stream --------------------------------------- */
-/* Yields the labels of the LEAVES via a left-first DFS. Static iterative stack
- * (max depth = 256). For DAGs with sharing, content-addressing means the same
+/* Yields the labels of the LEAVES via a left-first DFS. Dynamic iterative stack
+ * (initial depth 256, grows as needed). For DAGs with sharing, content-addressing means the same
  * slot is naturally not visited more than once (each slot has a single label,
  * leaf or node). */
 
@@ -5696,6 +5688,80 @@ double yon_rt_leech_co0_step(double v_24bit) {
      * algebraic reduction via reduce_type2: zero parameters, exact. */
     extern double yon_rt_leech_co0_canonical_exact(double);
     return yon_rt_leech_co0_canonical_exact(v_24bit);
+}
+
+/* Embed an (up to 12-bit) character vector as a type-2 Leech point, so that
+ * XSimplex.of2 can classify the RELATION between two vectors. This is the
+ * PURPOSE-BUILT map of the taxonomy experiment: of2 of two embeddings reflects
+ * the vectors' BIT PATTERN, not the byte-representation a raw content-address
+ * would use. Whether Hamming distance survives into the of2 subtype is an
+ * EMPIRICAL question, gated by regression/book/jp/probe_embed_maps, never assumed.
+ *
+ * `mode` selects how the bits become a point q in R^24 before quantizing to the
+ * nearest type-2 (norm-4) vector (yon_leech2_quantize):
+ *   0 duplicate : q[2k]=q[2k+1] = (bit_k ? +1 : -1), k<12          (all 24 coords)
+ *   1 golay     : gv = mat24_gcode_to_vect(bits & 0xFFF);
+ *                 q[k] = ((gv>>k)&1 ? -1 : +1), k<24               (codeword signs)
+ *   2 sparse    : q[k] = (bit_k ? +1 : -1) for k<12, q[k]=0 for k>=12
+ *   3 linear    : (bits & 0xFFF) << 12 straight into the gcode field, NO
+ *                 quantizer (a linear GF(2) map; see the mode==3 branch below).
+ * Modes 0/1/2 return the xcoord of the nearest type-2 point (a valid of2
+ * input); mode 3 returns the raw linear embedding. These modes ARE the
+ * candidate maps; one build gates all of them. */
+double yon_rt_leech_embed_bits(double bits_f, double mode_f) {
+    extern uint32_t yon_leech2_quantize(const double *q);
+    extern uint32_t mat24_gcode_to_vect(uint32_t v1);
+    uint32_t bits = (uint32_t)bits_f;
+    int mode = (int)mode_f;
+    if (mode == 3) {
+        /* LINEAR gcode embedding: the 12 character bits go straight into the
+         * leech2 gcode field (bits 12-23), with NO quantizer. The map is linear
+         * over GF(2), so embed(v) ^ embed(w) = embed(v ^ w): the subtype of the
+         * difference then reads WHICH characters differ (the symmetric difference,
+         * via the Golay code), not how many. Pair it with Leech.pair_subtype (the
+         * raw subtype of a^b, no type-2 gate) — that is the structure-reading map
+         * mode 0 could not be, because mode 0 / the quantizer are non-linear and
+         * collapse to the popcount (the evolutionary grade, not the clade). */
+        return (double)((bits & 0xFFFu) << 12);
+    }
+    double q[24];
+    if (mode == 1) {
+        uint32_t gv = mat24_gcode_to_vect(bits & 0xFFFu) & 0xFFFFFFu;
+        for (int k = 0; k < 24; k++) q[k] = ((gv >> k) & 1u) ? -1.0 : 1.0;
+    } else if (mode == 2) {
+        for (int k = 0; k < 12; k++) q[k] = ((bits >> k) & 1u) ? 1.0 : -1.0;
+        for (int k = 12; k < 24; k++) q[k] = 0.0;
+    } else {
+        for (int k = 0; k < 12; k++) {
+            double s = ((bits >> k) & 1u) ? 1.0 : -1.0;
+            q[2 * k] = s; q[2 * k + 1] = s;
+        }
+    }
+    return (double)(uint32_t)yon_leech2_quantize(q);
+}
+
+/* Leech.point(idx): the idx-th type-2 point via the MPHF unindex, a bijection
+ * [0,196560) -> type-2 xcoords. Where Leech.embed is many-to-one (a neighbourhood
+ * of inputs collapses to one nearest point), this enumerates DISTINCT lattice
+ * points by index. idx is taken mod 196560 so any input stays in range. */
+double yon_rt_leech_point(double idx_f) {
+    extern uint32_t yon_mphf_unindex(uint32_t idx);
+    uint32_t idx = ((uint32_t)idx_f) % 196560u;
+    return (double)yon_mphf_unindex(idx);
+}
+
+/* Raw leech2 subtype of the difference a^b, WITHOUT the type-2 gate that
+ * XSimplex.of2 imposes (of2 returns -1 unless both inputs are type-2). With the
+ * linear gcode embedding (Leech.embed mode 3), embed(v)^embed(w) = (v^w)<<12, so
+ * this returns gen_leech2_subtype((v^w)<<12) & 0xFF: a STRUCTURAL function of
+ * WHICH characters differ (the Golay codeword of the symmetric difference),
+ * defined for every pair whether or not the points are type-2. The honest reader
+ * of the linear map — the one that sees the clade, not the grade. */
+double yon_rt_leech_pair_subtype(double a_f, double b_f) {
+    extern uint32_t gen_leech2_subtype(uint64_t v2);
+    uint32_t a = (uint32_t)a_f, b = (uint32_t)b_f;
+    uint32_t d = (a ^ b) & 0x1FFFFFFu;
+    return (double)(gen_leech2_subtype((uint64_t)d) & 0xFFu);
 }
 
 /* NOTE (history): a bounded-BFS orbit closure with an open-addressing visited

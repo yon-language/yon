@@ -1,25 +1,27 @@
 (* package_layout.ml — the filesystem IS the declaration.
  *
  * A Yon program is a directory tree. The path carries the ontology the surface
- * keywords used to carry:
- *   - a sub-directory of the package root is a WORLD (its name is the world's);
- *   - a .yon file inside a world-directory is a SPACE (its basename);
- *   - a file directly under the root is a space in the ROOT world;
- *   - the conventional file `world.yon` in a world-directory carries only what
- *     the path cannot say: the world's inhabitants (`Code is Order`) or its
- *     construction (`= A + B`, `/ Rel`, `subset of R`).
+ * keywords used to carry. The LIVE rule is in `space_of`/`place_of` below:
+ *   - a .yon FILE is a PLACE: its basename is the place name (`Rex.yon` -> Rex);
+ *     one place per file, no `place` keyword in the body (commit "no 'place'");
+ *   - a DIRECTORY under the root is a SPACE: the first path segment
+ *     (`paddocks/Rex.yon` -> space `paddocks`);
+ *   - a file directly under the root belongs to no space — the entrypoint area
+ *     (e.g. Entry.yon);
+ *   - a WORLD is declared in `yon.toml` (`[world.Name]`, with objects/spaces),
+ *     not as a directory and not as an inline keyword; the inline `topos Name
+ *     where { ... }` lives in the conventional `Topos.yon` inside a space-dir.
  *
- * This module is the DEDUCTION + RECONSTRUCTION: it walks the tree, derives
- * (world, space) from each path, and rebuilds the explicit declarative form the
- * existing parser already accepts -- `world W { ... }`, `space S in W`, then the
- * file body. That explicit form stays the canonical kernel target; the tree is
- * a notation that desugars onto it.
+ * This module is the DEDUCTION: it walks the tree and derives (space, place)
+ * from each path; world membership comes from the manifest (sd_world = None
+ * here). It IS wired into the live emit driver (yoner_emit_mlir.ml calls
+ * Package_layout.layout / is_project / space_decls) and is exercised by
+ * test_world_site.ml.
  *
- * STAGE NOTE. Pure layout->text step, exercised on a tiny src/ fixture and
- * checked to PARSE with today's parser. It does NOT touch the driver, the
- * parser, or the corpus -- those follow once this is solid. The place<->world
- * binding (a place inherits its directory's world) is left to the existing
- * __INFER path and is not forced here. *)
+ * WARNING — comment archaeology. Earlier strata of THIS header said "dir =
+ * world, file = space" and "does NOT touch the driver". Both are STALE. The
+ * code (space_of / place_of) and yoner_emit_mlir's call sites are the truth.
+ * Trust the code, not a header comment. *)
 
 type unit_loc = {
   ul_space : string;     (* "" = a file directly under the project root *)

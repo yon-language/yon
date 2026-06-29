@@ -1,0 +1,80 @@
+place Entry { }
+// BENCHMARK — HashMap (FNV content-addressing): insert throughput + get latency.
+// INSERT: thread the map handle through a Space cell, set N distinct key->value
+// pairs (key=i, value=i+1), time it net of a baseline loop (same cell-threading,
+// no set). GET: build a map of N once, then time M get() probes of a present key
+// (min-of-K, baseline-subtracted) like the equality bench.
+// DCE guard: final size + a get value are accumulated into a Space cell and printed.
+//
+// Stdout schema (4 ints): final_size, insert_net_ns_per_N, get_value, get_net_ns_per_M
+//   [1] final_size          = HashMap.size after N sets   (== N = 100000)
+//   [2] insert_net_ns_per_N = min insert-loop ns net of baseline, for N sets
+//                             (divide by N=100000 => ns/insert)
+//   [3] get_value           = HashMap.get(map, 42) guard  (== 43; must be nonzero)
+//   [4] get_net_ns_per_M    = min get-loop ns net of baseline, for M gets
+//                             (divide by M=1000000 => ns/get)
+//   N = 100000 (inserts) ; M = 1000000 (gets), K = 11 reps.
+fun timed_insert(n: number): number visits Output {
+  be mapc holds Space.make(HashMap.empty())
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(mapc, HashMap.set(Space.get(mapc), k, k + 1))
+              be _2 holds Space.set(i, k + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun timed_insert_base(n: number): number visits Output {
+  be i holds Space.make(0)
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(acc, k + 1)
+              be _2 holds Space.set(i, k + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun build_map(n: number): number {
+  be mapc holds Space.make(HashMap.empty())
+  be i holds Space.make(0)
+  iter n do { be k holds Space.get(i)
+              be _ holds Space.set(mapc, HashMap.set(Space.get(mapc), k, k + 1))
+              be _2 holds Space.set(i, k + 1) }
+  return Space.get(mapc)
+}
+fun timed_get(mp: number, m: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter m do { be v holds HashMap.get(mp, 42)
+              be _ holds Space.set(acc, Space.get(acc) + v) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun timed_get_base(m: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter m do { be _ holds Space.set(acc, Space.get(acc) + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun min2(f0: number, f1: number): number { return if f0 < f1 then f0 else f1 }
+fun main(): number visits Output {
+  be n holds 100000
+  // insert throughput: min over a few reps, net of baseline
+  be ins holds Space.make(timed_insert(n))
+  iter 4 do { be _ holds Space.set(ins, min2(Space.get(ins), timed_insert(n))) }
+  be insb holds Space.make(timed_insert_base(n))
+  iter 4 do { be _ holds Space.set(insb, min2(Space.get(insb), timed_insert_base(n))) }
+  be mp holds build_map(n)
+  be sz holds HashMap.size(mp)
+  be m holds 1000000
+  be gk holds Space.make(timed_get(mp, m))
+  iter 11 do { be _ holds Space.set(gk, min2(Space.get(gk), timed_get(mp, m))) }
+  be gkb holds Space.make(timed_get_base(m))
+  iter 11 do { be _ holds Space.set(gkb, min2(Space.get(gkb), timed_get_base(m))) }
+  be _1 holds Output.print(String.from_int(sz))                                  // final_size = N
+  be _2 holds Output.print(String.from_int((Space.get(ins) - Space.get(insb)))) // insert net ns for N
+  be _3 holds Output.print(String.from_int(HashMap.get(mp, 42)))                // get value guard (==43)
+  be _4 holds Output.print(String.from_int((Space.get(gk) - Space.get(gkb))))   // get net ns for M
+  return 0
+}

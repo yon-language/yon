@@ -1,0 +1,155 @@
+place Entry { }
+// BENCHMARK — Arena (lattice store on type-2 Leech points): put throughput +
+// get/same_orbit latency.
+//
+// ADDRESSES. Arena addresses must be valid type-2 lattice points. Raw sequential
+// ints are REJECTED by the store at scale (Arena.get returns the 2147483647 INT_MAX
+// sentinel), so we route every address through Leech.embed(i, mode) — the quantizer
+// that snaps a bit pattern to the nearest type-2 point. NOTE: embed is many-to-one;
+// over i in [0..100000) the distinct-address ceiling measured is mode0=1664,
+// mode1=4096, mode2=384. We use mode 1 (widest, 4096 distinct points). N=2000 puts
+// therefore land on ~2000 distinct type-2 addresses (below the 4096 ceiling, so
+// essentially all distinct — no significant overwrite).
+//
+// COSTS (measured here). The three ops differ by orders of magnitude, so they get
+// different iteration counts:
+//   Arena.put        ~240 us/put : a CERTIFIED insert (orbit canonicalization per
+//                                   put), super-linear past a few thousand entries =>
+//                                   N=2000 puts, 4 reps (build-throughput style).
+//   Arena.get        ~30 ns/get  : O(1) lookup => Mg=1e6 iters, 11 reps (min-of-K).
+//   Arena.same_orbit ~580 ns/op  : recomputes the M24 orbit relation per call (~20000x
+//                                   a get) => Mso=2e5 iters, 11 reps (min-of-K).
+// All three are baseline-subtracted (loop+cell-threading overhead removed). DCE
+// guard: get-values and same_orbit hits are accumulated and printed.
+//
+// Stdout schema (6 ints):
+//   [1] get_guard     = Arena.get(a, A0)            (a real stored value, not sentinel)
+//   [2] occ_guard     = Arena.occupied(a, A0)       (=1, address is live)
+//   [3] put_net_ns    = min ns for N=2000 put calls, baseline-subtracted (/2000 = ns/put)
+//   [4] get_net_ns    = min ns for Mg=1e6 get calls, baseline-subtracted (/1e6 = ns/get)
+//   [5] so_net_ns     = min ns for Mso=2e5 same_orbit calls, base-subtracted (/2e5 = ns/op)
+//   [6] so_guard      = accumulated same_orbit hits over Mso (DCE guard, = Mso)
+
+fun min2(f0: number, f1: number): number { return if f0 < f1 then f0 else f1 }
+
+// ---- put throughput ----
+fun timed_put(n: number): number visits Output {
+  be ac holds Space.make(Arena.empty())
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be addr holds Leech.embed(k, 1)
+              be _ holds Space.set(ac, Arena.put(Space.get(ac), addr, k + 1))
+              be _2 holds Space.set(i, k + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun timed_put_base(n: number): number visits Output {
+  be acc holds Space.make(0)
+  be i holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter n do { be k holds Space.get(i)
+              be addr holds Leech.embed(k, 1)
+              be _ holds Space.set(acc, addr)
+              be _2 holds Space.set(i, k + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+
+// ---- build a populated arena once (returns the handle) ----
+fun build_arena(n: number): number {
+  be ac holds Space.make(Arena.empty())
+  be i holds Space.make(0)
+  iter n do { be k holds Space.get(i)
+              be addr holds Leech.embed(k, 1)
+              be _ holds Space.set(ac, Arena.put(Space.get(ac), addr, k + 1))
+              be _2 holds Space.set(i, k + 1) }
+  return Space.get(ac)
+}
+
+// ---- get latency ----
+fun timed_get(a: number, addr: number, m: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.get(a, addr)) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun timed_get_base(m: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter m do { be _ holds Space.set(acc, Space.get(acc) + 1) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+
+// ---- same_orbit latency (+ accumulate hits for the DCE guard) ----
+fun timed_so(a: number, x: number, y: number, m: number): number visits Output {
+  be acc holds Space.make(0)
+  be t0 holds Time.now_ns(0)
+  iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(a, x, y)) }
+  be t1 holds Time.now_ns(0)
+  return (t1 - t0)
+}
+fun so_hits(a: number, x: number, y: number, m: number): number {
+  be acc holds Space.make(0)
+  be i holds Space.make(0)
+  iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(a, x, y))
+              be _2 holds Space.set(i, Space.get(i) + 1) }
+  return Space.get(acc)
+}
+
+fun min_put(reps: number, n: number): number visits Output {
+  be m holds Space.make(timed_put(n))
+  iter reps do { be _ holds Space.set(m, min2(Space.get(m), timed_put(n))) }
+  return Space.get(m)
+}
+fun min_put_base(reps: number, n: number): number visits Output {
+  be m holds Space.make(timed_put_base(n))
+  iter reps do { be _ holds Space.set(m, min2(Space.get(m), timed_put_base(n))) }
+  return Space.get(m)
+}
+fun min_get(a: number, addr: number, reps: number, m: number): number visits Output {
+  be mm holds Space.make(timed_get(a, addr, m))
+  iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_get(a, addr, m))) }
+  return Space.get(mm)
+}
+fun min_get_base(reps: number, m: number): number visits Output {
+  be mm holds Space.make(timed_get_base(m))
+  iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_get_base(m))) }
+  return Space.get(mm)
+}
+fun min_so(a: number, x: number, y: number, reps: number, m: number): number visits Output {
+  be mm holds Space.make(timed_so(a, x, y, m))
+  iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_so(a, x, y, m))) }
+  return Space.get(mm)
+}
+
+fun main(): number visits Output {
+  be n holds 2000            // put calls (land on ~2000 distinct type-2 points)
+  be mg holds 1000000        // get iterations (cheap op)
+  be mso holds 200000        // same_orbit iterations (heavy op)
+  be reps_w holds 4          // build-throughput reps
+  be reps_r holds 11         // read-latency reps
+
+  be a holds build_arena(n)
+  be a0 holds Leech.embed(0, 1)   // a fixed valid address
+  // two known same-orbit type-2 points (from uc_arena: 1536 ~ 1280)
+  be x holds 1536
+  be y holds 1280
+
+  // put throughput, baseline-subtracted
+  be put_net holds (min_put(reps_w, n) - min_put_base(reps_w, n))
+  // get latency, baseline-subtracted (same_orbit-free read)
+  be get_net holds (min_get(a, a0, reps_r, mg) - min_get_base(reps_r, mg))
+  // same_orbit latency, baseline-subtracted (same baseline shape, Mso iters)
+  be so_net holds (min_so(a, x, y, reps_r, mso) - min_get_base(reps_r, mso))
+
+  be _1 holds Output.print(String.from_int(Arena.get(a, a0)))
+  be _2 holds Output.print(String.from_int(Arena.occupied(a, a0)))
+  be _3 holds Output.print(String.from_int(put_net))
+  be _4 holds Output.print(String.from_int(get_net))
+  be _5 holds Output.print(String.from_int(so_net))
+  be _6 holds Output.print(String.from_int(so_hits(a, x, y, mso)))
+  return 0
+}

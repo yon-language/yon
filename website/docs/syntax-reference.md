@@ -7,9 +7,12 @@ description: The normative syntax of Yon 1.0, derived from the actual grammar.
 
 # Yon, Syntax Reference
 
-This is the **normative reference for Yon 1.0**. Every form below was derived
-from a complete pass over the real grammar (`frontend/parser.mly` and
-`frontend/lexer.mll`), not from memory, not from older documents.
+This is the **normative reference for Yon 1.0**. Every form below was
+re-verified against the real grammar (`frontend/parser.mly` and
+`frontend/lexer.mll`) and the compiling examples under
+`regression/book/jp/*/Entry.yon`, not from memory, not from older documents.
+Where a construct could not be confirmed in the live grammar it has been
+removed or flagged, rather than asserted.
 
 This table answers *is this form valid?* For *what does this keyword
 mean?*, with a compiling example next to each explanation, see
@@ -19,21 +22,17 @@ mean?*, with a compiling example next to each explanation, see
 [`adjunction`](/book/keywords#adjunction) ·
 [`aggregates`](/book/keywords#aggregates) ·
 [`algebra`](/book/keywords#algebra) ·
-[`all`](/book/keywords#all) ·
 [`and`](/book/keywords#and) ·
 [`as`](/book/keywords#as) ·
 [`at`](/book/keywords#at) ·
 [`backward`](/book/keywords#backward) ·
 [`be`](/book/keywords#be) ·
-[`becomes`](/book/keywords#becomes) ·
 [`bi`](/book/keywords#bi) ·
-[`buffer`](/book/keywords#buffer) ·
 [`by`](/book/keywords#by) ·
 [`cell`](/book/keywords#cell) ·
 [`compose`](/book/keywords#compose) ·
 [`converts`](/book/keywords#converts) ·
 [`do`](/book/keywords#do) ·
-[`drop`](/book/keywords#drop) ·
 [`each`](/book/keywords#each) ·
 [`effects`](/book/keywords#effects) ·
 [`else`](/book/keywords#else) ·
@@ -41,7 +40,6 @@ mean?*, with a compiling example next to each explanation, see
 [`error`](/book/keywords#error) ·
 [`every`](/book/keywords#every) ·
 [`exact`](/book/keywords#exact) ·
-[`extends`](/book/keywords#extends) ·
 [`false`](/book/keywords#false) ·
 [`fold`](/book/keywords#fold) ·
 [`for`](/book/keywords#for) ·
@@ -62,7 +60,6 @@ mean?*, with a compiling example next to each explanation, see
 [`import`](/book/keywords#import) ·
 [`in`](/book/keywords#in) ·
 [`ind_path`](/book/keywords#ind_path) ·
-[`init`](/book/keywords#init) ·
 [`internal`](/book/keywords#internal) ·
 [`invertible`](/book/keywords#invertible) ·
 [`is`](/book/keywords#is) ·
@@ -79,7 +76,6 @@ mean?*, with a compiling example next to each explanation, see
 [`multishot`](/book/keywords#multishot) ·
 [`new`](/book/keywords#new) ·
 [`not`](/book/keywords#not) ·
-[`objects`](/book/keywords#objects) ·
 [`of`](/book/keywords#of) ·
 [`operation`](/book/keywords#operation) ·
 [`or`](/book/keywords#or) ·
@@ -109,7 +105,6 @@ mean?*, with a compiling example next to each explanation, see
 [`Sigma`](/book/keywords#sigma) ·
 [`snd`](/book/keywords#snd) ·
 [`verify`](/book/keywords#verify) ·
-[`space`](/book/keywords#space) ·
 [`stream`](/book/keywords#stream) ·
 [`terminal`](/book/keywords#terminal) ·
 [`then`](/book/keywords#then) ·
@@ -128,8 +123,7 @@ mean?*, with a compiling example next to each explanation, see
 [`when`](/book/keywords#when) ·
 [`where`](/book/keywords#where) ·
 [`while`](/book/keywords#while) ·
-[`with`](/book/keywords#with) ·
-[`world`](/book/keywords#world)
+[`with`](/book/keywords#with)
 
 Each construct carries a status:
 
@@ -148,11 +142,12 @@ Each construct carries a status:
 | `"ciao"` | ✓ | String literal, a real value of type `text`/`String` (see *Strings*) |
 | [`true`](/book/keywords#true), [`false`](/book/keywords#false) | ✓ | Boolean literals |
 | [`present`](/book/keywords#present), [`absent`](/book/keywords#absent), [`unknown`](/book/keywords#unknown) | ✓ | Heyting truth values (intuitionistic Ω) |
-| `100ms`, `5s`, `2min`, `1h`, `3d`, `1y` | ✓ | Duration literals (no whitespace before the unit). **A duration is a `number` of milliseconds**: `2s + 500ms == 2500` |
 | `mod::name` | ✓ | Qualified name (module namespace) |
 
-Currency literals (`10.50 EUR`) are **not** in the 1.0 grammar; the `money`
-*type* exists (see *Types*).
+Duration literals (`100ms`, `5s`, `2min`) were **removed in v1.1**: `2s` now
+lexes as `NUM_LIT 2` followed by the identifier `s`. Currency literals
+(`10.50 EUR`) are likewise **not** in the grammar; the `money` *type* exists
+(see *Types*).
 
 ## Strings
 
@@ -180,14 +175,14 @@ only numbers travel on the wire.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `be x holds e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword) |
-| `x becomes e` | ✓ | Mutation. A becomes-target binding is **promoted to a Space cell** (the content-addressed mutation mechanism): its `be` allocates the cell, reads go through it, [`becomes`](/book/keywords#becomes) updates it. Works on locals and parameters |
+| `be x holds e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword). Declares once per scope: re-`holds` of a name already bound in the same scope is a compile error (use `x = e` to reassign); nested-scope shadowing is allowed, `_`-prefixed names are exempt |
+| `x = e` | ✓ | **Space-cell assign** (the content-addressed mutation mechanism). The target binding is promoted to a Space cell: its `be` allocates the cell, reads go through it, `x = e` updates it. Works on locals and parameters. Snapshot semantics, no aliasing (`be y holds x` does not alias `x`'s cell) |
 | `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
-| `x.f becomes e` | ⚠ not implemented | Field mutation: place sections are immutable in 1.0; mutate through cells |
+| `x.f = e` | ⚠ rejected by design | Field mutation: place sections are immutable in 1.0; mutate through cells |
 
-There is no reassignment `x = e`. `=` appears only in top-level categorical
-definitions (`world W = A * B`, `place P = pullback(f, g)`) and in `show f = e`
-inside views.
+`=` is the assignment operator. The same `=` token also appears in top-level
+categorical definitions (`place P = pullback(f, g)`), in `prop name(...) = e`
+inside a topos, and in `show f = e` inside views. There is no `becomes` keyword.
 
 ## Types
 
@@ -216,7 +211,7 @@ from the call sites.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Zero-argument builtins take a dummy `0`**: `Time.now_ms(0)` |
+| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty()`, `XSet.empty()`, `Vec.empty()`, `Arena.empty()`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
 | `obj.field`, `x.f1.f2` | ✓ | Field access (chains left-associatively) |
 | `e.method(args).map(f).fold(0, g)` | ✓ | Method chaining: `recv.m(args)` ≡ `m(recv, args)` |
 | `a \|> f(args)` | ✓ | Pipe: passes `a` as the **first** argument of the call |
@@ -236,7 +231,7 @@ from the call sites.
 | `new P in S { ... }` | ✓ | Construction inside Space `S` |
 | [`refl(t)`](/book/keywords#refl), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
 | [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is [`refl`](/book/keywords#refl) in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
-| `pullback(f, g)` / `pullback(f, g, a, b)` | ✓ | Pullback scaffolding / runtime compatible pair with `f(a) == g(b)` checked |
+| `pullback(f, g, a, b)` | ✓ | Runtime compatible pair with `f(a) == g(b)` checked. The no-arg expression forms `pullback(f, g)` / `pushout(f, g)` were removed in v1.1; the two-argument form survives **only** as the declaration `place P = pullback(f, g)` (see *Places*) |
 | `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
 ### Operators (by family)
@@ -304,21 +299,28 @@ function that `visits E` requires the caller to cover `E`, by declaring
 
 ## Worlds
 
-| Form | Status | Meaning |
-|---|---|---|
-| `world W { Name is A, B, C  Color is by F }` | ✓ | A world; each member is `Name is descriptor` (an enumeration of inhabitants, a primitive type name, or `by F`) |
-| `world W = A * B` | ✓ | Product of worlds |
-| `world W = A + B` | ✓ | Coproduct |
-| `world W = Base / Rel` | ✓ | Quotient world by an equivalence |
-| `world W subset of V` | ✓ | Sub-world |
+A world has **no surface syntax**. `world` is not a lexer keyword, so any
+`world W { ... }`, `world W = A * B`, `world W = A + B`, `world W = Base / Rel`,
+or `world W subset of V` is a parse error.
+
+A world is declared **only in `yon.toml`**, never in a `.yon` file:
+
+```toml
+[world.Park]
+objects = ["Dinosaur", "Herd"]
+spaces  = ["Enclosure"]
+```
+
+A `place` then takes its world by inference from the project's toml, not from an
+`in W` clause in the source.
 
 ## Places, operations, laws
 
 | Form | Status | Meaning |
 |---|---|---|
-| `place P [in W] [over X] [extends B] [on error E] { members }` | ✓ | An object. `over X` = slice (fibered over `X`); `extends B` = sub-object mono `P ↪ B`; `on error E` = error morphism `P → E` |
+| `place P [over X] [subcontains B] [on error E] { members }` | ✓ | An object (its world is inferred from the toml; there is no `in W` clause). `over X` = slice (fibered over `X`); `subcontains B` = sub-object mono `P ↪ B`; `on error E` = error morphism `P → E` |
 | `place P ... with effects { ... }` | ✓ | Enables operations (1-cells) among the members |
-| `error E [in W] [extends B] { fields }` | ✓ | An error place (target of `on error`) |
+| `error E [subcontains B] { fields }` | ✓ | An error place (target of `on error`); world inferred from the toml, no `in W` clause |
 | `field_name type` | ✓ | Field, **no colon**: `balance number` |
 | `operation op(a: T): U` | ✓ | Operation (1-cell) |
 | `functorial operation op(...)` | ✓ | Operation lifted along world morphisms (Yoneda lifting) |
@@ -348,24 +350,32 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 ## Topos declarations
 
 ```yon
-topos Account [in W] [at SPACE] where {
-  objects { ...place declarations... }
+topos Account where {
   terminal Unit                                  // optional
-  morphisms { ...operations... }                 // optional
+  morphisms { ...morphism declarations... }      // optional
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
 ```
 
-Status: ✓ (regression examples). A `prop` is a subobject classifier, a map
-into Ω; the abstract form (no `= body`) declares the signature only. `at SPACE`
-binds the topos to a residence heap; without it the topos is purely formal.
+Status: ✓ (regression examples). Under v1.1 *topos-per-space* there is no `in W`
+or `at SPACE` annotation and no inline `objects { }` block: the world, the
+residence space, and the objects are all **inferred from the filesystem**. The
+`morphisms { }` block declares its members with the singular `morphism` keyword.
+A `prop` is a subobject classifier, a map into Ω; the abstract form (no `= body`)
+declares the signature only.
 
 ## Spaces and packages
 
+A **Space has no surface declaration**. There is no `space S ...` declaration
+form (the `space` keyword's `SPACE` token appears only inside the expression
+`wire to space S`), and `init` is not a keyword (`init X as Space` is a parse
+error). A Space is a **filesystem directory plus its `yon.toml`**, discovered by
+the toolchain, not declared in source.
+
+The import forms below are the surface syntax that *references* Spaces:
+
 | Form | Status | Meaning |
 |---|---|---|
-| `space S [in W] [with fold "sum_f64"]` | ✓ | Declare a Space; the optional fold names its semilattice join |
-| `init X as Space` | ✓ | Initialize a Space |
 | `import "file.yon"` | ✓ | File import |
 | `import m::n [as alias]` | ✓ | Symbol import from a module |
 | `import m::n from Space` | ✓ | **Cross-package import**: `n` becomes a remote arrow into `Space` |
@@ -409,7 +419,9 @@ failure (missing file, unset variable, out-of-range index).
 
 ## Conventions
 
-- Zero-argument builtins are called with a dummy `0`: `Args.count(0)`.
+- Nullary builtins are called with empty parens `()`: `XSet.empty()`,
+  `Vec.empty()`. The few with a unit-argument signature take `(0)`:
+  `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)`.
 - `new P { field value }` and place fields `name type`, no `=`, no `:`.
 - A program's exit code is `main`'s return value, truncated mod 256.
 - `return` inside a `when` branch does not exit the function; use

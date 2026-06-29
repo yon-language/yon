@@ -1,0 +1,8 @@
+[package]
+name = "probe_dino_classes"
+
+[world.Park]
+objects = ["Dinosaur"]
+
+[runtime]
+backend = "memory"

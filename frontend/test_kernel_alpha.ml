@@ -1,11 +1,12 @@
-(* test_kernel_alpha.ml — oracle for the de Bruijn migration.
+(* test_kernel_alpha.ml — oracle for kernel binder handling (alpha-equivalence).
  *
  * Asserts the CORRECT behaviour of the type-theory kernel on binder handling.
- * It is RED on the current string-name kernel and must turn GREEN once
- * variables move to de Bruijn indices. It also empirically settles two claims
- * from the HN review (omega/lambdas) so we fix real bugs, not imagined ones.
+ * The string-name kernel achieves alpha-equivalence via an env-carried de
+ * Bruijn-depth comparison (ast.ml var_alpha), so these pass without a
+ * representation change. It also empirically settles two claims from the HN
+ * review (omega/lambdas) so we fix real bugs, not imagined ones.
  *
- * Build (standalone, excluded from the dune executables):
+ * Build (standalone):
  *   ocamlc ast.ml subst.ml test_kernel_alpha.ml -o /tmp/tka
  *)
 

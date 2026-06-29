@@ -7,8 +7,8 @@
 #include "mat24_functions.h"
 #include "xleech2_mphf.h"
 
-/* Mutex shared with xleech2_move.c to serialize calls into libmmgroup.
- * libmmgroup is not thread-safe by default. Defined in xleech2_move.c. */
+/* Mutex serializing calls into libmmgroup, which is not thread-safe by
+ * default. The canonical definition lives in xleech2_heap.c. */
 extern pthread_mutex_t mmgroup_mutex;
 
 int yon_xcoord_type(yon_xcoord_t v) {

@@ -1,0 +1,16 @@
+place Entry { }
+// §5 VoyagerList (Golay 24,12,8) — "the gene survives flipped bits". seal -> corrupt 2 bits
+// -> open recovers. The list auto-seals on append, auto-opens on get with correction.
+// Stdout: [1] gene=1445, [2] open(corrupt(seal,2))=1445 (recovered), [3] list get after
+// corrupt_at(0,3)=1445 (auto-corrected, 3 is the radius).
+fun main(): number visits Output {
+  be cw holds VoyagerList.seal(1445)
+  be back holds VoyagerList.open(VoyagerList.corrupt(cw, 2))
+  be _1 holds Output.print(String.from_int(1445))
+  be _2 holds Output.print(String.from_int(back))
+  be l holds VoyagerList.empty()
+  l = VoyagerList.append(l, 1445)
+  l = VoyagerList.corrupt_at(l, 0, 3)
+  be _3 holds Output.print(String.from_int(VoyagerList.get(l, 0)))
+  return 0
+}

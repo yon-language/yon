@@ -59,7 +59,7 @@ type env = {
   (* Place pairs transportable only while checking a geometric morphism's
    * pull/push bodies. This is scoped typing evidence, not global subtyping. *)
   transport_pairs : (string * string) list;
-  (* For each variable bound via `let x holds new P in EU { ... }`, track its
+  (* For each variable bound via `be x holds new P in EU { ... }`, track its
    * explicit space. Variables created with `new P { ... }` (without `in`) and
    * function parameters have no entry (implicitly "in __Default", or passed
    * cross-space as opaque).
@@ -279,7 +279,7 @@ let lookup_sum_constructor (env : env) (name : string)
     env.sum_types
 
 (* Bind a variable together with an explicit originating space. Used by
-   `let x holds new P in EU { ... }`. *)
+   `be x holds new P in EU { ... }`. *)
 let add_var_in_space (env : env) (x : string) (t : ty) (space : string) : env =
   { env with
     vars = (x, t) :: env.vars;

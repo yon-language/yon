@@ -1,0 +1,8 @@
+place Entry { }
+fun main(): number visits Output {
+  be m holds HashMap.set(HashMap.set(HashMap.empty(), 42, 1445), 7, 1)
+  be acc holds Space.make(0)
+  iter 10000000 do { be _ holds Space.set(acc, Space.get(acc) + (HashMap.get(m, 42))) }
+  be _p holds Output.print(String.from_int(Space.get(acc)))
+  return 0
+}

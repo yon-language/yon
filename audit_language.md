@@ -134,7 +134,7 @@ Costruzioni dichiarabili: `world` (+ quotient), `place` (+ `objects {}` block, +
 
 Il vecchio quadro a tre livelli (statico orfano / lowering C++ del covering sovrapposto / trigger simulato) è **superato**: il ramo C++ (`LowerToposToStandard.cpp`, glue del covering) era fuori scope — un move si realizza via `xcoord`/Co₀, non per gluing — e il trigger-stringa del Test 170 non fa più parte del disegno. La sheafification è **chiusa**: motore + aggancio + reject end-to-end per il quoziente (l'unico generatore con contenuto sui campi), coproduct/subset documentati vacui, orfane rimosse. Il `canon` ha casa nel `world.yon` di una cartella-quoziente (Batch 8) quando il filesystem sarà cablato; il reject di oggi opera già sulla forma esplicita.
 
-**Nota di design (Antonio):** `x holds …` è inizializzazione/dichiarazione, `x = …` è l'assegnazione di superficie, `becomes` deve restare **solo negli strati inferiori**. Da rivedere in quest'ottica la presenza del token surface `becomes`.
+**Nota di design (Antonio):** `x holds …` è inizializzazione/dichiarazione, `x = …` è l'assegnazione di superficie, `becomes` deve restare **solo negli strati inferiori**. → **Fatto (2026-06-26):** `becomes` rimosso dalla superficie, `=` è il token (`lexer.mll:321`); il nodo AST resta `SAssignBecomes` (nome interno). Vedi Debt #8 (chiuso).
 
 **Crediti:** nucleo effetti/geometria solido; `geom_morphism` end-to-end; `becomes` coerente con l'immutabilità delle sezioni.
 **Debiti:** sheafification **chiusa** (vedi sopra); copertura esempi debole su `geom_morphism` (0), `reduction` (1), `topology` (1).
@@ -244,7 +244,7 @@ Decisione di design di sessione: **un programma Yon è un albero di cartelle**, 
 | 5 | Regressione nativa Heyting end-to-end da rifare sul Mac | 3 | verifica | rischio nullo sul corpus |
 | 6 | Esecuzione runtime end-to-end — **APERTO sul Mac attuale (2026-06-19)** | 5 | verifica | `test_mphf`/`test_spawn_collect` ok in un container precedente, ma su questa macchina `run_regression.sh` è rosso: `spawn_parallel_collect` timeout (124), cross-space `rc=85/247/248` + `subscriber does not compile`. Provato pre-esistente. Riconfermare l'ambiente |
 | 7 | Multi-nodo/remoto per Space | 5 | futuro | single-process oggi |
-| 8 | Token surface `becomes` da rivedere (deve stare negli strati inferiori) | 4 | design | nota di Antonio |
+| 8 | ~~Token surface `becomes` da rivedere~~ **CHIUSO (2026-06-26)** | 4 | — | `becomes` non è più token surface: sostituito da `=` (`lexer.mll:321` EQ; 0 occorrenze `becomes`/`BECOMES` in lexer/parser). Il nodo AST `SAssignBecomes` resta come nome interno (lowering). La gerarchia voluta è atterrata: `holds`=init, `=`=assegnazione surface, `becomes`=solo strati inferiori |
 | 9 | Copertura esempi debole su `topology` (1)/`reduction` (2) | 4 | minore | `geom_morphism` ora ha 6 esempi (risolto); resta poco) |
 | 10 | ~~`emit_ty` (schema) non printer del carrier~~ **CHIUSO (quarto giro 2026-06-18)** | 6 | — | `ty_to_mlir = Carrier.to_mlir o Carrier.of_core_ty`; `emit_ty`/`core_ty_to_mlir_simple` alias; divergenza su rami morti |
 | 11 | `type_erase` higher-order non lowered | 6 | feature | il `failwith` e ora un reject pulito (decreto 2026-06-17); resta la feature |

@@ -1,0 +1,11 @@
+{
+  "_comment": "Theorems checked in frontend/test_leech_theta.ml (the theta series of the Leech lattice, a weight-12 modular form). Each count is the EXACT number of lattice points at that norm, proven as an integer (no error bar). Not invented; re-derived in Yon's oracle every build.",
+  "source": "frontend/test_leech_theta.ml",
+  "shells": [
+    { "norm": 4,  "count": 196560,      "label": "kissing", "note": "the kissing number: nearest neighbours. In 3 dimensions this is 12." },
+    { "norm": 6,  "count": 16773120 },
+    { "norm": 8,  "count": 398034000 },
+    { "norm": 10, "count": 4629381120 },
+    { "norm": 12, "count": 34417656000 }
+  ]
+}

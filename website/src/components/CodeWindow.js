@@ -20,17 +20,27 @@ export default function CodeWindow({ file, run, out, children }) {
   return (
     <div className={styles.code}>
       <div className={styles.codeBar}>
-        <span className={styles.dots}><i></i><i></i><i></i></span>
+        <span className={styles.dots}>
+          <i></i>
+          <i></i>
+          <i></i>
+        </span>
         <span>{file}</span>
       </div>
-      <CodeBlock language="yon" className={`${styles.body} yon-in-window`}>{children}</CodeBlock>
+      <CodeBlock language="yon" className={`${styles.body} yon-in-window`}>
+        {children}
+      </CodeBlock>
       {(run || out) && (
         <div className={styles.codeOut}>
           {run && (
-            <span><span className={styles.pmt}>$</span> {run}</span>
+            <span>
+              <span className={styles.pmt}>$</span> {run}
+            </span>
           )}
           {(out || []).map((line, i) => (
-            <span key={i} className={styles.res}>{line}</span>
+            <span key={i} className={styles.res}>
+              {line}
+            </span>
           ))}
         </div>
       )}

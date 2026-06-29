@@ -255,9 +255,9 @@ let hover_at (prog : Surface_ast.program) (line0 : int) (col0 : int)
 (* ─── Completion: keyword + nomi di top-level in scope ──────────────── *)
 
 let keywords = [
-  "world"; "place"; "fun"; "let"; "holds"; "return"; "operation"; "import"; "as"; "internal"; "init"; "from";
-  "uses"; "algebra"; "law"; "verify"; "move"; "reduction"; "view";
-  "with"; "effects"; "is"; "if"; "then"; "else"; "all"; "where";
+  "be"; "place"; "fun"; "holds"; "return"; "operation"; "import"; "as"; "internal"; "from";
+  "topos"; "subcontains"; "uses"; "algebra"; "law"; "verify"; "move"; "reduction"; "view";
+  "with"; "effects"; "is"; "if"; "then"; "else"; "where";
   "commutative"; "associative"; "monotone"; "Additive"; "TropicalMax";
   "TropicalMin"; "Multiplicative"; "BooleanOr"; "BooleanAnd"; "Gcd";
 ]

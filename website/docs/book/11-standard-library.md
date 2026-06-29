@@ -64,7 +64,7 @@ fun main(): number {
 }
 ```
 
-A `Vec` is a dynamic array on an arena strip — no `malloc`. `push` appends in
+A `Vec` is a dynamic array on an arena strip, no `malloc`. `push` appends in
 place into spare capacity, or reallocates a doubled strip past capacity and
 returns a new handle (so always use the handle `push` returns), handing the
 old strip's whole pages back to the OS; `get`/`set` are O(1) and `set` mutates

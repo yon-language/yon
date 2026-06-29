@@ -1,0 +1,4 @@
+[package]
+name = "hashmap"
+[runtime]
+backend = "memory"

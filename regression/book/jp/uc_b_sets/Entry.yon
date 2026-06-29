@@ -1,0 +1,22 @@
+place Entry { }
+
+// USE CASE B — "what do two paddocks have in common?" (bit-parallel set algebra).
+// Paddock A holds {7, 11, 63}, paddock B holds {11, 63, 99} (genomes as type-2 points).
+// XSet.intersect = a bit-AND over the 196560-bit bitmap (O(3072), ~50x a hash set).
+// Stdout: [1] |A|=3, [2] |B|=3, [3] |A & B|=2 (shared 11,63), [4] |A | B|=4 (union).
+
+fun main(): number visits Output {
+  be a holds XSet.empty()
+  a = XSet.add(a, Leech.embed(7, 0))
+  a = XSet.add(a, Leech.embed(11, 0))
+  a = XSet.add(a, Leech.embed(63, 0))
+  be b holds XSet.empty()
+  b = XSet.add(b, Leech.embed(11, 0))
+  b = XSet.add(b, Leech.embed(63, 0))
+  b = XSet.add(b, Leech.embed(99, 0))
+  be _1 holds Output.print(String.from_int(XSet.size(a)))
+  be _2 holds Output.print(String.from_int(XSet.size(b)))
+  be _3 holds Output.print(String.from_int(XSet.size(XSet.intersect(a, b))))
+  be _4 holds Output.print(String.from_int(XSet.size(XSet.union(a, b))))
+  return 0
+}

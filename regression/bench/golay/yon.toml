@@ -1,0 +1,4 @@
+[package]
+name = "golay"
+[runtime]
+backend = "memory"

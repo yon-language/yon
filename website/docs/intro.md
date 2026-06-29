@@ -11,8 +11,8 @@ keywords: [topos, programming language, category theory, MLIR, LLVM, content-add
 # The Yon Programming Language
 
 Yon is a research programming language whose foundations are categorical: its
-type system is grounded in topos theory, the Yoneda lemma, homotopy type theory
-(HoTT), and cubical type theory, with algebraic effects and an intuitionistic
+type system is grounded in topos theory, the Yoneda lemma, and homotopy type theory
+(HoTT), with algebraic effects and an intuitionistic
 logic core. It is, at the same time, a research program and a working compiler:
 Yon source compiles, through a custom MLIR dialect, down to LLVM IR and then to a
 native executable.
@@ -47,7 +47,7 @@ description of Yon 1.0, then follow the book:
 1. [Installation](./book/01-installation.md), what you need, build, verify, the toolchain.
 2. [Hello, world](./book/02-hello-world.md), your first program, `yonc`, exit codes.
 3. [Values and bindings](./book/03-values-and-bindings.md), numbers, strings (and their fusion), durations, truth.
-4. [Control flow and mutation](./book/04-control-flow.md), `when`/`is`, loops, `becomes` and Space cells.
+4. [Control flow and mutation](./book/04-control-flow.md), `when`/`is`, loops, `=` and Space cells.
 5. [Functions and effects](./book/05-functions-and-effects.md), inference, lambdas, pipes, `visits`.
 6. [Worlds and places](./book/06-worlds-and-places.md), the categorical data model, operations, certified laws.
 7. [Arrows](./book/07-arrows.md), moves, views, reductions, handle lambdas, composition, geometric morphisms.
