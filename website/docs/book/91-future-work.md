@@ -47,9 +47,9 @@ work that is arriving, in that order.
   is no maximum size and no degraded regime: growth is bounded by
   memory alone, like the chain. 256 instances per structure per
   process.
-- **VoyagerList:** capacity grows dynamically (doubling, from 1,024 up to
-  1,048,576 codewords; codewords live outside the heap). 256 lists per
-  process.
+- **VoyagerList:** capacity grows dynamically (doubling from 1,024
+  codewords, bounded by memory alone, no fixed maximum; codewords live
+  outside the heap). 256 lists per process.
 - **The wire:** at most 4 arguments per cross-Space call, all `f64`.
   Strings and sections never cross (they are process-local handles).
 - **Exit codes:** `main`'s value mod 256, like every Unix process.
@@ -66,21 +66,26 @@ These are not on any roadmap. They are the design.
   (chapter 18).
 - **No interfaces / typeclasses / virtual dispatch**, arrows are the
   interface (chapters 0, 5).
-- **No central package registry**, a dependencies are git.
+- **No central package registry**, dependencies are git.
 
 ## Arriving
 
-The grammar already reserves most of this syntax; the compiler rejects
-it until each implementation lands with regression coverage. In planned
-order:
+The grammar already reserves most of this syntax. Each item sits at a
+different stage: some forms parse and type-check but do not yet lower to
+a stable runtime, others are rejected outright until the implementation
+lands with regression coverage. In planned order:
 
 - **`spawn { ... }` and `promote`**: ephemeral sub-runtimes with an
   isolated arena. Only the yielded value is promoted to the parent
-  heap; the arena is reclaimed in one move. The design and its
-  invariants are public in the LLVM Discourse announcement thread. An
-  API for Space lifecycles belongs to the same work.
+  heap; the arena is reclaimed in one move. The block parses and
+  type-checks today (a spawn types as a stream of its promoted value);
+  the runtime lowering is not yet stable, so it is not part of 1.0. The
+  design and its invariants are public in the LLVM Discourse
+  announcement thread. An API for Space lifecycles belongs to the same
+  work.
 - **`produce { emit e }`**, the stream-producer block, and folding
-  sub-runtimes into streams.
+  sub-runtimes into streams. The block parses; the fold that turns a
+  producer into a settled stream is 1.2 work.
 - **`ind_path(C, d, p)`**, the J eliminator (the runnable HoTT fragment
   is `refl`/`pair`/`fst`/`snd`).
 - **`x.f = e`**, field mutation (sections are immutable; today you

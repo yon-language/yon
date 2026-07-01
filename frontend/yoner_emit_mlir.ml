@@ -268,6 +268,9 @@ let () =
       | Failure msg ->
           Printf.eprintf "Lex/parse failure in %s: %s\n" filename msg;
           exit 2
+      | Lexer.Lexer_error msg ->
+          Printf.eprintf "Lexer error in %s: %s\n" filename msg;
+          exit 2
     ) all_sources
   in
   (* Agent ENF: mandatory file-layout enforcement. The per-file loop above has

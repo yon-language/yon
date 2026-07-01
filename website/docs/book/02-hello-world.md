@@ -23,8 +23,8 @@ $ yonc hello.yon -o hello
 $ ./hello
 ```
 
-The process **exit code is `main`'s return value, truncated mod 256**, Yon
-programs habitually use it as their observable result:
+The process **exit code is `main`'s return value, truncated mod 256**, and Yon
+programs commonly use it as their observable result:
 
 ```yon
 fun main(): number {
@@ -32,7 +32,7 @@ fun main(): number {
 }
 ```
 
-Printing something is one call away:
+Printing takes one call:
 
 ```yon
 fun main(): number {
@@ -47,9 +47,9 @@ string literal is a real value: since the 1.0 *string fusion*, `"ciao, mondo"`
 is a section of the builtin `String` place, interned on the content-addressed
 heap.
 
-`String.print` is a direct builtin. Yon also has a principled, *effectful*
-printing path (`Output.print` under the `visits Output` effect), we will meet
-it in the chapter on functions and effects.
+`String.print` is a direct builtin. Yon also has an *effectful* printing path
+(`Output.print` under the `visits Output` effect), we will meet it in the
+chapter on functions and effects.
 
 You can stop the compiler at any stage and look at what it produced:
 

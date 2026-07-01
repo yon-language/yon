@@ -79,6 +79,7 @@ let parse_string (source : string) : (Surface_ast.program, string) result =
                p.Lexing.pos_lnum
                (p.Lexing.pos_cnum - p.Lexing.pos_bol))
   | Failure m -> Error ("Lex error: " ^ m)
+  | Lexer.Lexer_error msg -> Error ("Lexer error: " ^ msg)
 
 let () =
   let args = Array.to_list Sys.argv in

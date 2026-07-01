@@ -248,7 +248,6 @@ from the call sites.
 | `all P where cond` | ✓ | Quantification over the sections of a place |
 | `verify P` | ✓ | Instantiate a law-verified place as a Magma handle |
 | `new P { field value }` | ✓ | Section construction, **no `=`** between field and value |
-| `new P in S { ... }` | ✓ | Construction inside Space `S` |
 | [`refl(t)`](/book/keywords#refl), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
 | [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is [`refl`](/book/keywords#refl) in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
 | [`plam i => e`](/book/keywords#plam) | ✓ | Path abstraction over a dimension `i`; the face system for the compositions is written `i = I0 => plam j => e` / `i = I1 => plam j => e` |

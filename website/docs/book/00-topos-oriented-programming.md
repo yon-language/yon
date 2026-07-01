@@ -21,19 +21,22 @@ In OOP an object is a box of mutable state with methods attached; identity
 is primary, content is incidental. TOP inverts this completely:
 
 - A **world** is a category, a semantic context, not a namespace. Worlds
-  compose like categories do: products, coproducts, quotients, sub-worlds.
+  compose the way categories do (products, coproducts, quotients,
+  sub-objects), but that composition is mathematics, not a surface dialect:
+  you declare worlds in `yon.toml` and act between them with arrows, never
+  with a world-algebra written by hand (chapter 6).
 - A **place** is an object *in* a world. It has no methods and no hidden
   state; it is pure structure.
 - A value is a **section** of a place, immutable content, identified by
-  that content (chapter 11).
+  that content (chapter 13).
 - All behaviour lives in **arrows**: moves, views, reductions, morphisms
-  between worlds (chapter 6). Nothing "happens to" a value; arrows take you
+  between worlds (chapter 7). Nothing "happens to" a value; arrows take you
   from one value to another.
 - **Identity is the exception**, not the rule: it exists only where you ask
-  for it (a Space cell, chapter 12), never by default.
+  for it (a Space cell, chapter 13), never by default.
 - Even **logic is internal**: truth is the subobject classifier Ω, a `prop`
   is a map into it, and the logic you get is the Heyting algebra of the
-  topos (chapter 7), `unknown` is a citizen, not an error.
+  topos (chapter 8), `unknown` is a citizen, not an error.
 
 ## The Yoneda principle
 
@@ -45,7 +48,7 @@ design principle, this becomes: **a thing is what you can observe of it**.
 Three places where this is load-bearing in the implementation, not just
 philosophy:
 
-1. **Functorial operations** (chapter 5) are lifted along world morphisms, 
+1. **Functorial operations** (chapter 6) are lifted along world morphisms,
    the operation travels with the object's *relations*, not with a pinned
    implementation. The compiler's world-inference and effect-propagation
    rules are written and audited as "Yoneda-coherent": if `f` calls `g` and
@@ -53,8 +56,8 @@ philosophy:
 2. **There are no typeclasses.** Where Haskell would attach an instance,
    Yon attaches arrows: a place's interface *is* the bundle of moves, views
    and reductions defined on it, its presheaf of observations.
-3. **Content addressing is extensionality made physical** (chapter 11):
-   two values indistinguishable by observation are not merely equal, they
+3. **Content addressing is extensionality made physical** (chapter 12):
+   two values indistinguishable by observation are not only equal, they
    are *the same slot*. When `String.equal` compares two handles it is
    checking Yoneda-style indiscernibility in O(1):
 
@@ -82,7 +85,7 @@ become one computation in the IR, collapse by structure, before any
 classical optimization runs. The same philosophy returns at every level:
 **Co₀-orbit canonicalization** collapses heap contents equivalent under the
 Leech-lattice symmetries (chapter 14), η/unit rules collapse trivial
-coherence cells, and verified laws (chapter 5) license algebraic rewrites
+coherence cells, and verified laws (chapter 6) license algebraic rewrites
 that an unverified `add` could never justify.
 
 That is the thesis of Topos-Oriented Programming in one line: **declare the

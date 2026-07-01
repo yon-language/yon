@@ -75,5 +75,5 @@ fun main(): number {
 }
 ```
 
-All of these are *surface lowerings* onto `while`, `iter` and Space cells, 
-there is no second loop machinery underneath.
+All of these are *surface lowerings* onto `while`, `iter` and Space cells.
+There is no second loop machinery underneath.

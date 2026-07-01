@@ -20,20 +20,19 @@ double __yon_dispatch(double selector, double a1, double a2,
                       double a3, double a4);
 ```
 
-, a switch over the package's **public** (non-`internal`) number functions,
-arity 0 to 4 (lower-arity functions simply ignore the extra slots). At
-startup, an ELF constructor stashes `argc/argv` before `main` even runs, so
-the binary can ask *"was I launched as a server?"* and enter the serve loop
-instead of `main`. The runtime owns that loop; the compiled code only
-provides the dispatch table. `internal` functions are not in the switch:
-from outside the package they do not exist.
+This is a switch over the package's **public** (non-`internal`) number
+functions, arity 0 to 4 (lower-arity functions ignore the extra slots). At
+startup, a load-time constructor (ELF or Mach-O, whichever the platform uses)
+stashes `argc/argv` before `main` runs, so the binary can ask *"was I launched
+as a server?"* and enter the serve loop instead of `main`. The runtime owns that
+loop; the compiled code provides only the dispatch table. `internal` functions
+are not in the switch: from outside the package they do not exist.
 
 ## Spawn and discovery
 
-The first call toward Space `S` forks and launches `./S_srv`, by
-convention, the server binary sits next to the caller; `YON_SRV_DIR`
-overrides the directory. Shutdown cascades from the caller; nothing
-outlives the conversation.
+The first call toward Space `S` forks and launches `./S_srv`. By convention the
+server binary sits next to the caller, and `YON_SRV_DIR` overrides the directory.
+Shutdown cascades from the caller; nothing outlives the conversation.
 
 ## The channel
 
@@ -47,16 +46,19 @@ designed to be **position-independent**: a fixed header followed by a ring
 buffer, all fields plain integers and offsets, no pointers, so every
 process can map it wherever it likes. The header carries:
 
-- a `magic` sentinel (`"STRE"`), *published last* during the `O_EXCL`
-  creation race, so attachers never see a half-initialized region;
+- a `magic` sentinel (`"STRE"`, `0x53545245`), written when the region is first
+  created, so an attacher that finds no magic knows the creator has not finished
+  initializing;
 - `slot_size`, `capacity`, `head`, `tail`, `count`, the ring;
 - `closed`, a clean-EOF flag from the producer;
 - `producers`, a live attach count, used for fault detection.
 
-Cross-process `emit`/`await` are serialized with an exclusive `flock`; the
-RPC session adds a `PROCESS_SHARED` mutex with `nonempty`/`nonfull`
-condition variables, so a slow consumer exerts **back-pressure** instead of
-dropping frames.
+Cross-process `emit`/`await` are serialized with an exclusive `flock`. The RPC
+mailbox that carries a *call* is the stricter of the two: its region is claimed
+by an `O_EXCL` race so exactly one process initializes it, that process publishes
+its magic **last** and the losers spin until they see it, and the session adds a
+`PROCESS_SHARED` mutex with `nonempty`/`nonfull` condition variables, so a slow
+consumer exerts **back-pressure** instead of dropping frames.
 
 ## Crossing by value: the DTO wire
 
@@ -101,27 +103,44 @@ mismatched schema is an error, never a silent mis-read.
 
 In the language this is the subscription pipeline:
 
-```
-import weather::forecasts from Weather
+```yon
+// Entry.yon, the consumer
+import weather::forecasts from Weather    // forecasts: fun(): stream of Reading
 
-fun main(): number {
-  be w holds wire to space Weather
-  be sub holds w.awaits(forecasts)        // forecasts: fun(): stream of Reading
-  be total holds sub.stream.fold(0, sum_reading)
-  return total
+place Entry {
+  fun main(): number {
+    be w holds wire to space Weather
+    be sub holds w.awaits(forecasts)
+    be readings holds sub.stream          // the drained frames, as a local stream
+    be total holds readings.fold(0, sum_reading)
+    return total
+  }
 }
 ```
 
-`forecasts` runs inside the Weather Space and emits `Reading` values; `sub.stream`
-is the consumer's local view of them, folded on its own heap. The two Spaces
-never share a cell: each `Reading` is a copy that lives in the consumer's heap,
-strings and nested places and all.
+`sub.stream` is bound to its own name before the fold: it is the consumer's local
+stream, materialized from the completed channel, and the fold runs over that.
+`forecasts` runs inside the Weather Space and emits `Reading` values; the two
+Spaces never share a cell, and each `Reading` is a copy that lives in the
+consumer's heap, strings and nested places and all.
+
+One shape of the drain is verified end to end, and one is deferred. In 1.0 the
+producer runs to completion (it emits its frames, sets `closed`, and exits)
+before the consumer drains: the frames sit in the file-backed shared segment,
+which persists past the producer's exit, so a full cross-process crossing is
+exercised deterministically. The producer's exit is the synchronization point.
+The concurrent path, both processes live at once with the consumer draining a
+slot ring the producer is still filling under contention, is a known 1.2 item.
+The scalar slot ring is 64 slots; the byte ring above it (the DTO wire) is the
+64&nbsp;KB frame ring. Neither number is a design ceiling on data, only the
+current in-flight window; the honest statement today is that the completed-drain
+case is gated and the concurrent-drain case is not.
 
 ## Epochs, liveness, recovery
 
 Freshness is an **epoch**: recreating a channel means unlink + recreate
 with the epoch advanced, so a stale peer can never talk to the new
-incarnation by accident. Liveness is checked the Unix way, 
+incarnation by accident. Liveness is checked the Unix way,
 `kill(pid, 0)`/`ESRCH` against the recorded server pid. When a server has
 crashed, the caller gets a **virgin channel**, the epoch advances, and the
 call is retried once, transparently: the program never sees the death.

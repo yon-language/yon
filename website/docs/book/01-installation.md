@@ -51,7 +51,7 @@ cmake -G Ninja -B build \
   -DLLVM_DIR=$(brew --prefix llvm@18 2>/dev/null || echo /usr/lib/llvm-18)/lib/cmake/llvm
 ninja -C build
 cd ..
-export PATH="$PWD/toolchain:$PATH"
+export PATH="$PWD/toolchain:$PWD/pkg:$PATH"   # yonc and friends live in toolchain/, yon-pkg in pkg/
 ```
 
 No environment variables are needed: `yonc` locates the LLVM tools on

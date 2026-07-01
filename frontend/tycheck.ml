@@ -873,29 +873,11 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       ok (TyStream elem)
 
   | EField (obj, fld, loc) ->
-      (* Cross-space field-access detection. If obj is a variable bound in an
-       * explicit space (`be x holds new P in EU { ... }`), the field access is
-       * a forbidden cross-space dereference. The only legitimate channel to
-       * extract information from a foreign section is to pass it to
-       * `apply_move(M, x)`, which transports it into the current space via the
-       * conversion function (the inverse image f* of the geometric
-       * morphism). *)
-      let* () =
-        match obj with
-        | EVar (name, _) ->
-            (match Tyenv.lookup_var_space env name with
-             | Some explicit_space ->
-                 err loc (Printf.sprintf
-                            "[TOPOS-E1110] cross-Space field access: \
-                             '%s' lives in space '%s' and its field '%s' \
-                             cannot be read directly from outside that space. \
-                             Use apply_move(M, %s) to transport it via a \
-                             declared geometric morphism, then access \
-                             the field on the moved instance."
-                            name explicit_space fld name)
-             | None -> ok ())
-        | _ -> ok ()
-      in
+      (* The E1110 cross-Space field-read gate was type-gated on the retired
+       * `new P in Space` surface form. With that vestige gone, a place's space
+       * is its filesystem directory; same-binary isolation is physical
+       * (`backend=separate` + the process/package boundary), not a field-read
+       * type-check. See chapter 10. *)
       let* obj_ty = infer env ctx obj in
       (match obj_ty with
        | TyPrim "unknown" | TyUser "unknown" | TyVar _ ->
@@ -1151,45 +1133,9 @@ got %s" (Tyenv.ty_to_string other)))
         in
         check_call env ctx name args arg_tys loc
       end else begin
-      (* Cross-space arg leakage detection. If the argument is an EVar bound in
-       * an explicit space, the function call would try to read its fields from
-       * inside the function (which lives in the current space). That violates
-       * cross-space isolation. The caller must transport the section via
-       * apply_move before passing it to the function.
-       *
-       * Exception for higher-order move: if the called function has at least
-       * one parameter of type TyMoveHandle, we are legitimately passing a
-       * section plus its move transformer. The check passes: the body inlined
-       * at the call site will have a correct apply_move. *)
-      let target_fn_has_move_param =
-        match Tyenv.lookup_fun env name with
-        | Some fs ->
-            List.exists (fun (_, t) ->
-              match t with TyMoveHandle _ -> true | _ -> false
-            ) fs.fs_params
-        | None -> false
-      in
-      let* () =
-        if target_fn_has_move_param then ok ()
-        else
-        List.fold_left (fun acc arg ->
-          let* () = acc in
-          match arg with
-          | EVar (var_name, var_loc) ->
-              (match Tyenv.lookup_var_space env var_name with
-               | Some explicit_space ->
-                   err var_loc (Printf.sprintf
-                                  "[TOPOS-E1111] cross-Space argument: \
-                                   '%s' lives in space '%s' and cannot be \
-                                   passed as a function argument to '%s' \
-                                   (which executes in the current space). \
-                                   Transport it first via apply_move(M, %s)."
-                                  var_name explicit_space name var_name)
-               | None -> ok ())
-          | _ -> ok ()
-        ) (ok ()) args
-      in
-      (* A call can be a user function, a qualified operation
+      (* (E1111 cross-Space argument gating retired with `new P in Space`; see
+       * E1110 above and chapter 10.)
+       * A call can be a user function, a qualified operation
        * (Place__op via the desugarer's mangling), or a built-in. *)
       let arg_tys_result =
         List.fold_left
@@ -2103,9 +2049,25 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
         "'%s' is already bound in this scope; use `%s = ...` to reassign it, \
          not `be %s holds ...` again"
         name name name)
-  | SLet (name, e, _) ->
+  | SLet (name, e, loc) ->
       scope_add name;
       let* t = infer env ctx e in
+      (* A type is not a runtime value. `text`/`number`/... resolve to their
+       * Tarski code (a citizen of the universe) in term position, which is right
+       * for a type argument or `refl(T)`, but binding one as a value has no
+       * runtime meaning and would leak past erasure to a Fatal at emit. Reject it
+       * here so tycheck states the truth (a type in value position) rather than
+       * emit crashing on the downstream consequence. *)
+      let* () =
+        match t with
+        | TyUniverse _ ->
+            err loc (Printf.sprintf
+              "binding `%s` holds a type, not a value: a type is a compile-time \
+               citizen of the universe with no runtime representation. Use it in a \
+               type position (a type argument, or `refl(T)`), not a value binding"
+              name)
+        | _ -> ok ()
+      in
       (* HM let-polymorphism: if the value is a lambda (ELam), generalize the
        * inferred type into a polymorphic scheme. Every meta-variable free in
        * the type but not free in the outer env is universally quantified.
@@ -2132,13 +2094,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
             * (the ordinary lookup still works). *)
            ok (Tyenv.add_var env name t)
        | _ ->
-           let env' =
-             match e with
-             | ENewIn (_, space, _, _) ->
-                 Tyenv.add_var_in_space env name t space
-             | _ -> Tyenv.add_var env name t
-           in
-           ok env')
+           ok (Tyenv.add_var env name t))
 
   | SAssignHolds (lv, e, loc) ->
       let* expected = type_of_lvalue env ctx lv loc in
@@ -3385,6 +3341,17 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
         fn.fn_name)
     else ok ()
   in
+  (* main is the program entry: its interface to the world is the effect system
+   * (a `visits` clause), not value arguments, and nothing would supply them. A
+   * parameterized main also desugars to a nested Lambda the backend cannot lower,
+   * so reject it here with a clean diagnostic rather than a Fatal at emit. *)
+  let* () =
+    if fn.fn_name = "main" && fn.fn_params <> [] then
+      err fn.fn_loc
+        "main takes no value parameters: a program receives input from the world \
+         through effects (a `visits` clause), not through arguments"
+    else ok ()
+  in
   (* Step 2: well-formedness checks. TyVar is always well-formed. *)
   let* () = List.fold_left
     (fun acc p ->
@@ -3475,6 +3442,13 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
   (if fn.fn_body = [] && fn.fn_return <> None then
      collect (err fn.fn_loc (Printf.sprintf
        "function %s: empty body but a return type is declared" fn.fn_name)));
+  (* main is the program entry: its interface to the world is the effect system
+   * (a `visits` clause), not value arguments. Reject a parameterized main with a
+   * clean diagnostic rather than a Fatal at emit (nested Lambda not lowerable). *)
+  (if fn.fn_name = "main" && fn.fn_params <> [] then
+     collect (err fn.fn_loc
+       "main takes no value parameters: a program receives input from the world \
+        through effects (a `visits` clause), not through arguments"));
   List.iter
     (fun p -> collect (check_type_well_formed env p.param_ty fn.fn_loc))
     fn.fn_params;

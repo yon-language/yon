@@ -10,7 +10,7 @@ Calibrated comparisons. Where a rival is more mature, this page says so.
 
 **From Unison.** Unison content-addresses *code*, definitions are hashes,
 renames are free. Yon content-addresses *runtime values*: allocation
-itself deduplicates, and deep equality is one comparison (chapter 11).
+itself deduplicates, and deep equality is one comparison (chapter 12).
 The ideas rhyme; the object differs. Unison's codebase manager has no Yon
 equivalent; Yon's O(1) value equality has no Unison equivalent.
 
@@ -24,17 +24,18 @@ forbidden. Choose Erlang for distributed systems today; Yon's bet is that
 a narrower door makes a stronger wall.
 
 **From Haskell.** Typeclass laws in Haskell are documentation; Yon's
-`law` declarations are *checked*, AlgebraVerifier rejects a false
-`commutative` at compile time (chapter 5). The price: a closed catalog of
+`law` declarations are *checked*, the algebra verifier rejects a false
+`commutative` at compile time (chapter 6). The price: a closed catalog of
 algebras, not arbitrary laws. Where Haskell says "trust the instance",
 Yon says "prove it or don't claim it", for the algebras it knows.
 
 **From Lean/Idris/Agda.** Proof assistants verify arbitrary laws, with
 your labor. Yon sits at a different point: automatic, bounded
 verification, plus something proof assistants don't do: `verify` hands the
-verified structure back as a *runnable* object with reachability
-certificates (chapter 18). Yon's HoTT layer (chapter 8) is a fragment of
-theirs; its topos vocabulary as compiled syntax has no equivalent there.
+verified structure back as a *runnable* object (chapter 6), whose
+reachability view carries the witness for each reachable value
+(chapter 11). Yon's HoTT layer (chapter 9) is a fragment of theirs; its
+topos vocabulary as compiled syntax has no equivalent there.
 
 **From Rust.** Rust earns memory safety through ownership and lifetimes, 
 analysis of *who may touch what when*. Yon dissolves the question instead

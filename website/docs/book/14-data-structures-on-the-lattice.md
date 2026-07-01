@@ -83,9 +83,9 @@ The module ships a fault injector so you can watch it work:
 fun main(): number {
   be vl holds VoyagerList.empty()
   be vl2 holds VoyagerList.append(vl, 42)
-  be _z holds VoyagerList.corrupt_at(vl2, 0, 3)   // flip 3 bits in storage
-  be healed holds VoyagerList.get(vl2, 0)         // Golay (24,12,8) corrects
-  return healed                                   // 42, healed
+  be damaged holds VoyagerList.corrupt_at(vl2, 0, 3)  // flip 3 bits in storage
+  be healed holds VoyagerList.get(damaged, 0)         // Golay (24,12,8) corrects
+  return healed                                       // 42, healed
 }
 ```
 

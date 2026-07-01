@@ -4,11 +4,15 @@ title: "12. The content-addressed heap"
 sidebar_position: 12
 ---
 
+import ContentAddress from '@site/src/components/ContentAddress';
+
 # The content-addressed heap
 
 Everything you have built so far, numbers aside, lives in one structure:
 **xleech2**, a content-addressed heap. Its contract is a single sentence:
 *the address of a value is (determined by) its content*.
+
+<ContentAddress />
 
 `put(payload)` hashes the bytes; if that content is already in the heap, you
 get the **existing** slot index back; if not, a fresh sequential slot is
@@ -24,9 +28,9 @@ that minted it.
 
 ## Equality for free
 
-The killer consequence: **same content ⟺ same slot**. Equality of arbitrarily
-large values is one number comparison. This is the entire implementation of
-`String.equal` in the runtime:
+The consequence that pays for itself: **same content ⟺ same slot**. Equality
+of arbitrarily large values is one number comparison. This is the entire
+implementation of `String.equal` in the runtime:
 
 ```c
 double yon_rt_string_equal(double a_id_d, double b_id_d) {

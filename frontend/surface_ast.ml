@@ -147,7 +147,7 @@ and expr =
   | EProduce of stmt list * location                  (* "produce { ... }" as an expression: the value is the stream id *)
   | ESpawn of expr option * stmt list * location      (* "spawn { ... }" / "spawn in N parallel { ... }": value is the collection stream; None = single replica, Some e = e replicas *)
   | ENew of string * field_assignment list * location (* "new Place { field1 e1, ... }" *)
-  | ENewIn of string * string * field_assignment list * location  (* "new P in Space { ... }" *)
+  | ENewIn of string * string * field_assignment list * location  (* retired: `new P in Space` removed (a place's space is its filesystem directory); constructor kept for exhaustive matches, no longer produced *)
   | EBinop of binop * expr * expr * location
   | EParen of expr * location
   | EAll of string * condition * location             (* retired: the `all P where cond` surface form was removed in v1.1; constructor kept for exhaustive matches *)
@@ -261,7 +261,7 @@ and stmt =
   | SReturn of expr * location
   | SCall of string * expr list * location            (* function call as statement *)
   | SNew of string * field_assignment list * location (* "new P { ... }" *)
-  | SNewIn of string * string * field_assignment list * location  (* "new P in Space { ... }" *)
+  | SNewIn of string * string * field_assignment list * location  (* retired: `new P in Space` removed (space = filesystem directory); constructor kept for exhaustive matches, no longer produced *)
   | SWhen of condition * stmt list *
              (condition * stmt list) list *           (* additional "when" branches *)
              stmt list option *                        (* optional "otherwise" *)
