@@ -112,6 +112,24 @@ let () =
           cr.cr_errors;
         exit 4
       end;
+      (* The pure evaluator does NOT faithfully run the imperative / effectful layer:
+       * loops do not iterate, Space mutations and stream sends do not take effect, so it
+       * would return a WRONG value SILENTLY. Reject such programs rather than lie: if the
+       * source uses one of these constructs, exit with a distinct EVAL-INCOMPLETE code
+       * instead of a value the evaluator cannot vouch for. (Line comments stripped first;
+       * a keyword left in a block comment only over-refuses, which is safe.) *)
+      let no_line_comments = Str.global_replace (Str.regexp "//[^\n]*") "" source in
+      let unfaithful =
+        Str.regexp "\\b\\(iter\\|while\\|every\\|sequence\\|repeat\\|forever\\|produce\\|emit\\|spawn\\|promote\\|wire\\)\\b" in
+      (try
+         let _ = Str.search_forward unfaithful no_line_comments 0 in
+         Printf.eprintf
+           "EVAL INCOMPLETE: the program uses an imperative/effectful construct (loop / \
+            produce / spawn / wire) that the pure interpreter does not faithfully evaluate; \
+            refusing to emit a value rather than return a wrong one.\n";
+         print_string "EVAL INCOMPLETE\n";
+         exit 6
+       with Not_found -> ());
       let dr = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) prog in
       (* Mount all the needed hooks, the same configuration as run_example.
        * Without them the stdlib (List/Map/Stream/Heyting) stays stuck and the
