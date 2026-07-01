@@ -8,11 +8,20 @@ description: "Measured per-operation timings for Yon's data structures on Apple 
 
 import ParallelScaling from '@site/src/components/ParallelScaling';
 import HeapGenerations from '@site/src/components/HeapGenerations';
+import PerOpLadder from '@site/src/components/PerOpLadder';
+import XSetScaling from '@site/src/components/XSetScaling';
+import ArenaPutO1 from '@site/src/components/ArenaPutO1';
 
 # Appendix D, Benchmarks
 
 Numbers before claims, and the method before the numbers. A timing without its method is
 not a benchmark, it is a number someone saw once.
+
+This is the whole suite, not a highlight reel: sixteen per-operation timings, four scaling
+studies (set algebra, heap expansion, content interning, and multicore replicas), a
+cross-process wire measurement, and underneath all of them a correctness gate that re-runs
+every program and checks its result on each build. What follows is organized by what each
+number teaches.
 
 ## How these were measured
 
@@ -81,6 +90,8 @@ exact nanoseconds are this machine's, and yours will differ in the constants, no
 | `HashMap.set` (grows with the map) | ~130 to ~340 ns |
 | `Arena.same_orbit` (recomputes the M24 relation) | ~1.17 µs |
 
+<PerOpLadder />
+
 The fastest operations sit **below this harness's floor**, and the suite says so rather than
 printing noise. Five of them, the two string and the Merkle equalities, the Golay seal, and the
 vector push, came out with a baseline-subtracted net at or below zero: the operation costs less than
@@ -133,6 +144,8 @@ in-process net of an exact twin, with min-over-reps to drop the one-time init, i
 |---|---|---|---|---|
 | `Arena.put` ns/op | 65 | 75 | 79 | 81 |
 
+<ArenaPutO1 />
+
 About 80 ns, O(1), the same order as `Arena.get`. The 31 µs was a measurement artifact, named and
 removed, not a property of the store. (`regression/bench/arena_ops`.)
 
@@ -166,6 +179,8 @@ single ratio but how the ratio behaves as the sets grow:
 | 1,000 | 4.9 µs | 43 µs | 9× |
 | 10,000 | 4.5 µs | 768 µs | 169× |
 | 100,000 | 4.6 µs | 47.7 ms | **10,454×** |
+
+<XSetScaling />
 
 `union` tells the same story, from 6× at N=100 to **33,776×** at N=100,000, where the HashSet union
 reaches about 168 ms against the same flat XSet cost. The XSet cost is **flat** across three orders

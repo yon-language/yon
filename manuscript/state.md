@@ -9,6 +9,75 @@
 
 ## Locked decisions (log)
 
+- **RESUME 2026-07-02 — BOOK PROJECT-EXAMPLE SWEEP (committed as a WIP checkpoint, tired-stop).**
+  SYSTEMATIC BUG found by an independent spot-check (2026-07-01): every DIRECTORY-project example whose
+  entrypoint is `Entry.yon` with a bare `fun main` (or an empty `place Entry {}` + a top-level main)
+  DOES NOT COMPILE in directory mode: `yonc <dir>` needs `place Entry { fun main() … }` and the file
+  MUST be `Entry.yon` (filename = place name). The first finalize-swarm MISSED this (agents tested
+  snippets in isolation / single-file, never assembled the directory + ran it). Single-file demos
+  (`yonc X.yon`, bare main) are fine, do NOT touch those.
+  · Fix pattern (VERIFIED by reconstructing the project and running it): wrap the `Entry.yon` main (and
+    any helper funs shown in the same Entry.yon snippet) inside `place Entry { … }`. Reconstruct the
+    full directory and `./toolchain/yonc <dir> -o /tmp/x && /tmp/x` to confirm the stated result.
+  · DONE + reconstructed→correct: ch05 (SyntaxError→42), ch08 (forcing→0, is_overdrawn→42), ch15
+    (ledger walkthrough→42), ch18 (Error→42). Plus ch06/ch07 (restaurant, done earlier).
+  · REMAINING TOMORROW (do NOT trust the agent reports for these; reconstruct+run each):
+    - **ch10** needs a real RESTRUCTURE, not just a wrap: it uses the old inline model (`move ToKitchen`
+      inline at Entry root + empty `place Entry {}`). Split like ch07 (move into a place file, main into
+      `place Entry`), on the restaurant thread.
+    - **ch16** (how spaces talk) likely similar (inline/stale), verify + restructure on the restaurant.
+    - **ch21** three CodeWindow directory demos (`run="yonc X/ …"`): forcing_demo/, comprehension_carrier/,
+      handle_lambdas/ (and check kw_view_show/) all have bare/empty-Entry mains, fix to `place Entry`.
+    - INDEPENDENTLY re-verify ch09, ch11, ch14 project examples (multi-file), agent reports unreliable.
+  · Then: fish more viz from the 75 swarm suggestions (task w59zac6g7 output), yonfmt is NOT usable
+    (partial formatter, refuses on most book constructs). DONE already: landing (less-marketing), 8 viz,
+    the `new P in Space` vestige removal (parser + E1110/E1111 + var_spaces), surface + project fuzzers.
+
+- **BOOK MANUAL FINALIZATION started 2026-07-01 (strada A, chapter by chapter).** The `docs/book/`
+  25-ch manual is now IN SCOPE (was excluded). Verified live: the inline `world{}` / `place X in W`
+  model is DEAD (even `regression/book/01/park_ok.yon` no longer parses); the live model is
+  filesystem-only: `[world.X]` in `yon.toml`, space=directory, place=file, `Topos.yon`, arrows in
+  place files, compiled via `yonc <dir>` / `yoner_emit_mlir <dir>` (single-file emit of a place fails
+  with "cannot infer world"). ALL SEVEN ARROWS WORK in a real project (verified from live code, not
+  state.md's stale "debt" flags): view / reduction / fun; move as `field maps to field by identity`;
+  functor between two worlds with DISTINCT spaces; geomorph; nat transform. My earlier "arrows are
+  debt" was WRONG, caused by my own malformed test projects (missing `by identity`, two places in one
+  file, one space in two worlds). Toml needs `[runtime] backend = "memory|separate|shm"`.
+- **Project-level fuzzer built 2026-07-01** (`regression/surface_fuzz_projects.py` + gate
+  `test_surface_fuzz_projects.py`): closes the gap the inline `test_surface_fuzz.ml` left. Generates
+  whole projects (world/space/place/7 arrows + malformed variants), runs the project pipeline, asserts
+  never-Fatal. ~6000 projects, BUGS=0, both accept+reject paths covered (coverage line printed). The
+  filesystem/arrow surface is no longer un-fuzzed.
+- **Running-project thread for the project chapters = RESTAURANT** (Antonio's choice over bank/airport).
+- **Ch 7 "Arrows" REWRITTEN 2026-07-01** (`docs/book/07-arrows.md`), v2 after Antonio's pedagogy note:
+  teach EVERY arrow in the domain where it is natural, not forced into one.
+  · **Restaurant, TWO spaces** (`sala/` + `cucina/`) so the model fits: `sala/Order.yon` (with-effects),
+    `sala/Bill.yon` (view, computed column), `sala/ToKitchen.yon` (move, now crosses sala→cucina),
+    `sala/Tally.yon` (reduction), `cucina/Ticket.yon`, `cucina/Line.yon` (**geomorph** with pull+push,
+    the adjunction sala⇄cucina — Antonio's framing: an Order in sala corresponds to a Ticket in cucina).
+  · **functor + nat transform → a SECOND project (BANK)** where they are natural (forced in a
+    restaurant): two worlds `EurBank`/`UsdBank`, `functor Spot`/`Fwd` (x*110/100, x*112/100 = currency
+    conversion of the whole context), `nat transform Adjust from Spot to Fwd`. Both projects compile
+    (emit exit 0); every snippet is a real file. Closure-rejection shown (real error, paraphrased since
+    the compiler message has an em-dash).
+  · Viz: `ProjectStructure.js` (updated to two spaces + geomorph) + NEW `GeomorphAdjunction.js` (the
+    push⊣pull adjunction between sala and cucina). First two viz in the narrative manual.
+  Verified: all 7 arrows work in the live project model (view/reduction/fun/move/geomorph/functor/nat).
+  0 em-dash, build green. Saved projects: /tmp/restaurant_v2, /tmp/bank_v1.
+- **Ch 6 "Worlds and places" REWRITTEN 2026-07-01** (`docs/book/06-worlds-and-places.md`), restaurant
+  thread, introduces the ontology ch07 uses. It was NOT `world{}`-stale (already used the live
+  filesystem model), but every snippet is now gated + it is aligned to the restaurant + given its own
+  viz. Sections: the ontology (world=category=toml / space=dir / place=file=object / section=value);
+  a place is pure structure (`new Order { table 5 total 40 }`, dot access, main → 42, print via
+  `IO.print_num` to avoid the effect annotation); operations (`with effects`, `operation`,
+  `functorial operation` = the Yoneda lift); `subcontains` (VipOrder subcontains Order); worlds compose
+  only via arrows (no world-algebra); **certified laws** (`place Tally … operation add uses algebra
+  Additive  law commutative/associative`, `verify Tally` → `Magma.is_commutative/associative` → 42;
+  the restaurant framing: the bill tally is commutative). ALL gated (new/field→42, functorial exit 0,
+  subcontains exit 0, verify/laws→42). New viz `OntologyMap.js` = category ↔ Yon ↔ disk (distinct from
+  ch07's ProjectStructure, honoring viz-dedup). 0 em-dash, build green.
+  NEXT: ch10, ch16 on the restaurant thread; then ch03/ch21 (other stale), then the rest.
+
 - **Language**: book in **English**; conversation with author in Italian.
 - **Spine**: 7 Iterations of the novel → 7 Parts, ascending **silicon → Yoneda**.
   Content-addressing planted as silicon (Iter 2), revealed as Yoneda (Iter 7).

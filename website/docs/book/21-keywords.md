@@ -14,12 +14,12 @@ valid forms, with status per construct, see the
 `KEYWORDS.md` in the repository root.
 
 :::note Reading the snippets
-Some snippets below predate the v1.1 filesystem ontology and show several
-declarations together for compactness. In the real project model a world is
-declared in `yon.toml` (`[world.Name]`, there is no surface `world` keyword),
-a Space is a directory, and each file declares a single `place` whose basename
-is the place name. The `examples/` projects that back these constructs follow
-that layout; the inline form here is illustrative.
+Each runnable snippet below is one project. The `// path` comments name the files:
+a world is declared in `yon.toml` (`[world.Name]`, there is no surface `world`
+keyword), a Space is a directory, and each file declares a single `place` whose
+basename is the place name. The `examples/` projects that back these constructs
+follow exactly that layout, and each `run` line compiles the directory with
+`yonc <dir>`.
 :::
 
 ## Top-level declarations
@@ -28,7 +28,7 @@ A Yon program is a list of these.
 
 #### `place`
 
-An object living in a world: named fields, and operations when declared `with effects`. Instances are built with `new P { field value }`. One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to <space>` (see `wire`).
+An object living in a world: named fields, and operations when declared `with effects`. Instances are built with `new P { field value }`. One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
 
 #### `import`
 
@@ -170,11 +170,13 @@ The formally hermetic block: `scope { }` lowers to an MLIR `IsolatedFromAbove` r
 
 The Kripke-Joyal forcing block: `forces stage cond { }` runs its body at a stage of the site, where the condition is forced. See the Heyting core chapter for the worked example.
 
-<CodeWindow file="forcing_demo.yon"
-            run="yonc forcing_demo.yon -o forcing_demo && ./forcing_demo; echo $?"
+<CodeWindow file="forcing_demo/"
+            run="yonc forcing_demo/ -o forcing_demo && ./forcing_demo; echo $?"
             out={["0"]}>
-{`world Net { Code is X }
-place NodeA in Net { value number }
+{`// net/NodeA.yon
+place NodeA { value number }
+// Entry.yon
+place Entry { }
 fun guard(): number {
   forces NodeA value is number {
     return 1
@@ -213,7 +215,7 @@ Returns from the function. Inside a `when` branch it does not exit the function;
 
 #### `new`
 
-Instance construction: `new P { field value }`. With `new P in S { }` the instance is allocated in the Space S.
+Instance construction: `new P { field value }`. The instance's Space is the place's directory on the filesystem, so the Space is not named at the construction site.
 
 ## Word-form operators
 
@@ -229,11 +231,13 @@ Disjunction, same positions as `and`.
 
 The constraint of the `topos ... where { }` block, and of the comprehension `{ x : A where P }`: the subobject carved out by the fibre P. With a mere-proposition fibre the comprehension is exactly the classified subobject of the formalization. (The older `all P where cond` quantifier is retired.)
 
-<CodeWindow file="comprehension_carrier.yon"
-            run="yonc comprehension_carrier.yon -o comprehension_carrier && ./comprehension_carrier; echo $?"
+<CodeWindow file="comprehension_carrier/"
+            run="yonc comprehension_carrier/ -o comprehension_carrier && ./comprehension_carrier; echo $?"
             out={["0"]}>
-{`world W { Code is X }
-place Account in W { balance number }
+{`// w/Account.yon
+place Account { balance number }
+// Entry.yon
+place Entry { }
 fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): number { return 0 }
 fun main(): number { return 0 }`}
 </CodeWindow>
@@ -266,13 +270,17 @@ A method signature exposed by a place `with effects`; it carries an effect and m
 
 A higher cell inside a place, CaTT style: the seed of the higher-dimensional structure.
 
-<CodeWindow file="handle_lambdas.yon"
-            run="yonc handle_lambdas.yon -o handle_lambdas && ./handle_lambdas; echo $?"
+<CodeWindow file="handle_lambdas/"
+            run="yonc handle_lambdas/ -o handle_lambdas && ./handle_lambdas; echo $?"
             out={["44"]}>
-{`world W { Code is X }
-place P in W { v number }
-place Q in W { v number }
-place R in W { v number }
+{`// w/P.yon
+place P { v number }
+// w/Q.yon
+place Q { v number }
+// w/R.yon
+place R { v number }
+// Entry.yon
+place Entry { }
 fun main(): number {
   be m1 holds move(s: P) => new Q { v 1 } from P to Q
   be m2 holds move(s: Q) => new R { v 2 } from Q to R
@@ -295,17 +303,20 @@ Inside a view declaration: `show f` exposes the field, `show f = e` a derived va
 
 The aliasing word: `import q as a`, `show f as "label"`.
 
-<CodeWindow file="kw_view_show.yon"
-            run="yonc kw_view_show.yon -o view_show && ./view_show; echo $?"
+<CodeWindow file="kw_view_show/"
+            run="yonc kw_view_show/ -o view_show && ./view_show; echo $?"
             out={["8"]}>
-{`world W { Code is X }
-place Account in W { balance number
+{`// w/Account.yon
+place Account { balance number
   fee number }
+// w/Snapshot.yon
 view Snapshot of Account {
   show balance
   show net = balance - fee
   show fee as "monthly fee"
 }
+// Entry.yon
+place Entry { }
 fun main(): number {
   be acc holds new Account { balance 50
     fee 8 }
@@ -340,18 +351,23 @@ In the merge move: the fields shared without conflict.
 
 `src aggregates to dst by f`: the aggregation clause, one source in the grammar. The three kinds are operationally `f(source)`; the distinction is declared intent.
 
-<CodeWindow file="kw_merge_move.yon"
-            run="yonc kw_merge_move.yon -o merge_move && ./merge_move; echo $?"
+<CodeWindow file="kw_merge_move/"
+            run="yonc kw_merge_move/ -o merge_move && ./merge_move; echo $?"
             out={["22"]}>
-{`world W { Code is X }
-place A in W { v number
+{`// w/A.yon
+place A { v number
   w number }
-place B in W { v number
+// w/B.yon
+place B { v number
   w number }
-place Wide in W { x number
+// w/Wide.yon
+place Wide { x number
   y number }
-place Narrow in W { x number
+// w/Narrow.yon
+place Narrow { x number
   total number }
+// Entry.yon
+place Entry { }
 fun pick(a: number, b: number): number { return a }
 fun ident(x: number): number { return x }
 fun double(x: number): number { return x * 2 }
@@ -406,19 +422,19 @@ Instantiates a law-verified place as a runnable handle.
 
 Names a space's fold function: `with fold "sum_f64"`.
 
-<CodeWindow file="verify_algebra.yon"
-            run="yonc verify_algebra.yon -o verify_algebra && ./verify_algebra; echo $?"
+<CodeWindow file="verify_algebra/"
+            run="yonc verify_algebra/ -o verify_algebra && ./verify_algebra; echo $?"
             out={["3"]}>
-{`world Alg { Code is X }
-
-place OrPlace in Alg with effects {
+{`// alg/Or.yon
+place Or with effects {
   operation join(a: number, b: number): number uses algebra BooleanOr
   law commutative
   law associative
 }
-
+// Entry.yon
+place Entry { }
 fun main(): number {
-  be m holds verify OrPlace
+  be m holds verify Or
   be m1 holds Magma.gen(m, 1)
   be m2 holds Magma.gen(m1, 2)
   /* closure of {1, 2} under OR is {1, 2, 3} -> size 3 */
@@ -456,24 +472,26 @@ Reduction direction: backward.
 
 Bidirectional reduction. Also a reserved word on its own; see the reference.
 
-<CodeWindow file="functor_compose_inline.yon"
-            run="yonc functor_compose_inline.yon -o functor_compose_inline && ./functor_compose_inline; echo $?"
+<CodeWindow file="functor_compose_inline/"
+            run="yonc functor_compose_inline/ -o functor_compose_inline && ./functor_compose_inline; echo $?"
             out={["0"]}>
-{`world W { Code is X }
-world V { Code is Y }
-world U { Code is Z }
+{`// yon.toml declares three worlds: [world.W] [world.V] [world.U]
+// Entry.yon
+place Entry { }
 fun main(): number {
   be h holds compose (functor (x: number) => x from W to V) with (functor (y: number) => y from V to U)
   return 0
 }`}
 </CodeWindow>
 
-<CodeWindow file="kw_reduction_modifiers.yon"
-            run="yonc kw_reduction_modifiers.yon -o reduction_modifiers && ./reduction_modifiers; echo $?"
+<CodeWindow file="kw_reduction_modifiers/"
+            run="yonc kw_reduction_modifiers/ -o reduction_modifiers && ./reduction_modifiers; echo $?"
             out={["0"]}>
-{`world W { Code is X }
-place Tally in W with effects { total number
+{`// w/Tally.yon
+place Tally with effects { total number
   operation add(x: number): number }
+// Entry.yon
+place Entry { }
 reduction bi lawful invertible Sum of Tally with multishot fold "sum_f64" {
   be seed holds 0
   on add(x: number) {
@@ -512,22 +530,24 @@ A subobject classifier map into Omega: `prop is_overdrawn(s): proposition = ...`
 
 Equips a place with a Lawvere-Tierney operator j : Omega to Omega, the seed of sheaf semantics.
 
-<CodeWindow file="kw_topos_block.yon"
-            run="yonc kw_topos_block.yon -o topos_block && ./topos_block; echo $?"
+<CodeWindow file="kw_topos_block/"
+            run="yonc kw_topos_block/ -o topos_block && ./topos_block; echo $?"
             out={["42"]}>
-{`world Ledger { Code is X }
-topos Bank in Ledger where {
-  objects {
-    place State in Ledger { balance number }
-    place Unit1 in Ledger { u number }
-  }
+{`// bank/State.yon
+place State { balance number }
+// bank/Unit1.yon
+place Unit1 { u number }
+// bank/Topos.yon  (objects are inferred from the place files in bank/)
+topos Bank where {
   terminal Unit1
   morphisms {
-    operation tag(s: State): number
-    functorial operation lift(s: State): number
+    morphism tag(s: State): number
+    functorial morphism lift(s: State): number
   }
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
+// Entry.yon
+place Entry { }
 topology j of State { return 1 }
 fun main(): number {
   be s holds new State { balance 5 }
@@ -544,12 +564,15 @@ A single functor between topoi: `morph F from A to B { }` with the two-word cont
 
 In `on morphism op via op2`: names the operation that realizes the map.
 
-<CodeWindow file="kw_morph.yon"
-            run="yonc kw_morph.yon -o morph && ./morph; echo $?"
+<CodeWindow file="kw_morph/"
+            run="yonc kw_morph/ -o morph && ./morph; echo $?"
             out={["0"]}>
-{`world Shop { Code is X }
-place Account in Shop { balance number }
-place AccountEU in Shop { balance number }
+{`// shop/Account.yon
+place Account { balance number }
+// shop/AccountEU.yon
+place AccountEU { balance number }
+// Entry.yon
+place Entry { }
 morph LiftEU from Account to AccountEU {
   on object(s: Account): AccountEU {
     return new AccountEU { balance s.balance }
@@ -562,12 +585,12 @@ fun main(): number { return 0 }`}
 
 In `for each X by fnX` inside a `nat transform`: one component per object of the natural transformation.
 
-<CodeWindow file="nat_transform_functor.yon"
-            run="yonc nat_transform_functor.yon -o nat_transform_functor && ./nat_transform_functor; echo $?"
+<CodeWindow file="nat_transform_functor/"
+            run="yonc nat_transform_functor/ -o nat_transform_functor && ./nat_transform_functor; echo $?"
             out={["0"]}>
-{`world W { Code is X }
-world V { Code is Y }
-
+{`// yon.toml declares two worlds: [world.W] and [world.V]
+// Entry.yon
+place Entry { }
 functor F(x: number) from W to V { return x }
 functor G(x: number) from W to V { return x }
 
@@ -600,12 +623,15 @@ Declares the adjoint pairing of the geomorph.
 
 `exact pull` / `exact push`: the inverse image preserves finite limits.
 
-<CodeWindow file="kw_geomorph_full.yon"
-            run="yonc kw_geomorph_full.yon -o geomorph_full && ./geomorph_full; echo $?"
+<CodeWindow file="kw_geomorph_full/"
+            run="yonc kw_geomorph_full/ -o geomorph_full && ./geomorph_full; echo $?"
             out={["0"]}>
-{`world Shop { Code is X }
-place Account in Shop { balance number }
-place AccountEU in Shop { balance number }
+{`// shop/Account.yon
+place Account { balance number }
+// shop/AccountEU.yon
+place AccountEU { balance number }
+// Entry.yon
+place Entry { }
 geomorph Lift from Account to AccountEU {
   adjunction
   exact pull
@@ -630,16 +656,21 @@ The limit: glues two maps over a shared target. As a declaration, `place P = pul
 
 The colimit: glues two maps under a shared source. The declaration is kernel metadata.
 
-<CodeWindow file="kw_pullback_pushout.yon"
-            run="yonc kw_pullback_pushout.yon -o pullback_pushout && ./pullback_pushout; echo $?"
+<CodeWindow file="kw_pullback_pushout/"
+            run="yonc kw_pullback_pushout/ -o pullback_pushout && ./pullback_pushout; echo $?"
             out={["12"]}>
-{`world W { Code is X }
-place A in W { v number }
-place B in W { v number }
+{`// w/A.yon
+place A { v number }
+// w/B.yon
+place B { v number }
+// w/P.yon  (kernel metadata: the pullback object)
+place P = pullback(f, g)
+// w/Q.yon  (kernel metadata: the pushout object)
+place Q = pushout(f, g)
+// Entry.yon
+place Entry { }
 fun f(x: number): number { return x * 2 }
 fun g(y: number): number { return y + 6 }
-place P = pullback(f, g)
-place Q = pushout(f, g)
 fun main(): number {
   be p holds pullback(f, g, 6, 6)      // f(6)=12, g(6)=12: compatible
   be a holds __pullback_pi1(p)
@@ -671,6 +702,7 @@ error QueryError subcontains Error { message number sqlstate number }
 //   db/QueryInsert.yon
 place QueryInsert on error QueryError { sql number }
 //   Entry.yon
+place Entry { }
 fun handle(e: Error): number { return 1 }
 fun on_query_fail(q: QueryError): number {
   return handle(q)
@@ -688,7 +720,7 @@ These read as English in declarations.
 
 #### `in`
 
-`for every x in e`, `new P in S { }` (allocate the instance in Space S).
+`for every x in e` (iterate over the elements of `e`).
 
 #### `to`
 
@@ -785,15 +817,15 @@ The stream type, `stream of T`, with its back-pressure modifiers in type positio
 
 #### `wire`
 
-`wire to Space` opens the transport toward a Space. The producer side declares a public function returning `stream of T`; the consumer subscribes by name with `w.awaits(producer)` and materializes the emissions with `.stream`. Three errors are caught at compile time: an unknown Space, a function the Space does not declare, a declared function that is not a producer. The channel identity is the producer's dispatch selector: nominal on both sides, no literals anywhere.
+`wire to space S` opens the transport toward a Space. The producer side declares a public function returning `stream of T`; the consumer subscribes by name with `w.awaits(producer)` and materializes the emissions with `.stream`. Three errors are caught at compile time: an unknown Space, a function the Space does not declare, a declared function that is not a producer. The channel identity is the producer's dispatch selector: nominal on both sides, no literals anywhere.
 
-<CodeWindow file="subscriber.yon" run="yonc sensors.yon -o Sensors_srv && yonc subscriber.yon -o subscriber && ./subscriber; echo $?" out={["36"]}>
+<CodeWindow file="subscriber.yon" run="yonc sensors.yon -o Sensors_srv && yonc subscriber.yon -o subscriber && ./Sensors_srv && ./subscriber; echo $?" out={["36"]}>
 
 ```yon
 import sensors::readings from Sensors
 
 fun main(): number {
-  be w holds wire to Sensors
+  be w holds wire to space Sensors
   be sub holds w.awaits(readings)
   be s holds sub.stream
   be total holds s.fold(0, fun(a: number, v: number) => a + v)
@@ -817,7 +849,7 @@ A reserved word that appears in the surface only as the target of a wire, `wire 
 
 #### `promote`
 
-Inside a `spawn` body, `promote E` emits `E` onto the parent's collection stream — the spawn counterpart of `emit`. A `spawn` block with no `promote` is a compile-time error (it would collect nothing). The magic variable `spawn_index` (0 to N-1) is in scope in the body, the replica's own index.
+Inside a `spawn` body, `promote E` emits `E` onto the parent's collection stream, the spawn counterpart of `emit`. A `spawn` block with no `promote` is a compile-time error (it would collect nothing). The implicit variable `spawn_index` (0 to N-1) is in scope in the body, the replica's own index.
 
 #### `parallel`
 

@@ -14,23 +14,38 @@ them *values or declarations*.
 ## Errors are places
 
 An `error` declaration is a place whose meaning is failure. Errors form
-their own sub-object hierarchy with `subcontains` (chapter 4's monomorphisms),
-and a place can declare its error morphism with `on error`:
+their own sub-object hierarchy with `subcontains` (chapter 5's monomorphisms),
+and a place can declare its error morphism with `on error`. Each error and
+each place is its own file, so the declarations sit side by side in the space.
+`s/Error.yon` and `s/QueryError.yon`:
 
 ```yon
 error Error { message number }
+```
+
+```yon
 error QueryError subcontains Error { message number  sqlstate number }
+```
 
+A place names the error it can raise. `s/QueryInsert.yon`:
+
+```yon
 place QueryInsert on error QueryError { sql number }
+```
 
-fun handle(e: Error): number { return e.message }
-fun on_query_fail(q: QueryError): number {
-  return handle(q)               // sub-error used where Error is expected
-}
+`Entry.yon` reads a sub-error where the base is expected and returns 42:
 
-fun main(): number {
-  be q holds new QueryError { message 40  sqlstate 23505 }
-  return on_query_fail(q) + 2    // 42
+```yon
+place Entry {
+  fun handle(e: Error): number { return e.message }
+  fun on_query_fail(q: QueryError): number {
+    return handle(q)               // sub-error used where Error is expected
+  }
+
+  fun main(): number {
+    be q holds new QueryError { message 40  sqlstate 23505 }
+    return on_query_fail(q) + 2    // 42
+  }
 }
 ```
 
@@ -43,7 +58,7 @@ everything else.
 
 ## Failure is a value
 
-At the stdlib boundary, absence is in-band (chapter 10): a missing file, an
+At the stdlib boundary, absence is in-band (chapter 11): a missing file, an
 unset variable, an out-of-range index all return the `0.0` handle. You test
 it like any number. The compiler does its part *before* runtime: a false
 `law` is rejected by AlgebraVerifier, a missing subsumption mono is rejected by
@@ -52,7 +67,7 @@ categories of "going wrong" are moved from runtime to the type checker.
 
 ## When another process fails
 
-Cross-Space, failure is a process matter, and chapter 15's machinery handles
+Cross-Space, failure is a process matter, and chapter 16's machinery handles
 the recoverable case: a crashed server is respawned on a virgin channel with
 the epoch advanced, and the call retried once, transparently. When the
 failure is *not* recoverable (the server binary is missing, the operation

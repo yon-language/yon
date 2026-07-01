@@ -81,17 +81,30 @@ constraints, no bounds, a type parameter is honest ignorance.
 declares a **monomorphism** `A → B`, and the checker verifies it
 structurally, `A` must carry at least all of `B`'s fields (*subsumption*),
 or the mono does not exist and the program is rejected. Where it holds, an
-`A` is usable wherever a `B` is expected:
+`A` is usable wherever a `B` is expected. Each place is its own file, so the
+base and the sub-object live side by side. `s/Error.yon`:
 
 ```yon
 place Error { message number }
+```
+
+`s/SyntaxError.yon` carries the extra field and the function that reads the
+base:
+
+```yon
 place SyntaxError subcontains Error { message number  line number }
 
 fun describe(e: Error): number { return e.message }   // accepts any sub-object
+```
 
-fun main(): number {
-  be s holds new SyntaxError { message 40 line 17 }
-  return describe(s) + 2          // 42: SyntaxError used as Error
+`Entry.yon` builds the sub-object and passes it where an `Error` is expected:
+
+```yon
+place Entry {
+  fun main(): number {
+    be s holds new SyntaxError { message 40 line 17 }
+    return describe(s) + 2          // 42: SyntaxError used as Error
+  }
 }
 ```
 
@@ -100,8 +113,8 @@ because places have no behaviour of their own (chapter 0). `subcontains` is a
 *claim about structure* that the compiler checks, exactly like a `law`.
 
 **Coercions along monos.** The same direction appears twice more: the
-comprehension `{x : A where P} <: A` (chapter 8) and the `boolean` face of
-`proposition` (chapter 7). All Yon subtyping is travel along a declared or
+comprehension `{x : A where P} <: A` (chapter 9) and the `boolean` face of
+`proposition` (chapter 8). All Yon subtyping is travel along a declared or
 derived monomorphism, never an implicit conversion.
 
 **What is missing, on purpose.** There are no interfaces, traits or

@@ -9,12 +9,16 @@ sidebar_position: 90
 One sentence each. Left: the word; right: what it means *in Yon*, with the
 mathematical reading in parentheses.
 
-**world**, a semantic context that places live in; worlds compose by
-product, coproduct, quotient and sub-world (a category, used as a site).
+**world**, a semantic context that places live in, declared in `yon.toml`
+as `[world.Name]`; worlds compose the way categories do (products,
+coproducts, quotients, sub-objects), but Yon gives you no world-algebra to
+write a composite world by hand, you act on worlds only through arrows (a
+category, used as a site).
 
-**place**, a pure structure declared in a world: fields, optionally
-operations and laws; it has no methods and no hidden state (an object of
-the category).
+**place**, a pure structure written one per file (the filename is the place
+name): fields, optionally operations and laws; it has no methods and no
+hidden state, and its space is the directory it lives in (an object of the
+category).
 
 **section**, a value of a place, immutable and identified by its content
 (a generalized element; a section of the corresponding sheaf).
@@ -45,8 +49,9 @@ operations together, with checkable laws (a functor between categories).
 **nat transform**, a family of arrows relating two functors, one component
 per object (a natural transformation; a 2-cell).
 
-**geomorph**, a pull/push pair between places-as-sites (a geometric
-morphism: the adjunction `f* ⊣ f∗`).
+**geomorph**, a pull/push pair between two sites (in the restaurant, the
+`sala` and `cucina` spaces): a geometric morphism, the adjunction
+`f* ⊣ f∗`.
 
 **monomorphism (mono)**, an arrow that loses nothing; all Yon subtyping is
 travel along a mono: `subcontains` declares one, comprehension's coercion is
@@ -77,8 +82,9 @@ place's interface is its bundle of arrows, and content addressing makes
 indiscernibles literally identical (the Yoneda lemma, used as a design
 axiom).
 
-**Space**, a hermetic tenant: a named heap plus, across packages, a
-process; content crosses only through moves and the numeric wire.
+**Space**, a hermetic tenant: a directory under the project root, backed at
+runtime by its own heap and, across packages, its own process; content
+crosses only through moves and the numeric wire.
 
 **content addressing**, the allocator's contract: the address of a value
 is determined by its bytes, so same content is the same slot and equality
@@ -100,7 +106,8 @@ flips.
 *verified* at compile time by AlgebraVerifier; a false law does not compile.
 
 **verify**, the keyword that hands you a law-verified place as a runnable
-algebraic structure (a Magma with closure, reachability, certificates).
+`Magma`, so a program can query in code what the compiler already proved
+(`is_commutative`, `is_associative`, `identity`, `closure_size`).
 
 **effect / visits**, what a function touches, written in its signature and
 checked transitively by the compiler (algebraic effects discipline).

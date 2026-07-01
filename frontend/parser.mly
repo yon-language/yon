@@ -1103,10 +1103,6 @@ call_or_new_stmt:
     { SCall (name, args, mk_loc $startpos $endpos) }   (* mod::fun(args) *)
   | NEW name = IDENT LBRACE fas = field_assign_list RBRACE
     { SNew (name, fas, mk_loc $startpos $endpos) }
-  | NEW name = IDENT IN space = IDENT LBRACE fas = field_assign_list RBRACE
-    { (* Allocate in the given space. Desugared to SNew plus the space
-       * captured in the dedicated field (see surface_ast). *)
-      SNewIn (name, space, fas, mk_loc $startpos $endpos) }
 
 forces_stmt:
   | FORCES stage = IDENT c = condition LBRACE body = list(stmt) RBRACE
@@ -1463,8 +1459,6 @@ expr_atom:
     { EVar (x, mk_loc $startpos $endpos) }   (* qualified name mod::fun *)
   | NEW name = IDENT LBRACE fas = field_assign_list RBRACE             
     { ENew (name, fas, mk_loc $startpos $endpos) }
-  | NEW name = IDENT IN space = IDENT LBRACE fas = field_assign_list RBRACE
-    { ENewIn (name, space, fas, mk_loc $startpos $endpos) }
   | WIRE TO SPACE sp = IDENT
     { EWireTo (sp, mk_loc $startpos $endpos) }
   | PRODUCE LBRACE body = list(stmt) RBRACE

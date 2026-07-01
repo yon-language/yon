@@ -12,12 +12,15 @@ Yon's type system has a homotopy-type-theoretic layer: universes (`Type`,
 and eliminator.
 
 ```yon
-fun main(): number {
-  be p holds pair(40, 2)
-  be x holds fst(p)
-  be y holds snd(p)
-  be w holds refl(x)               // a path witness x = x
-  return x + y                     // 42
+// Entry.yon, at the project root
+place Entry {
+  fun main(): number {
+    be p holds pair(40, 2)
+    be x holds fst(p)
+    be y holds snd(p)
+    be w holds refl(x)             // a path witness x = x
+    return x + y                   // 42
+  }
 }
 ```
 
@@ -30,11 +33,14 @@ Limits exist in expression form too, a runtime-checked pullback takes a
 compatible pair over a cospan:
 
 ```yon
-fun f(x: number): number { return x }
-fun g(y: number): number { return y }
-fun main(): number {
-  be p holds pullback(f, g, 3, 3)     // runtime-checked: f(3) == g(3)
-  return 7
+// Entry.yon, at the project root
+place Entry {
+  fun f(x: number): number { return x }
+  fun g(y: number): number { return y }
+  fun main(): number {
+    be p holds pullback(f, g, 3, 3)   // runtime-checked: f(3) == g(3)
+    return 7
+  }
 }
 ```
 
@@ -43,7 +49,8 @@ fun main(): number {
 The most Yon-flavoured citizen is the **comprehension**:
 
 ```yon
-// Account.yon, a place file in the site's space directory
+// Account.yon, a place file in the site's space directory.
+// A separate Entry.yon at the project root supplies main.
 place Account { v number }
 
 /* The comprehension type: the subobject of Account carved out by the
@@ -52,8 +59,6 @@ place Account { v number }
 fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): number {
   return 7
 }
-
-fun main(): number { return 42 }
 ```
 
 `{ x : A where P }` is the subobject of `A` carved out by the fibre `P`, a

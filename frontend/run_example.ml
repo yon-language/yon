@@ -41,6 +41,9 @@ let () =
     | Failure msg ->
         Printf.eprintf "Lex/parse failure: %s\n" msg;
         exit 2
+    | Lexer.Lexer_error msg ->
+        Printf.eprintf "Lexer error: %s\n" msg;
+        exit 2
   in
   Printf.printf "[Phase 1] Parsed %d top-level declarations\n"
     (List.length prog);

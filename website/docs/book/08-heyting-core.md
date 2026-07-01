@@ -4,11 +4,15 @@ title: "8. The Heyting core"
 sidebar_position: 8
 ---
 
+import HeytingOmega from '@site/src/components/HeytingOmega';
+
 # The Heyting core
 
 Yon's logic is intuitionistic. The proposition type Ω is a Heyting algebra
 with three observable states, `present`, `absent`, `unknown`, and
 `boolean` is just Ω's classical face.
+
+<HeytingOmega />
 
 ```yon
 fun main(): number {
@@ -54,24 +58,26 @@ topos Bank where {
 }
 
 // Entry.yon
-fun main(): number {
-  be s holds new State { balance 5 }
-  be bad holds is_overdrawn(s)
-  return if bad then 0 else 42
+place Entry {
+  fun main(): number {
+    be s holds new State { balance 5 }
+    be bad holds is_overdrawn(s)
+    return if bad then 0 else 42
+  }
 }
 ```
 
-And Ω itself carries structure: a **Lawvere–Tierney topology** is an
+And Ω itself carries structure: a **Lawvere-Tierney topology** is an
 operator `j : Ω → Ω` (monotone, inflationary, idempotent) declared on a
 place, the seed of sheaf semantics:
 
 ```yon
-topology j of P { return 1 }          // a Lawvere–Tierney j : Omega -> Omega
+topology j of P { return 1 }          // a Lawvere-Tierney j : Omega -> Omega
 ```
 
 ## Forcing at a stage
 
-Kripke–Joyal semantics evaluates truth at a stage: a statement may hold
+Kripke-Joyal semantics evaluates truth at a stage: a statement may hold
 at one object of the site and fail at another. In Yon the stage is a
 place, and the statement is a pattern condition, the same patterns that
 drive `when`:
@@ -81,13 +87,15 @@ drive `when`:
 place NodeA { value number }
 
 // Entry.yon
-fun guard(): number {
-  forces NodeA value is number {
-    return 1
+place Entry {
+  fun guard(): number {
+    forces NodeA value is number {
+      return 1
+    }
+    return 0
   }
-  return 0
+  fun main(): number { return 0 }
 }
-fun main(): number { return 0 }
 ```
 
 The block runs only where the condition holds at that stage. Patterns

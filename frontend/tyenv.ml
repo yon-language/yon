@@ -59,16 +59,6 @@ type env = {
   (* Place pairs transportable only while checking a geometric morphism's
    * pull/push bodies. This is scoped typing evidence, not global subtyping. *)
   transport_pairs : (string * string) list;
-  (* For each variable bound via `be x holds new P in EU { ... }`, track its
-   * explicit space. Variables created with `new P { ... }` (without `in`) and
-   * function parameters have no entry (implicitly "in __Default", or passed
-   * cross-space as opaque).
-   *
-   * Space-locality rule: `x.field` where x has an explicit entry fails with
-   * [TOPOS-E1110] cross-space field access. The only way to read a foreign
-   * section is to pass it to apply_move, which transports it into the current
-   * space via a geometric morphism. *)
-  var_spaces : (string * string) list;
   (* The spaces declared in the program, filled by register_decl. Used to
      validate the binding `topos T at S`. *)
   declared_spaces : string list;
@@ -99,7 +89,6 @@ let empty : env = {
   current_effects = [];
   active_handlers = [];
   transport_pairs = [];
-  var_spaces = [];
   declared_spaces = [];
   declared_morphs = [];
   morph_decls = [];
@@ -277,19 +266,6 @@ let lookup_sum_constructor (env : env) (name : string)
        | Some variant -> Some (variants, variant)
        | None -> None)
     env.sum_types
-
-(* Bind a variable together with an explicit originating space. Used by
-   `be x holds new P in EU { ... }`. *)
-let add_var_in_space (env : env) (x : string) (t : ty) (space : string) : env =
-  { env with
-    vars = (x, t) :: env.vars;
-    var_spaces = (x, space) :: env.var_spaces }
-
-(* Look up the explicit space of a variable. None means "implicitly in
-   __Default" or "parameter / return-derived", both treated as
-   local-readable. *)
-let lookup_var_space (env : env) (x : string) : string option =
-  List.assoc_opt x env.var_spaces
 
 let add_interval (env : env) (i : interval_var) : env =
   { env with intervals = i :: env.intervals }

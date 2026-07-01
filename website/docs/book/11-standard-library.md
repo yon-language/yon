@@ -12,8 +12,9 @@ code.
 
 ## Collections and streams
 
-`List`, `Vec`, `HashMap`, `HashSet`, `XSet` are immutable collections over the
-content-addressed heap. Streams chain with methods, and their combinators
+`List`, `HashMap`, `HashSet`, `XSet` are immutable collections over the
+content-addressed heap; `Vec` is the mutable-array exception (its own section
+below). Streams chain with methods, and their combinators
 **require inline lambdas** (the fusion happens at emission, so the body must
 be visible):
 

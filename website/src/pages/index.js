@@ -29,11 +29,9 @@ function Banner() {
         lineHeight: 1.55,
       }}
     >
-      <strong>Active development: 1.1 lands soon.</strong> Yon is mid-refactor on the road to{' '}
-      <strong>1.1</strong>: a handful of known errors are still being corrected, so an example, a
-      doc page, or an API name may be briefly out of step with the compiler; rough edges are
-      expected. The source and the benchmarks are public; what these pages describe is what compiles
-      and runs today.
+      <strong>Yon 1.1.</strong> A topos-oriented language that compiles to native code through MLIR
+      and LLVM, in active development. The source, the benchmarks, and the full test suite are
+      public, and every page here describes what compiles and runs today.
     </div>
   );
 }
@@ -151,7 +149,7 @@ function Topos() {
       <div className={styles.sectionIn}>
         <div className={styles.panel}>
           <span className={styles.kicker}>The paradigm</span>
-          <h2 className={styles.h2}>Worlds are categories. Behaviour is arrows.</h2>
+          <h2 className={styles.h2}>Worlds are categories, behaviour is arrows.</h2>
           <p className={styles.lede}>
             In Topos-Oriented Programming a <strong>world</strong> is a category, a{' '}
             <strong>place</strong> is an object in it, and a value is a <strong>section</strong>:
@@ -215,10 +213,11 @@ function Execution() {
     <section className={`${styles.section} ${styles.sectionAlt}`}>
       <div className={styles.sectionIn}>
         <span className={styles.kicker}>Execution model</span>
-        <h2 className={styles.h2}>What Yon does without.</h2>
+        <h2 className={styles.h2}>No garbage collector, no threads, no exceptions.</h2>
         <p className={styles.lede} style={{ maxWidth: '60ch' }}>
-          Identity is explicit. Concurrency is the process. Failure is a value. The interface to a
-          place is its arrows. Four mechanisms common elsewhere are absent:
+          Identity is requested explicitly, the unit of concurrency is the process, failure is
+          represented as data rather than a thrown stack, and a place's interface is its arrows. Four
+          mechanisms common elsewhere are absent by design:
         </p>
         <div className={styles.absents}>
           {ABSENT.map(([h, p]) => (
@@ -246,7 +245,7 @@ function Sets() {
     <section className={`${styles.section} ${styles.sectionAlt}`}>
       <div className={styles.sectionIn}>
         <span className={styles.kicker}>Sets</span>
-        <h2 className={styles.h2}>A set is 24 KB of geometry.</h2>
+        <h2 className={styles.h2}>An XSet is a fixed-size lattice bitmap.</h2>
         <p className={styles.lede} style={{ maxWidth: '64ch' }}>
           An <strong>XSet</strong> is a subset of the 196,560 minimal vectors of the Leech lattice,
           stored as a fixed <strong>196,560-bit bitmap</strong>: 3,072 64-bit words, about
@@ -262,6 +261,14 @@ function Sets() {
           algebra: there, union and intersection cost time proportional to the sets. Here they are a
           fixed 3,072-word pass with no per-element work.
         </p>
+        <div className={styles.stat}>
+          At 100,000 elements, <b>intersection is 10,454× faster</b> than a hash set on the same data
+          (Apple M1), and the gap only widens: one side is constant in the number of elements, the
+          other linear.
+          <Link className={styles.statLink} to="/book/benchmarks">
+            Benchmarks
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -273,7 +280,7 @@ function Voyager() {
       <div className={styles.sectionIn}>
         <div className={styles.panel}>
           <span className={styles.kicker}>Error correction</span>
-          <h2 className={styles.h2}>A list that survives bit-flips.</h2>
+          <h2 className={styles.h2}>The list type stores error-correcting codewords.</h2>
           <p className={styles.lede}>
             A <strong>VoyagerList</strong> stores each 12-bit payload as a 24-bit codeword of the
             binary

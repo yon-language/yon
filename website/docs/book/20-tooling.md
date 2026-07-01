@@ -15,7 +15,7 @@ developer-facing pieces.
 API reference: places (with fields and their `subcontains`
 sub-object lines), functions with signatures. The world is inferred from
 the filesystem, so it prints as `__INFER`. Run on the `SyntaxError.yon`
-file of chapter 4's subsumption example it produces, verbatim:
+file of chapter 5's subsumption example it produces, verbatim:
 
 ```markdown
 # API Reference — SyntaxError
@@ -30,7 +30,7 @@ Fields:
 - `line`: number
 ```
 
-It reads declarations, not comments, what it prints is what the checker
+It reads declarations, not comments. What it prints is what the checker
 checked.
 
 ## yon-lsp, the language server
@@ -38,14 +38,14 @@ checked.
 `yon-lsp` speaks the Language Server Protocol. 1.0 scope, stated plainly:
 **real-time diagnostics** (parse errors and type errors, the same ones
 `yonc` would give, surfaced as you type) and **hover** (the inferred
-surface type of the expression under the cursor). No rename, no
-go-to-definition yet, diagnostics-first was the choice, because Yon's
-error messages are the teaching tool (E1110 and friends), and getting them
-into the editor mattered more than navigation.
+surface type of the expression under the cursor). No rename and no
+go-to-definition yet. Diagnostics came first because Yon's error messages
+are the teaching tool (E1110 and friends), and getting them into the editor
+mattered more than navigation.
 
 ## Looking inside the compiler
 
-Every stage of the pipeline is inspectable from the CLI, `--emit=mlir`
+Every stage of the pipeline is inspectable from the CLI: `--emit=mlir`
 for the Topos dialect as the frontend wrote it, `--emit=standard` after
 structural collapse and lowering, `--emit=ll` for the LLVM IR. When a
 chapter of this book claims something about what the compiler does, this
