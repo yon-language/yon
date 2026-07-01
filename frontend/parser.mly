@@ -1074,9 +1074,11 @@ let_stmt:
 
 assign_stmt:
   | lv = lvalue EQ e = expr
-    { (* State mutation in Yon is `=`, which updates the content-addressed
-         space content. This is NOT SSA reassignment of a local: local bindings
-         (`be x holds e`) stay immutable; `=` mutates a Space cell. *)
+    { (* Reassignment (model A). `be x holds e` declares a mutable local once;
+         `x = e` reassigns it (a same-scope re-`holds` is a compile error, the
+         declare-once rule). The cell is promoted lazily: the first `=` on a
+         name makes its `be` allocate a Space cell, reads go through it, `x = e`
+         updates it. Snapshot semantics, no aliasing. *)
       SAssignBecomes (lv, e, mk_loc $startpos $endpos) }
 
 lvalue:

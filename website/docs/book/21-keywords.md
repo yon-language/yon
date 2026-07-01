@@ -432,6 +432,10 @@ fun main(): number {
 
 A map between worlds that preserves the categorical structure; composable with `compose`.
 
+#### `nat`
+
+A natural transformation between two functors: `nat transform Eta from F to G { for each X by F }`, the clause naming how each component is built. The naturality square (η_Y ∘ F(f) = G(f) ∘ η_X) is its law; 1.1 checks the structural precondition, the full equation is future work. (Example `nat_transform_functor`.)
+
 #### `compose`
 
 Handle composition with kind discipline: `(compose f with g)(x) = g(f(x))`.
@@ -801,6 +805,40 @@ fun main(): number {
 
 The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed in v1.1: `buffer` and `drop` are no longer reserved words.
 
+#### `space`
+
+A reserved word that appears in the surface only as the target of a wire, `wire to space S`. A Space itself is not declared with a surface block: it is a directory in the package, and its world is read from `yon.toml` (`[world.X]`). So `space` names the destination of a transport, while the Space's existence and world come from the filesystem.
+
+## Concurrency: spawn and collect
+
+#### `spawn`
+
+`spawn { ... }` forks one isolated replica that runs the body in a separate OS process; `spawn in N parallel { ... }` forks N of them, which run on real cores at once. The value of a `spawn` block is the collection stream: every `promote` in the body contributes one element, and the parent drains it with the stream methods (`.fold`, `.for_every`). The replicas are isolated by construction (each gets its own heap), so the collection is unordered; an order-independent fold over it is deterministic.
+
+#### `promote`
+
+Inside a `spawn` body, `promote E` emits `E` onto the parent's collection stream — the spawn counterpart of `emit`. A `spawn` block with no `promote` is a compile-time error (it would collect nothing). The magic variable `spawn_index` (0 to N-1) is in scope in the body, the replica's own index.
+
+#### `parallel`
+
+The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in the parent before the fork and gives the number of replicas. (`=` is not yet supported inside a spawn body; use `Space.set`, or compute the value before the block. The full fix lands with the produce rework in 1.2.)
+
+<CodeWindow file="spawn_parallel_collect.yon" run="yonc spawn_parallel_collect.yon -o spc && ./spc; echo $?" out={["10"]}>
+
+```yon
+fun main(): number {
+  be results holds spawn in 4 parallel {
+    promote spawn_index + 1
+  }
+  be total holds results.fold(0, fun(a: number, v: number) => a + v)
+  return total      // (0+1)+(1+1)+(2+1)+(3+1) = 1+2+3+4 = 10
+}
+```
+
+</CodeWindow>
+
+The wall-clock scaling of `spawn in N parallel` is measured in Appendix D: N replicas of a fixed task finish in roughly the time of one until N meets the core count, a near-linear speedup (`regression/book/jp/bench/spawn_scaling`).
+
 ## Three-valued logic and effects
 
 #### `present`
@@ -948,5 +986,61 @@ fun main(): number {
   be r holds refl(7)                          // a path value, let-bound
   be moved holds ind_path(0, diag, refl(7))   // J computes diag(7) = 42
   return moved
+}`}
+</CodeWindow>
+
+## Cubical composition and universe codes
+
+These are active in the kernel today: their reductions are exercised by the
+`regression/yon_tests/prove` oracle (definitional equality, the emitter exits 0 only when the
+reducer agrees) and they run end to end (`examples/circle_hit`). The full pedagogical treatment of
+cubical type theory is future work (1.2). All are type-level or proof constructs: they reduce or
+erase at compile time, so they carry no runtime benchmark.
+
+#### `plam`
+
+Path abstraction: `plam i => e` builds a path by binding a dimension variable `i`; applied at an
+endpoint it recovers the face. The companion of `refl` for non-constant paths (`path_app`,
+`path_typed`).
+
+#### `comp`
+
+Kan composition: transports along a path system, filling the missing face. On a constant system it
+reduces to the identity (`comp_refl`), and it computes through a `ua` path (`comp_ua_id`) in the
+reducer.
+
+#### `hcomp`
+
+Homogeneous composition: closes an open box from its faces; when a face is active the reducer
+selects it (`hcomp_face_active`). The Kan operation that makes the cubical structure compose.
+
+#### `hit`
+
+Higher inductive type constructor: `hit(base)`, `hit(loop)`, `hit(merid, a)` build the points and
+paths of a HIT (the circle's `base` and `loop`, a suspension's meridian).
+
+#### `hit_elim`
+
+Higher inductive type eliminator: one branch per constructor, the path branches required to respect
+the points. The reducer never identifies `loop` with `refl`, so the circle stays a circle.
+
+#### `quote`
+
+Universe-code introduction: `quote(c, a) : El(c)` packages an inhabitant `a` under the code `c` that
+names its type. It lowers to its inhabitant and runs; the deeper Tarski reflection (a code inspecting
+its own structure) is 1.2.
+
+#### `el_match`
+
+Universe-code elimination: `el_match(target, ret, body)` eliminates an `El(_)` by handing its
+inhabitant to `body`. Lowers to the body application and runs.
+
+<CodeWindow file="circle_hit.yon" run="yonc circle_hit.yon -o circle_hit && ./circle_hit; echo $?" out={["42"]}>
+{`fun motive(x: S1): number { return 0 }
+fun circle_elim(): number {
+  return hit_elim(motive, [base => 42, loop => plam i => 42], hit(base))
+}
+fun main(): number {
+  return circle_elim()
 }`}
 </CodeWindow>

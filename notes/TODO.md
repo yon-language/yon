@@ -7,13 +7,9 @@ in-process examples + the cross-Space suite, all green.
 
 ## In progress
 
-- **`spawn { }` MLIR lowering (step 4b)** — wire the language construct to the
-  runtime collection primitive (`yon_rt_spawn_open` / `promote` / `child_exit` /
-  `join_collect` / `close`). Steps 1–4a are done (tokens, AST/grammar,
-  `spawn_index` scoping, runtime primitive fork-tested with zero deadlock / data
-  loss); 4b is designed on paper, not yet implemented.
 - **Container verification** of the `YON_SATLIB_DIR` `getenv` change in
-  `runtime/yon_rt.c` (committed, not yet verified end to end in the container).
+  `runtime/yon_rt.c` — works in the local/CI environment (the runtime suite is
+  green); the one remaining step is the end-to-end check in the deploy container.
 
 ## Collections
 
@@ -37,8 +33,14 @@ in-process examples + the cross-Space suite, all green.
 
 ## Language / compiler
 
-- **`while` and `iter N do { }` MLIR lowering** — syntax stubs complete, lowering
-  pending.
+- **`spawn in N parallel { }` MLIR lowering (step 4b)** — *done.* The parent forks
+  N replicas over the SHM collection facade (`Spawn__open` / `role` / `index` /
+  `promote` / `child_exit` / `join_stream` → `yon_rt_spawn_*`, `emit_mlir.ml`);
+  `child_exit` is marked noreturn. Gated by `test_spawn_scaling`.
+- **`while` and `iter N do { }` MLIR lowering** — *done.* Both compile and run
+  natively (verified: `while` sum→10, `iter 4 do`→8). Note: the kernel interpreter
+  (`eval_runner`) does not evaluate loop bodies and refuses such programs
+  (`EVAL INCOMPLETE`) — an interpreter-coverage gap (D3), not a compiler gap.
 - **CDT roadmap** (10 steps): terminal/initial object → factorizer → CDT
   declaration syntax → product/coproduct → exponential → CPL element → reduction
   to canonical → generic object → polynomial extension → fibration as an MLIR

@@ -76,7 +76,7 @@ Runtime: yon_rt, yon_rt_hsh, yon_arena, xleech2_coord, xleech2_heap.
 Frontend (cuore tipi/inferenza, ancora intatto):
 - `dispatcher.ml` — dispatch di `type_equal`, centrale per ogni uguaglianza di tipi. Mai auditato a fondo.
 - `hm_infer.ml` — inferenza HM (qui viveva il polyclash).
-- `ty_subst.ml` — unificazione. **FLAG APERTO** dalle ondate vecchie: `unify(TyVar/unknown) → empty_subst` (silent-pass) + `apply_subst` con possibile non-terminazione. Da chiudere.
+- `ty_subst.ml` — unificazione. **FLAG CHIUSO nel codice (verificato 2026-07-01):** l'occurs-check c'è (`unify` fa `if occur_check n t then raise (Unify_failure (UOccurCheck ...))`), quindi niente sostituzione ciclica → `apply_subst` termina; il silent-pass `TyVar _, _ -> empty_subst` è stato rimosso (ora `raise (Unify_failure (UMismatch ...))`). Resta solo `TyPrim "unknown"` che unifica con tutto: escape-hatch graduale deliberato, non un buco. Il modulo resta comunque da auditare a fondo per il resto.
 - `core_check.ml` — core-checker del kernel.
 - `type_erase.ml` — erasure (correttezza a runtime).
 - `prop_eval.ml` — valutazione Ω (visto solo in parte dall'agente heyting).
@@ -91,7 +91,7 @@ Runtime (Leech/memoria non battuti):
 `move_engine`, `sct`, `site`, `inline_seq`, `method_sugar`, `module_prefix`, `package_layout`, `manifest`, `place_visibility` (già false alarm), `leech_theta`; tooling non-soundness (`yon_lsp`, `yon_doc`, `yon_lint`, `yonfmt`, `pretty`, `diagnostics`). `test_*`/`*_demo`/`run_example`: harness, skip. `locally_nameless.ml`: SOSPESO, non in build.
 
 ### Prossimo cluster consigliato
-Cuore tipi: `dispatcher` + `hm_infer` + `ty_subst` + `core_check`. È lì che vive la soundness, e `ty_subst` ha già un buco segnalato.
+Cuore tipi: `dispatcher` + `hm_infer` + `ty_subst` + `core_check`. È lì che vive la correttezza del sistema di tipi. (Il buco storico di `ty_subst` è chiuso — vedi sopra; resta debito di copertura, non un bug aperto.)
 
 ## DA FARE (prossimo batch project-mode)
 ### place collision tra world — chiave per nome nudo (HIGH soundness)

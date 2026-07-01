@@ -190,6 +190,21 @@ designed): an unordered stream may spread over N buffers for N processes and mul
 an ordered stream stays a single channel. Not automatic, not hidden — declared. The model
 underneath (spawn + SHM collection) exists; only the mark that says when it is legal is missing.
 
+**Distinct manifestation found 2026-07-01 — cross-process concurrent-drain read race.** Bug B
+above is the in-process silent-drop. Separately, the cross-process SHM wire (`await_shm` drain in
+a consumer process while a producer process is still writing) has a torn/stale read under
+contention: the cross-space gate's scenario 3 (`regression/cross_space/`, producer streams 1..8,
+consumer folds the sum = 36) intermittently returns `36 + k*64` (k=1,2,3), i.e. a single
+`await_shm` returns a value one-or-more ring-lengths too high. The `64` is `YON_STREAM_MAX_SLOTS`,
+so the race is in the ring's slot/generation read, not in the framing (the consumer loops exactly
+8 times; it is a wrong VALUE, not an over-count). It is load-sensitive: ~80-100% correct in
+isolation, surfaced only under the full parallel suite. **1.1 mitigation (shipped):** scenario 3
+now uses a **readiness handshake** — the producer runs to completion (writes 1..8 + close, then
+exits) before the consumer drains, so the gate is deterministic and still exercises the full
+cross-process transport (8 < 64 sit in the file-backed segment, which persists past the producer's
+exit). **1.2 action:** when the ring read is made race-free, restore scenario 3 to the *concurrent*
+producer/consumer form (drop the sequencing) so it stands as the regression witness for this race.
+
 **Related gap to close in the same rework: `=` inside a `produce` block.** A `produce`/`spawn`/
 `scope` body is desugared via `desugar_stmt` (Core-term path), which bypasses the v1 cells pass
 (`desugar.ml` ~1907/1997) that promotes `be x holds 0` to a Space cell and rewrites `x = e` to
@@ -219,3 +234,4 @@ there) is the 1.2 work above.
 - **`TyEl`-opaque NoCarrier** — safety net, live with surface Path/`ua`.
 - **Weak example coverage on `geom_morphism` (0), `reduction` (1), `topology` (1).**
 - **Runtime build platform-specific + mmgroup `.o` provenance** (portability).
+
