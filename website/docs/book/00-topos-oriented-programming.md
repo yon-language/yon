@@ -61,6 +61,7 @@ philosophy:
    are *the same slot*. When `String.equal` compares two handles it is
    checking Yoneda-style indiscernibility in O(1):
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be a holds "ab"

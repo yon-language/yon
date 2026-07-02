@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: return_stmt
+note: |
+  return e yields from the function; inside a when branch it does not exit.

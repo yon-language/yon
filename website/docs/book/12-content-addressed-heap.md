@@ -42,6 +42,7 @@ double yon_rt_string_equal(double a_id_d, double b_id_d) {
 
 And it holds *by construction*, whatever route built the value:
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be a holds "ab"

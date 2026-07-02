@@ -24,6 +24,7 @@ an entry in a small registry (ids are sequential, up to 1024 per process)
 whose *current value* is a handle into the heap. The cell has identity; what
 it holds is still immutable content.
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be v holds 7

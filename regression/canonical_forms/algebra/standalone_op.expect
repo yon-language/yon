@@ -1,0 +1,4 @@
+status: accept
+exit: 42
+note: |
+  The standalone (top-level) operation form (standalone_op): an operation declared outside any place.

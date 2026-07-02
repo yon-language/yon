@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: type_expr type_atom
+note: |
+  Types: list of T, map of K to V, T -> U, stream of T.

@@ -1,0 +1,4 @@
+fun twice(x: number): number { return x * 2 }
+fun main(): number {
+  return 21 |> twice()
+}

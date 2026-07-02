@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: error_decl on_error_clause
+note: |
+  An error is a place whose meaning is failure; a place names the error it raises with on error.

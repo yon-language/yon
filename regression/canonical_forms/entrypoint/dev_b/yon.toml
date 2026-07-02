@@ -1,0 +1,9 @@
+[package]
+name = "entrypoint_fixture"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["X"]
+spaces  = ["s"]

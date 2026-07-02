@@ -1,0 +1,9 @@
+[package]
+name = "fx"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["Pt"]
+spaces  = ["s"]

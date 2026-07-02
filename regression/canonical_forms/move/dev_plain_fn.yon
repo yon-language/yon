@@ -1,0 +1,17 @@
+// HANDLE-TYPE STRATIFICATION (W6 family) — a plain arrow is NOT a morph-handle.
+// A parameter typed `morph from S1 to S2` (TyMorphHandle) is a HANDLE on a
+// morphism between two topoi, not an ordinary function value. Passing a plain
+// `number -> number` where a handle is required must be REJECTED (exit 3).
+//
+// VERIFIED SOUND (not a stub): emit yields
+//   "run: parameter m expects morph from S1 to S2, got number -> number".
+// The opacity noted in c_ty_morph_handle.yon is confined to the topos
+// IDENTIFIERS (S1/S2 need no decl); it does NOT extend to the argument's
+// arrow-vs-handle distinction, so the call site bites here.
+fun plain(x: number): number { return x }
+
+fun run(m: morph from S1 to S2): number { return 0 }
+
+fun main(): number {
+  return run(plain)
+}

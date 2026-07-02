@@ -46,6 +46,7 @@ also carries a `Topos.yon` that declares the topos of the site, and an
 A place body declares its **sections**, the fields it stores, and nothing else by
 default. An order has a table and a running total, `sala/Order.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place Order {
   table number
@@ -57,13 +58,13 @@ There are no methods here and no hidden state: a place is pure structure. You
 create one with `new`, read its sections with a dot, and that is the whole
 surface. `Entry.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
-place Entry {
-  fun main(): number {
-    be o holds new Order { table 5 total 40 }
-    be _p holds IO.print_num(o.table)
-    return o.total + 2                     // 42
-  }
+place Entry { }
+fun main(): number {
+  be o holds new Order { table 5 total 40 }
+  be _p holds IO.print_num(o.table)
+  return o.total + 2                     // 42
 }
 ```
 
@@ -79,6 +80,7 @@ Where a place needs an effectful interface, it opens its body with `with
 effects` and lists **operations** alongside its sections. An order accumulates
 items, and a kitchen ticket can be retagged:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place Order with effects {
   table number
@@ -100,6 +102,7 @@ object, not a pinned site. What each operation *means* is given later by a
 A place can carve out a sub-object of another with `subcontains`. A VIP order is
 still an order, restricted:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place VipOrder subcontains Order {
   table number
@@ -129,6 +132,7 @@ up the courses does not change the total, and neither does the grouping. In most
 languages that is a comment, a thing you believe. In Yon you declare it, and the
 compiler checks it. `sala/Tally.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place Tally with effects {
   total number
@@ -144,14 +148,14 @@ against the named algebra (`Additive`, `Multiplicative`, `TropicalMax`,
 compile time. `verify P` then hands you the verified structure as a runnable
 Magma, so you can ask it, in the program, what the compiler already proved:
 
+<!-- yon-gate: illustrative -->
 ```yon
-place Entry {
-  fun main(): number {
-    be m holds verify Tally
-    be c holds Magma.is_commutative(m)
-    be a holds Magma.is_associative(m)
-    return if c and a then 42 else 0        // 42: both hold
-  }
+place Entry { }
+fun main(): number {
+  be m holds verify Tally
+  be c holds Magma.is_commutative(m)
+  be a holds Magma.is_associative(m)
+  return if c and a then 42 else 0        // 42: both hold
 }
 ```
 

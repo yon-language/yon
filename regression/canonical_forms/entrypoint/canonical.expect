@@ -1,0 +1,9 @@
+status: accept
+exit: 0
+covers: program top_decl
+note: |
+  Form A/D. An empty `place Entry { }` marker at the project root plus a
+  top-level `fun main`. This is the dominant form in all 34 examples/ projects
+  (measured 2026-07-02); the canonical fixture is that shape promoted to spec,
+  not invented. `place Entry` is the entrypoint marker; `main` is an ordinary
+  top-level function beside it.

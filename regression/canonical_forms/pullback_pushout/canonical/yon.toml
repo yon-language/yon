@@ -1,0 +1,9 @@
+[package]
+name = "kw_pullback_pushout"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"

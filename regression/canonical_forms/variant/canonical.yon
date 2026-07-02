@@ -1,0 +1,4 @@
+fun motive(value: A | B(number)): number { return 0 }
+fun main(): number {
+  return hit_elim(motive, [A => 0, B(x) => x], hit(B, 7))
+}

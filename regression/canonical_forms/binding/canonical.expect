@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: top_let let_stmt
+note: |
+  be x holds e is the only binding form, at top level (top_let) and in functions (let_stmt) alike.

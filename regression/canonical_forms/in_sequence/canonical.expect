@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: in_seq_stmt
+note: |
+  in sequence over x in e { }: iteration sequential by declaration.

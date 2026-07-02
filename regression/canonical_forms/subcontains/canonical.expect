@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: subcontains_clause
+note: |
+  subcontains is the subobject mono P into B (the retired keyword was extends).

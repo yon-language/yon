@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: chained_expr
+note: |
+  if c then a else b selects a value and lowers to scf.if.

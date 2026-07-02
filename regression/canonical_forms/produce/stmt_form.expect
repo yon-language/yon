@@ -1,0 +1,4 @@
+status: accept
+exit: 42
+note: |
+  The produce STATEMENT form (produce_stmt): a bare produce block whose stream is discarded, distinct from produce as an expression bound with be...holds.

@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: promote_stmt
+note: |
+  spawn in N parallel { promote e } forks N isolated replicas; promote hands each result to the parent fold.

@@ -21,6 +21,7 @@ yonproj/
 
 A library is a directory without a `main`. Publish it by pushing a tag:
 
+<!-- yon-gate: illustrative -->
 ```yon
 /* rates, currency conversion, published as a git package. */
 fun eur_to_usd(eur: number): number { return eur * 110 / 100 }
@@ -40,6 +41,7 @@ wire. Second, **a service still has a `main`**: the compiled binary is both
 the program and the server (chapter 15), so an idle `main` is the
 convention.
 
+<!-- yon-gate: exit 0 -->
 ```yon
 /* The Bank service: pure domain logic, exported over the wire. */
 fun deposit_net(amount: number): number {
@@ -81,6 +83,7 @@ rates = { git = "https://github.com/utente/rates", version = "1.0" }
 And the program, both kinds of import at work, a loop, mutation, and three
 calls that each cross a process boundary:
 
+<!-- yon-gate: illustrative -->
 ```yon
 import "yonproj/rates"
 import bank::deposit_net from Bank

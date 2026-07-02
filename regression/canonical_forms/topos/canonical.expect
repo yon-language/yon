@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: topos_decl topos_prop_decl topos_terminal_opt topos_morphisms_opt morph_decl morph_item morphism_decl topology_decl
+note: |
+  A topos block declares the subobject classifiers, terminal, morphisms and a Lawvere-Tierney topology over a space.

@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: type_params_opt
+note: |
+  Generic type parameters f<T>(...); written ex-novo, the corpus barely covers them (only identity<T>).

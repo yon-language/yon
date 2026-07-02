@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: functor_decl functor_law visits_clause
+note: |
+  A functor translates one world into another; its body is closed over its own parameter.

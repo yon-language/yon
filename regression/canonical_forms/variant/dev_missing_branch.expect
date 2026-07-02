@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: missing branch
+note: |
+  A hit_elim missing a constructor branch.

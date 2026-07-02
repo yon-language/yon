@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: payload
+note: |
+  A hit_elim branch with the wrong payload arity.

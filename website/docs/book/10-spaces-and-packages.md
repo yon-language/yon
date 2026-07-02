@@ -16,10 +16,11 @@ ontology. Here is the restaurant, with its dining room (`sala`) and its kitchen
 ```
 restaurant/
   yon.toml
-  Entry.yon          // main, plus the cross-Space move
+  Entry.yon          // place Entry { } + top-level fun main()
   sala/              // the Space "sala" (the dining room)
     Topos.yon        // topos SalaTopos where { }
     Order.yon        // place Order { total number }
+    ToKitchen.yon    // move ToKitchen from Order to Ticket
   cucina/            // the Space "cucina" (the kitchen)
     Topos.yon        // topos CucinaTopos where { }
     Ticket.yon       // place Ticket { total number }
@@ -53,15 +54,21 @@ place Ticket {
 ```
 
 An order placed in the dining room becomes a ticket in the kitchen. That
-crossing is a `move`, declared in the entry file:
+crossing is a `move`, a file in the `sala` Space:
 
 ```yon
-// Entry.yon
-place Entry { }
+// sala/ToKitchen.yon
 fun withTax(x: number): number { return x * 110 / 100 }
 move ToKitchen from Order to Ticket {
   total maps to total by withTax
 }
+```
+
+The entry place applies it:
+
+```yon
+// Entry.yon
+place Entry { }
 fun main(): number {
   be table4 holds new Order { total 40 }
   be fired holds apply_move(ToKitchen, table4)
@@ -69,7 +76,7 @@ fun main(): number {
 }
 ```
 
-To run it, save the four files under `restaurant/` and compile the directory:
+To run it, save these files under `restaurant/` and compile the directory:
 
 ```
 ./toolchain/yonc restaurant -o /tmp/restaurant && /tmp/restaurant; echo $?
@@ -154,6 +161,8 @@ it uses must enter as an explicit capture, and an implicit reference is a
 verifier error:
 
 ```yon
+// Entry.yon
+place Entry { }
 fun main(): number {
   be base holds 40
   scope Hermetic {
@@ -163,6 +172,6 @@ fun main(): number {
 }
 ```
 
-Wrap this in an `Entry.yon` under a one-Space project and it returns `42`. The
-same fence, three grains: an arrow between two Spaces in one binary, a process
-boundary between two packages, and a region boundary inside one function.
+Under a one-Space project this returns `42`. The same fence, three grains: an
+arrow between two Spaces in one binary, a process boundary between two packages,
+and a region boundary inside one function.

@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: produce_stmt emit_stmt
+note: |
+  produce { emit e }: builds a stream; emit deposits into it; closes structurally.

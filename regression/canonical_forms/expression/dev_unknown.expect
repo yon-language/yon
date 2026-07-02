@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: unknown identifier
+note: |
+  A reference to a name that is not bound.

@@ -1,0 +1,5 @@
+status: accept
+exit: 22
+covers: merge_body share_clause conflict_clause
+note: |
+  A merge move combines two sources with a share clause and a conflict resolution.

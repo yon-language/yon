@@ -1,0 +1,5 @@
+fun sink(): number {
+  produce { emit 1 }
+  return 42
+}
+fun main(): number { return sink() }

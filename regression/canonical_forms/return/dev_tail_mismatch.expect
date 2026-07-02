@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: declares return type number
+note: |
+  The implicit-return tail has the wrong type.

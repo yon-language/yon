@@ -107,14 +107,13 @@ In the language this is the subscription pipeline:
 // Entry.yon, the consumer
 import weather::forecasts from Weather    // forecasts: fun(): stream of Reading
 
-place Entry {
-  fun main(): number {
-    be w holds wire to space Weather
-    be sub holds w.awaits(forecasts)
-    be readings holds sub.stream          // the drained frames, as a local stream
-    be total holds readings.fold(0, sum_reading)
-    return total
-  }
+place Entry { }
+fun main(): number {
+  be w holds wire to space Weather
+  be sub holds w.awaits(forecasts)
+  be readings holds sub.stream          // the drained frames, as a local stream
+  be total holds readings.fold(0, sum_reading)
+  return total
 }
 ```
 
@@ -150,20 +149,21 @@ on first contact rather than inheriting its parent's reply slot.
 ## The discipline of the wire
 
 Two doors, two disciplines. The **call** door, `__yon_dispatch`, moves `f64`
-and nothing else: a selector plus at most four numeric arguments. A string or a
-bare section cannot ride it, since it would be a handle into a heap the callee
-does not have (chapter 12), and the type checker rejects it in an imported
-*function signature* before you ever run. The **subscription** door, just
-above, is the one that carries values, and it carries them by **copy**, never
-by handle: a value is serialized on the way out and rebuilt on the far side.
+and nothing else: a selector plus at most four numeric arguments, and a fifth is
+rejected at compile time. A string or a bare section cannot ride it: it would be
+a handle into a heap the callee does not have (chapter 12), so only numbers cross
+the call door. The **subscription** door, just above, is the one that carries
+values, and it carries them by **copy**, never by handle: a value is serialized
+on the way out and rebuilt on the far side.
 
 So the underlying rule is uniform, and it is the rule the whole book keeps
 returning to: no process ever dereferences another process's heap. Either a
 datum is a number small enough to be its own meaning, or it is flattened to
 bytes and reconstructed in the receiver's heap. The narrow door stays narrow;
 the wide door copies. This is the same hermeticity ladder as everywhere else:
-*inside* a binary it is typed (TOPOS-E1110 and friends); *between* binaries it
-is the kernel's process isolation. `internal` functions are on neither door.
+*inside* a binary a crossing goes through a declared arrow (a `move`, a `view`,
+a `geomorph`); *between* binaries it is the kernel's process isolation.
+`internal` functions are on neither door.
 
 ## What about threads?
 

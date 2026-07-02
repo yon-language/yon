@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: pattern condition condition_atom
+note: |
+  Patterns: a variable, a literal, present/absent/unknown, chained with and/or.

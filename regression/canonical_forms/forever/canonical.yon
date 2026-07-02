@@ -1,0 +1,4 @@
+fun spin(): number visits Output {
+  forever { be _ holds String.print("tick") }
+}
+fun main(): number { return 42 }

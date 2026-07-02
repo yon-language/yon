@@ -1,0 +1,6 @@
+fun main(): number {
+  be x holds 42
+  be r holds 0
+  when x == 42 { r = 1 } otherwise { r = 2 }
+  return if r == 1 then 42 else 0
+}

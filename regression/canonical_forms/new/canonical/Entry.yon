@@ -1,0 +1,5 @@
+place Entry { }
+fun main(): number {
+  be p holds new Pt { x 42 }
+  return p.x
+}

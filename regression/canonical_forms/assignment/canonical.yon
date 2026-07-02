@@ -1,0 +1,5 @@
+fun main(): number {
+  be x holds 40
+  x = 42
+  return x
+}

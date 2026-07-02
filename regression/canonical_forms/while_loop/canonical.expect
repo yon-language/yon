@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: while_stmt
+note: |
+  while cond do { }: the general loop; it may not terminate, and that is its job.

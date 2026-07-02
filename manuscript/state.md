@@ -9,29 +9,92 @@
 
 ## Locked decisions (log)
 
-- **RESUME 2026-07-02 — BOOK PROJECT-EXAMPLE SWEEP (committed as a WIP checkpoint, tired-stop).**
-  SYSTEMATIC BUG found by an independent spot-check (2026-07-01): every DIRECTORY-project example whose
-  entrypoint is `Entry.yon` with a bare `fun main` (or an empty `place Entry {}` + a top-level main)
-  DOES NOT COMPILE in directory mode: `yonc <dir>` needs `place Entry { fun main() … }` and the file
-  MUST be `Entry.yon` (filename = place name). The first finalize-swarm MISSED this (agents tested
-  snippets in isolation / single-file, never assembled the directory + ran it). Single-file demos
-  (`yonc X.yon`, bare main) are fine, do NOT touch those.
-  · Fix pattern (VERIFIED by reconstructing the project and running it): wrap the `Entry.yon` main (and
-    any helper funs shown in the same Entry.yon snippet) inside `place Entry { … }`. Reconstruct the
-    full directory and `./toolchain/yonc <dir> -o /tmp/x && /tmp/x` to confirm the stated result.
-  · DONE + reconstructed→correct: ch05 (SyntaxError→42), ch08 (forcing→0, is_overdrawn→42), ch15
-    (ledger walkthrough→42), ch18 (Error→42). Plus ch06/ch07 (restaurant, done earlier).
-  · REMAINING TOMORROW (do NOT trust the agent reports for these; reconstruct+run each):
-    - **ch10** needs a real RESTRUCTURE, not just a wrap: it uses the old inline model (`move ToKitchen`
-      inline at Entry root + empty `place Entry {}`). Split like ch07 (move into a place file, main into
-      `place Entry`), on the restaurant thread.
-    - **ch16** (how spaces talk) likely similar (inline/stale), verify + restructure on the restaurant.
-    - **ch21** three CodeWindow directory demos (`run="yonc X/ …"`): forcing_demo/, comprehension_carrier/,
-      handle_lambdas/ (and check kw_view_show/) all have bare/empty-Entry mains, fix to `place Entry`.
-    - INDEPENDENTLY re-verify ch09, ch11, ch14 project examples (multi-file), agent reports unreliable.
-  · Then: fish more viz from the 75 swarm suggestions (task w59zac6g7 output), yonfmt is NOT usable
-    (partial formatter, refuses on most book constructs). DONE already: landing (less-marketing), 8 viz,
-    the `new P in Space` vestige removal (parser + E1110/E1111 + var_spaces), surface + project fuzzers.
+- **2026-07-02 — CANONICAL FORMS as executable spec (the corpus IS the spec, markdown is a projection).**
+  Antonio's architecture: truth lives in runnable `.yon`, not markdown. `regression/canonical_forms/<construct>/`
+  holds `canonical.yon|canonical/` (+ `.expect`) and `dev_*.yon|dev_*/` (+ `.expect`). Each `.expect` carries
+  `status` (accept | reject_clean | enforce_1_2), `exit` (from the compiler, not assumed), and `match` (an error
+  fragment that MUST appear, so a deviation can never pass for the WRONG reason). New gate
+  `regression/test_canonical_forms.py`: (1) execution, (2) completeness vs parser.mly `covers:` + `allowlist.txt`,
+  (3) generation of `regression/CANONICAL-FORMS.md` (`--check` for CI). 39 constructs, 19 deviations enforced, 1 debt.
+  Confirmed decisions: granularity = surface construct; provenance = canonical extracted from the corpus
+  (dir-canonicals COPY the examples/ project); populate all d'un fiato; migrate atomically at full coverage.
+  · COMPLETENESS is REAL grammar coverage, not covers:-accounting. "ma stiamo testando tutta la sintassi?" exposed
+    that covers: was an assertion. Built `frontend/tok_dump.ml` (a token dumper, generated from the %token list,
+    added to the dune executables): lex a .yon -> token names -> `menhir --interpret --interpret-show-cst` -> read the
+    reduced production names off the CST. job 2 (`test_every_production_reduced`) asserts every non-allowlisted
+    parser.mly production is ACTUALLY REDUCED by a fixture. Found 4 aspirational covers: (call_or_new_stmt,
+    produce_stmt, standalone_op, reduction_type_params were the STATEMENT/top-level FORM, my canonicals used the
+    expression form); closed them with real fixtures (produce/stmt_form, new/call_statement, algebra/standalone_op,
+    reduction Sum<T>). Result: **92/94 productions reduced by a real fixture**; the only 2 not are hcomp_side/hcomp_base
+    (cubical, no surface writer) -> allowlist.txt (tightened to just those 2; the structural list rules are reduced
+    incidentally and are NOT allowlisted). covers: stays as advisory doc; the reduction check is the teeth.
+  · enforce_1_2 = the keystone: a deviation the compiler ACCEPTS today but 1.2 must reject. Gate compiles it, asserts
+    it still passes (never lies about the present), records it as debt. `entrypoint/dev_c` (form C, main-inside-Entry)
+    is the first. When 1.2 lands it starts failing to compile -> flip .expect to reject_clean + match, and the gate
+    becomes the fix's acceptance test.
+  · reality corrected the layout: reject exit is 1 (not 3); entrypoint is DIR-mode (file-mode allows bare main);
+    forever lives in an uncalled function; spawn/promote is one construct; variant is the sum+HIT eliminator (covers
+    hit_branch, canonical -> 7). Real messages captured from the 19 negatives are the `match:` fragments.
+  · ATOMIC MIGRATION done: retired the hand-authored `regression/CANONICAL-FORMS.md` + Leg 3 of test_syntax_triangle.py.
+    The triangle now owns legs 1/2/4 (keyword-doc, coverage, book fidelity) + a KEYWORD_ALLOWLIST constant; the
+    production leg is test_canonical_forms.py. Both `--check`-clean. Whole suite 341+ green, collects 1065.
+  · BUG FOUND (flagged via spawn_task): `x.f = e` (place-field mutation) is NOT "rejected by design" as the syntax
+    reference claims -- it CRASHES the compiler (`Fatal error: exception ... '__space_update_here'`). Real uncaught
+    exception + doc-vs-reality divergence. Not used as a deviation fixture (a crash is neither accept nor reject_clean).
+  · Scratch driver that scaffolded the fixtures: scratchpad/build_canon.py (not committed; fixtures are the artifact).
+
+- **2026-07-02 — SYNTAX TRIANGLE gate shipped (lexer <-> corpus <-> book, one invariant).**
+  New permanent CI guard `regression/test_syntax_triangle.py` (140 tests, green) closing the
+  triangle that `test_keyword_docs.py` only touched on one edge:
+  · Leg 1 lexer->book: every lexer keyword has a `#### `kw`` section (folds in test_keyword_docs).
+  · Leg 2 lexer->corpus: every keyword exercised by a compiling example, or in a justified
+    Table-C allowlist. All 117 keywords are exercised (0 allowlist-needed beyond 5 kernel/lexing
+    tokens); generics `<T>` are IN the corpus (`identity<T>`), not allowlisted.
+  · Leg 3 production ledger: every parser.mly production (94) has a canonical/deviation row
+    (Table A) or a structural-helper reason (Table B) in the NEW `regression/CANONICAL-FORMS.md`
+    (Antonio chose "artefatto strutturato" over derive-in-gate); every named deviation's negative
+    fixture is compiled and MUST be rejected (13 gated, e.g. neg_rebind_holds, sum_payload_wrong_type).
+  · Leg 4 book->corpus: 13 project CodeWindows byte-identical to their `examples/` files; all 25
+    CodeWindows executed via their literal `run=` command; 20 standalone prose blocks carry a
+    `<!-- yon-gate: exit N -->` marker (compiled+run), 32 fragments marked `illustrative` (exempt,
+    COUNTED in the artifact — Antonio chose "marker + esenti contati").
+  · Artifact `regression/SYNTAX-TRIANGLE.md` = the full matrix (keyword x lexer x corpus-count x
+    book-anchor + production x canonical x deviation x enforcement), regenerable, `--check` for CI.
+  · Gate parser gotcha fixed: table cells with escaped pipes (`A \| B \| C(T)`, `a \|> f`) must be
+    split on UNESCAPED `|` only. Run with `.venv/bin/python -m pytest regression/test_syntax_triangle.py`.
+    Site build stays green (52 `<!-- yon-gate -->` HTML comments do not break MDX). Partially closes
+    the `notes/to-fix.md` runtime-gate gap (book examples now yonc+run+exit-gated; general examples/*/ still open).
+
+- **RESUME 2026-07-02 (cont.) — SWEEP CORRECTED + COMPLETED. The earlier "systematic bug" was a MISDIAGNOSIS.**
+  The real directory-mode entrypoint rule, re-derived from live behaviour (4 variants tested):
+    A/D  `place Entry { }` empty + top-level `fun main`  → COMPILES (exit as expected)
+    B    bare `fun main`, NO `place Entry` at all        → FAILS (this is the ONLY real error)
+    C    `fun main` inside `place Entry { … }`           → COMPILES
+  So form B is the only broken shape; A/D and C both work. ALL 34 real `examples/` projects use form A/D
+  (`place Entry { }` marker + top-level main). The prior fix-pass had wrapped mains into form C, diverging
+  from that convention. DECISION (Antonio, 2026-07-02): **form A/D EVERYWHERE** (Entry is a marker, main
+  is a top-level fun; the honest model).
+  · DONE this turn, each reconstructed + compiled + RUN to its stated exit:
+    - ch21: all 13 directory CodeWindows SYNCED to their real `examples/<name>/` files (bodies mirror disk);
+      subscriber.yon made self-contained (added the `sensors.yon` producer, cross-package pair → 36, backed
+      by regression/cross_space); **all 25 CodeWindows now pass via their LITERAL `run=` command (25/25)**.
+    - 8 chapters converted form C → A/D (ch05/06/08/09/10/15/16/18, 12 blocks); 3 prose descriptions
+      (ch10 tree-comment, ch15 ×2) aligned to A/D. Verified compile+run: ch06 Order→42 & verify Tally→42,
+      ch08 is_overdrawn→42 & forcing→0, ch09 pair/refl→42 & pullback→7, ch10 restaurant→44 & kitchen/pass
+      39/38 & scope→42, ch18 error→42.
+    - `examples/capability_flow_demo` was broken by MY `new P in Space` removal (used `new … in EU`);
+      migrated to `new …` → runs (110). All 34 examples/ compile now except the intentional negative fixture
+      `closed_morphism_capture` (the closed-morphism-discipline demo).
+    - `npm run build` = SUCCESS. Book em-dash = 0 (only ch20's real yon-doc OUTPUT keeps its em-dash).
+  · TOOLCHAIN GOTCHA found + worked around (do NOT reintroduce): `yonc dir/ -o NAME` where `NAME` equals
+    the source directory basename fails at link time (`ld: open() failed, errno=21`, EISDIR) — the binary
+    name collides with the `NAME/` dir. Fixed 6 ch21 `run=` commands to use a distinct `-o` name.
+  · KNOWN / not touched (flag to Antonio): (1) ~16 PRE-EXISTING viz components (ArenaOrbit, XSetBitmap,
+    Mutation, ThreeLenses, …) have em-dashes in RENDERED text — separate decision whether the no-em-dash
+    rule extends to viz prose. My new viz (ProjectStructure/GeomorphAdjunction/OntologyMap/HeytingOmega/
+    ContentAddress/…) are clean. (2) ch10 restaurant has no `examples/restaurant` fixture (assembled from
+    prose, verified→44). (3) ch15 walkthrough uses an external `yon_modules/geometria` dep (conversion is
+    exit-preserving; not re-run standalone). Only ch21 has CodeWindows; other chapters are prose blocks.
 
 - **BOOK MANUAL FINALIZATION started 2026-07-01 (strada A, chapter by chapter).** The `docs/book/`
   25-ch manual is now IN SCOPE (was excluded). Verified live: the inline `world{}` / `place X in W`

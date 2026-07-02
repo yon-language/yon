@@ -1,0 +1,4 @@
+fun main(): number {
+  be c holds 1
+  return if c == 1 then 42 else 0
+}

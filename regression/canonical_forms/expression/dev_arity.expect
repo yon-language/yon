@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: expected 1 arguments, got 2
+note: |
+  Wrong number of arguments at a call site.

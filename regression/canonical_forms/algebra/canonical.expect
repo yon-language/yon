@@ -1,0 +1,5 @@
+status: accept
+exit: 3
+covers: operation_decl standalone_op uses_algebra_clause law_decl
+note: |
+  An operation uses a named algebra and declares laws the verifier checks; verify hands back a runnable Magma.

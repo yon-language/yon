@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: scope_stmt
+note: |
+  scope { }: an IsolatedFromAbove region; outer bindings enter as explicit captures.

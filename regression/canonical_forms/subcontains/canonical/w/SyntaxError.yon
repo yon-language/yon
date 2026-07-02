@@ -1,0 +1,1 @@
+place SyntaxError subcontains Error { message number line number }

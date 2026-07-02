@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: type_expr type_atom
+note: |
+  The comprehension type { a : A where P } carves the subobject of A by the fibre P.

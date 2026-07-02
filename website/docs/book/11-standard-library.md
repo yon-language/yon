@@ -18,6 +18,7 @@ below). Streams chain with methods, and their combinators
 **require inline lambdas** (the fusion happens at emission, so the body must
 be visible):
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be l holds List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
@@ -28,6 +29,7 @@ fun main(): number {
 
 ## System: files, environment, arguments
 
+<!-- yon-gate: illustrative -->
 ```yon
 be _w holds File.write_text("/tmp/out.txt", "ciao")
 be back holds File.read_text("/tmp/out.txt")
@@ -51,6 +53,7 @@ hashes).
 
 ## Maps, bits, sealed storage
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be m holds HashMap.empty()
@@ -71,6 +74,7 @@ returns a new handle (so always use the handle `push` returns), handing the
 old strip's whole pages back to the OS; `get`/`set` are O(1) and `set` mutates
 in place.
 
+<!-- yon-gate: exit 62 -->
 ```yon
 fun main(): number {
   be a holds Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)

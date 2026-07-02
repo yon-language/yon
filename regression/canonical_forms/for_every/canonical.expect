@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: for_stmt
+note: |
+  for every x in e { }: iteration over a List; sequential in 1.0.

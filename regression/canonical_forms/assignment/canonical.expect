@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: assign_stmt lvalue
+note: |
+  x = e promotes the binding to a Space cell and updates it; reserved to cells.

@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: when_stmt when_chain
+note: |
+  when c { } otherwise { }: the conditional chain, branches are for effects.

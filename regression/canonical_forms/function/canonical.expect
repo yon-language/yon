@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: fun_decl param return_type_decl
+note: |
+  A function: fun name(params): type { body }.

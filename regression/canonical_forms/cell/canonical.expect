@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: cell_decl
+note: |
+  A cell is a Space-backed mutable field of a place, distinct from an immutable section.
