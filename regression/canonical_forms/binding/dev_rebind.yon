@@ -1,0 +1,10 @@
+// Rule 1 of the `be holds` / `=` split (model A: every `be x holds e` binds a fresh
+// mutable local, and `x = e` reassigns it). Re-declaring the SAME name with
+// `be ... holds` in the SAME scope is a mistake, not a reassignment: the fix is
+// `x = ...`. Rejected at compile time (exit 3). The wildcard `_` is exempt; shadowing
+// in a NESTED scope is allowed; this is a flat same-scope redeclaration.
+fun main(): number {
+  be x holds 1
+  be x holds 2
+  return x
+}

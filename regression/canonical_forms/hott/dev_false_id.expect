@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: type mismatch
+note: |
+  A false identity proof (1 = 2) rejected: the runtime never decides path equality.

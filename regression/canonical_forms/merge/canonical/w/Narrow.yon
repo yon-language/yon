@@ -1,0 +1,2 @@
+place Narrow { x number
+  total number }

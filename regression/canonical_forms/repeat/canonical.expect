@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: repeat_stmt repeat_tail
+note: |
+  repeat at most N times { } otherwise { }: bounded repeat.

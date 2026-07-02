@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: forces_stmt
+note: |
+  The Kripke-Joyal forcing block runs its body at a stage of the site where the condition is forced.

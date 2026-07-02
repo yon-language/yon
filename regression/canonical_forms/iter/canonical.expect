@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: iter_stmt
+note: |
+  iter N do { }: the bounded loop, always terminates by construction.

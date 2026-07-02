@@ -1,0 +1,15 @@
+status: enforce_1_2
+exit: 0
+note: |
+  Form C. `main` nested INSIDE `place Entry { }`. The compiler accepts this today
+  (it compiles and runs, exit 0), but it is a deviation: `place Entry` is a marker,
+  `main` belongs at the top level, and every one of the 34 examples/ projects keeps
+  it there. This is the form that bit us on 2026-07-02 (a fix-pass silently moved
+  mains inside `place Entry`, diverging the book from the corpus with no compiler
+  signal). It is registered here as a debt.
+
+  The gate compiles it and asserts it still passes today, so the ledger never lies
+  about the current state. When enforcement lands in 1.2 (the checker rejecting a
+  nested main), this fixture will START to fail compilation, and THAT failure is the
+  cue to flip `status` to reject_clean and add the `match` fragment of the new error.
+  At that moment this file becomes the acceptance test for the 1.2 fix.

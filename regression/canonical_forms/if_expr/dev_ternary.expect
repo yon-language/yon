@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: unexpected character
+note: |
+  The C ternary c ? a : b does not exist; if c then a else b is the form.

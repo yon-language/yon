@@ -1,0 +1,5 @@
+status: accept
+exit: 8
+covers: view_decl view_item
+note: |
+  A view exposes a read-only projection of a place: show field, or a computed column.

@@ -1,0 +1,5 @@
+// Declared return type but empty body: there is no value to return/infer.
+// check_fun_decl_accum rejects "empty body but a return type is declared"
+// -> exit 3 (otherwise emit would crash with no value to analyze).
+fun g(): number { }
+fun main(): number { return 0 }

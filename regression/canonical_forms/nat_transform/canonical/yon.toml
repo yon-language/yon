@@ -1,0 +1,11 @@
+[package]
+name = "nat_transform_functor"
+
+[world.W]
+objects = ["X"]
+
+[world.V]
+objects = ["Y"]
+
+[runtime]
+backend = "memory"

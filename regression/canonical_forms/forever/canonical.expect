@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: forever_stmt
+note: |
+  forever { }: the infinite loop. Exercised by a function that is compiled but not called, the corpus pattern for a non-terminating form.

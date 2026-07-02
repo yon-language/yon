@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: expected number, got text
+note: |
+  A variant payload of the wrong type: hit(B, "not a number") where B carries number.

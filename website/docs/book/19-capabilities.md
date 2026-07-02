@@ -8,6 +8,7 @@ sidebar_position: 19
 
 A move can demand more than well-typed fields: it can demand **authority**.
 
+<!-- yon-gate: illustrative -->
 ```yon
 place EUR { balance number }
 place USD { balance number }
@@ -38,6 +39,7 @@ attached to the arrow that needs it, never ambient.
 The registry is real and observable. `Cap.check(h)` returns `0` before the
 token is granted and `1` after:
 
+<!-- yon-gate: exit 1 -->
 ```yon
 fun main(): number {
   be before holds Cap.check(169281588)   // 0, not yet granted

@@ -6,6 +6,7 @@ sidebar_position: 4
 
 # Control flow and mutation
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be x holds present
@@ -51,6 +52,7 @@ To *select a value*, use the expression form `if c then a else b`.
   `otherwise`;
 - `forever { }`, the infinite loop, typically paired with effects inside.
 
+<!-- yon-gate: exit 9 -->
 ```yon
 fun main(): number {
   be acc holds 0
@@ -64,6 +66,7 @@ fun main(): number {
 
 A `forever` in flight (the loop runs without bound, printing as it goes):
 
+<!-- yon-gate: illustrative -->
 ```yon
 fun main(): number {
   be n holds 0

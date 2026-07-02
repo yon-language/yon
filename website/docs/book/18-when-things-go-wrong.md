@@ -19,33 +19,36 @@ and a place can declare its error morphism with `on error`. Each error and
 each place is its own file, so the declarations sit side by side in the space.
 `s/Error.yon` and `s/QueryError.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 error Error { message number }
 ```
 
+<!-- yon-gate: illustrative -->
 ```yon
 error QueryError subcontains Error { message number  sqlstate number }
 ```
 
 A place names the error it can raise. `s/QueryInsert.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place QueryInsert on error QueryError { sql number }
 ```
 
 `Entry.yon` reads a sub-error where the base is expected and returns 42:
 
+<!-- yon-gate: illustrative -->
 ```yon
-place Entry {
-  fun handle(e: Error): number { return e.message }
-  fun on_query_fail(q: QueryError): number {
-    return handle(q)               // sub-error used where Error is expected
-  }
+place Entry { }
+fun handle(e: Error): number { return e.message }
+fun on_query_fail(q: QueryError): number {
+  return handle(q)               // sub-error used where Error is expected
+}
 
-  fun main(): number {
-    be q holds new QueryError { message 40  sqlstate 23505 }
-    return on_query_fail(q) + 2    // 42
-  }
+fun main(): number {
+  be q holds new QueryError { message 40  sqlstate 23505 }
+  return on_query_fail(q) + 2    // 42
 }
 ```
 

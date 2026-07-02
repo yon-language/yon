@@ -1,0 +1,4 @@
+fun main(): number {
+  y = 5
+  return y
+}

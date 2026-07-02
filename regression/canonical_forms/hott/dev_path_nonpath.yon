@@ -1,0 +1,1 @@
+fun main(): number { return 5 @ I0 }

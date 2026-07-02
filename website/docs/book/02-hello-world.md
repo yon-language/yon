@@ -9,6 +9,7 @@ sidebar_position: 2
 A Yon program is a list of top-level declarations; execution starts at `main`,
 which returns a `number`:
 
+<!-- yon-gate: exit 0 -->
 ```yon
 fun main(): number {
   return 0
@@ -26,6 +27,7 @@ $ ./hello
 The process **exit code is `main`'s return value, truncated mod 256**, and Yon
 programs commonly use it as their observable result:
 
+<!-- yon-gate: exit 44 -->
 ```yon
 fun main(): number {
   return 300   // the process exit code is main's value mod 256 -> 44
@@ -34,6 +36,7 @@ fun main(): number {
 
 Printing takes one call:
 
+<!-- yon-gate: exit 0 -->
 ```yon
 fun main(): number {
   be _p holds String.print("ciao, mondo")

@@ -58,6 +58,7 @@ What distinguishes them is what they make cheap:
 A Merkle tree is what the heap already does, surfaced as an API, every node
 is addressed by the content of its children:
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be l1 holds MerkleTree.leaf(7)
@@ -79,6 +80,7 @@ Equality of whole trees is one comparison, the same trick as
 with minimum distance 8, which corrects up to **3 arbitrary bit flips**.
 The module ships a fault injector so you can watch it work:
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be vl holds VoyagerList.empty()

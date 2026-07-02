@@ -14,6 +14,7 @@ with three observable states, `present`, `absent`, `unknown`, and
 
 <HeytingOmega />
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun main(): number {
   be u holds unknown
@@ -48,6 +49,7 @@ A `topos` block declares **subobject classifiers** over the objects of its
 space (the objects are the place files in that directory), each `prop` is a
 map into Ω you can evaluate:
 
+<!-- yon-gate: illustrative -->
 ```yon
 // in the space directory: State.yon
 place State { balance number }
@@ -58,12 +60,11 @@ topos Bank where {
 }
 
 // Entry.yon
-place Entry {
-  fun main(): number {
-    be s holds new State { balance 5 }
-    be bad holds is_overdrawn(s)
-    return if bad then 0 else 42
-  }
+place Entry { }
+fun main(): number {
+  be s holds new State { balance 5 }
+  be bad holds is_overdrawn(s)
+  return if bad then 0 else 42
 }
 ```
 
@@ -71,6 +72,7 @@ And Ω itself carries structure: a **Lawvere-Tierney topology** is an
 operator `j : Ω → Ω` (monotone, inflationary, idempotent) declared on a
 place, the seed of sheaf semantics:
 
+<!-- yon-gate: illustrative -->
 ```yon
 topology j of P { return 1 }          // a Lawvere-Tierney j : Omega -> Omega
 ```
@@ -87,15 +89,14 @@ drive `when`:
 place NodeA { value number }
 
 // Entry.yon
-place Entry {
-  fun guard(): number {
-    forces NodeA value is number {
-      return 1
-    }
-    return 0
+place Entry { }
+fun guard(): number {
+  forces NodeA value is number {
+    return 1
   }
-  fun main(): number { return 0 }
+  return 0
 }
+fun main(): number { return 0 }
 ```
 
 The block runs only where the condition holds at that stage. Patterns

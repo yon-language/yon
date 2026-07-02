@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: place_decl over_clause
+note: |
+  A place is an object of a world: named fields, built with new P value. Here with an over-clause.

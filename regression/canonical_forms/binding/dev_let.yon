@@ -1,0 +1,4 @@
+fun main(): number {
+  let x = 42
+  return x
+}

@@ -40,8 +40,8 @@ checked.
 `yonc` would give, surfaced as you type) and **hover** (the inferred
 surface type of the expression under the cursor). No rename and no
 go-to-definition yet. Diagnostics came first because Yon's error messages
-are the teaching tool (E1110 and friends), and getting them into the editor
-mattered more than navigation.
+are the teaching tool (the closed-morphism discipline, the layout and entrypoint
+rules), and getting them into the editor mattered more than navigation.
 
 ## Looking inside the compiler
 

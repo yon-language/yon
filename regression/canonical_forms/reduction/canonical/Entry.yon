@@ -1,0 +1,11 @@
+place Entry { }
+reduction bi lawful invertible Sum<T> of Tally with multishot fold "sum_f64" {
+  be seed holds 0
+  on add(x: number) {
+    return x
+  }
+}
+reduction backward Rewind of Tally {
+  be seed holds 0
+}
+fun main(): number { return 0 }

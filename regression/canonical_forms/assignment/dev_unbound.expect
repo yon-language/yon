@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: unknown identifier
+note: |
+  Assigning to a name that was never bound; = updates an existing cell, it does not declare.

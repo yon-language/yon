@@ -1,0 +1,12 @@
+# Grammar productions that NO fixture is required to reduce. Everything else in
+# parser.mly must be REDUCED by a real fixture (test_canonical_forms.py, job 2,
+# Menhir-verified). One `production  # reason` per line. Keep this list minimal:
+# a production belongs here only if it genuinely cannot be written at the surface.
+#
+# Measured 2026-07-02: of the 94 productions, 92 are reduced by the fixtures; only
+# these 2 are not. The structural list rules (param_list, field_decl, place_member,
+# expr_list, ...) are NOT allowlisted: they are reduced incidentally while parsing
+# the place/function/call fixtures, and the gate now requires that.
+
+hcomp_side   # one side of an `hcomp` cube; cubical kernel form, no surface writer in 1.0
+hcomp_base   # the base of an `hcomp` cube; cubical kernel form, no surface writer in 1.0

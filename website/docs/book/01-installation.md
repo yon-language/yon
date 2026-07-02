@@ -69,6 +69,7 @@ cd regression && ./run_regression.sh
 
 Create `hello.yon`:
 
+<!-- yon-gate: exit 0 -->
 ```yon
 fun main(): number {
   be greeting holds "ciao, mondo"   // interned on the heap

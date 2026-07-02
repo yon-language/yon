@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: expected number, got text
+note: |
+  Returning text where number is declared.

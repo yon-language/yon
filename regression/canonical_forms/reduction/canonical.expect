@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: reduction_decl on_clause fold_decl_opt reduction_type_params reduction_direction_opt reduction_clause
+note: |
+  A reduction gives operations their meaning: on op(x) { emit e }, with fold and direction modifiers.

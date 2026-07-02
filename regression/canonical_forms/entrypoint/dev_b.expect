@@ -1,0 +1,10 @@
+status: reject_clean
+exit: 1
+match: ENTRYPOINT ERROR
+note: |
+  Form B. A bare `fun main` with no `place Entry` anywhere. The project has no
+  entrypoint marker, and the compiler rejects it cleanly today. This is the ONE
+  entrypoint shape that genuinely fails (form A/D and form C both compile), so it
+  is the reject_clean anchor. The `match` fragment is the live message, verbatim:
+  "ENTRYPOINT ERROR: the project declares no entrypoint: add `place Entry` in the
+  project root, in the file that defines main".

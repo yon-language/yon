@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: nat_transform_decl nat_transform_binding
+note: |
+  A natural transformation between two parallel functors, one component per object.

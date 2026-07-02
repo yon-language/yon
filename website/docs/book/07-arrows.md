@@ -53,6 +53,7 @@ An order is a file, `sala/Order.yon`. Its fields are its sections; its
 `operation`s are the things a guest can do to it, which is why it is declared
 `with effects`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place Order with effects {
   table number
@@ -71,6 +72,7 @@ code block from here on is a file of this one project, and the project compiles.
 The humblest arrow claims nothing about places. A service charge is a morphism of
 numbers, and that is all it is:
 
+<!-- yon-gate: illustrative -->
 ```yon
 fun service(n: number): number { return n + n / 10 }
 ```
@@ -85,6 +87,7 @@ a view and a move are about to.
 To read an order without touching it, you write a **view**, `sala/Bill.yon`. It
 can `show` a stored section, or a computed column that factors through a `fun`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 fun service(n: number): number { return n + n / 10 }
 view Bill of Order { show charged = service(total) }
@@ -102,6 +105,7 @@ boundary, from the `sala` space to the `cucina` space. That crossing is a
 **move**, and it is the *only* way content travels between places.
 `sala/ToKitchen.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 fun identity(x: number): number { return x }
 move ToKitchen from Order to Ticket {
@@ -114,6 +118,7 @@ target; `converts to … by f` transforms it through a function, the `fun` it
 hires; `aggregates to` folds several sources into one. The `Ticket` place is the
 kitchen's copy, and it lives in the other space, `cucina/Ticket.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place Ticket {
   total number
@@ -132,6 +137,7 @@ An order is not only fields; it is a sequence of `operation`s, each `add_item`. 
 say what those operations *mean*, you write a **reduction**, an eliminator that
 folds the place's operations into a value. `sala/Tally.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 reduction Tally of Order {
   on add_item(price: number) { return price }
@@ -157,6 +163,7 @@ top-level definitions of the project (functions, places, worlds), never a local
 from the scope it was written in. This is enforced. A move that reaches for an
 enclosing local is a compile-time error:
 
+<!-- yon-gate: illustrative -->
 ```yon
 be base holds 7
 be m holds move(s: Order) => new Ticket { total base } from Order to Ticket
@@ -187,6 +194,7 @@ correspondence is a **geomorph**, an adjunction between the two sites. It is not
 one arrow but an adjoint pair, `push` and `pull`, that carry each side to the
 other and are held consistent by the adjunction. `cucina/Line.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 geomorph Line from Order to Ticket {
   pull(t: Ticket): Order { be o holds t  return o }
@@ -224,6 +232,7 @@ A **functor** translates one world into the other, objects and operations
 together. Converting the euro books into dollar books at a rate is exactly that,
 a structure-preserving map of the entire accounting context, `eur/Rates.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 functor Spot(x: number) from EurBank to UsdBank { return x * 110 / 100 }
 ```
@@ -237,6 +246,7 @@ world. Two rates give two functors, the spot rate and the forward rate, and the
 adjustment from one to the other is a natural transformation, the same shift
 applied coherently to every account:
 
+<!-- yon-gate: illustrative -->
 ```yon
 functor Fwd(x: number) from EurBank to UsdBank { return x * 112 / 100 }
 nat transform Adjust from Spot to Fwd { for each Money by Spot }

@@ -13,14 +13,13 @@ and eliminator.
 
 ```yon
 // Entry.yon, at the project root
-place Entry {
-  fun main(): number {
-    be p holds pair(40, 2)
-    be x holds fst(p)
-    be y holds snd(p)
-    be w holds refl(x)             // a path witness x = x
-    return x + y                   // 42
-  }
+place Entry { }
+fun main(): number {
+  be p holds pair(40, 2)
+  be x holds fst(p)
+  be y holds snd(p)
+  be w holds refl(x)             // a path witness x = x
+  return x + y                   // 42
 }
 ```
 
@@ -34,13 +33,12 @@ compatible pair over a cospan:
 
 ```yon
 // Entry.yon, at the project root
-place Entry {
-  fun f(x: number): number { return x }
-  fun g(y: number): number { return y }
-  fun main(): number {
-    be p holds pullback(f, g, 3, 3)   // runtime-checked: f(3) == g(3)
-    return 7
-  }
+place Entry { }
+fun f(x: number): number { return x }
+fun g(y: number): number { return y }
+fun main(): number {
+  be p holds pullback(f, g, 3, 3)   // runtime-checked: f(3) == g(3)
+  return 7
 }
 ```
 

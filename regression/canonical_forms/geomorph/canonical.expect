@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: geom_morphism_decl geom_morphism_item
+note: |
+  A geometric morphism relocates the site by an adjunction: pull and push legs.

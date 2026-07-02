@@ -6,6 +6,7 @@ sidebar_position: 3
 
 # Values and bindings
 
+<!-- yon-gate: exit 62 -->
 ```yon
 fun main(): number {
   be answer holds 42

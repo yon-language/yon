@@ -6,6 +6,7 @@ sidebar_position: 5
 
 # Functions and effects
 
+<!-- yon-gate: exit 42 -->
 ```yon
 fun double(x): number { return x * 2 }              // param type inferred
 fun id<A>(x: A): A { return x }                     // type parameter
@@ -36,6 +37,7 @@ surrounding function's locals. (A *morphism* lambda, `move`, `functor`,
 from outside, it is indistinguishable from a function that does not exist.
 `partial fun` declares a function that may not return:
 
+<!-- yon-gate: illustrative -->
 ```yon
 partial fun spin(n: number): number {
   forever { n = n + 1 }
@@ -48,6 +50,7 @@ partial fun spin(n: number): number {
 I/O is an effect. The principled printing path is `Output.print`, and a
 function that uses it must say so:
 
+<!-- yon-gate: exit 0 -->
 ```yon
 fun announce(msg: String): unit visits Output {
   return Output.print(msg)
@@ -84,6 +87,7 @@ or the mono does not exist and the program is rejected. Where it holds, an
 `A` is usable wherever a `B` is expected. Each place is its own file, so the
 base and the sub-object live side by side. `s/Error.yon`:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place Error { message number }
 ```
@@ -91,6 +95,7 @@ place Error { message number }
 `s/SyntaxError.yon` carries the extra field and the function that reads the
 base:
 
+<!-- yon-gate: illustrative -->
 ```yon
 place SyntaxError subcontains Error { message number  line number }
 
@@ -99,12 +104,12 @@ fun describe(e: Error): number { return e.message }   // accepts any sub-object
 
 `Entry.yon` builds the sub-object and passes it where an `Error` is expected:
 
+<!-- yon-gate: illustrative -->
 ```yon
-place Entry {
-  fun main(): number {
-    be s holds new SyntaxError { message 40 line 17 }
-    return describe(s) + 2          // 42: SyntaxError used as Error
-  }
+place Entry { }
+fun main(): number {
+  be s holds new SyntaxError { message 40 line 17 }
+  return describe(s) + 2          // 42: SyntaxError used as Error
 }
 ```
 

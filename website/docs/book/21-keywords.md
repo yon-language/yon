@@ -171,7 +171,7 @@ The formally hermetic block: `scope { }` lowers to an MLIR `IsolatedFromAbove` r
 The Kripke-Joyal forcing block: `forces stage cond { }` runs its body at a stage of the site, where the condition is forced. See the Heyting core chapter for the worked example.
 
 <CodeWindow file="forcing_demo/"
-            run="yonc forcing_demo/ -o forcing_demo && ./forcing_demo; echo $?"
+            run="yonc forcing_demo/ -o forcing && ./forcing; echo $?"
             out={["0"]}>
 {`// net/NodeA.yon
 place NodeA { value number }
@@ -232,7 +232,7 @@ Disjunction, same positions as `and`.
 The constraint of the `topos ... where { }` block, and of the comprehension `{ x : A where P }`: the subobject carved out by the fibre P. With a mere-proposition fibre the comprehension is exactly the classified subobject of the formalization. (The older `all P where cond` quantifier is retired.)
 
 <CodeWindow file="comprehension_carrier/"
-            run="yonc comprehension_carrier/ -o comprehension_carrier && ./comprehension_carrier; echo $?"
+            run="yonc comprehension_carrier/ -o comprehension && ./comprehension; echo $?"
             out={["0"]}>
 {`// w/Account.yon
 place Account { balance number }
@@ -271,7 +271,7 @@ A method signature exposed by a place `with effects`; it carries an effect and m
 A higher cell inside a place, CaTT style: the seed of the higher-dimensional structure.
 
 <CodeWindow file="handle_lambdas/"
-            run="yonc handle_lambdas/ -o handle_lambdas && ./handle_lambdas; echo $?"
+            run="yonc handle_lambdas/ -o handles && ./handles; echo $?"
             out={["44"]}>
 {`// w/P.yon
 place P { v number }
@@ -423,7 +423,7 @@ Instantiates a law-verified place as a runnable handle.
 Names a space's fold function: `with fold "sum_f64"`.
 
 <CodeWindow file="verify_algebra/"
-            run="yonc verify_algebra/ -o verify_algebra && ./verify_algebra; echo $?"
+            run="yonc verify_algebra/ -o verify && ./verify; echo $?"
             out={["3"]}>
 {`// alg/Or.yon
 place Or with effects {
@@ -437,7 +437,6 @@ fun main(): number {
   be m holds verify Or
   be m1 holds Magma.gen(m, 1)
   be m2 holds Magma.gen(m1, 2)
-  /* closure of {1, 2} under OR is {1, 2, 3} -> size 3 */
   return Magma.closure_size(m2)
 }`}
 </CodeWindow>
@@ -473,9 +472,23 @@ Reduction direction: backward.
 Bidirectional reduction. Also a reserved word on its own; see the reference.
 
 <CodeWindow file="functor_compose_inline/"
-            run="yonc functor_compose_inline/ -o functor_compose_inline && ./functor_compose_inline; echo $?"
+            run="yonc functor_compose_inline/ -o fcompose && ./fcompose; echo $?"
             out={["0"]}>
 {`// yon.toml declares three worlds: [world.W] [world.V] [world.U]
+[package]
+name = "functor_compose_inline"
+
+[world.W]
+objects = ["X"]
+
+[world.V]
+objects = ["Y"]
+
+[world.U]
+objects = ["Z"]
+
+[runtime]
+backend = "memory"
 // Entry.yon
 place Entry { }
 fun main(): number {
@@ -546,9 +559,9 @@ topos Bank where {
   }
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
+topology j of State { return 1 }
 // Entry.yon
 place Entry { }
-topology j of State { return 1 }
 fun main(): number {
   be s holds new State { balance 5 }
   be bad holds is_overdrawn(s)
@@ -586,18 +599,27 @@ fun main(): number { return 0 }`}
 In `for each X by fnX` inside a `nat transform`: one component per object of the natural transformation.
 
 <CodeWindow file="nat_transform_functor/"
-            run="yonc nat_transform_functor/ -o nat_transform_functor && ./nat_transform_functor; echo $?"
+            run="yonc nat_transform_functor/ -o nattransform && ./nattransform; echo $?"
             out={["0"]}>
 {`// yon.toml declares two worlds: [world.W] and [world.V]
+[package]
+name = "nat_transform_functor"
+
+[world.W]
+objects = ["X"]
+
+[world.V]
+objects = ["Y"]
+
+[runtime]
+backend = "memory"
 // Entry.yon
 place Entry { }
 functor F(x: number) from W to V { return x }
 functor G(x: number) from W to V { return x }
-
 nat transform Eta from F to G {
   for each X by F
 }
-
 fun main(): number { return 0 }`}
 </CodeWindow>
 
@@ -693,6 +715,7 @@ The slice: `place P over X` declares objects equipped with a chosen map down to 
 
 The subobject mono P into B (the older `extends` keyword is retired).
 
+<!-- yon-gate: illustrative -->
 ```yon
 // error_morphism, split one place per file under the db/ space:
 //   db/Error.yon
@@ -822,6 +845,18 @@ The stream type, `stream of T`, with its back-pressure modifiers in type positio
 <CodeWindow file="subscriber.yon" run="yonc sensors.yon -o Sensors_srv && yonc subscriber.yon -o subscriber && ./Sensors_srv && ./subscriber; echo $?" out={["36"]}>
 
 ```yon
+// sensors.yon, the producer package -> ./Sensors_srv
+fun readings(): stream of number {
+  be s holds produce {
+    emit 10
+    emit 11
+    emit 15
+  }
+  return s
+}
+fun main(): number { return 0 }
+
+// subscriber.yon, the consumer
 import sensors::readings from Sensors
 
 fun main(): number {

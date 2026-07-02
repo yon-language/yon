@@ -1,0 +1,4 @@
+status: accept
+exit: 42
+note: |
+  The call STATEMENT form (call_or_new_stmt): a bare method call obj.m(args) whose result is discarded, distinct from a call bound as an expression.

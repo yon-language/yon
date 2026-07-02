@@ -17,7 +17,7 @@ fun main(): number {
   be _grant holds Cap.grant(cap_hash)
 
   /* Apply move — emit runtime Cap.check sotto */
-  be alice_eur holds new Account_EUR in EU { balance 100 }
+  be alice_eur holds new Account_EUR { balance 100 }
   be alice_usd holds apply_move(EurToUsd, alice_eur)
   return alice_usd.balance
 }

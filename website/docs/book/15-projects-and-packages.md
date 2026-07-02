@@ -10,16 +10,17 @@ sidebar_position: 15
 
 There is no `src/` convention and no project file beyond the manifest: a
 **package is a directory**, and every `.yon` file in it shares one scope. The
-entrypoint is an `Entry.yon` at the project root holding `place Entry { fun
-main() … }` (a place file's name is its place, so the entry place lives in
-`Entry.yon`); a package with one is an executable, a package without one is a
+entrypoint is an `Entry.yon` at the project root holding `place Entry { }` and
+a top-level `fun main()` (a place file's name is its place, so the entry place
+lives in `Entry.yon`, and `main` is a top-level function beside it); a package
+with one is an executable, a package without one is a
 library, a convention, not a flag. `internal` declarations stay invisible
 outside the package either way.
 
 ```
 example/
 ├── yon.toml
-├── Entry.yon           # place Entry { fun main() { ... } }, the entrypoint
+├── Entry.yon           # place Entry { } + a top-level fun main(), the entrypoint
 ├── geometry.yon        # bare functions, same scope as Entry.yon, no import needed
 └── yon_modules/        # dependencies land here (never edited by hand)
 ```
@@ -85,10 +86,9 @@ declaration of an imported module arrives **prefixed with its module name**:
 // Entry.yon
 import "github.com/utente/geometria"
 
-place Entry {
-  fun main(): number {
-    return area(6, 5) + geometria::circle_area(2)    // 30 + 12 = 42
-  }
+place Entry { }
+fun main(): number {
+  return area(6, 5) + geometria::circle_area(2)    // 30 + 12 = 42
 }
 ```
 

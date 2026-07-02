@@ -1,0 +1,4 @@
+// Return a text where number is declared: the SReturn check (e checked against
+// the declared return type via Dispatcher.subtype) must reject this at compile
+// time. text is not a subtype of number, so exit 3.
+fun main(): number { return "text" }

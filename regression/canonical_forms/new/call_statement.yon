@@ -1,0 +1,5 @@
+fun main(): number {
+  be x holds 42
+  Space.make(1)
+  return x
+}

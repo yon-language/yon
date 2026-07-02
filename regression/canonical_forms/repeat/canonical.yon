@@ -1,0 +1,5 @@
+fun main(): number {
+  be acc holds 0
+  repeat at most 42 times { acc = acc + 1 } otherwise { acc = 0 }
+  return acc
+}

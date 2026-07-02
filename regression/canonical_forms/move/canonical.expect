@@ -1,0 +1,5 @@
+status: accept
+exit: 0
+covers: move_decl mapping_decl optional_requires
+note: |
+  A move transports an instance across places: field maps to field by a function.

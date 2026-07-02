@@ -1,0 +1,5 @@
+be greeting holds 10
+fun main(): number {
+  be x holds 42
+  return x
+}

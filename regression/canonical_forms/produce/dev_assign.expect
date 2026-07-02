@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: not yet supported
+note: |
+  = (Space-cell assign) inside a produce body is refused (1.1 stop-gap).

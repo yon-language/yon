@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: path application
+note: |
+  Path application @ of a non-path value.

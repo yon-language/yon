@@ -1,0 +1,5 @@
+place Or with effects {
+  operation join(a: number, b: number): number uses algebra BooleanOr
+  law commutative
+  law associative
+}

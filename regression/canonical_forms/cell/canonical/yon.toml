@@ -1,0 +1,8 @@
+[package]
+name = "c_cell"
+
+[world.Ledger]
+objects = ["X"]
+
+[runtime]
+backend = "memory"

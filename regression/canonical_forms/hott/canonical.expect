@@ -1,0 +1,4 @@
+status: accept
+exit: 42
+note: |
+  The runnable HoTT fragment: refl / pair / fst / snd (a Sigma intro with projections and a path witness).

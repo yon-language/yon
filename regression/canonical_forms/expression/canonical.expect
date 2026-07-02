@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: expr expr_atom
+note: |
+  Expressions: calls, field access, method chains, and the pipe a |> f(args).

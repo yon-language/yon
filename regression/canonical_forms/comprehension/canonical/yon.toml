@@ -1,0 +1,9 @@
+[package]
+name = "comprehension_carrier"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"
