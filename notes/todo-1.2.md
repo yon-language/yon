@@ -235,3 +235,40 @@ there) is the 1.2 work above.
 - **Weak example coverage on `geom_morphism` (0), `reduction` (1), `topology` (1).**
 - **Runtime build platform-specific + mmgroup `.o` provenance** (portability).
 
+
+## Space death-watch (1.2): dynamic state on top of the static graph (1.1)
+
+**1.1 closed (2026-07-03): `drop X` end to end.** The explicit, compile-time
+reclaim is done: analysis decides (`downstream_arcs`, the shared predicate),
+the check verifies (existence from the manifest census, then reachability; exit-3
+with the offending site), and the runtime honors (`yon_xheap_drop` = madvise the
+Space heap's live arena, the whole-heap twin of `strip_trim`, at the drop point).
+The runtime reads a decision already made; it does not make one. Double pin on the
+`yon_xheap_drops()` counter, negative control seen failing. This 1.2 death-watch
+is the AUTOMATIC counterpart (reclaim without an explicit `drop`), built on the
+same graph and the same predicate; do NOT fold refcounts or runtime EOF into the
+1.1 pass.
+
+The 1.1 static Space communication graph (`frontend/space_graph.ml`, driver flag
+`yonc <dir> --dump-space-graph`, gate `regression/test_space_graph.py`) is the
+foundation this feature stands on. The split is the same one the whole language
+keeps: the type is static, the value is dynamic; here the GRAPH is static, the
+STATE of the graph is dynamic.
+
+- **Static (done, 1.1):** which arcs can exist. The graph is a projection of the
+  source: an arc `A -> B` is a declared `wire to space B` or `import ... from B`
+  in code that lives in Space `A` (the entry root is node `""`). The in/out
+  degree sums both families, so an isolated Space (in = out = 0) is reclaimable
+  at end of work with NO runtime watch, deduced by the compiler. This is the
+  perimeter inside which death can happen.
+- **Dynamic (1.2, this item):** WHEN an arc closes (a wire reaches EOF), WHEN a
+  Space is terminable now. The runtime observes closure: a live subscription
+  count per channel, observable EOF, `kill(pid,0)`/`ESRCH` liveness, and a
+  reclaim (madvise/unmap the Space heap) once every incoming arc of a Space has
+  closed. The compiler guarantees "this Space communicates only with these"; the
+  runtime observes when those arcs go quiet.
+
+This separation is what makes the death-watch SOUND rather than heuristic: the
+runtime never has to guess the topology, it reads it off the static graph and
+only watches the closure of arcs the compiler already proved finite and named.
+Depends on the 1.1 pass; do NOT fold refcounts or runtime EOF into that pass.

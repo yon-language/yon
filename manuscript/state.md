@@ -9,6 +9,170 @@
 
 ## Locked decisions (log)
 
+- **2026-07-03 — The AUTOMATIC reclaim at last-use (the mechanism): reclaim without an annotation, decided at compile time.**
+  The other half of the reclaim system (`drop X` is its checked, declared assertion). The DUAL of check_drops: instead
+  of verifying a user's drop point, FIND each Space's last use and insert the reclaim there. `Space_liveness.auto_reclaim_
+  program` runs on the entry's `main` (the single root under which all execution lives), so main's downstream arc-set
+  (WITH transitive arcs, now complete after the audit) is the whole-program remaining use of a Space: the first top-level
+  position where X leaves `downstream_arcs` is its GLOBAL last use, and an auto reclaim there is sound -- no read of X can
+  follow (a read would be an arc, and the arc set is complete). It only inserts SDrop nodes, so the whole drop pipeline
+  (desugar -> `__drop_space_X` -> `yon_rt_drop_space`) handles them verbatim. Skips: Spaces dropped explicitly (the user's
+  drop covers them), Spaces live to the end (process exit frees them).
+  · REACLAIMABLE SET = OWNED (directory-backed) Spaces, not every declared Space. Caught by meteo_sub failing to compile:
+    a subscriber's `wire to space Meteo` makes Meteo a declared arc, but Meteo is REMOTE (no directory, no `yon_space_str_
+    Meteo` global, no local heap the compiler owns). Referencing its missing global failed emission. Fix: auto_reclaim
+    targets `Package_layout.space_decls` names (the directories this program owns). Remote receive-views are left to the
+    owner + process exit (a later precision gain). The existence check for explicit `drop` still uses the full census.
+  · SOUNDNESS VALIDATED BY THE WHOLE CORPUS: with auto-reclaim ON, every program in the suite still produces correct
+    output/exit. A premature reclaim (a Space freed while still read -> madvise zeros the pages -> wrong data) would flip
+    a result and a test would fail. Green = the arc audit was complete enough. This is why the audit had to come first.
+  · Runtime logs (`yon_xheap_drops`) gated behind `YON_DEBUG_DROPS` so the now-ubiquitous reclaim is silent by default.
+  · PINS: end-to-end mechanism (`test_automatic_reclaim_without_explicit_drop`: main uses D then unrelated work, no `drop`
+    written -> binary reports xheap_drops=1; negative control neuters auto_reclaim_main_body -> counter 0 -> red, SEEN)
+    plus an analysis pin in the oracle (auto_reclaim_main_body inserts SDrop(A) at A's last use). Whole suite green.
+  · The reclaim system is now COMPLETE: analysis decides (downstream_arcs, all arc families), the automatic mechanism
+    reclaims every owned Space at its last use, and `drop X` is the checked assertion of the same criterion. Compile-time
+    GC: automatic and safe like a GC, deterministic like C, declarable-and-verified like a type annotation.
+
+- **2026-07-03 — Arc-completeness audit: `downstream_arcs` now counts EVERY way a named Space's heap is touched.**
+  Precondition for the automatic reclaim (which fires everywhere, so it needs a complete arc set to be precise) and a
+  correctness hardening for `drop`. An exhaustive audit (Explore agent) enumerated every surface/Core operation that
+  resolves a named Space to a heap. Result: two families were already counted (wire `EWireTo`, import `TopImportFrom`
+  + symbol use); FOUR were missed, now closed in `space_liveness.ml`, each with an oracle pin + negative control SEEN
+  failing (restored byte-identical):
+  · `apply_move(a) in S` and `f(a) in S` (morph): the parser mangles the Space into the call name
+    (`__apply_move_in_<S>`, `__morph_in_<S>__<f>`). `space_of_mangled_call` extracts it. Surface-visible, no threading.
+  · `new P { }` at a topos-`at S`: the tp_at_space rewrite (post-check_drops) turns `SNew(P)` into a write to P's Space.
+    check_drops sees `SNew(P)`; names_expr/names_stmt now emit the place name, resolved via a place->space census merged
+    into imap. `~place_space` threaded through `transitive_arcs`/`check_drops`; the driver builds it from the per-file
+    place accumulation (place P in dir D/ -> Space D). DRIVER end-to-end verified: `drop D; new DP {}` -> DROP ERROR.
+  · `w.awaits(producer)`: the Space rides the wire handle's type; tycheck records it in the global `awaits_site_table`
+    keyed by the awaits call's (line, col). `awaits_arc_of` queries it by the same loc names_expr collects. No threading
+    (global table, populated by tycheck before check_drops). Usually subsumed by the co-located wire; the distinct gap is
+    `wire X; drop X; w.awaits()` (wire upstream, awaits downstream).
+  · Correctly EXCLUDED (not arcs): `Space__set/get`/`__space_update_here` (default/current heap, not a named Space) and
+    `topos at S` / `geom_morphism` DECLARATIONS (metadata; the arc arises when a morph/move is APPLIED, i.e. the mangled
+    forms above). The `SNewIn` "retired" comment in surface_ast.ml is STALE: the rewrite still produces it.
+  Threading kept minimal: the place->space map is merged into imap (both are "name -> Space it touches"), so only
+  `transitive_arcs` and `check_drops` gained `~place_space`; `downstream_arcs`/`region_arc_sites` are unchanged (they use
+  the merged imap). Whole affected suite green. NEXT: the automatic reclaim, on a now-complete and validated arc set.
+
+- **2026-07-03 — The `drop X` construct: parser + check + driver, wired end to end (emission is a placeholder for now).**
+  Order followed: grep (is `drop` free?) then parser then check then driver. `drop`/`DROP` was a stream-policy modifier
+  removed in v1.1 and free in the corpus, so it was reintroduced clean. Additive frontend, no runtime touched.
+  · SYNTAX: `drop X` (keyword `drop`, no explicit `Space` token, X is a Space name). Inline production in `stmt` (NOT a
+    named rule, so the canonical-forms completeness gate is not tripped). New node `Surface_ast.SDrop of string * location`.
+    Adding it made every exhaustive stmt match non-exhaustive: the anti-fake-green net listed all 13 sites across 5 files
+    (space_graph, space_liveness x3, tok_dump, desugar x4, tycheck x3, module_prefix x3). A drop is not an arc nor a value
+    use, so it contributes nothing everywhere except the checker; desugar lowers it to a unit placeholder (the real reclaim
+    is the emission step, still to do).
+  · CHECK: `Space_liveness.check_drops ~declared prog` finds every `drop X` (drops_in_stmts) and validates TWO obligations
+    in order (domain before value): (1) EXISTENCE, X must be a declared Space (`declared` = the manifest census, keys of
+    `space_world`, source of truth including isolated declared Spaces that appear in no arc); (2) SAFETY, no arc toward X
+    is reachable downstream. The order matters for the message: an undeclared X is "unknown Space X" (a typo like
+    `drop Acount` has no arc toward the misspelling, so reachability alone would wave it through), and only a declared X
+    gets the "still reachable downstream" arc diagnostic. This closed the SECOND HALF of the same arc-blindness hole the
+    lowering bug exposed: the check reasoned about arcs, not node existence. `drop_error` carries `de_fault`
+    (Unknown_space | Still_live loc), so the diagnostic names the right fault. REFACTOR: `downstream_arc_sites` (carries a
+    representative `(Space, loc)` per arc) is the core, `downstream_arcs` its name-projection, so the pinned predicate is
+    preserved as a SET and the gate re-verified it green. THREE faces now pinned with negative controls: reachability,
+    loop-rule, existence (`drop Zeta` undeclared must be unknown-Space; blind the existence check -> the pin goes
+    green-wrong).
+  · DRIVER: hooked in `yoner_emit_mlir.ml` on the merged `prog`, as an exit-3 semantic error. CRITICAL PLACEMENT: it runs
+    BEFORE `Module_prefix.lower_cross_space` (which rewrites cross-Space calls into remote invokes and consumes the import
+    decls). Run it after and the import/transitive arcs vanish and every drop looks legal. This bug was caught by a real
+    project fixture, not the oracle: the oracle's `downstream_selftest` had only pinned WIRE and CALL arcs, never IMPORT
+    arcs. Closed the gap by adding an `import_illegal`/`import_legal` shape to the oracle (negative control confirms it
+    bites) and by placing the driver check pre-lowering with a comment that pins the ordering.
+  · TESTS: `drop_construct_selftest` in test_space_graph.exe (in-process parser->check on real `drop` nodes, one misplaced
+    drop flagged WITH its downstream site, one well-placed drop accepted; negative control: blinding check_drops turns it
+    red). `regression/test_drop_check.py` (driver integration: a legal project compiles, an illegal import-arc drop and an
+    illegal transitive drop each fail with DROP ERROR; the two illegal cases go red if the check is ever moved past
+    lower_cross_space). Triangle closed: `regression/keyword_coverage/c_drop.yon` (leg 2, emits MLIR) + a `#### drop`
+    entry in `website/docs/book/21-keywords.md` (leg 1) + regenerated SYNTAX-TRIANGLE.md. The coverage example is a
+    PROJECT (`regression/keyword_coverage/drop_reclaim`, declares Space D, legal `drop D`): after the existence check a
+    legal `drop` needs a declared Space, so a single-file example cannot exist. test_drop_check.py points at the same
+    fixture (dual use) and adds the unknown-Space case. Whole affected suite green.
+  · EMISSION (2026-07-03, DONE): the desugar unit placeholder is replaced by the real reclaim. Model R1 (Antonio's call):
+    reclaim = hand the Space heap's live arena [0, arena_used) back to the OS via madvise(MADV_DONTNEED), page-aligned
+    inward -- the WHOLE-HEAP TWIN of the existing yon_xheap_strip_trim (a proven primitive scaled from a strip's dead
+    tail to the entire arena, NOT a new mechanism). Two safety nets: the virtual mapping stays valid (no dangling, a stray
+    read returns zeros) AND the upstream check forbids the stray read. R2 (munmap/destroy) deferred: it would trade the
+    first net for virtual space we do not need in 1.1. Serve-loop early-termination NOT touched: the RPC idle-death policy
+    already handles process exit; 1.1 reclaims the heap only, not the process.
+    · runtime: `yon_xheap_drop(h)` (void) in xleech2_heap.c (next to strip_trim, same page-alignment; increments the
+      counter `g_xheap_drops` on every drop of a real heap; NULL is a no-op; arena_used is NOT rewound -- RAM reclaim, not
+      a logical reset); `yon_xheap_drops()` exposes the counter; `yon_rt_drop_space(double heap_id)` in yon_rt.c (heap_id
+      crosses as f64; reads the per-Space heap DIRECTLY from g_spaces[id] -- NOT via yon_rt_heap_for, whose out-of-range
+      fallback is the shared global heap that must never be dropped; safe no-op for an out-of-range id or a NULL heap
+      under L1_SHARED; returns heap_id as an inert f64). An atexit hook prints `[YON-RT] xheap_drops=N` when N>0, so the
+      authoritative counter is readable from the binary.
+    · emission: `drop X` desugars to `C.Var "__drop_space_X"` (an effectful term the sequence keeps); emit_mlir lowers it,
+      via the same yon_space_str_<X> global the space bootstrap emits (the ABI-correct source of a `const char*`, unlike
+      yon_rt_string_lit which mints an f64 interned handle), to `yon_rt_drop_space(sitofp(yon_rt_lookup_space("X")))` in
+      the f64 ABI. Needed arms in BOTH emit_term AND infer_mlir_ty (the inference pass ran first and failed "unknown
+      variable" until the second arm was added -- the anti-fake-green net again).
+    · TWO pins on one observable (the counter), distinct failures: (a) emission wired through AND (b) the primitive ran --
+      test_drop_check compiles+RUNS a standalone `drop D` and asserts the binary prints `xheap_drops=1` (the counter
+      increments INSIDE yon_xheap_drop, past the madvise, so ==1 proves both the call arrived and the reclaim executed).
+      Negative control SEEN failing: replace the emit arm with a placeholder constant -> no drop -> counter absent -> red,
+      then restored byte-identical. Plus test_unit_drop_reclaim.c (runtime C oracle): a multi-page drop increments the
+      counter and preserves arena_used, NULL/invalid-id are no-ops, drop_space returns the heap_id f64.
+    · NEXT: the automatic reclaim at last-use (the mechanism), consuming the same downstream_arcs. The `drop` construct is
+      now complete end to end: analysis decides, check verifies (existence then reachability), emission honors. The
+      runtime reads a decision already made; it does not make one.
+
+- **2026-07-02 — Space RECLAIM analysis + pin gate (the reclaim is compile-time decided, `drop` is a checked assertion).**
+  DESIGN (Antonio, settled): Space death is COMPUTED from the text, not observed at runtime. No refcount, no
+  subscription-count, no liveness-poll. Enabled by copy geometry (wire flattens bytes, import returns f64, the handle
+  never crosses), so extracted values are copies decoupled from X's heap, so Space-liveness is PURE arc-reachability,
+  zero data-flow. Two ROLES from ONE analysis: (a) automatic reclaim at last-use = the mechanism (nothing leaks);
+  (b) `drop X` = an explicit CHECKED assertion that appeals to the SAME criterion (coincides with the auto point, can
+  never fire earlier because the check forbids a downstream arc). `drop` is sugar-with-teeth (documents intent, catches
+  your misconception with the exact site), NOT a second mechanism. No unsafe/early-drop (that would reintroduce the
+  heuristic). The world-class claim: reclaim automatic-and-safe like a GC, deterministic like C, declarable-and-verified
+  like a type annotation, all from one static check on the graph.
+  · `frontend/space_liveness.ml` (additive, build green): import_map (symbol->Space; LIVENESS precision: an import arc
+    fires at the symbol USE, not the `import` line), transitive_arcs (per function, wire ∪ import-call, closed over the
+    call graph, recursion-guarded), and `downstream_arcs ~imap ~ftab ~tarcs body target` (the SHARED predicate).
+  · LOOP RULE (Option A, Antonio's call, sound not heuristic): if a loop encloses the point, the WHOLE loop body is
+    downstream (the back-edge re-runs it), so no legal drop inside a loop that touches X; first legal point is after the
+    join. Conservative (post-dominator) but never unsound. Nesting via enclosing loops; scope is sequential (not a loop);
+    inter-procedural via a downstream call whose callee has X in transitive_arcs.
+  · GATE FIRST (before the construct, so the property is pinned before anything builds on it, and tested in isolation):
+    the pins live in `frontend/test_space_graph.exe`'s no-arg self-test (test_* oracle family, run by test_ocaml_oracle),
+    self-describing (a `*_illegal` function's `be drop_X holds ..` point must be rejected, `*_legal` accepted). FOUR pins:
+    back-edge, sequential, transitive (level-2 hookup inside level-3), scope (seen-through). NEGATIVE CONTROL proved each
+    BITES: M1 break loop-rule -> loop_illegal fails; M2 break sequential-rest -> seq/scope/trans fail; M3 break call-hookup
+    -> trans_illegal (isolated); M4 break scope-recursion -> scope_illegal (isolated). No pin passes unseen-to-fail.
+  · NEXT (order fixed): (1) the `drop X` construct (parser SDrop + tycheck check consuming downstream_arcs + reclaim
+    emission), (2) the automatic reclaim at last-use. Both consume a now-blinded downstream_arcs.
+
+- **2026-07-02 — STATIC Space communication graph (compile-time, foundation for the 1.2 death-watch).**
+  Additive frontend pass, zero runtime/emit changes. `frontend/space_graph.ml`: `type edge = { src; dst;
+  kind : Wire | Import; loc }`; `edges_of_file ~src_space` (one pass, both families); `build`/`isolated`/
+  `in_degree`/`out_degree`/`reachable_from`/`unreachable_from_entry`/`find_cycle`/`dump`.
+  · Nodes = Spaces (a Space is a directory); the entry root is node "". Edges = two DECLARED static families:
+    `wire to space X` (EWireTo, surface_ast:146) UNION `import mod::sym from X` (TopImportFrom, surface_ast:696,
+    reused via Manifest.import_targets). The wire∪import decision is SOUNDNESS, not scope: a Space reached only by
+    an import must count as reached, so in/out-degree SUMS both families (kind is only for the dump). Isolated
+    (in=out=0) = static-reclaimable; a sink (in>0,out=0) needs death-watch (dynamic, 1.2).
+  · Hook: `yoner_emit_mlir.ml` per-file parse loop (:194, where sp = ul_space and decls = synth @ p are in
+    scope). CRITICAL: a form-C `fun main` inside a place is lifted to Parser_state (parser.mly:655); the driver
+    drains it per file, so edges of a place-body arrow inherit the file's Space. The extractor walks expr/stmt/
+    top_decl EXHAUSTIVELY (no wildcard) so a new constructor fails the build rather than silently dropping a wire
+    (the exhaustive net caught RcLet + FoLaw; the real-fixture net caught the Parser_state-drain gap).
+  · Artifact: `yonc <dir> --dump-space-graph` (frontend flag, dumps + exits before emit; yonc passthrough added).
+  · Gate: `regression/test_space_graph.py` (5 tests) on `regression/space_graph/topology/` (entry->A, A<->B cycle,
+    C isolated, D import-only). THE pin: `test_import_only_space_is_not_isolated` (D reached only by an import must
+    NOT be isolated); proven to BITE via a negative-control mutation (degree filtered to Wire -> the test fails).
+    `test_space_graph.exe` doubles as a no-arg self-test oracle in the test_* family.
+  · Honest boundary (step 6): EWireTo/import always name a static IDENT, so there is no syntactic dynamic-target;
+    the imperative `Wire.make_shm(...)` builtins carry runtime args, name no Space, and are out of the static
+    graph's scope; a named-but-undeclared target is listed under "unresolved targets", never invented away.
+  · Note added to notes/todo-1.2.md: the compiler guarantees the topology, the 1.2 runtime observes the closure.
+    All green (graph gates + projects + surface fuzz + oracle + source<->binary diff). NOT committed (Antonio does).
+
 - **2026-07-02 — CANONICAL FORMS as executable spec (the corpus IS the spec, markdown is a projection).**
   Antonio's architecture: truth lives in runnable `.yon`, not markdown. `regression/canonical_forms/<construct>/`
   holds `canonical.yon|canonical/` (+ `.expect`) and `dev_*.yon|dev_*/` (+ `.expect`). Each `.expect` carries
@@ -38,9 +202,21 @@
   · ATOMIC MIGRATION done: retired the hand-authored `regression/CANONICAL-FORMS.md` + Leg 3 of test_syntax_triangle.py.
     The triangle now owns legs 1/2/4 (keyword-doc, coverage, book fidelity) + a KEYWORD_ALLOWLIST constant; the
     production leg is test_canonical_forms.py. Both `--check`-clean. Whole suite 341+ green, collects 1065.
-  · BUG FOUND (flagged via spawn_task): `x.f = e` (place-field mutation) is NOT "rejected by design" as the syntax
-    reference claims -- it CRASHES the compiler (`Fatal error: exception ... '__space_update_here'`). Real uncaught
-    exception + doc-vs-reality divergence. Not used as a deviation fixture (a crash is neither accept nor reject_clean).
+  · PLACE-MUTATION FAMILY, two bugs found + fixed (2026-07-02), grounded in content-addressing (Antonio: a place's
+    address IS its bytes, so in-place field mutation is semantically impossible; the only coherent "mutation" is the
+    handle swap `p = new P{...}`):
+    (1) `x.f = e` (in-place field mutation) used to CRASH (`Fatal error ... '__space_update_here'`). Rightly rejected:
+        reject `LField` lvalues in tycheck.ml `type_of_lvalue` (covers `x.f = e` and `x.f holds e`), "place sections are
+        immutable in 1.0". `x = e` cell reassign unaffected. syntax-reference status -> `✗ rejected` (new legend row).
+        Pinned by canonical_forms/assignment/dev_field_mutation (reject_clean).
+    (2) `p = new P{...}` then `p.x` (rebind + project) also CRASHED (`field projection 'x' on a non-section`). This is
+        the COHERENT mutation and had to WORK (Option A). Cause: the `=` promotion turns p into a scalar Space cell;
+        the section handle survived as f64 bits but the section TYPE was lost, so `Space__get(p)` typed f64 and `p.x`
+        crashed. Fix (emit_mlir.ml): `g_cell_elem` table records a promoted cell's element section type at its
+        `Space__make` binding; `Space__get` on such a cell reconstructs the section from the f64 handle (fptosi +
+        topos.xcoord_to_section, the existing DTO-wormhole inverse coercion). Places are now first-class through the
+        mutable path (rebind + project, incl. in a loop). Pinned by canonical_forms/assignment/place_rebind (accept 42).
+    Both: surface fuzzer + pipeline + projects + source<->binary diff green (no miscompile, kernel agrees).
   · Scratch driver that scaffolded the fixtures: scratchpad/build_canon.py (not committed; fixtures are the artifact).
 
 - **2026-07-02 — SYNTAX TRIANGLE gate shipped (lexer <-> corpus <-> book, one invariant).**

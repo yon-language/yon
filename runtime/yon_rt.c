@@ -89,6 +89,15 @@ static yon_xheap_t *heap_for(uint32_t heap_id) {
     return yon_rt_heap_for(heap_id);
 }
 
+/* atexit hook: report the drop counter. Gated behind YON_DEBUG_DROPS so the
+   automatic reclaim (which fires in nearly every program) stays silent by
+   default; the counter is the tests' observable when the flag is set. */
+static void yon_rt__report_drops(void) {
+    if (!getenv("YON_DEBUG_DROPS")) return;
+    unsigned long long n = (unsigned long long)yon_xheap_drops();
+    fprintf(stderr, "[YON-RT] xheap_drops=%llu\n", n);
+}
+
 void yon_rt_init(void) {
     if (g_initialized) return;
     /* Detect backend via env var. */
@@ -124,6 +133,12 @@ void yon_rt_init(void) {
     }
     g_n_spaces = 1;
     g_initialized = 1;
+
+    /* Expose the authoritative drop counter to the running binary: at exit, if
+     * any Space was dropped, print yon_xheap_drops(). This is what the drop
+     * gate reads (== the number of reclaims performed). Gated on > 0 so programs
+     * with no drop leave their output untouched. */
+    atexit(yon_rt__report_drops);
 
     {
         const char *bname =
@@ -208,6 +223,25 @@ uint32_t yon_rt_lookup_space(const char *name) {
 uint32_t yon_rt_space_count(void) {
     ensure_init();
     return g_n_spaces;
+}
+
+/* The runtime bridge for `drop X`: reclaim the Space's heap. heap_id arrives as
+ * an f64 (the universal IR type; the emitter passes yon_rt_lookup_space's result
+ * coerced to f64). The compiler emits this call only where check_drops has proven
+ * the Space dead downstream, so it executes a decision already made and carries
+ * no policy of its own: no refcount, no poll, no heuristic, just yon_xheap_drop
+ * at a statically fixed point. The per-Space heap is read directly from the
+ * registry (NOT via yon_rt_heap_for, whose out-of-range fallback is the shared
+ * global heap: that must never be dropped). A safe no-op for an out-of-range id
+ * or a Space with no private heap (L1_SHARED). Returns heap_id as an inert f64
+ * (the drop statement's value). */
+double yon_rt_drop_space(double heap_id) {
+    ensure_init();
+    uint32_t id = (uint32_t)heap_id;
+    if (id == YON_HEAP_ID_INVALID || id >= g_n_spaces) return heap_id;
+    yon_xheap_t *h = g_spaces[id].heap;           /* NULL under L1_SHARED */
+    yon_xheap_drop(h);                            /* no-op if NULL */
+    return heap_id;
 }
 
 /* ============================================================== */

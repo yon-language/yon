@@ -1332,6 +1332,12 @@ and desugar_stmt (s : S.stmt) : C.term =
          is established by the surrounding lambda. *)
       desugar_expr e
   | S.SAssignHolds (_lv, e, _) -> desugar_expr e
+  | S.SDrop (x, _) ->
+      (* drop X: reclaim Space X. The emitter recognizes the __drop_space_ prefix
+         and lowers this to yon_rt_drop_space(yon_rt_lookup_space("X")). X is a
+         declared Space (guaranteed upstream by Space_liveness.check_drops), so
+         the yon_space_str_<X> global the space bootstrap emits is present. *)
+      C.Var ("__drop_space_" ^ x)
   | S.SAssignBecomes (lv, e, _) ->
       (* "x.f = new_value" -> Space.update_here(id_of(x), x with f := new_value) *)
       let new_val = desugar_expr e in
@@ -2021,6 +2027,7 @@ and v1_cell_stmt cells st =
   | S.SForever (b, loc) -> S.SForever (rb b, loc)
   | S.SForEvery (k, x, e, b, loc) -> S.SForEvery (k, x, re e, rb b, loc)
   | S.SInSequence (x, e, b, loc) -> S.SInSequence (x, re e, rb b, loc)
+  | S.SDrop _ -> st
   | S.SRepeat (n, b, oth, loc) ->
       S.SRepeat (n, rb b, (match oth with None -> None | Some o -> Some (rb o)), loc)
 
@@ -2484,6 +2491,7 @@ let rec rewrite_stmt (m : (string * string) list) (s : S.stmt) : S.stmt =
       S.SIter (rewrite_expr m n_e, stmts body, loc)
   | S.SWhile (c_e, body, loc) ->
       S.SWhile (rewrite_expr m c_e, stmts body, loc)
+  | S.SDrop _ -> s
 
 let rewrite_top_decl (m : (string * string) list) (td : S.top_decl) : S.top_decl =
   match td with
@@ -3250,6 +3258,7 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
     | S.SForever (ss,_) | S.SProduce (ss,_) -> gos ss
     | S.SScope (_, ss, e, _) -> gos ss || go e
     | S.SForces (_, c, ss, _) -> cond_any pred c || gos ss
+    | S.SDrop _ -> false
   and stmts_any (pred : S.expr -> bool) (ss : S.stmt list) : bool =
     List.exists (stmt_any pred) ss
   in

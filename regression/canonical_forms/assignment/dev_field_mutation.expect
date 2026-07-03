@@ -1,0 +1,9 @@
+status: reject_clean
+exit: 1
+match: place sections are immutable
+note: |
+  Form `x.f = e`: mutating a place field. Place sections are immutable in 1.0;
+  mutation goes through Space cells (`x = e` on a `be`-bound local) or a fresh
+  `new`. Until 2026-07-02 this CRASHED the compiler (an uncaught exception in
+  emit_mlir, `__space_update_here` had no lowering); now it is rejected cleanly at
+  type-check. This fixture pins that it stays a clean rejection, never a crash again.

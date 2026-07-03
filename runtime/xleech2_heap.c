@@ -305,6 +305,36 @@ void yon_xheap_strip_trim(yon_xheap_t *h, uint32_t off,
     }
 }
 
+/* Number of drops performed (observability for the drop-emission gate). */
+static uint64_t g_xheap_drops = 0;
+
+uint64_t yon_xheap_drops(void) { return g_xheap_drops; }
+
+void yon_xheap_drop(yon_xheap_t *h) {
+    /* Whole-heap twin of yon_xheap_strip_trim, scaled from one strip's dead tail
+     * to the ENTIRE live arena [0, arena_used): used when a Space is dropped and
+     * its whole heap is provably dead (Space_liveness.check_drops). Hands the
+     * physical RAM back to the OS via madvise(MADV_DONTNEED); the virtual mapping
+     * and the struct header are left intact, so the heap stays addressable and no
+     * pointer dangles (a stray read returns zeros, which the compile-time
+     * downstream check already excludes). arena_used is NOT rewound: this is a
+     * RAM reclaim, not a logical reset. Same inward page alignment as strip_trim:
+     * start rounded up, end rounded down, so only whole pages that lie ENTIRELY
+     * inside the arena are handed back and the partial final page (live up to
+     * arena_used) is never touched. Counts every drop performed on a real heap;
+     * a NULL heap (no private per-Space heap, L1_SHARED) is a no-op. */
+    if (!h) return;
+    long pg = sysconf(_SC_PAGESIZE);
+    if (pg <= 0) return;
+    uintptr_t page    = (uintptr_t)pg;
+    uintptr_t base    = (uintptr_t)h->arena;
+    uintptr_t a_start = (base + page - 1u)        & ~(page - 1u);
+    uintptr_t a_end   = (base + h->arena_used)    & ~(page - 1u);
+    if (a_end > a_start)
+        madvise((void *)a_start, (size_t)(a_end - a_start), MADV_DONTNEED);
+    g_xheap_drops++;
+}
+
 /* ============================================================== */
 /* Content index operations                                        */
 /* ============================================================== */

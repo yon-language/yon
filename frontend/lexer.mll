@@ -180,6 +180,7 @@
        * General while: while cond do { body } may not terminate. *)
       "iter", ITER_KW;
       "do", DO_KW;
+      "drop", DROP;
       "while", WHILE_KW;
       
       (* Statement keywords *)

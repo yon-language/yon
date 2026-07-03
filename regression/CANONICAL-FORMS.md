@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **39**
 - productions REDUCED by a fixture (Menhir-verified): **92 / 92** surface (+2 structural allowlisted)
-- deviations enforced today: **19**
+- deviations enforced today: **20**
 - deviations registered as 1.2 debt (`enforce_1_2`): **1**
 
 | construct | fixture | status | exit | match |
@@ -17,7 +17,9 @@ from them; the `.yon` files are the specification, not this text.
 | algebra | `canonical` | accept | 3 | — |
 | algebra | `standalone_op` | accept | 42 | — |
 | assignment | `canonical` | accept | 42 | — |
+| assignment | `dev_field_mutation` | reject_clean | 1 | `place sections are immutable` |
 | assignment | `dev_unbound` | reject_clean | 1 | `unknown identifier` |
+| assignment | `place_rebind` | accept | 42 | — |
 | binding | `canonical` | accept | 42 | — |
 | binding | `dev_let` | reject_clean | 1 | `let` |
 | binding | `dev_rebind` | reject_clean | 1 | `already bound in this scope` |

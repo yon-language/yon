@@ -1,0 +1,9 @@
+[package]
+name = "space_graph_topology"
+
+[runtime]
+backend = "separate"
+
+[world.W]
+objects = ["X"]
+spaces  = ["A", "B", "C", "D"]

@@ -590,6 +590,18 @@ module SS = Set.Make (String)
  * llvm.mlir.addressof + a call to @yon_rt_string_lit (runtime interning on
  * the content-addressed heap: idempotent, same literal -> same slot). *)
 let g_strlits : (string, string) Hashtbl.t = Hashtbl.create 16
+
+(* A place-typed local reassigned with `=` is promoted to a Space cell. The cell
+   stores the section HANDLE as an f64 (the same wire convention sections use to
+   cross an f64 boundary), but the section TYPE would be lost, so a later `p.x`
+   would try to project a field off an f64 and crash emit. This table remembers,
+   per promoted cell variable, the element section type recorded at its
+   `Space__make` binding; `Space__get` on such a cell reconstructs a section from
+   the f64 handle (fptosi + xcoord_to_section, the existing inverse coercion).
+   Scalar cells never enter the table. Reset per function in emit_function. *)
+let g_cell_elem : (string, string) Hashtbl.t = Hashtbl.create 16
+let is_section_ty_str s =
+  String.length s >= 15 && String.sub s 0 15 = "!topos.section<"
 let g_strlit_order : string list ref = ref []
 
 let rec collect_string_literals (t : C.term) : unit =
@@ -840,6 +852,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.Var "__spawn_index" -> "f64"
   | C.Var x ->
       if String.length x > 6 && String.sub x 0 6 = "__num_" then "f64"
+      else if String.length x > 13 && String.sub x 0 13 = "__drop_space_" then "f64"
       else if x = "__bool_true" || x = "__bool_false" then "i1"
       else if x = "__heyt_present" || x = "__heyt_absent"
               || x = "__heyt_unknown" then "!topos.proposition"
@@ -992,6 +1005,10 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "__stream_from_list", _) -> "f64"
   | C.App (C.App (C.Var "__stream_map", _), _) -> "f64"
   | C.App (C.App (C.Var "__stream_filter", _), _) -> "f64"
+  (* A read of a place-typed promoted cell: the section handle, typed as the
+     cell's element section (recorded at its Space__make binding). *)
+  | C.App (C.Var "Space__get", C.Var p) when Hashtbl.mem g_cell_elem p ->
+      Hashtbl.find g_cell_elem p
   (* Field projection, carried as App(Var "__field_X", obj). *)
   | C.App (C.Var fvar, obj) when extract_field_name fvar <> None ->
       let fname = (match extract_field_name fvar with Some s -> s | None -> assert false) in
@@ -1068,6 +1085,11 @@ let rec infer_mlir_ty (e : emitter)
                          x)
        | _ ->
            let tv = infer_mlir_ty e env funcs value in
+           (match value with
+            | C.App (C.Var "Space__make", e0) ->
+                let ety = infer_mlir_ty e env funcs e0 in
+                if is_section_ty_str ety then Hashtbl.replace g_cell_elem x ety
+            | _ -> ());
            let env' = Env.add x ("(unused)", tv) env in
            infer_mlir_ty e env' funcs rest)
   | C.App _ as app ->
@@ -1475,6 +1497,28 @@ let rec emit_term (e : emitter)
           | None, None -> nstr ^ ".0"
       in
       emit_line e (Printf.sprintf "%s = arith.constant %s : f64" v formatted);
+      (v, "f64")
+  | C.Var x when String.length x > 13 && String.sub x 0 13 = "__drop_space_" ->
+      (* drop <Space>: reclaim the Space's heap. Resolve the name to a heap_id via
+         lookup_space over the same yon_space_str_<name> global the space bootstrap
+         registered (present because check_drops guarantees the Space is declared;
+         this is the ABI-correct source of a `const char*`, unlike yon_rt_string_lit
+         which mints an f64 interned handle). lookup_space returns i32; coerce to
+         f64 (the IR's universal type) and hand it to yon_rt_drop_space, which
+         returns the heap_id as an inert f64 -- the drop statement's value. This
+         runs a decision already made at compile time. *)
+      let sp = String.sub x 13 (String.length x - 13) in
+      let v_ptr = fresh_ssa e in
+      emit_line e (Printf.sprintf
+                     "%s = llvm.mlir.addressof @yon_space_str_%s : !llvm.ptr" v_ptr sp);
+      let v_id = fresh_ssa e in
+      emit_line e (Printf.sprintf
+                     "%s = func.call @yon_rt_lookup_space(%s) : (!llvm.ptr) -> i32" v_id v_ptr);
+      let v_idf = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.sitofp %s : i32 to f64" v_idf v_id);
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf
+                     "%s = func.call @yon_rt_drop_space(%s) : (f64) -> f64" v v_idf);
       (v, "f64")
   | C.Var "__bool_true" ->
       let v = fresh_ssa e in
@@ -2297,6 +2341,15 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_observe(%s, %s, %s) : (f64, f64, f64) -> f64" v vs vk vd);
       (v, "f64")
+  | C.App (C.Var "Space__get", (C.Var p as cellvar)) when Hashtbl.mem g_cell_elem p ->
+      (* Reading a place-typed promoted cell: load the f64 handle, then rebuild the
+         section from it so a downstream `p.x` projects a real place, not an f64. *)
+      let sec_ty = Hashtbl.find g_cell_elem p in
+      let (v_cell, _) = emit_term e env funcs cellvar in
+      let vf = fresh_ssa e in
+      emit_line e (Printf.sprintf
+                     "%s = func.call @yon_rt_space_get(%s) : (f64) -> f64" vf v_cell);
+      (coerce_to_param e vf "f64" sec_ty, sec_ty)
   | C.App (C.Var fvar, obj) when extract_field_name fvar <> None ->
       let fname = (match extract_field_name fvar with
                    | Some s -> s | None -> assert false) in
@@ -3881,6 +3934,11 @@ let rec emit_term (e : emitter)
                 emit_term e env' funcs rest
             | _ ->
                 let (vv, tv) = emit_term e env funcs value in
+                (match value with
+                 | C.App (C.Var "Space__make", e0) ->
+                     let ety = infer_mlir_ty e env funcs e0 in
+                     if is_section_ty_str ety then Hashtbl.replace g_cell_elem x ety
+                 | _ -> ());
                 let env' = Env.add x (vv, tv) env in
                 emit_term e env' funcs rest))
   | C.App _ as app ->
@@ -5058,6 +5116,7 @@ let coerce_return (e : emitter) (v : string) (v_ty : string)
 
 let emit_function (e : emitter) (funcs : (string * func_sig) list)
     (fs : func_sig) : unit =
+  Hashtbl.reset g_cell_elem;
   let param_strs = List.map (fun (n, t) ->
     Printf.sprintf "%%arg_%s: %s" n (core_ty_to_mlir_simple t)
   ) fs.fn_params in
@@ -6188,6 +6247,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
     emit_line e "func.func private @yon_rt_register_space(!llvm.ptr) -> i32";
     emit_line e "func.func private @yon_rt_register_space_with_fold(!llvm.ptr, !llvm.ptr) -> i32";
     emit_line e "func.func private @yon_rt_lookup_space(!llvm.ptr) -> i32";
+    emit_line e "func.func private @yon_rt_drop_space(f64) -> f64";
     emit_line e "func.func private @yon_rt_begin_cross_space_op(!llvm.ptr, i32) -> i32";
     emit_line e "func.func private @yon_rt_end_cross_space_op(i32) -> ()";
     emit_space_strings e dr.spaces;

@@ -149,6 +149,17 @@ void *yon_xheap_strip_at(yon_xheap_t *h, uint32_t off);
 void yon_xheap_strip_trim(yon_xheap_t *h, uint32_t off,
                           uint32_t live_bytes, uint32_t total_bytes);
 
+/* Whole-heap twin of yon_xheap_strip_trim: hand the physical RAM of the live
+ * arena [0, arena_used) back to the OS (madvise MADV_DONTNEED), page-aligned
+ * inward. Used to reclaim a dropped Space whose heap is provably dead. The
+ * virtual mapping stays valid (no dangling); arena_used is not rewound. A NULL
+ * heap is a no-op. Counts each drop performed (see yon_xheap_drops). */
+void yon_xheap_drop(yon_xheap_t *h);
+
+/* Number of yon_xheap_drop calls performed on a real heap. Observable proof, for
+ * the drop-emission gate, that a compiled `drop X` reached the reclaim. */
+uint64_t yon_xheap_drops(void);
+
 /* ============================================================== */
 /* Basic operations                                                */
 /* ============================================================== */

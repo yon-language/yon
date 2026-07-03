@@ -64,6 +64,9 @@ C_UNIT_TESTS = [
     ("vec",           "test_unit_vec.c",          b"VEC: PASS",           True),
     ("merkle",        "test_unit_merkle.c",       b"MERKLE: PASS",        True),
     ("bits",          "test_unit_bits.c",         b"BITS: PASS",          True),
+    # The Space-reclaim primitive behind the `drop X` construct: reclaim_arena
+    # (whole-heap madvise, page-aligned) and yon_rt_drop_space (resolve + count).
+    ("drop_reclaim",  "test_unit_drop_reclaim.c", b"DROP_RECLAIM: PASS",  True),
 ]
 
 
