@@ -9,8 +9,8 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `regression/CANONICAL-FORMS.md`. Regenerate this file with
 `python regression/test_syntax_triangle.py`.
 
-- lexer keywords: **117**
-- corpus files: **301**
+- lexer keywords: **118**
+- corpus files: **304**
 - CodeWindows: **25**  (project **13**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **32**
 - allowlisted reserved/kernel tokens: **5**
@@ -27,7 +27,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `as` | `AS` | 2 | yes | exercised |
 | `at` | `AT` | 2 | yes | exercised |
 | `backward` | `BACKWARD` | 1 | yes | exercised |
-| `be` | `LET` | 356 | yes | exercised |
+| `be` | `LET` | 357 | yes | exercised |
 | `bi` | `BI` | 1 | yes | exercised |
 | `by` | `BY` | 6 | yes | exercised |
 | `cell` | `CELL` | 1 | yes | exercised |
@@ -35,6 +35,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `compose` | `COMPOSE` | 3 | yes | exercised |
 | `converts` | `CONVERTS` | 1 | yes | exercised |
 | `do` | `DO_KW` | 6 | yes | exercised |
+| `drop` | `DROP` | 1 | yes | exercised |
 | `each` | `EACH` | 1 | yes | exercised |
 | `effects` | `EFFECTS` | 4 | yes | exercised |
 | `el_match` | `EL_MATCH` | 1 | yes | exercised |
@@ -49,9 +50,9 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `forces` | `FORCES` | 1 | yes | exercised |
 | `forever` | `FOREVER` | 1 | yes | exercised |
 | `forward` | `FORWARD` | 2 | yes | exercised |
-| `from` | `FROM` | 35 | yes | exercised |
+| `from` | `FROM` | 36 | yes | exercised |
 | `fst` | `FST` | 6 | yes | exercised |
-| `fun` | `FUN` | 289 | yes | exercised |
+| `fun` | `FUN` | 291 | yes | exercised |
 | `functor` | `FUNCTOR` | 9 | yes | exercised |
 | `functorial` | `FUNCTORIAL` | 1 | yes | exercised |
 | `geomorph` | `GEOM_MORPHISM` | 5 | yes | exercised |
@@ -60,9 +61,9 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
 | `hit` | `HIT_KW` | 7 | yes | exercised |
 | `hit_elim` | `HIT_ELIM` | 7 | yes | exercised |
-| `holds` | `HOLDS` | 356 | yes | exercised |
+| `holds` | `HOLDS` | 357 | yes | exercised |
 | `if` | `IF_KW` | 31 | yes | exercised |
-| `import` | `IMPORT` | 10 | yes | exercised |
+| `import` | `IMPORT` | 11 | yes | exercised |
 | `in` | `IN` | 8 | yes | exercised |
 | `ind_path` | `IND_PATH` | 2 | yes | exercised |
 | `internal` | `INTERNAL` | 2 | yes | exercised |
@@ -91,7 +92,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `pair` | `PAIR` | 7 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
 | `partial` | `PARTIAL` | 1 | yes | exercised |
-| `place` | `PLACE` | 138 | yes | exercised |
+| `place` | `PLACE` | 140 | yes | exercised |
 | `plam` | `PLAM` | 14 | yes | exercised |
 | `present` | `PRESENT` | 2 | yes | exercised |
 | `produce` | `PRODUCE` | 15 | yes | exercised |
@@ -107,7 +108,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `repeat` | `REPEAT` | 2 | yes | exercised |
 | `requires` | `REQUIRES` | 1 | yes | exercised |
 | `resolves` | `RESOLVES` | 1 | yes | exercised |
-| `return` | `RETURN` | 288 | yes | exercised |
+| `return` | `RETURN` | 290 | yes | exercised |
 | `scope` | `SCOPE` | 2 | yes | exercised |
 | `sequence` | `SEQUENCE` | 1 | yes | exercised |
 | `share` | `SHARE` | 1 | yes | exercised |
@@ -122,7 +123,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `times` | `TIMES` | 2 | yes | exercised |
 | `to` | `TO` | 40 | yes | exercised |
 | `topology` | `TOPOLOGY` | 1 | yes | exercised |
-| `topos` | `TOPOS_KW` | 51 | yes | exercised |
+| `topos` | `TOPOS_KW` | 52 | yes | exercised |
 | `true` | `BOOL_LIT` | 1 | yes | exercised |
 | `unifies` | `UNIFIES` | 1 | yes | exercised |
 | `unknown` | `UNKNOWN` | 5 | yes | exercised |
@@ -132,7 +133,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `view` | `VIEW` | 5 | yes | exercised |
 | `visits` | `VISITS` | 18 | yes | exercised |
 | `when` | `WHEN` | 9 | yes | exercised |
-| `where` | `WHERE` | 52 | yes | exercised |
+| `where` | `WHERE` | 53 | yes | exercised |
 | `while` | `WHILE_KW` | 4 | yes | exercised |
 | `wire` | `WIRE` | 5 | yes | exercised |
 | `with` | `WITH` | 8 | yes | exercised |

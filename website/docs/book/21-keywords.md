@@ -870,11 +870,15 @@ fun main(): number {
 
 </CodeWindow>
 
-The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed in v1.1: `buffer` and `drop` are no longer reserved words.
+The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed in v1.1: `buffer` is no longer a reserved word. (`drop` was later reintroduced with an unrelated meaning, the Space-reclaim statement `drop X`; see below.)
 
 #### `space`
 
 A reserved word that appears in the surface only as the target of a wire, `wire to space S`. A Space itself is not declared with a surface block: it is a directory in the package, and its world is read from `yon.toml` (`[world.X]`). So `space` names the destination of a transport, while the Space's existence and world come from the filesystem.
+
+#### `drop`
+
+`drop X` reclaims Space `X` at this point: an explicit, compile-time-checked assertion that `X` is no longer needed. Two obligations are checked, in order. First `X` must be a declared Space, a directory named in a world's `spaces` list; a `drop` of an unknown name, a typo, is rejected as an unknown Space before anything else. Then the check proves that no arc toward `X` is reachable downstream of the drop (a `wire to space X`, a use of a symbol imported `from X`, or a call that reaches either transitively); an early drop, with such an arc still ahead, is a compile error that names the offending arc. The criterion is existence and reachability in the source, computed statically with no runtime bookkeeping, so a `drop` turns a wrong assumption about a Space's lifetime into a diagnostic rather than a shortcut.
 
 ## Concurrency: spawn and collect
 

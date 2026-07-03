@@ -1,0 +1,11 @@
+status: accept
+exit: 42
+note: |
+  Rebinding a place variable to a fresh instance, then reading a field.
+  Content-addressing makes p.x = e (in-place field mutation) impossible, so the
+  ONLY coherent "mutation" is the handle swap: p = new Pt {...} builds a new slot
+  and points the cell at the new handle. This exercises that a place stays
+  first-class through the mutable (cell-promoted) path: the section handle survives
+  the round-trip through the f64 cell and p.x projects the new value. Fixed
+  2026-07-02 (before, reading a field after = CRASHED emit_mlir: the promoted cell
+  lost the section type).

@@ -149,6 +149,9 @@ Each construct carries a status:
 
 - **✓**, verified end-to-end: a regression example or a compiled probe
   exercises it through `yonc` down to a running binary.
+- **✗ rejected**, the grammar accepts it but the type checker refuses it
+  cleanly, by design, with a specific error. A deviation, pinned by a negative
+  fixture in `regression/canonical_forms/`.
 - **⚠ not implemented**, the grammar accepts it, but the 1.0 compiler does
   not implement it (it fails at emission, or the construct cannot actually be
   used). Listed for completeness; *not part of the 1.0 contract*.
@@ -198,7 +201,7 @@ only numbers travel on the wire.
 | `be x holds e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword). Declares once per scope: re-`holds` of a name already bound in the same scope is a compile error (use `x = e` to reassign); nested-scope shadowing is allowed, `_`-prefixed names are exempt |
 | `x = e` | ✓ | **Space-cell assign** (the content-addressed mutation mechanism). The target binding is promoted to a Space cell: its `be` allocates the cell, reads go through it, `x = e` updates it. Works on locals and parameters. Snapshot semantics, no aliasing (`be y holds x` does not alias `x`'s cell) |
 | `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
-| `x.f = e` | ⚠ rejected by design | Field mutation: place sections are immutable in 1.0; mutate through cells |
+| `x.f = e` | ✗ rejected | Field mutation: place sections are immutable in 1.0; the type checker rejects it ("place sections are immutable"). Mutate through cells |
 
 `=` is the assignment operator. The same `=` token also appears in top-level
 categorical definitions (`place P = pullback(f, g)`), in `prop name(...) = e`

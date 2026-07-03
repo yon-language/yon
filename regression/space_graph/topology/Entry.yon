@@ -1,0 +1,7 @@
+import svc::d_op from D
+place Entry { }
+fun main(): number {
+  be w holds wire to space A
+  be r holds d_op(5)
+  return r - r
+}

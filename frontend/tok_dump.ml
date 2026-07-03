@@ -9,6 +9,7 @@ let tok_name = function
   | Parser.TYPE_LEVEL _ -> "TYPE_LEVEL"
   | Parser.PLACE -> "PLACE"
   | Parser.FUN -> "FUN"
+  | Parser.DROP -> "DROP"
   | Parser.MOVE -> "MOVE"
   | Parser.VIEW -> "VIEW"
   | Parser.REDUCTION -> "REDUCTION"

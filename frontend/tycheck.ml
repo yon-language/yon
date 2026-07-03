@@ -2298,6 +2298,11 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       let* _env' = check_stmts env ctx body None in
       ok env
 
+  | SDrop (_x, _) ->
+      (* drop X: type-checks as unit here; the downstream-arc obligation is
+         discharged by the separate Space_liveness.check_drops pass. *)
+      ok env
+
 and check_stmts (env : Tyenv.env) (ctx : Reduce.ctx)
                 (stmts : stmt list) (expected_return : ty option) : Tyenv.env tc_result =
   scope_push ();
@@ -2377,26 +2382,15 @@ and type_of_lvalue (env : Tyenv.env) (ctx : Reduce.ctx)
        | Some t -> ok t
        | None -> err loc (Printf.sprintf "unbound variable %s" x))
   | LField (x, fld) ->
-      let* x_ty = match Tyenv.lookup_var env x with
-        | Some t -> ok t
-        | None -> err loc (Printf.sprintf "unbound variable %s" x)
-      in
-      (match x_ty with
-       | TyUser place_name ->
-           (match Tyenv.lookup_place env place_name with
-            | None -> err loc
-                (Printf.sprintf "place %s not found" place_name)
-            | Some pd ->
-                let rec find_field = function
-                  | [] -> err loc
-                      (Printf.sprintf "place %s has no field %s" place_name fld)
-                  | FoField f :: _ when f.fd_name = fld -> ok f.fd_ty
-                  | _ :: rest -> find_field rest
-                in
-                find_field pd.pd_members)
-       | other -> err loc
-           (Printf.sprintf "field assignment requires a place; got %s"
-              (Tyenv.ty_to_string other)))
+      (* Place sections are immutable in 1.0, so assigning to a field (`x.f = e`
+         or `x.f holds e`) is rejected by design. It has no lowering: it would
+         desugar to __space_update_here and crash emit_mlir, so it is stopped here
+         with a clean type error instead. Mutate through a Space cell (a `be`-bound
+         local reassigned with `=`), or build a fresh instance with `new`. *)
+      err loc (Printf.sprintf
+        "cannot assign to place field '%s.%s': place sections are immutable in 1.0. \
+         Mutate through a Space cell (a `be`-bound local reassigned with `=`), or \
+         build a new instance with `new`." x fld)
 
 (* ─── Top-level declaration checking ───────────────────────────────── *)
 
@@ -4022,6 +4016,7 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | SForces (_, _, body, _) -> List.iter walk_stmt body
     | SIter (n, body, _) -> walk_expr n; List.iter walk_stmt body
     | SWhile (c, body, _) -> walk_expr c; List.iter walk_stmt body
+    | SDrop _ -> ()
   in
   List.iter walk_stmt stmts;
   !calls
@@ -4176,6 +4171,7 @@ let infer_fun_signatures (p : program) : (program, type_error) result =
         | SIter (n, body, _) -> walk_expr n; List.iter walk_stmt body
         | SWhile (c, body, _) -> walk_expr c; List.iter walk_stmt body
         | SPromote (e, _) -> walk_expr e
+        | SDrop _ -> ()
       in
       List.iter (function
         | TopFun other_fn -> List.iter walk_stmt other_fn.fn_body

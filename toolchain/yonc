@@ -68,10 +68,12 @@ INPUT=""
 OUTPUT=""
 EMIT="binary"
 VERBOSE=0
+DUMP_GRAPH=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --emit=*) EMIT="${1#--emit=}"; shift ;;
+        --dump-space-graph) DUMP_GRAPH=1; shift ;;
         -o)       OUTPUT="$2"; shift 2 ;;
         -v|--verbose) VERBOSE=1; shift ;;
         --help|-h) grep '^#' "$0" | sed 's/^# \?//'; exit 0 ;;
@@ -86,6 +88,12 @@ done
 
 [ -n "$INPUT" ] || { echo "yonc: no input. See: yonc --help" >&2; exit 1; }
 [ -e "$INPUT" ] || { echo "yonc: '$INPUT' not found" >&2; exit 1; }
+
+# Static-only, additive: print the inter-Space communication graph and stop
+# (never lowers, never emits). Delegates to the frontend flag of the same name.
+if [ "$DUMP_GRAPH" = "1" ]; then
+    exec "$YONC_FRONTEND" "$INPUT" --dump-space-graph
+fi
 
 # Input may be a FILE (.yon/.mlir) or a DIRECTORY (project, Maven-style in the
 # pom directory). A directory is a package: the frontend concatenates the .yon

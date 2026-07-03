@@ -105,6 +105,7 @@ and rw_stmt (rename : string -> string) (s : S.stmt) : S.stmt =
   | S.SForces (st, c, body, l) -> S.SForces (st, c, rs body, l)
   | S.SIter (e, body, l) -> S.SIter (re e, rs body, l)
   | S.SWhile (e, body, l) -> S.SWhile (re e, rs body, l)
+  | S.SDrop (x, l) -> S.SDrop (x, l)
 
 (* ─── top-level ────────────────────────────────────────────────────────── *)
 
@@ -176,6 +177,7 @@ and refs_in_stmt (s : S.stmt) : string list =
   | S.SForces (_, c, b, _) -> refs_in_cond c @ rs b
   | S.SForever (b, _) | S.SProduce (b, _) -> rs b
   | S.SRepeat (_, b, ow, _) -> rs b @ (match ow with Some o -> rs o | None -> [])
+  | S.SDrop _ -> []
 
 let check_visibility (internals : string list) (decls : S.top_decl list) : unit =
   if internals = [] then ()
@@ -311,6 +313,7 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.SScope (n, b, r, ll) -> S.SScope (n, rb b, rwe r, ll)
       | S.SProduce (b, ll) -> S.SProduce (rb b, ll)
       | S.SForces (stg, c, b, ll) -> S.SForces (stg, rwc c, rb b, ll)
+      | S.SDrop (x, ll) -> S.SDrop (x, ll)
     in
     List.map (function
       | S.TopFun fn -> S.TopFun { fn with fn_body = List.map rws fn.S.fn_body }

@@ -21,6 +21,10 @@ let () =
     exit 1
   end;
   let path = argv.(1) in
+  (* Additive, static-only: `--dump-space-graph` prints the inter-Space
+     communication graph (wire and import arcs, from the source) and exits before
+     emission. It never changes what the compiler emits. *)
+  let dump_space_graph = Array.exists (fun a -> a = "--dump-space-graph") argv in
   (* A package is a directory. If `path` is a directory, all the .yon files in
    * it (recursively, e.g. under src/) share one scope (concatenated into a
    * single program). yon_modules/ is skipped here: dependencies are pulled in
@@ -153,6 +157,7 @@ let () =
      space (directory) of the file; key it by the same canon path as `loaded`. *)
   let pw_pairs = ref [] in
   let wire_errs = ref [] in
+  let space_edges = ref [] in (* static Space graph: wire and import arcs, tagged by source Space *)
   let place_acc = ref [] in   (* (place_name, file, space) for every project place *)
   let main_files = ref [] in  (* files that define `fun main` *)
   (* Filesystem-derived topos structure (Agent M). Captured per file at
@@ -191,6 +196,12 @@ let () =
           (match project_wm with
            | Some wm when Hashtbl.mem space_of_path filename ->
                let sp = Hashtbl.find space_of_path filename in
+               (* Static Space graph: collect this file's wire and import arcs,
+                  tagged with its Space (sp; "" for a root/entry file). `decls`
+                  is synth @ p, so arrows lifted from a place body (a form-C
+                  `fun main`) are covered too. Accumulation only, no emit change. *)
+               space_edges :=
+                 Space_graph.edges_of_file ~src_space:sp decls @ !space_edges;
                (* entrypoint collection: every project file (root included).
                   Record each declared place (name, file, space) and whether the
                   file defines `main`, so the Entry constraints below can be
@@ -273,6 +284,95 @@ let () =
           exit 2
     ) all_sources
   in
+  (* Static Space graph dump (additive, before emission). Build the graph from
+     the arcs collected per file above and print it, then stop. Never emits. *)
+  (if dump_space_graph then begin
+    let declared = match project_wm with
+      | Some wm ->
+          List.sort compare
+            (Hashtbl.fold (fun k _ acc -> k :: acc) wm.Manifest.space_world [])
+      | None -> []
+    in
+    let g = Space_graph.build ~declared (List.rev !space_edges) in
+    print_string (Space_graph.dump ~declared g);
+    exit 0
+  end);
+  (* Static drop check: every `drop X` must have no arc toward X reachable
+   * downstream (Space_liveness.check_drops) -- the same criterion the automatic
+   * reclaim uses, so a drop can never fire earlier than reclaim would. An early
+   * drop is a use-after-reclaim and is rejected here, citing the offending
+   * downstream arc.
+   *
+   * This runs on the PRE-LOWERING surface program: imports are still
+   * TopImportFrom and calls are still raw, so import arcs and transitive call
+   * arcs are visible to the analysis. It MUST stay before
+   * Module_prefix.lower_cross_space (below), which rewrites cross-Space calls
+   * into remote invokes and consumes the import decls -- after that the arcs are
+   * invisible and every drop would look legal. Whole-program: the transitive
+   * case crosses files via calls/imports, and `prog` is the merged program.
+   * Reuses the exit-3 semantic-error channel. *)
+  (* Existence census: the declared Spaces are the keys of the manifest's
+     space->world map (the source of truth, includes isolated declared Spaces
+     that appear in no arc). In single-file mode there is no world, so no Space
+     exists and any `drop` is an unknown-Space error. *)
+  let declared_spaces =
+    match project_wm with
+    | Some wm ->
+        List.sort compare
+          (Hashtbl.fold (fun k _ acc -> k :: acc) wm.Manifest.space_world [])
+    | None -> []
+  in
+  (* Place->Space census: a place P in directory D/ belongs to Space D (the same
+     binding the tp_at_space rewrite propagates to `new P {}`). Built from the
+     per-file place accumulation, so `new P` downstream of a drop counts as an arc
+     toward P's Space. *)
+  let place_space =
+    let h = Hashtbl.create 32 in
+    List.iter (fun (sp, pd) ->
+      if sp <> "" then Hashtbl.replace h pd.Surface_ast.pd_name sp) !places_by_space;
+    h
+  in
+  (match Space_liveness.check_drops ~declared:declared_spaces ~place_space prog with
+   | [] -> ()
+   | errs ->
+       List.iter (fun (e : Space_liveness.drop_error) ->
+         let l = e.Space_liveness.de_drop in
+         match e.Space_liveness.de_fault with
+         | Space_liveness.Unknown_space ->
+             Printf.eprintf
+               "DROP ERROR: unknown Space %s at %d:%d (not a declared Space in any world)\n"
+               e.Space_liveness.de_space
+               l.Surface_ast.start_line l.Surface_ast.start_col
+         | Space_liveness.Still_live arc ->
+             Printf.eprintf
+               "DROP ERROR: cannot drop Space %s at %d:%d: an arc toward it is still \
+                reachable downstream (at %d:%d)\n"
+               e.Space_liveness.de_space
+               l.Surface_ast.start_line l.Surface_ast.start_col
+               arc.Surface_ast.start_line arc.Surface_ast.start_col)
+         errs;
+       exit 3);
+  (* Automatic reclaim at last-use (the mechanism `drop X` is the checked
+     assertion of): insert an SDrop for each Space at its global last use in the
+     entry's main. Runs AFTER check_drops (the inserted drops are legal by
+     construction, at the point where the Space leaves downstream_arcs) and BEFORE
+     lowering, so the same drop emission handles them. Sound because the arc set
+     is complete (the audit): no read of a reclaimed Space can follow.
+     The reclaimable set is the OWNED (directory-backed) Spaces, not every declared
+     Space: only those have a local heap and a `yon_space_str_<X>` global. A remote
+     Space merely wired/imported (e.g. a subscriber's producer) is left to the
+     owner and to process exit -- reclaiming its local receive view is a later
+     precision gain, and referencing its missing global would fail emission. *)
+  let owned_spaces =
+    match project_wm with
+    | Some _ ->
+        List.filter_map
+          (function Surface_ast.TopSpace sd -> Some sd.Surface_ast.sd_name | _ -> None)
+          (Package_layout.space_decls ~root:path)
+    | None -> []
+  in
+  let prog =
+    Space_liveness.auto_reclaim_program ~declared:owned_spaces ~place_space prog in
   (* Agent ENF: mandatory file-layout enforcement. The per-file loop above has
      now populated layout_errs (it ran eagerly: List.concat_map forces every
      element). Project mode only: layout_errs is only ever appended to inside

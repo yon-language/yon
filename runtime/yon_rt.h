@@ -115,6 +115,14 @@ uint32_t yon_rt_register_space_with_fold(const char *name, const char *fold_name
 /* Look up a heap_id by name. Returns YON_HEAP_ID_INVALID if absent. */
 uint32_t yon_rt_lookup_space(const char *name);
 
+/* Reclaim a dropped Space: hand its heap's live arena back to the OS via
+ * yon_xheap_drop. heap_id is an f64 (the IR's universal type). The compiler emits
+ * this only where Space_liveness.check_drops has proven the Space dead downstream,
+ * so it honors a compile-time decision and carries no runtime policy. Safe no-op
+ * for an out-of-range id or a Space with no private heap. Returns heap_id as an
+ * inert f64 (the drop statement's value). Observe drops via yon_xheap_drops(). */
+double yon_rt_drop_space(double heap_id);
+
 /* ---- Place instance management ---- */
 
 /* Allocate a new section in the given Space.

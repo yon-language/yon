@@ -160,7 +160,7 @@
 /* Control flow */
 %token WHEN OTHERWISE FOR EVERY EACH HERE SEQUENCE OVER REPEAT AT MOST TIMES
 %token FORCES
-%token FOREVER SCOPE RETURN PRODUCE EMIT NEW
+%token FOREVER SCOPE RETURN PRODUCE EMIT NEW DROP
 /* Expression-level if/then/else + iter/while */
 %token IF_KW THEN_KW ELSE_KW
 %token ITER_KW DO_KW WHILE_KW
@@ -1052,6 +1052,7 @@ stmt:
   | s = produce_stmt                      { s }
   | s = emit_stmt                         { s }
   | s = promote_stmt                      { s }
+  | DROP sp = IDENT                       { SDrop (sp, mk_loc $startpos $endpos) }
   | s = iter_stmt                         { s }
   | s = while_stmt                        { s }
   | s = forces_stmt                       { s }

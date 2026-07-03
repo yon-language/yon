@@ -287,6 +287,11 @@ and stmt =
    * while cond do { body }: general. Lowered to scf.while. *)
   | SIter of expr * stmt list * location
   | SWhile of expr * stmt list * location
+  | SDrop of string * location
+    (* "drop X": reclaim Space X at this point. The checker proves no arc toward
+     * X is reachable downstream (Space_liveness.downstream_arcs); an arc to X
+     * after the drop is a compile error. X is a Space name, unambiguous from the
+     * communication graph. *)
 
 and lvalue =
   | LVar of string
