@@ -16,9 +16,9 @@ const C = {
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
   head: 'var(--ifm-color-emphasis-600, #606770)',
-  cat: '#9b5de5',
-  yon: '#4f8ff7',
-  disk: '#1d9e75',
+  cat: 'var(--viz-accent)',
+  yon: 'var(--viz-accent)',
+  disk: 'var(--viz-green)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 

@@ -21,7 +21,7 @@ function el(n, a) {
 function renderMotif(container, opts) {
   opts = opts || {};
   const density = opts.density == null ? 0.95 : opts.density;
-  const accent = opts.accent || '#E8A33D';
+  const accent = opts.accent || 'var(--viz-gold)';
   const enso = opts.enso !== false;
   const goldTips = opts.goldTips !== false;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -68,7 +68,7 @@ function renderMotif(container, opts) {
             y1: dots[i].y,
             x2: dots[j].x,
             y2: dots[j].y,
-            stroke: '#6A5FC0',
+            stroke: 'var(--viz-accent-2)',
             'stroke-width': 1,
             'stroke-opacity': 0.12,
           }),
@@ -82,7 +82,7 @@ function renderMotif(container, opts) {
         cx: d.x,
         cy: d.y,
         r: 1.2 + rand() * 1.7,
-        fill: '#A59ED7',
+        fill: 'var(--viz-faint)',
         'fill-opacity': (0.16 + rand() * 0.34).toFixed(2),
       }),
     );
@@ -98,7 +98,7 @@ function renderMotif(container, opts) {
     gField.appendChild(
       el('path', {
         d: `M ${sx} ${sy} A ${R} ${R} 0 1 1 ${ex} ${ey}`,
-        stroke: '#6A5FC0',
+        stroke: 'var(--viz-accent-2)',
         'stroke-width': 1.4,
         'stroke-opacity': 0.4,
         'stroke-linecap': 'round',
@@ -136,7 +136,7 @@ function renderMotif(container, opts) {
   arrows.forEach((a, idx) => {
     const path = el('path', {
       d: `M ${a.S.x.toFixed(1)} ${a.S.y.toFixed(1)} C ${a.c1.x.toFixed(1)} ${a.c1.y.toFixed(1)} ${a.c2.x.toFixed(1)} ${a.c2.y.toFixed(1)} ${a.Tend.x.toFixed(1)} ${a.Tend.y.toFixed(1)}`,
-      stroke: a.gold ? accent : '#9991d6',
+      stroke: a.gold ? accent : 'var(--viz-faint)',
       'stroke-width': a.gold ? 1.5 : 1.1,
       'stroke-opacity': a.gold ? 0.85 : (0.32 + rand() * 0.24).toFixed(2),
       'stroke-linecap': 'round',
@@ -152,7 +152,7 @@ function renderMotif(container, opts) {
     const p2 = `${(b.x - perp.x * wing).toFixed(1)} ${(b.y - perp.y * wing).toFixed(1)}`;
     const head = el('path', {
       d: `M ${tip.x.toFixed(1)} ${tip.y.toFixed(1)} L ${p1} M ${tip.x.toFixed(1)} ${tip.y.toFixed(1)} L ${p2}`,
-      stroke: a.gold ? accent : '#cfc8f5',
+      stroke: a.gold ? accent : 'var(--viz-faint)',
       'stroke-width': 1.5,
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
@@ -194,7 +194,7 @@ function renderMotif(container, opts) {
   sq.appendChild(
     el('path', {
       d: `M ${x0 + 10} ${y0} L ${x0 + s} ${y0} L ${x0 + s} ${y0 + s} L ${x0} ${y0 + s} L ${x0} ${y0 + 12}`,
-      stroke: '#6A5FC0',
+      stroke: 'var(--viz-accent-2)',
       'stroke-width': 1.4,
       'stroke-opacity': 0.5,
     }),
@@ -202,7 +202,7 @@ function renderMotif(container, opts) {
   sq.appendChild(
     el('path', {
       d: `M ${x0 + 8} ${y0 + 8} L ${x0 + 20} ${y0 + 8} M ${x0 + 8} ${y0 + 8} L ${x0 + 8} ${y0 + 20}`,
-      stroke: '#A59ED7',
+      stroke: 'var(--viz-faint)',
       'stroke-width': 1.4,
       'stroke-opacity': 0.6,
     }),

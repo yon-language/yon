@@ -22,9 +22,9 @@ const C = {
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   grid: 'var(--ifm-color-emphasis-200, #ebedf0)',
   rail: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  fast: '#1d9e75',
-  mid: '#4f8ff7',
-  heavy: '#d99a2b',
+  fast: 'var(--viz-green)',
+  mid: 'var(--viz-accent)',
+  heavy: 'var(--viz-gold)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 

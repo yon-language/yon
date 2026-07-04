@@ -19,8 +19,8 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   rail: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  ok: '#1d9e75',
-  okT: '#0f6e56',
+  ok: 'var(--viz-green)',
+  okT: 'var(--viz-green)',
   ghost: 'var(--ifm-color-emphasis-400, #a0a4ab)',
 };
 const mono = 'var(--ifm-font-family-monospace)';

@@ -18,11 +18,11 @@ const C = {
   border: 'var(--ifm-color-emphasis-300, #dadde1)',
   rail: 'var(--ifm-color-emphasis-200, #ebedf0)',
   panel: 'var(--ifm-color-emphasis-100, #f5f6f7)',
-  same: '#d99a2b',
-  sameT: '#b5790f', // collapsed / blind = warning gold
-  diff: '#3fa45b',
-  diffT: '#2f7d45', // distinguished / seen = green
-  accent: '#4f8ff7',
+  same: 'var(--viz-gold)',
+  sameT: 'var(--viz-gold)', // collapsed / blind = warning gold
+  diff: 'var(--viz-green)',
+  diffT: 'var(--viz-green)', // distinguished / seen = green
+  accent: 'var(--viz-accent)',
 };
 const L = trace.levels;
 const fmt = (n) => n.toLocaleString('en-US');

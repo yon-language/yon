@@ -21,14 +21,14 @@ const C = {
   border: 'var(--ifm-color-emphasis-300, #dadde1)',
   panel: 'var(--ifm-color-emphasis-100, #f5f6f7)',
   rail: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  same: '#3fa45b',
-  sameText: '#2f7d45',
+  same: 'var(--viz-green)',
+  sameText: 'var(--viz-green)',
   diff: 'var(--ifm-color-emphasis-500, #8a8f98)',
 };
 
 // categorical colours for the realized of2 classes (NO order implied)
-const CLASS_COLOR = { 1: '#4f8ff7', 7: '#d99a2b', 11: '#8b5cf6' };
-const CLASS_TEXT = { 1: '#2f6fd0', 7: '#b5790f', 11: '#6d44b8' };
+const CLASS_COLOR = { 1: 'var(--viz-accent)', 7: 'var(--viz-gold)', 11: 'var(--viz-accent)' };
+const CLASS_TEXT = { 1: 'var(--viz-accent-2)', 7: 'var(--viz-gold)', 11: 'var(--viz-accent-2)' };
 const SHORT = {
   Tyrannosaurus: 'T. rex',
   Velociraptor: 'Raptor',
@@ -186,7 +186,7 @@ export default function DinoLattice() {
                 alignItems: 'center',
                 padding: '9px 12px',
                 borderBottom: i < PAIRS.length - 1 ? `1px solid ${C.rail}` : 'none',
-                background: isSpot ? 'rgba(79,143,247,0.06)' : 'transparent',
+                background: isSpot ? 'var(--viz-fill)' : 'transparent',
               }}
             >
               <div style={{ flex: '0 0 130px', fontSize: 12.5, fontWeight: isSpot ? 600 : 400 }}>

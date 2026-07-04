@@ -16,10 +16,10 @@ const C = {
   sub: 'var(--ifm-color-emphasis-700, #4a4f57)',
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  dir: '#4f8ff7',
-  file: '#1d9e75',
-  toml: '#d99a2b',
-  arrow: '#9b5de5',
+  dir: 'var(--viz-accent)',
+  file: 'var(--viz-green)',
+  toml: 'var(--viz-gold)',
+  arrow: 'var(--viz-accent)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 

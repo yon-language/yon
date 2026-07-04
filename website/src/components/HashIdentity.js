@@ -12,9 +12,9 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  red: '#e0604d',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  red: 'var(--viz-red)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 const ADDS = [1445, 1445, 2361, 100, 200]; // uc_hashset: the add sequence
@@ -61,8 +61,8 @@ export default function HashIdentity() {
                 border: `1px solid ${dup ? C.red : C.line}`,
                 background: on
                   ? dup
-                    ? 'rgba(224,96,77,0.08)'
-                    : 'rgba(79,143,247,0.08)'
+                    ? 'var(--viz-fill-red)'
+                    : 'var(--viz-fill)'
                   : 'transparent',
                 color: on ? (dup ? C.red : C.accentText) : C.faint,
                 textDecoration: dup ? 'line-through' : 'none',
@@ -83,7 +83,7 @@ export default function HashIdentity() {
         </text>
         {seen.map((g, i) => (
           <g key={i} transform={`translate(${20 + i * 98}, 38)`}>
-            <rect width="86" height="38" rx="7" fill="rgba(79,143,247,0.10)" stroke={C.accent} />
+            <rect width="86" height="38" rx="7" fill="var(--viz-fill)" stroke={C.accent} />
             <text
               x="43"
               y="24"

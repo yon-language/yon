@@ -14,10 +14,10 @@ const C = {
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   ring: 'var(--ifm-color-emphasis-300, #dadde1)',
   border: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  gold: '#d99a2b',
-  goldText: '#b5790f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  gold: 'var(--viz-gold)',
+  goldText: 'var(--viz-gold)',
 };
 
 const S = trace.shells;
@@ -159,8 +159,8 @@ export default function LeechShells() {
                   background:
                     i === step - 1
                       ? s.label === 'kissing'
-                        ? 'rgba(217,154,43,0.12)'
-                        : 'rgba(79,143,247,0.10)'
+                        ? 'var(--viz-fill-gold)'
+                        : 'var(--viz-fill)'
                       : 'transparent',
                   color: i < step ? C.text : C.faint,
                   transition: 'all .3s',

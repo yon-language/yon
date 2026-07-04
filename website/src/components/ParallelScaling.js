@@ -23,12 +23,12 @@ const C = {
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
   rail: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  perf: '#4f8ff7',
-  perfText: '#2f6fd0',
-  eff: '#1d9e75',
-  effText: '#0f6e56',
-  hot: '#d99a2b',
-  hotText: '#b5790f',
+  perf: 'var(--viz-accent)',
+  perfText: 'var(--viz-accent-2)',
+  eff: 'var(--viz-green)',
+  effText: 'var(--viz-green)',
+  hot: 'var(--viz-gold)',
+  hotText: 'var(--viz-gold)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
@@ -79,7 +79,7 @@ export default function ParallelScaling() {
                 width="36"
                 height="44"
                 rx="7"
-                fill={busy ? (load > 1 ? 'rgba(217,154,43,0.14)' : 'rgba(79,143,247,0.09)') : 'transparent'}
+                fill={busy ? (load > 1 ? 'var(--viz-fill-gold)' : 'var(--viz-fill)') : 'transparent'}
                 stroke={load > 1 ? C.hot : busy ? base : C.line}
                 strokeWidth={load > 1 ? 2 : 1}
                 style={{ transition: 'all 0.4s ease' }}

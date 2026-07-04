@@ -168,7 +168,7 @@ Each construct carries a status:
 | [`present`](/book/keywords#present), [`absent`](/book/keywords#absent), [`unknown`](/book/keywords#unknown) | ✓ | Heyting truth values (intuitionistic Ω) |
 | `mod::name` | ✓ | Qualified name (module namespace) |
 
-Duration literals (`100ms`, `5s`, `2min`) were **removed in v1.1**: `2s` now
+Duration literals (`100ms`, `5s`, `2min`) were **removed in v1.1.0**: `2s` now
 lexes as `NUM_LIT 2` followed by the identifier `s`. Currency literals
 (`10.50 EUR`) are likewise **not** in the grammar; the `money` *type* exists
 (see *Types*).
@@ -216,7 +216,7 @@ inside a topos, and in `show f = e` inside views. There is no `becomes` keyword.
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
 | `A \| B \| C(T)` | ✓ | Sum type; variants may carry arguments |
 | `list of T`, `map of K to V` | ✓ | Collections |
-| `stream of T` | ✓ | Stream type. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed in v1.1) |
+| `stream of T` | ✓ | Stream type. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed in v1.1.0) |
 | `T -> U` | ✓ | Function type, right-associative |
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
@@ -258,7 +258,7 @@ from the call sites.
 | [`hit(ctor)`](/book/keywords#hit) / `hit(ctor, a)`, [`hit_elim(C, [b => e, ...], x)`](/book/keywords#hit_elim) | ✓ | Higher inductive type constructor and eliminator; one branch per constructor, the path branches respecting the points (`examples/circle_hit`) |
 | [`comp(line)[faces]`](/book/keywords#comp) / [`hcomp T[faces]`](/book/keywords#hcomp) | ✓ | Kan composition along a line / homogeneous composition; reduced by the kernel (`regression/yon_tests/prove`) |
 | [`quote(c, a)`](/book/keywords#quote) / [`el_match(target, ret, body)`](/book/keywords#el_match) | ✓ | Universe-code introduction / elimination for `El(c)`; lowers to the inhabitant / the body application. The deeper Tarski reflection is 1.2 |
-| `pullback(f, g, a, b)` | ✓ | Runtime compatible pair with `f(a) == g(b)` checked. The no-arg expression forms `pullback(f, g)` / `pushout(f, g)` were removed in v1.1; the two-argument form survives **only** as the declaration `place P = pullback(f, g)` (see *Places*) |
+| `pullback(f, g, a, b)` | ✓ | Runtime compatible pair with `f(a) == g(b)` checked. The no-arg expression forms `pullback(f, g)` / `pushout(f, g)` were removed in v1.1.0; the two-argument form survives **only** as the declaration `place P = pullback(f, g)` (see *Places*) |
 | `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
 ### Operators (by family)
@@ -385,7 +385,7 @@ topos Account where {
 }
 ```
 
-Status: ✓ (regression examples). Under v1.1 *topos-per-space* there is no `in W`
+Status: ✓ (regression examples). Under v1.1.0 *topos-per-space* there is no `in W`
 or `at SPACE` annotation and no inline `objects { }` block: the world, the
 residence space, and the objects are all **inferred from the filesystem**. The
 `morphisms { }` block declares its members with the singular `morphism` keyword.

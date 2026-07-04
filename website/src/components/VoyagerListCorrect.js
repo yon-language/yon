@@ -13,12 +13,12 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  green: '#3fae6b',
-  greenText: '#2f8a52',
-  bad: '#e0604d',
-  badText: '#c0432f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  green: 'var(--viz-green)',
+  greenText: 'var(--viz-green)',
+  bad: 'var(--viz-red)',
+  badText: 'var(--viz-red)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 const GENES = [1445, 1280, 2361]; // a VoyagerList of genes, each sealed
@@ -58,7 +58,7 @@ export default function VoyagerListCorrect() {
                 width="140"
                 height="40"
                 rx="8"
-                fill={hit ? 'rgba(224,96,77,0.08)' : 'rgba(79,143,247,0.06)'}
+                fill={hit ? 'var(--viz-fill-red)' : 'var(--viz-fill)'}
                 stroke={hit ? C.bad : C.accent}
                 strokeWidth={hit ? 2 : 1}
               />

@@ -29,12 +29,12 @@ const C = {
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
   rail: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  gold: '#d99a2b',
-  goldText: '#b5790f',
-  green: '#3fa45b',
-  greenText: '#2f7d45',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  gold: 'var(--viz-gold)',
+  goldText: 'var(--viz-gold)',
+  green: 'var(--viz-green)',
+  greenText: 'var(--viz-green)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
@@ -102,7 +102,7 @@ export default function HeapGenerations() {
                 width="56"
                 height={Math.round(40 * fill)}
                 rx="3"
-                fill="rgba(79,143,247,0.16)"
+                fill="var(--viz-fill)"
                 style={{ transition: 'all 0.5s ease' }}
               />
               <text x={x + 31} y={15} textAnchor="middle" fontSize="8.5" fill={C.faint}>
@@ -124,7 +124,7 @@ export default function HeapGenerations() {
         {/* the single dedup slot, shown in the same-content state */}
         {same && (
           <g fontFamily={mono}>
-            <rect x={8} y={28} width="16" height="16" rx="3" fill="rgba(63,164,91,0.22)" stroke={C.green} strokeWidth="1" />
+            <rect x={8} y={28} width="16" height="16" rx="3" fill="var(--viz-fill-green)" stroke={C.green} strokeWidth="1" />
             <text x={30} y={40} fontSize="10.5" fill={C.greenText}>
               one slot, every write deduplicated
             </text>

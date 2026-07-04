@@ -35,7 +35,7 @@ processes is chapter 16.
 
 **Durations.** A duration *is* a `number` of milliseconds, so `2500` (two and
 a half seconds) is ordinary arithmetic. The dedicated literal suffixes (`5s`,
-`100ms`) were removed in v1.1; write the millisecond count directly.
+`100ms`) were removed in v1.1.0; write the millisecond count directly.
 
 **Truth.** Yon's logical core is intuitionistic: the proposition type Ω has
 three literals, `present`, `absent`, `unknown`. `boolean` is a distinct type

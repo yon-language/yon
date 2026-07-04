@@ -19,10 +19,10 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   grid: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  xset: '#1d9e75',
-  xsetT: '#0f6e56',
-  hash: '#d99a2b',
-  hashT: '#b5790f',
+  xset: 'var(--viz-green)',
+  xsetT: 'var(--viz-green)',
+  hash: 'var(--viz-gold)',
+  hashT: 'var(--viz-gold)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 

@@ -21,9 +21,9 @@ const C = {
   surface: 'var(--ifm-color-emphasis-100, #f5f6f7)',
   border: 'var(--ifm-color-emphasis-300, #dadde1)',
   cellBg: 'var(--ifm-background-surface-color, #ffffff)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  accentBg: 'rgba(79,143,247,0.12)',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  accentBg: 'var(--viz-fill)',
 };
 
 // Four frames. State (cell, y) is taken from the real trace; the store frame is

@@ -193,6 +193,17 @@
   color: var(--yon-white);
   text-wrap: balance;
 }
+/* Short brand accent under the headline (Refactoring UI, "Add color with
+   accent borders"): a small gold rule threads the sections together. */
+.h2::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 2px;
+  margin-top: 20px;
+  border-radius: 2px;
+  background: var(--yon-gold);
+}
 .lede {
   margin: 24px 0 0;
   max-width: 60ch;
@@ -289,7 +300,7 @@
   border-radius: 14px;
   overflow: hidden;
   background: var(--yon-disc);
-  box-shadow: 0 30px 60px -34px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--elev-3);
 }
 .codeBar {
   display: flex;
@@ -384,26 +395,19 @@
 }
 
 /* ---------- ABSENT GRID ---------- */
+/* Separation by tint + spacing, not a grid of borders (Refactoring UI,
+   "Use fewer borders"): each cell is a faint panel, gaps do the dividing. */
 .absents {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0;
+  gap: var(--sp-3);
   margin-top: 38px;
   max-width: 760px;
-  border: 1px solid var(--yon-hair-2);
-  border-radius: 14px;
-  overflow: hidden;
 }
 .absents > div {
   padding: 22px 24px;
-  border-top: 1px solid var(--yon-hair-2);
-  border-left: 1px solid var(--yon-hair-2);
-}
-.absents > div:nth-child(-n + 2) {
-  border-top: none;
-}
-.absents > div:nth-child(odd) {
-  border-left: none;
+  background: rgba(28, 23, 62, 0.5);
+  border-radius: 12px;
 }
 .absents h4 {
   margin: 0 0 6px;
@@ -452,11 +456,5 @@
 @media (max-width: 620px) {
   .absents {
     grid-template-columns: 1fr;
-  }
-  .absents > div {
-    border-left: none;
-  }
-  .absents > div:nth-child(2) {
-    border-top: 1px solid var(--yon-hair-2);
   }
 }
