@@ -12,12 +12,12 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  green: '#3fae6b',
-  greenText: '#2f8a52',
-  red: '#e0604d',
-  redText: '#c0432f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  green: 'var(--viz-green)',
+  greenText: 'var(--viz-green)',
+  red: 'var(--viz-red)',
+  redText: 'var(--viz-red)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
@@ -37,7 +37,7 @@ function Tree({ leaves, diffIdx, x }) {
       <line x1={rootX} y1={rootY + 14} x2={lx[0]} y2={ly - 14} stroke={C.line} />
       <line x1={rootX} y1={rootY + 14} x2={lx[1]} y2={ly - 14} stroke={C.line} />
       <g transform={`translate(${rootX - 26}, ${rootY - 13})`}>
-        <rect width="52" height="26" rx="6" fill="rgba(79,143,247,0.10)" stroke={C.accent} />
+        <rect width="52" height="26" rx="6" fill="var(--viz-fill)" stroke={C.accent} />
         <text x="26" y="17" textAnchor="middle" fontSize="11" fill={C.accentText}>
           node2
         </text>
@@ -50,7 +50,7 @@ function Tree({ leaves, diffIdx, x }) {
               width="52"
               height="26"
               rx="6"
-              fill={diff ? 'rgba(224,96,77,0.10)' : 'transparent'}
+              fill={diff ? 'var(--viz-fill-red)' : 'transparent'}
               stroke={diff ? C.red : C.line}
             />
             <text x="26" y="17" textAnchor="middle" fontSize="12" fill={diff ? C.redText : C.text}>

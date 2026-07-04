@@ -449,7 +449,7 @@ A map between worlds that preserves the categorical structure; composable with `
 
 #### `nat`
 
-A natural transformation between two functors: `nat transform Eta from F to G { for each X by F }`, the clause naming how each component is built. The naturality square (η_Y ∘ F(f) = G(f) ∘ η_X) is its law; 1.1 checks the structural precondition, the full equation is future work. (Example `nat_transform_functor`.)
+A natural transformation between two functors: `nat transform Eta from F to G { for each X by F }`, the clause naming how each component is built. The naturality square (η_Y ∘ F(f) = G(f) ∘ η_X) is its law; 1.1.0 checks the structural precondition, the full equation is future work. (Example `nat_transform_functor`.)
 
 #### `compose`
 
@@ -870,7 +870,7 @@ fun main(): number {
 
 </CodeWindow>
 
-The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed in v1.1: `buffer` is no longer a reserved word. (`drop` was later reintroduced with an unrelated meaning, the Space-reclaim statement `drop X`; see below.)
+The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed in v1.1.0: `buffer` is no longer a reserved word. (`drop` was later reintroduced with an unrelated meaning, the Space-reclaim statement `drop X`; see below.)
 
 #### `space`
 

@@ -97,7 +97,7 @@ frontend, Topos dialect, LLVM, runtime.
 | `yon-lint` | linter (unused bindings, dead code) |
 | `yon-doc` | API reference generator (Markdown from source) |
 | `yon-pkg` | git-based package manager (no central registry) |
-| `yon-lsp` | language server (diagnostics, hover, symbols, completion) |
+| `yon-lsp` | language server (diagnostics, hover, symbols, completion, formatting) |
 
 For editors: a VS Code / Cursor extension ships as a `.vsix` with the
 GitHub releases (syntax highlighting plus the language server; set

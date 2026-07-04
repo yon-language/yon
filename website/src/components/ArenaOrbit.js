@@ -13,14 +13,14 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  green: '#3fae6b',
-  greenText: '#2f8a52',
-  red: '#e0604d',
-  redText: '#c0432f',
-  gold: '#d99a2b',
-  goldText: '#b5790f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  green: 'var(--viz-green)',
+  greenText: 'var(--viz-green)',
+  red: 'var(--viz-red)',
+  redText: 'var(--viz-red)',
+  gold: 'var(--viz-gold)',
+  goldText: 'var(--viz-gold)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
@@ -109,7 +109,7 @@ export default function ArenaOrbit() {
                 cx={p.x}
                 cy={p.y}
                 r="11"
-                fill={p.kind === 'A' ? 'rgba(79,143,247,0.18)' : 'rgba(224,96,77,0.18)'}
+                fill={p.kind === 'A' ? 'var(--viz-fill)' : 'var(--viz-fill-red)'}
                 stroke={col}
                 strokeWidth="1.5"
               />

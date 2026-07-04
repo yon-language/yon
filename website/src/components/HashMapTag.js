@@ -11,12 +11,12 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  green: '#3fae6b',
-  greenText: '#2f8a52',
-  red: '#e0604d',
-  redText: '#c0432f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  green: 'var(--viz-green)',
+  greenText: 'var(--viz-green)',
+  red: 'var(--viz-red)',
+  redText: 'var(--viz-red)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 const ROWS = [
@@ -63,7 +63,7 @@ export default function HashMapTag() {
                 border: `1px solid ${lit ? C.green : C.line}`,
                 borderRadius: 8,
                 overflow: 'hidden',
-                background: lit ? 'rgba(63,174,107,0.08)' : 'transparent',
+                background: lit ? 'var(--viz-fill-green)' : 'transparent',
                 transition: 'all .3s',
               }}
             >

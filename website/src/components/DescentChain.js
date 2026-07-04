@@ -12,10 +12,10 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  gold: '#d99a2b',
-  goldText: '#b5790f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  gold: 'var(--viz-gold)',
+  goldText: 'var(--viz-gold)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 const CHAIN = [
@@ -68,9 +68,9 @@ export default function DescentChain() {
                 rx="8"
                 fill={
                   isHead
-                    ? 'rgba(79,143,247,0.10)'
+                    ? 'var(--viz-fill)'
                     : isFounder
-                      ? 'rgba(217,154,43,0.10)'
+                      ? 'var(--viz-fill-gold)'
                       : 'transparent'
                 }
                 stroke={col}

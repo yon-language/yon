@@ -16,12 +16,12 @@ const C = {
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   border: 'var(--ifm-color-emphasis-300, #dadde1)',
   rail: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  good: '#3fa45b',
-  goodT: '#2f7d45',
-  det: '#d99a2b',
-  detT: '#b5790f',
-  mut: '#e5534b',
-  mutT: '#c23b34',
+  good: 'var(--viz-green)',
+  goodT: 'var(--viz-green)',
+  det: 'var(--viz-gold)',
+  detT: 'var(--viz-gold)',
+  mut: 'var(--viz-red)',
+  mutT: 'var(--viz-red)',
 };
 const COL = { corrected: [C.good, C.goodT], detected: [C.det, C.detT], mutated: [C.mut, C.mutT] };
 const STEPS = trace.steps;

@@ -20,12 +20,12 @@ const C = {
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   border: 'var(--ifm-color-emphasis-300, #dadde1)',
   panel: 'var(--ifm-color-emphasis-100, #f5f6f7)',
-  edge: '#4f8ff7',
-  edgeText: '#2f6fd0',
-  move: '#e5534b',
-  moveText: '#c23b34',
-  fixed: '#3fa45b',
-  fixedText: '#2f7d45',
+  edge: 'var(--viz-accent)',
+  edgeText: 'var(--viz-accent-2)',
+  move: 'var(--viz-red)',
+  moveText: 'var(--viz-red)',
+  fixed: 'var(--viz-green)',
+  fixedText: 'var(--viz-green)',
 };
 
 const D = trace.xi_demo; // {triple, home:{of2,omega}, frame_xi:{of2,omega}}
@@ -151,7 +151,7 @@ export default function OmegaInvariant() {
               border: `0.5px solid ${C.border}`,
               cursor: 'pointer',
               marginBottom: 14,
-              background: xi ? 'rgba(229,83,75,0.10)' : 'transparent',
+              background: xi ? 'var(--viz-fill-red)' : 'transparent',
               color: C.text,
               fontWeight: 600,
             }}

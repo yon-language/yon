@@ -15,12 +15,12 @@ const C = {
   text: 'var(--ifm-font-color-base, #1c1e21)',
   sub: 'var(--ifm-color-emphasis-700, #4a4f57)',
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
-  sala: '#4f8ff7',
-  salaT: '#2f6fd0',
-  cucina: '#d99a2b',
-  cucinaT: '#b5790f',
-  push: '#1d9e75',
-  pull: '#9b5de5',
+  sala: 'var(--viz-accent)',
+  salaT: 'var(--viz-accent-2)',
+  cucina: 'var(--viz-gold)',
+  cucinaT: 'var(--viz-gold)',
+  push: 'var(--viz-green)',
+  pull: 'var(--viz-accent)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
@@ -45,9 +45,9 @@ export default function GeomorphAdjunction() {
         </defs>
 
         {/* space frames */}
-        <rect x="16" y="40" width="150" height="110" rx="10" fill="rgba(79,143,247,0.06)" stroke={C.sala} strokeWidth="1" />
+        <rect x="16" y="40" width="150" height="110" rx="10" fill="var(--viz-fill)" stroke={C.sala} strokeWidth="1" />
         <text x="91" y="32" textAnchor="middle" fontSize="11" fill={C.salaT}>sala/ (a space)</text>
-        <rect x="274" y="40" width="150" height="110" rx="10" fill="rgba(217,154,43,0.07)" stroke={C.cucina} strokeWidth="1" />
+        <rect x="274" y="40" width="150" height="110" rx="10" fill="var(--viz-fill-gold)" stroke={C.cucina} strokeWidth="1" />
         <text x="349" y="32" textAnchor="middle" fontSize="11" fill={C.cucinaT}>cucina/ (a space)</text>
 
         {/* the two places */}

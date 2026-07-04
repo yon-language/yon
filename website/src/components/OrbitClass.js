@@ -14,12 +14,12 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  green: '#3fae6b',
-  greenText: '#2f8a52',
-  red: '#e0604d',
-  redText: '#c0432f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  green: 'var(--viz-green)',
+  greenText: 'var(--viz-green)',
+  red: 'var(--viz-red)',
+  redText: 'var(--viz-red)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
@@ -59,7 +59,7 @@ export default function OrbitClass() {
           width="248"
           height="100"
           rx="12"
-          fill="rgba(79,143,247,0.05)"
+          fill="var(--viz-fill)"
           stroke={C.accent}
           strokeDasharray="4 3"
         />
@@ -77,7 +77,7 @@ export default function OrbitClass() {
                 cx={p.x}
                 cy={p.y}
                 r="12"
-                fill={lit ? 'rgba(63,174,107,0.2)' : 'rgba(79,143,247,0.14)'}
+                fill={lit ? 'var(--viz-fill-green)' : 'var(--viz-fill)'}
                 stroke={lit ? C.green : C.accent}
                 strokeWidth={lit ? 2.5 : 1.5}
               />
@@ -95,7 +95,7 @@ export default function OrbitClass() {
           width="140"
           height="100"
           rx="12"
-          fill="rgba(224,96,77,0.04)"
+          fill="var(--viz-fill-red)"
           stroke={C.red}
           strokeDasharray="4 3"
         />
@@ -110,7 +110,7 @@ export default function OrbitClass() {
                 cx="340"
                 cy="74"
                 r="12"
-                fill={lit ? 'rgba(224,96,77,0.18)' : 'transparent'}
+                fill={lit ? 'var(--viz-fill-red)' : 'transparent'}
                 stroke={C.red}
                 strokeWidth={lit ? 2.5 : 1.5}
               />

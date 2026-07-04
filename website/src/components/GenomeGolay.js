@@ -18,12 +18,12 @@ const C = {
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   border: 'var(--ifm-color-emphasis-300, #dadde1)',
   bit0: 'var(--ifm-color-emphasis-200, #ebedf0)',
-  bit1: '#4f8ff7',
-  bad: '#e5534b',
-  badText: '#c23b34',
-  good: '#3fa45b',
-  goodText: '#2f7d45',
-  accentText: '#2f6fd0',
+  bit1: 'var(--viz-accent)',
+  bad: 'var(--viz-red)',
+  badText: 'var(--viz-red)',
+  good: 'var(--viz-green)',
+  goodText: 'var(--viz-green)',
+  accentText: 'var(--viz-accent-2)',
 };
 
 const N = trace.bits; // 24

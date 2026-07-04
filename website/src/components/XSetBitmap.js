@@ -12,10 +12,10 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  green: '#3fae6b',
-  greenText: '#2f8a52',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  green: 'var(--viz-green)',
+  greenText: 'var(--viz-green)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 const COLS = [7, 11, 63, 99]; // the lattice points used (uc_b_sets)

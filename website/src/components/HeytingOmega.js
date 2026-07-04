@@ -17,8 +17,8 @@ const C = {
   sub: 'var(--ifm-color-emphasis-700, #4a4f57)',
   faint: 'var(--ifm-color-emphasis-500, #8a8f98)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  present: '#1d9e75',
-  unknown: '#d99a2b',
+  present: 'var(--viz-green)',
+  unknown: 'var(--viz-gold)',
   absent: 'var(--ifm-color-emphasis-600, #606770)',
 };
 const mono = 'var(--ifm-font-family-monospace)';

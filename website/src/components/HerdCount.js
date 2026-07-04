@@ -12,10 +12,10 @@ const C = {
   sub: 'var(--ifm-color-emphasis-600, #606770)',
   faint: 'var(--ifm-color-emphasis-400, #a0a4ab)',
   line: 'var(--ifm-color-emphasis-300, #dadde1)',
-  accent: '#4f8ff7',
-  accentText: '#2f6fd0',
-  gold: '#d99a2b',
-  goldText: '#b5790f',
+  accent: 'var(--viz-accent)',
+  accentText: 'var(--viz-accent-2)',
+  gold: 'var(--viz-gold)',
+  goldText: 'var(--viz-gold)',
 };
 const mono = 'var(--ifm-font-family-monospace)';
 const BASE = [1445, 1280, 1445];
@@ -57,7 +57,7 @@ export default function HerdCount() {
                 width="96"
                 height="42"
                 rx="8"
-                fill={changed ? 'rgba(217,154,43,0.12)' : 'rgba(79,143,247,0.07)'}
+                fill={changed ? 'var(--viz-fill-gold)' : 'var(--viz-fill)'}
                 stroke={changed ? C.gold : C.accent}
                 strokeWidth={changed ? 2 : 1}
               />

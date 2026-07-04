@@ -4,6 +4,8 @@ title: "13. Values, cells, and lifetime"
 sidebar_position: 13
 ---
 
+import SpaceReclaim from '@site/src/components/SpaceReclaim';
+
 # Values, cells, and lifetime
 
 ## Values have no identity
@@ -64,3 +66,41 @@ Across packages, lifetime is process lifetime: the first cross-Space call
 spawns the server; shutdown cascades from the caller; a crashed server is
 respawned on a virgin channel with the epoch advanced. Handles never cross, 
 each process's heap is its own universe, which is what makes the model safe.
+
+## Reclaiming a Space
+
+Within a process the heap does not shrink, and that is the design. There is one
+exception, and it is at the granularity of a whole Space: a Space keeps its
+sections in its own heap arena, and that arena can be released in a single move
+once the Space is finished with. Reclamation here is by *region*, never by
+tracing individual values; there is no per-object bookkeeping and nothing to
+scan.
+
+You can state that point yourself. `drop X` is an assertion, checked at compile
+time, that Space `X` is no longer needed here. Two things are verified, in order:
+that `X` is a real Space (a directory named in a world's `spaces`; a typo is
+rejected as an unknown Space), and that no arc toward `X` is reachable downstream
+of the drop, no later `wire to space X`, no use of a symbol imported `from X`, no
+call that reaches either transitively. An early `drop`, with such an arc still
+ahead, is a compile error that names the offending arc. The keyword chapter gives
+the full rule; the point here is that the check is over the *source*, static, with
+no runtime watch.
+
+You usually do not need to write it. The same analysis runs the other way: the
+compiler finds each owned Space's last use on its own and inserts the release
+there automatically, so a `drop` is only an explicit assertion of a point the
+compiler would reach anyway. `drop X` earlier than that last use is the error
+above; there is no way to reclaim a Space that is still spoken to.
+
+The release itself is one call, `madvise(MADV_DONTNEED)` over the arena's live
+bytes, page-aligned inward. The virtual mapping stays valid, so nothing dangles;
+the physical pages are handed back. Because the arc analysis counts *every* way a
+named Space's heap is touched, a wire, an import, a cross-Space call, a `new` at a
+topos bound to that Space, an `awaits`, the release can never fall before a read
+that still needs the pages.
+
+<SpaceReclaim />
+
+The whole point is that this needs no collector. The lifetime of a Space is a
+fact about the communication graph, which the compiler already has, so releasing
+its memory is a decision it can make, not a guess the runtime has to hedge.

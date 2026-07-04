@@ -41,6 +41,10 @@ const config = {
         docs: {
           routeBasePath: '/', // docs-only mode; the home "/" is src/pages/index.js
           sidebarPath: './sidebars.js',
+          // "Jurassic Park in Yon" (docs/jp) is a separate pedagogical book, still a
+          // draft; it ships with a later edition, so it is excluded from this build.
+          // The files stay in the tree; drop this line to publish it again.
+          exclude: ['jp/**'],
         },
         blog: false,
         theme: { customCss: './src/css/custom.css' },
@@ -61,12 +65,6 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      announcementBar: {
-        id: 'refactor-2026',
-        content:
-          'Active development: Yon is under heavy refactoring and new capabilities land continuously. Examples and docs may briefly lag the compiler; rough edges are expected.',
-        isCloseable: true,
-      },
       image: 'img/social-card.png',
       metadata: [
         {

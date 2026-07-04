@@ -17,25 +17,6 @@ const Arrow = () => (
   </svg>
 );
 
-function Banner() {
-  return (
-    <div
-      style={{
-        borderBottom: '1px solid rgba(212,175,55,0.35)',
-        background: 'rgba(212,175,55,0.06)',
-        padding: '11px 20px',
-        textAlign: 'center',
-        fontSize: '0.9rem',
-        lineHeight: 1.55,
-      }}
-    >
-      <strong>Yon 1.1.</strong> A topos-oriented language that compiles to native code through MLIR
-      and LLVM, in active development. The source, the benchmarks, and the full test suite are
-      public, and every page here describes what compiles and runs today.
-    </div>
-  );
-}
-
 function Hero() {
   return (
     <header className={styles.hero}>
@@ -300,6 +281,32 @@ function Voyager() {
   );
 }
 
+function Tooling() {
+  return (
+    <section className={styles.section}>
+      <div className={styles.sectionIn}>
+        <div className={styles.panel}>
+          <span className={styles.kicker}>Tooling</span>
+          <h2 className={styles.h2}>The editor and the compiler share one implementation.</h2>
+          <p className={styles.lede}>
+            A language server, a linter, and a formatter ship with the toolchain, and each shares
+            its code with the command line: the editor runs the same project checker as{' '}
+            <code>yonc</code>, the same rules as <code>yon-lint</code>, the same formatter as{' '}
+            <code>yon-fmt</code>. So they cannot disagree, the editor never accepts a project the
+            compiler rejects. Diagnostics carry stable codes read off the communication graph, the
+            kind a single-file view cannot give: an illegal <code>drop</code> is <code>E3001</code>,
+            a wire that crosses a world boundary is <code>E3010</code>. The formatter re-parses its
+            own output and leaves the file untouched unless it can prove the meaning was preserved.
+          </p>
+          <Link className={styles.arrowlink} to="/book/tooling">
+            Read “Tooling” <Arrow />
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   return (
     <Layout
@@ -307,7 +314,6 @@ export default function Home() {
       description="A topos-oriented programming language. Native via MLIR and LLVM, with a content-addressed heap and Leech-lattice sets and error correction."
     >
       <main className={styles.page}>
-        <Banner />
         <Hero />
         <Heap />
         <Sets />
@@ -315,6 +321,7 @@ export default function Home() {
         <Topos />
         <ClosedArrows />
         <Execution />
+        <Tooling />
       </main>
     </Layout>
   );

@@ -7,101 +7,109 @@ slug: /book/future-work
 
 # Appendix B, Future work
 
-1.0 draws its perimeter on purpose. A limit you know is a contract; a
-limit you discover is a bug. This page states the contract of the
-current version, what is absent by design and stays that way, and the
-work that is arriving, in that order.
+1.1.0 draws its perimeter on purpose. A limit you know is a contract; a limit you
+discover is a bug. This page keeps the two apart: what the current version
+guarantees, what it leaves out by design and always will, and — held in outline on
+purpose — what is coming.
 
-## The contract of 1.0
+## The contract of 1.1.0
 
-- **Space cells:** 1,024 per process. Cells are the identity mechanism,
-  not a data structure; if you are allocating thousands, you want a
-  collection.
-- **Heap slots:** 196,560 *distinct contents* per heap, 64 MB payload
-  arena (~70 MB per heap mapped). Deduplication means repeats are free;
-  the budget is on distinct values.
-- **The heap chain:** every structure on the heap (strings, lists,
-  HashMap entries, Merkle nodes, sets) allocates through the allocator's
-  chain, when a heap fills, a new one is created and linked
-  automatically, references are global (8-bit heap id, 24-bit slot), and
-  **deduplication stays global** through a process-wide content index:
-  the same content returns the same reference wherever it lives, so O(1)
-  equality survives the boundary. The ceiling is memory, up to 256
-  chained heaps of 196,560 contents each. Measured: one million map
-  entries across six heaps, exact on every side; 60,000 distinct string
-  keys with zero collisions and exact re-derivation.
-- **Fixed pools, loud refusal.** Macro-architecture limits are fixed by
-  encoding width and refuse explicitly when exhausted: 256 heaps per
-  chain (8-bit heap id, a perimeter of roughly 18 GB of globally
-  deduplicated content per process), 256 instances per collection type,
-  64 Spaces, 64 streams, 16 RPC sessions. These are specifications, not
-  defects: like a fixed-width address bus, they buy predictability of
-  memory and rule out runaway allocation. The wire's internal buffers
-  are static and larger than the protocol can ever fill (the wire is at
-  most 4×`f64` = 32 bytes); process isolation by the kernel's MMU
-  contains any local fault to the single server binary.
-- **No tuning knobs in the data path.** Directories (HashMap and
-  HashSet) keep a single invariant, load factor ≤ 0.7, which with
-  linear probing guarantees an expected O(1) probe count at *every*
-  size, by doubling with a rehash whenever it would be violated. There
-  is no maximum size and no degraded regime: growth is bounded by
-  memory alone, like the chain. 256 instances per structure per
-  process.
-- **VoyagerList:** capacity grows dynamically (doubling from 1,024
-  codewords, bounded by memory alone, no fixed maximum; codewords live
-  outside the heap). 256 lists per process.
-- **The wire:** at most 4 arguments per cross-Space call, all `f64`.
-  Strings and sections never cross (they are process-local handles).
-- **Exit codes:** `main`'s value mod 256, like every Unix process.
+These are numbers you can build on. Each is fixed by an encoding width, not by a
+timeout or a heuristic, so it holds at *every* size right up to the wall, where the
+runtime refuses out loud rather than degrading in silence.
 
-## Absent by design, and staying that way
+- **Space cells** — 1,024 per process. A cell is the identity mechanism, not a
+  container; if you find yourself allocating thousands, you want a collection.
+- **The heap** — 196,560 *distinct* contents per heap (the count of minimal
+  vectors of Λ<sub>24</sub>), on a 64&nbsp;MB payload arena. Deduplication makes
+  repeats free; the budget is spent on distinct values, not on allocations.
+- **The heap chain** — when a heap fills, a successor is created and linked; a
+  reference is global (8-bit heap id, 24-bit slot), and deduplication stays global
+  through a process-wide content index, so O(1) equality survives the boundary. Up
+  to 256 chained heaps: roughly 18&nbsp;GB of globally deduplicated content per
+  process. Measured exact at a million map entries across six heaps.
+- **Fixed pools, loud refusal** — 256 instances per collection type, 64 Spaces, 64
+  streams, 16 RPC sessions. Like a fixed-width address bus, these buy predictable
+  memory and rule out runaway allocation. Process isolation by the kernel's MMU
+  keeps any local fault inside the one server binary that raised it.
+- **Directories with no knobs** — HashMap and HashSet hold one invariant, load
+  factor ≤ 0.7, which under linear probing guarantees an expected O(1) probe at
+  every size; they double and rehash before it is ever violated. No maximum, no
+  degraded regime: growth is bounded by memory alone.
+- **The wire** — at most four arguments per cross-Space call, all `f64`. Strings
+  and sections never cross; they are process-local handles.
+- **Exit codes** — `main`'s value mod 256, like every Unix process.
+
+## Absent by design
 
 These are not on any roadmap. They are the design.
 
-- **No garbage collector**, slots are stable for the life of the process;
-  the heap grows with distinct content only (chapter 13). Reclamation is
-  coming, but as regions, not tracing: see below.
-- **No threads**, the unit of concurrency is the process (chapter 16).
-- **No exceptions**, failure is data, declarations, or a process matter
-  (chapter 18).
-- **No interfaces / typeclasses / virtual dispatch**, arrows are the
-  interface (chapters 0, 5).
-- **No central package registry**, dependencies are git.
+- **No garbage collector.** Slots are stable for the life of the process; the heap
+  grows with distinct content only (chapter 13). Reclamation is by *region*, never
+  tracing: a whole Space's heap is released in one move, at a checked `drop X` or
+  automatically at the Space's last use.
+- **No threads.** The unit of concurrency is the process; Spaces talk over a
+  shared-memory wire (chapter 16).
+- **No exceptions.** Failure is data, a declaration, or a process exit — never a
+  thrown stack (chapter 18).
+- **No interfaces, typeclasses, or virtual dispatch.** An arrow is the interface: a
+  place's presheaf of observations (chapters 0, 5).
+- **No central package registry.** Dependencies are git.
 
-## Arriving
+## On the horizon
 
-The grammar already reserves most of this syntax. Each item sits at a
-different stage: some forms parse and type-check but do not yet lower to
-a stable runtime, others are rejected outright until the implementation
-lands with regression coverage. In planned order:
+Some of what follows the grammar already reserves; some is being *proved* before it
+is promised. The shapes are drawn. What you get here is the outline, not the
+blueprint — the full telling belongs to the editions that land each one.
 
-- **`spawn { ... }` and `promote`**: ephemeral sub-runtimes with an
-  isolated arena. Only the yielded value is promoted to the parent
-  heap; the arena is reclaimed in one move. The block parses and
-  type-checks today (a spawn types as a stream of its promoted value);
-  the runtime lowering is not yet stable, so it is not part of 1.0. The
-  design and its invariants are public in the LLVM Discourse
-  announcement thread. An API for Space lifecycles belongs to the same
-  work.
-- **`produce { emit e }`**, the stream-producer block, and folding
-  sub-runtimes into streams. The block parses; the fold that turns a
-  producer into a settled stream is 1.2 work.
-- **`ind_path(C, d, p)`**, the J eliminator (the runnable HoTT fragment
-  is `refl`/`pair`/`fst`/`snd`).
-- **`x.f = e`**, field mutation (sections are immutable; today you
-  mutate through cells, and `x.f = e` is rejected by design).
-- **Static capability checking** (`requires` is enforced at runtime; the
-  caller-side static rule is design, chapter 19).
-- **Value-level construction of comprehension types** (the type and its
-  coercion are live, chapter 9).
-- **True parallel execution of `for every` / `when here`** (sequential
-  in 1.0, declared intent).
+<div style={{display: 'grid', gap: 'var(--sp-4)', margin: 'var(--sp-5) 0'}}>
+
+<div style={{borderLeft: '3px solid var(--viz-accent)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
+
+**Memory that lets itself go.** Today a Space's heap is released at a point the
+compiler can name in your source. The next step teaches the runtime to watch its
+own topology and let a Space go the instant its conversations fall silent — read
+off a graph the compiler already proved, not a count it has to keep. Sound, because
+nothing is guessed. That is as much as it will say for now.
+
+</div>
+
+<div style={{borderLeft: '3px solid var(--viz-gold)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
+
+**A window on the living system.** Not a debugger that stops time — that fits an
+append-only world of isolated Spaces poorly, there being little "current line" to
+stop on. Something closer to an instrument: the Spaces and wires alive at an
+instant, the arcs opening and closing, over the very protocol the wire already
+speaks. The heap picture in this book is the still frame; this is the moving one.
+
+</div>
+
+<div style={{borderLeft: '3px solid var(--viz-green)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
+
+**A logic that proves more of what it means.** The type checker already computes by
+conversion; the work underway lets it *quantify* the higher coherences the
+mathematics has been promising all along — the Yoneda correspondence in full, the
+cubical layer that makes an equality a path. Where 1.1.0 checks the structural
+precondition, the coming editions check the equation.
+
+</div>
+
+<div style={{borderLeft: '3px solid var(--viz-accent-2)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
+
+**The grammar, rounding out.** More syntax is reserved than 1.1.0 lowers to a stable
+runtime: ephemeral sub-runtimes and their reclaimed arenas, stream producers folded
+into settled streams, paths into a section's fields. Each parses and type-checks
+today and waits only on the runtime and the regression coverage that make a promise
+safe to print. The collection API, kept deliberately small, fills in alongside.
+
+</div>
+
+</div>
 
 ## Measured, and measured next
 
-Appendix D publishes benchmarks with method and sources; the numbers on
-the landing page come from there. Two empirical questions remain open
-in the development notes and will be answered the same way, numbers
-before claims: what the structural-collapse pass catches that classical
-value numbering does not, and the physical cost of the categorical
-structure in final object code.
+Appendix D publishes the benchmarks with method and sources; the numbers on the
+landing page come from there, not from memory. Two empirical questions stay open in
+the development notes and will be answered the same way, numbers before claims: what
+the structural-collapse pass catches that classical value numbering does not, and
+the physical cost of the categorical structure in the final object code.

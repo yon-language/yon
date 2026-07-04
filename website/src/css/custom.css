@@ -16,7 +16,7 @@
   --yon-hair: rgba(165, 158, 215, 0.16);
   --yon-hair-2: rgba(165, 158, 215, 0.1);
   --yon-lav: #a59ed7;
-  --yon-lav-dim: #8079b0;
+  --yon-lav-dim: #928bc4; /* tertiary text: lifted from #8079b0 to clear WCAG 4.5:1 on the bg (same hue) */
   --yon-light: #ebe6ff;
   --yon-prose: #d8d2f2;
   --yon-white: #ffffff;
@@ -73,6 +73,42 @@
   --ifm-menu-color-background-active: rgba(106, 95, 192, 0.14);
   --ifm-breadcrumb-color-active: var(--yon-white);
   --ifm-toc-link-color: var(--yon-lav-dim);
+
+  /* ── Design tokens: scales defined up front (Refactoring UI) ────────── */
+
+  /* Spacing scale. Use these, not ad-hoc pixels: a small set of steps keeps
+     rhythm consistent and choices few. */
+  --sp-1: 4px;   --sp-2: 8px;   --sp-3: 12px;  --sp-4: 16px;  --sp-5: 24px;
+  --sp-6: 32px;  --sp-7: 48px;  --sp-8: 64px;  --sp-9: 96px;
+
+  /* Modular type scale (~1.25). Headings and UI text pick from these. */
+  --text-xs: 12.5px;  --text-sm: 14px;   --text-base: 17.5px;  --text-lg: 20px;
+  --text-xl: 27px;    --text-2xl: 34px;  --text-3xl: clamp(34px, 5vw, 50px);
+
+  /* Elevation. Two-part shadows (a tight direct shadow + a soft ambient one),
+     light coming from above, so higher = larger + softer. */
+  --elev-1: 0 1px 1px rgba(10, 6, 30, 0.5), 0 1px 2px rgba(10, 6, 30, 0.4);
+  --elev-2: 0 2px 4px -2px rgba(10, 6, 30, 0.5), 0 6px 14px -6px rgba(10, 6, 30, 0.55);
+  --elev-3: 0 6px 14px -8px rgba(10, 6, 30, 0.55), 0 22px 46px -20px rgba(10, 6, 30, 0.7);
+
+  /* Viz accent palette: ONE defined shade per role, brand-aligned. Components
+     reference these instead of eyeballing a hex each time (this is what removes
+     the drift, six near-identical greens and an off-brand blue, across the viz). */
+  --viz-accent: #a78bfa;   /* brand violet, brightened for the dark ground */
+  --viz-accent-2: #8b79d9;
+  --viz-gold: #e8a33d;     /* brand gold */
+  --viz-green: #4cc38a;    /* positive / present */
+  --viz-red: #f2765c;      /* negative / absent */
+  --viz-info: #67b8e3;     /* the one info blue (was several ad-hoc blues) */
+  --viz-ink: var(--yon-light);
+  --viz-sub: var(--yon-lav);
+  --viz-faint: var(--yon-lav-dim);
+  --viz-line: var(--yon-hair);
+  --viz-rail: var(--yon-hair-2);
+  --viz-fill: rgba(167, 139, 250, 0.16);
+  --viz-fill-gold: rgba(232, 163, 61, 0.15);
+  --viz-fill-green: rgba(76, 195, 138, 0.15);
+  --viz-fill-red: rgba(242, 118, 92, 0.15);
 }
 
 html,
@@ -175,6 +211,11 @@ body {
 .markdown li {
   margin-top: 0.35em;
 }
+/* A dash of brand color on list markers (Refactoring UI, "Supercharge the
+   defaults"): gold bullets thread the accent through otherwise plain lists. */
+.markdown ul > li::marker {
+  color: var(--yon-gold);
+}
 .markdown strong {
   color: var(--yon-light);
   font-weight: 600;
@@ -251,7 +292,7 @@ article h3 {
 .theme-code-block,
 div[class*='codeBlockContainer_'] {
   border-radius: 14px !important;
-  box-shadow: 0 26px 54px -32px rgba(0, 0, 0, 0.65);
+  box-shadow: var(--elev-3);
 }
 .theme-code-block pre,
 pre[class*='language-'] {
@@ -336,6 +377,7 @@ div[class*='codeBlockTitle_'] {
   border-left-width: 3px;
   border-radius: 10px;
   font-family: var(--yon-serif);
+  box-shadow: var(--elev-1);
 }
 
 /* breadcrumbs */
@@ -387,6 +429,7 @@ article .card {
 article .card:hover {
   border-color: var(--yon-ring);
   transform: translateY(-2px);
+  box-shadow: var(--elev-2);
 }
 
 /* ============================================================ FOOTER */
@@ -427,7 +470,7 @@ article .card:hover {
   border-radius: 999px;
 }
 .navbar__search-input::placeholder {
-  color: #8079b0;
+  color: var(--yon-lav-dim);
 }
 .navbar__search-input:focus {
   border-color: #f0bf72;
@@ -458,7 +501,7 @@ div[class*='SearchModal'] button:hover {
   border-radius: 14px;
   overflow: hidden;
   background: var(--yon-disc);
-  box-shadow: 0 30px 60px -34px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--elev-3);
 }
 .theme-doc-markdown .theme-code-block:not(.yon-in-window)::before {
   content: '';
