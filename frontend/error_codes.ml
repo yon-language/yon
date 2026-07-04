@@ -39,6 +39,11 @@ type code =
   | Entrypoint
   | File_layout
   | Manifest
+  (* Wxxx lint warnings (well-typed but suspicious; never reject) *)
+  | Lint_dead_function
+  | Lint_unused_binding
+  | Lint_unused_param
+  | Lint_unused_import
 
 let id : code -> string = function
   | Parse_syntax        -> "E1001"
@@ -51,11 +56,17 @@ let id : code -> string = function
   | Entrypoint          -> "E4002"
   | File_layout         -> "E4003"
   | Manifest            -> "E4004"
+  | Lint_dead_function  -> "W1001"
+  | Lint_unused_binding -> "W1002"
+  | Lint_unused_param   -> "W1003"
+  | Lint_unused_import  -> "W3001"
 
 let severity : code -> severity = function
   | Parse_syntax | Lex_bad_token | Type_check
   | Drop_still_live | Drop_unknown_space | Wire_boundary
   | Topos_layout | Entrypoint | File_layout | Manifest -> Error
+  | Lint_dead_function | Lint_unused_binding | Lint_unused_param
+  | Lint_unused_import -> Warning
 
 (* The prefix each class historically printed on the CLI. Preserved additively so
  * text-matching consumers keep working while the stable code is what tools grab. *)
@@ -68,6 +79,8 @@ let cli_prefix : code -> string = function
   | Entrypoint                   -> "ENTRYPOINT ERROR"
   | File_layout                  -> "FILE ERROR"
   | Manifest                     -> "MANIFEST ERROR"
+  | Lint_dead_function | Lint_unused_binding | Lint_unused_param
+  | Lint_unused_import           -> "LINT"
 
 let title : code -> string = function
   | Parse_syntax        -> "syntax error"
@@ -80,6 +93,10 @@ let title : code -> string = function
   | Entrypoint          -> "entrypoint violation"
   | File_layout         -> "file layout violation"
   | Manifest            -> "manifest error"
+  | Lint_dead_function  -> "unreachable function"
+  | Lint_unused_binding -> "unused binding"
+  | Lint_unused_param   -> "unused parameter"
+  | Lint_unused_import  -> "unused import (dead Space dependency)"
 
 (* The canonical Diagnostic. The message is the specific text WITHOUT the prefix
  * or code (those come from the code). The range is 1-based surface coordinates
@@ -105,4 +122,5 @@ let to_cli (d : t) : string =
 let all : code list =
   [ Parse_syntax; Lex_bad_token; Type_check;
     Drop_still_live; Drop_unknown_space; Wire_boundary;
-    Topos_layout; Entrypoint; File_layout; Manifest ]
+    Topos_layout; Entrypoint; File_layout; Manifest;
+    Lint_dead_function; Lint_unused_binding; Lint_unused_param; Lint_unused_import ]

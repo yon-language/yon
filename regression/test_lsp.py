@@ -183,8 +183,10 @@ def _cross_file_call_project(root: Path):
         "place AP { }\nfun a_op(n: number): number { return gee(n) + 1 }\n")
     (root / "B" / "BP.yon").write_text(
         "place BP { }\nfun gee(n: number): number { return n * 2 }\n")
+    # main uses a_op so the project is lint-clean (no unused-function warnings);
+    # these tests are about cross-file type resolution, not lint.
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): number { return 0 }\n")
+        "place Entry { }\nfun main(): number { return a_op(1) }\n")
     return root
 
 

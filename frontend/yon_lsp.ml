@@ -105,9 +105,18 @@ let diag_of_diagnostic (d : Error_codes.t) : diag =
  * results are attributed to THIS document by matching each diagnostic's site
  * against the drop sites parsed from this file (locations carry no file of their
  * own yet). *)
+(* Lint warnings (Wxxx) for the open buffer: purely syntactic, so they run on this
+ * document alone, in project mode or not. Rendered as Warning diagnostics. *)
+let lint_diags (source : string) : diag list =
+  match parse_source source with
+  | Error _ -> []
+  | Ok prog -> List.map diag_of_diagnostic (Linter.lint_program prog)
+
 let diagnostics_of_document (path : string) (source : string) : diag list =
   match Project.root_of_file path with
-  | None -> diagnostics_of_source source   (* not in a package: single-file mode *)
+  | None ->
+      (* not in a package: single-file parse + type errors + lint *)
+      diagnostics_of_source source @ lint_diags source
   | Some root ->
       (match parse_source source with
        | Error d -> [d]                     (* parse error: cannot type-check *)
@@ -120,10 +129,17 @@ let diagnostics_of_document (path : string) (source : string) : diag list =
               document by the exact file each diagnostic's location carries (Project
               stamps the parsing file onto every location). Project-wide diagnostics
               with no file (layout, entrypoint, orphan space -- dummy location) do
-              not attach to the cursor and are left to the compiler's CLI. *)
+              not attach to the cursor and are left to the compiler's CLI. Lint
+              warnings are appended from the open buffer. *)
            let mine (d : Error_codes.t) = d.Error_codes.range.Surface_ast.file = path in
+           (* Lint the WHOLE package too: dead-function is a whole-program rule (a
+              function unused in this buffer may be reached from a sibling file), so
+              linting the merged program and attributing by file avoids that false
+              positive. *)
            (Project.typecheck_diags loaded |> List.filter mine |> List.map diag_of_diagnostic)
-           @ (Project.check_all loaded |> List.filter mine |> List.map diag_of_diagnostic))
+           @ (Project.check_all loaded |> List.filter mine |> List.map diag_of_diagnostic)
+           @ (Linter.lint_program loaded.Project.merged
+              |> List.filter mine |> List.map diag_of_diagnostic))
 
 (* ─── Pretty-print of a surface type (for hover and symbols) ────────── *)
 
