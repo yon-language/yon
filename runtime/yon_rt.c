@@ -225,6 +225,31 @@ uint32_t yon_rt_space_count(void) {
     return g_n_spaces;
 }
 
+/* Live arena bytes summed over the named per-Space heaps (heap 0 = __Default is
+ * excluded). The real footprint the drop/reclaim frees. */
+uint64_t yon_rt_live_bytes(void) {
+    uint64_t t = 0;
+    for (uint32_t i = 1; i < g_n_spaces; i++)
+        if (g_spaces[i].heap) t += g_spaces[i].heap->arena_used;
+    return t;
+}
+
+/* Heap trace for the memory visualizer: at each allocation and each drop, dump
+ * every named Space's arena_used and the total. Gated behind YON_DEBUG_HEAP so it
+ * costs nothing in a normal run. seq is a monotonic tick counter. */
+static uint64_t g_heap_seq = 0;
+static void yon_rt__heap_tick(const char *ev) {
+    static int on = -1;                    /* cache: getenv once, not per allocation */
+    if (on < 0) on = getenv("YON_DEBUG_HEAP") ? 1 : 0;
+    if (!on) return;
+    fprintf(stderr, "[HEAP] seq=%llu ev=%s", (unsigned long long)g_heap_seq++, ev);
+    for (uint32_t i = 1; i < g_n_spaces; i++) {
+        uint32_t used = g_spaces[i].heap ? g_spaces[i].heap->arena_used : 0;
+        fprintf(stderr, " %s=%u", g_spaces[i].name, used);
+    }
+    fprintf(stderr, " total=%llu\n", (unsigned long long)yon_rt_live_bytes());
+}
+
 /* The runtime bridge for `drop X`: reclaim the Space's heap. heap_id arrives as
  * an f64 (the universal IR type; the emitter passes yon_rt_lookup_space's result
  * coerced to f64). The compiler emits this call only where check_drops has proven
@@ -241,6 +266,11 @@ double yon_rt_drop_space(double heap_id) {
     if (id == YON_HEAP_ID_INVALID || id >= g_n_spaces) return heap_id;
     yon_xheap_t *h = g_spaces[id].heap;           /* NULL under L1_SHARED */
     yon_xheap_drop(h);                            /* no-op if NULL */
+    {   /* trace names the dropped Space, so a heap trace can attribute it */
+        char ev[280];
+        snprintf(ev, sizeof ev, "drop:%s", g_spaces[id].name);
+        yon_rt__heap_tick(ev);
+    }
     return heap_id;
 }
 
@@ -292,6 +322,7 @@ yon_section_t yon_rt_new(uint32_t heap_id,
         return YON_SECTION_INVALID;
     }
     g_spaces[heap_id].occupancy++;
+    yon_rt__heap_tick("new");
     yon_section_t result = yon_section_pack(heap_id, slot_idx);
     return result;
 }
@@ -794,6 +825,7 @@ yon_section_t yon_rt_new_v(uint32_t heap_id,
         return YON_SECTION_INVALID;
     }
     g_spaces[heap_id].occupancy++;
+    yon_rt__heap_tick("new");
     yon_section_t result = yon_section_pack(heap_id, slot_idx);
     return result;
 }

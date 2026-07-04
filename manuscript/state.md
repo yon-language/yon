@@ -9,6 +9,85 @@
 
 ## Locked decisions (log)
 
+- **2026-07-04 — Compiler tooling, brick 2 (pilot): the canonical `Project` pass + a project-aware LSP surfacing E3001.**
+  The recon found the real bottleneck for the LSP was NOT missing codes: `diagnostics_of_source` calls check_program
+  IN-PROCESS and structured, so it already sees parse+type; the 6 semantic classes live in the driver as eprintf+exit,
+  outside any channel the LSP calls. AND the LSP works on one in-memory buffer while the semantic checks need PROJECT
+  context. DONE (piloted on drop, the crown jewel): `frontend/project.ml` -- the canonical loader (`load ~root ?overrides`,
+  from the test-harness pattern: Package_layout.layout for files+Space, Manifest for declared Spaces, TopPlace -> its
+  directory for place_space; `overrides` substitutes an open buffer's unsaved text) and `check_all : loaded ->
+  Error_codes.t list` (runs the pure whole-program checks, pilots on check_drops -> E3001/E3002). One source of truth for
+  "how to check a project", shared by the LSP now and the driver later.
+  · LSP wired: `diag` gained `d_code`; `diagnostics_of_document path source` = the single-file parse/type PLUS, when
+    `Project.root_of_file` finds a yon.toml, the whole-program semantic pass on the merged program (open buffer swapped
+    in). Attributed to THIS file by matching each diagnostic's site against the drop AND import sites parsed from the open
+    file. `yon_lsp --check <projectfile>` prints `[E3001 error] cannot drop Space D ... (at 5:13)` in-process; a legal
+    drop raises nothing. Pinned by regression/test_lsp.py.
+  · EXTENDED to all project-context classes (2026-07-04): check_all now = drop (E3001/E3002) + wire boundary (E3010) +
+    topos-layout (E4001) + file-layout (E4003) + entrypoint (E4002), each reusing the pure Manifest.check_ / check_drops
+    functions -- no duplicated LOGIC, only unified orchestration. The LSP surfaces the LOCATED crown jewels under the
+    cursor (drop E3001, wire-boundary E3010 at the import site); the project-wide classes (layout, entrypoint, no
+    location) are computed by check_all but left to the compiler CLI, not attached to a cursor. The LSP now shows ALL
+    located diagnostics at once, where the driver exits at the first failing class -- a difference convergence will settle
+    (show-all vs first-hit). test_lsp.py pins drop E3001 + wire-boundary E3010. Driver still unchanged; compiler suite
+    identical (438 green).
+  · TWO HONEST LIMITS for the next slice. (1) The single-file type check is NOT project-aware: an isolated Entry.yon
+    yields a false "cannot infer world" (E2001) the full compiler does not -- pre-existing, now visible; the type check
+    should run on the merged program too. (2) Per-file attribution of whole-program diagnostics rides on location
+    matching, and Surface_ast.location carries NO file (line numbers collide across files). Correct in the common case
+    (drops are usually in the entry); the rigorous fix is file-carrying locations, a foundational change. NEXT: extend
+    check_all to layout/boundary/entrypoint, make the type check project-aware, migrate the driver onto Project.load +
+    check_all (converge the two loaders to one), then linter/formatter/debugger.
+
+- **2026-07-04 — Compiler tooling, brick 1: the stable diagnostic-code catalog (`frontend/error_codes.ml`).**
+  Roadmap (Antonio): errors -> LSP -> linter -> formatter -> debugger. Four of five tools already exist as real binaries
+  (diagnostics.ml/yon_lsp.ml/yon_lint.ml/yonfmt.ml); the bottleneck is upstream of all four: NO error class emits a stable
+  code (E1110/E1111 are retired, comment-only; diagnostics.ml is a formatter, not a catalog). A tool cannot key on
+  "DROP ERROR:" (rename the prose, the tool breaks); it needs `E3001`, stable under rewording. DONE: `Error_codes` is the
+  single registry -- a code is defined by its relationships (Yoneda: id, severity, cli_prefix, title), the variant is
+  EXHAUSTIVE (a new class fails the build until numbered, the anti-fake-green net on the catalog). Canonical `Diagnostic
+  { code; range; message }` + `to_cli` renders "<PREFIX> [<id>]: <message>": the historical prefix preserved (text
+  consumers keep working), the stable code added. Ranges: E1xxx syntax, E2xxx type, E3xxx Space semantics (the
+  crown jewels -- E3001 drop-still-live, E3002 unknown-Space, E3010 wire-boundary), E4xxx project/layout, Wxxx lint.
+  · All 8 driver error classes routed through it (yoner_emit_mlir.ml): PARSE/lex, TYPE (x3), DROP (x2), WORLD BOUNDARY,
+    TOPOS LAYOUT (x2), ENTRYPOINT, FILE, MANIFEST. Additive: messages and exit codes unchanged, code added in brackets.
+  · Catalog gate `regression/test_error_codes.py`: codes unique (the hazard hand-numbering invites), in-range, and the CLI
+    really carries `DROP ERROR [E3001]:`. Whole suite green (718 + gate); test_drop_check's `DROP ERROR`/`Space D` greps
+    survive because the prefix is preserved.
+  · SURFACE FINDING for the next brick: the LSP is IN-PROCESS and STRUCTURED (diagnostics_of_source calls
+    parse_source + Tycheck.check_program, maps cr_errors -> diag). It sees parse+type not because they have codes but
+    because they return a structured list; the 6 semantic classes live in the DRIVER as eprintf+exit, outside any channel
+    the LSP calls. So codes alone do NOT light up the LSP. Brick 2 = a shared `check_all : project_ctx -> program ->
+    Diagnostic list` (the semantic checks already return structured lists; extract them from the driver) AND make the LSP
+    PROJECT-AWARE (find the containing yon.toml/layout for the open document), since drop/layout/boundary need project
+    context a single in-memory buffer lacks. eval_runner.ml's 3 sites still use raw prefixes (secondary, interpreter).
+
+- **2026-07-03 — at_space routing ON (census-fed) + the FIFTH arc family: section-handle liveness.**
+  Investigating the measured-memory viz exposed that `new P { }` NEVER reached its Space's arena: assign_topos_structure
+  leaves tp_objects empty on purpose (double-registration fix), so desugar's build_place_to_space_map was always empty and
+  every instance landed on heap 0. Zero corpus projects routed a new. FIX (Antonio's design): do not launder membership
+  through tp_objects; the router reads the source that already knows it. `desugar_program ?place_to_space` receives the
+  filesystem census (the driver's places_by_space inverse, the same place_space check_drops uses); build_place_to_space_map
+  degrades to the fallback for censusless callers (single-file/eval, where empty = correct). One source of truth.
+  PROOF: main emits `__new_in_A_AP`; the [HEAP] trace (new runtime tick, YON_DEBUG_HEAP, drop events name their Space)
+  shows arenas REALLY filling: A 9 -> 24001 bytes across loop 1, drop:A exactly at the join (seq 3000), then B, then C.
+  · ROUTING EXPOSED THE FIFTH ARC FAMILY. With instances in named arenas, a section handle is a LIVE REFERENCE (not a
+    copy): field reads dereference the arena. The analysis counted the arc at the `new` only, so the auto-reclaim
+    scheduled the drop BETWEEN a new and a later field read (use-after-reclaim in the MLIR, verified). Darwin MASKS it
+    (MADV_DONTNEED reclaims lazily: a C probe wrote 4 pages, dropped, all 4 survived); Linux zero-fills, so the same
+    schedule returns zeros there. Fixed with `section_bindings`: variables bound to a section of a routed place (new,
+    place-returning call, alias; fixpoint) merge into the name->Space map, so every USE is an arc through the same imap
+    lookup as imported symbols. Place-typed PARAMETERS seed the callee side (transitive). Flow-insensitive, conservative.
+  · PINS: handle_illegal + alias_illegal in the oracle (negative control: neuter section_bindings -> both go LEGAL-wrong,
+    SEEN, restored); the OLD place_legal pin correctly went red (it returned the raw handle after the drop: legal only
+    under the incomplete semantics) and was rewritten to the copy-geometry shape (extract the field, then drop).
+    System pin test_handle_read_schedules_before_reclaim: MLIR order (field_load BEFORE drop_space, platform-independent)
+    + the binary returns 7 through the live handle. drop_reclaim fixture's DP gained a field for it.
+  · Suite green with routing ON: 741 behavioral (projects/pipeline/cross-space/oracle 508, canonical/coverage/runtime 233)
+    + drop-check 7. The whole corpus now allocates place instances in named arenas and still behaves identically.
+  · Measured-memory viz shipped on the real trace (9003 events, sampled): allocated cursor vs live-after-reclaims, drop
+    markers at measured seqs, per-reclaim arc explanations (loop rule, handle liveness).
+
 - **2026-07-03 — The AUTOMATIC reclaim at last-use (the mechanism): reclaim without an annotation, decided at compile time.**
   The other half of the reclaim system (`drop X` is its checked, declared assertion). The DUAL of check_drops: instead
   of verifying a user's drop point, FIND each Space's last use and insert the reclaim there. `Space_liveness.auto_reclaim_

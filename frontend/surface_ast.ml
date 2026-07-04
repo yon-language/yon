@@ -19,9 +19,10 @@ type location = {
   start_col : int;
   end_line : int;
   end_col : int;
+  file : string;      (* originating file (from Lexing.pos_fname); "" if unknown *)
 }
 
-let dummy_loc = { start_line = 0; start_col = 0; end_line = 0; end_col = 0 }
+let dummy_loc = { start_line = 0; start_col = 0; end_line = 0; end_col = 0; file = "" }
 
 (* Compile-time membership table (same pattern as stage_forces): the
    tycheck registers here every for-every whose collection types as a

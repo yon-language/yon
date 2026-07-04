@@ -129,10 +129,93 @@ let awaits_arc_of (l : S.location) : string option =
   | Some (sp, _, _, _) -> Some sp
   | None -> None
 
+(* A variable bound to a SECTION of a routed place holds a live reference into
+   that place's Space arena: a section handle is NOT a copy, a later field read
+   dereferences the arena. So every USE of such a variable is an arc toward the
+   Space, or the reclaim would madvise pages a later read still needs (real on
+   Linux, where MADV_DONTNEED zero-fills; masked on Darwin, which reclaims
+   lazily). Collected flow-insensitively over the whole body (a binding anywhere
+   maps the name everywhere): conservative, never frees early. Binders, closed
+   under aliasing by fixpoint: `be x holds new P { }`, `be x holds f( )` where f
+   returns a place, `be x holds y` where y is already bound. The result merges
+   into the name->Space map (imap), so uses resolve through the same lookup as
+   imported symbols. *)
+let section_bindings ~(imap : (string, string) Hashtbl.t)
+    ~(ftab : (string, S.fun_decl) Hashtbl.t) (body : S.stmt list)
+    : (string * string) list =
+  let rec binds_stmts ss = List.concat_map binds_stmt ss
+  and binds_stmt s =
+    match s with
+    | S.SLet (x, e, _) -> [ (x, e) ]
+    | S.SAssignHolds (S.LVar x, e, _) -> [ (x, e) ]
+    | S.SAssignHolds (S.LField _, _, _) | S.SAssignBecomes _ | S.SReturn _
+    | S.SCall _ | S.SNew _ | S.SNewIn _ | S.SEmit _ | S.SPromote _
+    | S.SDrop _ -> []
+    | S.SWhile (_, b, _) | S.SIter (_, b, _) | S.SForEvery (_, _, _, b, _)
+    | S.SInSequence (_, _, b, _) | S.SForever (b, _) | S.SProduce (b, _)
+    | S.SForces (_, _, b, _) | S.SScope (_, b, _, _) -> binds_stmts b
+    | S.SRepeat (_, b, oth, _) ->
+        binds_stmts b @ (match oth with Some o -> binds_stmts o | None -> [])
+    | S.SWhen (_, b, elifs, oth, _) ->
+        binds_stmts b
+        @ List.concat_map (fun (_, bb) -> binds_stmts bb) elifs
+        @ (match oth with Some o -> binds_stmts o | None -> [])
+  in
+  let pairs = binds_stmts body in
+  let tbl : (string, string) Hashtbl.t = Hashtbl.create 8 in
+  let rec space_of_rhs e =
+    match e with
+    | S.ENew (p, _, _) | S.ENewIn (p, _, _, _) -> Hashtbl.find_opt imap p
+    | S.ECall (f, _, _) ->
+        (match Hashtbl.find_opt ftab f with
+         | Some fd ->
+             (match fd.S.fn_return with
+              | Some (S.TyUser p) -> Hashtbl.find_opt imap p
+              | _ -> None)
+         | None -> None)
+    | S.EVar (y, _) -> Hashtbl.find_opt tbl y
+    | S.EParen (e0, _) -> space_of_rhs e0
+    | _ -> None
+  in
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    List.iter (fun (x, e) ->
+        if not (Hashtbl.mem tbl x) then
+          match space_of_rhs e with
+          | Some sp -> Hashtbl.replace tbl x sp; changed := true
+          | None -> ())
+      pairs
+  done;
+  Hashtbl.fold (fun k v acc -> (k, v) :: acc) tbl []
+
+(* imap extended with the section-handle bindings of [body] (and extra seeds,
+   e.g. place-typed parameters). Copies on write; the caller's map is shared. *)
+let imap_with_handles ~imap ~ftab ?(seeds = []) (body : S.stmt list)
+    : (string, string) Hashtbl.t =
+  match seeds @ section_bindings ~imap ~ftab body with
+  | [] -> imap
+  | bs ->
+      let m = Hashtbl.copy imap in
+      List.iter (fun (x, sp) -> Hashtbl.replace m x sp) bs;
+      m
+
 (* The Spaces a function communicates with DIRECTLY (its own body): wire arcs
    (EWireTo, via the graph), import arcs (uses of a symbol imported from a Space),
-   and mangled cross-space calls (`apply_move`/morph `in S`). *)
-let direct_arcs ~(imap : (string, string) Hashtbl.t) (fd : S.fun_decl) : string list =
+   mangled cross-space calls (`apply_move`/morph `in S`), and section-handle uses
+   (including place-typed parameters: the caller's handle dereferenced here). *)
+let direct_arcs ~(imap : (string, string) Hashtbl.t)
+    ~(ftab : (string, S.fun_decl) Hashtbl.t) (fd : S.fun_decl) : string list =
+  let param_seeds =
+    List.filter_map
+      (fun pr -> match pr.S.param_ty with
+         | S.TyUser p ->
+             (match Hashtbl.find_opt imap p with
+              | Some sp -> Some (pr.S.param_name, sp) | None -> None)
+         | _ -> None)
+      fd.S.fn_params
+  in
+  let imap = imap_with_handles ~imap ~ftab ~seeds:param_seeds fd.S.fn_body in
   let used = names_used_in_fun fd in
   let wire = List.map fst (Space_graph.wires_fun fd) in
   let imported = List.filter_map (fun (n, _l) -> Hashtbl.find_opt imap n) used in
@@ -172,7 +255,7 @@ let transitive_arcs ~(place_space : (string, string) Hashtbl.t)
         else match Hashtbl.find_opt ftab name with
           | None -> []
           | Some fd ->
-              let here = direct_arcs ~imap fd in
+              let here = direct_arcs ~imap ~ftab fd in
               let through =
                 List.concat_map (fun c -> arcs_of c (name :: visiting)) (callees ~ftab fd)
               in
@@ -266,6 +349,9 @@ let region_arc_sites_expr ~imap ~ftab ~tarcs (e : S.expr) : (string * S.location
    downstream-empty too early. *)
 let downstream_arc_sites ~imap ~ftab ~tarcs (body : S.stmt list) (target : S.location)
     : (string * S.location) list =
+  (* section-handle liveness: uses of a handle-bound variable dereference its
+     Space's arena, so those variables resolve like imported symbols. *)
+  let imap = imap_with_handles ~imap ~ftab body in
   let ras = region_arc_sites ~imap ~ftab ~tarcs in
   let raes = region_arc_sites_expr ~imap ~ftab ~tarcs in
   let rec ds_block (stmts : S.stmt list) : bool * (string * S.location) list =

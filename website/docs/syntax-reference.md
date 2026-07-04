@@ -37,6 +37,7 @@ Every keyword, alphabetically:
 [`compose`](/book/keywords#compose) ·
 [`converts`](/book/keywords#converts) ·
 [`do`](/book/keywords#do) ·
+[`drop`](/book/keywords#drop) ·
 [`each`](/book/keywords#each) ·
 [`effects`](/book/keywords#effects) ·
 [`el_match`](/book/keywords#el_match) ·

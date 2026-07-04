@@ -11,7 +11,8 @@
     { start_line = start_pos.Lexing.pos_lnum;
       start_col = start_pos.Lexing.pos_cnum - start_pos.Lexing.pos_bol;
       end_line = end_pos.Lexing.pos_lnum;
-      end_col = end_pos.Lexing.pos_cnum - end_pos.Lexing.pos_bol; }
+      end_col = end_pos.Lexing.pos_cnum - end_pos.Lexing.pos_bol;
+      file = start_pos.Lexing.pos_fname; }
 
   (* Split a qualified name "a::b::c" into (module="a::b", name="c").
    * The name is the last segment; the module is everything before it. *)

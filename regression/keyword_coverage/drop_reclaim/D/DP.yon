@@ -1,2 +1,2 @@
 fun d_op(x: number): number { return x + 1 }
-place DP { }
+place DP { n number }
