@@ -435,10 +435,10 @@ let write_message (oc : out_channel) (body : string) : unit =
 
 (* Response to the "initialize" request: declares the server capabilities.
  * textDocumentSync = 1 (Full): the client sends the entire text on every change.
- * Also announces hover, document symbols, completion. *)
+ * Also announces hover, document symbols, completion, and document formatting. *)
 let initialize_response (id : string) : string =
   Printf.sprintf
-    {|{"jsonrpc":"2.0","id":%s,"result":{"capabilities":{"textDocumentSync":1,"hoverProvider":true,"documentSymbolProvider":true,"completionProvider":{"triggerCharacters":["."]}}}}|}
+    {|{"jsonrpc":"2.0","id":%s,"result":{"capabilities":{"textDocumentSync":1,"hoverProvider":true,"documentSymbolProvider":true,"completionProvider":{"triggerCharacters":["."]},"documentFormattingProvider":true}}}|}
     id
 
 (* JSON for the documentSymbol response. *)
@@ -466,6 +466,21 @@ let publish_diagnostics (uri : string) (diags : diag list) : string =
   Printf.sprintf
     {|{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"%s","diagnostics":[%s]}}|}
     (json_escape uri) arr
+
+(* A whole-document formatting response: a single TextEdit replacing the entire
+ * buffer with the formatted text, or [] when the formatter declines (fail-safe:
+ * an uncovered construct or a non-idempotent result), leaving the buffer as is.
+ * The shared Formatter is the same code the `yonfmt` CLI runs. *)
+let formatting_edits (text : string) : string =
+  match Formatter.safe_format text with
+  | None -> "[]"
+  | Some out ->
+      (* end = the position just past the document's last character *)
+      let el = ref 0 and ec = ref 0 in
+      String.iter (fun c -> if c = '\n' then (incr el; ec := 0) else incr ec) text;
+      Printf.sprintf
+        {|[{"range":{"start":{"line":0,"character":0},"end":{"line":%d,"character":%d}},"newText":"%s"}]|}
+        !el !ec (json_escape out)
 
 (* Extract the id (which may be a number or a string) as raw text to reuse. *)
 let extract_id (json : string) : string =
@@ -565,6 +580,14 @@ let run_server () : unit =
                   respond id (completions_to_json items)
               | None -> respond id (completions_to_json
                          (List.map (fun k -> (k, 14)) keywords)))
+         | "textDocument/formatting" ->
+             let id = extract_id body in
+             (match extract_string_field body "uri" with
+              | Some uri ->
+                  (match Hashtbl.find_opt docs uri with
+                   | Some text -> respond id (formatting_edits text)
+                   | None -> respond id "[]")
+              | None -> respond id "[]")
          | "shutdown" ->
              respond (extract_id body) "null"
          | "exit" -> raise Exit
