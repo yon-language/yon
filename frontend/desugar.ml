@@ -1105,7 +1105,7 @@ and inject_captured_args_in_stmt (old_n : string) (new_n : string)
   let loc = match s with
     | S.SLet (_, _, l) | S.SAssignHolds (_, _, l) | S.SAssignBecomes (_, _, l)
     | S.SReturn (_, l) | S.SCall (_, _, l) -> l
-    | _ -> { start_line = 0; start_col = 0; end_line = 0; end_col = 0 }
+    | _ -> S.dummy_loc
   in
   let goe = inject_captured_args old_n new_n captured loc in
   match s with
@@ -2603,7 +2603,8 @@ let place_info = List.filter_map (function
 let () = produce_block_ref := desugar_produce_block
 let () = spawn_block_ref := desugar_spawn_block
 
-let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_result =
+let desugar_program ?(env : Tyenv.env option = None)
+    ?(place_to_space : (string * string) list = []) (p : S.program) : desugar_result =
   (* The optional [env] is the typed environment from Tycheck (cr_env). The
      terminal absorber (B.3) consults it to collapse a pure, terminal-returning
      function body to the unique inhabitant `()`. When None the absorber stays
@@ -2613,7 +2614,19 @@ let desugar_program ?(env : Tyenv.env option = None) (p : S.program) : desugar_r
   (* Pre-rewriting that propagates tp_at_space to the `new P { ... }`
    * expressions inside functions. *)
   reset_synth ();  (* reset the accumulator of handle lambdas *)
-  let place_to_space = build_place_to_space_map p in
+  (* The place->space membership for the at_space routing. In project mode the
+     driver passes it from the filesystem census (a place lives in the Space of
+     its directory, ul_space): the single source of truth, read directly, never
+     laundered through tp_objects (which assign_topos_structure leaves empty on
+     purpose to avoid double registration). The tp_objects-derived map remains as
+     the fallback for callers with no census (single-file, eval, fuzz): there it
+     is empty and the rewrite is a no-op, which is correct because without a
+     project there is no Space directory to route to. *)
+  let place_to_space =
+    match place_to_space with
+    | [] -> build_place_to_space_map p
+    | m -> m
+  in
   let p = List.map (rewrite_top_decl place_to_space) p in
   let p = expand_views p in
   (* The first fold collects synth_funs into the global refs (filled by

@@ -16,6 +16,7 @@ type diag = {
   d_end_col : int;
   d_severity : int; (* 1 = Error *)
   d_msg : string;
+  d_code : string option;  (* the stable diagnostic code, e.g. "E3001" *)
 }
 
 (* Parse the source. On a parse/lex error, produce a single diagnostic with
@@ -32,7 +33,8 @@ let parse_source (source : string)
       Error { d_line = line; d_col = col;
               d_end_line = line; d_end_col = col + 1;
               d_severity = 1;
-              d_msg = "Syntax error" }
+              d_msg = "Syntax error";
+              d_code = Some (Error_codes.id Error_codes.Parse_syntax) }
   | Lexer.Lexer_error msg ->
       let p = lexbuf.Lexing.lex_curr_p in
       let line = p.Lexing.pos_lnum - 1 in
@@ -40,7 +42,8 @@ let parse_source (source : string)
       Error { d_line = line; d_col = col;
               d_end_line = line; d_end_col = col + 1;
               d_severity = 1;
-              d_msg = Printf.sprintf "Errore lessicale: %s" msg }
+              d_msg = Printf.sprintf "Errore lessicale: %s" msg;
+              d_code = Some (Error_codes.id Error_codes.Lex_bad_token) }
 
 (* Convert a frontend type_error into an LSP diagnostic. The frontend
  * locations are 1-based (start_line/start_col); LSP is 0-based. *)
@@ -58,7 +61,8 @@ let type_error_to_diag (e : Tycheck.type_error) : diag =
   { d_line = line0; d_col = col0;
     d_end_line = eline0; d_end_col = ecol0;
     d_severity = 1;
-    d_msg = e.Tycheck.err_msg }
+    d_msg = e.Tycheck.err_msg;
+    d_code = Some (Error_codes.id Error_codes.Type_check) }
 
 (* Source -> list of diagnostics. Empty = valid program.
  * Parse error: one diagnostic, then we stop (we cannot type check).
@@ -69,6 +73,57 @@ let diagnostics_of_source (source : string) : diag list =
   | Ok prog ->
       let result = Tycheck.check_program prog in
       List.map type_error_to_diag result.Tycheck.cr_errors
+
+(* "file:///abs/path" -> "/abs/path". Minimal: the common editor case. *)
+let path_of_uri (uri : string) : string =
+  if String.length uri >= 7 && String.sub uri 0 7 = "file://" then
+    let rest = String.sub uri 7 (String.length uri - 7) in
+    if String.length rest > 0 && rest.[0] = '/' then rest else "/" ^ rest
+  else uri
+
+(* A canonical project Diagnostic (Error_codes.t) -> an LSP diagnostic. The range
+ * is 1-based surface coordinates; LSP is 0-based. *)
+let diag_of_diagnostic (d : Error_codes.t) : diag =
+  let l = d.Error_codes.range in
+  let line0 = max 0 (l.Surface_ast.start_line - 1) in
+  let col0 = max 0 l.Surface_ast.start_col in
+  let eline0 = max 0 (l.Surface_ast.end_line - 1) in
+  let ecol0 = max 0 l.Surface_ast.end_col in
+  let eline0, ecol0 =
+    if eline0 = line0 && ecol0 <= col0 then (line0, col0 + 1) else (eline0, ecol0) in
+  { d_line = line0; d_col = col0; d_end_line = eline0; d_end_col = ecol0;
+    d_severity = (match Error_codes.severity d.Error_codes.code with
+                  | Error_codes.Error -> 1 | Error_codes.Warning -> 2);
+    d_msg = d.Error_codes.message;
+    d_code = Some (Error_codes.id d.Error_codes.code) }
+
+(* Diagnostics for an open document: the single-file parse + type errors, PLUS
+ * the whole-program semantic diagnostics (drop, ...) when the file lives inside a
+ * package. The open buffer's unsaved text is substituted into the project load,
+ * so the editor sees exactly what the compiler would. The semantic pass runs on
+ * the merged program (whole-program is required for the drop analysis); its
+ * results are attributed to THIS document by matching each diagnostic's site
+ * against the drop sites parsed from this file (locations carry no file of their
+ * own yet). *)
+let diagnostics_of_document (path : string) (source : string) : diag list =
+  match Project.root_of_file path with
+  | None -> diagnostics_of_source source   (* not in a package: single-file mode *)
+  | Some root ->
+      (match parse_source source with
+       | Error d -> [d]                     (* parse error: cannot type-check *)
+       | Ok _ ->
+           let loaded = Project.load ~root ~overrides:[ (path, source) ] () in
+           (* Type errors AND whole-program semantic diagnostics (drop E3001/E3002,
+              wire boundary E3010), both computed over the WHOLE package -- so a
+              cross-file reference (a place/type/function in a sibling file) resolves
+              instead of tripping a false "unknown ..." -- then attributed to THIS
+              document by the exact file each diagnostic's location carries (Project
+              stamps the parsing file onto every location). Project-wide diagnostics
+              with no file (layout, entrypoint, orphan space -- dummy location) do
+              not attach to the cursor and are left to the compiler's CLI. *)
+           let mine (d : Error_codes.t) = d.Error_codes.range.Surface_ast.file = path in
+           (Project.typecheck_diags loaded |> List.filter mine |> List.map diag_of_diagnostic)
+           @ (Project.check_all loaded |> List.filter mine |> List.map diag_of_diagnostic))
 
 (* ─── Pretty-print of a surface type (for hover and symbols) ────────── *)
 
@@ -297,9 +352,12 @@ let json_escape (s : string) : string =
   Buffer.contents buf
 
 let diag_to_json (d : diag) : string =
+  let code = match d.d_code with
+    | Some c -> Printf.sprintf {|,"code":"%s"|} (json_escape c)
+    | None -> "" in
   Printf.sprintf
-    {|{"range":{"start":{"line":%d,"character":%d},"end":{"line":%d,"character":%d}},"severity":%d,"source":"yon","message":"%s"}|}
-    d.d_line d.d_col d.d_end_line d.d_end_col d.d_severity (json_escape d.d_msg)
+    {|{"range":{"start":{"line":%d,"character":%d},"end":{"line":%d,"character":%d}},"severity":%d,"source":"yon"%s,"message":"%s"}|}
+    d.d_line d.d_col d.d_end_line d.d_end_col d.d_severity code (json_escape d.d_msg)
 
 (* ─── Minimal JSON-RPC parsing for the fields we need ───────────────── *)
 
@@ -470,7 +528,7 @@ let run_server () : unit =
                     extract_string_field body "text" with
               | Some uri, Some text ->
                   Hashtbl.replace docs uri text;
-                  let diags = diagnostics_of_source text in
+                  let diags = diagnostics_of_document (path_of_uri uri) text in
                   write_message oc (publish_diagnostics uri diags)
               | _ -> ())
          | "textDocument/hover" ->
@@ -522,15 +580,24 @@ let () =
    * prints the diagnostics in a readable format and exits with code = #errors.
    * `yon_lsp`: LSP server mode (stdin/stdout). *)
   if Array.length Sys.argv >= 3 && Sys.argv.(1) = "--check" then begin
-    let file = Sys.argv.(2) in
-    let ic = open_in file in
-    let n = in_channel_length ic in
-    let source = really_input_string ic n in
-    close_in ic;
-    let diags = diagnostics_of_source source in
+    let target = Sys.argv.(2) in
+    let diags =
+      if Sys.file_exists target && Sys.is_directory target then
+        (* Whole-project mode: the canonical check_all, UNFILTERED. Used by the
+           differential gate to compare the module's verdict against the driver. *)
+        Project.check_all (Project.load ~root:target ())
+        |> List.map diag_of_diagnostic
+      else
+        let ic = open_in target in
+        let n = in_channel_length ic in
+        let source = really_input_string ic n in
+        close_in ic;
+        diagnostics_of_document target source
+    in
     List.iter (fun d ->
-      Printf.printf "%d:%d-%d:%d [%s] %s\n"
+      Printf.printf "%d:%d-%d:%d [%s %s] %s\n"
         (d.d_line + 1) (d.d_col + 1) (d.d_end_line + 1) (d.d_end_col + 1)
+        (match d.d_code with Some c -> c | None -> "-")
         (if d.d_severity = 1 then "error" else "warn") d.d_msg
     ) diags;
     if diags = [] then Printf.printf "OK: no errors\n";

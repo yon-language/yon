@@ -38,6 +38,21 @@ _DEBUG_ENV = {**os.environ, "YON_DEBUG_DROPS": "1"}
 
 # No explicit `drop`: main uses D (the imported d_op) then does unrelated work, so
 # D dies before the end and the automatic reclaim inserts the drop at its last use.
+# The section-handle liveness pin: the handle p returned by `new DP { }` is a
+# live reference into D's arena (not a copy), so the automatic reclaim must land
+# AFTER the last field read through p, never between the new and the read. The
+# program returns p.n; a reclaim scheduled before the read would zero the page on
+# platforms where MADV_DONTNEED zero-fills (Linux) and return 0 instead of 7.
+_HANDLE_ESCAPE = """\
+place Entry { }
+fun main(): number {
+  be p holds new DP { n 7 }
+  be filler holds 1
+  be y holds p.n
+  return y
+}
+"""
+
 _AUTO_NO_DROP = """\
 import svc::d_op from D
 place Entry { }
@@ -50,6 +65,7 @@ fun main(): number {
 
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
+EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
 FIXTURE = ROOT / "regression" / "keyword_coverage" / "drop_reclaim"
 
 _ILLEGAL_IMPORT = """\
@@ -195,3 +211,27 @@ def test_automatic_reclaim_without_explicit_drop(tmp_path):
     run_out = r.stdout + r.stderr
     assert "xheap_drops=1" in run_out, (
         f"D was not automatically reclaimed (no drop written):\n{run_out}")
+
+
+@pytest.mark.skipif(not YONC.exists() or not EMIT.exists() or not FIXTURE.exists(),
+                    reason="yonc, emitter or drop_check fixture missing")
+def test_handle_read_schedules_before_reclaim(tmp_path):
+    """Section-handle liveness: a handle into D's arena keeps D alive until its
+    last field read, so the automatic reclaim lands AFTER the read. Two pins:
+    (1) the schedule, platform-independent: in the emitted MLIR the field_load
+    comes before the drop_space call; (2) the value: the binary returns 7, not the
+    zero a read-after-madvise would produce where MADV_DONTNEED zero-fills."""
+    proj = _copy_with_entry(FIXTURE, tmp_path / "proj", _HANDLE_ESCAPE)
+    e = subprocess.run([str(EMIT), str(proj)], capture_output=True, text=True, timeout=120)
+    assert e.returncode == 0, f"emit failed:\n{e.stderr[-800:]}"
+    main_body = e.stdout[e.stdout.index("func.func @main"):]
+    load_at = main_body.index("yon_rt_field_load")
+    drop_at = main_body.index("yon_rt_drop_space")
+    assert load_at < drop_at, (
+        "the reclaim is scheduled BEFORE the handle's field read: use-after-reclaim")
+    out = tmp_path / "out"
+    c = _compile(proj, out)
+    assert c.returncode == 0, f"escape fixture failed to compile:\n{c.stdout + c.stderr}"
+    r = subprocess.run([str(out)], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 7, (
+        f"expected p.n == 7 through the live handle, got exit {r.returncode}")

@@ -134,7 +134,7 @@ let () =
       if Sys.file_exists manifest_path then
         (try Some (Manifest.parse_file manifest_path)
          with Manifest.Manifest_error msg ->
-           Printf.eprintf "MANIFEST ERROR: %s\n" msg; exit 3)
+           Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Manifest msg)); exit 3)
       else None
     end else None
   in
@@ -152,11 +152,10 @@ let () =
   (* parse each file (import-stripped source), accumulate the top_decls,
    * prefixing each imported module's declarations with `module::`. *)
   let internals = ref [] in
-  (* Project mode: collect each place's world and each file's wire targets while
-     the file is parsed below -- no second parse. The place->world map needs the
-     space (directory) of the file; key it by the same canon path as `loaded`. *)
+  (* Project mode: collect each place's world while the file is parsed below --
+     no second parse. The place->world map needs the space (directory) of the
+     file; key it by the same canon path as `loaded`. *)
   let pw_pairs = ref [] in
-  let wire_errs = ref [] in
   let space_edges = ref [] in (* static Space graph: wire and import arcs, tagged by source Space *)
   let place_acc = ref [] in   (* (place_name, file, space) for every project place *)
   let main_files = ref [] in  (* files that define `fun main` *)
@@ -165,13 +164,11 @@ let () =
      the merged program below no longer carries per-file origin. *)
   let places_by_space = ref [] in  (* (space, place_decl) for every project TopPlace *)
   let topos_space = ref [] in      (* (topos_name, space) for every TopTopos file *)
-  let topos_count = ref [] in      (* (space, n) topos-file count per space *)
-  (* Agent ENF: mandatory file-layout violations, collected per file in the
-     loop below (project mode only). One message per rule violation; printed and
-     exit-3'd after the loop, matching the check_one_topos_per_space convention.
-     Collecting here (not from the merged program) keeps per-file origin —
-     filename/decls are in scope in the per-file parse. *)
-  let layout_errs = ref [] in
+  (* Per-file record for the shared project diagnostic pass (Project.check_all):
+     the file's Space (directory), path, and drained decls -- exactly what the
+     module's loader would produce, but built from THIS parse so there is no
+     second read. Project mode only (populated in the branch below). *)
+  let files_acc = ref [] in
   let space_of_path =
     match project_wm with
     | Some _ ->
@@ -209,60 +206,37 @@ let () =
                (* Filesystem-derived topos structure (Agent M): in this same
                   pass capture, per space, (a) the full place_decl of every
                   TopPlace — these become the topos's tp_objects — and (b) each
-                  TopTopos's name->space binding plus a per-space topos-file
-                  count (for one-topos-per-space enforcement). sp is "" for root
-                  files, which belong to no space/topos. *)
-               let local_topos_in_file = ref 0 in
+                  TopTopos's name->space binding. sp is "" for root files, which
+                  belong to no space/topos. The file-layout / topos-count /
+                  boundary facts are no longer tallied here: Project.check_all
+                  derives them from `files_acc` below, in one place. *)
                List.iter (function
                  | Surface_ast.TopPlace pd ->
                      place_acc := (pd.Surface_ast.pd_name, filename, sp) :: !place_acc;
                      if sp <> "" then
                        places_by_space := (sp, pd) :: !places_by_space
                  | Surface_ast.TopTopos td ->
-                     if sp <> "" then begin
-                       topos_space := (td.Surface_ast.tp_name, sp) :: !topos_space;
-                       incr local_topos_in_file
-                     end
+                     if sp <> "" then
+                       topos_space := (td.Surface_ast.tp_name, sp) :: !topos_space
                  | Surface_ast.TopFun fd when fd.Surface_ast.fn_name = "main" ->
                      main_files := filename :: !main_files
                  | _ -> ()) decls;
-               if sp <> "" && !local_topos_in_file > 0 then
-                 topos_count := (sp, !local_topos_in_file) :: !topos_count;
-               (* Agent ENF: mandatory file-layout checks. Gather this file's
-                  per-file facts (basename, declared place names, whether it
-                  declares a topos) HERE, where filename + decls are in scope,
-                  and run them through Manifest.check_file_layout. Applies to
-                  every project file (root and space files alike): the basename
-                  is the filename without ".yon"; the rules themselves exempt
-                  zero-place files. Project mode only (this whole branch is
-                  gated on project_wm = Some wm). *)
-               let basename =
-                 Filename.remove_extension (Filename.basename filename) in
-               let file_place_names =
-                 List.filter_map (function
-                   | Surface_ast.TopPlace pd -> Some pd.Surface_ast.pd_name
-                   | _ -> None) decls in
-               let file_has_topos =
-                 List.exists (function
-                   | Surface_ast.TopTopos _ -> true
-                   | _ -> false) decls in
-               layout_errs :=
-                 Manifest.check_file_layout ~basename
-                   ~place_names:file_place_names ~has_topos:file_has_topos
-                 @ !layout_errs;
-               (* place->world + wire boundary: only for files whose space is
-                  in a world (root files inherit no world). *)
-               let sender_world = Manifest.world_of_space wm sp in
-               (match sender_world with
+               (* Capture the file for Project.check_all (drop / boundary / topos /
+                  layout / entrypoint), built from this same parse. sp is "" for
+                  root files, which the pass treats as space-less. *)
+               files_acc :=
+                 { Project.fi_space = sp; fi_path = filename; fi_prog = decls }
+                 :: !files_acc;
+               (* place->world: bind each place in a world-bearing space to that
+                  world (root files inherit no world). The wire-boundary targets
+                  are re-derived by Project.check_all from files_acc. *)
+               (match Manifest.world_of_space wm sp with
                 | Some w ->
                     List.iter (function
                       | Surface_ast.TopPlace pd ->
                           pw_pairs := (pd.Surface_ast.pd_name, w) :: !pw_pairs
                       | _ -> ()) decls
-                | None -> ());
-               wire_errs :=
-                 Manifest.check_targets wm ~sender_world
-                   (Manifest.import_targets decls) @ !wire_errs
+                | None -> ())
            | _ -> ());
           decls
         end
@@ -273,14 +247,16 @@ let () =
       with
       | Parser.Error ->
           let p = lexbuf.lex_curr_p in
-          Printf.eprintf "Parse error at %s:%d:%d\n" p.pos_fname
-            p.pos_lnum (p.pos_cnum - p.pos_bol);
+          Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Parse_syntax
+            (Printf.sprintf "%s:%d:%d" p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol))));
           exit 2
       | Failure msg ->
-          Printf.eprintf "Lex/parse failure in %s: %s\n" filename msg;
+          Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Parse_syntax
+            (Printf.sprintf "%s: %s" filename msg)));
           exit 2
       | Lexer.Lexer_error msg ->
-          Printf.eprintf "Lexer error in %s: %s\n" filename msg;
+          Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Lex_bad_token
+            (Printf.sprintf "%s: %s" filename msg)));
           exit 2
     ) all_sources
   in
@@ -332,25 +308,38 @@ let () =
       if sp <> "" then Hashtbl.replace h pd.Surface_ast.pd_name sp) !places_by_space;
     h
   in
-  (match Space_liveness.check_drops ~declared:declared_spaces ~place_space prog with
+  (* Whole-program project diagnostics, from the SAME orchestration the language
+     server runs (Project.check_all): drop, wire boundary, one-topos-per-space,
+     file layout, entrypoint. Converging here is what makes the compiler and the
+     editor incapable of disagreeing -- one function decides "what a project's
+     diagnostics are". The `loaded` is built from THIS parse (no second read): the
+     merged pre-lowering program, the filesystem space census, and the per-file
+     facts the loop above accumulated. Show-all: every violation is printed, then
+     exit 3 (the shared semantic-error channel). Must stay before
+     Module_prefix.lower_cross_space (below): the drop analysis needs the raw
+     import/call arcs, gone after lowering. *)
+  let loaded : Project.loaded =
+    { Project.root = path;
+      declared = declared_spaces;
+      place_space;
+      merged = prog;
+      space_nodes =
+        (match project_wm with
+         | Some _ -> Package_layout.space_decls ~root:path
+         | None -> []);
+      files = List.rev !files_acc;
+      wm = project_wm;
+      place_acc = !place_acc;
+      main_files = !main_files;
+      entry_name =
+        (match project_wm with
+         | Some wm -> (match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry")
+         | None -> "Entry") }
+  in
+  (match Project.check_all loaded with
    | [] -> ()
-   | errs ->
-       List.iter (fun (e : Space_liveness.drop_error) ->
-         let l = e.Space_liveness.de_drop in
-         match e.Space_liveness.de_fault with
-         | Space_liveness.Unknown_space ->
-             Printf.eprintf
-               "DROP ERROR: unknown Space %s at %d:%d (not a declared Space in any world)\n"
-               e.Space_liveness.de_space
-               l.Surface_ast.start_line l.Surface_ast.start_col
-         | Space_liveness.Still_live arc ->
-             Printf.eprintf
-               "DROP ERROR: cannot drop Space %s at %d:%d: an arc toward it is still \
-                reachable downstream (at %d:%d)\n"
-               e.Space_liveness.de_space
-               l.Surface_ast.start_line l.Surface_ast.start_col
-               arc.Surface_ast.start_line arc.Surface_ast.start_col)
-         errs;
+   | diags ->
+       List.iter (fun d -> Printf.eprintf "%s\n" (Error_codes.to_cli d)) diags;
        exit 3);
   (* Automatic reclaim at last-use (the mechanism `drop X` is the checked
      assertion of): insert an SDrop for each Space at its global last use in the
@@ -373,18 +362,8 @@ let () =
   in
   let prog =
     Space_liveness.auto_reclaim_program ~declared:owned_spaces ~place_space prog in
-  (* Agent ENF: mandatory file-layout enforcement. The per-file loop above has
-     now populated layout_errs (it ran eagerly: List.concat_map forces every
-     element). Project mode only: layout_errs is only ever appended to inside
-     the `project_wm = Some wm` branch, so for a single-file `EMIT some.yon`
-     (project_wm = None) it stays empty and this is vacuous — the negative-test
-     harness runs single files and is exempt. Collect ALL violations across the
-     project's files, print them, exit 3 — matching check_one_topos_per_space. *)
-  (match List.rev !layout_errs with
-   | [] -> ()
-   | errs ->
-       List.iter (fun m -> Printf.eprintf "TOPOS LAYOUT ERROR: %s\n" m) errs;
-       exit 3);
+  (* File layout, one-topos-per-space, boundary and entrypoint were all decided
+     above by Project.check_all; nothing to re-check here. *)
   (* In project mode the worlds and spaces are not in any .yon file: the worlds
      come from the toml (as native TopWorld nodes) and each directory is a
      space (a native TopSpace). Prepend them to the parsed place files -- no
@@ -399,36 +378,14 @@ let () =
      and the file that declares it carries `main`. The name defaults to "Entry"
      and may be set by [package] entry. In project mode these four conditions
      are enforced; outside project mode `main` keeps its top-level meaning. *)
+  (* The entrypoint's four conditions were validated by Project.check_all above;
+     here we only need its NAME to strip the container below. *)
   let project_entry_name =
     match project_wm with
     | None -> None
     | Some wm ->
         Some (match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry")
   in
-  (match project_wm, project_entry_name with
-   | None, _ -> ()
-   | Some _, Some entry_name ->
-       let entries = List.filter (fun (n, _, _) -> n = entry_name) !place_acc in
-       let fail msg = Printf.eprintf "ENTRYPOINT ERROR: %s\n" msg; exit 3 in
-       (match entries with
-        | [] ->
-            fail (Printf.sprintf
-              "the project declares no entrypoint: add `place %s` in the project \
-               root, in the file that defines main" entry_name)
-        | _ :: _ :: _ ->
-            fail (Printf.sprintf
-              "the entrypoint place `%s` must be unique; it is declared %d times"
-              entry_name (List.length entries))
-        | [ (_, file, sp) ] ->
-            if sp <> "" then
-              fail (Printf.sprintf
-                "the entrypoint place `%s` must live in the project root, not in \
-                 space `%s`" entry_name sp)
-            else if not (List.mem file !main_files) then
-              fail (Printf.sprintf
-                "the entrypoint place `%s` must contain main: its file defines no \
-                 `fun main`" entry_name))
-   | Some _, None -> assert false);
   (* Entry is a validated package container, not a site object. Keeping it as
      TopPlace would force a root world in multi-world packages and would emit a
      fictitious topos.place. main remains as the actual executable entry. *)
@@ -491,26 +448,9 @@ let () =
   let prog =
     match project_wm with
     | Some wm ->
-        (* one topos per space (mandatory): every declared space must hold
-           exactly one topos file. space_decls gives the declared spaces. *)
-        let declared_spaces =
-          Package_layout.space_decls ~root:path
-          |> List.filter_map (function
-               | Surface_ast.TopSpace sd -> Some sd.Surface_ast.sd_name
-               | _ -> None)
-        in
-        (* per-space topos-file count, summed across that space's files *)
-        let count_tbl : (string, int) Hashtbl.t = Hashtbl.create 16 in
-        List.iter (fun (sp, n) ->
-          let prev = match Hashtbl.find_opt count_tbl sp with Some k -> k | None -> 0 in
-          Hashtbl.replace count_tbl sp (prev + n)) !topos_count;
-        let topos_count_of_space sp =
-          match Hashtbl.find_opt count_tbl sp with Some k -> k | None -> 0 in
-        (match Manifest.check_one_topos_per_space ~topos_count_of_space declared_spaces with
-         | [] -> ()
-         | errs ->
-             List.iter (fun m -> Printf.eprintf "TOPOS LAYOUT ERROR: %s\n" m) errs;
-             exit 3);
+        (* one-topos-per-space was already enforced by Project.check_all above, so
+           assign_topos_structure runs on a validated layout (exactly one topos per
+           space). *)
         (* topos_name -> space *)
         let ts_tbl : (string, string) Hashtbl.t = Hashtbl.create 16 in
         List.iter (fun (tn, sp) -> Hashtbl.replace ts_tbl tn sp) !topos_space;
@@ -565,30 +505,13 @@ let () =
   let cr = Tycheck.check_program prog in
   if cr.Tycheck.cr_errors <> [] then begin
     List.iter (fun e ->
-      Printf.eprintf "TYPE ERROR: %s\n" (Tycheck.error_to_string e))
+      Printf.eprintf "%s\n" (Error_codes.to_cli
+        (Error_codes.make Error_codes.Type_check (Tycheck.error_to_string e))))
       cr.Tycheck.cr_errors;
     exit 3
   end;
-  (* World boundary (yon.toml [world] sections): a wire may only reach a space
-   * in the sender's own world. Project mode only -- the manifest lives at the
-   * project root. Reuses the parsed program and the same exit-3 channel as
-   * type errors. Opt-in: with no [world] declared, the checks are vacuous. *)
-  (match project_wm with
-   | None -> ()
-   | Some wm ->
-      (* D (orphan spaces) is global, from the whole program; B + C were
-         collected per file during parsing (wire_errs). No second parse. *)
-      (match Manifest.check_program wm prog @ List.rev !wire_errs with
-       | [] -> ()
-       | errs ->
-           List.iter (fun (loc, msg) ->
-             if loc.Surface_ast.start_line > 0 then
-               Printf.eprintf "WORLD BOUNDARY ERROR: %d:%d: %s\n"
-                 loc.Surface_ast.start_line loc.Surface_ast.start_col msg
-             else
-               Printf.eprintf "WORLD BOUNDARY ERROR: %s\n" msg
-           ) errs;
-           exit 3));
+  (* The world-boundary checks (orphan spaces + per-wire targets) were decided by
+     Project.check_all above, before any lowering consumed the import arcs. *)
   (* Propagate the inferred place->world binding to codegen. check_program runs
    * infer_place_worlds to resolve each unannotated place's world (e.g. Order in
    * Commerce via `Code is Order` in the world), but keeps that rewrite internal
@@ -602,7 +525,14 @@ let () =
     | Ok p -> p
     | Error _ -> prog
   in
-  let desugared = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) prog in
+  (* Route `new P { }` to P's Space: pass the filesystem census (place -> its
+     directory's Space, the same place_space the drop check uses) to the at_space
+     rewrite. Reading the census directly keeps one source of truth; tp_objects
+     stays empty (its double-registration hazard never arises). *)
+  let desugared =
+    Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env)
+      ~place_to_space:(Hashtbl.fold (fun k v acc -> (k, v) :: acc) place_space [])
+      prog in
   (* Erase type-level (universe-typed) parameters before codegen: a type
      argument is a compile-time citizen and must not reach the carrier/backend
      as runtime data. Coordinated drop of binders and matching call arguments;
@@ -610,11 +540,12 @@ let () =
   let desugared =
     try Type_erase.erase desugared
     with Type_erase.Higher_order_type_param fname ->
-      Printf.eprintf
-        "TYPE ERROR: function `%s` has type parameters and is used outside a \
-         direct call (passed as a value, aliased, or partially applied). \
-         Higher-order type-argument erasure is not lowered, so this is \
-         rejected at compile time rather than miscompiled.\n" fname;
+      Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Type_check
+        (Printf.sprintf
+           "function `%s` has type parameters and is used outside a direct call \
+            (passed as a value, aliased, or partially applied). Higher-order \
+            type-argument erasure is not lowered, so this is rejected at compile \
+            time rather than miscompiled." fname)));
       exit 3
   in
   (* TEMP DIAGNOSTIC: dump the Core IR under YON_DUMP_CORE=1 *)
