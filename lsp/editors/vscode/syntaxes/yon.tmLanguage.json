@@ -1,0 +1,102 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Yon",
+  "scopeName": "source.yon",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#declarations" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#operators" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.yon",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.yon",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.yon",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        { "name": "constant.character.escape.yon", "match": "\\\\." }
+      ]
+    },
+    "numbers": {
+      "name": "constant.numeric.yon",
+      "match": "\\b[0-9]+(\\.[0-9]+)?\\b"
+    },
+    "declarations": {
+      "comment": "A declaration keyword followed by the name it binds.",
+      "match": "\\b(place|fun|move|view|reduction|operation|functor|morph|geomorph|topos|topology|prop|space|cell|error|terminal)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.type.yon" },
+        "2": { "name": "entity.name.type.yon" }
+      }
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.yon",
+          "match": "\\b(when|otherwise|forces|for|every|here|sequence|repeat|at|most|times|forever|scope|return|produce|emit|if|then|else|iter|do|while)\\b"
+        },
+        {
+          "name": "storage.type.yon",
+          "match": "\\b(import|internal|partial|place|space|fun|move|view|reduction|operation|cell|geomorph|pullback|pushout|topology|functorial|functor|topos|morphisms|morphism|terminal|prop|nat|morph|error)\\b"
+        },
+        {
+          "name": "keyword.other.binding.yon",
+          "match": "\\b(be|holds|new)\\b"
+        },
+        {
+          "name": "keyword.operator.word.yon",
+          "match": "\\b(of|in|to|by|from|with|as|where|over|subcontains|uses|algebra|verify|law|lawful|invertible|forward|backward|bi|fold|compose|hcomp|comp|unifies|requires|share|resolves|maps|converts|aggregates|via|exact|adjunction|pull|push|effects|visits|promote|spawn|parallel|show|each|and|or|not|is|multishot|drop)\\b"
+        },
+        {
+          "name": "constant.language.yon",
+          "match": "\\b(true|false|present|absent|unknown)\\b"
+        },
+        {
+          "name": "keyword.other.hott.yon",
+          "match": "\\b(refl|pair|fst|snd|ind_path|quote|el_match|hit_elim|hit|I0|I1|plam)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "support.type.primitive.yon",
+          "match": "\\b(number|text|boolean|proposition|unit|money|person|address|tensor|cryptographic|duration|sum|Decidable|list|map|stream|wire|heyting|Type|Pi|Sigma|Id|PathP|El)\\b"
+        },
+        {
+          "comment": "Upper-case head = a place, module or type (String, List, Magma, ...).",
+          "name": "entity.name.type.yon",
+          "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.intuitionistic.yon",
+          "match": "&&\\?|\\|\\|\\?|=>\\?|!\\?|&\\?|\\|\\?|\\^\\?|~\\?"
+        },
+        {
+          "name": "keyword.operator.yon",
+          "match": "&&|\\|\\||\\|>|=>|->|<=|>=|==|!=|[-+*/%<>=!&|\\^~@]"
+        }
+      ]
+    }
+  }
+}

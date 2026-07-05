@@ -1,14 +1,18 @@
 {
   "name": "yon-lang",
   "displayName": "Yon Language Support",
-  "description": "Syntax highlighting and language server (diagnostics, hover, symbols, completion) for the Yon programming language.",
-  "version": "0.2.1",
+  "description": "One extension for Yon: diagnostics (compiler errors + linter warnings), formatting, hover, symbols, completion, and syntax highlighting, all from the yon-lsp language server.",
+  "version": "0.3.0",
   "publisher": "yon-lang",
-  "license": "AGPL-3.0",
+  "license": "AGPL-3.0-only",
   "icon": "icon.png",
-  "repository": {"type": "git", "url": "https://github.com/yon-language/yon"},
-  "engines": {"vscode": "^1.75.0"},
-  "categories": ["Programming Languages"],
+  "galleryBanner": { "color": "#5b4bc4", "theme": "dark" },
+  "homepage": "https://yon-lang.org",
+  "bugs": { "url": "https://github.com/yon-language/yon/issues" },
+  "repository": { "type": "git", "url": "https://github.com/yon-language/yon" },
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Programming Languages", "Linters", "Formatters"],
+  "keywords": ["yon", "topos", "category theory", "language server", "lsp"],
   "activationEvents": ["onLanguage:yon"],
   "main": "./client.js",
   "contributes": {
@@ -29,10 +33,26 @@
         "yon.lspPath": {
           "type": "string",
           "default": "yon-lsp",
-          "description": "Absolute path to the yon_lsp binary (build it with: cd frontend && dune build)."
+          "description": "The yon-lsp binary: a name found on PATH, or an absolute path. Build it with `cd frontend && dune build` (the wrapper is toolchain/yon-lsp)."
+        },
+        "yon.lint.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show linter warnings (Wxxxx codes) as diagnostics, alongside compiler errors."
+        },
+        "yon.format.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Provide Format Document via the language server (yon-fmt). Pair with editor.formatOnSave for format-on-save."
+        },
+        "yon.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace the JSON-RPC traffic between VS Code and the Yon language server (for debugging)."
         }
       }
     }
   },
-  "dependencies": {"vscode-languageclient": "^9.0.0"}
+  "dependencies": { "vscode-languageclient": "^9.0.0" }
 }
