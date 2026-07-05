@@ -145,8 +145,8 @@ reduction Tally of Order {
 ```
 
 A reduction does not touch sections at all. It gives meaning to operations, which
-is why it is activated as a handler over a block, `with Tally of Order { … }`,
-rather than applied to a section. It is the algebra of the order: every
+is why it is an eliminator, one that consumes the order's operations rather than
+being applied to a section. It is the algebra of the order: every
 `add_item` is interpreted, and the interpretations fold into the tally.
 
 Four arrows, four levels, and each one *cannot* do what the next one does. That
@@ -265,5 +265,5 @@ and have the compiler check that the translation respects the structure. Pick th
 lowest rung that does the job. The whole chapter, in one line, is that the rung is
 part of the type, and the type checker will not let you pretend otherwise.
 
-Where content actually crosses between Spaces, and what a `move` becomes when its
+Where content actually crosses between Spaces, and what a `move` looks like when its
 target lives in another process, is [chapter 16](/book/how-spaces-talk).
