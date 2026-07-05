@@ -12,6 +12,21 @@ binaries and a Homebrew tap are planned; today you build from source:
 one round of prerequisites and three builds, the same on both
 platforms.
 
+## The one-line installer
+
+The fastest path runs those three builds for you:
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://yon-lang.org/install.sh | bash
+```
+
+It reports what is missing (it never installs system packages behind your
+back), builds the runtime, the frontend and the MLIR dialect, then installs a
+self-contained toolchain into `~/.yon` with the CLI on your `PATH` and the
+VS Code / Cursor extension wired up. Pass `--check` (as `| bash -s -- --check`)
+for a dry prerequisites report. Everything below is what the installer does by
+hand, and the path to take when you want each step under your control.
+
 ## What you need
 
 - OCaml and `dune` (the compiler frontend)

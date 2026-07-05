@@ -30,3 +30,5 @@ a.out
 # yonc --emit intermediate dumps (written to CWD)
 *.topos.mlir
 *.standard.mlir
+*.llvm.mlir
+*.ll

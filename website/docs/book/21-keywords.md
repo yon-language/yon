@@ -10,8 +10,7 @@ Every reserved word of Yon, explained next to an example.
 
 This chapter answers *what does it mean?* For the normative table of
 valid forms, with status per construct, see the
-[Syntax Reference](/syntax-reference); for the maintainers' census,
-`KEYWORDS.md` in the repository root.
+[Syntax Reference](/syntax-reference).
 
 :::note Reading the snippets
 Each runnable snippet below is one project. The `// path` comments name the files:
