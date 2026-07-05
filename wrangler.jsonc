@@ -1,9 +1,12 @@
-// Cloudflare Workers (static assets only): serves the Docusaurus site
-// built into website/build. No Worker script — pure static hosting.
+// Cloudflare Worker for the Yon site: static Docusaurus assets from
+// website/build, plus a tiny Worker (worker.js) that serves /install.sh
+// straight from the repo so `curl https://yon-lang.org/install.sh | bash` works.
 {
   "name": "yon",
   "compatibility_date": "2026-06-04",
+  "main": "worker.js",
   "assets": {
-    "directory": "./website/build"
+    "directory": "./website/build",
+    "binding": "ASSETS"
   }
 }

@@ -2,7 +2,7 @@
 // dependent pair type (lowered to the honest two-field struct);
 // `pair`/`fst`/`snd` are its constructor and projections.
 // (`Type` in parameter position and `refl` path values do not lower
-// in these positions today; see KEYWORDS.md.)
+// in these positions today.)
 fun takes(p: Sigma(x: number). number): number {
   return fst(p) + snd(p)
 }

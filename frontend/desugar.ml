@@ -2533,7 +2533,7 @@ let rec rewrite_view_fields fields e =
   | S.EField (e1, f, loc) -> S.EField (r e1, f, loc)
   | other -> other
 
-(* View declaration lowering (KEYWORDS.md work map item 2): each
+(* View declaration lowering: each
    `view V of P { show ... }` expands into a synthetic record place V
    (one field per show clause) plus a constructor function V(s: P): V
    building the record, so `V(x)` and `r.field` just work through the

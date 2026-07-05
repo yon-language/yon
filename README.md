@@ -17,12 +17,27 @@ native binary, linked against a self-contained C runtime (xleech allocator with 
 
 ## Status
 
-**1.0 baseline** — see `BASELINE-1.0.md`. The ground truth is the
+**1.0 baseline**. The ground truth is the
 regression suite: **112 examples + 2 cross-Space scenarios**, exit
 codes identical across platforms.
 
 Platforms: Linux x86-64 and macOS Apple Silicon; the regression suite runs green on both.
 macOS Intel: untested (expected to work; reports welcome).
+
+## Install
+
+One line (macOS arm64, Linux x86-64):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://yon-lang.org/install.sh | bash
+```
+
+It checks prerequisites (and prints what to install if something is missing),
+builds the three stages from source, and drops a self-contained toolchain into
+`~/.yon` with `yonc`, `yon-lsp`, `yon-fmt`, `yon-lint` and `yon-pkg` on your
+`PATH`, plus the VS Code / Cursor extension. Re-runnable; pass `--check` (as
+`| bash -s -- --check`) for a dry prerequisites report. For the manual,
+step-by-step path, follow `INSTRUCTIONS.md`.
 
 ## Build
 
