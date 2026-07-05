@@ -5111,6 +5111,25 @@ double yon_rt_frozen_from_indexed(double src_id) {
     yon_ihmap_entry_t *l2 = (yon_ihmap_entry_t *)yon_xheap_strip_at(g_ds_heap, l2_off);
     for (uint32_t i = 0; i < total; i++) l2[i].key_ref = YON_IHMAP_INVALID;
 
+    /* Group entry indices by their level-1 bucket in a single O(n) counting
+     * pass, so the fill below walks each bucket's own members only. The old
+     * code re-scanned all n keys for every one of the ~n buckets (the
+     * `if (b1 != bi) continue` filter), making the build O(n^2). The placement
+     * logic and the a2 RNG stream are unchanged, so the frozen map built here is
+     * identical to before, only the construction is now O(n). */
+    uint32_t starts_off = yon_xheap_strip_alloc(g_ds_heap, m * (uint32_t)sizeof(uint32_t));
+    uint32_t cur_off    = yon_xheap_strip_alloc(g_ds_heap, m * (uint32_t)sizeof(uint32_t));
+    uint32_t order_off  = yon_xheap_strip_alloc(g_ds_heap, n * (uint32_t)sizeof(uint32_t));
+    uint32_t *starts = (uint32_t *)yon_xheap_strip_at(g_ds_heap, starts_off);
+    uint32_t *cur    = (uint32_t *)yon_xheap_strip_at(g_ds_heap, cur_off);
+    uint32_t *order  = (uint32_t *)yon_xheap_strip_at(g_ds_heap, order_off);
+    { uint32_t acc0 = 0;
+      for (uint32_t i = 0; i < m; i++) { starts[i] = acc0; cur[i] = acc0; acc0 += cnt[i]; } }
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t b = (uint32_t)(((uint64_t)ek[i].key_ref * a1) >> shift1);
+        order[cur[b]++] = i;
+    }
+
     /* fill each bucket with a collision-free a2 */
     for (uint32_t bi = 0; bi < m; bi++) {
         uint32_t bcount = cnt[bi];
@@ -5118,13 +5137,13 @@ double yon_rt_frozen_from_indexed(double src_id) {
         uint32_t s = (bcount <= 1u) ? bcount : fks_pow2_ceil(bcount * bcount);
         uint32_t shift2 = bk[bi].shift2;
         uint32_t base = bk[bi].l2_off;
+        uint32_t gstart = starts[bi];
         for (;;) {
             uint64_t a2 = fks_rng(&rng) | 1ull;
             for (uint32_t j = 0; j < s; j++) l2[base + j].key_ref = YON_IHMAP_INVALID;
             int ok = 1;
-            for (uint32_t i = 0; i < n; i++) {
-                uint32_t b1 = (uint32_t)(((uint64_t)ek[i].key_ref * a1) >> shift1);
-                if (b1 != bi) continue;
+            for (uint32_t t = 0; t < bcount; t++) {
+                uint32_t i = order[gstart + t];
                 uint32_t pos = fks_pos(ek[i].key_ref, a2, shift2);
                 if (l2[base + pos].key_ref != YON_IHMAP_INVALID) { ok = 0; break; }
                 l2[base + pos] = ek[i];
@@ -5133,7 +5152,10 @@ double yon_rt_frozen_from_indexed(double src_id) {
         }
     }
 
-    /* trim the temp strips (counts, key copy); best-effort whole pages */
+    /* trim the temp strips (counts, grouping, key copy); best-effort whole pages */
+    yon_xheap_strip_trim(g_ds_heap, order_off, 0u, n * (uint32_t)sizeof(uint32_t));
+    yon_xheap_strip_trim(g_ds_heap, cur_off, 0u, m * (uint32_t)sizeof(uint32_t));
+    yon_xheap_strip_trim(g_ds_heap, starts_off, 0u, m * (uint32_t)sizeof(uint32_t));
     yon_xheap_strip_trim(g_ds_heap, cnt_off, 0u, m * (uint32_t)sizeof(uint32_t));
     yon_xheap_strip_trim(g_ds_heap, keys_off, 0u, n * (uint32_t)sizeof(yon_ihmap_entry_t));
 
