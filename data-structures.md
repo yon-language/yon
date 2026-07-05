@@ -20,18 +20,29 @@ There is no `malloc` in Yon. Everything stands on a four-level backing stack.
 4. **arena strips** are contiguous regions an arena hands out, on which the
    queue-like collections run.
 
-### The two keys
+### Allocator keys
 
-When the table below names an *allocator key*, it is one of these two.
+The table below names, per structure, how its allocator addresses content. There
+are three cases, and it is worth keeping them apart: the first two are
+content-address hashes, the third is a raw region with its own (non-FNV) index.
 
 - **Leech 24**: the key is a point of the Leech lattice (an xcoord, or its MPHF
   index in `[0, 196560)`). Used by every geometric structure. Membership and
   identity are decided by *where the point sits*, not by its byte content.
 - **FNV-1a**: the key is the 64-bit FNV-1a hash of the payload bytes
   (offset basis `0xcbf29ce484222325`, prime `0x100000001b3`), with content dedup
-  on the xheap. Used by the general-purpose and fused collections. Identical
-  payloads collapse to one slot, which is why `String.equal` is O(1) regardless
-  of length: equal strings share a slot, so equality is a slot-id comparison.
+  on the xheap. Identical payloads collapse to one slot, which is why
+  `String.equal` is O(1) regardless of length: equal strings share a slot, so
+  equality is a slot-id comparison.
+- **arena strip**: a raw, offset-addressed byte region bump-allocated from the
+  shared xheap `g_yon_heap` (no `malloc`, no content hash, no dedup; dead tails
+  handed back with `madvise`). The mutable Level-2 structures live here, and
+  their own index is *not* FNV-1a: `IndexedHeapMap` and `MemoTable` spread keys
+  by **Fibonacci** (Knuth multiplicative) hashing, `FrozenMap` by an **FKS**
+  two-level perfect hash, `Deque` and `PriorityQueue` by position (ring buffer,
+  binary heap). FNV-1a still addresses the key/value *payloads* they intern onto
+  the xheap, but never the structure's own storage. Saying a strip is "FNV-1a"
+  conflates the two: the strip is precisely the path that skips the hash.
 
 ## The structures
 
@@ -51,12 +62,12 @@ When the table below names an *allocator key*, it is one of these two.
 | `XSet` | membership over all type-2 points | one checkbox for each of the 196560 possible apples | Leech 24 (private mmap) |
 | `XMap` / `XTree` *(to do)* | map/tree keyed by an equivariant Co0/M24 code | a dictionary whose key is *anything* (a string, a record) projected onto the Leech | blocked: key to xcoord |
 | **Level 2: general-purpose collections** | | | |
-| `Vec` | mutable dynamic array | a row of apples you append to at the end | FNV-1a (arena strip) |
-| `IndexedHeapMap` | insertion-ordered map (backs `map`) | apple to weight in the order you weighed them | FNV-1a (arena, no malloc) |
-| `MemoTable` | memoization cache | you remember an apple's weight so you never reweigh it | FNV-1a (arena, no malloc) |
-| `Deque` | double-ended queue | a row of apples you push/pop at both ends | FNV-1a (arena strip) |
-| `PriorityQueue` | priority extraction | you always take the ripest apple first | FNV-1a (arena strip, no malloc) |
-| `FrozenMap` | immutable map, O(1) worst-case lookup | a catalogue apple to info that never changes, any apple found in one shot | FNV-1a (arena, immutable) |
+| `Vec` | mutable dynamic array | a row of apples you append to at the end | arena strip (indexed) |
+| `IndexedHeapMap` | insertion-ordered map (backs `map`) | apple to weight in the order you weighed them | arena strip; Fibonacci |
+| `MemoTable` | memoization cache | you remember an apple's weight so you never reweigh it | arena strip; Fibonacci |
+| `Deque` | double-ended queue | a row of apples you push/pop at both ends | arena strip (ring buffer) |
+| `PriorityQueue` | priority extraction | you always take the ripest apple first | arena strip (binary heap) |
+| `FrozenMap` | immutable map, O(1) worst-case lookup | a catalogue apple to info that never changes, any apple found in one shot | arena strip; FKS perfect hash |
 | **Robust storage** | | | |
 | `VoyagerList` | list with built-in error correction | apples in crates that survive 3 dents: the crate gets damaged, the apple comes out intact | FNV-1a (pool + arena strip) |
 
@@ -163,17 +174,55 @@ needs an O(196560) scan.
 The quality margin is modest at this cardinality (24-D leaves room around 196560
 points); the speed margin is structural and grows with the codebook.
 
+### The internal Level-2 structures (direct-C)
+
+`IndexedHeapMap`, `MemoTable`, `Deque`, `PriorityQueue`, and `FrozenMap` have no
+frontend handle, so they are timed by a direct-C harness that links the runtime
+objects and calls `yon_rt_*` in a loop: min of 5 reps, net of a same-trip
+baseline, one fresh process per structure. Measured on an **Apple M1 (Darwin
+arm64)**, Apple clang 15, `-O2`, **2026-07-05**. Maps at 50k entries, the linear
+collections at 100k.
+
+| Structure | Operation | Per-op | Note |
+|---|---|---|---|
+| `IndexedHeapMap` | `insert` | ~44 ns | Fibonacci open addressing on a strip |
+| `IndexedHeapMap` | `get` | ~30 ns | ~1.1 probes average |
+| `MemoTable` | `put` | ~49 ns | same Fibonacci machinery |
+| `MemoTable` | `get` | ~30 ns | |
+| `Deque` | `push_back` | ~10 ns | ring buffer, amortized over grows |
+| `Deque` | `pop_front` | ~4 ns | pure index move |
+| `PriorityQueue` | `push` | ~14 ns | sift-up, usually shallow |
+| `PriorityQueue` | `pop_min` | ~147 ns | full sift-down, log N + cache misses at 100k |
+| `FrozenMap` | `get` | ~43 ns | two-level, O(1) worst-case, no probing |
+| `FrozenMap` | `build` | ~21 ns/key | O(n) FKS, flat 1k..64k, ~1 ms for 50k |
+
+Two shapes worth naming. The internal maps beat the frontend `HashMap` on write
+(insert 44 ns, put 49 ns vs `HashMap.set` 375 ns) because they do not
+content-address every `(key, value)` entry or rehash the way `HashMap.set` does;
+they index interned key-refs on a strip. And `FrozenMap.get` (43 ns) is a shade
+slower than a probing `get` (30 ns) on these uniform keys: the two dependent
+loads of the FKS lookup cost a little more than the single load a well-spread
+open-addressed probe usually needs, in exchange for a worst case with no probing
+at all. That is the honest trade, not a free lunch.
+
+`FrozenMap.build` is a genuine O(n) FKS construction (flat ~21 ns/key from 1k to
+64k). It was O(n²) until the level-2 fill (`runtime/yon_rt.c`,
+`yon_rt_frozen_from_indexed`) was changed to group keys by bucket in one counting
+pass instead of re-scanning all n keys for each of the ~n buckets; the placement
+and the RNG stream are unchanged, so the map built is identical, but the build is
+roughly 500x faster at 32k keys (630 ms to 1.2 ms). It was measured, found
+quadratic, and fixed before these numbers were written down.
+
 ### What was not benchmarked, and why
 
 - **HashMap beyond one heap.** A single xheap holds 196560 slots, so the
   measured HashMap is single-heap at 50k. Spilling to 300k / 500k / 1M entries
   needs multiple Spaces; that multi-heap walk (where per-op drifts toward the
   microsecond) is not reproduced in this isolated harness.
-- **`FrozenMap`, `MemoTable`, `Deque`, `PriorityQueue`, and `XRel`/`XRelMap`/
-  `XRelSet`/`XSimplex`/`XSet`** have no frontend-exposed handle API; they are
-  internal backends. `HashMap.set/get` exercises the `IndexedHeapMap` backend
-  indirectly, but the others are not callable in isolation and are left
-  unmeasured rather than guessed.
+- **`XRel`/`XRelMap`/`XRelSet`/`XSimplex`/`XSet`** have no frontend-exposed
+  handle API and are not timed here. (`IndexedHeapMap`, `MemoTable`, `Deque`,
+  `PriorityQueue`, and `FrozenMap`, also handle-less, are now measured by the
+  direct-C harness above rather than left to guesswork.)
 
 ## What is missing to close the open ones
 
