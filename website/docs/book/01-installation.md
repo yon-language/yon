@@ -114,9 +114,23 @@ frontend, Topos dialect, LLVM, runtime.
 | `yon-pkg` | git-based package manager (no central registry) |
 | `yon-lsp` | language server (diagnostics, hover, symbols, completion, formatting) |
 
-For editors: a VS Code / Cursor extension ships as a `.vsix` with the
-GitHub releases (syntax highlighting plus the language server; set
-`yon.lspPath` to your built `yon-lsp` binary). Neovim users can source
+## Editor support
+
+The one-line installer already wires up the **VS Code / Cursor** extension. To
+do it by hand, build the `.vsix` and install it:
+
+```bash
+cd lsp/editors/vscode
+npm install
+npx --yes @vscode/vsce package                 # -> yon-lang-<version>.vsix
+code --install-extension yon-lang-*.vsix        # or: cursor --install-extension yon-lang-*.vsix
+```
+
+You get syntax highlighting plus everything the language server does from one
+place: diagnostics (compiler errors *and* linter warnings), formatting, hover,
+document symbols and completion. If `yon-lsp` is not on your `PATH`, set
+`yon.lspPath` to its absolute path in the editor settings (`yon.lint.enable` and
+`yon.format.enable` toggle those two features). Neovim users can source
 `lsp/editors/neovim.lua`.
 
 ## Dependencies in two minutes
