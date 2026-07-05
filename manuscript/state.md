@@ -4,7 +4,7 @@
 > drift: terminology, voice, what's introduced, open threads, verdicts. Governing
 > docs: `00-jp-spec.md` (contract), `01-jp-structure.md` (approved backbone),
 > `jp-novel-map.md` (the novel), `construct-inventory.md` (✓/declared/debt),
-> `inspiration-list.md` (the 27 claims). Ground truth = the code + `audit_language.md`
+> `inspiration-list.md` (the 27 claims). Ground truth = the code
 > + `regression/COVERAGE.md` + `swarm/AUDIT_*` (gitignored, real, mtime Jun 21-22).
 
 ## Locked decisions (log)
@@ -766,7 +766,7 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
   same slot (dedup). ✓ (`test_unit_xheap_bounds.c`).
 - **Space cell** — a *variable* assigned with `=` (`x = e`) is promoted to a Space
   cell: write `Space__set`, read `Space__get`, runtime `g_space_cells`. ✓
-  (`kw_list_here.yon`; `audit:106`). `=` is the surface token; `becomes` is retired
+  (`kw_list_here.yon`). `=` is the surface token; `becomes` is retired
   (internal AST node `SAssignBecomes` only). **NOT** `x.f = e` (place field =
   by-design reject, sections immutable) nor `new…in` (vestige).
 - **bind vs assign** — `be x holds e` = immutable init; `x = e` = Space-cell assign.
@@ -1078,4 +1078,4 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
 ## Codebase changes made this session (book-adjacent, comment/doc only)
 - `frontend/package_layout.ml` header comment cleaned (was "dir=world/file=space",
   now matches the live `space_of`/`place_of` code) — comment-only, no behavior change.
-- `audit_language.md` Debt #8 (`becomes` surface token) marked CHIUSO; design note → Fatto.
+- Debt #8 (`becomes` surface token) marked CHIUSO; design note → Fatto.

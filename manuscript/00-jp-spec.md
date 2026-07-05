@@ -29,8 +29,6 @@ Docusaurus site. The JP epub is supplied alongside this prompt; read it.
    reading, or a test. The sources of truth in the repo are:
    - `regression/COVERAGE.md` — the 5-layer test coverage matrix, gaps marked `[ ]`.
      The official map of what is verified.
-   - `audit_language.md` — the feature-by-feature audit with
-     resolved/partial/declared/debt verdicts and supporting `file:line` anchors.
    - `manuscript/00-blueprint.md` — the book blueprint (voice, register, the three
      planes, the recurring example). The JP book IS this book: Jurassic Park
      becomes the recurring example in place of Account/Ledger.
@@ -204,7 +202,7 @@ The site exists at `website/` (verified). Concretely:
    introduction, Malcolm's epigraphs). Exhaustive reading, not sampling.
 2. Study the repo in this order: `manuscript/00-blueprint.md` (voice, three planes),
    `regression/COVERAGE.md` (what is verified), `frontend/lexer.mll` (the real
-   ~110 keywords), `audit_language.md` (verdicts and anchors), the `website/` site.
+   ~110 keywords), the `website/` site.
 3. Produce `manuscript/01-jp-structure.md` containing:
    - the map of 7 Iterations → 7 parts → Yon concept groupings, with each
      Iteration's Malcolm epigraph and why it resonates;
@@ -253,10 +251,9 @@ untouched; these are the corrections to apply when executing.
 | Cited in spec | Reality | Action |
 |---|---|---|
 | `manuscript/00-blueprint.md` | **does not exist** | blueprint is `manuscript/book-plan.md`; living spine is `manuscript/state.md` |
-| `audit_language.md` | ✓ exists (repo root) | use as-is |
 | `regression/COVERAGE.md` | ✓ exists | use as-is |
 | `DOCS_DIFF.md` | lives at `swarm/DOCS_DIFF.md` | adjust path |
-| (additional ground truth) | `swarm/LANGUAGE_AUDIT.md` exists | cross-check against `audit_language.md` |
+| (additional ground truth) | `swarm/LANGUAGE_AUDIT.md` exists | cross-check against `frontend/lexer.mll` |
 
 **Authoritative inventory & ordering (use these — do not re-derive a list by hand):**
 - `swarm/AUDIT_INVENTORY.md` — Gate 0 *perimeter* taken from the code: every lexer

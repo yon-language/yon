@@ -1,6 +1,6 @@
 # Yon construct inventory — verdicts (code-sourced)
 
-> Built by reading `regression/COVERAGE.md`, `audit_language.md`,
+> Built by reading `regression/COVERAGE.md`,
 > `swarm/LANGUAGE_AUDIT.md`, the OCaml oracles (`frontend/test_*.ml`), the runtime
 > tests (`runtime/test_*.c`), the examples and the syntax files. Every verdict has a
 > `file:line` anchor. This is the honesty backbone for `01-jp-structure.md`:
@@ -12,7 +12,7 @@
 |---|---------|---------|-------------------|------|
 | 1 | `place` as presheaf `Site→Type` | **declared** | `ast.ml:8,157-158`, `carrier.ml:3` | Design-level ontology; testable consequences are #12/#13 + Yoneda dispatch. No test asserts "place IS a presheaf". |
 | 2 | content-addressing (FNV + byte-compare) | **✓ verified** | `runtime/test_unit_xheap_bounds.c:32-47` (dedup + memcmp), `test_runtime_units.py:54` PASS; impl `xleech2_heap.c:34-42,329,720` | Strongest silicon claim. |
-| 3 | `Space` cell (location) | **✓ verified** | write `x = e` → `SAssignBecomes` → `Space__set`/`__space_update_here` (`desugar.ml:1761,1341`); **read `Space__get`** (becomes-promotion pass `desugar.ml:1835-1859`); runtime `g_space_cells`/`yon_rt_space_set`/`_get` (`yon_rt.c:6427,6443,6454`); green via `kw_list_here.yon` (exit 21) + all stream/fold lowerings. `audit_language.md:106` "risolto + lowered". | A var assigned with `=` is PROMOTED to a Space cell (every read → `Space__get`). Distinct from `x.f = e` (place field = by-design reject, sections immutable, `audit:107`) and `new…in` (vestige). `becomes` retired as surface token; `=` is the surface, `SAssignBecomes` the internal node. |
+| 3 | `Space` cell (location) | **✓ verified** | write `x = e` → `SAssignBecomes` → `Space__set`/`__space_update_here` (`desugar.ml:1761,1341`); **read `Space__get`** (becomes-promotion pass `desugar.ml:1835-1859`); runtime `g_space_cells`/`yon_rt_space_set`/`_get` (`yon_rt.c:6427,6443,6454`); green via `kw_list_here.yon` (exit 21) + all stream/fold lowerings. | A var assigned with `=` is PROMOTED to a Space cell (every read → `Space__get`). Distinct from `x.f = e` (place field = by-design reject, sections immutable, by design) and `new…in` (vestige). `becomes` retired as surface token; `=` is the surface, `SAssignBecomes` the internal node. |
 | 4 | carrier partial functor, `NoCarrier` | **✓ verified** | `carrier.ml:47,70,115,125,130`; `emit_mlir.ml:219`; oracle `test_type_erase.ml:24-70` | Clean reject at erasure frontier, not a crash. |
 | 5 | Heyting Ω (Gödel G3), `=>?` `!?` | **✓ verified** | oracle `test_prop_eval.ml:76-164` (`neg(unknown)=unknown` :122); `heyting.ml:27-100`; `decidable_unknown.yon` exit 134 | Genuine Gödel G3, not Kleene K3 (fixed this session). |
 | 6 | `Id`, `refl`, `PathP` | **✓ verified** | `test_path.ml:28-106`, `test_path_core.ml:31-38`; neg `neg_pathp_endpoint.yon` exit 3; `c_pathp_refl.yon` | Endpoint-blind bug closed this pass. |

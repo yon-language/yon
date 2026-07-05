@@ -93,7 +93,7 @@ breeding."** The fourth wall: Hammond counts locations believing he counts conte
 |----|----------|--------------------|------------------|--------|------|
 | 3.1 | The island laid out | **the filesystem is the declaration**: `[world.Park]` in `yon.toml`; a paddock = a directory (space); a dinosaur = `Rex.yon` (place) [D2] | ✓ (`package_layout.ml:29-48`; `test_world_site.ml` for world algebra `*,+,/∼,subset` [#12]) | a tiny park project tree that compiles | **real** (the tree IS the ontology) |
 | 3.2 | "You only tracked the expected number" | **identity is extensional** (content-addressing as ontology) [#2]; **the arrows** `move/view/reduction/operation`, Yoneda dispatch `recv.f` [D3] | ✓ (#2; dispatch `parser.mly:24-42`, `test_dispatcher.ml`) | `new Dinosaur { same genome }` twice → one slot | **real** (the fourth wall, part 1) |
-| 3.3 | One fossil, two positions | **the `Space` cell** = location, not content [#3]; concept vs instance: stratified universes [#11], strict products η_Σ [#10] | ✓ Space cell (write `x = e`→`Space__set`, read `Space__get`, runtime `g_space_cells`; `kw_list_here.yon` green; `audit:106`); ✓ universes (`test_core_check.ml`), η_Σ (`test_eta_sigma.ml`) | two location cells, one content slot (the dedup'd genome) | **real** (the fourth wall, part 2 — BOTH halves green) · player: **PADDOCK MAP** |
+| 3.3 | One fossil, two positions | **the `Space` cell** = location, not content [#3]; concept vs instance: stratified universes [#11], strict products η_Σ [#10] | ✓ Space cell (write `x = e`→`Space__set`, read `Space__get`, runtime `g_space_cells`; `kw_list_here.yon` green); ✓ universes (`test_core_check.ml`), η_Σ (`test_eta_sigma.ml`) | two location cells, one content slot (the dedup'd genome) | **real** (the fourth wall, part 2 — BOTH halves green) · player: **PADDOCK MAP** |
 
 ### Iteration 4 — Identity & homotopy · *"underlying instabilities begin to appear"*
 JP: sabotage and storm; fences fail; the rigid assumption (equality = identity) wobbles.
@@ -223,10 +223,9 @@ collection" pairing. The recurring **park** is the natural vehicle to combine th
 3. **The Space cell (#3) — RESOLVED (closed by observation, 2026-06-26).** NOT a
    debt: a variable assigned with `=` is promoted to a Space cell (write `Space__set`,
    read `Space__get`, runtime `g_space_cells`/`yon_rt_space_set`/`_get`), green via
-   `kw_list_here.yon` + the stream/fold lowerings (`audit_language.md:106`
-   "risolto + lowered"). The paddock-map shows BOTH halves of the fourth wall green:
+   `kw_list_here.yon` + the stream/fold lowerings (risolto + lowered). The paddock-map shows BOTH halves of the fourth wall green:
    one content slot (#2) + two location cells (#3). Kept distinct: `x.f = e` (place
-   field) is a by-design reject (sections immutable, `audit:107`); `new…in` inline is
+   field) is a by-design reject (sections immutable, by design); `new…in` inline is
    a vestige (space = directory). Neither is used.
 4. **Sample chapter**: the sandbox can't compile Yon (Mac-gated), so I can't
    guarantee a snippet compiles here. Want a Chapter 1.1 voice-and-format specimen

@@ -219,7 +219,7 @@ there) is the 1.2 work above.
 
 ---
 
-## Open debts (from audit_language.md) — 1.2 candidates
+## Open debts — 1.2 candidates
 
 - **Sheafification / topology not wired** (orphan + not-yet-emitted + simulated trigger). Debt
   #1, the one genuinely uncovered point. It is a project.
