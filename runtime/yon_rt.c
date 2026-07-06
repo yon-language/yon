@@ -56,7 +56,11 @@ typedef enum {
     YON_BACKEND_L2_SHM      = 2
 } yon_backend_t;
 
-static yon_backend_t g_backend = YON_BACKEND_L2_SHM;
+/* Default: each Space gets its OWN private heap; shm is reserved for the wire
+ * (the cross-process channel), not for Space heaps. Set YON_BACKEND=shm to opt
+ * a Space heap into shared memory (needed only when a Space's heap itself must
+ * be attached from another process). */
+static yon_backend_t g_backend = YON_BACKEND_L2_SEPARATE;
 static yon_xheap_t *g_yon_heap = NULL;        /* global DS heap, all backends */
 static int g_initialized = 0;
 
@@ -103,9 +107,8 @@ void yon_rt_init(void) {
     /* Detect backend via env var. */
     const char *be = getenv("YON_BACKEND");
     if (be) {
-        if (strcmp(be, "separate") == 0)  g_backend = YON_BACKEND_L2_SEPARATE;
-        else if (strcmp(be, "shm") == 0)  g_backend = YON_BACKEND_L2_SHM;
-        else g_backend = YON_BACKEND_L2_SHM;
+        if (strcmp(be, "shm") == 0)       g_backend = YON_BACKEND_L2_SHM;
+        else                              g_backend = YON_BACKEND_L2_SEPARATE;
     }
     g_yon_heap = yon_xheap_create();
     if (!g_yon_heap) {
@@ -1932,6 +1935,13 @@ static int yon_rpc2_past(const struct timespec *dl) {
            (now.tv_sec == dl->tv_sec && now.tv_nsec >= dl->tv_nsec);
 }
 
+/* Is a strictly earlier than b? Used to cap a fixed liveness slice at a
+ * caller's (possibly much shorter) idle deadline. */
+static int yon_rpc2_ts_earlier(const struct timespec *a, const struct timespec *b) {
+    return a->tv_sec < b->tv_sec ||
+           (a->tv_sec == b->tv_sec && a->tv_nsec < b->tv_nsec);
+}
+
 /* Liveness. Subtlety: a spawned server killed before we reap it is a
  * ZOMBIE of ours, and kill(zombie, 0) still returns 0 — kill-based liveness
  * is blind to zombies. So for our own children we ask waitpid(WNOHANG)
@@ -2134,6 +2144,13 @@ int yon_rt_rpc2_take(void *qh, yon_rpc2_req_t *out, uint32_t idle_ms) {
     while (q->count == 0) {
         struct timespec slice;
         yon_rpc2_deadline(&slice, YON_RPC2_SLICE_MS);
+        /* Cap the 100ms liveness slice at the caller's idle deadline: the spawn
+         * collect passes idle_ms=2 (and 0 for the final drain), and must return
+         * in ~idle_ms, not block a whole slice. Without this, two idle takes per
+         * collect burned 2x100ms of fixed overhead on every spawn. For a large
+         * idle_ms (the RPC serve loop) dl is far off, so the slice stands and
+         * liveness is still re-checked every 100ms. */
+        if (yon_rpc2_ts_earlier(&dl, &slice)) slice = dl;
         pthread_cond_timedwait(&q->nonempty, &q->mu, &slice);
         if (q->count > 0) break;
         if (yon_rpc2_past(&dl)) {
@@ -2410,7 +2427,7 @@ int yon_rt_spawn_join_collect(void *h, double *out, int cap) {
     int got = 0, reaped = 0;
     for (;;) {
         yon_rpc2_req_t r;
-        int rc = yon_rt_rpc2_take(c->q, &r, 50u);   /* short idle slice */
+        int rc = yon_rt_rpc2_take(c->q, &r, 2u);   /* short idle slice */
         if (rc >= 0) {
             if (got < cap) out[got] = r.args[0];
             got++;
@@ -2459,7 +2476,7 @@ double yon_rt_spawn_join_stream(void *h) {
     int reaped = 0;
     for (;;) {
         yon_rpc2_req_t r;
-        int rc = yon_rt_rpc2_take(c->q, &r, 50u);
+        int rc = yon_rt_rpc2_take(c->q, &r, 2u);
         if (rc >= 0) { double v = r.args[0]; yon_rt_stream_emit(sid, &v); continue; }
         for (int i = 0; i < c->n_spawned; i++) {
             if (c->pids[i] > 0) {
