@@ -68,6 +68,17 @@ C_UNIT_TESTS = [
     # The Space-reclaim primitive behind the `drop X` construct: reclaim_arena
     # (whole-heap madvise, page-aligned) and yon_rt_drop_space (resolve + count).
     ("drop_reclaim",  "test_unit_drop_reclaim.c", b"DROP_RECLAIM: PASS",  True),
+    # Concurrency regression for the cross-process SHM wire (Bug B): producer and
+    # consumer hammer one ring simultaneously; every value is 1, so a correct
+    # transport delivers exactly N summing to N. Proves the PROCESS_SHARED header
+    # mutex serializes head/tail/count where flock() on an shm fd did not on
+    # macOS. Self-provides __yon_dispatch -> no shared stub.
+    ("wire_race",     "test_unit_wire_race.c",    b"WIRE_RACE: PASS",     False),
+    # Extensionality under load: 300k distinct contents (> the 196,560 Leech
+    # kissing number) chain past one heap, each on a DISTINCT ref (no false dedup
+    # even under heavy 64-bit-hash collisions — memcmp settles them), dedup stable.
+    # Refutes the pigeonhole/birthday critique. Self-provides __yon_dispatch.
+    ("extensionality", "test_unit_extensionality.c", b"EXTENSIONALITY: PASS", False),
 ]
 
 

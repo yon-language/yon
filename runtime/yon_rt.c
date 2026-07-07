@@ -37,6 +37,8 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 #include <sys/file.h>
+#include <pthread.h>   /* PROCESS_SHARED mutex for the cross-process shm wire */
+#include <errno.h>     /* EBUSY: bounded lock acquisition */
 #include <sys/stat.h>
 #include <fcntl.h>
 
@@ -1309,10 +1311,29 @@ typedef struct {
     uint32_t count;        /* values present */
     uint32_t closed;       /* 1 = producer closed the stream (clean EOF) */
     uint32_t producers;    /* live producer attach count (fault detection) */
+    pthread_mutex_t mu;    /* PROCESS_SHARED: serializes head/tail/count across
+                            * processes. flock() on an shm fd is a no-op x-proc
+                            * on macOS, so the ring raced (Bug B); this replaces
+                            * it. Inited by the creator, used by every attacher. */
     /* ring buffer bytes follow immediately after this header */
 } yon_shm_stream_hdr_t;
 
 #define YON_SHM_STREAM_MAGIC 0x53545245u  /* "STRE" */
+#define YON_SHM_LOCK_MS      2000u        /* dead-holder acquisition bound for hdr->mu */
+
+/* Bounded acquire of the header mutex. Robust mutexes are absent on macOS, so a
+ * peer that dies holding the lock must not hang us forever: trylock in a 1ms
+ * poll up to the bound. 0 = locked, -1 = timeout/corrupt. Mirrors the discipline
+ * of yon_rpc2_lock_timed used by the spawn-collect queue. */
+static int yon_shm_hdr_lock(pthread_mutex_t *mu) {
+    for (uint32_t i = 0; i < YON_SHM_LOCK_MS; i++) {
+        int rc = pthread_mutex_trylock(mu);
+        if (rc == 0) return 0;
+        if (rc != EBUSY) return -1;
+        usleep(1000);
+    }
+    return -1;
+}
 
 #define YON_MAX_SHM_STREAMS 64
 typedef struct {
@@ -1338,6 +1359,11 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
     snprintf(shm_name, sizeof(shm_name), "%s%s", YON_SHM_STREAM_PREFIX, name);
     int flags = O_RDWR;
     if (create) flags |= O_CREAT;
+    /* A create starts a FRESH stream: unlink any stale segment left by a prior
+     * run. POSIX shm persists in the kernel namespace on macOS, untouched by a
+     * filesystem rm, so without this its leftover header/counters/mutex would
+     * leak in (is_new would be false and the reset below would be skipped). */
+    if (create) shm_unlink(shm_name);
     int fd = shm_open(shm_name, flags, 0600);
     if (fd < 0) { perror("[YON-RT stream-shm] shm_open"); return NULL; }
 
@@ -1365,11 +1391,18 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
     }
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)region;
     if (is_new && create) {
-        hdr->magic = YON_SHM_STREAM_MAGIC;
+        /* Init the PROCESS_SHARED mutex that guards the ring, then publish the
+         * magic LAST so the fully-initialized header is what attachers see. */
+        pthread_mutexattr_t ma;
+        pthread_mutexattr_init(&ma);
+        pthread_mutexattr_setpshared(&ma, PTHREAD_PROCESS_SHARED);
+        pthread_mutex_init(&hdr->mu, &ma);
+        pthread_mutexattr_destroy(&ma);
         hdr->slot_size = slot_size;
         hdr->capacity = capacity;
         hdr->head = 0; hdr->tail = 0; hdr->count = 0;
         hdr->closed = 0; hdr->producers = 0;
+        hdr->magic = YON_SHM_STREAM_MAGIC;   /* published last: init complete */
     }
     int pslot = -1;
     for (int i = 0; i < YON_MAX_SHM_STREAMS; i++)
@@ -1393,7 +1426,7 @@ int yon_rt_stream_shm_emit(yon_shm_stream_t *s, const void *value_ptr) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
-    flock(s->fd, LOCK_EX);
+    if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     int rc;
     if (hdr->capacity == 0 || hdr->count >= hdr->capacity) {
         rc = -1;  /* invalid header (capacity 0, untrusted shm) or full */
@@ -1404,7 +1437,7 @@ int yon_rt_stream_shm_emit(yon_shm_stream_t *s, const void *value_ptr) {
         hdr->count++;
         rc = 0;
     }
-    flock(s->fd, LOCK_UN);
+    pthread_mutex_unlock(&hdr->mu);
     return rc;
 }
 
@@ -1413,7 +1446,7 @@ int yon_rt_stream_shm_await(yon_shm_stream_t *s, void *out_ptr) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
-    flock(s->fd, LOCK_EX);
+    if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     int rc;
     if (hdr->count == 0 || hdr->capacity == 0) {
         rc = -1;  /* empty, or invalid header (capacity 0, untrusted shm) -> no mod-by-zero */
@@ -1424,7 +1457,7 @@ int yon_rt_stream_shm_await(yon_shm_stream_t *s, void *out_ptr) {
         hdr->count--;
         rc = 0;
     }
-    flock(s->fd, LOCK_UN);
+    pthread_mutex_unlock(&hdr->mu);
     return rc;
 }
 
@@ -1456,10 +1489,11 @@ int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
         /* If the producer has closed and the buffer is drained, this is a clean
          * end-of-stream, not a timeout: report it distinctly so the consumer
          * stops instead of spinning to the timeout. */
-        flock(s->fd, LOCK_EX);
-        int eof = (hdr->closed && hdr->count == 0);
-        flock(s->fd, LOCK_UN);
-        if (eof) return -2;             /* EOF: closed + empty */
+        if (yon_shm_hdr_lock(&hdr->mu) == 0) {
+            int eof = (hdr->closed && hdr->count == 0);
+            pthread_mutex_unlock(&hdr->mu);
+            if (eof) return -2;         /* EOF: closed + empty */
+        }
         usleep(YON_SHM_POLL_USEC);      /* empty but open: wait for a value */
     }
     return -1;                          /* timed out (peer alive but silent) */
@@ -1471,9 +1505,9 @@ int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
 int yon_rt_stream_shm_close_write(yon_shm_stream_t *s) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
-    flock(s->fd, LOCK_EX);
+    if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     hdr->closed = 1;
-    flock(s->fd, LOCK_UN);
+    pthread_mutex_unlock(&hdr->mu);
     return 0;
 }
 
@@ -1514,7 +1548,7 @@ int yon_rt_stream_shm_emit_frame(yon_shm_stream_t *s,
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
     uint32_t cap = hdr->capacity;
     if (frame_len > cap) return -3;          /* cannot ever fit: loud */
-    flock(s->fd, LOCK_EX);
+    if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     int rc;
     if (cap - hdr->count < frame_len) {
         rc = -1;                              /* full: back-pressure */
@@ -1531,7 +1565,7 @@ int yon_rt_stream_shm_emit_frame(yon_shm_stream_t *s,
         hdr->count += frame_len;
         rc = 0;
     }
-    flock(s->fd, LOCK_UN);
+    pthread_mutex_unlock(&hdr->mu);
     return rc;
 }
 
@@ -1546,7 +1580,7 @@ int yon_rt_stream_shm_await_frame(yon_shm_stream_t *s,
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
     uint32_t cap = hdr->capacity;
-    flock(s->fd, LOCK_EX);
+    if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     int rc;
     if (hdr->count < 8u) {
         if (hdr->count == 0u) rc = hdr->closed ? -2 : -1;  /* EOF or empty */
@@ -1576,7 +1610,7 @@ int yon_rt_stream_shm_await_frame(yon_shm_stream_t *s,
             rc = 0;
         }
     }
-    flock(s->fd, LOCK_UN);
+    pthread_mutex_unlock(&hdr->mu);
     return rc;
 }
 
