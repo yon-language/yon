@@ -224,7 +224,15 @@ yon_xheap_t *yon_xheap_create_with_backing(yon_heap_backing_t kind,
         m->kind = kind;
         m->fd = fd;
         snprintf(m->name, sizeof(m->name), "%s", shm_name);
-        registry_register(h); /* chain support */
+        if (registry_register(h) == 0xFFFFFFFFu) {
+            /* Registry exhausted: fail LOUDLY (Yon's own rule — a hard limit is
+             * a spec, a silent degradation is a bug), don't return a heap with
+             * an unassigned id. */
+            fprintf(stderr, "[YON-XHEAP] heap registry exhausted (max %d heaps)"
+                            " — cannot create heap\n", YON_HEAPREF_MAX_HEAPS);
+            meta_free(h); munmap(mem, sz); close(fd);
+            return NULL;
+        }
         return h;
     } else {
         return NULL;
@@ -242,7 +250,12 @@ yon_xheap_t *yon_xheap_create_with_backing(yon_heap_backing_t kind,
     m->kind = kind;
     m->fd = -1;
     m->name[0] = '\0';
-    registry_register(h); /* chain support */
+    if (registry_register(h) == 0xFFFFFFFFu) {
+        fprintf(stderr, "[YON-XHEAP] heap registry exhausted (max %d heaps)"
+                        " — cannot create heap\n", YON_HEAPREF_MAX_HEAPS);
+        meta_free(h); munmap(mem, sz);
+        return NULL;
+    }
     return h;
 }
 
