@@ -360,6 +360,10 @@ and decode_composition_system (clauses : S.expr list)
 and desugar_expr (e : S.expr) : C.term =
   match e with
   | S.ELit (lit, _) -> desugar_literal lit
+  (* Bare `psh_id` (no call parens) is the polymorphic presheaf identity id_A:
+   * lower it to the reserved kernel marker `__id` so (F-id) fires. The call
+   * form psh_id() is handled in the S.ECall arm. *)
+  | S.EVar ("psh_id", _) -> C.Var "__id"
   | S.EVar (x, _) -> C.Var x
   | S.EApp (f, args, _) ->
       curry_apply (desugar_expr f) (List.map desugar_expr args)
@@ -475,6 +479,24 @@ and desugar_expr (e : S.expr) : C.term =
               desugar_expr value])
   | S.ECall ("equiv", [f; g; eta; eps], _) ->
       equivalence_term f g eta eps
+  (* ── Presheaf arrow-action + composition (A1.2 / A1.3, surface half) ──
+   * The kernel (reduce.ml try_functoriality) recognises the arrow action of an
+   * abstract presheaf and its two functoriality laws on the exact reserved-Var
+   * markers `__psh_map` / `__compose` / `__id`. These surface forms — plain
+   * function-call syntax with reserved head names, so NO new grammar and no new
+   * menhir conflict — lower to precisely those markers, so the delta-rules fire
+   * on desugared programs:
+   *   psh_map(F, f)     ==  F(f)     ⟶ App(App(Var "__psh_map", <F>), <f>)
+   *   psh_compose(g, f) ==  g ∘ f    ⟶ App(App(Var "__compose", <g>), <f>)
+   *   psh_id / psh_id() ==  id       ⟶ Var "__id"
+   * (The chosen spelling mirrors the existing __-tagged builtins __band /
+   * __hcomp_surface: reserved names threaded through S.ECall, not new tokens.) *)
+  | S.ECall ("psh_map", [ff; f], _) ->
+      C.App (C.App (C.Var "__psh_map", desugar_expr ff), desugar_expr f)
+  | S.ECall ("psh_compose", [g; f], _) ->
+      C.App (C.App (C.Var "__compose", desugar_expr g), desugar_expr f)
+  | S.ECall ("psh_id", [], _) ->
+      C.Var "__id"
   | S.ECall (name, args, loc) ->
       (* Rename Seq -> __stream_. The "Seq" prefix is removed from the internal
        * naming. The surface still accepts Seq.X as a deprecated alias

@@ -39,6 +39,7 @@ exception Higher_order_type_param of string
 let is_universe_ty (t : C.ty) : bool =
   match t with
   | C.TyType _ -> true
+  | C.TyDirUniverse _ -> true   (* U_omega: a directed code classifier, also a universe *)
   | _ -> false
 
 (* Positions (0-based) of universe-typed binders in a function's top-level
@@ -125,6 +126,24 @@ let rewrite (positions_of : string -> int list option) (t0 : C.term) : C.term =
 
 (* The pass over a whole program. *)
 let erase (dr : Desugar.desugar_result) : Desugar.desugar_result =
+  (* A type-FAMILY function — one whose declared return type is a universe, e.g.
+     `fun Fam(x: number): Type_0 { return number }` — is a compile-time citizen,
+     the value-level analogue of a universe-typed parameter. Its codes are already
+     consumed by El_normalize's delta-unfolding (El(Fam x) ≡ El(nf_Δ (Fam x))), and
+     after that it is referenced nowhere in a runtime term; a higher-order use would
+     have been rejected as a type argument. So drop it before codegen: its return
+     type has no runtime carrier, exactly why we never let it reach the functor. *)
+  let families =
+    List.filter_map
+      (fun (n, rt) -> if is_universe_ty rt then Some n else None)
+      dr.Desugar.fn_ret_hints
+  in
+  let is_family n = List.mem n families in
+  let functions =
+    List.filter (fun (n, _) -> not (is_family n)) dr.Desugar.functions in
+  let fn_ret_hints =
+    List.filter (fun (n, _) -> not (is_family n)) dr.Desugar.fn_ret_hints in
+  let dr = { dr with Desugar.functions; Desugar.fn_ret_hints } in
   let sigs =
     List.map (fun (name, body) -> (name, universe_positions body))
       dr.Desugar.functions

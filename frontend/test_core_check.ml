@@ -172,5 +172,68 @@ let () =
        (Lam ("A", u0, Var "A"))
        (TyPi ("A", u0, el "A"))));
 
+  (* ── Delta-aware conversion (step 1) ──────────────────────────────────────
+     A body whose declared codomain is `El(idcode A)` equals `El A` ONLY after
+     unfolding the certified delta `idcode = \z:U0. z`. Without deltas the code
+     `idcode A` is stuck (idcode unbound in the empty reducer) and conversion
+     FAILS; with the certified delta threaded into the checker's reducer it
+     reduces to `A` and the body checks. This is exactly the definitional
+     equality gap the delta-threading closes. *)
+  let idcode_deltas = [ ("idcode", Lam ("z", u0, Var "z")) ] in
+  let cc_delta = Core_check.cctx_of_deltas idcode_deltas in
+  let delta_body = Lam ("A", u0, Lam ("x", el "A", Var "x")) in
+  let delta_ty =
+    TyPi ("A", u0, TyArrow (el "A", TyEl (App (Var "idcode", Var "A"))))
+  in
+  check "conversion is INCOMPLETE without the delta (idcode stuck)"
+    (not (Core_check.check_closed delta_body delta_ty));
+  check "delta-aware conversion unfolds a certified definition (El(idcode A) = El A)"
+    (Core_check.check_closed ~cc:cc_delta delta_body delta_ty);
+  (* SN safety: the same context is a strict extension — the delta-free witnesses
+     still check under it (unfolding never blocks a term that needed no unfold). *)
+  check "delta context is a conservative extension (poly-id still checks)"
+    (Core_check.check_closed ~cc:cc_delta poly_id poly_id_ty);
+
+  (* Numeric-literal seeding (step 2). A literal is encoded as a Var whose name
+     starts with __num_ ; it must infer as the primitive number type
+     (TyPlace number) rather than raising Unsupported on an unbound __num_ name. *)
+  check "a numeric literal infers as the number type"
+    (Core_check.infer_closed (Var "__num_42") = Some (TyPlace "number"));
+  check "a non-__num_ unbound name is still a coverage gap, not seeded"
+    (Core_check.infer_closed (Var "__not_a_num") = None);
+
+  (* ── Term-checking gate (step 3) ──────────────────────────────────────────
+     certify_term is the gate primitive core_wf uses to CHECK a body against its
+     declared type. It must (b) CERTIFY a well-typed pure-dependent body, and
+     (c) REJECT an ill-typed one with `Type_error (a clean structural
+     non-inhabitation), NOT silently skip it. *)
+  let good_body = Lam ("A", u0, Lam ("x", el "A", Var "x")) in
+  let good_ty = TyPi ("A", u0, TyArrow (el "A", el "A")) in
+  check "(b) certify_term CERTIFIES a well-typed pure-dependent body"
+    (Core_check.certify_term [] good_body good_ty = `Ok);
+
+  let ill_body = Lam ("A", u0, Lam ("B", u0, Lam ("x", el "A", Var "x"))) in
+  let ill_ty = TyPi ("A", u0, TyPi ("B", u0, TyArrow (el "A", el "B"))) in
+  check "(c) certify_term REJECTS an ill-typed body with Type_error (not Skipped)"
+    (match Core_check.certify_term [] ill_body ill_ty with
+     | `Type_error _ -> true
+     | `Ok | `Skipped _ -> false);
+
+  (* An out-of-fragment body (an unseeded runtime name) must SKIP, never reject:
+     the SOUND-over-COMPLETE bias the gate depends on. *)
+  check "certify_term SKIPS a body that mentions an unseeded name"
+    (match Core_check.certify_term []
+             (Lam ("x", TyPlace "number", App (Var "Space__get", Var "x")))
+             (TyArrow (TyPlace "number", TyPlace "number")) with
+     | `Skipped _ -> true
+     | `Ok | `Type_error _ -> false);
+
+  (* A body that is definitionally equal to a literal only after delta-unfolding
+     + beta computation is CERTIFIED once normalized: `(\z.z) __num_7 : number`. *)
+  check "certify_term certifies a body up to beta/delta normalization"
+    (Core_check.certify_term ~cc:cc_delta []
+       (App (Lam ("z", TyPlace "number", Var "z"), Var "__num_7"))
+       (TyPlace "number") = `Ok);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

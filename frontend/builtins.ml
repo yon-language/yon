@@ -261,6 +261,29 @@ let with_builtins (ctx : Reduce.ctx) : Reduce.ctx =
  *   App(App(Var "Output__print", s), _) — print to buffer
  *)
 
+(* ─── Path / groupoid recognizers ──────────────────────────────────────
+ *
+ * The path operations concat/inv/ap/path_app are surface builtins that reach
+ * the reducer as `App (Var "concat", ..)` etc. (see cubical_bindings.ml for
+ * their arities). They must COMPUTE the groupoid laws as definitional
+ * reductions, not carry an inert `__coh_witness`.
+ *
+ * The only path VALUE the untyped runtime can inspect is refl. It appears in
+ * two shapes:
+ *   - `Refl a`               — the canonical core form (surface `refl(a)`
+ *                              desugars to C.Refl via desugar.ml:616).
+ *   - `App (Var "refl", a)`  — the builtin var-applied form (refl used as a
+ *                              bare curried function).
+ * `as_refl` normalizes both to the basepoint `a`. It is deliberately
+ * SYNTACTIC on the refl head so it survives even though the `App (Var "refl",
+ * _)` arm below collapses a standalone refl to its bare basepoint — we detect
+ * refl-ness on the ORIGINAL sub-path, before that collapse. *)
+let as_refl (t : term) : term option =
+  match t with
+  | Refl a -> Some a
+  | App (Var "refl", a) -> Some a
+  | _ -> None
+
 let rec try_reduce_builtin (t : term) : term option =
   match t with
   | App (App (Var op, a), b)
@@ -564,25 +587,73 @@ let rec try_reduce_builtin (t : term) : term option =
   | App (App (Var "transp", _path), value) ->
       let value' = match try_reduce_builtin value with Some v -> v | None -> value in
       Some value'
-  | App (App (Var "concat", _p1), _p2) ->
-      (* Path concatenation: at the witness level, the concatenated
-       * path is itself a witness; we mark it as the inert witness
-       * since we have no path value to expose. *)
-      Some (Var "__coh_witness")
-  | App (Var "inv", _path) ->
-      (* Path inversion: also a witness; inert. *)
-      Some (Var "__coh_witness")
-  | App (App (Var "ap", _f), p) ->
-      (* Action on paths: ap f p produces a new path. We treat the
-       * result conservatively as the input path's witness. *)
-      let p' = match try_reduce_builtin p with Some v -> v | None -> p in
-      Some p'
+  | App (App (Var "concat", p1), p2) ->
+      (* Path concatenation with the groupoid UNIT laws as definitional
+       * reductions (concat : Path A x y -> Path A y z -> Path A x z):
+       *
+       *   concat(refl_a, p) ≡ p        (left  unit)
+       *   concat(p, refl_a) ≡ p        (right unit)
+       *
+       * Refl-ness is read off the ORIGINAL sub-paths (as_refl), so a
+       * standalone `refl(a)` sub-path is recognized before the refl arm
+       * would collapse it. When both are refl, left-unit fires first and
+       * yields p2 (itself a refl); the two refls are only ever composable
+       * when their shared basepoint agrees, so this is the canonical refl.
+       *
+       * `concat(inv(p), p)` / `concat(p, inv(p))` are NOT reduced here: the
+       * result is refl at p's endpoint, but that endpoint is not recoverable
+       * from p without the type/interval model (this untyped runtime does not
+       * track path endpoints). We leave those a stuck neutral — honest — and
+       * return None so the whole application stays intact rather than emitting
+       * a bogus witness. *)
+      (match as_refl p1 with
+       | Some _ ->
+           (* left unit: normalize the surviving path for the caller. *)
+           Some (match try_reduce_builtin p2 with Some v -> v | None -> p2)
+       | None ->
+           match as_refl p2 with
+           | Some _ ->
+               (* right unit *)
+               Some (match try_reduce_builtin p1 with Some v -> v | None -> p1)
+           | None -> None   (* no unit law applies: stay a neutral, no witness *))
+  | App (Var "inv", path) ->
+      (* Path inversion with the groupoid laws (inv : Path A x y -> Path A y x):
+       *
+       *   inv(refl_a)   ≡ refl_a       (inverse of refl is refl)
+       *   inv(inv(p))   ≡ p            (involution)
+       *
+       * inv on a general (non-refl, non-inv) path has no runtime witness to
+       * expose, so it stays a neutral (None) rather than an inert placeholder. *)
+      (match as_refl path with
+       | Some a -> Some (Refl a)                 (* inv(refl_a) = refl_a *)
+       | None ->
+           match path with
+           | App (Var "inv", q) -> Some q        (* inv(inv(p)) = p (involution) *)
+           | _ -> None                           (* stuck neutral: no witness *))
+  | App (App (Var "ap", f), p) ->
+      (* Action on paths, functorial on refl
+       * (ap : (A -> B) -> Path A x y -> Path B (f x) (f y)):
+       *
+       *   ap(f, refl_a) ≡ refl_{f a}
+       *
+       * On a non-refl path there is no runtime path value to map, so we stay a
+       * neutral (None) rather than echoing the input as before. *)
+      (match as_refl p with
+       | Some a -> Some (Refl (App (f, a)))      (* ap(f, refl_a) = refl_{f a} *)
+       | None -> None)
   | App (App (Var "path_app", p), _i) ->
-      (* Path applied at an interval point: returns the path's value
-       * at that point. For refl-like paths we have no interval
-       * variation, so we return the witness. *)
-      let p' = match try_reduce_builtin p with Some v -> v | None -> p in
-      Some p'
+      (* Path applied at an interval endpoint
+       * (path_app : Path A x y -> I -> A). refl is the CONSTANT path, so it is
+       * the basepoint at every interval point:
+       *
+       *   path_app(refl_a, i) ≡ a      (for any endpoint i)
+       *
+       * This mirrors the core refl-beta rule PApp (Refl t, _) -> t in reduce.ml.
+       * On a non-refl path the value genuinely varies with i and requires the
+       * interval model, so we stay a neutral (None). *)
+      (match as_refl p with
+       | Some a -> Some a                        (* refl is constant at a *)
+       | None -> None)
   | App (Var "__effect_print", arg) ->
       (* The actual output side effect: invoked by the __Console.print
        * handler body after handler dispatch substitutes the argument. *)

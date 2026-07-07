@@ -789,6 +789,10 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                      TyTermExpr p.Hit_env.hpc_left,
                      TyTermExpr p.Hit_env.hpc_right)))
 
+  | EVar ("psh_id", _) ->
+      (* Bare presheaf identity id_A : X -> X (same rule as the psh_id() call
+       * form). It lowers to the kernel marker `__id`; the (F-id) law applies. *)
+      ok (TyArrow (TyVar "__psh_X", TyVar "__psh_X"))
   | EVar (x, loc) ->
       (* HM let-polymorphism, with priority to the scheme store. If x is bound
        * to a scheme forall a. T, instantiate it with fresh meta-variables at
@@ -1031,6 +1035,64 @@ got %s" (Tyenv.ty_to_string other)))
          | [_name] -> ok (TyPrim "boolean")
          | _ -> err loc "directed_cell expects 1 argument: (morphism_name)")
       else
+      (* ── Presheaf arrow-action + composition (A1.2 / A1.3, surface half) ──
+       * These reserved calls give the surface counterparts of the kernel
+       * conversion rules in reduce.ml (try_functoriality). The typing is the
+       * standard categorical one, and it is SOUND-FIRST / conservative: each
+       * rule fires ONLY on the exact presheaf shape (right head name, right
+       * arity, arguments of the expected form). Whenever an object cannot be
+       * read off nominally (HM metavars, `unknown`, non-arrow morphism) we fall
+       * back to `unknown`, so ordinary application typing is never perturbed and
+       * no well-typed program is falsely rejected. *)
+      if name = "psh_id" then
+        (* id_A : X -> X (polymorphic identity). __id is the reserved neutral;
+         * a fresh generic binder makes it usable at any object. *)
+        (match args with
+         | [] -> ok (TyArrow (TyVar "__psh_X", TyVar "__psh_X"))
+         | _ -> err loc "psh_id takes no arguments: it is the polymorphic identity id_A")
+      else
+      if name = "psh_compose" then
+        (* g ∘ f : for g : B -> C and f : A -> B, the composite is A -> C.
+         * Guard: fire only when both arguments are genuinely arrows; otherwise
+         * stay `unknown` (never reject a program that merely reuses the name). *)
+        (match args with
+         | [g; f] ->
+             let* g_ty = infer env ctx g in
+             let* f_ty = infer env ctx f in
+             (match g_ty, f_ty with
+              | (TyArrow (_gb, gc) | TyPi (_, _gb, gc)),
+                (TyArrow (fa, _fb) | TyPi (_, fa, _fb)) ->
+                  ok (TyArrow (fa, gc))
+              | _ -> ok (TyPrim "unknown"))
+         | _ -> err loc "psh_compose expects 2 arguments: psh_compose(g, f) for g ∘ f")
+      else
+      if name = "psh_map" then
+        (* F(f) : the contravariant arrow action of a presheaf F on a morphism
+         * f : A -> B is F(f) : F(B) -> F(A). The object action F(X) is the
+         * dependent carrier El(F X) (exactly how El(F x) is typed elsewhere).
+         * We recover A and B from f's arrow type; the objects must be readable
+         * as nominal codes to embed them in El. If not, degrade to `unknown`. *)
+        (match args with
+         | [ff; f] ->
+             let* f_ty = infer env ctx f in
+             (* object type -> surface code expr (nominal only) *)
+             let obj_code (t : ty) : expr option =
+               match t with
+               | TyUser n | TyPrim n -> Some (EVar (n, loc))
+               | _ -> None
+             in
+             (match f_ty with
+              | (TyArrow (a_ty, b_ty) | TyPi (_, a_ty, b_ty)) ->
+                  (match obj_code a_ty, obj_code b_ty with
+                   | Some a_e, Some b_e ->
+                       (* F(B) -> F(A), contravariant. F is the surface term ff. *)
+                       let fb = TyEl (TyTermExpr (EApp (ff, [b_e], loc))) in
+                       let fa = TyEl (TyTermExpr (EApp (ff, [a_e], loc))) in
+                       ok (TyArrow (fb, fa))
+                   | _ -> ok (TyPrim "unknown"))
+              | _ -> ok (TyPrim "unknown"))
+         | _ -> err loc "psh_map expects 2 arguments: psh_map(F, f) for the arrow action F(f)")
+      else
       let (name, args) =
         match name with
         | "map" -> ("__stream_map", args)
@@ -1146,6 +1208,23 @@ got %s" (Tyenv.ty_to_string other)))
           (ok []) args
       in
       let* arg_tys = arg_tys_result in
+      (* A primitive type name in term position is its Tarski code (TyUniverse),
+       * legitimate only in a universe-code slot (refl/Id/El/hcomp, handled
+       * above). It has no runtime f64 representation, so as an ordinary call
+       * argument it used to slip through the lax stdlib arg check and then crash
+       * at emit ("variable '<T>' not in scope"). Reject it here, cleanly. *)
+      let* () =
+        (* The cubical/universe primitives (transport, transp, ua, idEquiv, refl,
+         * …) legitimately CONSUME a type-code at compile time; only the ordinary
+         * data path (List/Vec/Map/…) would lower it as an f64 and crash. So skip
+         * the guard for the Cubical_bindings family. *)
+        if (not (Cubical_bindings.is_primitive name))
+           && List.exists (function TyUniverse _ -> true | _ -> false) arg_tys then
+          err loc (Printf.sprintf
+            "%s: a type name is a compile-time code, not a runtime value, so it \
+             cannot be passed as an argument" name)
+        else ok ()
+      in
       check_call env ctx name args arg_tys loc
       end
 
@@ -3280,13 +3359,46 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
       (* A subscription carries a stream element type; check that. *)
       check_type_well_formed env inner loc
   | TyEl c ->
-      (* El(c) is well-formed iff the code decodes to a carrier. *)
-      let cname = (match c with TyTermExpr e -> ty_term_to_name e) in
-      (match Catt_r_yon.el_decode (Catt_r_yon.TmVar cname) with
-       | Some _ -> ok ()
-       | None ->
-           err loc (Printf.sprintf
-             "El(%s): code does not decode to a carrier (only 0/1-cells supported)" cname))
+      (* El(c) is well-formed iff the code c inhabits a universe. When c is an
+         application `f(args)`, f must be a type FAMILY (return type a universe
+         Type_n) — El decodes a type code, not a value. Catching a call to a
+         value-returning function here gives a surface error with a location; the
+         Core well-formedness gate (Core_wf) is the downstream backstop. We reject
+         only the unambiguous case (f returns a PRIMITIVE value type) and defer
+         everything else (generic/place/bare code) to the decode fallback + the
+         Core gate, so a valid family like `El(Fam x)` is never false-rejected. *)
+      let e = (match c with TyTermExpr e -> e) in
+      let head_return =
+        match e with
+        | ECall (f, _, _) | EApp (EVar (f, _), _, _) ->
+            (match Tyenv.lookup_fun env f with
+             | Some s -> Some s.Tyenv.fs_return
+             | None -> None)
+        | _ -> None
+      in
+      (* A function used as a code family MUST return a universe. If the head of the
+         code is a call to a function returning a PRIMITIVE value type (number, text,
+         boolean, ...), the code is a value, not a type code: reject with a surface
+         location. Universe / generic / place returns are deferred to the decode
+         fallback and the Core gate, so a real family `El(Fam x)` is never rejected. *)
+      let returns_value_prim =
+        match head_return with
+        | Some (TyPrim n | TyPrimIn (n, _) | TyUser n) -> List.mem n primitives
+        | _ -> false
+      in
+      if returns_value_prim then
+        err loc (Printf.sprintf
+          "El(%s): the code computes a value of type %s, not a type code — El \
+           decodes a universe code (a function returning Type_n), not a value"
+          (ty_term_to_name e)
+          (match head_return with Some rt -> Tyenv.ty_to_string rt | None -> "?"))
+      else
+        (match Catt_r_yon.el_decode (Catt_r_yon.TmVar (ty_term_to_name e)) with
+         | Some _ -> ok ()
+         | None ->
+             err loc (Printf.sprintf
+               "El(%s): code does not decode to a carrier (only 0/1-cells supported)"
+               (ty_term_to_name e)))
 
 and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit tc_result =
   (* Step 1: rebind TyUser -> TyVar wherever the parser produced TyUser

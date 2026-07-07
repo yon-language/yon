@@ -40,6 +40,33 @@ type t =
   | Arrow of t list * t        (* a function value: flattened (args) -> ret signature *)
   | Struct of t list           (* a structural product (dependent pair, non-comprehension) *)
   | Opaque                     (* a pointer-sized opaque handle, no inspectable payload *)
+  | Boxed                      (* the UNIFORM carrier of a genuinely value-dependent El:
+                                  a FAT POINTER {payload-ptr, i64 type-tag}. One single
+                                  layout every stuck-El instance shares, so a function
+                                  over `El(stuck)` compiles ONCE regardless of which
+                                  concrete type the code computes to at runtime.
+
+                                  SOUNDNESS. The box is SELF-DESCRIBING: the i64 tag
+                                  records what the payload pointer points at, so no bit
+                                  pattern is ever reinterpreted as the wrong type. It is
+                                  the polymorphic-box discipline of OCaml/Java `Object`
+                                  or a Rust `dyn Any`: a value carried as a box can only
+                                  be observed through a tag-checked unbox, never by a
+                                  raw reinterpret. Memory-safety: the payload pointer is
+                                  either null (no payload) or a heap cell owned by the
+                                  runtime; the carrier itself allocates nothing and reads
+                                  nothing — it only fixes the ABI shape. Uniformity is
+                                  what buys the soundness of "compile once": since every
+                                  value-dependent El has THIS carrier, the calling
+                                  convention is identical across instances, so no caller
+                                  and callee can ever disagree on the layout.
+
+                                  This is the ONLY carrier that is honestly opaque about
+                                  its payload TYPE (the tag defers that to runtime) while
+                                  being fully concrete about its LAYOUT (16 bytes: ptr +
+                                  i64). Distinct from `Opaque` (a bare untagged handle,
+                                  no payload discipline) precisely because the tag is the
+                                  seat of soundness for value-dependent decoding. *)
 
 (* A place that has no runtime value (a code / universe / bare type-level
    former) has no carrier. Carries the offending Core type so the caller can
@@ -114,15 +141,30 @@ let rec of_core_ty (ty : C.ty) : t =
       else Struct [of_core_ty a; of_core_ty b]
   | C.TyDirUniverse _ -> raise (NoCarrier ty)  (* universe: no runtime value (erased upstream) *)
   | C.TyEl c ->
-      (* El(c) degrades to the carrier the code denotes. A named place -> its
-         section. An El of a code the place layer cannot decode has NO value
-         carrier: it must be decoded or erased upstream, never realized as a
-         silent opaque token. (Today this branch is unreached; it becomes live
-         only once Path/transport/ua are surface-exposed and an El(IdPlace) or
-         El(reducible code) could reach the Core carrier — at which point this
-         clean failure forces the decode upstream instead of emitting a wrong
-         pointer.) *)
-      (match el_target c with `Named n -> Section n | `Opaque -> raise (NoCarrier ty))
+      (* El(c) degrades to the carrier the code DENOTES. The code has already been
+         reduced to Δ-normal form upstream (El_normalize, the conversion rule
+         El(c) ≡ El(nf_Δ c)), so a code that computes to a name is a bare Var/Place
+         here: it decodes to the carrier of THAT place — a primitive to its scalar,
+         a section to its handle — via the same functor (never a blind Section, so
+         `El(Fam x)` that computed to `number` gets number's scalar layout).
+
+         COMPUTED case (`Named n`): UNCHANGED. This is the A1 path — the code
+         reduced to a concrete named type and decodes to that place's exact
+         carrier. Byte-for-byte identical to before; pinned by
+         test_dependent_carrier.py.
+
+         STUCK case (`Opaque`): a code that stays stuck under Δ because it
+         genuinely depends on a runtime value (a non-constant family applied to a
+         free variable, or an `El(v)` for a runtime-chosen code v). Such a type has
+         no SINGLE concrete layout — different runtime values yield different
+         types. But it DOES have a single UNIFORM layout: the boxed carrier, a fat
+         pointer {payload-ptr, i64 tag} shared by every instance. So instead of the
+         old clean-but-incomplete `NoCarrier` failure, we lower it to `Boxed`: the
+         value-dependent El now COMPILES, uniformly, and soundly (the tag defers
+         the concrete type to runtime; see the `Boxed` doc above). *)
+      (match el_target c with
+       | `Named n -> of_core_ty (C.TyPlace n)
+       | `Opaque -> Boxed)
   | C.TyId (a, _, _) ->
       (* a path value lowers to its erased witness, which carries the endpoint
          type: refl(x) is operationally x. Equality stays the reducer's job. *)
@@ -160,3 +202,12 @@ let rec to_mlir (c : t) : string =
       Printf.sprintf "!llvm.struct<(%s)>"
         (String.concat ", " (List.map to_mlir elms))
   | Opaque -> "!llvm.ptr"
+  | Boxed ->
+      (* the uniform value-dependent-El box: a fat pointer, {payload-ptr, i64 tag}.
+         16 bytes, one shape for every stuck El — a function over `El(stuck)` takes
+         and returns exactly this, compiled once. The tag (i64) names, at runtime,
+         what the payload pointer points at; the payload pointer is null for the
+         no-payload case and a runtime-owned heap cell otherwise. Concrete LAYOUT,
+         deferred payload TYPE — that split is the seat of the soundness argument in
+         the `Boxed` constructor's doc. *)
+      "!llvm.struct<(ptr, i64)>"

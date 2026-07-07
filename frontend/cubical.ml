@@ -262,12 +262,33 @@ and subst_interval_in_ctype
                subst_interval_in_cterm var replacement x,
                subst_interval_in_cterm var replacement y)
   | CTGlue (base, phi, partial) ->
-      CTGlue (subst_interval_in_ctype var replacement base,
-              subst_interval_in_formula var replacement phi,
-              List.map (fun (t, e) ->
-                (subst_interval_in_ctype var replacement t,
-                 subst_interval_in_cterm var replacement e))
-                partial)
+      (* phi (the disjunction of glue faces) is aligned POSITIONALLY with the
+       * per-face pair list `partial`: phi.(k) <-> partial.(k) = (T_k, e_k).
+       * A dimension substitution can KILL a face (subst_interval_in_face -> None,
+       * e.g. (i=0) under i:=1) or make it a TAUTOLOGY ([] under the matching
+       * endpoint). We must keep phi and partial aligned by processing them
+       * TOGETHER: drop the pair whenever its face dies, keep it (with the face,
+       * possibly now []) otherwise. A plain filter_map on phi + map on partial
+       * de-syncs the two lists and would make a surviving glue face borrow the
+       * wrong equivalence — the root of the multi-face restriction bug. *)
+      let subst_pair (t, e) =
+        (subst_interval_in_ctype var replacement t,
+         subst_interval_in_cterm var replacement e) in
+      let rec go fs ps = match fs, ps with
+        | [], [] -> ([], [])
+        | f :: fs', p :: ps' ->
+            let (phi', partial') = go fs' ps' in
+            (match subst_interval_in_face var replacement f with
+             | None -> (phi', partial')                     (* face dies: drop pair too *)
+             | Some f' -> (f' :: phi', subst_pair p :: partial'))
+        | _, _ ->
+            (* lengths already out of sync (should not happen): fall back to the
+             * independent maps rather than crash, so at least each list is
+             * self-consistent. *)
+            (subst_interval_in_formula var replacement fs,
+             List.map subst_pair ps) in
+      let (phi', partial') = go phi partial in
+      CTGlue (subst_interval_in_ctype var replacement base, phi', partial')
   | CTQuotient (a, paths) ->
       CTQuotient (subst_interval_in_ctype var replacement a,
                   List.map (fun (x, y) ->
@@ -474,27 +495,58 @@ and reduce_hcomp (ty : ctype) (phi : face_formula)
                let u_sides = List.map (fun (nm, f, u) -> (nm, f, unglue u)) sides in
                let a1 = reduce_hcomp a_ty phi u_sides (unglue base) in
                CGlueElem ([], a1, a1)
-           | (t_ty, equiv) :: _ ->
+           | _ :: _ ->
                (* CCHM homogeneous composition at a Glue type. The type is
                 * constant along the dimension, so this needs only the forward
-                * map w.f (no isEquiv): push the hcomp into the T-component and
-                * the A-component, and patch coherence on gphi with the path
-                * l |-> w.f (hfill_T @ l), connecting w.f(t0) to w.f(t1). *)
+                * maps w_k.f (no isEquiv): push the hcomp into the T-component
+                * and the A-component, patching coherence on EVERY glue face.
+                *
+                * A Glue's partial element is a face SYSTEM
+                *   [ psi_1 |-> (T_1, e_1), ..., psi_n |-> (T_n, e_n) ]
+                * where gphi = [psi_1; ...; psi_n] is aligned POSITIONALLY with
+                * `partial` = [(T_1,e_1); ...; (T_n,e_n)] (invariant preserved by
+                * to_ctype/of_ctype in builtins.ml). Composition must handle ALL
+                * faces: on each psi_k the A-component is patched by the k-th
+                * forward map e_k applied to the filler computed in the k-th type
+                * T_k. The old code used (T_1,e_1) for the whole system, so any
+                * restriction to psi_k (k>1) produced e_1 — the multi-face bug. *)
                let tpart v = match v with CGlueElem (_, t, _) -> t | _ -> v in
                let t_sides = List.map (fun (nm, f, u) -> (nm, f, tpart u)) sides in
                let t0 = tpart base in
-               (* t1 : T = hcomp T [phi |-> t-part u] t0 *)
-               let t1 = reduce_hcomp t_ty phi t_sides t0 in
-               (* hfill_T @ l = hcomp T [phi |-> t-part u, (l=0) |-> t0] t0 :
-                * equals t0 at l=0 (the (l=0) side fires) and t1 at l=1. *)
                let l = "_hg_l" in
-               let hfill_at_l =
-                 reduce_hcomp t_ty (phi @ [[(l, false)]])
-                   (t_sides @ [("_hg_fill", [(l, false)], t0)]) t0 in
-               let wf x = CHITConstr ("__equiv_fwd", [equiv; x]) in
-               (* a1 : A = hcomp A [phi |-> unglue u, gphi |-> <l> w.f(hfill_T)] (unglue base) *)
+               (* the length invariant between the disjunction gphi and the
+                * per-face pair list `partial`. If they ever diverge (they must
+                * not) we pad/truncate to the common prefix so every handled face
+                * keeps its own equivalence rather than borrowing the head's. *)
+               let faces =
+                 let rec zip fs ps = match fs, ps with
+                   | f :: fs', p :: ps' -> (f, p) :: zip fs' ps'
+                   | _, _ -> [] in
+                 zip gphi partial in
+               (* one coherence side PER glue face:
+                *   on psi_k:  <l> e_k.f (hfill_{T_k} @ l)
+                * where hfill_{T_k} @ l = hcomp T_k [phi |-> t-part u, (l=0)|->t0] t0
+                * equals t0 at l=0 and t1_k at l=1. Both the filler type and the
+                * forward map are taken from the k-th pair. *)
+               let coh_sides =
+                 List.map
+                   (fun (psi_k, (tk_ty, ek)) ->
+                      let hfill_k =
+                        reduce_hcomp tk_ty (phi @ [[(l, false)]])
+                          (t_sides @ [("_hg_fill", [(l, false)], t0)]) t0 in
+                      let wf_k x = CHITConstr ("__equiv_fwd", [ek; x]) in
+                      (l, psi_k, wf_k hfill_k))
+                   faces in
+               (* t1 : T = hcomp T [phi |-> t-part u] t0. The T-component is a
+                * partial element: on psi_k it lives in T_k. We compose it once
+                * (the shared t-part representative); the ambient type restricts
+                * to T_k on psi_k, so its dispatch type is the first pair's — a
+                * CTBase-prototype simplification that does not affect the term. *)
+               let t1_ty = match partial with (tk, _) :: _ -> tk | [] -> a_ty in
+               let t1 = reduce_hcomp t1_ty phi t_sides t0 in
+               (* a1 : A = hcomp A [phi |-> unglue u,
+                *                    psi_k |-> <l> e_k.f(hfill_{T_k})] (unglue base) *)
                let u_sides = List.map (fun (nm, f, u) -> (nm, f, unglue u)) sides in
-               let coh_sides = List.map (fun g -> (l, g, wf hfill_at_l)) gphi in
                let a1 = reduce_hcomp a_ty (phi @ gphi) (u_sides @ coh_sides) (unglue base) in
                CGlueElem (gphi, t1, a1))
       | _ -> CHComp (ty, phi, sides, base))

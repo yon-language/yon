@@ -7,7 +7,9 @@
  * Warning diagnostics) share one implementation and cannot disagree.
  *
  * Rules (purely syntactic; reuse the parser + the free-variable collector):
- *   W1001 dead-function   : a top-level fun never reached from `main`
+ *   W1001 dead-function   : a top-level fun referenced nowhere in the program
+ *                           (NOT "unreachable from `main`": a Space's functions
+ *                           are its cross-Space API, not called from one entry)
  *   W1002 unused-binding  : `be x holds e` whose x is never used afterwards
  *   W1003 unused-param    : a function parameter never used in the body
  *   W3001 unused-import   : an `import ... from S` whose symbol is never used --
