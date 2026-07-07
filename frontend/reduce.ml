@@ -214,6 +214,71 @@ let try_beta t =
         Some (Subst.subst x arg body)
   | _ -> None
 
+(* ─── Functoriality of an abstract presheaf (A1.2 / A1.3) ─────────────
+ *
+ * A1.1 internalized the OBJECT action of a contravariant functor
+ * F : Type_0 -> Type_0; El(F x) computes by delta-unfolding a CONCRETE F.
+ * The pieces missing for an ABSTRACT presheaf symbol F (one that is NOT a
+ * lambda the reducer can unfold) are the ARROW action F(f) and its two
+ * functoriality laws. Those laws are conversions the KERNEL must apply,
+ * because an abstract F(f) is otherwise stuck: there is nothing to unfold.
+ *
+ * Representation (reuses App/Var only — no new AST constructor, so every
+ * existing pattern-match stays exhaustive; these reserved names sit in the
+ * same "__"-tagged namespace the reducer already owns for __num_, __new_,…):
+ *
+ *   identity  id_A            ==  Var "__id"
+ *                                 (the polymorphic identity, semantically λx.x)
+ *   composite g ∘ f           ==  __compose g f   (i.e. λx. g (f x))
+ *   arrow action  F(f)        ==  __psh_map F f
+ *                                 (contravariant pullback of the presheaf F
+ *                                  along the morphism f : A -> B, so
+ *                                  F(f) : F(B) -> F(A))
+ *
+ * The functoriality laws, as directed R_Yon conversion (delta) rules:
+ *
+ *   (F-id)     F(id)       ≡ id
+ *                  __psh_map F __id            ⟶  __id
+ *   (F-comp)   F(g ∘ f)    ≡ F(f) ∘ F(g)       (contravariant)
+ *                  __psh_map F (__compose g f) ⟶  __compose (__psh_map F f)
+ *                                                            (__psh_map F g)
+ *
+ * These fire ONLY on the exact __psh_map/__id/__compose head shape, and the
+ * heads are bare Vars (never a Lam), so they never overlap a beta- or
+ * eta-redex nor any existing rule; F is left OPAQUE (it may be an abstract
+ * Var or a concrete lambda — the laws hold either way, in the R_Yon /
+ * CATT spirit of a conversion, not a surface inliner).
+ *
+ * Termination: with μ(t) = Σ over each __psh_map node of |its 2nd argument|,
+ * (F-id) deletes a node (μ↓) and (F-comp) replaces one node over
+ * `__compose g f` (arg-size 1+|g|+|f|) by two nodes over the strict subterms
+ * f and g (arg-size |f|+|g|), so μ strictly decreases; μ is invariant under
+ * every other rule, so SN is preserved. Local confluence: the two LHSs are
+ * head-disjoint (2nd arg __id vs __compose) and disjoint from beta/eta, so
+ * the only critical pairs are with congruence and commute — SN+WCR ⇒
+ * confluent (Newman). *)
+let psh_id = "__id"
+let psh_compose = "__compose"
+let psh_map = "__psh_map"
+
+(* `__compose g f`  as a core term (g ∘ f). *)
+let mk_compose g f = App (App (Var psh_compose, g), f)
+(* `__psh_map F f`  as a core term (F(f)). *)
+let mk_psh_map ff f = App (App (Var psh_map, ff), f)
+
+let try_functoriality t =
+  match t with
+  (* head must be exactly `__psh_map F morph`, uncurried to 2 args. *)
+  | App (App (Var h, ff), morph) when h = psh_map ->
+      (match morph with
+       (* (F-id):   F(id) ⟶ id *)
+       | Var m when m = psh_id -> Some (Var psh_id)
+       (* (F-comp): F(g ∘ f) ⟶ F(f) ∘ F(g)   [contravariant swap] *)
+       | App (App (Var c, g), f) when c = psh_compose ->
+           Some (mk_compose (mk_psh_map ff f) (mk_psh_map ff g))
+       | _ -> None)
+  | _ -> None
+
 (* ─── Scope-exit ───────────────────────────────────────────────────── *)
 
 (* When a scope body has reduced to a value, the scope itself reduces
@@ -334,6 +399,14 @@ let rec step ctx t =
   match t with
   (* Computational reductions on the term head. *)
   | App _ ->
+      (* Presheaf functoriality (A1.2/A1.3): the head-level conversion rules
+       * for an ABSTRACT presheaf's arrow action. Guarded to the exact
+       * `__psh_map F __id` / `__psh_map F (__compose g f)` shape, whose head
+       * is a bare Var (never a Lam), so it can never mask a beta- or
+       * eta-redex; trying it first only short-circuits that exact shape. *)
+      (match try_functoriality t with
+       | Some t' -> Some t'
+       | None ->
       (* Try beta first; if not a beta-redex, ...
        * Call-by-value: when f is a Lam (body waiting for arg), reduce
        * the arg first, NOT the body. This ensures side effects in the
@@ -378,7 +451,7 @@ let rec step ctx t =
                           (match step ctx a with
                            | Some a' -> Some (App (f, a'))
                            | None -> None))
-                 | _ -> None)))
+                 | _ -> None))))
 
   | Lam (x, ty, body) ->
       (* Apply eta if applicable. *)

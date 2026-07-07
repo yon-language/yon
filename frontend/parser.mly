@@ -809,8 +809,8 @@ type_atom:
     { TyId (a, TyTermExpr x, TyTermExpr y) }
   | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
     { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
-  | EL LPAREN c = IDENT RPAREN
-    { TyEl (TyTermExpr (EVar (c, mk_loc $startpos $endpos))) }
+  | EL LPAREN c = expr RPAREN
+    { TyEl (TyTermExpr c) }   (* A1: c may be an APPLIED code El(Fam(x)), not just a bare name *)
   | name = IDENT
     { TyUser name }
   | name = IDENT IN ids = ident_list

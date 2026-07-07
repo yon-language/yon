@@ -1,11 +1,28 @@
 # to-fix — limiti reali trovati PER ESECUZIONE (v1.1)
 
+> **NB (2026-07-07): la lista d'azione unica è in `todo-1.2.md` → "★ MASTER BACKLOG 1.2".**
+> Gli item ancora aperti (place-collision, return-tail, ecc.) sono stati promossi lì.
+> Questo file resta come **registro storico** di cosa è stato trovato per esecuzione,
+> non più come lista d'azione parallela.
+
 > Regola: ogni voce qui è stata trovata **compilando ed eseguendo** un programma
 > a risposta nota, non leggendo i sorgenti degli oracle. Una funzionalità che
 > all'esecuzione produce un **marker**, uno **stuck**, un **valore errato** o un
 > **reject** dove dovrebbe ridurre → finisce qui, con il programma che lo mostra.
 >
 > Colonne: costrutto · programma · osservato (com'è uscito) · atteso · gravità.
+
+> **PASSATA DI VERIFICA 2026-07-04 — 1.1 CHIUSA.** Rivisti tutti gli item
+> robustezza/soundness ricompilando le sonde: **già chiusi**. Corpo funzione vuoto
+> e parametro duplicato → E2001 pulito. "Funzione senza return" NON è un bug: Yon
+> ha il **return implicito di coda** (l'ultimo statement è il valore) e
+> `check_implicit_tail_return` (tycheck.ml) ne verifica il tipo contro il tipo di
+> ritorno dichiarato. Place-collision cross-world → exit 6 con messaggio pulito.
+> Il "gate runtime mancante" ESISTE: `run_regression.sh` costruisce+esegue gli
+> examples e fa diff con `baseline_exitcodes.txt` (sul Mac). `decide(unknown)` →
+> SIGABRT è DESIGN, in baseline (`RAN decidable_unknown exit=134`). Restano solo i
+> buchi di completezza API stdlib (`remove`/`difference`/`pop`, `to_stream` su
+> XRel*, tipo di `Seq.range`), **spostati in 1.2** (todo-1.2.md, feature non bug).
 
 | costrutto | programma | osservato | atteso | gravità |
 |---|---|---|---|---|
@@ -108,7 +125,12 @@ Il tipo del valore di return implicito (ultimo stmt non-SReturn) non e' confront
 ## yon_xcoord_to_int24: disaccordo semantico con yon_xcoord_type (Leech, non memory-safety)
 Trovato dal test C `test_unit_coord_decode` (sweep su 2^21/277 probe). `yon_xcoord_to_int24` documenta "ritorna -1 se v non è un type-2 short decodificabile", ma il decoder `gen_xi_leech_to_short` è più permissivo del classificatore `yon_xcoord_type` (gen_leech2_subtype): per alcuni `v` con `type(v)!=2`, `to_int24` decodifica (ritorna 0). **Non è un OOB** — le guard-lane oltre la 24 restano intatte e ogni decode resta in {-4..4} (memory-safety OK). Nel path raggiungibile `to_int24` è chiamato solo su short già validati type-2 (la validazione type-2 avviene a monte), quindi il disaccordo è **latente**. Da chiarire: o `to_int24` deve rifiutare i non-type-2 per rispettare il suo contratto doc, o il doc va corretto. Priorità BASSA (matematica Leech specialistica). Il test conta i disaccordi (`semantic-disagree=N`) ma non fallisce su questo.
 
-## dispatcher: type_equal cieco agli endpoint per TyPathP (stessa classe del TyId, non chiuso)
+## dispatcher: type_equal cieco agli endpoint per TyPathP — ✅ CHIUSO (verificato 2026-07-07)
+L'arm `TyPathP/TyPathP` esiste in `dispatcher.ml:359-374`: confronta il carrier
+(up-to-interval, con `rename_ty`) + ENTRAMBI gli endpoint (`ty_term_equal x1 x2 && y1 y2`),
+col commento che documenta la chiusura del vecchio buco. Il `neg_pathp_endpoint` skippato
+va ora riattivato come negativo. Nota storica sotto.
+
 Trovato costruendo i negativi Yon. `Dispatcher.type_equal` intercetta `TyId/TyId` PRIMA del dispatch e ne confronta gli endpoint (fix fatto in precedenza, dispatcher.ml:360-367), ma `TyPathP` NON ha l'intercettazione equivalente: passa per `lift_to_cubical` (dispatcher.ml:145-159) che riscrive gli endpoint a placeholder `__endpoint_x/__endpoint_y` → due `PathP(i,A,x,y)` che differiscono SOLO negli endpoint vengono giudicati uguali → un programma cubicale mal-tipato sui PathP potrebbe essere accettato. Reachable solo via uso PathP di superficie (nicchia, avanzato). Fix: aggiungere un arm `TyPathP/TyPathP` in type_equal che confronta carrier + endpoint (come il TyId), prima del dispatch. Priorità BASSA. (Per questo il negativo `neg_pathp_endpoint` è stato saltato: oggi verrebbe accettato → negativo rotto.)
 
 ## Spawn__child_exit / yon_rt_spawn_child_exit non marcati noreturn (robustezza, basso)

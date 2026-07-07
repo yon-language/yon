@@ -32,3 +32,6 @@ a.out
 *.standard.mlir
 *.llvm.mlir
 *.ll
+
+# copyrighted ebooks/PDFs — never commit
+books/

@@ -84,5 +84,83 @@ let () =
   check "encode_number 5.0 is a value-tagged Var"
     (match enc 5.0 with Var s -> Reduce.is_value (Var s) | _ -> false);
 
+  (* ── (3) path / groupoid laws (builtins.ml: concat / inv / ap / path_app) ──
+   *
+   * These pin the P2 fix: the path operations COMPUTE the groupoid laws as
+   * definitional reductions instead of returning the inert `__coh_witness`.
+   * We drive them through try_reduce_builtin — the exact reducer arm — and
+   * assert the reduced term is structurally the law's RHS (term_equal).
+   *
+   * refl appears in two shapes; every law is checked against both:
+   *   canonical `Refl a`  and  builtin var-applied `App (Var "refl", a)`.
+   *)
+  let a = Var "a" and b = Var "b" in
+  let p = Var "p" and f = Var "f" in
+  let concat x y = App (App (Var "concat", x), y) in
+  let inv x = App (Var "inv", x) in
+  let ap g x = App (App (Var "ap", g), x) in
+  let path_app pt i = App (App (Var "path_app", pt), i) in
+  let reduces_to name t expected =
+    match Builtins.try_reduce_builtin t with
+    | Some got -> check name (term_equal got expected)
+    | None -> check (name ^ " [reduced? NO]") false
+  in
+  let stays_neutral name t =
+    check (name ^ " stays neutral (no witness)")
+      (Builtins.try_reduce_builtin t = None)
+  in
+  (* the two refl shapes *)
+  let refl_core = Refl a in
+  let refl_var  = App (Var "refl", a) in
+
+  (* concat left unit: concat(refl_a, p) = p *)
+  reduces_to "concat(refl_a, p) = p          (left unit, Refl)" (concat refl_core p) p;
+  reduces_to "concat(refl_a, p) = p          (left unit, refl-var)" (concat refl_var p) p;
+  (* concat right unit: concat(p, refl_a) = p *)
+  reduces_to "concat(p, refl_a) = p          (right unit, Refl)" (concat p refl_core) p;
+  reduces_to "concat(p, refl_a) = p          (right unit, refl-var)" (concat p refl_var) p;
+  (* concat(refl_a, refl_b): left unit fires first -> refl_b (canonical refl) *)
+  reduces_to "concat(refl_a, refl_b) = refl_b (both refl)" (concat refl_core (Refl b)) (Refl b);
+  (* concat of two general paths: no unit law -> neutral *)
+  stays_neutral "concat(p, q)" (concat p (Var "q"));
+
+  (* inv of refl: inv(refl_a) = refl_a *)
+  reduces_to "inv(refl_a) = refl_a           (inverse of refl, Refl)" (inv refl_core) (Refl a);
+  reduces_to "inv(refl_a) = refl_a           (inverse of refl, refl-var)" (inv refl_var) (Refl a);
+  (* inv involution: inv(inv(p)) = p *)
+  reduces_to "inv(inv(p)) = p                 (involution)" (inv (inv p)) p;
+  (* inv of a general path: neutral *)
+  stays_neutral "inv(p)" (inv p);
+  (* concat(inv(p), p): endpoint not recoverable untyped -> neutral (documented) *)
+  stays_neutral "concat(inv(p), p)" (concat (inv p) p);
+  stays_neutral "concat(p, inv(p))" (concat p (inv p));
+
+  (* ap functoriality on refl: ap(f, refl_a) = refl_{f a} *)
+  reduces_to "ap(f, refl_a) = refl_{f a}     (functoriality, Refl)"
+    (ap f refl_core) (Refl (App (f, a)));
+  reduces_to "ap(f, refl_a) = refl_{f a}     (functoriality, refl-var)"
+    (ap f refl_var) (Refl (App (f, a)));
+  (* ap on a general path: neutral (no runtime path value to map) *)
+  stays_neutral "ap(f, p)" (ap f p);
+
+  (* path_app: refl is the constant path at a for EVERY endpoint *)
+  reduces_to "path_app(refl_a, 0) = a        (const path, Refl)"
+    (path_app refl_core (Var "__num_0")) a;
+  reduces_to "path_app(refl_a, 1) = a        (const path, Refl)"
+    (path_app refl_core (Var "__num_1")) a;
+  reduces_to "path_app(refl_a, i) = a        (const path, refl-var, var endpoint)"
+    (path_app refl_var (Var "i")) a;
+  (* path_app on a general path: value varies with i -> neutral *)
+  stays_neutral "path_app(p, i)" (path_app p (Var "i"));
+
+  (* no result of any path law is the inert __coh_witness placeholder *)
+  check "no path law reduces to __coh_witness"
+    (List.for_all
+       (fun t -> match Builtins.try_reduce_builtin t with
+          | Some (Var "__coh_witness") -> false
+          | _ -> true)
+       [ concat refl_core p; concat p refl_core; inv refl_core; inv (inv p);
+         ap f refl_core; path_app refl_core (Var "__num_0") ]);
+
   Printf.printf "\n%d passed, %d failed\n" !pass !fails;
   if !fails = 0 then exit 0 else exit 1

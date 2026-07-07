@@ -72,9 +72,26 @@ let rec gen_cubical d : term =
                   [("i", [("i", true); ("j", false)], gen_val 1)], gen_core (d-1))
     | _ -> HITElim ([("c", ["x"], Var "x")], HITConstr ("c", [gen_val 1]))
 
-let alpha_bump (t : term) : term = match t with
-  | Lam (x, ty, b) -> Lam (x ^ "_", ty, Subst.subst x (Var (x ^ "_")) b)
-  | other -> App (Lam ("z", ty0, Var "z"), other)
+(* DEEP alpha-renaming: rename EVERY Lam binder (capture-avoidingly via Subst)
+ * and recurse through all generated constructors. alpha_bump t is alpha-
+ * equivalent to t, so NF(t) must equal NF(alpha_bump t) — any divergence is a
+ * substitution/capture bug. (Was shallow: only the outermost binder.) *)
+let rec alpha_bump (t : term) : term = match t with
+  | Lam (x, ty, b) ->
+      let x' = x ^ "_" in Lam (x', ty, alpha_bump (Subst.subst x (Var x') b))
+  | App (f, a) -> App (alpha_bump f, alpha_bump a)
+  | Pair (a, b) -> Pair (alpha_bump a, alpha_bump b)
+  | Fst a -> Fst (alpha_bump a)
+  | Snd a -> Snd (alpha_bump a)
+  | Refl a -> Refl (alpha_bump a)
+  | J (x, ty, c, d, p, a) ->
+      J (x, ty, alpha_bump c, alpha_bump d, alpha_bump p, alpha_bump a)
+  | PLam (i, b) -> PLam (i, alpha_bump b)
+  | PApp (p, r) -> PApp (alpha_bump p, r)
+  | HComp (ty, phi, sides, base) -> HComp (ty, phi, sides, alpha_bump base)
+  | Comp (ty, phi, sides, base) -> Comp (ty, phi, sides, alpha_bump base)
+  | Transp (l, b) -> Transp (l, alpha_bump b)
+  | other -> other
 
 let show_head = function
   | Var v -> "Var " ^ v | Lam _ -> "Lam" | App _ -> "App" | Fst _ -> "Fst"
@@ -84,7 +101,7 @@ let show_head = function
   | Unglue _ -> "Unglue" | GlueElem _ -> "GlueElem" | Unit -> "Unit" | _ -> "other"
 
 (* ── driver ───────────────────────────────────────────────────────────── *)
-let n_core = 3000 and n_cub = 3000 and n_conf = 1000 and depth = 4
+let n_core = 3000 and n_cub = 3000 and n_conf = 1000
 
 let cv = ref 0 and cs = ref 0 and ct = ref 0
 let uv = ref 0 and us = ref 0 and ut = ref 0
@@ -113,7 +130,11 @@ let diag () =
     Printf.printf "  %-26s -> %s\n" label s) cases
 
 let () =
-  Random.init 20260701;
+  (* seed + depth overridable from CLI for a hunting sweep; defaults keep the
+   * deterministic gate reproducible. *)
+  let seed  = if Array.length Sys.argv > 1 then int_of_string Sys.argv.(1) else 20260701 in
+  let depth = if Array.length Sys.argv > 2 then int_of_string Sys.argv.(2) else 4 in
+  Random.init seed;
   diag ();
   for _ = 1 to n_core do
     match classify (gen_core depth) with
@@ -132,7 +153,7 @@ let () =
     let a = nf_of (classify t) and b = nf_of (classify (alpha_bump t)) in
     if term_equal_env [] a b then incr confok else incr confbad
   done;
-  Printf.printf "=== metatheory fuzz (seed 20260701, fuel %d, depth %d) ===\n" fuel_budget depth;
+  Printf.printf "=== metatheory fuzz (seed %d, fuel %d, depth %d) ===\n" seed fuel_budget depth;
   Printf.printf "P1 core    : %d value | %d STUCK | %d timeout   (n=%d)\n" !cv !cs !ct n_core;
   Printf.printf "P2 cubical : %d value | %d stuck | %d timeout   (n=%d)\n" !uv !us !ut n_cub;
   Printf.printf "P3 confl   : %d ok | %d MISMATCH                 (n=%d)\n" !confok !confbad n_conf;

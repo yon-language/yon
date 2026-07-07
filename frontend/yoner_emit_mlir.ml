@@ -533,6 +533,31 @@ let () =
     Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env)
       ~place_to_space:(Hashtbl.fold (fun k v acc -> (k, v) :: acc) place_space [])
       prog in
+  (* Kernel re-check: the dependent Core checker certifies the well-formedness of
+     every dependent type the surface elaboration produced, over the ORIGINAL codes
+     (before El_normalize computes them away). A genuine ill-formed dependent type is
+     rejected here; constructs outside the checker's fragment are skipped, so a
+     well-formed program always passes. *)
+  (match Core_wf.certify_program desugared with
+   | Ok r ->
+       if (try Sys.getenv "YON_CORE_WF" = "1" with Not_found -> false) then
+         Printf.eprintf "[core-wf] %d dependent types certified, %d skipped (out of fragment)\n"
+           r.Core_wf.certified r.Core_wf.skipped
+   | Error msg ->
+       Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Type_check
+         (Printf.sprintf
+            "kernel re-check rejected a lowered dependent type: %s. The surface \
+             type-checked but its Core lowering is not well-formed under the \
+             dependent checker — this is a desugaring/normalization soundness bug." msg)));
+       exit 3);
+  (* Conversion rule El(c) ≡ El(nf_Δ c): reduce every El code to its Δ-normal form
+     under the certified deltas, so a computed-codomain dependent type `El(Fam x)`
+     computes to a concrete carrier before the pure carrier functor sees it. The
+     kernel/R_Yon reducer does the work; the carrier stays a functor on normal
+     forms. *)
+  let desugared =
+    El_normalize.normalize_result
+      (Dispatcher.certified_deltas cr.Tycheck.cr_env) desugared in
   (* Erase type-level (universe-typed) parameters before codegen: a type
      argument is a compile-time citizen and must not reach the carrier/backend
      as runtime data. Coordinated drop of binders and matching call arguments;
