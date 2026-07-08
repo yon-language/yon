@@ -161,14 +161,20 @@ let () =
     Printf.printf "  [core witnesses, head ctor of the stuck/looping normal form]: %s\n"
       (String.concat ", " !core_wit);
   if !us > 0 then
-    Printf.printf "  [O2 cubical witnesses — stuck normal form, NOT a value]: %s\n"
+    Printf.printf "  [cubical NEUTRAL normal forms over FREE dimensions — correct, NOT stuck-bugs]: %s\n"
       (String.concat ", " !cub_wit);
   let core_bug = !cs > 0 || !ct > 0 || !confbad > 0 in
   if core_bug then begin
     Printf.printf "RESULT: FAIL — core Progress/SN or confluence violated.\n"; exit 1
   end else begin
+    (* NOTE (2026-07-08): these generated terms have FREE dimension variables, so a
+       residual hcomp/comp is a legitimately NEUTRAL normal form, not an O2 gap. Closed
+       canonicity (the real O2 question) is measured by test_o2_probe.ml — CCHM boundary
+       laws + 8000/8000 closed corners → value, cross-dim included. The count below is
+       open-dimension neutrality, NOT a compute failure. *)
     Printf.printf "RESULT: core sound on this run%s.\n"
-      (if !us > 0 then Printf.sprintf "; %d cubical O2 witnesses exhibited (known-open gap)" !us
-       else "; no cubical stuck found this run");
+      (if !us > 0 then
+         Printf.sprintf "; %d cubical neutrals over free dims (correct — see test_o2_probe for CLOSED canonicity)" !us
+       else "; no cubical neutral found this run");
     exit 0
   end

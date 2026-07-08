@@ -582,6 +582,14 @@ let () =
      | Some m -> Printf.eprintf "=== main ===\n%s\n" (Pretty.pp_term m)
      | None -> ())
   end with Not_found -> ());
+  (* Space death-watch (1.2): hand the STATIC inter-Space graph to the emitter so
+     emit_space_bootstrap can arm each watched Space with
+     yon_rt_space_expect_inputs(id, in_degree). Built from the SAME per-file arc
+     collection (space_edges) and declared-Space census (declared_spaces) that
+     Space_graph.dump / --dump-space-graph consumes — one source of truth, no
+     re-derivation. Same one-line-setter plumbing as set_views_list below. *)
+  Emit_mlir.set_space_graph
+    (Space_graph.build ~declared:declared_spaces (List.rev !space_edges));
   (* Extract the view decls from the program and propagate them to
    * emit_program via a global setter. *)
   Emit_mlir.set_views_list (List.filter_map (function

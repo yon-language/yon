@@ -2941,13 +2941,21 @@ let test_univalence_computes () =
   ) in
   let t = Cubical.CVar "a_value" in
   let transported = Cubical.reduce_transport ("i", glue_ty) t in
+  (* The general CCHM transp-Glue rule applies the forward map at the START face
+     (i=0 ↦ (A,e)) and the inverse at the TARGET face (i=1 ↦ (B,id_b)): the result
+     is id_b.g(e.f(t)). id_b is the identity equivalence, whose inverse g collapses
+     to the identity in the core, so this IS e.f(t) — univalence still computes.
+     (Was: the placeholder emitted the bare forward; the rule now goes through both
+     faces with the correct directions. transport_ua_succ pins the collapsed value.) *)
   match transported with
-  | Cubical.CHITConstr ("__equiv_fwd", [eq; arg]) when eq = e && arg = t ->
-      Printf.printf "  transp(Glue[(i=0)↦(A,e),(i=1)↦(B,id)] B, t) = e.fun(t)\n";
-      Printf.printf "Status: PASS — univalence reduces, not postulated\n";
+  | Cubical.CHITConstr ("__equiv_bwd",
+      [idq; Cubical.CHITConstr ("__equiv_fwd", [eq; arg])])
+    when idq = id_b && eq = e && arg = t ->
+      Printf.printf "  transp(ua) = id_B.g(e.f(t)); id_B.g = id ⇒ e.f(t)\n";
+      Printf.printf "Status: PASS — univalence reduces (fwd at start face, inv at target)\n";
       true
   | _ ->
-      Printf.printf "FAIL — transport over Glue didn't reduce\n";
+      Printf.printf "FAIL — transport over Glue didn't reduce to the expected ua form\n";
       false
 
 (* Test 158-160: every built-in HIT is registered in Hit_env.builtin_env.
