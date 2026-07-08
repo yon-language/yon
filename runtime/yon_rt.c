@@ -78,6 +78,14 @@ static struct {
      * declared, each `new` calls fold with this as prev. Initially
      * YON_SECTION_INVALID = bottom. */
     yon_section_t accumulator;
+    /* Space death-watch (1.2 region-reaping, NOT a garbage collector). Counts
+     * the STATIC, compiler-provided, FINITE set of NAMED incoming communication
+     * arcs still open for this Space (the inter-Space graph's in-degree, wire +
+     * import). -1 = unwatched (an isolated / pure-producer Space, or one whose
+     * in-degree the compiler did not arm); >= 0 = named arcs left before the
+     * WHOLE-Space heap is reaped. This is one counter per REGION, decremented
+     * once per named arc EOF — never a per-object refcount, never a trace. */
+    int32_t       deathwatch_pending;
 } g_spaces[YON_MAX_SPACES];
 
 static uint32_t g_n_spaces = 0;
@@ -122,6 +130,7 @@ void yon_rt_init(void) {
     g_spaces[0].occupancy = 0;
     g_spaces[0].fold_name[0] = '\0';
     g_spaces[0].accumulator = YON_SECTION_INVALID;
+    g_spaces[0].deathwatch_pending = -1;   /* the entry/default heap is never death-watched */
     /* L2_SEPARATE/SHM: heap_id 0 ha il proprio heap. */
     if (g_backend == YON_BACKEND_L2_SEPARATE) {
         g_spaces[0].heap = yon_xheap_create();
@@ -172,6 +181,7 @@ uint32_t yon_rt_register_space(const char *name) {
     g_spaces[id].occupancy = 0;
     g_spaces[id].fold_name[0] = '\0';
     g_spaces[id].accumulator = YON_SECTION_INVALID;
+    g_spaces[id].deathwatch_pending = -1;  /* unwatched until expect_inputs arms it */
     /* Each space has its own physical heap under SEPARATE/SHM. In L1_SHARED it
      * stays NULL (heap_for returns g_yon_heap). */
     if (g_backend == YON_BACKEND_L2_SEPARATE) {
@@ -277,6 +287,56 @@ double yon_rt_drop_space(double heap_id) {
         yon_rt__heap_tick(ev);
     }
     return heap_id;
+}
+
+/* ============================================================== */
+/* Space death-watch: automatic REGION reap when the static input   */
+/* arcs all close (1.2). This is NOT a garbage collector.           */
+/* ============================================================== */
+/* It counts a STATIC, compiler-provided, FINITE set of NAMED incoming
+ * communication arcs (the inter-Space graph's in-degree, wire + import) at
+ * whole-SPACE granularity. When the last named input arc closes, the WHOLE Space
+ * heap is reclaimed via the same yon_xheap_drop primitive that `drop X` uses.
+ * There is NO per-object refcount, NO write barrier, NO heap tracing, NO
+ * reachability scan and NO cycle concern: the counter tracks a small named set of
+ * ARCS, not object references, and the reap is a deterministic REGION operation
+ * (fired exactly at the last arc's EOF) — like an OS reaping a process whose
+ * input pipes have all reached EOF. */
+
+/* Arm the death-watch with the compiler's static in-degree. Only a positive
+ * count arms it; n <= 0 leaves the Space unwatched (-1), so an isolated / pure
+ * producer Space is reclaimed at process exit by the OS, never here. Safe for an
+ * out-of-range id. Idempotent: re-arming with the same static count is a no-op
+ * change. */
+void yon_rt_space_expect_inputs(uint32_t id, int32_t n) {
+    ensure_init();
+    if (id >= g_n_spaces) return;
+    if (n > 0) g_spaces[id].deathwatch_pending = n;
+}
+
+/* Signal that ONE named incoming arc of Space `id` has closed (clean EOF). If
+ * the Space is watched (pending > 0) decrement it; when the LAST arc closes
+ * (pending reaches 0) REAP the whole Space heap and disarm (pending = -1) so the
+ * reap fires exactly once. A safe no-op for an out-of-range id, an unwatched
+ * Space (-1) or an already-reaped Space — hence idempotent under over-signalling.
+ * The heap is read directly from the registry (never via yon_rt_heap_for, whose
+ * out-of-range fallback is the shared global heap, which must never be dropped). */
+void yon_rt_space_input_closed(uint32_t id) {
+    ensure_init();
+    if (id >= g_n_spaces) return;
+    int32_t p = g_spaces[id].deathwatch_pending;
+    if (p <= 0) return;                        /* unwatched (-1) or already reaped */
+    p -= 1;
+    g_spaces[id].deathwatch_pending = p;
+    if (p == 0) {
+        yon_xheap_drop(g_spaces[id].heap);     /* region reap; no-op if NULL (L1_SHARED) */
+        {   /* trace names the reaped Space, mirroring the `drop:` event */
+            char ev[280];
+            snprintf(ev, sizeof ev, "deathwatch:%s", g_spaces[id].name);
+            yon_rt__heap_tick(ev);
+        }
+        g_spaces[id].deathwatch_pending = -1;  /* disarm: reaped once, idempotent after */
+    }
 }
 
 /* ============================================================== */
@@ -1269,7 +1329,15 @@ double yon_rt_stream_await_f64(double stream_id_f64) {
 uint32_t yon_rt_stream_close(uint32_t stream_id) {
     ensure_init();
     if (stream_id >= g_n_streams) return 1;
-    g_streams[stream_id].closed = 1;
+    /* Death-watch trigger. This in-process wire is a NAMED incoming arc of the
+     * consumer Space g_streams[stream_id].target_heap_id; closing it is that arc
+     * reaching EOF. Signal exactly on the 0->1 transition so an idempotent
+     * re-close cannot decrement the arc count twice (same-process: the consumer
+     * heap is in THIS g_spaces[] table, so the reap is correctly attributed). */
+    if (!g_streams[stream_id].closed) {
+        g_streams[stream_id].closed = 1;
+        yon_rt_space_input_closed(g_streams[stream_id].target_heap_id);
+    }
     return 0;
 }
 
@@ -1501,7 +1569,24 @@ int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
 
 /* Producer announces it will send no more: a clean shutdown so consumers can
  * distinguish end-of-stream from a stalled/dead peer (fault-tolerance,
- * same-machine). */
+ * same-machine).
+ *
+ * Death-watch NOTE: this close is deliberately NOT wired to
+ * yon_rt_space_input_closed. The cross-process shm wire is not attributable to a
+ * consumer Space HERE, for two independent reasons:
+ *   (1) No id -> consumer map. An shm channel is named only by an integer id
+ *       ("/yon_stream_id_<n>"); neither yon_shm_stream_t nor yon_shm_stream_hdr_t
+ *       carries the consumer Space, so this site cannot name which Space's arc
+ *       just ended.
+ *   (2) Wrong process. close_write runs in the PRODUCER process, whose g_spaces[]
+ *       table and heaps are a SEPARATE address space from the consumer's; the
+ *       heap to reap lives in the consumer process, so decrementing/reaping here
+ *       would touch the wrong process's registry.
+ * The correct cross-process signal is consumer-side (the consumer's await
+ * returning EOF -2 for the last of ITS input wires), a distinct mechanism that
+ * is out of scope for this change. The in-process wire close
+ * (yon_rt_stream_close) IS attributable — same process, target_heap_id known —
+ * and is the path wired above. */
 int yon_rt_stream_shm_close_write(yon_shm_stream_t *s) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;

@@ -92,6 +92,16 @@ let emit_indent e = Buffer.add_string e.buf (String.make (e.indent * 2) ' ')
  * emit_program reads it to recognize view-name let-bindings as __view_ref. *)
 let global_views_list : (string * string) list ref = ref []
 let set_views_list (vs : (string * string) list) = global_views_list := vs
+
+(* Global mutable channel carrying the STATIC inter-Space communication graph
+ * (Space_graph, wire + import arcs) from the driver into emit_program. The
+ * driver builds it from the same per-file arc collection Space_graph.dump uses
+ * and sets it before the call; emit_space_bootstrap reads it to arm each
+ * watched Space's death-watch with yon_rt_space_expect_inputs(id, in_degree).
+ * None (unset) or a Space with in_degree 0 emits no arming call — the death-watch
+ * is opt-in on a positive static in-degree, exactly the Space_graph criterion. *)
+let global_space_graph : Space_graph.graph option ref = ref None
+let set_space_graph (g : Space_graph.graph) = global_space_graph := Some g
 let emit_str e s = Buffer.add_string e.buf s
 let emit_line e s =
   emit_indent e;
@@ -5271,12 +5281,11 @@ let emit_space_bootstrap (e : emitter) (spaces : Surface_ast.space_decl list)
       emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @%s : !llvm.ptr"
                      v_ptr str_sym);
       let v_id = fresh_ssa e in
-      match sd.sd_fold with
+      (match sd.sd_fold with
       | None ->
           emit_line e (Printf.sprintf
                          "%s = func.call @yon_rt_register_space(%s) : (!llvm.ptr) -> i32"
-                         v_id v_ptr);
-          let _ = v_id in ()
+                         v_id v_ptr)
       | Some fold_name ->
           (* a space with a declared semilattice fold; reuse the global
              string yon_fold_str_<name> *)
@@ -5286,8 +5295,24 @@ let emit_space_bootstrap (e : emitter) (spaces : Surface_ast.space_decl list)
                          v_fold fold_name);
           emit_line e (Printf.sprintf
                          "%s = func.call @yon_rt_register_space_with_fold(%s, %s) : (!llvm.ptr, !llvm.ptr) -> i32"
-                         v_id v_ptr v_fold);
-          let _ = v_id in ()
+                         v_id v_ptr v_fold));
+      (* Space death-watch (1.2): arm the Space with its STATIC in-degree in the
+         inter-Space graph (wire + import arcs). Only in_degree > 0 arms it; an
+         isolated / pure-producer Space (in_degree 0) is left unwatched and is
+         reclaimed at process exit by the OS. The count is read off the compiler's
+         static graph — no runtime poll, no topology guess — so the reap the
+         runtime later performs is a deterministic REGION reclaim, not a GC. *)
+      (match !global_space_graph with
+       | Some g ->
+           let indeg = Space_graph.in_degree g sd.Surface_ast.sd_name in
+           if indeg > 0 then begin
+             let v_n = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_n indeg);
+             emit_line e (Printf.sprintf
+                            "func.call @yon_rt_space_expect_inputs(%s, %s) : (i32, i32) -> ()"
+                            v_id v_n)
+           end
+       | None -> ())
     ) spaces
   end
 
@@ -6248,6 +6273,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
     emit_line e "func.func private @yon_rt_register_space_with_fold(!llvm.ptr, !llvm.ptr) -> i32";
     emit_line e "func.func private @yon_rt_lookup_space(!llvm.ptr) -> i32";
     emit_line e "func.func private @yon_rt_drop_space(f64) -> f64";
+    (* Space death-watch: arm a Space with its static in-degree at startup. *)
+    emit_line e "func.func private @yon_rt_space_expect_inputs(i32, i32) -> ()";
     emit_line e "func.func private @yon_rt_begin_cross_space_op(!llvm.ptr, i32) -> i32";
     emit_line e "func.func private @yon_rt_end_cross_space_op(i32) -> ()";
     emit_space_strings e dr.spaces;

@@ -5,6 +5,10 @@
 > è il completamento del **Lemma di Yoneda universale** + gli item differiti.
 > Oggi il kernel fa check **per conversione** (normalizza termini); la v1.2 deve
 > renderlo un motore capace di **quantificare ed estrarre le coerenze superiori**.
+>
+> **Direzioni prodotto** (per cosa è Yon): vedi [`killer-applications.md`](killer-applications.md)
+> — 5 domini (Storage/Database, Distribuiti, Blockchain, Verifica) dove le leve reali
+> (content-addressing, Space isolati, dipendenti) diventano killer app.
 
 ---
 
@@ -120,13 +124,45 @@ indicato. Priorità: SOUNDNESS > completezza tipi > doc > hardening > copertura 
   + death-watch. Chiude "no GC / never free" (ricorre in OGNI venue: HN, PCJ, LLVM Discourse).
 
 ### P4 — HARDENING
-- [ ] **locally-nameless / de Bruijn** per il kernel (subst named è sound, ma più fragile).
-- [ ] **Space death-watch automatica** (reclaim senza `drop` esplicito). [dettaglio: sezione dedicata]
+- [~] **locally-nameless / de Bruijn — DESCOPED post-1.2 (disposizione 2026-07-08).** Il subst named +
+  alpha-renaming è **SOUND** (verificato: `test_kernel_alpha`, capture-avoidance fuzz 120k casi 0 mismatch);
+  de Bruijn è *irrobustimento a-prova-di-errore*, **non un bug**. È un refactor MAGGIORE del tipo-termine
+  del kernel (la migrazione locally-nameless è sospesa by design in `ast.ml`, `locally_nameless.ml` fuori
+  build). Non churn del kernel per un nice-to-have mentre la soundness è già provata: rimandato a dopo la
+  1.2, quando/se il kernel viene toccato per altre ragioni. Chiuso come disposizione.
+- [x] **Space death-watch automatica — CHIUSO 2026-07-08** (region-reaping da grafo statico, **NON un GC**).
+  Runtime (`yon_rt.c`): campo per-Space `deathwatch_pending` (init -1 = non sorvegliato); `yon_rt_space_expect_inputs
+  (id,n)` lo arma con l'in-degree statico; `yon_rt_space_input_closed(id)` decrementa e a 0 **reap-a la REGIONE**
+  (`yon_xheap_drop(g_spaces[id].heap)`, lo stesso primitivo di `drop X`) + traccia `deathwatch:<name>` + disarma
+  (idempotente). **Linea rossa tenuta**: conta archi entranti STATICI NOMINATI (dal grafo del compilatore), a
+  granularità di Space — zero refcount per-oggetto, zero write-barrier, zero tracing/raggiungibilità. Come un OS
+  che reap-a un processo con le pipe di input tutte EOF. Compilatore (`emit_mlir.ml`): emette `expect_inputs(id,
+  in_degree)` per ogni Space con `Space_graph.in_degree > 0` (isolati/produttori puri non sorvegliati — reclaim
+  a exit dall'OS). Trigger: EOF degli stream/wire entranti. Pin: `test_unit_deathwatch.c` (arma 3 → 2 chiusure
+  nessun reap → 3ª reap esatto a 0 → 4ª no-op idempotente). Chiude "no GC / never free" **senza** un GC.
+  [dettaglio: sezione dedicata]
 
 ### P5 — COPERTURA AUDIT (moduli mai battuti a fondo)
-- [ ] Cuore tipi: `dispatcher` · `hm_infer` · `ty_subst` (debito copertura, buco storico chiuso)
+- [x] Cuore tipi: `dispatcher` · `hm_infer` · `ty_subst` — **CHIUSO 2026-07-08** (+104 check:
+  `test_dispatcher_ext` 40, `test_hm_infer_ext` 27, `test_ty_subst_ext` 37; oracoli esistenti invariati).
+  Finding pinnati come known-answer (by-design, non bug): (1) l'uguaglianza di `El` è code-structural,
+  NON up-to-delta (la delta-conversione del dispatcher tocca solo gli endpoint di TyId/TyPathP); (2)
+  `unify` (ty_subst) non ha arm per TyId/TyPathP/TyEl/TySum → identici falliscono l'unificazione,
+  asimmetrico con `apply_subst` che ricorre in TySum — consistente col boundary HM prim'ordine (i
+  dipendenti non raggiungono `unify` nel pipeline vivo), pinnato così un futuro "arm TySum" aggiorna il
+  test di proposito; (3) `ty_structural_eq` fonde `boolean≡proposition`, `TyUser n≡TyPrim n`, `unknown`
+  con tutto. Resta il debito su `core_check`/`type_erase`/`prop_eval` (non in questo giro).
   · `core_check` · `type_erase` · `prop_eval`.
-- [ ] Runtime: `xleech2_mphf.c` · `xleech2_handler_stack.c` · `yon_curtis_canon.c` · `yon_mmap.c`.
+- [x] Runtime: `xleech2_mphf.c` · `yon_curtis_canon.c` · `yon_mmap.c` — **CHIUSO 2026-07-08** (3 test C
+  nuovi verdi): `test_unit_mphf_ext` (bijezione MPHF su tutti i 196.560 slot type-2, INVALID su input
+  avversari/assenti), `test_unit_curtis_canon` (idempotenza `canon(canon)=canon`, minimalità, 98.260
+  classi, accoppiamento MPHF), `test_unit_yon_mmap` (round-trip/allineamento/zeroing/shared, size-0
+  abort by-design in child forkato). Runtime units 22 verdi. Nessun bug di memory-safety/correttezza.
+  **Finding: `xleech2_handler_stack.c` è CODICE MORTO** — .c/.h rimossi nel commit 785ecab ("remove the
+  orphan with_handler dispatch cluster"); sopravvive solo un `.o` stale, NON nel Makefile OBJS (sparisce
+  a `make clean`). Testare un modulo cancellato è testare un fantasma → escluso dalla copertura. Cruft
+  minore: il `.o` stale va rimosso (gitignored). `yon_map(0)` aborta by-design (contratto "aborts on
+  failure") — guardia caller-side se 0 può essere dinamico.
 
 ### Caratteristiche di design (NON bug — documentare, non "fixare")
 - stdlib typing lasco agli argomenti = conseguenza del boundary f64 (load-bearing, intenzionale). [to-fix.md]
@@ -183,15 +219,60 @@ Il caso calcolabile (F concreto, `Fam(x)` che srotola via delta) è chiuso: il
 riduttore ha le delta-regole certificate. Resta il caso di `F` **astratto**
 (`F(f)` non srotolabile), che richiede 2+3 come delta-regole primitive.
 
-### A2. Espandere Π con le congiunzioni cubiche (sistemi di facce complessi)
-Yoneda: `Nat(よA, F) ≅ F(A)` è naturale **sia in A sia in F**. La naturalità è
-un'uguaglianza tra trasformazioni → un **cammino di cammini** (omotopia
-superiore). Non basta più la faccia singola del cubo (task #12, `i = I0 => …`):
-servono le **congiunzioni di facce** (`i = I0 ∧ j = I1`). Spostare una
-trasformazione naturale lungo un cambio di base funtoriale disegna un quadrato
-(due lati = azione del prefascio, due lati = la trasformazione); chiuderlo
-richiede che `hcomp` accetti **vincoli multidimensionali** per chiudere il cubo
-omotopico.
+### A2. Congiunzioni cubiche cross-dimensione — RI-CARATTERIZZATO 2026-07-08
+**La premessa registrata era falsa.** Si diceva: "`hcomp`/`comp` con sistema di facce
+non-vuoto non computano; il motore va completato". **Refutato** da `test_o2_probe.ml`:
+sui termini CHIUSI le leggi di bordo/adiacenza CCHM reggono (faccia attiva scatta col
+suo componente, angoli inattivi → base), **congiunzione cross-dimensione `i=1 ∧ j=0`
+inclusa**, e lo sweep di canonicità dà **8000/8000 angoli chiusi → valore, 0 stuck** (+
+Glue-typed hcomp coperto da `test_glue_boundary`, 20/20). I "490 stuck" del fuzzer sono
+`hcomp` su dimensioni **libere** — forme normali NEUTRE corrette (mislabellate da
+`is_value(HComp)=false`), non un fallimento di computazione. Il motore delle facce
+multidimensionali **funziona già**. Restano aperti solo: (a) la **prova meccanizzata**
+di canonicità su TUTTI i tipi (obbligo metateorico, non incompletezza del motore) — **framing
+scritto 2026-07-08** (`metatheory.md` O2): discharge via prova meccanizzata *o* citando il
+teorema di canonicità CCHM di **Huber** ("Canonicity for Cubical Type Theory", JAR 63, 2019),
+modulo il motore che implementa fedelmente CCHM (corroborato dai probe); (b)
+un **residuo non testato** — `comp` lungo una linea di tipo non-costante, hcomp a tipo
+HIT — in caccia sotto A (lo sweep esteso). Fuzzer, CONFORMANCE, ladder-notes, trusted-kernel
+allineati alla verità. **Yoneda naturalità**: il quadrato si chiude col motore esistente
+(le congiunzioni computano); ciò che manca è la superficie per esprimerlo, non il kernel.
+
+**A — caccia del residuo (2026-07-08): nessun gap di motore.** Copertura misurata, tutta
+verde: `test_glue_boundary` 20/20 (hcomp a tipo Glue + bordi), `transport_ua_succ`
+(transport lungo linea di tipo non-costante/ua), `test_hit_compute` 8/8, comp-at-Glue con
+facce. Il motore computa ovunque lo si testi. **Residuo terminale, localizzato con
+precisione** — due sole cose, nessuna delle quali è "il motore non computa le facce":
+  1. **Prova meccanizzata di canonicità** su tutti i tipi. Obbligo metateorico (serve una
+     dimostrazione formale, non un fuzzer). NON chiudibile per test — è l'unico O2 genuino.
+  2. **T-component per-faccia per Glue type-varying — CHIUSO 2026-07-08.** Esibito: Glue a 2 facce
+     con `T_1=CTBase`, `T_2=CTPath` (regole diverse); `reduce_hcomp` produceva `t1` composto una
+     volta in `T_1`, così `t1|ψ_2` leggeva la regola di `T_1` dove ψ_2 vive in `T_2` (`t1==T1: true,
+     ==T2: false`) — difetto reale (rompe "t-part su ψ_k vive in T_k"). **Fix** (`cubical.ml`,
+     `reduce_hcomp`/CTGlue): la T-component è ora un SISTEMA che forza ogni faccia glue `ψ_k` al suo
+     composito in `T_k` (`t1 = hcomp T [phi |-> t-part, ψ_k |-> hcomp T_k [phi|->t-part] t0] t0`);
+     restringere a ψ_k dà il composito per-faccia corretto. Base invariata (`t0`), NON tocca la
+     rappresentazione `CGlueElem` (t-part resta un `cterm`, ma ora un sistema per-faccia). Quando i
+     `T_k` condividono la regola (tutti CTBase) coincide col vecchio composito → zero cambio sui test
+     esistenti. Pin: nuovo `test_glue_tcomp.ml` (3/3: t1|ψ_1==T1-comp, t1|ψ_2==T2-comp, fibre
+     distinguibili); `test_glue_boundary` resta 20/20 + tutti gli oracoli cubicali verdi.
+     Copre anche `reduce_comp`/CTGlue, che **delega** a `reduce_hcomp` (eredita il fix). Regressione
+     completa dopo il fix: **1219 passed, 0 fail**.
+  3. **transport-a-Glue CCHM generico — IMPLEMENTATO 2026-07-08.** Il placeholder prendeva la 1ª
+     equivalenza e applicava sempre il **forward** `e.f`. **Finding di correttezza** (verificato
+     indipendentemente): per `Glue [i=1↦(T,e)] A` la linea è `A` a i=0 e `T` a i=1, quindi transp
+     mappa **A→T = INVERSO `e.g`**; il placeholder applicava `e.f` (T→A, direzione sbagliata,
+     ill-typed — coincideva solo per T=A,e=id). Nuova regola CCHM (Cohen et al. §6.2, `reduce_transport`
+     /CTGlue): `a0=unglue t0`, `a1=transp A a0`, e **per-faccia** `t1'_k=e_k.g(a1)` forzato via
+     hcorp face-system (come la T-component), `result=glue [φ↦t1'_k] a1`; forward alla start-face,
+     inverso alla target-face. Si specializza a `e.f(t)` su **ua** (`transport_ua_succ` verde).
+     Machinery già presente: `__equiv_fwd`/`__equiv_bwd` (builtins.ml). Pin: `test_transp_glue.ml`
+     (13/13: direzione, equazione di base `unglue(result)=transp A`, fibra per-faccia, guardia 3-facce);
+     `test_path_core` corretto alla direzione fedele (asseriva il forward sbagliato); `main.ml` Test 157
+     aggiornato; oracoli + `transport_ua_succ` verdi. **Residuo onesto**: la coerenza CCHM step-5
+     (il filler ε: `e_k.f(t1'_k) ~ a1` su φ_k, l'aggiustamento della base) NON è forzata — base
+     esatta (`a1'=a1`), fibra = centro `e_k.g(a1)` senza il filler ε. Stessa classe del patch di
+     coerenza dell'hcomp-Glue; chiudibile con un marker `__equiv_eps` se perseguito.
 
 ### A3. Soluzione transitoria — Riflessione di Tarski (universi)
 Via più rapida senza riscrivere la metateoria (stile Coq/Agda). Rendere `El(c)`

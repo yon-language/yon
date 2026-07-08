@@ -77,22 +77,29 @@ let () =
     (term_equal_env [] (nf fwd_applied) (Var "w"));
 
   (* Univalence as a reduction rule: transport along a Glue type applies the
-   * forward map of the partial equivalence. With the equivalence referred by
-   * name e, transp reduces to (Fst e) applied to the point — the computational
-   * content of ua. Composed with the case above (forward of the identity equiv
-   * computes to the point), this is univalence computing end-to-end. *)
+   * equivalence map that MEDIATES the two ends of the line — in the CCHM
+   * direction.  For the line
+   *     Glue [(i=1) ↦ (T, e)] A ,   e : T ≃ A ,
+   * the type is A at i=0 and T at i=1, so transp (i:0→1) maps A → T, which is
+   * the INVERSE map e.g = Fst (Snd e); the forward e.f = Fst e goes T → A, the
+   * wrong way (and is ill-typed on a : A).  This is exactly the CCHM
+   * fibre-correction centre t1' = e.g(a1) (Cohen–Coquand–Huber–Mörtberg 2018,
+   * §6.2).  [The earlier placeholder applied Fst e unconditionally — the
+   * forward map — which happened to agree only when T = A and e = id; these two
+   * checks now pin the real per-face direction of the transp-Glue rule.] *)
   let e = Var "e" in
   let glue_ty = TyGlue (TyPlace "A", [[("i", true)]], [(TyPlace "T", e)]) in
   let tr_glue = Transp (("i", glue_ty), Var "t") in
-  check "transp along Glue applies the equivalence forward map (univalence computes)"
-    (term_equal_env [] (nf tr_glue) (App (Fst e, Var "t")));
+  check "transp along Glue [i=1↦(T,e)] A applies the INVERSE map e.g : A→T"
+    (term_equal_env [] (nf tr_glue) (App (Fst (Snd e), Var "t")));
 
   (* With CCore the equivalence Pair can be written INLINE in the Glue and still
-   * cross the engine opaquely: transp applies the forward map (Fst), and for
-   * the identity equivalence the whole thing computes to the point. *)
+   * cross the engine opaquely: transp uses the inverse (Fst (Snd _)), and when
+   * that inverse is the identity the whole thing computes to the point. *)
   let equiv_inline =
-    Pair (Lam ("x", TyPlace "T", Var "x"),
-          Pair (Var "g", Pair (Refl (Var "x"), Refl (Var "x")))) in
+    Pair (Var "f",
+          Pair (Lam ("x", TyPlace "A", Var "x"),
+                Pair (Refl (Var "x"), Refl (Var "x")))) in
   let glue_inline = TyGlue (TyPlace "A", [[("i", true)]], [(TyPlace "T", equiv_inline)]) in
   let tr_inline = Transp (("i", glue_inline), Var "t") in
   check "transp along Glue with INLINE equivalence Pair computes (CCore lift)"
@@ -121,7 +128,8 @@ let () =
   (* ── vetrina: S1 ≃ S1 via ua, transport computes ──────────────────── *)
   (* e : S1 ≃ S1 the identity equivalence (Pair (f,(g,(eta,eps))), f=g=id).
    * ua(e) is the Glue [i=1 ↦ (S1, e)] S1; transporting a point along it
-   * applies the forward map, and for the identity it computes to the point. *)
+   * applies the mediating map (the inverse e.g : A→T), and for the identity
+   * (f=g=id) it computes to the point. *)
   let s1 = TyPlace "S1" in
   let id_s1 = Lam ("z", s1, Var "z") in
   let e_s1 = Pair (id_s1, Pair (id_s1, Pair (Refl (Var "z"), Refl (Var "z")))) in

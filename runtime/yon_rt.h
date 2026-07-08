@@ -123,6 +123,26 @@ uint32_t yon_rt_lookup_space(const char *name);
  * inert f64 (the drop statement's value). Observe drops via yon_xheap_drops(). */
 double yon_rt_drop_space(double heap_id);
 
+/* ---- Space death-watch (1.2 region-reaping; NOT a garbage collector) ----
+ *
+ * Automatic reclaim of a Space's WHOLE heap when all its statically NAMED
+ * incoming communication arcs (the inter-Space graph in-degree, wire + import)
+ * have closed, without an explicit `drop`. The compiler arms each watched Space
+ * once at startup with yon_rt_space_expect_inputs(id, in_degree); every real arc
+ * EOF calls yon_rt_space_input_closed(id); the last one reaps via the same
+ * yon_xheap_drop primitive `drop X` uses. This counts a small named set of ARCS
+ * at REGION granularity — no per-object refcount, no barrier, no tracing. */
+
+/* Arm the death-watch for Space `id` with its static in-degree n. Only n > 0
+ * arms it; n <= 0 leaves the Space unwatched. Safe no-op for an out-of-range id. */
+void yon_rt_space_expect_inputs(uint32_t id, int32_t n);
+
+/* Signal one named incoming arc of Space `id` has closed (clean EOF). Decrements
+ * the armed count; reaps the whole Space heap exactly when it reaches 0, then
+ * disarms. Idempotent no-op for an out-of-range, unwatched, or already-reaped
+ * Space. Observe the reap via yon_xheap_drops(). */
+void yon_rt_space_input_closed(uint32_t id);
+
 /* ---- Place instance management ---- */
 
 /* Allocate a new section in the given Space.

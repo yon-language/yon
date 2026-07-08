@@ -537,13 +537,28 @@ and reduce_hcomp (ty : ctype) (phi : face_formula)
                       let wf_k x = CHITConstr ("__equiv_fwd", [ek; x]) in
                       (l, psi_k, wf_k hfill_k))
                    faces in
-               (* t1 : T = hcomp T [phi |-> t-part u] t0. The T-component is a
-                * partial element: on psi_k it lives in T_k. We compose it once
-                * (the shared t-part representative); the ambient type restricts
-                * to T_k on psi_k, so its dispatch type is the first pair's — a
-                * CTBase-prototype simplification that does not affect the term. *)
+               (* t1 : T = the fiber component of the result glue-elem. It is a
+                * PARTIAL element on gphi: on psi_k it lives in T_k, and there it
+                * must be the composition IN T_k of the t-part sides — hcomp^phi T_k
+                * [phi |-> t-part u] t0. Composing once in the first pair's type is
+                * per-face WRONG when the T_k genuinely vary (different reduction
+                * rules): restricting the result to psi_k would then read the fiber
+                * in T_1's type, not T_k. So we build t1 as a system that FORCES each
+                * glue face psi_k to its own T_k-composite; restricting the result to
+                * psi_k then yields the correct per-face fiber. The base stays t0 and
+                * the default dispatch is the first pair's (off every psi_k the fiber
+                * is unobserved — a glue-elem degenerates to its base there). When all
+                * T_k share a rule (e.g. all CTBase) every per-face composite
+                * coincides, so this reduces to the old single composite: no change on
+                * the existing (non-varying) tests, correct on the varying ones. *)
                let t1_ty = match partial with (tk, _) :: _ -> tk | [] -> a_ty in
-               let t1 = reduce_hcomp t1_ty phi t_sides t0 in
+               let t1_faces =
+                 List.mapi
+                   (fun idx (psi_k, (tk_ty, _ek)) ->
+                      (Printf.sprintf "_hg_t1_%d" idx, psi_k,
+                       reduce_hcomp tk_ty phi t_sides t0))
+                   faces in
+               let t1 = reduce_hcomp t1_ty (phi @ gphi) (t_sides @ t1_faces) t0 in
                (* a1 : A = hcomp A [phi |-> unglue u,
                 *                    psi_k |-> <l> e_k.f(hfill_{T_k})] (unglue base) *)
                let u_sides = List.map (fun (nm, f, u) -> (nm, f, unglue u)) sides in
@@ -563,7 +578,7 @@ and reduce_hcomp (ty : ctype) (phi : face_formula)
  *   transp <i> (CTBase T) i_0 t = t          (constant: identity)
  *)
 
-let reduce_transport ((i, ty) : string * ctype) (t : cterm) : cterm =
+let rec reduce_transport ((i, ty) : string * ctype) (t : cterm) : cterm =
   match ty with
   | CTBase _ -> t                            (* constant type: identity *)
   | CTPath (a, x, y) ->
@@ -592,27 +607,118 @@ let reduce_transport ((i, ty) : string * ctype) (t : cterm) : cterm =
           [(i, [(fresh_j, false)], x);
            (i, [(fresh_j, true)], y)]
           (path_app t (IVar fresh_j)))
-  | CTGlue (_base, _phi, partial) ->
-      (* Univalence as a COMPUTATION RULE.
+  | CTGlue (base, glue_phi, partial) ->
+      (* ── CCHM transport at a Glue type ─────────────────────────────────
+       * Cohen–Coquand–Huber–Mörtberg 2018, §6.2 (transp = comp with the
+       * empty system). Line of types, moving the transport dimension i:0→1:
        *
-       * transp <i> (Glue [(i=0)↦(A,e), (i=1)↦(B,id)] B) t
-       *   reduces to e.fun(t)
+       *     B(i) = Glue [ φ ↦ (T_k, e_k)_k ] A          A = the base type
        *
-       * i.e., transporting along a path built from an equivalence
-       * e : A ~= B applies the forward map of e. This is the
-       * COMPUTATIONAL content of univalence — not an axiom, a
-       * reduction rule of the cubical machine.
+       * φ = glue_phi is the glue extent, aligned POSITIONALLY with `partial`
+       * = [(T_1,e_1); …; (T_n,e_n)] (invariant preserved by to_ctype/of_ctype
+       * in builtins.ml and by subst_interval_in_ctype above). Each e_k : T_k ≃ A
+       * is the core Σ (f,(g,(η,ε))); the engine reaches the forward map f via
+       * the marker __equiv_fwd (lowered to `App (Fst e, ·)` in builtins.ml)
+       * and the inverse g via __equiv_bwd (`App (Fst (Snd e), ·)`).
        *
-       * For a generic Glue, we apply the partial equivalence on the
-       * face (i=0) — taking the first partial pair as the relevant
-       * equivalence (this is the standard ua(e) shape). *)
-      (match partial with
-       | (_t_ty, equiv) :: _ ->
-           (* equiv is a cterm of type T ~= A; apply its forward map
-            * to t. We model equiv-application as CHITConstr "fwd"
-            * since we don't have a first-class App at this layer. *)
-           CHITConstr ("__equiv_fwd", [equiv; t])
-       | [] -> t)
+       * The six CCHM steps, at the prototype level:
+       *
+       *  (1) a0 = unglue^{i:=0} t0, the base value at the start.  On any glue
+       *      face φ_k that is a TAUTOLOGY at i=0 the start type collapses to
+       *      T_k and `unglue` there IS the forward map, so a0 = e_k.f(t0).
+       *      (In the engine t0 is then a bare fibre element, not a glue-elem,
+       *      so we emit e_k.f(t0) directly instead of calling `unglue`.)  Off
+       *      every start face, a0 = unglue t0.
+       *
+       *  (2) a1 = transp^i A a0 : A[i:=1]  — the base transported to the target
+       *      (identity when A is constant, e.g. CTBase; recurses otherwise).
+       *
+       *  (3)/(4) fibre correction.  On each glue face φ_k the corrected result
+       *      fibre is the centre of the contractible fibre of e_k.f over a1,
+       *      t1'_k = e_k.g(a1), with a coherence path ω_k : e_k.f(t1'_k) ~ a1.
+       *
+       *  (5) a1' = comp^j A [ φ ↦ ω ] a1 adjusts the base along ω.  RESIDUAL:
+       *      ω needs the ε-homotopy of e_k as a genuine filler, which this
+       *      prototype does not compute, so we keep a1' = a1 (the un-adjusted
+       *      transport).  This leaves the base-boundary unglue(result)=a1 exact
+       *      and the fibre-boundary result|φ_k = t1'_k exact; the only thing
+       *      NOT enforced is that a1 = e_k.f(t1'_k) on φ_k (that is ω, the open
+       *      coherence — see the report).
+       *
+       *  (6) result = glue [ φ[i:=1] ↦ t1' ] a1'.  On a target face φ_k that is
+       *      a TAUTOLOGY at i=1 the target type collapses to T_k and the
+       *      glue-elem degenerates to its fibre, so the observable result is
+       *      that face's corrected fibre t1'_k = e_k.g(a1) directly.
+       *
+       * Specialisation to ua.  For `ua e` the line is
+       *   Glue [(i=0) ↦ (A,e), (i=1) ↦ (B, idEquiv)] B :
+       *     • start face (i=0) taut  ⇒ a0 = e.f(t0);
+       *     • A = B constant         ⇒ a1 = a0 = e.f(t0);
+       *     • target face (i=1) taut ⇒ result = idEquiv.g(a1) = a1 = e.f(t0)
+       *       (idEquiv.g β-reduces to the identity in the core).
+       *   So `transp (ua e) t0` = e.f(t0) — the univalence computation rule,
+       *   the transport_ua_succ anchor.  EVERY face is handled per-face (the
+       *   start/target faces via their own e_k above, interior faces via the
+       *   per-face fibre system below), never "just the first pair". *)
+      let fwd e x = CHITConstr ("__equiv_fwd", [e; x]) in
+      let bwd e x = CHITConstr ("__equiv_bwd", [e; x]) in
+      (* pair each glue face with its (T_k, e_k), keeping φ and partial aligned *)
+      let faces =
+        let rec zip fs ps = match fs, ps with
+          | f :: fs', p :: ps' -> (f, p) :: zip fs' ps'
+          | _, _ -> [] in
+        zip glue_phi partial in
+      (match faces with
+       | [] ->
+           (* degenerate Glue with no partial system = its base type A *)
+           reduce_transport (i, base) t
+       | _ ->
+           let taut_at endpoint f =
+             (subst_interval_in_face i endpoint f = Some []) in
+           (* (1) base value at the start = unglue^{i:=0} t0. *)
+           let a0 =
+             match List.find_opt (fun (f, _) -> taut_at I0 f) faces with
+             | Some (_, (_tk, ek)) -> fwd ek t   (* start face taut: unglue = e.f *)
+             | None ->
+                 (match t with
+                  | CGlueElem (_, _, a) -> a      (* genuine glue-elem: base part *)
+                  | _ -> t)                       (* extent ⊥ at i=0: type = A, t : A,
+                                                     so unglue is the identity here *)
+           in
+           (* (2) transport the base to A[i:=1] *)
+           let a1 = reduce_transport (i, base) a0 in
+           (* (6) result — target-face collapse vs. glue-elem *)
+           (match List.find_opt (fun (f, _) -> taut_at I1 f) faces with
+            | Some (_, (_tk, ek)) ->
+                (* target face taut: glue degenerates to the fibre; observable
+                 * result is that face's corrected fibre e_k.g(a1) *)
+                bwd ek a1
+            | None ->
+                (* one corrected fibre e_k.g(a1) per SURVIVING target face
+                 * φ_k[i:=1] (faces that die under i:=1 leave the extent) *)
+                let t1_faces =
+                  List.concat
+                    (List.mapi
+                       (fun idx (f, (_tk, ek)) ->
+                          match subst_interval_in_face i I1 f with
+                          | Some f1 when f1 <> [] ->
+                              [ (Printf.sprintf "_tg_fib_%d" idx, f1, bwd ek a1) ]
+                          | _ -> [])
+                       faces) in
+                (match t1_faces with
+                 | [] -> a1                     (* target extent empty: type = A *)
+                 | (_, _, v0) :: _ ->
+                     let phi1 = List.map (fun (_, f, _) -> f) t1_faces in
+                     let t1_ty =
+                       match partial with (tk, _) :: _ -> tk | [] -> base in
+                     (* one system that FORCES each target face to its own fibre,
+                      * so restricting the result to φ_k yields e_k.g(a1), never
+                      * the head's — the same per-face device as the hcomp-Glue
+                      * T-component fix. Off the extent the glue-elem degenerates
+                      * to its base a1, so the fibre's default dispatch (v0) and
+                      * its type (t1_ty) are unobserved there. *)
+                     let fiber = reduce_hcomp t1_ty phi1 t1_faces v0 in
+                     CGlueElem (phi1, fiber, a1))))
   | _ -> CTransport ((i, ty), t)
 
 (* ─── Glue types and univalence ────────────────────────────────────── *)
