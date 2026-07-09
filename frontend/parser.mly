@@ -207,6 +207,11 @@
 %token EL QUOTE EL_MATCH
 %token HIT_ELIM LBRACKET RBRACKET
 %token ATSIGN I0 I1 PLAM PATHP HIT_KW
+/* Metonymic surface sugar (journey metaphor): desugar to the cubical primitives. */
+%token STAY BACK SPAN CARRY ALONG THROUGH
+%token PLUSPLUS          /* p ++ q = concat */
+%token LRARROW           /* f <=> g = equivalence */
+%token MATCH_KW          /* match x { ctor => .. } = hit_elim with synthesized motive */
 /* heyt_int<N> type keyword. */
 %token HEYT_INT_KW
 %token <int> TYPE_LEVEL
@@ -234,15 +239,18 @@
 %left OR PIPEPIPE PIPEPIPEQ
 %left AND AMPAMP AMPAMPQ
 %left LT GT LEQ GEQ EQEQ NEQ
+%nonassoc LRARROW        /* f <=> g = equivalence, non-associative */
 %left PIPE
 %left PIPEQ
 %left CARET CARETQ
 %left AMP AMPQ
 %left PLUS MINUS
+%left PLUSPLUS           /* p ++ q = concat, left-assoc */
 %left STAR SLASH PERCENT
 %nonassoc UMINUS
 %nonassoc UNOT
 %nonassoc UTILDE
+%left THROUGH             /* p through f = ap(f, p), binds tight */
 %left ATSIGN              /* path application p @ i, binds tight */
 
 /* Precedence for IS pattern test. */
@@ -1183,6 +1191,17 @@ promote_stmt:
 expr:
   | e1 = expr PLUS e2 = expr
     { EBinop (OpAdd, e1, e2, mk_loc $startpos $endpos) }
+  (* Metonymic infix sugar: p ++ q = concat(p,q); f <=> g = equivalence with
+     refl coherences (valid when f,g are definitional inverses); p through f =
+     ap(f,p). Pure desugar to the cubical primitives. *)
+  | e1 = expr PLUSPLUS e2 = expr
+    { ECall ("concat", [e1; e2], mk_loc $startpos $endpos) }
+  | f = expr LRARROW g = expr
+    { let l = mk_loc $startpos $endpos in
+      let refl_lam v = ELam ([(v, TyPrim "unknown")], ERefl (EVar (v, l), l), l) in
+      ECall ("equiv", [f; g; refl_lam "a"; refl_lam "b"], l) }
+  | p = expr THROUGH f = expr
+    { ECall ("ap", [f; p], mk_loc $startpos $endpos) }
   | e1 = expr MINUS e2 = expr
     { EBinop (OpSub, e1, e2, mk_loc $startpos $endpos) }
   | e1 = expr STAR e2 = expr
@@ -1366,6 +1385,21 @@ expr_atom:
     { ELit (LitHeytUnknown, mk_loc $startpos $endpos) }
   | REFL LPAREN e = expr RPAREN
     { ERefl (e, mk_loc $startpos $endpos) }
+  (* ─── Metonymic surface sugar (journey metaphor) ─────────────────────
+     Prefix forms binding an atom; pure desugar to the cubical primitives.
+       stay a          = refl(a)
+       back p          = inv(p)
+       span e          = ua(e)
+       carry x along e = transport(ua(e), x)   (e a bridge / equivalence) *)
+  | STAY e = expr_atom
+    { ERefl (e, mk_loc $startpos $endpos) }
+  | BACK e = expr_atom
+    { ECall ("inv", [e], mk_loc $startpos $endpos) }
+  | SPAN e = expr_atom
+    { ECall ("ua", [e], mk_loc $startpos $endpos) }
+  | CARRY x = expr_atom ALONG e = expr_atom
+    { let l = mk_loc $startpos $endpos in
+      ECall ("transport", [ECall ("ua", [e], l); x], l) }
   | PAIR LPAREN a = expr COMMA b = expr RPAREN
     { EPair (a, b, mk_loc $startpos $endpos) }
   | FST LPAREN e = expr RPAREN
@@ -1380,6 +1414,12 @@ expr_atom:
     { EElMatch (t, r, b, mk_loc $startpos $endpos) }
   | HIT_ELIM LPAREN c = expr COMMA LBRACKET branches = separated_list(COMMA, hit_branch) RBRACKET COMMA x = expr RPAREN
     { EHITElim (c, branches, x, mk_loc $startpos $endpos) }
+  (* Metonymic: `match x { ctor => .., loop => plam i => .. }` = hit_elim with a
+     SYNTHESIZED motive (non-dependent). The sentinel motive __match tells the
+     type checker to infer the result type from the branches. *)
+  | MATCH_KW x = expr_atom LBRACE branches = separated_list(COMMA, hit_branch) RBRACE
+    { let l = mk_loc $startpos $endpos in
+      EHITElim (EVar ("__match", l), branches, x, l) }
   | e = expr_atom ATSIGN I0
     { EPathApp (e, DI0, mk_loc $startpos $endpos) }
   | e = expr_atom ATSIGN I1

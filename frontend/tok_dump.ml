@@ -171,6 +171,15 @@ let tok_name = function
   | Parser.RPAREN -> "RPAREN"
   | Parser.LBRACE -> "LBRACE"
   | Parser.RBRACE -> "RBRACE"
+  | Parser.STAY -> "STAY"
+  | Parser.BACK -> "BACK"
+  | Parser.SPAN -> "SPAN"
+  | Parser.CARRY -> "CARRY"
+  | Parser.ALONG -> "ALONG"
+  | Parser.THROUGH -> "THROUGH"
+  | Parser.PLUSPLUS -> "PLUSPLUS"
+  | Parser.LRARROW -> "LRARROW"
+  | Parser.MATCH_KW -> "MATCH_KW"
   | Parser.EOF -> "EOF"
 
 let () =

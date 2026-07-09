@@ -545,6 +545,31 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                    (Tyenv.ty_to_string other)))
       in apply f_ty args
 
+  | EHITElim (EVar ("__match", _), branches, x, loc) ->
+      (* `match x { ctor => v, .. }`: a non-dependent HIT eliminator whose motive
+         is SYNTHESIZED. Infer the scrutinee's HIT type for the motive domain,
+         and take the first POINT branch body (a plain value, not a `plam`) as a
+         witness of the result type, giving the constant motive
+         `fun(_: HIT) => <body> : HIT -> T`. Then reuse the standard rule below.
+         A point branch that references its own payload binders cannot serve as
+         the constant witness (payload-carrying HITs) — those keep hit_elim. *)
+      let* x_ty = infer env ctx x in
+      let point_body =
+        List.fold_left
+          (fun acc (_ctor, _vars, body) ->
+             match acc, body with
+             | Some _, _ -> acc
+             | None, EPathAbs _ -> None
+             | None, v -> Some v)
+          None branches
+      in
+      (match point_body with
+       | None ->
+           err loc "match: needs at least one point branch (a plain value) to \
+                    infer the result type"
+       | Some body ->
+           let motive = ELam ([("__m", x_ty)], body, loc) in
+           infer env ctx (EHITElim (motive, branches, x, loc)))
   | EHITElim (c, branches, x, loc) ->
       (* hit_elim(C, [ctor => v, ...], x), Tarski-typed.
        *   target x : a HIT (known by name in Hit_env)
@@ -1854,6 +1879,49 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
               ok (Cubical_bindings.mk_equiv_ty a_ty b_ty)
           | _ -> err loc "equiv: forward map (arg 1) and inverse (arg 2) must be functions")
      | _ -> err loc "equiv expects 4 arguments (f, g, eta, eps)")
+  else
+  (* ap : (f : A -> B) -> Id A x y -> Id B (f x) (f y).  Precise when f is a
+   * simple (non-dependent) function and the path's endpoints are tracked: the
+   * result endpoints are f applied to x and to y, built from the argument
+   * EXPRESSION of f (available here in the ECall handler, unlike the types-only
+   * cubical dispatch).  A carrier/domain mismatch is a clean type error; any
+   * other shape (dependent f -> PathP, untracked-endpoint path) keeps the
+   * existing loose cubical typing — no fake precision. *)
+  if name = "ap" then
+    (match args, arg_tys with
+     | [f_e; _], [TyArrow (dom, cod); TyId (carrier, x, y)]
+       when Dispatcher.type_equal env ctx dom carrier ->
+         let apf t = match t with TyTermExpr ex -> TyTermExpr (EApp (f_e, [ex], loc)) in
+         ok (TyId (cod, apf x, apf y))
+     | [_; _], [TyArrow (dom, _); TyId (carrier, _, _)]
+       when not (Dispatcher.type_equal env ctx dom carrier) ->
+         err loc "ap: the function's domain does not match the path's carrier type"
+     | _ ->
+         (match Cubical_bindings.check_call name arg_tys with
+          | Ok ty -> ok ty
+          | Error msg -> err loc msg))
+  else
+  (* transport : Path U A B -> A -> B.  Precise for the operative univalence
+   * form transport(ua(e), x): e : Equiv A B is a Sigma headed by A -> B, so
+   * the univalence path runs from A to B, the result type is B, and the value
+   * x must have type A.  The reducer computes this to the equivalence's
+   * forward map applied to x (the ua anchor).  Any other form (a path bound to
+   * a variable, a within-type path) keeps the loose typing (transport stays in
+   * the source type) — see the Task 0-A gate note; no fake precision. *)
+  if name = "transport" then
+    (match args, arg_tys with
+     | [ECall ("ua", [e_e], _); _], [_; x_ty] ->
+         (match infer env ctx e_e with
+          | Ok (TySigma (_, TyArrow (a_ty, b_ty), _)) ->
+              if Dispatcher.type_equal env ctx x_ty a_ty then ok b_ty
+              else err loc "transport: the value's type must match the source type A \
+                            of the univalence path ua : Path U A B"
+          | _ ->
+              (match Cubical_bindings.check_call name arg_tys with
+               | Ok ty -> ok ty | Error msg -> err loc msg))
+     | _ ->
+         (match Cubical_bindings.check_call name arg_tys with
+          | Ok ty -> ok ty | Error msg -> err loc msg))
   else
   (* First, try cubical primitives. *)
   if Cubical_bindings.is_primitive name then

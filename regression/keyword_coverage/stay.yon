@@ -1,0 +1,3 @@
+/* stay a = refl(a): the trivial path, a value that stays itself. */
+fun main(): number { be p holds stay 5
+  return p @ I0 }

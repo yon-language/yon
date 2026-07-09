@@ -1,0 +1,7 @@
+/* span e = ua(e): an equivalence laid down as a way (a path of types). */
+fun succ(n: number): number { return n + 1 }
+fun pred(n: number): number { return n - 1 }
+fun main(): number {
+  be bridge holds succ <=> pred
+  be y holds transport(span bridge, 10)
+  return y }

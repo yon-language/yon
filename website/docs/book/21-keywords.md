@@ -1039,6 +1039,30 @@ fun main(): number {
 
 The reflexivity path: the proof that a value equals itself. A path value lowers to its *erased witness*, operationally the endpoint value, so `refl(7)` binds and passes like any value. What it never does is decide path equality at runtime: that judgement belongs to the reducer alone.
 
+#### `stay`
+
+`stay a` is the trivial path — the proof that `a` stays itself — sugar for `refl(a)`. The journey that goes nowhere; read off at either end, it is just `a`. Part of the *journey* vocabulary for paths (`stay`/`back`/`through`/`span`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
+
+#### `back`
+
+`back p` is the path `p` travelled in reverse, sugar for `inv(p)`. Reverse a reverse and you return to the start: `back (back p)` is `p`. If `p` runs from `a` to `b`, `back p` runs from `b` to `a`.
+
+#### `through`
+
+`p through f` carries the path `p` *through* the function `f`, sugar for `ap(f, p)`. If `p` runs from `a` to `b`, then `p through f` runs from `f a` to `f b` — structure preserved under the map (functoriality).
+
+#### `span`
+
+`span e` lays an equivalence `e` down as a *way* — a path between the two types it relates — sugar for `ua(e)`. Univalence in one word: a two-way bridge, seen as a road you can travel.
+
+#### `carry`
+
+`carry x along e` carries the value `x` along the bridge `e`, sugar for `transport(ua(e), x)`. When `e` is `f <=> g`, this computes to `f x`: an equivalence of *types* becomes computation on *values*. Always paired with `along`.
+
+#### `along`
+
+The second half of `carry x along e` (see `carry`): it names the bridge the value travels. `along` has no meaning on its own.
+
 #### `ind_path`
 
 The J eliminator, the one tool of path induction: to prove something about every path, prove it on `refl`. `ind_path(C, d, p)` computes `d(basepoint)` when the path is `refl` in evidence at the call site. A J stuck on a non-trivial path is rejected at compile time, loudly: the runtime never identifies `loop` with `refl`, so the circle stays a circle.
@@ -1093,6 +1117,10 @@ paths of a HIT (the circle's `base` and `loop`, a suspension's meridian).
 
 Higher inductive type eliminator: one branch per constructor, the path branches required to respect
 the points. The reducer never identifies `loop` with `refl`, so the circle stays a circle.
+
+#### `match`
+
+`match x { ctor => v, .. }` is `hit_elim` with the motive *synthesized*: the result type is inferred from the branches, so the non-dependent case needs no explicit motive function. The part naming the whole — one case per constructor. `match hit(base) { base => 42, loop => plam i => 42 }` computes to `42`. Payload-carrying point constructors (whose branch body references its binders) still take the explicit `hit_elim` form.
 
 #### `quote`
 

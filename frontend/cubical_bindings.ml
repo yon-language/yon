@@ -33,6 +33,38 @@ type infer_result = {
 let ok_ty t = { result_ty = t; errors = [] }
 let fail_ty t msg = { result_ty = t; errors = [msg] }
 
+(* ─── Endpoint equality for precise path typing ────────────────────────
+ * The precise arms of concat/inv compare the term-endpoints that a
+ * structured identity type TyId(A, x, y) carries. Those endpoints are
+ * Surface term-trees, so plain OCaml (=) would also compare source
+ * locations and reject two syntactically equal endpoints written at
+ * different positions. We compare location-insensitively over the shapes
+ * that actually occur as endpoints; anything exotic falls back to (=),
+ * which errs toward *rejection* (sound, occasionally incomplete). *)
+let rec expr_eq (a : expr) (b : expr) : bool =
+  match a, b with
+  | EParen (a', _), _ -> expr_eq a' b
+  | _, EParen (b', _) -> expr_eq a b'
+  | ELit (l1, _), ELit (l2, _) -> l1 = l2
+  | EVar (x, _), EVar (y, _) -> x = y
+  | EField (e1, f1, _), EField (e2, f2, _) -> f1 = f2 && expr_eq e1 e2
+  | ECall (f1, xs1, _), ECall (f2, xs2, _) ->
+      f1 = f2 && List.length xs1 = List.length xs2 && List.for_all2 expr_eq xs1 xs2
+  | EApp (h1, xs1, _), EApp (h2, xs2, _) ->
+      expr_eq h1 h2 && List.length xs1 = List.length xs2 && List.for_all2 expr_eq xs1 xs2
+  | ERefl (e1, _), ERefl (e2, _) -> expr_eq e1 e2
+  | EPair (x1, y1, _), EPair (x2, y2, _) -> expr_eq x1 x2 && expr_eq y1 y2
+  | _ -> a = b
+
+let tyterm_eq (TyTermExpr a) (TyTermExpr b) = expr_eq a b
+
+(* Conservative carrier equality: leaf types by name, else structural. *)
+let ty_carrier_eq (a : ty) (b : ty) : bool =
+  match a, b with
+  | TyPrim x, TyPrim y -> x = y
+  | TyUser x, TyUser y -> x = y
+  | _ -> a = b
+
 (* ─── Built-in type-level constructors ─────────────────────────────── *)
 
 (* Path A x y is represented as a TyUser "Path" wrapping arguments
@@ -206,6 +238,18 @@ let infer_ap (arg_tys : ty list) : infer_result =
  *)
 let infer_concat (arg_tys : ty list) : infer_result =
   match arg_tys with
+  (* Precise: two structured identity types compose iff they share a
+   * carrier and the end of the first equals the start of the second.
+   *   concat : Id A x y -> Id A y z -> Id A x z.
+   * A mismatch (different carrier, or first-end != second-start) is a
+   * clean type error. *)
+  | [TyId (a1, x, y1); TyId (a2, y2, z)] ->
+      if ty_carrier_eq a1 a2 && tyterm_eq y1 y2 then ok_ty (TyId (a1, x, z))
+      else
+        fail_ty (TyId (a1, x, z))
+          "concat: the paths do not compose — the endpoint of the first must \
+           equal the start of the second, in the same type"
+  (* Loose fallback for opaque paths (endpoints not tracked at the surface). *)
   | [TyUser "Path"; TyUser "Path"] -> ok_ty (TyUser "Path")
   | [_; _] -> ok_ty (TyUser "Path")
     (* Permissive: accept any two args, return Path. A strict mode
@@ -219,6 +263,8 @@ let infer_concat (arg_tys : ty list) : infer_result =
  *)
 let infer_inv (arg_tys : ty list) : infer_result =
   match arg_tys with
+  (* Precise: inversion swaps the endpoints.  inv : Id A x y -> Id A y x. *)
+  | [TyId (a, x, y)] -> ok_ty (TyId (a, y, x))
   | [TyUser "Path"] -> ok_ty (TyUser "Path")
   | [_] -> ok_ty (TyUser "Path")
   | _ -> fail_ty (TyUser "Path")

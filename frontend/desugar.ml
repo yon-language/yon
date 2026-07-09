@@ -1141,6 +1141,57 @@ and inject_captured_args_in_stmt (old_n : string) (new_n : string)
   | S.SCall (n, args, l) -> S.SCall (n, List.map goe args, l)
   | _ -> s
 
+(* ─── Cubical `be`-binding inlining (surface level) ─────────────────────
+ * The cubical desugar patterns for ua/transport fire only on the INLINE
+ * surface shape — ua(equiv(..)), transport(ua(..),..). When a proof value is
+ * named first (`be e holds equiv(..); .. ua(e) ..`), the use `ua(e)` otherwise
+ * falls through to a meaningless generic App(Var "ua", ..) that reaches codegen
+ * as an unknown function. Cubical/proof values are PURE, so we inline such a
+ * binding into its uses before desugaring; the inline patterns then see a
+ * closed form and fold it. *)
+let is_cubical_surface_value (e : S.expr) : bool =
+  match e with
+  | S.ECall (("equiv" | "ua" | "idEquiv" | "transport" | "transp"
+             | "comp" | "hcomp" | "refl" | "inv" | "concat" | "ap"
+             | "glue" | "unglue" | "path"), _, _) -> true
+  | S.ERefl _ | S.EPathAbs _ | S.EPathApp _ | S.EHITConstr _ -> true
+  | _ -> false
+
+let rec subst_evar_in_expr (name : string) (repl : S.expr) (e : S.expr) : S.expr =
+  let go = subst_evar_in_expr name repl in
+  match e with
+  | S.EVar (n, _) when n = name -> repl
+  | S.EVar _ | S.ELit _ -> e
+  | S.ECall (n, args, loc) -> S.ECall (n, List.map go args, loc)
+  | S.EApp (f, args, loc) -> S.EApp (go f, List.map go args, loc)
+  | S.EField (sub, f, loc) -> S.EField (go sub, f, loc)
+  | S.EBinop (op, a, b, loc) -> S.EBinop (op, go a, go b, loc)
+  | S.EParen (sub, loc) -> S.EParen (go sub, loc)
+  | S.EIfThenElse (c, t, el, loc) -> S.EIfThenElse (go c, go t, go el, loc)
+  | S.ERefl (a, loc) -> S.ERefl (go a, loc)
+  | S.EPathApp (p, i, loc) -> S.EPathApp (go p, i, loc)
+  | S.EPathAbs (i, b, loc) -> S.EPathAbs (i, go b, loc)
+  | S.EHITConstr (ctor, args, loc) -> S.EHITConstr (ctor, List.map go args, loc)
+  | S.EHITElim (m, brs, scr, loc) ->
+      S.EHITElim
+        (go m,
+         List.map (fun (n, vs, b) ->
+           (n, vs, if List.mem name vs then b else go b)) brs,
+         go scr, loc)
+  | S.ELam (params, body, loc) ->
+      if List.exists (fun (p, _) -> p = name) params then e
+      else S.ELam (params, go body, loc)
+  | _ -> e   (* conservative: same non-recursion as subst_var_in_expr *)
+
+and subst_evar_in_stmt (name : string) (repl : S.expr) (s : S.stmt) : S.stmt =
+  let goe = subst_evar_in_expr name repl in
+  match s with
+  | S.SLet (n, _, _) when n = name -> s   (* a rebinding shadows: stop here *)
+  | S.SLet (n, e, loc) -> S.SLet (n, goe e, loc)
+  | S.SReturn (e, loc) -> S.SReturn (goe e, loc)
+  | S.SAssignHolds (lv, e, loc) -> S.SAssignHolds (lv, goe e, loc)
+  | _ -> s
+
 (* ─── Statement sequence translation ───────────────────────────────── *)
 
 (* A statement list is translated to a chain of let bindings and
@@ -1206,6 +1257,14 @@ and desugar_stmts_with_locals (locals : string list) (stmts : S.stmt list) : C.t
           List.map (inject_captured_args_in_stmt name synth_name captured) rest
       in
       desugar_stmts_with_locals (name :: locals) rest_rewritten
+  | S.SLet (name, e, _) :: rest when is_cubical_surface_value e ->
+      (* Inline a proof/cubical binding into its uses so the inline cubical
+         desugar patterns see a closed form (ua/transport on a bound variable
+         would otherwise become a meaningless generic application). Pure values,
+         so duplication/dropping is sound. Recurse: chained cubical `be`s fold
+         one after another. *)
+      let rest' = List.map (subst_evar_in_stmt name e) rest in
+      desugar_stmts_with_locals locals rest'
   | S.SLet (name, e, _) :: rest ->
       (* If the value is a handle-lambda, record the binding name -> lambda so
          that `compose name with ...` can resolve it. *)

@@ -1,0 +1,7 @@
+// COSA: transport lungo un cammino COSTANTE (refl) è l'identità.
+// PERCHE': è il caso degenere del trasporto — comp su una linea di tipo che non
+// varia riporta il valore inalterato. Il cuore: trasformare sotto un cammino che,
+// quando il cammino è banale, non trasforma nulla.
+fun main(): number {
+  return comp (refl(number)) [] 5     // -> 5
+}

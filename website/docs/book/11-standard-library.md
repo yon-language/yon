@@ -32,7 +32,7 @@ fun main(): number {
 <!-- yon-gate: illustrative -->
 ```yon
 be _w holds File.write_text("/tmp/out.txt", "ciao")
-be back holds File.read_text("/tmp/out.txt")
+be readback holds File.read_text("/tmp/out.txt")
 be home holds Env.get("HOME")
 be n holds Args.count(0)
 ```
@@ -63,8 +63,8 @@ fun main(): number {
   be b holds Bits.band(12, 10)                    // 8
   be vl holds VoyagerList.empty()
   be vl2 holds VoyagerList.append(vl, 18)        // Golay-sealed storage
-  be back holds VoyagerList.get(vl2, 0)
-  return ten + g + b + back                      // 10+6+8+18 = 42
+  be readback holds VoyagerList.get(vl2, 0)
+  return ten + g + b + readback                  // 10+6+8+18 = 42
 }
 ```
 

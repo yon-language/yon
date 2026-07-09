@@ -1,0 +1,9 @@
+[package]
+name = "cx_move_law"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"
