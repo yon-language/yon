@@ -5,9 +5,9 @@ place Entry { }
 // corrupt_at(0,3)=1445 (auto-corrected, 3 is the radius).
 fun main(): number visits Output {
   be cw holds VoyagerList.seal(1445)
-  be back holds VoyagerList.open(VoyagerList.corrupt(cw, 2))
+  be readback holds VoyagerList.open(VoyagerList.corrupt(cw, 2))
   be _1 holds Output.print(String.from_int(1445))
-  be _2 holds Output.print(String.from_int(back))
+  be _2 holds Output.print(String.from_int(readback))
   be l holds VoyagerList.empty()
   l = VoyagerList.append(l, 1445)
   l = VoyagerList.corrupt_at(l, 0, 3)

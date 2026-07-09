@@ -1,0 +1,13 @@
+// COSA: un HIT dal roster (Suspension: poli north/south, merid il meridiano)
+// eliminato con `match` — niente motive esplicito, niente hit_elim(...). Il
+// tipo-risultato e' inferito dai branch.
+// PERCHE': `match x { ctor => .. }` e' l'eliminatore universale (la parte per il
+// tutto: ogni costruttore un caso); i tipi induttivi SUPERIORI portano i cammini
+// fra i punti dentro il dato, e il ramo `merid` lo riflette con un `plam`.
+fun main(): number {
+  return match hit(north) {
+    north => 5,
+    south => 5,
+    merid(a) => plam i => 5
+  }     // -> 5
+}

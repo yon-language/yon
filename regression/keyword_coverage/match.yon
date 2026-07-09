@@ -1,0 +1,4 @@
+/* match x { ctor => .. } = hit_elim with a synthesized (non-dependent) motive. */
+fun main(): number {
+  return match hit(base) { base => 42, loop => plam i => 42 }
+}

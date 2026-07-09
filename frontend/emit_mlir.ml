@@ -846,6 +846,18 @@ let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
   match t with
+  (* inv/concat/ap are surface path-algebra builtins that reach the emitter as
+     ordinary applications, not dedicated cubical core nodes. On closed paths
+     they REDUCE (builtins.ml groupoid laws: inv(refl)=refl, concat units, ap
+     functoriality); fold before type inference, or they reach codegen as an
+     "unknown function". Same reduce-then-look discipline as J/Transp/HITElim. *)
+  | (C.App (C.Var "inv", _)
+    | C.App (C.App (C.Var ("concat" | "ap"), _), _)) as pa ->
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx pa with
+       | (C.App (C.Var "inv", _)
+         | C.App (C.App (C.Var ("concat" | "ap"), _), _)) ->
+           failwith "[emit_mlir infer] path-algebra op stuck over a free dimension (no runtime value)."
+       | t' -> infer_mlir_ty e env funcs t')
   | C.Var "__map_empty" -> "f64"
   | C.Var "Map__empty" -> "f64"
   | C.Var "HashMap__empty" -> "f64"
@@ -1286,8 +1298,14 @@ let rec infer_mlir_ty (e : emitter)
       (* Paths are proof-erased at runtime and carry the representation of
          their endpoint carrier. *)
       infer_mlir_ty e env funcs body
-  | C.PApp (p, _) ->
-      infer_mlir_ty e env funcs p
+  | C.PApp (p, i) ->
+      (* A path applied at a dimension may compute to a point: refl-beta
+         (refl(x)@i = x) plus the inv/concat/ap groupoid laws all fire in the
+         reducer. Reduce-then-look, as for J/Transp; a neutral path-app over a
+         free dimension falls back to the path's carrier type. *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx (C.PApp (p, i)) with
+       | C.PApp (p', _) -> infer_mlir_ty e env funcs p'
+       | t' -> infer_mlir_ty e env funcs t')
   | (C.Transp _ | C.Comp _ | C.HComp _
     | C.GlueElem _ | C.Unglue _) as ct ->
       (* A let-bound cubical value needs its normalized carrier type before
@@ -1492,6 +1510,17 @@ let rec emit_term (e : emitter)
     (funcs : (string * func_sig) list)
     (t : C.term) : string * string =
   match t with
+  (* Path-algebra builtins (inv/concat/ap) reach the emitter as ordinary
+     applications and reduce on closed paths (groupoid laws); fold before
+     emission, else they reach codegen as an unknown function. Same
+     reduce-then-emit discipline as the J/Transp/HITElim arms below. *)
+  | (C.App (C.Var "inv", _)
+    | C.App (C.App (C.Var ("concat" | "ap"), _), _)) as pa ->
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx pa with
+       | (C.App (C.Var "inv", _)
+         | C.App (C.App (C.Var ("concat" | "ap"), _), _)) ->
+           failwith "[emit_mlir] path-algebra op stuck over a free dimension (no runtime value)."
+       | t' -> emit_term e env funcs t')
   | C.Var x when String.length x > 6 && String.sub x 0 6 = "__num_" ->
       let nstr = String.sub x 6 (String.length x - 6) in
       let v = fresh_ssa e in
@@ -4793,8 +4822,13 @@ let rec emit_term (e : emitter)
        | t' -> emit_term e env funcs t')
   | C.PLam (_, body) ->
       emit_term e env funcs body
-  | C.PApp (p, _) ->
-      emit_term e env funcs p
+  | C.PApp (p, i) ->
+      (* refl-beta and the inv/concat/ap groupoid laws fire in the reducer;
+         reduce-then-emit, as for J/Transp. A neutral path-app over a free
+         dimension erases to its path's value. *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx (C.PApp (p, i)) with
+       | C.PApp (p', _) -> emit_term e env funcs p'
+       | t' -> emit_term e env funcs t')
   | (C.Transp _ | C.Comp _ | C.HComp _
     | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _) as ct ->
       (* comp-in-MLIR (B2). A cubical term in emission position is normalized

@@ -19,8 +19,8 @@ fun main(): number {
 
   /* the file path is finally a literal */
   be _wr holds File.write_text("/tmp/yon_lit.txt", msg)
-  be back holds File.read_text("/tmp/yon_lit.txt")
-  be ok_io holds if String.equal(back, msg) then 1 else 0
+  be readback holds File.read_text("/tmp/yon_lit.txt")
+  be ok_io holds if String.equal(readback, msg) then 1 else 0
 
   be ok_env holds if Env.has("PATH") then 1 else 0
 

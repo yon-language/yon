@@ -236,12 +236,23 @@
       "quote", QUOTE;
       "el_match", EL_MATCH;
       "hit_elim", HIT_ELIM;
+      "match", MATCH_KW;         (* metonymic: match x { ctor => .. } = hit_elim, motive synthesized *)
       "hit", HIT_KW;             (* HIT constructor: hit(base), hit(merid, a) *)
       "I0", I0;                  (* interval endpoint 0 *)
       "I1", I1;                  (* interval endpoint 1 *)
       "plam", PLAM;              (* path abstraction <i> e *)
       "PathP", PATHP;            (* dependent path type *)
-      
+
+      (* Metonymic surface sugar (journey metaphor) — pure NAMES that desugar to
+         the cubical primitives: stay=refl, back=inv, span=ua,
+         carry..along=transport, through=ap. No new semantics. *)
+      "stay", STAY;
+      "back", BACK;
+      "span", SPAN;
+      "carry", CARRY;
+      "along", ALONG;
+      "through", THROUGH;
+
       (* Note: duration literals (100ms/5s/3min) were removed in v1.1. `s`,
          `ms`, etc. are now ordinary identifiers; `2s` lexes as NUM_LIT + IDENT. *)
     ]
@@ -289,6 +300,7 @@ rule token = parse
   | "&&?"            { AMPAMPQ }
   | "||?"            { PIPEPIPEQ }
   | "=>?"            { FATARROWQ }
+  | "<=>"            { LRARROW }   (* metonymic: f <=> g = equivalence *)
   | "!?"             { BANGQ }
   (* Bitwise operators in the intuitionistic setting, tagged with `?`.
      These lower to topos.heyt_int_* ops on !topos.heyt_int<64> (value,mask). *)
@@ -312,6 +324,7 @@ rule token = parse
   | '&'              { AMP }
   | '^'              { CARET }
   | '~'              { TILDE }
+  | "++"             { PLUSPLUS }  (* metonymic: p ++ q = concat *)
   | '+'              { PLUS }
   | '-'              { MINUS }
   | '*'              { STAR }
