@@ -5,7 +5,7 @@ suite closes the keyword triangle and keeps it closed in CI. Three legs plus a
 regenerable matrix:
 
   Leg 1  lexer -> book       every lexer keyword has a `#### `kw`` section in
-                             website/docs/book/21-keywords.md.
+                             website/docs/book/22-keywords.md.
   Leg 2  lexer -> corpus     every lexer keyword is exercised by a compiling
                              example (examples/, keyword_coverage/, yon_tests/,
                              cross_space/) or is in KEYWORD_ALLOWLIST (reserved /
@@ -34,7 +34,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 LEXER = ROOT / "frontend" / "lexer.mll"
-KEYWORDS_MD = ROOT / "website" / "docs" / "book" / "21-keywords.md"
+KEYWORDS_MD = ROOT / "website" / "docs" / "book" / "22-keywords.md"
 MATRIX = ROOT / "regression" / "SYNTAX-TRIANGLE.md"
 BOOK = ROOT / "website" / "docs" / "book"
 EXAMPLES = ROOT / "examples"
@@ -215,7 +215,7 @@ def run_codewindow(cw, tmp: Path):
 def test_leg1_every_keyword_documented():
     missing = sorted(set(lexer_keyword_tokens()) - documented_keywords())
     assert not missing, (
-        f"lexer keywords with no `#### `kw`` section in 21-keywords.md: {missing}"
+        f"lexer keywords with no `#### `kw`` section in 22-keywords.md: {missing}"
     )
 
 

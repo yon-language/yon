@@ -1,7 +1,7 @@
 ---
 id: spaces-and-packages
-title: "10. Spaces and packages"
-sidebar_position: 10
+title: "11. Spaces and packages"
+sidebar_position: 11
 ---
 
 # Spaces and packages

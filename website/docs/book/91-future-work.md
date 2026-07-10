@@ -45,13 +45,13 @@ runtime refuses out loud rather than degrading in silence.
 These are not on any roadmap. They are the design.
 
 - **No garbage collector.** Slots are stable for the life of the process; the heap
-  grows with distinct content only (chapter 13). Reclamation is by *region*, never
+  grows with distinct content only (chapter 14). Reclamation is by *region*, never
   tracing: a whole Space's heap is released in one move, at a checked `drop X` or
   automatically at the Space's last use.
 - **No threads.** The unit of concurrency is the process; Spaces talk over a
-  shared-memory wire (chapter 16).
+  shared-memory wire (chapter 17).
 - **No exceptions.** Failure is data, a declaration, or a process exit, never a
-  thrown stack (chapter 18).
+  thrown stack (chapter 19).
 - **No interfaces, typeclasses, or virtual dispatch.** An arrow is the interface: a
   place's presheaf of observations (chapters 0, 5).
 - **No central package registry.** Dependencies are git.

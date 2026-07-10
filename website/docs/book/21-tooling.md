@@ -1,12 +1,12 @@
 ---
 id: tooling
-title: "20. Tooling"
-sidebar_position: 20
+title: "21. Tooling"
+sidebar_position: 21
 ---
 
 # Tooling
 
-Beyond `yonc` and `yon-pkg` (chapters 1, 15), the toolchain ships a small set of
+Beyond `yonc` and `yon-pkg` (chapters 1, 16), the toolchain ships a small set of
 developer-facing programs: a language server, a linter, a formatter, and a
 documentation generator. They are described one by one below, but they share a
 single design decision worth stating first, because it is the reason the set

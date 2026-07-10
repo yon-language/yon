@@ -53,23 +53,24 @@ description of Yon 1.0, then follow the book:
 7. [Arrows](./book/07-arrows.md), moves, views, reductions, handle lambdas, composition, geometric morphisms.
 8. [The Heyting core](./book/08-heyting-core.md), present/absent/unknown, the operator families, `heyting`.
 9. [Types from HoTT](./book/09-hott-types.md), Pi/Sigma/Id, `refl`, comprehension types.
-10. [Spaces and packages](./book/10-spaces-and-packages.md), hermeticity, cross-package calls, hermetic scopes.
-11. [A tour of the standard library](./book/11-standard-library.md), collections, streams, system, the exotic corner.
+10. [Generics](./book/10-generics.md), type parameters on functions, places, and arrows, anchored to the universe.
+11. [Spaces and packages](./book/11-spaces-and-packages.md), hermeticity, cross-package calls, hermetic scopes.
+12. [A tour of the standard library](./book/12-standard-library.md), collections, streams, system, the exotic corner.
 
 **Part II, the machine model:**
 
-12. [The content-addressed heap](./book/12-content-addressed-heap.md), addresses are content, equality for free, the Leech lattice.
-13. [Values, cells, and lifetime](./book/13-values-cells-lifetime.md), immutability, identity, types at runtime, no-GC by design.
-14. [Data structures on the lattice](./book/14-data-structures-on-the-lattice.md), persistent collections, MerkleTree, Golay-sealed storage, cells across processes.
+13. [The content-addressed heap](./book/13-content-addressed-heap.md), addresses are content, equality for free, the Leech lattice.
+14. [Values, cells, and lifetime](./book/14-values-cells-lifetime.md), immutability, identity, types at runtime, no-GC by design.
+15. [Data structures on the lattice](./book/15-data-structures-on-the-lattice.md), persistent collections, MerkleTree, Golay-sealed storage, cells across processes.
 
 **Part III, the system:**
 
-15. [Projects, yon.toml, and packages](./book/15-projects-and-packages.md), directory layout, the manifest, yon-pkg, imports and namespaces.
-16. [How Spaces talk](./book/16-how-spaces-talk.md), the dispatch symbol, spawn, the shared-memory channel, epochs and recovery, backends.
-17. [The project: a ledger in three packages](./book/17-the-project.md), everything at once: a git dependency, a service, a client over the wire.
-18. [When things go wrong](./book/18-when-things-go-wrong.md), errors as places, failure as a value, process failure, the Heyting horizon.
-19. [Capabilities](./book/19-capabilities.md), authority attached to arrows, never ambient.
-20. [Tooling](./book/20-tooling.md), yon-doc, the language server, inspecting the compiler.
+16. [Projects, yon.toml, and packages](./book/16-projects-and-packages.md), directory layout, the manifest, yon-pkg, imports and namespaces.
+17. [How Spaces talk](./book/17-how-spaces-talk.md), the dispatch symbol, spawn, the shared-memory channel, epochs and recovery, backends.
+18. [The project: a ledger in three packages](./book/18-the-project.md), everything at once: a git dependency, a service, a client over the wire.
+19. [When things go wrong](./book/19-when-things-go-wrong.md), errors as places, failure as a value, process failure, the Heyting horizon.
+20. [Capabilities](./book/20-capabilities.md), authority attached to arrows, never ambient.
+21. [Tooling](./book/21-tooling.md), yon-doc, the language server, inspecting the compiler.
 
 Appendices: [Glossary](./book/90-glossary.md) · [Future work](./book/91-future-work.md) · [Coming from elsewhere](./book/92-coming-from.md) · [Benchmarks](./book/93-benchmarks.mdx)
 

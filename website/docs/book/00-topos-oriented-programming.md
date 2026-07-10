@@ -28,12 +28,12 @@ is primary, content is incidental. TOP inverts this completely:
 - A **place** is an object *in* a world. It has no methods and no hidden
   state; it is pure structure.
 - A value is a **section** of a place, immutable content, identified by
-  that content (chapter 13).
+  that content (chapter 14).
 - All behaviour lives in **arrows**: moves, views, reductions, morphisms
   between worlds (chapter 7). Nothing "happens to" a value; arrows take you
   from one value to another.
 - **Identity is the exception**, not the rule: it exists only where you ask
-  for it (a Space cell, chapter 13), never by default.
+  for it (a Space cell, chapter 14), never by default.
 - Even **logic is internal**: truth is the subobject classifier Ω, a `prop`
   is a map into it, and the logic you get is the Heyting algebra of the
   topos (chapter 8), `unknown` is a citizen, not an error.
@@ -56,7 +56,7 @@ philosophy:
 2. **There are no typeclasses.** Where Haskell would attach an instance,
    Yon attaches arrows: a place's interface *is* the bundle of moves, views
    and reductions defined on it, its presheaf of observations.
-3. **Content addressing is extensionality made physical** (chapter 12):
+3. **Content addressing is extensionality made physical** (chapter 13):
    two values indistinguishable by observation are not only equal, they
    are *the same slot*. When `String.equal` compares two handles it is
    checking Yoneda-style indiscernibility in O(1):
@@ -85,7 +85,7 @@ computation, so three syntactic copies of `(3 + 4) * 2` in the source
 become one computation in the IR, collapse by structure, before any
 classical optimization runs. The same philosophy returns at every level:
 **Co₀-orbit canonicalization** collapses heap contents equivalent under the
-Leech-lattice symmetries (chapter 14), η/unit rules collapse trivial
+Leech-lattice symmetries (chapter 15), η/unit rules collapse trivial
 coherence cells, and verified laws (chapter 6) license algebraic rewrites
 that an unverified `add` could never justify.
 

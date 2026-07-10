@@ -1,9 +1,0 @@
-// A generic place Box<T>, instantiated at number, built and read back.
-// The field is El(T), an element of the universe, not an erased type; the
-// runtime carrier is Yon's uniform value (f64).
-place Entry { }
-
-fun main(): number {
-  be b holds new Box { value 42 }   // built at T = number
-  return b.value                    // -> 42
-}

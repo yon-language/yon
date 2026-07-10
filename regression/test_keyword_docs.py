@@ -4,7 +4,7 @@ Every surface keyword in the lexer must be documented, and the alphabetical inde
 syntax-reference.md must be in sync with the keyword reference. This catches the drift the
 manual audit found: live keywords (spawn, the cubical constructs, ...) that had no entry, and
 an index that had gone out of order. Adding a keyword to the lexer without a `#### `kw``
-section in 21-keywords.md, or hand-editing the index, fails here.
+section in 22-keywords.md, or hand-editing the index, fails here.
 
   - test_every_lexer_keyword_documented: lexer keyword table ⊆ `#### `kw`` entries.
   - test_keyword_index_in_sync: website/scripts/gen-keyword-index.py --check passes.
@@ -18,7 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 LEXER = ROOT / "frontend" / "lexer.mll"
-KEYWORDS_MD = ROOT / "website" / "docs" / "book" / "21-keywords.md"
+KEYWORDS_MD = ROOT / "website" / "docs" / "book" / "22-keywords.md"
 GEN = ROOT / "website" / "scripts" / "gen-keyword-index.py"
 
 
@@ -38,7 +38,7 @@ def documented_keywords() -> set[str]:
 def test_every_lexer_keyword_documented():
     missing = sorted(lexer_keywords() - documented_keywords())
     assert not missing, (
-        "lexer keywords with no `#### `kw`` section in website/docs/book/21-keywords.md: "
+        "lexer keywords with no `#### `kw`` section in website/docs/book/22-keywords.md: "
         f"{missing}. Document each (a sentence + a compiling example), then run "
         "website/scripts/gen-keyword-index.py."
     )

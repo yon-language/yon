@@ -1,7 +1,7 @@
 ---
 id: projects-and-packages
-title: "15. Projects, yon.toml, and packages"
-sidebar_position: 15
+title: "16. Projects, yon.toml, and packages"
+sidebar_position: 16
 ---
 
 # Projects, yon.toml, and packages
@@ -54,7 +54,7 @@ algebra   = { git = "https://github.com/altro/algebra", rev = "abc123" }
 ```
 
 The `[runtime]` section is required in project mode: `backend` decides
-how Space heaps are physically backed (chapter 16), and a missing or
+how Space heaps are physically backed (chapter 17), and a missing or
 invalid key is a compile error. The declared value is the binary's
 default; a `YON_BACKEND` environment variable at launch overrides it.
 
