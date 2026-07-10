@@ -163,6 +163,6 @@ This is the heart of Yon's bet, and it is worth stating plainly: the algebra you
 declare is the algebra you get, checked, not trusted. A place is where you write
 the claim down, and the compiler is what makes it true.
 
-Chapter 7 gives these places their behaviour, the arrows. Chapter 10 returns to
+Chapter 7 gives these places their behaviour, the arrows. Chapter 11 returns to
 spaces in full, as the directories where instances actually live and where one
 Space begins to talk to another.

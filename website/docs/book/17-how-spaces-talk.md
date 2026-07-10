@@ -1,12 +1,12 @@
 ---
 id: how-spaces-talk
-title: "16. How Spaces talk"
-sidebar_position: 16
+title: "17. How Spaces talk"
+sidebar_position: 17
 ---
 
 # How Spaces talk
 
-Chapter 10 showed the surface: `import mid::addtriple from Mid`, and a call
+Chapter 11 showed the surface: `import mid::addtriple from Mid`, and a call
 crosses a process boundary. This chapter is the machinery underneath, all
 of it verified against the runtime sources.
 
@@ -151,7 +151,7 @@ on first contact rather than inheriting its parent's reply slot.
 Two doors, two disciplines. The **call** door, `__yon_dispatch`, moves `f64`
 and nothing else: a selector plus at most four numeric arguments, and a fifth is
 rejected at compile time. A string or a bare section cannot ride it: it would be
-a handle into a heap the callee does not have (chapter 12), so only numbers cross
+a handle into a heap the callee does not have (chapter 13), so only numbers cross
 the call door. The **subscription** door, just above, is the one that carries
 values, and it carries them by **copy**, never by handle: a value is serialized
 on the way out and rebuilt on the far side.
@@ -173,7 +173,7 @@ guarantee this book has described: hermetic Spaces, the no-aliasing value
 model, cells as the *only* identity. Yon's unit of concurrency is the
 **process**: Spaces in separate binaries, the numeric wire between them,
 shared-memory cells with `flock` and convergent folds where state must
-really be shared (chapter 13). `for every … when here` declares parallel
+really be shared (chapter 14). `for every … when here` declares parallel
 *intent* at the surface, 1.0 executes it sequentially, and any future
 parallel execution will be process-shaped, not thread-shaped.
 
@@ -193,6 +193,6 @@ backend = "memory"     # or: separate | shm
 deployment lever. The values:
 `memory` (the default, one private heap), `separate` (one heap per Space),
 `shm` (heaps in POSIX shared memory, `/yon_space_<name>`, enabling the
-cross-process cells and convergent shared folds of chapter 13). The
+cross-process cells and convergent shared folds of chapter 14). The
 language semantics do not change across backends; only the physical
 residence of the content does.

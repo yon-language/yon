@@ -1,7 +1,7 @@
 ---
 id: the-project
-title: "17. The project: a ledger in three packages"
-sidebar_position: 17
+title: "18. The project: a ledger in three packages"
+sidebar_position: 18
 ---
 
 # The project: a ledger in three packages
@@ -38,7 +38,7 @@ The Bank exposes pure domain logic over the wire. Two facts of life for a
 service package. First, only `internal` separates the private from the
 exported: everything else with a numeric signature (arity ≤ 4) is on the
 wire. Second, **a service still has a `main`**: the compiled binary is both
-the program and the server (chapter 15), so an idle `main` is the
+the program and the server (chapter 16), so an idle `main` is the
 convention.
 
 <!-- yon-gate: exit 0 -->

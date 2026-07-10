@@ -1,7 +1,7 @@
 ---
 id: content-addressed-heap
-title: "12. The content-addressed heap"
-sidebar_position: 12
+title: "13. The content-addressed heap"
+sidebar_position: 13
 ---
 
 import ContentAddress from '@site/src/components/ContentAddress';

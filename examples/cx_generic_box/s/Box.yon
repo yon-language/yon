@@ -1,3 +1,0 @@
-// Box<T>: a generic container. The field value has the parameter type T,
-// which lowers to El(T), an element of the universe, anchored to the types.
-place Box<T> { value T }

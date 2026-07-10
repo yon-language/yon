@@ -1,7 +1,7 @@
 ---
 id: values-cells-lifetime
-title: "13. Values, cells, and lifetime"
-sidebar_position: 13
+title: "14. Values, cells, and lifetime"
+sidebar_position: 14
 ---
 
 import SpaceReclaim from '@site/src/components/SpaceReclaim';

@@ -31,7 +31,7 @@ literals are **interned**, the same literal is the same value, which is why
 `String.equal("ciao", greeting)` holds: equality is equality of content.
 Strings are process-local handles: a string does not cross a cross-package
 function call, which carries numbers. How structured data moves between
-processes is chapter 16.
+processes is chapter 17.
 
 **Durations.** A duration *is* a `number` of milliseconds, so `2500` (two and
 a half seconds) is ordinary arithmetic. The dedicated literal suffixes (`5s`,

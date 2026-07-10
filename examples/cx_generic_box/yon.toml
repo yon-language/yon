@@ -1,7 +1,0 @@
-[package]
-name = "cx_generic_box"
-[world.W]
-objects = ["X"]
-spaces  = ["s"]
-[runtime]
-backend = "memory"

@@ -1,7 +1,7 @@
 ---
 id: when-things-go-wrong
-title: "18. When things go wrong"
-sidebar_position: 18
+title: "19. When things go wrong"
+sidebar_position: 19
 ---
 
 # When things go wrong
@@ -61,7 +61,7 @@ everything else.
 
 ## Failure is a value
 
-At the stdlib boundary, absence is in-band (chapter 11): a missing file, an
+At the stdlib boundary, absence is in-band (chapter 12): a missing file, an
 unset variable, an out-of-range index all return the `0.0` handle. You test
 it like any number. The compiler does its part *before* runtime: a false
 `law` is rejected by AlgebraVerifier, a missing subsumption mono is rejected by
@@ -70,7 +70,7 @@ categories of "going wrong" are moved from runtime to the type checker.
 
 ## When another process fails
 
-Cross-Space, failure is a process matter, and chapter 16's machinery handles
+Cross-Space, failure is a process matter, and chapter 17's machinery handles
 the recoverable case: a crashed server is respawned on a virgin channel with
 the epoch advanced, and the call retried once, transparently. When the
 failure is *not* recoverable (the server binary is missing, the operation

@@ -1082,19 +1082,27 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
 
 ## SESSION 2026-07-10 — Generics chapter + metonymic surface + full staleness audit
 New canonical terms (append-only): **generics** = type parameters on functions
-(`fun id<T>`), places (`place Box<T>`), and arrows (`reduction Sum<T>`); **type
-application** `Box<number>` is a distinct type node; a generic field lowers to
+(`fun id<T>`), places (`place Envelope<T>`), and arrows (`reduction Sum<T>`); **type
+application** `Envelope<number>` is a distinct type node; a generic field lowers to
 `El(T)` (universe element, NOT erased); uniform f64 carrier at runtime. **journey
 vocabulary** = the metonymic cubical surface `stay`/`back`/`++`/`through`/`span`/
 `carry ... along`/`<=>`/`match`, all runnable.
 
-Book changes (all gated; syntax-triangle + keyword-docs = **144 passed**):
-- **NEW chapter `09b-generics.md`** ("Generics", `sidebar_position: 9.5`, interlude
-  between ch9 and ch10; slug `/book/generics`). Generic functions (in/out, multi-param),
-  generic places (`Box<T>` → `El(T)`), type application, generic arrows, and the honest
-  monomorphisation DEBT (element-level check of `new Box{value ...}` vs the instantiated
-  `T` is the next increment; parser comment marks the spot). Gated: `id<T>`→42,
-  `first<A,B>`→9, Box CodeWindow (byte-identical to `examples/cx_generic_box/`)→42.
+Book changes (all gated; syntax-triangle + keyword-docs = **142 passed**):
+- **NEW chapter `10-generics.md`** ("10. Generics", `sidebar_position: 10`; slug
+  `/book/generics`). Antonio wanted a real number, not a blank: RENUMBERED the whole
+  book, old ch10-21 → 11-22 (appendices 90-93 unchanged); title numbers + `sidebar_position`
+  + every prose "chapter N" ref (30 shifts, 10-21 → +1) + `intro.md` TOC (numbers + file
+  links, Generics inserted as #10) + the hardcoded `21-keywords.md`→`22-keywords.md` in
+  `test_syntax_triangle.py`/`test_keyword_docs.py`/`gen-keyword-index.py`. Slugs/URLs are
+  stable (Docusaurus strips the number prefix), so no live link broke. Functions-first: generic functions
+  (in/out, multi-param) are the real feature. Containers point to `stream of T` / Vec /
+  List (built in, not hand-rolled). Generic places framed honestly as parametric domain
+  objects (illustrative `place Envelope<T>`), with the monomorphisation DEBT (the
+  value-level check is the next increment). Gated single-file blocks `id<T>`→42,
+  `first<A,B>`→9; corpus example `examples/generics_basic.yon` (`identity<T>`/`first<A,B>`
+  →44). The toy `Box` place example was REMOVED (Antonio: a place is a domain object, not
+  a wrapper; `Box` was never a special construct, just an example name, verified by grep).
 - **Ch9 (`09-hott-types.md`)**: new "## Paths as journeys" section. Metonymic surface,
   gated `exit 22/11/5` (from `cx_path_algebra`/`cx_carry`/`cx_hit_suspension`). Corrected
   the stale "runnable HoTT fragment is refl/pair/fst/snd" claim (now much wider).

@@ -1,7 +1,7 @@
 ---
 id: capabilities
-title: "19. Capabilities"
-sidebar_position: 19
+title: "20. Capabilities"
+sidebar_position: 20
 ---
 
 # Capabilities
@@ -67,5 +67,5 @@ missing token into a refusal is the next step, not this one.
 The *static* half is design in the same sense. The intended rule (a caller of a
 `requires` move must itself hold the capability) is the production shape, not
 yet enforced by the checker. Both halves are the model; both arrive together,
-like the Heyting unwrapping of chapter 18. The syntax you write today is the
+like the Heyting unwrapping of chapter 19. The syntax you write today is the
 syntax authority will travel on when the gate closes.

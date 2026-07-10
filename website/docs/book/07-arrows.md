@@ -266,4 +266,4 @@ lowest rung that does the job. The whole chapter, in one line, is that the rung 
 part of the type, and the type checker will not let you pretend otherwise.
 
 Where content actually crosses between Spaces, and what a `move` looks like when its
-target lives in another process, is [chapter 16](/book/how-spaces-talk).
+target lives in another process, is [chapter 17](/book/how-spaces-talk).
