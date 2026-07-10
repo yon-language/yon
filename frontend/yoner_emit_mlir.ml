@@ -596,5 +596,19 @@ let () =
     | Surface_ast.TopView vd -> Some (vd.Surface_ast.vw_name, vd.Surface_ast.vw_of)
     | _ -> None
   ) prog);
-  let mlir_output = Emit_mlir.emit_program desugared in
+  let mlir_output =
+    try Emit_mlir.emit_program desugared
+    with Emit_mlir.Cubical_stuck msg ->
+      (* A cubical value with no runtime representation reached codegen. The
+         surface checker is permissive (monomorphic, does not track path-ness),
+         so it accepts terms like `inv` of a scalar point that only exist at
+         compile time. Reject cleanly on the semantic-error channel (E2001)
+         rather than crashing with a Fatal exception. *)
+      Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Type_check
+        (Printf.sprintf
+           "this cubical term has no runtime value and cannot be lowered: %s \
+            It is a compile-time-only citizen (a path/homotopy value in a \
+            position that must produce a number)." msg)));
+      exit 3
+  in
   print_string mlir_output

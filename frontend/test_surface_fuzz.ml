@@ -70,8 +70,11 @@ let classify (src : string) : verdict =
                      | Surface_ast.TopView vd ->
                        Some (vd.Surface_ast.vw_name, vd.Surface_ast.vw_of)
                      | _ -> None) prog);
-                (match (try ignore (Emit_mlir.emit_program ds); `Ok with e -> `E e) with
+                (match (try ignore (Emit_mlir.emit_program ds); `Ok
+                        with Emit_mlir.Cubical_stuck _ -> `Reject
+                           | e -> `E e) with
                  | `Ok -> Accept
+                 | `Reject -> Reject "cubical-stuck"
                  | `E e -> Bug ("emit", Printexc.to_string e)))
          end)
   with

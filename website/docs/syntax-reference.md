@@ -43,6 +43,7 @@ Every keyword, alphabetically:
 [`drop`](/book/keywords#drop) ·
 [`each`](/book/keywords#each) ·
 [`effects`](/book/keywords#effects) ·
+[`El`](/book/keywords#el) ·
 [`el_match`](/book/keywords#el_match) ·
 [`else`](/book/keywords#else) ·
 [`emit`](/book/keywords#emit) ·
@@ -67,6 +68,8 @@ Every keyword, alphabetically:
 [`hit`](/book/keywords#hit) ·
 [`hit_elim`](/book/keywords#hit_elim) ·
 [`holds`](/book/keywords#holds) ·
+[`I0`](/book/keywords#i0) ·
+[`I1`](/book/keywords#i1) ·
 [`Id`](/book/keywords#id) ·
 [`if`](/book/keywords#if) ·
 [`import`](/book/keywords#import) ·
@@ -99,6 +102,7 @@ Every keyword, alphabetically:
 [`pair`](/book/keywords#pair) ·
 [`parallel`](/book/keywords#parallel) ·
 [`partial`](/book/keywords#partial) ·
+[`PathP`](/book/keywords#pathp) ·
 [`Pi`](/book/keywords#pi) ·
 [`place`](/book/keywords#place) ·
 [`plam`](/book/keywords#plam) ·

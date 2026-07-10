@@ -93,7 +93,7 @@ let doc_fun (f : S.fun_decl) =
 
 let gen (title : string) (prog : S.program) : string =
   Buffer.clear buf;
-  line (Printf.sprintf "# API Reference — %s" title);
+  line (Printf.sprintf "# API Reference: %s" title);
   line "";
   let imports = List.filter_map (function
     | S.TopImport (s, _) -> Some (Printf.sprintf "- package `%s`" s)

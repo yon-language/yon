@@ -13,7 +13,7 @@ fun main(): number {
   be cap_name holds String.from_int(0)   /* placeholder; per ora hardcode hash */
   /* Hash hardcoded: FNV-1a di "MoneyTransfer" (string Yon). */
   /* Per il check runtime, grant lo stesso hash che emette emit_mlir. */
-  be cap_hash holds 1991051931   /* approx, ricavato runtime */
+  be cap_hash holds 169281588   /* FNV-1a("MoneyTransfer"), matches emit_mlir's Cap.check */
   be _grant holds Cap.grant(cap_hash)
 
   /* Apply move — emit runtime Cap.check sotto */

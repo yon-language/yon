@@ -31,6 +31,17 @@
 module C = Ast
 module R = Reduce
 
+(* A cubical term that survives to codegen with no runtime value — a
+   path-algebra op (inv/concat/ap) or a J/transp/comp/hit_elim that stays
+   stuck after full normalization. These are compile-time-only citizens: the
+   surface (monomorphic, permissive) checker accepts them, but they have no
+   f64/i64 representation to lower. This is a clean COMPILE-TIME REJECTION, not
+   an internal invariant break — the driver reports it as a semantic error and
+   exits, and the fuzzer classifies it as an intended reject. Raising a typed
+   exception (rather than `failwith`) is what makes that catchable: a bare
+   `failwith` here reaches the user as a `Fatal error` crash. *)
+exception Cubical_stuck of string
+
 (* ─── Output buffer ────────────────────────────────────────────────── *)
 
 type emitter = {
@@ -856,7 +867,7 @@ let rec infer_mlir_ty (e : emitter)
       (match Builtins.reduce_with_builtins Reduce.empty_ctx pa with
        | (C.App (C.Var "inv", _)
          | C.App (C.App (C.Var ("concat" | "ap"), _), _)) ->
-           failwith "[emit_mlir infer] path-algebra op stuck over a free dimension (no runtime value)."
+           raise (Cubical_stuck "path-algebra op (inv/concat/ap) stuck over a free dimension: no runtime value to lower.")
        | t' -> infer_mlir_ty e env funcs t')
   | C.Var "__map_empty" -> "f64"
   | C.Var "Map__empty" -> "f64"
@@ -901,6 +912,16 @@ let rec infer_mlir_ty (e : emitter)
                      else if String.length x > 12 &&
                              String.sub x (String.length x - 12) 12 = "_instantiate"
                      then "f64"   (* <P>_instantiate() -> f64, the Magma handle *)
+                     else if Carrier.is_prim_name x then
+                       (* A primitive type name in term position is a universe
+                          type-code (tycheck: `refl(number) : Id(Type_0, number,
+                          number)`), reached here via `stay <type>` / `refl(<type>)`.
+                          It is a compile-time-only citizen with no runtime value —
+                          a clean reject, not a Fatal "unknown variable" crash. *)
+                       raise (Cubical_stuck (Printf.sprintf
+                         "the type name `%s` is a compile-time universe code, not a \
+                          runtime value (it appears here as a path in the universe, \
+                          e.g. from `stay %s`)." x x))
                      else
                        failwith (Printf.sprintf
                                    "[emit_mlir infer] unknown variable '%s'."
@@ -1289,7 +1310,7 @@ let rec infer_mlir_ty (e : emitter)
       (* same reduce-then-look discipline as the emission case *)
       (match Builtins.reduce_with_builtins Reduce.empty_ctx jt with
        | C.J _ ->
-           failwith "[emit_mlir infer] ind_path stuck on a non-refl path."
+           raise (Cubical_stuck "ind_path (path induction) stuck on a non-refl path: no runtime value to lower.")
        | t' -> infer_mlir_ty e env funcs t')
   | C.Scope (_, body) ->
       (* hermetic scope yields its body value; same type (81b) *)
@@ -1314,16 +1335,16 @@ let rec infer_mlir_ty (e : emitter)
       let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
       (match reduced with
        | C.Transp _ | C.Comp _ | C.HComp _ | C.GlueElem _ | C.Unglue _ ->
-           failwith "[emit_mlir infer] cubical term stuck after normalization."
+           raise (Cubical_stuck "cubical term (transp/comp/glue) stuck after normalization: no runtime value to lower.")
        | t' -> infer_mlir_ty e env funcs t')
   | C.HITElim _ as ht ->
       (* HIT eliminator: reduce-then-look. hit_elim on a constructor computes
        * to a branch; stuck only if the scrutinee is not a constructor. *)
       (match Builtins.reduce_with_builtins Reduce.empty_ctx ht with
-       | C.HITElim _ -> failwith "[emit_mlir infer] hit_elim stuck (scrutinee is not a constructor)."
+       | C.HITElim _ -> raise (Cubical_stuck "hit_elim stuck (scrutinee is not a constructor): no runtime value to lower.")
        | t' -> infer_mlir_ty e env funcs t')
   | C.HITConstr _ ->
-      failwith "[emit_mlir infer] a bare HIT constructor has no runtime type (it is a homotopy value); use it through hit_elim."
+      raise (Cubical_stuck "a bare HIT constructor has no runtime type (it is a homotopy value); use it through hit_elim.")
   | _ ->
       failwith "[emit_mlir infer] term form cannot be analyzed for type inference."
 
@@ -1519,7 +1540,7 @@ let rec emit_term (e : emitter)
       (match Builtins.reduce_with_builtins Reduce.empty_ctx pa with
        | (C.App (C.Var "inv", _)
          | C.App (C.App (C.Var ("concat" | "ap"), _), _)) ->
-           failwith "[emit_mlir] path-algebra op stuck over a free dimension (no runtime value)."
+           raise (Cubical_stuck "path-algebra op (inv/concat/ap) stuck over a free dimension: no runtime value to lower.")
        | t' -> emit_term e env funcs t')
   | C.Var x when String.length x > 6 && String.sub x 0 6 = "__num_" ->
       let nstr = String.sub x 6 (String.length x - 6) in
@@ -1740,6 +1761,14 @@ let rec emit_term (e : emitter)
                   emit_line e (Printf.sprintf "%s = func.call @%s() : () -> f64" v x);
                   (v, "f64")
                 end
+                else if Carrier.is_prim_name x then
+                  (* A primitive type name reached emission as a value: a
+                     universe type-code (`stay <type>` / `refl(<type>)`), which
+                     is compile-time-only and has no runtime representation.
+                     Clean reject, mirroring the infer-side guard above. *)
+                  raise (Cubical_stuck (Printf.sprintf
+                    "the type name `%s` is a compile-time universe code, not a \
+                     runtime value." x))
                 else
                   failwith (Printf.sprintf
                               "[emit_mlir] variable '%s' not in scope."
@@ -4818,7 +4847,7 @@ let rec emit_term (e : emitter)
       let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx jt in
       (match reduced with
        | C.J _ ->
-           failwith "[emit_mlir] ind_path stuck on a non-refl path: path induction over non-trivial paths is compile-time only; the runtime does not decide path equality."
+           raise (Cubical_stuck "ind_path stuck on a non-refl path: path induction over non-trivial paths is compile-time only; the runtime does not decide path equality.")
        | t' -> emit_term e env funcs t')
   | C.PLam (_, body) ->
       emit_term e env funcs body
@@ -4839,7 +4868,7 @@ let rec emit_term (e : emitter)
       (match reduced with
        | C.Transp _ | C.Comp _ | C.HComp _
        | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _ ->
-           failwith "[emit_mlir] cubical term stuck after normalization: not decided at runtime."
+           raise (Cubical_stuck "cubical term stuck after normalization: not decided at runtime.")
        | t' -> emit_term e env funcs t')
   (* P7-frontend A2: Sigma pair (Pair, Fst, Snd) --> !llvm.struct *)
   | C.Pair (a, b) ->
