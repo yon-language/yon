@@ -395,6 +395,7 @@ let rec type_tag (t : ty) : string =
   | TySubscription (sp, _) -> "subscription to " ^ sp
   | TyPrim n | TyPrimIn (n, _) -> n
   | TyUser n -> n
+  | TyApp (n, _) -> n   (* type application collapses to its head for tag purposes *)
   | TyVar n -> n
   | TyMetaVar n -> Printf.sprintf "alpha%d" n
   | TyUniverse n -> Printf.sprintf "Type_%d" n
@@ -451,6 +452,7 @@ let with_builtins (env : env) : env =
   } in
   let output_place = {
     pd_name = "Output";
+    pd_type_params = [];
     pd_world = "__Builtin";
     pd_with_effects = true;
     pd_members = [FoOp output_op_decl];
@@ -523,6 +525,7 @@ let rec ty_to_string (t : ty) : string =
   | TyPrim n -> n
   | TyPrimIn (n, ws) -> n ^ " in " ^ String.concat ", " ws
   | TyUser n -> n
+  | TyApp (n, args) -> n ^ "<" ^ String.concat ", " (List.map ty_to_string args) ^ ">"
   | TyVar n -> n
   | TyMetaVar n -> Printf.sprintf "alpha%d" n
   | TyUniverse 0 -> "Type"

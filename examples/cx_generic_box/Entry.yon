@@ -1,0 +1,10 @@
+// COSA: un place GENERICO `Box<T>` istanziato su number, costruito e riletto.
+// PERCHE': i generici sono ancorati al sistema di tipi (il campo e' El(T), un
+// elemento dell'universo, non un tipo erased); il carrier a runtime e' il valore
+// uniforme di Yon (f64).
+place Entry { }
+
+fun main(): number {
+  be b holds new Box { value 42 }
+  return b.value        // -> 42
+}

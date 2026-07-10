@@ -74,6 +74,7 @@ let rec apply_subst (sigma : subst) (t : ty) : ty =
   | TySumIn (variants, ws) ->
       TySumIn (List.map (fun v ->
         { v with v_args = List.map (apply_subst sigma) v.v_args }) variants, ws)
+  | TyApp (n, args) -> TyApp (n, List.map (apply_subst sigma) args)
   | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _
   | TyUniverse _ | TyHeytInt _ | TyEl _ -> t
 
@@ -112,6 +113,7 @@ let rec free_metavars (t : ty) : int list =
   | TySubscription (_, inner) -> free_metavars inner
   | TySum variants | TySumIn (variants, _) ->
       List.concat_map (fun v -> List.concat_map free_metavars v.v_args) variants
+  | TyApp (_, args) -> List.concat_map free_metavars args
   | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _
   | TyUniverse _ | TyHeytInt _ | TyEl _ -> []
 

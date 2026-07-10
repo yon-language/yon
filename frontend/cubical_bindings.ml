@@ -225,6 +225,11 @@ let infer_ua (arg_tys : ty list) : infer_result =
  *)
 let infer_ap (arg_tys : ty list) : infer_result =
   match arg_tys with
+  (* The path (2nd) argument must be a path, not a concrete scalar — reject
+     cleanly so a mis-shaped ap never reaches codegen (fuzzer robustness). *)
+  | [_fn; TyPrim n] ->
+      fail_ty (TyUser "Path")
+        (Printf.sprintf "ap: the second argument must be a path, got %s" n)
   | [_fn; _path] ->
       (* The result is a path; without knowing the function's return
        * type at this layer, we return a generic Path. *)
@@ -251,6 +256,10 @@ let infer_concat (arg_tys : ty list) : infer_result =
            equal the start of the second, in the same type"
   (* Loose fallback for opaque paths (endpoints not tracked at the surface). *)
   | [TyUser "Path"; TyUser "Path"] -> ok_ty (TyUser "Path")
+  (* A concrete scalar is not a path — reject cleanly (fuzzer robustness). *)
+  | [TyPrim n; _] | [_; TyPrim n] ->
+      fail_ty (TyUser "Path")
+        (Printf.sprintf "concat: the arguments must be paths, got %s" n)
   | [_; _] -> ok_ty (TyUser "Path")
     (* Permissive: accept any two args, return Path. A strict mode
      * would reject non-Path inputs. *)
@@ -266,6 +275,10 @@ let infer_inv (arg_tys : ty list) : infer_result =
   (* Precise: inversion swaps the endpoints.  inv : Id A x y -> Id A y x. *)
   | [TyId (a, x, y)] -> ok_ty (TyId (a, y, x))
   | [TyUser "Path"] -> ok_ty (TyUser "Path")
+  (* A concrete scalar is not a path — reject cleanly at the type level so it
+     never reaches codegen as a stuck path-algebra op (found by the fuzzer). *)
+  | [TyPrim n] -> fail_ty (TyUser "Path")
+                    (Printf.sprintf "inv: the argument must be a path, got %s" n)
   | [_] -> ok_ty (TyUser "Path")
   | _ -> fail_ty (TyUser "Path")
            (Printf.sprintf "inv expects 1 argument, got %d"

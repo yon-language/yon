@@ -157,7 +157,7 @@ let rec lift_to_cubical (t : ty) : Cubical.ctype =
       Cubical.CTPathP ((i, lift_to_cubical a),
                        Cubical.CInhabitant (Cubical.CVar "__endpoint_x"),
                        Cubical.CInhabitant (Cubical.CVar "__endpoint_y"))
-  | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _ | TyMetaVar _
+  | TyPrim _ | TyPrimIn _ | TyUser _ | TyApp _ | TyVar _ | TyMetaVar _
   | TyUniverse _ | TyPi _ | TySigma _ ->
       Cubical.CTBase t
   | TyList inner -> Cubical.CTBase (TyList inner)
@@ -311,6 +311,11 @@ let rec type_equal
    * Bidirectional, like boolean/proposition. *)
   | TyPrim "text", TyUser "String" -> true
   | TyUser "String", TyPrim "text" -> true
+  (* Type application vs its head: a bare place `Box` (as built by `new Box`) is
+   * compatible with an instance annotation `Box<number>`, and two instances of
+   * the same generic agree — the checker is monomorphic, so the head decides. *)
+  | TyApp (n1, _), TyApp (n2, _) -> n1 = n2
+  | TyApp (n1, _), TyUser n2 | TyUser n1, TyApp (n2, _) -> n1 = n2
   (* NB: the one-way PROMOTIONS  number <: heyt_int  and  heyt_int <: proposition
    * used to live here as SYMMETRIC arms, which unsoundly also accepted the
    * reverse (a heyt_int where a number is expected, a prop where a heyt_int is

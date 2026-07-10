@@ -67,6 +67,7 @@ type ty =
   | TyWire of string                                  (* the handle of "wire to Space"; carries the Space name *)
   | TySubscription of string * ty                     (* the handle of w.awaits(f); carries the Space name and the stream element type *)
   | TyUser of string                                  (* user-defined place name *)
+  | TyApp of string * ty list                         (* type application: Box<number>, HashMap<text, number> *)
   | TyVar of string                                   (* type variable (generic binder) *)
   | TyMetaVar of int                                  (* HM fresh tyvar alpha_N *)
   | TyUniverse of int                                 (* Type_n : universe of level n *)
@@ -382,6 +383,7 @@ and cell_decl = {
 
 type place_decl = {
   pd_name : string;
+  pd_type_params : string list;     (* generic parameters: `place Box<T> { value T }` *)
   pd_world : string;
   pd_with_effects : bool;
   pd_members : field_or_op list;
