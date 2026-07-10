@@ -1937,9 +1937,25 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
        when not (Dispatcher.type_equal env ctx dom carrier) ->
          err loc "ap: the function's domain does not match the path's carrier type"
      | _ ->
-         (match Cubical_bindings.check_call name arg_tys with
-          | Ok ty -> ok ty
-          | Error msg -> err loc msg))
+         (* ap maps a FUNCTION over a path; a non-function head (a number/bool/
+          * text scalar or a data value, e.g. the ill-typed `ap(75, p)` the
+          * permissive cubical check would admit) has no action to apply. Reject
+          * it cleanly here instead of letting the reducer fabricate `App(75, a)`,
+          * which reaches emit as a call to a non-function and Fatal-crashes. A
+          * genuine function types as an arrow (TyArrow/TyPi) or the loose fun
+          * code; anything else is rejected. *)
+         let is_fun = function
+           | TyArrow _ | TyPi _ | TyPrim "fun" | TyUser "fun" -> true
+           | _ -> false in
+         (match arg_tys with
+          | ftype :: _ when not (is_fun ftype) ->
+              err loc "ap: the first argument must be a function (A -> B) — ap \
+                       maps a function over a path, so a non-function head has \
+                       no action to apply"
+          | _ ->
+              (match Cubical_bindings.check_call name arg_tys with
+               | Ok ty -> ok ty
+               | Error msg -> err loc msg)))
   else
   (* transport : Path U A B -> A -> B.  Precise for the operative univalence
    * form transport(ua(e), x): e : Equiv A B is a Sigma headed by A -> B, so

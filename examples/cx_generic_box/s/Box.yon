@@ -1,3 +1,3 @@
-// Un contenitore GENERICO: Box<T> ha un campo `value` di tipo T (il parametro).
-// T e' una variabile d'universo; nel core il campo e' El(T), ancorato ai tipi.
+// Box<T>: a generic container. The field value has the parameter type T,
+// which lowers to El(T), an element of the universe, anchored to the types.
 place Box<T> { value T }

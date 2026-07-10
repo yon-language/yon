@@ -78,7 +78,9 @@ and do not require the clause.)
 Yon has three forms of polymorphism, and deliberately lacks a fourth.
 
 **Parametric.** Type parameters on functions: `fun id<A>(x: A): A`. No
-constraints, no bounds, a type parameter is honest ignorance.
+constraints, no bounds, a type parameter is honest ignorance. The
+[Generics](/book/generics) chapter carries this further, to parameters on
+places and arrows and how a type variable anchors to the universe.
 
 **Sub-objects.** `place A subcontains B` does *not* declare inheritance: it
 declares a **monomorphism** `A → B`, and the checker verifies it

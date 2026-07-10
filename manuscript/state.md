@@ -1079,3 +1079,57 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
 - `frontend/package_layout.ml` header comment cleaned (was "dir=world/file=space",
   now matches the live `space_of`/`place_of` code) — comment-only, no behavior change.
 - Debt #8 (`becomes` surface token) marked CHIUSO; design note → Fatto.
+
+## SESSION 2026-07-10 — Generics chapter + metonymic surface + full staleness audit
+New canonical terms (append-only): **generics** = type parameters on functions
+(`fun id<T>`), places (`place Box<T>`), and arrows (`reduction Sum<T>`); **type
+application** `Box<number>` is a distinct type node; a generic field lowers to
+`El(T)` (universe element, NOT erased); uniform f64 carrier at runtime. **journey
+vocabulary** = the metonymic cubical surface `stay`/`back`/`++`/`through`/`span`/
+`carry ... along`/`<=>`/`match`, all runnable.
+
+Book changes (all gated; syntax-triangle + keyword-docs = **144 passed**):
+- **NEW chapter `09b-generics.md`** ("Generics", `sidebar_position: 9.5`, interlude
+  between ch9 and ch10; slug `/book/generics`). Generic functions (in/out, multi-param),
+  generic places (`Box<T>` → `El(T)`), type application, generic arrows, and the honest
+  monomorphisation DEBT (element-level check of `new Box{value ...}` vs the instantiated
+  `T` is the next increment; parser comment marks the spot). Gated: `id<T>`→42,
+  `first<A,B>`→9, Box CodeWindow (byte-identical to `examples/cx_generic_box/`)→42.
+- **Ch9 (`09-hott-types.md`)**: new "## Paths as journeys" section. Metonymic surface,
+  gated `exit 22/11/5` (from `cx_path_algebra`/`cx_carry`/`cx_hit_suspension`). Corrected
+  the stale "runnable HoTT fragment is refl/pair/fst/snd" claim (now much wider).
+- **Ch21 (`21-keywords.md`)**: added the 4 keyword entries that had drifted undocumented —
+  `El`, `I0`, `I1`, `PathP`. Index regenerated (`syntax-reference.md`, 133 keywords).
+- **Em-dash re-cleanup**: 38 em-dashes had crept back (ch20:16, ch91:14, ch21:4) → back to
+  **0 book-wide**. Root-caused one at the SOURCE: `frontend/yon_doc.ml:96` emitted
+  `# API Reference — %s`; changed to `: %s`, rebuilt, and realigned the ch20 verbatim block.
+- **Cross-ref fixes**: ch5 → forward-link to Generics; ch11:92 `verify P`/`Magma` ch5→ch6;
+  ch14 ×5 (heap-chain ch11→12, cells ch12→13 ×2, HashMap "up to 2²⁰"→"bounded only by
+  memory" [runtime `yon_rt.c:3296` = NO cap, load ≤0.7 invariant], dead Arena→ch18 ref removed).
+- Staleness audit (4 parallel agents, all cross-checked vs live code): ch0-4, 6-8, 10, 12-13,
+  15-19, 90, 92 all CLEAN.
+
+Known gate blind-spot (flagged, NOT changed): `test_keyword_docs.lexer_keywords()` regex is
+lowercase-only (`[a-z_]+`), so uppercase keywords (`El`/`I0`/`I1`/`PathP`, plus non-keywords
+`Type_`/`sum_f64`) bypass the documented+exercised gate. Widening it needs an allowlist for
+`Type_`/`sum_f64` and an `I1` corpus example (I1 currently has 0 examples).
+
+Separate example bug (spawned as a task, not fixed here): `examples/capability_flow_demo/
+Entry.yon:16` hardcodes cap `1991051931` ("approx") but FNV-1a("MoneyTransfer") = `169281588`
+(the value ch19 correctly uses).
+
+Compiler robustness ported this session (from the stranded worktree
+`.claude/worktrees/elated-snyder-567874`, session "Fix double-paren back((ap))@I0
+crash"): the **Cubical_stuck** hardening. HEAD (be2de59) already had the parser
+precedence (`%prec PREFIX_APP`), so `back((ap))@I0` did not crash — but the 5
+`failwith "... stuck"` sites in `emit_mlir.ml` still Fatal-crashed on stuck
+cubical terms that pass the permissive surface checker. A fuzzer campaign on main
+found **6 crashes / 1.2M cases** (e.g. `back List.cons(...)`, `carry ... through
+pred`), all the `path-algebra op stuck` class. Ported: `exception Cubical_stuck`
++ 5 `raise` sites + `is_prim_name` case (emit_mlir.ml), driver `try…with
+Cubical_stuck → E2001, exit 3` (yoner_emit_mlir.ml), `ap` non-function reject
+(tycheck.ml), and the fuzzer classifies `Cubical_stuck` as a reject
+(test_surface_fuzz.ml). Post-port: **BUGS=0 / 1.2M cases**, all `cx_*` examples
+still correct (11/5/5/22/5/11/11/42), pytest 145 passed, OCaml cubical tests
+green. NOT the parser.mly `METONYM` token (redundant with main's `PREFIX_APP`).
+The worktree can now be discarded.

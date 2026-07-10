@@ -1041,7 +1041,7 @@ The reflexivity path: the proof that a value equals itself. A path value lowers 
 
 #### `stay`
 
-`stay a` is the trivial path — the proof that `a` stays itself — sugar for `refl(a)`. The journey that goes nowhere; read off at either end, it is just `a`. Part of the *journey* vocabulary for paths (`stay`/`back`/`through`/`span`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
+`stay a` is the trivial path, the proof that `a` stays itself, sugar for `refl(a)`. The journey that goes nowhere; read off at either end, it is just `a`. Part of the *journey* vocabulary for paths (`stay`/`back`/`through`/`span`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
 
 #### `back`
 
@@ -1049,11 +1049,11 @@ The reflexivity path: the proof that a value equals itself. A path value lowers 
 
 #### `through`
 
-`p through f` carries the path `p` *through* the function `f`, sugar for `ap(f, p)`. If `p` runs from `a` to `b`, then `p through f` runs from `f a` to `f b` — structure preserved under the map (functoriality).
+`p through f` carries the path `p` *through* the function `f`, sugar for `ap(f, p)`. If `p` runs from `a` to `b`, then `p through f` runs from `f a` to `f b`: structure preserved under the map (functoriality).
 
 #### `span`
 
-`span e` lays an equivalence `e` down as a *way* — a path between the two types it relates — sugar for `ua(e)`. Univalence in one word: a two-way bridge, seen as a road you can travel.
+`span e` lays an equivalence `e` down as a *way*, a path between the two types it relates, sugar for `ua(e)`. Univalence in one word: a two-way bridge, seen as a road you can travel.
 
 #### `carry`
 
@@ -1097,6 +1097,24 @@ Path abstraction: `plam i => e` builds a path by binding a dimension variable `i
 endpoint it recovers the face. The companion of `refl` for non-constant paths (`path_app`,
 `path_typed`).
 
+#### `I0`
+
+Interval endpoint 0: the start of the abstract interval a path runs over. Read a closed path at its
+start with `p @ I0`, and substituting `i := I0` in a `plam i => e` recovers the path's left face.
+Paired with `I1`.
+
+#### `I1`
+
+Interval endpoint 1: the far end of the interval. `p @ I1` reads a path at its end, and `i := I1` in a
+`plam i => e` recovers the right face. Paired with `I0`.
+
+#### `PathP`
+
+Dependent path type: the type former behind a path whose endpoints live in a family of types that
+itself varies over the interval, the dependent generalisation of `Id`. A `plam i => e` inhabits a
+`PathP` when the type of `e` depends on `i`; when it does not, the `PathP` is just an ordinary `Id`
+path.
+
 #### `comp`
 
 Kan composition: transports along a path system, filling the missing face. On a constant system it
@@ -1120,7 +1138,14 @@ the points. The reducer never identifies `loop` with `refl`, so the circle stays
 
 #### `match`
 
-`match x { ctor => v, .. }` is `hit_elim` with the motive *synthesized*: the result type is inferred from the branches, so the non-dependent case needs no explicit motive function. The part naming the whole — one case per constructor. `match hit(base) { base => 42, loop => plam i => 42 }` computes to `42`. Payload-carrying point constructors (whose branch body references its binders) still take the explicit `hit_elim` form.
+`match x { ctor => v, .. }` is `hit_elim` with the motive *synthesized*: the result type is inferred from the branches, so the non-dependent case needs no explicit motive function. The part naming the whole, one case per constructor. `match hit(base) { base => 42, loop => plam i => 42 }` computes to `42`. Payload-carrying point constructors (whose branch body references its binders) still take the explicit `hit_elim` form.
+
+#### `El`
+
+Universe-code type: `El(c)` is the type of inhabitants of the code `c`, "the elements of `c`". It is
+the bridge the [Generics](/book/generics) chapter leans on: a generic field of parameter type `T`
+lowers to `El(T)`, a genuine element of the universe rather than an erased placeholder. `quote(c, a)`
+introduces an inhabitant; `el_match` eliminates one.
 
 #### `quote`
 
