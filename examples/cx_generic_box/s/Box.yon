@@ -1,0 +1,3 @@
+// Un contenitore GENERICO: Box<T> ha un campo `value` di tipo T (il parametro).
+// T e' una variabile d'universo; nel core il campo e' El(T), ancorato ai tipi.
+place Box<T> { value T }

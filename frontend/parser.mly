@@ -252,6 +252,9 @@
 %nonassoc UTILDE
 %left THROUGH             /* p through f = ap(f, p), binds tight */
 %left ATSIGN              /* path application p @ i, binds tight */
+%nonassoc PREFIX_APP      /* metonymic prefixes (stay/back/span/carry) bind TIGHTER
+                             than @, so `back X @ I0` is always `(back X) @ I0` and
+                             never `back (X @ I0)` — deterministic, not menhir-arbitrary */
 
 /* Precedence for IS pattern test. */
 %nonassoc IS
@@ -574,11 +577,13 @@ top_let:
 
 place_decl:
   | PLACE name = IDENT
+    tparams = type_params_opt
     over = option(over_clause)
     ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     LBRACE members = place_member_list RBRACE
     { { pd_name = name;
+        pd_type_params = tparams;
         pd_world = "__INFER";
         pd_with_effects = false;
         pd_members = members;
@@ -589,12 +594,14 @@ place_decl:
         pd_on_error = oerr;
         pd_loc = mk_loc $startpos $endpos } }
   | PLACE name = IDENT
+    tparams = type_params_opt
     over = option(over_clause)
     ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     WITH EFFECTS
     LBRACE members = field_or_op_list RBRACE
     { { pd_name = name;
+        pd_type_params = tparams;
         pd_world = "__INFER";
         pd_with_effects = true;
         pd_members = members;
@@ -612,6 +619,7 @@ error_decl:
     ext = option(subcontains_clause)
     LBRACE members = field_and_cell_list RBRACE
     { { pd_name = name;
+        pd_type_params = [];
         pd_world = "__INFER";
         pd_with_effects = false;
         pd_members = members;
@@ -819,6 +827,13 @@ type_atom:
     { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
   | EL LPAREN c = expr RPAREN
     { TyEl (TyTermExpr c) }   (* A1: c may be an APPLIED code El(Fam(x)), not just a bare name *)
+  (* Type application at use: `Box<number>`, `HashMap<text, number>`. For now the
+     arguments are accepted (readable annotations) and the type resolves to its
+     base — the checker is monomorphic and the runtime carrier is uniform f64, so
+     Box<number> and Box<text> share one layout. Precise per-instantiation
+     element typing (a TyApp node + monomorphisation) is the next increment. *)
+  | name = IDENT LT args = separated_nonempty_list(COMMA, type_atom) GT
+    { TyApp (name, args) }
   | name = IDENT
     { TyUser name }
   | name = IDENT IN ids = ident_list
@@ -1391,13 +1406,13 @@ expr_atom:
        back p          = inv(p)
        span e          = ua(e)
        carry x along e = transport(ua(e), x)   (e a bridge / equivalence) *)
-  | STAY e = expr_atom
+  | STAY e = expr_atom %prec PREFIX_APP
     { ERefl (e, mk_loc $startpos $endpos) }
-  | BACK e = expr_atom
+  | BACK e = expr_atom %prec PREFIX_APP
     { ECall ("inv", [e], mk_loc $startpos $endpos) }
-  | SPAN e = expr_atom
+  | SPAN e = expr_atom %prec PREFIX_APP
     { ECall ("ua", [e], mk_loc $startpos $endpos) }
-  | CARRY x = expr_atom ALONG e = expr_atom
+  | CARRY x = expr_atom ALONG e = expr_atom %prec PREFIX_APP
     { let l = mk_loc $startpos $endpos in
       ECall ("transport", [ECall ("ua", [e], l); x], l) }
   | PAIR LPAREN a = expr COMMA b = expr RPAREN

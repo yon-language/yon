@@ -162,9 +162,20 @@ let rec of_core_ty (ty : C.ty) : t =
          old clean-but-incomplete `NoCarrier` failure, we lower it to `Boxed`: the
          value-dependent El now COMPILES, uniformly, and soundly (the tag defers
          the concrete type to runtime; see the `Boxed` doc above). *)
-      (match el_target c with
-       | `Named n -> of_core_ty (C.TyPlace n)
-       | `Opaque -> Boxed)
+      (match c with
+       | C.Var n when String.length n >= 5 && String.sub n 0 5 = "__tp_" ->
+           (* A generic parameter T: the field is genuinely El(T) (anchored to
+              the universe, type-checked as such), but its runtime carrier is
+              Yon's UNIFORM value f64 — numbers, section handles, and stream ids
+              are all f64, so one scalar slot carries any monomorphic
+              instantiation and reuses the proven section machinery. The
+              fully-general fat-pointer Boxed carrier (with a runtime type tag)
+              is the upgrade for generics over non-f64 aggregates. *)
+           Scalar W_f64
+       | _ ->
+           (match el_target c with
+            | `Named n -> of_core_ty (C.TyPlace n)
+            | `Opaque -> Boxed))
   | C.TyId (a, _, _) ->
       (* a path value lowers to its erased witness, which carries the endpoint
          type: refl(x) is operationally x. Equality stays the reducer's job. *)

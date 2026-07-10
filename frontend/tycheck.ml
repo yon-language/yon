@@ -146,6 +146,40 @@ let isprop_ty (carrier : ty) : ty =
 let omega_ty : ty =
   TySigma ("P", TyUniverse 0, isprop_ty (TyVar "P"))
 
+(* Map a generic place's parameter names, seen as user types in field/op
+   signatures (`place Box<T> { value T }`), to type variables — the same move
+   the checker already makes for a function's fn_type_params. TyVar is then
+   accepted wherever a concrete type is (monomorphic erasure). *)
+let rec resolve_tparams (tps : string list) (t : ty) : ty =
+  if tps = [] then t
+  else
+    let go = resolve_tparams tps in
+    match t with
+    | TyUser n when List.mem n tps -> TyVar n
+    | TyArrow (a, b) -> TyArrow (go a, go b)
+    | TyStream a -> TyStream (go a)
+    | _ -> t
+
+(* PRECISE instantiation: given a generic place's parameters and the concrete
+   type arguments of an application `Box<number>`, substitute each parameter by
+   its argument inside a field/op type. This is what makes `b : Box<number>`
+   give `b.value : number` rather than the erased TyVar. Falls back to the
+   monomorphic resolve when the arity doesn't line up. *)
+let subst_place_tparams (params : string list) (args : ty list) (t : ty) : ty =
+  if params = [] || List.length params <> List.length args then
+    resolve_tparams params t
+  else
+    let pairs = List.combine params args in
+    let rec go t =
+      match t with
+      | TyUser n when List.mem_assoc n pairs -> List.assoc n pairs
+      | TyVar n when List.mem_assoc n pairs -> List.assoc n pairs
+      | TyArrow (a, b) -> TyArrow (go a, go b)
+      | TyStream a -> TyStream (go a)
+      | _ -> t
+    in
+    go t
+
 (* Recognize a type that is (syntactically) the mere-proposition predicate
    applied to some carrier, i.e. of the shape Pi(_:C).Pi(_:C).Id_C(_,_). Used by
    later steps (comprehension) to check that a predicate's fibres are props. *)
@@ -913,7 +947,8 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
            (* Polymorphic types: accept field access and return unknown.
             * Defers full typing until specialization. *)
            ok (TyPrim "unknown")
-       | TyUser place_name ->
+       | (TyUser place_name | TyApp (place_name, _)) as pt ->
+           let targs = (match pt with TyApp (_, a) -> a | _ -> []) in
            (match Tyenv.lookup_place env place_name with
             | None -> err loc
                 (Printf.sprintf "place %s not found while looking up field %s" place_name fld)
@@ -921,7 +956,10 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                 let rec find_field = function
                   | [] -> err loc
                       (Printf.sprintf "place %s has no field %s" place_name fld)
-                  | FoField f :: _ when f.fd_name = fld -> ok f.fd_ty
+                  | FoField f :: _ when f.fd_name = fld ->
+                      (* precise on a type application (Box<number> -> value:number),
+                         monomorphic-erased on a bare place *)
+                      ok (subst_place_tparams pd.pd_type_params targs f.fd_ty)
                   | _ :: rest -> find_field rest
                 in
                 find_field pd.pd_members)
@@ -1316,7 +1354,8 @@ got %s" (Tyenv.ty_to_string other)))
            (* Check that each field assignment matches a declared field
             * and has the right type. *)
            let fields = List.filter_map
-             (function FoField f -> Some f | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
+             (function FoField f -> Some { f with fd_ty = resolve_tparams pd.pd_type_params f.fd_ty }
+                     | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
              pd.pd_members in
            let* () = check_field_assignments env ctx pd.pd_name fields fas loc in
            ok (TyUser place_name))
@@ -1329,7 +1368,8 @@ got %s" (Tyenv.ty_to_string other)))
        | None -> err loc (Printf.sprintf "unknown place %s in 'new in' expression" place_name)
        | Some pd ->
            let fields = List.filter_map
-             (function FoField f -> Some f | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
+             (function FoField f -> Some { f with fd_ty = resolve_tparams pd.pd_type_params f.fd_ty }
+                     | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
              pd.pd_members in
            let* () = check_field_assignments env ctx pd.pd_name fields fas loc in
            ok (TyUser place_name))
@@ -2317,7 +2357,8 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
        | None -> err loc (Printf.sprintf "unknown place %s in new" place_name)
        | Some pd ->
            let fields = List.filter_map
-             (function FoField f -> Some f | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
+             (function FoField f -> Some { f with fd_ty = resolve_tparams pd.pd_type_params f.fd_ty }
+                     | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
              pd.pd_members in
            let* () = check_field_assignments env ctx pd.pd_name fields fas loc in
            ok env)
@@ -2328,7 +2369,8 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
        | None -> err loc (Printf.sprintf "unknown place %s in 'new in'" place_name)
        | Some pd ->
            let fields = List.filter_map
-             (function FoField f -> Some f | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
+             (function FoField f -> Some { f with fd_ty = resolve_tparams pd.pd_type_params f.fd_ty }
+                     | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
              pd.pd_members in
            let* () = check_field_assignments env ctx pd.pd_name fields fas loc in
            ok env)
@@ -2582,7 +2624,7 @@ let rec level_of_type (t : ty) : int =
              (fun acc' arg -> max acc' (level_of_type arg))
              acc v.v_args)
         0 vs
-  | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _ | TyMetaVar _ -> 0
+  | TyPrim _ | TyPrimIn _ | TyUser _ | TyApp _ | TyVar _ | TyMetaVar _ -> 0
   | TyHeytInt _ -> 0
   | TyArrow (a, b) -> max (level_of_type a) (level_of_type b)
   | TyMoveHandle _ -> 0
@@ -2649,7 +2691,7 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
       register_sum_types_in_ty (register_sum_types_in_ty env domain) codomain
   | TyId (carrier, _, _) | TyPathP ((_, carrier), _, _) ->
       register_sum_types_in_ty env carrier
-  | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _ | TyMetaVar _
+  | TyPrim _ | TyPrimIn _ | TyUser _ | TyApp _ | TyVar _ | TyMetaVar _
   | TyUniverse _ | TyHeytInt _ | TyMoveHandle _ | TyReductionHandle _
   | TyMorphHandle _ | TyViewHandle _ | TyWire _ | TyEl _ -> env
 
@@ -3282,7 +3324,8 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
     (fun acc fo ->
        let* () = acc in
        match fo with
-       | FoField f -> check_type_well_formed env f.fd_ty f.fd_loc
+       | FoField f ->
+           check_type_well_formed env (resolve_tparams pd.pd_type_params f.fd_ty) f.fd_loc
        | FoOp op ->
            let* () = List.fold_left
              (fun acc p ->
@@ -3341,6 +3384,14 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
       else if Tyenv.lookup_place env n <> None then ok ()
       else if Tyenv.lookup_world env n <> None then ok ()
       else err loc (Printf.sprintf "unknown user type: %s" n)
+  | TyApp (n, args) ->
+      (* A type application `Box<number>`: the head must be a known type and each
+         argument must be well-formed. Arity against the declared parameters is a
+         later refinement (needs the head's type-param count threaded here). *)
+      let* () = check_type_well_formed env (TyUser n) loc in
+      List.fold_left
+        (fun acc a -> let* () = acc in check_type_well_formed env a loc)
+        (ok ()) args
   | TyVar _ ->
       (* Type variables are always well-formed in the context of their
        * binder (function signature with <T1, T2>). *)

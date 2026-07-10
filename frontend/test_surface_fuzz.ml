@@ -86,25 +86,51 @@ let kw_pool =
   [| "be"; "holds"; "fun"; "return"; "if"; "then"; "else"; "while"; "do";
      "for"; "every"; "in"; "place"; "internal"; "view"; "move"; "reduction";
      "operation"; "number"; "text"; "true"; "false"; "and"; "or"; "not";
-     "visits"; "import"; "topos"; "where" |]
-let op_pool = [| "+"; "-"; "*"; "/"; "<"; ">"; "="; "=="; "("; ")"; "{"; "}"; ","; ":"; ";" |]
+     "visits"; "import"; "topos"; "where";
+     (* new surface: metonymic journey + cubical + HIT *)
+     "stay"; "back"; "span"; "carry"; "along"; "through"; "match";
+     "refl"; "transport"; "plam"; "hit"; "hit_elim"; "hcomp"; "comp"; "I0"; "I1" |]
+let op_pool = [| "+"; "-"; "*"; "/"; "<"; ">"; "="; "=="; "("; ")"; "{"; "}"; ","; ":"; ";";
+                 "++"; "<=>"; "@"; "=>" |]
 let fn_pool =
   [| "List.cons"; "List.empty"; "List.head"; "List.tail"; "String.from_int";
      "String.equal"; "IO.print_num"; "Output.print"; "HashSet.add"; "HashSet.empty" |]
+(* Simple functions defined by the generated prelude — used by the cubical /
+   metonymic generators for `through f` and `f <=> g`. *)
+let cubfn_pool = [| "succ"; "pred"; "dbl" |]
 
 let var_name () = String.make 1 (Char.chr (Char.code 'a' + Random.int 6))
 let num () = string_of_int (Random.int 1000)
 
 let rec gen_expr d =
   if d <= 0 then (if Random.bool () then num () else var_name ())
-  else match Random.int 7 with
+  else match Random.int 9 with
     | 0 -> num ()
     | 1 -> var_name ()
     | 2 -> Printf.sprintf "(%s %s %s)" (gen_expr (d-1)) op_pool.(Random.int 8) (gen_expr (d-1))
     | 3 -> Printf.sprintf "%s(%s)" fn_pool.(Random.int (Array.length fn_pool)) (gen_expr (d-1))
     | 4 -> Printf.sprintf "List.cons(%s, %s)" (gen_expr (d-1)) (gen_expr (d-1))
     | 5 -> Printf.sprintf "(%s)" (gen_expr (d-1))
-    | _ -> Printf.sprintf "if %s then %s else %s" (gen_expr (d-1)) (gen_expr (d-1)) (gen_expr (d-1))
+    | 6 -> Printf.sprintf "if %s then %s else %s" (gen_expr (d-1)) (gen_expr (d-1)) (gen_expr (d-1))
+    | 7 -> gen_cubical (d-1)                              (* a path value (may type-error, not crash) *)
+    | _ -> Printf.sprintf "(%s @ I0)" (gen_cubical (d-1)) (* a path applied -> a point (number) *)
+
+(* Cubical / metonymic expression forms — the journey vocabulary, path algebra,
+   univalence, and the HIT recursor. Some type-check, some don't; the fuzzer only
+   demands they never CRASH the frontend. *)
+and gen_cubical d =
+  if d <= 0 then Printf.sprintf "stay %s" (num ())
+  else match Random.int 8 with
+    | 0 -> Printf.sprintf "stay %s" (num ())
+    | 1 -> Printf.sprintf "back (%s)" (gen_cubical (d-1))
+    | 2 -> Printf.sprintf "(%s ++ %s)" (gen_cubical (d-1)) (gen_cubical (d-1))
+    | 3 -> Printf.sprintf "(%s through %s)" (gen_cubical (d-1)) cubfn_pool.(Random.int 3)
+    | 4 -> Printf.sprintf "refl(%s)" (num ())
+    | 5 -> Printf.sprintf "(%s @ I0)" (gen_cubical (d-1))
+    | 6 -> Printf.sprintf "carry %s along (%s <=> %s)" (num ())
+             cubfn_pool.(Random.int 3) cubfn_pool.(Random.int 3)
+    | _ -> Printf.sprintf "match hit(base) { base => %s, loop => plam i => %s }"
+             (num ()) (num ())
 
 let rec gen_stmt d =
   match Random.int 7 with
@@ -116,10 +142,18 @@ let rec gen_stmt d =
   | 5 -> Printf.sprintf "be _ holds %s" (gen_expr d)
   | _ -> "return " ^ gen_expr d
 
+(* Helper functions the cubical generators reference (succ/pred are inverse, so
+   a fraction of the generated univalence terms even type-check). *)
+let cub_prelude =
+  "fun succ(n: number): number { return n + 1 }\n\
+   fun pred(n: number): number { return n - 1 }\n\
+   fun dbl(n: number): number { return n + n }\n"
+
 let gen_grammar () =
   let n = 1 + Random.int 5 in
   let body = String.concat "\n  " (List.init n (fun _ -> gen_stmt 3)) in
-  Printf.sprintf "fun main(): number {\n  %s\n  return %s\n}" body (gen_expr 2)
+  Printf.sprintf "%sfun main(): number {\n  %s\n  return %s\n}"
+    cub_prelude body (gen_expr 2)
 
 (* corpus of real-ish seeds to mutate (near the valid manifold, where crashes hide) *)
 let seeds = [|
@@ -129,6 +163,13 @@ let seeds = [|
   "fun main(): number {\n  iter 4 do { be _ holds 0 }\n  return 8\n}";
   "internal fun k(x: number): number { return x * 1789 }\nfun main(): number { return k(2) }";
   "fun main(): number {\n  be g holds HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
+  (* metonymic / cubical / generics seeds — near the new-syntax manifold *)
+  "fun succ(n: number): number { return n + 1 }\nfun pred(n: number): number { return n - 1 }\nfun main(): number {\n  be b holds succ <=> pred\n  return carry 10 along b\n}";
+  "fun main(): number {\n  be p holds back (stay 5)\n  return p @ I0\n}";
+  "fun dbl(n: number): number { return n + n }\nfun main(): number {\n  be s holds stay 7 ++ (stay 5 through dbl)\n  return s @ I0\n}";
+  "fun main(): number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
+  "fun identity<T>(x: T): T { return x }\nfun main(): number { return identity(7) }";
+  "fun unwrap(b: Box<number>): number { return b.value }\nfun main(): number { return 0 }";
 |]
 
 let rand_token () =

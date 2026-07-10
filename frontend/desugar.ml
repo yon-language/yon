@@ -175,6 +175,7 @@ let rec desugar_ty (t : S.ty) : C.ty =
   | S.TyMap (_, _) -> C.TyPlace "map"
   | S.TyStream inner -> C.TyStream (desugar_ty inner)
   | S.TyUser n -> C.TyPlace n
+  | S.TyApp (n, _) -> C.TyPlace n   (* type args don't affect the uniform runtime carrier *)
   | S.TyVar n -> C.TyPlace n   (* type vars compile to opaque place at IR level *)
   | S.TyMetaVar n -> C.TyPlace (Printf.sprintf "alpha%d" n)  (* HM meta-var, same lowering *)
   | S.TyUniverse n -> C.TyType n
@@ -237,6 +238,7 @@ and ty_name (t : S.ty) : string =
   match t with
   | S.TyPrim n | S.TyPrimIn (n, _) -> n
   | S.TyUser n -> n
+  | S.TyApp (n, _) -> n
   | S.TyVar n -> n
   | S.TyMetaVar n -> Printf.sprintf "alpha%d" n
   | S.TyUniverse 0 -> "Type"
@@ -357,7 +359,29 @@ and decode_composition_system (clauses : S.expr list)
 
 (* ─── Expression translation ───────────────────────────────────────── *)
 
-and desugar_expr (e : S.expr) : C.term =
+(* Remove redundant `( )` wrappers before matching, so the cubical desugar
+   patterns (`ua(equiv(..))`, `transport(ua(..),..)`) fire even when the user (or
+   a metonymic desugaring like `carry x along (f <=> g)`) parenthesised the
+   argument. EParen is purely syntactic grouping — dropping it is transparent,
+   and this runs after typechecking, so it only feeds lowering. Found via the
+   surface fuzzer: `carry N along (f <=> g)` reached codegen as a stuck `ua`. *)
+and strip_parens (e : S.expr) : S.expr =
+  match e with
+  | S.EParen (e', _) -> strip_parens e'
+  | S.ECall (n, args, l) -> S.ECall (n, List.map strip_parens args, l)
+  | S.EApp (f, args, l) -> S.EApp (strip_parens f, List.map strip_parens args, l)
+  | S.EBinop (op, a, b, l) -> S.EBinop (op, strip_parens a, strip_parens b, l)
+  | S.ERefl (a, l) -> S.ERefl (strip_parens a, l)
+  | S.EPathApp (p, i, l) -> S.EPathApp (strip_parens p, i, l)
+  | S.EPathAbs (i, b, l) -> S.EPathAbs (i, strip_parens b, l)
+  | S.EField (o, f, l) -> S.EField (strip_parens o, f, l)
+  | S.ELam (ps, b, l) -> S.ELam (ps, strip_parens b, l)
+  | S.EIfThenElse (c, t, el, l) ->
+      S.EIfThenElse (strip_parens c, strip_parens t, strip_parens el, l)
+  | _ -> e
+
+and desugar_expr (e0 : S.expr) : C.term =
+  let e = strip_parens e0 in
   match e with
   | S.ELit (lit, _) -> desugar_literal lit
   (* Bare `psh_id` (no call parens) is the polymorphic presheaf identity id_A:
@@ -1629,17 +1653,28 @@ let empty_result : desugar_result = {
 let desugar_place_decl (pd : S.place_decl) : C.place_decl =
   (* Convert surface place_decl to Core place_decl.
      Fields and operations are extracted from the unified members list. *)
+  (* A generic parameter T is a variable ranging over the universe: a field of
+     type T is `El(T)` for a STUCK universe code (a free type variable), which
+     the carrier functor gives the uniform Boxed layout. So we anchor it to the
+     universe rather than erasing it — `__tp_<T>` marks the stuck code that
+     el_target reads as Opaque -> Boxed (see carrier.ml). *)
+  let tparams = pd.S.pd_type_params in
+  let lower_ty (t : S.ty) : C.ty =
+    match t with
+    | S.TyUser n when List.mem n tparams -> C.TyEl (C.Var ("__tp_" ^ n))
+    | _ -> desugar_ty t
+  in
   let fields, ops = List.fold_right
     (fun fo (fs, os) ->
        match fo with
-       | S.FoField f -> ((f.S.fd_name, desugar_ty f.S.fd_ty) :: fs, os)
+       | S.FoField f -> ((f.S.fd_name, lower_ty f.S.fd_ty) :: fs, os)
        | S.FoOp o ->
            let op_sig = {
              C.op_name = o.S.op_name;
              C.op_algebra = o.S.op_algebra;
-             C.op_params = List.map (fun p -> (p.S.param_name, desugar_ty p.S.param_ty)) o.S.op_params;
+             C.op_params = List.map (fun p -> (p.S.param_name, lower_ty p.S.param_ty)) o.S.op_params;
              C.op_return = (match o.S.op_return with
-                            | Some t -> desugar_ty t
+                            | Some t -> lower_ty t
                             | None -> C.TyPlace "unit");
            } in
            (fs, op_sig :: os)
@@ -2654,6 +2689,7 @@ let place_info = List.filter_map (function
              ) vd.S.vw_items in
              let synth_place : S.place_decl = {
                S.pd_name = vd.S.vw_name;
+               pd_type_params = [];
                pd_world = world;
                pd_with_effects = false;
                pd_members = List.map (fun (f, ty, _) ->
