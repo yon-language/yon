@@ -626,12 +626,14 @@ struct LowerHeytNotOp : public OpConversionPattern<HeytNotOp> {
 
     Value T = rewriter.create<arith::ConstantOp>(loc, i8Type, rewriter.getIntegerAttr(i8Type, 0));
     Value F = rewriter.create<arith::ConstantOp>(loc, i8Type, rewriter.getIntegerAttr(i8Type, 1));
-    Value U = rewriter.create<arith::ConstantOp>(loc, i8Type, rewriter.getIntegerAttr(i8Type, 2));
 
     Value aIsT = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, a, T);
     Value aIsF = rewriter.create<arith::CmpIOp>(loc, arith::CmpIPredicate::eq, a, F);
 
-    Value innerBranch = rewriter.create<arith::SelectOp>(loc, aIsF, T, U);
+    // Regular Heyting negation neg a = a -> bot on the Gödel chain:
+    //   neg T = F, neg F = T, neg U = F  (NOT involutive).
+    // a = F -> T; otherwise (a = T or a = U) the non-F branch is F.
+    Value innerBranch = rewriter.create<arith::SelectOp>(loc, aIsF, T, F);
     Value result      = rewriter.create<arith::SelectOp>(loc, aIsT, F, innerBranch);
 
     rewriter.replaceOp(op, result);
@@ -642,10 +644,11 @@ struct LowerHeytNotOp : public OpConversionPattern<HeytNotOp> {
 //===----------------------------------------------------------------------===//
 // topos.heyt_implies -> arith truth table.
 //
-// Tri-valued implication a -> b under the encoding {T=0, F=1, U=2}:
+// Tri-valued implication a -> b, Gödel G3 Heyting residual, under the
+// encoding {T=0, F=1, U=2}:
 //   T -> T = T   T -> F = F   T -> U = U
 //   F -> _ = T  (ex falso quodlibet)
-//   U -> T = T   U -> F = U   U -> U = U
+//   U -> T = T   U -> F = F   U -> U = T   (a -> a = top, residuation)
 //
 // Lowered through the same TypeConverter that maps !topos.proposition
 // to i8, so the OpAdaptor operands arrive already as i8 values.
@@ -665,18 +668,17 @@ struct LowerHeytImpliesOp : public OpConversionPattern<HeytImpliesOp> {
         loc, i8Type, rewriter.getIntegerAttr(i8Type, 0));
     Value F = rewriter.create<arith::ConstantOp>(
         loc, i8Type, rewriter.getIntegerAttr(i8Type, 1));
-    Value U = rewriter.create<arith::ConstantOp>(
-        loc, i8Type, rewriter.getIntegerAttr(i8Type, 2));
 
     Value aIsT = rewriter.create<arith::CmpIOp>(
         loc, arith::CmpIPredicate::eq, a, T);
     Value aIsF = rewriter.create<arith::CmpIOp>(
         loc, arith::CmpIPredicate::eq, a, F);
-    Value bIsT = rewriter.create<arith::CmpIOp>(
-        loc, arith::CmpIPredicate::eq, b, T);
+    Value bIsF = rewriter.create<arith::CmpIOp>(
+        loc, arith::CmpIPredicate::eq, b, F);
 
-    // a = U branch: result = T if b = T else U.
-    Value uBranch = rewriter.create<arith::SelectOp>(loc, bIsT, T, U);
+    // a = U branch (Gödel residual): U -> b = F if b = F, else T
+    // (U -> U = T is reflexivity a -> a = top; U -> F = F by residuation).
+    Value uBranch = rewriter.create<arith::SelectOp>(loc, bIsF, F, T);
     // a = F branch: ex falso -> T (overrides U branch).
     Value notTBranch =
         rewriter.create<arith::SelectOp>(loc, aIsF, T, uBranch);

@@ -8,8 +8,9 @@ import React from 'react';
  * `unknown` propagate instead of crashing.
  *
  * Static teaching figure of the logic itself (min for `and`, max for `or`, the
- * order-reversal for `not`), the standard three-valued semantics Yon's Heyting
- * core computes. No measured run.
+ * pseudo-complement for `not`: neg a = a -> absent, so neg unknown = absent and
+ * double negation does not eliminate), the Gödel G3 Heyting semantics Yon's core
+ * computes. No measured run.
  */
 
 const C = {
@@ -60,7 +61,8 @@ export default function HeytingOmega() {
             ['unknown and absent', '= absent'],
             ['unknown or present', '= present'],
             ['unknown or absent', '= unknown'],
-            ['not unknown', '= unknown'],
+            ['not unknown', '= absent'],
+            ['not not unknown', '= present'],
           ].map(([lhs, rhs], k) => (
             <g key={k}>
               <text x={300} y={54 + k * 24} fill={C.sub}>{lhs}</text>
