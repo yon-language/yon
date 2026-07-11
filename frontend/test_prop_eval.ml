@@ -115,12 +115,13 @@ let () =
        (Prop_eval.make_ctx [] Place_visibility.global_visibility state_x id_reducer)
        (var "x") = HPresent);
 
-  (* ── 5. neg(unknown) = unknown (the intuitionistic point) ───────── *)
-  (* __heyt_not over an invisible name: h_not HUnknown = HUnknown
-   * (prop_eval.ml:281-282 + heyting.ml:88). Negating "I don't know"
-   * does not produce an assertion. *)
-  check "not(invisible) -> HUnknown (neg of unknown is unknown)"
-    (Prop_eval.eval_expr_at (ctx_blind_with_state state_x) (heyt_not (var "x")) = HUnknown);
+  (* ── 5. neg(unknown) = absent (Heyting G3: regular, not involutive) ─ *)
+  (* __heyt_not over an invisible name: h_not HUnknown = HAbsent, because
+   * negation is the pseudo-complement neg a = a -> absent (heyting.ml h_not,
+   * prop_eval.ml:281-282). This is the Gödel G3 negation, NOT the Kleene
+   * involutive one (which would keep unknown). Certified by test_heyting. *)
+  check "not(invisible) -> HAbsent (neg of unknown is absent, G3)"
+    (Prop_eval.eval_expr_at (ctx_blind_with_state state_x) (heyt_not (var "x")) = HAbsent);
   (* and neg flips known values, to show the not-arm is really wired *)
   check "not(true) -> HAbsent"
     (Prop_eval.eval_expr_at ctx_global (heyt_not (lit_bool true)) = HAbsent);
@@ -149,11 +150,11 @@ let () =
     (Prop_eval.eval_condition_at ctx_global
        (CondAnd (CondExpr (lit_bool true), CondExpr (lit_bool false))) = HAbsent);
   (* CondIsNot wraps eval_is_pattern in h_not; for an invisible expr the
-   * pattern test is HUnknown and h_not HUnknown = HUnknown
+   * pattern test is HUnknown and h_not HUnknown = HAbsent under Heyting G3
    * (prop_eval.ml:298-299, :312). *)
-  check "condition `x is not present` with invisible x -> HUnknown"
+  check "condition `x is not present` with invisible x -> HAbsent (G3)"
     (Prop_eval.eval_condition_at (ctx_blind_with_state state_x)
-       (CondIsNot (var "x", PatPresent)) = HUnknown);
+       (CondIsNot (var "x", PatPresent)) = HAbsent);
 
   (* ── 9. resolve_to_heyt: invisible -> HUnknown; literal -> HPresent *)
   check "resolve_to_heyt on invisible name -> HUnknown"

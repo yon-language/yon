@@ -14,12 +14,15 @@
  *   - meet (AND): pointwise minimum on the order absent < unknown < present
  *               but with absorbing absent and propagating unknown
  *   - join (OR): pointwise maximum, dual rules
- *   - neg (NOT): present -> absent, absent -> present, unknown -> unknown
- *   - imp (->): standard Heyting implication
+ *   - neg (NOT): present -> absent, absent -> present, unknown -> absent
+ *   - imp (->): the Gödel (G3) residual implication, a -> b = top iff a <= b
  *
- * Critically, neg(unknown) = unknown. This is what distinguishes
- * intuitionistic logic from classical logic: the negation of "I do
- * not know" is not an assertion of anything.
+ * Critically, negation is regular, not involutive: neg(unknown) = absent and
+ * neg neg(unknown) = present > unknown. The failure of double-negation
+ * elimination (neg neg a >= a, not = a) is what distinguishes this Heyting
+ * negation from the classical/De Morgan one. An involutive neg(unknown) =
+ * unknown with the material implication ¬a \/ b would be Kleene/Łukasiewicz,
+ * not the subobject-classifier Heyting algebra Yon's Omega is meant to be.
  *)
 
 (* ─── The three Heyting values ─────────────────────────────────────── *)
@@ -71,40 +74,53 @@ let h_or (a : heyt_value) (b : heyt_value) : heyt_value =
   | HAbsent, HAbsent -> HAbsent
   | _ -> HUnknown
 
-(* Heyting negation (NOTφ == φ -> ⊥):
+(* Heyting negation, neg φ := φ -> absent (the pseudo-complement into bottom).
+ * On the Gödel chain absent < unknown < present:
  *
- *   NOTpresent = absent
- *   NOTabsent  = present
- *   NOTunknown = unknown
+ *   neg present = absent
+ *   neg absent  = present
+ *   neg unknown = absent          (unknown -> absent = absent, by residuation)
  *
- * The last rule is the intuitionistic point: not-knowing is preserved
- * under negation, because we cannot transform a lack of evidence for
- * φ into evidence for NOTφ.
+ * neg unknown = absent, NOT unknown: in a Heyting algebra negation is regular,
+ * not involutive — neg neg unknown = neg absent = present > unknown. The
+ * failure of double-negation elimination (neg neg a >= a, not = a) is exactly
+ * what separates intuitionistic negation from the classical/De Morgan one. An
+ * involutive neg unknown = unknown would put us in Kleene/Łukasiewicz, not
+ * Heyting; this is the corrected, residual negation.
  *)
 let h_not (a : heyt_value) : heyt_value =
   match a with
   | HPresent -> HAbsent
   | HAbsent -> HPresent
-  | HUnknown -> HUnknown
+  | HUnknown -> HAbsent
 
-(* Heyting implication (φ -> psi):
+(* Heyting implication (φ -> psi) — the relative pseudo-complement, i.e. the
+ * residual of meet: a -> b = the greatest c such that a /\ c <= b. On the
+ * three-element chain absent < unknown < present this is the Gödel (G3)
+ * implication:
+ *
+ *   a -> b = present        if a <= b      (in particular a -> a = present)
+ *          = b              otherwise
  *
  *   ->      | present | absent  | unknown
  *   ───────┼─────────┼─────────┼────────
- *   present| present | absent  | unknown
- *   absent | present | present | present
- *   unknown| present | unknown | unknown
+ *   present| present | absent  | unknown      (present -> b = b)
+ *   absent | present | present | present      (absent <= everything: ex falso)
+ *   unknown| present | absent  | present      (<= present and = unknown; else b)
  *
- * The rule "absent -> anything = present" captures ex falso quodlibet:
- * if the antecedent is definitively false, the implication holds
- * vacuously.
+ * This is what makes the chain a genuine Heyting algebra. Note unknown ->
+ * unknown = present (reflexivity a -> a = top) and unknown -> absent = absent
+ * (residuation: the greatest c with unknown /\ c <= absent is absent). The
+ * earlier table implemented the material implication ¬a \/ b (Kleene K3),
+ * which fails a -> a = top at unknown; this is the corrected residual.
  *)
 let h_imp (a : heyt_value) (b : heyt_value) : heyt_value =
   match a, b with
-  | HAbsent, _ -> HPresent
-  | HPresent, x -> x
-  | HUnknown, HPresent -> HPresent
-  | HUnknown, _ -> HUnknown
+  | HAbsent, _ -> HPresent            (* absent <= b for every b: vacuous *)
+  | HPresent, x -> x                  (* present <= b iff b = present; else b *)
+  | HUnknown, HPresent -> HPresent    (* unknown <= present *)
+  | HUnknown, HUnknown -> HPresent    (* unknown <= unknown: a -> a = top *)
+  | HUnknown, HAbsent -> HAbsent      (* unknown !<= absent: result = b = absent *)
 
 (* ─── Ordering ─────────────────────────────────────────────────────── *)
 

@@ -154,19 +154,21 @@ struct CanonicalizeHeytNot : public OpRewritePattern<HeytNotOp> {
                                 PatternRewriter &rewriter) const override {
     Value operand = op.getOperand();
 
-    // Doppia negazione: NOT(NOT(x)) -> x
-    if (auto innerNot = operand.getDefiningOp<HeytNotOp>()) {
-      rewriter.replaceOp(op, innerNot.getOperand());
-      return success();
-    }
+    // NB: NO double-negation elimination here. In a Heyting algebra
+    // neg neg x >= x but neg neg x != x in general (e.g. neg neg unknown =
+    // present > unknown), so NOT(NOT(x)) -> x is UNSOUND. It was removed when
+    // the connectives were corrected from Kleene to the Gödel G3 Heyting
+    // algebra.
 
-    // Fold di costante: NOT(c).
+    // Fold di costante: NOT(c) = c -> bot (regular Heyting negation).
     if (auto c = matchHeytConstant(operand)) {
       HeytingValue result;
       switch (*c) {
       case HeytingValue::True:    result = HeytingValue::False;   break;
       case HeytingValue::False:   result = HeytingValue::True;    break;
-      case HeytingValue::Unknown: result = HeytingValue::Unknown; break;
+      // neg unknown = unknown -> bot = absent (False), NOT unknown: the
+      // negation is regular, not involutive.
+      case HeytingValue::Unknown: result = HeytingValue::False;   break;
       }
       rewriter.replaceOp(op, createHeytConst(rewriter, op.getLoc(), result));
       return success();
@@ -203,19 +205,20 @@ struct CanonicalizeHeytImplies : public OpRewritePattern<HeytImpliesOp> {
 
     if (lhsConst && rhsConst) {
       HeytingValue result;
-      // Tabella IMPLIES tri-valued (Heyting algebra):
+      // Tabella IMPLIES tri-valued (Gödel G3 Heyting residual):
+      //   a -> b = T  if a <= b (on absent < unknown < present), else b
       //   T -> T = T,  T -> F = F,  T -> U = U
       //   F -> ? = T  (ex falso)
-      //   U -> T = T,  U -> F = U,  U -> U = U
+      //   U -> T = T,  U -> U = T  (a -> a = top),  U -> F = F
       if (*lhsConst == HeytingValue::False)
         result = HeytingValue::True;
       else if (*rhsConst == HeytingValue::True)
         result = HeytingValue::True;
       else if (*lhsConst == HeytingValue::True)
         result = *rhsConst;
-      else { // lhs = U
-        if (*rhsConst == HeytingValue::True) result = HeytingValue::True;
-        else                                  result = HeytingValue::Unknown;
+      else { // lhs = U : U -> b = (b = F) ? F : T
+        if (*rhsConst == HeytingValue::False) result = HeytingValue::False;
+        else                                   result = HeytingValue::True;
       }
       rewriter.replaceOp(op, createHeytConst(rewriter, op.getLoc(), result));
       return success();

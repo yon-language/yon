@@ -753,7 +753,8 @@ def Topos_HeytOrOp : Topos_Op<"heyt_or", [Pure, Commutative]> {
 }
 
 // topos.heyt_not %a -> %result
-// Three-valued NOT. NOT(U) = U (fixed point).
+// Three-valued regular Heyting NOT (neg a = a -> bot): NOT(U) = F, NOT not
+// involutive (neg neg U = T). NOT a fixed point at U.
 def Topos_HeytNotOp : Topos_Op<"heyt_not", [Pure]> {
   let summary = "Heyting tri-valued NOT";
   let arguments = (ins Topos_PropositionType:$operand);
@@ -762,8 +763,8 @@ def Topos_HeytNotOp : Topos_Op<"heyt_not", [Pure]> {
 }
 
 // topos.heyt_implies %a, %b -> %result
-// IMPLIES Heyting: a -> b == NOT a OR b (definable as max(neg(a), b)
-// nell'encoding scelto, ma realizzato direttamente per chiarezza).
+// IMPLIES Heyting: the residual of meet (Gödel G3), a -> b = top iff a <= b,
+// else b. NOT the material ¬a \/ b: that would fail a -> a = top at unknown.
 def Topos_HeytImpliesOp : Topos_Op<"heyt_implies", [Pure]> {
   let summary = "Heyting tri-valued IMPLIES";
   let arguments = (ins
