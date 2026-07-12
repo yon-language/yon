@@ -75,6 +75,7 @@ Every keyword, alphabetically:
 [`import`](/book/keywords#import) ·
 [`in`](/book/keywords#in) ·
 [`ind_path`](/book/keywords#ind_path) ·
+[`induct`](/book/keywords#induct) ·
 [`internal`](/book/keywords#internal) ·
 [`invertible`](/book/keywords#invertible) ·
 [`is`](/book/keywords#is) ·
@@ -105,6 +106,7 @@ Every keyword, alphabetically:
 [`PathP`](/book/keywords#pathp) ·
 [`Pi`](/book/keywords#pi) ·
 [`place`](/book/keywords#place) ·
+[`plainly`](/book/keywords#plainly) ·
 [`plam`](/book/keywords#plam) ·
 [`present`](/book/keywords#present) ·
 [`produce`](/book/keywords#produce) ·
@@ -121,6 +123,7 @@ Every keyword, alphabetically:
 [`requires`](/book/keywords#requires) ·
 [`resolves`](/book/keywords#resolves) ·
 [`return`](/book/keywords#return) ·
+[`Same`](/book/keywords#same) ·
 [`scope`](/book/keywords#scope) ·
 [`sequence`](/book/keywords#sequence) ·
 [`share`](/book/keywords#share) ·

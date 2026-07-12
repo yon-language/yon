@@ -1039,6 +1039,14 @@ fun main(): number {
 
 The reflexivity path: the proof that a value equals itself. A path value lowers to its *erased witness*, operationally the endpoint value, so `refl(7)` binds and passes like any value. What it never does is decide path equality at runtime: that judgement belongs to the reducer alone.
 
+#### `Same`
+
+`Same(X, Y)` is the proposition that `X` and `Y` are the same value, sugar for `Id(A, X, Y)` with the carrier `A` inferred from the endpoints. It reads as a law of the domain — `Same(total(merge(a, b)), total(a) + total(b))` — without spelling out the carrier. The raw `Id(A, X, Y)`, carrier written, stays available in the lower stratum for when the endpoints do not determine it.
+
+#### `plainly`
+
+`plainly` is the proof that the two sides of a `Same` (or `Id`) return type are the same *by computation*, sugar for `refl` of the endpoint. It is checked, not asserted: if the two sides do not reduce to one value the compiler rejects it, the same gate as writing `refl` by hand. Valid only in return position, where the goal fixes which endpoint to reflect.
+
 #### `stay`
 
 `stay a` is the trivial path, the proof that `a` stays itself, sugar for `refl(a)`. The journey that goes nowhere; read off at either end, it is just `a`. Part of the *journey* vocabulary for paths (`stay`/`back`/`through`/`span`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
@@ -1066,6 +1074,10 @@ The second half of `carry x along e` (see `carry`): it names the bridge the valu
 #### `ind_path`
 
 The J eliminator, the one tool of path induction: to prove something about every path, prove it on `refl`. `ind_path(C, d, p)` computes `d(basepoint)` when the path is `refl` in evidence at the call site. A J stuck on a non-trivial path is rejected at compile time, loudly: the runtime never identifies `loop` with `refl`, so the circle stays a circle.
+
+#### `induct`
+
+`induct(d, p)` is path induction with the motive left implicit, sugar for `ind_path(0, d, p)`. It fires the same computation rule, `induct(d, refl(a)) = d(a)`, and carries the same operational boundary: a J stuck on a non-`refl` path is still rejected. The motive is omitted the way `match` omits the eliminator motive — Yon's eliminators compute, they do not carry a full dependent motive; the raw `ind_path(C, d, p)` stays available when you want to write it.
 
 #### `Type`
 

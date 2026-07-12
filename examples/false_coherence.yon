@@ -1,18 +1,19 @@
-// Geometric rejection test for definitional (delta) conversion.
+// Geometric rejection test for definitional (delta) conversion, sugar voice.
 //
 // f is the identity. g is NOT its inverse: it adds a constant distortion.
 // So g(f(a)) normalizes (via the SCT-certified delta-rules, to strong normal
 // form) to `a + 1.0`, which does NOT structurally unify with `a`.
-// refl(a) : Id(number, a, a) therefore cannot inhabit Id(number, g(f(a)), a),
-// and the type checker MUST reject this program at compile time.
+// `plainly` (refl of the endpoint) therefore cannot inhabit `Same(g(f(a)), a)`,
+// and the type checker MUST reject this program at compile time. The gate is
+// the same whether written `Same`/`plainly` or the raw `Id(...)` + `refl`.
 fun f(x: number): number { return x }
 
 // g is not the inverse of f — constant distortion.
 fun g(x: number): number { return x + 1.0 }
 
 // Passing off g(f(a)) === a must be rejected by the checker.
-fun violate_naturality(a: number): Id(number, g(f(a)), a) {
-  return refl(a)
+fun violate_naturality(a: number): Same(g(f(a)), a) {
+  return plainly
 }
 
 fun main(): number { return 0 }

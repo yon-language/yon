@@ -8,8 +8,10 @@ sidebar_position: 9
 
 Yon's type system has a homotopy-type-theoretic layer: universes (`Type`,
 `Type_0`, `Type_1`, …), dependent functions and pairs (`Pi(x: A). B`,
-`Sigma(x: A). B`), and the identity type `Id(A, x, y)` with its introduction
-and eliminator.
+`Sigma(x: A). B`), and the identity type — written `Same(X, Y)` at the surface,
+with the carrier inferred from the endpoints — with its introduction and
+eliminator. The explicit form `Id(A, x, y)`, carrier written out, stays
+available in the lower stratum for when the endpoints do not determine it.
 
 ```yon
 // Entry.yon, at the project root
@@ -23,12 +25,28 @@ fun main(): number {
 }
 ```
 
-`refl(t)` introduces a path; pairs are the Σ introduction with `fst`/`snd`
+`refl(t)` introduces a path; the proof that two sides are the same *by
+computation* is `plainly`, sugar for `refl` of the endpoint, gated exactly as
+`refl` written by hand. Pairs are the Σ introduction with `fst`/`snd`
 projections. The runnable path fragment is wider than that one witness, though:
 the *journey vocabulary* in the next section (`back`, `++`, `through`, `span`,
-`carry`, `<=>`, and the `match` eliminator) compiles and computes. The bare
-J eliminator `ind_path(C, d, p)` stays a proof-layer construct; `match` is the
-eliminator you actually run.
+`carry`, `<=>`, and the `match` eliminator) compiles and computes. Path
+induction is `induct(d, p)`; the bare J eliminator `ind_path(C, d, p)` stays a
+proof-layer construct in the lower stratum, and `match` is the eliminator you
+actually run.
+
+A proof reads the same way. `coherence` claims `f(a)` and `a` are the same, and
+`plainly` supplies the trivial reason — the compiler checks that the two sides
+really do reduce to one value before it accepts it:
+
+<!-- yon-gate: exit 0 -->
+```yon
+fun f(x: number): number { return x }
+fun coherence(a: number): Same(f(a), a) {   // Id(number, f(a), a), carrier inferred
+  return plainly                            // refl of the endpoint: f(a) computes to a
+}
+fun main(): number { return 0 }
+```
 
 ## Paths as journeys
 

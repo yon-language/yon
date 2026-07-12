@@ -180,6 +180,9 @@ let tok_name = function
   | Parser.PLUSPLUS -> "PLUSPLUS"
   | Parser.LRARROW -> "LRARROW"
   | Parser.MATCH_KW -> "MATCH_KW"
+  | Parser.SAME -> "SAME"
+  | Parser.PLAINLY -> "PLAINLY"
+  | Parser.INDUCT -> "INDUCT"
   | Parser.EOF -> "EOF"
 
 let () =
