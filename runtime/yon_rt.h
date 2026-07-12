@@ -488,23 +488,18 @@ int yon_rt_lookup_geom_morphism(const char *source_topos,
 
 /* ---- Backend selection (multi-process IPC scaffolding) ---- */
 
-/* In single-process mode all heap_ids share a single global yon_xheap_t
- * (the SHARED backend, default).
+/* Backends:
+ *   - SEPARATE : each heap_id has its own private yon_xheap_t (default).
+ *                Physically partitioned; same semantics for pure programs
+ *                (content-addressing per heap_id), blobs in distinct heaps. A
+ *                fork()ed spawn replica inherits a private COW copy, so no Space
+ *                heap is shared across processes; shm is reserved for the wire.
+ *   - SHM      : POSIX shared memory. Each heap_id is a separate shm region, so
+ *                a producer and a consumer in different processes can attach the
+ *                same Space heap.
  *
- * Alternative backends:
- *   - SEPARATE : each heap_id has its own yon_xheap_t. Single-process but
- *                physically partitioned. Same semantics for pure programs
- *                (content-addressing per heap_id), but blobs in distinct
- *                heaps. A precondition for SHM.
- *   - SHM      : POSIX shared memory. Each heap_id is a separate shm region.
- *                Multi-process: producer and consumer in different processes
- *                attach the same shm. [not yet implemented — a scaffolding
- *                placeholder]
- *
- * Backend selected via env var:
- *   YON_BACKEND=memory    (default SHARED)
- *   YON_BACKEND=separate  (SEPARATE)
- *   YON_BACKEND=shm       (SHM, future)
+ * Backend selected via env var YON_BACKEND: "shm" selects SHM; any other value
+ * (or unset) selects SEPARATE, the default.
  *
  * The exposed ABI stays the same: the caller does not know which backend is
  * active. Sections stay i64 packed (heap_id+xcoord), portable across
@@ -706,8 +701,11 @@ uint32_t yon_rt_xheap_used(void);
  *   - parent: the number of children that completed successfully (0..N)
  *   - child:  immediate exit after the call (does not return to Yon)
  *
- * Cross-process SHM: each child opens its own SHM and shares the registered
- * spaces. The CRDT fold accumulator is already cross-process. */
+ * Cross-process: each child is a fork() COW copy, so under the default
+ * L2_SEPARATE backend every Space heap is private to the replica — nothing is
+ * shared across processes except the wire (the promote/collect queue). Only
+ * under the opt-in L2_SHM backend are Space heaps (and hence a fold
+ * accumulator) backed by shared memory. */
 double yon_rt_spawn_self(double n_replicas);
 
 /* yon_rt_spawn_index(): returns the spawn_index of the current process (-1 if

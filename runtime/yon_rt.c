@@ -6,13 +6,17 @@
  * the table — it lives in the heap the pointer refers to, so the table is a
  * registry (name -> heap), not a data store.
  *
- * Backend (selected via YON_BACKEND, default shm):
- *   L2_SHM      — each Space heap is backed by a named POSIX shared-memory
- *                 segment "/yon_space_<NAME>": process-per-Space, no shared
- *                 address space (PostgreSQL-style). Falls back to a private
- *                 heap if the shm segment cannot be created.
+ * Backend (selected via YON_BACKEND, default separate):
  *   L2_SEPARATE — each Space gets its own private yon_xheap_t in-process
- *                 (test/debug).
+ *                 (default). A fork()ed spawn replica inherits a private COW
+ *                 copy, so no Space heap is shared across processes. shm is
+ *                 reserved for the wire (the cross-process channel), never for
+ *                 a Space heap.
+ *   L2_SHM      — opt-in (YON_BACKEND=shm): each Space heap is backed by a named
+ *                 POSIX shared-memory segment "/yon_space_<NAME>" so the heap
+ *                 itself is attachable from another process (PostgreSQL-style).
+ *                 Falls back to a private heap if the shm segment cannot be
+ *                 created.
  *
  * The ABI is identical across backends; only the heap backing differs.
  */
@@ -48,11 +52,13 @@
 
 #define YON_MAX_SPACES 64
 
-/* Backend mode (process-per-Space, PostgreSQL-style; no shared address space):
- *   L2_SHM      = POSIX shared memory, multi-process (default)
- *   L2_SEPARATE = one yon_xheap_t per heap_id, single-process (test/debug)
+/* Backend mode (process-per-Space; a Space heap is not a shared address space
+ * by default):
+ *   L2_SEPARATE = one private yon_xheap_t per heap_id (default); a fork()ed
+ *                 spawn replica gets its own COW copy
+ *   L2_SHM      = each Space heap backed by POSIX shared memory (opt-in)
  *
- * Selectable via the env var YON_BACKEND={shm,separate}; default shm. */
+ * Selectable via the env var YON_BACKEND={separate,shm}; default separate. */
 typedef enum {
     YON_BACKEND_L2_SEPARATE = 1,
     YON_BACKEND_L2_SHM      = 2
@@ -658,7 +664,11 @@ yon_section_t yon_rt_fold_named(uint32_t heap_id,
      * active accumulator, use it as prev to accumulate instead of creating a
      * new slot.
      *
-     * In L2_SHM/L2_SEPARATE the accumulator must be visible cross-process.
+     * The accumulator is process-local (g_spaces[id].accumulator). Under
+     * L2_SEPARATE (default) each process holds a private COW copy, so spawn
+     * replicas fold into their OWN accumulator — nothing is shared across
+     * processes. Only under L2_SHM does the slot=0 convention below back the
+     * accumulator with shared memory, making it visible cross-process.
      * Strategy: the first occupied slot of the xheap (slot=0) is the
      * convention "accumulator of the space-with-fold" in the L2 backend.
      *
