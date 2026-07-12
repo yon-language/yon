@@ -196,6 +196,20 @@
       (* View keywords *)
       "show", SHOW;
       "as", AS;
+
+      (* Id-proposition sugar (desugar to Id / refl; no new kernel semantics):
+         `Same(X, Y)` in type position is Id(A, X, Y) with A inferred from the
+         endpoints; `plainly` in a body is refl of the endpoint. Keyword-first
+         by grammar necessity (see parser.mly design note). *)
+      "Same", SAME;
+      "plainly", PLAINLY;
+      (* NOTE: no `first`/`second` keywords — they collide with pervasive
+         identifiers (the Generics chapter's `fun first<A,B>`, many examples).
+         The Sigma projections stay `fst`/`snd` at the surface. *)
+      (* `induct(d, p)` = path induction (ind_path) with the operational
+         placeholder motive, exactly as `match` omits the HIT motive. The raw
+         `ind_path(C, d, p)` stays live in the lower stratum. *)
+      "induct", INDUCT;
       
       (* Mapping clauses *)
       "maps", MAPS;

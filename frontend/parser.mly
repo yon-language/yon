@@ -2,7 +2,16 @@
  *
  * Follows the BNF specification of yon-language-spec-v0-3.md §5.
  * LL(1) with small lookahead. Menhir handles the lookahead automatically.
- */
+ *
+ * DESIGN NOTE — new syntax in TYPE position must be keyword-first.
+ *   `expr` and `type_expr` overlap (both admit `Foo`, `Foo(...)`, ...). Any
+ *   production that puts an `expr` at the START of a type (e.g. an infix
+ *   `X same as Y` with X an expression) makes expr-lists and type_expr-lists
+ *   indistinguishable in every comma context -> a fatal reduce/reduce conflict,
+ *   and Menhir refuses to generate the parser. A leading keyword + delimiters
+ *   (`Id(A,x,y)`, `Same(x,y)`, `El(c)`) lets the parser commit immediately and
+ *   avoids the clash. This is a property of the grammar, not of one feature:
+ *   design future type-level sugar keyword-first. */
 
 %{
   open Surface_ast
@@ -212,6 +221,8 @@
 %token PLUSPLUS          /* p ++ q = concat */
 %token LRARROW           /* f <=> g = equivalence */
 %token MATCH_KW          /* match x { ctor => .. } = hit_elim with synthesized motive */
+%token SAME PLAINLY      /* `Same(X, Y)` = Id(A,X,Y) (A inferred); `plainly` = refl(endpoint) */
+%token INDUCT            /* `induct(d, p)` = ind_path(0, d, p): J with the operational placeholder motive */
 /* heyt_int<N> type keyword. */
 %token HEYT_INT_KW
 %token <int> TYPE_LEVEL
@@ -823,6 +834,13 @@ type_atom:
     { TySigma (x, a, b) }
   | ID LPAREN a = type_expr COMMA x = expr COMMA y = expr RPAREN
     { TyId (a, TyTermExpr x, TyTermExpr y) }
+  (* `Same(X, Y)` = Id(A, X, Y), A inferred from the endpoints. Keyword-first
+     (see header design note): the leading SAME + parens commit the parser, so
+     no expr/type_expr clash. The carrier is a sentinel metavar resolved by
+     Tycheck.elaborate_id_sugar. Pure sugar: same kernel Id, same rejection on
+     a false equation. *)
+  | SAME LPAREN x = expr COMMA y = expr RPAREN
+    { TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y) }
   | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
     { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
   | EL LPAREN c = expr RPAREN
@@ -1400,6 +1418,11 @@ expr_atom:
     { ELit (LitHeytUnknown, mk_loc $startpos $endpos) }
   | REFL LPAREN e = expr RPAREN
     { ERefl (e, mk_loc $startpos $endpos) }
+  (* `plainly` = refl(endpoint): the proof that the two sides are the same by
+     computation. The endpoint is filled by Tycheck.elaborate_id_sugar from the
+     enclosing function's return-type Id; here it is a sentinel var. *)
+  | PLAINLY
+    { ERefl (EVar ("__plainly__", mk_loc $startpos $endpos), mk_loc $startpos $endpos) }
   (* ─── Metonymic surface sugar (journey metaphor) ─────────────────────
      Prefix forms binding an atom; pure desugar to the cubical primitives.
        stay a          = refl(a)
@@ -1421,6 +1444,11 @@ expr_atom:
     { EFst (e, mk_loc $startpos $endpos) }
   | SND LPAREN e = expr RPAREN
     { ESnd (e, mk_loc $startpos $endpos) }
+  (* `induct(d, p)` = path induction with the operational placeholder motive
+     (`match` omits the HIT motive the same way). Desugars to ind_path(0, d, p);
+     the raw `ind_path(C, d, p)` below stays available in the lower stratum. *)
+  | INDUCT LPAREN d = expr COMMA p = expr RPAREN
+    { let l = mk_loc $startpos $endpos in EJ (ELit (LitNumber 0.0, l), d, p, l) }
   | IND_PATH LPAREN c = expr COMMA d = expr COMMA p = expr RPAREN
     { EJ (c, d, p, mk_loc $startpos $endpos) }
   | QUOTE LPAREN c = IDENT COMMA a = expr RPAREN

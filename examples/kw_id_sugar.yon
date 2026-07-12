@@ -1,0 +1,7 @@
+// Coverage for the Id-proposition sugar. `Same(X, Y)` is `Id(A, X, Y)` with the
+// carrier A inferred from the endpoints; `plainly` is `refl` of that endpoint;
+// `induct(d, p)` is path induction `ind_path(0, d, p)` (operational motive).
+// The raw `Id` / `refl` / `ind_path` stay available in the lower stratum.
+fun beta_fst(a: number, b: number): Same(fst(pair(a, b)), a) { return plainly }
+fun diag(x: number): number { return x + 35 }
+fun main(): number { return induct(diag, refl(7)) }   // -> 42

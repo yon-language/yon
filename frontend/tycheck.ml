@@ -4508,9 +4508,72 @@ let infer_effects (env : Tyenv.env) (p : program) : Tyenv.env =
   in
   { env with Tyenv.funs = updated_funs }
 
+(* ─── Id-proposition sugar elaboration (Same / plainly) ──────────────────
+   Runs on the surface AST before check_program AND desugar, lowering the two
+   sugar sentinels into kernel Id / refl so nothing downstream must know they
+   existed:
+     - `Same(X, Y)` parses as TyId(TyMetaVar same_sentinel, X, Y): the sentinel
+       carrier is replaced by the INFERRED type of the left endpoint X (reusing
+       `infer`, since the dependent layer has no unification engine of its own).
+     - `plainly` parses as refl(__plainly__): the placeholder endpoint is
+       replaced by the left endpoint of the enclosing function's return-type Id.
+   The env for inference is built with the same prelude check_program uses, but
+   we map over the ORIGINAL program (preserving __INFER world markers for the
+   backend), touching only the two sentinels. Best-effort: on any inference
+   failure the node is left as-is and check_program reports the visible error. *)
+let same_sentinel = -424242
+
+let elaborate_id_sugar (p : program) : program =
+  let built =
+    match infer_place_worlds (Method_sugar.normalize_program p) with
+    | Error _ -> None
+    | Ok p1 ->
+      (match infer_fun_signatures p1 with
+       | Error _ -> None
+       | Ok p2 -> Some (Hm_infer.infer_program p2))
+  in
+  match built with
+  | None -> p
+  | Some p3 ->
+    let genv = List.fold_left register_decl (Tyenv.with_builtins Tyenv.empty) p3 in
+    let ctx = Reduce.empty_ctx in
+    let fix_plainly (ep : expr) (e : expr) : expr =
+      match e with
+      | ERefl (EVar ("__plainly__", _), l) -> ERefl (ep, l)
+      | _ -> e
+    in
+    let resolve_fun (fd : fun_decl) : fun_decl =
+      let lenv = List.fold_left
+          (fun e (pm : param) -> Tyenv.add_var e pm.param_name pm.param_ty)
+          genv fd.fn_params in
+      let fn_return, endpoint =
+        match fd.fn_return with
+        | Some (TyId (TyMetaVar s, (TyTermExpr x as tx), ty_r)) when s = same_sentinel ->
+            let carrier =
+              (match infer lenv ctx x with Ok t -> t | Error _ -> TyMetaVar s) in
+            (Some (TyId (carrier, tx, ty_r)), Some x)
+        | Some (TyId (_, TyTermExpr x, _)) -> (fd.fn_return, Some x)
+        | _ -> (fd.fn_return, None)
+      in
+      let fn_body =
+        match endpoint with
+        | None -> fd.fn_body
+        | Some ep ->
+            List.map (function
+              | SReturn (e, l) -> SReturn (fix_plainly ep e, l)
+              | SLet (n, e, l) -> SLet (n, fix_plainly ep e, l)
+              | s -> s) fd.fn_body
+      in
+      { fd with fn_return; fn_body }
+    in
+    List.map (function TopFun fd -> TopFun (resolve_fun fd) | d -> d) p
+
 let check_program (p : program) : check_result =
   (* Method-call sugar (`s.add(...)`) is normalized away before any checking.
      Idempotent, so it is also safe to run at the start of desugar_program. *)
+  (* Lower Same / plainly first so every check path (LSP, driver, project) sees
+     kernel Id / refl. Idempotent on already-lowered programs. *)
+  let p = elaborate_id_sugar p in
   let p = Method_sugar.normalize_program p in
   reset_scheme_env ();  (* let-poly schemes reset *)
   collect_wire_knowledge p;
