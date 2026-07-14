@@ -1491,11 +1491,12 @@ let test_heyting_or_table () =
 (* Test 72: Heyting NOT — the critical intuitionistic rule.
  *
  * In Boolean logic: NOTunknown would not exist (unknown isn't a value).
- * In Kleene logic: NOTunknown = unknown.
- * In Heyting (intuitionistic): NOTunknown = unknown.
+ * In Kleene logic: NOTunknown = unknown (involutive negation).
+ * In Heyting / Godel G3: NOTunknown = absent (regular, non-involutive).
  *
- * The point: NOTunknown is NOT present. We cannot derive a positive
- * assertion from a lack of evidence. *)
+ * The point: NOTunknown is neither present nor unknown. We cannot derive a
+ * positive assertion from a lack of evidence, and G3 negation collapses the
+ * middle value to the bottom. *)
 let test_heyting_not () =
   Printf.printf "\n=== Test 72: Heyting NOT — intuitionistic semantics ===\n";
   let open Heyting in
@@ -1504,12 +1505,12 @@ let test_heyting_not () =
   let u = h_not HUnknown in
   Printf.printf "  NOTpresent = absent: %b\n" (p = HAbsent);
   Printf.printf "  NOTabsent = present: %b\n" (a = HPresent);
-  Printf.printf "  NOTunknown = unknown (NOT present): %b\n" (u = HUnknown);
+  Printf.printf "  NOTunknown = absent (G3, not Kleene): %b\n" (u = HAbsent);
   Printf.printf "  Excluded middle: present OR NOTpresent = present: %b\n"
     (h_or HPresent (h_not HPresent) = HPresent);
   Printf.printf "  Excluded middle FAILS at unknown: unknown OR NOTunknown = unknown: %b\n"
     (h_or HUnknown (h_not HUnknown) = HUnknown);
-  if p = HAbsent && a = HPresent && u = HUnknown
+  if p = HAbsent && a = HPresent && u = HAbsent
      && (h_or HUnknown (h_not HUnknown) = HUnknown)
   then (Printf.printf "Status: PASS\n"; true)
   else (Printf.printf "Status: FAIL\n"; false)
@@ -1526,8 +1527,8 @@ let test_heyting_imp () =
     (HAbsent,  HAbsent,  HPresent, "absent -> absent (ex falso)");
     (HAbsent,  HUnknown, HPresent, "absent -> unknown (ex falso)");
     (HUnknown, HPresent, HPresent, "unknown -> present");
-    (HUnknown, HAbsent,  HUnknown, "unknown -> absent");
-    (HUnknown, HUnknown, HUnknown, "unknown -> unknown");
+    (HUnknown, HAbsent,  HAbsent,  "unknown -> absent");
+    (HUnknown, HUnknown, HPresent, "unknown -> unknown");
   ] in
   let passed = List.for_all (fun (a, b, expected, label) ->
     let got = h_imp a b in
@@ -1569,13 +1570,13 @@ let test_heyting_kernel_reduction () =
   let t2 = App (App (Var "__heyt_or", p), u) in
   let r2 = Builtins.reduce_with_builtins ctx t2 in
   let ok2 = Heyting.decode_heyt r2 = Some Heyting.HPresent in
-  (* NOTu should reduce to u. *)
+  (* NOTu should reduce to absent (Godel G3: not-unknown = absent). *)
   let t3 = App (Var "__heyt_not", u) in
   let r3 = Builtins.reduce_with_builtins ctx t3 in
-  let ok3 = Heyting.decode_heyt r3 = Some Heyting.HUnknown in
+  let ok3 = Heyting.decode_heyt r3 = Some Heyting.HAbsent in
   Printf.printf "  p AND a = absent (via kernel): %b\n" ok1;
   Printf.printf "  p OR u = present (via kernel): %b\n" ok2;
-  Printf.printf "  NOTu = unknown (via kernel): %b\n" ok3;
+  Printf.printf "  NOTu = absent (via kernel): %b\n" ok3;
   if ok1 && ok2 && ok3 then
     (Printf.printf "Status: PASS\n"; true)
   else
@@ -3894,5 +3895,7 @@ let () =
   Printf.printf "Summary: %d/%d tests passed\n" passed total;
   if passed = total then
     print_endline "All tests pass. The prototype is operational."
-  else
-    print_endline "Some tests failed — see above for details."
+  else begin
+    print_endline "Some tests failed — see above for details.";
+    exit 1   (* propagate failure: the self-test suite must be able to fail a build *)
+  end
