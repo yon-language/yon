@@ -30,8 +30,9 @@ SEEDS = ["20260701", "1", "42"]
 CASES = "4000"
 
 
+@pytest.mark.stretchable
 @pytest.mark.skipif(not (FRONTEND / "dune").exists(), reason="frontend not present")
-def test_surface_fuzz_no_crashes():
+def test_surface_fuzz_no_crashes(stretch):
     try:
         subprocess.run(["dune", "build", "./test_surface_fuzz.exe"],
                        cwd=FRONTEND, capture_output=True, timeout=600)
@@ -39,8 +40,11 @@ def test_surface_fuzz_no_crashes():
         pass
     if not EXE.exists():
         pytest.skip("exe not built (cd frontend && dune build ./test_surface_fuzz.exe)")
+    cases = str(max(1, int(int(CASES) * stretch)))
+    per_seed_timeout = int(300 * max(1.0, stretch))
     for seed in SEEDS:
-        r = subprocess.run([str(EXE), seed, CASES], capture_output=True, text=True, timeout=300)
+        r = subprocess.run([str(EXE), seed, cases],
+                           capture_output=True, text=True, timeout=per_seed_timeout)
         assert r.returncode == 0, (
             f"surface fuzzer found a frontend crash (seed {seed}):\n{r.stdout}\n{r.stderr[-400:]}")
         assert "BUGS=0" in r.stdout, f"surface fuzzer found a crash (seed {seed}):\n{r.stdout}"

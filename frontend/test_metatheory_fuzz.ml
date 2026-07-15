@@ -134,21 +134,24 @@ let () =
    * deterministic gate reproducible. *)
   let seed  = if Array.length Sys.argv > 1 then int_of_string Sys.argv.(1) else 20260701 in
   let depth = if Array.length Sys.argv > 2 then int_of_string Sys.argv.(2) else 4 in
+  (* argv[3] = stretch scale (default 1): multiplies the iteration counts for a
+     --stretch nightly sweep; the deterministic gate stays at scale 1. *)
+  let scale = if Array.length Sys.argv > 3 then max 1 (int_of_string Sys.argv.(3)) else 1 in
   Random.init seed;
   diag ();
-  for _ = 1 to n_core do
+  for _ = 1 to n_core * scale do
     match classify (gen_core depth) with
     | Value _ -> incr cv
     | Stuck nf -> incr cs; add core_wit (show_head nf)
     | Timeout _ -> incr ct
   done;
-  for _ = 1 to n_cub do
+  for _ = 1 to n_cub * scale do
     match classify (gen_cubical depth) with
     | Value _ -> incr uv
     | Stuck nf -> incr us; add cub_wit (show_head nf)
     | Timeout _ -> incr ut
   done;
-  for _ = 1 to n_conf do
+  for _ = 1 to n_conf * scale do
     let t = gen_core depth in
     let a = nf_of (classify t) and b = nf_of (classify (alpha_bump t)) in
     if term_equal_env [] a b then incr confok else incr confbad
