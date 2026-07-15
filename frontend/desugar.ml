@@ -74,6 +74,13 @@ let current_env : Tyenv.env option ref = ref None
    ctor name -> (tag index in its type, argument types). Rebuilt per program by
    [build_sum_registry] from every sum-type annotation in scope. *)
 let sum_ctor_registry : (string, int * S.ty list) Hashtbl.t = Hashtbl.create 32
+(* The NAMES of the named inductive types (`inductive Tree = ...`). Their runtime
+   carrier is a MerkleTree handle, so desugar_ty lowers `TyUser Tree` to the
+   concrete MerkleTree carrier rather than a `Section "Tree"` that emit's
+   monomorphizer would mistake for a generic type parameter (which then cannot be
+   resolved when the type appears only in a function's RETURN, as in the lexer's
+   `emit_at(..): TokList`). *)
+let inductive_type_names : (string, unit) Hashtbl.t = Hashtbl.create 32
 let sum_scrut_counter = ref 0
 let fresh_sum_scrut () =
   incr sum_scrut_counter; Printf.sprintf "__sum_scrut_%d" !sum_scrut_counter
@@ -97,11 +104,14 @@ let rec collect_sums_in_ty (t : S.ty) : unit =
 
 let build_sum_registry (p : S.program) : unit =
   Hashtbl.clear sum_ctor_registry;
+  Hashtbl.clear inductive_type_names;
   sum_scrut_counter := 0;
   let scan_param (pm : S.param) = collect_sums_in_ty pm.S.param_ty in
   List.iter (function
-    | S.TopType (_name, variants, _) ->
-        (* a named sum registers its constructors exactly like an inline one *)
+    | S.TopType (name, variants, _) ->
+        (* a named sum registers its constructors exactly like an inline one,
+           plus its NAME (so desugar_ty lowers it to the MerkleTree carrier) *)
+        Hashtbl.replace inductive_type_names name ();
         collect_sums_in_ty (S.TySum variants)
     | S.TopFun fd ->
         List.iter scan_param fd.S.fn_params;
@@ -233,6 +243,14 @@ let rec desugar_ty (t : S.ty) : C.ty =
   | S.TyList inner -> C.TyPlace ("list_of_" ^ ty_name inner)
   | S.TyMap (_, _) -> C.TyPlace "map"
   | S.TyStream inner -> C.TyStream (desugar_ty inner)
+  | S.TyUser n when Hashtbl.mem inductive_type_names n ->
+      (* a named inductive is carried at runtime as a MerkleTree handle, an f64.
+         Lower it to the concrete `number` carrier (Scalar f64), NOT a
+         `Section "n"`: a section name is read back by emit's monomorphizer as a
+         generic type parameter (is_type_var), which then cannot be resolved when
+         the type appears only in a RETURN position (the lexer's emit_at). The
+         erased carrier is exactly f64, so `number` is the honest concrete type. *)
+      C.TyPlace "number"
   | S.TyUser n -> C.TyPlace n
   | S.TyApp (n, _) -> C.TyPlace n   (* type args don't affect the uniform runtime carrier *)
   | S.TyVar n -> C.TyPlace n   (* type vars compile to opaque place at IR level *)
@@ -1067,24 +1085,27 @@ and encode_sum_arg (arg : S.expr) (arg_ty : S.ty) (loc : S.location) : S.expr =
   | S.TySum _ | S.TySumIn _ | S.TyUser _ -> arg
   | _ -> S.ECall ("MerkleTree__leaf", [arg], loc)
 
-(* hit(Ctor, args) for a custom sum -> node_k(tag, child0, .., child_{k-1}).
-   A nullary constructor is a bare leaf(tag); arities 1..4 map onto node2/3/4
-   (arity 1 pads the second child with leaf(0)). Built as the same surface
-   MerkleTree calls the self-host writes by hand, then desugared. *)
+(* hit(Ctor, args) for a custom sum -> a right-nested spine of node2/leaf.
+   Using ONLY node2/leaf (never node3/node4, whose runtime child access is
+   unreliable) both fixes arity >= 3 and lifts the arity cap entirely:
+     k = 0 -> leaf(tag)
+     k >= 1 -> node2(tag, e0, node2(0, e1, .. node2(0, e_{k-1}, leaf(0)) ..))
+   The tag is the outer node's label; payload j sits at `child((child _ 1)^j, 0)`
+   (see lower_sum_elim). Built as surface MerkleTree calls, then desugared. *)
 and lower_sum_constr (tag : int) (arg_tys : S.ty list)
     (args : S.expr list) (loc : S.location) : C.term =
   let num n = S.ELit (S.LitNumber (float_of_int n), loc) in
-  let zero = S.ECall ("MerkleTree__leaf", [num 0], loc) in
+  let leaf e = S.ECall ("MerkleTree__leaf", [e], loc) in
+  let node2 t a b = S.ECall ("MerkleTree__node2", [t; a; b], loc) in
   let cs = List.map2 (fun a t -> encode_sum_arg a t loc) args arg_tys in
+  let rec spine = function
+    | [] -> leaf (num 0)
+    | e :: rest -> node2 (num 0) e (spine rest)
+  in
   let node =
     match cs with
-    | [] -> S.ECall ("MerkleTree__leaf", [num tag], loc)
-    | [c0] -> S.ECall ("MerkleTree__node2", [num tag; c0; zero], loc)
-    | [c0; c1] -> S.ECall ("MerkleTree__node2", [num tag; c0; c1], loc)
-    | [c0; c1; c2] -> S.ECall ("MerkleTree__node3", [num tag; c0; c1; c2], loc)
-    | [c0; c1; c2; c3] ->
-        S.ECall ("MerkleTree__node4", [num tag; c0; c1; c2; c3], loc)
-    | _ -> failwith "native sum lowering: constructor arity > 4 is not yet supported"
+    | [] -> leaf (num tag)
+    | e0 :: rest -> node2 (num tag) e0 (spine rest)
   in
   desugar_expr node
 
@@ -1101,6 +1122,10 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
   let sref = S.EVar (sv, loc) in
   let label e = S.ECall ("MerkleTree__label", [e], loc) in
   let child e j = S.ECall ("MerkleTree__child", [e; num j], loc) in
+  (* Payload j lives at the head of the j-th spine cell: descend `child(_,1)` j
+     times from the scrutinee, then take `child(_,0)`. Matches lower_sum_constr. *)
+  let rec tail j = if j <= 0 then sref else child (tail (j - 1)) 1 in
+  let payload_node j = child (tail j) 0 in
   let branch_body (ctor, vars, body) =
     let arg_tys =
       match Hashtbl.find_opt sum_ctor_registry ctor with
@@ -1113,15 +1138,25 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
         let vty = try List.nth arg_tys j with _ -> S.TyPrim "number" in
         let proj =
           match vty with
-          | S.TySum _ | S.TySumIn _ | S.TyUser _ -> child sref j
-          | _ -> label (child sref j)
+          | S.TySum _ | S.TySumIn _ | S.TyUser _ -> payload_node j
+          | _ -> label (payload_node j)
         in
         (j + 1, C.App (C.Lam (v, C.TyPlace "number", acc), desugar_expr proj)))
       (0, body_c) vars)
   in
+  (* A `_` branch is the catch-all: it becomes the final else, and EVERY explicit
+     constructor gets its own tag test. Without a wildcard the match is exhaustive,
+     so the last explicit branch is taken unconditionally (as before). *)
+  let explicit = List.filter (fun (c, _, _) -> c <> "_") branches in
+  let wildcard = List.find_opt (fun (c, _, _) -> c = "_") branches in
+  let default_body =
+    match wildcard with
+    | Some b -> branch_body b
+    | None -> desugar_expr (num 0)   (* unreachable: exhaustive match, no wildcard *)
+  in
   let rec chain = function
-    | [] -> desugar_expr (num 0)     (* an exhaustive match never reaches here *)
-    | [last] -> branch_body last     (* the remaining constructor: unconditional *)
+    | [] -> default_body
+    | [last] when wildcard = None -> branch_body last
     | (ctor, _, _ as b) :: rest ->
         let tag =
           match Hashtbl.find_opt sum_ctor_registry ctor with
@@ -1132,7 +1167,7 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
         curry_apply (C.Var "__if_expr")
           [desugar_expr cond; branch_body b; chain rest]
   in
-  C.App (C.Lam (sv, C.TyPlace "number", chain branches), desugar_expr scrut)
+  C.App (C.Lam (sv, C.TyPlace "number", chain explicit), desugar_expr scrut)
 
 and desugar_literal (l : S.literal) : C.term =
   match l with
