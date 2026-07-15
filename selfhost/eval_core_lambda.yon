@@ -1,0 +1,59 @@
+// Self-host Stage 1, incremento 2: shift / subst / beta / eval del lambda-nucleo
+// (de Bruijn), scritto in Yon. Forma wildcard: shift/subst restano esaustivi (ogni
+// costruttore ricorre in modo distinto), ma i rami-stuck di eval e i rami-zero di
+// as_num sono un solo `_ =>`. Oracolo: (lam.0) 42 = 42, Fst((lam.0) Pair(20,22)) = 20.
+inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
+               | TPair(Term, Term) | TFst(Term) | TSnd(Term)
+
+fun motT(t: Term): Term { return hit(TLit, 0) }
+
+fun shift(d: number, c: number, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
+      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
+      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
+      TPair(a, b) => hit(TPair, shift(d, c, a), shift(d, c, b)),
+      TFst(p)     => hit(TFst, shift(d, c, p)),
+      TSnd(p)     => hit(TSnd, shift(d, c, p)) ], t)
+}
+
+fun subst(j: number, s: Term, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i == j then s else hit(TVar, i),
+      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
+      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
+      TPair(a, b) => hit(TPair, subst(j, s, a), subst(j, s, b)),
+      TFst(p)     => hit(TFst, subst(j, s, p)),
+      TSnd(p)     => hit(TSnd, subst(j, s, p)) ], t)
+}
+
+fun beta(body: Term, arg: Term): Term {
+  return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
+}
+
+fun eval(t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => hit(TVar, i),
+      TLam(b)     => hit(TLam, b),
+      TApp(f, x)  => hit_elim(motT,
+                       [ TLam(b) => eval(beta(b, eval(x))),
+                         _       => hit(TApp, eval(f), eval(x)) ], eval(f)),
+      TPair(a, b) => hit(TPair, eval(a), eval(b)),
+      TFst(p)     => hit_elim(motT, [ TPair(a, b) => eval(a), _ => hit(TFst, eval(p)) ], eval(p)),
+      TSnd(p)     => hit_elim(motT, [ TPair(a, b) => eval(b), _ => hit(TSnd, eval(p)) ], eval(p)) ], t)
+}
+
+fun motN(t: Term): number { return 0 }
+fun as_num(t: Term): number {
+  return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
+}
+
+fun main(): number {
+  be id_lit   holds eval(hit(TApp, hit(TLam, hit(TVar, 0)), hit(TLit, 42)))
+  be fst_beta holds eval(hit(TFst, hit(TApp, hit(TLam, hit(TVar, 0)),
+                                       hit(TPair, hit(TLit, 20), hit(TLit, 22)))))
+  return (as_num(id_lit) - 42) + (as_num(fst_beta) - 20)
+}

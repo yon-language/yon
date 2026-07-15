@@ -1,0 +1,68 @@
+// Self-host, convergenza: un solo Term, un solo eval (lambda de Bruijn + aritmetica).
+// Forma wildcard: add_vals/mul_vals calcolano solo su due TLit, tutto il resto e' un
+// solo `_ => stuck`; shift/subst restano esaustivi. Oracolo: (lam. x+x) 21 = 42.
+inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
+               | TAdd(Term, Term) | TMul(Term, Term)
+
+fun motT(t: Term): Term { return hit(TLit, 0) }
+
+fun shift(d: number, c: number, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
+      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
+      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
+      TAdd(a, b)  => hit(TAdd, shift(d, c, a), shift(d, c, b)),
+      TMul(a, b)  => hit(TMul, shift(d, c, a), shift(d, c, b)) ], t)
+}
+fun subst(j: number, s: Term, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i == j then s else hit(TVar, i),
+      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
+      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
+      TAdd(a, b)  => hit(TAdd, subst(j, s, a), subst(j, s, b)),
+      TMul(a, b)  => hit(TMul, subst(j, s, a), subst(j, s, b)) ], t)
+}
+fun beta(body: Term, arg: Term): Term {
+  return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
+}
+
+// somma di due valori GIA' valutati: calcola su due TLit, altrimenti stuck
+fun add_vals(x: Term, y: Term): Term {
+  return hit_elim(motT,
+    [ TLit(nx) => hit_elim(motT,
+        [ TLit(ny) => hit(TLit, nx + ny), _ => hit(TAdd, hit(TLit, nx), y) ], y),
+      _ => hit(TAdd, x, y) ], x)
+}
+fun mul_vals(x: Term, y: Term): Term {
+  return hit_elim(motT,
+    [ TLit(nx) => hit_elim(motT,
+        [ TLit(ny) => hit(TLit, nx * ny), _ => hit(TMul, hit(TLit, nx), y) ], y),
+      _ => hit(TMul, x, y) ], x)
+}
+
+fun eval(t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => hit(TVar, i),
+      TLam(b)     => hit(TLam, b),
+      TApp(f, x)  => hit_elim(motT,
+                       [ TLam(b) => eval(beta(b, eval(x))),
+                         _       => hit(TApp, eval(f), eval(x)) ], eval(f)),
+      TAdd(a, b)  => add_vals(eval(a), eval(b)),
+      TMul(a, b)  => mul_vals(eval(a), eval(b)) ], t)
+}
+
+fun motN(t: Term): number { return 0 }
+fun as_num(t: Term): number {
+  return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
+}
+
+// ORACOLO: (lam. var0 + var0) 21  ->  21 + 21  ->  42
+fun main(): number {
+  be r holds eval(hit(TApp,
+                      hit(TLam, hit(TAdd, hit(TVar, 0), hit(TVar, 0))),
+                      hit(TLit, 21)))
+  return as_num(r) - 42
+}

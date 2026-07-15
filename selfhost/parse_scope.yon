@@ -1,0 +1,191 @@
+// Self-host, ultimo anello: parser CON SCOPE, chiude testo -> Term -> valore.
+// Estende il parser aritmetico a produrre il Term unificato (non Expr) e aggiunge
+// i binder: il parser porta un ambiente nome->indice, converte i nomi di superficie
+// in indici de Bruijn. lambda = '\' (codice 92, fork di sintassi scelto qui).
+// Oracolo: il testo "\aa+a" -> TLam(TAdd(TVar 0, TVar 0)), applicato a 21 -> 42.
+
+// ── lexer esteso: + nomi (a..z) e '=' e il token lambda ──────────────────────
+inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
+                  | TName(number) | TEq | TLamTok
+inductive TokList = TkNil | TkCons(Token, TokList)
+
+// controlli esatti e c>=97 (nomi) PRIMA di c>=48 (cifre), o '='/lettere diventano cifre
+fun emit_at(s: String, i: number, len: number, c: number): TokList {
+  return if c == 32 then lex_from(s, i + 1, len)
+    else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
+    else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
+    else if c == 40 then hit(TkCons, hit(TLParen), lex_from(s, i + 1, len))
+    else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
+    else if c == 61 then hit(TkCons, hit(TEq),      lex_from(s, i + 1, len))
+    else if c == 92 then hit(TkCons, hit(TLamTok),  lex_from(s, i + 1, len))
+    else if c >= 97 then hit(TkCons, hit(TName, c - 97), lex_from(s, i + 1, len))
+    else if c >= 48 then hit(TkCons, hit(TNum, c - 48),  lex_from(s, i + 1, len))
+    else lex_from(s, i + 1, len)
+}
+fun lex_from(s: String, i: number, len: number): TokList {
+  return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
+    else emit_at(s, i, len, String.char_at(s, i))
+}
+fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
+
+// ── Term unificato + eval (dal brief #6) ────────────────────────────────────
+inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
+               | TAdd(Term, Term) | TMul(Term, Term)
+fun motT(t: Term): Term { return hit(TLit, 0) }
+
+fun shift(d: number, c: number, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
+      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
+      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
+      TAdd(a, b)  => hit(TAdd, shift(d, c, a), shift(d, c, b)),
+      TMul(a, b)  => hit(TMul, shift(d, c, a), shift(d, c, b)) ], t)
+}
+fun subst(j: number, s: Term, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i == j then s else hit(TVar, i),
+      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
+      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
+      TAdd(a, b)  => hit(TAdd, subst(j, s, a), subst(j, s, b)),
+      TMul(a, b)  => hit(TMul, subst(j, s, a), subst(j, s, b)) ], t)
+}
+fun beta(body: Term, arg: Term): Term {
+  return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
+}
+fun add_vals(x: Term, y: Term): Term {
+  return hit_elim(motT,
+    [ TLit(nx) => hit_elim(motT,
+        [ TLit(ny) => hit(TLit, nx + ny), _ => hit(TAdd, hit(TLit, nx), y) ], y),
+      _ => hit(TAdd, x, y) ], x)
+}
+fun mul_vals(x: Term, y: Term): Term {
+  return hit_elim(motT,
+    [ TLit(nx) => hit_elim(motT,
+        [ TLit(ny) => hit(TLit, nx * ny), _ => hit(TMul, hit(TLit, nx), y) ], y),
+      _ => hit(TMul, x, y) ], x)
+}
+fun eval(t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => hit(TVar, i),
+      TLam(b)     => hit(TLam, b),
+      TApp(f, x)  => hit_elim(motT,
+                       [ TLam(b) => eval(beta(b, eval(x))),
+                         _       => hit(TApp, eval(f), eval(x)) ], eval(f)),
+      TAdd(a, b)  => add_vals(eval(a), eval(b)),
+      TMul(a, b)  => mul_vals(eval(a), eval(b)) ], t)
+}
+
+// ── peek tag-based sulla TokList (tag: Num0 Plus1 Star2 LP3 RP4 End5 Name6 Eq7 Lam8) ──
+fun motTn(t: Token): number { return 0 }
+fun tok_tag(t: Token): number {
+  return hit_elim(motTn,
+    [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5,
+      TName(n)=>6, TEq=>7, TLamTok=>8 ], t)
+}
+fun tok_num(t: Token): number {
+  return hit_elim(motTn,
+    [ TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0,
+      TName(n)=>n, TEq=>0, TLamTok=>0 ], t)
+}
+fun motLn(l: TokList): number { return 0 }
+fun head_tag(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
+}
+fun head_num(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
+}
+fun motLl(l: TokList): TokList { return hit(TkNil) }
+fun tail(l: TokList): TokList {
+  return hit_elim(motLl, [ TkNil => hit(TkNil), TkCons(h, t) => t ], l)
+}
+
+// ── ambiente dei nomi -> indice de Bruijn ───────────────────────────────────
+inductive NameEnv = NEnvNil | NEnvCons(number, NameEnv)
+fun bump(k: number): number { return if k >= 0 then k + 1 else 0 - 1 }
+fun motNEn(e: NameEnv): number { return 0 }
+fun lookup(name: number, env: NameEnv): number {
+  return hit_elim(motNEn,
+    [ NEnvNil => 0 - 1,
+      NEnvCons(h, rest) => if h == name then 0 else bump(lookup(name, rest)) ], env)
+}
+
+// ── parser con ambiente, produce Term ───────────────────────────────────────
+inductive Parse = POk(Term, TokList) | PErr
+fun motP(p: Parse): Parse { return hit(PErr) }
+
+// factor := NUM | NAME | '(' expr ')'
+fun parse_factor(l: TokList, env: NameEnv): Parse {
+  return if head_tag(l) == 0 then hit(POk, hit(TLit, head_num(l)), tail(l))
+    else if head_tag(l) == 6 then hit(POk, hit(TVar, lookup(head_num(l), env)), tail(l))
+    else if head_tag(l) == 3 then close_paren(parse_expr(tail(l), env))
+    else hit(PErr)
+}
+fun close_paren(p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(e, rest) => if head_tag(rest) == 4 then hit(POk, e, tail(rest)) else hit(PErr) ], p)
+}
+fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
+fun term_more(p: Parse, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) => if head_tag(rest) == 2
+                           then combine(2, left, parse_term(tail(rest), env))
+                           else hit(POk, left, rest) ], p)
+}
+fun parse_expr(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, env), env) }
+fun expr_more(p: Parse, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) => if head_tag(rest) == 1
+                           then combine(1, left, parse_expr(tail(rest), env))
+                           else hit(POk, left, rest) ], p)
+}
+fun combine(op: number, left: Term, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(right, rest) =>
+        hit(POk, if op == 1 then hit(TAdd, left, right) else hit(TMul, left, right), rest) ], p)
+}
+
+// il binder: '\' name body -> TLam(body') con name in testa all'ambiente
+fun parse_lam(l: TokList, env: NameEnv): Parse {
+  return if head_tag(l) == 8
+    then bind_name(head_num(tail(l)), tail(tail(l)), env)
+    else parse_expr(l, env)
+}
+fun bind_name(name: number, rest: TokList, env: NameEnv): Parse {
+  return wrap_lam(parse_expr(rest, hit(NEnvCons, name, env)))
+}
+fun wrap_lam(p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(body, rest) => hit(POk, hit(TLam, body), rest) ], p)
+}
+
+// ── estrazione + oracolo ────────────────────────────────────────────────────
+fun motN(t: Term): number { return 0 }
+fun as_num(t: Term): number {
+  return hit_elim(motN, [ TLit(n)=>n, TVar(i)=>i, _=>0 ], t)
+}
+fun motPt(p: Parse): Term { return hit(TLit, 0 - 1) }
+fun term_of(p: Parse): Term {
+  return hit_elim(motPt, [ PErr => hit(TLit, 0 - 1), POk(e, rest) => e ], p)
+}
+
+// sorgente "\aa+a" = codici 92 97 97 43 97  (lambda, nome a, corpo a+a)
+fun src(): String {
+  return String.concat(
+           String.concat(String.from_char(92), String.from_char(97)),
+           String.concat(String.concat(String.from_char(97), String.from_char(43)),
+                         String.from_char(97)))
+}
+
+fun main(): number {
+  be tree holds parse_lam(lex(src()), hit(NEnvNil))
+  // il Term deve essere TLam(TAdd(TVar 0, TVar 0)); applicato a 21 -> 42
+  return as_num(eval(hit(TApp, term_of(tree), hit(TLit, 21)))) - 42
+}

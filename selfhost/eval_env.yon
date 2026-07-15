@@ -1,0 +1,47 @@
+// Yon-in-Yon, seed 1: the object language gains BINDERS (Var, Let), and with them
+// eval stops being a fold into `number` and becomes a catamorphism into the
+// EXPONENTIAL `Env => number`. That is the categorical reason a language with binding
+// needs a cartesian closed ambient (a topos is one): the algebra of the fold lands in
+// a function space, not a flat value. Concretely, eval carries an environment, and
+// `Let` extends it. This is exactly the "you manage the object language's environment
+// yourself" boundary the design names: the meta-language (Yon) gives recursion and the
+// content-addressed heap; the object language's scope is threaded by hand.
+//
+// The environment is itself a content-addressed MerkleTree cons-list (nil = leaf(-1),
+// cons(v, rest) = node2(0, leaf(v), rest)), so it shares and compares like every other
+// value. de Bruijn indices, so alpha-equivalence is definitional.
+//
+// Program:  let x = (2+3) in x * (x + 1)   =  5 * 6  =  30.  Verified: exit 30.
+
+// node tags: 1=Lit, 2=Add, 3=Mul, 4=Var(index in child0 leaf), 5=Let(vexpr=c0, body=c1)
+fun mk_lit(n: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
+fun mk_var(i: number): MerkleTree { return MerkleTree.node2(4, MerkleTree.leaf(i), MerkleTree.leaf(0)) }
+fun mk_let(vexpr: MerkleTree, body: MerkleTree): MerkleTree { return MerkleTree.node2(5, vexpr, body) }
+
+fun env_nil(): MerkleTree { return MerkleTree.leaf(0 - 1) }
+fun env_cons(v: number, rest: MerkleTree): MerkleTree {
+  return MerkleTree.node2(0, MerkleTree.leaf(v), rest)
+}
+
+// lookup de Bruijn index i (0 = innermost) in the environment cons-list
+fun lookup(env: MerkleTree, i: number): number {
+  return if i == 0 then MerkleTree.label(MerkleTree.child(env, 0))
+         else lookup(MerkleTree.child(env, 1), i - 1)
+}
+
+// eval : AST -> (Env => number), curried here as (AST, Env) -> number
+fun eval(e: MerkleTree, env: MerkleTree): number {
+  be t holds MerkleTree.label(e)
+  return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
+         else if t == 2 then eval(MerkleTree.child(e, 0), env) + eval(MerkleTree.child(e, 1), env)
+         else if t == 3 then eval(MerkleTree.child(e, 0), env) * eval(MerkleTree.child(e, 1), env)
+         else if t == 4 then lookup(env, MerkleTree.label(MerkleTree.child(e, 0)))
+         else eval(MerkleTree.child(e, 1), env_cons(eval(MerkleTree.child(e, 0), env), env))
+}
+
+fun main(): number {
+  // body = x * (x + 1), with x = de Bruijn 0
+  be body holds MerkleTree.node2(3, mk_var(0), MerkleTree.node2(2, mk_var(0), mk_lit(1)))
+  be prog holds mk_let(MerkleTree.node2_commutative(2, mk_lit(2), mk_lit(3)), body)
+  return eval(prog, env_nil())
+}

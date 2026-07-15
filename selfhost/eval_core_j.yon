@@ -1,0 +1,64 @@
+// Self-host Stage 1, incremento 3: Id/refl/J nel lambda-nucleo, scritto in Yon.
+// Forma wildcard: la beta diagonale J(c,d,refl a) ~> d a e' l'unico ramo vivo di
+// TJ; tutto il resto resta stuck via `_ =>`. shift/subst restano esaustivi.
+// Oracolo: J(_, lam.0, refl 7) = 7  (come il kernel OCaml, j_computes.yon).
+inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
+               | TPair(Term, Term) | TFst(Term) | TSnd(Term)
+               | TRefl(Term) | TJ(Term, Term, Term)
+
+fun motT(t: Term): Term { return hit(TLit, 0) }
+
+fun shift(d: number, c: number, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
+      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
+      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
+      TPair(a, b) => hit(TPair, shift(d, c, a), shift(d, c, b)),
+      TFst(p)     => hit(TFst, shift(d, c, p)),
+      TSnd(p)     => hit(TSnd, shift(d, c, p)),
+      TRefl(a)    => hit(TRefl, shift(d, c, a)),
+      TJ(mo, ba, pa) => hit(TJ, shift(d, c, mo), shift(d, c, ba), shift(d, c, pa)) ], t)
+}
+
+fun subst(j: number, s: Term, t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => if i == j then s else hit(TVar, i),
+      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
+      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
+      TPair(a, b) => hit(TPair, subst(j, s, a), subst(j, s, b)),
+      TFst(p)     => hit(TFst, subst(j, s, p)),
+      TSnd(p)     => hit(TSnd, subst(j, s, p)),
+      TRefl(a)    => hit(TRefl, subst(j, s, a)),
+      TJ(mo, ba, pa) => hit(TJ, subst(j, s, mo), subst(j, s, ba), subst(j, s, pa)) ], t)
+}
+
+fun beta(body: Term, arg: Term): Term {
+  return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
+}
+
+fun eval(t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)     => hit(TLit, n),
+      TVar(i)     => hit(TVar, i),
+      TLam(b)     => hit(TLam, b),
+      TApp(f, x)  => hit_elim(motT, [ TLam(b) => eval(beta(b, eval(x))), _ => hit(TApp, eval(f), eval(x)) ], eval(f)),
+      TPair(a, b) => hit(TPair, eval(a), eval(b)),
+      TFst(p)     => hit_elim(motT, [ TPair(a, b) => eval(a), _ => hit(TFst, eval(p)) ], eval(p)),
+      TSnd(p)     => hit_elim(motT, [ TPair(a, b) => eval(b), _ => hit(TSnd, eval(p)) ], eval(p)),
+      TRefl(a)    => hit(TRefl, eval(a)),
+      TJ(mo, ba, pa) => hit_elim(motT,
+                       [ TRefl(a) => eval(hit(TApp, ba, a)),
+                         _        => hit(TJ, mo, ba, eval(pa)) ], eval(pa)) ], t)
+}
+
+fun motN(t: Term): number { return 0 }
+fun as_num(t: Term): number {
+  return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
+}
+
+fun main(): number {
+  be r holds eval(hit(TJ, hit(TLit, 0), hit(TLam, hit(TVar, 0)), hit(TRefl, hit(TLit, 7))))
+  return as_num(r) - 7
+}

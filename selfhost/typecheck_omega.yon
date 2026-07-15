@@ -1,0 +1,61 @@
+// Yon-in-Yon, seed 5 (the final step): an OMEGA-VALUED typing judgment.
+//
+// This is Heyting wired into the kernel's VERDICT, not into the AST dispatch. The
+// checked proposition is a definitional equality Eq(a, b), and its truth-value lives in
+// the topos truth-object Omega (Godel G3): PRESENT (holds), ABSENT (refuted), UNKNOWN
+// (stuck / undecided). The two logics cooperate exactly as they should:
+//
+//   * DECIDABLE, Boolean, meta: `MerkleTree.equal(a, b)` decides structural (alpha)
+//     equality on finite data. It gives TOP even for OPEN terms (refl: x = x), because
+//     content-addressed identity is decidable precisely on finite values. This is the
+//     honest core the design calls "content-addressing is Yoneda made physical".
+//   * OMEGA-VALUED, Heyting, judgmental: when the terms are not structurally equal, the
+//     verdict is TOP/BOTTOM only if BOTH are closed (evaluate and compare). If either is
+//     OPEN, the conversion is STUCK and the verdict is UNKNOWN, the middle of Omega. That
+//     is exactly the kernel's `Cubical_stuck` ("stuck on a non-refl path: no runtime
+//     value") turned from an exception into a first-class Omega value.
+//
+// SOUNDNESS discipline: UNKNOWN never masquerades as TOP. A stuck conversion refuses to
+// claim the equality; it says "undecided", which is the intuitionistic honesty (no
+// excluded middle: we do not decide open equalities we cannot compute).
+//
+// Omega: PRESENT=0, ABSENT=1, UNKNOWN=2.  Verdicts, base 3 -> exit 5 = (P, P, A, U).
+
+// object terms: 1=Lit(n), 2=Add(a,b), 3=Var(index)  (Var = an open/free variable)
+fun mk_lit(n: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
+fun mk_add(a: MerkleTree, b: MerkleTree): MerkleTree { return MerkleTree.node2(2, a, b) }
+fun mk_var(i: number): MerkleTree { return MerkleTree.node2(3, MerkleTree.leaf(i), MerkleTree.leaf(0)) }
+
+// is_closed: no Var anywhere (decidable, Boolean: 1 = closed, 0 = open)
+fun is_closed(e: MerkleTree): number {
+  be t holds MerkleTree.label(e)
+  return if t == 1 then 1
+    else if t == 3 then 0
+    else (if is_closed(MerkleTree.child(e, 0)) == 1 then is_closed(MerkleTree.child(e, 1)) else 0)
+}
+
+// eval a closed term to its number (Var unreachable when closed)
+fun eval_c(e: MerkleTree): number {
+  be t holds MerkleTree.label(e)
+  return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
+    else if t == 2 then eval_c(MerkleTree.child(e, 0)) + eval_c(MerkleTree.child(e, 1))
+    else 0
+}
+
+// check_eq : (Term, Term) -> Omega   (the omega-valued judgment)
+fun check_eq(a: MerkleTree, b: MerkleTree): number {
+  return if MerkleTree.equal(a, b) then 0                       // refl: structural TOP (open ok)
+    else if is_closed(a) == 1 then
+      (if is_closed(b) == 1
+       then (if eval_c(a) == eval_c(b) then 0 else 1)           // closed conversion: TOP / BOTTOM
+       else 2)                                                  // b open -> stuck
+    else 2                                                      // a open -> stuck (UNKNOWN)
+}
+
+fun main(): number {
+  be v_refl holds check_eq(mk_var(0), mk_var(0))                     // x = x  -> PRESENT (0)
+  be v_conv holds check_eq(mk_add(mk_lit(2), mk_lit(3)), mk_lit(5))  // 2+3 = 5 -> PRESENT (0)
+  be v_neq  holds check_eq(mk_lit(2), mk_lit(3))                     // 2 = 3  -> ABSENT (1)
+  be v_open holds check_eq(mk_var(0), mk_lit(5))                     // x = 5  -> UNKNOWN (2), stuck
+  return v_refl * 27 + v_conv * 9 + v_neq * 3 + v_open              // base 3 = 5
+}

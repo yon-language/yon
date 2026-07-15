@@ -1,0 +1,61 @@
+// Self-host, front-end: lexer minimale scritto in Yon. Legge una String e produce
+// una TokList (cifre singole e operatori + * ( ), spazi ignorati). Due funzioni
+// mutuamente ricorsive (lex_from guarda il char, emit_at dispaccia e ricorre);
+// dispatch su String.char_at (un number) via catena if/else if, non hit_elim.
+// Oracolo: checksum strutturale di "2+3*4" = 309.
+inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
+inductive TokList = TkNil | TkCons(Token, TokList)
+
+// decide il token per il carattere c in posizione i, poi prosegue da i+1
+fun emit_at(s: String, i: number, len: number, c: number): TokList {
+  return if c == 32 then lex_from(s, i + 1, len)
+    else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
+    else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
+    else if c == 40 then hit(TkCons, hit(TLParen), lex_from(s, i + 1, len))
+    else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
+    else if c >= 48 then hit(TkCons, hit(TNum, c - 48), lex_from(s, i + 1, len))
+    else lex_from(s, i + 1, len)
+}
+
+// scandisce da i: a fine stringa chiude con TEnd, altrimenti legge e dispaccia
+fun lex_from(s: String, i: number, len: number): TokList {
+  return if i >= len
+    then hit(TkCons, hit(TEnd), hit(TkNil))
+    else emit_at(s, i, len, String.char_at(s, i))
+}
+
+fun lex(s: String): TokList {
+  return lex_from(s, 0, String.length(s))
+}
+
+// ── oracolo: ogni token pesa un valore distinto ─────────────────────────────
+fun motN(t: Token): number { return 0 }
+fun tok_weight(t: Token): number {
+  return hit_elim(motN,
+    [ TNum(n)  => n,
+      TPlus    => 100,
+      TStar    => 200,
+      TLParen  => 300,
+      TRParen  => 400,
+      TEnd     => 0 ], t)
+}
+
+fun motL(l: TokList): number { return 0 }
+fun checksum(l: TokList): number {
+  return hit_elim(motL,
+    [ TkNil        => 0,
+      TkCons(h, t) => tok_weight(h) + checksum(t) ], l)
+}
+
+// sorgente "2+3*4" = codici 50 43 51 42 52
+fun src(): String {
+  return String.concat(
+           String.concat(String.from_char(50), String.from_char(43)),
+           String.concat(String.concat(String.from_char(51), String.from_char(42)),
+                         String.from_char(52)))
+}
+
+// atteso: TNum2, TPlus, TNum3, TStar, TNum4, TEnd = 2+100+3+200+4+0 = 309
+fun main(): number {
+  return checksum(lex(src())) - 309
+}

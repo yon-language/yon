@@ -58,6 +58,7 @@ _MODULE_DEFAULT = {
     "test_cross_space_runtime": ("yon", "integration"),  # multi-process, runs binaries
     "test_interp":        ("ocaml", "functional"),  # eval_runner (interpreter) over corpus
     "test_c_coverage":    ("c", "unit"),            # gcov floor gate (opt-in --gcov)
+    "test_selfhost":      ("yon", "integration"),   # Yon-in-Yon seeds compile + run
 }
 
 # modules that MIX kinds: per test-function-name overrides, plus a module default.
