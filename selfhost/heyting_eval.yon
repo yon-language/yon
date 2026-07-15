@@ -1,0 +1,57 @@
+// Yon-in-Yon, seed 4: an object language of INTUITIONISTIC propositions, evaluated in
+// the topos truth-object Omega.
+//
+// The conceptual point Antonio insisted on: in a topos, Omega (the subobject
+// classifier) is a HEYTING ALGEBRA (Lawvere-Tierney), not a Boolean one. So the logic
+// of a language that "keeps the categorical structure" is intuitionistic: `heval` is a
+// CATAMORPHISM into Omega, and Omega's operations are the Godel G3 truth tables, the
+// same algebra as the runtime's heyting.ml (fixed from Kleene to G3 this session).
+//
+// Omega, three-valued: PRESENT=0, ABSENT=1, UNKNOWN=2.
+// The G3 signature, distinct from Kleene/Boolean:
+//   NOT unknown = absent           (regular negation, not involutive)
+//   excluded middle FAILS: U or NOT U = U   (not PRESENT)  <- the intuitionistic mark
+//   but at a decided value it holds: P or NOT P = P.
+// Program returns:  (NOT U)*100 + (U or NOT U)*10 + (P or NOT P) = 1*100 + 2*10 + 0 = 120.
+
+// --- Omega (Godel G3), mirroring heyting.ml's h_not/h_and/h_or/h_imp ---
+fun h_not(x: number): number {
+  return if x == 0 then 1 else if x == 1 then 0 else 1   // P->A, A->P, U->A
+}
+fun h_and(a: number, b: number): number {
+  return if a == 1 then 1 else if b == 1 then 1          // absent absorbs
+    else if a == 0 then (if b == 0 then 0 else 2) else 2  // P,P->P ; else U
+}
+fun h_or(a: number, b: number): number {
+  return if a == 0 then 0 else if b == 0 then 0          // present absorbs
+    else if a == 1 then (if b == 1 then 1 else 2) else 2  // A,A->A ; else U
+}
+fun h_imp(a: number, b: number): number {
+  return if a == 1 then 0 else if a == 0 then b          // A->top ; P->x is x
+    else (if b == 0 then 0 else if b == 2 then 0 else 1)  // U->P/U is P, U->A is A
+}
+
+// --- proposition AST (content-addressed): 1=Lit(omega), 2=Not, 3=And, 4=Or, 5=Imp ---
+fun mk_p(w: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(w), MerkleTree.leaf(0)) }
+fun mk_not(p: MerkleTree): MerkleTree { return MerkleTree.node2(2, p, MerkleTree.leaf(0)) }
+fun mk_or(a: MerkleTree, b: MerkleTree): MerkleTree { return MerkleTree.node2(4, a, b) }
+
+// heval : Prop -> Omega  (the catamorphism into the Heyting algebra)
+fun heval(p: MerkleTree): number {
+  be t holds MerkleTree.label(p)
+  return if t == 1 then MerkleTree.label(MerkleTree.child(p, 0))
+    else if t == 2 then h_not(heval(MerkleTree.child(p, 0)))
+    else if t == 3 then h_and(heval(MerkleTree.child(p, 0)), heval(MerkleTree.child(p, 1)))
+    else if t == 4 then h_or(heval(MerkleTree.child(p, 0)), heval(MerkleTree.child(p, 1)))
+    else h_imp(heval(MerkleTree.child(p, 0)), heval(MerkleTree.child(p, 1)))
+}
+
+fun main(): number {
+  // NOT unknown = absent (1)
+  be not_u holds heval(mk_not(mk_p(2)))
+  // excluded middle at unknown: U or NOT U = unknown (2), NOT present
+  be em_u holds heval(mk_or(mk_p(2), mk_not(mk_p(2))))
+  // excluded middle at present: P or NOT P = present (0)
+  be em_p holds heval(mk_or(mk_p(0), mk_not(mk_p(0))))
+  return not_u * 100 + em_u * 10 + em_p
+}

@@ -1,0 +1,116 @@
+// Self-host, front-end: parser aritmetico in Yon, chiude la catena testo -> valore.
+// Discesa ricorsiva con precedenza (* sopra +) come catamorfismo su TokList; l'AST
+// e' un induttivo Expr, l'eval aritmetico un altro catamorfismo Expr -> number.
+// Include il lexer (Token/TokList/lex) nello stesso file. Niente parentesi in questo
+// giro. Oracolo: "2+3*4" = 2 + (3*4) = 14 (la precedenza e' il punto, NON 20).
+
+// ── lexer (dal brief #4) ────────────────────────────────────────────────────
+inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
+inductive TokList = TkNil | TkCons(Token, TokList)
+
+fun emit_at(s: String, i: number, len: number, c: number): TokList {
+  return if c == 32 then lex_from(s, i + 1, len)
+    else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
+    else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
+    else if c == 40 then hit(TkCons, hit(TLParen), lex_from(s, i + 1, len))
+    else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
+    else if c >= 48 then hit(TkCons, hit(TNum, c - 48), lex_from(s, i + 1, len))
+    else lex_from(s, i + 1, len)
+}
+fun lex_from(s: String, i: number, len: number): TokList {
+  return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
+    else emit_at(s, i, len, String.char_at(s, i))
+}
+fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
+
+// ── AST + risultato del parse ───────────────────────────────────────────────
+inductive Expr  = ENum(number) | EAdd(Expr, Expr) | EMul(Expr, Expr)
+inductive Parse = POk(Expr, TokList) | PErr    // (albero, resto) oppure errore
+
+// ── peek tag-based sulla TokList ────────────────────────────────────────────
+fun motTn(t: Token): number { return 0 }
+fun tok_tag(t: Token): number {
+  return hit_elim(motTn, [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 ], t)
+}
+fun tok_num(t: Token): number {
+  return hit_elim(motTn, [ TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0 ], t)
+}
+fun motLn(l: TokList): number { return 0 }
+fun head_tag(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
+}
+fun head_num(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
+}
+fun motLl(l: TokList): TokList { return hit(TkNil) }
+fun tail(l: TokList): TokList {
+  return hit_elim(motLl, [ TkNil => hit(TkNil), TkCons(h, t) => t ], l)
+}
+
+// ── parser a discesa ricorsiva con precedenza ───────────────────────────────
+fun motP(p: Parse): Parse { return hit(PErr) }
+
+// factor := NUM
+fun parse_factor(l: TokList): Parse {
+  return if head_tag(l) == 0
+    then hit(POk, hit(ENum, head_num(l)), tail(l))
+    else hit(PErr)
+}
+
+// term := factor ('*' term)?
+fun parse_term(l: TokList): Parse { return term_more(parse_factor(l)) }
+fun term_more(p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) =>
+        if head_tag(rest) == 2
+        then combine_mul(left, parse_term(tail(rest)))
+        else hit(POk, left, rest) ], p)
+}
+fun combine_mul(left: Expr, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(right, rest) => hit(POk, hit(EMul, left, right), rest) ], p)
+}
+
+// expr := term ('+' expr)?
+fun parse_expr(l: TokList): Parse { return expr_more(parse_term(l)) }
+fun expr_more(p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) =>
+        if head_tag(rest) == 1
+        then combine_add(left, parse_expr(tail(rest)))
+        else hit(POk, left, rest) ], p)
+}
+fun combine_add(left: Expr, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(right, rest) => hit(POk, hit(EAdd, left, right), rest) ], p)
+}
+
+// eval aritmetico: catamorfismo Expr -> number
+fun motE(e: Expr): number { return 0 }
+fun eval_expr(e: Expr): number {
+  return hit_elim(motE,
+    [ ENum(n)    => n,
+      EAdd(a, b) => eval_expr(a) + eval_expr(b),
+      EMul(a, b) => eval_expr(a) * eval_expr(b) ], e)
+}
+
+fun motPn(p: Parse): number { return 0 }
+fun result_of(p: Parse): number {
+  return hit_elim(motPn, [ PErr => 0 - 1, POk(e, rest) => eval_expr(e) ], p)
+}
+
+// ── oracolo: "2+3*4" = 2 + (3*4) = 14 ───────────────────────────────────────
+fun src(): String {
+  return String.concat(
+           String.concat(String.from_char(50), String.from_char(43)),
+           String.concat(String.concat(String.from_char(51), String.from_char(42)),
+                         String.from_char(52)))
+}
+
+fun main(): number {
+  return result_of(parse_expr(lex(src()))) - 14
+}

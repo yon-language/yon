@@ -1,0 +1,37 @@
+// Yon-in-Yon, seed 0: an object-language AST evaluated inside Yon.
+//
+// The AST (Lit | Add | Mul) is encoded as content-addressed MerkleTree nodes, and
+// `eval` is a recursive fun dispatching on the node label. That fun IS the unique
+// arrow from the term algebra to (number, +, *): a hand-rolled catamorphism, running
+// on the content-addressed heap. This is the concrete, on-silicon core of the
+// "AST as an initial algebra / eval as a catamorphism" design, using what the shipped
+// language gives today (mu F is not yet first-class; the native W-type road is the
+// next step, see notes).
+//
+// Commutative Add uses node2_commutative, so (2+3) and (3+2) canonicalize (S2 sort)
+// to ONE heap slot. Structural value numbering, for free, at the storage layer:
+// `--structural-value-numbering` reports the collapse, and MerkleTree.equal decides it
+// in O(1). eval((2+3)*(4+1)) = 25; the collapse (add23 == add32) adds 100 -> exit 125.
+//
+// Verified end-to-end: yonc -> topos-opt -> llc -> native -> run, exit 125.
+
+// node tags: 1 = Lit (value in child0's leaf), 2 = Add, 3 = Mul
+fun lit(n: number): MerkleTree {
+  return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0))
+}
+
+fun eval(e: MerkleTree): number {
+  be t holds MerkleTree.label(e)
+  return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
+         else if t == 2 then eval(MerkleTree.child(e, 0)) + eval(MerkleTree.child(e, 1))
+         else eval(MerkleTree.child(e, 0)) * eval(MerkleTree.child(e, 1))
+}
+
+fun main(): number {
+  be add23 holds MerkleTree.node2_commutative(2, lit(2), lit(3))
+  be add32 holds MerkleTree.node2_commutative(2, lit(3), lit(2))
+  be add41 holds MerkleTree.node2_commutative(2, lit(4), lit(1))
+  be prod  holds MerkleTree.node2(3, add23, add41)
+  be collapse holds if MerkleTree.equal(add23, add32) then 100 else 0
+  return eval(prod) + collapse
+}

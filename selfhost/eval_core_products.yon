@@ -1,0 +1,24 @@
+// Self-host Stage 1, incremento 1: eval del frammento SENZA binder (letterali e
+// prodotti), scritto in Yon. Forma wildcard: i rami-stuck (una sola intenzione,
+// "resta stuck") sono un unico `_ =>`. Oracolo: Fst(Pair(20, 22)) -> 20.
+inductive Term = TLit(number) | TPair(Term, Term) | TFst(Term) | TSnd(Term)
+
+fun motT(t: Term): Term { return hit(TLit, 0) }
+
+fun motN(t: Term): number { return 0 }
+fun as_num(t: Term): number {
+  return hit_elim(motN, [ TLit(n) => n, _ => 0 ], t)
+}
+
+fun eval(t: Term): Term {
+  return hit_elim(motT,
+    [ TLit(n)      => hit(TLit, n),
+      TPair(a, b)  => hit(TPair, eval(a), eval(b)),
+      TFst(p)      => hit_elim(motT, [ TPair(a, b) => eval(a), _ => hit(TFst, eval(p)) ], eval(p)),
+      TSnd(p)      => hit_elim(motT, [ TPair(a, b) => eval(b), _ => hit(TSnd, eval(p)) ], eval(p)) ], t)
+}
+
+fun main(): number {
+  be r holds eval(hit(TFst, hit(TPair, hit(TLit, 20), hit(TLit, 22))))
+  return as_num(r) - 20
+}

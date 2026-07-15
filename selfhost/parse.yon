@@ -1,0 +1,59 @@
+// Yon-in-Yon, seed 2: parse a token stream into the AST, then evaluate it.
+//
+// The conceptual point: parse is itself a CATAMORPHISM, this time over the token
+// cons-list rather than over the term algebra. Lexing and parsing are stream folds in
+// the design ("Lexer: a stream fold"), and here parse_loop is exactly that fold: it
+// consumes the token list left to right, accumulating an AST. Left-associative, no
+// precedence (a precedence climber is the next refinement); enough to close the loop
+// text -> tokens -> AST -> value on silicon.
+//
+// Tokens are content-addressed MerkleTree nodes too: NUM(v)=node2(1,leaf v,leaf 0),
+// PLUS=node2(2,..), STAR=node2(3,..). Conveniently the token kind of an operator (2/3)
+// IS the AST tag it builds (Add=2, Mul=3), so the fold reads op = label(head) and
+// builds node2(op, acc, Lit(next)). Token list = cons-list, nil = leaf(-1).
+//
+// Program tokens:  2 + 3 * 4   (left-assoc) -> Mul(Add(2,3),4) -> (2+3)*4 = 20.
+
+// --- AST + eval (same catamorphism as seed 0/1) ---
+fun mk_lit(n: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
+fun eval(e: MerkleTree): number {
+  be t holds MerkleTree.label(e)
+  return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
+         else if t == 2 then eval(MerkleTree.child(e, 0)) + eval(MerkleTree.child(e, 1))
+         else eval(MerkleTree.child(e, 0)) * eval(MerkleTree.child(e, 1))
+}
+
+// --- tokens (content-addressed) ---
+fun tok_num(v: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(v), MerkleTree.leaf(0)) }
+fun tok_op(kind: number): MerkleTree { return MerkleTree.node2(kind, MerkleTree.leaf(0), MerkleTree.leaf(0)) }
+fun toks_nil(): MerkleTree { return MerkleTree.leaf(0 - 1) }
+fun toks_cons(tok: MerkleTree, rest: MerkleTree): MerkleTree { return MerkleTree.node2(0, tok, rest) }
+
+fun is_nil(l: MerkleTree): number { return if MerkleTree.label(l) == (0 - 1) then 1 else 0 }
+fun tok_val(tok: MerkleTree): number { return MerkleTree.label(MerkleTree.child(tok, 0)) }
+
+// the fold: (rest_of_tokens, ast_so_far) -> ast. Each step reads an OP then a NUM.
+fun parse_loop(toks: MerkleTree, acc: MerkleTree): MerkleTree {
+  return if is_nil(toks) == 1 then acc
+         else parse_loop(
+                MerkleTree.child(MerkleTree.child(toks, 1), 1),           // drop op + num
+                MerkleTree.node2(
+                  MerkleTree.label(MerkleTree.child(toks, 0)),            // op kind = AST tag
+                  acc,
+                  mk_lit(tok_val(MerkleTree.child(MerkleTree.child(toks, 1), 0)))))  // Lit(next num)
+}
+
+// parse: first token must be a NUM; seed the accumulator, then fold the rest.
+fun parse(toks: MerkleTree): MerkleTree {
+  return parse_loop(MerkleTree.child(toks, 1), mk_lit(tok_val(MerkleTree.child(toks, 0))))
+}
+
+fun main(): number {
+  // token stream for "2 + 3 * 4"
+  be ts holds toks_cons(tok_num(2),
+              toks_cons(tok_op(2),
+              toks_cons(tok_num(3),
+              toks_cons(tok_op(3),
+              toks_cons(tok_num(4), toks_nil())))))
+  return eval(parse(ts))
+}
