@@ -5,5 +5,5 @@
  (libraries str)
  ; test_ln stays excluded: it opens Locally_nameless, the SUSPENDED locally-nameless
  ; migration module (not in the build). Re-enable both together when LN is revived.
- (modules (:standard \ lex_test locally_nameless test_ln))
+ (modules (:standard \ lex_test locally_nameless test_ln type_canon))
  (flags (:standard)))
