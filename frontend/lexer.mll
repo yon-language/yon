@@ -20,6 +20,7 @@
       "import", IMPORT;
       "internal", INTERNAL;
       "place", PLACE;
+      "inductive", INDUCTIVE;
       "space", SPACE;
       "nat", NAT;
 

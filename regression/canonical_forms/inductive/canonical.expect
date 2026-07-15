@@ -1,0 +1,9 @@
+status: accept
+exit: 42
+covers: data_decl variant
+note: |
+  A named sum type (the dual of place): `inductive Name = C0 | C1(args) | ...`.
+  The name lets a constructor argument refer to the type it defines, so this is
+  how a genuinely recursive inductive is written. Built with hit(Ctor, args),
+  consumed with match/hit_elim; at runtime a value is a content-addressed
+  MerkleTree node (constructor = tag, arguments = children).

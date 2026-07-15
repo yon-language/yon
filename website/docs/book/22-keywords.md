@@ -29,6 +29,10 @@ A Yon program is a list of these.
 
 An object living in a world: named fields, and operations when declared `with effects`. Instances are built with `new P { field value }`. One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
 
+#### `inductive`
+
+A named sum type, the dual of `place`: `inductive Tree = Leaf(number) | Node(Tree, Tree)`. Where a `place` is a product (named fields), an `inductive` is a coproduct (alternative constructors). The name is what makes a constructor argument able to refer to the type it defines, so `inductive` is how you write a genuinely recursive type; an anonymous inline sum (`A | B`) cannot name itself. A value is built with `hit(Ctor, args)` and consumed with `match`/`hit_elim`, one branch per constructor. At runtime an `inductive` value is a content-addressed node (its constructor is the tag, its arguments are the children), so equal subvalues share storage.
+
 #### `import`
 
 Brings a module or a qualified symbol into scope: `import "x/rates"`, `import q as a`. Multi-file by nature; see the chapter on projects and packages.

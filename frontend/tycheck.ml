@@ -590,17 +590,30 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       let* x_ty = infer env ctx x in
       let point_body =
         List.fold_left
-          (fun acc (_ctor, _vars, body) ->
+          (fun acc (_ctor, vars, body) ->
              match acc, body with
              | Some _, _ -> acc
              | None, EPathAbs _ -> None
-             | None, v -> Some v)
+             (* The synthesized motive is CONSTANT (fun _ => witness), so the
+                witness body must type-check in the OUTER env. A point branch
+                whose body reads its own payload binders (e.g. `Lit(n) => n`)
+                cannot serve as that witness; skip it and keep looking for a
+                base case whose body is closed (e.g. `Nil => 0`). The chosen
+                type is then checked against every branch body in ITS branch
+                env below, so payload-using branches are still verified. *)
+             | None, v ->
+                 let fv = free_vars_expr v in
+                 if List.exists (fun b -> List.mem b fv) vars
+                 then None else Some v)
           None branches
       in
       (match point_body with
        | None ->
-           err loc "match: needs at least one point branch (a plain value) to \
-                    infer the result type"
+           err loc "match: cannot synthesize the result type. Its motive is \
+                    constant, so it needs a point branch whose body does not \
+                    read that branch's own payload (a base case like `Nil => 0`). \
+                    For an eliminator where every branch uses its payload, use \
+                    hit_elim with an explicit motive."
        | Some body ->
            let motive = ELam ([("__m", x_ty)], body, loc) in
            infer env ctx (EHITElim (motive, branches, x, loc)))
@@ -622,31 +635,36 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
             ok domain
         | _ -> err loc "hit_elim: motive must be a function from the HIT"
       in
+      let sig_of_variants name variants =
+        let points =
+          List.map
+            (fun variant ->
+               let params =
+                 List.mapi
+                   (fun i ty -> (Printf.sprintf "arg%d" i, ty))
+                   variant.v_args
+               in
+               { Hit_env.pc_name = variant.v_name;
+                 pc_params = params;
+                 pc_result = x_ty })
+            variants
+        in
+        (name,
+         { Hit_env.hit_name = name; hit_type_params = [];
+           hit_points = points; hit_paths = [] })
+      in
       let hit_signature =
         match x_ty with
         | TySum variants | TySumIn (variants, _) ->
-            let name = Tyenv.type_tag x_ty in
-            let points =
-              List.map
-                (fun variant ->
-                   let params =
-                     List.mapi
-                       (fun i ty -> (Printf.sprintf "arg%d" i, ty))
-                       variant.v_args
-                   in
-                   { Hit_env.pc_name = variant.v_name;
-                     pc_params = params;
-                     pc_result = x_ty })
-                variants
-            in
-            Some (name,
-              { Hit_env.hit_name = name;
-                hit_type_params = [];
-                hit_points = points;
-                hit_paths = [] })
+            Some (sig_of_variants (Tyenv.type_tag x_ty) variants)
         | TyPrim n | TyPrimIn (n, _) | TyUser n ->
-            Option.map (fun sig_ -> (n, sig_))
-              (Hit_env.lookup Hit_env.builtin_env n)
+            (* a named sum (`inductive Tree = ...`) resolves to its variants; else a
+               built-in HIT; else not an inductive. *)
+            (match Tyenv.lookup_named_sum env n with
+             | Some variants -> Some (sig_of_variants n variants)
+             | None ->
+                 Option.map (fun sig_ -> (n, sig_))
+                   (Hit_env.lookup Hit_env.builtin_env n))
         | _ -> None in
       (match hit_signature with
        | None ->
@@ -824,7 +842,13 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                     | _ -> assert false
                   in
                   let* () = check_args args variant.v_args in
-                  ok (TySum variants)
+                  (* A named sum is nominal: `hit(Node, ..)` has type `Tree`, not
+                     the expanded sum, so it unifies with `Tree`-typed positions
+                     (including a constructor's own recursive arguments). An
+                     anonymous inline sum keeps its structural type. *)
+                  (match Tyenv.named_sum_of_ctor env ctor with
+                   | Some (name, _) -> ok (TyUser name)
+                   | None -> ok (TySum variants))
             | candidates ->
                 let signatures =
                   List.map
@@ -2714,6 +2738,15 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
 let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   match td with
   | TopWorld wd -> Tyenv.add_world env wd
+  | TopType (name, variants, _) ->
+      (* Register the named sum, then any sums nested in its constructors'
+         argument types (the recursive self-reference `TyUser name` is not one
+         of those and needs no registration). *)
+      let env = Tyenv.add_named_sum env name variants in
+      List.fold_left
+        (fun acc v ->
+           List.fold_left register_sum_types_in_ty acc v.v_args)
+        env variants
   | TopPlace pd ->
       let env =
         List.fold_left
@@ -2904,6 +2937,20 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
 let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit tc_result =
   match td with
   | TopWorld _ -> ok ()
+  | TopType (name, variants, loc) ->
+      (* The named sum is registered (register_decl); its constructors are
+         checked structurally at their hit/match use sites (arity, exhaustive
+         cover). Here we only reject a duplicated constructor name, which would
+         make dispatch ambiguous. *)
+      let rec dup seen = function
+        | [] -> ok ()
+        | v :: rest ->
+            if List.mem v.v_name seen then
+              err loc (Printf.sprintf
+                "inductive %s: duplicate constructor %s" name v.v_name)
+            else dup (v.v_name :: seen) rest
+      in
+      dup [] variants
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn
   | TopMove md -> check_move_decl env ctx md
@@ -3399,6 +3446,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
       else if List.mem n runtime_builtin then ok ()
       else if Tyenv.lookup_place env n <> None then ok ()
       else if Tyenv.lookup_world env n <> None then ok ()
+      else if Tyenv.lookup_named_sum env n <> None then ok ()  (* inductive Tree = ... *)
       else err loc (Printf.sprintf "unknown user type: %s" n)
   | TyApp (n, args) ->
       (* A type application `Box<number>`: the head must be a known type and each
