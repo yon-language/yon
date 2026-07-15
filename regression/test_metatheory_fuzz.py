@@ -21,8 +21,9 @@ FRONTEND = ROOT / "frontend"
 EXE = FRONTEND / "_build" / "default" / "test_metatheory_fuzz.exe"
 
 
+@pytest.mark.stretchable
 @pytest.mark.skipif(not (FRONTEND / "dune").exists(), reason="frontend not present")
-def test_core_soundness_fuzz():
+def test_core_soundness_fuzz(stretch):
     # build (best-effort); skip cleanly if the OCaml toolchain is unavailable here
     try:
         subprocess.run(["dune", "build", "./test_metatheory_fuzz.exe"],
@@ -32,7 +33,9 @@ def test_core_soundness_fuzz():
     if not EXE.exists():
         pytest.skip("fuzzer exe not built (run: cd frontend && dune build ./test_metatheory_fuzz.exe)")
 
-    r = subprocess.run([str(EXE)], capture_output=True, text=True, timeout=300)
+    scale = max(1, int(stretch))
+    r = subprocess.run([str(EXE), "20260701", "4", str(scale)],
+                       capture_output=True, text=True, timeout=int(300 * scale))
     out = r.stdout
 
     # exit 0 == no CORE stuck/timeout and no confluence mismatch

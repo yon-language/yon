@@ -65,6 +65,9 @@ C_UNIT_TESTS = [
     ("vec",           "test_unit_vec.c",          b"VEC: PASS",           True),
     ("merkle",        "test_unit_merkle.c",       b"MERKLE: PASS",        True),
     ("bits",          "test_unit_bits.c",         b"BITS: PASS",          True),
+    # Reduction/CRDT fold operators (yon_rt.c:487+): sum/max/min f64 & i64,
+    # element-wise f64 vectors, OR-set bitset. Pure combiners with size guards.
+    ("fold",          "test_unit_fold.c",         b"FOLD: PASS",          True),
     # The Space-reclaim primitive behind the `drop X` construct: reclaim_arena
     # (whole-heap madvise, page-aligned) and yon_rt_drop_space (resolve + count).
     ("drop_reclaim",  "test_unit_drop_reclaim.c", b"DROP_RECLAIM: PASS",  True),

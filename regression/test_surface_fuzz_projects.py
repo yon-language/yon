@@ -23,8 +23,9 @@ SEEDS = ["20260701", "1"]
 CASES = "500"
 
 
+@pytest.mark.stretchable
 @pytest.mark.skipif(not (ROOT / "frontend" / "dune").exists(), reason="frontend not present")
-def test_project_fuzz_no_crashes():
+def test_project_fuzz_no_crashes(stretch):
     try:
         subprocess.run(["dune", "build", "./yoner_emit_mlir.exe"],
                        cwd=ROOT / "frontend", capture_output=True, timeout=600)
@@ -32,9 +33,11 @@ def test_project_fuzz_no_crashes():
         pass
     if not EMIT.exists():
         pytest.skip("emit exe not built (cd frontend && dune build ./yoner_emit_mlir.exe)")
+    cases = str(max(1, int(int(CASES) * stretch)))
+    per_seed_timeout = int(600 * max(1.0, stretch))
     for seed in SEEDS:
-        r = subprocess.run(["python3", str(FUZZ), seed, CASES],
-                           capture_output=True, text=True, timeout=600)
+        r = subprocess.run(["python3", str(FUZZ), seed, cases],
+                           capture_output=True, text=True, timeout=per_seed_timeout)
         assert r.returncode == 0, (
             f"project fuzzer found a frontend crash (seed {seed}):\n{r.stdout[-3000:]}\n{r.stderr[-400:]}")
         assert "BUGS=0" in r.stdout, f"project fuzzer found a crash (seed {seed}):\n{r.stdout[-3000:]}"

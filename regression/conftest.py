@@ -29,6 +29,24 @@ import pytest
 
 LAYERS = {"yon", "ocaml", "mlir", "llvm", "c"}
 KINDS = {"unit", "functional", "integration"}
+SPEEDS = {"fast", "slow", "bench", "fuzz"}
+
+# module basename -> speed class (default "fast"). Lets the harness slice by cost:
+#   pytest -m "not slow and not bench and not fuzz"   # the quick inner loop
+#   pytest -m bench                                    # the pytest-benchmark suite
+#   pytest -m fuzz                                     # the property fuzzers
+_SPEED = {
+    "test_benchmarks": "bench",
+    "test_spawn_scaling": "bench",
+    "test_wire_throughput": "bench",
+    "test_perf": "bench",                 # bench_perf/test_perf.py (pytest-benchmark)
+    "test_surface_fuzz": "fuzz",
+    "test_surface_fuzz_projects": "fuzz",
+    "test_metatheory_fuzz": "fuzz",
+    "test_cross_space_runtime": "slow",
+    "test_source_binary_diff": "slow",
+    "test_c_coverage": "slow",            # rebuilds the runtime instrumented (opt-in)
+}
 
 # module basename -> default (layer, kind)
 _MODULE_DEFAULT = {
@@ -38,6 +56,8 @@ _MODULE_DEFAULT = {
     "test_yon_coverage":  ("yon", "functional"),   # construct micro-tests (emit)
     "test_projects":      ("yon", "functional"),   # a project compiles
     "test_cross_space_runtime": ("yon", "integration"),  # multi-process, runs binaries
+    "test_interp":        ("ocaml", "functional"),  # eval_runner (interpreter) over corpus
+    "test_c_coverage":    ("c", "unit"),            # gcov floor gate (opt-in --gcov)
 }
 
 # modules that MIX kinds: per test-function-name overrides, plus a module default.
@@ -62,9 +82,32 @@ _FUNC_OVERRIDE = {
 }
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--stretch", action="store", type=float, default=1.0,
+        help="scale factor for stretchable tests (fuzz case counts, soak sizes, "
+             "bench rounds); 1.0 is the fast default, e.g. 100.0 for a nightly run",
+    )
+    parser.addoption(
+        "--gcov", action="store_true", default=False,
+        help="run the opt-in C gcov coverage gate (rebuilds the runtime instrumented, "
+             "then restores it); off by default",
+    )
+
+
 def pytest_configure(config):
-    for m in sorted(LAYERS | KINDS):
-        config.addinivalue_line("markers", f"{m}: Yon suite layer/kind tag")
+    for m in sorted(LAYERS | KINDS | SPEEDS):
+        config.addinivalue_line("markers", f"{m}: Yon suite layer/kind/speed tag")
+    config.addinivalue_line(
+        "markers", "stretchable: scales its work by --stretch (fuzz / soak / bench)")
+
+
+@pytest.fixture(scope="session")
+def stretch(pytestconfig):
+    """The --stretch factor (float, default 1.0). A stretchable test multiplies its
+    base work count by this; use `max(1, int(BASE * stretch))` so 1.0 stays the fast
+    baseline and a large factor makes an exhaustive run."""
+    return float(pytestconfig.getoption("--stretch"))
 
 
 def pytest_collection_modifyitems(config, items):
@@ -80,3 +123,4 @@ def pytest_collection_modifyitems(config, items):
         if layer:
             item.add_marker(getattr(pytest.mark, layer))
             item.add_marker(getattr(pytest.mark, kind))
+        item.add_marker(getattr(pytest.mark, _SPEED.get(mod, "fast")))
