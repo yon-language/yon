@@ -1,0 +1,14 @@
+// The canonical form of a named inductive type: `inductive Name = variants`.
+// A recursive list, folded with match. Exercises the data_decl production.
+inductive List = Nil | Cons(number, List)
+
+fun sum(l: List): number {
+  return match l {
+    Nil => 0,
+    Cons(h, t) => h + sum(t)
+  }
+}
+
+fun main(): number {
+  return sum(hit(Cons, 10, hit(Cons, 15, hit(Cons, 17, hit(Nil)))))
+}

@@ -41,6 +41,10 @@ type env = {
   (* Structural sum signatures visible in the program. Each sum is the
      point-only HIT determined by its ordered constructor list. *)
   sum_types : variant list list;
+  (* Named sum types (`inductive Tree = ...`): the name -> its ordered constructor
+     list. Distinct from [sum_types] (anonymous inline sums) because the name is
+     what lets a constructor argument refer to the type it defines. *)
+  named_sums : (string * variant list) list;
   intervals : interval_var list;
   places : (string * place_decl) list;
   worlds : (string * world_decl) list;
@@ -79,6 +83,7 @@ type env = {
 let empty : env = {
   vars = [];
   sum_types = [];
+  named_sums = [];
   intervals = [];
   places = [];
   worlds = [];
@@ -266,6 +271,22 @@ let lookup_sum_constructor (env : env) (name : string)
        | Some variant -> Some (variants, variant)
        | None -> None)
     env.sum_types
+
+(* A named sum registers its constructors (so hit/match resolve them) and its
+   name (so `TyUser name` resolves to its variants, including recursively). *)
+let add_named_sum (env : env) (name : string) (variants : variant list) : env =
+  let env = add_sum_type env variants in
+  { env with named_sums = (name, variants) :: env.named_sums }
+
+let lookup_named_sum (env : env) (name : string) : variant list option =
+  List.assoc_opt name env.named_sums
+
+(* The name of the named sum a constructor belongs to, if any. Constructor names
+   are unique across sums, so this is unambiguous. *)
+let named_sum_of_ctor (env : env) (ctor : string) : (string * variant list) option =
+  List.find_opt
+    (fun (_, variants) -> List.exists (fun v -> v.v_name = ctor) variants)
+    env.named_sums
 
 let add_interval (env : env) (i : interval_var) : env =
   { env with intervals = i :: env.intervals }

@@ -8,6 +8,7 @@ let tok_name = function
   | Parser.QIDENT _ -> "QIDENT"
   | Parser.TYPE_LEVEL _ -> "TYPE_LEVEL"
   | Parser.PLACE -> "PLACE"
+  | Parser.INDUCTIVE -> "INDUCTIVE"
   | Parser.FUN -> "FUN"
   | Parser.DROP -> "DROP"
   | Parser.MOVE -> "MOVE"

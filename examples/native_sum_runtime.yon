@@ -1,0 +1,30 @@
+// COSA: un tipo somma NATIVO eliminato su un valore a RUNTIME (un parametro),
+// non su un costruttore noto staticamente. `eval` vede solo il parametro `e`:
+// il suo costruttore e' opaco fino all'esecuzione, quindi l'eliminazione e' un
+// vero dispatch a runtime, non un fold a compile-time.
+//
+// PERCHE': questo unifica le due facce dell'algebra iniziale. L'eliminatore
+// dipendente type-theoretic (hit_elim su un costruttore statico) resta la regola
+// beta del kernel; qui invece il valore somma ha un CARRIER a runtime — un nodo
+// MerkleTree, content-addressed — e l'eliminazione e' uno switch sul tag via
+// `label`, con i payload proiettati via `child`. E' la stessa codifica che i
+// seed self-host scrivono a mano, ora generata dal desugar per ogni somma custom.
+// Prima di questo, un match/hit_elim su un valore somma a runtime era "stuck":
+// nessun valore a runtime da lowerare.
+//
+// Ogni ramo legge il proprio payload, quindi si usa hit_elim con un motive
+// esplicito (il caso in cui il match-zucchero, dal motive costante, non puo'
+// sintetizzare il tipo-risultato: serve un ramo base chiuso, qui assente).
+
+fun mot(e: (Lit(number) | Neg(number) | Add(number))): number { return 0 }
+
+fun eval(e: (Lit(number) | Neg(number) | Add(number))): number {
+  return hit_elim(mot, [Lit(n) => n, Neg(m) => 0 - m, Add(s) => s + s], e)
+}
+
+fun main(): number {
+  be a holds eval(hit(Lit, 5))     // 5
+  be b holds eval(hit(Neg, 3))     // 0 - 3 = -3
+  be c holds eval(hit(Add, 20))    // 20 + 20 = 40
+  return a + b + c                  // 5 + (0-3) + 40 = 42
+}

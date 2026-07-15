@@ -212,6 +212,7 @@
 %token PRESENT ABSENT UNKNOWN
 
 /* HoTT / dependent types */
+%token INDUCTIVE
 %token TYPE_KW PI SIGMA ID REFL PAIR FST SND IND_PATH
 %token EL QUOTE EL_MATCH
 %token HIT_ELIM LBRACKET RBRACKET
@@ -297,6 +298,7 @@ top_decl:
                                          TopImportFrom (m, n, sp, mk_loc $startpos $endpos) }
   | pd = place_decl                   { TopPlace pd }
   | ed = error_decl                   { TopPlace ed }
+  | dd = data_decl                    { dd }
   | fd = fun_decl                     { TopFun fd }
   | md = move_decl                    { TopMove md }
   | vd = view_decl                    { TopView vd }
@@ -901,6 +903,13 @@ variant:
     { { v_name = name; v_args = [] } }
   | name = IDENT LPAREN args = separated_list(COMMA, type_expr) RPAREN
     { { v_name = name; v_args = args } }
+
+(* A named sum type: `inductive Tree = Leaf | Node(Tree, Tree)`. Reuses the
+   variant grammar; a constructor argument that names the type being defined
+   (Tree) is a plain type_expr (TyUser "Tree"), so recursion is expressible. *)
+data_decl:
+  | INDUCTIVE name = IDENT EQ variants = separated_nonempty_list(PIPE, variant)
+    { TopType (name, variants, mk_loc $startpos $endpos) }
 
 (* stream_modifier / stream_mod_list removed in v1.1 (BUFFER/DROP were inert). *)
 

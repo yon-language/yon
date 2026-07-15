@@ -683,6 +683,10 @@ type top_decl =
   | TopWorld of world_decl
   | TopSpace of space_decl                            (* cross-Space *)
   | TopPlace of place_decl
+  | TopType of string * variant list * location
+      (* a NAMED sum type: `inductive Tree = Leaf | Node(Tree, Tree)`. Gives the
+         point-only HIT a name so a constructor argument can refer to the type
+         it defines (genuine recursion), which an anonymous inline sum cannot. *)
   | TopFun of fun_decl
   | TopMove of move_decl
   | TopView of view_decl

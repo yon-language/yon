@@ -44,3 +44,7 @@ RAN cx_face_system exit=5
 RAN cx_path_algebra exit=22
 RAN cx_univalence_named exit=11
 RAN cx_carry exit=11
+RAN native_sum_match exit=42
+RAN native_sum_runtime exit=42
+RAN inductive_tree exit=42
+RAN inductive_list exit=42

@@ -56,6 +56,65 @@ let user_fun_sigs : (string * (S.ty list * S.ty)) list ref = ref []
    (degrades to current behavior). *)
 let current_env : Tyenv.env option ref = ref None
 
+(* ── Native sum types → the content-addressed MerkleTree carrier ─────────────
+   A custom (non-HIT) sum value gets a RUNTIME representation as a MerkleTree
+   node: the tag is the constructor's index in its declaring type, and its
+   payload arguments are the node's children (a number is boxed in a leaf; a
+   nested sum is already a handle). This unifies the two faces of the initial
+   algebra — the compile-time dependent eliminator that the kernel β-reduces on a
+   static constructor, and the RUNTIME eliminator (a tag switch on `label`,
+   projecting payloads via `child`) that the self-host otherwise writes out by
+   hand. The carrier is the same one MerkleTree exposes, so content-addressing
+   (hash-consing) is inherited for free: the design's "Yoneda made physical".
+
+   Built-in HITs (S1, Suspension, …) are never entered here — their constructors
+   are not surface `T | U` annotations, so they stay off this table and keep the
+   cubical path untouched.
+
+   ctor name -> (tag index in its type, argument types). Rebuilt per program by
+   [build_sum_registry] from every sum-type annotation in scope. *)
+let sum_ctor_registry : (string, int * S.ty list) Hashtbl.t = Hashtbl.create 32
+let sum_scrut_counter = ref 0
+let fresh_sum_scrut () =
+  incr sum_scrut_counter; Printf.sprintf "__sum_scrut_%d" !sum_scrut_counter
+
+let rec collect_sums_in_ty (t : S.ty) : unit =
+  match t with
+  | S.TySum variants | S.TySumIn (variants, _) ->
+      List.iteri (fun i (v : S.variant) ->
+        Hashtbl.replace sum_ctor_registry v.S.v_name (i, v.S.v_args)) variants;
+      List.iter (fun (v : S.variant) ->
+        List.iter collect_sums_in_ty v.S.v_args) variants
+  | S.TyList inner | S.TyStream inner | S.TySubscription (_, inner) ->
+      collect_sums_in_ty inner
+  | S.TyMap (a, b) | S.TyArrow (a, b) ->
+      collect_sums_in_ty a; collect_sums_in_ty b
+  | S.TyPi (_, a, b) | S.TySigma (_, a, b) ->
+      collect_sums_in_ty a; collect_sums_in_ty b
+  | S.TyId (a, _, _) -> collect_sums_in_ty a
+  | S.TyPathP ((_, a), _, _) -> collect_sums_in_ty a
+  | _ -> ()
+
+let build_sum_registry (p : S.program) : unit =
+  Hashtbl.clear sum_ctor_registry;
+  sum_scrut_counter := 0;
+  let scan_param (pm : S.param) = collect_sums_in_ty pm.S.param_ty in
+  List.iter (function
+    | S.TopType (_name, variants, _) ->
+        (* a named sum registers its constructors exactly like an inline one *)
+        collect_sums_in_ty (S.TySum variants)
+    | S.TopFun fd ->
+        List.iter scan_param fd.S.fn_params;
+        (match fd.S.fn_return with Some t -> collect_sums_in_ty t | None -> ())
+    | S.TopPlace pd ->
+        List.iter (function
+          | S.FoField field -> collect_sums_in_ty field.S.fd_ty
+          | S.FoOp op ->
+              List.iter scan_param op.S.op_params;
+              (match op.S.op_return with Some t -> collect_sums_in_ty t | None -> ())
+          | _ -> ()) pd.S.pd_members
+    | _ -> ()) p
+
 (* Local bindings name -> handle-lambda. Filled by the statement desugar when a
  * name is bound to an EFunctorLam/EMoveLam/EMorphLam/etc. Consulted by
  * analyze_handle in compose: `compose f with g` with f, g local resolves the
@@ -391,15 +450,27 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.EVar (x, _) -> C.Var x
   | S.EApp (f, args, _) ->
       curry_apply (desugar_expr f) (List.map desugar_expr args)
-  | S.EHITElim (_motive, branches, x, _) ->
-      C.HITElim
-        (List.map (fun (n, vars, e) -> (n, vars, desugar_expr e)) branches,
-         desugar_expr x)
+  | S.EHITElim (_motive, branches, x, loc) ->
+      (* A custom sum eliminates at RUNTIME via a tag switch on the MerkleTree
+         carrier; a built-in HIT keeps the cubical eliminator (kernel β-rule). *)
+      (match branches with
+       | (ctor, _, _) :: _ when Hashtbl.mem sum_ctor_registry ctor ->
+           lower_sum_elim branches x loc
+       | _ ->
+           C.HITElim
+             (List.map (fun (n, vars, e) -> (n, vars, desugar_expr e)) branches,
+              desugar_expr x))
   | S.EPathApp (p, d, _) ->
       let i = (match d with S.DI0 -> C.I0 | S.DI1 -> C.I1 | S.DIVar s -> C.IVar s) in
       C.PApp (desugar_expr p, i)
   | S.EPathAbs (i, e, _) -> C.PLam (i, desugar_expr e)
-  | S.EHITConstr (ctor, args, _) -> C.HITConstr (ctor, List.map desugar_expr args)
+  | S.EHITConstr (ctor, args, loc) ->
+      (* A custom sum constructor builds a MerkleTree node (tag + payload
+         children); a built-in HIT constructor stays a homotopy value. *)
+      (match Hashtbl.find_opt sum_ctor_registry ctor with
+       | Some (tag, arg_tys) when List.length arg_tys = List.length args ->
+           lower_sum_constr tag arg_tys args loc
+       | _ -> C.HITConstr (ctor, List.map desugar_expr args))
   | S.EField (obj, fld, _) ->
       (* "obj.field" translates to a projection function applied to obj.
          In Core we model this as application of a named projection. *)
@@ -988,6 +1059,80 @@ and desugar_expr (e0 : S.expr) : C.term =
         (name, C.Lam (x_param_name, desugar_ty h1_src, outer))
         :: !compose_synth_bodies;
       C.Var name
+
+(* Box a constructor argument for storage as a MerkleTree child: a number is
+   wrapped in a leaf; a nested sum value is already a handle, stored directly. *)
+and encode_sum_arg (arg : S.expr) (arg_ty : S.ty) (loc : S.location) : S.expr =
+  match arg_ty with
+  | S.TySum _ | S.TySumIn _ | S.TyUser _ -> arg
+  | _ -> S.ECall ("MerkleTree__leaf", [arg], loc)
+
+(* hit(Ctor, args) for a custom sum -> node_k(tag, child0, .., child_{k-1}).
+   A nullary constructor is a bare leaf(tag); arities 1..4 map onto node2/3/4
+   (arity 1 pads the second child with leaf(0)). Built as the same surface
+   MerkleTree calls the self-host writes by hand, then desugared. *)
+and lower_sum_constr (tag : int) (arg_tys : S.ty list)
+    (args : S.expr list) (loc : S.location) : C.term =
+  let num n = S.ELit (S.LitNumber (float_of_int n), loc) in
+  let zero = S.ECall ("MerkleTree__leaf", [num 0], loc) in
+  let cs = List.map2 (fun a t -> encode_sum_arg a t loc) args arg_tys in
+  let node =
+    match cs with
+    | [] -> S.ECall ("MerkleTree__leaf", [num tag], loc)
+    | [c0] -> S.ECall ("MerkleTree__node2", [num tag; c0; zero], loc)
+    | [c0; c1] -> S.ECall ("MerkleTree__node2", [num tag; c0; c1], loc)
+    | [c0; c1; c2] -> S.ECall ("MerkleTree__node3", [num tag; c0; c1; c2], loc)
+    | [c0; c1; c2; c3] ->
+        S.ECall ("MerkleTree__node4", [num tag; c0; c1; c2; c3], loc)
+    | _ -> failwith "native sum lowering: constructor arity > 4 is not yet supported"
+  in
+  desugar_expr node
+
+(* match/hit_elim on a runtime custom-sum value -> a tag switch. The scrutinee
+   is bound once (a Core let, inlined by emit), its tag read with `label`, and
+   each branch guarded by `label(scrut) == tag_i`; the last branch is the
+   remaining constructor, taken unconditionally (the match is exhaustive). A
+   branch's payload binders are bound by Core lets to their projections
+   (`label(child(scrut,j))` for a number, `child(scrut,j)` for a nested sum). *)
+and lower_sum_elim (branches : (string * string list * S.expr) list)
+    (scrut : S.expr) (loc : S.location) : C.term =
+  let num n = S.ELit (S.LitNumber (float_of_int n), loc) in
+  let sv = fresh_sum_scrut () in
+  let sref = S.EVar (sv, loc) in
+  let label e = S.ECall ("MerkleTree__label", [e], loc) in
+  let child e j = S.ECall ("MerkleTree__child", [e; num j], loc) in
+  let branch_body (ctor, vars, body) =
+    let arg_tys =
+      match Hashtbl.find_opt sum_ctor_registry ctor with
+      | Some (_, tys) -> tys
+      | None -> []
+    in
+    let body_c = desugar_expr body in
+    snd (List.fold_left
+      (fun (j, acc) v ->
+        let vty = try List.nth arg_tys j with _ -> S.TyPrim "number" in
+        let proj =
+          match vty with
+          | S.TySum _ | S.TySumIn _ | S.TyUser _ -> child sref j
+          | _ -> label (child sref j)
+        in
+        (j + 1, C.App (C.Lam (v, C.TyPlace "number", acc), desugar_expr proj)))
+      (0, body_c) vars)
+  in
+  let rec chain = function
+    | [] -> desugar_expr (num 0)     (* an exhaustive match never reaches here *)
+    | [last] -> branch_body last     (* the remaining constructor: unconditional *)
+    | (ctor, _, _ as b) :: rest ->
+        let tag =
+          match Hashtbl.find_opt sum_ctor_registry ctor with
+          | Some (t, _) -> t
+          | None -> 0
+        in
+        let cond = S.EBinop (S.OpEq, label sref, num tag, loc) in
+        curry_apply (C.Var "__if_expr")
+          [desugar_expr cond; branch_body b; chain rest]
+  in
+  C.App (C.Lam (sv, C.TyPlace "number", chain branches), desugar_expr scrut)
 
 and desugar_literal (l : S.literal) : C.term =
   match l with
@@ -2237,6 +2382,9 @@ let delta_rule_of_fun (env : Tyenv.env) (fn : S.fun_decl) : C.term option =
 let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_result =
   match td with
   | S.TopImport _ -> res   (* import resolved physically pre-parse; no-op *)
+  | S.TopType _ -> res   (* a named sum: a compile-time type decl, no Core body.
+                            Its constructors are lowered at their use sites via
+                            the sum registry (build_sum_registry). *)
   | S.TopImportSym _ -> res   (* selective import: handled in 4b *)
   | S.TopImportFrom (_, _, sp, _) ->
       if List.mem sp res.space_imports then res
@@ -2728,6 +2876,7 @@ let desugar_program ?(env : Tyenv.env option = None)
      inert, so behavior is identical to before. *)
   let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
   current_env := env;
+  build_sum_registry p;  (* ctor -> (tag, arg types) for the MerkleTree lowering *)
   (* Pre-rewriting that propagates tp_at_space to the `new P { ... }`
    * expressions inside functions. *)
   reset_synth ();  (* reset the accumulator of handle lambdas *)

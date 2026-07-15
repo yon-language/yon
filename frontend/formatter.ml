@@ -455,6 +455,8 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
   (match td with
    | TopFun fn -> fmt_fun f fn
    | TopPlace pd -> fmt_place f pd
+   | TopType (name, variants, _) ->
+       line f (Printf.sprintf "inductive %s = %s" name (fmt_ty (TySum variants)))
    | TopWorld wd -> fmt_world f wd
    | TopFunctor ft -> fmt_functor f ft
    | TopNatTransform nt -> fmt_nat_transform f nt
