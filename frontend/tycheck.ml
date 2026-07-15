@@ -676,7 +676,12 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                   | TyUniverse _ -> true
                   | _ -> false in
                 let handled = List.map (fun (name, _, _) -> name) branches in
-                let missing = Hit_env.missing_constructors sig_ handled in
+                (* `_` is a catch-all: it discharges every not-listed constructor,
+                   so a match with a wildcard is always exhaustive. *)
+                let has_wildcard = List.mem "_" handled in
+                let missing =
+                  if has_wildcard then []
+                  else Hit_env.missing_constructors sig_ handled in
                 let rec duplicate = function
                   | [] -> None
                   | n :: ns -> if List.mem n ns then Some n else duplicate ns
@@ -730,6 +735,9 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                    * path branch : El(C(ctor@i)) (path-over), result : El(C x). *)
                   let rec check_branches = function
                     | [] -> ok ()
+                    | ("_", _, _) :: _ ->
+                        err loc "hit_elim: the wildcard `_` needs a non-dependent \
+                                 motive; with a dependent motive list every constructor"
                     | (ctor, vars, v) :: rest ->
                         let* kind = constructor ctor in
                         let params = Hit_env.constructor_params kind in
@@ -768,6 +776,13 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                    | TyArrow (_, cod) | TyPi (_, _, cod) ->
                        let rec check_rec = function
                          | [] -> ok ()
+                         | ("_", vars, v) :: rest ->
+                             (* wildcard: binds nothing, body has the result type *)
+                             if vars <> [] then
+                               err loc "hit_elim: the wildcard branch `_` binds no payload"
+                             else
+                               let* () = check env ctx v cod in
+                               check_rec rest
                          | (ctor, vars, v) :: rest ->
                              let* kind = constructor ctor in
                              let params = Hit_env.constructor_params kind in

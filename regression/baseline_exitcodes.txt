@@ -48,3 +48,5 @@ RAN native_sum_match exit=42
 RAN native_sum_runtime exit=42
 RAN inductive_tree exit=42
 RAN inductive_list exit=42
+RAN inductive_arity3 exit=42
+RAN inductive_wildcard exit=42
