@@ -56,6 +56,11 @@ let rec expr_equal (a : S.expr) (b : S.expr) : bool =
       expr_equal ha hb
       && List.length asa = List.length asb
       && List.for_all2 expr_equal asa asb
+  | S.EHITConstr (ca, asa, _), S.EHITConstr (cb, asb, _) ->
+      ca = cb
+      && List.length asa = List.length asb
+      && List.for_all2 expr_equal asa asb
+  | S.ERefl (ea, _), S.ERefl (eb, _) -> expr_equal ea eb
   | S.EParen (ea, _), eb -> expr_equal ea eb
   | ea, S.EParen (eb, _) -> expr_equal ea eb
   | _ -> false  (* altre forme: pessimistico *)

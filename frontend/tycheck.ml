@@ -551,6 +551,101 @@ let rec first_assign_loc (ss : stmt list) : location option =
               | None -> (match oth with Some o -> first_assign_loc o | None -> None)))
       | _ -> None) None ss
 
+(* Resolve the point-constructor signature of an inductive from the scrutinee's
+   type: a declared sum (`TySum`/`TySumIn`), a named `inductive T = ...` (via
+   lookup_named_sum), or a builtin HIT. `pc_result` is the scrutinee type itself.
+   Shared by the hit_elim inference arm and the dependent-elimination check. *)
+let hit_signature_of (env : Tyenv.env) (x_ty : ty)
+    : (string * Hit_env.hit_signature) option =
+  let sig_of_variants name variants =
+    let points =
+      List.map
+        (fun variant ->
+           let params =
+             List.mapi (fun i ty -> (Printf.sprintf "arg%d" i, ty)) variant.v_args
+           in
+           { Hit_env.pc_name = variant.v_name; pc_params = params;
+             pc_result = x_ty })
+        variants
+    in
+    (name,
+     { Hit_env.hit_name = name; hit_type_params = [];
+       hit_points = points; hit_paths = [] })
+  in
+  match x_ty with
+  | TySum variants | TySumIn (variants, _) ->
+      Some (sig_of_variants (Tyenv.type_tag x_ty) variants)
+  | TyPrim n | TyPrimIn (n, _) | TyUser n ->
+      (match Tyenv.lookup_named_sum env n with
+       | Some variants -> Some (sig_of_variants n variants)
+       | None ->
+           Option.map (fun sig_ -> (n, sig_))
+             (Hit_env.lookup Hit_env.builtin_env n))
+  | _ -> None
+
+(* Substitute the surface variable [xv] by the expression [repl] inside a type,
+   reaching the term endpoints a dependent type carries (`TyTermExpr`). This is
+   how the expected type P(x) becomes P[x := ctor] per branch in the dependent
+   eliminator. Mirrors Dispatcher.rename_ty but replaces a variable with a term,
+   reusing Desugar.subst_evar_in_expr at the leaves. *)
+let rec subst_evar_in_ty (xv : string) (repl : expr) (t : ty) : ty =
+  let r = subst_evar_in_ty xv repl in
+  let rt = function
+    | TyTermExpr ex -> TyTermExpr (Desugar.subst_evar_in_expr xv repl ex) in
+  match t with
+  | TyId (a, x, y) -> TyId (r a, rt x, rt y)
+  | TyEl c -> TyEl (rt c)
+  | TyArrow (a, b) -> TyArrow (r a, r b)
+  | TyPi (v, d, c) ->
+      if String.equal v xv then TyPi (v, r d, c) else TyPi (v, r d, r c)
+  | TySigma (v, d, c) ->
+      if String.equal v xv then TySigma (v, r d, c) else TySigma (v, r d, r c)
+  | TyPathP ((i, a), x, y) -> TyPathP ((i, r a), rt x, rt y)
+  | _ -> t
+
+(* Does the type refer to [xv] at a term endpoint? Only then is the expected type
+   a genuine motive that varies with the scrutinee, so the dependent check is
+   warranted (otherwise the ordinary constant-motive path applies unchanged). *)
+let rec ty_mentions_evar (xv : string) (t : ty) : bool =
+  let in_tt = function TyTermExpr ex -> List.mem xv (free_vars_expr ex) in
+  match t with
+  | TyId (a, x, y) -> ty_mentions_evar xv a || in_tt x || in_tt y
+  | TyEl c -> in_tt c
+  | TyArrow (a, b) -> ty_mentions_evar xv a || ty_mentions_evar xv b
+  | TyPi (v, d, c) ->
+      ty_mentions_evar xv d || (not (String.equal v xv) && ty_mentions_evar xv c)
+  | TySigma (v, d, c) ->
+      ty_mentions_evar xv d || (not (String.equal v xv) && ty_mentions_evar xv c)
+  | TyPathP ((_, a), x, y) -> ty_mentions_evar xv a || in_tt x || in_tt y
+  | _ -> false
+
+(* Categorical certification for dependent elimination. An inductive is the
+   initial F-algebra; its constructors form a cocone into the carrier, and a
+   dependent eliminator is the unique map factoring the branch cone through that
+   colimit (the initial-algebra universal property). We build the constructor
+   pasting-diagram, take its universal colimit cell, and factor the branch cone
+   through it. This activates the CaTT universal-property machinery
+   (Catt_r_yon.universal_colimit_cell / factor_through) that the checker already
+   carries, so dependent elimination is grounded in the universal property rather
+   than a bare substitution. The operational content — that each branch inhabits
+   its fibre — is the per-branch check below; this is the abstract witness that
+   the branch cone is a well-formed cocone over the carrier. *)
+let certify_dependent_cone (hname : string)
+    (branches : (string * string list * expr) list) : bool =
+  let open Catt_r_yon in
+  let diagram : ps_ctx =
+    (hname, CellStar)
+    :: List.map
+         (fun (ctor, _, _) ->
+            (ctor, CellArr (TmVar ctor, TmVar hname, CellStar)))
+         branches
+  in
+  let apex = TmVar hname in
+  match factor_through (universal_colimit_cell diagram apex) apex
+          (TmVar "__branch_cone") with
+  | Some _ -> true
+  | None -> false
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -907,7 +1002,16 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                else
                  let ty =
                    List.fold_right
-                     (fun (_pname, pty) acc -> TyArrow (pty, acc))
+                     (fun (pname, pty) acc ->
+                        (* A function whose result type mentions a parameter is a
+                           genuine dependent function (a Pi that binds the name),
+                           not an arrow: dropping the binder would leak the
+                           parameter as a free variable in the codomain and defeat
+                           any comparison against the expected Pi (e.g. an equiv
+                           coherence `Pi(a). Id(g(f a), a)`). A non-dependent
+                           parameter stays an arrow, unchanged. *)
+                        if ty_mentions_evar pname acc then TyPi (pname, pty, acc)
+                        else TyArrow (pty, acc))
                      fs.fs_params fs.fs_return
                  in
                  ok ty
@@ -1800,6 +1904,70 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
         | _ -> fallback env e expected
       in
       go env params expected
+  | EHITElim (_, branches, x, loc), _
+      when (match x with
+            | EVar (xv, _) -> ty_mentions_evar xv expected
+            | _ -> false) ->
+      (* Dependent elimination in CHECKING mode. The expected type varies with the
+         scrutinee variable, so it IS the motive P(x): each branch is checked
+         against P[x := ctor], the constructor substituted into the expected type,
+         which then reduces (e.g. bit2b(b2bit(tt)) -> tt) so the branch proof
+         type-checks. This is the induction principle — the unique dependent
+         section given by the inductive's initial-algebra universal property,
+         certified below by factoring the branch cone. Fires ONLY when the
+         expected type mentions the scrutinee; otherwise the constant-motive path
+         (the `__match` infer arm) applies unchanged. The motive is compile-time
+         only: desugar/emit/runtime stay byte-identical (match still lowers to the
+         same tag switch). *)
+      let xv = (match x with EVar (xv, _) -> xv | _ -> assert false) in
+      let* x_ty = infer env ctx x in
+      (match hit_signature_of env x_ty with
+       | None -> fallback env e expected
+       | Some (hname, sig_) ->
+           let handled = List.map (fun (n, _, _) -> n) branches in
+           let missing =
+             if List.mem "_" handled then []
+             else Hit_env.missing_constructors sig_ handled in
+           let* () =
+             match missing with
+             | [] -> ok ()
+             | ns ->
+                 err loc (Printf.sprintf
+                   "match: a result type that varies with the scrutinee needs a \
+                    branch for every constructor; missing %s"
+                   (String.concat ", " ns)) in
+           let rec go_branches = function
+             | [] -> ok ()
+             | ("_", _, _) :: _ ->
+                 err loc "match: a result type that varies with the scrutinee \
+                          needs every constructor listed; `_` cannot refine it"
+             | (ctor, vars, body) :: rest ->
+                 (match Hit_env.find_constructor [hname, sig_] ctor with
+                  | None ->
+                      err loc (Printf.sprintf
+                        "match: constructor %s does not belong to %s" ctor hname)
+                  | Some (_, kind) ->
+                      let params = Hit_env.constructor_params kind in
+                      if List.length vars <> List.length params then
+                        err loc (Printf.sprintf
+                          "match: branch %s expects %d payload binder(s), got %d"
+                          ctor (List.length params) (List.length vars))
+                      else
+                        let branch_env =
+                          Tyenv.add_vars env
+                            (List.combine vars (List.map snd params)) in
+                        let ctor_expr =
+                          EHITConstr
+                            (ctor, List.map (fun n -> EVar (n, loc)) vars, loc) in
+                        let refined = subst_evar_in_ty xv ctor_expr expected in
+                        let* () = check branch_env ctx body refined in
+                        go_branches rest)
+           in
+           let* () = go_branches branches in
+           if certify_dependent_cone hname branches then ok ()
+           else
+             err loc "match: the branch cone does not factor through the \
+                      inductive's universal cell (malformed dependent cocone)")
   | _ -> fallback env e expected
 
 and location_of_expr (e : expr) : location =

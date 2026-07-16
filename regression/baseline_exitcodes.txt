@@ -54,3 +54,4 @@ RAN higher_order_recursive exit=42
 RAN closure_capture exit=42
 RAN handle_lambda_capture exit=44
 RAN closed_morphism_capture exit=7
+RAN cx_univalence_distinct exit=1
