@@ -37,6 +37,15 @@ let synth_reductions : S.reduction_decl list ref = ref []
 let synth_morphs : S.morph_decl list ref = ref []
 let synth_funs : S.fun_decl list ref = ref []
 
+(* For each lifted lambda (__arg_lam_inline_N), how many of its leading params are
+   CAPTURED environment values (the rest are the lambda's own parameters). A
+   closure node stores the captures as its payload; when a closure is CALLED, the
+   dispatcher must read exactly this many captures off the node before appending
+   the call arguments. The split is known here (at the lift) but fused away in the
+   func_sig (params = captures @ lam-params), so it is recorded on the side and
+   read by emit. Reset per program alongside synth_funs. *)
+let synth_cap_count : (string * int) list ref = ref []
+
 (* The bodies of the compose synthetic functions. The synth funs created from
  * S.EComposeWith have a placeholder surface fn_body (return 0); the real
  * C.term body (h2(h1(x))) is filled in here and substituted by
@@ -216,6 +225,7 @@ let reset_synth () =
   synth_reductions := [];
   synth_morphs := [];
   synth_funs := [];
+  synth_cap_count := [];
   compose_synth_bodies := [];
   user_fun_sigs := [];
   handle_bindings := [];
@@ -244,13 +254,21 @@ let rec desugar_ty (t : S.ty) : C.ty =
   | S.TyMap (_, _) -> C.TyPlace "map"
   | S.TyStream inner -> C.TyStream (desugar_ty inner)
   | S.TyUser n when Hashtbl.mem inductive_type_names n ->
-      (* a named inductive is carried at runtime as a MerkleTree handle, an f64.
-         Lower it to the concrete `number` carrier (Scalar f64), NOT a
-         `Section "n"`: a section name is read back by emit's monomorphizer as a
-         generic type parameter (is_type_var), which then cannot be resolved when
-         the type appears only in a RETURN position (the lexer's emit_at). The
-         erased carrier is exactly f64, so `number` is the honest concrete type. *)
-      C.TyPlace "number"
+      (* A named inductive is carried at runtime as a MerkleTree handle (an f64):
+         that layout is honest, a value is a handle. What was a lie is the
+         identity: reusing `number` conflated Tree and List. Its identity is now
+         its content-addressed type_root (the carrier path, Steps 2+3): the place
+         name `ind_<root>` is distinct per type, and carrier.ml carries it as a
+         Section, so the type surfaces in the MLIR as !topos.section<"ind_<root>">
+         and monomorphization keys on identity rather than collapsing onto f64.
+         Falls back to `number` when the typed env is absent (eval/fuzz) or the
+         type is outside Zona 1 (no root). *)
+      (match !current_env with
+       | Some env ->
+           (match Type_root.type_root env (S.TyUser n) with
+            | Some r -> C.TyPlace (Printf.sprintf "ind_%016Lx" r)
+            | None -> C.TyPlace "number")
+       | None -> C.TyPlace "number")
   | S.TyUser n -> C.TyPlace n
   | S.TyApp (n, _) -> C.TyPlace n   (* type args don't affect the uniform runtime carrier *)
   | S.TyVar n -> C.TyPlace n   (* type vars compile to opaque place at IR level *)
@@ -844,6 +862,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         S.fn_loc = _loc;
       } in
       synth_funs := synth_fd :: !synth_funs;
+      synth_cap_count := (synth_name, List.length captured) :: !synth_cap_count;
       if captured = [] then
         C.Var synth_name
       else

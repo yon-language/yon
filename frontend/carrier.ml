@@ -122,18 +122,16 @@ let rec of_core_ty (ty : C.ty) : t =
       (* a primitive place gets its fixed carrier; any other named place is a
          section handle. *)
       (match prim_carrier name with Some c -> c | None -> Section name)
-  | (C.TyArrow (_, _) | C.TyPi (_, _, _)) as ta ->
-      (* a curried arrow a -> b -> c (or a dependent Pi, whose dependency is
-         erased at runtime) flattens to one signature (a, b) -> c;
-         the flattening is a printing detail over one structural carrier. *)
-      let rec uncurry params u =
-        match u with
-        | C.TyArrow (a, b) -> uncurry (a :: params) b
-        | C.TyPi (_, a, b) -> uncurry (a :: params) b
-        | other -> (List.rev params, other)
-      in
-      let (params, ret) = uncurry [] ta in
-      Arrow (List.map of_core_ty params, of_core_ty ret)
+  | (C.TyArrow (_, _) | C.TyPi (_, _, _)) ->
+      (* A function VALUE is a first-class content-addressed closure: an f64 handle
+         to a node carrying the target's dense index (its tag/postmark) and the
+         captured environment. Calling it reads the tag (label, O(1)) and routes
+         through __yon_closure_call, which opens the node. So a function type lowers
+         to f64 (the handle), not an MLIR function-pointer: the identity travels
+         with the value and the dispatch reads it, never inspects structure. A
+         statically-known callee is still inlined/called directly, an optimization
+         over this uniform value representation. *)
+      Scalar W_f64
   | C.TySigma (_, a, b) ->
       (* comprehension subobject -> carrier alone (proof is zero-bit);
          generic dependent pair -> honest two-field struct. *)
