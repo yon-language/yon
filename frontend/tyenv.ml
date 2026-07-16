@@ -229,6 +229,16 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
       (match lookup_fun env name with
        | Some fs -> fs.fs_visits = [] && List.for_all (is_pure_expr env) args
        | None -> false)
+  (* A data constructor and its eliminator are effect-free: `hit(ctor, args)` is
+     pure iff its arguments are, and `match`/`hit_elim` is pure iff its scrutinee
+     and every branch body are. Recognizing them as pure lets the definitional-
+     equality checker desugar and reduce inductive computations (e.g. a
+     round-trip g(f(c)) on a constructor c), which the dependent eliminator needs
+     to discharge coherences between distinct inductive types. *)
+  | EHITConstr (_, args, _) -> List.for_all (is_pure_expr env) args
+  | EHITElim (motive, branches, scrut, _) ->
+      is_pure_expr env motive && is_pure_expr env scrut
+      && List.for_all (fun (_, _, body) -> is_pure_expr env body) branches
   | ENew _ | ENewIn _ | EIn _ | EAll _
   | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _ | EViewLam _
   | ELam _ | EPullback _ | EPushout _ | EPullbackVal _ -> false

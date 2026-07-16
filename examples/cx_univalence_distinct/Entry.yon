@@ -1,0 +1,37 @@
+inductive Bool = tt | ff
+inductive Bit = one | zero
+
+place Entry {
+// COSA: univalenza fra due tipi induttivi DISTINTI. Bool e Bit hanno root-Merkle
+// diverse (il carrier di Fase 1 le tiene separate apposta), ed e' un'EQUIVALENZA
+// vera, non l'identita': tt<->one, ff<->zero. Il ponte diventa un cammino nei
+// tipi e trasportare `tt` lungo esso lo porta in `one` (exit 1).
+//
+// PERCHE': e' il cuore che Fase 1 sblocca. Perche' l'equivalenza sia un cammino
+// servono le due coerenze del round-trip (bit2b(b2bit(a)) = a e viceversa). Su un
+// induttivo, bit2b(b2bit(a)) e' STUCK finche' `a` e' una variabile (il match non
+// dispaccia su una variabile), quindi refl non basta: la coerenza si prova per
+// ELIMINAZIONE DIPENDENTE. Un `match a` il cui tipo-risultato varia con `a` e'
+// controllato in checking-mode contro quel tipo con il costruttore sostituito ad
+// `a` per ramo (P[a := tt]), cosi' bit2b(b2bit(tt)) computa a tt e refl chiude il
+// ramo. E' il principio d'induzione: la sezione dipendente unica data dalla
+// proprieta' universale dell'algebra iniziale.
+
+fun b2bit(b: Bool): Bit { return match b { tt => hit(one), ff => hit(zero) } }
+fun bit2b(x: Bit): Bool { return match x { one => hit(tt), zero => hit(ff) } }
+
+// Le due coerenze del round-trip, provate per eliminazione dipendente: il tipo
+// di ritorno varia con l'argomento, il `match` lo raffina per costruttore.
+fun eta(a: Bool): Id(Bool, bit2b(b2bit(a)), a) {
+  return match a { tt => refl(hit(tt)), ff => refl(hit(ff)) }
+}
+fun eps(b: Bit): Id(Bit, b2bit(bit2b(b)), b) {
+  return match b { one => refl(hit(one)), zero => refl(hit(zero)) }
+}
+
+fun main(): number {
+  be bridge holds equiv(b2bit, bit2b, eta, eps)   // Bool ~= Bit, non l'identita'
+  be y holds transport(ua(bridge), hit(tt))       // porta tt lungo ua(Bool~=Bit)
+  return match y { one => 1, zero => 0 }           // tt |-> one |-> 1
+}
+}
