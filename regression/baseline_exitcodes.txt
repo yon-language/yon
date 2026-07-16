@@ -51,3 +51,4 @@ RAN inductive_list exit=42
 RAN inductive_arity3 exit=42
 RAN inductive_wildcard exit=42
 RAN higher_order_recursive exit=42
+RAN closure_capture exit=42

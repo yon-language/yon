@@ -10,7 +10,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `python regression/test_syntax_triangle.py`.
 
 - lexer keywords: **128**
-- corpus files: **332**
+- corpus files: **333**
 - CodeWindows: **25**  (project **13**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **35**
 - allowlisted reserved/kernel tokens: **5**
@@ -29,7 +29,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `at` | `AT` | 2 | yes | exercised |
 | `back` | `BACK` | 2 | yes | exercised |
 | `backward` | `BACKWARD` | 1 | yes | exercised |
-| `be` | `LET` | 389 | yes | exercised |
+| `be` | `LET` | 390 | yes | exercised |
 | `bi` | `BI` | 1 | yes | exercised |
 | `by` | `BY` | 7 | yes | exercised |
 | `carry` | `CARRY` | 3 | yes | exercised |
@@ -55,7 +55,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `forward` | `FORWARD` | 2 | yes | exercised |
 | `from` | `FROM` | 37 | yes | exercised |
 | `fst` | `FST` | 7 | yes | exercised |
-| `fun` | `FUN` | 355 | yes | exercised |
+| `fun` | `FUN` | 358 | yes | exercised |
 | `functor` | `FUNCTOR` | 9 | yes | exercised |
 | `functorial` | `FUNCTORIAL` | 1 | yes | exercised |
 | `geomorph` | `GEOM_MORPHISM` | 5 | yes | exercised |
@@ -64,7 +64,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
 | `hit` | `HIT_KW` | 37 | yes | exercised |
 | `hit_elim` | `HIT_ELIM` | 12 | yes | exercised |
-| `holds` | `HOLDS` | 389 | yes | exercised |
+| `holds` | `HOLDS` | 390 | yes | exercised |
 | `if` | `IF_KW` | 33 | yes | exercised |
 | `import` | `IMPORT` | 11 | yes | exercised |
 | `in` | `IN` | 8 | yes | exercised |
@@ -115,7 +115,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `repeat` | `REPEAT` | 2 | yes | exercised |
 | `requires` | `REQUIRES` | 1 | yes | exercised |
 | `resolves` | `RESOLVES` | 1 | yes | exercised |
-| `return` | `RETURN` | 349 | yes | exercised |
+| `return` | `RETURN` | 351 | yes | exercised |
 | `scope` | `SCOPE` | 2 | yes | exercised |
 | `sequence` | `SEQUENCE` | 1 | yes | exercised |
 | `share` | `SHARE` | 1 | yes | exercised |
