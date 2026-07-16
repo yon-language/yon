@@ -4666,16 +4666,8 @@ let check_program (p : program) : check_result =
                         err_msg = Printf.sprintf
                           "duplicate top-level function '%s'" fd.fn_name } ] }
   | None ->
-  match List.find_opt
-          (fun fd -> match fd.fn_return with Some (TyArrow _) -> true | _ -> false)
-          fun_decls with
-  | Some fd ->
-      { cr_env = Tyenv.with_builtins Tyenv.empty;
-        cr_errors = [ { err_loc = fd.fn_loc;
-                        err_msg = Printf.sprintf
-                          "function '%s': a functional return type (T -> U) is not \
-                           supported; return a value or use a handle" fd.fn_name } ] }
-  | None ->
+  (* A functional return type (T -> U) is now supported: the function returns a
+     first-class content-addressed closure, an f64 handle (Stage B). *)
   (* HM-light for fun
    * signatures with "_" param or missing return type. Heuristic best-effort
    * on call-sites. *)

@@ -746,6 +746,16 @@ let is_type_var (e : emitter) (name : string) : bool =
   && not (is_prim_name name)
   && not (List.mem_assoc name e.places_table)
   && not (List.mem_assoc name e.toposes_index)
+  && not (String.length name >= 4 && String.sub name 0 4 = "ind_")
+
+(* Is this MLIR type the section handle of a named inductive `ind_<root>`? These
+   are the only sections that carry a MerkleTree f64 value: the section lives at
+   function signatures, but the body works in f64, so section<->f64 is coerced at
+   the boundaries (function entry/exit, call args/results). *)
+let is_ind_section (ty : string) : bool =
+  let pre = "!topos.section<\"ind_" in
+  String.length ty >= String.length pre
+  && String.sub ty 0 (String.length pre) = pre
 
 (* Look up an operation by its mangled name `<Place>__<op>`. Returns the place
    name and the operation signature if found. Used to recognize operation call
@@ -1183,6 +1193,10 @@ let rec infer_mlir_ty (e : emitter)
                    let arrow_idx = Str.search_forward (Str.regexp " -> ") fn_ty 0 in
                    String.sub fn_ty (arrow_idx + 4) (String.length fn_ty - arrow_idx - 4)
                  with Not_found -> "f64")
+            | Some (_, "f64") ->
+                (* a local f64 in call position is a closure handle; applying it
+                   dispatches through __yon_closure_call and yields f64. *)
+                "f64"
             | Some (alias, _) when String.length alias > 10
                                    && String.sub alias 0 10 = "__hof_ref:" ->
                 let real_fname = String.sub alias 10
@@ -1462,6 +1476,80 @@ let make_mono_registry () : mono_registry = {
    every recursive call of emit_term. *)
 let mono_global : mono_registry ref = ref (make_mono_registry ())
 
+(* The stack of higher-order functions currently being inlined at a call site
+   (see the HOF-inline case in emit_term). A HOF called with a static function
+   argument is specialized by substituting the argument into the callee body and
+   emitting that body inline. For a recursive HOF the inlined body contains the
+   self-call with the same static argument, so inlining it again would never
+   terminate (it ran the frontend out of memory). This stack breaks the loop: a
+   HOF already on it is not inlined again; the call falls through to the generic
+   path, which passes the function as a func.constant value and emits a normal
+   func.call to the callee (a func.func with a function-pointer parameter that
+   calls it via call_indirect, exactly as a non-recursive HOF already does). It
+   is a stack, not a flag, so mutual recursion (F inlines G inlines F) is caught
+   too. Global for the same reason as mono_global: it avoids threading state
+   through every recursive call of emit_term. *)
+let hof_inline_stack : string list ref = ref []
+
+(* The functions a closure value can target, in a STABLE dense order shared by the
+   closure constructor (which stamps a node's tag with the target's index) and the
+   __yon_closure_call dispatcher (which routes on that index). Both must read the
+   SAME order, so it lives here, once. A target is a lifted lambda
+   (an __arg_lam_inline_N) or a plain user function, arity <= 4, all-f64. *)
+let closure_target_list (funcs : (string * func_sig) list)
+    : (string * func_sig) list =
+  List.filter (fun (name, fs) ->
+    name <> "main"
+    && List.length fs.fn_params <= 4
+    && List.for_all (fun (_, pty) -> core_ty_to_mlir_simple pty = "f64") fs.fn_params
+    && fs.fn_ret_mlir = "f64"
+    && not (String.length name >= 7 && String.sub name 0 7 = "yon_rt_")
+    && not (String.length name >= 8 && String.sub name 0 8 = "Stream__")
+    && (let is_arg_lam =
+          String.length name >= 16 && String.sub name 0 16 = "__arg_lam_inline" in
+        is_arg_lam
+        || not (String.length name >= 2 && String.sub name 0 2 = "__"))) funcs
+
+(* The dense index a closure carries as its tag for [name], or None if [name] is
+   not a legal closure target. Same order as closure_target_list, by construction. *)
+let closure_target_index (funcs : (string * func_sig) list) (name : string)
+    : int option =
+  let rec go i = function
+    | [] -> None
+    | (n, _) :: _ when n = name -> Some i
+    | _ :: rest -> go (i + 1) rest
+  in go 0 (closure_target_list funcs)
+
+(* Build a closure value: a content-addressed node carrying the target's dense
+   index as its tag and the captured values as its payload, on the same
+   node2/leaf spine an inductive value uses (label = tag, payload j reachable at
+   child((child _ 1)^j, 0)). Returns the f64 handle. __yon_closure_call reads the
+   tag with `label` and routes O(1); the caller reads the caps with `child`. *)
+let emit_closure_node (e : emitter) (funcs : (string * func_sig) list)
+    (target : string) (caps : string list) : string * string =
+  let idx = match closure_target_index funcs target with
+    | Some i -> i
+    | None -> failwith (Printf.sprintf
+        "[emit_mlir closure] '%s' is not a legal closure target." target) in
+  let const c =
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.constant %d.0 : f64" v c); v in
+  let leaf x =
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf
+      "%s = func.call @yon_rt_merkle_leaf(%s) : (f64) -> f64" v x); v in
+  let node2 l a b =
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf
+      "%s = func.call @yon_rt_merkle_node2(%s, %s, %s) : (f64, f64, f64) -> f64"
+      v l a b); v in
+  match caps with
+  | [] -> (leaf (const idx), "f64")               (* no captures: a bare tag leaf *)
+  | c0 :: rest ->
+      let zero = const 0 in
+      let tail = List.fold_right (fun cap acc -> node2 zero cap acc) rest (leaf zero) in
+      (node2 (const idx) c0 tail, "f64")
+
 (* Request a specialization of fs at the concrete types concrete_mlir. If it
    was already generated, return its mangled name; otherwise generate it,
    queue it as pending, and return the new name. *)
@@ -1706,17 +1794,25 @@ let rec emit_term (e : emitter)
                                v x fs.fn_ret_mlir);
                 (v, fs.fn_ret_mlir)
             | Some fs ->
-                (* A bare Var naming an n-ary function becomes a
-                   func.constant @name (a function pointer), usable in
-                   scf.if/scf.select and call_indirect. Its MLIR type is
-                   (param_tys) -> ret_ty. *)
-                let v = fresh_ssa e in
-                let param_tys = List.map (fun (_, t) -> core_ty_to_mlir_simple t) fs.fn_params in
-                let func_ty = Printf.sprintf "(%s) -> %s"
-                  (String.concat ", " param_tys) fs.fn_ret_mlir in
-                emit_line e (Printf.sprintf "%s = func.constant @%s : %s"
-                               v x func_ty);
-                (v, func_ty)
+                (match closure_target_index funcs x with
+                 | Some _ ->
+                     (* A bare Var naming a function, used as a VALUE, is an
+                        empty-env closure handle (f64): the function is the target,
+                        with no captures. Applying it later dispatches through
+                        __yon_closure_call. This is the uniform value form. *)
+                     emit_closure_node e funcs x []
+                 | None ->
+                     (* Not a legal closure target (e.g. arity > 4 or a non-f64
+                        signature): keep the raw function pointer for the paths
+                        that still consume one. *)
+                     let v = fresh_ssa e in
+                     let param_tys =
+                       List.map (fun (_, t) -> core_ty_to_mlir_simple t) fs.fn_params in
+                     let func_ty = Printf.sprintf "(%s) -> %s"
+                       (String.concat ", " param_tys) fs.fn_ret_mlir in
+                     emit_line e (Printf.sprintf "%s = func.constant @%s : %s"
+                                    v x func_ty);
+                     (v, func_ty))
             | None ->
                 (* A string literal __str_X — String fusion: emit the
                  * address of its module global and intern it at runtime to
@@ -2572,16 +2668,20 @@ let rec emit_term (e : emitter)
           v'
         end else vc_raw
       in
-      let ty = infer_mlir_ty e env funcs then_t in
+      let ty0 = infer_mlir_ty e env funcs then_t in
+      (* inductive values are f64 inside a body (section only at signatures) *)
+      let ty = if is_ind_section ty0 then "f64" else ty0 in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = scf.if %s -> (%s) {" v vc ty);
       push_indent e;
-      let (vt, _) = emit_term e env funcs then_t in
+      let (vt0, vt_ty) = emit_term e env funcs then_t in
+      let vt = coerce_to_param e vt0 vt_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" vt ty);
       pop_indent e;
       emit_line e "} else {";
       push_indent e;
-      let (ve, _) = emit_term e env funcs else_t in
+      let (ve0, ve_ty) = emit_term e env funcs else_t in
+      let ve = coerce_to_param e ve0 ve_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" ve ty);
       pop_indent e;
       emit_line e "}";
@@ -2598,16 +2698,20 @@ let rec emit_term (e : emitter)
           v'
         end else vc_raw
       in
-      let ty = infer_mlir_ty e env funcs then_t in
+      let ty0 = infer_mlir_ty e env funcs then_t in
+      (* inductive values are f64 inside a body (section only at signatures) *)
+      let ty = if is_ind_section ty0 then "f64" else ty0 in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = scf.if %s -> (%s) {" v vc ty);
       push_indent e;
-      let (vt, _) = emit_term e env funcs then_t in
+      let (vt0, vt_ty) = emit_term e env funcs then_t in
+      let vt = coerce_to_param e vt0 vt_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" vt ty);
       pop_indent e;
       emit_line e "} else {";
       push_indent e;
-      let (ve, _) = emit_term e env funcs else_t in
+      let (ve0, ve_ty) = emit_term e env funcs else_t in
+      let ve = coerce_to_param e ve0 ve_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" ve ty);
       pop_indent e;
       emit_line e "}";
@@ -4081,15 +4185,36 @@ let rec emit_term (e : emitter)
                  | C.TyPlace "view_handle" ->
                      true
                  | _ -> true
-               ) fs.fn_params args) ->
+               ) fs.fn_params args)
+           (* ... and we are not already inlining this function. A recursive HOF
+              re-meets its own call in the inlined body; inlining it again never
+              terminates. When fname is on the inline stack, this guard fails and
+              the call falls through to the generic func.call path below, which
+              passes the function as a func.constant value (call_indirect in the
+              callee). Stack, not flag, so mutual recursion is caught too. *)
+           && not (List.mem fname !hof_inline_stack) ->
            let fs = List.assoc fname funcs in
            (* For each parameter and argument, substitute the parameter name
             * with the Core IR argument. *)
            let inlined_body = List.fold_left2 (fun body (pname, _ptype) arg ->
              Subst.subst pname arg body
            ) fs.fn_body fs.fn_params args in
-           (* Emit the inlined body in the current env. *)
-           emit_term e env funcs inlined_body
+           (* Emit the inlined body in the current env, marking fname as being
+             inlined so its self-call in the body takes the generic path. *)
+           hof_inline_stack := fname :: !hof_inline_stack;
+           let inlined_result = emit_term e env funcs inlined_body in
+           hof_inline_stack :=
+             (match !hof_inline_stack with _ :: tl -> tl | [] -> []);
+           inlined_result
+       | Some (fname, args) when
+           List.mem_assoc fname funcs
+           && List.length args < List.length (List.assoc fname funcs).fn_params
+           && closure_target_index funcs fname <> None ->
+           (* Partial application of a closure target = a closure VALUE: the given
+              args are its captured environment. Build the closure node; its tag is
+              fname's dense index, read back by __yon_closure_call at the call. *)
+           let cap_ssas = List.map (fun a -> fst (emit_term e env funcs a)) args in
+           emit_closure_node e funcs fname cap_ssas
        | Some (fname, args) when List.mem_assoc fname funcs ->
            let fs = List.assoc fname funcs in
            let n_expected = List.length fs.fn_params in
@@ -4146,7 +4271,10 @@ let rec emit_term (e : emitter)
            let arg_ty_str = String.concat ", " param_tys in
            emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                           v call_name arg_str arg_ty_str ret_ty);
-           (v, ret_ty)
+           (* An inductive result comes back as its section handle; unpack to f64 so
+              the body stays f64 (section only at signatures). *)
+           if is_ind_section ret_ty then (coerce_to_param e v ret_ty "f64", "f64")
+           else (v, ret_ty)
        (* apply_move(MoveName, instance) is the identity on instance, with a
         * type cast to the target place declared by the move.
         * Pattern: App(App(Var "apply_move", Var move_name), instance).
@@ -4746,6 +4874,31 @@ let rec emit_term (e : emitter)
            (v, ret_ty)
        | Some (fname, args) when
            (match Env.find_opt fname env with
+            | Some (_, "f64") -> true
+            | _ -> false) ->
+           (* fname is a local CLOSURE handle (an f64): applying it dispatches
+              through __yon_closure_call, which reads the tag and the captured
+              environment off the node and routes. The caller just passes the
+              handle and the call arguments, padded to the fixed a1..a4 arity. *)
+           let v_clo = (match Env.find_opt fname env with
+             | Some (v, _) -> v | None -> assert false) in
+           let arg_ssas = List.map (fun a -> fst (emit_term e env funcs a)) args in
+           let take4 lst =
+             let rec go k = function
+               | [] -> [] | _ when k = 0 -> [] | x :: xs -> x :: go (k - 1) xs
+             in go 4 lst in
+           let base = take4 arg_ssas in
+           let dummy () =
+             let z = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" z); z in
+           let padded = base @ List.init (4 - List.length base) (fun _ -> dummy ()) in
+           let v = fresh_ssa e in
+           emit_line e (Printf.sprintf
+             "%s = func.call @__yon_closure_call(%s, %s) : (f64, f64, f64, f64, f64) -> f64"
+             v v_clo (String.concat ", " padded));
+           (v, "f64")
+       | Some (fname, args) when
+           (match Env.find_opt fname env with
             | Some (ssa, _) -> String.length ssa > 10
                                && String.sub ssa 0 10 = "__hof_ref:"
             | None -> false) ->
@@ -5176,15 +5329,20 @@ let extract_morph_in_space (name : string) : (string * string) option =
 let coerce_return (e : emitter) (v : string) (v_ty : string)
     (ret_ty : string) : string =
   if v_ty <> ret_ty && v_ty = "f64" then
-    match extract_place_name ret_ty with
-    | Some place ->
-        (* body was Unit (f64 placeholder) but a section is expected:
-           materialize the terminal value of that place. *)
-        let v_unit = fresh_ssa e in
-        emit_line e (Printf.sprintf
-          "%s = func.call @__new_%s() : () -> %s" v_unit place ret_ty);
-        v_unit
-    | None -> v
+    (* An inductive returns its MerkleTree f64 handle; pack it back into the
+       section handle via the wire coercion, NOT the terminal constructor
+       (__new_ materializes a fieldless place, which an inductive is not). *)
+    if is_ind_section ret_ty then coerce_to_param e v v_ty ret_ty
+    else
+      match extract_place_name ret_ty with
+      | Some place ->
+          (* body was Unit (f64 placeholder) but a section is expected:
+             materialize the terminal value of that place. *)
+          let v_unit = fresh_ssa e in
+          emit_line e (Printf.sprintf
+            "%s = func.call @__new_%s() : () -> %s" v_unit place ret_ty);
+          v_unit
+      | None -> v
   else v
 
 let emit_function (e : emitter) (funcs : (string * func_sig) list)
@@ -5198,8 +5356,19 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
   emit_str e (Printf.sprintf "func.func @%s(%s) -> %s {\n"
                 fs.fn_name (String.concat ", " param_strs) ret_ty);
   push_indent e;
+  (* A named inductive param arrives as its section handle `!topos.section<ind_...>`
+     (its visible content-addressed identity), but the body works on the MerkleTree
+     f64 handle. Unpack it to f64 at entry, so the section lives ONLY at the
+     signature and the whole body is f64 (merkle ops, scf yields). The inverse
+     (f64 -> section) is coerce_return at exit. This is the section<->f64 discipline
+     that makes a first-class inductive carrier compile. *)
   let env = List.fold_left (fun env (n, t) ->
-    Env.add n (Printf.sprintf "%%arg_%s" n, core_ty_to_mlir_simple t) env
+    let mty = core_ty_to_mlir_simple t in
+    if is_ind_section mty then
+      let f = coerce_to_param e (Printf.sprintf "%%arg_%s" n) mty "f64" in
+      Env.add n (f, "f64") env
+    else
+      Env.add n (Printf.sprintf "%%arg_%s" n, mty) env
   ) Env.empty fs.fn_params in
   (* If the function is a synthesized __morph_in_<S>__<M>, wrap its body with
      begin/end_cross_space_op to announce the space context to the runtime. The
@@ -5806,6 +5975,79 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     acc := res_v
   ) dispatchable;
   emit_line e (Printf.sprintf "return %s : f64" !acc);
+  pop_indent e;
+  emit_line e "}";
+
+  (* ── __yon_closure_call(func_idx, a1..a4) -> result ───────────────────
+   * The closure dispatcher: a DENSE-indexed jump table over every function a
+   * closure value can target (a lifted lambda __arg_lam_inline_*, or a plain
+   * user function). A closure node carries its target's dense index as its tag;
+   * calling a closure reads that index (O(1), a `label` read on the node) and
+   * routes here. Keyed on the dense 0..k index, NOT the sparse name hash, so
+   * the switch lowers to a jump table: the dispatch reads the postmark and
+   * indexes, it never scans. Always emitted; dead until a closure call is
+   * wired (Stage B). *)
+  let closure_targets = closure_target_list funcs in
+  let cap_count name =
+    match List.assoc_opt name !Desugar.synth_cap_count with Some m -> m | None -> 0 in
+  (* Takes the closure HANDLE (not a bare index): the dispatcher opens the
+     envelope. It reads the tag with `label`, and for the matching target reads
+     that target's captured values off the node (child projection, the same spine
+     an inductive uses) before appending the call arguments a1.. . So the caller
+     just passes (handle, call-args); it never needs to know the capture count. *)
+  emit_line e "func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {";
+  push_indent e;
+  let v_c0 = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_c0);
+  let v_c1 = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = arith.constant 1.0 : f64" v_c1);
+  let v_idx = fresh_ssa e in
+  emit_line e (Printf.sprintf
+    "%s = func.call @yon_rt_merkle_label(%%clo) : (f64) -> f64" v_idx);
+  let v_cdef = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = arith.constant -777.0 : f64" v_cdef);
+  let cacc = ref v_cdef in
+  List.iteri (fun i (name, fs) ->
+    let sel_v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.constant %d.0 : f64" sel_v i);
+    let cmp_v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.cmpf oeq, %s, %s : f64" cmp_v v_idx sel_v);
+    let res_v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = scf.if %s -> f64 {" res_v cmp_v);
+    push_indent e;
+    let p = List.length fs.fn_params in
+    let m = let m0 = cap_count name in if m0 > p then p else m0 in
+    (* read the m captured values off the node: cap_j at child((child _ 1)^j, 0) *)
+    let walker = ref "%clo" in
+    let caps = ref [] in
+    for _j = 0 to m - 1 do
+      let capj = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_merkle_child(%s, %s) : (f64, f64) -> f64" capj !walker v_c0);
+      caps := capj :: !caps;
+      let nxt = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_merkle_child(%s, %s) : (f64, f64) -> f64" nxt !walker v_c1);
+      walker := nxt
+    done;
+    let caps = List.rev !caps in
+    let lam = p - m in
+    let passed = List.init lam (fun j -> Printf.sprintf "%%a%d" (j + 1)) in
+    let tys = List.init p (fun _ -> "f64") in
+    let call_v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> f64"
+                   call_v name (String.concat ", " (caps @ passed))
+                   (String.concat ", " tys));
+    emit_line e (Printf.sprintf "scf.yield %s : f64" call_v);
+    pop_indent e;
+    emit_line e "} else {";
+    push_indent e;
+    emit_line e (Printf.sprintf "scf.yield %s : f64" !cacc);
+    pop_indent e;
+    emit_line e "}";
+    cacc := res_v
+  ) closure_targets;
+  emit_line e (Printf.sprintf "return %s : f64" !cacc);
   pop_indent e;
   emit_line e "}"
 
@@ -6663,6 +6905,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_blank e;
   (* reset the global monomorphization registry for this run *)
   mono_global := make_mono_registry ();
+  hof_inline_stack := [];
   (* Emit only the monomorphic functions (fn_type_params = []). The
      polymorphic ones are emitted on demand as specializations at the end of
      the module. *)

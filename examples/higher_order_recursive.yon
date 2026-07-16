@@ -1,0 +1,31 @@
+// A recursive higher-order function over a native inductive. map_list takes a
+// function f and threads it through the recursion, applying it to every element.
+// This is the shape a compiler-in-Yon is built from (visitors, fold_tree,
+// map_ast), and the case that used to run the frontend out of memory: the emit
+// inlined the higher-order call, and a recursive callee re-inlined its own
+// self-call forever. Now f is a first-class value, a function pointer passed by
+// value (func.constant) and called via call_indirect, so the recursive call is a
+// plain func.call and never re-inlines. Works for a named function or a lambda,
+// direct or mutual recursion.
+
+inductive IntList = Nil | Cons(number, IntList)
+
+fun map_list(f: number -> number, xs: IntList): IntList {
+  return match xs {
+    Nil => hit(Nil),
+    Cons(h, t) => hit(Cons, f(h), map_list(f, t))
+  }
+}
+
+fun sum(xs: IntList): number {
+  return match xs {
+    Nil => 0,
+    Cons(h, t) => h + sum(t)
+  }
+}
+
+fun main(): number {
+  // [20, 20] -- map (y => y + 1) --> [21, 21] -- sum --> 42
+  be xs holds hit(Cons, 20, hit(Cons, 20, hit(Nil)))
+  return sum(map_list(fun(y: number) => y + 1, xs))
+}
