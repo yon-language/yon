@@ -1,0 +1,5 @@
+[package]
+name = "merkle_noncommutative"
+
+[runtime]
+backend = "memory"

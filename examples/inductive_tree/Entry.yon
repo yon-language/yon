@@ -1,0 +1,29 @@
+inductive Tree = Leaf(number) | Node(Tree, Tree)
+
+place Entry {
+// COSA: un tipo di dato algebrico RICORSIVO con nome. `inductive` da' un nome al
+// tipo somma, cosi' un argomento di costruttore puo' riferirsi al tipo che sta
+// definendo (Node porta due Tree) — la ricorsione che un somma anonimo inline
+// non puo' esprimere. Poi lo si valuta a RUNTIME con un catamorfismo.
+//
+// PERCHE': chiude l'unificazione delle due facce dell'algebra iniziale. Un valore
+// Tree ha un CARRIER a runtime: un nodo MerkleTree content-addressed (tag = indice
+// del costruttore; una foglia number e' boxata in una leaf, un sottoalbero Tree e'
+// gia' un handle e si memorizza diretto). `total` e' il catamorfismo: hit_elim
+// dispaccia sul tag e ricorre sui figli, proiettati con `child`. Il content-
+// addressing e' ereditato gratis (il pass SVN collassa i sottoalberi uguali: due
+// foglie con lo stesso numero condividono storage). E' l'algebra iniziale runtime
+// del design, ora un induttivo nativo e non un MerkleTree codificato a mano.
+
+
+fun mot(t: Tree): number { return 0 }
+
+fun total(t: Tree): number {
+  return hit_elim(mot, [Leaf(v) => v, Node(l, r) => total(l) + total(r)], t)
+}
+
+fun main(): number {
+  // Node(Leaf(10), Node(Leaf(15), Leaf(17)))  ->  10 + 15 + 17 = 42
+  return total(hit(Node, hit(Leaf, 10), hit(Node, hit(Leaf, 15), hit(Leaf, 17))))
+}
+}

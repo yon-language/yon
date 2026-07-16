@@ -1,0 +1,15 @@
+place Entry {
+// COSA: univalenza nella voce del VIAGGIO. Si costruisce il ponte `succ <=> pred`
+// (un'equivalenza) e si porta 10 attraverso di esso — `carry 10 along bridge`.
+// PERCHE': un'equivalenza e' un ponte a due sensi fra tipi; trasportare e'
+// PORTARE un valore lungo il ponte. Stesso motore di cx_univalence_named, ma
+// leggibile senza conoscere transport/ua/equiv. Zucchero metonimico che
+// desugar-a a transport(ua(equiv(succ,pred,refl,refl)), 10) = 11.
+fun succ(n: number): number { return n + 1 }
+fun pred(n: number): number { return n - 1 }
+
+fun main(): number {
+  be bridge holds succ <=> pred        // il ponte: coerenze refl sintetizzate
+  return carry 10 along bridge         // -> 11
+}
+}

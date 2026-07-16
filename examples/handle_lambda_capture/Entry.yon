@@ -1,0 +1,13 @@
+// A capturing handle-lambda (Stage C). The view `view(s: P) => base of P`
+// remembers the enclosing local `base`. The old closed-morphism discipline
+// forbade this; now a handle-lambda that captures is a content-addressed closure
+// (its dense tag + the captured env on the node), applied through the closure
+// dispatcher which coerces the section-typed argument across the f64 boundary.
+place Entry { }
+fun main(): number {
+  be base holds 40
+  be sp holds new P { v 0 }
+  be vw holds view(s: P) => base of P
+  be forty holds vw(sp)
+  return forty + 4
+}

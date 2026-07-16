@@ -50,12 +50,22 @@ def _binary_exit(src: Path, tmp: Path):
     return subprocess.run([str(b)], capture_output=True, timeout=120).returncode
 
 
+def _corpus():
+    """Every runnable example: a directory PROJECT (examples/<name>/ with a
+    yon.toml, the post-migration form) or a single file (examples/<name>.yon).
+    Both eval_runner and yonc accept a directory directly."""
+    projs = [p for p in sorted(EXAMPLES.iterdir())
+             if p.is_dir() and (p / "yon.toml").exists()]
+    files = sorted(EXAMPLES.glob("*.yon"))
+    return projs + files
+
+
 @pytest.mark.skipif(not YONC.exists() or not EVAL.exists(),
                     reason="toolchain/yonc or eval_runner not built")
 def test_source_binary_differential(tmp_path):
-    srcs = sorted(EXAMPLES.glob("*.yon"))
+    srcs = _corpus()
     if not srcs:
-        pytest.skip("no single-file examples found")
+        pytest.skip("no examples found")
 
     agree, scoped, mismatches = 0, 0, []
     for src in srcs:
@@ -80,5 +90,7 @@ def test_source_binary_differential(tmp_path):
     assert not mismatches, (
         "kernel and compiled binary disagree on a program the interpreter fully evaluated "
         f"(a back-end or kernel bug):\n  " + "\n  ".join(mismatches))
-    # at least some programs must be interpreter-complete, else the gate checks nothing
-    assert agree > 0, "no example was interpreter-complete; the differential validated nothing"
+    assert agree > 0, (
+        "no example reached the interpreter-complete fragment: eval_runner and yonc both accept "
+        "a project directory now, so at least the pure examples should agree. A zero here means "
+        "the corpus assembly or the interpreter path regressed.")

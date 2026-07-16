@@ -1,0 +1,25 @@
+place Entry {
+/* v1.0 (2026-06-04): for every / in sequence over / repeat..otherwise /
+ * = / duration literals — lowered onto while, iter and Space cells.
+ * (`forever` is exercised by a separate non-terminating probe.)
+ * Expected exit: 42. */
+fun main(): number {
+  be acc holds 0
+  be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+
+  for every x in lst { acc = acc + x }            // 21
+  in sequence over y in lst { acc = acc + 1 }     // 24
+  repeat at most 3 times { acc = acc + 2 }        // 30
+  otherwise { acc = acc + 1 }                     // 31
+
+  be d holds 2000 + 500                                 // 2500 (duration literals dropped in v1.1)
+  when d == 2500 { acc = acc + 10 }               // 41
+
+  be i holds 0
+  while i < 1 do {
+    acc = acc + 1                                 // 42
+    i = i + 1
+  }
+  return acc
+}
+}

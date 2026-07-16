@@ -1,0 +1,14 @@
+place Entry {
+fun server_node(): number {
+  be sid holds Wire.make_net(5, 54331, 1)
+  be v holds Wire.recv_net(sid)
+  be c holds Wire.close_net(sid)
+  return 0
+}
+fun client_node(): number {
+  be sid holds Wire.make_net(5, 54331, 0)
+  be ok holds Wire.send_net(sid, 42)
+  return 0
+}
+fun main(): number { return 0 }
+}

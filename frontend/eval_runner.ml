@@ -81,6 +81,70 @@ let parse_string (source : string) : (Surface_ast.program, string) result =
   | Failure m -> Error ("Lex error: " ^ m)
   | Lexer.Lexer_error msg -> Error ("Lexer error: " ^ msg)
 
+let read_file (fn : string) : string =
+  let ic = open_in fn in
+  let s = really_input_string ic (in_channel_length ic) in
+  close_in ic; s
+
+(* Assemble a project DIRECTORY into a surface program the pure interpreter can
+ * run, together with the place->space census the desugar needs and the merged
+ * source text (for the imperative/effectful refusal check below).
+ *
+ * This mirrors the driver's project assembly (yoner_emit_mlir.ml) but keeps only
+ * the transforms the evaluator needs -- no codegen (no cross-space lowering, no
+ * space graph, no auto-reclaim). Every transform is the SAME library function the
+ * driver calls (Manifest / Package_layout / Desugar / Tycheck), so each step stays
+ * single-sourced; this is a subset of the driver, not a reimplementation of it. *)
+let assemble_project (root : string)
+    : Surface_ast.program * (string * string) list * string =
+  let wm = Manifest.parse_file (Filename.concat root Package_layout.manifest_name) in
+  let units = Package_layout.layout ~root in
+  let place_to_space = ref [] in
+  let pw_pairs = ref [] in       (* (place name, world of its space) *)
+  let sources = ref [] in
+  let merged =
+    List.concat_map (fun (u : Package_layout.unit_loc) ->
+      let src = read_file u.Package_layout.ul_path in
+      sources := src :: !sources;
+      let lexbuf = Lexing.from_string src in
+      Lexing.set_filename lexbuf u.Package_layout.ul_path;
+      Parser_state.reset ();
+      let p = Parser.program Lexer.token lexbuf in
+      (* place-member funs live inside `place Entry { ... }`; the parser stages
+         them into Parser_state, drained here into top-level decls -- the same
+         lift the driver performs. *)
+      let decls = Parser_state.drain () @ p in
+      let sp = u.Package_layout.ul_space in
+      List.iter (function
+        | Surface_ast.TopPlace pd ->
+            if sp <> "" then
+              place_to_space := (pd.Surface_ast.pd_name, sp) :: !place_to_space;
+            (match Manifest.world_of_space wm sp with
+             | Some w -> pw_pairs := (pd.Surface_ast.pd_name, w) :: !pw_pairs
+             | None -> ())
+        | _ -> ()) decls;
+      decls
+    ) units
+  in
+  (* Prepend the toml worlds and the filesystem spaces (neither lives in a .yon
+     file), then drop the Entry package container: it is a validated marker, not a
+     runnable place, and keeping it would demand a world it has none of. *)
+  let entry_name =
+    match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry" in
+  let prog = Manifest.world_decls wm @ Package_layout.space_decls ~root @ merged in
+  let prog = Manifest.remove_entrypoint_container ~entry_name prog in
+  (* Bind each place to the world of its directory (filesystem -> toml), so a
+     place resolves structurally instead of via the single-world heuristic. *)
+  let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
+  List.iter (fun (n, w) -> Hashtbl.replace pw n w) !pw_pairs;
+  let prog =
+    Manifest.assign_place_worlds
+      ~world_of_space:(Manifest.world_of_space wm)
+      (fun n -> Hashtbl.find_opt pw n) prog in
+  let prog = Desugar.expand_views prog in
+  let prog = Tycheck.elaborate_id_sugar prog in
+  (prog, List.rev !place_to_space, String.concat "\n" (List.rev !sources))
+
 let () =
   let args = Array.to_list Sys.argv in
   let (trace, filename) =
@@ -89,22 +153,37 @@ let () =
     | _ :: [f] -> (false, f)
     | _ -> usage ()
   in
-  let source =
-    try
-      let ic = open_in filename in
-      let n = in_channel_length ic in
-      let s = Bytes.create n in
-      really_input ic s 0 n;
-      close_in ic;
-      Bytes.to_string s
-    with Sys_error e ->
-      Printf.eprintf "FILE ERROR: %s\n" e; exit 2
+  (* A directory carrying yon.toml is a project: assemble it the way the driver
+     does (subset). A plain .yon file keeps the classic single-file path. *)
+  let is_project =
+    (try Sys.is_directory filename with Sys_error _ -> false)
+    && Package_layout.is_project ~dir:filename
   in
-  match parse_string source with
+  let parsed : (Surface_ast.program * (string * string) list * string, string) result =
+    if is_project then
+      (try
+         let (prog, pts, src) = assemble_project filename in
+         Ok (prog, pts, src)
+       with
+       | Parser.Error -> Error "Parse error in project"
+       | Manifest.Manifest_error m -> Error ("Manifest error: " ^ m)
+       | Failure m -> Error ("Lex/assembly error: " ^ m)
+       | Sys_error m -> Error ("File error: " ^ m))
+    else
+      let source =
+        try read_file filename
+        with Sys_error e ->
+          Printf.eprintf "FILE ERROR: %s\n" e; exit 2
+      in
+      (match parse_string source with
+       | Error e -> Error e
+       | Ok prog -> Ok (prog, [], source))
+  in
+  match parsed with
   | Error e ->
       Printf.eprintf "PARSE ERROR: %s\n" e;
       exit 3
-  | Ok prog ->
+  | Ok (prog, place_to_space, source) ->
       (* Type check first; if errors, abort. *)
       let cr = Tycheck.check_program prog in
       if cr.cr_errors <> [] then begin
@@ -131,7 +210,8 @@ let () =
          print_string "EVAL INCOMPLETE\n";
          exit 6
        with Not_found -> ());
-      let dr = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) prog in
+      let dr = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env)
+                 ~place_to_space prog in
       (* Mount all the needed hooks, the same configuration as run_example.
        * Without them the stdlib (List/Map/Stream/Heyting) stays stuck and the
        * eval does not reproduce the compiler's semantics. *)

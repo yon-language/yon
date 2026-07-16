@@ -1,0 +1,20 @@
+place Entry {
+/* Route — versioned history store (the backward direction of a search:
+ * a chain H_0 subset H_1 subset ... with O(1) membership, content-addressed
+ * Merkle sharing between levels, and historical navigation).
+ *
+ * H_0 = {0}; each step adds {a_i + v : v in H_i}.
+ *   H_0 = {0}
+ *   step 1 -> H_1 = {0, 1}
+ *   step 2 -> H_2 = {0, 1, 2, 3}
+ * levels = 3; 3 is in H_2 (true), so:
+ * return levels*10 + (3 in H_2 ? 1 : 0) = 3*10 + 1 = 31. */
+fun main(): number {
+  be s0 holds Route.empty(0)
+  be s1 holds Route.step(s0, 1, 0)
+  be s2 holds Route.step(s1, 2, 0)
+  be lv holds Route.levels(s2)
+  be c3 holds Route.contains(s2, 2, 3)
+  return lv * 10 + (if c3 then 1 else 0)
+}
+}

@@ -1,0 +1,18 @@
+place Entry {
+// Micro-example: `heyting` (Heyting integers with an Unknown mask) and
+// the present/unknown literals through the Omega connectives.
+// heyting(v) has no unknown trits; heyting(v, mask) marks the masked
+// ones; `&?` is trit-wise with mask propagation. The Omega connectives
+// (`&&?`, `=>?`) follow the intuitionistic rules, and to_bool decides.
+fun main(): number {
+  be u holds unknown
+  be p holds present
+  be both holds p &&? u            // unknown: conjunction with the undecided
+  be imp holds u =>? p             // present: anything implies the present
+  be dec holds to_bool(imp)
+  be h1 holds heyting(5)           // trits 101, all certain
+  be h2 holds heyting(5, 2)        // middle trit unknown
+  be hand holds h1 &? h2           // trit-wise, the unknown propagates
+  return if dec then 42 else 0
+}
+}

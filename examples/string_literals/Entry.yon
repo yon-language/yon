@@ -1,0 +1,31 @@
+place Entry {
+/* String fusion (2026-06-03): "..." literals ARE String values — sections of
+ * the builtin String place, interned to xheap handles (content-addressed:
+ * same literal, same slot). Expected exit: 1+2+4+8+16 = 31. */
+
+fun greet(who: String): String {
+  return String.concat("ciao ", who)
+}
+
+fun main(): number {
+  be lit holds "yon"
+  be ok_len holds if String.length(lit) == 3 then 1 else 0
+
+  /* literals flow into String.* and user functions transparently (text = String) */
+  be msg holds greet("mondo")
+  be ok_msg holds if String.length(msg) == 10 then 1 else 0
+
+  /* content-addressing: same literal, same slot -> equal as values */
+  be ok_eq holds if String.equal("yon", lit) then 1 else 0
+
+  /* the file path is finally a literal */
+  be _wr holds File.write_text("/tmp/yon_lit.txt", msg)
+  be readback holds File.read_text("/tmp/yon_lit.txt")
+  be ok_io holds if String.equal(readback, msg) then 1 else 0
+
+  be ok_env holds if Env.has("PATH") then 1 else 0
+
+  be _p holds String.print(msg)
+  return ok_len + ok_msg * 2 + ok_eq * 4 + ok_io * 8 + ok_env * 16
+}
+}

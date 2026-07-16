@@ -1,0 +1,5 @@
+[package]
+name = "while_loop"
+
+[runtime]
+backend = "memory"

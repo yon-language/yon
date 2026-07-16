@@ -1,0 +1,5 @@
+[package]
+name = "cx_hit_suspension"
+
+[runtime]
+backend = "memory"

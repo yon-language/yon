@@ -1,0 +1,10 @@
+place Entry {
+// COSA: la SINTASSI DI FACCE scrivibile — comp lungo un cammino di univalenza con
+// sistema di bordo vuoto [] riempie in modo Kan e computa (5 |-> 5).
+// PERCHE': la macchina cubicale (composizione/riempimento) gira nel kernel; qui è
+// resa SCRIVIBILE in superficie: `[ i = I0 => plam j => body ]` vincola un bordo.
+fun main(): number {
+  be p holds plam i => hcomp number [ i = I0 => plam j => 5 ] 5
+  return p @ I0     // -> 5   (la faccia i=0 forza il composito a 5)
+}
+}

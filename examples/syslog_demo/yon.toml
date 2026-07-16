@@ -1,0 +1,5 @@
+[package]
+name = "syslog_demo"
+
+[runtime]
+backend = "memory"

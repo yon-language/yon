@@ -1,0 +1,27 @@
+place Entry {
+// COSA: un tipo somma NATIVO (Box porta un number, Empty e' il caso base)
+// eliminato con lo zucchero `match`, con un ramo che LEGA il payload.
+//
+// PERCHE': `match x { ctor(v) => .., base => .. }` e' l'eliminatore non-dipendente
+// (mu-F, la parte-per-il-tutto: un ramo per costruttore). Il suo motive e' COSTANTE
+// (fun _ => T), quindi il tipo-risultato T va sintetizzato da un ramo il cui corpo
+// NON legge il proprio payload: il caso base `Empty => 0`. Ogni ramo e' poi
+// ricontrollato nel proprio ambiente di binding, cosi' `Box(n) => n * 2` verifica
+// con n : number in scope. Prima di questo fix il sugar prendeva il PRIMO ramo come
+// testimone e falliva quando quel ramo usava il suo payload (`unknown identifier n`).
+//
+// CONFINE (onesto): questo eliminatore e' l'eliminatore TYPE-THEORETIC, calcolato a
+// compile-time (regola beta) quando lo scrutinee e' un costruttore noto. Un match su
+// un valore somma a RUNTIME (una variabile) non ha ancora dispatch sul tag ed e'
+// stuck: per il calcolo su dati costruiti a runtime i seed self-host usano MerkleTree
+// (l'algebra iniziale content-addressed, che il tag lo dispaccia a runtime).
+
+// La firma di `declares` introduce i costruttori Box/Empty nell'ambiente.
+fun declares(s: (Box(number) | Empty)): number { return 0 }
+
+fun run(): number {
+  return match hit(Box, 21) { Box(n) => n * 2, Empty => 0 }   // 21 * 2 = 42
+}
+
+fun main(): number { return run() }
+}

@@ -1,0 +1,22 @@
+place Entry {
+/* Nested lambda capture (block 6). A lambda nested inside another combinator
+ * lambda may capture, at every level: the OUTER lambda's parameters and the
+ * enclosing function's locals. Here the inner fold-lambda captures `v` (the
+ * outer lambda's parameter) and `base` (a local of main), and the outer
+ * lambda captures `ys` and `base`. Lambda-lifting now threads the capture
+ * through every nesting level (the receiver of a method call like `ys.fold`
+ * is recovered from the call name `ys__fold`, so `ys` is captured too).
+ *
+ * xs = [1,2], ys = [1,2], base = 10
+ *   inner(v) = fold(0, (b,w) => b + w + v + base) over [1,2] = 23 + 2v
+ *   total    = fold(0, (a,v) => a + inner(v)) over [1,2]
+ *            = inner(1) + inner(2) = 25 + 27 = 52
+ * Expected exit: 52. */
+fun main(): number {
+  be base holds 10
+  be xs holds List.cons(1, List.cons(2, List.empty(0)))
+  be ys holds List.cons(1, List.cons(2, List.empty(0)))
+  be total holds xs.fold(0, fun(a: number, v: number) => a + ys.fold(0, fun(b: number, w: number) => b + w + v + base))
+  return total
+}
+}

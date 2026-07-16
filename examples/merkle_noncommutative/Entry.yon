@@ -1,0 +1,24 @@
+place Entry {
+/* Item 2 — distinzione commutativo vs NON commutativo (correzione bug).
+ * node2 (order-preserving): minus(a,b) != minus(b,a) -> 2 slot distinti.
+ * node2_commutative: and(a,b) == and(b,a) -> 1 slot.
+ * return = nc_distinct*10 + comm_same
+ *   nc_distinct=1 (i due minus sono diversi), comm_same=1 (i due and uguali)
+ *   = 1*10 + 1 = 11. */
+fun main(): number {
+  be a holds MerkleTree.leaf(1)
+  be b holds MerkleTree.leaf(2)
+
+  /* NON commutativo (es. label 300="minus"): ordine significativo */
+  be m_ab holds MerkleTree.node2(300, a, b)
+  be m_ba holds MerkleTree.node2(300, b, a)
+  be nc_distinct holds if m_ab == m_ba then 0 else 1   /* atteso 1: diversi */
+
+  /* commutativo (label 200="and"): ordine non significativo */
+  be and_ab holds MerkleTree.node2_commutative(200, a, b)
+  be and_ba holds MerkleTree.node2_commutative(200, b, a)
+  be comm_same holds if and_ab == and_ba then 1 else 0  /* atteso 1: uguali */
+
+  return nc_distinct * 10 + comm_same
+}
+}

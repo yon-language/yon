@@ -1,0 +1,5 @@
+[package]
+name = "cx_univalence_named"
+
+[runtime]
+backend = "memory"

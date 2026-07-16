@@ -1,0 +1,18 @@
+place Entry {
+// Micro-example: `refl`, `ind_path` and `Type` (work map items 3-5).
+// Design per the Syn(Yon) formalization (sec. 13/16): the arbiter of
+// path equality is the REDUCER. A path value lowers to its erased
+// witness (refl(x) is operationally x); ind_path(C, d, p) computes
+// d(basepoint) when the path is refl in evidence at the call site;
+// a J stuck on a non-refl path (a HIT loop) is rejected at compile
+// time with a loud error: the runtime never decides path equality,
+// so S1 stays non-trivial. A universe-typed parameter is an inert
+// runtime token.
+fun diag(a: number): number { return a * 6 }
+fun universe_taker(t: Type): number { return 7 }
+fun main(): number {
+  be r holds refl(7)                          // a path value, let-bound
+  be moved holds ind_path(0, diag, refl(7))   // J computes diag(7) = 42
+  return moved
+}
+}

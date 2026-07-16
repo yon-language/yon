@@ -1,0 +1,5 @@
+[package]
+name = "net_stream"
+
+[runtime]
+backend = "memory"

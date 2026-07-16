@@ -1,0 +1,5 @@
+[package]
+name = "primes_bertrand"
+
+[runtime]
+backend = "memory"

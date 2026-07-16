@@ -1,7 +1,0 @@
-/* decide su unknown deve fallire a runtime (asserzione decidibilita'). */
-fun main(): number {
-  be p holds unknown
-  be d holds decide(p)
-  be b holds to_bool_dec(d)
-  return if b then 1 else 0
-}

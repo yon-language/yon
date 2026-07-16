@@ -1,0 +1,5 @@
+[package]
+name = "cx_face_system"
+
+[runtime]
+backend = "memory"

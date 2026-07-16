@@ -42,8 +42,7 @@ PROJECTS = _projects()
 def _is_negative(path):
     name = os.path.basename(path)
     return ("/negative/" in path.replace(os.sep, "/")
-            or "reject" in name or "leak" in name
-            or name == "closed_morphism_capture")  # closed arrow captures a local -> EMITFAIL
+            or "reject" in name or "leak" in name)
 
 
 @pytest.fixture(scope="session", autouse=True)

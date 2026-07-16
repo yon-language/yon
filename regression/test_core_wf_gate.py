@@ -25,11 +25,26 @@ ROOT = Path(__file__).resolve().parent.parent
 FE = ROOT / "frontend"
 EXD = ROOT / "examples"
 EMIT = FE / "_build" / "default" / "yoner_emit_mlir.exe"
+YONC = ROOT / "toolchain" / "yonc"
 
-EXAMPLES = sorted(p.name[:-4] for p in EXD.glob("*.yon")) if EXD.exists() else []
+# Corpus names: single-file examples/<name>.yon and dir-projects examples/<name>/
+# (the place-project migration). Both are emitted; a place needs the project
+# context a directory carries, so a dir is emitted through yonc.
+EXAMPLES = sorted(set(
+    [p.name[:-4] for p in EXD.glob("*.yon")]
+    + [d.name for d in EXD.iterdir() if d.is_dir() and (d / "yon.toml").exists()]
+)) if EXD.exists() else []
+
+
+def _example_src(name):
+    d = EXD / name
+    return d if d.is_dir() else EXD / f"{name}.yon"
 
 
 def _emit(src_path, extra_env=None):
+    # The frontend accepts a single .yon file OR a project directory (it mounts
+    # the project context a `place` needs), and prints the YON_CORE_WF log to
+    # stderr in both cases. Pass the path straight through.
     env = dict(os.environ, YON_CORE_WF="1")
     if extra_env:
         env.update(extra_env)
@@ -50,7 +65,7 @@ def _rejected(res):
 @pytest.mark.parametrize("name", EXAMPLES)
 def test_gate_does_not_false_reject(name):
     """Every corpus example passes the kernel re-check (type + body gate)."""
-    res = _emit(EXD / f"{name}.yon")
+    res = _emit(_example_src(name))
     assert not _rejected(res), (
         f"{name}: core-wf falsely rejected a valid program:\n"
         + res.stderr.decode(errors="replace"))
@@ -62,7 +77,7 @@ def test_gate_reports_body_check_counts():
     skipped) — otherwise the term-checking pass would be vacuous."""
     total_checked = 0
     for name in EXAMPLES:
-        res = _emit(EXD / f"{name}.yon")
+        res = _emit(_example_src(name))
         for line in res.stderr.decode(errors="replace").splitlines():
             if "function bodies kernel-checked" in line:
                 total_checked += int(line.split("]")[1].strip().split()[0])

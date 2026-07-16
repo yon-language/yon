@@ -1,0 +1,5 @@
+[package]
+name = "stdlib_showcase"
+
+[runtime]
+backend = "memory"

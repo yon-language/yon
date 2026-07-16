@@ -52,3 +52,5 @@ RAN inductive_arity3 exit=42
 RAN inductive_wildcard exit=42
 RAN higher_order_recursive exit=42
 RAN closure_capture exit=42
+RAN handle_lambda_capture exit=44
+RAN closed_morphism_capture exit=7

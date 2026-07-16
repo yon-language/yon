@@ -231,6 +231,41 @@ let reset_synth () =
   handle_bindings := [];
   topos_to_first_place := []
 
+(* Lift a lambda (a plain arg-lambda OR a categorical handle-lambda: move, morph,
+   reduction, functor, view) to a synth top-level fun and return the value that
+   stands for it. If the body captures outer locals, they become LEADING params
+   and the value is the partial application `synth captured...`: the emit turns
+   that into a content-addressed closure node (tag = the synth's dense index,
+   payload = the captured env) and a call dispatches through __yon_closure_call.
+   If nothing is captured, the value is the bare synth name. Shared by the plain
+   lambda and all five handle-lambdas, so capture is one code path, not six, and
+   the categorical typing survives in the synth signature (fn_return = the target
+   place); the closure is only the invocation vehicle. *)
+let lift_capturing_lambda (prefix : string)
+    (params : (string * S.ty) list) (body : S.expr) (ret_ty : S.ty)
+    (loc : S.location) : C.term =
+  let synth_name = fresh_synth_name prefix in
+  let free_in_body = free_vars_in_expr (List.map fst params) body in
+  let captured =
+    uniq_strs (List.filter (fun v -> List.mem v !current_locals_ref) free_in_body) in
+  let cap_params =
+    List.map (fun c -> { S.param_name = c; S.param_ty = S.TyPrim "unknown" }) captured in
+  let synth_fd : S.fun_decl = {
+    S.fn_name = synth_name;
+    S.fn_type_params = [];
+    S.fn_params = cap_params
+      @ List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
+    S.fn_return = Some ret_ty;
+    S.fn_visits = [];
+    S.fn_partial = false; fn_internal = false;
+    S.fn_body = [S.SReturn (body, loc)];
+    S.fn_loc = loc;
+  } in
+  synth_funs := synth_fd :: !synth_funs;
+  synth_cap_count := (synth_name, List.length captured) :: !synth_cap_count;
+  if captured = [] then C.Var synth_name
+  else List.fold_left (fun acc c -> C.App (acc, C.Var c)) (C.Var synth_name) captured
+
 (* ─── Type translation ─────────────────────────────────────────────── *)
 
 let rec desugar_ty (t : S.ty) : C.ty =
@@ -877,103 +912,38 @@ and desugar_expr (e0 : S.expr) : C.term =
    * `__move_inline_N`, `__reduction_inline_N`, `__morph_inline_N`. The prefix
    * is recognized by the type checker to derive the right handle type. *)
   | S.EMoveLam (params, body, from_p, to_p, loc) ->
-      let name = fresh_synth_name "move" in
-      let ret_ty = S.TyUser to_p in
       let _ = from_p in
-      let synth_fd : S.fun_decl = {
-        S.fn_name = name;
-        S.fn_type_params = [];
-        S.fn_params = List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
-        S.fn_return = Some ret_ty;
-        S.fn_visits = [];
-        S.fn_partial = false; fn_internal = false;
-        S.fn_body = [S.SReturn (body, loc)];
-        S.fn_loc = loc;
-      } in
-      synth_funs := synth_fd :: !synth_funs;
-      C.Var name
+      lift_capturing_lambda "move" params body (S.TyUser to_p) loc
   | S.EReductionLam (params, body, of_p, loc) ->
-      let name = fresh_synth_name "reduction" in
       let _ = of_p in
-      let synth_fd : S.fun_decl = {
-        S.fn_name = name;
-        S.fn_type_params = [];
-        S.fn_params = List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
-        S.fn_return = Some (S.TyPrim "number");
-        S.fn_visits = [];
-        S.fn_partial = false; fn_internal = false;
-        S.fn_body = [S.SReturn (body, loc)];
-        S.fn_loc = loc;
-      } in
-      synth_funs := synth_fd :: !synth_funs;
-      C.Var name
+      lift_capturing_lambda "reduction" params body (S.TyPrim "number") loc
   | S.EMorphLam (params, body, from_s, to_s, loc) ->
-      let name = fresh_synth_name "morph" in
       let _ = from_s in
-      (* For `morph from T1 to T2`, the ret type of the lifted fun is the
-       * first place of T2 (= the actual target place), NOT the topos name.
-       * Look up in the topos_to_first_place registry
-       * filled during TopTopos. If not found (an external or undeclared
-       * topos), fall back to TyUser to_s. *)
+      (* For `morph from T1 to T2`, the ret type of the lifted fun is the first
+       * place of T2 (the actual target place), NOT the topos name; look it up in
+       * topos_to_first_place (filled during TopTopos), else fall back to to_s. *)
       let ret_ty =
         match List.assoc_opt to_s !topos_to_first_place with
         | Some place_name -> S.TyUser place_name
         | None -> S.TyUser to_s
       in
-      let synth_fd : S.fun_decl = {
-        S.fn_name = name;
-        S.fn_type_params = [];
-        S.fn_params = List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
-        S.fn_return = Some ret_ty;
-        S.fn_visits = [];
-        S.fn_partial = false; fn_internal = false;
-        S.fn_body = [S.SReturn (body, loc)];
-        S.fn_loc = loc;
-      } in
-      synth_funs := synth_fd :: !synth_funs;
-      C.Var name
+      lift_capturing_lambda "morph" params body ret_ty loc
   | S.EFunctorLam (params, body, from_w, to_w, _laws, loc) ->
       (* A functor-lambda is a map W -> V. We desugar it like an EMorphLam, by
          synthesizing a lifted function. The functor laws (identity,
          composition) were already verified by the type checker; what remains
          here is only the computational translation. *)
-      let name = fresh_synth_name "functor" in
       let _ = from_w in
       let ret_ty =
         match List.assoc_opt to_w !topos_to_first_place with
         | Some place_name -> S.TyUser place_name
         | None -> S.TyUser to_w
       in
-      let synth_fd : S.fun_decl = {
-        S.fn_name = name;
-        S.fn_type_params = [];
-        S.fn_params = List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
-        S.fn_return = Some ret_ty;
-        S.fn_visits = [];
-        S.fn_partial = false; fn_internal = false;
-        S.fn_body = [S.SReturn (body, loc)];
-        S.fn_loc = loc;
-      } in
-      synth_funs := synth_fd :: !synth_funs;
-      C.Var name
+      lift_capturing_lambda "functor" params body ret_ty loc
   | S.EViewLam (params, body, of_p, loc) ->
-      (* EViewLam is lifted like EReductionLam. A view is a projection
-         P -> number (or T), so the return type defaults to number. of_p is the
-         source place, verified by the type checker. *)
-      let name = fresh_synth_name "view" in
+      (* A view is a projection P -> number; of_p is the source place. *)
       let _ = of_p in
-      let synth_fd : S.fun_decl = {
-        S.fn_name = name;
-        S.fn_type_params = [];
-        S.fn_params = List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
-        S.fn_return = Some (S.TyPrim "number");
-        S.fn_visits = [];
-        S.fn_partial = false; fn_internal = false;
-        S.fn_body = [S.SReturn (body, loc)];
-        S.fn_loc = loc;
-      } in
-      synth_funs := synth_fd :: !synth_funs;
-      C.Var name
+      lift_capturing_lambda "view" params body (S.TyPrim "number") loc
   | S.EComposeWith (h1, h2, loc) ->
       (* Handle composition. `compose h1 with h2` becomes a synthetic function
          computing h2(h1(x)). The dispatch is handle-aware: if h1 or h2 is the
