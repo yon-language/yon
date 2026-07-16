@@ -1,0 +1,5 @@
+[package]
+name = "shm_stream"
+
+[runtime]
+backend = "memory"

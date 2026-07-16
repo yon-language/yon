@@ -1,0 +1,20 @@
+inductive Triple = T3(number, number, number) | Nil
+
+place Entry {
+// COSA: un costruttore induttivo di arita' 3, letto su TUTTI e tre i payload.
+// PERCHE': e' il gate di regressione per il bug arita'>=3. Un costruttore custom
+// e' codificato come spine di soli node2/leaf (mai node3/node4, la cui lettura dei
+// figli a runtime e' inaffidabile), quindi il terzo payload (indice 2) si legge
+// correttamente e l'arita' non ha piu' un tetto.
+
+
+fun mot(t: Triple): number { return 0 }
+
+fun sum3(t: Triple): number {
+  return hit_elim(mot, [ T3(a, b, c) => a + b + c, Nil => 0 ], t)
+}
+
+fun main(): number {
+  return sum3(hit(T3, 12, 13, 17))   // 12 + 13 + 17 = 42, incluso il terzo (indice 2)
+}
+}

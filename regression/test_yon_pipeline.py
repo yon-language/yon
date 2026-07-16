@@ -25,7 +25,16 @@ FE = ROOT / "frontend"
 FT = ROOT / "runtime"
 EXD = ROOT / "examples"
 EMIT = FE / "_build" / "default" / "yoner_emit_mlir.exe"
+YONC = ROOT / "toolchain" / "yonc"
 BASELINE = ROOT / "regression" / "baseline_exitcodes.txt"
+
+
+def _example_src(name):
+    """An example is either a single file examples/<name>.yon or, after the
+    place-project migration, a directory examples/<name>/ with a yon.toml.
+    yonc compiles both; a place needs the project context a directory gives."""
+    d = EXD / name
+    return d if d.is_dir() else EXD / f"{name}.yon"
 
 
 def _tool(name, env):
@@ -88,39 +97,18 @@ def _toolchain():
 
 
 def _build_and_run(name, tmp):
-    """Replicate run_regression.sh for one example. Returns 'EMITFAIL',
-    'BUILDFAIL', or the integer exit code of the native binary."""
-    src = EXD / f"{name}.yon"
-    mlir, s1, s2, ll, obj, exe = (tmp / f"{name}.{e}"
-                                  for e in ("mlir", "s1", "s2", "ll", "o", "bin"))
-    r = _run([str(EMIT), str(src)])
-    if r.returncode != 0 or not r.stdout:
+    """Compile one example (single file or dir-project) with yonc and run it.
+    yonc runs exactly the verified chain and, for a directory, mounts the project
+    context a `place` needs. Returns 'EMITFAIL', 'BUILDFAIL', 'TIMEOUT', or the
+    integer exit code of the native binary."""
+    src = _example_src(name)
+    # A frontend-only pass first, so a frontend rejection still reads as EMITFAIL
+    # (the distinction the baseline keeps, e.g. false_coherence).
+    fe = _run([str(YONC), "--emit=mlir", str(src), "-o", str(tmp / f"{name}.mlir")])
+    if fe.returncode != 0:
         return "EMITFAIL"
-    mlir.write_bytes(r.stdout)
-
-    lowered = False
-    a = _run([TOPOS, "--algebra-verifier", "--lower-topos-extensions",
-              "--lower-topos-to-standard", str(mlir)])
-    if a.returncode == 0 and a.stdout:
-        s1.write_bytes(a.stdout)
-        b = _run([TOPOS, "--lower-topos-to-llvm", str(s1)])
-        if b.returncode == 0 and b.stdout:
-            s2.write_bytes(b.stdout)
-            lowered = True
-    if not lowered:
-        f = _run([MLIROPT, str(mlir), *LOWER])
-        if f.returncode != 0 or not f.stdout:
-            return "BUILDFAIL"
-        s2.write_bytes(f.stdout)
-
-    t = _run([MLIRTRANS, str(s2), "--mlir-to-llvmir"])
-    if t.returncode != 0 or not t.stdout:
-        return "BUILDFAIL"
-    ll.write_bytes(t.stdout)
-    if _run([LLC, "-filetype=obj", str(ll), "-o", str(obj)]).returncode != 0:
-        return "BUILDFAIL"
-    if _run([CC, "-no-pie", str(obj), *RTSET, "-lpthread", "-lm",
-             "-o", str(exe)]).returncode != 0:
+    exe = tmp / f"{name}.bin"
+    if _run([str(YONC), str(src), "-o", str(exe)]).returncode != 0:
         return "BUILDFAIL"
     try:
         rc = subprocess.run([str(exe)], capture_output=True, timeout=30).returncode

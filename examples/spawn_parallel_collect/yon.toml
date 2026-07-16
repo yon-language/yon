@@ -1,0 +1,5 @@
+[package]
+name = "spawn_parallel_collect"
+
+[runtime]
+backend = "memory"

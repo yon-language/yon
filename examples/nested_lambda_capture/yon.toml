@@ -1,0 +1,5 @@
+[package]
+name = "nested_lambda_capture"
+
+[runtime]
+backend = "memory"

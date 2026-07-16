@@ -1,0 +1,32 @@
+place Entry {
+/* Arena, the Leech type-2 arena, as a first-class language structure.
+ *
+ * Exercises the handle-based API end to end:
+ *   put/get  : store a value at a type-2 point and read it back
+ *   occupied : the slot is taken
+ *   orbit    : the pure M24 orbit id of the point (1536 is in orbit 0)
+ *   same_orbit: 1536 and 1280 share orbit 0 (yes); 1536 vs 16778752 differ (no)
+ *   fuse/fusion_count: record one sigma-certified fusion
+ *
+ * Each of the six checks contributes 1; the program returns 6 when all hold. */
+
+fun main(): number {
+  be a0 holds Arena.empty()
+  be a1 holds Arena.put(a0, 1536, 42)
+  be v holds Arena.get(a1, 1536)
+  be occ holds Arena.occupied(a1, 1536)
+  be o0 holds Arena.orbit(a1, 1536)
+  be so_same holds Arena.same_orbit(a1, 1536, 1280)
+  be so_diff holds Arena.same_orbit(a1, 1536, 16778752)
+  be a2 holds Arena.fuse(a1, 1536, 99, 7)
+  be fc holds Arena.fusion_count(a2, 1536)
+
+  be c_v holds if v == 42 then 1 else 0
+  be c_occ holds if occ == 1 then 1 else 0
+  be c_o0 holds if o0 == 0 then 1 else 0
+  be c_same holds if so_same == 1 then 1 else 0
+  be c_diff holds if so_diff == 0 then 1 else 0
+  be c_fc holds if fc == 1 then 1 else 0
+  return c_v + c_occ + c_o0 + c_same + c_diff + c_fc
+}
+}

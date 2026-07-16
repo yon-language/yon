@@ -1,0 +1,5 @@
+[package]
+name = "native_sum_match"
+
+[runtime]
+backend = "memory"

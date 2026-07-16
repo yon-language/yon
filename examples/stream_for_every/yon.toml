@@ -1,0 +1,5 @@
+[package]
+name = "stream_for_every"
+
+[runtime]
+backend = "memory"

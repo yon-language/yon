@@ -1,0 +1,5 @@
+[package]
+name = "kw_is_literal"
+
+[runtime]
+backend = "memory"

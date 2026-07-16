@@ -1,0 +1,5 @@
+[package]
+name = "closure_capture"
+
+[runtime]
+backend = "memory"

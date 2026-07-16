@@ -1,0 +1,5 @@
+[package]
+name = "wire_eof"
+
+[runtime]
+backend = "memory"

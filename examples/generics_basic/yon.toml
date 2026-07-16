@@ -1,0 +1,5 @@
+[package]
+name = "generics_basic"
+
+[runtime]
+backend = "memory"

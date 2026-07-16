@@ -1,0 +1,5 @@
+[package]
+name = "arena_basic"
+
+[runtime]
+backend = "memory"

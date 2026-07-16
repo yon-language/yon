@@ -1,0 +1,5 @@
+[package]
+name = "decidable_ok"
+
+[runtime]
+backend = "memory"

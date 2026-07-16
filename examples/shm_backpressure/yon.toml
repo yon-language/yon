@@ -1,0 +1,5 @@
+[package]
+name = "shm_backpressure"
+
+[runtime]
+backend = "memory"

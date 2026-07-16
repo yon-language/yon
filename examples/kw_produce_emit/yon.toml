@@ -1,0 +1,5 @@
+[package]
+name = "kw_produce_emit"
+
+[runtime]
+backend = "memory"

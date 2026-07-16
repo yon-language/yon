@@ -1,0 +1,21 @@
+place Entry {
+/* Primes / Bertrand (runtime measure).
+ *
+ * Measures the xheap_used delta over the series of primes <= 19 = {2,3,5,7,11,13,17,19}.
+ * Each prime allocates one new leaf (w_i = 1) unless it collides with an
+ * already allocated leaf. */
+
+fun main(): number {
+  be n0 holds __xheap_used()
+  be _p2 holds MerkleTree.leaf(2)
+  be _p3 holds MerkleTree.leaf(3)
+  be _p5 holds MerkleTree.leaf(5)
+  be _p7 holds MerkleTree.leaf(7)
+  be _p11 holds MerkleTree.leaf(11)
+  be _p13 holds MerkleTree.leaf(13)
+  be _p17 holds MerkleTree.leaf(17)
+  be _p19 holds MerkleTree.leaf(19)
+  be n1 holds __xheap_used()
+  return n1 - n0  /* expected 8 (tutti primi unici) */
+}
+}

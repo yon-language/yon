@@ -1193,10 +1193,20 @@ let rec infer_mlir_ty (e : emitter)
                    let arrow_idx = Str.search_forward (Str.regexp " -> ") fn_ty 0 in
                    String.sub fn_ty (arrow_idx + 4) (String.length fn_ty - arrow_idx - 4)
                  with Not_found -> "f64")
-            | Some (_, "f64") ->
-                (* a local f64 in call position is a closure handle; applying it
-                   dispatches through __yon_closure_call and yields f64. *)
+            | Some (_, ty) when ty = "f64" ->
+                (* a local f64 in call position is a plain closure handle;
+                   applying it dispatches through __yon_closure_call, yielding
+                   f64. *)
                 "f64"
+            | Some (_, ty) when is_section_ty_str ty ->
+                (* a section-typed local in call position is a captured
+                   handle-lambda (move/morph/functor): its binding type IS its
+                   target place, and applying it yields that same place. The
+                   dispatch produces an f64 handle at runtime, coerced back to
+                   the section at the call site, so the inferred type is the
+                   section itself (this keeps a following field projection
+                   `m(sp).v` well-typed). *)
+                ty
             | Some (alias, _) when String.length alias > 10
                                    && String.sub alias 0 10 = "__hof_ref:" ->
                 let real_fname = String.sub alias 10
@@ -1498,17 +1508,34 @@ let hof_inline_stack : string list ref = ref []
    (an __arg_lam_inline_N) or a plain user function, arity <= 4, all-f64. *)
 let closure_target_list (funcs : (string * func_sig) list)
     : (string * func_sig) list =
+  let has_pfx p name =
+    String.length name >= String.length p && String.sub name 0 (String.length p) = p in
+  (* a lifted lambda: the plain arg-lambda OR one of the five handle-lambdas
+     (Stage C), all of which are content-addressed closures when they capture. *)
+  let is_lifted_lambda name =
+    has_pfx "__arg_lam_inline" name || has_pfx "__move_inline" name
+    || has_pfx "__morph_inline" name || has_pfx "__reduction_inline" name
+    || has_pfx "__functor_inline" name || has_pfx "__view_inline" name in
+  (* A handle-lambda operates on sections (place-typed source/target), which are
+     f64 handles at runtime; the closure carries them and the dispatcher coerces.
+     A plain named user function must stay all-f64 (the Stage B set): admitting
+     every section-returning function (an inductive fun, a place fun) would bloat
+     the dispatcher and shift the dense indices, which regressed the inductive
+     path. So sections are admitted ONLY for the lifted lambdas. *)
+  let ok_ty t = t = "f64" || is_section_ty_str t in
+  let all_f64 fs =
+    List.for_all (fun (_, pt) -> core_ty_to_mlir_simple pt = "f64") fs.fn_params
+    && fs.fn_ret_mlir = "f64" in
+  let f64_or_section fs =
+    List.for_all (fun (_, pt) -> ok_ty (core_ty_to_mlir_simple pt)) fs.fn_params
+    && ok_ty fs.fn_ret_mlir in
   List.filter (fun (name, fs) ->
     name <> "main"
     && List.length fs.fn_params <= 4
-    && List.for_all (fun (_, pty) -> core_ty_to_mlir_simple pty = "f64") fs.fn_params
-    && fs.fn_ret_mlir = "f64"
-    && not (String.length name >= 7 && String.sub name 0 7 = "yon_rt_")
-    && not (String.length name >= 8 && String.sub name 0 8 = "Stream__")
-    && (let is_arg_lam =
-          String.length name >= 16 && String.sub name 0 16 = "__arg_lam_inline" in
-        is_arg_lam
-        || not (String.length name >= 2 && String.sub name 0 2 = "__"))) funcs
+    && not (has_pfx "yon_rt_" name)
+    && not (has_pfx "Stream__" name)
+    && (if is_lifted_lambda name then f64_or_section fs
+        else not (has_pfx "__" name) && all_f64 fs)) funcs
 
 (* The dense index a closure carries as its tag for [name], or None if [name] is
    not a legal closure target. Same order as closure_target_list, by construction. *)
@@ -1531,6 +1558,15 @@ let emit_closure_node (e : emitter) (funcs : (string * func_sig) list)
     | Some i -> i
     | None -> failwith (Printf.sprintf
         "[emit_mlir closure] '%s' is not a legal closure target." target) in
+  (* The closure value is always an f64 handle at runtime, but a
+     handle-lambda whose target returns a place (a move/morph/functor) carries
+     that section as its logical type, matching infer_mlir_ty: it lets a later
+     `m(sp).v` project a real place. A plain closure (a `fun` or a
+     number-returning view) stays f64. *)
+  let logical_ty =
+    match List.assoc_opt target funcs with
+    | Some fs when is_section_ty_str fs.fn_ret_mlir -> fs.fn_ret_mlir
+    | _ -> "f64" in
   let const c =
     let v = fresh_ssa e in
     emit_line e (Printf.sprintf "%s = arith.constant %d.0 : f64" v c); v in
@@ -1544,11 +1580,11 @@ let emit_closure_node (e : emitter) (funcs : (string * func_sig) list)
       "%s = func.call @yon_rt_merkle_node2(%s, %s, %s) : (f64, f64, f64) -> f64"
       v l a b); v in
   match caps with
-  | [] -> (leaf (const idx), "f64")               (* no captures: a bare tag leaf *)
+  | [] -> (leaf (const idx), logical_ty)          (* no captures: a bare tag leaf *)
   | c0 :: rest ->
       let zero = const 0 in
       let tail = List.fold_right (fun cap acc -> node2 zero cap acc) rest (leaf zero) in
-      (node2 (const idx) c0 tail, "f64")
+      (node2 (const idx) c0 tail, logical_ty)
 
 (* Request a specialization of fs at the concrete types concrete_mlir. If it
    was already generated, return its mangled name; otherwise generate it,
@@ -4874,15 +4910,27 @@ let rec emit_term (e : emitter)
            (v, ret_ty)
        | Some (fname, args) when
            (match Env.find_opt fname env with
-            | Some (_, "f64") -> true
+            | Some (_, ty) -> ty = "f64" || is_section_ty_str ty
             | _ -> false) ->
            (* fname is a local CLOSURE handle (an f64): applying it dispatches
               through __yon_closure_call, which reads the tag and the captured
               environment off the node and routes. The caller just passes the
               handle and the call arguments, padded to the fixed a1..a4 arity. *)
-           let v_clo = (match Env.find_opt fname env with
-             | Some (v, _) -> v | None -> assert false) in
-           let arg_ssas = List.map (fun a -> fst (emit_term e env funcs a)) args in
+           (* Each argument crosses the all-f64 dispatch boundary: a section (a
+              place-typed handle-lambda argument) is an f64 at runtime, so coerce
+              it to f64 here; the dispatcher coerces back to the target's real
+              parameter type. coerce_to_param is a no-op on f64. The closure
+              handle itself is ALWAYS a merkle node, so physically an f64, even
+              when its logical type is a section (a section-returning move/morph
+              carries its target place as its type). Use its SSA directly: a
+              section-to-f64 coercion here would emit section_to_xcoord on a value
+              that is physically already f64 and break MLIR verification. *)
+           let (v_clo0, clo_ty) = (match Env.find_opt fname env with
+             | Some (v, t) -> (v, t) | None -> assert false) in
+           let v_clo = v_clo0 in
+           let arg_ssas = List.map (fun a ->
+             let (ssa, ty) = emit_term e env funcs a in
+             coerce_to_param e ssa ty "f64") args in
            let take4 lst =
              let rec go k = function
                | [] -> [] | _ when k = 0 -> [] | x :: xs -> x :: go (k - 1) xs
@@ -4896,7 +4944,16 @@ let rec emit_term (e : emitter)
            emit_line e (Printf.sprintf
              "%s = func.call @__yon_closure_call(%s, %s) : (f64, f64, f64, f64, f64) -> f64"
              v v_clo (String.concat ", " padded));
-           (v, "f64")
+           (* The dispatch yields f64. If the closure is a section-typed
+              handle-lambda (a move/morph/functor whose binding type is its
+              target place), the application yields that same section, so
+              coerce the f64 handle back to the section type; a plain f64
+              closure stays f64. This keeps the result type in step with
+              infer_mlir_ty so a following field projection is well-typed. *)
+           if is_section_ty_str clo_ty then
+             let v_sec = coerce_to_param e v "f64" clo_ty in
+             (v_sec, clo_ty)
+           else (v, "f64")
        | Some (fname, args) when
            (match Env.find_opt fname env with
             | Some (ssa, _) -> String.length ssa > 10
@@ -6033,12 +6090,19 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     let caps = List.rev !caps in
     let lam = p - m in
     let passed = List.init lam (fun j -> Printf.sprintf "%%a%d" (j + 1)) in
-    let tys = List.init p (fun _ -> "f64") in
+    (* the target's real param types: a handle-lambda (Stage C) has section params
+       (place-typed source/target). Every arg arrives here as f64 (read off the
+       node, or from the a1..a4 slots), so coerce each to its real type, and coerce
+       the section-or-f64 return back to f64. coerce_to_param is a no-op on f64. *)
+    let real_tys = List.map (fun (_, pt) -> core_ty_to_mlir_simple pt) fs.fn_params in
+    let coerced =
+      List.map2 (fun a rt -> coerce_to_param e a "f64" rt) (caps @ passed) real_tys in
     let call_v = fresh_ssa e in
-    emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> f64"
-                   call_v name (String.concat ", " (caps @ passed))
-                   (String.concat ", " tys));
-    emit_line e (Printf.sprintf "scf.yield %s : f64" call_v);
+    emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
+                   call_v name (String.concat ", " coerced)
+                   (String.concat ", " real_tys) fs.fn_ret_mlir);
+    let call_v_f64 = coerce_to_param e call_v fs.fn_ret_mlir "f64" in
+    emit_line e (Printf.sprintf "scf.yield %s : f64" call_v_f64);
     pop_indent e;
     emit_line e "} else {";
     push_indent e;

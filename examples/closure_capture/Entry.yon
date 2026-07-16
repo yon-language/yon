@@ -1,0 +1,21 @@
+place Entry {
+// A first-class capturing closure. adder(x) returns fun(y) => x + y, a little
+// function that REMEMBERS x. The returned value is content-addressed: a node
+// carrying the target's dense index (its tag) and the captured x. Applying it
+// goes through the closure dispatcher, which opens the node, reads the tag with
+// merkle_label, reads the captured x off the node, appends the call argument, and
+// routes. So a function is now a value you can return and that keeps its state,
+// which is what a compiler-in-Yon needs (visitors and folds that carry a function
+// argument with captured environment). Gate for Stage B, the twin of
+// higher_order_recursive.yon for Stage A.
+
+fun adder(x: number): number -> number {
+  return fun(y: number) => x + y
+}
+
+fun main(): number {
+  // adder(40) returns a closure that remembers 40; applying it to 2 gives 42.
+  be add40 holds adder(40)
+  return add40(2)
+}
+}

@@ -1,0 +1,5 @@
+[package]
+name = "inductive_list"
+
+[runtime]
+backend = "memory"

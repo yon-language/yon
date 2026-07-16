@@ -1,0 +1,13 @@
+place Entry {
+/* Vec on an arena strip, in-place mutable, no malloc. push appends into spare
+ * capacity or reallocs a doubled strip past capacity (returning a new handle
+ * and trimming the old strip back to the OS); get/set are O(1); size reads the
+ * header. We grow past the initial capacity of 4 (the push of 50 reallocates),
+ * then mutate index 0 in place, and combine size/get into a small exit code. */
+fun main(): number {
+  be a holds Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
+  be b holds Vec.push(Vec.push(a, 40), 50)
+  be c holds Vec.set(b, 0, 7)
+  return Vec.size(c) + Vec.get(c, 0) + Vec.get(c, 4)
+}
+}

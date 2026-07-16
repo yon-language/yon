@@ -1,0 +1,5 @@
+[package]
+name = "hermetic_scope"
+
+[runtime]
+backend = "memory"

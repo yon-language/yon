@@ -1,0 +1,5 @@
+[package]
+name = "string_test"
+
+[runtime]
+backend = "memory"

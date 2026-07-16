@@ -1,0 +1,14 @@
+place Entry {
+// 81b — hermetic scope, formal layer. The `scope` block becomes a
+// topos.scope_with_yield region: IsolatedFromAbove forces `base` to enter
+// as an EXPLICIT capture; an implicit outer reference would be rejected by
+// the MLIR verifier. The arena model is retired: the region inlines at
+// zero runtime cost.
+fun main(): number {
+  be base holds 40
+  scope Hermetic {
+    be sealed holds base + 2
+  }
+  return base + 2
+}
+}

@@ -439,27 +439,18 @@ let free_vars_expr (e0 : expr) : string list =
    scope"). Handle bodies are not closure-converted: a morphism escapes its
    definition site (it is composed and applied elsewhere, possibly across a
    Space boundary) and cannot carry an environment by reference. *)
+(* Stage C: a handle-lambda (move/reduction/morph/functor/view) MAY now capture an
+   enclosing local. The old closed-morphism discipline forbade it on the grounds
+   that a morphism escapes its definition site and "is not closure-converted", but
+   Stage B built exactly that: a handle-lambda that captures is lifted to a
+   content-addressed closure node (its dense tag + the captured env), so the
+   environment travels with the handle across composition and Space boundaries.
+   Kept as a no-op (still called by the five handle-lambda cases) so the removal
+   is one edit and the intent is documented at the site of the old check. *)
 let forbid_local_capture
-    (kind : string) (params : (string * ty) list) (body : expr)
-    (env : Tyenv.env) (loc : location) : unit tc_result =
-  let param_names = List.map fst params in
-  let captured =
-    free_vars_expr body
-    |> List.filter (fun x ->
-         (not (List.mem x param_names)) && Tyenv.lookup_var env x <> None)
-  in
-  match captured with
-  | [] -> ok ()
-  | x :: _ ->
-      err loc (Printf.sprintf
-        "closed-morphism discipline: the body of this '%s' lambda captures the \
-         enclosing local '%s'. A morphism may use only its own parameters and \
-         top-level definitions (functions, places, worlds) \226\128\148 never a \
-         local from the surrounding scope, because a morphism escapes its \
-         definition site (it is composed and applied elsewhere, possibly across \
-         a Space boundary) and is not closure-converted. Workaround: pass '%s' \
-         as a parameter, or lift it to a top-level definition."
-        kind x x)
+    (_kind : string) (_params : (string * ty) list) (_body : expr)
+    (_env : Tyenv.env) (_loc : location) : unit tc_result =
+  ok ()
 
 (* Forward reference: infer (this rec group) reaches the statement
    checker of the later group, for produce blocks in expression

@@ -47,12 +47,23 @@ def _interp_exit(path):
     return exits[-1][len("EXIT "):].strip() if exits else "ERR"
 
 
+def _resolve(name):
+    """An example is either a directory PROJECT (examples/<name>/, post the
+    filesystem-worlds migration) or a single file (examples/<name>.yon).
+    eval_runner accepts both; prefer the directory."""
+    d = EXAMPLES / name
+    if d.is_dir():
+        return d
+    f = EXAMPLES / f"{name}.yon"
+    return f if f.exists() else None
+
+
 @pytest.mark.skipif(not EVR.exists(), reason="eval_runner.exe not built")
 @pytest.mark.parametrize("name,expected", sorted(_BASE.items()))
 def test_interp_exit_matches_baseline(name, expected):
-    src = EXAMPLES / f"{name}.yon"
-    if not src.exists():
-        pytest.skip(f"example {name}.yon not present")
+    src = _resolve(name)
+    if src is None:
+        pytest.skip(f"example {name} not present (neither dir nor .yon)")
     got = _interp_exit(src)
     assert got == expected, (
         f"interpreter exit for {name}: got {got}, baseline {expected}. "

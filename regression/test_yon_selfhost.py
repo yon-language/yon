@@ -111,11 +111,15 @@ def test_runtime_in_yon(src, tmp_path):
     assert rc == 0, f"runtime property failed: binary exited {rc} (expected 0)"
 
 
-def test_mlir_erasure():
+def test_mlir_erasure(tmp_path):
     """Level 3: a universe-typed parameter is erased -- the emitted MLIR has no
-    !llvm.ptr token and universe_taker lowers to () -> f64 (the kw_paths fix)."""
-    r = subprocess.run([str(EMIT), str(ROOT / "examples" / "kw_paths.yon")],
-                       capture_output=True, timeout=60)
-    mlir = r.stdout.decode(errors="replace")
+    !llvm.ptr token and universe_taker lowers to () -> f64 (the kw_paths fix).
+    kw_paths is a dir-project (place migration), so emit through yonc, which mounts
+    the project context; the raw frontend cannot infer a world for a bare place."""
+    out = tmp_path / "kw_paths.mlir"
+    subprocess.run([str(ROOT / "toolchain" / "yonc"), "--emit=mlir",
+                    str(ROOT / "examples" / "kw_paths"), "-o", str(out)],
+                   capture_output=True, timeout=60)
+    mlir = out.read_text(errors="replace") if out.exists() else ""
     assert "!llvm.ptr" not in mlir, "type-level token leaked into the emitted code"
     assert "@universe_taker() -> f64" in mlir, "type-argument was not erased before emit"

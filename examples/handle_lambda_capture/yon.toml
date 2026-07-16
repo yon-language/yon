@@ -1,0 +1,9 @@
+[package]
+name = "handle_lambda_capture"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"

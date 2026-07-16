@@ -1,0 +1,5 @@
+[package]
+name = "kw_id_sugar"
+
+[runtime]
+backend = "memory"

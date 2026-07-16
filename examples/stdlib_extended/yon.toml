@@ -1,0 +1,5 @@
+[package]
+name = "stdlib_extended"
+
+[runtime]
+backend = "memory"
