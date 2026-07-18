@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_bits.c — oracle for the bitwise + hashing runtime families:
  * yon_rt_bits_* (yon_rt.c:6826+) and yon_rt_crypto_* (yon_rt.c:7220+). All take
  * plain f64 (interpreted as uint32/uint64) except fnv1a, which takes a String

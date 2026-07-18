@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_frozen.c — correctness oracle for FrozenMap, the FKS two-level
  * perfect-hash map built from an IndexedHeapMap (yon_rt.c:5040+,
  * yon_rt_frozen_from_indexed / _get / _contains / _size).

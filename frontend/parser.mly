@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 /* parser.mly — Menhir grammar for Yon v0.3 surface syntax.
  *
  * Follows the BNF specification of yon-language-spec-v0-3.md §5.

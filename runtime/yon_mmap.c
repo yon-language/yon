@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_mmap.c — the one allocation primitive of the Yon runtime. See yon_mmap.h.
  * mmap always; private anonymous by default, named shared as the sole
  * exception for cross-Space structures. */

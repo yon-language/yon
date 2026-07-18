@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* leech_orbits.c — see leech_orbits.h. */
 #include "leech_orbits.h"
 #include "xleech2_mphf.h"    /* yon_mphf_index / unindex, YON_MPHF_INVALID */

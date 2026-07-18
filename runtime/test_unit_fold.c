@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_fold.c — oracle for the reduction/CRDT fold operators (yon_rt.c:487+).
  * These are the per-element combiners the collect path applies when folding a
  * stream of partials. All are pure and side-effect-free on plain memory (no

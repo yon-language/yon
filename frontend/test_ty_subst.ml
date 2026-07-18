@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_ty_subst.ml — Unit test per Ty_subst (Algorithm W foundations) *)
 
 open Surface_ast

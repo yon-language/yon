@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_type_erase.ml — oracle for the type-argument erasure pass.
  *
  * (1) BASE ERASURE is coordinated: a universe-typed binder is dropped from a

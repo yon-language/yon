@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* locally_nameless.ml — de Bruijn migration, stadio 2.
  *
  * The three arithmetic primitives of a locally-nameless representation

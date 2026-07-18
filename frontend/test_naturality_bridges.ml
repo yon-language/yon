@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_naturality_bridges.ml — oracle for the Coq and SMT naturality bridges.
  *
  * naturality_coqcheck.ml and naturality_smtcheck.ml translate an arithmetic

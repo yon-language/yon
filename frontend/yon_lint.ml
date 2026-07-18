@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* yon_lint.ml — the `yon_lint` CLI over the shared Linter library.
  *
  * The rules live in linter.ml (also used by the language server), so the CLI and

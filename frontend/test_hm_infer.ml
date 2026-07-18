@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_hm_infer.ml — ORACLE for the HM inference engine (Algorithm W) plus the
  * pure ty_subst core it stands on (unify / occur-check).
  *

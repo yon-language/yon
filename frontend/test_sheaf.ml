@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_sheaf.ml — ORACLE for the sheaf descent judgement (sheafification
  * soundness gate). See sheaf.ml header: a field : W -> V is accepted iff it
  * FACTORS through the quotient map canon : W -> Q, i.e. it is determined by the

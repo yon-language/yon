@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* move_engine.ml — execution engine for `move` declarations.
  *
  * A move declaration specifies how to transport values between worlds:

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* tycheck.ml — bidirectional type checker for surface Yon.
  *
  * The checker has two mutually recursive judgments:

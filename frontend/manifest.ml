@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* manifest.ml — reads the [world.<Name>] sections of yon.toml and enforces
    the wire boundary they declare.
 

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_space_graph.ml  -  proof harness and self-verifying oracle for the static
    Space graph and the downstream-reachability (reclaim) analysis.
 

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_transp_glue.ml — the CCHM boundary-equation ORACLE for TRANSPORT at a
  * Glue type (transp = comp with the empty system; Cohen–Coquand–Huber–Mörtberg
  * 2018, §6.2).  Companion to test_glue_boundary.ml, which pins the analogous

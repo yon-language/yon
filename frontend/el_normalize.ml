@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* el_normalize.ml — the CATT / R_Yon conversion rule  El(c) ≡ El(nf_Δ c)  applied
  * to every type annotation in the Core, once, just before the carrier functor
  * lowers types to runtime layout.

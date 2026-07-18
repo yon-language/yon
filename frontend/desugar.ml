@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* desugar.ml — translation from surface Yon (Surface_ast) to Yon Core (Ast).
  *
  * Follows the translation table of yon-core-calculus-v0-1.md §7.

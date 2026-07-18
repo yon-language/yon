@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_vec.c — oracle for the linear-collection runtime families that take
  * plain f64 values and need no compiled-program context: the growable Vec
  * (yon_rt.c:6372+), the ring-buffer Deque (yon_rt.c:4006+), and the binary

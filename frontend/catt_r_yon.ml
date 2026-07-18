@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* catt_r_yon.ml — CATT with R_Yon equality rules, per Rice 2025.
  *
  * Implements the CATT_R_Yon fragment of the type checker federation.

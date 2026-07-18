@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* module_prefix.ml — namespace prefixing for imported modules (Strato 2).
  *
  * When a package M is pulled in via `import "M"`, every top-level function it

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_ln.ml — oracle for the locally-nameless primitives (stadio 2).
  * Round-trip (close then open = id), instantiation, and capture-safety, on
  * nested Lam terms built by hand. Standalone:

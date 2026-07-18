@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_metatheory_fuzz.ml — property-based / differential testing of the kernel's
  * operational semantics (item 4 of the "Verifying semantic correctness" ladder).
  *

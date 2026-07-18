@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* bench_ds.c — direct-C microbenchmark for the five internal Level-2 structures
  * that have no frontend handle API: Deque, PriorityQueue, IndexedHeapMap,
  * MemoTable, FrozenMap. Feeds the "internal Level-2 structures" table in

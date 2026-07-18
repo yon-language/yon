@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* leech_orbits.h — pure M24 orbits over the Leech type-2 shell.
  *
  * mmgroup gives Co_0 (transitive: one orbit) and N_0 (the three shapes /

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_drop_reclaim.c — oracle for the Space-reclaim primitive that the
  * `drop X` construct lowers to:
  *   xleech2_heap.c  void     yon_xheap_drop(yon_xheap_t *h)

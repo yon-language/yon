@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* yon_doc.ml — documentation generator for Yon.
  *
  * Produces a Markdown API reference from a source file's AST: every world,

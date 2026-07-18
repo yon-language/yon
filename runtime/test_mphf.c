@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_mphf.c — the C recheck of the XLeech2 minimal-perfect-hash bijection,
  * referenced by xleech2_mphf.h. Exhaustive over the whole type-2 shell.
  *

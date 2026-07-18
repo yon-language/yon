@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* emit_mlir.ml — lowers the Yon core IR to the textual MLIR "topos" dialect.
  *
  * The emitter has two layers. The structural layer turns top-level

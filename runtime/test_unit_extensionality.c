@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_extensionality.c — the content-addressed heap's extensionality under
  * load, past one heap's 196,560 slots (the Leech kissing number). Answers the
  * pigeonhole/birthday critique: with N distinct contents > slots-per-heap, does

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_eta_sigma.ml — oracle: eta-Sigma (surjective pairing) makes the binary
  * products of Syn(Yon) STRICT. The kernel contracts Pair(Fst t, Snd t) ~> t on
  * a NEUTRAL t, so the pairing mediator is unique (Syn(Yon) formalization sec.12:

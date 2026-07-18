@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* yon_lsp.ml — Language Server Protocol implementation for Yon.
  *
  * Runs on the client (stdin/stdout, JSON-RPC), nothing to host. Reuses the

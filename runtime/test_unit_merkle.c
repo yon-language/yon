@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_merkle.c — oracle for the yon_rt_merkle_* content-addressing family
  * (yon_rt.c:5368+). A Merkle node is an xheap slot on g_ds_heap; its slot id is
  * the f64 handle and is its content address: identical (label, ordered children,

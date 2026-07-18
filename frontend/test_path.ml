@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_path.ml — oracle for non-trivial cubical path equality.
  *
  * A *computational* cubical kernel (vs. one "dead on paper") recognizes two

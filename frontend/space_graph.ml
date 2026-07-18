@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* space_graph.ml  -  the STATIC inter-Space communication graph.
 
    A node is a Space: a Space is a project directory, and the project root (the

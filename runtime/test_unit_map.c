@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_map.c — oracle for the yon_rt_map_* family (open-addressed HashMap,
  * yon_rt.c:3166+). Keys and values are both f64; entries live in xheap slots,
  * the directory is an arena strip of slot ids with linear probing.

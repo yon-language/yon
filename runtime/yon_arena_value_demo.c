@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_arena_value_demo.c — insert ONE real Yon value into shell 1, using the
  * mechanism we actually built: the content-addressed heap.
  *

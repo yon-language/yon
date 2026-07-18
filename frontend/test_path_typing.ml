@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_path_typing.ml — Task 0-A: precise surface typing of path operators.
  *
  * concat/inv compute the correct endpoints on STRUCTURED identity types

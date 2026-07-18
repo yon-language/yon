@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* place_visibility.ml — visibility sets for places.
  *
  * For each place P in the program, V(P) is the set of names (fields,

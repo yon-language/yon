@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* leech_theta.h — the Leech lattice constants the runtime is sized by, kept as
  * a single source of truth and shared across the runtime translation units.
  *

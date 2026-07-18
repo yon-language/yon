@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* lexer.mll — tokenizer for the Yon surface syntax.
    Maps source text to the tokens consumed by parser.mly. Keywords live in a
    hash table (built once below); everything else is matched by the rules at

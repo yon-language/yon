@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* type_root.ml — the content-addressed identity of a type.
  *
  * A type is the Merkle root of its canonical form, computed with the same hash

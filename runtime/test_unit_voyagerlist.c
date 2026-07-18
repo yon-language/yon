@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_voyagerlist.c — oracle for the yon_rt_voyagerlist_* family
  * (yon_rt.c:6021+). The family wraps the Golay (24,12,8) code: a 12-bit datum
  * is "sealed" into a 24-bit codeword, and "opened" back via syndrome decoding,

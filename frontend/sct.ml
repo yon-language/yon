@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* sct.ml — Size-Change Termination gate for delta-rule certification.
  *
  * Lee, Jones, Ben-Amram, "The Size-Change Principle for Program

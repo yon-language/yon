@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_desugar.ml — oracle for the Surface->Core desugar rules (desugar.ml).
  *
  * Pins the canonical statement-desugar shapes (desugar.ml desugar_stmts):

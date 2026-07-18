@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_dispatcher.ml — ORACLE: equality + directional subtype known-answer.
  *
  * Pins the type-equality dispatcher (Dispatcher.type_equal) and the

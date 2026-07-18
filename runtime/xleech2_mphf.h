@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* xleech2_mphf.h — Minimal Perfect Hash Function xcoord <-> idx.
  *
  * BACKING: libmmgroup_mm_op.so (Martin Seysen, MIT license)

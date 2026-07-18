@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_type_root.ml — oracle for the Fase 1 / Step 1 type_root (standalone).
  * Checks the identity function on real surface types, Nominal_type. Not wired into
  * the compile path; exits nonzero on any failure. *)

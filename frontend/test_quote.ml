@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_quote.ml — oracle for the B eliminator of El (quote intro + match elim).
  *
  * Architecture chosen (aligned with CaTT / HoTT / Yoneda): the eliminator binds

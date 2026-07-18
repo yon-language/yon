@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* formatter.ml — the Yon formatter, as a shared library.
  *
  * A pretty printer over the surface AST that produces re-parsable Yon (not the

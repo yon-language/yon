@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_psh_surface.ml — end-to-end oracle for the SURFACE half of the abstract
  * presheaf arrow action (A1.2 / A1.3). The kernel conversion rules live in
  * reduce.ml (try_functoriality) and are pinned by test_functoriality.ml at the

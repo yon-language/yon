@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_pretty.ml — oracle for the Core pretty-printer (pretty.ml).
  *
  * pretty.ml is a pure Core-AST -> string printer used for debug/inspection. Each

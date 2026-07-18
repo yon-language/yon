@@ -1,0 +1,17 @@
+Yon — a categorical programming language
+Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com>
+ORCID: 0009-0001-5978-6015 — https://yon-lang.org
+
+Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
+See LICENSE for the full text.
+
+This product includes third-party components:
+
+  mmgroup (mat24 functions and tables)
+  Copyright (c) 2020, Martin Seysen
+  Licensed under the BSD 2-Clause License.
+  See runtime/vendor/mmgroup/LICENSE.
+
+Attribution notices required by the AGPL must be preserved in all
+copies and derivative works, including modified versions offered
+over a network.

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_motive.ml — oracle for the type-level dependent substitution
  * (motive application). subst_term_in_ty x u t replaces the TERM variable x
  * inside the term-carrying type formers (TyId endpoints, TyEl code, TyGlue

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_xheap_bounds.c — memory-safety oracle for the XLeech2 heap put/get
  * bounds (xleech2_heap.c). slot_index reaching yon_xheap_get can be an
  * attacker-influenceable handle decoded from a wire ref; a wild index must

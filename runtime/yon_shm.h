@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_shm.h — shared-memory backend for yon_xheap_t.
  *
  * A shadow implementation of a content-addressed heap that lives in POSIX
