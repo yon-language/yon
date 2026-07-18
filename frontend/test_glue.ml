@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_glue.ml — oracle for the task-3 surface: Glue, univalence-as-computation,
  * and the HIT scaffold. Measures honestly what already reduces vs. what is a
  * placeholder.

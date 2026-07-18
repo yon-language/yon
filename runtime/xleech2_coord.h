@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* xleech2_coord.h — Yon native NdCoord in XLeech2 encoding.
  *
  * REPLACES: ndcoord.h (24-int16 Leech vector)

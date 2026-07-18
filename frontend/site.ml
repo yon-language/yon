@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* site.ml — the world reified as a Grothendieck site C(W), and its topology J.
  *
  * A world W is the base category (the site) on which its places are presheaves

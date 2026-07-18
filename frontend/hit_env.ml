@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* hit_env.ml — environment of Higher Inductive Type signatures.
  *
  * HITs are inductive types with two kinds of constructors:

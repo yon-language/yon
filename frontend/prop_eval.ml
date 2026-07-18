@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* prop_eval.ml — place-aware evaluation of propositions.
  *
  * This module is the operational core of the topos integration: it

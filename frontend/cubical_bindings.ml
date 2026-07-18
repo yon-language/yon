@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* cubical_bindings.ml — type signatures for cubical primitives.
  *
  * Cubical primitives are polymorphic over types: e.g.

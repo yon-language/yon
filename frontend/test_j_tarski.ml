@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_j_tarski.ml — integration oracle for the Tarski dependent J.
  *
  * A GENUINE motive C (a term whose type lands in the universe) makes J typed

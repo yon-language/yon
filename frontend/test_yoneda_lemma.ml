@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_yoneda_lemma.ml - kernel oracle for full faithfulness of the Yoneda
  * embedding. Recovery uses beta-eta; fullness is conversion of the naturality
  * square at h, evaluated on id_P. *)

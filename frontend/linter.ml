@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* linter.ml — the Yon linter, as a shared library.
  *
  * Complementary to the type checker: the tycheck REJECTS ill-typed programs; the

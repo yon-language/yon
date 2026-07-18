@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* space_liveness.ml  -  per-function Space arc-set, the base of the reclaim
    analysis (automatic last-use reclaim, and the `drop X` check that appeals to
    the same criterion).

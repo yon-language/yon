@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_hit_elim.ml — Tarski HIT eliminator typing, with DEPENDENT path branches.
  *
  * hit_elim(C, [base => v_base, loop => plam i => body], x):

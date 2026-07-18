@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_kernel_alpha.ml — oracle for kernel binder handling (alpha-equivalence).
  *
  * Asserts the CORRECT behaviour of the type-theory kernel on binder handling.

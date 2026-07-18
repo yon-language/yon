@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_mmap.h — the one allocation primitive of the Yon runtime.
  *
  * mmap always: every runtime structure allocates through here, never malloc,

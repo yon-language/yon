@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_field_load.c — memory-safety oracle for yon_rt_field_load and
  * yon_rt_flatten (yon_rt.c). These are the attacker-influenceable OOB paths:
  * the (offset, size) pair reaching field_load comes from the generated code and,

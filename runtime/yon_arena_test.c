@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_arena_test.c — oracle for the Leech type-2 arena (road 3, bricks 1-4).
  *
  * Brick 1: repr round-trip + zero collisions over all 196560 points.

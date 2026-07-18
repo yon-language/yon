@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* xleech2_mphf.c — MPHF implementation via the mmgroup mm_op tables.
  *
  * Composition of 2 C functions already in libmmgroup_mm_op.so to obtain a

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* package_layout.ml — the filesystem IS the declaration.
  *
  * A Yon program is a directory tree. The path carries the ontology the surface

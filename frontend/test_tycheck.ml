@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_tycheck.ml — ORACLE: verdict tests on hand-built surface programs.
  *
  * We build Surface_ast.program values directly (no parser) and run

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* leech_theta.ml — the arithmetic oracle of the Leech lattice.
  *
  * Theta_Leech = E_12 - (65520/691) * Delta, a modular form of weight 12.

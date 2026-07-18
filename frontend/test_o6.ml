@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_o6.ml — oracle: O6, the witness that closes the classifier theorem of
  * Syn(Yon) (formalization sec.16). For an embedding m : B -> A, with image
  * predicate P(x) := Sigma(b:B). Id(m b, x), the comprehension {x:A | P} is

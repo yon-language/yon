@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* xleech2_heap.c — hybrid HexHeap design (arena + content_index).
  *
  * Tile-based arena (no physical slot collisions) + content_index hash table

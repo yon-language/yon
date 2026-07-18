@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* Generate runtime/yon_curtis_canon.c: precomputed canon_map LUTs for the
  * fixed Curtis frame. */
 #include <stdint.h>

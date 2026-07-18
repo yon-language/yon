@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_xtower_surface.ml — surface-exposure oracle for XTower.
  *
  * XTower is the nested stabilizer tower Co0 ⊃ N ⊃ M24 ⊃ id (widths 1/3/12/196560,

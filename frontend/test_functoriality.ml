@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_functoriality.ml — oracle for the abstract-presheaf functoriality
  * conversion rules (A1.2 arrow action + A1.3 functoriality laws) added to
  * reduce.ml.

@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_glue_tcomp.ml — the T-component (fiber) of hcomp at a type-VARYING,
  * multi-face Glue restricts to the correct PER-FACE composite: on psi_k the fiber
  * must be the composition IN T_k. Before the per-face fix, reduce_hcomp composed

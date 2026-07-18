@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* GENERATED token dumper: lex a .yon (argv[1]) and print terminal names for
    `menhir --interpret`. Used only by the grammar-coverage gate. *)
 let tok_name = function

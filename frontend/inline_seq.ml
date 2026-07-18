@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* inline_seq.ml — a let-inline pass for stream fusion preservation
  *
  * Problem solved: when the user writes

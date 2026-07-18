@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_subst.ml — oracle for capture-avoiding substitution (subst.ml).
  *
  * Pins the three sub-cases named in the subst.ml header, plus the HITElim

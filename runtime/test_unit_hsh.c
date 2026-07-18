@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_hsh.c — oracle for the HSH (Hierarchical History Store) membership
  * and backward paths (yon_rt_hsh.c, #include'd into yon_rt.o). The level index
  * reaching hsh_contains is attacker-influenceable; an out-of-range level must

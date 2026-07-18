@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_o2_probe.ml — CCHM boundary/adjacency probe for the O2 canonicity claim.
  *
  * The metatheory fuzzer reports ~490 cubical "stuck" hcomp witnesses. Those are

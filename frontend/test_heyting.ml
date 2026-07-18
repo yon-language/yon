@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_heyting.ml — certifies that the three-value prop fragment is a genuine
  * Heyting algebra (the Gödel G3 chain), not Kleene/Łukasiewicz.
  *

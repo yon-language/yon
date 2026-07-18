@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_prop_eval.ml — oracle for the Ω proposition EVALUATOR (prop_eval.ml).
  *
  * test_heyting (and the heyting oracle) already pin the *algebra*

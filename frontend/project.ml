@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* project.ml — the canonical project loader and whole-program diagnostic pass.
  *
  * The LSP and (later) the driver share this: load a package (its files + the

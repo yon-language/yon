@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_world_site.ml — oracle: the world reified as a site C(W), and get_J
  * reading the Grothendieck topology off its CONSTRUCTION. Fixes the LOGIC of
  * the generated topology, not merely that it compiles:

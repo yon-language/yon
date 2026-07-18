@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* cubical.ml — Cubical Type Theory fragment for Yon.
  *
  * A prototype of the (∞,1)-decidable layer of the federation, modelled on

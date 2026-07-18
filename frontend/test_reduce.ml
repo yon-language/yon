@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_reduce.ml — oracle for the R_Yon kernel reducer (reduce.ml), each rule
  * exercised in isolation through the public API (step / reduce / try_eta /
  * is_value). Terms are built as CORE terms and compared with term_equal_env,

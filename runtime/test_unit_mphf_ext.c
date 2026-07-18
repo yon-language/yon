@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_mphf_ext.c — extended oracle for the XLeech2 minimal perfect hash
  * (xleech2_mphf.c). The MPHF is NOT a parametric "build over N keys" structure:
  * it is the FIXED bijection

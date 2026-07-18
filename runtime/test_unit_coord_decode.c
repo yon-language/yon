@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_coord_decode.c — memory-safety oracle for the XLeech2 decode path
  * (xleech2_coord.c). yon_xcoord_to_int24 writes into a caller int16[24]; a
  * malformed v must never drive an OOB lane write. The audited fail-closed guard

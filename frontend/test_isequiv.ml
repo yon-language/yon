@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_isequiv.ml — soundness gate: ua/Glue require a genuine equivalence.
  *
  * The hole this closes: previously `ua` accepted any argument (it ignored the

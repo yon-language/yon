@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_curtis_canon.c — oracle for the precomputed Curtis canonicalisation
  * LUTs (yon_curtis_canon.c / .o).
  *

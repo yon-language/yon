@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* error_codes.ml — the single registry of stable diagnostic codes, and the
  * canonical Diagnostic value every producer emits and every consumer reads.
  *

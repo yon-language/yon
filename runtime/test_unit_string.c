@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_unit_string.c — oracle for the yon_rt_string_* family (yon_rt.c:6867+).
  *
  * A "String" is an xheap slot on g_ds_heap whose payload is a NUL-terminated C

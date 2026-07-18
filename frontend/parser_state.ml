@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* Global parser state for lifting inline lambdas. Used by parser.mly to
  * accumulate synthetic top-level declarations (e.g. for `by fun(...)` in a
  * move conversion). *)

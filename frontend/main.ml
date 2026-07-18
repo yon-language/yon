@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* main.ml — entry point with synthetic test programs
  *
  * Each test constructs a Yon Core term directly, runs it, and verifies

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_rt.c — implementation of the cross-space runtime API.
  *
  * A program has multiple logical Spaces. Each Space owns a SEPARATE heap; the

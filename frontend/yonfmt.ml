@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* yonfmt.ml — the `yonfmt` CLI over the shared Formatter library.
  *
  * The formatting logic lives in formatter.ml (also used by the language server's

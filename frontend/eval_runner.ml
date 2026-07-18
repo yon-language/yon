@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* eval_runner.ml — run a .yon file through the OCaml interpreter and print the
  * final numeric value.
  *

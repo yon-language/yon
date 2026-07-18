@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* surface_ast.ml — abstract syntax tree of surface Yon v0.3.
  *
  * This is the AST produced by the parser. It is distinct from the

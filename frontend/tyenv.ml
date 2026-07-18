@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* tyenv.ml — type environment for the Yon type checker.
  *
  * Tracks term variables, place/world/reduction/fun declarations, and

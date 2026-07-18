@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_glue_boundary.ml — the CCHM boundary-equation ORACLE for composition
  * (comp/hcomp) at a Glue type.
  *

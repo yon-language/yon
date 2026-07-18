@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* test_spawn_collect.c — standalone verifier for the spawn { } collection
  * primitive and its f64 facade (steps 4a + 4b-i). Forks N replicas via the
  * exact f64 id-based path the MLIR lowering will generate: Spawn__open, branch

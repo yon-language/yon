@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* heyting.ml — Heyting algebra runtime for Yon propositions.
  *
  * Yon's "boolean" type is not Boolean. It is the subobject classifier

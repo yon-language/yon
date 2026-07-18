@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: AGPL-3.0-only */
+/* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_arena.h — the Leech type-2 arena (road 3).
  *
  * An index from each of the 196560 type-2 lattice points to the canonical value

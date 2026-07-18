@@ -1,3 +1,5 @@
+(* SPDX-License-Identifier: AGPL-3.0-only *)
+(* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* Method-call sugar normalization (surface AST pass, run BEFORE tycheck).
  *
  * Lets a tracked collection handle be updated method-style:
