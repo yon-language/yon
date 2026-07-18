@@ -6761,6 +6761,27 @@ double yon_rt_space_get(double space_id) {
     return g_space_cells[id].value;
 }
 
+/* Mutable-cell reclaim by stack discipline. A function's mutable-local cells do
+ * NOT escape (you cannot return a cell handle: `return` reads the cell's value),
+ * so they are LIFO with respect to calls. The compiler captures the high-water
+ * mark on entry (yon_rt_space_mark) and, once the return value is materialized,
+ * frees every cell allocated during the call by resetting the counter to the mark
+ * (yon_rt_space_reset). Freed slots are then reused by yon_rt_space_make, so a
+ * reassigning helper called N times no longer leaks N cells. This is the same
+ * drop-then-reuse the named-Space regions get, applied to the cell registry. */
+double yon_rt_space_mark(void) {
+    return (double)g_n_space_cells;
+}
+
+double yon_rt_space_reset(double mark) {
+    uint32_t m = (uint32_t)mark;
+    if (m <= g_n_space_cells) {
+        for (uint32_t i = m; i < g_n_space_cells; i++) g_space_cells[i].in_use = 0;
+        g_n_space_cells = m;
+    }
+    return mark;
+}
+
 /* ============================================================== */
 /* S7 — LockedRing: capability tokens via the Co_0 group           */
 /* ============================================================== */

@@ -5434,8 +5434,21 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
      fires automatically when a relevant morphism is declared. *)
   (match extract_morph_in_space fs.fn_name with
    | None ->
+       (* Reclaim this call's mutable-local cells on return. The high-water mark
+          is captured before the body allocates any cell; once the return value is
+          materialized (an f64, read out of any cell), resetting to the mark frees
+          every cell this activation made, so the slots recycle. The cells do not
+          escape (a `return` reads a value, never a cell handle), so this LIFO
+          discipline is sound and stops a reassigning helper called many times
+          from exhausting the registry. *)
+       let mark = fresh_ssa e in
+       emit_line e (Printf.sprintf
+         "%s = func.call @yon_rt_space_mark() : () -> f64" mark);
        let (v, v_ty) = emit_term e env funcs fs.fn_body in
        let v = coerce_return e v v_ty ret_ty in
+       let rreset = fresh_ssa e in
+       emit_line e (Printf.sprintf
+         "%s = func.call @yon_rt_space_reset(%s) : (f64) -> f64" rreset mark);
        emit_line e (Printf.sprintf "return %s : %s" v ret_ty)
    | Some (space_name_raw, morph_name) ->
        (* space_name_raw may be:
@@ -6375,6 +6388,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
     emit_line e "func.func private @yon_rt_space_get(f64) -> f64";
     emit_blank e
   end;
+  (* Mutable-cell reclaim (space_mark/reset) is emitted in EVERY function body
+     (emit_function), including pure functions with no cells, so its declarations
+     must NOT depend on used_list. Declared unconditionally here. *)
+  emit_line e "func.func private @yon_rt_space_mark() -> f64";
+  emit_line e "func.func private @yon_rt_space_reset(f64) -> f64";
   (* Declarations always emitted for Map/Set/Dag. They use the
      content-addressed yon_xheap in the runtime. The cost is negligible (a
      handful of private declarations) and the benefit is that any program can

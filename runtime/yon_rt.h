@@ -881,6 +881,8 @@ double yon_rt_vec_set(double vec_id, double idx, double value);
 double yon_rt_space_make(double initial);
 double yon_rt_space_set(double space_id, double new_value);
 double yon_rt_space_get(double space_id);
+double yon_rt_space_mark(void);
+double yon_rt_space_reset(double mark);
 
 /* ============================================================== */
 /* S7 — LockedRing: capability tokens via the Co_0 group            */
