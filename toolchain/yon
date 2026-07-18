@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# yon -- the unified Yon driver (thin).
+#
+# One entry point that dispatches to the stage-0 reference toolchain (yonc) and
+# the shared tooling binaries. This is the facade: it unifies what already works
+# so `yon <cmd>` is the single command a user types. The bootstrap/oracle
+# commands (diff, stages, bootstrap) and the language-introspection commands
+# (spec, keywords, prove, refute, root, carrier, normalize, type, eval, repl)
+# are layered on later; today they report honestly that they are not yet wired
+# rather than pretending to work.
+#
+# On-disk model: only `yon` is meant to be on PATH. The real compilers live under
+# this directory as stage 0 (yonc, the OCaml reference) and, later, yon-stage1
+# (the self-hosted compiler). Users do not type those.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+YONC="$HERE/yonc"
+FRONTEND="${YON_BIN_DIR:-$HERE/../frontend/_build/default}/yoner_emit_mlir.exe"
+
+die() { echo "yon: $*" >&2; exit 2; }
+
+usage() {
+  cat <<'EOF'
+yon -- the Yon driver
+
+Usage: yon <command> [args]
+
+Build & run (stage 0, the OCaml reference):
+  build <file|dir> [-o out]   compile to a native executable
+  run   <file> [prog-args]    compile then execute, forwarding args
+  check <file|dir>            type-check only, no codegen (fast; exit 3 on a false proof)
+
+Pipeline inspection:
+  emit mlir     <file>        Topos-dialect MLIR from the frontend
+  emit standard <file>        after Topos->Standard lowering
+  emit llvm     <file>        after ->LLVM-dialect lowering
+  emit ll       <file>        LLVM IR (.ll)
+  emit obj      <file> -o f.o object file
+  emit core     <file>        the Core IR (YON_DUMP_CORE)
+
+Tooling:
+  fmt  [args]                 format (yonfmt)
+  lint [args]                 lint (yon_lint)
+  doc  [args]                 docs (yon_doc)
+  lsp  [args]                 language server over stdio
+
+Introspection:
+  version                     print the version
+  help                        this message
+
+Not yet wired (roadmap): diff, stages, bootstrap, spec, keywords, prove,
+  refute, root, carrier, normalize, type, eval, repl, new, init, test, clean,
+  add, deps, fetch, publish.
+EOF
+}
+
+need_frontend() {
+  [ -x "$FRONTEND" ] || die "frontend not built: $FRONTEND (build with: cd frontend && dune build)"
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  build)
+    exec "$YONC" "$@"
+    ;;
+
+  run)
+    [ $# -ge 1 ] || die "run: missing source file"
+    src="$1"; shift || true
+    out="$(mktemp -t yon-run.XXXXXX)"
+    "$YONC" "$src" -o "$out"
+    rc=0
+    "$out" "$@" || rc=$?
+    rm -f "$out"
+    exit $rc
+    ;;
+
+  check)
+    # The frontend parses, type-checks and runs Project.check_all, then emits
+    # MLIR; a check-only run discards that MLIR and keeps the exit code. No
+    # backend (topos-opt/llc/gcc), so this is the fast path.
+    need_frontend
+    [ $# -ge 1 ] || die "check: missing source file"
+    "$FRONTEND" "$@" >/dev/null
+    ;;
+
+  emit)
+    sub="${1:-}"; shift || true
+    case "$sub" in
+      mlir|standard|llvm|ll|obj)
+        exec "$YONC" --emit="$sub" "$@" ;;
+      core)
+        need_frontend
+        exec env YON_DUMP_CORE=1 "$FRONTEND" "$@" ;;
+      asm|ast)
+        die "emit $sub: not wired yet (roadmap); today: emit ll for LLVM IR, emit core for the Core IR" ;;
+      ""|*)
+        die "emit: expected one of mlir|standard|llvm|ll|obj|core (got '${sub:-}')" ;;
+    esac
+    ;;
+
+  fmt)  exec "$HERE/yon-fmt"  "$@" ;;
+  lint) exec "$HERE/yon-lint" "$@" ;;
+  doc)  exec "$HERE/yon-doc"  "$@" ;;
+  lsp)  exec "$HERE/yon-lsp"  "$@" ;;
+
+  version)
+    sha="$(git -C "$HERE/.." rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "yon 1.2-dev ($sha), stage 0 reference"
+    ;;
+
+  help|-h|--help)
+    usage
+    ;;
+
+  # roadmap: real commands, not yet wired. Fail honestly instead of pretending.
+  diff|stages|bootstrap|spec|keywords|prove|refute|root|carrier|normalize|type|eval|repl|\
+  new|init|test|clean|add|deps|fetch|publish)
+    die "$cmd: not implemented yet (roadmap). Run 'yon help' for what works today."
+    ;;
+
+  *)
+    echo "yon: unknown command '$cmd'" >&2
+    usage
+    exit 2
+    ;;
+esac
