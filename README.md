@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="website/static/img/logo.svg" width="170" alt="Yon — the zen monk cat in an enso">
+  <img src="website/static/img/logo.svg" width="170" alt="Yon: the conferral mark, Hom(-, A)">
 </p>
 
 # Yon
