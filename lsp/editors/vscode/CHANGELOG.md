@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- Color theme **Yon (Frappé)**: a Catppuccin-Frappé-derived palette tuned with
+  Refactoring-UI principles (one cool-tinted gray ramp for the chrome, pastel
+  accents used semantically, blue/mauve as the Yon primary).
+- File icon theme **Yon Icons**: the azure Y for `.yon` / `yon.toml` / `yon.lock`,
+  plus generic file and folder icons. Reliable in the explorer (unlike the
+  extension-contributed language icon, which the default Seti theme ignores).
+
+## 0.3.1
+
+- Extension icon: the real Yon logo (the enso cat).
+- File icon: `.yon` files show an azure **Y** in the explorer
+  (`contributes.languages.icon`).
+
 ## 0.3.0
 
 - Syntax highlighting: a real TextMate grammar (`syntaxes/yon.tmLanguage.json`),

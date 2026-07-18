@@ -1,0 +1,17 @@
+{
+  "iconDefinitions": {
+    "yon":         { "iconPath": "./yon-file.svg" },
+    "file":        { "iconPath": "./default-file.svg" },
+    "folder":      { "iconPath": "./folder.svg" },
+    "folderOpen":  { "iconPath": "./folder-open.svg" }
+  },
+  "file": "file",
+  "folder": "folder",
+  "folderExpanded": "folderOpen",
+  "rootFolder": "folder",
+  "rootFolderExpanded": "folderOpen",
+  "fileExtensions": { "yon": "yon" },
+  "fileNames": { "yon.toml": "yon", "yon.lock": "yon", "topos.yon": "yon" },
+  "languageIds": { "yon": "yon" },
+  "hidesExplorerArrows": false
+}

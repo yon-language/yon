@@ -2,7 +2,7 @@
   "name": "yon-lang",
   "displayName": "Yon Language Support",
   "description": "One extension for Yon: diagnostics (compiler errors + linter warnings), formatting, hover, symbols, completion, and syntax highlighting, all from the yon-lsp language server.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "yon-lang",
   "license": "AGPL-3.0-only",
   "icon": "icon.png",
@@ -20,7 +20,8 @@
       "id": "yon",
       "extensions": [".yon"],
       "aliases": ["Yon"],
-      "configuration": "./language-configuration.json"
+      "configuration": "./language-configuration.json",
+      "icon": { "light": "./icons/yon-file.svg", "dark": "./icons/yon-file.svg" }
     }],
     "grammars": [{
       "language": "yon",
@@ -52,7 +53,17 @@
           "description": "Trace the JSON-RPC traffic between VS Code and the Yon language server (for debugging)."
         }
       }
-    }
+    },
+    "themes": [{
+      "label": "Yon (Frappé)",
+      "uiTheme": "vs-dark",
+      "path": "./themes/yon-frappe-color-theme.json"
+    }],
+    "iconThemes": [{
+      "id": "yon-icons",
+      "label": "Yon Icons",
+      "path": "./icons/yon-icon-theme.json"
+    }]
   },
   "dependencies": { "vscode-languageclient": "^9.0.0" }
 }
