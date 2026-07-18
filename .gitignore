@@ -35,3 +35,13 @@ a.out
 
 # copyrighted ebooks/PDFs — never commit
 books/
+# ebooks dropped in the repo root (Little Typer, Siek, Harper, Stump)
+/*.pdf
+/*.epub
+/*.djvu
+
+# local physics scratch (never committed)
+physics/
+
+# local working notes (untracked, kept off the repo)
+notes/todo.md
