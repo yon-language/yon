@@ -1,0 +1,162 @@
+/* Self-host M2 -- a full arithmetic compiler in Yon: text -> Term -> MLIR.
+ *
+ * This joins the two halves that were separate in Stage 1 and M1:
+ *   front (parse_arith.yon): text -> tokens -> AST, recursive descent with
+ *                            precedence (* over +).
+ *   back  (emit_arith.yon):  AST -> MLIR text, the gen catamorphism.
+ * The result is a real (tiny) compiler: it lexes and parses a source string into
+ * a Term, generates a full MLIR module, writes it to a file; the backend then
+ * compiles+runs it. Source "2+3*4" = 2 + (3*4) = 14 -> the emitted program exits
+ * 14. One AST (Term) shared by parser and emitter; no interpreter in the loop.
+ */
+
+/* one shared AST for both parser and emitter. */
+inductive Term    = TLit(number) | TAdd(Term, Term) | TMul(Term, Term)
+inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
+inductive TokList = TkNil | TkCons(Token, TokList)
+inductive Parse   = POk(Term, TokList) | PErr
+/* result of gen: (result ssa, accumulated code, next counter). */
+inductive EmitR   = ER(String, String, number)
+
+/* ---- lexer: String -> TokList ---- */
+fun lex_at(s: String, i: number, len: number, c: number): TokList {
+  return if c == 32 then lex_from(s, i + 1, len)
+    else if c == 43 then hit(TkCons, hit(TPlus), lex_from(s, i + 1, len))
+    else if c == 42 then hit(TkCons, hit(TStar), lex_from(s, i + 1, len))
+    else if c >= 48 then hit(TkCons, hit(TNum, c - 48), lex_from(s, i + 1, len))
+    else lex_from(s, i + 1, len)
+}
+fun lex_from(s: String, i: number, len: number): TokList {
+  return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
+    else lex_at(s, i, len, String.char_at(s, i))
+}
+fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
+
+/* ---- token/list peeking ---- */
+fun motTn(t: Token): number { return 0 }
+fun tok_tag(t: Token): number {
+  return hit_elim(motTn, [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 ], t)
+}
+fun tok_num(t: Token): number {
+  return hit_elim(motTn, [ TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0 ], t)
+}
+fun motLn(l: TokList): number { return 0 }
+fun head_tag(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
+}
+fun head_num(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
+}
+fun motLl(l: TokList): TokList { return hit(TkNil) }
+fun tail(l: TokList): TokList {
+  return hit_elim(motLl, [ TkNil => hit(TkNil), TkCons(h, t) => t ], l)
+}
+
+/* ---- recursive-descent parser: TokList -> Parse (builds Term) ---- */
+fun motP(p: Parse): Parse { return hit(PErr) }
+/* factor := NUM */
+fun parse_factor(l: TokList): Parse {
+  return if head_tag(l) == 0
+    then hit(POk, hit(TLit, head_num(l)), tail(l))
+    else hit(PErr)
+}
+/* term := factor ('*' term)? */
+fun parse_term(l: TokList): Parse { return term_more(parse_factor(l)) }
+fun term_more(p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) =>
+        if head_tag(rest) == 2
+        then combine_mul(left, parse_term(tail(rest)))
+        else hit(POk, left, rest) ], p)
+}
+fun combine_mul(left: Term, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(right, rest) => hit(POk, hit(TMul, left, right), rest) ], p)
+}
+/* expr := term ('+' expr)? */
+fun parse_expr(l: TokList): Parse { return expr_more(parse_term(l)) }
+fun expr_more(p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) =>
+        if head_tag(rest) == 1
+        then combine_add(left, parse_expr(tail(rest)))
+        else hit(POk, left, rest) ], p)
+}
+fun combine_add(left: Term, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(right, rest) => hit(POk, hit(TAdd, left, right), rest) ], p)
+}
+/* extract the Term from a successful parse (TLit 0 on error). */
+fun motPt(p: Parse): Term { return hit(TLit, 0) }
+fun term_of(p: Parse): Term {
+  return hit_elim(motPt, [ PErr => hit(TLit, 0), POk(e, rest) => e ], p)
+}
+
+/* ---- back end: gen (Term -> MLIR text) ---- */
+fun motS(e: EmitR): String { return "" }
+fun motN(e: EmitR): number { return 0 }
+fun er_ssa(e: EmitR):  String { return hit_elim(motS, [ ER(s, c, n) => s ], e) }
+fun er_code(e: EmitR): String { return hit_elim(motS, [ ER(s, c, n) => c ], e) }
+fun er_ctr(e: EmitR):  number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
+
+fun ssa_name(n: number): String { return String.concat("%v", String.from_int(n)) }
+fun num_lit(k: number): String  { return String.concat(String.from_int(k), ".0") }
+fun line(ssa: String, rhs: String): String {
+  return String.concat(String.concat(String.concat("  ", ssa),
+           String.concat(" = ", rhs)), " : f64\n")
+}
+
+fun motER(t: Term): EmitR { return hit(ER, "", "", 0) }
+fun gen(t: Term, n: number): EmitR {
+  return hit_elim(motER, [
+    TLit(k) =>
+      hit(ER, ssa_name(n),
+         line(ssa_name(n), String.concat("arith.constant ", num_lit(k))),
+         n + 1),
+    TAdd(a, b) => gen_bin("arith.addf", a, b, n),
+    TMul(a, b) => gen_bin("arith.mulf", a, b, n)
+  ], t)
+}
+fun gen_bin(op: String, a: Term, b: Term, n: number): EmitR {
+  be ea holds gen(a, n)
+  be eb holds gen(b, er_ctr(ea))
+  be m  holds er_ctr(eb)
+  be rhs holds String.concat(String.concat(op, " "),
+                 String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
+  return hit(ER, ssa_name(m),
+            String.concat(String.concat(er_code(ea), er_code(eb)),
+                          line(ssa_name(m), rhs)),
+            m + 1)
+}
+
+/* ---- module boilerplate ---- */
+fun mod_prefix(): String {
+  return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
+}
+fun stubs(): String {
+  return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
+}
+fun mod_suffix(result_ssa: String, ctr: number): String {
+  be rss holds ssa_name(ctr)
+  return String.concat(
+    String.concat("    ", String.concat(rss,
+      String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
+    String.concat(String.concat("    return ", String.concat(rss, " : i32\n  }\n")),
+      stubs()))
+}
+
+fun main(): number {
+  /* the whole pipeline: source text -> tokens -> Term -> MLIR module -> file. */
+  be prog holds term_of(parse_expr(lex("2+3*4")))     /* 2 + (3*4) = 14 */
+  be r holds gen(prog, 0)
+  be full holds String.concat(mod_prefix(),
+                  String.concat(er_code(r),
+                    mod_suffix(er_ssa(r), er_ctr(r))))
+  be _w holds File.write_text("/tmp/yon_m2_out.mlir", full)
+  be _p holds String.print(full)
+  return String.length(full)
+}

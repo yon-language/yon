@@ -1,0 +1,178 @@
+/* Self-host M1 -- gen: Term -> String (MLIR text), in Yon.
+ *
+ * The first piece of a Yon-in-Yon code generator. Where Stage 1 interpreted
+ * (eval: Term -> value), this one compiles: the same hit_elim catamorphism over
+ * Term, but the algebra is MLIR-text accumulation plus two threaded states (an
+ * SSA counter and a name-to-ssa environment for variables), instead of
+ * reduction. Yon0 now covers TLit/TAdd/TMul (arithmetic), TVar/TLet (the `be`
+ * binder, de Bruijn variables), and TCall + top-level function definitions. It
+ * produces a full MLIR module (helper functions, then `func.func @main`), wraps
+ * it in the fixed boilerplate, writes it to a file, and the backend compiles+runs
+ * it. The test program is `fun double(x){ return x+x }` and `main{ double(21) }`
+ * -> exit 42.
+ */
+
+inductive Term    = TLit(number) | TAdd(Term, Term) | TMul(Term, Term)
+                  | TVar(number) | TLet(Term, Term) | TCall(String, Term)
+/* a top-level function: name + body; the body uses TVar 0 for the parameter. */
+inductive Fun     = FnDef(String, Term)
+inductive FunList = FlNil | FlCons(Fun, FunList)
+/* SSA environment: the list of bound ssa-names, indexed by de Bruijn. */
+inductive SsaEnv  = SeNil | SeCons(String, SsaEnv)
+/* result of gen: (result ssa, accumulated code, next counter). */
+inductive EmitR   = ER(String, String, number)
+
+/* accessors on EmitR (single constructor -> hit_elim with an explicit motive). */
+fun motS(e: EmitR): String { return "" }
+fun motN(e: EmitR): number { return 0 }
+fun er_ssa(e: EmitR):  String { return hit_elim(motS, [ ER(s, c, n) => s ], e) }
+fun er_code(e: EmitR): String { return hit_elim(motS, [ ER(s, c, n) => c ], e) }
+fun er_ctr(e: EmitR):  number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
+
+/* environment: look up the i-th de Bruijn index. */
+fun motLk(e: SsaEnv): String { return "" }
+fun lookup(i: number, env: SsaEnv): String {
+  return hit_elim(motLk,
+    [ SeNil => "%vERR",
+      SeCons(h, rest) => if i == 0 then h else lookup(i - 1, rest) ], env)
+}
+
+/* text helpers. */
+fun ssa_name(n: number): String { return String.concat("%v", String.from_int(n)) }
+fun num_lit(k: number): String  { return String.concat(String.from_int(k), ".0") }
+/* one line "  <ssa> = <rhs> : f64\n" (the f64 type is appended). */
+fun line(ssa: String, rhs: String): String {
+  return String.concat(String.concat(String.concat("  ", ssa),
+           String.concat(" = ", rhs)),
+           " : f64\n")
+}
+/* one line "  <ssa> = <rhs>\n" (rhs already carries its own type signature). */
+fun line_raw(ssa: String, rhs: String): String {
+  return String.concat(String.concat(String.concat("  ", ssa),
+           String.concat(" = ", rhs)), "\n")
+}
+
+/* the emission catamorphism (threading env + counter). */
+fun motER(t: Term): EmitR { return hit(ER, "", "", 0) }
+fun gen(t: Term, env: SsaEnv, n: number): EmitR {
+  return hit_elim(motER, [
+    TLit(k) =>
+      /* %vn = arith.constant k.0 : f64 */
+      hit(ER, ssa_name(n),
+         line(ssa_name(n), String.concat("arith.constant ", num_lit(k))),
+         n + 1),
+    TVar(i) =>
+      /* a variable is already an ssa in env: no new line. */
+      hit(ER, lookup(i, env), "", n),
+    TLet(e1, body) =>
+      /* be x holds e1 ; body   (x is de Bruijn 0 in body) */
+      gen_let(e1, body, env, n),
+    TCall(name, arg) =>
+      /* %vn = func.call @name(<arg>) : (f64) -> f64 */
+      gen_call(name, arg, env, n),
+    TAdd(a, b) => gen_bin("arith.addf", a, b, env, n),
+    TMul(a, b) => gen_bin("arith.mulf", a, b, env, n)
+  ], t)
+}
+/* let: emit e1, push its ssa onto env, emit body in that env. */
+fun gen_let(e1: Term, body: Term, env: SsaEnv, n: number): EmitR {
+  be ea holds gen(e1, env, n)
+  be eb holds gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
+  return hit(ER, er_ssa(eb),
+            String.concat(er_code(ea), er_code(eb)),
+            er_ctr(eb))
+}
+/* call: emit the argument, then "<ssa> = func.call @name(<arg>) : (f64) -> f64". */
+fun gen_call(name: String, arg: Term, env: SsaEnv, n: number): EmitR {
+  be ea holds gen(arg, env, n)
+  be m  holds er_ctr(ea)
+  be rhs holds String.concat("func.call @",
+                 String.concat(name,
+                   String.concat("(", String.concat(er_ssa(ea), ") : (f64) -> f64"))))
+  return hit(ER, ssa_name(m),
+            String.concat(er_code(ea), line_raw(ssa_name(m), rhs)),
+            m + 1)
+}
+/* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64". */
+fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: number): EmitR {
+  be ea holds gen(a, env, n)
+  be eb holds gen(b, env, er_ctr(ea))
+  be m  holds er_ctr(eb)
+  be rhs holds String.concat(String.concat(op, " "),
+                 String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
+  return hit(ER, ssa_name(m),
+            String.concat(String.concat(er_code(ea), er_code(eb)),
+                          line(ssa_name(m), rhs)),
+            m + 1)
+}
+
+/* a top-level function definition: func.func @name(%arg0: f64) -> f64 { body }. */
+fun motFunS(f: Fun): String { return "" }
+fun gen_fun(f: Fun): String {
+  return hit_elim(motFunS, [
+    FnDef(name, body) => gen_fundef(name, body)
+  ], f)
+}
+fun gen_fundef(name: String, body: Term): String {
+  /* the parameter is %arg0 = de Bruijn 0 of the body. */
+  be eb holds gen(body, hit(SeCons, "%arg0", hit(SeNil)), 0)
+  return String.concat(
+    String.concat(String.concat("  func.func @", name), "(%arg0: f64) -> f64 {\n"),
+    String.concat(er_code(eb),
+      String.concat(String.concat("    return ", er_ssa(eb)), " : f64\n  }\n")))
+}
+/* emit every function definition, in order. */
+fun motFunLs(fs: FunList): String { return "" }
+fun gen_funs(fs: FunList): String {
+  return hit_elim(motFunLs, [
+    FlNil => "",
+    FlCons(f, rest) => String.concat(gen_fun(f), gen_funs(rest))
+  ], fs)
+}
+
+/* fixed MLIR boilerplate. */
+fun mod_head(): String {
+  return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n"
+}
+fun main_head(): String {
+  return "  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
+}
+fun stubs(): String {
+  return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
+}
+/* fptosi(result) -> i32 + return + close main. */
+fun main_tail(result_ssa: String, ctr: number): String {
+  be rss holds ssa_name(ctr)
+  return String.concat(
+    String.concat("    ", String.concat(rss,
+      String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
+    String.concat("    return ", String.concat(rss, " : i32\n  }\n")))
+}
+
+/* structural checksum of the emitted text (a stable oracle for the harness). */
+fun checksum(s: String): number { return csum_from(s, 0, String.length(s), 0) }
+fun csum_from(s: String, i: number, len: number, acc: number): number {
+  return if i >= len then acc
+    else csum_from(s, i + 1, len, acc + String.char_at(s, i))
+}
+
+fun main(): number {
+  /* the Yon0 program:
+   *   fun double(x): number { return x + x }
+   *   fun main(): number { return double(21) }
+   * core: FnDef("double", TAdd(TVar 0, TVar 0)) ; main = TCall("double", TLit 21) */
+  be funs holds hit(FlCons,
+                    hit(FnDef, "double", hit(TAdd, hit(TVar, 0), hit(TVar, 0))),
+                    hit(FlNil))
+  be mainT holds hit(TCall, "double", hit(TLit, 21))
+  be rmain holds gen(mainT, hit(SeNil), 0)
+  be full holds String.concat(mod_head(),
+                  String.concat(gen_funs(funs),
+                    String.concat(main_head(),
+                      String.concat(er_code(rmain),
+                        String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
+                          stubs())))))
+  be _w holds File.write_text("/tmp/yon_m1_out.mlir", full)   /* write the emitted MLIR */
+  be _p holds String.print(full)
+  return checksum(full)
+}
