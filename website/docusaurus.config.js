@@ -29,7 +29,11 @@ const config = {
   url: 'https://yon-lang.org',
   baseUrl: '/',
   trailingSlash: false,
-  favicon: 'img/logo.svg',
+  favicon: 'img/favicon.ico',
+  headTags: [
+    { tagName: 'link', attributes: { rel: 'icon', type: 'image/svg+xml', href: '/img/favicon.svg' } },
+    { tagName: 'link', attributes: { rel: 'apple-touch-icon', href: '/img/apple-touch-icon.png' } },
+  ],
   onBrokenLinks: 'warn',
   onBrokenMarkdownLinks: 'warn',
   i18n: { defaultLocale: 'en', locales: ['en'] },
