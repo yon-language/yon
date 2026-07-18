@@ -69,3 +69,25 @@ def test_m3_compile_fun(tmp_path):
     # and the emitted program exits 42 = (20 + 22) mod 256.
     _end_to_end(tmp_path, ROOT / "selfhost" / "compile_fun.yon",
                 "/tmp/yon_m3_out.mlir", 42)
+
+
+@pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
+def test_m4_compile_if(tmp_path):
+    # M4: control flow. Adds `==` (arith.cmpf oeq -> i1) and if/then/else
+    # (scf.if with scf.yield). `return if x == y then 99 else x + y` with
+    # x=20, y=22: the condition is false, so the else branch runs and the
+    # emitted program exits 42 = (20 + 22) mod 256 (not 99).
+    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_if.yon",
+                "/tmp/yon_m4_out.mlir", 42)
+
+
+@pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
+def test_m5_compile_rec(tmp_path):
+    # M5: functions, calls and RECURSION. Compiles two top-level functions,
+    # `fun fact(n): number { return if n == 0 then 1 else n * fact(n - 1) }`
+    # and `fun main(): number { return fact(5) }`, to real func.func/func.call
+    # (a name is emitted as @fn_<hash>). The recursive self-call sits in the
+    # else branch, so scf.if's laziness bottoms the recursion out at n == 0;
+    # fact(5) = 120, so the emitted program exits 120.
+    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_rec.yon",
+                "/tmp/yon_m5_out.mlir", 120)
