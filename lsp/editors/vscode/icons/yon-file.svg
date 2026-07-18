@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Yon file icon: a filled azure Y, legible at 16px in the tree explorer -->
+  <path d="M4 5 L10 5 L16 14 L22 5 L28 5 L18.5 18 L13.5 18 Z" fill="#1e9bf0"/>
+  <rect x="13.5" y="16" width="5" height="12" rx="0.5" fill="#1e9bf0"/>
+</svg>
