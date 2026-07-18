@@ -288,7 +288,14 @@ let rec desugar_ty (t : S.ty) : C.ty =
          collapsing every distinct sum to the old nominal stub "sum". *)
       C.TyPlace (Tyenv.type_tag sum_ty)
   | S.TyList inner -> C.TyPlace ("list_of_" ^ ty_name inner)
-  | S.TyMap (_, _) -> C.TyPlace "map"
+  | S.TyMap (_, _) as map_ty ->
+      (* Content-address the map carrier by its key and value, like TySum above
+         and TyList to the left, instead of collapsing every distinct map to the
+         nominal stub "map" (which lost k and v, so Map<number,text> and
+         Map<text,number> shared one Core identity). type_tag gives "map_K_V";
+         the runtime layout stays a uniform f64 handle (a Section), only the
+         compile-time identity is now distinct. *)
+      C.TyPlace (Tyenv.type_tag map_ty)
   | S.TyStream inner -> C.TyStream (desugar_ty inner)
   | S.TyUser n when Hashtbl.mem inductive_type_names n ->
       (* A named inductive is carried at runtime as a MerkleTree handle (an f64):
