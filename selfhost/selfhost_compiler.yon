@@ -1,0 +1,486 @@
+/* Self-host M6 -- the file-driven Yon0 compiler, used by the differential oracle.
+ *
+ * Same compiler machinery as M5 (compile_rec: lexer, recursive-descent parser,
+ * de Bruijn scope, gen: Term -> MLIR, functions/calls/recursion), but instead of
+ * a fixed source string it READS a Yon0 program from /tmp/yon_selfhost_in.yon and
+ * WRITES the MLIR module to /tmp/yon_selfhost_out.mlir (File.read_text/write_text).
+ *
+ * This makes it a real tool: the differential oracle (regression/test_selfhost_
+ * differential.py) writes an arbitrary Yon0 program, compiles it BOTH with the
+ * OCaml reference `yonc` and with this compiler-in-Yon, and asserts the two native
+ * programs exit with the SAME code. Convergence with the reference is the metric
+ * toward the M-bootstrap.
+ *
+ * Yon0 covered: `fun name(param?): number { (be x holds e)* return e }`, arithmetic
+ * (+ - *, * over +), a call `name(arg)`, `if e == e then e else e`, recursion.
+ * A function name is emitted as `@fn_<hash>`; `main` is the i32 entry `@main`.
+ * v1 boundary: at most one parameter per function, lowercase identifiers, a
+ * condition is a single `expr == expr`. `+`/`-`/`*` are LEFT-associative, so
+ * `a - b - c` = (a-b)-c, matching the reference (the earlier right-associative
+ * parse gave a-(b-c) -- the first divergence the differential oracle caught).
+ */
+
+/* one shared AST: arithmetic (+ - *), de Bruijn variables, let, equality, if, call. */
+inductive Term    = TLit(number) | TAdd(Term, Term) | TSub(Term, Term) | TMul(Term, Term)
+                  | TVar(number) | TLet(Term, Term)
+                  | TEq(Term, Term) | TIf(Term, Term, Term)
+                  | TCall(number, Term)
+/* a top-level function: name hash, arity (0 or 1), body (uses TVar 0 for the param). */
+inductive Fun      = FnDef(number, number, Term)
+inductive FunList  = FlNil | FlCons(Fun, FunList)
+inductive FunParse = FPOk(Fun, TokList) | FPErr
+/* tokens (tags: Num0 Ident1 Fun2 Be3 Holds4 Return5 Number6 If7 Then8 Else9
+ * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18 Minus19). */
+inductive Token   = TNum(number) | TIdent(number)
+                  | TKwFun | TKwBe | TKwHolds | TKwReturn | TKwNumber
+                  | TKwIf | TKwThen | TKwElse
+                  | TPlus | TStar | TEqEq | TLParen | TRParen | TLBrace | TRBrace | TColon
+                  | TEnd | TMinus
+inductive TokList = TkNil | TkCons(Token, TokList)
+inductive Parse   = POk(Term, TokList) | PErr
+/* SSA environment for the emitter: de Bruijn index -> ssa name. */
+inductive SsaEnv  = SeNil | SeCons(String, SsaEnv)
+/* de Bruijn name environment for the parser: identifier hash, innermost first. */
+inductive NameEnv = NEnvNil | NEnvCons(number, NameEnv)
+/* result of gen: (result ssa, accumulated code, next counter). */
+inductive EmitR   = ER(String, String, number)
+
+/* ---- hashing: keyword recognition and identifier identity share one hash ---- */
+fun word_hash(s: String, i: number, j: number, h: number): number {
+  return if i >= j then h
+    else word_hash(s, i + 1, j, h * 31 + String.char_at(s, i))
+}
+fun hash_of(s: String): number { return word_hash(s, 0, String.length(s), 0) }
+fun kw_fun(): number    { return hash_of("fun") }
+fun kw_be(): number     { return hash_of("be") }
+fun kw_holds(): number  { return hash_of("holds") }
+fun kw_return(): number { return hash_of("return") }
+fun kw_number(): number { return hash_of("number") }
+fun kw_if(): number     { return hash_of("if") }
+fun kw_then(): number   { return hash_of("then") }
+fun kw_else(): number   { return hash_of("else") }
+
+/* ---- lexer: String -> TokList ---- */
+fun word_end(s: String, i: number, len: number): number {
+  return if i >= len then i
+    else if String.char_at(s, i) >= 97 then
+           (if String.char_at(s, i) >= 123 then i else word_end(s, i + 1, len))
+         else i
+}
+fun num_end(s: String, i: number, len: number): number {
+  return if i >= len then i
+    else if String.char_at(s, i) >= 48 then
+           (if String.char_at(s, i) >= 58 then i else num_end(s, i + 1, len))
+         else i
+}
+fun num_val(s: String, i: number, j: number, acc: number): number {
+  return if i >= j then acc
+    else num_val(s, i + 1, j, acc * 10 + (String.char_at(s, i) - 48))
+}
+fun classify(h: number): Token {
+  return if h == kw_fun() then hit(TKwFun)
+    else if h == kw_be() then hit(TKwBe)
+    else if h == kw_holds() then hit(TKwHolds)
+    else if h == kw_return() then hit(TKwReturn)
+    else if h == kw_number() then hit(TKwNumber)
+    else if h == kw_if() then hit(TKwIf)
+    else if h == kw_then() then hit(TKwThen)
+    else if h == kw_else() then hit(TKwElse)
+    else hit(TIdent, h)
+}
+fun lex_word(s: String, i: number, len: number): TokList {
+  be j holds word_end(s, i, len)
+  return hit(TkCons, classify(word_hash(s, i, j, 0)), lex_from(s, j, len))
+}
+fun lex_num(s: String, i: number, len: number): TokList {
+  be j holds num_end(s, i, len)
+  return hit(TkCons, hit(TNum, num_val(s, i, j, 0)), lex_from(s, j, len))
+}
+fun lex_eq(s: String, i: number, len: number): TokList {
+  return if i + 1 >= len then hit(TkCons, hit(TEnd), hit(TkNil))
+    else if String.char_at(s, i + 1) == 61
+    then hit(TkCons, hit(TEqEq), lex_from(s, i + 2, len))
+    else lex_from(s, i + 1, len)
+}
+fun lex_at(s: String, i: number, len: number, c: number): TokList {
+  return if c == 32 then lex_from(s, i + 1, len)             /* space */
+    else if c == 10 then lex_from(s, i + 1, len)             /* newline */
+    else if c == 9  then lex_from(s, i + 1, len)             /* tab */
+    else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
+    else if c == 45 then hit(TkCons, hit(TMinus),  lex_from(s, i + 1, len))
+    else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
+    else if c == 61 then lex_eq(s, i, len)                   /* '=' -> '==' */
+    else if c == 40 then hit(TkCons, hit(TLParen), lex_from(s, i + 1, len))
+    else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
+    else if c == 123 then hit(TkCons, hit(TLBrace), lex_from(s, i + 1, len))
+    else if c == 125 then hit(TkCons, hit(TRBrace), lex_from(s, i + 1, len))
+    else if c == 58 then hit(TkCons, hit(TColon),   lex_from(s, i + 1, len))
+    else if c >= 97 then lex_word(s, i, len)                 /* a-z: keyword or ident */
+    else if c >= 48 then lex_num(s, i, len)                  /* 0-9: number */
+    else lex_from(s, i + 1, len)                             /* skip anything else */
+}
+fun lex_from(s: String, i: number, len: number): TokList {
+  return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
+    else lex_at(s, i, len, String.char_at(s, i))
+}
+fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
+
+/* ---- token/list peeking ---- */
+fun motTn(t: Token): number { return 0 }
+fun tok_tag(t: Token): number {
+  return hit_elim(motTn, [
+    TNum(n)=>0, TIdent(h)=>1, TKwFun=>2, TKwBe=>3, TKwHolds=>4, TKwReturn=>5,
+    TKwNumber=>6, TKwIf=>7, TKwThen=>8, TKwElse=>9, TPlus=>10, TStar=>11,
+    TEqEq=>12, TLParen=>13, TRParen=>14, TLBrace=>15, TRBrace=>16, TColon=>17,
+    TEnd=>18, TMinus=>19 ], t)
+}
+fun tok_num(t: Token): number {
+  return hit_elim(motTn, [
+    TNum(n)=>n, TIdent(h)=>h, TKwFun=>0, TKwBe=>0, TKwHolds=>0, TKwReturn=>0,
+    TKwNumber=>0, TKwIf=>0, TKwThen=>0, TKwElse=>0, TPlus=>0, TStar=>0,
+    TEqEq=>0, TLParen=>0, TRParen=>0, TLBrace=>0, TRBrace=>0, TColon=>0,
+    TEnd=>0, TMinus=>0 ], t)
+}
+fun motLn(l: TokList): number { return 0 }
+fun head_tag(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
+}
+fun head_num(l: TokList): number {
+  return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
+}
+fun motLl(l: TokList): TokList { return hit(TkNil) }
+fun tail(l: TokList): TokList {
+  return hit_elim(motLl, [ TkNil => hit(TkNil), TkCons(h, t) => t ], l)
+}
+
+/* ---- de Bruijn name environment: identifier hash -> index (innermost = 0) ---- */
+fun bump(k: number): number { return if k >= 0 then k + 1 else 0 - 1 }
+fun motNEn(e: NameEnv): number { return 0 }
+fun lookup_name(name: number, env: NameEnv): number {
+  return hit_elim(motNEn,
+    [ NEnvNil => 0 - 1,
+      NEnvCons(h, rest) => if h == name then 0 else bump(lookup_name(name, rest)) ], env)
+}
+
+/* ---- recursive-descent expression parser (threads the name environment) ---- */
+fun motP(p: Parse): Parse { return hit(PErr) }
+/* factor := NUM | IDENT | IDENT '(' expr ')' | '(' expr ')'
+ *         | 'if' expr '==' expr 'then' expr 'else' expr
+ * an identifier followed by '(' is a call; otherwise it is a variable. */
+fun parse_factor(l: TokList, env: NameEnv): Parse {
+  return if head_tag(l) == 0 then hit(POk, hit(TLit, head_num(l)), tail(l))
+    else if head_tag(l) == 1 then
+      (if head_tag(tail(l)) == 13
+         then parse_call(head_num(l), tail(l), env)             /* IDENT '(' -> call */
+         else hit(POk, hit(TVar, lookup_name(head_num(l), env)), tail(l)))
+    else if head_tag(l) == 13 then close_paren(parse_expr(tail(l), env))   /* '(' */
+    else if head_tag(l) == 7 then parse_if(tail(l), env)                   /* 'if' */
+    else hit(PErr)
+}
+/* call := (already have callee hash) '(' expr ')' */
+fun parse_call(callee: number, l: TokList, env: NameEnv): Parse {
+  return call_after_arg(callee, parse_expr(tail(l), env))
+}
+fun call_after_arg(callee: number, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(arg, rest) => if head_tag(rest) == 14         /* ')' */
+                          then hit(POk, hit(TCall, callee, arg), tail(rest))
+                          else hit(PErr) ], p)
+}
+fun close_paren(p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(e, rest) => if head_tag(rest) == 14 then hit(POk, e, tail(rest)) else hit(PErr) ], p)
+}
+/* term := factor ('*' factor)*  -- left-associative (loop, not right recursion). */
+fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
+fun term_more(p: Parse, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) => if head_tag(rest) == 11
+                           then term_more(combine(11, left, parse_factor(tail(rest), env)), env)
+                           else hit(POk, left, rest) ], p)
+}
+/* expr := term (('+' | '-') term)*  -- left-associative, so `a - b - c` = (a-b)-c
+ * (matching the reference; right recursion here gave a-(b-c), the divergence the
+ * differential oracle caught). */
+fun parse_expr(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, env), env) }
+fun expr_more(p: Parse, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(left, rest) => if head_tag(rest) == 10
+                           then expr_more(combine(10, left, parse_term(tail(rest), env)), env)
+                           else if head_tag(rest) == 19
+                           then expr_more(combine(19, left, parse_term(tail(rest), env)), env)
+                           else hit(POk, left, rest) ], p)
+}
+fun combine(op: number, left: Term, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(right, rest) =>
+        hit(POk, mk_binop(op, left, right), rest) ], p)
+}
+fun mk_binop(op: number, left: Term, right: Term): Term {
+  return if op == 10 then hit(TAdd, left, right)
+    else if op == 19 then hit(TSub, left, right)
+    else hit(TMul, left, right)
+}
+
+/* if := 'if' expr '==' expr 'then' expr 'else' expr (after 'if' is consumed). */
+fun parse_if(l: TokList, env: NameEnv): Parse {
+  return if_after_lhs(parse_expr(l, env), env)
+}
+fun if_after_lhs(p: Parse, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(a, rest) => if head_tag(rest) == 12
+                        then if_after_eq(a, parse_expr(tail(rest), env), env)
+                        else hit(PErr) ], p)
+}
+fun if_after_eq(a: Term, p: Parse, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(b, rest) => if head_tag(rest) == 8
+                        then if_after_then(hit(TEq, a, b), parse_expr(tail(rest), env), env)
+                        else hit(PErr) ], p)
+}
+fun if_after_then(cond: Term, p: Parse, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(thenE, rest) => if head_tag(rest) == 9
+                            then if_after_else(cond, thenE, parse_expr(tail(rest), env))
+                            else hit(PErr) ], p)
+}
+fun if_after_else(cond: Term, thenE: Term, p: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(elseE, rest) => hit(POk, hit(TIf, cond, thenE, elseE), rest) ], p)
+}
+
+/* ---- body parser: ('be' IDENT 'holds' expr)* 'return' expr ---- */
+fun parse_body(l: TokList, env: NameEnv): Parse {
+  return if head_tag(l) == 3
+    then parse_let(l, env)
+    else if head_tag(l) == 5
+    then parse_expr(tail(l), env)
+    else hit(PErr)
+}
+fun parse_let(l: TokList, env: NameEnv): Parse {
+  be name holds head_num(tail(l))
+  be after_holds holds tail(tail(tail(l)))
+  return build_let(parse_expr(after_holds, env), name, env)
+}
+fun build_let(pv: Parse, name: number, env: NameEnv): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(val, rest) =>
+        wrap_let(val, parse_body(rest, hit(NEnvCons, name, env))) ], pv)
+}
+fun wrap_let(val: Term, pb: Parse): Parse {
+  return hit_elim(motP,
+    [ PErr => hit(PErr),
+      POk(body, rest) => hit(POk, hit(TLet, val, body), rest) ], pb)
+}
+
+/* ---- function parser: 'fun' IDENT '(' param? ')' ':' 'number' '{' body '}' ---- */
+/* consume ')' ':' 'number' '{' = 4 tokens, landing on the body. */
+fun skip_fun_header(l: TokList): TokList {
+  return tail(tail(tail(tail(l))))
+}
+fun parse_fundef(l: TokList): FunParse {
+  be name holds head_num(tail(l))            /* IDENT after 'fun' */
+  be l3 holds tail(tail(tail(l)))            /* skip fun, IDENT, '(' -> at param or ')' */
+  return if head_tag(l3) == 1                /* a parameter is present */
+    then fundef_body(name, 1, hit(NEnvCons, head_num(l3), hit(NEnvNil)),
+                     skip_fun_header(tail(l3)))
+    else fundef_body(name, 0, hit(NEnvNil), skip_fun_header(l3))
+}
+fun fundef_body(name: number, arity: number, env: NameEnv, l: TokList): FunParse {
+  return close_fundef(name, arity, parse_body(l, env))
+}
+fun motFPfromP(p: Parse): FunParse { return hit(FPErr) }
+fun close_fundef(name: number, arity: number, p: Parse): FunParse {
+  return hit_elim(motFPfromP,
+    [ PErr => hit(FPErr),
+      POk(body, rest) => hit(FPOk, hit(FnDef, name, arity, body), tail(rest)) ], p)
+}
+/* parse every top-level function into a FunList (stops at TEnd or anything else). */
+fun motFL(fp: FunParse): FunList { return hit(FlNil) }
+fun parse_funs(l: TokList): FunList {
+  return if head_tag(l) == 2
+    then cons_fun(parse_fundef(l))
+    else hit(FlNil)
+}
+fun cons_fun(fp: FunParse): FunList {
+  return hit_elim(motFL,
+    [ FPErr => hit(FlNil),
+      FPOk(f, rest) => hit(FlCons, f, parse_funs(rest)) ], fp)
+}
+
+/* ---- back end: gen (Term -> MLIR text) with an SSA environment ---- */
+fun motS(e: EmitR): String { return "" }
+fun motN(e: EmitR): number { return 0 }
+fun er_ssa(e: EmitR):  String { return hit_elim(motS, [ ER(s, c, n) => s ], e) }
+fun er_code(e: EmitR): String { return hit_elim(motS, [ ER(s, c, n) => c ], e) }
+fun er_ctr(e: EmitR):  number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
+
+fun motLk(e: SsaEnv): String { return "" }
+fun lookup_ssa(i: number, env: SsaEnv): String {
+  return hit_elim(motLk,
+    [ SeNil => "%vERR",
+      SeCons(h, rest) => if i == 0 then h else lookup_ssa(i - 1, rest) ], env)
+}
+
+fun ssa_name(n: number): String { return String.concat("%v", String.from_int(n)) }
+fun num_lit(k: number): String  { return String.concat(String.from_int(k), ".0") }
+fun fn_symbol(h: number): String { return String.concat("fn_", String.from_int(h)) }
+fun line(ssa: String, rhs: String): String {
+  return String.concat(String.concat(String.concat("  ", ssa),
+           String.concat(" = ", rhs)), " : f64\n")
+}
+fun line_raw(ssa: String, rhs: String): String {
+  return String.concat(String.concat(String.concat("  ", ssa),
+           String.concat(" = ", rhs)), "\n")
+}
+
+fun motER(t: Term): EmitR { return hit(ER, "", "", 0) }
+fun gen(t: Term, env: SsaEnv, n: number): EmitR {
+  return hit_elim(motER, [
+    TLit(k) =>
+      hit(ER, ssa_name(n),
+         line(ssa_name(n), String.concat("arith.constant ", num_lit(k))),
+         n + 1),
+    TVar(i) => hit(ER, lookup_ssa(i, env), "", n),
+    TLet(e1, body) => gen_let(e1, body, env, n),
+    TAdd(a, b) => gen_bin("arith.addf", a, b, env, n),
+    TSub(a, b) => gen_bin("arith.subf", a, b, env, n),
+    TMul(a, b) => gen_bin("arith.mulf", a, b, env, n),
+    TEq(a, b)  => gen_bin("arith.cmpf oeq,", a, b, env, n),
+    TIf(c, thenT, elseT) => gen_if(c, thenT, elseT, env, n),
+    TCall(callee, arg)   => gen_call(callee, arg, env, n)
+  ], t)
+}
+fun gen_let(e1: Term, body: Term, env: SsaEnv, n: number): EmitR {
+  be ea holds gen(e1, env, n)
+  be eb holds gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
+  return hit(ER, er_ssa(eb),
+            String.concat(er_code(ea), er_code(eb)),
+            er_ctr(eb))
+}
+fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: number): EmitR {
+  be ea holds gen(a, env, n)
+  be eb holds gen(b, env, er_ctr(ea))
+  be m  holds er_ctr(eb)
+  be rhs holds String.concat(String.concat(op, " "),
+                 String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
+  return hit(ER, ssa_name(m),
+            String.concat(String.concat(er_code(ea), er_code(eb)),
+                          line(ssa_name(m), rhs)),
+            m + 1)
+}
+/* call: emit the argument, then "<ssa> = func.call @fn_<callee>(<arg>) : (f64) -> f64". */
+fun gen_call(callee: number, arg: Term, env: SsaEnv, n: number): EmitR {
+  be ea holds gen(arg, env, n)
+  be m  holds er_ctr(ea)
+  be rhs holds String.concat("func.call @",
+                 String.concat(fn_symbol(callee),
+                   String.concat("(", String.concat(er_ssa(ea), ") : (f64) -> f64"))))
+  return hit(ER, ssa_name(m),
+            String.concat(er_code(ea), line_raw(ssa_name(m), rhs)),
+            m + 1)
+}
+fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: number): EmitR {
+  be ec holds gen(c, env, n)
+  be et holds gen(thenT, env, er_ctr(ec))
+  be ee holds gen(elseT, env, er_ctr(et))
+  be m  holds er_ctr(ee)
+  be head holds String.concat(String.concat("  ", ssa_name(m)),
+                  String.concat(" = scf.if ", String.concat(er_ssa(ec), " -> (f64) {\n")))
+  be then_part holds String.concat(er_code(et),
+                       String.concat("    scf.yield ", String.concat(er_ssa(et), " : f64\n")))
+  be else_part holds String.concat(er_code(ee),
+                       String.concat("    scf.yield ", String.concat(er_ssa(ee), " : f64\n")))
+  be code holds String.concat(er_code(ec),
+                  String.concat(head,
+                    String.concat(then_part,
+                      String.concat("  } else {\n",
+                        String.concat(else_part, "  }\n")))))
+  return hit(ER, ssa_name(m), code, m + 1)
+}
+
+/* ---- top-level function emission ---- */
+/* a non-main function: func.func @fn_<name>(%arg0: f64) -> f64 { body ; return }.
+ * arity 1 -> the parameter is %arg0 (de Bruijn 0); arity 0 -> empty env. */
+fun gen_fundef_text(name: number, arity: number, body: Term): String {
+  be env holds if arity == 1 then hit(SeCons, "%arg0", hit(SeNil)) else hit(SeNil)
+  be eb  holds gen(body, env, 0)
+  be sig holds if arity == 1 then "(%arg0: f64) -> f64 {\n" else "() -> f64 {\n"
+  return String.concat(
+    String.concat(String.concat("  func.func @", fn_symbol(name)), sig),
+    String.concat(er_code(eb),
+      String.concat(String.concat("    return ", er_ssa(eb)), " : f64\n  }\n")))
+}
+/* emit every function except main (main becomes the i32 entry, below). */
+fun motGF(fs: FunList): String { return "" }
+fun gen_funs(fs: FunList, main_hash: number): String {
+  return hit_elim(motGF,
+    [ FlNil => "",
+      FlCons(f, rest) =>
+        String.concat(gen_one_fun(f, main_hash), gen_funs(rest, main_hash)) ], fs)
+}
+fun motFunToStr(f: Fun): String { return "" }
+fun gen_one_fun(f: Fun, main_hash: number): String {
+  return hit_elim(motFunToStr,
+    [ FnDef(name, arity, body) =>
+        if name == main_hash then "" else gen_fundef_text(name, arity, body) ], f)
+}
+/* find main's body (the entry Term). */
+fun motFunToNum(f: Fun): number { return 0 }
+fun fun_name(f: Fun): number { return hit_elim(motFunToNum, [ FnDef(name, arity, body) => name ], f) }
+fun motFunToTerm(f: Fun): Term { return hit(TLit, 0) }
+fun fun_body(f: Fun): Term { return hit_elim(motFunToTerm, [ FnDef(name, arity, body) => body ], f) }
+fun motFindMain(fs: FunList): Term { return hit(TLit, 0) }
+fun main_body(fs: FunList, main_hash: number): Term {
+  return hit_elim(motFindMain,
+    [ FlNil => hit(TLit, 0),
+      FlCons(f, rest) =>
+        if fun_name(f) == main_hash then fun_body(f) else main_body(rest, main_hash) ], fs)
+}
+
+/* ---- module boilerplate ---- */
+fun mod_head(): String {
+  return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n"
+}
+fun main_head(): String {
+  return "  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
+}
+fun stubs(): String {
+  return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
+}
+fun main_tail(result_ssa: String, ctr: number): String {
+  be rss holds ssa_name(ctr)
+  return String.concat(
+    String.concat("    ", String.concat(rss,
+      String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
+    String.concat("    return ", String.concat(rss, " : i32\n  }\n")))
+}
+
+fun main(): number {
+  /* file-driven compiler: read a Yon0 source, compile it, write the MLIR module.
+   * The differential oracle writes the input here and feeds the output back to the
+   * backend, so this same tool compiles any Yon0 program (not a fixed one). */
+  be source holds File.read_text("/tmp/yon_selfhost_in.yon")
+  be funs   holds parse_funs(lex(source))
+  be mh     holds hash_of("main")
+  be helpers holds gen_funs(funs, mh)
+  be rmain  holds gen(main_body(funs, mh), hit(SeNil), 0)
+  be full   holds String.concat(mod_head(),
+                    String.concat(helpers,
+                      String.concat(main_head(),
+                        String.concat(er_code(rmain),
+                          String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
+                            stubs())))))
+  be _w holds File.write_text("/tmp/yon_selfhost_out.mlir", full)
+  return String.length(full)
+}
