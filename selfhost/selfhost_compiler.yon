@@ -22,7 +22,7 @@
 
 /* one shared AST: arithmetic (+ - *), de Bruijn variables, let, equality, if, call,
  * and (Stage 1) algebraic data: THit builds a constructor, THitElim eliminates one. */
-place Term { this > TLit(number) :U TAdd(Term, Term) :U TSub(Term, Term) :U TMul(Term, Term) :U TVar(number) :U TLet(Term, Term) :U TCmp(number, Term, Term) :U TIf(Term, Term, Term) :U TCall(number, Term) :U TArgs(Term, Term) :U TNoArg :U THit(number, Term) :U THitElim(Term, Term) :U TBranch(number, number, Term, Term) :U TBrNil }
+place Term { this > TLit(number) :U TAdd(Term, Term) :U TSub(Term, Term) :U TMul(Term, Term) :U TVar(number) :U TLet(Term, Term) :U TCmp(number, Term, Term) :U TIf(Term, Term, Term) :U TCall(number, Term) :U TArgs(Term, Term) :U TNoArg :U THit(number, Term) :U THitElim(Term, Term) :U TBranch(number, number, Term, Term) :U TBrNil :U TStrLit(String) :U TRtCall(String, Term) }
 /* TCall's second field and THit's are an argument spine: TArgs(head, rest) ... TNoArg.
  * THitElim's first field is a branch spine: TBranch(ctor-hash, body, rest) ... TBrNil.
  * Keeping these inside Term avoids mutually recursive place declarations. */
@@ -40,7 +40,7 @@ place BindRes { this > BR(SsaEnv, String, number) }
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18 Minus19
  * Comma20 Lt21 Gt22 Le23 Ge24 Ne25 LBracket27 RBracket28 Bar29 Arrow30
  * Place31 This32 ColonU33; tag 26 retired with the 'inductive' keyword). */
-place Token { this > TNum(number) :U TIdent(number) :U TKwFun :U TKwBe :U TKwHolds :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus :U TComma :U TLt :U TGt :U TLe :U TGe :U TNe :U TLBracket :U TRBracket :U TBar :U TArrow :U TKwPlace :U TKwThis :U TColonU }
+place Token { this > TNum(number) :U TIdent(number) :U TKwFun :U TKwBe :U TKwHolds :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus :U TComma :U TLt :U TGt :U TLe :U TGe :U TNe :U TLBracket :U TRBracket :U TBar :U TArrow :U TKwPlace :U TKwThis :U TColonU :U TDot :U TStr(String) }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 place Parse { this > POk(Term, TokList) :U PErr }
 /* SSA environment for the emitter: de Bruijn index -> ssa name. */
@@ -124,6 +124,18 @@ fun lex_num(s: String, i: number, len: number): TokList {
   be j holds num_end(s, i, len)
   return hit(TkCons, hit(TNum, num_val(s, i, j, 0)), lex_from(s, j, len))
 }
+/* string literal: scan to the closing '"' (code 34), capture the content span. */
+fun str_end(s: String, i: number, len: number): number {
+  return if i >= len then i
+    else if String.char_at(s, i) == 34 then i          /* closing quote */
+    else str_end(s, i + 1, len)
+}
+/* i is at the char AFTER the opening quote. TStr carries the content handle
+ * (an f64, uniform with number); String.substring slices [i, j). */
+fun lex_str(s: String, i: number, len: number): TokList {
+  be j holds str_end(s, i, len)
+  return hit(TkCons, hit(TStr, String.substring(s, i, j - i)), lex_from(s, j + 1, len))
+}
 fun lex_eq(s: String, i: number, len: number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else if String.char_at(s, i + 1) == 61
@@ -202,6 +214,8 @@ fun lex_at(s: String, i: number, len: number, c: number): TokList {
     else if c == 91 then hit(TkCons, hit(TLBracket), lex_from(s, i + 1, len))
     else if c == 93 then hit(TkCons, hit(TRBracket), lex_from(s, i + 1, len))
     else if c == 124 then hit(TkCons, hit(TBar),     lex_from(s, i + 1, len))
+    else if c == 46 then hit(TkCons, hit(TDot),      lex_from(s, i + 1, len))  /* '.' */
+    else if c == 34 then lex_str(s, i + 1, len)              /* '"' -> string literal */
     else if c >= 97 then lex_word(s, i, len)                 /* a-z: keyword or ident */
     else if c == 95 then lex_word(s, i, len)                 /* _ : leading-underscore ident */
     else if c >= 65 then                                     /* A-Z: capitalised ident */
@@ -225,7 +239,7 @@ fun tok_tag(t: Token): number {
     TEnd=>18, TMinus=>19, TComma=>20,
     TLt=>21, TGt=>22, TLe=>23, TGe=>24, TNe=>25,
     TLBracket=>27, TRBracket=>28, TBar=>29, TArrow=>30,
-    TKwPlace=>31, TKwThis=>32, TColonU=>33 ], t)
+    TKwPlace=>31, TKwThis=>32, TColonU=>33, TDot=>34, TStr(sh)=>35 ], t)
 }
 fun tok_num(t: Token): number {
   return hit_elim(motTn, [
@@ -235,7 +249,7 @@ fun tok_num(t: Token): number {
     TEnd=>0, TMinus=>0, TComma=>0,
     TLt=>0, TGt=>0, TLe=>0, TGe=>0, TNe=>0,
     TLBracket=>0, TRBracket=>0, TBar=>0, TArrow=>0,
-    TKwPlace=>0, TKwThis=>0, TColonU=>0 ], t)
+    TKwPlace=>0, TKwThis=>0, TColonU=>0, TDot=>0, TStr(sh)=>0 ], t)
 }
 fun motLn(l: TokList): number { return 0 }
 fun head_tag(l: TokList): number {
@@ -265,9 +279,11 @@ fun motP(p: Parse): Parse { return hit(PErr) }
  * an identifier followed by '(' is a call; otherwise it is a variable. */
 fun parse_factor(l: TokList, env: NameEnv): Parse {
   return if head_tag(l) == 0 then hit(POk, hit(TLit, head_num(l)), tail(l))
+    else if head_tag(l) == 35 then hit(POk, hit(TStrLit, head_str(l)), tail(l))  /* string literal */
     else if head_tag(l) == 1 then
       (if head_num(l) == kw_hit() then parse_hit(tail(l), env)         /* hit(Ctor,..) */
        else if head_num(l) == kw_hitelim() then parse_hitelim(tail(l), env)  /* hit_elim(..) */
+       else if head_tag(tail(l)) == 34 then parse_qcall(head_num(l), l, env)  /* Module.op(..) */
        else if head_tag(tail(l)) == 13 then parse_call(head_num(l), tail(l), env)  /* call */
        else hit(POk, hit(TVar, lookup_name(head_num(l), env)), tail(l)))  /* variable */
     else if head_tag(l) == 13 then close_paren(parse_expr(tail(l), env))   /* '(' */
@@ -675,7 +691,9 @@ fun gen(t: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
     TArgs(a, b) => hit(ER, "%vERR", "", n),
     TNoArg      => hit(ER, "%vERR", "", n),
     TBranch(c, ar, a, b) => hit(ER, "%vERR", "", n),
-    TBrNil      => hit(ER, "%vERR", "", n)
+    TBrNil      => hit(ER, "%vERR", "", n),
+    TStrLit(s)  => gen_strlit(s, n),
+    TRtCall(sym, spine) => gen_rtcall(sym, spine, env, n, reg)
   ], t)
 }
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
@@ -951,6 +969,96 @@ fun main_body(fs: FunList, main_hash: number): Term {
         if fun_name(f) == main_hash then fun_body(f) else main_body(rest, main_hash) ], fs)
 }
 
+/* ---- strings and qualified/runtime calls (String.op) ---- */
+/* the String payload of a TStr token (empty for any other token). */
+fun tok_str(t: Token): String { return match t { TStr(sh) => sh, _ => "" } }
+fun motLnStr(l: TokList): String { return "" }
+fun head_str(l: TokList): String {
+  return hit_elim(motLnStr, [ TkNil => "", TkCons(h, t) => tok_str(h) ], l)
+}
+/* map (module, op) name hashes to the runtime symbol (mirrors yonc's stdlib). */
+fun rt_string_symbol(op: number): String {
+  return if op == hash_of("length") then "yon_rt_string_length"
+    else if op == hash_of("char_at") then "yon_rt_string_char_at"
+    else if op == hash_of("concat") then "yon_rt_string_concat"
+    else if op == hash_of("from_int") then "yon_rt_string_from_int"
+    else if op == hash_of("from_char") then "yon_rt_string_from_char"
+    else if op == hash_of("substring") then "yon_rt_string_substring"
+    else if op == hash_of("print") then "yon_rt_string_print"
+    else ""
+}
+fun rt_symbol(m: number, op: number): String {
+  return if m == hash_of("String") then rt_string_symbol(op) else ""
+}
+/* qualified call: MODULE '.' OP '(' args ')'. l at MODULE (an ident). */
+fun motQParse(p: Parse): Parse { return hit(PErr) }
+fun qcall_with_args(sym: String, p: Parse): Parse {
+  return hit_elim(motQParse, [ PErr => hit(PErr),
+    POk(spine, rest) => hit(POk, hit(TRtCall, sym, spine), rest) ], p)
+}
+fun parse_qcall(modh: number, l: TokList, env: NameEnv): Parse {
+  be sym holds rt_symbol(modh, head_num(tail(tail(l))))          /* op ident hash */
+  return qcall_with_args(sym, parse_args(tail(tail(tail(tail(l)))), env))  /* skip MODULE . OP ( */
+}
+/* string literal -> from_char/concat chain. Strings are content-addressed, so
+ * this interns to the SAME handle as yonc's global+string_lit: the differential
+ * oracle (exit codes) stays green without a module-level global. */
+fun gen_char(code: number, n: number): EmitR {
+  be c1 holds ssa_name(n)
+  be c2 holds ssa_name(n + 1)
+  return hit(ER, c2,
+    String.concat(
+      line_raw(c1, String.concat("arith.constant ", num_lit(code))),
+      line_raw(c2, String.concat("func.call @yon_rt_string_from_char(",
+                     String.concat(c1, ") : (f64) -> f64")))),
+    n + 2)
+}
+fun gen_str_step(s: String, i: number, len: number, acc_ssa: String, acc_code: String, ec: EmitR): EmitR {
+  be cat holds ssa_name(er_ctr(ec))
+  be code2 holds String.concat(acc_code, String.concat(er_code(ec),
+    line_raw(cat, String.concat("func.call @yon_rt_string_concat(",
+      String.concat(acc_ssa, String.concat(", ",
+        String.concat(er_ssa(ec), ") : (f64, f64) -> f64")))))))
+  return gen_str_from(s, i + 1, len, cat, code2, er_ctr(ec) + 1)
+}
+fun gen_str_from(s: String, i: number, len: number, acc_ssa: String, acc_code: String, n: number): EmitR {
+  return if i >= len then hit(ER, acc_ssa, acc_code, n)
+    else gen_str_step(s, i, len, acc_ssa, acc_code, gen_char(String.char_at(s, i), n))
+}
+fun gen_strlit_ne(s: String, len: number, ec: EmitR): EmitR {
+  return gen_str_from(s, 1, len, er_ssa(ec), er_code(ec), er_ctr(ec))
+}
+fun gen_strlit(s: String, n: number): EmitR {
+  be len holds String.length(s)
+  return if len == 0 then gen_char(0, n)
+    else gen_strlit_ne(s, len, gen_char(String.char_at(s, 0), n))
+}
+/* a runtime/qualified call by symbol name (like gen_call, but the callee is a
+ * literal symbol string, not @fn_<hash>). */
+fun gen_rtcall(sym: String, spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+  be ea  holds gen_args(spine, env, n, reg)
+  be m   holds er_ctr(ea)
+  be cnt holds spine_count(spine)
+  be rhs holds String.concat("func.call @",
+                 String.concat(sym,
+                   String.concat("(", String.concat(er_ssa(ea),
+                     String.concat(") : (",
+                       String.concat(call_sig(cnt, 0), ") -> f64"))))))
+  return hit(ER, ssa_name(m),
+            String.concat(er_code(ea), line_raw(ssa_name(m), rhs)),
+            m + 1)
+}
+/* string runtime functions as external declarations (resolved from yon_rt.o). */
+fun string_stubs(): String {
+  return String.concat("  func.func private @yon_rt_string_from_char(f64) -> f64\n",
+    String.concat("  func.func private @yon_rt_string_concat(f64, f64) -> f64\n",
+    String.concat("  func.func private @yon_rt_string_length(f64) -> f64\n",
+    String.concat("  func.func private @yon_rt_string_char_at(f64, f64) -> f64\n",
+    String.concat("  func.func private @yon_rt_string_from_int(f64) -> f64\n",
+    String.concat("  func.func private @yon_rt_string_substring(f64, f64, f64) -> f64\n",
+                  "  func.func private @yon_rt_string_print(f64) -> f64\n"))))))
+}
+
 /* ---- module boilerplate ---- */
 fun mod_head(): String {
   return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n"
@@ -988,11 +1096,12 @@ fun main(): number {
   be rmain  holds gen(main_body(funs, mh), hit(SeNil), 0, reg)
   be full   holds String.concat(mod_head(),
                     String.concat(merkle_stubs(),
+                    String.concat(string_stubs(),
                       String.concat(helpers,
                         String.concat(main_head(),
                           String.concat(er_code(rmain),
                             String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
-                              stubs()))))))
+                              stubs())))))))
   be _w holds File.write_text("/tmp/yon_selfhost_out.mlir", full)
   return String.length(full)
 }
