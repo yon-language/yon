@@ -2,8 +2,7 @@
 // (de Bruijn), scritto in Yon. Forma wildcard: shift/subst restano esaustivi (ogni
 // costruttore ricorre in modo distinto), ma i rami-stuck di eval e i rami-zero di
 // as_num sono un solo `_ =>`. Oracolo: (lam.0) 42 = 42, Fst((lam.0) Pair(20,22)) = 20.
-inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
-               | TPair(Term, Term) | TFst(Term) | TSnd(Term)
+place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }
 

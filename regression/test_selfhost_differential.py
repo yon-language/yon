@@ -43,6 +43,62 @@ PROGRAMS = [
                    "fun main(): number { return fact(5) }", 120),
     ("sum10",      "fun sum(n): number { return if n == 0 then 0 else n + sum(n - 1) }\n"
                    "fun main(): number { return sum(10) }", 55),
+    # multiple parameters (3-arg), plus a digit in the function name (sub3).
+    ("multi_arg",  "fun sub3(a, b, c): number { return a - b - c }\n"
+                   "fun main(): number { return sub3(100, 30, 8) }", 62),
+    # underscore in identifiers, two parameters.
+    ("ident_us",   "fun add_two(x, y): number { return x + y }\n"
+                   "fun main(): number { return add_two(19, 23) }", 42),
+    # comparison operators beyond ==: <, !=, and >= inside a recursion.
+    ("cmp_lt",     "fun main(): number { return if 3 < 4 then 11 else 22 }", 11),
+    ("cmp_ne",     "fun main(): number { return if 3 != 3 then 11 else 22 }", 22),
+    ("cmp_ge_rec", "fun cd(n): number { return if n >= 1 then cd(n - 1) else 42 }\n"
+                   "fun main(): number { return cd(9) }", 42),
+    # block and line comments must be skipped by the lexer.
+    ("comments",   "/* a header comment */\n"
+                   "fun main(): number {\n"
+                   "  /* inline */ return 40 + 2 // a line comment\n"
+                   "}\n", 42),
+    # Stage 1 of the heavy core: nullary coproduct places, hit and hit_elim
+    # (a runtime tag switch over MerkleTree labels).
+    ("enum_bit",   "place Bit { this > O :U I }\n"
+                   "fun mot(b: Bit): number { return 0 }\n"
+                   "fun v(b: Bit): number { return hit_elim(mot, [ O => 0, I => 1 ], b) }\n"
+                   "fun main(): number { return v(hit(I)) }", 1),
+    ("enum_dir",   "place Dir { this > N :U S :U E }\n"
+                   "fun mot(d: Dir): number { return 0 }\n"
+                   "fun code(d: Dir): number { return hit_elim(mot, [ N => 10, S => 20, E => 30 ], d) }\n"
+                   "fun main(): number { return code(hit(E)) }", 30),
+    # Stage 2: number-payload arms -- hit stores a raw number child,
+    # a pattern binder projects it back with child().
+    ("payload_lit", "place Val { this > Lit(number) }\n"
+                    "fun mot(v: Val): number { return 0 }\n"
+                    "fun get(v: Val): number { return hit_elim(mot, [ Lit(n) => n ], v) }\n"
+                    "fun main(): number { return get(hit(Lit, 42)) }", 42),
+    # a mix of a nullary and a payload arm (the names are arbitrary user
+    # constructors -- Yon has no built-in option type).
+    ("payload_mix", "place Box { this > Empty :U Full(number) }\n"
+                    "fun mot(o: Box): number { return 0 }\n"
+                    "fun un(o: Box): number { return hit_elim(mot, [ Empty => 99, Full(x) => x ], o) }\n"
+                    "fun main(): number { return un(hit(Full, 7)) }", 7),
+    # a two-field arm: both payloads projected.
+    ("payload_duo", "place Duo { this > Both(number, number) }\n"
+                    "fun mot(d: Duo): number { return 0 }\n"
+                    "fun a(d: Duo): number { return hit_elim(mot, [ Both(x, y) => x ], d) }\n"
+                    "fun b(d: Duo): number { return hit_elim(mot, [ Both(x, y) => y ], d) }\n"
+                    "fun main(): number { return a(hit(Both, 5, 9)) + b(hit(Both, 5, 9)) }", 14),
+    # Stage 3: nested / recursive payloads (a sum handle stored raw as a child).
+    # ev(build(3)) = -(-(-7)) = -7 = 249 mod 256.
+    ("rec_neg",    "place Term { this > Lit(number) :U Neg(Term) }\n"
+                   "fun mot(t: Term): number { return 0 }\n"
+                   "fun ev(t: Term): number { return hit_elim(mot, [ Lit(n) => n, Neg(m) => 0 - ev(m) ], t) }\n"
+                   "fun build(k: number): Term { return if k == 0 then hit(Lit, 7) else hit(Neg, build(k - 1)) }\n"
+                   "fun main(): number { return ev(build(3)) }", 249),
+    # a recursive list with a number + a nested-list payload; sum = 42.
+    ("rec_list",   "place Lst { this > Nil :U Cons(number, Lst) }\n"
+                   "fun mot(l: Lst): number { return 0 }\n"
+                   "fun sum(l: Lst): number { return hit_elim(mot, [ Nil => 0, Cons(h, t) => h + sum(t) ], l) }\n"
+                   "fun main(): number { return sum(hit(Cons, 10, hit(Cons, 20, hit(Cons, 12, hit(Nil))))) }", 42),
 ]
 
 

@@ -1,0 +1,10 @@
+status: accept
+exit: 42
+covers: variant_clause
+note: |
+  The canonical named coproduct: `place Name { this > A :U B }`. A place declared
+  by the arms it is the sum of (each arm a coproduct injection, a sub-object of the
+  place). The name lets an arm payload refer to the type it defines, so a genuinely
+  recursive type is expressible. Built with hit(Ctor, args), consumed with
+  match/hit_elim; at runtime a content-addressed MerkleTree node (arm = tag,
+  arguments = children), so equal subvalues share storage.

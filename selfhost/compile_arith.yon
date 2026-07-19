@@ -11,12 +11,12 @@
  */
 
 /* one shared AST for both parser and emitter. */
-inductive Term    = TLit(number) | TAdd(Term, Term) | TMul(Term, Term)
-inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
-inductive TokList = TkNil | TkCons(Token, TokList)
-inductive Parse   = POk(Term, TokList) | PErr
+place Term { this > TLit(number) :U TAdd(Term, Term) :U TMul(Term, Term) }
+place Token { this > TNum(number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place TokList { this > TkNil :U TkCons(Token, TokList) }
+place Parse { this > POk(Term, TokList) :U PErr }
 /* result of gen: (result ssa, accumulated code, next counter). */
-inductive EmitR   = ER(String, String, number)
+place EmitR { this > ER(String, String, number) }
 
 /* ---- lexer: String -> TokList ---- */
 fun lex_at(s: String, i: number, len: number, c: number): TokList {

@@ -1,10 +1,11 @@
-inductive Tree = Leaf(number) | Node(Tree, Tree)
+place Tree { this > Leaf(number) :U Node(Tree, Tree) }
 
 place Entry {
-// COSA: un tipo di dato algebrico RICORSIVO con nome. `inductive` da' un nome al
-// tipo somma, cosi' un argomento di costruttore puo' riferirsi al tipo che sta
-// definendo (Node porta due Tree) — la ricorsione che un somma anonimo inline
-// non puo' esprimere. Poi lo si valuta a RUNTIME con un catamorfismo.
+// COSA: un place-oggetto algebrico RICORSIVO. La clausola `this >` lo dichiara
+// come il coprodotto dei suoi rami, cosi' un argomento di costruttore puo'
+// riferirsi al tipo che sta definendo (Node porta due Tree): la ricorsione che
+// un somma anonimo inline non puo' esprimere. Poi lo si valuta a RUNTIME con un
+// catamorfismo.
 //
 // PERCHE': chiude l'unificazione delle due facce dell'algebra iniziale. Un valore
 // Tree ha un CARRIER a runtime: un nodo MerkleTree content-addressed (tag = indice

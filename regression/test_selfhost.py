@@ -4,7 +4,7 @@ Each selfhost/*.yon is a fragment of a compiler for a small object language, wri
 Yon: its AST is encoded as content-addressed MerkleTree nodes, and each pass (eval,
 parse, typecheck) is a recursive fun that is a catamorphism over that structure. This
 pins, on silicon, the design's spine: eval is a catamorphism on a content-addressed
-inductive; parse is a fold over the token stream; typecheck is a fold into the type
+coproduct place; parse is a fold over the token stream; typecheck is a fold into the type
 algebra. Layer/kind assigned centrally in conftest: yon / integration.
 """
 import subprocess
@@ -25,7 +25,7 @@ EXPECTED = {
     "heyting_eval": 120,  # Omega/G3: (NOT U=A)*100 + (U or NOT U=U)*10 + (P or NOT P=P)
     "typecheck_omega": 5,  # Omega-valued judgment: base3(refl=P, conv=P, neq=A, open=U)
     "lexer": 20,           # text "2+3*4" -> lex -> parse -> eval, left-assoc (2+3)*4
-    # Stage 1 metacircular evaluator, written in Yon over the native inductive
+    # Stage 1 metacircular evaluator, written in Yon over the native coproduct place
     # types. Each oracle is a structural identity; the binary exits 0 iff it holds.
     "eval_core_products": 0,  # eval Fst(Pair(20,22)) = 20  (products, no binder)
     "eval_core_lambda": 0,    # (lam.0) 42 = 42 and Fst((lam.0) Pair(20,22)) = 20 (de Bruijn beta)

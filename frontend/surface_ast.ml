@@ -383,6 +383,16 @@ and cell_decl = {
   cell_loc : location;
 }
 
+(* One entry in a block place body. A data member (field/cell), a coproduct
+   clause (`this > A :U B`, carrying the arms), or an arrow. Arrows are pushed
+   to the top level as a side effect by the parser, so they carry no payload
+   here. The parser splits these back into members and variants: a place with
+   variants and no fields IS its coproduct object and lowers like a sum. *)
+type place_body_item =
+  | PbiMember of field_or_op
+  | PbiVariants of variant list
+  | PbiArrow
+
 type place_decl = {
   pd_name : string;
   pd_type_params : string list;     (* generic parameters: `place Box<T> { value T }` *)

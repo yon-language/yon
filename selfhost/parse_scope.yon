@@ -5,9 +5,8 @@
 // Oracolo: il testo "\aa+a" -> TLam(TAdd(TVar 0, TVar 0)), applicato a 21 -> 42.
 
 // ── lexer esteso: + nomi (a..z) e '=' e il token lambda ──────────────────────
-inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
-                  | TName(number) | TEq | TLamTok
-inductive TokList = TkNil | TkCons(Token, TokList)
+place Token { this > TNum(number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd :U TName(number) :U TEq :U TLamTok }
+place TokList { this > TkNil :U TkCons(Token, TokList) }
 
 // controlli esatti e c>=97 (nomi) PRIMA di c>=48 (cifre), o '='/lettere diventano cifre
 fun emit_at(s: String, i: number, len: number, c: number): TokList {
@@ -29,8 +28,7 @@ fun lex_from(s: String, i: number, len: number): TokList {
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 // ── Term unificato + eval (dal brief #6) ────────────────────────────────────
-inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
-               | TAdd(Term, Term) | TMul(Term, Term)
+place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
 fun motT(t: Term): Term { return hit(TLit, 0) }
 
 fun shift(d: number, c: number, t: Term): Term {
@@ -103,7 +101,7 @@ fun tail(l: TokList): TokList {
 }
 
 // ── ambiente dei nomi -> indice de Bruijn ───────────────────────────────────
-inductive NameEnv = NEnvNil | NEnvCons(number, NameEnv)
+place NameEnv { this > NEnvNil :U NEnvCons(number, NameEnv) }
 fun bump(k: number): number { return if k >= 0 then k + 1 else 0 - 1 }
 fun motNEn(e: NameEnv): number { return 0 }
 fun lookup(name: number, env: NameEnv): number {
@@ -113,7 +111,7 @@ fun lookup(name: number, env: NameEnv): number {
 }
 
 // ── parser con ambiente, produce Term ───────────────────────────────────────
-inductive Parse = POk(Term, TokList) | PErr
+place Parse { this > POk(Term, TokList) :U PErr }
 fun motP(p: Parse): Parse { return hit(PErr) }
 
 // factor := NUM | NAME | '(' expr ')'

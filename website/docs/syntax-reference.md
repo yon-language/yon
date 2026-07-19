@@ -76,7 +76,6 @@ Every keyword, alphabetically:
 [`in`](/book/keywords#in) ·
 [`ind_path`](/book/keywords#ind_path) ·
 [`induct`](/book/keywords#induct) ·
-[`inductive`](/book/keywords#inductive) ·
 [`internal`](/book/keywords#internal) ·
 [`invertible`](/book/keywords#invertible) ·
 [`is`](/book/keywords#is) ·
@@ -139,6 +138,7 @@ Every keyword, alphabetically:
 [`subcontains`](/book/keywords#subcontains) ·
 [`terminal`](/book/keywords#terminal) ·
 [`then`](/book/keywords#then) ·
+[`this`](/book/keywords#this) ·
 [`through`](/book/keywords#through) ·
 [`times`](/book/keywords#times) ·
 [`to`](/book/keywords#to) ·

@@ -2,9 +2,7 @@
 // Forma wildcard: la beta diagonale J(c,d,refl a) ~> d a e' l'unico ramo vivo di
 // TJ; tutto il resto resta stuck via `_ =>`. shift/subst restano esaustivi.
 // Oracolo: J(_, lam.0, refl 7) = 7  (come il kernel OCaml, j_computes.yon).
-inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
-               | TPair(Term, Term) | TFst(Term) | TSnd(Term)
-               | TRefl(Term) | TJ(Term, Term, Term)
+place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) :U TRefl(Term) :U TJ(Term, Term, Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }
 

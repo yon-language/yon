@@ -1,4 +1,4 @@
-inductive Color = Red | Green | Blue(number) | Gray(number)
+place Color { this > Red :U Green :U Blue(number) :U Gray(number) }
 
 place Entry {
 // COSA: il ramo wildcard `_ =>` nell'eliminazione di un induttivo, mostrato

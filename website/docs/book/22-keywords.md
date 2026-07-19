@@ -27,11 +27,11 @@ A Yon program is a list of these.
 
 #### `place`
 
-An object living in a world: named fields, and operations when declared `with effects`. Instances are built with `new P { field value }`. One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
+An object living in a world. A place is declared in one of two shapes, both inside `place Name { ... }`. As a **product**: named fields (`side := number`, or the bare `side number`), plus operations when declared `with effects`; instances are built with `new P { field value }`. As a **coproduct**: a `this >` clause naming the arms it is the sum of (`place Tree { this > Leaf(number) :U Node(Tree, Tree) }`). One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
 
-#### `inductive`
+#### `this`
 
-A named sum type, the dual of `place`: `inductive Tree = Leaf(number) | Node(Tree, Tree)`. Where a `place` is a product (named fields), an `inductive` is a coproduct (alternative constructors). The name is what makes a constructor argument able to refer to the type it defines, so `inductive` is how you write a genuinely recursive type; an anonymous inline sum (`A | B`) cannot name itself. A value is built with `hit(Ctor, args)` and consumed with `match`/`hit_elim`, one branch per constructor. At runtime an `inductive` value is a content-addressed node (its constructor is the tag, its arguments are the children), so equal subvalues share storage.
+Heads the coproduct clause of a block place: `this > A :U B` declares the place as the sum of its arms. Each arm is a sub-object of the place (a coproduct injection, a mono), optionally carrying a payload (`Node(Tree, Tree)`). The name is what lets an arm's payload refer to the type being defined, so this is how a genuinely recursive type is written; an anonymous inline sum (`A | B`) cannot name itself. A value is built with `hit(Ctor, args)` and consumed with `match`/`hit_elim`, one branch per arm. At runtime the value is a content-addressed node (the arm is the tag, its arguments are the children), so equal subvalues share storage.
 
 #### `import`
 

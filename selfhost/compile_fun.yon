@@ -21,21 +21,17 @@
  */
 
 /* one shared AST: arithmetic + de Bruijn variables + let. */
-inductive Term    = TLit(number) | TAdd(Term, Term) | TMul(Term, Term)
-                  | TVar(number) | TLet(Term, Term)
+place Term { this > TLit(number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(number) :U TLet(Term, Term) }
 /* tokens: literals, identifiers, the five keywords, operators, punctuation. */
-inductive Token   = TNum(number) | TIdent(number)
-                  | TKwFun | TKwBe | TKwHolds | TKwReturn | TKwNumber
-                  | TPlus | TStar | TLParen | TRParen | TLBrace | TRBrace | TColon
-                  | TEnd
-inductive TokList = TkNil | TkCons(Token, TokList)
-inductive Parse   = POk(Term, TokList) | PErr
+place Token { this > TNum(number) :U TIdent(number) :U TKwFun :U TKwBe :U TKwHolds :U TKwReturn :U TKwNumber :U TPlus :U TStar :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd }
+place TokList { this > TkNil :U TkCons(Token, TokList) }
+place Parse { this > POk(Term, TokList) :U PErr }
 /* SSA environment for the emitter: de Bruijn index -> ssa name. */
-inductive SsaEnv  = SeNil | SeCons(String, SsaEnv)
+place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
 /* de Bruijn name environment for the parser: identifier hash, innermost first. */
-inductive NameEnv = NEnvNil | NEnvCons(number, NameEnv)
+place NameEnv { this > NEnvNil :U NEnvCons(number, NameEnv) }
 /* result of gen: (result ssa, accumulated code, next counter). */
-inductive EmitR   = ER(String, String, number)
+place EmitR { this > ER(String, String, number) }
 
 /* ---- hashing: keyword recognition and identifier identity share one hash ---- */
 /* rolling hash over s[i..j): h' = h*31 + code. A keyword literal and the same word

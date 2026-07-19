@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 # yon -- the unified Yon driver (thin).
 #
-# One entry point that dispatches to the stage-0 reference toolchain (yonc) and
-# the shared tooling binaries. This is the facade: it unifies what already works
-# so `yon <cmd>` is the single command a user types. The bootstrap/oracle
-# commands (diff, stages, bootstrap) and the language-introspection commands
-# (spec, keywords, prove, refute, root, carrier, normalize, type, eval, repl)
-# are layered on later; today they report honestly that they are not yet wired
-# rather than pretending to work.
+# One entry point that dispatches across the compiler stages and the shared
+# tooling binaries. Build/run default to the SELF-HOSTED compiler (stage 2, the
+# fixpoint) and fall back to the OCaml reference (stage 0, "rooted") until the
+# bootstrap is closed. Everything else delegates to the stage-0 pipeline and the
+# tooling binaries. Commands not yet wired (diff, bootstrap, spec, ...) report
+# honestly rather than pretending to work.
 #
-# On-disk model: only `yon` is meant to be on PATH. The real compilers live under
-# this directory as stage 0 (yonc, the OCaml reference) and, later, yon-stage1
-# (the self-hosted compiler). Users do not type those.
+# Stage vocabulary (Rust/Go/Lean standard):
+#   stage 0  rooted     -- the OCaml reference (yonc). The seed; compiles all Yon.
+#   stage 1  self-hosted-- the compiler-in-Yon built by stage 0. Compiles Yon0.
+#   stage 2  fixpoint   -- the compiler-in-Yon rebuilt by stage 1. Not reachable
+#                          until Yon0 covers the compiler's own source.
+#
+# On-disk model: only `yon` is meant to be on PATH; the stage compilers live here
+# as yonc (stage 0) and yon-stage1, and users do not type those directly.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-YONC="$HERE/yonc"
+YONC="$HERE/yonc"                    # stage 0 (rooted, OCaml reference)
+STAGE1="$HERE/yon-stage1"            # stage 1 (self-hosted Yon0 path)
+STAGE2="$HERE/yon-stage2"            # stage 2 (fixpoint) -- not present yet
 FRONTEND="${YON_BIN_DIR:-$HERE/../frontend/_build/default}/yoner_emit_mlir.exe"
 
 die() { echo "yon: $*" >&2; exit 2; }
@@ -26,10 +32,17 @@ yon -- the Yon driver
 
 Usage: yon <command> [args]
 
-Build & run (stage 0, the OCaml reference):
-  build <file|dir> [-o out]   compile to a native executable
-  run   <file> [prog-args]    compile then execute, forwarding args
-  check <file|dir>            type-check only, no codegen (fast; exit 3 on a false proof)
+Build & run:
+  build   <file|dir> [-o out]   compile to a native executable
+  compile <file|dir> [-o out]   alias of build
+  run     <file> [prog-args]    compile then execute, forwarding args
+  check   <file|dir>            type-check only, no codegen (fast; exit 3 on a false proof)
+
+  build/compile/run use the self-hosted compiler (stage 2) by default and fall
+  back to the rooted stage-0 compiler until the bootstrap is closed. Force a stage:
+    --rooted     stage 0 (yonc, the OCaml reference) -- compiles all Yon
+    --stage 1    the self-hosted Yon0 path
+    --stage 0    same as --rooted
 
 Pipeline inspection:
   emit mlir     <file>        Topos-dialect MLIR from the frontend
@@ -38,6 +51,9 @@ Pipeline inspection:
   emit ll       <file>        LLVM IR (.ll)
   emit obj      <file> -o f.o object file
   emit core     <file>        the Core IR (YON_DUMP_CORE)
+
+Bootstrap:
+  stages                      show which compiler stages are built and reachable
 
 Tooling:
   fmt  [args]                 format (yonfmt)
@@ -49,9 +65,9 @@ Introspection:
   version                     print the version
   help                        this message
 
-Not yet wired (roadmap): diff, stages, bootstrap, spec, keywords, prove,
-  refute, root, carrier, normalize, type, eval, repl, new, init, test, clean,
-  add, deps, fetch, publish.
+Not yet wired (roadmap): diff, bootstrap, spec, keywords, prove, refute, root,
+  carrier, normalize, type, eval, repl, new, init, test, clean, add, deps, fetch,
+  publish.
 EOF
 }
 
@@ -59,21 +75,57 @@ need_frontend() {
   [ -x "$FRONTEND" ] || die "frontend not built: $FRONTEND (build with: cd frontend && dune build)"
 }
 
+# Resolve which stage compiles a build/run. Strips the stage flags and leaves the
+# rest in RESOLVED_ARGS; sets RESOLVED_CC to the compiler command.
+resolve_stage() {
+  local rooted=0 stage=""
+  RESOLVED_ARGS=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --rooted)  rooted=1; shift ;;
+      --stage)   stage="${2:-}"; shift 2 ;;
+      --stage=*) stage="${1#--stage=}"; shift ;;
+      *)         RESOLVED_ARGS+=("$1"); shift ;;
+    esac
+  done
+  if [ "$rooted" = 1 ] || [ "$stage" = 0 ]; then
+    RESOLVED_CC=("$YONC"); return
+  fi
+  if [ "$stage" = 1 ]; then
+    RESOLVED_CC=("$STAGE1"); return
+  fi
+  if [ "$stage" = 2 ]; then
+    [ -x "$STAGE2" ] || die "stage 2 not available yet: Yon is not self-describing (stage 1 compiles only Yon0). Use --rooted (stage 0) or --stage 1 (self-hosted Yon0)."
+    RESOLVED_CC=("$STAGE2"); return
+  fi
+  # default: intend stage 2, fall back to rooted until the fixpoint exists.
+  if [ -x "$STAGE2" ]; then
+    RESOLVED_CC=("$STAGE2")
+  else
+    echo "yon: self-hosted stage 2 not available yet (Yon is not self-describing); using the rooted stage-0 compiler. Pass --rooted to silence this, or --stage 1 for the self-hosted Yon0 path." >&2
+    RESOLVED_CC=("$YONC")
+  fi
+}
+
 cmd="${1:-help}"
 shift || true
 
 case "$cmd" in
-  build)
-    exec "$YONC" "$@"
+  build|compile)
+    resolve_stage "$@"
+    # the ${arr[@]+...} guard keeps an empty array from tripping `set -u` on bash 3.2.
+    exec "${RESOLVED_CC[@]}" ${RESOLVED_ARGS[@]+"${RESOLVED_ARGS[@]}"}
     ;;
 
   run)
-    [ $# -ge 1 ] || die "run: missing source file"
-    src="$1"; shift || true
+    resolve_stage "$@"
+    [ ${#RESOLVED_ARGS[@]} -ge 1 ] || die "run: missing source file"
+    src="${RESOLVED_ARGS[0]}"
+    prog_args=("${RESOLVED_ARGS[@]:1}")
     out="$(mktemp -t yon-run.XXXXXX)"
-    "$YONC" "$src" -o "$out"
+    "${RESOLVED_CC[@]}" "$src" -o "$out" >/dev/null   # keep the program's stdout clean
     rc=0
-    "$out" "$@" || rc=$?
+    "$out" ${prog_args[@]+"${prog_args[@]}"} || rc=$?
     rm -f "$out"
     exit $rc
     ;;
@@ -102,6 +154,31 @@ case "$cmd" in
     esac
     ;;
 
+  stages)
+    sha="$(git -C "$HERE/.." rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "Yon compiler stages (rev $sha):"
+    if [ -x "$YONC" ]; then
+      echo "  stage 0  rooted (OCaml reference)  : available    compiles all Yon"
+    else
+      echo "  stage 0  rooted (OCaml reference)  : MISSING      ($YONC)"
+    fi
+    if [ -x "$STAGE1" ]; then
+      echo "  stage 1  self-hosted (Yon0)        : buildable    compiles Yon0 only"
+    else
+      echo "  stage 1  self-hosted (Yon0)        : wrapper missing"
+    fi
+    if [ -x "$STAGE2" ]; then
+      echo "  stage 2  fixpoint (self-built)      : available"
+    else
+      echo "  stage 2  fixpoint (self-built)      : blocked      stage 1 compiles only Yon0; the"
+      echo "                                                     compiler source uses place/hit_elim/String"
+    fi
+    echo ""
+    echo "  yon build            -> stage 2 (falls back to rooted until the fixpoint)"
+    echo "  yon build --rooted   -> stage 0 (yonc)"
+    echo "  yon build --stage 1  -> the self-hosted Yon0 path"
+    ;;
+
   fmt)  exec "$HERE/yon-fmt"  "$@" ;;
   lint) exec "$HERE/yon-lint" "$@" ;;
   doc)  exec "$HERE/yon-doc"  "$@" ;;
@@ -117,7 +194,7 @@ case "$cmd" in
     ;;
 
   # roadmap: real commands, not yet wired. Fail honestly instead of pretending.
-  diff|stages|bootstrap|spec|keywords|prove|refute|root|carrier|normalize|type|eval|repl|\
+  diff|bootstrap|spec|keywords|prove|refute|root|carrier|normalize|type|eval|repl|\
   new|init|test|clean|add|deps|fetch|publish)
     die "$cmd: not implemented yet (roadmap). Run 'yon help' for what works today."
     ;;

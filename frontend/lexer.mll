@@ -22,7 +22,9 @@
       "import", IMPORT;
       "internal", INTERNAL;
       "place", PLACE;
-      "inductive", INDUCTIVE;
+      (* `this` heads the coproduct clause of a block place: `this > A :U B`
+         names the arms (sub-objects) that this place is the sum of. *)
+      "this", THIS;
       "space", SPACE;
       "nat", NAT;
 
@@ -353,6 +355,13 @@ rule token = parse
   | '|'              { PIPE }
   | '.'              { DOT }
   | ','              { COMMA }
+  (* `:U` is the union (coproduct) operator between place arms: `A :U B`.
+     The `:` prefix keeps `U` usable as an ordinary identifier. Written with
+     no space (`:U`); a type annotation keeps its space (`x: T`), so `: U...`
+     stays COLON + identifier. `:=` binds a record field (`side := number`).
+     Both come before `:` so max-munch picks the two-char forms. *)
+  | ":U"             { COLON_U }
+  | ":="             { COLONEQ }
   | ':'              { COLON }
   | '('              { LPAREN }
   | ')'              { RPAREN }

@@ -1,8 +1,7 @@
 // Self-host, convergenza: un solo Term, un solo eval (lambda de Bruijn + aritmetica).
 // Forma wildcard: add_vals/mul_vals calcolano solo su due TLit, tutto il resto e' un
 // solo `_ => stuck`; shift/subst restano esaustivi. Oracolo: (lam. x+x) 21 = 42.
-inductive Term = TLit(number) | TVar(number) | TLam(Term) | TApp(Term, Term)
-               | TAdd(Term, Term) | TMul(Term, Term)
+place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }
 

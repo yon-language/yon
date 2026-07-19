@@ -5,8 +5,8 @@
 // giro. Oracolo: "2+3*4" = 2 + (3*4) = 14 (la precedenza e' il punto, NON 20).
 
 // ── lexer (dal brief #4) ────────────────────────────────────────────────────
-inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
-inductive TokList = TkNil | TkCons(Token, TokList)
+place Token { this > TNum(number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place TokList { this > TkNil :U TkCons(Token, TokList) }
 
 fun emit_at(s: String, i: number, len: number, c: number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
@@ -24,8 +24,8 @@ fun lex_from(s: String, i: number, len: number): TokList {
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 // ── AST + risultato del parse ───────────────────────────────────────────────
-inductive Expr  = ENum(number) | EAdd(Expr, Expr) | EMul(Expr, Expr)
-inductive Parse = POk(Expr, TokList) | PErr    // (albero, resto) oppure errore
+place Expr { this > ENum(number) :U EAdd(Expr, Expr) :U EMul(Expr, Expr) }
+place Parse { this > POk(Expr, TokList) :U PErr }   // (albero, resto) oppure errore
 
 // ── peek tag-based sulla TokList ────────────────────────────────────────────
 fun motTn(t: Token): number { return 0 }
