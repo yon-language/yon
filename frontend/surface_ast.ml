@@ -42,6 +42,14 @@ let stream_method_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
 let awaits_site_table : (int * int, string * int * int * int) Hashtbl.t = Hashtbl.create 16
 let substream_site_table : (int * int, int) Hashtbl.t = Hashtbl.create 16
 
+(* Method resolution: a call `s.area()` parses to `area(s)`; when `area` is an
+   overloaded method the tycheck resolves it to the receiver-qualified name
+   (`Square__area`) by the receiver's type, and records it here keyed by the
+   call site. The desugar reads it when lowering the call, so the resolved
+   (name-only) target flows to emit. Yoneda: an arrow is indexed by its
+   domain object; this carries that index from checking to code. *)
+let method_resolutions : (int * int, string) Hashtbl.t = Hashtbl.create 64
+
 (* ─── Type expressions ─────────────────────────────────────────────── *)
 
 (* Types in Yon surface — covers first-order schema types plus

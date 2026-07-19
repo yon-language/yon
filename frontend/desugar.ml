@@ -673,6 +673,15 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.ECall ("psh_id", [], _) ->
       C.Var "__id"
   | S.ECall (name, args, loc) ->
+      (* Type-directed method resolution: the tycheck resolved this call to a
+         receiver-qualified method name (`Square__area`) by the receiver's type
+         and recorded it here. Lower the call to the resolved target. *)
+      let name =
+        match Hashtbl.find_opt Surface_ast.method_resolutions
+                (loc.S.start_line, loc.S.start_col) with
+        | Some resolved -> resolved
+        | None -> name
+      in
       (* Rename Seq -> __stream_. The "Seq" prefix is removed from the internal
        * naming. The surface still accepts Seq.X as a deprecated alias
        * (auto-mapped). *)
@@ -2908,6 +2917,7 @@ let desugar_program ?(env : Tyenv.env option = None)
      function body to the unique inhabitant `()`. When None the absorber stays
      inert, so behavior is identical to before. *)
   let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
+  let p = Method_sugar.qualify_overloads p in  (* overloaded method decls -> Place__name (same as tycheck) *)
   current_env := env;
   build_sum_registry p;  (* ctor -> (tag, arg types) for the MerkleTree lowering *)
   (* Pre-rewriting that propagates tp_at_space to the `new P { ... }`

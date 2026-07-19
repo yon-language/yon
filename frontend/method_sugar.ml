@@ -103,3 +103,30 @@ let normalize_program (p : S.program) : S.program =
   List.map (function
     | S.TopFun fn -> S.TopFun (normalize_fun fn)
     | other -> other) p
+
+(* Overload resolution by receiver type (method dispatch). A method is an arrow
+   indexed by its domain object (Yoneda). When a function name is shared by
+   several top-level funs, qualify each with the place of its first parameter:
+   `area(s: Square)` becomes `Square__area`, matching the qualified-call form
+   `Square.area` the parser already produces. Unique names (main, plain helpers)
+   are untouched, so every downstream pass stays on unique names (no crash, no
+   shadow). NAME-ONLY: the body is never rewritten, so two methods with identical
+   bodies keep identical content and still content-address to the same value.
+   Call sites stay bare and are resolved to the qualified target by the receiver
+   type during checking (Surface_ast.method_resolutions). Pure and idempotent
+   after the first application (a qualified name is no longer shared), so both
+   Tycheck and Desugar can apply it and agree on the same names. *)
+let first_param_place (fd : S.fun_decl) : string option =
+  match fd.S.fn_params with
+  | p :: _ -> (match p.S.param_ty with S.TyUser pl -> Some pl | _ -> None)
+  | [] -> None
+
+let qualify_overloads (p : S.program) : S.program =
+  let names = List.filter_map (function S.TopFun fd -> Some fd.S.fn_name | _ -> None) p in
+  let shared n = List.length (List.filter (String.equal n) names) > 1 in
+  List.map (function
+    | S.TopFun fd when shared fd.S.fn_name ->
+        (match first_param_place fd with
+         | Some pl -> S.TopFun { fd with S.fn_name = pl ^ "__" ^ fd.S.fn_name }
+         | None -> S.TopFun fd)  (* not a method: left to the duplicate check *)
+    | d -> d) p
