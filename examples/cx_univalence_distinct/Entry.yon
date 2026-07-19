@@ -1,15 +1,15 @@
-inductive Bool = tt | ff
-inductive Bit = one | zero
+place Bool { this > tt :U ff }
+place Bit  { this > one :U zero }
 
 place Entry {
-// COSA: univalenza fra due tipi induttivi DISTINTI. Bool e Bit hanno root-Merkle
+// COSA: univalenza fra due place-oggetti DISTINTI. Bool e Bit hanno root-Merkle
 // diverse (il carrier di Fase 1 le tiene separate apposta), ed e' un'EQUIVALENZA
 // vera, non l'identita': tt<->one, ff<->zero. Il ponte diventa un cammino nei
 // tipi e trasportare `tt` lungo esso lo porta in `one` (exit 1).
 //
 // PERCHE': e' il cuore che Fase 1 sblocca. Perche' l'equivalenza sia un cammino
 // servono le due coerenze del round-trip (bit2b(b2bit(a)) = a e viceversa). Su un
-// induttivo, bit2b(b2bit(a)) e' STUCK finche' `a` e' una variabile (il match non
+// place-oggetto, bit2b(b2bit(a)) e' STUCK finche' `a` e' una variabile (il match non
 // dispaccia su una variabile), quindi refl non basta: la coerenza si prova per
 // ELIMINAZIONE DIPENDENTE. Un `match a` il cui tipo-risultato varia con `a` e'
 // controllato in checking-mode contro quel tipo con il costruttore sostituito ad

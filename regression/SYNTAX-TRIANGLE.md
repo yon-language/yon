@@ -70,7 +70,6 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `in` | `IN` | 8 | yes | exercised |
 | `ind_path` | `IND_PATH` | 2 | yes | exercised |
 | `induct` | `INDUCT` | 1 | yes | exercised |
-| `inductive` | `INDUCTIVE` | 7 | yes | exercised |
 | `internal` | `INTERNAL` | 2 | yes | exercised |
 | `invertible` | `INVERTIBLE` | 1 | yes | exercised |
 | `is` | `IS` | 14 | yes | exercised |
@@ -98,7 +97,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
 | `partial` | `PARTIAL` | 1 | yes | exercised |
-| `place` | `PLACE` | 204 | yes | exercised |
+| `place` | `PLACE` | 211 | yes | exercised |
 | `plainly` | `PLAINLY` | 3 | yes | exercised |
 | `plam` | `PLAM` | 18 | yes | exercised |
 | `present` | `PRESENT` | 3 | yes | exercised |
@@ -129,6 +128,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `subcontains` | `SUBCONTAINS` | 4 | yes | exercised |
 | `terminal` | `TERMINAL_KW` | 1 | yes | exercised |
 | `then` | `THEN_KW` | 33 | yes | exercised |
+| `this` | `THIS` | 7 | yes | exercised |
 | `through` | `THROUGH` | 2 | yes | exercised |
 | `times` | `TIMES` | 2 | yes | exercised |
 | `to` | `TO` | 42 | yes | exercised |

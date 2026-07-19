@@ -3,8 +3,8 @@
 // mutuamente ricorsive (lex_from guarda il char, emit_at dispaccia e ricorre);
 // dispatch su String.char_at (un number) via catena if/else if, non hit_elim.
 // Oracolo: checksum strutturale di "2+3*4" = 309.
-inductive Token   = TNum(number) | TPlus | TStar | TLParen | TRParen | TEnd
-inductive TokList = TkNil | TkCons(Token, TokList)
+place Token { this > TNum(number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place TokList { this > TkNil :U TkCons(Token, TokList) }
 
 // decide il token per il carattere c in posizione i, poi prosegue da i+1
 fun emit_at(s: String, i: number, len: number, c: number): TokList {

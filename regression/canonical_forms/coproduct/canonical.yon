@@ -1,0 +1,15 @@
+// The canonical named coproduct: `place Name { this > A :U B }`.
+// A place declared by the arms it is the sum of; a recursive list, folded with
+// match. Exercises the variant_clause production (`this > A :U B`).
+place List { this > Nil :U Cons(number, List) }
+
+fun sum(l: List): number {
+  return match l {
+    Nil => 0,
+    Cons(h, t) => h + sum(t)
+  }
+}
+
+fun main(): number {
+  return sum(hit(Cons, 10, hit(Cons, 15, hit(Cons, 17, hit(Nil)))))
+}

@@ -1,4 +1,4 @@
-inductive Triple = T3(number, number, number) | Nil
+place Triple { this > T3(number, number, number) :U Nil }
 
 place Entry {
 // COSA: un costruttore induttivo di arita' 3, letto su TUTTI e tre i payload.

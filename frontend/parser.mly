@@ -214,7 +214,9 @@
 %token PRESENT ABSENT UNKNOWN
 
 /* HoTT / dependent types */
-%token INDUCTIVE
+/* place-as-object block form: `this` heads the coproduct clause,
+   `:U` unions arms, `:=` binds a record field. */
+%token THIS COLON_U COLONEQ
 %token TYPE_KW PI SIGMA ID REFL PAIR FST SND IND_PATH
 %token EL QUOTE EL_MATCH
 %token HIT_ELIM LBRACKET RBRACKET
@@ -298,9 +300,8 @@ top_decl:
                                          TopImportSym (m, n, Some a, mk_loc $startpos $endpos) }
   | IMPORT q = QIDENT FROM sp = IDENT  { let (m,n) = split_qident q in
                                          TopImportFrom (m, n, sp, mk_loc $startpos $endpos) }
-  | pd = place_decl                   { TopPlace pd }
+  | t = place_decl                    { t }
   | ed = error_decl                   { TopPlace ed }
-  | dd = data_decl                    { dd }
   | fd = fun_decl                     { TopFun fd }
   | md = move_decl                    { TopMove md }
   | vd = view_decl                    { TopView vd }
@@ -596,18 +597,31 @@ place_decl:
     over = option(over_clause)
     ext = option(subcontains_clause)
     oerr = option(on_error_clause)
-    LBRACE members = place_member_list RBRACE
-    { { pd_name = name;
-        pd_type_params = tparams;
-        pd_world = "__INFER";
-        pd_with_effects = false;
-        pd_members = members;
-        pd_over = over;
-        pd_laws = [];
-        pd_subcontains = ext;
-        pd_is_error = false;
-        pd_on_error = oerr;
-        pd_loc = mk_loc $startpos $endpos } }
+    LBRACE mv = place_member_list RBRACE
+    { let (members, variants) = mv in
+      match variants with
+      | [] ->
+          (* a record place: fields, cells, and its arrows (pushed already). *)
+          TopPlace { pd_name = name;
+                     pd_type_params = tparams;
+                     pd_world = "__INFER";
+                     pd_with_effects = false;
+                     pd_members = members;
+                     pd_over = over;
+                     pd_laws = [];
+                     pd_subcontains = ext;
+                     pd_is_error = false;
+                     pd_on_error = oerr;
+                     pd_loc = mk_loc $startpos $endpos }
+      | vs ->
+          (* a coproduct place `this > A :U B`: it IS the sum object, so reuse
+             the sum lowering (TopType). Its arrows are already pushed as
+             synthetic top-levels. Fields alongside arms (a sum of products)
+             are a later increment. *)
+          if members <> [] then
+            failwith ("place '" ^ name ^ "': `this >` arms cannot yet be mixed "
+                      ^ "with fields in one place");
+          TopType (name, vs, mk_loc $startpos $endpos) }
   | PLACE name = IDENT
     tparams = type_params_opt
     over = option(over_clause)
@@ -615,17 +629,17 @@ place_decl:
     oerr = option(on_error_clause)
     WITH EFFECTS
     LBRACE members = field_or_op_list RBRACE
-    { { pd_name = name;
-        pd_type_params = tparams;
-        pd_world = "__INFER";
-        pd_with_effects = true;
-        pd_members = members;
-        pd_over = over;
-        pd_laws = List.filter_map (function FoLaw l -> Some l | _ -> None) members;
-        pd_subcontains = ext;
-        pd_is_error = false;
-        pd_on_error = oerr;
-        pd_loc = mk_loc $startpos $endpos } }
+    { TopPlace { pd_name = name;
+                 pd_type_params = tparams;
+                 pd_world = "__INFER";
+                 pd_with_effects = true;
+                 pd_members = members;
+                 pd_over = over;
+                 pd_laws = List.filter_map (function FoLaw l -> Some l | _ -> None) members;
+                 pd_subcontains = ext;
+                 pd_is_error = false;
+                 pd_on_error = oerr;
+                 pd_loc = mk_loc $startpos $endpos } }
 
 (* error E (subcontains Base)? { fields } — an error place. Reuses
  * place_decl with pd_is_error=true. The target of the `on error` morphism. *)
@@ -680,22 +694,40 @@ field_or_cell:
    of the front-end sees it as an ordinary top-level arrow while the source
    keeps it inside the place. *)
 place_member_list:
-  | items = list(place_member)            { List.filter_map (fun x -> x) items }
+  | items = list(place_member)
+    { let members =
+        List.filter_map (function PbiMember fc -> Some fc | _ -> None) items in
+      let variants =
+        List.concat_map (function PbiVariants vs -> vs | _ -> []) items in
+      (members, variants) }
+
+(* `this > A :U B :U ...` — the coproduct clause. It names the arms this place
+   is the sum of; each arm is a variant (an existing place, optionally with a
+   payload). Reuses the `variant` grammar shared with `inductive`. *)
+variant_clause:
+  | THIS GT vs = separated_nonempty_list(COLON_U, variant)   { vs }
 
 place_member:
-  | fc = field_or_cell                    { Some fc }
-  | fd = fun_decl                         { Parser_state.push_decl (TopFun fd); None }
-  | md = move_decl                        { Parser_state.push_decl (TopMove md); None }
-  | fct = functor_decl                    { Parser_state.push_decl fct; None }
-  | gm = geom_morphism_decl               { Parser_state.push_decl (TopGeomMorphism gm); None }
-  | vd = view_decl                        { Parser_state.push_decl (TopView vd); None }
-  | rd = reduction_decl                   { Parser_state.push_decl (TopReduction rd); None }
-  | mp = morph_decl                       { Parser_state.push_decl (TopMorph mp); None }
-  | nt = nat_transform_decl               { Parser_state.push_decl (TopNatTransform nt); None }
+  | fc = field_or_cell                    { PbiMember fc }
+  | vs = variant_clause                   { PbiVariants vs }
+  | fd = fun_decl                         { Parser_state.push_decl (TopFun fd); PbiArrow }
+  | md = move_decl                        { Parser_state.push_decl (TopMove md); PbiArrow }
+  | fct = functor_decl                    { Parser_state.push_decl fct; PbiArrow }
+  | gm = geom_morphism_decl               { Parser_state.push_decl (TopGeomMorphism gm); PbiArrow }
+  | vd = view_decl                        { Parser_state.push_decl (TopView vd); PbiArrow }
+  | rd = reduction_decl                   { Parser_state.push_decl (TopReduction rd); PbiArrow }
+  | mp = morph_decl                       { Parser_state.push_decl (TopMorph mp); PbiArrow }
+  | nt = nat_transform_decl               { Parser_state.push_decl (TopNatTransform nt); PbiArrow }
 
 
 field_decl:
   | name = IDENT t = type_expr
+    { { fd_name = name; fd_ty = t;
+        fd_loc = mk_loc $startpos $endpos } }
+  (* `side := number` — the explicit "has a field" binder. Same field, the
+     `:=` just makes the product component read as a definition and removes any
+     ambiguity with a bare arm name. *)
+  | name = IDENT COLONEQ t = type_expr
     { { fd_name = name; fd_ty = t;
         fd_loc = mk_loc $startpos $endpos } }
 
@@ -906,12 +938,11 @@ variant:
   | name = IDENT LPAREN args = separated_list(COMMA, type_expr) RPAREN
     { { v_name = name; v_args = args } }
 
-(* A named sum type: `inductive Tree = Leaf | Node(Tree, Tree)`. Reuses the
-   variant grammar; a constructor argument that names the type being defined
-   (Tree) is a plain type_expr (TyUser "Tree"), so recursion is expressible. *)
-data_decl:
-  | INDUCTIVE name = IDENT EQ variants = separated_nonempty_list(PIPE, variant)
-    { TopType (name, variants, mk_loc $startpos $endpos) }
+(* A named sum type is a coproduct place: `place Tree { this > Leaf :U Node(Tree, Tree) }`
+   (see place_decl, which returns TopType when a `this >` clause is present). The
+   `variant` grammar above is shared with that clause; a constructor argument that
+   names the type being defined (Tree) is a plain type_expr (TyUser "Tree"), so
+   recursion is expressible. There is no separate `inductive`/`place X = ...` form. *)
 
 (* stream_modifier / stream_mod_list removed in v1.1 (BUFFER/DROP were inert). *)
 

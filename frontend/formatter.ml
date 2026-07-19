@@ -458,7 +458,14 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
    | TopFun fn -> fmt_fun f fn
    | TopPlace pd -> fmt_place f pd
    | TopType (name, variants, _) ->
-       line f (Printf.sprintf "inductive %s = %s" name (fmt_ty (TySum variants)))
+       (* Canonical named coproduct: the block place form `place X { this > A :U B }`.
+          A named sum IS a place declared by the arms it is the coproduct of. *)
+       let arm v =
+         if v.v_args = [] then v.v_name
+         else Printf.sprintf "%s(%s)" v.v_name
+                (String.concat ", " (List.map fmt_ty v.v_args)) in
+       line f (Printf.sprintf "place %s { this > %s }" name
+                 (String.concat " :U " (List.map arm variants)))
    | TopWorld wd -> fmt_world f wd
    | TopFunctor ft -> fmt_functor f ft
    | TopNatTransform nt -> fmt_nat_transform f nt

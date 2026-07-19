@@ -12,15 +12,14 @@
  * -> exit 42.
  */
 
-inductive Term    = TLit(number) | TAdd(Term, Term) | TMul(Term, Term)
-                  | TVar(number) | TLet(Term, Term) | TCall(String, Term)
+place Term { this > TLit(number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(number) :U TLet(Term, Term) :U TCall(String, Term) }
 /* a top-level function: name + body; the body uses TVar 0 for the parameter. */
-inductive Fun     = FnDef(String, Term)
-inductive FunList = FlNil | FlCons(Fun, FunList)
+place Fun { this > FnDef(String, Term) }
+place FunList { this > FlNil :U FlCons(Fun, FunList) }
 /* SSA environment: the list of bound ssa-names, indexed by de Bruijn. */
-inductive SsaEnv  = SeNil | SeCons(String, SsaEnv)
+place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
 /* result of gen: (result ssa, accumulated code, next counter). */
-inductive EmitR   = ER(String, String, number)
+place EmitR { this > ER(String, String, number) }
 
 /* accessors on EmitR (single constructor -> hit_elim with an explicit motive). */
 fun motS(e: EmitR): String { return "" }

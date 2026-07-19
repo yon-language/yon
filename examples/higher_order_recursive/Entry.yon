@@ -1,7 +1,7 @@
-inductive IntList = Nil | Cons(number, IntList)
+place IntList { this > Nil :U Cons(number, IntList) }
 
 place Entry {
-// A recursive higher-order function over a native inductive. map_list takes a
+// A recursive higher-order function over a native place-object. map_list takes a
 // function f and threads it through the recursion, applying it to every element.
 // This is the shape a compiler-in-Yon is built from (visitors, fold_tree,
 // map_ast), and the case that used to run the frontend out of memory: the emit

@@ -10,7 +10,6 @@ let tok_name = function
   | Parser.QIDENT _ -> "QIDENT"
   | Parser.TYPE_LEVEL _ -> "TYPE_LEVEL"
   | Parser.PLACE -> "PLACE"
-  | Parser.INDUCTIVE -> "INDUCTIVE"
   | Parser.FUN -> "FUN"
   | Parser.DROP -> "DROP"
   | Parser.MOVE -> "MOVE"
@@ -186,6 +185,9 @@ let tok_name = function
   | Parser.SAME -> "SAME"
   | Parser.PLAINLY -> "PLAINLY"
   | Parser.INDUCT -> "INDUCT"
+  | Parser.THIS -> "THIS"
+  | Parser.COLON_U -> "COLON_U"
+  | Parser.COLONEQ -> "COLONEQ"
   | Parser.EOF -> "EOF"
 
 let () =

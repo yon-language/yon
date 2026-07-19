@@ -25,6 +25,7 @@ from them; the `.yon` files are the specification, not this text.
 | binding | `dev_rebind` | reject_clean | 1 | `already bound in this scope` |
 | cell | `canonical` | accept | 0 | — |
 | comprehension | `canonical` | accept | 0 | — |
+| coproduct | `canonical` | accept | 42 | — |
 | entrypoint | `canonical` | accept | 0 | — |
 | entrypoint | `dev_b` | reject_clean | 1 | `ENTRYPOINT ERROR` |
 | entrypoint | `dev_c` | enforce_1_2 | 0 | — |
@@ -48,7 +49,6 @@ from them; the `.yon` files are the specification, not this text.
 | if_expr | `canonical` | accept | 42 | — |
 | if_expr | `dev_ternary` | reject_clean | 1 | `unexpected character` |
 | in_sequence | `canonical` | accept | 42 | — |
-| inductive | `canonical` | accept | 42 | — |
 | iter | `canonical` | accept | 42 | — |
 | merge | `canonical` | accept | 22 | — |
 | move | `canonical` | accept | 0 | — |
