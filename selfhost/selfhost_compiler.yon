@@ -970,8 +970,18 @@ fun main_body(fs: FunList, main_hash: number): Term {
 }
 
 /* ---- strings and qualified/runtime calls (String.op) ---- */
-/* the String payload of a TStr token (empty for any other token). */
-fun tok_str(t: Token): String { return match t { TStr(sh) => sh, _ => "" } }
+/* the String payload of a TStr token (empty for any other token). Full hit_elim
+ * (not match) so Yon0 stays hit_elim-only for the self-compile. */
+fun motTokStr(t: Token): String { return "" }
+fun tok_str(t: Token): String {
+  return hit_elim(motTokStr, [
+    TNum(n)=>"", TIdent(h)=>"", TKwFun=>"", TKwBe=>"", TKwHolds=>"", TKwReturn=>"",
+    TKwNumber=>"", TKwIf=>"", TKwThen=>"", TKwElse=>"", TPlus=>"", TStar=>"",
+    TEqEq=>"", TLParen=>"", TRParen=>"", TLBrace=>"", TRBrace=>"", TColon=>"",
+    TEnd=>"", TMinus=>"", TComma=>"", TLt=>"", TGt=>"", TLe=>"", TGe=>"", TNe=>"",
+    TLBracket=>"", TRBracket=>"", TBar=>"", TArrow=>"", TKwPlace=>"", TKwThis=>"",
+    TColonU=>"", TDot=>"", TStr(sh)=>sh ], t)
+}
 fun motLnStr(l: TokList): String { return "" }
 fun head_str(l: TokList): String {
   return hit_elim(motLnStr, [ TkNil => "", TkCons(h, t) => tok_str(h) ], l)
@@ -987,8 +997,16 @@ fun rt_string_symbol(op: number): String {
     else if op == hash_of("print") then "yon_rt_string_print"
     else ""
 }
+fun rt_file_symbol(op: number): String {
+  return if op == hash_of("read_text") then "yon_rt_file_read_text"
+    else if op == hash_of("write_text") then "yon_rt_file_write_text"
+    else if op == hash_of("append_text") then "yon_rt_file_append_text"
+    else ""
+}
 fun rt_symbol(m: number, op: number): String {
-  return if m == hash_of("String") then rt_string_symbol(op) else ""
+  return if m == hash_of("String") then rt_string_symbol(op)
+    else if m == hash_of("File") then rt_file_symbol(op)
+    else ""
 }
 /* qualified call: MODULE '.' OP '(' args ')'. l at MODULE (an ident). */
 fun motQParse(p: Parse): Parse { return hit(PErr) }
@@ -1056,7 +1074,10 @@ fun string_stubs(): String {
     String.concat("  func.func private @yon_rt_string_char_at(f64, f64) -> f64\n",
     String.concat("  func.func private @yon_rt_string_from_int(f64) -> f64\n",
     String.concat("  func.func private @yon_rt_string_substring(f64, f64, f64) -> f64\n",
-                  "  func.func private @yon_rt_string_print(f64) -> f64\n"))))))
+    String.concat("  func.func private @yon_rt_string_print(f64) -> f64\n",
+    String.concat("  func.func private @yon_rt_file_read_text(f64) -> f64\n",
+    String.concat("  func.func private @yon_rt_file_write_text(f64, f64) -> f64\n",
+                  "  func.func private @yon_rt_file_append_text(f64, f64) -> f64\n")))))))))
 }
 
 /* ---- module boilerplate ---- */
