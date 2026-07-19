@@ -99,6 +99,15 @@ PROGRAMS = [
                    "fun mot(l: Lst): number { return 0 }\n"
                    "fun sum(l: Lst): number { return hit_elim(mot, [ Nil => 0, Cons(h, t) => h + sum(t) ], l) }\n"
                    "fun main(): number { return sum(hit(Cons, 10, hit(Cons, 20, hit(Cons, 12, hit(Nil))))) }", 42),
+    # String literals and qualified runtime calls (String.op). A literal lexes
+    # to a content handle (substring), lowers to a from_char/concat chain that
+    # interns to the same content-address as yonc's global+string_lit, so the
+    # exit codes agree; `String.op(..)` lowers to a runtime call.
+    ("str_len",    'fun main(): number { return String.length("hello") }', 5),
+    ("str_concat", 'fun main(): number { return String.length(String.concat("ab", "cde")) }', 5),
+    ("str_char",   'fun main(): number { return String.char_at("ABC", 1) }', 66),
+    ("str_in_fun", 'fun size(s): number { return String.length(s) }\n'
+                   'fun main(): number { return size("abcd") }', 4),
 ]
 
 
