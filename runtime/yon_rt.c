@@ -7342,13 +7342,18 @@ double yon_rt_file_read_text(double path_id_d) {
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
     if (sz <= 0 || sz >= 16*1024*1024) { fclose(f); return 0.0; }
-    char buf[YON_STR_MAX_LEN];
-    size_t to_read = (size_t)sz;
-    if (to_read >= YON_STR_MAX_LEN) to_read = YON_STR_MAX_LEN - 1;
-    size_t r = fread(buf, 1, to_read, f);
+    /* Read the whole file, no length cap: an mmap'd buffer sized to the file
+       (the old char[YON_STR_MAX_LEN] truncated the source at 1 KB, which is why
+       a large source, e.g. the self-host compiler itself, was cut off). */
+    size_t cap = (size_t)sz + 1;
+    char *buf = mmap(NULL, cap, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (buf == MAP_FAILED) { fclose(f); return 0.0; }
+    size_t r = fread(buf, 1, (size_t)sz, f);
     buf[r] = 0;
     fclose(f);
     uint32_t out_slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)(r + 1), YON_TAG_USER1);
+    munmap(buf, cap);
     return (double)out_slot;
 }
 
@@ -7382,12 +7387,10 @@ static const char *yon_ds_cstr(double id_d) {
 static double yon_ds_string(const char *str) {
     if (!str) return 0.0;
     ds_ensure_init();
+    /* No length cap and no copy buffer: str is already a valid C string in
+       memory; put_chain interns (copies) it into the heap directly. */
     size_t len = strlen(str);
-    if (len >= YON_STR_MAX_LEN) len = YON_STR_MAX_LEN - 1;
-    char buf[YON_STR_MAX_LEN];
-    memcpy(buf, str, len);
-    buf[len] = 0;
-    uint32_t slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)(len + 1), YON_TAG_USER1);
+    uint32_t slot = yon_xheap_put_chain(g_ds_heap, str, (uint32_t)(len + 1), YON_TAG_USER1);
     return (double)slot;
 }
 
