@@ -2185,7 +2185,27 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
     | Ok ty -> ok ty
     | Error msg -> err loc msg
   else
-  (* Then try user-defined functions. *)
+  (* Then try user-defined functions. Type-directed method resolution: a call
+     `s.area()` parses to `area(s)`, so when the bare name is not a top-level
+     fun, try the receiver-qualified name `TypeOf(args[0])__name` (methods are
+     registered under that name by qualify_overloads). Record the resolution at
+     the call site so the desugar lowers the call to the resolved target. This
+     is the domain index of the arrow, carried from checking to emit. *)
+  let name =
+    match Tyenv.lookup_fun env name with
+    | Some _ -> name
+    | None ->
+        (match arg_tys with
+         | TyUser recv :: _ ->
+             let qname = recv ^ "__" ^ name in
+             (match Tyenv.lookup_fun env qname with
+              | Some _ ->
+                  Hashtbl.replace Surface_ast.method_resolutions
+                    (loc.start_line, loc.start_col) qname;
+                  qname
+              | None -> name)
+         | _ -> name)
+  in
   match Tyenv.lookup_fun env name with
   | Some fs ->
       let* () = check_call_signature env ctx name fs.fs_params arg_tys loc in
@@ -4793,6 +4813,7 @@ let elaborate_id_sugar (p : program) : program =
     List.map (function TopFun fd -> TopFun (resolve_fun fd) | d -> d) p
 
 let check_program (p : program) : check_result =
+  Hashtbl.reset Surface_ast.method_resolutions;
   (* Method-call sugar (`s.add(...)`) is normalized away before any checking.
      Idempotent, so it is also safe to run at the start of desugar_program. *)
   (* Lower Same / plainly first so every check path (LSP, driver, project) sees
@@ -4808,10 +4829,17 @@ let check_program (p : program) : check_result =
       { cr_env = Tyenv.with_builtins Tyenv.empty;
         cr_errors = [e] }
   | Ok p ->
+  (* Qualify overloaded method names by their receiver place, so same-named
+     methods on distinct places (`Square.area`, `Circle.area`) become distinct
+     top-level names and the passes below stay on unique names. A no-op when no
+     name is shared. *)
+  let p = Method_sugar.qualify_overloads p in
   (* Pre-check PRIMA di infer_fun_signatures/Hm_infer (che su questi input vanno
    * in failwith/crash): nome di funzione top-level duplicato, e tipo di ritorno
    * funzionale `: T -> U` (un closure ritornato — non supportato, crasherebbe a
-   * emit con un'arità sballata). Rifiuto pulito invece di crash/build-fail. *)
+   * emit con un'arità sballata). Rifiuto pulito invece di crash/build-fail.
+   * After qualify_overloads, a remaining duplicate is a genuine ambiguity:
+   * same name with the same (or no) receiver type, which cannot be told apart. *)
   let fun_decls = List.filter_map (function TopFun fd -> Some fd | _ -> None) p in
   let dup_fun =
     let rec go seen = function
@@ -4825,7 +4853,9 @@ let check_program (p : program) : check_result =
       { cr_env = Tyenv.with_builtins Tyenv.empty;
         cr_errors = [ { err_loc = fd.fn_loc;
                         err_msg = Printf.sprintf
-                          "duplicate top-level function '%s'" fd.fn_name } ] }
+                          "duplicate top-level function '%s' (same name and \
+                           receiver type; methods on distinct places are fine, \
+                           but these two cannot be distinguished)" fd.fn_name } ] }
   | None ->
   (* A functional return type (T -> U) is now supported: the function returns a
      first-class content-addressed closure, an f64 handle (Stage B). *)
