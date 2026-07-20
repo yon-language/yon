@@ -124,17 +124,36 @@ fun lex_num(s: String, i: number, len: number): TokList {
   be j holds num_end(s, i, len)
   return hit(TkCons, hit(TNum, num_val(s, i, j, 0)), lex_from(s, j, len))
 }
-/* string literal: scan to the closing '"' (code 34), capture the content span. */
+/* string literal: scan to the closing '"' (code 34). Backslash (92) escapes the
+ * next char, so a '\"' inside the literal does not end it. */
 fun str_end(s: String, i: number, len: number): number {
   return if i >= len then i
-    else if String.char_at(s, i) == 34 then i          /* closing quote */
+    else if String.char_at(s, i) == 92 then str_end(s, i + 2, len)   /* skip escaped char */
+    else if String.char_at(s, i) == 34 then i                        /* closing quote */
     else str_end(s, i + 1, len)
 }
-/* i is at the char AFTER the opening quote. TStr carries the content handle
- * (an f64, uniform with number); String.substring slices [i, j). */
+/* the char an escape denotes: \n -> 10, \t -> 9, \" -> 34, \\ -> 92, else literal. */
+fun escape_char(c: number): number {
+  return if c == 110 then 10
+    else if c == 116 then 9
+    else if c == 34 then 34
+    else if c == 92 then 92
+    else c
+}
+/* build the literal content [i, j), interpreting backslash escapes. yonc does
+ * this at lex time, so the self-host MUST too: otherwise its own "...\n..."
+ * literals capture a raw backslash-n and the frontend fixpoint breaks (stage-2
+ * emits a literal backslash-n where stage-1 emitted a newline). */
+fun str_content(s: String, i: number, j: number, acc: String): String {
+  return if i >= j then acc
+    else if String.char_at(s, i) == 92 then
+      str_content(s, i + 2, j, String.concat(acc, String.from_char(escape_char(String.char_at(s, i + 1)))))
+    else str_content(s, i + 1, j, String.concat(acc, String.from_char(String.char_at(s, i))))
+}
+/* i is at the char AFTER the opening quote. */
 fun lex_str(s: String, i: number, len: number): TokList {
   be j holds str_end(s, i, len)
-  return hit(TkCons, hit(TStr, String.substring(s, i, j - i)), lex_from(s, j + 1, len))
+  return hit(TkCons, hit(TStr, str_content(s, i, j, "")), lex_from(s, j + 1, len))
 }
 fun lex_eq(s: String, i: number, len: number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TEnd), hit(TkNil))

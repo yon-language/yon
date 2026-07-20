@@ -477,6 +477,9 @@ let stdlib_registry : (string * (string list * string)) list = [
   "File__read_text",  (["f64"], "f64");
   "File__write_text",  (["f64"; "f64"], "f64");
   "File__append_text", (["f64"; "f64"], "f64");
+  "Buffer__make",   ([], "f64");
+  "Buffer__append", (["f64"; "f64"], "f64");
+  "Buffer__finish", (["f64"], "f64");
   "Env__get",   (["f64"], "f64");
   "Env__has",   (["f64"], "i1");
   "Args__count", ([], "f64");
@@ -3292,6 +3295,21 @@ let rec emit_term (e : emitter)
       let (vb, _) = emit_term e env funcs b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_file_append_text(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.Var "Buffer__make", _) ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_buffer_new() : () -> f64" v);
+      (v, "f64")
+  | C.App (C.App (C.Var "Buffer__append", a), b) ->
+      let (va, _) = emit_term e env funcs a in
+      let (vb, _) = emit_term e env funcs b in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_buffer_append(%s, %s) : (f64, f64) -> f64" v va vb);
+      (v, "f64")
+  | C.App (C.Var "Buffer__finish", a) ->
+      let (va, _) = emit_term e env funcs a in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_buffer_finish(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.Var "Env__get", a) ->
       let (va, _) = emit_term e env funcs a in
@@ -6570,6 +6588,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_file_read_text(f64) -> f64";
   emit_line e "func.func private @yon_rt_file_write_text(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_file_append_text(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_buffer_new() -> f64";
+  emit_line e "func.func private @yon_rt_buffer_append(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_buffer_finish(f64) -> f64";
   emit_line e "func.func private @yon_rt_env_get(f64) -> f64";
   emit_line e "func.func private @yon_rt_env_has(f64) -> f64";
   emit_line e "func.func private @yon_rt_args_count() -> f64";
