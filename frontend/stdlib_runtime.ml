@@ -690,6 +690,13 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "write_text",  [TyUser "String"; TyUser "String"], tnum;
       "append_text", [TyUser "String"; TyUser "String"], tnum;
     ];
+    (* Buffer: the transient string forge (mmap-backed builder, interns once at
+       finish). make takes a dummy arg (nullary-call convention, like Args.count). *)
+    "Buffer", [
+      "make",   [tunit], TyUser "Buffer";
+      "append", [TyUser "Buffer"; TyUser "String"], TyUser "Buffer";
+      "finish", [TyUser "Buffer"], TyUser "String";
+    ];
     "Env", [
       "get", [TyUser "String"], TyUser "String";
       "has", [TyUser "String"], tbool;

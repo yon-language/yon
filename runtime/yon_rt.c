@@ -7202,21 +7202,27 @@ double yon_rt_string_concat(double a_id_d, double b_id_d) {
      * the chain extends by itself). */
     char stack_buf[1024];
     size_t need = la + lb + 1;
-    uint32_t fb_off = 0;
+    char *heap_buf = NULL;
     char *buf;
     if (need <= sizeof(stack_buf)) {
         buf = stack_buf;
     } else {
-        fb_off = yon_xheap_strip_alloc(g_ds_heap, (uint32_t)need);
-        if (fb_off == 0) return 0.0;
-        buf = (char *)yon_xheap_strip_at(g_ds_heap, fb_off);
+        /* The build buffer is throwaway (only the interned result is kept), so it
+           must NOT compete for the content-addressed arena. strip_alloc bumps a
+           64MB arena that never rewinds; a full arena made it fail here and this
+           function returned the EMPTY string, silently collapsing large outputs
+           (the self-host whole-program emit hit exactly this). Use an mmap scratch,
+           freed right after the interned result is chained. */
+        heap_buf = mmap(NULL, need, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (heap_buf == MAP_FAILED) return 0.0;
+        buf = heap_buf;
     }
     memcpy(buf, pa, la);
     memcpy(buf + la, pb, lb);
     buf[la + lb] = 0;
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, buf, (uint32_t)need, YON_TAG_USER1);
-    if (fb_off != 0)
-        yon_xheap_strip_trim(g_ds_heap, fb_off, 0u, (uint32_t)need);
+    if (heap_buf) munmap(heap_buf, need);
     return (double)slot;
 }
 
@@ -7391,6 +7397,96 @@ static double yon_ds_string(const char *str) {
        memory; put_chain interns (copies) it into the heap directly. */
     size_t len = strlen(str);
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, str, (uint32_t)(len + 1), YON_TAG_USER1);
+    return (double)slot;
+}
+
+/* ============================================================== */
+/* Buffer — the transient string forge (NOT content-addressed).            */
+/* The place where content-addressed String values are BORN, not a third   */
+/* heap: a linear, mmap-backed builder that bump-appends bytes and interns  */
+/* ONCE at finish. This turns an O(n^2) concat fold (each concat interns a  */
+/* growing prefix into the content arena) into O(n) + a single intern. Its  */
+/* own storage is a private mmap region (lazy: physical RAM only for the    */
+/* pages it touches), doubled on demand and munmap'd at finish — so it      */
+/* NEVER competes with, nor leaks, the content-addressed arena.             */
+/* ============================================================== */
+#define YON_MAX_BUFFERS   64u
+#define YON_BUFFER_INIT   (16u * 1024u * 1024u)   /* initial reservation, lazy */
+typedef struct { char *base; size_t off; size_t cap; int in_use; } yon_buffer_t;
+static yon_buffer_t g_buffer_pool[YON_MAX_BUFFERS];
+
+/* Grow b to hold at least `need` bytes, doubling the reservation. Aborts
+   loudly on a genuine mmap failure (out of address space / RAM): the runtime
+   never silently drops bytes it was asked to append. */
+static void yon_buffer_grow(yon_buffer_t *b, size_t need) {
+    size_t newcap = b->cap ? b->cap : (size_t)YON_BUFFER_INIT;
+    while (newcap < need) {
+        if (newcap > ((size_t)-1) / 2) { newcap = need; break; }  /* saturate near the ceiling */
+        newcap *= 2;
+    }
+    char *nb = mmap(NULL, newcap, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (nb == MAP_FAILED) {
+        fprintf(stderr, "[YON-RT] FATAL: Buffer grow to %zu bytes failed (out of memory)\n", newcap);
+        abort();
+    }
+    memcpy(nb, b->base, b->off);
+    munmap(b->base, b->cap);
+    b->base = nb;
+    b->cap = newcap;
+}
+
+/* make() -> a fresh buffer handle (>0), or 0.0 if the pool is exhausted. */
+double yon_rt_buffer_new(void) {
+    for (uint32_t i = 0; i < YON_MAX_BUFFERS; i++) {
+        if (!g_buffer_pool[i].in_use) {
+            char *base = mmap(NULL, (size_t)YON_BUFFER_INIT, PROT_READ | PROT_WRITE,
+                              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            if (base == MAP_FAILED) return 0.0;
+            g_buffer_pool[i].base = base;
+            g_buffer_pool[i].off = 0;
+            g_buffer_pool[i].cap = (size_t)YON_BUFFER_INIT;
+            g_buffer_pool[i].in_use = 1;
+            return (double)(i + 1);   /* handle = index + 1; 0 is the invalid sentinel */
+        }
+    }
+    fprintf(stderr, "[YON-RT] Buffer pool exhausted (%u live buffers)\n", YON_MAX_BUFFERS);
+    return 0.0;
+}
+
+/* append(buf, str) -> buf (for chaining). Grows the arena as needed; the only
+   failure mode is a genuine OOM inside grow(), which aborts loudly. */
+double yon_rt_buffer_append(double buf_id_d, double str_id_d) {
+    uint32_t idx = (uint32_t)buf_id_d;
+    if (idx == 0 || idx > YON_MAX_BUFFERS) return 0.0;
+    yon_buffer_t *b = &g_buffer_pool[idx - 1];
+    if (!b->in_use) return 0.0;
+    const char *str = yon_ds_cstr(str_id_d);
+    if (!str) return buf_id_d;                 /* nothing to append */
+    size_t len = strlen(str);
+    if (b->off + len + 1u > b->cap) yon_buffer_grow(b, b->off + len + 1u);  /* +1: room for NUL */
+    memcpy(b->base + b->off, str, len);
+    b->off += len;
+    return buf_id_d;
+}
+
+/* finish(buf) -> the accumulated content as an interned String; frees the buffer. */
+double yon_rt_buffer_finish(double buf_id_d) {
+    uint32_t idx = (uint32_t)buf_id_d;
+    if (idx == 0 || idx > YON_MAX_BUFFERS) return 0.0;
+    yon_buffer_t *b = &g_buffer_pool[idx - 1];
+    if (!b->in_use) return 0.0;
+    ds_ensure_init();
+    if (b->off + 1u > (size_t)UINT32_MAX) {   /* the content heap interns 32-bit lengths */
+        fprintf(stderr, "[YON-RT] FATAL: Buffer of %zu bytes exceeds the 4GB intern limit\n", b->off);
+        abort();
+    }
+    b->base[b->off] = 0;   /* in bounds: append/grow always keep off + 1 <= cap */
+    uint32_t slot = yon_xheap_put_chain(g_ds_heap, b->base, (uint32_t)(b->off + 1), YON_TAG_USER1);
+    munmap(b->base, b->cap);
+    b->base = NULL;
+    b->off = 0;
+    b->cap = 0;
+    b->in_use = 0;
     return (double)slot;
 }
 

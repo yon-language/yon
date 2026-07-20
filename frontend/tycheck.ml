@@ -3631,7 +3631,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    * them with `place`. *)
   let runtime_builtin = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH";
                          "List"; "Stream"; "Seq"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower"; "MerkleTree";
-                         "VoyagerList"; "String"] in
+                         "VoyagerList"; "String"; "Buffer"] in
   match t with
   | TyPrim n | TyPrimIn (n, _) ->
       if List.mem n primitives then ok ()
