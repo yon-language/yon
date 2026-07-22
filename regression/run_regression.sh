@@ -41,8 +41,12 @@ RTSET="$FT/yon_rt.o $FT/yon_mmap.o $FT/leech_orbits.o $FT/yon_arena.o $FT/yon_cu
 LOWER="--convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm --convert-arith-to-llvm --reconcile-unrealized-casts"
 EMIT="$FE/_build/default/yoner_emit_mlir.exe"
 OUT=/tmp/regression_now.txt; > "$OUT"
-for f in "$EXD"/*.yon; do
-  name=$(basename "$f" .yon)
+# An example is a single examples/<name>.yon OR (after the Fase-1b migration)
+# a directory examples/<name>/ with a yon.toml — the emit accepts both. The
+# old *.yon-only glob silently shrank the gate to ONE file when the corpus
+# became directory-projects.
+for f in "$EXD"/*.yon "$EXD"/*/; do
+  name=$(basename "$f" .yon); name=${name%/}
   rm -f /tmp/rr   # never execute a stale binary when a compile stage fails
   if ! "$EMIT" "$f" 2>/dev/null > /tmp/r.mlir || [ ! -s /tmp/r.mlir ]; then echo "EMITFAIL $name" >>"$OUT"; continue; fi
   if "$TOPOS" --algebra-verifier --lower-topos-extensions --lower-topos-to-standard /tmp/r.mlir 2>/dev/null >/tmp/r.s1 && \
