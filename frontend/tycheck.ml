@@ -2931,18 +2931,50 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
   | TyUniverse _ | TyHeytInt _ | TyMoveHandle _ | TyReductionHandle _
   | TyMorphHandle _ | TyViewHandle _ | TyWire _ | TyEl _ -> env
 
+(* A coproduct arm whose head names a place declared in this same program IS
+   that place (the arm is the subobject; its injection is subcontains, not a
+   fresh constructor). A head that does not resolve stays a positional
+   constructor, lowered exactly as today. One rule, no new AST. *)
+let arm_resolves_to_place (env : Tyenv.env) (v : variant) : place_decl option =
+  if v.v_args <> [] then None
+  else Tyenv.lookup_place env v.v_name
+
+(* Register a named sum `name = variants` (a place with arms): the sum
+   itself, any sums nested in constructor
+   argument types (the recursive self-reference `TyUser name` is not one of
+   those), and — place refactor stage 1 — the injections. An arm that resolves
+   to a declared place is that place, and its injection arm -> union rides the
+   SAME machinery `subcontains` rides: the pd_subcontains chain that
+   Tyenv.place_subcontains walks. Re-adding the arm's decl with
+   pd_subcontains = Some name (add_place shadows) IS the registration — no
+   parallel registry. An arm already inside a declared subcontains chain keeps
+   its chain (first wins; overwriting would break declared subsumption).
+   Census 2026-07-20: no corpus arm head names a place, so on the corpus the
+   injection fold is the identity. *)
+let register_named_sum (env : Tyenv.env) (name : string)
+    (variants : variant list) : Tyenv.env =
+  let env = Tyenv.add_named_sum env name variants in
+  let env =
+    List.fold_left
+      (fun acc v ->
+         List.fold_left register_sum_types_in_ty acc v.v_args)
+      env variants
+  in
+  List.fold_left
+    (fun acc v ->
+       match arm_resolves_to_place acc v with
+       | Some pd when pd.pd_subcontains = None && pd.pd_name <> name ->
+           Tyenv.add_place acc { pd with pd_subcontains = Some name }
+       | _ -> acc)
+    env variants
+
 let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   match td with
   | TopWorld wd -> Tyenv.add_world env wd
-  | TopType (name, variants, _) ->
-      (* Register the named sum, then any sums nested in its constructors'
-         argument types (the recursive self-reference `TyUser name` is not one
-         of those and needs no registration). *)
-      let env = Tyenv.add_named_sum env name variants in
-      List.fold_left
-        (fun acc v ->
-           List.fold_left register_sum_types_in_ty acc v.v_args)
-        env variants
+  | TopPlace pd when pd.pd_arms <> [] ->
+      (* a place with arms IS the named sum: the same registration, not a
+         field-place. One production, one rule. *)
+      register_named_sum env pd.pd_name pd.pd_arms
   | TopPlace pd ->
       let env =
         List.fold_left
@@ -3130,23 +3162,30 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
       } in
       Tyenv.add_fun env ft.ft_name fs
 
+(* The named sum's own check (a place with arms). The sum is registered by
+   register_decl; constructors are checked
+   structurally at their hit/match use sites (arity, exhaustive cover). Here we
+   only reject a duplicated constructor name, which would make dispatch
+   ambiguous. *)
+let check_named_sum (name : string) (variants : variant list) (loc : location)
+    : unit tc_result =
+  let rec dup seen = function
+    | [] -> ok ()
+    | v :: rest ->
+        if List.mem v.v_name seen then
+          err loc (Printf.sprintf
+            "inductive %s: duplicate constructor %s" name v.v_name)
+        else dup (v.v_name :: seen) rest
+  in
+  dup [] variants
+
 let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit tc_result =
   match td with
   | TopWorld _ -> ok ()
-  | TopType (name, variants, loc) ->
-      (* The named sum is registered (register_decl); its constructors are
-         checked structurally at their hit/match use sites (arity, exhaustive
-         cover). Here we only reject a duplicated constructor name, which would
-         make dispatch ambiguous. *)
-      let rec dup seen = function
-        | [] -> ok ()
-        | v :: rest ->
-            if List.mem v.v_name seen then
-              err loc (Printf.sprintf
-                "inductive %s: duplicate constructor %s" name v.v_name)
-            else dup (v.v_name :: seen) rest
-      in
-      dup [] variants
+  | TopPlace pd when pd.pd_arms <> [] ->
+      (* a place with arms IS the named sum: the same check, not the
+         field-place check. One production, one rule. *)
+      check_named_sum pd.pd_name pd.pd_arms pd.pd_loc
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn
   | TopMove md -> check_move_decl env ctx md
@@ -4410,7 +4449,10 @@ let infer_place_worlds (p : program) : (program, type_error) result =
        | Error _ -> acc
        | Ok decls ->
            match td with
-           | TopPlace pd when pd.pd_world = "__INFER" ->
+           | TopPlace pd when pd.pd_world = "__INFER" && pd.pd_arms = [] ->
+               (* a place with arms is a type declaration (the named sum): it
+                  lives in no world, so it never
+                  entered this rewrite. Only field-places get a world. *)
                (match infer_for pd with
                 | Ok w ->
                     Ok (TopPlace { pd with pd_world = w } :: decls)

@@ -357,7 +357,20 @@ let fmt_world (f : fmt) (wd : world_decl) : unit =
   f.indent <- f.indent - 1;
   line f "}"
 
+(* A coproduct arm as written in `this > A :U B(t, u)`. One printer for the one
+   production (fmt_place). *)
+let fmt_arm (v : variant) : string =
+  if v.v_args = [] then v.v_name
+  else Printf.sprintf "%s(%s)" v.v_name
+         (String.concat ", " (List.map fmt_ty v.v_args))
+
 let fmt_place (f : fmt) (pd : place_decl) : unit =
+  if pd.pd_arms <> [] && pd.pd_members = [] then
+    (* a place declared by the arms it is the coproduct of: the canonical
+       single-line canonical form. *)
+    line f (Printf.sprintf "place %s { this > %s }" pd.pd_name
+              (String.concat " :U " (List.map fmt_arm pd.pd_arms)))
+  else begin
   (* An `error E { ... }` reuses the place structure with pd_is_error. The surface
      never writes `in W` (the world is filesystem-inferred, pd_world = "__INFER");
      only emit `in W` if a concrete world was actually annotated. Clause order
@@ -389,6 +402,7 @@ let fmt_place (f : fmt) (pd : place_decl) : unit =
   ) pd.pd_members;
   f.indent <- f.indent - 1;
   line f "}"
+  end
 
 let fmt_functor (f : fmt) (ft : functor_decl) : unit =
   let params = String.concat ", "
@@ -457,15 +471,6 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
   (match td with
    | TopFun fn -> fmt_fun f fn
    | TopPlace pd -> fmt_place f pd
-   | TopType (name, variants, _) ->
-       (* Canonical named coproduct: the block place form `place X { this > A :U B }`.
-          A named sum IS a place declared by the arms it is the coproduct of. *)
-       let arm v =
-         if v.v_args = [] then v.v_name
-         else Printf.sprintf "%s(%s)" v.v_name
-                (String.concat ", " (List.map fmt_ty v.v_args)) in
-       line f (Printf.sprintf "place %s { this > %s }" name
-                 (String.concat " :U " (List.map arm variants)))
    | TopWorld wd -> fmt_world f wd
    | TopFunctor ft -> fmt_functor f ft
    | TopNatTransform nt -> fmt_nat_transform f nt

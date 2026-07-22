@@ -106,7 +106,6 @@ let wires_fun (fd : S.fun_decl) : (string * S.location) list =
 let wires_topdecl (td : S.top_decl) : (string * S.location) list =
   match td with
   | S.TopFun fd -> wires_fun fd
-  | S.TopType _ -> []   (* a named sum declares no wires *)
   | S.TopLet (_, e, _) -> wires_expr e
   | S.TopReduction rd ->
       List.concat_map (function

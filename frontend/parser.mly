@@ -599,29 +599,24 @@ place_decl:
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
     { let (members, variants) = mv in
-      match variants with
-      | [] ->
-          (* a record place: fields, cells, and its arrows (pushed already). *)
-          TopPlace { pd_name = name;
-                     pd_type_params = tparams;
-                     pd_world = "__INFER";
-                     pd_with_effects = false;
-                     pd_members = members;
-                     pd_over = over;
-                     pd_laws = [];
-                     pd_subcontains = ext;
-                     pd_is_error = false;
-                     pd_on_error = oerr;
-                     pd_loc = mk_loc $startpos $endpos }
-      | vs ->
-          (* a coproduct place `this > A :U B`: it IS the sum object, so reuse
-             the sum lowering (TopType). Its arrows are already pushed as
-             synthetic top-levels. Fields alongside arms (a sum of products)
-             are a later increment. *)
-          if members <> [] then
-            failwith ("place '" ^ name ^ "': `this >` arms cannot yet be mixed "
-                      ^ "with fields in one place");
-          TopType (name, vs, mk_loc $startpos $endpos) }
+      (* ONE production: a place, with or without arms. With arms it is the
+         disjoint union its arms declare (one place_decl, pd_arms). Fields alongside arms (a field on the
+         union = an obligation on every arm) are stage 3. *)
+      if variants <> [] && members <> [] then
+        failwith ("place '" ^ name ^ "': `this >` arms cannot yet be mixed "
+                  ^ "with fields in one place");
+      TopPlace { pd_name = name;
+                 pd_type_params = tparams;
+                 pd_arms = variants;
+                 pd_world = "__INFER";
+                 pd_with_effects = false;
+                 pd_members = members;
+                 pd_over = over;
+                 pd_laws = [];
+                 pd_subcontains = ext;
+                 pd_is_error = false;
+                 pd_on_error = oerr;
+                 pd_loc = mk_loc $startpos $endpos } }
   | PLACE name = IDENT
     tparams = type_params_opt
     over = option(over_clause)
@@ -631,6 +626,7 @@ place_decl:
     LBRACE members = field_or_op_list RBRACE
     { TopPlace { pd_name = name;
                  pd_type_params = tparams;
+                     pd_arms = [];
                  pd_world = "__INFER";
                  pd_with_effects = true;
                  pd_members = members;
@@ -649,6 +645,7 @@ error_decl:
     LBRACE members = field_and_cell_list RBRACE
     { { pd_name = name;
         pd_type_params = [];
+        pd_arms = [];
         pd_world = "__INFER";
         pd_with_effects = false;
         pd_members = members;
@@ -939,7 +936,7 @@ variant:
     { { v_name = name; v_args = args } }
 
 (* A named sum type is a coproduct place: `place Tree { this > Leaf :U Node(Tree, Tree) }`
-   (see place_decl, which returns TopType when a `this >` clause is present). The
+   (see place_decl, whose pd_arms carry the `this >` clause). The
    `variant` grammar above is shared with that clause; a constructor argument that
    names the type being defined (Tree) is a plain type_expr (TyUser "Tree"), so
    recursion is expressible. There is no separate `inductive`/`place X = ...` form. *)

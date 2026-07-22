@@ -404,6 +404,10 @@ type place_body_item =
 type place_decl = {
   pd_name : string;
   pd_type_params : string list;     (* generic parameters: `place Box<T> { value T }` *)
+  pd_arms : variant list;           (* the coproduct arms `this > A :U B` — the ways this
+                                       place is a disjoint union. [] = empty generator
+                                       set (the former "record"). One construct, not two
+                                       natures: a place with or without arms. *)
   pd_world : string;
   pd_with_effects : bool;
   pd_members : field_or_op list;
@@ -703,10 +707,6 @@ type top_decl =
   | TopWorld of world_decl
   | TopSpace of space_decl                            (* cross-Space *)
   | TopPlace of place_decl
-  | TopType of string * variant list * location
-      (* a NAMED sum type: `inductive Tree = Leaf | Node(Tree, Tree)`. Gives the
-         point-only HIT a name so a constructor argument can refer to the type
-         it defines (genuine recursion), which an anonymous inline sum cannot. *)
   | TopFun of fun_decl
   | TopMove of move_decl
   | TopView of view_decl

@@ -119,15 +119,16 @@ let build_sum_registry (p : S.program) : unit =
   sum_scrut_counter := 0;
   let scan_param (pm : S.param) = collect_sums_in_ty pm.S.param_ty in
   List.iter (function
-    | S.TopType (name, variants, _) ->
-        (* a named sum registers its constructors exactly like an inline one,
-           plus its NAME (so desugar_ty lowers it to the MerkleTree carrier) *)
-        Hashtbl.replace inductive_type_names name ();
-        collect_sums_in_ty (S.TySum variants)
     | S.TopFun fd ->
         List.iter scan_param fd.S.fn_params;
         (match fd.S.fn_return with Some t -> collect_sums_in_ty t | None -> ())
     | S.TopPlace pd ->
+        (* a place with arms IS the named sum (one production): register its
+           name + constructors exactly as an inline sum. *)
+        if pd.S.pd_arms <> [] then begin
+          Hashtbl.replace inductive_type_names pd.S.pd_name ();
+          collect_sums_in_ty (S.TySum pd.S.pd_arms)
+        end;
         List.iter (function
           | S.FoField field -> collect_sums_in_ty field.S.fd_ty
           | S.FoOp op ->
@@ -2424,9 +2425,6 @@ let delta_rule_of_fun (env : Tyenv.env) (fn : S.fun_decl) : C.term option =
 let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_result =
   match td with
   | S.TopImport _ -> res   (* import resolved physically pre-parse; no-op *)
-  | S.TopType _ -> res   (* a named sum: a compile-time type decl, no Core body.
-                            Its constructors are lowered at their use sites via
-                            the sum registry (build_sum_registry). *)
   | S.TopImportSym _ -> res   (* selective import: handled in 4b *)
   | S.TopImportFrom (_, _, sp, _) ->
       if List.mem sp res.space_imports then res
@@ -2437,6 +2435,10 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
        * world's generators. No longer no-op metadata. *)
       let core_wd = desugar_world_decl wd in
       { res with ctx = Reduce.declare_world res.ctx core_wd }
+  | S.TopPlace pd when pd.S.pd_arms <> [] -> res
+      (* a place with arms: the named sum — a
+         compile-time type decl, no Core body; constructors are lowered at
+         their use sites via the sum registry. *)
   | S.TopPlace pd ->
       let core_pd = desugar_place_decl pd in
       { res with ctx = Reduce.declare_place res.ctx core_pd }
@@ -2880,6 +2882,7 @@ let place_info = List.filter_map (function
              let synth_place : S.place_decl = {
                S.pd_name = vd.S.vw_name;
                pd_type_params = [];
+               pd_arms = [];
                pd_world = world;
                pd_with_effects = false;
                pd_members = List.map (fun (f, ty, _) ->

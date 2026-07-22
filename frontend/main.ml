@@ -502,7 +502,7 @@ let test_catt_place_equiv () =
   Printf.printf "\n=== Test 32: CATT_R_Yon (place equivalence) ===\n";
   let mk_place name fields = {
     Surface_ast.pd_name = name;
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "W";
     pd_with_effects = false;
     pd_members = List.map (fun (n, t) -> Surface_ast.FoField {
@@ -1600,7 +1600,7 @@ let test_place_visibility () =
   } in
   let pd = {
     pd_name = "Account";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "Banking";
     pd_with_effects = true;
     pd_members = [
@@ -1654,7 +1654,7 @@ let test_place_relative_unknown () =
   let open Surface_ast in
   let acc_pd = {
     pd_name = "Account";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "Banking";
     pd_with_effects = false;
     pd_members = [
@@ -1708,7 +1708,7 @@ let test_place_proposition_propagation () =
   Printf.printf "\n=== Test 79: Heyting AND propagation through visibility ===\n";
   let open Surface_ast in
   let pd_a = {
-    pd_name = "A"; pd_type_params = []; pd_world = "W"; pd_with_effects = false;
+    pd_name = "A"; pd_type_params = []; pd_arms = []; pd_world = "W"; pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "x"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
@@ -1720,7 +1720,7 @@ let test_place_proposition_propagation () =
     pd_loc = dummy_loc;
   } in
   let pd_b = {
-    pd_name = "B"; pd_type_params = []; pd_world = "W"; pd_with_effects = false;
+    pd_name = "B"; pd_type_params = []; pd_arms = []; pd_world = "W"; pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "y"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
@@ -1789,7 +1789,7 @@ let test_excluded_middle_failure () =
   Printf.printf "\n=== Test 80: Excluded middle fails (Yon is intuitionistic) ===\n";
   let open Surface_ast in
   let pd = {
-    pd_name = "Restricted"; pd_type_params = []; pd_world = "W"; pd_with_effects = false;
+    pd_name = "Restricted"; pd_type_params = []; pd_arms = []; pd_world = "W"; pd_with_effects = false;
     pd_members = [];   (* sees nothing *)
     pd_over = None;
     pd_laws = [];
@@ -2572,7 +2572,7 @@ let test_place_isomorphism () =
   Printf.printf "\n=== Test 132: place isomorphism ===\n";
   let p1 = {
     Surface_ast.pd_name = "P1";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "W";
     pd_with_effects = false;
     pd_members = [
@@ -2588,7 +2588,7 @@ let test_place_isomorphism () =
   } in
   let p2 = {
     Surface_ast.pd_name = "P2";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "W";
     pd_with_effects = false;
     pd_members = [
@@ -2623,7 +2623,7 @@ let test_place_isomorphism_negative () =
   Printf.printf "\n=== Test 133: place isomorphism (negative) ===\n";
   let p1 = {
     Surface_ast.pd_name = "P1";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "W";
     pd_with_effects = false;
     pd_members = [
@@ -2638,7 +2638,7 @@ let test_place_isomorphism_negative () =
   } in
   let p2 = {
     Surface_ast.pd_name = "P2";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "W";
     pd_with_effects = false;
     pd_members = [
@@ -3035,7 +3035,7 @@ let test_cell_custom_in_place () =
   let loc = Surface_ast.dummy_loc in
   let p_circle : Surface_ast.place_decl = {
     pd_name = "Circle";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "TopologicalWorld";
     pd_with_effects = false;
     pd_members = [
@@ -3136,7 +3136,7 @@ let test_slice_place () =
   let loc = Surface_ast.dummy_loc in
   let p : Surface_ast.place_decl = {
     pd_name = "Order";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "Shop";
     pd_with_effects = false;
     pd_members = [
@@ -3439,7 +3439,7 @@ let test_default_world_inference () =
   Printf.printf "\n=== Test 176: default world inference ===\n";
   let pd : Surface_ast.place_decl = {
     pd_name = "Account";
-    pd_type_params = [];
+    pd_type_params = []; pd_arms = [];
     pd_world = "__INFER";  (* marker per inferenza *)
     pd_with_effects = false;
     pd_members = [];
