@@ -34,3 +34,40 @@ def test_union_field_obligation_reject_pins_the_obligation():
     assert "obligation on every arm" in msg and "balance" in msg, (
         f"gemello rosso ma per il motivo SBAGLIATO (atteso l'obbligo del "
         f"campo-sull'unione):\n{msg[-400:]}")
+
+
+# ---- stadio 4: clausole nel corpo, `error` come zucchero ----------------
+
+def _emit(path):
+    return subprocess.run([str(EMIT), str(path)], capture_output=True, timeout=60)
+
+
+def test_body_clause_is_the_header_clause(tmp_path):
+    """`over` scritto come riga del corpo emette MLIR byte-identico all'header."""
+    import shutil
+    src = ROOT / "examples" / "c_place_over"
+    twin = tmp_path / "twin"
+    shutil.copytree(src, twin)
+    (twin / "Slice.yon").write_text("place Slice {\n  over Base\n  weight number\n}\n")
+    header = _emit(src)
+    body = _emit(twin)
+    assert header.returncode == 0 and body.returncode == 0, body.stderr[-300:]
+    assert header.stdout == body.stdout, "body-clause emette MLIR diverso dall'header"
+
+
+def test_duplicate_clause_rejected(tmp_path):
+    import shutil
+    src = ROOT / "examples" / "c_place_over"
+    twin = tmp_path / "twin"
+    shutil.copytree(src, twin)
+    (twin / "Slice.yon").write_text(
+        "place Slice over Base {\n  over Base\n  weight number\n}\n")
+    r = _emit(twin)
+    assert r.returncode != 0
+    assert b"declared both in the header and in the body" in r.stderr + r.stdout
+
+
+def test_error_is_sugar_for_marked_place():
+    """error_decl e' morta: `error E ...` passa dalla produzione unica del place."""
+    r = _emit(ROOT / "examples" / "error_morphism")
+    assert r.returncode == 0, r.stderr[-300:]
