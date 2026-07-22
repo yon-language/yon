@@ -301,7 +301,6 @@ top_decl:
   | IMPORT q = QIDENT FROM sp = IDENT  { let (m,n) = split_qident q in
                                          TopImportFrom (m, n, sp, mk_loc $startpos $endpos) }
   | t = place_decl                    { t }
-  | ed = error_decl                   { TopPlace ed }
   | fd = fun_decl                     { TopFun fd }
   | md = move_decl                    { TopMove md }
   | vd = view_decl                    { TopView vd }
@@ -591,18 +590,50 @@ top_let:
 
 /* ─── Place declaration ─────────────────────────────────────────────── */
 
+%inline place_kw:
+  | PLACE     { false }
+  | ERROR_KW  { true }   /* `error E { ... }` = sugar: a place marked is_error */
+
 place_decl:
-  | PLACE name = IDENT
+  | is_err = place_kw name = IDENT
     tparams = type_params_opt
     over = option(over_clause)
     ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
-    { let (members, variants) = mv in
-      (* ONE production: a place, with or without arms. With arms it is the
-         disjoint union its arms declare (one place_decl, pd_arms); a field
-         alongside arms is legal — a field on the union is an OBLIGATION on
-         every arm, checked by the tycheck (check_union_members). *)
+    { let (members, variants, clauses) = mv in
+      (* ONE production: a place, with or without arms; `error` is the same
+         production marked. The canonical clauses may be written in the header
+         (deprecated synonym) or as body lines (stage 4); the two merge here
+         and a duplicate is rejected. *)
+      let merge what header body =
+        match header, body with
+        | Some _, Some _ ->
+            failwith ("place '" ^ name ^ "': " ^ what
+                      ^ " declared both in the header and in the body")
+        | Some x, None | None, Some x -> Some x
+        | None, None -> None in
+      let fold_clause what sel =
+        List.fold_left (fun acc c ->
+          match sel c with
+          | None -> acc
+          | Some x ->
+              (match acc with
+               | Some _ -> failwith ("place '" ^ name ^ "': " ^ what
+                                     ^ " declared twice in the body")
+               | None -> Some x)) None clauses in
+      let b_over = fold_clause "over" (function PcOver x -> Some x | _ -> None) in
+      let b_sub  = fold_clause "subcontains" (function PcSubcontains x -> Some x | _ -> None) in
+      let b_oerr = fold_clause "on error" (function PcOnError x -> Some x | _ -> None) in
+      let over = merge "over" over b_over in
+      let ext  = merge "subcontains" ext b_sub in
+      let oerr = merge "on error" oerr b_oerr in
+      if is_err && (over <> None || oerr <> None) then
+        failwith ("error '" ^ name ^ "': an error place takes only "
+                  ^ "subcontains (no over / on error)");
+      if is_err && variants <> [] then
+        failwith ("error '" ^ name ^ "': an error place declares fields, "
+                  ^ "not `this >` arms");
       TopPlace { pd_name = name;
                  pd_type_params = tparams;
                  pd_arms = variants;
@@ -612,7 +643,7 @@ place_decl:
                  pd_over = over;
                  pd_laws = [];
                  pd_subcontains = ext;
-                 pd_is_error = false;
+                 pd_is_error = is_err;
                  pd_on_error = oerr;
                  pd_loc = mk_loc $startpos $endpos } }
   | PLACE name = IDENT
@@ -635,24 +666,6 @@ place_decl:
                  pd_on_error = oerr;
                  pd_loc = mk_loc $startpos $endpos } }
 
-(* error E (subcontains Base)? { fields } — an error place. Reuses
- * place_decl with pd_is_error=true. The target of the `on error` morphism. *)
-error_decl:
-  | ERROR_KW name = IDENT
-    ext = option(subcontains_clause)
-    LBRACE members = field_and_cell_list RBRACE
-    { { pd_name = name;
-        pd_type_params = [];
-        pd_arms = [];
-        pd_world = "__INFER";
-        pd_with_effects = false;
-        pd_members = members;
-        pd_over = None;
-        pd_laws = [];
-        pd_subcontains = ext;
-        pd_is_error = true;
-        pd_on_error = None;
-        pd_loc = mk_loc $startpos $endpos } }
 
 (* Slice category: a place over X. The inhabitants of the place carry a
  * canonical reference to an instance of X. *)
@@ -673,12 +686,6 @@ on_error_clause:
                   ^ tag ^ " error'");
       e }
 
-(* field-only-or-cell list: a place without "with effects" allows fields and
- * custom cells, but not operations. The cells are structural declarations (the
- * cellular composition of the place), not effects. *)
-field_and_cell_list:
-  | items = list(field_or_cell)             { items }
-
 field_or_cell:
   | f = field_decl                          { FoField f }
   | c = cell_decl                           { FoCell c }
@@ -694,7 +701,9 @@ place_member_list:
         List.filter_map (function PbiMember fc -> Some fc | _ -> None) items in
       let variants =
         List.concat_map (function PbiVariants vs -> vs | _ -> []) items in
-      (members, variants) }
+      let clauses =
+        List.filter_map (function PbiClause c -> Some c | _ -> None) items in
+      (members, variants, clauses) }
 
 (* `this > A :U B :U ...` — the coproduct clause. It names the arms this place
    is the sum of; each arm is a variant (an existing place, optionally with a
@@ -705,6 +714,15 @@ variant_clause:
 place_member:
   | fc = field_or_cell                    { PbiMember fc }
   | vs = variant_clause                   { PbiVariants vs }
+  /* stage 4: the canonical clauses as body lines. `on` stays a bare IDENT
+     (the header's contextual-keyword tactic), validated in the action. */
+  | OVER base = IDENT                     { PbiClause (PcOver base) }
+  | SUBCONTAINS base = IDENT              { PbiClause (PcSubcontains base) }
+  | tag = IDENT ERROR_KW e = IDENT
+    { if tag <> "on" then
+        failwith ("expected 'on error' clause in place body, got '"
+                  ^ tag ^ " error'");
+      PbiClause (PcOnError e) }
   | fd = fun_decl                         { Parser_state.push_decl (TopFun fd); PbiArrow }
   | md = move_decl                        { Parser_state.push_decl (TopMove md); PbiArrow }
   | fct = functor_decl                    { Parser_state.push_decl fct; PbiArrow }

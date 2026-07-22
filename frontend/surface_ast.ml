@@ -396,9 +396,19 @@ and cell_decl = {
    to the top level as a side effect by the parser, so they carry no payload
    here. The parser splits these back into members and variants: a place with
    variants and no fields IS its coproduct object and lowers like a sum. *)
+(* A canonical clause written as a BODY line (stage 4): `over X`,
+   `subcontains B`, `on error E`. The header spelling stays legal as a
+   deprecated synonym; the two merge in the parser action, duplicates are
+   rejected. *)
+type place_clause =
+  | PcOver of string
+  | PcSubcontains of string
+  | PcOnError of string
+
 type place_body_item =
   | PbiMember of field_or_op
   | PbiVariants of variant list
+  | PbiClause of place_clause
   | PbiArrow
 
 type place_decl = {
