@@ -20,8 +20,12 @@ FMT = ROOT / "frontend" / "_build" / "default" / "yonfmt.exe"
 LSP = ROOT / "frontend" / "_build" / "default" / "yon_lsp.exe"
 
 CORPUS = sorted(
-    list((ROOT / "examples").rglob("*.yon"))
-    + list((ROOT / "regression" / "yon_tests").rglob("*.yon"))
+    p for p in (list((ROOT / "examples").rglob("*.yon"))
+                + list((ROOT / "regression" / "yon_tests").rglob("*.yon")))
+    # union_field_obligation is the place-refactor specimen GATE (pinned red
+    # by test_place_refactor.py): it does not parse by design, so it is not
+    # part of the formatting corpus.
+    if "union_field_obligation" not in p.parts
 )
 
 

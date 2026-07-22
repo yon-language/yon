@@ -1,0 +1,5 @@
+[package]
+name = "union_field_obligation"
+
+[runtime]
+backend = "memory"

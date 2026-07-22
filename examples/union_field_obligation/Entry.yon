@@ -1,0 +1,12 @@
+// SPECIMEN del refactor place: bracci-place + campo sull'unione.
+// Oggi DEVE essere rifiutato (parser.mly failwith arm+campi).
+// Diventerà verde allo stadio 3. NB: `when` del brief -> `moment`
+// (`when` è una keyword, lexer.mll:162, avrebbe dato syntax error).
+place Entry { }
+place Opened { initial number }
+place Closed { moment number }
+place Account {
+  this > Opened :U Closed
+  balance number
+}
+fun main(): number { return 0 }
