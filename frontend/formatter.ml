@@ -396,9 +396,8 @@ let fmt_place (f : fmt) (pd : place_decl) : unit =
   let over = match pd.pd_over with Some b -> " over " ^ b | None -> "" in
   let subcontains = match pd.pd_subcontains with Some b -> " subcontains " ^ b | None -> "" in
   let on_error = match pd.pd_on_error with Some e -> " on error " ^ e | None -> "" in
-  let effects = if pd.pd_with_effects then " with effects" else "" in
-  line f (Printf.sprintf "%s %s%s%s%s%s%s {"
-            kw pd.pd_name world over subcontains on_error effects);
+  line f (Printf.sprintf "%s %s%s%s%s%s {"
+            kw pd.pd_name world over subcontains on_error);
   f.indent <- f.indent + 1;
   List.iter (fun m ->
     match m with

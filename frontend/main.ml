@@ -504,7 +504,6 @@ let test_catt_place_equiv () =
     Surface_ast.pd_name = name;
     pd_type_params = []; pd_arms = [];
     pd_world = "W";
-    pd_with_effects = false;
     pd_members = List.map (fun (n, t) -> Surface_ast.FoField {
       fd_name = n; fd_ty = t; fd_loc = Surface_ast.dummy_loc;
     }) fields;
@@ -1602,7 +1601,6 @@ let test_place_visibility () =
     pd_name = "Account";
     pd_type_params = []; pd_arms = [];
     pd_world = "Banking";
-    pd_with_effects = true;
     pd_members = [
       mk_field "balance" (TyPrim "number");
       mk_field "owner" (TyUser "Person");
@@ -1656,7 +1654,6 @@ let test_place_relative_unknown () =
     pd_name = "Account";
     pd_type_params = []; pd_arms = [];
     pd_world = "Banking";
-    pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "balance"; fd_ty = TyPrim "number";
                 fd_loc = dummy_loc };
@@ -1708,7 +1705,7 @@ let test_place_proposition_propagation () =
   Printf.printf "\n=== Test 79: Heyting AND propagation through visibility ===\n";
   let open Surface_ast in
   let pd_a = {
-    pd_name = "A"; pd_type_params = []; pd_arms = []; pd_world = "W"; pd_with_effects = false;
+    pd_name = "A"; pd_type_params = []; pd_arms = []; pd_world = "W";
     pd_members = [
       FoField { fd_name = "x"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
@@ -1720,7 +1717,7 @@ let test_place_proposition_propagation () =
     pd_loc = dummy_loc;
   } in
   let pd_b = {
-    pd_name = "B"; pd_type_params = []; pd_arms = []; pd_world = "W"; pd_with_effects = false;
+    pd_name = "B"; pd_type_params = []; pd_arms = []; pd_world = "W";
     pd_members = [
       FoField { fd_name = "y"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
@@ -1789,7 +1786,7 @@ let test_excluded_middle_failure () =
   Printf.printf "\n=== Test 80: Excluded middle fails (Yon is intuitionistic) ===\n";
   let open Surface_ast in
   let pd = {
-    pd_name = "Restricted"; pd_type_params = []; pd_arms = []; pd_world = "W"; pd_with_effects = false;
+    pd_name = "Restricted"; pd_type_params = []; pd_arms = []; pd_world = "W";
     pd_members = [];   (* sees nothing *)
     pd_over = None;
     pd_laws = [];
@@ -2574,7 +2571,6 @@ let test_place_isomorphism () =
     Surface_ast.pd_name = "P1";
     pd_type_params = []; pd_arms = [];
     pd_world = "W";
-    pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "a"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
       FoField { fd_name = "b"; fd_ty = TyPrim "text"; fd_loc = Surface_ast.dummy_loc };
@@ -2590,7 +2586,6 @@ let test_place_isomorphism () =
     Surface_ast.pd_name = "P2";
     pd_type_params = []; pd_arms = [];
     pd_world = "W";
-    pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "foo"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
       FoField { fd_name = "bar"; fd_ty = TyPrim "text"; fd_loc = Surface_ast.dummy_loc };
@@ -2625,7 +2620,6 @@ let test_place_isomorphism_negative () =
     Surface_ast.pd_name = "P1";
     pd_type_params = []; pd_arms = [];
     pd_world = "W";
-    pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "a"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
     ];
@@ -2640,7 +2634,6 @@ let test_place_isomorphism_negative () =
     Surface_ast.pd_name = "P2";
     pd_type_params = []; pd_arms = [];
     pd_world = "W";
-    pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "x"; fd_ty = TyPrim "text"; fd_loc = Surface_ast.dummy_loc };
     ];
@@ -3037,7 +3030,6 @@ let test_cell_custom_in_place () =
     pd_name = "Circle";
     pd_type_params = []; pd_arms = [];
     pd_world = "TopologicalWorld";
-    pd_with_effects = false;
     pd_members = [
       (* Implicit: field `base` as a 0-cell *)
       FoField {
@@ -3138,7 +3130,6 @@ let test_slice_place () =
     pd_name = "Order";
     pd_type_params = []; pd_arms = [];
     pd_world = "Shop";
-    pd_with_effects = false;
     pd_members = [
       FoField { fd_name = "amount"; fd_ty = TyPrim "number"; fd_loc = loc };
     ];
@@ -3441,7 +3432,6 @@ let test_default_world_inference () =
     pd_name = "Account";
     pd_type_params = []; pd_arms = [];
     pd_world = "__INFER";  (* marker per inferenza *)
-    pd_with_effects = false;
     pd_members = [];
     pd_over = None;
     pd_laws = [];

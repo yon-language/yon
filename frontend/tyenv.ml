@@ -488,7 +488,6 @@ let with_builtins (env : env) : env =
     pd_type_params = [];
     pd_arms = [];
     pd_world = "__Builtin";
-    pd_with_effects = true;
     pd_members = [FoOp output_op_decl];
     pd_over = None;
     pd_laws = [];

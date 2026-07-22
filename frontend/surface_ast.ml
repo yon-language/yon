@@ -419,7 +419,6 @@ type place_decl = {
                                        set (the former "record"). One construct, not two
                                        natures: a place with or without arms. *)
   pd_world : string;
-  pd_with_effects : bool;
   pd_members : field_or_op list;
   pd_over : string option;          (* slice category C/X: a place fibered over X *)
   pd_laws : string list;            (* algebraic laws declared on the place *)

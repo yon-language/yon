@@ -51,11 +51,11 @@ spaces  = ["sala", "cucina"]
 
 An order is a file, `sala/Order.yon`. Its fields are its sections; its
 `operation`s are the things a guest can do to it, which is why it is declared
-`with effects`:
+operations declared inline on the place:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place Order with effects {
+place Order {
   table number
   total number
   operation add_item(price: number): number

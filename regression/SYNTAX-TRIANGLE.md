@@ -9,7 +9,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `regression/CANONICAL-FORMS.md`. Regenerate this file with
 `python regression/test_syntax_triangle.py`.
 
-- lexer keywords: **128**
+- lexer keywords: **127**
 - corpus files: **347**
 - CodeWindows: **25**  (project **13**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **35**
@@ -40,7 +40,6 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `do` | `DO_KW` | 6 | yes | exercised |
 | `drop` | `DROP` | 1 | yes | exercised |
 | `each` | `EACH` | 1 | yes | exercised |
-| `effects` | `EFFECTS` | 4 | yes | exercised |
 | `el_match` | `EL_MATCH` | 1 | yes | exercised |
 | `else` | `ELSE_KW` | 33 | yes | exercised |
 | `emit` | `EMIT` | 26 | yes | exercised |
@@ -146,5 +145,5 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `where` | `WHERE` | 57 | yes | exercised |
 | `while` | `WHILE_KW` | 4 | yes | exercised |
 | `wire` | `WIRE` | 5 | yes | exercised |
-| `with` | `WITH` | 8 | yes | exercised |
+| `with` | `WITH` | 4 | yes | exercised |
 

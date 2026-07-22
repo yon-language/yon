@@ -82,7 +82,7 @@ items, and a kitchen ticket can be retagged:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place Order with effects {
+place Order {
   table number
   total number
   operation add_item(price: number): number
@@ -134,7 +134,7 @@ compiler checks it. `sala/Tally.yon`:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place Tally with effects {
+place Tally {
   total number
   operation add(a: number, b: number): number uses algebra Additive
   law commutative

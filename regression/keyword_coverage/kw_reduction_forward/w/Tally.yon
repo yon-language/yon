@@ -1,2 +1,2 @@
-place Tally with effects { total number
+place Tally { total number
   operation add(x: number): number }
