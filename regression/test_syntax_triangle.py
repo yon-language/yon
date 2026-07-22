@@ -86,10 +86,7 @@ def corpus_files() -> list[Path]:
     for root in CORPUS_ROOTS:
         if root.exists():
             files += list(root.glob("**/*.yon"))
-    # union_field_obligation is the place-refactor specimen GATE (pinned red
-    # by test_place_refactor.py): it does not parse by design, so its tokens
-    # must not count as corpus keyword exercise.
-    return [p for p in files if "union_field_obligation" not in p.parts]
+    return files
 
 
 def corpus_token_counts() -> dict[str, int]:

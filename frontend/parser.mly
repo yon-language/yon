@@ -600,11 +600,9 @@ place_decl:
     LBRACE mv = place_member_list RBRACE
     { let (members, variants) = mv in
       (* ONE production: a place, with or without arms. With arms it is the
-         disjoint union its arms declare (one place_decl, pd_arms). Fields alongside arms (a field on the
-         union = an obligation on every arm) are stage 3. *)
-      if variants <> [] && members <> [] then
-        failwith ("place '" ^ name ^ "': `this >` arms cannot yet be mixed "
-                  ^ "with fields in one place");
+         disjoint union its arms declare (one place_decl, pd_arms); a field
+         alongside arms is legal — a field on the union is an OBLIGATION on
+         every arm, checked by the tycheck (check_union_members). *)
       TopPlace { pd_name = name;
                  pd_type_params = tparams;
                  pd_arms = variants;

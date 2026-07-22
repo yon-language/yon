@@ -32,11 +32,6 @@ def _projects():
             d = os.path.dirname(toml)
             if os.path.basename(d) == "project_min":
                 continue
-            # union_field_obligation is the place-refactor specimen GATE
-            # (pinned red by test_place_refactor.py), not a corpus example:
-            # it must NOT be collected as a compile-green project.
-            if os.path.basename(d) == "union_field_obligation":
-                continue
             dirs.add(d)
     return sorted(dirs)
 

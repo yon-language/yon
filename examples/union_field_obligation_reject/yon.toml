@@ -1,0 +1,9 @@
+[package]
+name = "union_field_obligation_reject"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"

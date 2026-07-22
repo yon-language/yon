@@ -1,5 +1,9 @@
 [package]
 name = "union_field_obligation"
 
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
 [runtime]
 backend = "memory"
