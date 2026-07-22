@@ -962,12 +962,19 @@ fun gen_fundef_text(name: number, arity: number, body: Term, reg: CtorReg): Stri
       String.concat(String.concat("    return ", er_ssa(eb)), " : f64\n  }\n")))
 }
 /* emit every function except main (main becomes the i32 entry, below). */
-fun motGF(fs: FunList): String { return "" }
-fun gen_funs(fs: FunList, main_hash: number, reg: CtorReg): String {
-  return hit_elim(motGF,
-    [ FlNil => "",
+/* Whole-program emission is the hot path: a naive concat fold interns a
+ * growing prefix at every step (O(N^2) over the total output). Bump-append
+ * each function's text into a Buffer (its own mmap arena) and intern ONCE
+ * at finish -> O(N). gen_funs keeps its String signature. */
+fun motGFInto(fs: FunList): Buffer { return Buffer.make(0) }
+fun gen_funs_into(buf: Buffer, fs: FunList, main_hash: number, reg: CtorReg): Buffer {
+  return hit_elim(motGFInto,
+    [ FlNil => buf,
       FlCons(f, rest) =>
-        String.concat(gen_one_fun(f, main_hash, reg), gen_funs(rest, main_hash, reg)) ], fs)
+        gen_funs_into(Buffer.append(buf, gen_one_fun(f, main_hash, reg)), rest, main_hash, reg) ], fs)
+}
+fun gen_funs(fs: FunList, main_hash: number, reg: CtorReg): String {
+  return Buffer.finish(gen_funs_into(Buffer.make(0), fs, main_hash, reg))
 }
 fun motFunToStr(f: Fun): String { return "" }
 fun gen_one_fun(f: Fun, main_hash: number, reg: CtorReg): String {
@@ -1022,9 +1029,16 @@ fun rt_file_symbol(op: number): String {
     else if op == hash_of("append_text") then "yon_rt_file_append_text"
     else ""
 }
+fun rt_buffer_symbol(op: number): String {
+  return if op == hash_of("make") then "yon_rt_buffer_new"
+    else if op == hash_of("append") then "yon_rt_buffer_append"
+    else if op == hash_of("finish") then "yon_rt_buffer_finish"
+    else ""
+}
 fun rt_symbol(m: number, op: number): String {
   return if m == hash_of("String") then rt_string_symbol(op)
     else if m == hash_of("File") then rt_file_symbol(op)
+    else if m == hash_of("Buffer") then rt_buffer_symbol(op)
     else ""
 }
 /* qualified call: MODULE '.' OP '(' args ')'. l at MODULE (an ident). */
@@ -1033,9 +1047,23 @@ fun qcall_with_args(sym: String, p: Parse): Parse {
   return hit_elim(motQParse, [ PErr => hit(PErr),
     POk(spine, rest) => hit(POk, hit(TRtCall, sym, spine), rest) ], p)
 }
+fun motNullary(p: Parse): Parse { return hit(PErr) }
+fun drop_dummy_spine(p: Parse): Parse {
+  return hit_elim(motNullary, [ PErr => hit(PErr),
+    POk(spine, rest) => hit(POk, hit(TNoArg), rest) ], p)
+}
 fun parse_qcall(modh: number, l: TokList, env: NameEnv): Parse {
-  be sym holds rt_symbol(modh, head_num(tail(tail(l))))          /* op ident hash */
-  return qcall_with_args(sym, parse_args(tail(tail(tail(tail(l)))), env))  /* skip MODULE . OP ( */
+  be oph holds head_num(tail(tail(l)))                           /* op ident hash */
+  be sym holds rt_symbol(modh, oph)
+  be args holds parse_args(tail(tail(tail(tail(l)))), env)       /* skip MODULE . OP ( */
+  /* Buffer.make(0): the surface takes a dummy arg (nullary-call convention),
+   * but the runtime symbol is 0-ary — drop the parsed dummy so the call
+   * emits as @yon_rt_buffer_new(). */
+  return if modh == hash_of("Buffer")
+    then if oph == hash_of("make")
+      then qcall_with_args(sym, drop_dummy_spine(args))
+      else qcall_with_args(sym, args)
+    else qcall_with_args(sym, args)
 }
 /* string literal -> from_char/concat chain. Strings are content-addressed, so
  * this interns to the SAME handle as yonc's global+string_lit: the differential
@@ -1119,6 +1147,12 @@ fun main_tail(result_ssa: String, ctr: number): String {
 /* the merkle runtime functions as EXTERNAL declarations (no body); the linker
  * resolves them to the real XLeech2 implementation in yon_rt.o. hit/hit_elim call
  * these yon_rt_merkle_* symbols directly (this is what yonc's own emit does). */
+/* Buffer runtime functions as external declarations (resolved from yon_rt.o). */
+fun buffer_stubs(): String {
+  return String.concat("  func.func private @yon_rt_buffer_new() -> f64\n",
+    String.concat("  func.func private @yon_rt_buffer_append(f64, f64) -> f64\n",
+                  "  func.func private @yon_rt_buffer_finish(f64) -> f64\n"))
+}
 fun merkle_stubs(): String {
   return "  func.func private @yon_rt_merkle_leaf(f64) -> f64\n  func.func private @yon_rt_merkle_node2(f64, f64, f64) -> f64\n  func.func private @yon_rt_merkle_label(f64) -> f64\n  func.func private @yon_rt_merkle_child(f64, f64) -> f64\n"
 }
@@ -1137,11 +1171,12 @@ fun main(): number {
   be full   holds String.concat(mod_head(),
                     String.concat(merkle_stubs(),
                     String.concat(string_stubs(),
+                    String.concat(buffer_stubs(),
                       String.concat(helpers,
                         String.concat(main_head(),
                           String.concat(er_code(rmain),
                             String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
-                              stubs())))))))
+                              stubs()))))))))
   be _w holds File.write_text("/tmp/yon_selfhost_out.mlir", full)
   return String.length(full)
 }
