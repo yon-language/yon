@@ -63,7 +63,6 @@ let tok_name = function
   | Parser.BY -> "BY"
   | Parser.FROM -> "FROM"
   | Parser.WITH -> "WITH"
-  | Parser.EFFECTS -> "EFFECTS"
   | Parser.UNIFIES -> "UNIFIES"
   | Parser.REQUIRES -> "REQUIRES"
   | Parser.WIRE -> "WIRE"

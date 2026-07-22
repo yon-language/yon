@@ -1,4 +1,4 @@
-place Counter with effects {
+place Counter {
   count number
   operation tick(n: number): number
 }

@@ -2901,6 +2901,12 @@ let place_field_subset (env : Tyenv.env) (ctx : Reduce.ctx)
        | None -> false)
     super_fields
 
+(* A place "has effects" iff its arrow list SAYS so: it declares at least one
+   operation. There is no flag: the effectfulness of a place is a theorem of
+   its member list, not a separate declaration (fork 3 = inline, stage 5). *)
+let place_has_effects (pd : place_decl) : bool =
+  List.exists (function FoOp _ -> true | _ -> false) pd.pd_members
+
 (* p_sub_name <:_w p_super_name: p_sub_name has all fields of p_super_name. *)
 let place_is_subtype (env : Tyenv.env) (ctx : Reduce.ctx)
     (p_super_name : string) (p_sub_name : string) : bool =
@@ -3969,7 +3975,7 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
        | None -> err fn.fn_loc
            (Printf.sprintf "function %s visits unknown place %s" fn.fn_name eff)
        | Some pd ->
-           if pd.pd_with_effects then ok ()
+           if place_has_effects pd then ok ()
            else err fn.fn_loc
              (Printf.sprintf "function %s visits %s but %s has no operations"
                 fn.fn_name eff eff))
@@ -4061,7 +4067,7 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
                        "function %s visits unknown place %s" fn.fn_name eff }
                    :: !errs
        | Some pd ->
-           if not pd.pd_with_effects then
+           if not (place_has_effects pd) then
              errs := { err_loc = fn.fn_loc;
                        err_msg = Printf.sprintf
                          "function %s visits %s but %s has no operations"
@@ -4087,7 +4093,7 @@ and check_reduction_decl (env : Tyenv.env) (ctx : Reduce.ctx) (rd : reduction_de
   let* target = match Tyenv.lookup_place env rd.rd_of with
     | None -> err rd.rd_loc
         (Printf.sprintf "reduction %s targets unknown place %s" rd.rd_name rd.rd_of)
-    | Some p when not p.pd_with_effects ->
+    | Some p when not (place_has_effects p) ->
         err rd.rd_loc
           (Printf.sprintf "reduction %s targets place %s which has no effects"
              rd.rd_name rd.rd_of)

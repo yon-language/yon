@@ -27,7 +27,7 @@ A Yon program is a list of these.
 
 #### `place`
 
-An object living in a world. A place is declared in one of two shapes, both inside `place Name { ... }`. As a **product**: named fields (`side := number`, or the bare `side number`), plus operations when declared `with effects`; instances are built with `new P { field value }`. As a **coproduct**: a `this >` clause naming the arms it is the sum of (`place Tree { this > Leaf(number) :U Node(Tree, Tree) }`). One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
+An object living in a world. A place is declared in one of two shapes, both inside `place Name { ... }`. As a **product**: named fields (`side := number`, or the bare `side number`), plus operations (mediated arrows, listed inline with the fields); instances are built with `new P { field value }`. As a **coproduct**: a `this >` clause naming the arms it is the sum of (`place Tree { this > Leaf(number) :U Node(Tree, Tree) }`). One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
 
 #### `this`
 
@@ -263,11 +263,11 @@ A representable functor on a place: the declaration `view V of P { show ... }` (
 
 #### `reduction`
 
-Folds a structure to a value. Declared `reduction ... of P { on op { } be seed holds e }` against a place with effects, or inline `reduction(acc, x) => e of P`.
+Folds a structure to a value. Declared `reduction ... of P { on op { } be seed holds e }` against a place that declares operations, or inline `reduction(acc, x) => e of P`.
 
 #### `operation`
 
-A method signature exposed by a place `with effects`; it carries an effect and may bind to a certified algebra with `uses algebra`.
+A method signature declared inline on a place; it carries an effect and may bind to a certified algebra with `uses algebra`.
 
 #### `cell`
 
@@ -429,7 +429,7 @@ Names a space's fold function: `with fold "sum_f64"`.
             run="yonc verify_algebra/ -o verify && ./verify; echo $?"
             out={["3"]}>
 {`// alg/Or.yon
-place Or with effects {
+place Or {
   operation join(a: number, b: number): number uses algebra BooleanOr
   law commutative
   law associative
@@ -504,7 +504,7 @@ fun main(): number {
             run="yonc kw_reduction_modifiers/ -o reduction_modifiers && ./reduction_modifiers; echo $?"
             out={["0"]}>
 {`// w/Tally.yon
-place Tally with effects { total number
+place Tally { total number
   operation add(x: number): number }
 // Entry.yon
 place Entry { }
@@ -797,11 +797,8 @@ fun main(): number visits Output {
 
 #### `with`
 
-`with effects`, `with multishot`, `with fold`, `compose f with g`.
+`with multishot`, `with fold`, `compose f with g`.
 
-#### `effects`
-
-`place P with effects { }`: the place exposes operations.
 
 #### `requires`
 

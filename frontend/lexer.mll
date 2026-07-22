@@ -146,7 +146,6 @@
       "compose", COMPOSE;
       "hcomp", HCOMP;
       "comp", COMP;
-      "effects", EFFECTS;
       "unifies", UNIFIES;
       "requires", REQUIRES;
       "share", SHARE;

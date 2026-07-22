@@ -159,7 +159,7 @@
 (* OVER is already declared below in the WHEN/SEQUENCE token group *)
 
 /* Type-related */
-%token OF IN TO LIST MAP STREAM IS NOT BY FROM WITH EFFECTS UNIFIES REQUIRES
+%token OF IN TO LIST MAP STREAM IS NOT BY FROM WITH UNIFIES REQUIRES
 %token WIRE
 %token SPAWN PROMOTE PARALLEL
 %token COMPOSE
@@ -638,35 +638,14 @@ place_decl:
                  pd_type_params = tparams;
                  pd_arms = variants;
                  pd_world = "__INFER";
-                 pd_with_effects = false;
                  pd_members = members;
                  pd_over = over;
-                 pd_laws = [];
+                 pd_laws = List.filter_map
+                   (function FoLaw l -> Some l | _ -> None) members;
                  pd_subcontains = ext;
                  pd_is_error = is_err;
                  pd_on_error = oerr;
                  pd_loc = mk_loc $startpos $endpos } }
-  | PLACE name = IDENT
-    tparams = type_params_opt
-    over = option(over_clause)
-    ext = option(subcontains_clause)
-    oerr = option(on_error_clause)
-    WITH EFFECTS
-    LBRACE members = field_or_op_list RBRACE
-    { TopPlace { pd_name = name;
-                 pd_type_params = tparams;
-                     pd_arms = [];
-                 pd_world = "__INFER";
-                 pd_with_effects = true;
-                 pd_members = members;
-                 pd_over = over;
-                 pd_laws = List.filter_map (function FoLaw l -> Some l | _ -> None) members;
-                 pd_subcontains = ext;
-                 pd_is_error = false;
-                 pd_on_error = oerr;
-                 pd_loc = mk_loc $startpos $endpos } }
-
-
 (* Slice category: a place over X. The inhabitants of the place carry a
  * canonical reference to an instance of X. *)
 over_clause:
@@ -714,6 +693,11 @@ variant_clause:
 place_member:
   | fc = field_or_cell                    { PbiMember fc }
   | vs = variant_clause                   { PbiVariants vs }
+  /* stage 5 (fork 3 = inline): an operation is a mediated arrow, listed with
+     the other arrows; a law is an algebraic obligation on the list. The
+     `with effects` block dies — effectfulness is a theorem of the list. */
+  | od = operation_decl                   { PbiMember (FoOp od) }
+  | LAW l = IDENT                         { PbiMember (FoLaw l) }
   /* stage 4: the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
   | OVER base = IDENT                     { PbiClause (PcOver base) }
@@ -743,15 +727,6 @@ field_decl:
   | name = IDENT COLONEQ t = type_expr
     { { fd_name = name; fd_ty = t;
         fd_loc = mk_loc $startpos $endpos } }
-
-field_or_op_list:
-  | items = list(field_or_op)             { items }
-
-field_or_op:
-  | f = field_decl                        { FoField f }
-  | o = operation_decl                    { FoOp o }
-  | c = cell_decl                         { FoCell c }
-  | l = law_decl                          { FoLaw l }
 
 (* A custom cell inside a place.
  *   cell <name> from <src> to <tgt>
@@ -825,10 +800,6 @@ functor_decl:
 
 (* The functor laws declared on a functor-lambda. *)
 functor_law:
-  | LAW name = IDENT  { name }
-
-(* law <name> inside a place *)
-law_decl:
   | LAW name = IDENT  { name }
 
 standalone_op:

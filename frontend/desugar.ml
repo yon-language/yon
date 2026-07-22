@@ -2884,7 +2884,6 @@ let place_info = List.filter_map (function
                pd_type_params = [];
                pd_arms = [];
                pd_world = world;
-               pd_with_effects = false;
                pd_members = List.map (fun (f, ty, _) ->
                  S.FoField { S.fd_name = f; fd_ty = ty; fd_loc = loc }) shown;
                pd_over = None;

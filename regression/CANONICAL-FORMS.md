@@ -8,7 +8,7 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **40**
-- productions REDUCED by a fixture (Menhir-verified): **91 / 91** surface (+2 structural allowlisted)
+- productions REDUCED by a fixture (Menhir-verified): **88 / 88** surface (+2 structural allowlisted)
 - deviations enforced today: **20**
 - deviations registered as 1.2 debt (`enforce_1_2`): **1**
 
