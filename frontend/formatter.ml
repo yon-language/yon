@@ -367,9 +367,24 @@ let fmt_arm (v : variant) : string =
 let fmt_place (f : fmt) (pd : place_decl) : unit =
   if pd.pd_arms <> [] && pd.pd_members = [] then
     (* a place declared by the arms it is the coproduct of: the canonical
-       single-line canonical form. *)
+       single-line form. *)
     line f (Printf.sprintf "place %s { this > %s }" pd.pd_name
               (String.concat " :U " (List.map fmt_arm pd.pd_arms)))
+  else if pd.pd_arms <> [] then begin
+    (* sum-of-products (stage 3): the `this >` clause line, then the union's
+       field obligations, multi-line. *)
+    line f (Printf.sprintf "place %s {" pd.pd_name);
+    f.indent <- f.indent + 1;
+    line f (Printf.sprintf "this > %s"
+              (String.concat " :U " (List.map fmt_arm pd.pd_arms)));
+    List.iter (fun m ->
+      match m with
+      | FoField fd -> line f (fd.fd_name ^ " " ^ fmt_ty fd.fd_ty)
+      | FoOp _ | FoCell _ | FoLaw _ -> raise Exit  (* not enabled on unions *)
+    ) pd.pd_members;
+    f.indent <- f.indent - 1;
+    line f "}"
+  end
   else begin
   (* An `error E { ... }` reuses the place structure with pd_is_error. The surface
      never writes `in W` (the world is filesystem-inferred, pd_world = "__INFER");

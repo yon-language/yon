@@ -1,10 +1,8 @@
-// SPECIMEN del refactor place: bracci-place + campo sull'unione.
-// Oggi DEVE essere rifiutato (parser.mly failwith arm+campi).
-// Diventerà verde allo stadio 3. NB: `when` del brief -> `moment`
-// (`when` è una keyword, lexer.mll:162, avrebbe dato syntax error).
+// SPECIMEN del refactor place (stadio 3, VERDE): bracci-place + campo
+// sull'unione. `balance` dichiarato sull'unione Account è un OBBLIGO su
+// ogni braccio: Opened e Closed (in w/) lo espongono entrambi. Il gemello
+// union_field_obligation_reject pinna il rifiuto quando un braccio manca.
 place Entry { }
-place Opened { initial number }
-place Closed { moment number }
 place Account {
   this > Opened :U Closed
   balance number

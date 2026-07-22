@@ -2940,33 +2940,44 @@ let arm_resolves_to_place (env : Tyenv.env) (v : variant) : place_decl option =
   else Tyenv.lookup_place env v.v_name
 
 (* Register a named sum `name = variants` (a place with arms): the sum
-   itself, any sums nested in constructor
-   argument types (the recursive self-reference `TyUser name` is not one of
-   those), and — place refactor stage 1 — the injections. An arm that resolves
-   to a declared place is that place, and its injection arm -> union rides the
-   SAME machinery `subcontains` rides: the pd_subcontains chain that
-   Tyenv.place_subcontains walks. Re-adding the arm's decl with
-   pd_subcontains = Some name (add_place shadows) IS the registration — no
-   parallel registry. An arm already inside a declared subcontains chain keeps
-   its chain (first wins; overwriting would break declared subsumption).
-   Census 2026-07-20: no corpus arm head names a place, so on the corpus the
-   injection fold is the identity. *)
+   itself and any sums nested in constructor argument types (the recursive
+   self-reference `TyUser name` is not one of those). The arm -> union
+   injections are NOT resolved here: they need the full program in the env
+   first (a union may precede its arm places), so they are a second pass —
+   resolve_arm_injections below. *)
 let register_named_sum (env : Tyenv.env) (name : string)
     (variants : variant list) : Tyenv.env =
   let env = Tyenv.add_named_sum env name variants in
-  let env =
-    List.fold_left
-      (fun acc v ->
-         List.fold_left register_sum_types_in_ty acc v.v_args)
-      env variants
-  in
   List.fold_left
     (fun acc v ->
-       match arm_resolves_to_place acc v with
-       | Some pd when pd.pd_subcontains = None && pd.pd_name <> name ->
-           Tyenv.add_place acc { pd with pd_subcontains = Some name }
-       | _ -> acc)
+       List.fold_left register_sum_types_in_ty acc v.v_args)
     env variants
+
+(* Place refactor stage 3, second pass: resolve the arm -> union injections
+   AFTER every declaration is registered, so resolution does not depend on
+   declaration order. An arm that resolves to a declared place IS that place,
+   and its injection rides the SAME machinery `subcontains` rides: the
+   pd_subcontains chain Tyenv.place_subcontains walks; re-adding the arm's
+   decl with pd_subcontains = Some union (add_place shadows) IS the
+   registration — no parallel registry. An arm already inside a declared
+   subcontains chain keeps its chain (first wins; overwriting would break
+   declared subsumption). *)
+let resolve_arm_injections (env : Tyenv.env) (p : program) : Tyenv.env =
+  List.fold_left
+    (fun env td ->
+       match td with
+       | TopPlace pd when pd.pd_arms <> [] ->
+           List.fold_left
+             (fun acc v ->
+                match arm_resolves_to_place acc v with
+                | Some apd when apd.pd_subcontains = None
+                             && apd.pd_name <> pd.pd_name ->
+                    Tyenv.add_place acc
+                      { apd with pd_subcontains = Some pd.pd_name }
+                | _ -> acc)
+             env pd.pd_arms
+       | _ -> env)
+    env p
 
 let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   match td with
@@ -3179,13 +3190,75 @@ let check_named_sum (name : string) (variants : variant list) (loc : location)
   in
   dup [] variants
 
+(* Place refactor stage 3: members declared ON a union. A map out of a
+   coproduct is a tuple of maps, so a field on the union is an OBLIGATION on
+   every arm: each arm must expose it. Verified with the same machine
+   `subcontains` rides — place_field_subset, union as super, arm as sub —
+   in the opposite direction. Ops/cells/laws on a union are not enabled yet
+   (fork 3 / stage 5): fail closed, never accept-and-ignore. *)
+let check_union_members (env : Tyenv.env) (ctx : Reduce.ctx)
+    (pd : place_decl) : unit tc_result =
+  let fields =
+    List.filter_map (function FoField f -> Some f | _ -> None) pd.pd_members in
+  let non_fields = List.filter (function FoField _ -> false | _ -> true)
+                     pd.pd_members in
+  let* () =
+    match non_fields with
+    | [] -> ok ()
+    | fo :: _ ->
+        let what = match fo with
+          | FoOp o -> Printf.sprintf "operation %s" o.op_name
+          | FoCell c -> Printf.sprintf "cell %s" c.cell_name
+          | FoLaw l -> Printf.sprintf "law %s" l
+          | FoField _ -> assert false in
+        err pd.pd_loc (Printf.sprintf
+          "place %s: %s on a union is not yet enabled -- only fields are \
+           allowed alongside `this >` arms (operations/cells/laws on unions \
+           are a later increment)." pd.pd_name what)
+  in
+  if fields = [] then ok ()
+  else
+    List.fold_left (fun acc v ->
+      let* () = acc in
+      match arm_resolves_to_place env v with
+      | Some apd ->
+          if place_field_subset env ctx pd apd then ok ()
+          else
+            let missing =
+              List.filter_map (fun (f : field_decl) ->
+                let apd_fields =
+                  List.filter_map
+                    (function FoField g -> Some g.fd_name | _ -> None)
+                    apd.pd_members in
+                if List.mem f.fd_name apd_fields then None else Some f.fd_name)
+                fields in
+            err pd.pd_loc (Printf.sprintf
+              "place %s: field%s %s declared on the union %s not exposed \
+               by arm %s -- a field on a disjoint union is an obligation on \
+               every arm (a map out of a coproduct is a tuple of maps)."
+              pd.pd_name
+              (if List.length missing = 1 then "" else "s")
+              (String.concat ", " missing)
+              (if List.length missing = 1 then "is" else "are")
+              apd.pd_name)
+      | None ->
+          err pd.pd_loc (Printf.sprintf
+            "place %s: arm %s is a bare constructor, but the union declares \
+             field%s -- a field on a union is an obligation on every arm, so \
+             every arm must be a declared place exposing it."
+            pd.pd_name v.v_name
+            (if List.length fields = 1 then " " ^ (List.hd fields).fd_name
+             else "s")))
+      (ok ()) pd.pd_arms
+
 let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit tc_result =
   match td with
   | TopWorld _ -> ok ()
   | TopPlace pd when pd.pd_arms <> [] ->
-      (* a place with arms IS the named sum: the same check, not the
-         field-place check. One production, one rule. *)
-      check_named_sum pd.pd_name pd.pd_arms pd.pd_loc
+      (* a place with arms IS the named sum: the sum check plus the stage-3
+         member obligations. Not the field-place check. *)
+      let* () = check_named_sum pd.pd_name pd.pd_arms pd.pd_loc in
+      check_union_members env ctx pd
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn
   | TopMove md -> check_move_decl env ctx md
@@ -4822,6 +4895,7 @@ let elaborate_id_sugar (p : program) : program =
   | None -> p
   | Some p3 ->
     let genv = List.fold_left register_decl (Tyenv.with_builtins Tyenv.empty) p3 in
+    let genv = resolve_arm_injections genv p3 in
     let ctx = Reduce.empty_ctx in
     let fix_plainly (ep : expr) (e : expr) : expr =
       match e with
@@ -4922,6 +4996,7 @@ let check_program (p : program) : check_result =
   let env0 = Tyenv.with_builtins Tyenv.empty in
   let ctx = Reduce.empty_ctx in
   let env_with_sigs = List.fold_left register_decl env0 p in
+  let env_with_sigs = resolve_arm_injections env_with_sigs p in
   (* Register the 3 builtin functions of the pullback. They are synthesized by
    * the desugar (only when the program uses them), but the type checker must
    * always recognize them to accept expressions like `__pullback_pi1(p)`. *)

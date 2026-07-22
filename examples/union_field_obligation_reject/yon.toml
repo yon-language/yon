@@ -1,5 +1,5 @@
 [package]
-name = "union_field_obligation"
+name = "union_field_obligation_reject"
 
 [world.W]
 objects = ["X"]

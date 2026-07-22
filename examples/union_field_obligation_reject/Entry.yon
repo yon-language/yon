@@ -1,0 +1,8 @@
+// GEMELLO NEGATIVO dello specimen stadio-3: il braccio Opened NON espone
+// `balance` -> l'obbligo del campo-sull'unione deve rifiutare, pulito.
+place Entry { }
+place Account {
+  this > Opened :U Closed
+  balance number
+}
+fun main(): number { return 0 }

@@ -46,9 +46,13 @@ let () =
     (Tycheck.arm_resolves_to_place Tyenv.empty
        { v_name = "P"; v_args = [] } = None);
 
-  (* ---- 1c: the injection rides the subcontains chain ---- *)
+  (* ---- 1c: the injection rides the subcontains chain (second pass) ---- *)
+  let register prog =
+    let env = List.fold_left Tycheck.register_decl Tyenv.empty prog in
+    Tycheck.resolve_arm_injections env prog
+  in
   let prog_env =
-    List.fold_left Tycheck.register_decl Tyenv.empty
+    register
       [ TopPlace (mk_place "P");
         TopPlace (mk_place "U" ~arms:[ { v_name = "P"; v_args = [] };
                                        { v_name = "Q"; v_args = [] } ]) ]
@@ -62,9 +66,18 @@ let () =
   check "no phantom subsumption toward an unrelated name"
     (not (Tyenv.place_subcontains prog_env "P" "V"));
 
+  (* stage 3: declaration order must not matter — union BEFORE its arm place *)
+  let reversed =
+    register
+      [ TopPlace (mk_place "U" ~arms:[ { v_name = "P"; v_args = [] } ]);
+        TopPlace (mk_place "P") ]
+  in
+  check "union declared before its arm place still resolves (second pass)"
+    (Tyenv.place_subcontains reversed "P" "U");
+
   (* a declared chain is NOT overwritten (first wins) *)
   let chained =
-    List.fold_left Tycheck.register_decl Tyenv.empty
+    register
       [ TopPlace (mk_place ~subc:(Some "Base") "P");
         TopPlace (mk_place "Base");
         TopPlace (mk_place "U" ~arms:[ { v_name = "P"; v_args = [] } ]) ]
