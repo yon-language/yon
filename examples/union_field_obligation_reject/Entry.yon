@@ -1,5 +1,5 @@
-// GEMELLO NEGATIVO dello specimen stadio-3: il braccio Opened NON espone
-// `balance` -> l'obbligo del campo-sull'unione deve rifiutare, pulito.
+// NEGATIVE TWIN of the stage-3 specimen: the arm Opened does NOT expose
+// `balance` -> the field-on-union obligation must reject, cleanly.
 place Entry { }
 place Account {
   this > Opened :U Closed

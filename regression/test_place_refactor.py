@@ -1,13 +1,13 @@
-"""Gate del refactor place — stadio 3 (FLIPPATO, era il rosso pinnato dello
-stadio 0). Doppio pin:
+"""The place-refactor gate — stage 3 (FLIPPED; it was stage 0's pinned red).
+Double pin:
 
-  - lo specimen (bracci-place + campo sull'unione, ogni braccio lo espone)
-    COMPILA: l'obbligo del campo-sull'unione e' soddisfatto;
-  - il gemello negativo (un braccio NON espone il campo) e' rifiutato con il
-    messaggio dell'obbligo — mai piu' il failwith del parser.
+  - the specimen (place-arms + a field on the union, every arm exposing it)
+    COMPILES: the field-on-union obligation is satisfied;
+  - the negative twin (an arm NOT exposing the field) is rejected with the
+    obligation message — never the parser failwith again.
 
-Una mappa fuori da un coprodotto e' una tupla di mappe: un campo dichiarato
-sull'unione e' un obbligo su ogni braccio (yon_place_grammar.md §3.4)."""
+A map out of a coproduct is a tuple of maps: a field declared on the union
+is an obligation on every arm (yon_place_grammar.md §3.4)."""
 import subprocess
 from pathlib import Path
 
@@ -20,30 +20,30 @@ REJECT = ROOT / "examples" / "union_field_obligation_reject"
 def test_union_field_obligation_compiles():
     r = subprocess.run([str(EMIT), str(SPEC)], capture_output=True, timeout=60)
     assert r.returncode == 0, (
-        f"lo specimen sum-of-products NON compila piu' (stadio 3 rotto):\n"
+        f"the sum-of-products specimen no longer compiles (stage 3 broken):\n"
         f"{r.stderr.decode(errors='replace')[-400:]}")
-    assert len(r.stdout) > 0, "specimen: exit 0 ma MLIR vuoto"
+    assert len(r.stdout) > 0, "specimen: exit 0 but empty MLIR"
 
 
 def test_union_field_obligation_reject_pins_the_obligation():
     r = subprocess.run([str(EMIT), str(REJECT)], capture_output=True, timeout=60)
     assert r.returncode != 0, (
-        "il gemello negativo COMPILA: l'obbligo del campo-sull'unione "
-        "non morde piu'")
+        "the negative twin COMPILES: the field-on-union obligation "
+        "no longer bites")
     msg = (r.stderr + r.stdout).decode(errors="replace")
     assert "obligation on every arm" in msg and "balance" in msg, (
-        f"gemello rosso ma per il motivo SBAGLIATO (atteso l'obbligo del "
-        f"campo-sull'unione):\n{msg[-400:]}")
+        f"twin red but for the WRONG reason (expected the field-on-union "
+        f"obligation):\n{msg[-400:]}")
 
 
-# ---- stadio 4: clausole nel corpo, `error` come zucchero ----------------
+# ---- stage 4: clauses in the body, `error` as sugar ----------------------
 
 def _emit(path):
     return subprocess.run([str(EMIT), str(path)], capture_output=True, timeout=60)
 
 
 def test_body_clause_is_the_header_clause(tmp_path):
-    """`over` scritto come riga del corpo emette MLIR byte-identico all'header."""
+    """`over` written as a body line emits MLIR byte-identical to the header."""
     import shutil
     src = ROOT / "examples" / "c_place_over"
     twin = tmp_path / "twin"
@@ -52,7 +52,7 @@ def test_body_clause_is_the_header_clause(tmp_path):
     header = _emit(src)
     body = _emit(twin)
     assert header.returncode == 0 and body.returncode == 0, body.stderr[-300:]
-    assert header.stdout == body.stdout, "body-clause emette MLIR diverso dall'header"
+    assert header.stdout == body.stdout, "body clause emits different MLIR than the header"
 
 
 def test_duplicate_clause_rejected(tmp_path):
@@ -68,6 +68,6 @@ def test_duplicate_clause_rejected(tmp_path):
 
 
 def test_error_is_sugar_for_marked_place():
-    """error_decl e' morta: `error E ...` passa dalla produzione unica del place."""
+    """error_decl is dead: `error E ...` flows through the single place production."""
     r = _emit(ROOT / "examples" / "error_morphism")
     assert r.returncode == 0, r.stderr[-300:]
