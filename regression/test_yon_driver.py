@@ -55,7 +55,16 @@ def test_version_and_help():
     assert h.returncode == 0 and "Usage:" in h.stdout
 
 
-@pytest.mark.parametrize("cmd", ["diff", "stages", "bootstrap", "spec", "prove"])
+def test_stages_reports_the_three_stages():
+    # `yon stages` is wired since c43f4c1 (the driver reports the bootstrap
+    # ladder); the roadmap-fail expectation below predates that commit.
+    r = _yon("stages")
+    assert r.returncode == 0
+    for s in ("stage 0", "stage 1", "stage 2"):
+        assert s in r.stdout
+
+
+@pytest.mark.parametrize("cmd", ["diff", "bootstrap", "spec", "prove"])
 def test_roadmap_commands_fail_honestly(cmd):
     # not-yet-wired commands must exit non-zero (2), not fake success.
     r = _yon(cmd)
