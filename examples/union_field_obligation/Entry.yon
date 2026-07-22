@@ -1,7 +1,7 @@
-// SPECIMEN del refactor place (stadio 3, VERDE): bracci-place + campo
-// sull'unione. `balance` dichiarato sull'unione Account è un OBBLIGO su
-// ogni braccio: Opened e Closed (in w/) lo espongono entrambi. Il gemello
-// union_field_obligation_reject pinna il rifiuto quando un braccio manca.
+// SPECIMEN of the place refactor (stage 3, GREEN): place-arms + a field
+// on the union. `balance` declared on the union Account is an OBLIGATION
+// on every arm: Opened and Closed (in w/) both expose it. The negative
+// twin (union_field_obligation_reject) pins the reject when an arm lacks it.
 place Entry { }
 place Account {
   this > Opened :U Closed
