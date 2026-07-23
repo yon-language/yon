@@ -42,7 +42,6 @@ Every keyword, alphabetically:
 [`do`](/book/keywords#do) ·
 [`drop`](/book/keywords#drop) ·
 [`each`](/book/keywords#each) ·
-[`effects`](/book/keywords#effects) ·
 [`El`](/book/keywords#el) ·
 [`el_match`](/book/keywords#el_match) ·
 [`else`](/book/keywords#else) ·
