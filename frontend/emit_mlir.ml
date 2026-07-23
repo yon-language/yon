@@ -1653,7 +1653,21 @@ let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
                    vs vi param_ty);
     vs
   end
-  else arg_ssa  (* unhandled mismatch: let it through, MLIR will reject it *)
+  else if String.length arg_ty >= 15 && String.sub arg_ty 0 15 = "!topos.section<"
+       && String.length param_ty >= 15 && String.sub param_ty 0 15 = "!topos.section<"
+  then
+    (* Two DIFFERENT section types with no declared subtype path. Letting the
+       mismatch through produced type-inconsistent MLIR that the pipeline
+       swallowed into a WRONG binary (found live: an Opened section passed
+       where the union's ind-section was expected — the stage-1 mono is
+       type-level, the value-level injection is not designed yet). Fail
+       closed, never miscompile. *)
+    raise (Cubical_stuck (Printf.sprintf
+      "no lowering yet for a value of %s where %s is expected: the \
+       injection along the mono is type-level only (the value-level \
+       representation of a union of places is not designed yet)"
+      arg_ty param_ty))
+  else arg_ssa  (* unhandled non-section mismatch: let it through, MLIR rejects it *)
 
 let rec emit_term (e : emitter)
     (env : (string * string) Env.t)
@@ -4464,7 +4478,18 @@ let rec emit_term (e : emitter)
            let v_buf = fresh_ssa e in
            emit_line e (Printf.sprintf
                           "%s = llvm.alloca %s x !llvm.array<%d x i8> : (i64) -> !llvm.ptr"
-                          v_buf v_one target_total);
+                          v_buf v_one (target_total + 8));
+           (* identity head: root of the TARGET place at buffer offset 0 *)
+           let v_rt = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64"
+                          v_rt (Type_root.leaf_root target_place));
+           let v_rz = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_rz);
+           let v_rg = fresh_ssa e in
+           emit_line e (Printf.sprintf
+                          "%s = llvm.getelementptr %s[%s] : (!llvm.ptr, i32) -> !llvm.ptr, i8"
+                          v_rg v_buf v_rz);
+           emit_line e (Printf.sprintf "llvm.store %s, %s : i64, !llvm.ptr" v_rt v_rg);
            (* For each target field, find a mapping or an identity copy. *)
            List.iter (fun (tfname, tfty, toff) ->
              let mapping_opt =
@@ -4538,7 +4563,7 @@ let rec emit_term (e : emitter)
              (* Store in target buffer. *)
              let v_t_off = fresh_ssa e in
              emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
-                            v_t_off toff);
+                            v_t_off (toff + 8));
              let v_gep = fresh_ssa e in
              emit_line e (Printf.sprintf
                             "%s = llvm.getelementptr %s[%s] : (!llvm.ptr, i32) -> !llvm.ptr, i8"
@@ -4553,7 +4578,7 @@ let rec emit_term (e : emitter)
             * (__Default). *)
            let v_size = fresh_ssa e in
            emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
-                          v_size target_total);
+                          v_size (target_total + 8));
            let v_heap = fresh_ssa e in
            (match target_space_opt with
             | None ->
@@ -4671,7 +4696,19 @@ let rec emit_term (e : emitter)
            let v_buf = fresh_ssa e in
            emit_line e (Printf.sprintf
                           "%s = llvm.alloca %s x !llvm.array<%d x i8> : (i64) -> !llvm.ptr"
-                          v_buf v_one target_total);
+                          v_buf v_one (target_total + 8));
+           (* identity head: root of the TARGET place at buffer offset 0 *)
+           let v_rt = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64"
+                          v_rt (Type_root.leaf_root target_place));
+           let v_rz = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_rz);
+           let v_rg = fresh_ssa e in
+           emit_line e (Printf.sprintf
+                          "%s = llvm.getelementptr %s[%s] : (!llvm.ptr, i32) -> !llvm.ptr, i8"
+                          v_rg v_buf v_rz);
+           emit_line e (Printf.sprintf "llvm.store %s, %s : i64, !llvm.ptr" v_rt v_rg);
+
            (* Load one field given an xcoord, an offset and a type. *)
            let load_field v_xc soff sty =
              let v_off = fresh_ssa e in
@@ -4721,7 +4758,7 @@ let rec emit_term (e : emitter)
              in
              let v_toff = fresh_ssa e in
              emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
-                            v_toff toff);
+                            v_toff (toff + 8));
              let v_gep = fresh_ssa e in
              emit_line e (Printf.sprintf
                             "%s = llvm.getelementptr %s[%s] : (!llvm.ptr, i32) -> !llvm.ptr, i8"
@@ -4731,7 +4768,7 @@ let rec emit_term (e : emitter)
            ) o1;
            let v_size = fresh_ssa e in
            emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
-                          v_size target_total);
+                          v_size (target_total + 8));
            let v_heap = fresh_ssa e in
            emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_heap);
            let v_xc = fresh_ssa e in
@@ -5877,9 +5914,15 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
         emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_id id);
         let v_nf = fresh_ssa e in
         emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_nf n);
+        (* the place's nominal root rides the schema registry: the consumer
+           re-attaches it at rebuild (the identity head is local content,
+           the frame carries fields + schema id only). *)
+        let v_root = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64"
+                       v_root (Type_root.leaf_root pd.p_name));
         emit_line e (Printf.sprintf
-                       "func.call @yon_rt_register_schema(%s, %s, %s) : (i32, i32, !llvm.ptr) -> ()"
-                       v_id v_nf v_tags)
+                       "func.call @yon_rt_register_schema(%s, %s, %s, %s) : (i32, i32, !llvm.ptr, i64) -> ()"
+                       v_id v_nf v_tags v_root)
     | _ -> ()
   ) e.places_decls;
   (* Register the declared geometric morphisms so the later
@@ -6657,7 +6700,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
     emit_line e "// Runtime external declarations (P8) for places";
     emit_line e "func.func private @yon_rt_new(i32, !llvm.ptr, i32) -> i64";
     emit_line e "func.func private @yon_rt_new_v(i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64";
-    emit_line e "func.func private @yon_rt_register_schema(i32, i32, !llvm.ptr) -> ()";
+    emit_line e "func.func private @yon_rt_register_schema(i32, i32, !llvm.ptr, i64) -> ()";
     emit_line e "func.func private @yon_rt_field_load(i64, i32, i32, !llvm.ptr) -> i32";
     (* fold_named plus the string constants naming the canonical folds. We
        emit these whenever there are places: the cost is negligible and it
@@ -6770,6 +6813,12 @@ let emit_program (dr : Desugar.desugar_result) : string =
         (offs, !acc)
       in
       let (offsets, total_size) = offsets_and_total in
+      (* Identity head: the payload begins with the place's 8-byte nominal
+         type root (LE). Field offsets stay FIELD-region offsets everywhere
+         (readers skip the head in the runtime); only the composed buffer is
+         head-prefixed: alloca +8, root stored at 0, field i at offsets[i]+8. *)
+      let place_root : int64 = Type_root.leaf_root pd.p_name in
+      let head = 8 in
 
       (* parametric body for the heap_id source.
        * heap_kind = `Default | `Lookup of string (the space name).
@@ -6778,6 +6827,18 @@ let emit_program (dr : Desugar.desugar_result) : string =
        *
        * If ?fold_name is Some "sum_f64" etc., emits yon_rt_fold_named instead
        * of yon_rt_new (CRDT semilattice-join semantics). *)
+      (* store the identity head at buffer offset 0 (root as i64, LE via store) *)
+      let emit_store_root (v_buf : string) : unit =
+        let v_root = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64" v_root place_root);
+        let v_z = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_z);
+        let v_g = fresh_ssa e in
+        emit_line e (Printf.sprintf
+                       "%s = llvm.getelementptr %s[%s] : (!llvm.ptr, i32) -> !llvm.ptr, i8"
+                       v_g v_buf v_z);
+        emit_line e (Printf.sprintf "llvm.store %s, %s : i64, !llvm.ptr" v_root v_g)
+      in
       let emit_alloc_call (v_heap : string) (v_buf : string) (v_size : string)
                           (fold_name : string option) : string =
         let v_xc = fresh_ssa e in
@@ -6816,12 +6877,17 @@ let emit_program (dr : Desugar.desugar_result) : string =
       let emit_new_body (heap_kind : [`Default | `Lookup of string])
                         ?(fold_name : string option = None) () : unit =
         if total_size = 0 then begin
+          (* a fieldless place (the terminal): the payload IS the head — 8
+             deterministic bytes of root (the old 1-byte uninitialized alloca
+             made the content address nondeterministic; the head fixes that
+             for free). *)
           let v_size = fresh_ssa e in
-          emit_line e (Printf.sprintf "%s = arith.constant 1 : i32" v_size);
+          emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_size head);
           let v_buf = fresh_ssa e in
           emit_line e (Printf.sprintf
                          "%s = llvm.alloca %s x i8 : (i32) -> !llvm.ptr"
                          v_buf v_size);
+          emit_store_root v_buf;
           let v_heap =
             match heap_kind with
             | `Default ->
@@ -6851,9 +6917,10 @@ let emit_program (dr : Desugar.desugar_result) : string =
           let v_buf = fresh_ssa e in
           emit_line e (Printf.sprintf
                          "%s = llvm.alloca %s x !llvm.array<%d x i8> : (i64) -> !llvm.ptr"
-                         v_buf v_one total_size);
+                         v_buf v_one (total_size + head));
+          emit_store_root v_buf;
           List.iteri (fun i ty ->
-            let off = List.nth offsets i in
+            let off = List.nth offsets i + head in   (* field stores after the head *)
             let v_off = fresh_ssa e in
             emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_off off);
             let v_gep = fresh_ssa e in
@@ -6882,7 +6949,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
             emit_line e (Printf.sprintf "llvm.store %s, %s : %s, !llvm.ptr" sv v_gep st)
           ) field_tys;
           let v_size = fresh_ssa e in
-          emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_size total_size);
+          emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_size (total_size + head));
           let v_heap =
             match heap_kind with
             | `Default ->
