@@ -42,6 +42,14 @@
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
+
+/* The identity head: every place instance's payload begins with the 8-byte
+   nominal type root of its place, little-endian. It ENTERS the content
+   address by construction (it is content), so two places with identical
+   field bytes get different slots, and index_lookup's memcmp stays honest
+   (the hash covers exactly the stored bytes). Disjointness of the coproduct
+   as a theorem of the heap — guaranteed modulo a 64-bit root collision. */
+#define YON_ROOT_HEAD_BYTES 8u
 #include <sys/file.h>
 #include <pthread.h>   /* PROCESS_SHARED mutex for the cross-process shm wire */
 #include <errno.h>     /* EBUSY: bounded lock acquisition */
@@ -433,8 +441,15 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
         memset(out, 0, size);
         return -1;
     }
-    /* L2 backends use physically separate heaps per space, no payload prefix. */
-    uint32_t prefix_skip = 0;
+    /* Every place instance begins with its 8-byte type root (the identity
+       head: "carrier forgets, root remembers", literally). Field offsets are
+       FIELD-region offsets; the reader skips the head. Disjointness of the
+       coproduct is thus a theorem of the content address — same fields,
+       different place => different bytes => different slots — guaranteed
+       MODULO a 64-bit collision of two roots (FNV-1a birthday on 2^64:
+       astronomically unlikely, not impossible; if it ever bites, it is
+       written down HERE). */
+    uint32_t prefix_skip = YON_ROOT_HEAD_BYTES;
     if ((uint64_t)offset + (uint64_t)size + (uint64_t)prefix_skip > slot->payload_size) {  /* 64-bit: no wrap */
         memset(out, 0, size);
         fprintf(stderr,
@@ -880,6 +895,63 @@ static const migration_entry_t *find_migration(const char *place_name,
 
 /* yon_rt_new_v: allocate with an explicit schema_version. Reuses the yon_rt_new
  * path but calls yon_xheap_put_v instead of yon_xheap_put. */
+static void yon_root_write_le(uint8_t *dst, uint64_t root) {
+    for (int i = 0; i < 8; i++) dst[i] = (uint8_t)(root >> (8 * i));
+}
+
+yon_section_t yon_rt_new_r(uint32_t heap_id,
+                            const void *field_bytes, uint32_t n_bytes,
+                            uint64_t type_root, uint32_t schema_version) {
+    ensure_init();
+    if (heap_id >= g_n_spaces) {
+        fprintf(stderr, "[YON-RT] new_r: heap_id=%u not registered\n", heap_id);
+        return YON_SECTION_INVALID;
+    }
+    if (n_bytes > 0 && !field_bytes) return YON_SECTION_INVALID;
+    /* compose root || fields. Stack for the common case, mmap for large
+       (the buffer is throwaway: it must not touch the content arena). */
+    uint8_t stack_buf[1024];
+    size_t total = (size_t)YON_ROOT_HEAD_BYTES + n_bytes;
+    uint8_t *heap_buf = NULL;
+    uint8_t *buf = stack_buf;
+    if (total > sizeof stack_buf) {
+        heap_buf = mmap(NULL, total, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (heap_buf == MAP_FAILED) return YON_SECTION_INVALID;
+        buf = heap_buf;
+    }
+    yon_root_write_le(buf, type_root);
+    if (n_bytes > 0) memcpy(buf + YON_ROOT_HEAD_BYTES, field_bytes, n_bytes);
+    yon_xheap_t *h = heap_for(heap_id);
+    uint32_t slot_idx = yon_xheap_put_v(h, buf, (uint32_t)total,
+                                        YON_TAG_USER1, schema_version);
+    if (heap_buf) munmap(heap_buf, total);
+    if (slot_idx == YON_HEAP_SLOT_INVALID) {
+        fprintf(stderr, "[YON-RT] new_r: put failed (heap=%u n=%u)\n",
+                heap_id, n_bytes);
+        return YON_SECTION_INVALID;
+    }
+    g_spaces[heap_id].occupancy++;
+    yon_rt__heap_tick("new");
+    return yon_section_pack(heap_id, slot_idx);
+}
+
+/* The head is recoverable from the handle alone: O(1), no side table. */
+uint64_t yon_rt_section_root(yon_section_t sec) {
+    ensure_init();
+    uint32_t heap_id = yon_section_heap(sec);
+    uint32_t slot_idx = yon_section_slot(sec);
+    yon_xheap_t *h = heap_for(heap_id);
+    const yon_xheap_slot_t *slot = yon_xheap_get(h, slot_idx);
+    if (!slot || slot->payload_offset == 0
+        || slot->payload_size < YON_ROOT_HEAD_BYTES) return 0;
+    const uint8_t *p = (const uint8_t *)yon_xheap_slot_payload(h, slot);
+    if (!p) return 0;
+    uint64_t r = 0;
+    for (int i = 7; i >= 0; i--) r = (r << 8) | p[i];
+    return r;
+}
+
 yon_section_t yon_rt_new_v(uint32_t heap_id,
                             const void *payload_bytes, uint32_t n_bytes,
                             const char *place_name, uint32_t schema_version) {
@@ -7737,13 +7809,14 @@ typedef struct {
     uint32_t       n_fields;
     const uint8_t *tags;   /* n_fields bytes, static in the binary */
     int            used;
+    uint64_t type_root;   /* the place's nominal root: re-attached at rebuild */
 } yon_wire_schema_t;
 
 static yon_wire_schema_t g_wire_schemas[YON_WIRE_MAX_SCHEMAS];
 static uint32_t g_wire_n_schemas = 0;
 
 void yon_rt_register_schema(uint32_t schema_id, uint32_t n_fields,
-                            const uint8_t *tags) {
+                            const uint8_t *tags, uint64_t type_root) {
     for (uint32_t i = 0; i < g_wire_n_schemas; i++) {
         if (g_wire_schemas[i].used && g_wire_schemas[i].schema_id == schema_id) {
             g_wire_schemas[i].n_fields = n_fields;  /* idempotent update */
@@ -7760,6 +7833,7 @@ void yon_rt_register_schema(uint32_t schema_id, uint32_t n_fields,
     e->n_fields  = n_fields;
     e->tags      = tags;
     e->used      = 1;
+    e->type_root = type_root;
 }
 
 static const yon_wire_schema_t *yon_wire_lookup(uint32_t schema_id) {
@@ -7784,17 +7858,17 @@ int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap) {
     }
     if (sc->n_fields > YON_WIRE_MAX_FIELDS) return -1;
 
-    /* The instance payload is n_fields * 8 bytes, one f64 slot per field. */
-    uint8_t inst[YON_WIRE_MAX_FIELDS * 8];
+    /* The instance payload is the 8-byte root head + n_fields * 8 bytes. */
+    uint8_t inst[8u + YON_WIRE_MAX_FIELDS * 8];
     int32_t pn = yon_rt_flatten(sec, inst, sizeof(inst));
-    if (pn < 0 || (uint32_t)pn != sc->n_fields * 8u) return -1;
+    if (pn < 0 || (uint32_t)pn != 8u + sc->n_fields * 8u) return -1;
 
     uint8_t *out = (uint8_t *)out_buf;
     const uint32_t hdr = 8u;     /* schema_id + payload_len */
     if (cap < hdr) return -1;
     uint32_t w = hdr;            /* payload starts after the header */
     for (uint32_t i = 0; i < sc->n_fields; i++) {
-        uint32_t off = i * 8u;
+        uint32_t off = 8u + i * 8u;   /* skip the identity head */
         if (sc->tags[i] == YON_WIRE_TAG_SCALAR) {
             if (w + 8u > cap) return -1;
             memcpy(out + w, inst + off, 8u);
@@ -7894,7 +7968,8 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
                 cur, payload_len);
         return YON_SECTION_INVALID;
     }
-    return yon_rt_new_v(heap_id, inst, sc->n_fields * 8u, NULL, schema_id);
+    return yon_rt_new_r(heap_id, inst, sc->n_fields * 8u,
+                        sc->type_root, schema_id);
 }
 
 /* ============================================================================
