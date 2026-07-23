@@ -1,0 +1,9 @@
+[package]
+name = "union_sited"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"

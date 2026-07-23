@@ -1,0 +1,8 @@
+// NEGATIVE probe for the world-guard rule (f): Opened lives in W1, Closed
+// in W2 — a coproduct across topoi does not exist, it needs a geometric
+// morphism. The union must be rejected with the coherence error.
+place Entry { }
+place Account {
+  this > Opened :U Closed
+}
+fun main(): number { return 0 }
