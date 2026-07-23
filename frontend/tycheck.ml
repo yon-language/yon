@@ -2940,10 +2940,16 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
 (* A coproduct arm whose head names a place declared in this same program IS
    that place (the arm is the subobject; its injection is subcontains, not a
    fresh constructor). A head that does not resolve stays a positional
-   constructor, lowered exactly as today. One rule, no new AST. *)
-let arm_resolves_to_place (env : Tyenv.env) (v : variant) : place_decl option =
+   constructor, lowered exactly as today. ONE rule, parameterized over the
+   lookup: the env entry point serves registration/checking, the raw-program
+   entry point serves world inference (which runs BEFORE any env exists). *)
+let arm_resolves_with (lookup : string -> place_decl option)
+    (v : variant) : place_decl option =
   if v.v_args <> [] then None
-  else Tyenv.lookup_place env v.v_name
+  else lookup v.v_name
+
+let arm_resolves_to_place (env : Tyenv.env) (v : variant) : place_decl option =
+  arm_resolves_with (fun n -> Tyenv.lookup_place env n) v
 
 (* Register a named sum `name = variants` (a place with arms): the sum
    itself and any sums nested in constructor argument types (the recursive
@@ -4382,6 +4388,40 @@ type check_result = {
 
 (* ─── Pass 0: world parameter inference for places ────────────────── *)
 
+(* The site of a place with arms is the common world of its arms, DERIVED
+   (not declared): a union is a coproduct, and the coproduct is taken in the
+   category where the addends live. A bare-constructor union (Bool = 1+1)
+   resolves no arm and is a CONSTANT presheaf — no site, available in every
+   topos; operationally identical to before. Arms in two different worlds
+   are INCOHERENT: a coproduct across topoi does not exist (it needs a
+   geometric morphism).
+
+   TODO (anchored, not a bug today): positional payloads (Node(Tree, Tree))
+   contribute no world until they become synthetic places with their own
+   projections (the «sezione» decision, yon_sezione_non_costruttore.md §4).
+   When arm payloads become places, arm_site_of must fold their worlds too.
+   Today every corpus payload belongs to a constant union, so none carries
+   a world regardless. *)
+type arm_site = Constant | Sited of string | Incoherent of string * string
+
+let arm_site_of (lookup : string -> place_decl option)
+    (pd : place_decl) : arm_site =
+  List.fold_left
+    (fun acc v ->
+       match arm_resolves_with lookup v with
+       | None -> acc                       (* bare constructor: no contribution *)
+       | Some apd ->
+           (match apd.pd_world with
+            | "__INFER" | "" -> acc        (* arm world not resolved (yet) *)
+            | w ->
+                (match acc with
+                 | Constant -> Sited w
+                 | Sited w0 when w0 = w -> acc
+                 | Sited w0 -> Incoherent (w0, w)
+                 | Incoherent _ -> acc)))
+    Constant pd.pd_arms
+
+
 (* Yoneda-native world inference.
  *
  * A place is a functor P : C^op -> Set where C is the site (the world).
@@ -4521,17 +4561,23 @@ let infer_place_worlds (p : program) : (program, type_error) result =
                   "place %s has conflicting world candidates: %s"
                   pd.pd_name (String.concat ", " ws) }
   in
-  (* Rewrite each TopPlace with __INFER, accumulating errors. *)
-  let result = List.fold_left
+  (* Rewrite each TopPlace with __INFER — ONE inferrer, two phases, the
+     outcome DERIVED from the arrow list (rule (f)).
+     Phase 1: the armless places, by contextual inference (as always).
+     Phase 2: the places WITH arms — their site is the common world of the
+     arms that resolve (the coproduct is taken in the category where the
+     addends live): Sited stamps that world; Constant (no arm resolves —
+     Bool = 1+1, a constant presheaf) leaves the place EXACTLY as it was;
+     Incoherent (arms in two worlds) is an error — a coproduct across topoi
+     needs a geometric morphism. Phase 2 runs to a fixpoint so a union of
+     sited unions resolves regardless of declaration order. *)
+  let phase1 = List.fold_left
     (fun acc td ->
        match acc with
        | Error _ -> acc
        | Ok decls ->
            match td with
            | TopPlace pd when pd.pd_world = "__INFER" && pd.pd_arms = [] ->
-               (* a place with arms is a type declaration (the named sum): it
-                  lives in no world, so it never
-                  entered this rewrite. Only field-places get a world. *)
                (match infer_for pd with
                 | Ok w ->
                     Ok (TopPlace { pd with pd_world = w } :: decls)
@@ -4539,9 +4585,45 @@ let infer_place_worlds (p : program) : (program, type_error) result =
            | other -> Ok (other :: decls))
     (Ok []) p
   in
-  match result with
-  | Ok decls -> Ok (List.rev decls)
+  match phase1 with
   | Error e -> Error e
+  | Ok rev_decls ->
+      let rec phase2 decls =
+        let lookup n =
+          List.find_map
+            (function TopPlace q when q.pd_name = n -> Some q | _ -> None)
+            decls in
+        let changed = ref false in
+        let step = List.fold_left
+          (fun acc td ->
+             match acc with
+             | Error _ -> acc
+             | Ok out ->
+                 match td with
+                 | TopPlace pd when pd.pd_world = "__INFER"
+                                 && pd.pd_arms <> [] ->
+                     (match arm_site_of lookup pd with
+                      | Sited w ->
+                          changed := true;
+                          Ok (TopPlace { pd with pd_world = w } :: out)
+                      | Constant -> Ok (td :: out)
+                      | Incoherent (w1, w2) ->
+                          Error { err_loc = pd.pd_loc;
+                                  err_msg = Printf.sprintf
+                                    "place %s: a union of places from \
+                                     different worlds (%s, %s) needs a \
+                                     geometric morphism, not a coproduct"
+                                    pd.pd_name w1 w2 })
+                 | other -> Ok (other :: out))
+          (Ok []) decls
+        in
+        match step with
+        | Error e -> Error e
+        | Ok rev_out ->
+            let out = List.rev rev_out in
+            if !changed then phase2 out else Ok out
+      in
+      phase2 (List.rev rev_decls)
 
 (* ─── Pass 1.5: effect inference (transitive closure of `visits`) ────── *)
 

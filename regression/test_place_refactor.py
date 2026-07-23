@@ -71,3 +71,64 @@ def test_error_is_sugar_for_marked_place():
     """error_decl is dead: `error E ...` flows through the single place production."""
     r = _emit(ROOT / "examples" / "error_morphism")
     assert r.returncode == 0, r.stderr[-300:]
+
+
+# ---- stage 6 (fork 2 = reserved slot): path constructors -----------------
+
+def test_path_constructor_slot_is_reserved(tmp_path):
+    """The grammar accepts the path-arm form; the parser rejects it cleanly
+    until the path-over obligation is pinned in the kernel. This test flips
+    when fork 2 opens."""
+    import shutil
+    twin = tmp_path / "twin"
+    shutil.copytree(ROOT / "examples" / "inductive_list", twin)
+    (twin / "Entry.yon").write_text(
+        "place List {\n"
+        "  this > Nil :U Cons(number, List) :U dup(number) : Cons(0, Nil) = Nil\n"
+        "}\n"
+        "place Entry { }\n"
+        "fun main(): number { return 0 }\n")
+    r = _emit(twin)
+    assert r.returncode != 0, "the reserved path-arm slot COMPILES (fork 2 opened without a plan?)"
+    assert b"path constructor" in r.stderr + r.stdout
+    assert b"not yet enabled" in r.stderr + r.stdout
+
+
+# ---- world-guard rule (f): the site of a union is DERIVED from its arms ----
+
+def test_sited_union_compiles():
+    """Arms in one world -> the union's site is derived (Sited), and the
+    project compiles. Phase 2 of the ONE world inferrer."""
+    r = _emit(ROOT / "regression" / "yon_tests" / "union_sited")
+    assert r.returncode == 0, r.stderr.decode(errors="replace")[-300:]
+
+
+def test_cross_world_union_is_incoherent():
+    """Arms in two worlds -> a coproduct across topoi does not exist; the
+    diagnostic names the right arrow (a geometric morphism)."""
+    r = _emit(ROOT / "examples" / "union_cross_world_reject")
+    assert r.returncode != 0
+    msg = (r.stderr + r.stdout).decode(errors="replace")
+    assert "needs a geometric morphism, not a coproduct" in msg, msg[-300:]
+
+
+def test_arm_section_at_union_boundary_fails_closed(tmp_path):
+    """SOUNDNESS pin: passing an arm section where the union is expected
+    TYPECHECKS (the stage-1 mono) but has NO value-level lowering yet — it
+    must be a clean reject, never the type-inconsistent MLIR that once
+    reached a wrong binary (found live 2026-07-23: exit 1 instead of 7).
+    Flips when the value-level injection is designed (cantiere «sezione»)."""
+    import shutil
+    twin = tmp_path / "sub"
+    shutil.copytree(ROOT / "regression" / "yon_tests" / "union_sited", twin)
+    (twin / "Entry.yon").write_text(
+        "place Entry { }\n"
+        "place Account {\n  this > Opened :U Closed\n}\n"
+        "fun accept(a: Account): number { return 7 }\n"
+        "fun main(): number {\n"
+        "  be o holds new Opened { initial 42 }\n"
+        "  return accept(o)\n}\n")
+    r = _emit(twin)
+    assert r.returncode != 0, "the subsumed call EMITS again: either the value-level injection landed (flip this) or the miscompile is back"
+    msg = (r.stderr + r.stdout).decode(errors="replace")
+    assert "injection along the mono is type-level only" in msg, msg[-300:]

@@ -1,0 +1,13 @@
+[package]
+name = "union_cross_world_reject"
+
+[world.W1]
+objects = ["X"]
+spaces  = ["a"]
+
+[world.W2]
+objects = ["Y"]
+spaces  = ["b"]
+
+[runtime]
+backend = "memory"
