@@ -207,7 +207,7 @@ int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
  * emitter emits one call per type at startup; tags points to n_fields bytes,
  * one YON_WIRE_TAG_* per field in declaration order. Idempotent per id. */
 void yon_rt_register_schema(uint32_t schema_id, uint32_t n_fields,
-                            const uint8_t *tags);
+                            const uint8_t *tags, uint64_t type_root);
 
 /* Serialize a place instance into a wire frame. Reads the schema_id stamped on
  * the section, looks up its descriptor, writes the frame into out_buf. Returns
@@ -364,6 +364,14 @@ int yon_rt_register_migration(const char *place_name,
 
 /* Variant of yon_rt_new with an explicit schema_version. yon_rt_new(...) is
  * equivalent to yon_rt_new_v(..., 0). */
+/* Root-prefixed constructor: every place instance's payload begins with the
+   8-byte nominal type root (LE). Field offsets elsewhere are FIELD-region
+   offsets (the root head is skipped by the readers). */
+yon_section_t yon_rt_new_r(uint32_t heap_id,
+                            const void *field_bytes, uint32_t n_bytes,
+                            uint64_t type_root, uint32_t schema_version);
+/* The type root recovered from the handle alone (0 if unavailable). */
+uint64_t yon_rt_section_root(yon_section_t sec);
 yon_section_t yon_rt_new_v(uint32_t heap_id,
                             const void *payload_bytes, uint32_t n_bytes,
                             const char *place_name, uint32_t schema_version);

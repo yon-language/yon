@@ -38,9 +38,12 @@ int main(void) {
     /* A 16-byte payload: two doubles, distinct bytes so we can verify the load. */
     uint8_t payload[16];
     for (int i = 0; i < 16; i++) payload[i] = (uint8_t)(i + 1);
-    yon_section_t sec = yon_rt_new(heap, payload, sizeof(payload));
+    /* Root-prefixed constructor (the identity head): field offsets below are
+       FIELD-region offsets, as everywhere in the system. */
+    yon_section_t sec = yon_rt_new_r(heap, payload, sizeof(payload),
+                                     0x524f4f5464656d6fULL, 1);
     if (sec == YON_SECTION_INVALID) {
-        printf("[FAIL] yon_rt_new\n");
+        printf("[FAIL] yon_rt_new_r\n");
         return 1;
     }
 
@@ -126,12 +129,14 @@ int main(void) {
         if (!ok) fails++;
     }
 
-    /* 7) flatten round-trips the exact payload, and rejects a too-small cap. */
+    /* 7) flatten round-trips the exact payload (head + fields), and rejects
+       a too-small cap. The wire ships the whole content; the field region
+       starts after the 8-byte identity head. */
     {
-        uint8_t buf[16];
+        uint8_t buf[24];
         memset(buf, 0, sizeof(buf));
         int32_t n = yon_rt_flatten(sec, buf, sizeof(buf));
-        int ok_full = (n == 16) && (memcmp(buf, payload, 16) == 0);
+        int ok_full = (n == 24) && (memcmp(buf + 8, payload, 16) == 0);
         int32_t n_small = yon_rt_flatten(sec, buf, 4);  /* cap < payload_size */
         int ok_small = (n_small == -1);
         printf("  flatten full=%d small=%d        : %s\n",

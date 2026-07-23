@@ -1,4 +1,5 @@
 EMITFAIL false_coherence
+EMITFAIL union_cross_world_reject
 EMITFAIL union_field_obligation_reject
 RAN arena_basic exit=6
 RAN c_cell exit=0
