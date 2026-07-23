@@ -10,3 +10,4 @@
 
 hcomp_side   # one side of an `hcomp` cube; cubical kernel form, no surface writer in 1.0
 hcomp_base   # the base of an `hcomp` cube; cubical kernel form, no surface writer in 1.0
+arm          # fork-2 reserved slot: the path-constructor alternatives failwith by design ("not yet enabled"); no fixture can reduce them until the kernel pins path-over

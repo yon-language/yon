@@ -688,7 +688,7 @@ place_member_list:
    is the sum of; each arm is a variant (an existing place, optionally with a
    payload). Reuses the `variant` grammar shared with `inductive`. *)
 variant_clause:
-  | THIS GT vs = separated_nonempty_list(COLON_U, variant)   { vs }
+  | THIS GT vs = separated_nonempty_list(COLON_U, arm)   { vs }
 
 place_member:
   | fc = field_or_cell                    { PbiMember fc }
@@ -921,6 +921,23 @@ variant:
     { { v_name = name; v_args = [] } }
   | name = IDENT LPAREN args = separated_list(COMMA, type_expr) RPAREN
     { { v_name = name; v_args = args } }
+
+/* An arm of a `this >` clause. Same shape as a type-position variant, PLUS
+   the fork-2 RESERVED SLOT: a path constructor puts an EQUALITY into the
+   place, as data (`this > shift(nat, nat) : mk(a, b) = mk(a+1, b+1)`).
+   The slot lives ONLY here (not in type-position sums, where the `:` tail
+   would be ambiguous); enabling it requires the pinned path-over obligation
+   in the kernel (the branch checked against PathP (i. P(loop@i)), Fase 2).
+   Until then: a clean reject. */
+arm:
+  | v = variant  { v }
+  | name = IDENT LPAREN separated_list(COMMA, type_expr) RPAREN
+    COLON expr EQ expr
+    { failwith ("path constructor '" ^ name ^ "' not yet enabled: a path "
+                ^ "arm needs the pinned path-over obligation in the kernel") }
+  | name = IDENT COLON expr EQ expr
+    { failwith ("path constructor '" ^ name ^ "' not yet enabled: a path "
+                ^ "arm needs the pinned path-over obligation in the kernel") }
 
 (* A named sum type is a coproduct place: `place Tree { this > Leaf :U Node(Tree, Tree) }`
    (see place_decl, whose pd_arms carry the `this >` clause). The
