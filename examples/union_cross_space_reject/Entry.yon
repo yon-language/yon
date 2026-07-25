@@ -1,0 +1,8 @@
+// NEGATIVE probe (same-space doctrine): Opened lives in space a, Closed in
+// space b — SAME world W, but the space is the topos: a coproduct across
+// spaces does not exist, across spaces there is the wire.
+place Entry { }
+place Account {
+  this > Opened :U Closed
+}
+fun main(): number { return 0 }

@@ -504,7 +504,7 @@ let () =
      place copies its source place's world; expanding earlier would freeze
      __INFER and orphan the view in multi-world projects. *)
   let prog = Desugar.expand_views prog in
-  (* Lower the Id-proposition sugar (Same / plainly) before check + desugar. *)
+  (* Lower the Id-proposition sugar (Same / bare clear) before check + desugar. *)
   let prog = Tycheck.elaborate_id_sugar prog in
   let cr = Tycheck.check_program prog in
   if cr.Tycheck.cr_errors <> [] then begin

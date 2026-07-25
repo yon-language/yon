@@ -17,21 +17,21 @@ place Entry {
 // ramo. E' il principio d'induzione: la sezione dipendente unica data dalla
 // proprieta' universale dell'algebra iniziale.
 
-fun b2bit(b: Bool): Bit { return match b { tt => hit(one), ff => hit(zero) } }
-fun bit2b(x: Bit): Bool { return match x { one => hit(tt), zero => hit(ff) } }
+fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }
+fun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }
 
 // Le due coerenze del round-trip, provate per eliminazione dipendente: il tipo
 // di ritorno varia con l'argomento, il `match` lo raffina per costruttore.
 fun eta(a: Bool): Id(Bool, bit2b(b2bit(a)), a) {
-  return match a { tt => refl(hit(tt)), ff => refl(hit(ff)) }
+  return match a { tt => clear tt, ff => clear ff }
 }
 fun eps(b: Bit): Id(Bit, b2bit(bit2b(b)), b) {
-  return match b { one => refl(hit(one)), zero => refl(hit(zero)) }
+  return match b { one => clear one, zero => clear zero }
 }
 
 fun main(): number {
   be bridge holds equiv(b2bit, bit2b, eta, eps)   // Bool ~= Bit, non l'identita'
-  be y holds transport(ua(bridge), hit(tt))       // porta tt lungo ua(Bool~=Bit)
+  be y holds transport(ua(bridge), tt)       // porta tt lungo ua(Bool~=Bit)
   return match y { one => 1, zero => 0 }           // tt |-> one |-> 1
 }
 }

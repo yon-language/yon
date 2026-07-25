@@ -20,7 +20,7 @@ fun scale(x: number): number { return x * 110 / 100 }
 
 fun main(): number {
   be _g holds Cap.grant(169281588)       // register the capability token
-  be a holds new EUR { balance 40 }
+  be a holds .-> EUR { balance 40 }
   be b holds apply_move(EurToUsd, a)     // the move that names the token
   return b.balance - 2                    // 42
 }

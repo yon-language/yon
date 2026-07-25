@@ -5,15 +5,15 @@ place Entry {
 //      the return type `Same(g(f(a)), a)` parses, and the carrier `number`
 //      is inferred from the endpoints (no need to write `Id(number, ...)`).
 //   2. Endpoint comparison is up to normalization: with f and g the identity,
-//      g(f(a)) reduces to a, so `plainly` (refl of the endpoint) inhabits it.
+//      g(f(a)) reduces to a, so bare `clear` (reflexivity of the endpoint) inhabits it.
 //      Syntactically the endpoints differ; up to conversion they agree.
-// The raw `Id(number, g(f(a)), a)` + `refl(a)` stays valid in the lower
-// stratum; this is the same proof, said plainly.
+// The raw `Id(number, g(f(a)), a)` + `refl(a)` stays valid in the KERNEL
+// stratum; this is the same proof, said clearly.
 fun f(x: number): number { return x }
 fun g(x: number): number { return x }
 
 fun coherence(a: number): Same(g(f(a)), a) {
-  return plainly
+  return clear
 }
 
 fun main(): number { return 0 }

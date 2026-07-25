@@ -150,15 +150,19 @@ and fmt_expr (e : expr) : string =
          NOT comma-separated -- a comma here would never re-parse. *)
       let assigns = String.concat " "
         (List.map (fun fa -> fa.fa_name ^ " " ^ fmt_expr fa.fa_value) fas) in
-      Printf.sprintf "new %s { %s }" place assigns
+      Printf.sprintf ".-> %s { %s }" place assigns
   | ENewIn (place, space, fas, _) ->
       (* field assignments are space-juxtaposed in the surface (`{ x 1 y 2 }`),
          NOT comma-separated -- a comma here would never re-parse. *)
       let assigns = String.concat " "
         (List.map (fun fa -> fa.fa_name ^ " " ^ fmt_expr fa.fa_value) fas) in
       Printf.sprintf "new %s in %s { %s }" place space assigns
-  | ERefl (EVar ("__plainly__", _), _) -> "plainly"  (* refl-of-endpoint sugar *)
-  | ERefl (e, _) -> "refl(" ^ fmt_expr e ^ ")"
+  | ERefl (EVar ("__plainly__", _), _) -> "clear"  (* bare clear: inferred endpoint *)
+  | ERefl (e, _) ->
+      (* `clear` binds an ATOM: parenthesize anything that is not one. *)
+      (match e with
+       | EVar _ | ELit _ | EParen _ -> "clear " ^ fmt_expr e
+       | _ -> "clear (" ^ fmt_expr e ^ ")")
   | EPair (a, b, _) -> Printf.sprintf "pair(%s, %s)" (fmt_expr a) (fmt_expr b)
   | EFst (e, _) -> "fst(" ^ fmt_expr e ^ ")"
   | ESnd (e, _) -> "snd(" ^ fmt_expr e ^ ")"
@@ -186,9 +190,16 @@ and fmt_expr (e : expr) : string =
       if args = [] then Printf.sprintf "hit(%s)" name
       else Printf.sprintf "hit(%s, %s)" name (String.concat ", " (List.map fmt_expr args))
   | EHITElim (motive, branches, target, _) ->
-      let br (name, binders, body) =
-        let hd = if binders = [] then name
-                 else Printf.sprintf "%s(%s)" name (String.concat ", " binders) in
+      let br (name, pat, body) =
+        let hd = match pat with
+          | PatVars [] -> name
+          | PatVars binders ->
+              Printf.sprintf "%s(%s)" name (String.concat ", " binders)
+          | PatFields fs ->
+              Printf.sprintf "%s { %s }" name
+                (String.concat " "
+                   (List.map (fun (f, b) ->
+                      if f = b then f else Printf.sprintf "%s as %s" f b) fs)) in
         Printf.sprintf "%s => %s" hd (fmt_expr body) in
       Printf.sprintf "hit_elim(%s, [%s], %s)"
         (fmt_expr motive) (String.concat ", " (List.map br branches)) (fmt_expr target)
@@ -304,7 +315,7 @@ let rec fmt_stmt (f : fmt) (s : stmt) : unit =
          NOT comma-separated -- a comma here would never re-parse. *)
       let assigns = String.concat " "
         (List.map (fun fa -> fa.fa_name ^ " " ^ fmt_expr fa.fa_value) fas) in
-      line f (Printf.sprintf "new %s { %s }" place assigns)
+      line f (Printf.sprintf ".-> %s { %s }" place assigns)
   | SInSequence (x, e, body, _) ->
       line f (Printf.sprintf "in sequence over %s in %s {" x (fmt_expr e));
       f.indent <- f.indent + 1; List.iter (fmt_stmt f) body; f.indent <- f.indent - 1;

@@ -1,7 +1,7 @@
 place Entry { }
 morph LiftEU from Account to AccountEU {
   on object(s: Account): AccountEU {
-    return new AccountEU { balance s.balance }
+    return .-> AccountEU { balance s.balance }
   }
 }
 fun main(): number { return 0 }

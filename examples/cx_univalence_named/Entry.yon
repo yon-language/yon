@@ -8,7 +8,7 @@ fun succ(n: number): number { return n + 1 }
 fun pred(n: number): number { return n - 1 }
 
 fun main(): number {
-  be bridge holds equiv(succ, pred, fun(a) => refl(a), fun(b) => refl(b))
+  be bridge holds equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)
   be y holds transport(ua(bridge), 10)
   return y     // -> 11
 }

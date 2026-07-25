@@ -72,6 +72,11 @@ type env = {
      validate `nat_transform Name from F to G { ... }`, where F and G must be
      existing morphisms. *)
   declared_morphs : string list;
+  (* Places SYNTHESIZED from payload arms (place refactor, prima pietra):
+     real places for identity/injection/world, but with no user-written
+     declaration — construction of their sections lands with the mediatrice
+     step, so `new` on them is rejected (transitional). *)
+  synthetic_places : string list;
   (* The full morph_decls, so we can read mp_source/mp_target while validating
      a nat_transform. *)
   morph_decls : (string * morph_decl) list;
@@ -98,6 +103,7 @@ let empty : env = {
   transport_pairs = [];
   declared_spaces = [];
   declared_morphs = [];
+  synthetic_places = [];
   morph_decls = [];
   view_decls = [];
   topos_decls = [];
@@ -302,6 +308,12 @@ let named_sum_of_ctor (env : env) (ctor : string) : (string * variant list) opti
 
 let add_interval (env : env) (i : interval_var) : env =
   { env with intervals = i :: env.intervals }
+
+let add_synthetic_marker (env : env) (name : string) : env =
+  { env with synthetic_places = name :: env.synthetic_places }
+
+let is_synthetic_place (env : env) (name : string) : bool =
+  List.mem name env.synthetic_places
 
 let add_place (env : env) (pd : place_decl) : env =
   let env = { env with places = (pd.pd_name, pd) :: env.places } in

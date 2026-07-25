@@ -59,7 +59,9 @@ let collect_wire_knowledge (p : program) : unit =
         Hashtbl.replace wire_fun_returns fd.fn_name fd.fn_return
     | _ -> ()) p
 
-let reset_scheme_env () = scheme_env := []
+let reset_scheme_env () =
+  scheme_env := [];
+  Hashtbl.clear Surface_ast.bare_point_sites
 
 let add_scheme (name : string) (s : Ty_subst.scheme) =
   scheme_env := (name, s) :: !scheme_env
@@ -397,7 +399,8 @@ let free_vars_expr (e0 : expr) : string list =
     | EApp (h, args, _) -> s h @ List.concat_map s args
     | EHITElim (t, branches, m, _) ->
         s t
-        @ List.concat_map (fun (_, vars, e) -> go (vars @ bound) e) branches
+        @ List.concat_map (fun (_, pat, e) ->
+            go (pat_bound_names pat @ bound) e) branches
         @ s m
     | EPathApp (e, _, _) -> s e
     | EPathAbs (i, e, _) -> go (i :: bound) e
@@ -489,7 +492,7 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
   | ECall (name, args, loc) -> ECall (name, List.map r args, loc)
   | EHITElim (motive, branches, scrutinee, loc) ->
       EHITElim (r motive,
-        List.map (fun (name, vars, body) -> (name, vars, r body)) branches,
+        List.map (fun (name, pat, body) -> (name, pat, r body)) branches,
         r scrutinee, loc)
   | EHITConstr (ctor, args, loc) -> EHITConstr (ctor, List.map r args, loc)
   | ENew (name, fields, loc) ->
@@ -633,7 +636,7 @@ let rec ty_mentions_evar (xv : string) (t : ty) : bool =
    its fibre — is the per-branch check below; this is the abstract witness that
    the branch cone is a well-formed cocone over the carrier. *)
 let certify_dependent_cone (hname : string)
-    (branches : (string * string list * expr) list) : bool =
+    (branches : (string * _ * expr) list) : bool =
   let open Catt_r_yon in
   let diagram : ps_ctx =
     (hname, CellStar)
@@ -678,7 +681,8 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       let* x_ty = infer env ctx x in
       let point_body =
         List.fold_left
-          (fun acc (_ctor, vars, body) ->
+          (fun acc (_ctor, pat, body) ->
+             let vars = pat_bound_names pat in
              match acc, body with
              | Some _, _ -> acc
              | None, EPathAbs _ -> None
@@ -808,6 +812,32 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                   | None -> err loc (Printf.sprintf
                       "hit_elim: constructor %s does not belong to %s"
                       ctor hname)
+                in
+                (* co-mediatrice: a field pattern (`Cons { head tail }`)
+                   binds projections BY NAME. On the bridge a registry arm's
+                   projections are `_1.._n` (the synthesis convention);
+                   declared arm places will supply their real names here.
+                   Resolution happens ONCE, then the whole rule below works on
+                   positional binders as it always did. *)
+                let* branches =
+                  let* rev =
+                    List.fold_left (fun acc (ctor, pat, v) ->
+                      let* acc = acc in
+                      match pat with
+                      | PatVars vs -> ok ((ctor, vs, v) :: acc)
+                      | PatFields _ ->
+                          let* kind = constructor ctor in
+                          let n = List.length (Hit_env.constructor_params kind) in
+                          let fields =
+                            List.init n (fun i -> Printf.sprintf "_%d" (i + 1)) in
+                          (match pat_to_binders ~fields pat with
+                           | Ok vs -> ok ((ctor, vs, v) :: acc)
+                           | Error bad -> err loc (Printf.sprintf
+                               "match %s { ... }: no projection named '%s' on \
+                                this arm (bridge projections are _1.._%d)"
+                               ctor bad n)))
+                      (ok []) branches
+                  in ok (List.rev rev)
                 in
                 let branch_env ctor vars params =
                   if List.length vars <> List.length params then
@@ -995,6 +1025,20 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       match Tyenv.lookup_var env x with
        | Some t -> ok t
        | None ->
+           (* the bare point: `tt` names the unique point of its terminal arm
+              (locals shadow — lookup_var already failed). Record the site for
+              the desugar's spine lowering. *)
+           match
+             List.find_opt
+               (fun (_, variants) ->
+                  List.exists (fun v -> v.v_name = x && v.v_args = []) variants)
+               env.Tyenv.named_sums
+           with
+           | Some (sum_name, _) ->
+               Hashtbl.replace bare_point_sites
+                 (loc.file, loc.start_line, loc.start_col) x;
+               ok (TyUser sum_name)
+           | None ->
            match Tyenv.lookup_morph_decl env x with
            | Some mp -> ok (TyMorphHandle (Some mp.mp_source, Some mp.mp_target))
            | None ->
@@ -1484,6 +1528,28 @@ got %s" (Tyenv.ty_to_string other)))
            spawn_promote_ty := saved;
            err loc "spawn block has no promote: it must promote at least one value")
   | ENew (place_name, fas, loc) ->
+      let* () =
+        (* a payload arm's mediatrice lowers to the arm's SPINE (the same
+           value hit built): every projection must be given — a spine has
+           full arity, there is no zero-fill. *)
+        if Tyenv.is_synthetic_place env place_name then
+          match Tyenv.lookup_place env place_name with
+          | Some pd ->
+              let need =
+                List.filter_map
+                  (function FoField f -> Some f.fd_name | _ -> None)
+                  pd.pd_members in
+              let given = List.map (fun fa -> fa.fa_name) fas in
+              (match List.find_opt (fun f -> not (List.mem f given)) need with
+               | Some missing ->
+                   err loc (Printf.sprintf
+                     "place %s is a payload arm: its mediatrice needs every \
+                      projection (missing %s) — a spine has no zero-fill"
+                     place_name missing)
+               | None -> ok ())
+          | None -> ok ()
+        else ok ()
+      in
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
        | Some pd ->
@@ -1906,6 +1972,65 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
         | _ -> fallback env e expected
       in
       go env params expected
+  | EHITElim (EVar ("__match", _), branches, x, loc), _
+      when (match x with
+            | EVar (xv, _) -> not (ty_mentions_evar xv expected)
+            | _ -> true) ->
+      (* CHECKING mode, non-dependent: the expected type IS the constant
+         motive — bidirectionality removes the "needs a payload-free base
+         branch" synthesis restriction (`fun total(t: Tree): number { return
+         match t {...} }`: every branch may read its payload; each body is
+         checked against the expected type in its branch env.
+         POINT constructors only: a builtin HIT with path constructors
+         (circle's loop, suspension's merid) has branches inhabiting a PATH
+         over the motive, not the motive — those keep the synthesis path. *)
+      let* x_ty = infer env ctx x in
+      (match hit_signature_of env x_ty with
+       | None -> fallback env e expected
+       | Some (_, sig_) when sig_.Hit_env.hit_paths <> [] ->
+           fallback env e expected
+       | Some (hname, sig_) ->
+           let handled = List.map (fun (n, _, _) -> n) branches in
+           let missing =
+             if List.mem "_" handled then []
+             else Hit_env.missing_constructors sig_ handled in
+           let* () =
+             match missing with
+             | [] -> ok ()
+             | ns -> err loc (Printf.sprintf
+                 "match: missing branch(es) for %s" (String.concat ", " ns)) in
+           List.fold_left (fun acc (ctor, pat, body) ->
+             let* () = acc in
+             if ctor = "_" then check env ctx body expected
+             else
+               match Hit_env.find_constructor [hname, sig_] ctor with
+               | None -> err loc (Printf.sprintf
+                   "match: constructor %s does not belong to %s" ctor hname)
+               | Some (_, kind) ->
+                   let params = Hit_env.constructor_params kind in
+                   let* vars =
+                     match pat with
+                     | PatVars vs ->
+                         if List.length vs <> List.length params then
+                           err loc (Printf.sprintf
+                             "match: branch %s expects %d payload binder(s), got %d"
+                             ctor (List.length params) (List.length vs))
+                         else ok vs
+                     | PatFields _ ->
+                         let fields =
+                           List.init (List.length params)
+                             (fun i -> Printf.sprintf "_%d" (i + 1)) in
+                         (match pat_to_binders ~fields pat with
+                          | Ok vs -> ok vs
+                          | Error bad -> err loc (Printf.sprintf
+                              "match %s { ... }: no projection named '%s'"
+                              ctor bad)) in
+                   let benv =
+                     Tyenv.add_vars env
+                       (List.filter (fun (n, _) -> n <> "_")
+                          (List.combine vars (List.map snd params))) in
+                   check benv ctx body expected)
+             (ok ()) branches)
   | EHITElim (_, branches, x, loc), _
       when (match x with
             | EVar (xv, _) -> ty_mentions_evar xv expected
@@ -1943,13 +2068,28 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
              | ("_", _, _) :: _ ->
                  err loc "match: a result type that varies with the scrutinee \
                           needs every constructor listed; `_` cannot refine it"
-             | (ctor, vars, body) :: rest ->
+             | (ctor, pat, body) :: rest ->
                  (match Hit_env.find_constructor [hname, sig_] ctor with
                   | None ->
                       err loc (Printf.sprintf
                         "match: constructor %s does not belong to %s" ctor hname)
                   | Some (_, kind) ->
                       let params = Hit_env.constructor_params kind in
+                      let* vars =
+                        (* co-mediatrice: field patterns bind by name;
+                           bridge projections are _1.._n. *)
+                        match pat with
+                        | PatVars vs -> ok vs
+                        | PatFields _ ->
+                            let fields =
+                              List.init (List.length params)
+                                (fun i -> Printf.sprintf "_%d" (i + 1)) in
+                            (match pat_to_binders ~fields pat with
+                             | Ok vs -> ok vs
+                             | Error bad -> err loc (Printf.sprintf
+                                 "match %s { ... }: no projection named '%s' \
+                                  on this arm" ctor bad))
+                      in
                       if List.length vars <> List.length params then
                         err loc (Printf.sprintf
                           "match: branch %s expects %d payload binder(s), got %d"
@@ -2943,10 +3083,50 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
    constructor, lowered exactly as today. ONE rule, parameterized over the
    lookup: the env entry point serves registration/checking, the raw-program
    entry point serves world inference (which runs BEFORE any env exists). *)
+(* A coproduct arm with a positional payload IS a place whose projections
+   are unnamed: `Node(Tree, Tree)` is the place `Node { _1 Tree, _2 Tree }`.
+   The synthesis gives the names; it does not change the nature of the arm
+   (extensivity: every arm is a subobject of the union). PURE — no env: it
+   also serves the pre-env world-inference path.
+
+   Projection-name convention, fixed once: `_1`, `_2`, ... (census
+   2026-07-24: no user field in the corpus is named `_N`). Today a place's
+   root is name-nominal (Type_root.leaf_root hashes the name only), so the
+   convention does not yet reach any address; the day place roots become
+   arrow-profile hashes, these names will enter them — fixed NOW so that
+   day changes nothing.
+
+   The self-reference is preserved nominally: a payload type equal to the
+   union's own name stays `TyUser union` — never expanded (recursion). The
+   synthetic place inherits the union's world: it is declared INSIDE it
+   (a Constant union yields a constant synthetic arm). *)
+let synth_place_of_arm (union_pd : place_decl) (v : variant) : place_decl =
+  { pd_name = v.v_name;
+    pd_type_params = [];
+    pd_arms = [];
+    pd_world = union_pd.pd_world;
+    pd_members =
+      List.mapi (fun i ty ->
+        FoField { fd_name = Printf.sprintf "_%d" (i + 1);
+                  fd_ty = ty; fd_loc = union_pd.pd_loc })
+        v.v_args;
+    pd_over = None; pd_laws = [];
+    pd_subcontains = None; pd_is_error = false; pd_on_error = None;
+    pd_loc = union_pd.pd_loc }
+
+(* Resolution, ONE rule: an empty-payload arm resolves iff its head names a
+   declared place; a payload arm IS a place — the synthetic one — unless its
+   head ALSO names a user place (a genuine conflict, rejected upstream by
+   check_named_sum; census 2026-07-24: zero in the corpus). *)
 let arm_resolves_with (lookup : string -> place_decl option)
-    (v : variant) : place_decl option =
-  if v.v_args <> [] then None
-  else lookup v.v_name
+    ?(union : place_decl option) (v : variant) : place_decl option =
+  if v.v_args = [] then lookup v.v_name
+  else match union with
+    | None -> None            (* no union in hand: cannot synthesize *)
+    | Some u ->
+        (match lookup v.v_name with
+         | Some _ -> None     (* head collides with a user place: no silent pick *)
+         | None -> Some (synth_place_of_arm u v))
 
 let arm_resolves_to_place (env : Tyenv.env) (v : variant) : place_decl option =
   arm_resolves_with (fun n -> Tyenv.lookup_place env n) v
@@ -2981,13 +3161,37 @@ let resolve_arm_injections (env : Tyenv.env) (p : program) : Tyenv.env =
        | TopPlace pd when pd.pd_arms <> [] ->
            List.fold_left
              (fun acc v ->
-                match arm_resolves_to_place acc v with
+                match arm_resolves_with
+                        (fun n -> Tyenv.lookup_place acc n)
+                        ~union:pd v with
                 | Some apd when apd.pd_subcontains = None
                              && apd.pd_name <> pd.pd_name ->
-                    Tyenv.add_place acc
-                      { apd with pd_subcontains = Some pd.pd_name }
+                    let acc =
+                      Tyenv.add_place acc
+                        { apd with pd_subcontains = Some pd.pd_name } in
+                    (* a payload arm resolved to its SYNTHETIC place: mark it,
+                       so `new` on it is rejected until the mediatrice step. *)
+                    if v.v_args <> [] then
+                      Tyenv.add_synthetic_marker acc apd.pd_name
+                    else acc
                 | _ -> acc)
              env pd.pd_arms
+       | _ -> env)
+    env p
+
+(* Delta-rule sweep (definitional equality): registered AFTER every
+   declaration so a pure body's bare points resolve against the full
+   named_sums (delta_rule_of_fun kernelizes them itself, scope-aware).
+   Side-effect-free; None for non-pure-return bodies (sound: no rule, the
+   call stays opaque). *)
+let register_deltas (env : Tyenv.env) (p : program) : Tyenv.env =
+  List.fold_left
+    (fun env td ->
+       match td with
+       | TopFun fn ->
+           (match Desugar.delta_rule_of_fun env fn with
+            | Some body -> Tyenv.add_delta env fn.fn_name body
+            | None -> env)
        | _ -> env)
     env p
 
@@ -3053,13 +3257,12 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         fs_visits = fn.fn_visits;
         fs_partial = fn.fn_partial;
       } in
-      let env1 = Tyenv.add_fun env fn.fn_name sig_ in
-      (* Register the delta-rule (Core body) for definitional equality.
-       * Side-effect-free; None for non-pure-return bodies (sound: no rule,
-       * call stays opaque). *)
-      (match Desugar.delta_rule_of_fun env1 fn with
-       | Some body -> Tyenv.add_delta env1 fn.fn_name body
-       | None -> env1)
+      Tyenv.add_fun env fn.fn_name sig_
+      (* the delta-rule is NOT registered here: hoisted funs precede their
+       * places in the decl fold, so named_sums would still be empty and a
+       * bare point in the body would desugar to a free Var. The delta sweep
+       * is register_deltas below, after every declaration is in the env —
+       * same order-independence move as resolve_arm_injections. *)
   | TopMove _ -> env
   | TopView vd -> Tyenv.add_view env vd
   | TopReduction rd -> Tyenv.add_reduction env rd
@@ -3270,6 +3473,40 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
       (* a place with arms IS the named sum: the sum check plus the stage-3
          member obligations. Not the field-place check. *)
       let* () = check_named_sum pd.pd_name pd.pd_arms pd.pd_loc in
+      (* prima pietra: a payload arm whose head ALSO names another place is a
+         genuine conflict — never picked silently (census 2026-07-24: zero).
+         Two cases, both loud: (i) the head names a USER place; (ii) the head
+         names the SYNTHETIC of a payload arm in ANOTHER union — synthetic
+         identity is name-nominal today (leaf_root hashes the name only), so
+         same-named arms in two unions would share a root AND the injection
+         chain is single-parent: the second would mis-resolve in silence. *)
+      let* () =
+        List.fold_left (fun acc v ->
+          let* () = acc in
+          if v.v_args = [] then ok ()
+          else match Tyenv.lookup_place env v.v_name with
+            | None -> ok ()
+            | Some other ->
+                if Tyenv.is_synthetic_place env v.v_name then
+                  (* our own synthetic (this union's arm, registered by the
+                     second pass) is fine; another union's synthetic is not. *)
+                  (match other.pd_subcontains with
+                   | Some parent when parent = pd.pd_name -> ok ()
+                   | _ ->
+                       err pd.pd_loc (Printf.sprintf
+                         "place %s: arm %s carries a payload but another \
+                          union already declares an arm with this name — \
+                          rename one; synthetic-arm identity is name-nominal \
+                          and the injection is single-parent"
+                         pd.pd_name v.v_name))
+                else
+                  err pd.pd_loc (Printf.sprintf
+                    "place %s: arm %s carries a payload but also names a \
+                     declared place — rename one; a payload arm synthesizes \
+                     its own place and cannot shadow a user declaration"
+                    pd.pd_name v.v_name))
+          (ok ()) pd.pd_arms
+      in
       check_union_members env ctx pd
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn
@@ -4396,12 +4633,12 @@ type check_result = {
    are INCOHERENT: a coproduct across topoi does not exist (it needs a
    geometric morphism).
 
-   TODO (anchored, not a bug today): positional payloads (Node(Tree, Tree))
-   contribute no world until they become synthetic places with their own
-   projections (the «sezione» decision, yon_sezione_non_costruttore.md §4).
-   When arm payloads become places, arm_site_of must fold their worlds too.
-   Today every corpus payload belongs to a constant union, so none carries
-   a world regardless. *)
+   TODO (prerequisite NOW SATISFIED — prima pietra 2026-07-24: payload arms
+   synthesize places): arm_site_of still does NOT consume payload arms (no
+   ~union passed here), so its outcome is unchanged by the synthesis —
+   deliberately: folding the payload types' worlds in would change rule (f)'s
+   verdict on unions that are Constant today. The extension is its own step,
+   decided separately. *)
 type arm_site = Constant | Sited of string | Incoherent of string * string
 
 let arm_site_of (lookup : string -> place_decl option)
@@ -4955,14 +5192,14 @@ let infer_effects (env : Tyenv.env) (p : program) : Tyenv.env =
   in
   { env with Tyenv.funs = updated_funs }
 
-(* ─── Id-proposition sugar elaboration (Same / plainly) ──────────────────
+(* ─── Id-proposition sugar elaboration (Same / bare clear) ────────────────
    Runs on the surface AST before check_program AND desugar, lowering the two
    sugar sentinels into kernel Id / refl so nothing downstream must know they
    existed:
      - `Same(X, Y)` parses as TyId(TyMetaVar same_sentinel, X, Y): the sentinel
        carrier is replaced by the INFERRED type of the left endpoint X (reusing
        `infer`, since the dependent layer has no unification engine of its own).
-     - `plainly` parses as refl(__plainly__): the placeholder endpoint is
+     - bare `clear` parses as refl(__plainly__): the placeholder endpoint is
        replaced by the left endpoint of the enclosing function's return-type Id.
    The env for inference is built with the same prelude check_program uses, but
    we map over the ORIGINAL program (preserving __INFER world markers for the
@@ -4984,6 +5221,7 @@ let elaborate_id_sugar (p : program) : program =
   | Some p3 ->
     let genv = List.fold_left register_decl (Tyenv.with_builtins Tyenv.empty) p3 in
     let genv = resolve_arm_injections genv p3 in
+    let genv = register_deltas genv p3 in
     let ctx = Reduce.empty_ctx in
     let fix_plainly (ep : expr) (e : expr) : expr =
       match e with
@@ -5020,7 +5258,7 @@ let check_program (p : program) : check_result =
   Hashtbl.reset Surface_ast.method_resolutions;
   (* Method-call sugar (`s.add(...)`) is normalized away before any checking.
      Idempotent, so it is also safe to run at the start of desugar_program. *)
-  (* Lower Same / plainly first so every check path (LSP, driver, project) sees
+  (* Lower Same / bare clear first so every check path (LSP, driver, project) sees
      kernel Id / refl. Idempotent on already-lowered programs. *)
   let p = elaborate_id_sugar p in
   let p = Method_sugar.normalize_program p in
@@ -5085,6 +5323,7 @@ let check_program (p : program) : check_result =
   let ctx = Reduce.empty_ctx in
   let env_with_sigs = List.fold_left register_decl env0 p in
   let env_with_sigs = resolve_arm_injections env_with_sigs p in
+  let env_with_sigs = register_deltas env_with_sigs p in
   (* Register the 3 builtin functions of the pullback. They are synthesized by
    * the desugar (only when the program uses them), but the type checker must
    * always recognize them to accept expressions like `__pullback_pi1(p)`. *)

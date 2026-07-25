@@ -79,8 +79,7 @@ let () =
                 (Tycheck.error_to_string e)) false);
 
   let transport_refl =
-    ECall ("transport",
-           [ERefl (EVar ("number", dl), dl); ELit (LitNumber 5.0, dl)], dl) in
+    ECall ("transport", [ERefl (EVar ("number", dl), dl); ELit (LitNumber 5.0, dl)], dl) in
   (match Tycheck.infer env ctx transport_refl with
    | Ok (TyPrim "number") -> check "transport(refl(number), 5) : number" true
    | _ -> check "transport(refl(number), 5) has wrong type" false);
@@ -91,8 +90,7 @@ let () =
 
   let transport_ua_id =
     ECall
-      ("transport",
-       [ECall ("ua", [ECall ("idEquiv", [EVar ("number", dl)], dl)], dl);
+      ("transport", [ECall ("ua", [ECall ("idEquiv", [EVar ("number", dl)], dl)], dl);
         ELit (LitNumber 5.0, dl)], dl) in
   (match Tycheck.infer env ctx transport_ua_id with
    | Ok (TyPrim "number") ->
@@ -127,12 +125,10 @@ let () =
   let refl_lam name =
     ELam ([(name, num)], ERefl (EVar (name, dl), dl), dl) in
   let equiv_expr =
-    ECall ("equiv",
-           [EVar ("succ", dl); EVar ("pred", dl);
+    ECall ("equiv", [EVar ("succ", dl); EVar ("pred", dl);
             refl_lam "a"; refl_lam "b"], dl) in
   let transport_ua_equiv =
-    ECall ("transport",
-           [ECall ("ua", [equiv_expr], dl); ELit (LitNumber 10.0, dl)], dl) in
+    ECall ("transport", [ECall ("ua", [equiv_expr], dl); ELit (LitNumber 10.0, dl)], dl) in
   let ua_equiv_core = Desugar.desugar_expr transport_ua_equiv in
   (match ua_equiv_core with
    | Ast.Transp

@@ -122,7 +122,8 @@ let rec collect_names (e : expr) : string list =
   | EApp (f, args, _) -> collect_names f @ List.concat_map collect_names args
   | EHITElim (c, branches, x, _) ->
       collect_names c
-      @ List.concat_map (fun (_, vars, e) ->
+      @ List.concat_map (fun (_, pat, e) ->
+          let vars = Surface_ast.pat_bound_names pat in
           List.filter (fun n -> not (List.mem n vars)) (collect_names e)) branches
       @ collect_names x
   | EPathApp (p, _, _) -> collect_names p

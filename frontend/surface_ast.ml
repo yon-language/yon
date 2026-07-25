@@ -50,6 +50,20 @@ let substream_site_table : (int * int, int) Hashtbl.t = Hashtbl.create 16
    domain object; this carries that index from checking to code. *)
 let method_resolutions : (int * int, string) Hashtbl.t = Hashtbl.create 64
 
+(* Value-level identity injection (mono) at call boundaries: an arm PLACE's
+   section is usable where its union is expected, and the cast is identity on
+   the handle (topos.subtype_cast lowers to identity). Filled by the desugar
+   (arm place name -> the union's ind-section MLIR type); consulted by emit's
+   is_section_subtype. Bare-constructor arms and synthetic payload arms never
+   enter (no sections of theirs exist). *)
+let union_arm_upcasts : (string, string) Hashtbl.t = Hashtbl.create 16
+
+(* Bare nullary points: `tt` in expression position IS the unique point of
+   its terminal arm (the name denotes the point — no constructor call). The
+   tycheck resolves the name (scope-aware: locals shadow) and records the
+   site; the desugar lowers it to the arm's spine leaf. *)
+let bare_point_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 32
+
 (* ─── Type expressions ─────────────────────────────────────────────── *)
 
 (* Types in Yon surface — covers first-order schema types plus
@@ -124,6 +138,11 @@ and variant = {
   v_args : ty list;
 }
 
+and match_pat =
+  | PatVars of string list                (* positional binders (legacy) *)
+  | PatFields of (string * string) list   (* (field, bound name); `head` alone
+                                             binds as itself, `head as h` as h *)
+
 (* Stream back-pressure modifiers (buffer/drop) were removed entirely in v1.1:
    the surface syntax was parsed but never consumed, so a stream type is now
    just `stream of T` (TyStream of ty). *)
@@ -151,7 +170,13 @@ and expr =
   | EField of expr * string * location                (* "obj.field" *)
   | ECall of string * expr list * location            (* "f(a, b, c)" *)
   | EApp of expr * expr list * location               (* general application: head is an expr (a name, a lambda, ...) applied to args *)
-  | EHITElim of expr * (string * string list * expr) list * expr * location
+  | EHITElim of expr * (string * match_pat * expr) list * expr * location
+      (* one eliminator, two branch spellings during the transition:
+         PatVars   — legacy positional `Cons(h, t)` (dies with the parens);
+         PatFields — the co-mediatrice `Cons { head tail }` / `{ head as h }`:
+         field names bind projections BY NAME (resolved to positions where
+         the arm's field order is known — tycheck/desugar), the mirror of
+         the mediatrice literal `.-> Cons { head 5 tail rest }`. *)
   | EPathApp of expr * dim * location
   | EPathAbs of string * expr * location              (* plam i => e : path abstraction <i> e *)
   | EHITConstr of string * expr list * location       (* hit(base), hit(loop), hit(merid, a): HIT constructor *)
@@ -806,3 +831,29 @@ and topology_decl = {
 }
 
 type program = top_decl list
+
+(* Resolve a match pattern to POSITIONAL binders, given the arm's field names
+   in declaration order. PatVars is already positional. PatFields binds by
+   NAME: every named field must exist; unmentioned fields bind to "_" (the
+   discard). Pure — callers (tycheck, desugar) supply the field order from
+   their own registries. Returns Error field on an unknown name. *)
+let pat_to_binders ~(fields : string list) (p : match_pat)
+    : (string list, string) result =
+  match p with
+  | PatVars vs -> Ok vs
+  | PatFields fs ->
+      (match List.find_opt (fun (f, _) -> not (List.mem f fields)) fs with
+       | Some (bad, _) -> Error bad
+       | None ->
+           Ok (List.map (fun f ->
+                 match List.assoc_opt f fs with
+                 | Some bound -> bound
+                 | None -> "_")
+               fields))
+
+(* The names a pattern BINDS (for scoping/shadowing walks): positional binders
+   as-is; field patterns bind their bound names ("_" discards never bind). *)
+let pat_bound_names (p : match_pat) : string list =
+  match p with
+  | PatVars vs -> vs
+  | PatFields fs -> List.map snd fs

@@ -25,7 +25,7 @@ topos AccountEU where {
 
 morph LiftEU from Account to AccountEU {
   on object(s: State): EUState {
-    return new EUState { balance s.balance }
+    return .-> EUState { balance s.balance }
   }
   on morphism deposit via wrong_sig
 }

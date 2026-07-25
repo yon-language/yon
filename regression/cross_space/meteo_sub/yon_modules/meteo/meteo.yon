@@ -2,6 +2,6 @@
  * the code lives in the Meteo Space (a separate process); the consumer needs
  * only the declared return type to typecheck awaits. */
 fun samples(): stream of Reading {
-  be s holds produce { emit new Reading { temp 10 humidity 50 } }
+  be s holds produce { emit .-> Reading { temp 10 humidity 50 } }
   return s
 }

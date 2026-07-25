@@ -11,7 +11,7 @@ move ToFahrenheit from Celsius to Fahrenheit {
 }
 
 fun main(): number {
-  be c holds new Celsius { degrees 100 }
+  be c holds .-> Celsius { degrees 100 }
   be f holds apply_move(ToFahrenheit, c)
   return f.degrees
 }

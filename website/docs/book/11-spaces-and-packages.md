@@ -70,7 +70,7 @@ The entry place applies it:
 // Entry.yon
 place Entry { }
 fun main(): number {
-  be table4 holds new Order { total 40 }
+  be table4 holds .-> Order { total 40 }
   be fired holds apply_move(ToKitchen, table4)
   return fired.total          // 44: read on the transported instance
 }

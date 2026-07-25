@@ -4,9 +4,9 @@ place Reading {
 
   fun forecasts(): stream of Reading {
     be s holds produce {
-      emit new Reading { temp 10 label "ok" }
-      emit new Reading { temp 11 label "ok" }
-      emit new Reading { temp 15 label "ok" }
+      emit .-> Reading { temp 10 label "ok" }
+      emit .-> Reading { temp 11 label "ok" }
+      emit .-> Reading { temp 15 label "ok" }
     }
     return s
   }

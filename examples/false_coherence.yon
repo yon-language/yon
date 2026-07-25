@@ -3,9 +3,9 @@
 // f is the identity. g is NOT its inverse: it adds a constant distortion.
 // So g(f(a)) normalizes (via the SCT-certified delta-rules, to strong normal
 // form) to `a + 1.0`, which does NOT structurally unify with `a`.
-// `plainly` (refl of the endpoint) therefore cannot inhabit `Same(g(f(a)), a)`,
+// bare `clear` (reflexivity of the endpoint) therefore cannot inhabit `Same(g(f(a)), a)`,
 // and the type checker MUST reject this program at compile time. The gate is
-// the same whether written `Same`/`plainly` or the raw `Id(...)` + `refl`.
+// the same whether written `Same`/`clear` or the kernel `Id(...)` + `refl`.
 fun f(x: number): number { return x }
 
 // g is not the inverse of f — constant distortion.
@@ -13,7 +13,7 @@ fun g(x: number): number { return x + 1.0 }
 
 // Passing off g(f(a)) === a must be rejected by the checker.
 fun violate_naturality(a: number): Same(g(f(a)), a) {
-  return plainly
+  return clear
 }
 
 fun main(): number { return 0 }

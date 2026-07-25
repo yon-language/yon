@@ -66,8 +66,7 @@ let () =
   let dl = Surface_ast.dummy_loc in
   let applied_code =
     Surface_ast.TyEl (Surface_ast.TyTermExpr
-      (Surface_ast.ECall ("C",
-        [Surface_ast.EVar ("x", dl); Surface_ast.EVar ("p", dl)], dl))) in
+      (Surface_ast.ECall ("C", [Surface_ast.EVar ("x", dl); Surface_ast.EVar ("p", dl)], dl))) in
   check "desugar: El(C(x,p)) lowers natively to TyEl(applied term)"
     (match Desugar.desugar_ty applied_code with
      | TyEl (App _) -> true | _ -> false);

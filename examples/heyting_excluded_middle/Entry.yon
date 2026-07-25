@@ -1,0 +1,16 @@
+place Entry {
+// Il terzo escluso (p or not p) FALLISCE su `unknown`: la firma di una logica
+// intuizionista (Heyting) vera, non un tri-valued ad-hoc ne' un null travestito.
+fun main(): number {
+  be p holds unknown
+  be lem holds p ||? (!? p)      // "p or not p": classicamente SEMPRE vero
+  be dec holds to_bool(lem)      // su unknown, in Heyting: NON decidibilmente vero
+
+  be q holds present
+  be lem_q holds q ||? (!? q)    // su un valore NOTO il terzo escluso vale
+  be dec_q holds to_bool(lem_q)
+
+  // logica classica darebbe 101; Heyting da' 1 (LEM cade su unknown, tiene su present)
+  return (if dec then 100 else 0) + (if dec_q then 1 else 0)
+}
+}

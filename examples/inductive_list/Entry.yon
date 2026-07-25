@@ -24,6 +24,6 @@ fun sum(l: List): number {
 
 fun main(): number {
   // Cons(10, Cons(15, Cons(17, Nil)))  ->  10 + 15 + 17 = 42
-  return sum(hit(Cons, 10, hit(Cons, 15, hit(Cons, 17, hit(Nil)))))
+  return sum(.-> Cons { _1 10 _2 .-> Cons { _1 15 _2 .-> Cons { _1 17 _2 Nil } } })
 }
 }

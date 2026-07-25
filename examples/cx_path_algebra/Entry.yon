@@ -6,9 +6,9 @@ place Entry {
 fun dbl(n: number): number { return n + n }
 
 fun main(): number {
-  be reversed holds back (stay 5)          // inv(refl(5))        = refl(5)
-  be joined holds stay 7 ++ stay 7         // concat(refl 7, refl 7) = refl(7)
-  be shadow holds stay 5 through dbl        // ap(dbl, refl(5))    = refl(10)
+  be reversed holds back clear 5           // inv(clear 5)        = clear 5
+  be joined holds clear 7 ++ clear 7       // concat(clear 7, clear 7) = clear 7
+  be shadow holds clear 5 through dbl       // ap(dbl, clear 5)    = clear 10
   return (reversed @ I0) + (joined @ I0) + (shadow @ I0)    // 5 + 7 + 10 = 22
 }
 }

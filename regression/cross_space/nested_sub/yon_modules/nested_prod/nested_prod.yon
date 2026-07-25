@@ -1,5 +1,5 @@
 /* Interface of the Nested producer (nominal cross-Space import). */
 fun pairs(): stream of Outer {
-  be s holds produce { emit new Outer { tag 7 inner new Inner { a 3 b "hi" } } }
+  be s holds produce { emit .-> Outer { tag 7 inner .-> Inner { a 3 b "hi" } } }
   return s
 }

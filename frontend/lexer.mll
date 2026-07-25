@@ -174,7 +174,6 @@
       "return", RETURN;
       "produce", PRODUCE;
       "emit", EMIT;
-      "new", NEW;
       (* Expression-level if/then/else, sufficient with while for
        * Turing-completeness. Lowered to scf.if with a yield of the value. *)
       "if", IF_KW;
@@ -203,10 +202,10 @@
 
       (* Id-proposition sugar (desugar to Id / refl; no new kernel semantics):
          `Same(X, Y)` in type position is Id(A, X, Y) with A inferred from the
-         endpoints; `plainly` in a body is refl of the endpoint. Keyword-first
+         endpoints; bare `clear` in a body is reflexivity of the endpoint. Keyword-first
          by grammar necessity (see parser.mly design note). *)
       "Same", SAME;
-      "plainly", PLAINLY;
+      "clear", CLEAR;
       (* NOTE: no `first`/`second` keywords — they collide with pervasive
          identifiers (the Generics chapter's `fun first<A,B>`, many examples).
          The Sigma projections stay `fst`/`snd` at the surface. *)
@@ -264,7 +263,6 @@
       (* Metonymic surface sugar (journey metaphor) — pure NAMES that desugar to
          the cubical primitives: stay=refl, back=inv, span=ua,
          carry..along=transport, through=ap. No new semantics. *)
-      "stay", STAY;
       "back", BACK;
       "span", SPAN;
       "carry", CARRY;
@@ -333,6 +331,10 @@ rule token = parse
   | "||"             { PIPEPIPE }
   | "|>"             { PIPEGT }   (* pipe-forward: x |> f means f(x) *)
   | "=>"             { FATARROW }
+  | ".->"            { DOTARROW } (* the mediatrice: a section written as the
+                                      arrow FROM THE POINT — `.-> P { ... }`
+                                      reads `1 -> P`, the dot carrying the
+                                      terminal. Longest-match beats DOT. *)
   | "->"             { ARROW }   (* function type T -> U *)
   (* Single-character punctuation *)
   | '@'              { ATSIGN }
