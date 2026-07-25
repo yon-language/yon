@@ -38,7 +38,7 @@ _DEBUG_ENV = {**os.environ, "YON_DEBUG_DROPS": "1"}
 
 # No explicit `drop`: main uses D (the imported d_op) then does unrelated work, so
 # D dies before the end and the automatic reclaim inserts the drop at its last use.
-# The section-handle liveness pin: the handle p returned by `new DP { }` is a
+# The section-handle liveness pin: the handle p returned by `.-> DP { }` is a
 # live reference into D's arena (not a copy), so the automatic reclaim must land
 # AFTER the last field read through p, never between the new and the read. The
 # program returns p.n; a reclaim scheduled before the read would zero the page on
@@ -46,7 +46,7 @@ _DEBUG_ENV = {**os.environ, "YON_DEBUG_DROPS": "1"}
 _HANDLE_ESCAPE = """\
 place Entry { }
 fun main(): number {
-  be p holds new DP { n 7 }
+  be p holds .-> DP { n 7 }
   be filler holds 1
   be y holds p.n
   return y

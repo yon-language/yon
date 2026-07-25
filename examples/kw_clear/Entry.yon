@@ -1,0 +1,31 @@
+place Entry { }
+// COSA: `clear`, la riflessivita' di superficie, nelle sue due forme.
+//
+// 1) PREFISSA `clear a`: il cammino banale su un valore — il viaggio che non va
+//    da nessuna parte (kernel: refl(a)). E' un VALORE: si binda, si passa, si
+//    legge a un estremo con @ I0 / @ I1 e ritorna il valore di partenza.
+//    Si compone con tutta la famiglia viaggio: back (inversione), ++ (concat),
+//    through (trasporto lungo una funzione).
+//
+// 2) NUDA `clear` in posizione return: la prova che i due lati di un
+//    Same(X, Y) sono lo stesso valore PER COMPUTAZIONE. L'endpoint e' inferito
+//    dal tipo di ritorno; il compilatore CONTROLLA che i lati riducano a una
+//    cosa sola (se no, rifiuta: vedi examples/false_coherence.yon).
+
+fun dbl(n: number): number { return n + n }
+
+// forma nuda: Same(dbl(a), a + a) — i due lati computano allo stesso valore,
+// quindi la riflessivita' dell'endpoint la abita. Il compilatore verifica.
+fun coherence(a: number): Same(dbl(a), a + a) {
+  return clear
+}
+
+fun main(): number {
+  be p holds clear 7                 // refl(7): cammino 7 ~> 7
+  be r holds back clear 5            // inversione del cammino banale: ancora 5 ~> 5
+  be s holds clear 5 through dbl     // trasporto lungo dbl: cammino 10 ~> 10
+  be j holds clear 4 ++ clear 4      // concatenazione: ancora 4 ~> 4
+  be w holds coherence(3)            // la prova e' un valore come gli altri
+  // lettura agli estremi: I0 = partenza, I1 = arrivo
+  return (p @ I0) + (r @ I1) + (s @ I0) + (j @ I1)   // 7 + 5 + 10 + 4 = 26
+}

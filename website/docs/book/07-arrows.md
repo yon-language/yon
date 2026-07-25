@@ -166,7 +166,7 @@ enclosing local is a compile-time error:
 <!-- yon-gate: illustrative -->
 ```yon
 be base holds 7
-be m holds move(s: Order) => new Ticket { total base } from Order to Ticket
+be m holds move(s: Order) => .-> Ticket { total base } from Order to Ticket
 ```
 
 The compiler refuses it and says why: the move's body captures the enclosing

@@ -4,6 +4,6 @@ geomorph Lift from Account to AccountEU {
 }
 fun read(a: Account): number { return a.balance }
 fun main(): number {
-  be eu holds new AccountEU { balance 7 }
+  be eu holds .-> AccountEU { balance 7 }
   return read(eu)
 }

@@ -11,12 +11,12 @@ move Squeeze from Wide to Narrow {
   y aggregates to total by double
 }
 fun main(): number {
-  be a holds new A { v 7
+  be a holds .-> A { v 7
     w 1 }
-  be b holds new B { v 7
+  be b holds .-> B { v 7
     w 9 }
   be m holds Move.merge(Merge, a, b)
-  be wide holds new Wide { x 4
+  be wide holds .-> Wide { x 4
     y 5 }
   be narrow holds apply_move(Squeeze, wide)
   return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22

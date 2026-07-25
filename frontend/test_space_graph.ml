@@ -166,13 +166,13 @@ fun move_illegal(): number { be drop_A holds 0  be r holds apply_move(0) in A  r
 fun move_legal(): number { be r holds apply_move(0) in A  be drop_A holds 0  return r }\n\
 fun morph_illegal(): number { be drop_A holds 0  be r holds tr(0) in A  return r }\n\
 fun morph_legal(): number { be r holds tr(0) in A  be drop_A holds 0  return r }\n\
-fun place_illegal(): number { be drop_A holds 0  be r holds new P { v 0 }  return r }\n\
-fun place_legal(): number { be r holds new P { v 0 }  be y holds r.v  be drop_A holds 0  return y }\n\
+fun place_illegal(): number { be drop_A holds 0  be r holds .-> P { v 0 }  return r }\n\
+fun place_legal(): number { be r holds .-> P { v 0 }  be y holds r.v  be drop_A holds 0  return y }\n\
 fun awaits_illegal(): number { be drop_A holds 0  be sub holds w.awaits(prod)  return 0 }\n\
 fun awaits_legal(): number { be sub holds w.awaits(prod)  be drop_A holds 0  return 0 }\n\
-fun handle_illegal(): number { be p holds new P { v 0 }  be drop_A holds 0  be y holds p.v  return y }\n\
-fun handle_legal(): number { be p holds new P { v 0 }  be y holds p.v  be drop_A holds 0  return y }\n\
-fun alias_illegal(): number { be p holds new P { v 0 }  be q holds p  be drop_A holds 0  be y holds q.v  return y }\n"
+fun handle_illegal(): number { be p holds .-> P { v 0 }  be drop_A holds 0  be y holds p.v  return y }\n\
+fun handle_legal(): number { be p holds .-> P { v 0 }  be y holds p.v  be drop_A holds 0  return y }\n\
+fun alias_illegal(): number { be p holds .-> P { v 0 }  be q holds p  be drop_A holds 0  be y holds q.v  return y }\n"
 
 let downstream_selftest () : string list =
   let prog = parse_src downstream_src in

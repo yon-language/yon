@@ -93,7 +93,7 @@ let kw_pool =
      "operation"; "number"; "text"; "true"; "false"; "and"; "or"; "not";
      "visits"; "import"; "topos"; "where";
      (* new surface: metonymic journey + cubical + HIT *)
-     "stay"; "back"; "span"; "carry"; "along"; "through"; "match";
+     "clear"; "back"; "span"; "carry"; "along"; "through"; "match";
      "refl"; "transport"; "plam"; "hit"; "hit_elim"; "hcomp"; "comp"; "I0"; "I1" |]
 let op_pool = [| "+"; "-"; "*"; "/"; "<"; ">"; "="; "=="; "("; ")"; "{"; "}"; ","; ":"; ";";
                  "++"; "<=>"; "@"; "=>" |]
@@ -124,9 +124,9 @@ let rec gen_expr d =
    univalence, and the HIT recursor. Some type-check, some don't; the fuzzer only
    demands they never CRASH the frontend. *)
 and gen_cubical d =
-  if d <= 0 then Printf.sprintf "stay %s" (num ())
+  if d <= 0 then Printf.sprintf "clear %s" (num ())
   else match Random.int 8 with
-    | 0 -> Printf.sprintf "stay %s" (num ())
+    | 0 -> Printf.sprintf "clear %s" (num ())
     | 1 -> Printf.sprintf "back (%s)" (gen_cubical (d-1))
     | 2 -> Printf.sprintf "(%s ++ %s)" (gen_cubical (d-1)) (gen_cubical (d-1))
     | 3 -> Printf.sprintf "(%s through %s)" (gen_cubical (d-1)) cubfn_pool.(Random.int 3)
@@ -170,8 +170,8 @@ let seeds = [|
   "fun main(): number {\n  be g holds HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
   (* metonymic / cubical / generics seeds — near the new-syntax manifold *)
   "fun succ(n: number): number { return n + 1 }\nfun pred(n: number): number { return n - 1 }\nfun main(): number {\n  be b holds succ <=> pred\n  return carry 10 along b\n}";
-  "fun main(): number {\n  be p holds back (stay 5)\n  return p @ I0\n}";
-  "fun dbl(n: number): number { return n + n }\nfun main(): number {\n  be s holds stay 7 ++ (stay 5 through dbl)\n  return s @ I0\n}";
+  "fun main(): number {\n  be p holds back (clear 5)\n  return p @ I0\n}";
+  "fun dbl(n: number): number { return n + n }\nfun main(): number {\n  be s holds clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
   "fun main(): number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
   "fun identity<T>(x: T): T { return x }\nfun main(): number { return identity(7) }";
   "fun unwrap(b: Box<number>): number { return b.value }\nfun main(): number { return 0 }";

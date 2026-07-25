@@ -20,14 +20,16 @@ fun main(): number {
   be p holds pair(40, 2)
   be x holds fst(p)
   be y holds snd(p)
-  be w holds refl(x)             // a path witness x = x
+  be w holds clear x             // a path witness x = x
   return x + y                   // 42
 }
 ```
 
-`refl(t)` introduces a path; the proof that two sides are the same *by
-computation* is `plainly`, sugar for `refl` of the endpoint, gated exactly as
-`refl` written by hand. Pairs are the Σ introduction with `fst`/`snd`
+`clear t` introduces a path (the surface spelling of reflexivity; `refl(t)`
+remains the KERNEL form, spoken by Yon0 and the cubical layer); the proof that
+two sides are the same *by computation* is bare `clear` — reflexivity of the
+endpoint inferred from the goal, gated exactly as the kernel `refl` written by
+hand. Pairs are the Σ introduction with `fst`/`snd`
 projections. The runnable path fragment is wider than that one witness, though:
 the *journey vocabulary* in the next section (`back`, `++`, `through`, `span`,
 `carry`, `<=>`, and the `match` eliminator) compiles and computes. Path
@@ -36,28 +38,28 @@ proof-layer construct in the lower stratum, and `match` is the eliminator you
 actually run.
 
 A proof reads the same way. `coherence` claims `f(a)` and `a` are the same, and
-`plainly` supplies the trivial reason — the compiler checks that the two sides
+bare `clear` supplies the trivial reason — the compiler checks that the two sides
 really do reduce to one value before it accepts it:
 
 <!-- yon-gate: exit 0 -->
 ```yon
 fun f(x: number): number { return x }
 fun coherence(a: number): Same(f(a), a) {   // Id(number, f(a), a), carrier inferred
-  return plainly                            // refl of the endpoint: f(a) computes to a
+  return clear                              // reflexivity of the endpoint: f(a) computes to a
 }
 fun main(): number { return 0 }
 ```
 
 ## Paths as journeys
 
-`refl(t)` is the simplest path, and it hides a metaphor worth making explicit. A
+`clear t` is the simplest path, and it hides a metaphor worth making explicit. A
 path is a *journey*: a way of getting from one value to another, or from one type
 to another, that the type system can hold as a value. Yon names the cubical
 primitives after travel, so the algebra of paths reads as the algebra of
 journeys.
 
-- `stay a` is the journey that goes nowhere, `refl(a)`, the proof that `a` stays
-  itself.
+- `clear a` is the journey that goes nowhere, the trivial path, the proof that
+  `a` is clearly itself (kernel: `refl(a)`).
 - `back p` is `p` walked in reverse, `inv(p)`. Reverse a reverse and you are
   home: `back (back p)` is `p`.
 - `p ++ q` is `p` *then* `q`, `concat`, one journey followed by another.
@@ -71,9 +73,9 @@ These compute. Read a closed path at an endpoint with `@ I0` (its start) or
 ```yon
 fun dbl(n: number): number { return n + n }
 fun main(): number {
-  be reversed holds back (stay 5)      // inv(refl 5)             = refl 5
-  be joined   holds stay 7 ++ stay 7   // concat(refl 7, refl 7)  = refl 7
-  be shadow   holds stay 5 through dbl // ap(dbl, refl 5)         = refl 10
+  be reversed holds back clear 5        // inv(clear 5)              = clear 5
+  be joined   holds clear 7 ++ clear 7  // concat(clear 7, clear 7)  = clear 7
+  be shadow   holds clear 5 through dbl // ap(dbl, clear 5)          = clear 10
   return (reversed @ I0) + (joined @ I0) + (shadow @ I0)   // 5 + 7 + 10 = 22
 }
 ```

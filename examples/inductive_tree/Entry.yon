@@ -17,14 +17,13 @@ place Entry {
 // del design, ora un induttivo nativo e non un MerkleTree codificato a mano.
 
 
-fun mot(t: Tree): number { return 0 }
 
 fun total(t: Tree): number {
-  return hit_elim(mot, [Leaf(v) => v, Node(l, r) => total(l) + total(r)], t)
+  return match t { Leaf { _1 as v } => v, Node { _1 as l _2 as r } => total(l) + total(r) }
 }
 
 fun main(): number {
   // Node(Leaf(10), Node(Leaf(15), Leaf(17)))  ->  10 + 15 + 17 = 42
-  return total(hit(Node, hit(Leaf, 10), hit(Node, hit(Leaf, 15), hit(Leaf, 17))))
+  return total(.-> Node { _1 .-> Leaf { _1 10 } _2 .-> Node { _1 .-> Leaf { _1 15 } _2 .-> Leaf { _1 17 } } })
 }
 }

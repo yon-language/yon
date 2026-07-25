@@ -172,7 +172,7 @@
 /* Control flow */
 %token WHEN OTHERWISE FOR EVERY EACH HERE SEQUENCE OVER REPEAT AT MOST TIMES
 %token FORCES
-%token FOREVER SCOPE RETURN PRODUCE EMIT NEW DROP
+%token FOREVER SCOPE RETURN PRODUCE EMIT DOTARROW DROP
 /* Expression-level if/then/else + iter/while */
 %token IF_KW THEN_KW ELSE_KW
 %token ITER_KW DO_KW WHILE_KW
@@ -222,11 +222,11 @@
 %token HIT_ELIM LBRACKET RBRACKET
 %token ATSIGN I0 I1 PLAM PATHP HIT_KW
 /* Metonymic surface sugar (journey metaphor): desugar to the cubical primitives. */
-%token STAY BACK SPAN CARRY ALONG THROUGH
+%token BACK SPAN CARRY ALONG THROUGH
 %token PLUSPLUS          /* p ++ q = concat */
 %token LRARROW           /* f <=> g = equivalence */
 %token MATCH_KW          /* match x { ctor => .. } = hit_elim with synthesized motive */
-%token SAME PLAINLY      /* `Same(X, Y)` = Id(A,X,Y) (A inferred); `plainly` = refl(endpoint) */
+%token SAME CLEAR        /* `Same(X, Y)` = Id(A,X,Y) (A inferred); `clear` = the surface refl */
 %token INDUCT            /* `induct(d, p)` = ind_path(0, d, p): J with the operational placeholder motive */
 /* heyt_int<N> type keyword. */
 %token HEYT_INT_KW
@@ -911,9 +911,18 @@ type_atom:
     { TySigma (x, a, p) }
 
 hit_branch:
-  | ctor = IDENT FATARROW v = expr { (ctor, [], v) }
+  | ctor = IDENT FATARROW v = expr { (ctor, PatVars [], v) }
   | ctor = IDENT LPAREN vars = separated_list(COMMA, IDENT) RPAREN FATARROW v = expr
-    { (ctor, vars, v) }
+    { (ctor, PatVars vars, v) }
+  /* the co-mediatrice: field names bind projections BY NAME — the mirror of
+     `.-> Cons { head 5 tail rest }`. `head` binds as itself, `head as h`
+     renames. Unmentioned fields are discarded. */
+  | ctor = IDENT LBRACE fs = list(pat_field) RBRACE FATARROW v = expr
+    { (ctor, PatFields fs, v) }
+
+pat_field:
+  | f = IDENT              { (f, f) }
+  | f = IDENT AS b = IDENT { (f, b) }
 
 
 variant:
@@ -1187,7 +1196,8 @@ call_or_new_stmt:
     { SCall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
     { SCall (name, args, mk_loc $startpos $endpos) }   (* mod::fun(args) *)
-  | NEW name = IDENT LBRACE fas = field_assign_list RBRACE
+  /* the mediatrice, statement position: same node, arrow-form surface. */
+  | DOTARROW name = IDENT LBRACE fas = field_assign_list RBRACE
     { SNew (name, fas, mk_loc $startpos $endpos) }
 
 forces_stmt:
@@ -1461,19 +1471,25 @@ expr_atom:
     { ELit (LitHeytUnknown, mk_loc $startpos $endpos) }
   | REFL LPAREN e = expr RPAREN
     { ERefl (e, mk_loc $startpos $endpos) }
-  (* `plainly` = refl(endpoint): the proof that the two sides are the same by
-     computation. The endpoint is filled by Tycheck.elaborate_id_sugar from the
-     enclosing function's return-type Id; here it is a sentinel var. *)
-  | PLAINLY
+  (* `clear` — THE surface spelling of reflexivity (refl stays the KERNEL
+     form). Two shapes, one keyword:
+       clear e   = refl(e)                       (was: stay e / refl(e))
+       clear     = refl(inferred endpoint)       (was: plainly)
+     The bare form's endpoint is filled by Tycheck.elaborate_id_sugar from
+     the enclosing function's return-type Id; here it is a sentinel var.
+     NOTE: after CLEAR, a token that can start an atom SHIFTS (greedy, same
+     as every prefix metonym) — the bare form fires only when nothing
+     parseable follows. This is the ONE state added to the s/r ledger
+     (11 -> 12 states; the arbitrated resolutions are all this shift). *)
+  | CLEAR e = expr_atom %prec PREFIX_APP
+    { ERefl (e, mk_loc $startpos $endpos) }
+  | CLEAR
     { ERefl (EVar ("__plainly__", mk_loc $startpos $endpos), mk_loc $startpos $endpos) }
   (* ─── Metonymic surface sugar (journey metaphor) ─────────────────────
      Prefix forms binding an atom; pure desugar to the cubical primitives.
-       stay a          = refl(a)
        back p          = inv(p)
        span e          = ua(e)
        carry x along e = transport(ua(e), x)   (e a bridge / equivalence) *)
-  | STAY e = expr_atom %prec PREFIX_APP
-    { ERefl (e, mk_loc $startpos $endpos) }
   | BACK e = expr_atom %prec PREFIX_APP
     { ECall ("inv", [e], mk_loc $startpos $endpos) }
   | SPAN e = expr_atom %prec PREFIX_APP
@@ -1585,7 +1601,10 @@ expr_atom:
     { EVar (x, mk_loc $startpos $endpos) }
   | x = QIDENT
     { EVar (x, mk_loc $startpos $endpos) }   (* qualified name mod::fun *)
-  | NEW name = IDENT LBRACE fas = field_assign_list RBRACE             
+  /* the mediatrice, expression position: `.-> Confirmed { amount 100 }` is
+     the mediating arrow the universal property guarantees — written, not
+     called. Same ENew node: identical lowering by construction. */
+  | DOTARROW name = IDENT LBRACE fas = field_assign_list RBRACE
     { ENew (name, fas, mk_loc $startpos $endpos) }
   | WIRE TO SPACE sp = IDENT
     { EWireTo (sp, mk_loc $startpos $endpos) }

@@ -821,7 +821,19 @@ let extract_place_name (mlir_ty : string) : string option =
    declared in P_super. Reflexive: returns true when P_sub = P_super. *)
 let rec is_section_subtype (e : emitter) (sub_ty : string) (super_ty : string)
     : bool =
-  if sub_ty = super_ty then true
+  (* the mono, value level: an arm place's section IS usable where its union
+     is expected (identity injection — subtype_cast lowers to identity). The
+     desugar filled union_arm_upcasts with arm -> union ind-section. *)
+  let arm_upcast =
+    match extract_place_name sub_ty with
+    | Some arm ->
+        (match Hashtbl.find_opt Surface_ast.union_arm_upcasts arm with
+         | Some union_sec -> union_sec = super_ty
+         | None -> false)
+    | None -> false
+  in
+  if arm_upcast then true
+  else if sub_ty = super_ty then true
   else
     match extract_place_name sub_ty, extract_place_name super_ty with
     | Some sub_name, Some super_name ->

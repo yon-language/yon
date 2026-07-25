@@ -113,9 +113,15 @@ let rec collect_sums_in_ty (t : S.ty) : unit =
   | S.TyPathP ((_, a), _, _) -> collect_sums_in_ty a
   | _ -> ()
 
+(* Armless (field) places of the program, for the union-arm upcast table:
+   only a DECLARED armless place can be an arm whose sections exist. *)
+let armless_place_names : (string, unit) Hashtbl.t = Hashtbl.create 32
+
 let build_sum_registry (p : S.program) : unit =
   Hashtbl.clear sum_ctor_registry;
   Hashtbl.clear inductive_type_names;
+  Hashtbl.clear armless_place_names;
+  Hashtbl.clear Surface_ast.union_arm_upcasts;
   sum_scrut_counter := 0;
   let scan_param (pm : S.param) = collect_sums_in_ty pm.S.param_ty in
   List.iter (function
@@ -128,7 +134,8 @@ let build_sum_registry (p : S.program) : unit =
         if pd.S.pd_arms <> [] then begin
           Hashtbl.replace inductive_type_names pd.S.pd_name ();
           collect_sums_in_ty (S.TySum pd.S.pd_arms)
-        end;
+        end
+        else Hashtbl.replace armless_place_names pd.S.pd_name ();
         List.iter (function
           | S.FoField field -> collect_sums_in_ty field.S.fd_ty
           | S.FoOp op ->
@@ -528,12 +535,66 @@ and desugar_expr (e0 : S.expr) : C.term =
    * lower it to the reserved kernel marker `__id` so (F-id) fires. The call
    * form psh_id() is handled in the S.ECall arm. *)
   | S.EVar ("psh_id", _) -> C.Var "__id"
+  | S.EVar (x, loc) when
+      Hashtbl.mem Surface_ast.bare_point_sites
+        (loc.S.file, loc.S.start_line, loc.S.start_col) ->
+      (* the bare point: the tycheck resolved `tt` to its terminal arm
+         (scope-aware); lower to the arm's spine leaf, same value as hit(tt).
+         On the PURE paths (delta_rule_of_fun / endpoint comparison) the
+         registry is not built yet: fall back to the kernel constructor, the
+         form the core reducer dispatches on — a C.Var here would leave the
+         round-trip bit2b(b2bit(tt)) forever stuck (mirrors the EHITConstr
+         arm's own registry-free fallback). *)
+      (match Hashtbl.find_opt sum_ctor_registry x with
+       | Some (tag, []) -> lower_sum_constr tag [] [] loc
+       | _ -> C.HITConstr (x, []))
   | S.EVar (x, _) -> C.Var x
   | S.EApp (f, args, _) ->
       curry_apply (desugar_expr f) (List.map desugar_expr args)
   | S.EHITElim (_motive, branches, x, loc) ->
       (* A custom sum eliminates at RUNTIME via a tag switch on the MerkleTree
          carrier; a built-in HIT keeps the cubical eliminator (kernel β-rule). *)
+      let resolve_pat ctor pat =
+        (* bridge: a registry ctor's fields are `_1.._n` (the synthesis
+           convention); declared arm places will supply real names here.
+           The registry may be EMPTY on the tycheck-time desugar paths
+           (delta_rule_of_fun / desugar_expr_pure run before
+           desugar_program builds it): the `_k` names carry their own
+           positions, so the dense binder list derives from the pattern
+           alone — registry-free, same result. *)
+        match pat with
+        | S.PatVars vs -> vs
+        | S.PatFields fs ->
+            (match Hashtbl.find_opt sum_ctor_registry ctor with
+             | Some (_, arg_tys) ->
+                 let fields =
+                   List.init (List.length arg_tys)
+                     (fun i -> Printf.sprintf "_%d" (i + 1)) in
+                 (match S.pat_to_binders ~fields pat with
+                  | Ok vs -> vs
+                  | Error bad ->
+                      failwith (Printf.sprintf
+                        "match %s { ... }: no projection named '%s' on this arm"
+                        ctor bad))
+             | None ->
+                 (* pure _k derivation (registry not built yet) *)
+                 let pos_of f =
+                   if String.length f > 1 && f.[0] = '_' then
+                     (try Some (int_of_string
+                                  (String.sub f 1 (String.length f - 1)))
+                      with _ -> None)
+                   else None in
+                 let slots =
+                   List.filter_map
+                     (fun (f, b) -> Option.map (fun k -> (k, b)) (pos_of f)) fs in
+                 (match slots with
+                  | [] -> []
+                  | _ ->
+                      let maxk = List.fold_left (fun a (k, _) -> max a k) 0 slots in
+                      List.init maxk (fun i ->
+                        match List.assoc_opt (i + 1) slots with
+                        | Some b -> b | None -> "_"))) in
+      let branches = List.map (fun (n, pat, e) -> (n, resolve_pat n pat, e)) branches in
       (match branches with
        | (ctor, _, _) :: _ when Hashtbl.mem sum_ctor_registry ctor ->
            lower_sum_elim branches x loc
@@ -800,11 +861,28 @@ and desugar_expr (e0 : S.expr) : C.term =
       (* the wire handle is compile-time identity: the Space name lives
          in the type (TyWire); the runtime value is inert *)
       desugar_expr (S.ELit (S.LitNumber 0.0, S.dummy_loc))
-  | S.ENew (place_name, fas, _) ->
-      (* new P { f1 e1, f2 e2 } translates to a constructor call with
-         field values as arguments in declared order. *)
-      let arg_terms = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
-      curry_apply (C.Var ("__new_" ^ place_name)) arg_terms
+  | S.ENew (place_name, fas, loc) ->
+      (* `.-> P { f1 e1, f2 e2 }`: the mediatrice. Two value regimes, one
+         surface: a field place lowers to its constructor call (a SECTION
+         with the identity head); a payload ARM lowers to its SPINE — the
+         same value hit built — with the field assignments ordered by the
+         bridge projections _1.._n. *)
+      (match Hashtbl.find_opt sum_ctor_registry place_name with
+       | Some (tag, arg_tys) ->
+           let n = List.length arg_tys in
+           let ordered =
+             List.init n (fun i ->
+               let f = Printf.sprintf "_%d" (i + 1) in
+               match List.find_opt (fun fa -> fa.S.fa_name = f) fas with
+               | Some fa -> fa.S.fa_value
+               | None ->
+                   failwith (Printf.sprintf
+                     ".-> %s { ... }: missing projection %s (a spine has \
+                      full arity)" place_name f)) in
+           lower_sum_constr tag arg_tys ordered loc
+       | None ->
+           let arg_terms = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
+           curry_apply (C.Var ("__new_" ^ place_name)) arg_terms)
   | S.ENewIn (place_name, space_name, fas, _) ->
       (* new P in Space { ... } desugars to __new_in_<Space>_<Place>(args).
        * The emitter recognizes the "__new_in_" prefix and emits the
@@ -1387,8 +1465,9 @@ let rec subst_evar_in_expr (name : string) (repl : S.expr) (e : S.expr) : S.expr
   | S.EHITElim (m, brs, scr, loc) ->
       S.EHITElim
         (go m,
-         List.map (fun (n, vs, b) ->
-           (n, vs, if List.mem name vs then b else go b)) brs,
+         List.map (fun (n, pat, b) ->
+           (n, pat,
+            if List.mem name (S.pat_bound_names pat) then b else go b)) brs,
          go scr, loc)
   | S.ELam (params, body, loc) ->
       if List.exists (fun (p, _) -> p = name) params then e
@@ -2418,6 +2497,30 @@ let delta_rule_of_fun (env : Tyenv.env) (fn : S.fun_decl) : C.term option =
             (fun (p : S.param) -> (p.S.param_name, desugar_ty p.S.param_ty))
             fn.S.fn_params
         in
+        (* Bare points in a delta body: this runs in the SIGNATURE pass,
+           before any body is type-checked, so the bare_point_sites table is
+           still empty and `one` would desugar to a free C.Var the reducer
+           cannot dispatch on. Resolve them here, scope-aware via env: a name
+           is a point iff it is a nullary variant of a named sum and is not
+           shadowed by a parameter or a var in scope. subst_evar_in_expr
+           respects the inner binders (lambda params, match patterns). *)
+        let rexpr =
+          List.fold_left
+            (fun acc (_, variants) ->
+               List.fold_left
+                 (fun acc (v : S.variant) ->
+                    if v.S.v_args = []
+                       && not (List.exists
+                                 (fun (p : S.param) ->
+                                    p.S.param_name = v.S.v_name)
+                                 fn.S.fn_params)
+                       && Tyenv.lookup_var env v.S.v_name = None
+                    then subst_evar_in_expr v.S.v_name
+                           (S.EHITConstr (v.S.v_name, [], S.dummy_loc)) acc
+                    else acc)
+                 acc variants)
+            rexpr env.Tyenv.named_sums
+        in
         Some (curry_lam params (desugar_expr rexpr))
     | _ -> None)
 
@@ -2435,10 +2538,24 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
        * world's generators. No longer no-op metadata. *)
       let core_wd = desugar_world_decl wd in
       { res with ctx = Reduce.declare_world res.ctx core_wd }
-  | S.TopPlace pd when pd.S.pd_arms <> [] -> res
-      (* a place with arms: the named sum — a
-         compile-time type decl, no Core body; constructors are lowered at
-         their use sites via the sum registry. *)
+  | S.TopPlace pd when pd.S.pd_arms <> [] ->
+      (* a place with arms: the named sum — a compile-time type decl, no Core
+         body; constructors are lowered at use sites via the sum registry.
+         Value-level mono (prima pietra, boundary stone): every BARE arm that
+         names a declared armless place gets an upcast entry — its section is
+         usable where the union is expected, cast = identity on the handle. *)
+      (match desugar_ty (S.TyUser pd.S.pd_name) with
+       | C.TyPlace tag when String.length tag > 4
+                         && String.sub tag 0 4 = "ind_" ->
+           let union_sec = Printf.sprintf "!topos.section<\"%s\">" tag in
+           List.iter (fun (v : S.variant) ->
+             if v.S.v_args = []
+                && Hashtbl.mem armless_place_names v.S.v_name then
+               Hashtbl.replace Surface_ast.union_arm_upcasts
+                 v.S.v_name union_sec)
+             pd.S.pd_arms
+       | _ -> ());
+      res
   | S.TopPlace pd ->
       let core_pd = desugar_place_decl pd in
       { res with ctx = Reduce.declare_place res.ctx core_pd }

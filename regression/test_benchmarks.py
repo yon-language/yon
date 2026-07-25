@@ -62,7 +62,11 @@ def test_benchmark(name, tmp_path):
         [str(YONC), str(BENCH / name), "-o", str(binp)],
         capture_output=True, timeout=240,
     )
-    assert comp.returncode == 0, f"{name}: compile failed\n{comp.stderr.decode(errors='replace')[-800:]}"
+    assert comp.returncode == 0, (
+        f"{name}: compile failed (returncode={comp.returncode})\n"
+        f"--- stderr ---\n{comp.stderr.decode(errors='replace')[-4000:]}\n"
+        f"--- stdout ---\n{comp.stdout.decode(errors='replace')[-1000:]}"
+    )
     runs = []
     for _ in range(K):
         r = subprocess.run([str(binp)], capture_output=True, timeout=180)
@@ -83,8 +87,15 @@ def test_benchmark(name, tmp_path):
     if name == "eq_constant":
         net_1, net_32k = median[3], median[5]
         # O(1) in size: a 32768x larger string must not cost meaningfully more.
-        assert net_32k <= max(net_1, 1) * 8, (
-            f"eq_constant: equality not O(1) in size? net(1)={net_1} net(32768)={net_32k}"
+        # The address-compare's true cost is ~0 ns/call, so BOTH nets are timer
+        # jitter (tens of us, sometimes negative): a purely multiplicative bound
+        # divides noise by noise and flakes. The absolute floor is the real
+        # separator — a genuine O(N) compare at 32KB is ~1 us/call = 1e9 ns per
+        # 1e6 calls, 50x the floor; observed jitter stays 20x below it.
+        NOISE_FLOOR_NS = 20_000_000  # 20 ms per 1e6 calls = 20 ns/call
+        assert net_32k <= max(max(net_1, 1) * 8, NOISE_FLOOR_NS), (
+            f"eq_constant: equality not O(1) in size? net(1)={net_1} net(32768)={net_32k}\n"
+            f"raw runs={runs}"
         )
     if name == "xset":
         xset_inter, hash_inter = median[2], median[4]

@@ -38,8 +38,8 @@ let () =
   (* dependent loop branch: loop => plam i => vbody *)
   let elim =
     EHITElim (EVar ("C", dl),
-              [("base", [], EVar ("vb", dl));
-               ("loop", [], EPathAbs ("i", EVar ("vbody", dl), dl))],
+              [("base", PatVars [], EVar ("vb", dl));
+               ("loop", PatVars [], EPathAbs ("i", EVar ("vbody", dl), dl))],
               EVar ("x", dl), dl) in
   (match Tycheck.infer env ctx elim with
    | Ok (TyEl (TyTermExpr (EApp (EVar ("C", _), [EVar ("x", _)], _)))) ->
@@ -59,8 +59,8 @@ let () =
   (* loop branch that is NOT a path abstraction is rejected *)
   let elim_bad =
     EHITElim (EVar ("C", dl),
-              [("base", [], EVar ("vb", dl));
-               ("loop", [], EVar ("vb", dl))],
+              [("base", PatVars [], EVar ("vb", dl));
+               ("loop", PatVars [], EVar ("vb", dl))],
               EVar ("x", dl), dl) in
   (match Tycheck.infer env ctx elim_bad with
    | Error _ -> check "non-abstraction loop branch rejected" true
@@ -72,7 +72,7 @@ let () =
        ("x", TyPrim "Widget"); ("vb", TyPrim "number")] in
   let elim3 =
     EHITElim
-      (EVar ("C", dl), [("base", [], EVar ("vb", dl))], EVar ("x", dl), dl)
+      (EVar ("C", dl), [("base", PatVars [], EVar ("vb", dl))], EVar ("x", dl), dl)
   in
   (match Tycheck.infer env3 ctx elim3 with
    | Error _ -> check "non-HIT target rejected" true

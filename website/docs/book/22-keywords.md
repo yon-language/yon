@@ -27,11 +27,11 @@ A Yon program is a list of these.
 
 #### `place`
 
-An object living in a world. A place is declared in one of two shapes, both inside `place Name { ... }`. As a **product**: named fields (`side := number`, or the bare `side number`), plus operations (mediated arrows, listed inline with the fields); instances are built with `new P { field value }`. As a **coproduct**: a `this >` clause naming the arms it is the sum of (`place Tree { this > Leaf(number) :U Node(Tree, Tree) }`). One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
+An object living in a world. A place is declared in one of two shapes, both inside `place Name { ... }`. As a **product**: named fields (`side := number`, or the bare `side number`), plus operations (mediated arrows, listed inline with the fields); instances are built with `.-> P { field value }`. As a **coproduct**: a `this >` clause naming the arms it is the sum of (`place Tree { this > Leaf(number) :U Node(Tree, Tree) }`). One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
 
 #### `this`
 
-Heads the coproduct clause of a block place: `this > A :U B` declares the place as the sum of its arms. Each arm is a sub-object of the place (a coproduct injection, a mono), optionally carrying a payload (`Node(Tree, Tree)`). The name is what lets an arm's payload refer to the type being defined, so this is how a genuinely recursive type is written; an anonymous inline sum (`A | B`) cannot name itself. A value is built with `hit(Ctor, args)` and consumed with `match`/`hit_elim`, one branch per arm. At runtime the value is a content-addressed node (the arm is the tag, its arguments are the children), so equal subvalues share storage.
+Heads the coproduct clause of a block place: `this > A :U B` declares the place as the sum of its arms. Each arm is a sub-object of the place (a coproduct injection, a mono), optionally carrying a payload (`Node(Tree, Tree)`). The name is what lets an arm's payload refer to the type being defined, so this is how a genuinely recursive type is written; an anonymous inline sum (`A | B`) cannot name itself. A value is built with the mediatrice `.-> Ctor { _1 a _2 b }` (a bare name denotes a nullary arm's point) and consumed with `match`, one branch per arm; `hit(Ctor, args)`/`hit_elim` remain the KERNEL spellings of the same constructor/eliminator (Yon0 and the cubical layer speak them directly). At runtime the value is a content-addressed node (the arm is the tag, its arguments are the children), so equal subvalues share storage.
 
 #### `import`
 
@@ -216,9 +216,9 @@ fun main(): number {
 
 Returns from the function. Inside a `when` branch it does not exit the function; branches are for effects.
 
-#### `new`
+#### `.->`
 
-Instance construction: `new P { field value }`. The instance's Space is the place's directory on the filesystem, so the Space is not named at the construction site.
+Instance construction: `.-> P { field value }`. The instance's Space is the place's directory on the filesystem, so the Space is not named at the construction site.
 
 ## Word-form operators
 
@@ -285,10 +285,10 @@ place R { v number }
 // Entry.yon
 place Entry { }
 fun main(): number {
-  be m1 holds move(s: P) => new Q { v 1 } from P to Q
-  be m2 holds move(s: Q) => new R { v 2 } from Q to R
+  be m1 holds move(s: P) => .-> Q { v 1 } from P to Q
+  be m2 holds move(s: Q) => .-> R { v 2 } from Q to R
   be mm holds compose m1 with m2
-  be sp holds new P { v 0 }
+  be sp holds .-> P { v 0 }
   be sr holds mm(sp)
   be vw holds view(s: P) => 40 of P
   be forty holds vw(sp)
@@ -321,7 +321,7 @@ view Snapshot of Account {
 // Entry.yon
 place Entry { }
 fun main(): number {
-  be acc holds new Account { balance 50
+  be acc holds .-> Account { balance 50
     fee 8 }
   be snap holds Snapshot(acc)
   return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
@@ -383,12 +383,12 @@ move Squeeze from Wide to Narrow {
   y aggregates to total by double
 }
 fun main(): number {
-  be a holds new A { v 7
+  be a holds .-> A { v 7
     w 1 }
-  be b holds new B { v 7
+  be b holds .-> B { v 7
     w 9 }
   be m holds Move.merge(Merge, a, b)
-  be wide holds new Wide { x 4
+  be wide holds .-> Wide { x 4
     y 5 }
   be narrow holds apply_move(Squeeze, wide)
   return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
@@ -566,7 +566,7 @@ topology j of State { return 1 }
 // Entry.yon
 place Entry { }
 fun main(): number {
-  be s holds new State { balance 5 }
+  be s holds .-> State { balance 5 }
   be bad holds is_overdrawn(s)
   return if bad then 0 else 42
 }`}
@@ -591,7 +591,7 @@ place AccountEU { balance number }
 place Entry { }
 morph LiftEU from Account to AccountEU {
   on object(s: Account): AccountEU {
-    return new AccountEU { balance s.balance }
+    return .-> AccountEU { balance s.balance }
   }
 }
 fun main(): number { return 0 }`}
@@ -1038,23 +1038,19 @@ fun main(): number {
 
 #### `refl`
 
-The reflexivity path: the proof that a value equals itself. A path value lowers to its *erased witness*, operationally the endpoint value, so `refl(7)` binds and passes like any value. What it never does is decide path equality at runtime: that judgement belongs to the reducer alone.
+KERNEL FORM (the surface spelling is `clear`). The reflexivity path: the proof that a value equals itself. A path value lowers to its *erased witness*, operationally the endpoint value, so `refl(7)` binds and passes like any value. What it never does is decide path equality at runtime: that judgement belongs to the reducer alone. Yon0 and the cubical layer speak `refl` directly; human surface code says `clear 7`.
 
 #### `Same`
 
 `Same(X, Y)` is the proposition that `X` and `Y` are the same value, sugar for `Id(A, X, Y)` with the carrier `A` inferred from the endpoints. It reads as a law of the domain — `Same(total(merge(a, b)), total(a) + total(b))` — without spelling out the carrier. The raw `Id(A, X, Y)`, carrier written, stays available in the lower stratum for when the endpoints do not determine it.
 
-#### `plainly`
+#### `clear`
 
-`plainly` is the proof that the two sides of a `Same` (or `Id`) return type are the same *by computation*, sugar for `refl` of the endpoint. It is checked, not asserted: if the two sides do not reduce to one value the compiler rejects it, the same gate as writing `refl` by hand. Valid only in return position, where the goal fixes which endpoint to reflect.
-
-#### `stay`
-
-`stay a` is the trivial path, the proof that `a` stays itself, sugar for `refl(a)`. The journey that goes nowhere; read off at either end, it is just `a`. Part of the *journey* vocabulary for paths (`stay`/`back`/`through`/`span`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
+THE surface spelling of reflexivity, one keyword with two shapes. `clear a` is the trivial path, the proof that `a` is clearly itself (kernel: `refl(a)`) — the journey that goes nowhere; read off at either end, it is just `a`. Bare `clear` is the proof that the two sides of a `Same` (or `Id`) return type are the same *by computation* — reflexivity of the endpoint, inferred from the goal; it is checked, not asserted: if the two sides do not reduce to one value the compiler rejects it, the same gate as the kernel `refl` written by hand, and it is valid only in return position, where the goal fixes which endpoint to reflect. Part of the *journey* vocabulary for paths (`clear`/`back`/`through`/`span`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
 
 #### `back`
 
-`back p` is the path `p` travelled in reverse, sugar for `inv(p)`. Reverse a reverse and you return to the start: `back (back p)` is `p`. If `p` runs from `a` to `b`, `back p` runs from `b` to `a`.
+`back p` is the path `p` travelled in reverse, sugar for `inv(p)`. Reverse a reverse and you return to the start: `back back p` is `p` (prefixes chain; parentheses only when an infix rides underneath: `back (p ++ q)`). If `p` runs from `a` to `b`, `back p` runs from `b` to `a`.
 
 #### `through`
 
@@ -1090,8 +1086,8 @@ The universe of types (`Type_1`, `Type_2`, ... for the levels). A universe-typed
 {`fun diag(a: number): number { return a * 6 }
 fun universe_taker(t: Type): number { return 7 }
 fun main(): number {
-  be r holds refl(7)                          // a path value, let-bound
-  be moved holds ind_path(0, diag, refl(7))   // J computes diag(7) = 42
+  be r holds clear 7                          // a path value, let-bound
+  be moved holds ind_path(0, diag, clear 7)   // J computes diag(7) = 42
   return moved
 }`}
 </CodeWindow>
@@ -1141,7 +1137,7 @@ selects it (`hcomp_face_active`). The Kan operation that makes the cubical struc
 
 #### `hit`
 
-Higher inductive type constructor: `hit(base)`, `hit(loop)`, `hit(merid, a)` build the points and
+KERNEL FORM. Higher inductive type constructor: `hit(base)`, `hit(loop)`, `hit(merid, a)` build the points and
 paths of a HIT (the circle's `base` and `loop`, a suspension's meridian).
 
 #### `hit_elim`
@@ -1151,7 +1147,7 @@ the points. The reducer never identifies `loop` with `refl`, so the circle stays
 
 #### `match`
 
-`match x { ctor => v, .. }` is `hit_elim` with the motive *synthesized*: the result type is inferred from the branches, so the non-dependent case needs no explicit motive function. The part naming the whole, one case per constructor. `match hit(base) { base => 42, loop => plam i => 42 }` computes to `42`. Payload-carrying point constructors (whose branch body references its binders) still take the explicit `hit_elim` form.
+KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): number { return match t { Leaf { _1 as v } => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
 
 #### `El`
 

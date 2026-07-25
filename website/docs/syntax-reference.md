@@ -36,6 +36,7 @@ Every keyword, alphabetically:
 [`by`](/book/keywords#by) ·
 [`carry`](/book/keywords#carry) ·
 [`cell`](/book/keywords#cell) ·
+[`clear`](/book/keywords#clear) ·
 [`comp`](/book/keywords#comp) ·
 [`compose`](/book/keywords#compose) ·
 [`converts`](/book/keywords#converts) ·
@@ -92,7 +93,6 @@ Every keyword, alphabetically:
 [`move`](/book/keywords#move) ·
 [`multishot`](/book/keywords#multishot) ·
 [`nat`](/book/keywords#nat) ·
-[`new`](/book/keywords#new) ·
 [`not`](/book/keywords#not) ·
 [`of`](/book/keywords#of) ·
 [`operation`](/book/keywords#operation) ·
@@ -105,7 +105,6 @@ Every keyword, alphabetically:
 [`PathP`](/book/keywords#pathp) ·
 [`Pi`](/book/keywords#pi) ·
 [`place`](/book/keywords#place) ·
-[`plainly`](/book/keywords#plainly) ·
 [`plam`](/book/keywords#plam) ·
 [`present`](/book/keywords#present) ·
 [`produce`](/book/keywords#produce) ·
@@ -132,7 +131,6 @@ Every keyword, alphabetically:
 [`space`](/book/keywords#space) ·
 [`span`](/book/keywords#span) ·
 [`spawn`](/book/keywords#spawn) ·
-[`stay`](/book/keywords#stay) ·
 [`stream`](/book/keywords#stream) ·
 [`subcontains`](/book/keywords#subcontains) ·
 [`terminal`](/book/keywords#terminal) ·

@@ -7,8 +7,8 @@ One canonical form per construct, and every deviation the compiler rejects, as
 EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
-- constructs: **40**
-- productions REDUCED by a fixture (Menhir-verified): **88 / 88** surface (+3 structural allowlisted)
+- constructs: **41**
+- productions REDUCED by a fixture (Menhir-verified): **89 / 89** surface (+3 structural allowlisted)
 - deviations enforced today: **20**
 - deviations registered as 1.2 debt (`enforce_1_2`): **1**
 
@@ -24,6 +24,7 @@ from them; the `.yon` files are the specification, not this text.
 | binding | `dev_let` | reject_clean | 1 | `let` |
 | binding | `dev_rebind` | reject_clean | 1 | `already bound in this scope` |
 | cell | `canonical` | accept | 0 | — |
+| comatch | `canonical` | accept | 42 | — |
 | comprehension | `canonical` | accept | 0 | — |
 | coproduct | `canonical` | accept | 42 | — |
 | entrypoint | `canonical` | accept | 0 | — |

@@ -33,6 +33,7 @@ type code =
   (* E2xxx type *)
   | Type_check
   (* E3xxx Space semantics *)
+  | Union_arms_cross_space
   | Drop_still_live
   | Drop_unknown_space
   | Wire_boundary
@@ -51,6 +52,7 @@ let id : code -> string = function
   | Parse_syntax        -> "E1001"
   | Lex_bad_token       -> "E1002"
   | Type_check          -> "E2001"
+  | Union_arms_cross_space -> "E3003"
   | Drop_still_live     -> "E3001"
   | Drop_unknown_space  -> "E3002"
   | Wire_boundary       -> "E3010"
@@ -65,6 +67,7 @@ let id : code -> string = function
 
 let severity : code -> severity = function
   | Parse_syntax | Lex_bad_token | Type_check
+  | Union_arms_cross_space
   | Drop_still_live | Drop_unknown_space | Wire_boundary
   | Topos_layout | Entrypoint | File_layout | Manifest -> Error
   | Lint_dead_function | Lint_unused_binding | Lint_unused_param
@@ -75,6 +78,7 @@ let severity : code -> severity = function
 let cli_prefix : code -> string = function
   | Parse_syntax | Lex_bad_token -> "PARSE ERROR"
   | Type_check                   -> "TYPE ERROR"
+  | Union_arms_cross_space -> "TYPE ERROR"
   | Drop_still_live | Drop_unknown_space -> "DROP ERROR"
   | Wire_boundary                -> "WORLD BOUNDARY ERROR"
   | Topos_layout                 -> "TOPOS LAYOUT ERROR"
@@ -88,6 +92,7 @@ let title : code -> string = function
   | Parse_syntax        -> "syntax error"
   | Lex_bad_token       -> "lexical error"
   | Type_check          -> "type error"
+  | Union_arms_cross_space -> "the arms of a union must be places of one Space"
   | Drop_still_live     -> "cannot drop a Space still used downstream"
   | Drop_unknown_space  -> "drop of an unknown Space"
   | Wire_boundary       -> "wire crosses a world boundary"
@@ -123,6 +128,6 @@ let to_cli (d : t) : string =
  * assigned ids are all distinct -- the one hazard hand-numbering invites. *)
 let all : code list =
   [ Parse_syntax; Lex_bad_token; Type_check;
-    Drop_still_live; Drop_unknown_space; Wire_boundary;
+    Union_arms_cross_space; Drop_still_live; Drop_unknown_space; Wire_boundary;
     Topos_layout; Entrypoint; File_layout; Manifest;
     Lint_dead_function; Lint_unused_binding; Lint_unused_param; Lint_unused_import ]

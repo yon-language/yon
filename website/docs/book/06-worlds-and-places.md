@@ -62,14 +62,14 @@ surface. `Entry.yon`:
 ```yon
 place Entry { }
 fun main(): number {
-  be o holds new Order { table 5 total 40 }
+  be o holds .-> Order { table 5 total 40 }
   be _p holds IO.print_num(o.table)
   return o.total + 2                     // 42
 }
 ```
 
 Note the conventions the `new` shows: a field is written `name type` with no
-colon, `new P { field value }` fills the sections without an `=`, and access is
+colon, `.-> P { field value }` fills the sections without an `=`, and access is
 the usual dot. What a place cannot do, on its own, is *behave*. Behaviour is not
 a method bolted to the object; it lives in arrows, and that is the whole of the
 next chapter.

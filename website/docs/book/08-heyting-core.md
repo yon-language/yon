@@ -62,7 +62,7 @@ topos Bank where {
 // Entry.yon
 place Entry { }
 fun main(): number {
-  be s holds new State { balance 5 }
+  be s holds .-> State { balance 5 }
   be bad holds is_overdrawn(s)
   return if bad then 0 else 42
 }

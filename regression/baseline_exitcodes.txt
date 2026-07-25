@@ -1,4 +1,5 @@
 EMITFAIL false_coherence
+EMITFAIL union_cross_space_reject
 EMITFAIL union_cross_world_reject
 EMITFAIL union_field_obligation_reject
 RAN arena_basic exit=6
@@ -51,6 +52,7 @@ RAN inductive_list exit=42
 RAN inductive_tree exit=42
 RAN inductive_wildcard exit=42
 RAN iter_loop exit=5
+RAN kw_clear exit=26
 RAN kw_geomorph_full exit=0
 RAN kw_heyting exit=42
 RAN kw_hott exit=42
@@ -90,6 +92,7 @@ RAN syslog_demo exit=0
 RAN system_io exit=63
 RAN terminal_pure exit=0
 RAN union_field_obligation exit=0
+RAN union_upcast exit=7
 RAN v1_control_flow exit=42
 RAN vec_basic exit=62
 RAN verify_algebra exit=3

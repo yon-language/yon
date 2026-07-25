@@ -8,7 +8,7 @@ fun pred(n: number): number { return n - 1 }
 
 fun main(): number {
   be y holds transport(
-    ua(equiv(succ, pred, fun(a) => refl(a), fun(b) => refl(b))),
+    ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)),
     10)
   return y     // -> 11
 }

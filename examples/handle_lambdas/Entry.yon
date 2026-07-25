@@ -1,9 +1,9 @@
 place Entry { }
 fun main(): number {
-  be m1 holds move(s: P) => new Q { v 1 } from P to Q
-  be m2 holds move(s: Q) => new R { v 2 } from Q to R
+  be m1 holds move(s: P) => .-> Q { v 1 } from P to Q
+  be m2 holds move(s: Q) => .-> R { v 2 } from Q to R
   be mm holds compose m1 with m2
-  be sp holds new P { v 0 }
+  be sp holds .-> P { v 0 }
   be sr holds mm(sp)
   be vw holds view(s: P) => 40 of P
   be forty holds vw(sp)

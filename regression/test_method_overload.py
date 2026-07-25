@@ -51,8 +51,8 @@ CIRCLE = ("place Circle {\n  r := number\n"
 def test_dispatch_by_receiver_type(tmp_path):
     # sq.area() -> Square's area (25); ci.area() -> Circle's area (12); 25+12=37.
     main = ("fun main(): number {\n"
-            "  be sq holds new Square { side 5 }\n"
-            "  be ci holds new Circle { r 2 }\n"
+            "  be sq holds .-> Square { side 5 }\n"
+            "  be ci holds .-> Circle { r 2 }\n"
             "  return sq.area() + ci.area()\n}\n")
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE}, main) == 37
 
@@ -60,7 +60,7 @@ def test_dispatch_by_receiver_type(tmp_path):
 def test_qualified_call(tmp_path):
     # the Place.method(x) form resolves to the same target.
     main = ("fun main(): number {\n"
-            "  be sq holds new Square { side 5 }\n"
+            "  be sq holds .-> Square { side 5 }\n"
             "  return Square.area(sq)\n}\n")
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE}, main) == 25
 
@@ -70,8 +70,8 @@ def test_third_place_extends_without_touching_others(tmp_path):
     tri = ("place Tri {\n  base := number\n"
            "  fun area(t: Tri): number { return t.base }\n}\n")
     main = ("fun main(): number {\n"
-            "  be sq holds new Square { side 4 }\n"
-            "  be t holds new Tri { base 9 }\n"
+            "  be sq holds .-> Square { side 4 }\n"
+            "  be t holds .-> Tri { base 9 }\n"
             "  return sq.area() + t.area()\n}\n")  # 16 + 9 = 25
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE, "Tri": tri}, main) == 25
 

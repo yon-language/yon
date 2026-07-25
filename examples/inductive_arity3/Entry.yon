@@ -8,13 +8,12 @@ place Entry {
 // correttamente e l'arita' non ha piu' un tetto.
 
 
-fun mot(t: Triple): number { return 0 }
 
 fun sum3(t: Triple): number {
-  return hit_elim(mot, [ T3(a, b, c) => a + b + c, Nil => 0 ], t)
+  return match t { T3 { _1 as a _2 as b _3 as c } => a + b + c, Nil => 0 }
 }
 
 fun main(): number {
-  return sum3(hit(T3, 12, 13, 17))   // 12 + 13 + 17 = 42, incluso il terzo (indice 2)
+  return sum3(.-> T3 { _1 12 _2 13 _3 17 })   // 12 + 13 + 17 = 42, incluso il terzo (indice 2)
 }
 }

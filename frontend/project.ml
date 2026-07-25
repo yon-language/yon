@@ -239,8 +239,48 @@ let entrypoint_diags (l : loaded) : Error_codes.t list =
  * (drop, boundary) are the crown jewels -- diagnostics no other language server
  * can give, from the communication graph; the layout/entrypoint classes guard the
  * project's structure. *)
+(* The arms of a union must be places of ONE Space: the space IS the topos,
+   and a coproduct is taken inside one topos — across spaces there is the
+   wire (a geometric morphism), not a coproduct. Rule (f) already rejects
+   cross-WORLD unions in the tycheck; this is the finer, space-level half,
+   checked here because file->space truth lives at the project layer. Arms
+   in project-root files count as the root space (""). *)
+let union_arm_space_diags (l : loaded) : Error_codes.t list =
+  let armless =
+    List.filter_map
+      (function S.TopPlace pd when pd.S.pd_arms = [] -> Some pd.S.pd_name
+              | _ -> None) l.merged in
+  List.concat_map
+    (function
+      | S.TopPlace pd when pd.S.pd_arms <> [] ->
+          let arm_spaces =
+            List.filter_map (fun (v : S.variant) ->
+              if v.S.v_args = [] && List.mem v.S.v_name armless then
+                Some (v.S.v_name,
+                      match Hashtbl.find_opt l.place_space v.S.v_name with
+                      | Some sp -> sp | None -> "")
+              else None)
+              pd.S.pd_arms in
+          (match arm_spaces with
+           | [] | [_] -> []
+           | (n0, s0) :: rest ->
+               (match List.find_opt (fun (_, sp) -> sp <> s0) rest with
+                | None -> []
+                | Some (n1, s1) ->
+                    [ Error_codes.make ~range:pd.S.pd_loc
+                        Error_codes.Union_arms_cross_space
+                        (Printf.sprintf
+                           "place %s: arms %s (space %s) and %s (space %s) live in \
+                            different Spaces -- the arms of a union must be \
+                            places of the SAME space (the space is the topos; \
+                            across spaces there is the wire)"
+                           pd.S.pd_name
+                           n0 (if s0 = "" then "<root>" else s0)
+                           n1 (if s1 = "" then "<root>" else s1)) ]))
+      | _ -> []) l.merged
+
 let check_all (l : loaded) : Error_codes.t list =
-  drop_diags l @ boundary_diags l @ topos_layout_diags l
+  drop_diags l @ boundary_diags l @ union_arm_space_diags l @ topos_layout_diags l
   @ file_layout_diags l @ entrypoint_diags l
 
 (* ---- whole-program type check ---- *)

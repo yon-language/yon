@@ -110,7 +110,7 @@ fun describe(e: Error): number { return e.message }   // accepts any sub-object
 ```yon
 place Entry { }
 fun main(): number {
-  be s holds new SyntaxError { message 40 line 17 }
+  be s holds .-> SyntaxError { message 40 line 17 }
   return describe(s) + 2          // 42: SyntaxError used as Error
 }
 ```

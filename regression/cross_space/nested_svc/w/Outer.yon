@@ -4,8 +4,8 @@ place Outer {
 
   fun pairs(): stream of Outer {
     be s holds produce {
-      emit new Outer { tag 7 inner new Inner { a 3 b "hi" } }
-      emit new Outer { tag 8 inner new Inner { a 4 b "yo" } }
+      emit .-> Outer { tag 7 inner .-> Inner { a 3 b "hi" } }
+      emit .-> Outer { tag 8 inner .-> Inner { a 4 b "yo" } }
     }
     return s
   }

@@ -1,0 +1,6 @@
+[project]
+name = "kw_clear"
+entry = "Entry.yon"
+
+[runtime]
+backend = "memory"

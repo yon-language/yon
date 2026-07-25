@@ -12,27 +12,26 @@ place Entry {
 // l'else finale del tag-switch; ogni costruttore esplicito resta un test sul tag.
 
 
-fun mot(c: Color): number { return 0 }
 
 // forma ESAUSTIVA: ogni costruttore elencato (il path senza wildcard)
 fun weight_exhaustive(c: Color): number {
-  return hit_elim(mot, [ Red => 0, Green => 0, Blue(n) => n, Gray(g) => 0 ], c)
+  return match c { Red => 0, Green => 0, Blue { _1 as n } => n, Gray { } => 0 }
 }
 
 // forma WILDCARD: la stessa intenzione, detta una volta
 fun weight_wild(c: Color): number {
-  return hit_elim(mot, [ Blue(n) => n, _ => 0 ], c)
+  return match c { Blue { _1 as n } => n, _ => 0 }
 }
 
 // match-zucchero col wildcard
-fun is_blue(c: Color): number { return match c { Blue(n) => 1, _ => 0 } }
+fun is_blue(c: Color): number { return match c { Blue { } => 1, _ => 0 } }
 
 fun main(): number {
   // le due forme coincidono su ogni costruttore -> ciascuna differenza e' 0
-  be d1 holds weight_exhaustive(hit(Blue, 7))  - weight_wild(hit(Blue, 7))
-  be d2 holds weight_exhaustive(hit(Red))      - weight_wild(hit(Red))
-  be d3 holds weight_exhaustive(hit(Gray, 9))  - weight_wild(hit(Gray, 9))
+  be d1 holds weight_exhaustive(.-> Blue { _1 7 })  - weight_wild(.-> Blue { _1 7 })
+  be d2 holds weight_exhaustive(Red)      - weight_wild(Red)
+  be d3 holds weight_exhaustive(.-> Gray { _1 9 })  - weight_wild(.-> Gray { _1 9 })
   // (0 + 0 + 0) + 41 + 1 (is_blue su Blue) + 0 (is_blue su Green) = 42
-  return d1 + d2 + d3 + weight_wild(hit(Blue, 41)) + is_blue(hit(Blue, 0)) + is_blue(hit(Green))
+  return d1 + d2 + d3 + weight_wild(.-> Blue { _1 41 }) + is_blue(.-> Blue { _1 0 }) + is_blue(Green)
 }
 }

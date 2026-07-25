@@ -1,0 +1,5 @@
+[package]
+name = "heyting_excluded_middle"
+
+[runtime]
+backend = "memory"
