@@ -1,15 +1,16 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be x holds 3
+    be y holds x
+    be _1 holds Output.print(String.from_int(x))
+    be _2 holds Output.print(String.from_int(y))
+    x = 5
+    be _3 holds Output.print(String.from_int(x))
+    be _4 holds Output.print(String.from_int(y))
+    return 0
+  }
+}
 
 // Probe: does y stay 3 when x becomes 5? (no-aliasing / snapshot semantics)
 // Expected print order: 3, 3, 5, 3   (the last 3 = y unchanged = PROOF of no aliasing)
 // If it prints 3, 3, 5, 5 then y aliases x's cell and the model is wrong.
-fun main(): Number visits Output {
-  be x holds 3
-  be y holds x
-  be _1 holds Output.print(String.from_int(x))
-  be _2 holds Output.print(String.from_int(y))
-  x = 5
-  be _3 holds Output.print(String.from_int(x))
-  be _4 holds Output.print(String.from_int(y))
-  return 0
-}

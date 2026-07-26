@@ -1,2 +1,4 @@
-fun bogus(p: Sigma(x: Number). Number): Id(Sigma(x: Number). Number, pair(snd(p), fst(p)), p) { return refl(p) }
-fun main(): Number { return 0 }
+place Entry {
+  fun bogus(p: Sigma(x: Number). Number): Id(Sigma(x: Number). Number, pair(snd(p), fst(p)), p) { return refl(p) }
+  fun main(): Number { return 0 }
+}

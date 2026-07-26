@@ -1,8 +1,9 @@
-place Entry { }
-fun main(): Number {
-  be base holds 7
-  be m holds move(s: P) => .-> Q { v base } from P to Q
-  be sp holds .-> P { v 0 }
-  be sq holds m(sp)
-  return sq.v
+place Entry {
+  fun main(): Number {
+    be base holds 7
+    be m holds move(s: P) => .-> Q { v base } from P to Q
+    be sp holds .-> P { v 0 }
+    be sq holds m(sp)
+    return sq.v
+  }
 }

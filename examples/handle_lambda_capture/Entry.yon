@@ -3,11 +3,12 @@
 // forbade this; now a handle-lambda that captures is a content-addressed closure
 // (its dense tag + the captured env on the node), applied through the closure
 // dispatcher which coerces the section-typed argument across the f64 boundary.
-place Entry { }
-fun main(): Number {
-  be base holds 40
-  be sp holds .-> P { v 0 }
-  be vw holds view(s: P) => base of P
-  be forty holds vw(sp)
-  return forty + 4
+place Entry {
+  fun main(): Number {
+    be base holds 40
+    be sp holds .-> P { v 0 }
+    be vw holds view(s: P) => base of P
+    be forty holds vw(sp)
+    return forty + 4
+  }
 }

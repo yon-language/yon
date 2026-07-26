@@ -1,5 +1,6 @@
-place Entry { }
-geomorph LiftEU from Account to AccountEU {
-  pull(a: AccountEU): Account { return a }
+place Entry {
+  geomorph LiftEU from Account to AccountEU {
+    pull(a: AccountEU): Account { return a }
+  }
+  fun main(): Number { return 0 }
 }
-fun main(): Number { return 0 }

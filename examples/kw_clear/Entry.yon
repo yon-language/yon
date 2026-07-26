@@ -1,4 +1,18 @@
-place Entry { }
+place Entry {
+  fun dbl(n: Number): Number { return n + n }
+  fun coherence(a: Number): Same(dbl(a), a + a) {
+    return clear
+  }
+  fun main(): Number {
+    be p holds clear 7                 // refl(7): cammino 7 ~> 7
+    be r holds back clear 5            // inversione del cammino banale: ancora 5 ~> 5
+    be s holds clear 5 through dbl     // trasporto lungo dbl: cammino 10 ~> 10
+    be j holds clear 4 ++ clear 4      // concatenazione: ancora 4 ~> 4
+    be w holds coherence(3)            // la prova e' un valore come gli altri
+    // lettura agli estremi: I0 = partenza, I1 = arrivo
+    return (p @ I0) + (r @ I1) + (s @ I0) + (j @ I1)   // 7 + 5 + 10 + 4 = 26
+  }
+}
 // COSA: `clear`, la riflessivita' di superficie, nelle sue due forme.
 //
 // 1) PREFISSA `clear a`: il cammino banale su un valore — il viaggio che non va
@@ -12,20 +26,7 @@ place Entry { }
 //    dal tipo di ritorno; il compilatore CONTROLLA che i lati riducano a una
 //    cosa sola (se no, rifiuta: vedi examples/false_coherence.yon).
 
-fun dbl(n: Number): Number { return n + n }
 
 // forma nuda: Same(dbl(a), a + a) — i due lati computano allo stesso valore,
 // quindi la riflessivita' dell'endpoint la abita. Il compilatore verifica.
-fun coherence(a: Number): Same(dbl(a), a + a) {
-  return clear
-}
 
-fun main(): Number {
-  be p holds clear 7                 // refl(7): cammino 7 ~> 7
-  be r holds back clear 5            // inversione del cammino banale: ancora 5 ~> 5
-  be s holds clear 5 through dbl     // trasporto lungo dbl: cammino 10 ~> 10
-  be j holds clear 4 ++ clear 4      // concatenazione: ancora 4 ~> 4
-  be w holds coherence(3)            // la prova e' un valore come gli altri
-  // lettura agli estremi: I0 = partenza, I1 = arrivo
-  return (p @ I0) + (r @ I1) + (s @ I0) + (j @ I1)   // 7 + 5 + 10 + 4 = 26
-}

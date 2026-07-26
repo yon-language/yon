@@ -1,8 +1,10 @@
-fun motive(q: Quotient): Number { return 0 }
-
-fun main(): Number {
-  return hit_elim(
-    motive,
-    [inj(x, y) => x, quot(a, b, r) => plam i => 0],
-    hit(inj, 7))
+place Entry {
+  fun motive(q: Quotient): Number { return 0 }
+  fun main(): Number {
+    return hit_elim(
+      motive,
+      [inj(x, y) => x, quot(a, b, r) => plam i => 0],
+      hit(inj, 7))
+  }
 }
+

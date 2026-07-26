@@ -1,4 +1,22 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be kn      holds XTower.width(3)
+    be m24n    holds XTower.width(2)
+    be cls     holds Leech.m24_orbit(1536)
+    be a holds Leech.embed(100247, 0)
+    be b holds Leech.embed(100247, 0)
+    be c holds Leech.embed(555, 0)
+    be set0 holds XSet.empty()
+    be set1 holds XSet.add(set0, a)
+    be set2 holds XSet.add(set1, b)
+    be set3 holds XSet.add(set2, c)
+    be _1 holds Output.print(String.from_int(kn))
+    be _2 holds Output.print(String.from_int(m24n))
+    be _3 holds Output.print(String.from_int(cls))
+    be _4 holds Output.print(String.from_int(XSet.size(set3)))
+    return 0
+  }
+}
 // §2.1 The Leech lattice — the SECOND content-addressing engine. The address space is
 // a FIXED finite set: exactly 196,560 type-2 points — the kissing number in 24
 // dimensions, a theorem the build re-derives (test_leech_theta.ml). They fall into 12
@@ -7,20 +25,3 @@ place Entry { }
 // land on the same point share one address; distinct points are distinct addresses.
 // Stdout: [1] 196560 (the whole space), [2] 12 (M24 classes), [3] a point's class in
 // 0..11, [4] 2 (two distinct genomes -> two distinct perfect addresses, the dup gone).
-fun main(): Number visits Output {
-  be kn      holds XTower.width(3)
-  be m24n    holds XTower.width(2)
-  be cls     holds Leech.m24_orbit(1536)
-  be a holds Leech.embed(100247, 0)
-  be b holds Leech.embed(100247, 0)
-  be c holds Leech.embed(555, 0)
-  be set0 holds XSet.empty()
-  be set1 holds XSet.add(set0, a)
-  be set2 holds XSet.add(set1, b)
-  be set3 holds XSet.add(set2, c)
-  be _1 holds Output.print(String.from_int(kn))
-  be _2 holds Output.print(String.from_int(m24n))
-  be _3 holds Output.print(String.from_int(cls))
-  be _4 holds Output.print(String.from_int(XSet.size(set3)))
-  return 0
-}

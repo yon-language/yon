@@ -121,6 +121,7 @@ let tok_name = function
   | Parser.PI -> "PI"
   | Parser.SIGMA -> "SIGMA"
   | Parser.ID -> "ID"
+  | Parser.ON_ERROR -> "ON_ERROR"
   | Parser.REFL -> "REFL"
   | Parser.PAIR -> "PAIR"
   | Parser.FST -> "FST"

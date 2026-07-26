@@ -1,5 +1,7 @@
 be greeting holds 10
-fun main(): Number {
-  be x holds 42
-  return x
+place Entry {
+  fun main(): Number {
+    be x holds 42
+    return x
+  }
 }

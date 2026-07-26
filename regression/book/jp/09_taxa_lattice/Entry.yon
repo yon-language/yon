@@ -1,4 +1,48 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be eEo holds Leech.embed(1, 0)
+    be eAl holds Leech.embed(263, 0)
+    be eTy holds Leech.embed(295, 0)
+    be eVe holds Leech.embed(2431, 0)
+    be eDe holds Leech.embed(2431, 0)
+    be eAr holds Leech.embed(2559, 0)
+    be eSt holds Leech.embed(2047, 0)
+    be eGa holds Leech.embed(4095, 0)
+    be eLa holds Leech.embed(4095, 0)
+
+    // [1-7] orbit/family at level 2 (the gradient)
+    be _1 holds Output.print(String.from_int(XTower.class(eEo, 2)))
+    be _2 holds Output.print(String.from_int(XTower.class(eAl, 2)))
+    be _3 holds Output.print(String.from_int(XTower.class(eTy, 2)))
+    be _4 holds Output.print(String.from_int(XTower.class(eVe, 2)))
+    be _5 holds Output.print(String.from_int(XTower.class(eAr, 2)))
+    be _6 holds Output.print(String.from_int(XTower.class(eSt, 2)))
+    be _7 holds Output.print(String.from_int(XTower.class(eGa, 2)))
+
+    // [8-12] same_branch at level 2 (stable partition: who shares a family)
+    be _8  holds Output.print(String.from_int(XTower.same_branch(eGa, eLa, 2)))
+    be _9  holds Output.print(String.from_int(XTower.same_branch(eSt, eGa, 2)))
+    be _10 holds Output.print(String.from_int(XTower.same_branch(eEo, eGa, 2)))
+    be _11 holds Output.print(String.from_int(XTower.same_branch(eVe, eDe, 2)))
+    be _12 holds Output.print(String.from_int(XTower.same_branch(eEo, eAl, 2)))
+
+    // [13-16] of2 relation class
+    be _13 holds Output.print(String.from_int(XSimplex.of2(eVe, eDe)))
+    be _14 holds Output.print(String.from_int(XSimplex.of2(eEo, eGa)))
+    be _15 holds Output.print(String.from_int(XSimplex.of2(eAl, eTy)))
+    be _16 holds Output.print(String.from_int(XSimplex.of2(eEo, eVe)))
+
+    // [17-20] level 1: the three clades
+    be _17 holds Output.print(String.from_int(XTower.class(eEo, 1)))
+    be _18 holds Output.print(String.from_int(XTower.class(eAl, 1)))
+    be _19 holds Output.print(String.from_int(XTower.class(eVe, 1)))
+    be _20 holds Output.print(String.from_int(XTower.class(eGa, 1)))
+
+    // [21] omega: the Co0-invariant holonomy of a triple
+    be _21 holds Output.print(String.from_int(XSimplex.omega(eEo, eVe, eGa)))
+    return 0
+  }
+}
 
 // GATE 2: does the experiment have biological shape on REAL Yon numbers?
 // Nine representative taxa across the lineage, embedded via Leech.embed(v, 0)
@@ -23,46 +67,3 @@ place Entry { }
 //  [17-20] XTower.class L1  : Eo Al Ve Ga                 (the 3 clades)
 //  [21]    omega           : (Eo,Ve,Ga)
 
-fun main(): Number visits Output {
-  be eEo holds Leech.embed(1, 0)
-  be eAl holds Leech.embed(263, 0)
-  be eTy holds Leech.embed(295, 0)
-  be eVe holds Leech.embed(2431, 0)
-  be eDe holds Leech.embed(2431, 0)
-  be eAr holds Leech.embed(2559, 0)
-  be eSt holds Leech.embed(2047, 0)
-  be eGa holds Leech.embed(4095, 0)
-  be eLa holds Leech.embed(4095, 0)
-
-  // [1-7] orbit/family at level 2 (the gradient)
-  be _1 holds Output.print(String.from_int(XTower.class(eEo, 2)))
-  be _2 holds Output.print(String.from_int(XTower.class(eAl, 2)))
-  be _3 holds Output.print(String.from_int(XTower.class(eTy, 2)))
-  be _4 holds Output.print(String.from_int(XTower.class(eVe, 2)))
-  be _5 holds Output.print(String.from_int(XTower.class(eAr, 2)))
-  be _6 holds Output.print(String.from_int(XTower.class(eSt, 2)))
-  be _7 holds Output.print(String.from_int(XTower.class(eGa, 2)))
-
-  // [8-12] same_branch at level 2 (stable partition: who shares a family)
-  be _8  holds Output.print(String.from_int(XTower.same_branch(eGa, eLa, 2)))
-  be _9  holds Output.print(String.from_int(XTower.same_branch(eSt, eGa, 2)))
-  be _10 holds Output.print(String.from_int(XTower.same_branch(eEo, eGa, 2)))
-  be _11 holds Output.print(String.from_int(XTower.same_branch(eVe, eDe, 2)))
-  be _12 holds Output.print(String.from_int(XTower.same_branch(eEo, eAl, 2)))
-
-  // [13-16] of2 relation class
-  be _13 holds Output.print(String.from_int(XSimplex.of2(eVe, eDe)))
-  be _14 holds Output.print(String.from_int(XSimplex.of2(eEo, eGa)))
-  be _15 holds Output.print(String.from_int(XSimplex.of2(eAl, eTy)))
-  be _16 holds Output.print(String.from_int(XSimplex.of2(eEo, eVe)))
-
-  // [17-20] level 1: the three clades
-  be _17 holds Output.print(String.from_int(XTower.class(eEo, 1)))
-  be _18 holds Output.print(String.from_int(XTower.class(eAl, 1)))
-  be _19 holds Output.print(String.from_int(XTower.class(eVe, 1)))
-  be _20 holds Output.print(String.from_int(XTower.class(eGa, 1)))
-
-  // [21] omega: the Co0-invariant holonomy of a triple
-  be _21 holds Output.print(String.from_int(XSimplex.omega(eEo, eVe, eGa)))
-  return 0
-}

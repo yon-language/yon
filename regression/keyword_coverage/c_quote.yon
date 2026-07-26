@@ -3,7 +3,9 @@
 // quote(number, 0) : El(number) — the inhabitant 0 is checked against the
 // decoded carrier TyPrim "number". The handle is bound and the function
 // returns a plain number (quote lowers to its inhabitant `a` in desugar).
-fun main(): Number {
-  be q holds quote(Number, 0)
-  return 0
+place Entry {
+  fun main(): Number {
+    be q holds quote(Number, 0)
+    return 0
+  }
 }

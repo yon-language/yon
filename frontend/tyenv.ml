@@ -498,7 +498,7 @@ let with_builtins (env : env) : env =
   let output_op_decl = {
     op_name = "print";
     op_params = [{ param_name = "s"; param_ty = TyUser "String" }];
-    op_return = Some (TyPrim "unit");
+    op_return = Some (TyPrim "unit"); op_on_error = None;
     op_functorial = false;
     op_algebra = None;
     op_loc = dummy_loc;
@@ -517,7 +517,7 @@ let with_builtins (env : env) : env =
     pd_loc = dummy_loc;
   } in
   let console_reduction = {
-    rd_name = "__Console";
+    rd_name = "__Console"; rd_on_error = None;
     rd_of = "Output";
     rd_multi_shot = false;
     rd_clauses = [];

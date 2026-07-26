@@ -1,4 +1,6 @@
-fun main(): Number {
-  let x = 42
-  return x
+place Entry {
+  fun main(): Number {
+    let x = 42
+    return x
+  }
 }

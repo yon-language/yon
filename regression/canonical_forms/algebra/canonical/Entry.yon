@@ -1,4 +1,5 @@
-place Entry { }
-fun main(): Number {
-  return 0
+place Entry {
+  fun main(): Number {
+    return 0
+  }
 }

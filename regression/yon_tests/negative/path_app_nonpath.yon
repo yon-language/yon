@@ -1,1 +1,3 @@
-fun main(): Number { return 5 @ I0 }
+place Entry {
+  fun main(): Number { return 5 @ I0 }
+}

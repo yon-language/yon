@@ -1,3 +1,5 @@
 // eta-Sigma: pair(fst p, snd p) = p, proved IN Yon (surjective pairing)
-fun eta_sigma(p: Sigma(x: Number). Number): Id(Sigma(x: Number). Number, pair(fst(p), snd(p)), p) { return refl(p) }
-fun main(): Number { return 0 }
+place Entry {
+  fun eta_sigma(p: Sigma(x: Number). Number): Id(Sigma(x: Number). Number, pair(fst(p), snd(p)), p) { return refl(p) }
+  fun main(): Number { return 0 }
+}

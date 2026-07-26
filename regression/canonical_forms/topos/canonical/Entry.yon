@@ -1,6 +1,7 @@
-place Entry { }
-fun main(): Number {
-  be s holds .-> State { balance 5 }
-  be bad holds is_overdrawn(s)
-  return if bad then 0 else 42
+place Entry {
+  fun main(): Number {
+    be s holds .-> State { balance 5 }
+    be bad holds is_overdrawn(s)
+    return if bad then 0 else 42
+  }
 }

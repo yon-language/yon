@@ -56,7 +56,7 @@ let () =
   (* (6) end-to-end: a geom morphism's CaTT code decodes to El(src) -> El(tgt),
      which is exactly the coherence the checker now enforces on TopGeomMorphism *)
   let gm = {
-    gm_name = "f"; gm_source_site = "EU"; gm_target_site = "US";
+    gm_name = "f"; gm_on_error = None; gm_source_site = "EU"; gm_target_site = "US";
     gm_pull = None; gm_push = None;
     gm_adjunction = false; gm_f_star_exact = false; gm_f_lower_star_exact = false;
     gm_loc = dummy_loc;

@@ -1,6 +1,8 @@
 // coverage: a parameter of arrow type `number -> number` (TyArrow)
-fun apply(g: Number -> Number, x: Number): Number { return g(x) }
-fun main(): Number {
-  be inc holds fun(n: Number) => n + 1
-  return apply(inc, 41)
+place Entry {
+  fun apply(g: Number -> Number, x: Number): Number { return g(x) }
+  fun main(): Number {
+    be inc holds fun(n: Number) => n + 1
+    return apply(inc, 41)
+  }
 }

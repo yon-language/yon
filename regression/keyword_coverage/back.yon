@@ -1,3 +1,5 @@
 /* back p = inv(p): the path travelled in reverse. */
-fun main(): Number { be p holds back clear 5
-  return p @ I0 }
+place Entry {
+  fun main(): Number { be p holds back clear 5
+    return p @ I0 }
+}

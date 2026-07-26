@@ -1,4 +1,6 @@
-fun spin(): Number visits Output {
-  forever { be _ holds String.print("tick") }
+place Entry {
+  fun spin(): Number visits Output {
+    forever { be _ holds String.print("tick") }
+  }
+  fun main(): Number { return 42 }
 }
-fun main(): Number { return 42 }

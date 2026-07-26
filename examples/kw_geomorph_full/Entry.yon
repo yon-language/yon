@@ -1,15 +1,16 @@
-place Entry { }
-geomorph Lift from Account to AccountEU {
-  adjunction
-  exact pull
-  exact push
-  pull(a: AccountEU): Account {
-    be tmp holds a
-    return tmp
+place Entry {
+  geomorph Lift from Account to AccountEU {
+    adjunction
+    exact pull
+    exact push
+    pull(a: AccountEU): Account {
+      be tmp holds a
+      return tmp
+    }
+    push(a: Account): AccountEU {
+      be tmp holds a
+      return tmp
+    }
   }
-  push(a: Account): AccountEU {
-    be tmp holds a
-    return tmp
-  }
+  fun main(): Number { return 0 }
 }
-fun main(): Number { return 0 }

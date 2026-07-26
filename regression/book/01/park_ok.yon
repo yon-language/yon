@@ -16,12 +16,12 @@ world PublicPark = Park / cohort
 
 place PublicDino in PublicPark {
   cohort Number
+  fun bucket_of(c: Number): Number { return c }
+  view LegalLens of PublicDino {
+    show bucket = bucket_of(cohort)
+  }
+  fun main(): Number { return 0 }
 }
 
-fun bucket_of(c: Number): Number { return c }
 
-view LegalLens of PublicDino {
-  show bucket = bucket_of(cohort)
-}
 
-fun main(): Number { return 0 }

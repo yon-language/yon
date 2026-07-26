@@ -1,23 +1,24 @@
-place Entry { }
-move EurToUsd from Account_EUR to Account_USD requires MoneyTransfer {
-  balance converts to balance by scale_eur_usd
-}
-fun scale_eur_usd(x: Number): Number {
-  return x * 110 / 100
-}
-fun main(): Number {
-  /* FNV-1a hash di "MoneyTransfer" (calcolato compile-time
-   * a runtime tramite Crypto.fnv1a per consistenza con emit MLIR).
-   * NOTA MVP: il compile-time hash in emit_mlir.ml usa lo stesso FNV-1a init
-   * 0x811c9dc5 + multiplier 0x01000193, identico a Crypto.fnv1a runtime. */
-  be cap_name holds String.from_int(0)   /* placeholder; per ora hardcode hash */
-  /* Hash hardcoded: FNV-1a di "MoneyTransfer" (string Yon). */
-  /* Per il check runtime, grant lo stesso hash che emette emit_mlir. */
-  be cap_hash holds 169281588   /* FNV-1a("MoneyTransfer"), matches emit_mlir's Cap.check */
-  be _grant holds Cap.grant(cap_hash)
+place Entry {
+  move EurToUsd from Account_EUR to Account_USD requires MoneyTransfer {
+    balance converts to balance by scale_eur_usd
+  }
+  fun scale_eur_usd(x: Number): Number {
+    return x * 110 / 100
+  }
+  fun main(): Number {
+    /* FNV-1a hash di "MoneyTransfer" (calcolato compile-time
+     * a runtime tramite Crypto.fnv1a per consistenza con emit MLIR).
+     * NOTA MVP: il compile-time hash in emit_mlir.ml usa lo stesso FNV-1a init
+     * 0x811c9dc5 + multiplier 0x01000193, identico a Crypto.fnv1a runtime. */
+    be cap_name holds String.from_int(0)   /* placeholder; per ora hardcode hash */
+    /* Hash hardcoded: FNV-1a di "MoneyTransfer" (string Yon). */
+    /* Per il check runtime, grant lo stesso hash che emette emit_mlir. */
+    be cap_hash holds 169281588   /* FNV-1a("MoneyTransfer"), matches emit_mlir's Cap.check */
+    be _grant holds Cap.grant(cap_hash)
 
-  /* Apply move — emit runtime Cap.check sotto */
-  be alice_eur holds .-> Account_EUR { balance 100 }
-  be alice_usd holds apply_move(EurToUsd, alice_eur)
-  return alice_usd.balance
+    /* Apply move — emit runtime Cap.check sotto */
+    be alice_eur holds .-> Account_EUR { balance 100 }
+    be alice_usd holds apply_move(EurToUsd, alice_eur)
+    return alice_usd.balance
+  }
 }

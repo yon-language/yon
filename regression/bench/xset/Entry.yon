@@ -1,4 +1,62 @@
-place Entry { }
+place Entry {
+  fun build_xset(lo: Number, n: Number): Number {
+    be s holds Space.make(XSet.empty())
+    be i holds Space.make(0)
+    iter n do { be _ holds Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
+                be _2 holds Space.set(i, Space.get(i) + 1) }
+    return Space.get(s)
+  }
+  fun build_hset(lo: Number, n: Number): Number {
+    be s holds Space.make(HashSet.empty())
+    be i holds Space.make(0)
+    iter n do { be _ holds Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
+                be _2 holds Space.set(i, Space.get(i) + 1) }
+    return Space.get(s)
+  }
+  fun batch_xinter(a: Number, b: Number, batch: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter batch do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun batch_xunion(a: Number, b: Number, batch: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter batch do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun batch_hinter(a: Number, b: Number, batch: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter batch do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun batch_hunion(a: Number, b: Number, batch: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter batch do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun main(): Number visits Output {
+    be n holds 2000
+    be batch holds 100
+    be xa holds build_xset(0, n)
+    be xb holds build_xset(1000, n)
+    be ha holds build_hset(0, n)
+    be hb holds build_hset(1000, n)
+    be _g1 holds Output.print(String.from_int(XSet.size(XSet.intersect(xa, xb))))   // ~1000 overlap
+    be _g2 holds Output.print(String.from_int(XSet.size(XSet.union(xa, xb))))        // ~3000
+    be _1 holds Output.print(String.from_int(batch_xinter(xa, xb, batch)))
+    be _2 holds Output.print(String.from_int(batch_xunion(xa, xb, batch)))
+    be _3 holds Output.print(String.from_int(batch_hinter(ha, hb, batch)))
+    be _4 holds Output.print(String.from_int(batch_hunion(ha, hb, batch)))
+    return 0
+  }
+}
 // BENCHMARK — XSet bit-parallel set algebra vs HashSet.
 // XSet is a fixed 196,560-bit bitmap: intersect/union are a bit-AND/OR over ~3072
 // machine words, INDEPENDENT of set size N. HashSet intersect/union iterate elements
@@ -10,60 +68,3 @@ place Entry { }
 //
 // Schema (6 ints): inter_sz_guard, union_sz_guard,
 //   xset_inter_ns_per100, xset_union_ns_per100, hash_inter_ns_per100, hash_union_ns_per100
-fun build_xset(lo: Number, n: Number): Number {
-  be s holds Space.make(XSet.empty())
-  be i holds Space.make(0)
-  iter n do { be _ holds Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
-              be _2 holds Space.set(i, Space.get(i) + 1) }
-  return Space.get(s)
-}
-fun build_hset(lo: Number, n: Number): Number {
-  be s holds Space.make(HashSet.empty())
-  be i holds Space.make(0)
-  iter n do { be _ holds Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
-              be _2 holds Space.set(i, Space.get(i) + 1) }
-  return Space.get(s)
-}
-fun batch_xinter(a: Number, b: Number, batch: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter batch do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun batch_xunion(a: Number, b: Number, batch: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter batch do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun batch_hinter(a: Number, b: Number, batch: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter batch do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun batch_hunion(a: Number, b: Number, batch: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter batch do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun main(): Number visits Output {
-  be n holds 2000
-  be batch holds 100
-  be xa holds build_xset(0, n)
-  be xb holds build_xset(1000, n)
-  be ha holds build_hset(0, n)
-  be hb holds build_hset(1000, n)
-  be _g1 holds Output.print(String.from_int(XSet.size(XSet.intersect(xa, xb))))   // ~1000 overlap
-  be _g2 holds Output.print(String.from_int(XSet.size(XSet.union(xa, xb))))        // ~3000
-  be _1 holds Output.print(String.from_int(batch_xinter(xa, xb, batch)))
-  be _2 holds Output.print(String.from_int(batch_xunion(xa, xb, batch)))
-  be _3 holds Output.print(String.from_int(batch_hinter(ha, hb, batch)))
-  be _4 holds Output.print(String.from_int(batch_hunion(ha, hb, batch)))
-  return 0
-}

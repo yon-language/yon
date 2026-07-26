@@ -1,0 +1,6 @@
+/* Error — the root of the failure sub-object hierarchy. Concrete errors
+ * declare themselves from below with the mono arrow (`this < Error`), the
+ * open-world direction: Error never enumerates them and never changes.
+ * The mono VERIFIES (does not inherit): a sub-object must expose every
+ * observation of the super — no `this < Error` compiles without `message`. */
+place Error { message Text }

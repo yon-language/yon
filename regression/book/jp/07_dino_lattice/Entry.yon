@@ -1,4 +1,24 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be a holds 1536
+    be b holds 1280
+    be c holds 25167360
+    be d holds 512
+
+    be _1 holds Output.print(String.from_int(a))
+    be _2 holds Output.print(String.from_int(b))
+    be _3 holds Output.print(String.from_int(c))
+    be _4 holds Output.print(String.from_int(d))
+
+    be _5  holds Output.print(String.from_int(XSimplex.of2(a, b)))
+    be _6  holds Output.print(String.from_int(XSimplex.of2(a, c)))
+    be _7  holds Output.print(String.from_int(XSimplex.of2(a, d)))
+    be _8  holds Output.print(String.from_int(XSimplex.of2(b, c)))
+    be _9  holds Output.print(String.from_int(XSimplex.of2(b, d)))
+    be _10 holds Output.print(String.from_int(XSimplex.of2(c, d)))
+    return 0
+  }
+}
 
 // Classifying the animals on the Leech lattice -- FINAL trace for the 2.3 viz.
 //
@@ -22,22 +42,3 @@ place Entry { }
 //   [1-4]  A, B, C, D                      -- the genome xcoords
 //   [5-10] of2: AB, AC, AD, BC, BD, CD     -- the relation classes (1,11,7,1,1,7)
 
-fun main(): Number visits Output {
-  be a holds 1536
-  be b holds 1280
-  be c holds 25167360
-  be d holds 512
-
-  be _1 holds Output.print(String.from_int(a))
-  be _2 holds Output.print(String.from_int(b))
-  be _3 holds Output.print(String.from_int(c))
-  be _4 holds Output.print(String.from_int(d))
-
-  be _5  holds Output.print(String.from_int(XSimplex.of2(a, b)))
-  be _6  holds Output.print(String.from_int(XSimplex.of2(a, c)))
-  be _7  holds Output.print(String.from_int(XSimplex.of2(a, d)))
-  be _8  holds Output.print(String.from_int(XSimplex.of2(b, c)))
-  be _9  holds Output.print(String.from_int(XSimplex.of2(b, d)))
-  be _10 holds Output.print(String.from_int(XSimplex.of2(c, d)))
-  return 0
-}

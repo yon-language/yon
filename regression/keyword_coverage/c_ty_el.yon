@@ -1,5 +1,7 @@
 // coverage: a parameter of type `El(c)` (TyEl) where c is a code identifier.
 // Grammar: EL LPAREN IDENT RPAREN (parser.mly). A bare code identifier decodes
 // to the nominal 0-cell carrier TyPrim c via Catt_r_yon.el_decode (TmVar c).
-fun useEl(e: El(Carrier)): Number { return 0 }
-fun main(): Number { return 0 }
+place Entry {
+  fun useEl(e: El(Carrier)): Number { return 0 }
+  fun main(): Number { return 0 }
+}

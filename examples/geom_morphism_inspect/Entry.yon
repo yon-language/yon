@@ -1,8 +1,9 @@
-place Entry { }
-geomorph LiftEU from Account to AccountEU {
-  pull(a: AccountEU): Account { return a }
+place Entry {
+  geomorph LiftEU from Account to AccountEU {
+    pull(a: AccountEU): Account { return a }
+  }
+  fun check(): Boolean {
+    return directed_cell(LiftEU)
+  }
+  fun main(): Number { return 0 }
 }
-fun check(): Boolean {
-  return directed_cell(LiftEU)
-}
-fun main(): Number { return 0 }

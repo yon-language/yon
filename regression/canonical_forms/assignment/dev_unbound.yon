@@ -1,4 +1,6 @@
-fun main(): Number {
-  y = 5
-  return y
+place Entry {
+  fun main(): Number {
+    y = 5
+    return y
+  }
 }

@@ -1,4 +1,52 @@
-place Entry { }
+place Entry {
+  fun timed_base(iters: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter iters do { be _ holds Space.set(acc, Space.get(acc) + 1) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun timed_eq(a: Text, b: Text, iters: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter iters do { be e holds (if String.equal(a, b) then 1 else 0)
+                    be _ holds Space.set(acc, Space.get(acc) + e) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun min_base(reps: Number, iters: Number): Number visits Output {
+    be m holds Space.make(timed_base(iters))
+    iter reps do { be t holds timed_base(iters)
+                   be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
+    return Space.get(m)
+  }
+  fun min_eq(a: Text, b: Text, reps: Number, iters: Number): Number visits Output {
+    be m holds Space.make(timed_eq(a, b, iters))
+    iter reps do { be t holds timed_eq(a, b, iters)
+                   be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
+    return Space.get(m)
+  }
+  fun build(seed: Text, doublings: Number): Text {
+    be s holds Space.make(seed)
+    iter doublings do { be _ holds Space.set(s, String.concat(Space.get(s), Space.get(s))) }
+    return Space.get(s)
+  }
+  fun main(): Number visits Output {
+    be s1   holds "x"
+    be s1k  holds build("x", 10)
+    be s32k holds build("x", 15)
+    be reps holds 15
+    be n holds 1000000
+    be base holds min_base(reps, n)
+    be _l1 holds Output.print(String.from_int(String.length(s1)))
+    be _l2 holds Output.print(String.from_int(String.length(s1k)))
+    be _l3 holds Output.print(String.from_int(String.length(s32k)))
+    be _n1 holds Output.print(String.from_int(min_eq(s1, s1, reps, n) - base))
+    be _n2 holds Output.print(String.from_int(min_eq(s1k, s1k, reps, n) - base))
+    be _n3 holds Output.print(String.from_int(min_eq(s32k, s32k, reps, n) - base))
+    return 0
+  }
+}
 // BENCHMARK — content-addressed equality is O(1) in string length.
 // String.equal compares two heap addresses (one integer compare), so it costs the
 // same at 1 char and at 32,768 chars. Method: time 1e6 equal() calls, take the MIN
@@ -8,50 +56,3 @@ place Entry { }
 //
 // Stdout schema (6 ints): len_1, len_1k, len_32k, net_1, net_1k, net_32k
 //   net_* = min ns for 1e6 equal() calls, baseline-subtracted (/1e6 = ns/call).
-fun timed_base(iters: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter iters do { be _ holds Space.set(acc, Space.get(acc) + 1) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun timed_eq(a: Text, b: Text, iters: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter iters do { be e holds (if String.equal(a, b) then 1 else 0)
-                  be _ holds Space.set(acc, Space.get(acc) + e) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun min_base(reps: Number, iters: Number): Number visits Output {
-  be m holds Space.make(timed_base(iters))
-  iter reps do { be t holds timed_base(iters)
-                 be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
-  return Space.get(m)
-}
-fun min_eq(a: Text, b: Text, reps: Number, iters: Number): Number visits Output {
-  be m holds Space.make(timed_eq(a, b, iters))
-  iter reps do { be t holds timed_eq(a, b, iters)
-                 be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
-  return Space.get(m)
-}
-fun build(seed: Text, doublings: Number): Text {
-  be s holds Space.make(seed)
-  iter doublings do { be _ holds Space.set(s, String.concat(Space.get(s), Space.get(s))) }
-  return Space.get(s)
-}
-fun main(): Number visits Output {
-  be s1   holds "x"
-  be s1k  holds build("x", 10)
-  be s32k holds build("x", 15)
-  be reps holds 15
-  be n holds 1000000
-  be base holds min_base(reps, n)
-  be _l1 holds Output.print(String.from_int(String.length(s1)))
-  be _l2 holds Output.print(String.from_int(String.length(s1k)))
-  be _l3 holds Output.print(String.from_int(String.length(s32k)))
-  be _n1 holds Output.print(String.from_int(min_eq(s1, s1, reps, n) - base))
-  be _n2 holds Output.print(String.from_int(min_eq(s1k, s1k, reps, n) - base))
-  be _n3 holds Output.print(String.from_int(min_eq(s32k, s32k, reps, n) - base))
-  return 0
-}

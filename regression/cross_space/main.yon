@@ -1,13 +1,15 @@
 import "x/rates"
 import bank::deposit_net from Bank
 
-fun main(): Number {
-  be deposits holds List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
-  be total holds 0
-  for every d in deposits {
-    total = total + deposit_net(d)
+place Entry {
+  fun main(): Number {
+    be deposits holds List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
+    be total holds 0
+    for every d in deposits {
+      total = total + deposit_net(d)
+    }
+    be usd holds rates::eur_to_usd(total)
+    be _p holds IO.print_num(usd)
+    return usd - 167
   }
-  be usd holds rates::eur_to_usd(total)
-  be _p holds IO.print_num(usd)
-  return usd - 167
 }

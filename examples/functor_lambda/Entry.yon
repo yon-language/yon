@@ -1,7 +1,8 @@
-place Entry { }
-fun main(): Number {
-  be f holds functor (x: Number) => x from W to V
-    law identity
-    law composition
-  return 0
+place Entry {
+  fun main(): Number {
+    be f holds functor (x: Number) => x from W to V
+      law identity
+      law composition
+    return 0
+  }
 }

@@ -1,8 +1,9 @@
-place Entry { }
-fun addone(n: Number): Number { return n + 1 }
-fun main(): Number {
-  be f holds functor (x: Number) => addone(x) from W to V
-  be g holds functor (y: Number) => addone(y) from V to U
-  be h holds compose f with g
-  return 0
+place Entry {
+  fun addone(n: Number): Number { return n + 1 }
+  fun main(): Number {
+    be f holds functor (x: Number) => addone(x) from W to V
+    be g holds functor (y: Number) => addone(y) from V to U
+    be h holds compose f with g
+    return 0
+  }
 }

@@ -1,11 +1,12 @@
-place Entry { }
-// pybench BASE (throughput): N handle-threading iterations, no structure op.
-fun main(): Number visits Output {
-  be h holds Space.make(0)
-  be i holds Space.make(0)
-  iter 1000000 do { be k holds Space.get(i)
-               be _ holds Space.set(h, Space.get(h) + 1)
-               be _2 holds Space.set(i, k + 1) }
-  be _p holds Output.print(String.from_int(Space.get(h)))
-  return 0
+place Entry {
+  fun main(): Number visits Output {
+    be h holds Space.make(0)
+    be i holds Space.make(0)
+    iter 1000000 do { be k holds Space.get(i)
+                 be _ holds Space.set(h, Space.get(h) + 1)
+                 be _2 holds Space.set(i, k + 1) }
+    be _p holds Output.print(String.from_int(Space.get(h)))
+    return 0
+  }
 }
+// pybench BASE (throughput): N handle-threading iterations, no structure op.

@@ -1,5 +1,7 @@
 /* Cross-Space suite — the Bank service (chapter 16). */
-fun deposit_net(amount: Number): Number { return amount - fee(amount) }
-fun fee(amount: Number): Number { return amount / 20 }
-internal fun audit_key(x: Number): Number { return x * 1789 }
-fun main(): Number { return 0 }
+place Entry {
+  fun deposit_net(amount: Number): Number { return amount - fee(amount) }
+  fun fee(amount: Number): Number { return amount / 20 }
+  internal fun audit_key(x: Number): Number { return x * 1789 }
+  fun main(): Number { return 0 }
+}

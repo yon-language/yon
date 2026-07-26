@@ -1,4 +1,6 @@
-fun main(): Number {
-  be c holds 1
-  return c == 1 ? 42 : 0
+place Entry {
+  fun main(): Number {
+    be c holds 1
+    return c == 1 ? 42 : 0
+  }
 }

@@ -173,14 +173,15 @@ The Kripke-Joyal forcing block: `forces stage cond { }` runs its body at a stage
 {`// net/NodeA.yon
 place NodeA { value Number }
 // Entry.yon
-place Entry { }
-fun guard(): Number {
-  forces NodeA value is Number {
-    return 1
+place Entry {
+  fun guard(): Number {
+    forces NodeA value is Number {
+      return 1
+    }
+    return 0
   }
-  return 0
-}
-fun main(): Number { return 0 }`}
+  fun main(): Number { return 0 }
+}`}
 </CodeWindow>
 
 #### `produce`
@@ -234,9 +235,10 @@ The constraint of the `topos ... where { }` block, and of the comprehension `{ x
 {`// w/Account.yon
 place Account { balance Number }
 // Entry.yon
-place Entry { }
-fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): Number { return 0 }
-fun main(): Number { return 0 }`}
+place Entry {
+  fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): Number { return 0 }
+  fun main(): Number { return 0 }
+}`}
 </CodeWindow>
 
 ## The four kinds of handle
@@ -277,16 +279,17 @@ place Q { v Number }
 // w/R.yon
 place R { v Number }
 // Entry.yon
-place Entry { }
-fun main(): Number {
-  be m1 holds move(s: P) => .-> Q { v 1 } from P to Q
-  be m2 holds move(s: Q) => .-> R { v 2 } from Q to R
-  be mm holds compose m1 with m2
-  be sp holds .-> P { v 0 }
-  be sr holds mm(sp)
-  be vw holds view(s: P) => 40 of P
-  be forty holds vw(sp)
-  return forty + 4
+place Entry {
+  fun main(): Number {
+    be m1 holds move(s: P) => .-> Q { v 1 } from P to Q
+    be m2 holds move(s: Q) => .-> R { v 2 } from Q to R
+    be mm holds compose m1 with m2
+    be sp holds .-> P { v 0 }
+    be sr holds mm(sp)
+    be vw holds view(s: P) => 40 of P
+    be forty holds vw(sp)
+    return forty + 4
+  }
 }`}
 </CodeWindow>
 
@@ -313,12 +316,13 @@ view Snapshot of Account {
   show fee as "monthly fee"
 }
 // Entry.yon
-place Entry { }
-fun main(): Number {
-  be acc holds .-> Account { balance 50
-    fee 8 }
-  be snap holds Snapshot(acc)
-  return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
+place Entry {
+  fun main(): Number {
+    be acc holds .-> Account { balance 50
+      fee 8 }
+    be snap holds Snapshot(acc)
+    return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
+  }
 }`}
 </CodeWindow>
 
@@ -364,28 +368,29 @@ place Wide { x Number
 place Narrow { x Number
   total Number }
 // Entry.yon
-place Entry { }
-fun pick(a: Number, b: Number): Number { return a }
-fun ident(x: Number): Number { return x }
-fun double(x: Number): Number { return x * 2 }
-move Merge unifies A, B {
-  share v
-  conflict on w resolves to pick
-}
-move Squeeze from Wide to Narrow {
-  x maps to x by ident
-  y aggregates to total by double
-}
-fun main(): Number {
-  be a holds .-> A { v 7
-    w 1 }
-  be b holds .-> B { v 7
-    w 9 }
-  be m holds Move.merge(Merge, a, b)
-  be wide holds .-> Wide { x 4
-    y 5 }
-  be narrow holds apply_move(Squeeze, wide)
-  return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
+place Entry {
+  fun pick(a: Number, b: Number): Number { return a }
+  fun ident(x: Number): Number { return x }
+  fun double(x: Number): Number { return x * 2 }
+  move Merge unifies A, B {
+    share v
+    conflict on w resolves to pick
+  }
+  move Squeeze from Wide to Narrow {
+    x maps to x by ident
+    y aggregates to total by double
+  }
+  fun main(): Number {
+    be a holds .-> A { v 7
+      w 1 }
+    be b holds .-> B { v 7
+      w 9 }
+    be m holds Move.merge(Merge, a, b)
+    be wide holds .-> Wide { x 4
+      y 5 }
+    be narrow holds apply_move(Squeeze, wide)
+    return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
+  }
 }`}
 </CodeWindow>
 
@@ -417,9 +422,10 @@ place Or {
   law associative
 }
 // Entry.yon
-place Entry { }
-fun main(): Number {
-  return 0
+place Entry {
+  fun main(): Number {
+    return 0
+  }
 }`}
 </CodeWindow>
 
@@ -478,11 +484,12 @@ topos Bank where {
 }
 topology j of State { return 1 }
 // Entry.yon
-place Entry { }
-fun main(): Number {
-  be s holds .-> State { balance 5 }
-  be bad holds is_overdrawn(s)
-  return if bad then 0 else 42
+place Entry {
+  fun main(): Number {
+    be s holds .-> State { balance 5 }
+    be bad holds is_overdrawn(s)
+    return if bad then 0 else 42
+  }
 }`}
 </CodeWindow>
 
@@ -502,13 +509,14 @@ place Account { balance Number }
 // shop/AccountEU.yon
 place AccountEU { balance Number }
 // Entry.yon
-place Entry { }
-morph LiftEU from Account to AccountEU {
-  on object(s: Account): AccountEU {
-    return .-> AccountEU { balance s.balance }
+place Entry {
+  morph LiftEU from Account to AccountEU {
+    on object(s: Account): AccountEU {
+      return .-> AccountEU { balance s.balance }
+    }
   }
-}
-fun main(): Number { return 0 }`}
+  fun main(): Number { return 0 }
+}`}
 </CodeWindow>
 
 #### `each`
@@ -531,13 +539,14 @@ objects = ["Y"]
 [runtime]
 backend = "memory"
 // Entry.yon
-place Entry { }
-functor F(x: Number) from W to V { return x }
-functor G(x: Number) from W to V { return x }
-nat transform Eta from F to G {
-  for each X by F
-}
-fun main(): Number { return 0 }`}
+place Entry {
+  functor F(x: Number) from W to V { return x }
+  functor G(x: Number) from W to V { return x }
+  nat transform Eta from F to G {
+    for each X by F
+  }
+  fun main(): Number { return 0 }
+}`}
 </CodeWindow>
 
 ## Categorical constructions
@@ -570,21 +579,22 @@ place Account { balance Number }
 // shop/AccountEU.yon
 place AccountEU { balance Number }
 // Entry.yon
-place Entry { }
-geomorph Lift from Account to AccountEU {
-  adjunction
-  exact pull
-  exact push
-  pull(a: AccountEU): Account {
-    be tmp holds a
-    return tmp
+place Entry {
+  geomorph Lift from Account to AccountEU {
+    adjunction
+    exact pull
+    exact push
+    pull(a: AccountEU): Account {
+      be tmp holds a
+      return tmp
+    }
+    push(a: Account): AccountEU {
+      be tmp holds a
+      return tmp
+    }
   }
-  push(a: Account): AccountEU {
-    be tmp holds a
-    return tmp
-  }
-}
-fun main(): Number { return 0 }`}
+  fun main(): Number { return 0 }
+}`}
 </CodeWindow>
 
 #### `pullback`
@@ -607,14 +617,15 @@ place P = pullback(f, g)
 // w/Q.yon  (kernel metadata: the pushout object)
 place Q = pushout(f, g)
 // Entry.yon
-place Entry { }
-fun f(x: Number): Number { return x * 2 }
-fun g(y: Number): Number { return y + 6 }
-fun main(): Number {
-  be p holds pullback(f, g, 6, 6)      // f(6)=12, g(6)=12: compatible
-  be a holds __pullback_pi1(p)
-  be b holds __pullback_pi2(p)
-  return a + b                          // 12
+place Entry {
+  fun f(x: Number): Number { return x * 2 }
+  fun g(y: Number): Number { return y + 6 }
+  fun main(): Number {
+    be p holds pullback(f, g, 6, 6)      // f(6)=12, g(6)=12: compatible
+    be a holds __pullback_pi1(p)
+    be b holds __pullback_pi2(p)
+    return a + b                          // 12
+  }
 }`}
 </CodeWindow>
 

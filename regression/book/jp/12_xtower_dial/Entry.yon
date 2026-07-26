@@ -1,4 +1,31 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be o holds Leech.embed(1445, 0)
+    be m holds Leech.embed(2361, 0)
+    be t holds Leech.embed(100, 0)
+
+    be _0 holds Output.print(String.from_int(XTower.same_branch(o, m, 0)))
+    be _1 holds Output.print(String.from_int(XTower.same_branch(o, m, 1)))
+    be _2 holds Output.print(String.from_int(XTower.same_branch(o, m, 2)))
+    be _3 holds Output.print(String.from_int(XTower.same_branch(o, m, 3)))
+
+    be _4 holds Output.print(String.from_int(XTower.same_branch(o, t, 0)))
+    be _5 holds Output.print(String.from_int(XTower.same_branch(o, t, 1)))
+    be _6 holds Output.print(String.from_int(XTower.same_branch(o, t, 2)))
+    be _7 holds Output.print(String.from_int(XTower.same_branch(o, t, 3)))
+
+    be _8  holds Output.print(String.from_int(XTower.class(o, 0)))
+    be _9  holds Output.print(String.from_int(XTower.class(o, 1)))
+    be _10 holds Output.print(String.from_int(XTower.class(o, 2)))
+    be _11 holds Output.print(String.from_int(XTower.class(o, 3)))
+
+    be _12 holds Output.print(String.from_int(XTower.width(0)))
+    be _13 holds Output.print(String.from_int(XTower.width(1)))
+    be _14 holds Output.print(String.from_int(XTower.width(2)))
+    be _15 holds Output.print(String.from_int(XTower.width(3)))
+    return 0
+  }
+}
 
 // XTower = the DIAL of equality. same_branch(a, b, level) asks "are a and b the
 // same?" at a grain you turn: level 0 = Co0 (all one), level 2 = M24 (XRelSet's
@@ -16,29 +43,3 @@ place Entry { }
 //  [9-12]  xtower_class(orig, level)         level 0,1,2,3   -- orig's class at each grain
 //  [13-16] xtower_width(level)               level 0,1,2,3   -- 1 / 3 / 12 / 196560 (the dial's range)
 
-fun main(): Number visits Output {
-  be o holds Leech.embed(1445, 0)
-  be m holds Leech.embed(2361, 0)
-  be t holds Leech.embed(100, 0)
-
-  be _0 holds Output.print(String.from_int(XTower.same_branch(o, m, 0)))
-  be _1 holds Output.print(String.from_int(XTower.same_branch(o, m, 1)))
-  be _2 holds Output.print(String.from_int(XTower.same_branch(o, m, 2)))
-  be _3 holds Output.print(String.from_int(XTower.same_branch(o, m, 3)))
-
-  be _4 holds Output.print(String.from_int(XTower.same_branch(o, t, 0)))
-  be _5 holds Output.print(String.from_int(XTower.same_branch(o, t, 1)))
-  be _6 holds Output.print(String.from_int(XTower.same_branch(o, t, 2)))
-  be _7 holds Output.print(String.from_int(XTower.same_branch(o, t, 3)))
-
-  be _8  holds Output.print(String.from_int(XTower.class(o, 0)))
-  be _9  holds Output.print(String.from_int(XTower.class(o, 1)))
-  be _10 holds Output.print(String.from_int(XTower.class(o, 2)))
-  be _11 holds Output.print(String.from_int(XTower.class(o, 3)))
-
-  be _12 holds Output.print(String.from_int(XTower.width(0)))
-  be _13 holds Output.print(String.from_int(XTower.width(1)))
-  be _14 holds Output.print(String.from_int(XTower.width(2)))
-  be _15 holds Output.print(String.from_int(XTower.width(3)))
-  return 0
-}

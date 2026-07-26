@@ -1,2 +1,3 @@
-place BP { }
-fun bf(): Number { be w holds wire to space A  return 0 }
+place BP {
+  fun bf(): Number { be w holds wire to space A  return 0 }
+}

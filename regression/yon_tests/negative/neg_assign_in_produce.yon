@@ -3,10 +3,12 @@
 // expression-context blocks). Until the produce rework in 1.2 it is rejected cleanly at
 // type-check time (exit 3) instead of crashing emit_mlir with a Fatal error. The fix is
 // `Space.set` or binding the value with `be` outside the block.
-fun main(): Number {
-  be s holds produce {
-    be i holds 0
-    iter 3 do { emit i  i = i + 1 }
+place Entry {
+  fun main(): Number {
+    be s holds produce {
+      be i holds 0
+      iter 3 do { emit i  i = i + 1 }
+    }
+    return 0
   }
-  return 0
 }

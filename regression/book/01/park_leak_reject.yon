@@ -13,6 +13,6 @@ world PublicPark = Park / cohort
 place PublicDino in PublicPark {
   cohort Number
   individual_id Number
+  fun main(): Number { return 0 }
 }
 
-fun main(): Number { return 0 }

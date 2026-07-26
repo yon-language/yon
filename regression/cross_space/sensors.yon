@@ -1,10 +1,12 @@
 /* The Sensors service: declares the producer (chapter 16 + wire design). */
-fun readings(): Stream<Number> {
-  be s holds produce {
-    emit 10
-    emit 11
-    emit 15
+place Entry {
+  fun readings(): Stream<Number> {
+    be s holds produce {
+      emit 10
+      emit 11
+      emit 15
+    }
+    return s
   }
-  return s
+  fun main(): Number { return 0 }
 }
-fun main(): Number { return 0 }

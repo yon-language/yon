@@ -2,16 +2,17 @@
 // Fahrenheit applicando la legge di campo c2f al campo `degrees` (100 |-> 212).
 // PERCHE': un morfismo di place trasporta la struttura preservando la legge
 // (functorialita') — il lato categoriale APPLICATO del linguaggio, non una copia.
-place Entry { }
-
-fun c2f(c: Number): Number { return c * 9 / 5 + 32 }
-
-move ToFahrenheit from Celsius to Fahrenheit {
-  degrees maps to degrees by c2f
+place Entry {
+  fun c2f(c: Number): Number { return c * 9 / 5 + 32 }
+  move ToFahrenheit from Celsius to Fahrenheit {
+    degrees maps to degrees by c2f
+  }
+  fun main(): Number {
+    be c holds .-> Celsius { degrees 100 }
+    be f holds apply_move(ToFahrenheit, c)
+    return f.degrees
+  }
 }
 
-fun main(): Number {
-  be c holds .-> Celsius { degrees 100 }
-  be f holds apply_move(ToFahrenheit, c)
-  return f.degrees
-}
+
+

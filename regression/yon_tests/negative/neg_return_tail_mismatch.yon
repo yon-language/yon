@@ -2,5 +2,7 @@
 // `be y holds "text"` has type text while the declared return type is number.
 // check_implicit_tail_return infers the tail and rejects via Dispatcher.subtype
 // (text is not a subtype of number) -> exit 3.
-fun h(): Number { be y holds "text" }
-fun main(): Number { return 0 }
+place Entry {
+  fun h(): Number { be y holds "text" }
+  fun main(): Number { return 0 }
+}

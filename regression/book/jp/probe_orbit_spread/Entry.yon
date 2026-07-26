@@ -1,4 +1,33 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be _l01 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1, 3))))
+    be _l02 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(7, 3))))
+    be _l03 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(63, 3))))
+    be _l04 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(100, 3))))
+    be _l05 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(200, 3))))
+    be _l06 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(511, 3))))
+    be _l07 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1023, 3))))
+    be _l08 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1445, 3))))
+    be _l09 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2047, 3))))
+    be _l10 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2361, 3))))
+    be _l11 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4094, 3))))
+    be _l12 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4095, 3))))
+
+    be _q01 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1, 0))))
+    be _q02 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(7, 0))))
+    be _q03 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(63, 0))))
+    be _q04 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(100, 0))))
+    be _q05 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(200, 0))))
+    be _q06 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(511, 0))))
+    be _q07 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1023, 0))))
+    be _q08 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1445, 0))))
+    be _q09 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2047, 0))))
+    be _q10 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2361, 0))))
+    be _q11 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4094, 0))))
+    be _q12 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4095, 0))))
+    return 0
+  }
+}
 
 // Does the orbit (the XRelSet class) actually VARY across genes, or is the linear
 // embedding degenerate (everything -> one orbit)? If it varies, "these 4 collapse
@@ -10,31 +39,3 @@ place Entry { }
 //  [13-24] m24_orbit(embed(g, 0))   quantize      (the content-address / grade orbit)
 // genes: 1, 7, 63, 100, 200, 511, 1023, 1445, 2047, 2361, 4094, 4095
 
-fun main(): Number visits Output {
-  be _l01 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1, 3))))
-  be _l02 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(7, 3))))
-  be _l03 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(63, 3))))
-  be _l04 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(100, 3))))
-  be _l05 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(200, 3))))
-  be _l06 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(511, 3))))
-  be _l07 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1023, 3))))
-  be _l08 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1445, 3))))
-  be _l09 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2047, 3))))
-  be _l10 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2361, 3))))
-  be _l11 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4094, 3))))
-  be _l12 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4095, 3))))
-
-  be _q01 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1, 0))))
-  be _q02 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(7, 0))))
-  be _q03 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(63, 0))))
-  be _q04 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(100, 0))))
-  be _q05 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(200, 0))))
-  be _q06 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(511, 0))))
-  be _q07 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1023, 0))))
-  be _q08 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1445, 0))))
-  be _q09 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2047, 0))))
-  be _q10 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(2361, 0))))
-  be _q11 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4094, 0))))
-  be _q12 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(4095, 0))))
-  return 0
-}

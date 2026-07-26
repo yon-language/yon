@@ -319,6 +319,10 @@ rule token = parse
   | "||"             { PIPEPIPE }
   | "|>"             { PIPEGT }   (* pipe-forward: x |> f means f(x) *)
   | "=>"             { FATARROW }
+  | "on" [' ' '\t']+ "error"
+      { ON_ERROR }   (* one token: kills the contextual-`on` ambiguity in every
+                        host (place member, fun, operation); an identifier
+                        `on` elsewhere is untouched *)
   | ".->"            { DOTARROW } (* the mediatrice: a section written as the
                                       arrow FROM THE POINT — `.-> P { ... }`
                                       reads `1 -> P`, the dot carrying the

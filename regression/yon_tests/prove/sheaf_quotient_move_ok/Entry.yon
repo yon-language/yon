@@ -1,6 +1,7 @@
-place Entry { }
-fun identity(x: Number): Number { return x }
-move Publish from Profile to PublicProfile {
-  cohort maps to cohort by identity
+place Entry {
+  fun identity(x: Number): Number { return x }
+  move Publish from Profile to PublicProfile {
+    cohort maps to cohort by identity
+  }
+  fun main(): Number { return 0 }
 }
-fun main(): Number { return 0 }

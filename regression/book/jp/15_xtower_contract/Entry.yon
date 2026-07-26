@@ -1,4 +1,52 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be w0 holds XTower.width(0)
+    be w1 holds XTower.width(1)
+    be w2 holds XTower.width(2)
+    be w3 holds XTower.width(3)
+    be dp holds XTower.depth()
+    be s0 holds XTower.same_branch(1536, 1536, 0)
+    be s1 holds XTower.same_branch(1536, 1536, 1)
+    be s2 holds XTower.same_branch(1536, 1536, 2)
+    be s3 holds XTower.same_branch(1536, 1536, 3)
+    be d0 holds XTower.same_branch(1536, 1280, 0)
+    be d1 holds XTower.same_branch(1536, 1280, 1)
+    be d2 holds XTower.same_branch(1536, 1280, 2)
+    be d3 holds XTower.same_branch(1536, 1280, 3)
+    be c0 holds XTower.class(1536, 0)
+
+    be _1 holds Output.print(String.from_int(w0))
+    be _2 holds Output.print(String.from_int(w1))
+    be _3 holds Output.print(String.from_int(w2))
+    be _4 holds Output.print(String.from_int(w3))
+    be _5 holds Output.print(String.from_int(dp))
+    be _6 holds Output.print(String.from_int(s0))
+    be _7 holds Output.print(String.from_int(s1))
+    be _8 holds Output.print(String.from_int(s2))
+    be _9 holds Output.print(String.from_int(s3))
+    be _10 holds Output.print(String.from_int(d0))
+    be _11 holds Output.print(String.from_int(d1))
+    be _12 holds Output.print(String.from_int(d2))
+    be _13 holds Output.print(String.from_int(d3))
+    be _14 holds Output.print(String.from_int(c0))
+
+    be f holds (if w0 == 1 then 0 else 1)
+             + (if w1 == 3 then 0 else 1)
+             + (if w2 == 12 then 0 else 1)
+             + (if w3 == 196560 then 0 else 1)
+             + (if dp == 4 then 0 else 1)
+             + (if s0 == 1 then 0 else 1)
+             + (if s1 == 1 then 0 else 1)
+             + (if s2 == 1 then 0 else 1)
+             + (if s3 == 1 then 0 else 1)
+             + (if d0 == 1 then 0 else 1)
+             + (if d1 == 1 then 0 else 1)
+             + (if d2 == 1 then 0 else 1)
+             + (if d3 == 0 then 0 else 1)
+             + (if c0 == 0 then 0 else 1)
+    return f
+  }
+}
 
 // XTower functional contract — SELF-CHECKING. Return = number of failed checks;
 // exit 0 means the contract holds. XTower is a TRUE refinement Co0 superset N
@@ -9,50 +57,3 @@ place Entry { }
 //
 // Stdout (the 14 observed values); exit code = failures.
 
-fun main(): Number visits Output {
-  be w0 holds XTower.width(0)
-  be w1 holds XTower.width(1)
-  be w2 holds XTower.width(2)
-  be w3 holds XTower.width(3)
-  be dp holds XTower.depth()
-  be s0 holds XTower.same_branch(1536, 1536, 0)
-  be s1 holds XTower.same_branch(1536, 1536, 1)
-  be s2 holds XTower.same_branch(1536, 1536, 2)
-  be s3 holds XTower.same_branch(1536, 1536, 3)
-  be d0 holds XTower.same_branch(1536, 1280, 0)
-  be d1 holds XTower.same_branch(1536, 1280, 1)
-  be d2 holds XTower.same_branch(1536, 1280, 2)
-  be d3 holds XTower.same_branch(1536, 1280, 3)
-  be c0 holds XTower.class(1536, 0)
-
-  be _1 holds Output.print(String.from_int(w0))
-  be _2 holds Output.print(String.from_int(w1))
-  be _3 holds Output.print(String.from_int(w2))
-  be _4 holds Output.print(String.from_int(w3))
-  be _5 holds Output.print(String.from_int(dp))
-  be _6 holds Output.print(String.from_int(s0))
-  be _7 holds Output.print(String.from_int(s1))
-  be _8 holds Output.print(String.from_int(s2))
-  be _9 holds Output.print(String.from_int(s3))
-  be _10 holds Output.print(String.from_int(d0))
-  be _11 holds Output.print(String.from_int(d1))
-  be _12 holds Output.print(String.from_int(d2))
-  be _13 holds Output.print(String.from_int(d3))
-  be _14 holds Output.print(String.from_int(c0))
-
-  be f holds (if w0 == 1 then 0 else 1)
-           + (if w1 == 3 then 0 else 1)
-           + (if w2 == 12 then 0 else 1)
-           + (if w3 == 196560 then 0 else 1)
-           + (if dp == 4 then 0 else 1)
-           + (if s0 == 1 then 0 else 1)
-           + (if s1 == 1 then 0 else 1)
-           + (if s2 == 1 then 0 else 1)
-           + (if s3 == 1 then 0 else 1)
-           + (if d0 == 1 then 0 else 1)
-           + (if d1 == 1 then 0 else 1)
-           + (if d2 == 1 then 0 else 1)
-           + (if d3 == 0 then 0 else 1)
-           + (if c0 == 0 then 0 else 1)
-  return f
-}

@@ -1,8 +1,9 @@
 // POSITIVE probe for the world-guard rule (f): Opened and Closed live in
 // the same world W, so the union's site is DERIVED as W (Sited) and the
 // project compiles. The negative twin is examples/union_cross_world_reject.
-place Entry { }
+place Entry {
+  fun main(): Number { return 0 }
+}
 place Account {
   this > Opened :U Closed
 }
-fun main(): Number { return 0 }

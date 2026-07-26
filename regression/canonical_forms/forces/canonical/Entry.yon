@@ -1,8 +1,9 @@
-place Entry { }
-fun guard(): Number {
-  forces NodeA value is Number {
-    return 1
+place Entry {
+  fun guard(): Number {
+    forces NodeA value is Number {
+      return 1
+    }
+    return 0
   }
-  return 0
+  fun main(): Number { return 0 }
 }
-fun main(): Number { return 0 }

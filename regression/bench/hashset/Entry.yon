@@ -1,4 +1,69 @@
-place Entry { }
+place Entry {
+  fun timed_insert(n: Number): Number visits Output {
+    be setc holds Space.make(HashSet.empty())
+    be i holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(setc, HashSet.add(Space.get(setc), k))
+                be _2 holds Space.set(i, k + 1) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun timed_insert_base(n: Number): Number visits Output {
+    be i holds Space.make(0)
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(acc, k)
+                be _2 holds Space.set(i, k + 1) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun build_set(n: Number): Number {
+    be setc holds Space.make(HashSet.empty())
+    be i holds Space.make(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(setc, HashSet.add(Space.get(setc), k))
+                be _2 holds Space.set(i, k + 1) }
+    return Space.get(setc)
+  }
+  fun timed_lookup(s: Number, m: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter m do { be h holds (if HashSet.contains(s, 42) then 1 else 0)
+                be _ holds Space.set(acc, Space.get(acc) + h) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun timed_lookup_base(m: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter m do { be _ holds Space.set(acc, Space.get(acc) + 1) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
+  fun main(): Number visits Output {
+    be n holds 100000
+    // insert throughput: min over a few reps, net of baseline
+    be ins holds Space.make(timed_insert(n))
+    iter 4 do { be _ holds Space.set(ins, min2(Space.get(ins), timed_insert(n))) }
+    be insb holds Space.make(timed_insert_base(n))
+    iter 4 do { be _ holds Space.set(insb, min2(Space.get(insb), timed_insert_base(n))) }
+    be s holds build_set(n)
+    be sz holds HashSet.size(s)
+    be m holds 1000000
+    be lk holds Space.make(timed_lookup(s, m))
+    iter 11 do { be _ holds Space.set(lk, min2(Space.get(lk), timed_lookup(s, m))) }
+    be lkb holds Space.make(timed_lookup_base(m))
+    iter 11 do { be _ holds Space.set(lkb, min2(Space.get(lkb), timed_lookup_base(m))) }
+    be _1 holds Output.print(String.from_int(sz))                                  // final_size = N
+    be _2 holds Output.print(String.from_int((Space.get(ins) - Space.get(insb)))) // insert net ns for N
+    be _3 holds Output.print(String.from_int(if HashSet.contains(s, 42) then 1 else 0)) // hit guard
+    be _4 holds Output.print(String.from_int((Space.get(lk) - Space.get(lkb))))    // lookup net ns for M
+    return 0
+  }
+}
 // BENCHMARK — HashSet (FNV content-addressing): insert throughput + lookup latency.
 // INSERT: thread the set handle through a Space cell, add N distinct keys, time it
 // net of a baseline loop (same cell-threading, no add). LOOKUP: build a set of N once,
@@ -7,67 +72,3 @@ place Entry { }
 //
 // Stdout schema (4 ints): final_size, insert_net_ns_per_N, hits, lookup_net_ns_per_M
 //   insert: N = 100000 ; lookup: M = 1000000, K = 11 reps.
-fun timed_insert(n: Number): Number visits Output {
-  be setc holds Space.make(HashSet.empty())
-  be i holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(setc, HashSet.add(Space.get(setc), k))
-              be _2 holds Space.set(i, k + 1) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun timed_insert_base(n: Number): Number visits Output {
-  be i holds Space.make(0)
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(acc, k)
-              be _2 holds Space.set(i, k + 1) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun build_set(n: Number): Number {
-  be setc holds Space.make(HashSet.empty())
-  be i holds Space.make(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(setc, HashSet.add(Space.get(setc), k))
-              be _2 holds Space.set(i, k + 1) }
-  return Space.get(setc)
-}
-fun timed_lookup(s: Number, m: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter m do { be h holds (if HashSet.contains(s, 42) then 1 else 0)
-              be _ holds Space.set(acc, Space.get(acc) + h) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun timed_lookup_base(m: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter m do { be _ holds Space.set(acc, Space.get(acc) + 1) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
-fun main(): Number visits Output {
-  be n holds 100000
-  // insert throughput: min over a few reps, net of baseline
-  be ins holds Space.make(timed_insert(n))
-  iter 4 do { be _ holds Space.set(ins, min2(Space.get(ins), timed_insert(n))) }
-  be insb holds Space.make(timed_insert_base(n))
-  iter 4 do { be _ holds Space.set(insb, min2(Space.get(insb), timed_insert_base(n))) }
-  be s holds build_set(n)
-  be sz holds HashSet.size(s)
-  be m holds 1000000
-  be lk holds Space.make(timed_lookup(s, m))
-  iter 11 do { be _ holds Space.set(lk, min2(Space.get(lk), timed_lookup(s, m))) }
-  be lkb holds Space.make(timed_lookup_base(m))
-  iter 11 do { be _ holds Space.set(lkb, min2(Space.get(lkb), timed_lookup_base(m))) }
-  be _1 holds Output.print(String.from_int(sz))                                  // final_size = N
-  be _2 holds Output.print(String.from_int((Space.get(ins) - Space.get(insb)))) // insert net ns for N
-  be _3 holds Output.print(String.from_int(if HashSet.contains(s, 42) then 1 else 0)) // hit guard
-  be _4 holds Output.print(String.from_int((Space.get(lk) - Space.get(lkb))))    // lookup net ns for M
-  return 0
-}

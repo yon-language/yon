@@ -12,5 +12,7 @@
 // (replacing them with the fixed placeholders __endpoint_x/_y), so the
 // mismatch was silently ACCEPTED — the same endpoint-blind hole TyId had
 // before e44e5f9. With the endpoint-aware arm, c != b is rejected -> exit 3.
-fun coerce(q: PathP(i, Number, a, c)): PathP(i, Number, a, b) { return q }
-fun main(): Number { return 0 }
+place Entry {
+  fun coerce(q: PathP(i, Number, a, c)): PathP(i, Number, a, b) { return q }
+  fun main(): Number { return 0 }
+}

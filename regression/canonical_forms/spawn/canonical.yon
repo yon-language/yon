@@ -1,6 +1,8 @@
-fun rep(i: Number): Number visits Output { return 21 }
-fun run(): Number visits Output {
-  be results holds spawn in 2 parallel { promote rep(spawn_index) }
-  return results.fold(0, fun(a: Number, v: Number) => a + v)
+place Entry {
+  fun rep(i: Number): Number visits Output { return 21 }
+  fun run(): Number visits Output {
+    be results holds spawn in 2 parallel { promote rep(spawn_index) }
+    return results.fold(0, fun(a: Number, v: Number) => a + v)
+  }
+  fun main(): Number visits Output { return run() }
 }
-fun main(): Number visits Output { return run() }

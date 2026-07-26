@@ -1,3 +1,4 @@
-place Entry { }
-fun tap(x: Number): Number visits Output { return x }
-fun main(): Number { return 0 }
+place Entry {
+  fun tap(x: Number): Number visits Output { return x }
+  fun main(): Number { return 0 }
+}
