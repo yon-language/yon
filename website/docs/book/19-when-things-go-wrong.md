@@ -21,19 +21,19 @@ each place is its own file, so the declarations sit side by side in the space.
 
 <!-- yon-gate: illustrative -->
 ```yon
-error Error { message number }
+error Error { message Number }
 ```
 
 <!-- yon-gate: illustrative -->
 ```yon
-error QueryError { this < Error message number  sqlstate number }
+error QueryError { this < Error message Number  sqlstate Number }
 ```
 
 A place names the error it can raise. `s/QueryInsert.yon`:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place QueryInsert on error QueryError { sql number }
+place QueryInsert on error QueryError { sql Number }
 ```
 
 `Entry.yon` reads a sub-error where the base is expected and returns 42:
@@ -41,12 +41,12 @@ place QueryInsert on error QueryError { sql number }
 <!-- yon-gate: illustrative -->
 ```yon
 place Entry { }
-fun handle(e: Error): number { return e.message }
-fun on_query_fail(q: QueryError): number {
+fun handle(e: Error): Number { return e.message }
+fun on_query_fail(q: QueryError): Number {
   return handle(q)               // sub-error used where Error is expected
 }
 
-fun main(): number {
+fun main(): Number {
   be q holds .-> QueryError { message 40  sqlstate 23505 }
   return on_query_fail(q) + 2    // 42
 }

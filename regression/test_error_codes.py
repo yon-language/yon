@@ -28,7 +28,7 @@ FIXTURE = ROOT / "regression" / "keyword_coverage" / "drop_reclaim"
 _ILLEGAL = """\
 import svc::d_op from D
 place Entry { }
-fun main(): number {
+fun main(): Number {
   drop D
   be r holds d_op(5)
   return r - r

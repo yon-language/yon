@@ -17,13 +17,13 @@ place Entry {
 // esplicito (il caso in cui il match-zucchero, dal motive costante, non puo'
 // sintetizzare il tipo-risultato: serve un ramo base chiuso, qui assente).
 
-fun mot(e: (Lit(number) | Neg(number) | Add(number))): number { return 0 }
+fun mot(e: (Lit(Number) | Neg(Number) | Add(Number))): Number { return 0 }
 
-fun eval(e: (Lit(number) | Neg(number) | Add(number))): number {
+fun eval(e: (Lit(Number) | Neg(Number) | Add(Number))): Number {
   return hit_elim(mot, [Lit(n) => n, Neg(m) => 0 - m, Add(s) => s + s], e)
 }
 
-fun main(): number {
+fun main(): Number {
   be a holds eval(hit(Lit, 5))     // 5
   be b holds eval(hit(Neg, 3))     // 0 - 3 = -3
   be c holds eval(hit(Add, 20))    // 20 + 20 = 40

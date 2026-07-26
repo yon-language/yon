@@ -1,5 +1,5 @@
 place Outer {
-  tag number
+  tag Number
   inner Inner
 
   fun pairs(): Stream<Outer> {

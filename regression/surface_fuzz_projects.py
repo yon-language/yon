@@ -39,10 +39,10 @@ def rand_place_file(rng, name):
     fields = "\n".join(f"  {fn} number" for fn in fnames)  # all-number: views/moves stay valid
     extra, wf, has_op = "", "", False
     if rng.random() < 0.4:
-        extra += f"\n  fun mm(): number {{ return {rng.randint(0, 99)} }}"
+        extra += f"\n  fun mm(): Number {{ return {rng.randint(0, 99)} }}"
     if rng.random() < 0.3:  # with-effects place carries operations (reduction targets)
         wf, has_op = " with effects", True
-        extra += "\n  operation op(v: number): number"
+        extra += "\n  operation op(v: Number): Number"
     return f"place {name}{wf} {{\n{fields}{extra}\n}}\n", fnames, has_op
 
 
@@ -64,19 +64,19 @@ def rand_arrow(rng, pinfo):
         pf = pinfo[p]["fields"][0] if pinfo[p]["fields"] else "v"
         qf = pinfo[q]["fields"][0] if pinfo[q]["fields"] else "v"
         by = " by identity" if valid else ""
-        return (f"fun identity(x: number): number {{ return x }}\n"
+        return (f"fun identity(x: Number): Number {{ return x }}\n"
                 f"move Mv{rng.randint(0,9)} from {p} to {q} {{ {qf} maps to {pf}{by} }}\n")
     if kind == "reduction":
         # reduction needs a with-effects target (has an `operation`)
         eff = [n for n in names if pinfo[n]["op"]]
         rt = rng.choice(eff) if (eff and valid) else tgt
-        return f"reduction R{rng.randint(0,9)} of {rt} {{ on op(v: number) {{ return v }} }}\n"
+        return f"reduction R{rng.randint(0,9)} of {rt} {{ on op(v: Number) {{ return v }} }}\n"
     if kind == "functor":
-        return f"functor F{rng.randint(0,9)}(x: number) from W to V {{ return x }}\n"
+        return f"functor F{rng.randint(0,9)}(x: Number) from W to V {{ return x }}\n"
     if kind == "geomorph":
         return (f"geomorph G{rng.randint(0,9)} from {p} to {q} "
                 f"{{ pull(a: {q}): {p} {{ be t holds a  return t }} }}\n")
-    return f"fun top{rng.randint(0,99)}(x: number): number {{ return x * {rng.randint(1,9)} }}\n"
+    return f"fun top{rng.randint(0,99)}(x: Number): Number {{ return x * {rng.randint(1,9)} }}\n"
 
 
 def gen_files(rng):
@@ -86,7 +86,7 @@ def gen_files(rng):
             '[world.W]', 'objects=["Code"]',
             'spaces=[' + ",".join(f'"{s}"' for s in spaces) + ']']
     files["yon.toml"] = "\n".join(toml) + "\n"
-    files["Entry.yon"] = "place Entry { fun main(): number { return 0 } }\n"
+    files["Entry.yon"] = "place Entry { fun main(): Number { return 0 } }\n"
     pinfo = {}  # place name -> {"fields": [...], "op": bool, "space": s}
     for s in spaces:
         files[f"{s}/Topos.yon"] = f"topos T_{s} where {{ }}\n"
@@ -112,12 +112,12 @@ def mutate(rng, files, spaces, places):
                 if rng.random() > 0.4) + "\n"
         elif m == 1 and places:  # two places in one file (layout violation)
             k = rng.choice([x for x in keys if x.endswith(".yon") and "/" in x])
-            files[k] += f"place Extra{rng.randint(0,9)} {{ z number }}\n"
+            files[k] += f"place Extra{rng.randint(0,9)} {{ z Number }}\n"
         elif m == 2:  # unbalanced brace
             k = rng.choice(keys)
             files[k] = files[k].replace("}", "", 1) if "}" in files[k] else files[k] + "{"
         elif m == 3:  # a place file in the project root (not a space)
-            files[f"Loose{rng.randint(0,9)}.yon"] = "place Loose { q number }\n"
+            files[f"Loose{rng.randint(0,9)}.yon"] = "place Loose { q Number }\n"
         elif m == 4:  # garbage line injected
             k = rng.choice(keys)
             files[k] += rng.choice(["@@@ ??? ;\n", "place\n", "move from to {}\n",

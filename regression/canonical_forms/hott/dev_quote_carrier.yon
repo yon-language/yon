@@ -2,7 +2,7 @@
 // number, but the inhabitant "text" has type text. The EQuote case in infer
 // rejects via Dispatcher.type_equal: "inhabitant has type text but El(number)
 // carrier is number" -> exit 3.
-fun main(): number {
-  be q holds quote(number, "text")
+fun main(): Number {
+  be q holds quote(Number, "text")
   return 0
 }

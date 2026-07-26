@@ -150,31 +150,31 @@ let rec gen_stmt d =
 (* Helper functions the cubical generators reference (succ/pred are inverse, so
    a fraction of the generated univalence terms even type-check). *)
 let cub_prelude =
-  "fun succ(n: number): number { return n + 1 }\n\
-   fun pred(n: number): number { return n - 1 }\n\
-   fun dbl(n: number): number { return n + n }\n"
+  "fun succ(n: Number): Number { return n + 1 }\n\
+   fun pred(n: Number): Number { return n - 1 }\n\
+   fun dbl(n: Number): Number { return n + n }\n"
 
 let gen_grammar () =
   let n = 1 + Random.int 5 in
   let body = String.concat "\n  " (List.init n (fun _ -> gen_stmt 3)) in
-  Printf.sprintf "%sfun main(): number {\n  %s\n  return %s\n}"
+  Printf.sprintf "%sfun main(): Number {\n  %s\n  return %s\n}"
     cub_prelude body (gen_expr 2)
 
 (* corpus of real-ish seeds to mutate (near the valid manifold, where crashes hide) *)
 let seeds = [|
-  "fun main(): number {\n  be x holds 0\n  return x\n}";
-  "fun main(): number {\n  be s holds 0\n  be i holds 0\n  while i < 5 do { s = s + i  i = i + 1 }\n  return s\n}";
-  "fun deposit_net(amount: number): number { return amount - amount / 20 }\nfun main(): number {\n  be d holds List.cons(100, List.cons(60, List.empty(0)))\n  be t holds 0\n  for every x in d { t = t + deposit_net(x) }\n  return t\n}";
-  "fun main(): number {\n  iter 4 do { be _ holds 0 }\n  return 8\n}";
-  "internal fun k(x: number): number { return x * 1789 }\nfun main(): number { return k(2) }";
-  "fun main(): number {\n  be g holds HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
+  "fun main(): Number {\n  be x holds 0\n  return x\n}";
+  "fun main(): Number {\n  be s holds 0\n  be i holds 0\n  while i < 5 do { s = s + i  i = i + 1 }\n  return s\n}";
+  "fun deposit_net(amount: Number): Number { return amount - amount / 20 }\nfun main(): Number {\n  be d holds List.cons(100, List.cons(60, List.empty(0)))\n  be t holds 0\n  for every x in d { t = t + deposit_net(x) }\n  return t\n}";
+  "fun main(): Number {\n  iter 4 do { be _ holds 0 }\n  return 8\n}";
+  "internal fun k(x: Number): Number { return x * 1789 }\nfun main(): Number { return k(2) }";
+  "fun main(): Number {\n  be g holds HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
   (* metonymic / cubical / generics seeds — near the new-syntax manifold *)
-  "fun succ(n: number): number { return n + 1 }\nfun pred(n: number): number { return n - 1 }\nfun main(): number {\n  be b holds succ <=> pred\n  return carry 10 along b\n}";
-  "fun main(): number {\n  be p holds back (clear 5)\n  return p @ I0\n}";
-  "fun dbl(n: number): number { return n + n }\nfun main(): number {\n  be s holds clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
-  "fun main(): number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
-  "fun identity<T>(x: T): T { return x }\nfun main(): number { return identity(7) }";
-  "fun unwrap(b: Box<number>): number { return b.value }\nfun main(): number { return 0 }";
+  "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main(): Number {\n  be b holds succ <=> pred\n  return carry 10 along b\n}";
+  "fun main(): Number {\n  be p holds back (clear 5)\n  return p @ I0\n}";
+  "fun dbl(n: Number): Number { return n + n }\nfun main(): Number {\n  be s holds clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
+  "fun main(): Number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
+  "fun identity<T>(x: T): T { return x }\nfun main(): Number { return identity(7) }";
+  "fun unwrap(b: Box<number>): Number { return b.value }\nfun main(): Number { return 0 }";
 |]
 
 let rand_token () =

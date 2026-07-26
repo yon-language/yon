@@ -1,2 +1,2 @@
-fun line(): Id(number, 3, 3) { return plam i => 3 }
-fun main(): number { return (line() @ I0) - 3 }
+fun line(): Id(Number, 3, 3) { return plam i => 3 }
+fun main(): Number { return (line() @ I0) - 3 }

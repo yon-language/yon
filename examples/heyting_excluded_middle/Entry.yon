@@ -1,7 +1,7 @@
 place Entry {
 // Il terzo escluso (p or not p) FALLISCE su `unknown`: la firma di una logica
 // intuizionista (Heyting) vera, non un tri-valued ad-hoc ne' un null travestito.
-fun main(): number {
+fun main(): Number {
   be p holds unknown
   be lem holds p ||? (!? p)      // "p or not p": classicamente SEMPRE vero
   be dec holds to_bool(lem)      // su unknown, in Heyting: NON decidibilmente vero

@@ -1,1 +1,1 @@
-place Closed { moment number balance number }
+place Closed { moment Number balance Number }

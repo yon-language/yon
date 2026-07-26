@@ -48,7 +48,7 @@ def test_body_clause_is_the_header_clause(tmp_path):
     src = ROOT / "examples" / "c_place_over"
     twin = tmp_path / "twin"
     shutil.copytree(src, twin)
-    (twin / "Slice.yon").write_text("place Slice {\n  over Base\n  weight number\n}\n")
+    (twin / "Slice.yon").write_text("place Slice {\n  over Base\n  weight Number\n}\n")
     header = _emit(src)
     body = _emit(twin)
     assert header.returncode == 0 and body.returncode == 0, body.stderr[-300:]
@@ -61,7 +61,7 @@ def test_duplicate_clause_rejected(tmp_path):
     twin = tmp_path / "twin"
     shutil.copytree(src, twin)
     (twin / "Slice.yon").write_text(
-        "place Slice over Base {\n  over Base\n  weight number\n}\n")
+        "place Slice over Base {\n  over Base\n  weight Number\n}\n")
     r = _emit(twin)
     assert r.returncode != 0
     assert b"declared both in the header and in the body" in r.stderr + r.stdout
@@ -84,10 +84,10 @@ def test_path_constructor_slot_is_reserved(tmp_path):
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
         "place List {\n"
-        "  this > Nil :U Cons(number, List) :U dup(number) : Cons(0, Nil) = Nil\n"
+        "  this > Nil :U Cons(Number, List) :U dup(Number) : Cons(0, Nil) = Nil\n"
         "}\n"
         "place Entry { }\n"
-        "fun main(): number { return 0 }\n")
+        "fun main(): Number { return 0 }\n")
     r = _emit(twin)
     assert r.returncode != 0, "the reserved path-arm slot COMPILES (fork 2 opened without a plan?)"
     assert b"path constructor" in r.stderr + r.stdout
@@ -140,9 +140,9 @@ def test_mediatrice_on_arm_requires_full_arity(tmp_path):
     twin = tmp_path / "twin"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place List { this > Nil :U Cons(number, List) }\n"
+        "place List { this > Nil :U Cons(Number, List) }\n"
         "place Entry { }\n"
-        "fun main(): number {\n"
+        "fun main(): Number {\n"
         "  be c holds .-> Cons { _1 1 }\n"
         "  return 0\n}\n")
     r = _emit(twin)
@@ -171,14 +171,14 @@ def test_record_pattern_matches_by_name(tmp_path):
     positional twin, e2e exit 42."""
     import shutil
     a = tmp_path / "rec"; b = tmp_path / "pos"
-    prog = ("place List { this > Nil :U Cons(number, List) }\n"
+    prog = ("place List { this > Nil :U Cons(Number, List) }\n"
             "place Entry { }\n"
-            "fun sum(xs: List): number {\n"
+            "fun sum(xs: List): Number {\n"
             "  return match xs {\n"
             "    Nil => 0,\n"
             "    %s => h + sum(t)\n"
             "  }\n}\n"
-            "fun main(): number {\n"
+            "fun main(): Number {\n"
             "  be xs holds hit(Cons, 5, hit(Cons, 37, hit(Nil)))\n"
             "  return sum(xs)\n}\n")
     for d, pat in ((a, "Cons { _1 as h _2 as t }"), (b, "Cons(h, t)")):
@@ -199,14 +199,14 @@ def test_full_circle_no_constructors(tmp_path):
     twin = tmp_path / "circle"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place List { this > Nil :U Cons(number, List) }\n"
+        "place List { this > Nil :U Cons(Number, List) }\n"
         "place Entry { }\n"
-        "fun sum(xs: List): number {\n"
+        "fun sum(xs: List): Number {\n"
         "  return match xs {\n"
         "    Nil => 0,\n"
         "    Cons { _1 as h _2 as t } => h + sum(t)\n"
         "  }\n}\n"
-        "fun main(): number {\n"
+        "fun main(): Number {\n"
         "  be xs holds .-> Cons { _1 5 _2 (.-> Cons { _1 37 _2 Nil }) }\n"
         "  return sum(xs)\n}\n")
     r = _emit(twin)

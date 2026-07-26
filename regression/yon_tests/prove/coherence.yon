@@ -1,4 +1,4 @@
-fun f(x: number): number { return x }
-fun g(x: number): number { return x }
-fun coherence(a: number): Id(number, g(f(a)), a) { return refl(a) }
-fun main(): number { return 0 }
+fun f(x: Number): Number { return x }
+fun g(x: Number): Number { return x }
+fun coherence(a: Number): Id(Number, g(f(a)), a) { return refl(a) }
+fun main(): Number { return 0 }

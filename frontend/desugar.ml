@@ -285,6 +285,10 @@ let rec desugar_ty (t : S.ty) : C.ty =
      Fixing this at the emit layer instead caused signature/call splits
      (the monomorphizer keyed on the divergent type strings). *)
   | S.TyUser "String" -> C.TyPlace "text"
+  (* fusion places: TyUser Number -> EXACTLY what its prim code desugars
+     to (the fused pair is one semantic object; one source of truth) *)
+  | S.TyUser u when Hashtbl.mem S.fusion_places u ->
+      desugar_ty (S.TyPrim (Hashtbl.find S.fusion_places u))
   | S.TyPrim n | S.TyPrimIn (n, _) ->
       (match n with
        | "text" | "number" | "boolean" | "money" -> C.TyPlace n
@@ -544,9 +548,27 @@ and desugar_expr (e0 : S.expr) : C.term =
          form the core reducer dispatches on — a C.Var here would leave the
          round-trip bit2b(b2bit(tt)) forever stuck (mirrors the EHITConstr
          arm's own registry-free fallback). *)
-      (match Hashtbl.find_opt sum_ctor_registry x with
+      (let owning_sum =
+         match Hashtbl.find_opt Surface_ast.bare_point_sites
+                 (loc.S.file, loc.S.start_line, loc.S.start_col) with
+         | Some (_, sum) -> Some sum
+         | None -> None in
+       let is_fused_site =
+         match owning_sum with
+         | Some sum -> Hashtbl.mem Surface_ast.fusion_places sum
+         | None -> false in
+       if is_fused_site then
+         match Hashtbl.find_opt Surface_ast.fused_points x with
+         | Some (`Bool b) -> Builtins.encode_bool b
+         | Some `Unit -> C.Unit
+         | None -> C.Var x
+       else
+       match Hashtbl.find_opt sum_ctor_registry x with
        | Some (tag, []) -> lower_sum_constr tag [] [] loc
        | _ -> C.HITConstr (x, []))
+  | S.EVar (x, _) when Hashtbl.mem Surface_ast.fusion_places x ->
+      (* the fused face in TERM position is its prim's Tarski code *)
+      C.Var (Hashtbl.find Surface_ast.fusion_places x)
   | S.EVar (x, _) -> C.Var x
   | S.EApp (f, args, _) ->
       curry_apply (desugar_expr f) (List.map desugar_expr args)
@@ -595,6 +617,17 @@ and desugar_expr (e0 : S.expr) : C.term =
                         | Some b -> b | None -> "_"))) in
       let branches = List.map (fun (n, pat, e) -> (n, resolve_pat n pat, e)) branches in
       (match branches with
+       | [(c1, _, e1); (c2, _, e2)] when
+           Hashtbl.mem Surface_ast.fused_elim_sites
+             (loc.S.file, loc.S.start_line, loc.S.start_col) ->
+           (* match on the FUSED Boolean: the eliminator of i1 is If. The
+              tt/true branch is whichever ctor maps to `Bool true. *)
+           let b1 = (match Hashtbl.find_opt Surface_ast.fused_points c1 with
+                     | Some (`Bool b) -> b | _ -> true) in
+           let (et, ef) = if b1 then (e1, e2) else (e2, e1) in
+           ignore c2;
+           curry_apply (C.Var "__if_expr")
+             [desugar_expr x; desugar_expr et; desugar_expr ef]
        | (ctor, _, _) :: _ when Hashtbl.mem sum_ctor_registry ctor ->
            lower_sum_elim branches x loc
        | _ ->
@@ -1166,6 +1199,10 @@ and desugar_expr (e0 : S.expr) : C.term =
 and encode_sum_arg (arg : S.expr) (arg_ty : S.ty) (loc : S.location) : S.expr =
   match arg_ty with
   | S.TySum _ | S.TySumIn _ | S.TyUser _ -> arg
+  (* the four prelude faces canonicalize to TyPrim at parse; arm payloads
+     spelled with them must keep the HISTORIC TyUser encoding (raw child),
+     byte-identical MLIR *)
+  | S.TyPrim ("number" | "text" | "boolean" | "unit") -> arg
   | _ -> S.ECall ("MerkleTree__leaf", [arg], loc)
 
 (* hit(Ctor, args) for a custom sum -> a right-nested spine of node2/leaf.
@@ -1221,7 +1258,9 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
         let vty = try List.nth arg_tys j with _ -> S.TyPrim "number" in
         let proj =
           match vty with
-          | S.TySum _ | S.TySumIn _ | S.TyUser _ -> payload_node j
+          | S.TySum _ | S.TySumIn _ | S.TyUser _
+          | S.TyPrim ("number" | "text" | "boolean" | "unit") ->
+              payload_node j
           | _ -> label (payload_node j)
         in
         (j + 1, C.App (C.Lam (v, C.TyPlace "number", acc), desugar_expr proj)))
@@ -2552,6 +2591,11 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
              pd.S.pd_arms
        | _ -> ());
       res
+  | S.TopPlace pd when pd.S.pd_fusion <> None ->
+      (* a FUSED place emits NOTHING: it is the declared face of a primitive
+         code — the carrier machinery already exists; declaring a section
+         schema for it would invent a second representation. *)
+      res
   | S.TopPlace pd ->
       let core_pd = desugar_place_decl pd in
       { res with ctx = Reduce.declare_place res.ctx core_pd }
@@ -2992,7 +3036,7 @@ let place_info = List.filter_map (function
              ) vd.S.vw_items in
              let synth_place : S.place_decl = {
                S.pd_name = vd.S.vw_name;
-               pd_type_params = [];
+               pd_type_params = []; pd_fusion = None; pd_width = None;
                pd_arms = [];
                pd_world = world;
                pd_members = List.map (fun (f, ty, _) ->

@@ -1,5 +1,5 @@
 // Consumer: attaches, drains eight readings in a loop, exits with the sum.
-fun main(): number {
+fun main(): Number {
   be w holds Wire.make_shm(9, 0)
   be total holds 0
   be i holds 0

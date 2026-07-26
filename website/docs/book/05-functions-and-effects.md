@@ -8,12 +8,12 @@ sidebar_position: 5
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun double(x): number { return x * 2 }              // param type inferred
+fun double(x): Number { return x * 2 }              // param type inferred
 fun id<A>(x: A): A { return x }                     // type parameter
-internal fun helper(x: number): number { return x + 1 }
+internal fun helper(x: Number): Number { return x + 1 }
 
-fun main(): number {
-  be twice holds fun(n: number) => n * 2            // inline lambda
+fun main(): Number {
+  be twice holds fun(n: Number) => n * 2            // inline lambda
   be a holds 10 |> double()                         // pipe: 20
   be b holds twice(a) + helper(1)                   // 40 + 2 = 42
   return id(b)
@@ -39,7 +39,7 @@ from outside, it is indistinguishable from a function that does not exist.
 
 <!-- yon-gate: illustrative -->
 ```yon
-partial fun spin(n: number): number {
+partial fun spin(n: Number): Number {
   forever { n = n + 1 }
   return n
 }
@@ -52,13 +52,13 @@ function that uses it must say so:
 
 <!-- yon-gate: exit 0 -->
 ```yon
-fun announce(msg: String): unit visits Output {
+fun announce(msg: String): Unit visits Output {
   return Output.print(msg)
 }
-fun run(): unit visits Output {                     // the effect propagates
+fun run(): Unit visits Output {                     // the effect propagates
   return announce("fatto")
 }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be _u holds run()
   return 0
 }
@@ -91,7 +91,7 @@ base and the sub-object live side by side. `s/Error.yon`:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place Error { message number }
+place Error { message Number }
 ```
 
 `s/SyntaxError.yon` carries the extra field and the function that reads the
@@ -99,9 +99,9 @@ base:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place SyntaxError { this < Error message number  line number }
+place SyntaxError { this < Error message Number  line Number }
 
-fun describe(e: Error): number { return e.message }   // accepts any sub-object
+fun describe(e: Error): Number { return e.message }   // accepts any sub-object
 ```
 
 `Entry.yon` builds the sub-object and passes it where an `Error` is expected:
@@ -109,7 +109,7 @@ fun describe(e: Error): number { return e.message }   // accepts any sub-object
 <!-- yon-gate: illustrative -->
 ```yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be s holds .-> SyntaxError { message 40 line 17 }
   return describe(s) + 2          // 42: SyntaxError used as Error
 }

@@ -4,7 +4,7 @@
 // and still-live rejections are pinned by regression/test_drop_check.py.
 import svc::d_op from D
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be r holds d_op(5)
   drop D
   return r - r

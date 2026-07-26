@@ -1,2 +1,2 @@
-place Narrow { x number
-  total number }
+place Narrow { x Number
+  total Number }

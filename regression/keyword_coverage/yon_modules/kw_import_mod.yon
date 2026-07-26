@@ -1,1 +1,1 @@
-fun helper(x: number): number { return x + 1 }
+fun helper(x: Number): Number { return x + 1 }

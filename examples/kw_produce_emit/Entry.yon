@@ -1,10 +1,10 @@
 place Entry {
-fun main(): number {
+fun main(): Number {
   be s holds produce {
     emit 41
     emit 1
   }
-  be total holds s.fold(0, fun(a: number, v: number) => a + v)
+  be total holds s.fold(0, fun(a: Number, v: Number) => a + v)
   return total        // 41 + 1 = 42
 }
 }

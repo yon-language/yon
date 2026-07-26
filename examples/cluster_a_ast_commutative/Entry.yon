@@ -15,7 +15,7 @@ place Entry {
  *
  * Misura: total slot allocati. */
 
-fun main(): number {
+fun main(): Number {
   be n0 holds __xheap_used()
 
   /* Variables (leaves) */

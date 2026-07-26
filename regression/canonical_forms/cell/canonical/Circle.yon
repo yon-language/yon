@@ -1,4 +1,4 @@
 place Circle {
-  base number
+  base Number
   cell loop from base to base
 }

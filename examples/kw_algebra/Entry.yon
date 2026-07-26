@@ -1,4 +1,4 @@
 place Entry { }
-fun main(): number {
+fun main(): Number {
   return 0
 }

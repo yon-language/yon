@@ -1,11 +1,11 @@
 import meteo::samples from Meteo
 
 place Entry {
-  fun main(): number {
+  fun main(): Number {
     be w holds wire to space Meteo
     be sub holds w.awaits(samples)
     be s holds sub.stream
-    be total holds s.fold(0, fun(a: number, r: Reading) => a + r.temp)
+    be total holds s.fold(0, fun(a: Number, r: Reading) => a + r.temp)
     return total
   }
 }

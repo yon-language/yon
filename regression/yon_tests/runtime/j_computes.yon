@@ -1,2 +1,2 @@
-fun diag(a: number): number { return a * 6 }
-fun main(): number { be got holds ind_path(0, diag, refl(7)) return got - 42 }
+fun diag(a: Number): Number { return a * 6 }
+fun main(): Number { be got holds ind_path(0, diag, refl(7)) return got - 42 }

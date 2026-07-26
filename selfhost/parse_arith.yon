@@ -5,10 +5,10 @@
 // giro. Oracolo: "2+3*4" = 2 + (3*4) = 14 (la precedenza e' il punto, NON 20).
 
 // ── lexer (dal brief #4) ────────────────────────────────────────────────────
-place Token { this > TNum(number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 
-fun emit_at(s: String, i: number, len: number, c: number): TokList {
+fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
     else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
     else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
@@ -17,29 +17,29 @@ fun emit_at(s: String, i: number, len: number, c: number): TokList {
     else if c >= 48 then hit(TkCons, hit(TNum, c - 48), lex_from(s, i + 1, len))
     else lex_from(s, i + 1, len)
 }
-fun lex_from(s: String, i: number, len: number): TokList {
+fun lex_from(s: String, i: Number, len: Number): TokList {
   return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else emit_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 // ── AST + risultato del parse ───────────────────────────────────────────────
-place Expr { this > ENum(number) :U EAdd(Expr, Expr) :U EMul(Expr, Expr) }
+place Expr { this > ENum(Number) :U EAdd(Expr, Expr) :U EMul(Expr, Expr) }
 place Parse { this > POk(Expr, TokList) :U PErr }   // (albero, resto) oppure errore
 
 // ── peek tag-based sulla TokList ────────────────────────────────────────────
-fun motTn(t: Token): number { return 0 }
-fun tok_tag(t: Token): number {
+fun motTn(t: Token): Number { return 0 }
+fun tok_tag(t: Token): Number {
   return hit_elim(motTn, [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 ], t)
 }
-fun tok_num(t: Token): number {
+fun tok_num(t: Token): Number {
   return hit_elim(motTn, [ TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0 ], t)
 }
-fun motLn(l: TokList): number { return 0 }
-fun head_tag(l: TokList): number {
+fun motLn(l: TokList): Number { return 0 }
+fun head_tag(l: TokList): Number {
   return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
 }
-fun head_num(l: TokList): number {
+fun head_num(l: TokList): Number {
   return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
 }
 fun motLl(l: TokList): TokList { return hit(TkNil) }
@@ -90,16 +90,16 @@ fun combine_add(left: Expr, p: Parse): Parse {
 }
 
 // eval aritmetico: catamorfismo Expr -> number
-fun motE(e: Expr): number { return 0 }
-fun eval_expr(e: Expr): number {
+fun motE(e: Expr): Number { return 0 }
+fun eval_expr(e: Expr): Number {
   return hit_elim(motE,
     [ ENum(n)    => n,
       EAdd(a, b) => eval_expr(a) + eval_expr(b),
       EMul(a, b) => eval_expr(a) * eval_expr(b) ], e)
 }
 
-fun motPn(p: Parse): number { return 0 }
-fun result_of(p: Parse): number {
+fun motPn(p: Parse): Number { return 0 }
+fun result_of(p: Parse): Number {
   return hit_elim(motPn, [ PErr => 0 - 1, POk(e, rest) => eval_expr(e) ], p)
 }
 
@@ -111,6 +111,6 @@ fun src(): String {
                          String.from_char(52)))
 }
 
-fun main(): number {
+fun main(): Number {
   return result_of(parse_expr(lex(src()))) - 14
 }

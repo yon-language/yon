@@ -3,7 +3,7 @@ place Entry { }
 // the same genomes are equal by content-address; one differing leaf breaks it.
 // Stdout: [1] equal(t1,t2)=1 (same content), [2] equal(t1,t3)=0 (one leaf differs),
 // [3] label(t1) = the content-address of the whole tree.
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be t1 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
   be t2 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
   be t3 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(9999))

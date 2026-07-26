@@ -19,7 +19,7 @@ let check name cond =
   else (incr fail; Printf.printf "  [FAIL] %s\n" name)
 
 let mk_place ?(subc = None) ?(arms = []) name : place_decl =
-  { pd_name = name; pd_type_params = []; pd_arms = arms; pd_world = "__INFER"; pd_members = []; pd_over = None; pd_laws = [];
+  { pd_name = name; pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = arms; pd_world = "__INFER"; pd_members = []; pd_over = None; pd_laws = [];
     pd_subcontains = subc; pd_is_error = false; pd_on_error = None;
     pd_loc = dummy_loc }
 

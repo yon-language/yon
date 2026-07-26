@@ -8,7 +8,7 @@ sidebar_position: 4
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be x holds present
   be acc holds 0
   when x is present { acc = 10 }
@@ -54,7 +54,7 @@ To *select a value*, use the expression form `if c then a else b`.
 
 <!-- yon-gate: exit 9 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be acc holds 0
   be lst holds List.cons(5, List.cons(7, List.empty(0)))
   in sequence over y in lst { acc = acc + 1 }     // 2
@@ -68,7 +68,7 @@ A `forever` in flight (the loop runs without bound, printing as it goes):
 
 <!-- yon-gate: illustrative -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be n holds 0
   forever {
     n = n + 1

@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be acc holds .-> Account { balance 50
     fee 8 }
   be snap holds Snapshot(acc)

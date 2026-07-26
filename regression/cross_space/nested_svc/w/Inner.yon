@@ -1,4 +1,4 @@
 place Inner {
-  a number
-  b text
+  a Number
+  b Text
 }

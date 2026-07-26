@@ -1,7 +1,7 @@
 place Entry { }
 // §1b HashMap (FNV) — "tag each genome with a species id, any key type, O(1)".
 // Stdout: [1] get(1445)=1, [2] has(9999)=0 (absent), [3] size=2.
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be m holds HashMap.empty()
   m = HashMap.set(m, 1445, 1)
   m = HashMap.set(m, 1280, 2)

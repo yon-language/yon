@@ -10,7 +10,7 @@ place Entry { }
 //  [13-24] m24_orbit(embed(g, 0))   quantize      (the content-address / grade orbit)
 // genes: 1, 7, 63, 100, 200, 511, 1023, 1445, 2047, 2361, 4094, 4095
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be _l01 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1, 3))))
   be _l02 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(7, 3))))
   be _l03 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(63, 3))))

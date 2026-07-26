@@ -4,7 +4,7 @@ place Entry { }
 // Prints, in order:  data  codeword  corrupted-codeword  recovered
 // Expected:          1445  <cw>      <cw with 2 bits flipped>  1445
 // The viz reads cw and bad to render the 24 real bits and the 2 real flips, then the decode.
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be data holds 1445
   be cw   holds VoyagerList.seal(data)        // the 24-bit Golay codeword
   be bad  holds VoyagerList.corrupt(cw, 2)    // 2 bits flipped

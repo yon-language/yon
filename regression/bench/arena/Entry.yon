@@ -30,10 +30,10 @@ place Entry { }
 //   [5] so_net_ns     = min ns for Mso=2e5 same_orbit calls, base-subtracted (/2e5 = ns/op)
 //   [6] so_guard      = accumulated same_orbit hits over Mso (DCE guard, = Mso)
 
-fun min2(f0: number, f1: number): number { return if f0 < f1 then f0 else f1 }
+fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
 
 // ---- put throughput ----
-fun timed_put(n: number): number visits Output {
+fun timed_put(n: Number): Number visits Output {
   be ac holds Space.make(Arena.empty())
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -44,7 +44,7 @@ fun timed_put(n: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_put_base(n: number): number visits Output {
+fun timed_put_base(n: Number): Number visits Output {
   be acc holds Space.make(0)
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -57,7 +57,7 @@ fun timed_put_base(n: number): number visits Output {
 }
 
 // ---- build a populated arena once (returns the handle) ----
-fun build_arena(n: number): number {
+fun build_arena(n: Number): Number {
   be ac holds Space.make(Arena.empty())
   be i holds Space.make(0)
   iter n do { be k holds Space.get(i)
@@ -68,14 +68,14 @@ fun build_arena(n: number): number {
 }
 
 // ---- get latency ----
-fun timed_get(a: number, addr: number, m: number): number visits Output {
+fun timed_get(a: Number, addr: Number, m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.get(a, addr)) }
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_get_base(m: number): number visits Output {
+fun timed_get_base(m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be _ holds Space.set(acc, Space.get(acc) + 1) }
@@ -84,14 +84,14 @@ fun timed_get_base(m: number): number visits Output {
 }
 
 // ---- same_orbit latency (+ accumulate hits for the DCE guard) ----
-fun timed_so(a: number, x: number, y: number, m: number): number visits Output {
+fun timed_so(a: Number, x: Number, y: Number, m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(a, x, y)) }
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun so_hits(a: number, x: number, y: number, m: number): number {
+fun so_hits(a: Number, x: Number, y: Number, m: Number): Number {
   be acc holds Space.make(0)
   be i holds Space.make(0)
   iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(a, x, y))
@@ -99,33 +99,33 @@ fun so_hits(a: number, x: number, y: number, m: number): number {
   return Space.get(acc)
 }
 
-fun min_put(reps: number, n: number): number visits Output {
+fun min_put(reps: Number, n: Number): Number visits Output {
   be m holds Space.make(timed_put(n))
   iter reps do { be _ holds Space.set(m, min2(Space.get(m), timed_put(n))) }
   return Space.get(m)
 }
-fun min_put_base(reps: number, n: number): number visits Output {
+fun min_put_base(reps: Number, n: Number): Number visits Output {
   be m holds Space.make(timed_put_base(n))
   iter reps do { be _ holds Space.set(m, min2(Space.get(m), timed_put_base(n))) }
   return Space.get(m)
 }
-fun min_get(a: number, addr: number, reps: number, m: number): number visits Output {
+fun min_get(a: Number, addr: Number, reps: Number, m: Number): Number visits Output {
   be mm holds Space.make(timed_get(a, addr, m))
   iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_get(a, addr, m))) }
   return Space.get(mm)
 }
-fun min_get_base(reps: number, m: number): number visits Output {
+fun min_get_base(reps: Number, m: Number): Number visits Output {
   be mm holds Space.make(timed_get_base(m))
   iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_get_base(m))) }
   return Space.get(mm)
 }
-fun min_so(a: number, x: number, y: number, reps: number, m: number): number visits Output {
+fun min_so(a: Number, x: Number, y: Number, reps: Number, m: Number): Number visits Output {
   be mm holds Space.make(timed_so(a, x, y, m))
   iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_so(a, x, y, m))) }
   return Space.get(mm)
 }
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be n holds 2000            // put calls (land on ~2000 distinct type-2 points)
   be mg holds 1000000        // get iterations (cheap op)
   be mso holds 200000        // same_orbit iterations (heavy op)

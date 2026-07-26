@@ -1,5 +1,5 @@
 // Producer: streams readings 1..8 into the wire, then closes it.
-fun main(): number {
+fun main(): Number {
   be w holds Wire.make_shm(9, 1)
   be k holds 1
   while k < 9 do {

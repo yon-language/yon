@@ -6,7 +6,7 @@ place Entry {
  *   witness(8) = bitmask of the generators that reach 8 = {gen0=3, gen1=5}
  *              = 0b011 = 3
  * return (reach8 ? 100 : 0) + (reach9 ? 0 : 10) + witness8 = 100 + 10 + 3 = 113. */
-fun main(): number {
+fun main(): Number {
   be m0 holds Magma.empty(0)
   be m1 holds Magma.gen(m0, 3)
   be m2 holds Magma.gen(m1, 5)

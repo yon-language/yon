@@ -9,7 +9,7 @@ place Entry {
  *   step 2 -> H_2 = {0, 1, 2, 3}
  * levels = 3; 3 is in H_2 (true), so:
  * return levels*10 + (3 in H_2 ? 1 : 0) = 3*10 + 1 = 31. */
-fun main(): number {
+fun main(): Number {
   be s0 holds Route.empty(0)
   be s1 holds Route.step(s0, 1, 0)
   be s2 holds Route.step(s1, 2, 0)

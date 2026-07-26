@@ -2,11 +2,11 @@
 // Forma wildcard: la beta diagonale J(c,d,refl a) ~> d a e' l'unico ramo vivo di
 // TJ; tutto il resto resta stuck via `_ =>`. shift/subst restano esaustivi.
 // Oracolo: J(_, lam.0, refl 7) = 7  (come il kernel OCaml, j_computes.yon).
-place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) :U TRefl(Term) :U TJ(Term, Term, Term) }
+place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) :U TRefl(Term) :U TJ(Term, Term, Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }
 
-fun shift(d: number, c: number, t: Term): Term {
+fun shift(d: Number, c: Number, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
@@ -19,7 +19,7 @@ fun shift(d: number, c: number, t: Term): Term {
       TJ(mo, ba, pa) => hit(TJ, shift(d, c, mo), shift(d, c, ba), shift(d, c, pa)) ], t)
 }
 
-fun subst(j: number, s: Term, t: Term): Term {
+fun subst(j: Number, s: Term, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i == j then s else hit(TVar, i),
@@ -51,12 +51,12 @@ fun eval(t: Term): Term {
                          _        => hit(TJ, mo, ba, eval(pa)) ], eval(pa)) ], t)
 }
 
-fun motN(t: Term): number { return 0 }
-fun as_num(t: Term): number {
+fun motN(t: Term): Number { return 0 }
+fun as_num(t: Term): Number {
   return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
 }
 
-fun main(): number {
+fun main(): Number {
   be r holds eval(hit(TJ, hit(TLit, 0), hit(TLam, hit(TVar, 0)), hit(TRefl, hit(TLit, 7))))
   return as_num(r) - 7
 }

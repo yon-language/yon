@@ -1,4 +1,4 @@
-place IntList { this > Nil :U Cons(number, IntList) }
+place IntList { this > Nil :U Cons(Number, IntList) }
 
 place Entry {
 // A recursive higher-order function over a native place-object. map_list takes a
@@ -12,23 +12,23 @@ place Entry {
 // direct or mutual recursion.
 
 
-fun map_list(f: number -> number, xs: IntList): IntList {
+fun map_list(f: Number -> Number, xs: IntList): IntList {
   return match xs {
     Nil => Nil,
     Cons(h, t) => .-> Cons { _1 (f(h)) _2 (map_list(f, t)) }
   }
 }
 
-fun sum(xs: IntList): number {
+fun sum(xs: IntList): Number {
   return match xs {
     Nil => 0,
     Cons(h, t) => h + sum(t)
   }
 }
 
-fun main(): number {
+fun main(): Number {
   // [20, 20] -- map (y => y + 1) --> [21, 21] -- sum --> 42
   be xs holds .-> Cons { _1 20 _2 .-> Cons { _1 20 _2 Nil } }
-  return sum(map_list(fun(y: number) => y + 1, xs))
+  return sum(map_list(fun(y: Number) => y + 1, xs))
 }
 }

@@ -2,11 +2,11 @@
 // (de Bruijn), scritto in Yon. Forma wildcard: shift/subst restano esaustivi (ogni
 // costruttore ricorre in modo distinto), ma i rami-stuck di eval e i rami-zero di
 // as_num sono un solo `_ =>`. Oracolo: (lam.0) 42 = 42, Fst((lam.0) Pair(20,22)) = 20.
-place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
+place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }
 
-fun shift(d: number, c: number, t: Term): Term {
+fun shift(d: Number, c: Number, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
@@ -17,7 +17,7 @@ fun shift(d: number, c: number, t: Term): Term {
       TSnd(p)     => hit(TSnd, shift(d, c, p)) ], t)
 }
 
-fun subst(j: number, s: Term, t: Term): Term {
+fun subst(j: Number, s: Term, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i == j then s else hit(TVar, i),
@@ -45,12 +45,12 @@ fun eval(t: Term): Term {
       TSnd(p)     => hit_elim(motT, [ TPair(a, b) => eval(b), _ => hit(TSnd, eval(p)) ], eval(p)) ], t)
 }
 
-fun motN(t: Term): number { return 0 }
-fun as_num(t: Term): number {
+fun motN(t: Term): Number { return 0 }
+fun as_num(t: Term): Number {
   return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
 }
 
-fun main(): number {
+fun main(): Number {
   be id_lit   holds eval(hit(TApp, hit(TLam, hit(TVar, 0)), hit(TLit, 42)))
   be fst_beta holds eval(hit(TFst, hit(TApp, hit(TLam, hit(TVar, 0)),
                                        hit(TPair, hit(TLit, 20), hit(TLit, 22)))))

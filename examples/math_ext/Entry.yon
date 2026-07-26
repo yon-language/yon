@@ -1,6 +1,6 @@
 place Entry {
 /* Math esteso: lcm(12,18)=36, log2(8)=3 -> 36+3 = 39. */
-fun main(): number {
+fun main(): Number {
   be l holds Math.lcm(12, 18)
   be lg holds Math.log2(8)
   return l + lg

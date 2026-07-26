@@ -1,2 +1,2 @@
-fun add(a: number, b: number): number { return a + b }
-fun main(): number { return add(40, 2) }
+fun add(a: Number, b: Number): Number { return a + b }
+fun main(): Number { return add(40, 2) }

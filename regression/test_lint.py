@@ -31,21 +31,21 @@ def _lint(tmp_path, source: str) -> str:
 
 @pytest.mark.skipif(not LINT.exists(), reason="yon_lint not built")
 def test_lint_flags_dead_function(tmp_path):
-    out = _lint(tmp_path, "fun orphan(y: number): number { return y }\n"
-                          "fun main(): number { return 0 }\n")
+    out = _lint(tmp_path, "fun orphan(y: Number): Number { return y }\n"
+                          "fun main(): Number { return 0 }\n")
     assert "W1001" in out and "orphan" in out, out
 
 
 @pytest.mark.skipif(not LINT.exists(), reason="yon_lint not built")
 def test_lint_flags_unused_binding(tmp_path):
-    out = _lint(tmp_path, "fun main(): number { be unusedb holds 99  return 0 }\n")
+    out = _lint(tmp_path, "fun main(): Number { be unusedb holds 99  return 0 }\n")
     assert "W1002" in out and "unusedb" in out, out
 
 
 @pytest.mark.skipif(not LINT.exists(), reason="yon_lint not built")
 def test_lint_flags_unused_param(tmp_path):
-    out = _lint(tmp_path, "fun f(dead: number): number { return 1 }\n"
-                          "fun main(): number { return f(0) }\n")
+    out = _lint(tmp_path, "fun f(dead: Number): Number { return 1 }\n"
+                          "fun main(): Number { return f(0) }\n")
     assert "W1003" in out and "dead" in out, out
 
 
@@ -56,7 +56,7 @@ def test_lint_flags_unused_import_dead_space_dep(tmp_path):
     out = _lint(tmp_path,
                 "import svc::used_op from A\n"
                 "import svc::dead_op from B\n"
-                "fun main(): number { be a holds used_op(5)  return a }\n")
+                "fun main(): Number { be a holds used_op(5)  return a }\n")
     assert "W3001" in out and "dead_op" in out and "Space B" in out, out
     assert "used_op" not in out.replace("used_op(5)", ""), f"used import flagged: {out}"
 
@@ -65,8 +65,8 @@ def test_lint_flags_unused_import_dead_space_dep(tmp_path):
 def test_lint_underscore_and_clean_are_quiet(tmp_path):
     # leading-underscore binding/param are intentional discards, not warned
     out = _lint(tmp_path,
-                "fun f(_ignored: number): number { be _tmp holds 1  return 0 }\n"
-                "fun main(): number { return f(0) }\n")
+                "fun f(_ignored: Number): Number { be _tmp holds 1  return 0 }\n"
+                "fun main(): Number { return f(0) }\n")
     assert "no lint warnings" in out, out
 
 
@@ -97,12 +97,12 @@ def test_lsp_dead_function_is_whole_program(tmp_path):
     root = _two_space_project(tmp_path / "proj")
     (root / "A" / "AP.yon").write_text(
         "place AP { }\n"
-        "fun shared(n: number): number { return n + 1 }\n"
-        "fun truly_dead(n: number): number { return n }\n")
+        "fun shared(n: Number): Number { return n + 1 }\n"
+        "fun truly_dead(n: Number): Number { return n }\n")
     (root / "B" / "BP.yon").write_text(
-        "place BP { }\nfun b_uses(n: number): number { return shared(n) }\n")
+        "place BP { }\nfun b_uses(n: Number): Number { return shared(n) }\n")
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): number { return b_uses(1) }\n")
+        "place Entry { }\nfun main(): Number { return b_uses(1) }\n")
     r = subprocess.run([str(LSP), "--check", str(root / "A" / "AP.yon")],
                        capture_output=True, text=True, timeout=60)
     out = r.stdout + r.stderr
@@ -114,8 +114,8 @@ def test_lsp_dead_function_is_whole_program(tmp_path):
 def test_lsp_surfaces_lint_as_warning(tmp_path):
     """The LSP reports lint under its stable code, as a Warning (not an error)."""
     f = tmp_path / "x.yon"
-    f.write_text("fun orphan(y: number): number { return y }\n"
-                 "fun main(): number { return 0 }\n")
+    f.write_text("fun orphan(y: Number): Number { return y }\n"
+                 "fun main(): Number { return 0 }\n")
     r = subprocess.run([str(LSP), "--check", str(f)],
                        capture_output=True, text=True, timeout=60)
     out = r.stdout + r.stderr

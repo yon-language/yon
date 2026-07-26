@@ -4,13 +4,13 @@
 // (functorialita') — il lato categoriale APPLICATO del linguaggio, non una copia.
 place Entry { }
 
-fun c2f(c: number): number { return c * 9 / 5 + 32 }
+fun c2f(c: Number): Number { return c * 9 / 5 + 32 }
 
 move ToFahrenheit from Celsius to Fahrenheit {
   degrees maps to degrees by c2f
 }
 
-fun main(): number {
+fun main(): Number {
   be c holds .-> Celsius { degrees 100 }
   be f holds apply_move(ToFahrenheit, c)
   return f.degrees

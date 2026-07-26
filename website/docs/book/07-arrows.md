@@ -56,9 +56,9 @@ operations declared inline on the place:
 <!-- yon-gate: illustrative -->
 ```yon
 place Order {
-  table number
-  total number
-  operation add_item(price: number): number
+  table Number
+  total Number
+  operation add_item(price: Number): Number
 }
 ```
 
@@ -74,7 +74,7 @@ numbers, and that is all it is:
 
 <!-- yon-gate: illustrative -->
 ```yon
-fun service(n: number): number { return n + n / 10 }
+fun service(n: Number): Number { return n + n / 10 }
 ```
 
 A `fun` is welcome everywhere precisely because it knows nothing: it cannot read
@@ -89,7 +89,7 @@ can `show` a stored section, or a computed column that factors through a `fun`:
 
 <!-- yon-gate: illustrative -->
 ```yon
-fun service(n: number): number { return n + n / 10 }
+fun service(n: Number): Number { return n + n / 10 }
 view Bill of Order { show charged = service(total) }
 ```
 
@@ -107,7 +107,7 @@ boundary, from the `sala` space to the `cucina` space. That crossing is a
 
 <!-- yon-gate: illustrative -->
 ```yon
-fun identity(x: number): number { return x }
+fun identity(x: Number): Number { return x }
 move ToKitchen from Order to Ticket {
   total maps to total by identity
 }
@@ -121,7 +121,7 @@ kitchen's copy, and it lives in the other space, `cucina/Ticket.yon`:
 <!-- yon-gate: illustrative -->
 ```yon
 place Ticket {
-  total number
+  total Number
 }
 ```
 
@@ -140,7 +140,7 @@ folds the place's operations into a value. `sala/Tally.yon`:
 <!-- yon-gate: illustrative -->
 ```yon
 reduction Tally of Order {
-  on add_item(price: number) { return price }
+  on add_item(price: Number) { return price }
 }
 ```
 
@@ -234,7 +234,7 @@ a structure-preserving map of the entire accounting context, `eur/Rates.yon`:
 
 <!-- yon-gate: illustrative -->
 ```yon
-functor Spot(x: number) from EurBank to UsdBank { return x * 110 / 100 }
+functor Spot(x: Number) from EurBank to UsdBank { return x * 110 / 100 }
 ```
 
 A functor may carry `law identity` and `law composition` for the checker to
@@ -248,7 +248,7 @@ applied coherently to every account:
 
 <!-- yon-gate: illustrative -->
 ```yon
-functor Fwd(x: number) from EurBank to UsdBank { return x * 112 / 100 }
+functor Fwd(x: Number) from EurBank to UsdBank { return x * 112 / 100 }
 nat transform Adjust from Spot to Fwd { for each Money by Spot }
 ```
 

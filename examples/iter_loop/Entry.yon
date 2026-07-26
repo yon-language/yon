@@ -1,6 +1,6 @@
 place Entry {
 /* iter N do — bounded loop. Somma 1 cinque volte in una Space cell -> 5. */
-fun main(): number {
+fun main(): Number {
   be acc holds Space.make(0)
   iter 5 do {
     be cur holds Space.get(acc)

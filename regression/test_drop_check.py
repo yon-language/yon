@@ -45,7 +45,7 @@ _DEBUG_ENV = {**os.environ, "YON_DEBUG_DROPS": "1"}
 # platforms where MADV_DONTNEED zero-fills (Linux) and return 0 instead of 7.
 _HANDLE_ESCAPE = """\
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be p holds .-> DP { n 7 }
   be filler holds 1
   be y holds p.n
@@ -56,7 +56,7 @@ fun main(): number {
 _AUTO_NO_DROP = """\
 import svc::d_op from D
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be r holds d_op(5)
   be s holds r + 1
   return s - s
@@ -71,7 +71,7 @@ FIXTURE = ROOT / "regression" / "keyword_coverage" / "drop_reclaim"
 _ILLEGAL_IMPORT = """\
 import svc::d_op from D
 place Entry { }
-fun main(): number {
+fun main(): Number {
   drop D
   be r holds d_op(5)
   return r - r
@@ -81,8 +81,8 @@ fun main(): number {
 _ILLEGAL_TRANSITIVE = """\
 import svc::d_op from D
 place Entry { }
-fun helper(): number { be r holds d_op(9)  return r }
-fun main(): number {
+fun helper(): Number { be r holds d_op(9)  return r }
+fun main(): Number {
   drop D
   be r holds helper()
   return r - r
@@ -92,7 +92,7 @@ fun main(): number {
 _ILLEGAL_UNKNOWN = """\
 import svc::d_op from D
 place Entry { }
-fun main(): number {
+fun main(): Number {
   drop Zeta
   be r holds d_op(5)
   return r - r
@@ -104,7 +104,7 @@ fun main(): number {
 # reclaim executes. Used to prove the emission reaches the runtime.
 _LEGAL_STANDALONE = """\
 place Entry { }
-fun main(): number {
+fun main(): Number {
   drop D
   return 0
 }

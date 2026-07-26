@@ -1,6 +1,6 @@
 place Entry { }
 // pybench BASE (throughput): N handle-threading iterations, no structure op.
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be h holds Space.make(0)
   be i holds Space.make(0)
   iter 1000000 do { be k holds Space.get(i)

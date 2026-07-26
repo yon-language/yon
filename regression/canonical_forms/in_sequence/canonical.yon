@@ -1,4 +1,4 @@
-fun main(): number {
+fun main(): Number {
   be acc holds 0
   be xs holds List.cons(1, List.cons(1, List.empty(0)))
   in sequence over x in xs { acc = acc + 21 }

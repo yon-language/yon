@@ -135,7 +135,7 @@ let test_scope () =
     ~expected:Unit
 
 (* ─── Test 6: with-handle (effect dispatch) ────────────────────────── *)
-(* Setup: a place Disk with an operation read(path: text): text          *)
+(* Setup: a place Disk with an operation read(path: Text): Text          *)
 (*        a reduction MockDisk with on read(p) ↦ p (identity)            *)
 (* Program: with MockDisk in (read Unit)                                 *)
 (* Expected: Unit (the handler returned its argument)                    *)
@@ -206,7 +206,7 @@ let parse_string (source : string) : (Surface_ast.program, string) result =
 (* Test 11: full pipeline — parse, desugar, evaluate (no errors). *)
 let test_pipeline () =
   let src = {|
-    fun identity(x: number): number {
+    fun identity(x: Number): Number {
       return x
     }
     
@@ -237,7 +237,7 @@ let test_pipeline () =
 (* Test 17: parse program with patterns and Heyting tri-value. *)
 let test_parse_patterns () =
   let src = {|
-    fun classify(x: number): text {
+    fun classify(x: Number): Text {
       when x is present and x > 0 {
         return positive
       }
@@ -265,7 +265,7 @@ let test_parse_patterns () =
 (* Test 19: parse program with when/is guards and forever block. *)
 let test_parse_partial_forever () =
   let src = {|
-    fun risky_op(input: number): number {
+    fun risky_op(input: Number): Number {
       when input is 0 {
         return error_value
       }
@@ -291,11 +291,11 @@ let test_parse_partial_forever () =
 (* Test 20: end-to-end arithmetic program with observable output. *)
 let test_arithmetic_program () =
   let src = {|
-    fun add(a: number, b: number): number {
+    fun add(a: Number, b: Number): Number {
       return a + b
     }
     
-    fun main(): number {
+    fun main(): Number {
       return add(7, 5)
     }
   |} in
@@ -330,7 +330,7 @@ let test_arithmetic_program () =
 (* Test 21: end-to-end program with conditional. *)
 let test_conditional_program () =
   let src = {|
-    fun classify(x: number): number {
+    fun classify(x: Number): Number {
       when x > 10 {
         return 1
       }
@@ -339,7 +339,7 @@ let test_conditional_program () =
       }
     }
     
-    fun main(): number {
+    fun main(): Number {
       return classify(42)
     }
   |} in
@@ -385,11 +385,11 @@ let tc_program (src : string) : (Tycheck.check_result, string) result =
 (* Test 24: type-check catches a wrong argument count. *)
 let test_tycheck_wrong_arity () =
   let src = {|
-    fun add(a: number, b: number): number {
+    fun add(a: Number, b: Number): Number {
       return a + b
     }
     
-    fun main(): number {
+    fun main(): Number {
       return add(1, 2, 3)
     }
   |} in
@@ -410,11 +410,11 @@ let test_tycheck_wrong_arity () =
 (* Test 25: type-check catches type mismatch in argument. *)
 let test_tycheck_wrong_type () =
   let src = {|
-    fun greet(s: text): text {
+    fun greet(s: Text): Text {
       return s + s
     }
     
-    fun main(): text {
+    fun main(): Text {
       return greet(42)
     }
   |} in
@@ -479,7 +479,7 @@ let test_tycheck_with_visits () =
 (* Test 29: type-check catches field access on non-place. *)
 let test_tycheck_bad_field_access () =
   let src = {|
-    fun bad(x: number): number {
+    fun bad(x: Number): Number {
       return x.field
     }
   |} in
@@ -502,7 +502,7 @@ let test_catt_place_equiv () =
   Printf.printf "\n=== Test 32: CATT_R_Yon (place equivalence) ===\n";
   let mk_place name fields = {
     Surface_ast.pd_name = name;
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "W";
     pd_members = List.map (fun (n, t) -> Surface_ast.FoField {
       fd_name = n; fd_ty = t; fd_loc = Surface_ast.dummy_loc;
@@ -571,11 +571,11 @@ let test_cubical_path () =
 (* Test 35: full pipeline with type checking — successful program. *)
 let test_full_pipeline_typed () =
   let src = {|
-    fun mul(a: number, b: number): number {
+    fun mul(a: Number, b: Number): Number {
       return a * b
     }
     
-    fun main(): number {
+    fun main(): Number {
       return mul(6, 7)
     }
   |} in
@@ -712,7 +712,7 @@ let test_cubical_comp_path () =
 (* Test 41: cubical primitive refl type-checks. *)
 let test_tycheck_refl () =
   let src = {|
-    fun id_path(x: number): Path {
+    fun id_path(x: Number): Path {
       return refl(x)
     }
   |} in
@@ -773,7 +773,7 @@ let test_tycheck_ua () =
 (* Test 44: cubical primitive transport type-checks. *)
 let test_tycheck_transport () =
   let src = {|
-    fun transport_value(p: Path, x: number): number {
+    fun transport_value(p: Path, x: Number): Number {
       return transport(p, x)
     }
   |} in
@@ -1124,7 +1124,7 @@ let test_diagnostics_format () =
 (* Test 61: Diagnostics — type mismatch error formatting. *)
 let test_diagnostics_type_mismatch () =
   Printf.printf "\n=== Test 61: Diagnostics — type mismatch formatting ===\n";
-  let src = "fun add(a: number, b: number): number {\n  return a + b\n}\n\nfun main(): number {\n  return add(\"hello\", 2)\n}\n" in
+  let src = "fun add(a: Number, b: number): Number {\n  return a + b\n}\n\nfun main(): Number {\n  return add(\"hello\", 2)\n}\n" in
   let err = Diagnostics.format_ty_error src 6 13
     (Diagnostics.TypeMismatch {
        context = "argument to add";
@@ -1389,7 +1389,7 @@ let test_catt_term_equiv () =
  * We avoid the ambiguity by putting the `in` list at the end. *)
 let test_parser_world_list () =
   let src = {|
-    fun process(y: number, x: money in EUR): number {
+    fun process(y: Number, x: money in EUR): Number {
       return y
     }
   |} in
@@ -1407,7 +1407,7 @@ let test_parser_world_list () =
  * ambiguity. Verifies the dangling-elif fix. *)
 let test_parser_when_chain () =
   let src = {|
-    fun classify(n: number): text {
+    fun classify(n: Number): Text {
       when n > 0 {
         return positive_label
       }
@@ -1590,7 +1590,7 @@ let test_place_visibility () =
   } in
   let pd = {
     pd_name = "Account";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "Banking";
     pd_members = [
       mk_field "balance" (TyPrim "number");
@@ -1643,7 +1643,7 @@ let test_place_relative_unknown () =
   let open Surface_ast in
   let acc_pd = {
     pd_name = "Account";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "Banking";
     pd_members = [
       FoField { fd_name = "balance"; fd_ty = TyPrim "number";
@@ -1696,7 +1696,7 @@ let test_place_proposition_propagation () =
   Printf.printf "\n=== Test 79: Heyting AND propagation through visibility ===\n";
   let open Surface_ast in
   let pd_a = {
-    pd_name = "A"; pd_type_params = []; pd_arms = []; pd_world = "W";
+    pd_name = "A"; pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = []; pd_world = "W";
     pd_members = [
       FoField { fd_name = "x"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
@@ -1708,7 +1708,7 @@ let test_place_proposition_propagation () =
     pd_loc = dummy_loc;
   } in
   let pd_b = {
-    pd_name = "B"; pd_type_params = []; pd_arms = []; pd_world = "W";
+    pd_name = "B"; pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = []; pd_world = "W";
     pd_members = [
       FoField { fd_name = "y"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
@@ -1777,7 +1777,7 @@ let test_excluded_middle_failure () =
   Printf.printf "\n=== Test 80: Excluded middle fails (Yon is intuitionistic) ===\n";
   let open Surface_ast in
   let pd = {
-    pd_name = "Restricted"; pd_type_params = []; pd_arms = []; pd_world = "W";
+    pd_name = "Restricted"; pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = []; pd_world = "W";
     pd_members = [];   (* sees nothing *)
     pd_over = None;
     pd_laws = [];
@@ -1989,7 +1989,7 @@ let test_reduce_visibility_table () =
 (* Test 91: `proposition` type is recognized as a primitive. *)
 let test_proposition_type () =
   let src = {|
-    fun is_positive(x: number): proposition {
+    fun is_positive(x: Number): proposition {
       return x > 0
     }
   |} in
@@ -2013,11 +2013,11 @@ let test_proposition_type () =
  * Boolean-topos specialization. *)
 let test_boolean_proposition_alias () =
   let src = {|
-    fun returns_prop(x: number): proposition {
+    fun returns_prop(x: Number): proposition {
       return x > 0
     }
     
-    fun uses_bool(x: number): boolean {
+    fun uses_bool(x: Number): Boolean {
       return returns_prop(x)
     }
   |} in
@@ -2111,13 +2111,13 @@ let test_space_world_indexed () =
  * present/absent/unknown via `is` patterns, returns the right branch. *)
 let test_heyt_surface_branch_present () =
   let src = {|
-    fun classify(x: proposition): text {
+    fun classify(x: proposition): Text {
       when x is present { return "yes" }
       when x is absent { return "no" }
       when x is unknown { return "indeterminate" }
       otherwise { return "impossible" }
     }
-    fun main(): text { return classify(present) }
+    fun main(): Text { return classify(present) }
   |} in
   Printf.printf "\n=== Test 96: SWhen dispatch on Heyt value (present) ===\n";
   match parse_string src with
@@ -2135,13 +2135,13 @@ let test_heyt_surface_branch_present () =
 
 let test_heyt_surface_branch_unknown () =
   let src = {|
-    fun classify(x: proposition): text {
+    fun classify(x: proposition): Text {
       when x is present { return "yes" }
       when x is absent { return "no" }
       when x is unknown { return "indeterminate" }
       otherwise { return "impossible" }
     }
-    fun main(): text { return classify(unknown) }
+    fun main(): Text { return classify(unknown) }
   |} in
   Printf.printf "\n=== Test 97: SWhen dispatch on Heyt value (unknown) — intuitionistic ===\n";
   match parse_string src with
@@ -2230,7 +2230,7 @@ let test_generics_pair () =
   let src = {|
     fun first<A, B>(a: A, b: B): A { return a }
     fun second<A, B>(a: A, b: B): B { return b }
-    fun main(): text {
+    fun main(): Text {
       return second(1, "hi")
     }
   |} in
@@ -2339,7 +2339,7 @@ let test_sigma_projections () =
  * Verifies that the parser accepts `Pi(x : Type). T` as a type. *)
 let test_pi_type_parse () =
   let src = {|
-    fun applied_at(f: Pi(x : Type). number, t: Type): number {
+    fun applied_at(f: Pi(x : Type). Number, t: Type): Number {
       return 0
     }
   |} in
@@ -2347,7 +2347,7 @@ let test_pi_type_parse () =
   match parse_string src with
   | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
   | Ok _prog ->
-      Printf.printf "  fun applied_at(f: Pi(x:Type). number, t: Type): number parsed\n";
+      Printf.printf "  fun applied_at(f: Pi(x:Type). number, t: Type): Number parsed\n";
       Printf.printf "Status: PASS — Pi-type syntax operational\n"; true
 
 (* Test 113: Typeclass-style dispatch via Yoneda-native place + reduction.
@@ -2378,7 +2378,7 @@ let test_pi_type_parse () =
 (* Test 122: Coercion handles `present`/`absent` propositions explicitly. *)
 let test_bool_prop_coercion_explicit () =
   let src = {|
-    fun main(): boolean {
+    fun main(): Boolean {
       return to_bool(present)
     }
   |} in
@@ -2560,7 +2560,7 @@ let test_place_isomorphism () =
   Printf.printf "\n=== Test 132: place isomorphism ===\n";
   let p1 = {
     Surface_ast.pd_name = "P1";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "W";
     pd_members = [
       FoField { fd_name = "a"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
@@ -2575,7 +2575,7 @@ let test_place_isomorphism () =
   } in
   let p2 = {
     Surface_ast.pd_name = "P2";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "W";
     pd_members = [
       FoField { fd_name = "foo"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
@@ -2609,7 +2609,7 @@ let test_place_isomorphism_negative () =
   Printf.printf "\n=== Test 133: place isomorphism (negative) ===\n";
   let p1 = {
     Surface_ast.pd_name = "P1";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "W";
     pd_members = [
       FoField { fd_name = "a"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
@@ -2623,7 +2623,7 @@ let test_place_isomorphism_negative () =
   } in
   let p2 = {
     Surface_ast.pd_name = "P2";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "W";
     pd_members = [
       FoField { fd_name = "x"; fd_ty = TyPrim "text"; fd_loc = Surface_ast.dummy_loc };
@@ -3019,7 +3019,7 @@ let test_cell_custom_in_place () =
   let loc = Surface_ast.dummy_loc in
   let p_circle : Surface_ast.place_decl = {
     pd_name = "Circle";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "TopologicalWorld";
     pd_members = [
       (* Implicit: field `base` as a 0-cell *)
@@ -3117,7 +3117,7 @@ let test_slice_place () =
   let loc = Surface_ast.dummy_loc in
   let p : Surface_ast.place_decl = {
     pd_name = "Order";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "Shop";
     pd_members = [
       FoField { fd_name = "amount"; fd_ty = TyPrim "number"; fd_loc = loc };
@@ -3177,7 +3177,7 @@ let test_exponentials () =
   in
   match exp_ty with
   | TyPi ("_", a, b) when a = TyPrim "number" && b = TyPrim "text" ->
-      Printf.printf "  text^number := Pi(_:number). text\n";
+      Printf.printf "  text^number := Pi(_:Number). text\n";
       Printf.printf "  function-space internal to topos via TyPi\n";
       Printf.printf "Status: PASS\n"; true
   | _ -> Printf.printf "FAIL\n"; false
@@ -3210,7 +3210,7 @@ let test_power_object () =
   match p_x with
   | TyMap (TyPrim "number", TyPrim "proposition") ->
       Printf.printf "  P(number) := map of number to proposition\n";
-      Printf.printf "  membership: (x: number, s: P(number)) -> proposition\n";
+      Printf.printf "  membership: (x: Number, s: P(number)) -> proposition\n";
       Printf.printf "Status: PASS\n"; true
   | _ -> Printf.printf "FAIL\n"; false
 
@@ -3419,7 +3419,7 @@ let test_default_world_inference () =
   Printf.printf "\n=== Test 176: default world inference ===\n";
   let pd : Surface_ast.place_decl = {
     pd_name = "Account";
-    pd_type_params = []; pd_arms = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "__INFER";  (* marker per inferenza *)
     pd_members = [];
     pd_over = None;
@@ -3485,7 +3485,7 @@ let test_functorial_op () =
     op_loc = Surface_ast.dummy_loc;
   } in
   if op.op_functorial then
-    (Printf.printf "  functorial operation compute(x: number): number\n";
+    (Printf.printf "  functorial operation compute(x: Number): Number\n";
      Printf.printf "  automatic lifting along the geometric morphism W' -> W\n";
      Printf.printf "  naturality: compute_W' . f^* = f^* . compute_W\n";
      Printf.printf "Status: PASS\n"; true)

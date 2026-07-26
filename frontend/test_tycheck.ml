@@ -54,7 +54,7 @@ let rejects (fn : fun_decl) : bool =
 let () =
   Printf.printf "=== Tycheck verdict oracle ===\n\n";
 
-  (* A. WELL-TYPED accepts: fun main(): number { return 1 + 2 } *)
+  (* A. WELL-TYPED accepts: fun main(): Number { return 1 + 2 } *)
   let well_typed =
     mkfun "main"
       ~ret:(Some (TyPrim "number"))
@@ -91,7 +91,7 @@ let () =
 
   (* E. return-tail (the check we just added): a body ending in a let whose
      value clearly differs from the concrete declared return type is rejected.
-     `fun h(): number { let y holds "text" }` — tail value is text, declared
+     `fun h(): Number { let y holds "text" }` — tail value is text, declared
      number → rejected via check_implicit_tail_return (tycheck.ml:2337). *)
   let bad_tail =
     mkfun "h"

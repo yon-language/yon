@@ -1,4 +1,4 @@
-fun spin(): number visits Output {
+fun spin(): Number visits Output {
   forever { be _ holds String.print("tick") }
 }
-fun main(): number { return 42 }
+fun main(): Number { return 42 }

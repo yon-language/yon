@@ -1,4 +1,4 @@
 place A { this < B
-  value number
-  extra number
+  value Number
+  extra Number
 }

@@ -7,7 +7,7 @@ place Entry { }
 //
 // Stdout schema (4 ints): final_size, insert_net_ns_per_N, hits, lookup_net_ns_per_M
 //   insert: N = 100000 ; lookup: M = 1000000, K = 11 reps.
-fun timed_insert(n: number): number visits Output {
+fun timed_insert(n: Number): Number visits Output {
   be setc holds Space.make(HashSet.empty())
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -17,7 +17,7 @@ fun timed_insert(n: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_insert_base(n: number): number visits Output {
+fun timed_insert_base(n: Number): Number visits Output {
   be i holds Space.make(0)
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -27,7 +27,7 @@ fun timed_insert_base(n: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun build_set(n: number): number {
+fun build_set(n: Number): Number {
   be setc holds Space.make(HashSet.empty())
   be i holds Space.make(0)
   iter n do { be k holds Space.get(i)
@@ -35,7 +35,7 @@ fun build_set(n: number): number {
               be _2 holds Space.set(i, k + 1) }
   return Space.get(setc)
 }
-fun timed_lookup(s: number, m: number): number visits Output {
+fun timed_lookup(s: Number, m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be h holds (if HashSet.contains(s, 42) then 1 else 0)
@@ -43,15 +43,15 @@ fun timed_lookup(s: number, m: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_lookup_base(m: number): number visits Output {
+fun timed_lookup_base(m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be _ holds Space.set(acc, Space.get(acc) + 1) }
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun min2(f0: number, f1: number): number { return if f0 < f1 then f0 else f1 }
-fun main(): number visits Output {
+fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
+fun main(): Number visits Output {
   be n holds 100000
   // insert throughput: min over a few reps, net of baseline
   be ins holds Space.make(timed_insert(n))

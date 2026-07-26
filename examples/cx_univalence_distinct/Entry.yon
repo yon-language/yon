@@ -29,7 +29,7 @@ fun eps(b: Bit): Id(Bit, b2bit(bit2b(b)), b) {
   return match b { one => clear one, zero => clear zero }
 }
 
-fun main(): number {
+fun main(): Number {
   be bridge holds equiv(b2bit, bit2b, eta, eps)   // Bool ~= Bit, non l'identita'
   be y holds transport(ua(bridge), tt)       // porta tt lungo ua(Bool~=Bit)
   return match y { one => 1, zero => 0 }           // tt |-> one |-> 1

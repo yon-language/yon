@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be a holds "x"
   be acc holds Space.make(0)
   iter 10000000 do { be _ holds Space.set(acc, Space.get(acc) + (if String.equal(a, a) then 1 else 0)) }

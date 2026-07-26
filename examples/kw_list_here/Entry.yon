@@ -2,14 +2,14 @@ place Entry {
 // Micro-example: `list` (the `List<T>` type annotation) and `here`
 // (the `when here` Space filter in the for-every header; in 1.0 it is
 // declared intent, execution is sequential and every element passes).
-fun total(xs: List<number>): number {
+fun total(xs: List<Number>): Number {
   be acc holds 0
   for every x in xs when here {
     acc = acc + x
   }
   return acc
 }
-fun main(): number {
+fun main(): Number {
   be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
   return total(lst)
 }

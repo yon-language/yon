@@ -11,8 +11,8 @@ world Park { Dino is Species }
 world PublicPark = Park / cohort
 
 place PublicDino in PublicPark {
-  cohort number
-  individual_id number
+  cohort Number
+  individual_id Number
 }
 
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

@@ -142,37 +142,37 @@ let graph_selftest () : string list =
    miss a live use. *)
 let downstream_src = "\
 import svc::a_op from A\n\
-fun helper(): number { be w holds wire to space A  return 0 }\n\
-fun loop_illegal(): number {\n\
+fun helper(): Number { be w holds wire to space A  return 0 }\n\
+fun loop_illegal(): Number {\n\
   be i holds 0\n\
   while i < 3 do { be w holds wire to space A  be drop_A holds 0  i = i + 1 }\n\
   return 0\n\
 }\n\
-fun loop_legal(): number {\n\
+fun loop_legal(): Number {\n\
   be i holds 0\n\
   while i < 3 do { be w holds wire to space A  i = i + 1 }\n\
   be drop_A holds 0\n\
   return 0\n\
 }\n\
-fun seq_illegal(): number { be drop_A holds 0  be w holds wire to space A  return 0 }\n\
-fun seq_legal(): number { be w holds wire to space A  be drop_A holds 0  return 0 }\n\
-fun trans_illegal(): number { be drop_A holds 0  be r holds helper()  return r }\n\
-fun trans_legal(): number { be r holds helper()  be drop_A holds 0  return r }\n\
-fun scope_illegal(): number { be drop_A holds 0  scope S { be w holds wire to space A }  return 0 }\n\
-fun scope_legal(): number { scope S { be w holds wire to space A }  be drop_A holds 0  return 0 }\n\
-fun import_illegal(): number { be drop_A holds 0  be r holds a_op(5)  return r }\n\
-fun import_legal(): number { be r holds a_op(5)  be drop_A holds 0  return r }\n\
-fun move_illegal(): number { be drop_A holds 0  be r holds apply_move(0) in A  return r }\n\
-fun move_legal(): number { be r holds apply_move(0) in A  be drop_A holds 0  return r }\n\
-fun morph_illegal(): number { be drop_A holds 0  be r holds tr(0) in A  return r }\n\
-fun morph_legal(): number { be r holds tr(0) in A  be drop_A holds 0  return r }\n\
-fun place_illegal(): number { be drop_A holds 0  be r holds .-> P { v 0 }  return r }\n\
-fun place_legal(): number { be r holds .-> P { v 0 }  be y holds r.v  be drop_A holds 0  return y }\n\
-fun awaits_illegal(): number { be drop_A holds 0  be sub holds w.awaits(prod)  return 0 }\n\
-fun awaits_legal(): number { be sub holds w.awaits(prod)  be drop_A holds 0  return 0 }\n\
-fun handle_illegal(): number { be p holds .-> P { v 0 }  be drop_A holds 0  be y holds p.v  return y }\n\
-fun handle_legal(): number { be p holds .-> P { v 0 }  be y holds p.v  be drop_A holds 0  return y }\n\
-fun alias_illegal(): number { be p holds .-> P { v 0 }  be q holds p  be drop_A holds 0  be y holds q.v  return y }\n"
+fun seq_illegal(): Number { be drop_A holds 0  be w holds wire to space A  return 0 }\n\
+fun seq_legal(): Number { be w holds wire to space A  be drop_A holds 0  return 0 }\n\
+fun trans_illegal(): Number { be drop_A holds 0  be r holds helper()  return r }\n\
+fun trans_legal(): Number { be r holds helper()  be drop_A holds 0  return r }\n\
+fun scope_illegal(): Number { be drop_A holds 0  scope S { be w holds wire to space A }  return 0 }\n\
+fun scope_legal(): Number { scope S { be w holds wire to space A }  be drop_A holds 0  return 0 }\n\
+fun import_illegal(): Number { be drop_A holds 0  be r holds a_op(5)  return r }\n\
+fun import_legal(): Number { be r holds a_op(5)  be drop_A holds 0  return r }\n\
+fun move_illegal(): Number { be drop_A holds 0  be r holds apply_move(0) in A  return r }\n\
+fun move_legal(): Number { be r holds apply_move(0) in A  be drop_A holds 0  return r }\n\
+fun morph_illegal(): Number { be drop_A holds 0  be r holds tr(0) in A  return r }\n\
+fun morph_legal(): Number { be r holds tr(0) in A  be drop_A holds 0  return r }\n\
+fun place_illegal(): Number { be drop_A holds 0  be r holds .-> P { v 0 }  return r }\n\
+fun place_legal(): Number { be r holds .-> P { v 0 }  be y holds r.v  be drop_A holds 0  return y }\n\
+fun awaits_illegal(): Number { be drop_A holds 0  be sub holds w.awaits(prod)  return 0 }\n\
+fun awaits_legal(): Number { be sub holds w.awaits(prod)  be drop_A holds 0  return 0 }\n\
+fun handle_illegal(): Number { be p holds .-> P { v 0 }  be drop_A holds 0  be y holds p.v  return y }\n\
+fun handle_legal(): Number { be p holds .-> P { v 0 }  be y holds p.v  be drop_A holds 0  return y }\n\
+fun alias_illegal(): Number { be p holds .-> P { v 0 }  be q holds p  be drop_A holds 0  be y holds q.v  return y }\n"
 
 let downstream_selftest () : string list =
   let prog = parse_src downstream_src in
@@ -215,8 +215,8 @@ let downstream_selftest () : string list =
    This pins parser -> check; the loop / scope / transitive predicate is pinned
    separately by downstream_selftest, and is not re-verified here. *)
 let drop_construct_src = "\
-fun drop_ok(): number { be w holds wire to space A  drop A  return 0 }\n\
-fun drop_early(): number {\n\
+fun drop_ok(): Number { be w holds wire to space A  drop A  return 0 }\n\
+fun drop_early(): Number {\n\
   drop A\n\
   be w holds wire to space A\n\
   return 0\n\
@@ -252,7 +252,7 @@ let drop_construct_selftest () : string list =
    misspelling, so the reachability check alone would wave it through; existence
    is validated first. A is declared, Zeta is not. *)
 let drop_existence_src = "\
-fun main(): number { drop Zeta  return 0 }\n"
+fun main(): Number { drop Zeta  return 0 }\n"
 
 let drop_existence_selftest () : string list =
   let prog = parse_src drop_existence_src in
@@ -270,7 +270,7 @@ let drop_existence_selftest () : string list =
    so A dies before the end and a reclaim must be inserted. This pins the analysis
    (the insertion point) independently of the runtime counter. *)
 let auto_reclaim_src = "\
-fun main(): number { be w holds wire to space A  be x holds 1  return x }\n"
+fun main(): Number { be w holds wire to space A  be x holds 1  return x }\n"
 
 let auto_reclaim_selftest () : string list =
   let prog = parse_src auto_reclaim_src in

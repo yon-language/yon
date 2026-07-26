@@ -126,7 +126,7 @@ The infinite loop, typically wrapped around effects: a server, a producer, a hea
 <CodeWindow file="v1_control_flow.yon"
             run="yonc v1_control_flow.yon -o v1_control_flow && ./v1_control_flow; echo $?"
             out={["42"]}>
-{`fun main(): number {
+{`fun main(): Number {
   be acc holds 0
   be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
 
@@ -154,7 +154,7 @@ The formally hermetic block: `scope { }` lowers to an MLIR `IsolatedFromAbove` r
 <CodeWindow file="hermetic_scope.yon"
             run="yonc hermetic_scope.yon -o hermetic_scope && ./hermetic_scope; echo $?"
             out={["42"]}>
-{`fun main(): number {
+{`fun main(): Number {
   be base holds 40
   scope Hermetic {
     be sealed holds base + 2
@@ -171,16 +171,16 @@ The Kripke-Joyal forcing block: `forces stage cond { }` runs its body at a stage
             run="yonc forcing_demo/ -o forcing && ./forcing; echo $?"
             out={["0"]}>
 {`// net/NodeA.yon
-place NodeA { value number }
+place NodeA { value Number }
 // Entry.yon
 place Entry { }
-fun guard(): number {
-  forces NodeA value is number {
+fun guard(): Number {
+  forces NodeA value is Number {
     return 1
   }
   return 0
 }
-fun main(): number { return 0 }`}
+fun main(): Number { return 0 }`}
 </CodeWindow>
 
 #### `produce`
@@ -194,12 +194,12 @@ Emits a value: into the stream being built inside a `produce` block, or into the
 <CodeWindow file="kw_produce_emit.yon" run="yonc kw_produce_emit.yon -o produce_emit && ./produce_emit; echo $?" out={["42"]}>
 
 ```yon
-fun main(): number {
+fun main(): Number {
   be s holds produce {
     emit 41
     emit 1
   }
-  be total holds s.fold(0, fun(a: number, v: number) => a + v)
+  be total holds s.fold(0, fun(a: Number, v: Number) => a + v)
   return total        // 41 + 1 = 42
 }
 ```
@@ -232,11 +232,11 @@ The constraint of the `topos ... where { }` block, and of the comprehension `{ x
             run="yonc comprehension_carrier/ -o comprehension && ./comprehension; echo $?"
             out={["0"]}>
 {`// w/Account.yon
-place Account { balance number }
+place Account { balance Number }
 // Entry.yon
 place Entry { }
-fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): number { return 0 }
-fun main(): number { return 0 }`}
+fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): Number { return 0 }
+fun main(): Number { return 0 }`}
 </CodeWindow>
 
 ## The four kinds of handle
@@ -271,14 +271,14 @@ A higher cell inside a place, CaTT style: the seed of the higher-dimensional str
             run="yonc handle_lambdas/ -o handles && ./handles; echo $?"
             out={["44"]}>
 {`// w/P.yon
-place P { v number }
+place P { v Number }
 // w/Q.yon
-place Q { v number }
+place Q { v Number }
 // w/R.yon
-place R { v number }
+place R { v Number }
 // Entry.yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be m1 holds move(s: P) => .-> Q { v 1 } from P to Q
   be m2 holds move(s: Q) => .-> R { v 2 } from Q to R
   be mm holds compose m1 with m2
@@ -304,8 +304,8 @@ The aliasing word: `import q as a`, `show f as "label"`.
             run="yonc kw_view_show/ -o view_show && ./view_show; echo $?"
             out={["8"]}>
 {`// w/Account.yon
-place Account { balance number
-  fee number }
+place Account { balance Number
+  fee Number }
 // w/Snapshot.yon
 view Snapshot of Account {
   show balance
@@ -314,7 +314,7 @@ view Snapshot of Account {
 }
 // Entry.yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be acc holds .-> Account { balance 50
     fee 8 }
   be snap holds Snapshot(acc)
@@ -352,22 +352,22 @@ In the merge move: the fields shared without conflict.
             run="yonc kw_merge_move/ -o merge_move && ./merge_move; echo $?"
             out={["22"]}>
 {`// w/A.yon
-place A { v number
-  w number }
+place A { v Number
+  w Number }
 // w/B.yon
-place B { v number
-  w number }
+place B { v Number
+  w Number }
 // w/Wide.yon
-place Wide { x number
-  y number }
+place Wide { x Number
+  y Number }
 // w/Narrow.yon
-place Narrow { x number
-  total number }
+place Narrow { x Number
+  total Number }
 // Entry.yon
 place Entry { }
-fun pick(a: number, b: number): number { return a }
-fun ident(x: number): number { return x }
-fun double(x: number): number { return x * 2 }
+fun pick(a: Number, b: Number): Number { return a }
+fun ident(x: Number): Number { return x }
+fun double(x: Number): Number { return x * 2 }
 move Merge unifies A, B {
   share v
   conflict on w resolves to pick
@@ -376,7 +376,7 @@ move Squeeze from Wide to Narrow {
   x maps to x by ident
   y aggregates to total by double
 }
-fun main(): number {
+fun main(): Number {
   be a holds .-> A { v 7
     w 1 }
   be b holds .-> B { v 7
@@ -412,13 +412,13 @@ Names a space's fold function: `with fold "sum_f64"`.
             out={["0"]}>
 {`// alg/Or.yon
 place Or {
-  operation join(a: number, b: number): number uses algebra BooleanOr
+  operation join(a: Number, b: Number): Number uses algebra BooleanOr
   law commutative
   law associative
 }
 // Entry.yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   return 0
 }`}
 </CodeWindow>
@@ -465,21 +465,21 @@ Equips a place with a Lawvere-Tierney operator j : Omega to Omega, the seed of s
             run="yonc kw_topos_block/ -o topos_block && ./topos_block; echo $?"
             out={["42"]}>
 {`// bank/State.yon
-place State { balance number }
+place State { balance Number }
 // bank/Unit1.yon
-place Unit1 { u number }
+place Unit1 { u Number }
 // bank/Topos.yon  (objects are inferred from the place files in bank/)
 topos Bank where {
   terminal Unit1
   
-  morphism tag(s: State): number
-  functorial morphism lift(s: State): number
+  morphism tag(s: State): Number
+  functorial morphism lift(s: State): Number
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
 topology j of State { return 1 }
 // Entry.yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be s holds .-> State { balance 5 }
   be bad holds is_overdrawn(s)
   return if bad then 0 else 42
@@ -498,9 +498,9 @@ In `on morphism op via op2`: names the operation that realizes the map.
             run="yonc kw_morph/ -o morph && ./morph; echo $?"
             out={["0"]}>
 {`// shop/Account.yon
-place Account { balance number }
+place Account { balance Number }
 // shop/AccountEU.yon
-place AccountEU { balance number }
+place AccountEU { balance Number }
 // Entry.yon
 place Entry { }
 morph LiftEU from Account to AccountEU {
@@ -508,7 +508,7 @@ morph LiftEU from Account to AccountEU {
     return .-> AccountEU { balance s.balance }
   }
 }
-fun main(): number { return 0 }`}
+fun main(): Number { return 0 }`}
 </CodeWindow>
 
 #### `each`
@@ -532,12 +532,12 @@ objects = ["Y"]
 backend = "memory"
 // Entry.yon
 place Entry { }
-functor F(x: number) from W to V { return x }
-functor G(x: number) from W to V { return x }
+functor F(x: Number) from W to V { return x }
+functor G(x: Number) from W to V { return x }
 nat transform Eta from F to G {
   for each X by F
 }
-fun main(): number { return 0 }`}
+fun main(): Number { return 0 }`}
 </CodeWindow>
 
 ## Categorical constructions
@@ -566,9 +566,9 @@ Declares the adjoint pairing of the geomorph.
             run="yonc kw_geomorph_full/ -o geomorph_full && ./geomorph_full; echo $?"
             out={["0"]}>
 {`// shop/Account.yon
-place Account { balance number }
+place Account { balance Number }
 // shop/AccountEU.yon
-place AccountEU { balance number }
+place AccountEU { balance Number }
 // Entry.yon
 place Entry { }
 geomorph Lift from Account to AccountEU {
@@ -584,7 +584,7 @@ geomorph Lift from Account to AccountEU {
     return tmp
   }
 }
-fun main(): number { return 0 }`}
+fun main(): Number { return 0 }`}
 </CodeWindow>
 
 #### `pullback`
@@ -599,18 +599,18 @@ The colimit: glues two maps under a shared source. The declaration is kernel met
             run="yonc kw_pullback_pushout/ -o pullback_pushout && ./pullback_pushout; echo $?"
             out={["12"]}>
 {`// w/A.yon
-place A { v number }
+place A { v Number }
 // w/B.yon
-place B { v number }
+place B { v Number }
 // w/P.yon  (kernel metadata: the pullback object)
 place P = pullback(f, g)
 // w/Q.yon  (kernel metadata: the pushout object)
 place Q = pushout(f, g)
 // Entry.yon
 place Entry { }
-fun f(x: number): number { return x * 2 }
-fun g(y: number): number { return y + 6 }
-fun main(): number {
+fun f(x: Number): Number { return x * 2 }
+fun g(y: Number): Number { return y + 6 }
+fun main(): Number {
   be p holds pullback(f, g, 6, 6)      // f(6)=12, g(6)=12: compatible
   be a holds __pullback_pi1(p)
   be b holds __pullback_pi2(p)
@@ -655,13 +655,13 @@ The pattern condition `e is pattern` (a variable, a literal, `present`, `absent`
 <CodeWindow file="kw_is_literal.yon"
             run="yonc kw_is_literal.yon -o is_literal && ./is_literal; echo $?"
             out={["x is seven", "city is rome", "other is not rome", "30"]}>
-{`fun pick(x: number): number visits Output {
+{`fun pick(x: Number): Number visits Output {
   when x is 7 {
     be _ holds String.print("x is seven")
   }
   return 10
 }
-fun name_check(a: number, b: number): number visits Output {
+fun name_check(a: Number, b: Number): Number visits Output {
   be city holds "rome"
   when city is "rome" {
     be _ holds String.print("city is rome")
@@ -676,7 +676,7 @@ fun name_check(a: number, b: number): number visits Output {
   }
   return 20
 }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be r1 holds pick(7)
   be r2 holds name_check(2, 3)
   return r1 + r2
@@ -695,14 +695,14 @@ fun main(): number visits Output {
 <CodeWindow file="kw_list_here.yon"
             run="yonc kw_list_here.yon -o list_here && ./list_here; echo $?"
             out={["21"]}>
-{`fun total(xs: List<number>): number {
+{`fun total(xs: List<Number>): Number {
   be acc holds 0
   for every x in xs when here {
     acc = acc + x
   }
   return acc
 }
-fun main(): number {
+fun main(): Number {
   be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
   return total(lst)
 }`}
@@ -726,7 +726,7 @@ In member position (`subscription.stream`): the subscription's stream handle. Th
 
 ```yon
 // sensors.yon, the producer package -> ./Sensors_srv
-fun readings(): Stream<number> {
+fun readings(): Stream<Number> {
   be s holds produce {
     emit 10
     emit 11
@@ -734,16 +734,16 @@ fun readings(): Stream<number> {
   }
   return s
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }
 
 // subscriber.yon, the consumer
 import sensors::readings from Sensors
 
-fun main(): number {
+fun main(): Number {
   be w holds wire to space Sensors
   be sub holds w.awaits(readings)
   be s holds sub.stream
-  be total holds s.fold(0, fun(a: number, v: number) => a + v)
+  be total holds s.fold(0, fun(a: Number, v: Number) => a + v)
   return total      // 10+11+15 = 36, from another process
 }
 ```
@@ -777,11 +777,11 @@ The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in t
 <CodeWindow file="spawn_parallel_collect.yon" run="yonc spawn_parallel_collect.yon -o spc && ./spc; echo $?" out={["10"]}>
 
 ```yon
-fun main(): number {
+fun main(): Number {
   be results holds spawn in 4 parallel {
     promote spawn_index + 1
   }
-  be total holds results.fold(0, fun(a: number, v: number) => a + v)
+  be total holds results.fold(0, fun(a: Number, v: Number) => a + v)
   return total      // (0+1)+(1+1)+(2+1)+(3+1) = 1+2+3+4 = 10
 }
 ```
@@ -811,28 +811,28 @@ Pattern negation, `e is not pattern`: the Heyting negation of the positive test,
 <CodeWindow file="kw_patterns.yon"
             run="yonc kw_patterns.yon -o patterns && ./patterns; echo $?"
             out={["p is not absent", "u is unknown", "6"]}>
-{`fun chain_one(a: number, b: number): number visits Output {
+{`fun chain_one(a: Number, b: Number): Number visits Output {
   be p holds (a < b)
   when p is not absent {
     be _ holds String.print("p is not absent")
   }
   return 1
 }
-fun chain_two(d: number): number visits Output {
+fun chain_two(d: Number): Number visits Output {
   be u holds unknown
   when u is unknown {
     be _ holds String.print("u is unknown")
   }
   return d
 }
-fun chain_three(a: number, b: number): number visits Output {
+fun chain_three(a: Number, b: Number): Number visits Output {
   be p holds (a < b)
   when p is absent {
     be _ holds String.print("NEVER printed: p is a known truth")
   }
   return 3
 }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be x holds chain_one(3, 5)
   be y holds chain_two(2)
   be z holds chain_three(3, 5)
@@ -847,7 +847,7 @@ fun main(): number visits Output {
 <CodeWindow file="kw_heyting.yon"
             run="yonc kw_heyting.yon -o heyting && ./heyting; echo $?"
             out={["42"]}>
-{`fun main(): number {
+{`fun main(): Number {
   be u holds unknown
   be p holds present
   be both holds p &&? u            // unknown: conjunction with the undecided
@@ -901,16 +901,16 @@ Second projection of the pair.
 <CodeWindow file="kw_hott.yon"
             run="yonc kw_hott.yon -o hott && ./hott; echo $?"
             out={["42"]}>
-{`fun takes(p: Sigma(x: number). number): number {
+{`fun takes(p: Sigma(x: Number). Number): Number {
   return fst(p) + snd(p)
 }
-fun proj_sum(a: number, b: number): number {
+fun proj_sum(a: Number, b: Number): Number {
   be p holds pair(a, b)
   be x holds fst(p)
   be y holds snd(p)
   return x + y
 }
-fun main(): number {
+fun main(): Number {
   be direct holds takes(pair(20, 10))
   return direct + proj_sum(7, 5)        // 30 + 12 = 42
 }`}
@@ -959,9 +959,9 @@ The universe of types (`Type_1`, `Type_2`, ... for the levels). A universe-typed
 <CodeWindow file="kw_paths.yon"
             run="yonc kw_paths.yon -o paths && ./paths; echo $?"
             out={["42"]}>
-{`fun diag(a: number): number { return a * 6 }
-fun universe_taker(t: Type): number { return 7 }
-fun main(): number {
+{`fun diag(a: Number): Number { return a * 6 }
+fun universe_taker(t: Type): Number { return 7 }
+fun main(): Number {
   be r holds clear 7                          // a path value, let-bound
   be moved holds ind_path(0, diag, clear 7)   // J computes diag(7) = 42
   return moved
@@ -1044,11 +1044,11 @@ Universe-code elimination: `el_match(target, ret, body)` eliminates an `El(_)` b
 inhabitant to `body`. Lowers to the body application and runs.
 
 <CodeWindow file="circle_hit.yon" run="yonc circle_hit.yon -o circle_hit && ./circle_hit; echo $?" out={["42"]}>
-{`fun motive(x: S1): number { return 0 }
-fun circle_elim(): number {
+{`fun motive(x: S1): Number { return 0 }
+fun circle_elim(): Number {
   return hit_elim(motive, [base => 42, loop => plam i => 42], hit(base))
 }
-fun main(): number {
+fun main(): Number {
   return circle_elim()
 }`}
 </CodeWindow>

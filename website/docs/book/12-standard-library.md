@@ -20,7 +20,7 @@ be visible):
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be l holds List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
   be s holds Seq.from_list(l).map(fun(x) => x * 2).fold(0, fun(a, b) => a + b)
   return s + 30                    // 12 + 30 = 42
@@ -55,7 +55,7 @@ hashes).
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be m holds HashMap.empty()
   be m2 holds HashMap.set(m, 1, 10)
   be ten holds HashMap.get(m2, 1)
@@ -76,7 +76,7 @@ in place.
 
 <!-- yon-gate: exit 62 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be a holds Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
   be b holds Vec.push(Vec.push(a, 40), 50)       // grows past the initial cap of 4
   be c holds Vec.set(b, 0, 7)                     // in-place; c is b

@@ -1,4 +1,4 @@
-fun main(): number {
-  be y holds transport(ua(idEquiv(number)), 5)
+fun main(): Number {
+  be y holds transport(ua(idEquiv(Number)), 5)
   return y - 5
 }

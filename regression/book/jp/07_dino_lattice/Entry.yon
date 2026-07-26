@@ -22,7 +22,7 @@ place Entry { }
 //   [1-4]  A, B, C, D                      -- the genome xcoords
 //   [5-10] of2: AB, AC, AD, BC, BD, CD     -- the relation classes (1,11,7,1,1,7)
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be a holds 1536
   be b holds 1280
   be c holds 25167360

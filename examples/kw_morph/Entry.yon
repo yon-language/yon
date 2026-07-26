@@ -4,4 +4,4 @@ morph LiftEU from Account to AccountEU {
     return .-> AccountEU { balance s.balance }
   }
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

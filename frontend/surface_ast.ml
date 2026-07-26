@@ -58,11 +58,31 @@ let method_resolutions : (int * int, string) Hashtbl.t = Hashtbl.create 64
    enter (no sections of theirs exist). *)
 let union_arm_upcasts : (string, string) Hashtbl.t = Hashtbl.create 16
 
+(* Fusion places (prelude): place name -> primitive code it IS the face of
+   (`place Number is number`). Filled at registration; consulted by
+   type equality (Number = number), desugar (TyUser fused -> prim), and the
+   literal/point bridge (Boolean's tt/ff <-> true/false). *)
+let fusion_places : (string, string) Hashtbl.t = Hashtbl.create 8
+(* inverse: prim code -> fusion place name *)
+let fusion_of_prim : (string, string) Hashtbl.t = Hashtbl.create 8
+(* points of FUSED coproducts -> their literal value ("tt" -> true, "ff" ->
+   false, "star" -> unit): a fused place's arms never build spines — the
+   carrier already has canonical values, the arms are their declared NAMES. *)
+let fused_points : (string, [ `Bool of bool | `Unit ]) Hashtbl.t = Hashtbl.create 8
+(* match sites whose SCRUTINEE tycheck resolved to a fused prim (boolean):
+   only those lower to __if_expr — a user coproduct that happens to reuse the
+   arm names tt/ff keeps its spine elimination. Keyed like bare_point_sites. *)
+let fused_elim_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 8
+
 (* Bare nullary points: `tt` in expression position IS the unique point of
    its terminal arm (the name denotes the point — no constructor call). The
    tycheck resolves the name (scope-aware: locals shadow) and records the
    site; the desugar lowers it to the arm's spine leaf. *)
-let bare_point_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 32
+(* value: (point name, OWNING sum name) — the sum is recorded so desugar can
+   tell a fused coproduct's point (a literal) from an ordinary spine leaf,
+   scoped exactly as tycheck resolved it (a user Bool's tt is NOT the prelude
+   Boolean's tt). *)
+let bare_point_sites : (string * int * int, string * string) Hashtbl.t = Hashtbl.create 32
 
 (* ─── Type expressions ─────────────────────────────────────────────── *)
 
@@ -343,7 +363,12 @@ and for_kind =
  * applied codes (ECall / ERefl) get a readable synthesized name. *)
 let rec ty_term_to_name (e : expr) : string =
   match e with
-  | EVar (s, _) -> s
+  | EVar (s, _) ->
+      (* a fused face (Number) names the SAME code as its prim (number):
+         one object, one canonical name — El_<name> mangling included *)
+      (match Hashtbl.find_opt fusion_places s with
+       | Some prim -> prim
+       | None -> s)
   | EParen (e, _) -> ty_term_to_name e
   | ERefl (t, _) -> "refl(" ^ ty_term_to_name t ^ ")"
   | ECall (f, args, _) ->
@@ -439,6 +464,12 @@ type place_body_item =
 type place_decl = {
   pd_name : string;
   pd_type_params : string list;     (* generic parameters: `place Box<T> { value T }` *)
+  pd_fusion : string option;        (* `is <prim>`: the AXIOMATIC carrier — this place
+                                       IS the declared face of that primitive code (the
+                                       leaf of the carrier functor's recursion, not a
+                                       bypass of it). Prelude-only in practice. *)
+  pd_width : int option;            (* `place Number<64>`: declared width, validated
+                                       against the fused prim's carrier *)
   pd_arms : variant list;           (* the coproduct arms `this > A :U B` — the ways this
                                        place is a disjoint union. [] = empty generator
                                        set (the former "record"). One construct, not two

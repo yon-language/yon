@@ -7,7 +7,7 @@ place Entry { }
 //   same-popcount values -> fewer than 4. FNV is the exact content-address here.
 // Stdout: [1] HashSet.size (expect 4), [2] XSet.size (<= 4, the collapse).
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be h holds HashSet.empty()
   h = HashSet.add(h, 1445)
   h = HashSet.add(h, 1445)

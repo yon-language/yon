@@ -1,1 +1,1 @@
-fun main(): number { return 5 @ I0 }
+fun main(): Number { return 5 @ I0 }

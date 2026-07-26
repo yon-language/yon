@@ -74,7 +74,7 @@ let () =
      | Error (UOccurCheck (0, _)) -> true | _ -> false);
 
   (* ── program-level inference (known answer) ─────────────────────────────── *)
-  (* fun f(x): number { return x + 1 }   with x untyped (TyUser "_").
+  (* fun f(x): Number { return x + 1 }   with x untyped (TyUser "_").
    * The body forces x to number (binop LHS expects number, hm_infer.ml:112),
    * so the inferred param type must come back as number. *)
   let dl = dummy_loc in

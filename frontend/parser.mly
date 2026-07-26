@@ -585,9 +585,27 @@ top_let:
   | PLACE     { false }
   | ERROR_KW  { true }   /* `error E { ... }` = sugar: a place marked is_error */
 
+(* `place Number<64>` (numeric width, precedent heyting<64>) and
+   `place Box<T>` (IDENT generics) share the `<`: ONE nonterminal keeps the
+   grammar LR(1)-clean (two consecutive nullable `<`-starting nonterminals
+   would conflict). Returns (width, tparams). *)
+place_params:
+  | (* empty *)                                        { (None, []) }
+  | LT n = NUM_LIT GT                                  { (Some (int_of_float n), []) }
+  | LT ids = separated_nonempty_list(COMMA, IDENT) GT  { (None, ids) }
+
+(* `place Number is number { }` — the fusion clause: the place is the declared
+   face of that PRIMITIVE CODE (is <prim>, not is <carrier>: carrier names are
+   ambiguous — f64 realizes four codes — while the prim name keys prim_carrier,
+   the one source of truth). A primitive is the place whose carrier is
+   axiomatic instead of derived: the leaf of the carrier functor's recursion. *)
+is_fusion_clause:
+  | IS c = IDENT  { c }
+
 place_decl:
   | is_err = place_kw name = IDENT
-    tparams = type_params_opt
+    wp = place_params
+    fusion = option(is_fusion_clause)
     over = option(over_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
@@ -624,8 +642,16 @@ place_decl:
       if is_err && variants <> [] then
         failwith ("error '" ^ name ^ "': an error place declares fields, "
                   ^ "not `this >` arms");
+      let (width, tparams) = wp in
+      (* collision fence at the SOURCE: the prelude owns its four names. *)
+      (if List.mem name ["Number"; "Text"; "Boolean"; "Unit"]
+          && fusion = None then
+         failwith (Printf.sprintf
+           "place %s collides with the prelude place of the same name: the             prelude owns it (rename yours)" name));
       TopPlace { pd_name = name;
                  pd_type_params = tparams;
+                 pd_fusion = fusion;
+                 pd_width = width;
                  pd_arms = variants;
                  pd_world = "__INFER";
                  pd_members = members;
@@ -868,7 +894,28 @@ type_atom:
             name (if name = "Map" then "2" else "1"))
       | _ -> TyApp (name, args) }
   | name = IDENT
-    { TyUser name }
+    { (* prelude fusion, canonicalized AT THE SOURCE: the capitalized face
+         and its primitive code are one object; parsing them to one node
+         means no comparator downstream can ever tell them apart (the same
+         move as the String/text normalization in desugar, one layer up). *)
+      match name with
+      | "Number" -> TyPrim "number"
+      | "Text" -> TyPrim "text"
+      | "Boolean" -> TyPrim "boolean"
+      | "Unit" -> TyPrim "unit"
+      | ("number" | "text" | "boolean" | "unit") when
+          not (let f = $startpos.Lexing.pos_fname in
+               (* the prelude and the kernel corpus may speak the codes *)
+               let has sub =
+                 let ls = String.length sub and lf = String.length f in
+                 let rec go i = i + ls <= lf
+                   && (String.sub f i ls = sub || go (i + 1)) in
+                 go 0 in
+               has "prelude/") ->
+          failwith (Printf.sprintf
+            "type `%s` is the kernel code: write `%s` (the prelude place)"
+            name (String.capitalize_ascii name))
+      | _ -> TyUser name }
   | name = IDENT IN ids = ident_list
     { TyPrimIn (name, ids) }
   | first = IDENT PIPE rest = separated_nonempty_list(PIPE, variant)
@@ -907,6 +954,9 @@ type_atom:
 
 hit_branch:
   | ctor = IDENT FATARROW v = expr { (ctor, PatVars [], v) }
+  (* the literals as patterns on the fused Boolean: `match b { true => ..,
+     false => .. }` — they NAME the kernel arms tt/ff. *)
+  | b = BOOL_LIT FATARROW v = expr { ((if b then "tt" else "ff"), PatVars [], v) }
   | ctor = IDENT LPAREN vars = separated_list(COMMA, IDENT) RPAREN FATARROW v = expr
     { (ctor, PatVars vars, v) }
   /* the co-mediatrice: field names bind projections BY NAME — the mirror of

@@ -2,10 +2,10 @@ place Entry { }
 move EurToUsd from Account_EUR to Account_USD requires MoneyTransfer {
   balance converts to balance by scale_eur_usd
 }
-fun scale_eur_usd(x: number): number {
+fun scale_eur_usd(x: Number): Number {
   return x * 110 / 100
 }
-fun main(): number {
+fun main(): Number {
   /* FNV-1a hash di "MoneyTransfer" (calcolato compile-time
    * a runtime tramite Crypto.fnv1a per consistenza con emit MLIR).
    * NOTA MVP: il compile-time hash in emit_mlir.ml usa lo stesso FNV-1a init

@@ -9,12 +9,12 @@ place Entry {
 //      Syntactically the endpoints differ; up to conversion they agree.
 // The raw `Id(number, g(f(a)), a)` + `refl(a)` stays valid in the KERNEL
 // stratum; this is the same proof, said clearly.
-fun f(x: number): number { return x }
-fun g(x: number): number { return x }
+fun f(x: Number): Number { return x }
+fun g(x: Number): Number { return x }
 
-fun coherence(a: number): Same(g(f(a)), a) {
+fun coherence(a: Number): Same(g(f(a)), a) {
   return clear
 }
 
-fun main(): number { return 0 }
+fun main(): Number { return 0 }
 }

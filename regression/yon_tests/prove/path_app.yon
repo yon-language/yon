@@ -1,4 +1,4 @@
-fun main(): number {
+fun main(): Number {
   be p holds plam i => 7
   return (p @ I0) - 7
 }

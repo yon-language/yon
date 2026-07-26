@@ -1,7 +1,7 @@
 // Wire throughput bench, PRODUCER. Pushes N messages onto a shared-memory wire (channel
 // 9), then closes it. Bare `fun main` (no place): the cross-Space wire scenarios run in
 // this form. Paired with dash.yon, which times receiving the N messages. Requires IPC/SHM.
-fun main(): number {
+fun main(): Number {
   be w holds Wire.make_shm(9, 1)
   be k holds 0
   while k < 200000 do {

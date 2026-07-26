@@ -4,7 +4,7 @@ place Entry {
 // as an EXPLICIT capture; an implicit outer reference would be rejected by
 // the MLIR verifier. The arena model is retired: the region inlines at
 // zero runtime cost.
-fun main(): number {
+fun main(): Number {
   be base holds 40
   scope Hermetic {
     be sealed holds base + 2

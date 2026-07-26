@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be v holds Vec.push(Vec.push(Vec.empty(), 1445), 1280)
   be acc holds Space.make(0)
   iter 10000000 do { be _ holds Space.set(acc, Space.get(acc) + (Vec.get(v, 0))) }

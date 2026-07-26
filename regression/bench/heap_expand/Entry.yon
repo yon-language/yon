@@ -7,7 +7,7 @@ place Entry { }
 // distinct across several generations (1M, which chains ~5 times) to show expansion is
 // amortized O(1); and identical content (dedup) for contrast.
 // Stdout schema (4 ints): guard(=1000000), distinct@100k ns, distinct@1M ns, same@1M ns
-fun intern_distinct(n: number): number visits Output {
+fun intern_distinct(n: Number): Number visits Output {
   be acc holds Space.make(0)
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -17,7 +17,7 @@ fun intern_distinct(n: number): number visits Output {
               be _2 holds Space.set(i, k + 1) }
   return Time.now_ns(0) - t0
 }
-fun intern_same(n: number): number visits Output {
+fun intern_same(n: Number): Number visits Output {
   be acc holds Space.make(0)
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -27,7 +27,7 @@ fun intern_same(n: number): number visits Output {
               be _2 holds Space.set(i, k + 1) }
   return Time.now_ns(0) - t0
 }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be _g holds Output.print(String.from_int(1000000))
   be d100k holds intern_distinct(100000)
   be d1m holds intern_distinct(1000000)

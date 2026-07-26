@@ -1,0 +1,6 @@
+status: accept
+exit: 42
+covers: is_fusion_clause place_params
+note: |
+  `place X is <prim>` — the fusion clause: the axiomatic carrier, the leaf of
+  the carrier functor's recursion. The prelude declares the four faces with it.

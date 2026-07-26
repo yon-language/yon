@@ -1,11 +1,11 @@
 import weather::forecasts from Weather
 
 place Entry {
-  fun main(): number {
+  fun main(): Number {
     be w holds wire to space Weather
     be sub holds w.awaits(forecasts)
     be s holds sub.stream
-    be total holds s.fold(0, fun(a: number, r: Reading) => a + r.temp + String.length(r.label))
+    be total holds s.fold(0, fun(a: Number, r: Reading) => a + r.temp + String.length(r.label))
     return total
   }
 }

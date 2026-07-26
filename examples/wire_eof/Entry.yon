@@ -2,7 +2,7 @@ place Entry {
 // Structural close: the produce wire closes itself when the block
 // ends, so the for-every drain stops on its own. No count is known
 // in advance anywhere in this program.
-fun main(): number {
+fun main(): Number {
   be s holds produce { emit 7 }
   be total holds 0
   for every v in s {

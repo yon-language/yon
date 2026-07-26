@@ -1,0 +1,6 @@
+[project]
+name = "kw_prelude"
+entry = "Entry.yon"
+
+[runtime]
+backend = "memory"

@@ -1,10 +1,10 @@
 place Entry { }
-functor Identity(x: number) from W to V
+functor Identity(x: Number) from W to V
   law identity
   law composition
 {
   return x
 }
-fun main(): number {
+fun main(): Number {
   return 0
 }

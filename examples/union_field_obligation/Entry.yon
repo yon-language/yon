@@ -5,6 +5,6 @@
 place Entry { }
 place Account {
   this > Opened :U Closed
-  balance number
+  balance Number
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

@@ -1,4 +1,4 @@
 place State {
-  cohort number
-  secret number
+  cohort Number
+  secret Number
 }

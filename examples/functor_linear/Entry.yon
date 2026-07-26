@@ -1,6 +1,6 @@
 place Entry { }
-fun double(n: number): number { return n }
-fun main(): number {
-  be f holds functor (x: number) => double(x) from W to V law composition
+fun double(n: Number): Number { return n }
+fun main(): Number {
+  be f holds functor (x: Number) => double(x) from W to V law composition
   return 0
 }

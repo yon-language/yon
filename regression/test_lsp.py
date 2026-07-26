@@ -20,7 +20,7 @@ FIXTURE = ROOT / "regression" / "keyword_coverage" / "drop_reclaim"
 _ILLEGAL = """\
 import svc::d_op from D
 place Entry { }
-fun main(): number {
+fun main(): Number {
   drop D
   be r holds d_op(5)
   return r - r
@@ -30,7 +30,7 @@ fun main(): number {
 _LEGAL = """\
 import svc::d_op from D
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be r holds d_op(5)
   drop D
   return r - r
@@ -72,12 +72,12 @@ def _two_world_project(root: Path) -> Path:
     (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
     (root / "B" / "Topos.yon").write_text("topos TB where { }\n")
     (root / "B" / "BP.yon").write_text(
-        "fun b_op(x: number): number { return x + 1 }\nplace BP { }\n")
+        "fun b_op(x: Number): Number { return x + 1 }\nplace BP { }\n")
     # A (world W1) imports from B (world W2): the wire crosses a world boundary.
     a = root / "A" / "AP.yon"
     a.write_text(
         "import svc::b_op from B\nplace AP { }\n"
-        "fun a_op(x: number): number { be r holds b_op(x)  return r }\n")
+        "fun a_op(x: Number): Number { be r holds b_op(x)  return r }\n")
     return a
 
 
@@ -101,9 +101,9 @@ def _world_project(root: Path):
         '[world.W]\nobjects = ["X"]\nspaces  = ["A"]\n')
     (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
     (root / "A" / "AP.yon").write_text(
-        "place AP { }\nfun a_op(x: number): number { return x + 1 }\n")
+        "place AP { }\nfun a_op(x: Number): Number { return x + 1 }\n")
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): number { return 0 }\n")
+        "place Entry { }\nfun main(): Number { return 0 }\n")
     return root
 
 
@@ -134,9 +134,9 @@ def _two_boundary_files_same_pos(root: Path) -> Path:
     for d, t in [("A", "TA"), ("B", "TB"), ("OtherX", "TX"), ("OtherY", "TY")]:
         (root / d / "Topos.yon").write_text(f"topos {t} where {{ }}\n")
     (root / "OtherX" / "XP.yon").write_text(
-        "fun fx(x: number): number { return x }\nplace XP { }\n")
+        "fun fx(x: Number): Number { return x }\nplace XP { }\n")
     (root / "OtherY" / "YP.yon").write_text(
-        "fun fy(x: number): number { return x }\nplace YP { }\n")
+        "fun fy(x: Number): Number { return x }\nplace YP { }\n")
     a = root / "A" / "AP.yon"
     a.write_text("import svc::fx from OtherX\nplace AP { }\n")
     (root / "B" / "BP.yon").write_text("import svc::fy from OtherY\nplace BP { }\n")
@@ -163,7 +163,7 @@ def test_lsp_still_reports_genuine_type_error_in_package_file(tmp_path):
     a package file is still reported under E2001."""
     root = _world_project(tmp_path / "proj")
     (root / "A" / "AP.yon").write_text(
-        "place AP { }\nfun a_op(x: number): number { return zzz + 1 }\n")
+        "place AP { }\nfun a_op(x: Number): Number { return zzz + 1 }\n")
     r = subprocess.run([str(LSP), "--check", str(root / "A" / "AP.yon")],
                        capture_output=True, text=True, timeout=60)
     out = r.stdout + r.stderr
@@ -180,13 +180,13 @@ def _cross_file_call_project(root: Path):
     (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
     (root / "B" / "Topos.yon").write_text("topos TB where { }\n")
     (root / "A" / "AP.yon").write_text(
-        "place AP { }\nfun a_op(n: number): number { return gee(n) + 1 }\n")
+        "place AP { }\nfun a_op(n: Number): Number { return gee(n) + 1 }\n")
     (root / "B" / "BP.yon").write_text(
-        "place BP { }\nfun gee(n: number): number { return n * 2 }\n")
+        "place BP { }\nfun gee(n: Number): Number { return n * 2 }\n")
     # main uses a_op so the project is lint-clean (no unused-function warnings);
     # these tests are about cross-file type resolution, not lint.
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): number { return a_op(1) }\n")
+        "place Entry { }\nfun main(): Number { return a_op(1) }\n")
     return root
 
 
@@ -207,7 +207,7 @@ def test_lsp_type_error_attributes_to_owning_file(tmp_path):
     onto a clean sibling that references it -- whole-program check, per-file view."""
     root = _cross_file_call_project(tmp_path / "proj")
     (root / "B" / "BP.yon").write_text(
-        "place BP { }\nfun gee(n: number): number { return zzz }\n")
+        "place BP { }\nfun gee(n: Number): Number { return zzz }\n")
     b = subprocess.run([str(LSP), "--check", str(root / "B" / "BP.yon")],
                        capture_output=True, text=True, timeout=60)
     bout = b.stdout + b.stderr

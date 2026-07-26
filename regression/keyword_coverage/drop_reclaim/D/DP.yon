@@ -1,2 +1,2 @@
-fun d_op(x: number): number { return x + 1 }
-place DP { n number }
+fun d_op(x: Number): Number { return x + 1 }
+place DP { n Number }

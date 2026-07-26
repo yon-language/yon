@@ -10,15 +10,15 @@ A move can demand more than well-typed fields: it can demand **authority**.
 
 <!-- yon-gate: illustrative -->
 ```yon
-place EUR { balance number }
-place USD { balance number }
+place EUR { balance Number }
+place USD { balance Number }
 
 move EurToUsd from EUR to USD requires MoneyTransfer {
   balance converts to balance by scale
 }
-fun scale(x: number): number { return x * 110 / 100 }
+fun scale(x: Number): Number { return x * 110 / 100 }
 
-fun main(): number {
+fun main(): Number {
   be _g holds Cap.grant(169281588)       // register the capability token
   be a holds .-> EUR { balance 40 }
   be b holds apply_move(EurToUsd, a)     // the move that names the token
@@ -41,7 +41,7 @@ token is granted and `1` after:
 
 <!-- yon-gate: exit 1 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be before holds Cap.check(169281588)   // 0, not yet granted
   be _g holds Cap.grant(169281588)
   be after holds Cap.check(169281588)    // 1, now present

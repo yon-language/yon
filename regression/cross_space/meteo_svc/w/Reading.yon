@@ -1,6 +1,6 @@
 place Reading {
-  temp number
-  humidity number
+  temp Number
+  humidity Number
 
   fun samples(): Stream<Reading> {
     be s holds produce {

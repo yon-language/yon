@@ -10,7 +10,7 @@ Write a function that hands back what it was given. For a number it reads:
 
 <!-- yon-gate: illustrative -->
 ```yon
-fun id(x: number): number { return x }
+fun id(x: Number): Number { return x }
 ```
 
 Now you want it for text. You write it again, character for character the same,
@@ -26,7 +26,7 @@ later, once per call, instead of once per source file.
 fun id<T>(x: T): T {
   return x
 }
-fun main(): number {
+fun main(): Number {
   return id(42)
 }
 ```
@@ -47,7 +47,7 @@ A function may leave several types blank, and they vary independently:
 fun first<A, B>(x: A, y: B): A {
   return x
 }
-fun main(): number {
+fun main(): Number {
   be n holds first(7, 99)         // A and B both number
   be t holds first("hi", 5)       // A is text, B is number
   return n + String.length(t)     // 7 + 2 = 9

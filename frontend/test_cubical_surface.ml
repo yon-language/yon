@@ -81,7 +81,7 @@ let () =
   let transport_refl =
     ECall ("transport", [ERefl (EVar ("number", dl), dl); ELit (LitNumber 5.0, dl)], dl) in
   (match Tycheck.infer env ctx transport_refl with
-   | Ok (TyPrim "number") -> check "transport(refl(number), 5) : number" true
+   | Ok (TyPrim "number") -> check "transport(refl(number), 5) : Number" true
    | _ -> check "transport(refl(number), 5) has wrong type" false);
   (match Desugar.desugar_expr transport_refl with
    | Ast.Transp (("__ti", Ast.TyPlace "number"), _) ->
@@ -94,7 +94,7 @@ let () =
         ELit (LitNumber 5.0, dl)], dl) in
   (match Tycheck.infer env ctx transport_ua_id with
    | Ok (TyPrim "number") ->
-       check "transport(ua(idEquiv(number)), 5) : number" true
+       check "transport(ua(idEquiv(number)), 5) : Number" true
    | _ -> check "transport(ua(idEquiv(number)), 5) has wrong type" false);
   let ua_core = Desugar.desugar_expr transport_ua_id in
   (match ua_core with

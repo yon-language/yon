@@ -22,88 +22,88 @@
 
 /* one shared AST: arithmetic (+ - *), de Bruijn variables, let, equality, if, call,
  * and (Stage 1) algebraic data: THit builds a constructor, THitElim eliminates one. */
-place Term { this > TLit(number) :U TAdd(Term, Term) :U TSub(Term, Term) :U TMul(Term, Term) :U TVar(number) :U TLet(Term, Term) :U TCmp(number, Term, Term) :U TIf(Term, Term, Term) :U TCall(number, Term) :U TArgs(Term, Term) :U TNoArg :U THit(number, Term) :U THitElim(Term, Term) :U TBranch(number, number, Term, Term) :U TBrNil :U TStrLit(String) :U TRtCall(String, Term) }
+place Term { this > TLit(Number) :U TAdd(Term, Term) :U TSub(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) :U TCmp(Number, Term, Term) :U TIf(Term, Term, Term) :U TCall(Number, Term) :U TArgs(Term, Term) :U TNoArg :U THit(Number, Term) :U THitElim(Term, Term) :U TBranch(Number, Number, Term, Term) :U TBrNil :U TStrLit(String) :U TRtCall(String, Term) }
 /* TCall's second field and THit's are an argument spine: TArgs(head, rest) ... TNoArg.
  * THitElim's first field is a branch spine: TBranch(ctor-hash, body, rest) ... TBrNil.
  * Keeping these inside Term avoids mutually recursive place declarations. */
 /* a top-level function: name hash, arity (0..N), body (params are TVar 0..N-1). */
-place Fun { this > FnDef(number, number, Term) }
+place Fun { this > FnDef(Number, Number, Term) }
 place FunList { this > FlNil :U FlCons(Fun, FunList) }
 place FunParse { this > FPOk(Fun, TokList) :U FPErr }
 /* constructor registry: constructor-name hash -> tag (its index in its place). */
-place CtorReg { this > CrNil :U CrCons(number, number, CtorReg) }
+place CtorReg { this > CrNil :U CrCons(Number, Number, CtorReg) }
 place Program { this > Prog(FunList, CtorReg) }
 place IndRes { this > IR(CtorReg, TokList) }
 /* result of binding a branch's payloads: extended SSA env, emitted code, next counter. */
-place BindRes { this > BR(SsaEnv, String, number) }
+place BindRes { this > BR(SsaEnv, String, Number) }
 /* tokens (tags: Num0 Ident1 Fun2 Be3 Holds4 Return5 Number6 If7 Then8 Else9
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18 Minus19
  * Comma20 Lt21 Gt22 Le23 Ge24 Ne25 LBracket27 RBracket28 Bar29 Arrow30
  * Place31 This32 ColonU33; tag 26 retired with the 'inductive' keyword). */
-place Token { this > TNum(number) :U TIdent(number) :U TKwFun :U TKwBe :U TKwHolds :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus :U TComma :U TLt :U TGt :U TLe :U TGe :U TNe :U TLBracket :U TRBracket :U TBar :U TArrow :U TKwPlace :U TKwThis :U TColonU :U TDot :U TStr(String) }
+place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TKwHolds :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus :U TComma :U TLt :U TGt :U TLe :U TGe :U TNe :U TLBracket :U TRBracket :U TBar :U TArrow :U TKwPlace :U TKwThis :U TColonU :U TDot :U TStr(String) }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 place Parse { this > POk(Term, TokList) :U PErr }
 /* SSA environment for the emitter: de Bruijn index -> ssa name. */
 place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
 /* de Bruijn name environment for the parser: identifier hash, innermost first. */
-place NameEnv { this > NEnvNil :U NEnvCons(number, NameEnv) }
+place NameEnv { this > NEnvNil :U NEnvCons(Number, NameEnv) }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER(String, String, number) }
+place EmitR { this > ER(String, String, Number) }
 
 /* ---- hashing: keyword recognition and identifier identity share one hash ---- */
 /* keep a value below m by repeated subtraction (Yon0 has no '%' operator). */
-fun mod_reduce(x: number, m: number): number {
+fun mod_reduce(x: Number, m: Number): Number {
   return if x >= m then mod_reduce(x - m, m) else x
 }
 /* rolling hash over s[i..j): h' = (h*31 + code) mod 2000003. The modulus keeps the
  * hash small (< 2^21) so it survives a round-trip through the MerkleTree runtime,
  * which truncates large values: without it, a long identifier hashed to a value
  * that differed once stored in a TIdent and read back, breaking keyword dispatch. */
-fun word_hash(s: String, i: number, j: number, h: number): number {
+fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
   return if i >= j then h
     else word_hash(s, i + 1, j, mod_reduce(h * 31 + String.char_at(s, i), 2000003))
 }
-fun hash_of(s: String): number { return word_hash(s, 0, String.length(s), 0) }
-fun kw_fun(): number    { return hash_of("fun") }
-fun kw_be(): number     { return hash_of("be") }
-fun kw_holds(): number  { return hash_of("holds") }
-fun kw_return(): number { return hash_of("return") }
-fun kw_number(): number { return hash_of("number") }
-fun kw_if(): number     { return hash_of("if") }
-fun kw_then(): number   { return hash_of("then") }
-fun kw_else(): number   { return hash_of("else") }
-fun kw_place(): number     { return hash_of("place") }
-fun kw_this(): number      { return hash_of("this") }
-fun kw_hit(): number       { return hash_of("hit") }
-fun kw_hitelim(): number   { return hash_of("hit_elim") }
+fun hash_of(s: String): Number { return word_hash(s, 0, String.length(s), 0) }
+fun kw_fun(): Number    { return hash_of("fun") }
+fun kw_be(): Number     { return hash_of("be") }
+fun kw_holds(): Number  { return hash_of("holds") }
+fun kw_return(): Number { return hash_of("return") }
+fun kw_number(): Number { return hash_of("number") }
+fun kw_if(): Number     { return hash_of("if") }
+fun kw_then(): Number   { return hash_of("then") }
+fun kw_else(): Number   { return hash_of("else") }
+fun kw_place(): Number     { return hash_of("place") }
+fun kw_this(): Number      { return hash_of("this") }
+fun kw_hit(): Number       { return hash_of("hit") }
+fun kw_hitelim(): Number   { return hash_of("hit_elim") }
 
 /* ---- lexer: String -> TokList ---- */
 /* an identifier char: a-z (97-122), A-Z (65-90), 0-9 (48-57), or '_' (95).
  * Identifiers start with a letter or '_' (dispatched in lex_at) and continue on
  * any of these; constructor and type names are capitalised, so A-Z is required. */
-fun word_char(c: number): number {
+fun word_char(c: Number): Number {
   return if c >= 97 then (if c >= 123 then 0 else 1)     /* a-z */
     else if c == 95 then 1                               /* _ */
     else if c >= 65 then (if c >= 91 then 0 else 1)      /* A-Z */
     else if c >= 48 then (if c >= 58 then 0 else 1)      /* 0-9 */
     else 0
 }
-fun word_end(s: String, i: number, len: number): number {
+fun word_end(s: String, i: Number, len: Number): Number {
   return if i >= len then i
     else if word_char(String.char_at(s, i)) == 1 then word_end(s, i + 1, len)
     else i
 }
-fun num_end(s: String, i: number, len: number): number {
+fun num_end(s: String, i: Number, len: Number): Number {
   return if i >= len then i
     else if String.char_at(s, i) >= 48 then
            (if String.char_at(s, i) >= 58 then i else num_end(s, i + 1, len))
          else i
 }
-fun num_val(s: String, i: number, j: number, acc: number): number {
+fun num_val(s: String, i: Number, j: Number, acc: Number): Number {
   return if i >= j then acc
     else num_val(s, i + 1, j, acc * 10 + (String.char_at(s, i) - 48))
 }
-fun classify(h: number): Token {
+fun classify(h: Number): Token {
   return if h == kw_fun() then hit(TKwFun)
     else if h == kw_be() then hit(TKwBe)
     else if h == kw_holds() then hit(TKwHolds)
@@ -116,24 +116,24 @@ fun classify(h: number): Token {
     else if h == kw_this() then hit(TKwThis)
     else hit(TIdent, h)
 }
-fun lex_word(s: String, i: number, len: number): TokList {
+fun lex_word(s: String, i: Number, len: Number): TokList {
   be j holds word_end(s, i, len)
   return hit(TkCons, classify(word_hash(s, i, j, 0)), lex_from(s, j, len))
 }
-fun lex_num(s: String, i: number, len: number): TokList {
+fun lex_num(s: String, i: Number, len: Number): TokList {
   be j holds num_end(s, i, len)
   return hit(TkCons, hit(TNum, num_val(s, i, j, 0)), lex_from(s, j, len))
 }
 /* string literal: scan to the closing '"' (code 34). Backslash (92) escapes the
  * next char, so a '\"' inside the literal does not end it. */
-fun str_end(s: String, i: number, len: number): number {
+fun str_end(s: String, i: Number, len: Number): Number {
   return if i >= len then i
     else if String.char_at(s, i) == 92 then str_end(s, i + 2, len)   /* skip escaped char */
     else if String.char_at(s, i) == 34 then i                        /* closing quote */
     else str_end(s, i + 1, len)
 }
 /* the char an escape denotes: \n -> 10, \t -> 9, \" -> 34, \\ -> 92, else literal. */
-fun escape_char(c: number): number {
+fun escape_char(c: Number): Number {
   return if c == 110 then 10
     else if c == 116 then 9
     else if c == 34 then 34
@@ -144,18 +144,18 @@ fun escape_char(c: number): number {
  * this at lex time, so the self-host MUST too: otherwise its own "...\n..."
  * literals capture a raw backslash-n and the frontend fixpoint breaks (stage-2
  * emits a literal backslash-n where stage-1 emitted a newline). */
-fun str_content(s: String, i: number, j: number, acc: String): String {
+fun str_content(s: String, i: Number, j: Number, acc: String): String {
   return if i >= j then acc
     else if String.char_at(s, i) == 92 then
       str_content(s, i + 2, j, String.concat(acc, String.from_char(escape_char(String.char_at(s, i + 1)))))
     else str_content(s, i + 1, j, String.concat(acc, String.from_char(String.char_at(s, i))))
 }
 /* i is at the char AFTER the opening quote. */
-fun lex_str(s: String, i: number, len: number): TokList {
+fun lex_str(s: String, i: Number, len: Number): TokList {
   be j holds str_end(s, i, len)
   return hit(TkCons, hit(TStr, str_content(s, i, j, "")), lex_from(s, j + 1, len))
 }
-fun lex_eq(s: String, i: number, len: number): TokList {
+fun lex_eq(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else if String.char_at(s, i + 1) == 61
     then hit(TkCons, hit(TEqEq), lex_from(s, i + 2, len))          /* '==' */
@@ -164,42 +164,42 @@ fun lex_eq(s: String, i: number, len: number): TokList {
     else lex_from(s, i + 1, len)
 }
 /* '<' or '<=' (peek the next char for '='). */
-fun lex_lt(s: String, i: number, len: number): TokList {
+fun lex_lt(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TLt), lex_from(s, i + 1, len))
     else if String.char_at(s, i + 1) == 61
     then hit(TkCons, hit(TLe), lex_from(s, i + 2, len))
     else hit(TkCons, hit(TLt), lex_from(s, i + 1, len))
 }
 /* '>' or '>='. */
-fun lex_gt(s: String, i: number, len: number): TokList {
+fun lex_gt(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TGt), lex_from(s, i + 1, len))
     else if String.char_at(s, i + 1) == 61
     then hit(TkCons, hit(TGe), lex_from(s, i + 2, len))
     else hit(TkCons, hit(TGt), lex_from(s, i + 1, len))
 }
 /* ':U' (the union operator) or a lone ':' (peek the next char for 'U' = 85). */
-fun lex_colon(s: String, i: number, len: number): TokList {
+fun lex_colon(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TColon), lex_from(s, i + 1, len))
     else if String.char_at(s, i + 1) == 85
     then hit(TkCons, hit(TColonU), lex_from(s, i + 2, len))
     else hit(TkCons, hit(TColon), lex_from(s, i + 1, len))
 }
 /* '!=' (a lone '!' is not a Yon0 token, so skip it). */
-fun lex_ne(s: String, i: number, len: number): TokList {
+fun lex_ne(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else if String.char_at(s, i + 1) == 61
     then hit(TkCons, hit(TNe), lex_from(s, i + 2, len))
     else lex_from(s, i + 1, len)
 }
 /* '/' begins a comment: '/*' block or '//' line; a lone '/' is skipped. */
-fun lex_slash(s: String, i: number, len: number): TokList {
+fun lex_slash(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then lex_from(s, i + 1, len)
     else if String.char_at(s, i + 1) == 42 then skip_block(s, i + 2, len)   /* '/*' */
     else if String.char_at(s, i + 1) == 47 then skip_line(s, i + 2, len)    /* '//' */
     else lex_from(s, i + 1, len)
 }
 /* skip a block comment until the closing star-then-slash. */
-fun skip_block(s: String, i: number, len: number): TokList {
+fun skip_block(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TEnd), hit(TkNil))            /* unterminated */
     else if String.char_at(s, i) == 42 then                                /* star */
            (if String.char_at(s, i + 1) == 47 then lex_from(s, i + 2, len)  /* slash: comment ends */
@@ -207,12 +207,12 @@ fun skip_block(s: String, i: number, len: number): TokList {
          else skip_block(s, i + 1, len)
 }
 /* skip a line comment until the next newline. */
-fun skip_line(s: String, i: number, len: number): TokList {
+fun skip_line(s: String, i: Number, len: Number): TokList {
   return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else if String.char_at(s, i) == 10 then lex_from(s, i + 1, len)
     else skip_line(s, i + 1, len)
 }
-fun lex_at(s: String, i: number, len: number, c: number): TokList {
+fun lex_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)             /* space */
     else if c == 10 then lex_from(s, i + 1, len)             /* newline */
     else if c == 9  then lex_from(s, i + 1, len)             /* tab */
@@ -242,15 +242,15 @@ fun lex_at(s: String, i: number, len: number, c: number): TokList {
     else if c >= 48 then lex_num(s, i, len)                  /* 0-9: number */
     else lex_from(s, i + 1, len)                             /* skip anything else */
 }
-fun lex_from(s: String, i: number, len: number): TokList {
+fun lex_from(s: String, i: Number, len: Number): TokList {
   return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else lex_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 /* ---- token/list peeking ---- */
-fun motTn(t: Token): number { return 0 }
-fun tok_tag(t: Token): number {
+fun motTn(t: Token): Number { return 0 }
+fun tok_tag(t: Token): Number {
   return hit_elim(motTn, [
     TNum(n)=>0, TIdent(h)=>1, TKwFun=>2, TKwBe=>3, TKwHolds=>4, TKwReturn=>5,
     TKwNumber=>6, TKwIf=>7, TKwThen=>8, TKwElse=>9, TPlus=>10, TStar=>11,
@@ -260,7 +260,7 @@ fun tok_tag(t: Token): number {
     TLBracket=>27, TRBracket=>28, TBar=>29, TArrow=>30,
     TKwPlace=>31, TKwThis=>32, TColonU=>33, TDot=>34, TStr(sh)=>35 ], t)
 }
-fun tok_num(t: Token): number {
+fun tok_num(t: Token): Number {
   return hit_elim(motTn, [
     TNum(n)=>n, TIdent(h)=>h, TKwFun=>0, TKwBe=>0, TKwHolds=>0, TKwReturn=>0,
     TKwNumber=>0, TKwIf=>0, TKwThen=>0, TKwElse=>0, TPlus=>0, TStar=>0,
@@ -270,11 +270,11 @@ fun tok_num(t: Token): number {
     TLBracket=>0, TRBracket=>0, TBar=>0, TArrow=>0,
     TKwPlace=>0, TKwThis=>0, TColonU=>0, TDot=>0, TStr(sh)=>0 ], t)
 }
-fun motLn(l: TokList): number { return 0 }
-fun head_tag(l: TokList): number {
+fun motLn(l: TokList): Number { return 0 }
+fun head_tag(l: TokList): Number {
   return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
 }
-fun head_num(l: TokList): number {
+fun head_num(l: TokList): Number {
   return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
 }
 fun motLl(l: TokList): TokList { return hit(TkNil) }
@@ -283,9 +283,9 @@ fun tail(l: TokList): TokList {
 }
 
 /* ---- de Bruijn name environment: identifier hash -> index (innermost = 0) ---- */
-fun bump(k: number): number { return if k >= 0 then k + 1 else 0 - 1 }
-fun motNEn(e: NameEnv): number { return 0 }
-fun lookup_name(name: number, env: NameEnv): number {
+fun bump(k: Number): Number { return if k >= 0 then k + 1 else 0 - 1 }
+fun motNEn(e: NameEnv): Number { return 0 }
+fun lookup_name(name: Number, env: NameEnv): Number {
   return hit_elim(motNEn,
     [ NEnvNil => 0 - 1,
       NEnvCons(h, rest) => if h == name then 0 else bump(lookup_name(name, rest)) ], env)
@@ -311,7 +311,7 @@ fun parse_factor(l: TokList, env: NameEnv): Parse {
 }
 /* call := (already have callee hash) '(' (expr (',' expr)*)? ')'
  * the arguments parse into a spine TArgs(a, TArgs(b, ... TNoArg)). */
-fun parse_call(callee: number, l: TokList, env: NameEnv): Parse {
+fun parse_call(callee: Number, l: TokList, env: NameEnv): Parse {
   return call_with_args(callee, parse_args(tail(l), env))
 }
 fun parse_args(l: TokList, env: NameEnv): Parse {
@@ -334,7 +334,7 @@ fun args_prepend(arg: Term, p: Parse): Parse {
     [ PErr => hit(PErr),
       POk(rest_spine, rest) => hit(POk, hit(TArgs, arg, rest_spine), rest) ], p)
 }
-fun call_with_args(callee: number, p: Parse): Parse {
+fun call_with_args(callee: Number, p: Parse): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(spine, rest) => hit(POk, hit(TCall, callee, spine), rest) ], p)
@@ -366,13 +366,13 @@ fun expr_more(p: Parse, env: NameEnv): Parse {
                            then expr_more(combine(19, left, parse_term(tail(rest), env)), env)
                            else hit(POk, left, rest) ], p)
 }
-fun combine(op: number, left: Term, p: Parse): Parse {
+fun combine(op: Number, left: Term, p: Parse): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(right, rest) =>
         hit(POk, mk_binop(op, left, right), rest) ], p)
 }
-fun mk_binop(op: number, left: Term, right: Term): Term {
+fun mk_binop(op: Number, left: Term, right: Term): Term {
   return if op == 10 then hit(TAdd, left, right)
     else if op == 19 then hit(TSub, left, right)
     else hit(TMul, left, right)
@@ -388,7 +388,7 @@ fun parse_hit(l: TokList, env: NameEnv): Parse {
     then hit_after_args(ctor, parse_args(tail(rest), env))
     else hit(PErr)
 }
-fun hit_after_args(ctor: number, p: Parse): Parse {
+fun hit_after_args(ctor: Number, p: Parse): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(spine, rest) => hit(POk, hit(THit, ctor, spine), rest) ], p)
@@ -447,14 +447,14 @@ fun parse_one_branch(l: TokList, env: NameEnv): Parse {
  * a branch-local env; the body is parsed in that env, the following branches in the
  * outer env (binders are scoped to their own branch body). */
 fun motPRtoParse(pr: ParamRes): Parse { return hit(PErr) }
-fun branch_with_binders(ctor: number, pr: ParamRes, outer: NameEnv): Parse {
+fun branch_with_binders(ctor: Number, pr: ParamRes, outer: NameEnv): Parse {
   return hit_elim(motPRtoParse,
     [ PR(env2, arity, rest) =>
         if head_tag(rest) == 30                           /* '=>' */
           then branch_after_arrow(ctor, arity, parse_expr(tail(rest), env2), outer)
           else hit(PErr) ], pr)
 }
-fun branch_after_arrow(ctor: number, arity: number, p: Parse, env: NameEnv): Parse {
+fun branch_after_arrow(ctor: Number, arity: Number, p: Parse, env: NameEnv): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(body, rest) =>
@@ -464,7 +464,7 @@ fun branch_after_arrow(ctor: number, arity: number, p: Parse, env: NameEnv): Par
           then hit(POk, hit(TBranch, ctor, arity, body, hit(TBrNil)), rest)
         else hit(PErr) ], p)
 }
-fun br_prepend(ctor: number, arity: number, body: Term, p: Parse): Parse {
+fun br_prepend(ctor: Number, arity: Number, body: Term, p: Parse): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(rest_brs, rest) => hit(POk, hit(TBranch, ctor, arity, body, rest_brs), rest) ], p)
@@ -472,7 +472,7 @@ fun br_prepend(ctor: number, arity: number, body: Term, p: Parse): Parse {
 
 /* if := 'if' expr CMP expr 'then' expr 'else' expr, CMP one of == != < > <= >=.
  * cmp_op maps a comparison token tag to an op code (or -1 if not a comparison). */
-fun cmp_op(tag: number): number {
+fun cmp_op(tag: Number): Number {
   return if tag == 12 then 0        /* == -> oeq */
     else if tag == 25 then 1        /* != -> one */
     else if tag == 21 then 2        /* <  -> olt */
@@ -491,7 +491,7 @@ fun if_after_lhs(p: Parse, env: NameEnv): Parse {
                         then if_after_cmp(a, cmp_op(head_tag(rest)), parse_expr(tail(rest), env), env)
                         else hit(PErr) ], p)
 }
-fun if_after_cmp(a: Term, op: number, p: Parse, env: NameEnv): Parse {
+fun if_after_cmp(a: Term, op: Number, p: Parse, env: NameEnv): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(b, rest) => if head_tag(rest) == 8
@@ -524,7 +524,7 @@ fun parse_let(l: TokList, env: NameEnv): Parse {
   be after_holds holds tail(tail(tail(l)))
   return build_let(parse_expr(after_holds, env), name, env)
 }
-fun build_let(pv: Parse, name: number, env: NameEnv): Parse {
+fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(val, rest) =>
@@ -539,21 +539,21 @@ fun wrap_let(val: Term, pb: Parse): Parse {
 /* ---- function parser: 'fun' IDENT '(' (IDENT (',' IDENT)*)? ')' ':' 'number' '{' body '}' ---- */
 /* a parsed parameter list: the de Bruijn env (params pushed in order), the arity,
  * and the token list positioned right after the ')'. */
-place ParamRes { this > PR(NameEnv, number, TokList) }
+place ParamRes { this > PR(NameEnv, Number, TokList) }
 fun motPR(pr: ParamRes): FunParse { return hit(FPErr) }
 /* skip an optional ': Type' annotation after a parameter name (one type token). */
 fun skip_param_type(l: TokList): TokList {
   return if head_tag(l) == 17 then tail(tail(l)) else l   /* ':' Type */
 }
 /* parse the parameters starting right after '(': push each onto env, count arity. */
-fun parse_params(l: TokList, env: NameEnv, count: number): ParamRes {
+fun parse_params(l: TokList, env: NameEnv, count: Number): ParamRes {
   return if head_tag(l) == 14                          /* ')' -> done */
     then hit(PR, env, count, tail(l))
     else if head_tag(l) == 1                            /* IDENT -> a parameter */
     then params_more(hit(NEnvCons, head_num(l), env), count + 1, skip_param_type(tail(l)))
     else hit(PR, env, count, l)                         /* malformed -> stop */
 }
-fun params_more(env: NameEnv, count: number, l: TokList): ParamRes {
+fun params_more(env: NameEnv, count: Number, l: TokList): ParamRes {
   return if head_tag(l) == 20                           /* ',' -> more */
     then parse_params(tail(l), env, count)
     else if head_tag(l) == 14                           /* ')' -> done */
@@ -569,16 +569,16 @@ fun parse_fundef(l: TokList): FunParse {
   be after_lparen holds tail(tail(tail(l)))  /* skip fun, IDENT, '(' -> at params or ')' */
   return fundef_with_params(name, parse_params(after_lparen, hit(NEnvNil), 0))
 }
-fun fundef_with_params(name: number, pr: ParamRes): FunParse {
+fun fundef_with_params(name: Number, pr: ParamRes): FunParse {
   return hit_elim(motPR,
     [ PR(env, arity, rest) =>
         fundef_body(name, arity, env, skip_after_params(rest)) ], pr)
 }
-fun fundef_body(name: number, arity: number, env: NameEnv, l: TokList): FunParse {
+fun fundef_body(name: Number, arity: Number, env: NameEnv, l: TokList): FunParse {
   return close_fundef(name, arity, parse_body(l, env))
 }
 fun motFPfromP(p: Parse): FunParse { return hit(FPErr) }
-fun close_fundef(name: number, arity: number, p: Parse): FunParse {
+fun close_fundef(name: Number, arity: Number, p: Parse): FunParse {
   return hit_elim(motFPfromP,
     [ PErr => hit(FPErr),
       POk(body, rest) => hit(FPOk, hit(FnDef, name, arity, body), tail(rest)) ], p)
@@ -606,12 +606,12 @@ fun close_place(reg: CtorReg, l: TokList): IndRes {
   return if head_tag(l) == 16 then hit(IR, reg, tail(l))
     else hit(IR, reg, l)
 }
-fun parse_arms(l: TokList, reg: CtorReg, tag: number): IndRes {
+fun parse_arms(l: TokList, reg: CtorReg, tag: Number): IndRes {
   return if head_tag(l) == 1                             /* an arm identifier */
     then arms_more(hit(CrCons, head_num(l), tag, reg), skip_ctor_types(tail(l)), tag + 1)
     else close_place(reg, l)
 }
-fun arms_more(reg: CtorReg, l: TokList, tag: number): IndRes {
+fun arms_more(reg: CtorReg, l: TokList, tag: Number): IndRes {
   return if head_tag(l) == 33                            /* ':U' -> another arm */
     then parse_arms(tail(l), reg, tag)
     else close_place(reg, l)                             /* at '}' */
@@ -642,34 +642,34 @@ fun prepend_fun(f: Fun, prog: Program): Program {
 }
 
 /* registry lookup: constructor-name hash -> tag. */
-fun motCR(r: CtorReg): number { return 0 }
-fun tag_of(hash: number, reg: CtorReg): number {
+fun motCR(r: CtorReg): Number { return 0 }
+fun tag_of(hash: Number, reg: CtorReg): Number {
   return hit_elim(motCR,
     [ CrNil => 0,
       CrCons(h, t, rest) => if h == hash then t else tag_of(hash, rest) ], reg)
 }
 /* is this term the empty branch spine? */
-fun is_brnil(t: Term): number {
+fun is_brnil(t: Term): Number {
   return hit_elim(motTermToNum, [ TBrNil => 1, _ => 0 ], t)
 }
 
 /* ---- back end: gen (Term -> MLIR text) with an SSA environment ---- */
 fun motS(e: EmitR): String { return "" }
-fun motN(e: EmitR): number { return 0 }
+fun motN(e: EmitR): Number { return 0 }
 fun er_ssa(e: EmitR):  String { return hit_elim(motS, [ ER(s, c, n) => s ], e) }
 fun er_code(e: EmitR): String { return hit_elim(motS, [ ER(s, c, n) => c ], e) }
-fun er_ctr(e: EmitR):  number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
+fun er_ctr(e: EmitR):  Number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
 
 fun motLk(e: SsaEnv): String { return "" }
-fun lookup_ssa(i: number, env: SsaEnv): String {
+fun lookup_ssa(i: Number, env: SsaEnv): String {
   return hit_elim(motLk,
     [ SeNil => "%vERR",
       SeCons(h, rest) => if i == 0 then h else lookup_ssa(i - 1, rest) ], env)
 }
 
-fun ssa_name(n: number): String { return String.concat("%v", String.from_int(n)) }
-fun num_lit(k: number): String  { return String.concat(String.from_int(k), ".0") }
-fun fn_symbol(h: number): String { return String.concat("fn_", String.from_int(h)) }
+fun ssa_name(n: Number): String { return String.concat("%v", String.from_int(n)) }
+fun num_lit(k: Number): String  { return String.concat(String.from_int(k), ".0") }
+fun fn_symbol(h: Number): String { return String.concat("fn_", String.from_int(h)) }
 fun line(ssa: String, rhs: String): String {
   return String.concat(String.concat(String.concat("  ", ssa),
            String.concat(" = ", rhs)), " : f64\n")
@@ -681,7 +681,7 @@ fun line_raw(ssa: String, rhs: String): String {
 
 /* the arith.cmpf predicate for a comparison op code (0..5). The trailing comma
  * is part of the emitted text, matching gen_bin's "op <a>, <b>" shape. */
-fun cmp_pred(op: number): String {
+fun cmp_pred(op: Number): String {
   return if op == 0 then "arith.cmpf oeq,"
     else if op == 1 then "arith.cmpf one,"
     else if op == 2 then "arith.cmpf olt,"
@@ -690,7 +690,7 @@ fun cmp_pred(op: number): String {
     else "arith.cmpf oge,"
 }
 fun motER(t: Term): EmitR { return hit(ER, "", "", 0) }
-fun gen(t: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen(t: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return hit_elim(motER, [
     TLit(k) =>
       hit(ER, ssa_name(n),
@@ -715,14 +715,14 @@ fun gen(t: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
     TRtCall(sym, spine) => gen_rtcall(sym, spine, env, n, reg)
   ], t)
 }
-fun gen_let(e1: Term, body: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be ea holds gen(e1, env, n, reg)
   be eb holds gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea), reg)
   return hit(ER, er_ssa(eb),
             String.concat(er_code(ea), er_code(eb)),
             er_ctr(eb))
 }
-fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be ea holds gen(a, env, n, reg)
   be eb holds gen(b, env, er_ctr(ea), reg)
   be m  holds er_ctr(eb)
@@ -734,26 +734,26 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: number, reg: CtorReg):
             m + 1)
 }
 /* count the arguments in a spine. */
-fun motTermToNum(t: Term): number { return 0 }
-fun spine_count(spine: Term): number {
+fun motTermToNum(t: Term): Number { return 0 }
+fun spine_count(spine: Term): Number {
   return hit_elim(motTermToNum,
     [ TNoArg => 0, TArgs(a, rest) => 1 + spine_count(rest), _ => 0 ], spine)
 }
 /* the "(f64, f64, ...)" operand-type list for a call of arity k. */
-fun call_sig(k: number, i: number): String {
+fun call_sig(k: Number, i: Number): String {
   return if i >= k then ""
     else if i == k - 1 then "f64"
     else String.concat("f64, ", call_sig(k, i + 1))
 }
 /* emit each argument (threading the counter + code), returning ER whose ssa field
  * is the comma-joined list of argument ssas. */
-fun gen_args(spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_args(spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return hit_elim(motER,
     [ TNoArg => hit(ER, "", "", n),
       TArgs(a, rest) => gen_args_cons(a, rest, env, n, reg),
       _ => hit(ER, "", "", n) ], spine)
 }
-fun gen_args_cons(a: Term, rest: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_args_cons(a: Term, rest: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be ea holds gen(a, env, n, reg)
   be er holds gen_args(rest, env, er_ctr(ea), reg)
   be joined holds if String.length(er_ssa(er)) == 0 then er_ssa(ea)
@@ -761,7 +761,7 @@ fun gen_args_cons(a: Term, rest: Term, env: SsaEnv, n: number, reg: CtorReg): Em
   return hit(ER, joined, String.concat(er_code(ea), er_code(er)), er_ctr(er))
 }
 /* call: emit the arguments, then "<ssa> = func.call @fn_<callee>(<args>) : (<sig>) -> f64". */
-fun gen_call(callee: number, spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_call(callee: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be ea  holds gen_args(spine, env, n, reg)
   be m   holds er_ctr(ea)
   be cnt holds spine_count(spine)
@@ -774,7 +774,7 @@ fun gen_call(callee: number, spine: Term, env: SsaEnv, n: number, reg: CtorReg):
             String.concat(er_code(ea), line_raw(ssa_name(m), rhs)),
             m + 1)
 }
-fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be ec holds gen(c, env, n, reg)
   be et holds gen(thenT, env, er_ctr(ec), reg)
   be ee holds gen(elseT, env, er_ctr(et), reg)
@@ -809,11 +809,11 @@ fun child_call(nd: String, idx_ssa: String): String {
   return String.concat("func.call @yon_rt_merkle_child(",
     String.concat(nd, String.concat(", ", String.concat(idx_ssa, ") : (f64, f64) -> f64"))))
 }
-fun is_noarg(t: Term): number {
+fun is_noarg(t: Term): Number {
   return hit_elim(motTermToNum, [ TNoArg => 1, _ => 0 ], t)
 }
 /* leaf(k) for a constant tag k: emits the constant and the leaf call. */
-fun gen_leaf_const(k: number, n: number): EmitR {
+fun gen_leaf_const(k: Number, n: Number): EmitR {
   be tc holds ssa_name(n)
   be lf holds ssa_name(n + 1)
   be code holds String.concat(line(tc, String.concat("arith.constant ", num_lit(k))),
@@ -821,12 +821,12 @@ fun gen_leaf_const(k: number, n: number): EmitR {
   return hit(ER, lf, code, n + 2)
 }
 /* leaf(val_ssa): wrap an already-computed value ssa. */
-fun gen_leaf_of(val_ssa: String, n: number): EmitR {
+fun gen_leaf_of(val_ssa: String, n: Number): EmitR {
   be lf holds ssa_name(n)
   return hit(ER, lf, line_raw(lf, leaf_call(val_ssa)), n + 1)
 }
 /* the inner spine: leaf(0) if empty, else node2(0, leaf(head), spine(rest)). */
-fun gen_inner_spine(spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_inner_spine(spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return hit_elim(motER,
     [ TNoArg => gen_leaf_const(0, n),
       TArgs(a, rest) => gen_spine_cons(0, a, rest, env, n, reg),
@@ -835,7 +835,7 @@ fun gen_inner_spine(spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
 /* node2(node_tag, gen a, gen_inner_spine(rest)) -- one spine cell. The argument is
  * stored RAW as the child (a number directly, a nested-sum handle directly); this
  * is what the runtime + yonc's own emit do (child() reads it back raw). */
-fun gen_spine_cons(node_tag: number, a: Term, rest: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_spine_cons(node_tag: Number, a: Term, rest: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be ea  holds gen(a, env, n, reg)                         /* the raw value/handle */
   be inner holds gen_inner_spine(rest, env, er_ctr(ea), reg)
   be tc holds ssa_name(er_ctr(inner))                      /* node tag constant */
@@ -847,13 +847,13 @@ fun gen_spine_cons(node_tag: number, a: Term, rest: Term, env: SsaEnv, n: number
   return hit(ER, nd, code, er_ctr(inner) + 2)
 }
 /* hit(Ctor, args): nullary -> leaf(tag); with args -> node2(tag, leaf(a0), spine(rest)). */
-fun gen_hit(ctor: number, spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_hit(ctor: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be tag holds tag_of(ctor, reg)
   return if is_noarg(spine) == 1
     then gen_leaf_const(tag, n)
     else gen_hit_payload(tag, spine, env, n, reg)
 }
-fun gen_hit_payload(tag: number, spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_hit_payload(tag: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return hit_elim(motER,
     [ TArgs(a0, rest) => gen_spine_cons(tag, a0, rest, env, n, reg),
       _ => hit(ER, "%vERR", "", n) ], spine)
@@ -862,17 +862,17 @@ fun gen_hit_payload(tag: number, spine: Term, env: SsaEnv, n: number, reg: CtorR
 /* accessors on BindRes. */
 fun motBRe(b: BindRes): SsaEnv { return hit(SeNil) }
 fun motBRs(b: BindRes): String { return "" }
-fun motBRn(b: BindRes): number { return 0 }
+fun motBRn(b: BindRes): Number { return 0 }
 fun br_env(b: BindRes):  SsaEnv { return hit_elim(motBRe, [ BR(e, c, n) => e ], b) }
 fun br_code(b: BindRes): String { return hit_elim(motBRs, [ BR(e, c, n) => c ], b) }
-fun br_n(b: BindRes):    number { return hit_elim(motBRn, [ BR(e, c, n) => n ], b) }
+fun br_n(b: BindRes):    Number { return hit_elim(motBRn, [ BR(e, c, n) => n ], b) }
 /* bind k number payloads projected from the scrutinee: payload j = label(child(tail_j, 0)),
  * tail_0 = scrut, tail_{j+1} = child(tail_j, 1). Binds them innermost-last onto env. */
-fun gen_bind(tail_ssa: String, j: number, k: number, env: SsaEnv, n: number): BindRes {
+fun gen_bind(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): BindRes {
   return if j >= k then hit(BR, env, "", n)
     else gen_bind_one(tail_ssa, j, k, env, n)
 }
-fun gen_bind_one(tail_ssa: String, j: number, k: number, env: SsaEnv, n: number): BindRes {
+fun gen_bind_one(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): BindRes {
   be idx0 holds ssa_name(n)          /* constant 0 (child index) */
   be pn holds ssa_name(n + 1)        /* payload = child(tail, 0), read RAW (no label) */
   be idx1 holds ssa_name(n + 2)      /* constant 1 (child index) */
@@ -886,12 +886,12 @@ fun gen_bind_one(tail_ssa: String, j: number, k: number, env: SsaEnv, n: number)
   return hit(BR, br_env(rest), String.concat(code0, br_code(rest)), br_n(rest))
 }
 /* bind the branch payloads, then emit the body (the unconditional last branch). */
-fun gen_branch_body(arity: number, body: Term, scrut_ssa: String, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_branch_body(arity: Number, body: Term, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be bind holds gen_bind(scrut_ssa, 0, arity, env, n)
   be eb   holds gen(body, br_env(bind), br_n(bind), reg)
   return hit(ER, er_ssa(eb), String.concat(br_code(bind), er_code(eb)), er_ctr(eb))
 }
-fun gen_hitelim(brs: Term, scrut: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_hitelim(brs: Term, scrut: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be es holds gen(scrut, env, n, reg)
   be sc holds er_ssa(es)                               /* the scrutinee handle */
   be tl holds ssa_name(er_ctr(es))                     /* tag = label(scrut) */
@@ -901,18 +901,18 @@ fun gen_hitelim(brs: Term, scrut: Term, env: SsaEnv, n: number, reg: CtorReg): E
     String.concat(er_code(es), String.concat(lcode, er_code(chain))),
     er_ctr(chain))
 }
-fun gen_br_chain(brs: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_br_chain(brs: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return hit_elim(motER,
     [ TBrNil => hit(ER, "%vERR", "", n),
       TBranch(ctor, arity, body, rest) => gen_br_one(ctor, arity, body, rest, t_ssa, scrut_ssa, env, n, reg),
       _ => hit(ER, "%vERR", "", n) ], brs)
 }
-fun gen_br_one(ctor: number, arity: number, body: Term, rest: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_br_one(ctor: Number, arity: Number, body: Term, rest: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return if is_brnil(rest) == 1
     then gen_branch_body(arity, body, scrut_ssa, env, n, reg)   /* last: unconditional */
     else gen_br_if(ctor, arity, body, rest, t_ssa, scrut_ssa, env, n, reg)
 }
-fun gen_br_if(ctor: number, arity: number, body: Term, rest: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_br_if(ctor: Number, arity: Number, body: Term, rest: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be tag holds tag_of(ctor, reg)
   be tc  holds ssa_name(n)
   be cc  holds ssa_name(n + 1)
@@ -937,22 +937,22 @@ fun gen_br_if(ctor: number, arity: number, body: Term, rest: Term, t_ssa: String
 }
 
 /* ---- top-level function emission ---- */
-fun argname(i: number): String { return String.concat("%arg", String.from_int(i)) }
+fun argname(i: Number): String { return String.concat("%arg", String.from_int(i)) }
 /* the SSA env for a body of arity k: cons %arg0 first (deepest) .. %arg(k-1) last,
  * so lookup_ssa(de Bruijn i) lands on the right %arg (params pushed in order). */
-fun arg_env(k: number, i: number, env: SsaEnv): SsaEnv {
+fun arg_env(k: Number, i: Number, env: SsaEnv): SsaEnv {
   return if i >= k then env
     else arg_env(k, i + 1, hit(SeCons, argname(i), env))
 }
 /* the "%arg0: f64, %arg1: f64, ..." parameter signature for arity k. */
-fun arg_sig(k: number, i: number): String {
+fun arg_sig(k: Number, i: Number): String {
   return if i >= k then ""
     else if i == k - 1 then String.concat(argname(i), ": f64")
     else String.concat(String.concat(argname(i), ": f64, "), arg_sig(k, i + 1))
 }
 /* a non-main function: func.func @fn_<name>(%arg0: f64, ...) -> f64 { body ; return }.
  * the k parameters are TVar 0..k-1 in the body (%arg0..%arg(k-1)). */
-fun gen_fundef_text(name: number, arity: number, body: Term, reg: CtorReg): String {
+fun gen_fundef_text(name: Number, arity: Number, body: Term, reg: CtorReg): String {
   be env holds arg_env(arity, 0, hit(SeNil))
   be eb  holds gen(body, env, 0, reg)
   be sig holds String.concat(String.concat("(", arg_sig(arity, 0)), ") -> f64 {\n")
@@ -967,28 +967,28 @@ fun gen_fundef_text(name: number, arity: number, body: Term, reg: CtorReg): Stri
  * each function's text into a Buffer (its own mmap arena) and intern ONCE
  * at finish -> O(N). gen_funs keeps its String signature. */
 fun motGFInto(fs: FunList): Buffer { return Buffer.make(0) }
-fun gen_funs_into(buf: Buffer, fs: FunList, main_hash: number, reg: CtorReg): Buffer {
+fun gen_funs_into(buf: Buffer, fs: FunList, main_hash: Number, reg: CtorReg): Buffer {
   return hit_elim(motGFInto,
     [ FlNil => buf,
       FlCons(f, rest) =>
         gen_funs_into(Buffer.append(buf, gen_one_fun(f, main_hash, reg)), rest, main_hash, reg) ], fs)
 }
-fun gen_funs(fs: FunList, main_hash: number, reg: CtorReg): String {
+fun gen_funs(fs: FunList, main_hash: Number, reg: CtorReg): String {
   return Buffer.finish(gen_funs_into(Buffer.make(0), fs, main_hash, reg))
 }
 fun motFunToStr(f: Fun): String { return "" }
-fun gen_one_fun(f: Fun, main_hash: number, reg: CtorReg): String {
+fun gen_one_fun(f: Fun, main_hash: Number, reg: CtorReg): String {
   return hit_elim(motFunToStr,
     [ FnDef(name, arity, body) =>
         if name == main_hash then "" else gen_fundef_text(name, arity, body, reg) ], f)
 }
 /* find main's body (the entry Term). */
-fun motFunToNum(f: Fun): number { return 0 }
-fun fun_name(f: Fun): number { return hit_elim(motFunToNum, [ FnDef(name, arity, body) => name ], f) }
+fun motFunToNum(f: Fun): Number { return 0 }
+fun fun_name(f: Fun): Number { return hit_elim(motFunToNum, [ FnDef(name, arity, body) => name ], f) }
 fun motFunToTerm(f: Fun): Term { return hit(TLit, 0) }
 fun fun_body(f: Fun): Term { return hit_elim(motFunToTerm, [ FnDef(name, arity, body) => body ], f) }
 fun motFindMain(fs: FunList): Term { return hit(TLit, 0) }
-fun main_body(fs: FunList, main_hash: number): Term {
+fun main_body(fs: FunList, main_hash: Number): Term {
   return hit_elim(motFindMain,
     [ FlNil => hit(TLit, 0),
       FlCons(f, rest) =>
@@ -1013,7 +1013,7 @@ fun head_str(l: TokList): String {
   return hit_elim(motLnStr, [ TkNil => "", TkCons(h, t) => tok_str(h) ], l)
 }
 /* map (module, op) name hashes to the runtime symbol (mirrors yonc's stdlib). */
-fun rt_string_symbol(op: number): String {
+fun rt_string_symbol(op: Number): String {
   return if op == hash_of("length") then "yon_rt_string_length"
     else if op == hash_of("char_at") then "yon_rt_string_char_at"
     else if op == hash_of("concat") then "yon_rt_string_concat"
@@ -1023,19 +1023,19 @@ fun rt_string_symbol(op: number): String {
     else if op == hash_of("print") then "yon_rt_string_print"
     else ""
 }
-fun rt_file_symbol(op: number): String {
+fun rt_file_symbol(op: Number): String {
   return if op == hash_of("read_text") then "yon_rt_file_read_text"
     else if op == hash_of("write_text") then "yon_rt_file_write_text"
     else if op == hash_of("append_text") then "yon_rt_file_append_text"
     else ""
 }
-fun rt_buffer_symbol(op: number): String {
+fun rt_buffer_symbol(op: Number): String {
   return if op == hash_of("make") then "yon_rt_buffer_new"
     else if op == hash_of("append") then "yon_rt_buffer_append"
     else if op == hash_of("finish") then "yon_rt_buffer_finish"
     else ""
 }
-fun rt_symbol(m: number, op: number): String {
+fun rt_symbol(m: Number, op: Number): String {
   return if m == hash_of("String") then rt_string_symbol(op)
     else if m == hash_of("File") then rt_file_symbol(op)
     else if m == hash_of("Buffer") then rt_buffer_symbol(op)
@@ -1052,7 +1052,7 @@ fun drop_dummy_spine(p: Parse): Parse {
   return hit_elim(motNullary, [ PErr => hit(PErr),
     POk(spine, rest) => hit(POk, hit(TNoArg), rest) ], p)
 }
-fun parse_qcall(modh: number, l: TokList, env: NameEnv): Parse {
+fun parse_qcall(modh: Number, l: TokList, env: NameEnv): Parse {
   be oph holds head_num(tail(tail(l)))                           /* op ident hash */
   be sym holds rt_symbol(modh, oph)
   be args holds parse_args(tail(tail(tail(tail(l)))), env)       /* skip MODULE . OP ( */
@@ -1068,7 +1068,7 @@ fun parse_qcall(modh: number, l: TokList, env: NameEnv): Parse {
 /* string literal -> from_char/concat chain. Strings are content-addressed, so
  * this interns to the SAME handle as yonc's global+string_lit: the differential
  * oracle (exit codes) stays green without a module-level global. */
-fun gen_char(code: number, n: number): EmitR {
+fun gen_char(code: Number, n: Number): EmitR {
   be c1 holds ssa_name(n)
   be c2 holds ssa_name(n + 1)
   return hit(ER, c2,
@@ -1078,7 +1078,7 @@ fun gen_char(code: number, n: number): EmitR {
                      String.concat(c1, ") : (f64) -> f64")))),
     n + 2)
 }
-fun gen_str_step(s: String, i: number, len: number, acc_ssa: String, acc_code: String, ec: EmitR): EmitR {
+fun gen_str_step(s: String, i: Number, len: Number, acc_ssa: String, acc_code: String, ec: EmitR): EmitR {
   be cat holds ssa_name(er_ctr(ec))
   be code2 holds String.concat(acc_code, String.concat(er_code(ec),
     line_raw(cat, String.concat("func.call @yon_rt_string_concat(",
@@ -1086,21 +1086,21 @@ fun gen_str_step(s: String, i: number, len: number, acc_ssa: String, acc_code: S
         String.concat(er_ssa(ec), ") : (f64, f64) -> f64")))))))
   return gen_str_from(s, i + 1, len, cat, code2, er_ctr(ec) + 1)
 }
-fun gen_str_from(s: String, i: number, len: number, acc_ssa: String, acc_code: String, n: number): EmitR {
+fun gen_str_from(s: String, i: Number, len: Number, acc_ssa: String, acc_code: String, n: Number): EmitR {
   return if i >= len then hit(ER, acc_ssa, acc_code, n)
     else gen_str_step(s, i, len, acc_ssa, acc_code, gen_char(String.char_at(s, i), n))
 }
-fun gen_strlit_ne(s: String, len: number, ec: EmitR): EmitR {
+fun gen_strlit_ne(s: String, len: Number, ec: EmitR): EmitR {
   return gen_str_from(s, 1, len, er_ssa(ec), er_code(ec), er_ctr(ec))
 }
-fun gen_strlit(s: String, n: number): EmitR {
+fun gen_strlit(s: String, n: Number): EmitR {
   be len holds String.length(s)
   return if len == 0 then gen_char(0, n)
     else gen_strlit_ne(s, len, gen_char(String.char_at(s, 0), n))
 }
 /* a runtime/qualified call by symbol name (like gen_call, but the callee is a
  * literal symbol string, not @fn_<hash>). */
-fun gen_rtcall(sym: String, spine: Term, env: SsaEnv, n: number, reg: CtorReg): EmitR {
+fun gen_rtcall(sym: String, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   be ea  holds gen_args(spine, env, n, reg)
   be m   holds er_ctr(ea)
   be cnt holds spine_count(spine)
@@ -1137,7 +1137,7 @@ fun main_head(): String {
 fun stubs(): String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
-fun main_tail(result_ssa: String, ctr: number): String {
+fun main_tail(result_ssa: String, ctr: Number): String {
   be rss holds ssa_name(ctr)
   return String.concat(
     String.concat("    ", String.concat(rss,
@@ -1157,7 +1157,7 @@ fun merkle_stubs(): String {
   return "  func.func private @yon_rt_merkle_leaf(f64) -> f64\n  func.func private @yon_rt_merkle_node2(f64, f64, f64) -> f64\n  func.func private @yon_rt_merkle_label(f64) -> f64\n  func.func private @yon_rt_merkle_child(f64, f64) -> f64\n"
 }
 
-fun main(): number {
+fun main(): Number {
   /* file-driven compiler: read a Yon0 source, compile it, write the MLIR module.
    * The differential oracle writes the input here and feeds the output back to the
    * backend, so this same tool compiles any Yon0 program (not a fixed one). */

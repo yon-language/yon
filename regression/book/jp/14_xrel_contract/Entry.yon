@@ -8,7 +8,7 @@ place Entry { }
 //
 // Stdout (the 11 observed values); exit code = failures.
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   // XRelSet — dedup by orbit class
   be r holds XRelSet.empty()
   be _r0 holds XRelSet.add_ref(r, 1536)

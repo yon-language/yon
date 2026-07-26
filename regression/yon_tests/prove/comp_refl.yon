@@ -1,4 +1,4 @@
-fun main(): number {
-  be p holds plam i => comp (refl(number)) [ i = I0 => plam j => 9 ] 5
+fun main(): Number {
+  be p holds plam i => comp (refl(Number)) [ i = I0 => plam j => 9 ] 5
   return (p @ I0) - 9
 }

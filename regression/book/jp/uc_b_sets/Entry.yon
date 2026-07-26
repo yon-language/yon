@@ -5,7 +5,7 @@ place Entry { }
 // XSet.intersect = a bit-AND over the 196560-bit bitmap (O(3072), ~50x a hash set).
 // Stdout: [1] |A|=3, [2] |B|=3, [3] |A & B|=2 (shared 11,63), [4] |A | B|=4 (union).
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be a holds XSet.empty()
   a = XSet.add(a, Leech.embed(7, 0))
   a = XSet.add(a, Leech.embed(11, 0))

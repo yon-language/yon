@@ -87,7 +87,7 @@ declaration of an imported module arrives **prefixed with its module name**:
 import "github.com/utente/geometria"
 
 place Entry { }
-fun main(): number {
+fun main(): Number {
   return area(6, 5) + geometria::circle_area(2)    // 30 + 12 = 42
 }
 ```

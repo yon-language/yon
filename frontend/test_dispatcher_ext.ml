@@ -155,7 +155,7 @@ let () =
   check "Pi(x:num).Id(x,z) /= Pi(y:num).Id(w,z) (w free, not the binder)"
     (not (eq (TyPi ("x", num, pi_cod "x"))
              (TyPi ("y", num, TyId (num, tm (v "w"), tm (v "z"))))));
-  check "Pi(x:num).num /= Pi(x:text).num (domain differs)"
+  check "Pi(x:num).num /= Pi(x:Text).num (domain differs)"
     (not (eq (TyPi ("x", num, num)) (TyPi ("x", txt, num))));
 
   (* ── behavioral known-answers (pin real ty_structural_eq behavior) ──── *)

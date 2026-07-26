@@ -7,7 +7,7 @@ place Entry { }
 // land on the same point share one address; distinct points are distinct addresses.
 // Stdout: [1] 196560 (the whole space), [2] 12 (M24 classes), [3] a point's class in
 // 0..11, [4] 2 (two distinct genomes -> two distinct perfect addresses, the dup gone).
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be kn      holds XTower.width(3)
   be m24n    holds XTower.width(2)
   be cls     holds Leech.m24_orbit(1536)

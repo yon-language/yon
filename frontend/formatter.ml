@@ -53,7 +53,11 @@ let lit_str = function
 
 let rec fmt_ty (t : ty) : string =
   match t with
-  | TyPrim s -> s
+  | TyPrim s ->
+      (match s with
+       | "number" -> "Number" | "text" -> "Text"
+       | "boolean" -> "Boolean" | "unit" -> "Unit"
+       | other -> other)
   | TyPrimIn (s, opts) -> s ^ " in " ^ String.concat ", " opts
   | TyList t -> "List<" ^ fmt_ty t ^ ">"
   | TyMap (k, v) -> "Map<" ^ fmt_ty k ^ ", " ^ fmt_ty v ^ ">"

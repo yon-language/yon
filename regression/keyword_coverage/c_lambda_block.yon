@@ -1,5 +1,5 @@
 // coverage: an inline lambda with a BLOCK body `fun(x) => { ... }`
-fun main(): number {
-  be f holds fun(x: number) => { be y holds x + 1 return y }
+fun main(): Number {
+  be f holds fun(x: Number) => { be y holds x + 1 return y }
   return f(41)
 }

@@ -1,4 +1,4 @@
-fun main(): number {
+fun main(): Number {
   be x holds 42
   when x is 42 { return 42 }
   return 0

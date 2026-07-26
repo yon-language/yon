@@ -23,7 +23,7 @@ place Entry { }
 //  [7]    VoyagerList.size of the 5-append population (events = 5)
 //  [8-11] m24_orbit(embed(g,3)) for g in [1445, mutant(k=6), 100, 200]  (the classes)
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be cw holds VoyagerList.seal(1445)
   be _1 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 1))))
   be _2 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 2))))

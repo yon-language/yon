@@ -12,33 +12,33 @@
  * -> exit 42.
  */
 
-place Term { this > TLit(number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(number) :U TLet(Term, Term) :U TCall(String, Term) }
+place Term { this > TLit(Number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) :U TCall(String, Term) }
 /* a top-level function: name + body; the body uses TVar 0 for the parameter. */
 place Fun { this > FnDef(String, Term) }
 place FunList { this > FlNil :U FlCons(Fun, FunList) }
 /* SSA environment: the list of bound ssa-names, indexed by de Bruijn. */
 place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER(String, String, number) }
+place EmitR { this > ER(String, String, Number) }
 
 /* accessors on EmitR (single constructor -> hit_elim with an explicit motive). */
 fun motS(e: EmitR): String { return "" }
-fun motN(e: EmitR): number { return 0 }
+fun motN(e: EmitR): Number { return 0 }
 fun er_ssa(e: EmitR):  String { return hit_elim(motS, [ ER(s, c, n) => s ], e) }
 fun er_code(e: EmitR): String { return hit_elim(motS, [ ER(s, c, n) => c ], e) }
-fun er_ctr(e: EmitR):  number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
+fun er_ctr(e: EmitR):  Number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
 
 /* environment: look up the i-th de Bruijn index. */
 fun motLk(e: SsaEnv): String { return "" }
-fun lookup(i: number, env: SsaEnv): String {
+fun lookup(i: Number, env: SsaEnv): String {
   return hit_elim(motLk,
     [ SeNil => "%vERR",
       SeCons(h, rest) => if i == 0 then h else lookup(i - 1, rest) ], env)
 }
 
 /* text helpers. */
-fun ssa_name(n: number): String { return String.concat("%v", String.from_int(n)) }
-fun num_lit(k: number): String  { return String.concat(String.from_int(k), ".0") }
+fun ssa_name(n: Number): String { return String.concat("%v", String.from_int(n)) }
+fun num_lit(k: Number): String  { return String.concat(String.from_int(k), ".0") }
 /* one line "  <ssa> = <rhs> : f64\n" (the f64 type is appended). */
 fun line(ssa: String, rhs: String): String {
   return String.concat(String.concat(String.concat("  ", ssa),
@@ -53,7 +53,7 @@ fun line_raw(ssa: String, rhs: String): String {
 
 /* the emission catamorphism (threading env + counter). */
 fun motER(t: Term): EmitR { return hit(ER, "", "", 0) }
-fun gen(t: Term, env: SsaEnv, n: number): EmitR {
+fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
   return hit_elim(motER, [
     TLit(k) =>
       /* %vn = arith.constant k.0 : f64 */
@@ -74,7 +74,7 @@ fun gen(t: Term, env: SsaEnv, n: number): EmitR {
   ], t)
 }
 /* let: emit e1, push its ssa onto env, emit body in that env. */
-fun gen_let(e1: Term, body: Term, env: SsaEnv, n: number): EmitR {
+fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
   be ea holds gen(e1, env, n)
   be eb holds gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
   return hit(ER, er_ssa(eb),
@@ -82,7 +82,7 @@ fun gen_let(e1: Term, body: Term, env: SsaEnv, n: number): EmitR {
             er_ctr(eb))
 }
 /* call: emit the argument, then "<ssa> = func.call @name(<arg>) : (f64) -> f64". */
-fun gen_call(name: String, arg: Term, env: SsaEnv, n: number): EmitR {
+fun gen_call(name: String, arg: Term, env: SsaEnv, n: Number): EmitR {
   be ea holds gen(arg, env, n)
   be m  holds er_ctr(ea)
   be rhs holds String.concat("func.call @",
@@ -93,7 +93,7 @@ fun gen_call(name: String, arg: Term, env: SsaEnv, n: number): EmitR {
             m + 1)
 }
 /* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64". */
-fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: number): EmitR {
+fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
   be ea holds gen(a, env, n)
   be eb holds gen(b, env, er_ctr(ea))
   be m  holds er_ctr(eb)
@@ -140,7 +140,7 @@ fun stubs(): String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 /* fptosi(result) -> i32 + return + close main. */
-fun main_tail(result_ssa: String, ctr: number): String {
+fun main_tail(result_ssa: String, ctr: Number): String {
   be rss holds ssa_name(ctr)
   return String.concat(
     String.concat("    ", String.concat(rss,
@@ -149,13 +149,13 @@ fun main_tail(result_ssa: String, ctr: number): String {
 }
 
 /* structural checksum of the emitted text (a stable oracle for the harness). */
-fun checksum(s: String): number { return csum_from(s, 0, String.length(s), 0) }
-fun csum_from(s: String, i: number, len: number, acc: number): number {
+fun checksum(s: String): Number { return csum_from(s, 0, String.length(s), 0) }
+fun csum_from(s: String, i: Number, len: Number, acc: Number): Number {
   return if i >= len then acc
     else csum_from(s, i + 1, len, acc + String.char_at(s, i))
 }
 
-fun main(): number {
+fun main(): Number {
   /* the Yon0 program:
    *   fun double(x): number { return x + x }
    *   fun main(): number { return double(21) }

@@ -1,5 +1,5 @@
-fun sink(): number {
+fun sink(): Number {
   produce { emit 1 }
   return 42
 }
-fun main(): number { return sink() }
+fun main(): Number { return sink() }
