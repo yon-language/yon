@@ -2651,15 +2651,23 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
        let ls = String.length sub and lf = String.length f in
        let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
        go 0) ->
-      (* an UNFUSED prelude place (Error): site-free by location, and its
-         decl does not ride into every program's MLIR — the corpus diff
-         stays empty. Its sections exist through the USER places that
-         declare `this <` into it (the mono is identity on the handle). *)
-      res
+      (* an UNFUSED prelude place (Error, DomainError): declared NORMALLY —
+         its constructor must exist for the programs that raise it — but
+         recorded as prelude so the emitter keeps it ON USE only (the corpus
+         diff stays empty for programs that never touch it). *)
+      Hashtbl.replace Surface_ast.prelude_place_names pd.S.pd_name ();
+      let core_pd = desugar_place_decl pd in
+      C.prelude_place_decls := core_pd :: !C.prelude_place_decls;
+      { res with ctx = Reduce.declare_place res.ctx core_pd }
   | S.TopPlace pd ->
       let core_pd = desugar_place_decl pd in
       { res with ctx = Reduce.declare_place res.ctx core_pd }
   | S.TopFun fn ->
+      (let f = fn.S.fn_loc.S.file and sub = "prelude/" in
+       let ls = String.length sub and lf = String.length f in
+       let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
+       if go 0 then
+         Hashtbl.replace Surface_ast.prelude_arrow_names fn.S.fn_name ());
       let res = if fn.S.fn_internal
                 then { res with internal_funs = fn.S.fn_name :: res.internal_funs }
                 else res in
@@ -3132,6 +3140,7 @@ let desugar_program ?(env : Tyenv.env option = None)
      terminal absorber (B.3) consults it to collapse a pure, terminal-returning
      function body to the unique inhabitant `()`. When None the absorber stays
      inert, so behavior is identical to before. *)
+  C.prelude_place_decls := [];  (* per-run identity registry (LSP re-runs) *)
   let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
   let p = Method_sugar.qualify_overloads p in  (* overloaded method decls -> Place__name (same as tycheck) *)

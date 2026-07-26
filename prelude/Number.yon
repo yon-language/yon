@@ -1,4 +1,259 @@
-/* Number — the declared face of the primitive code number. `is number`
- * declares the AXIOMATIC carrier: the leaf of the carrier functor
- * recursion, not a bypass of it. */
-place Number<64> is number { }
+/* Number — the declared face of the primitive code `number`.
+ *
+ * `is number` declares the AXIOMATIC carrier: the leaf of the carrier functor
+ * recursion, not a bypass of it.
+ *
+ * The library lives HERE, in Yon, not in the compiler. The arithmetic
+ * OPERATORS (+ - * / %) stay primitive — as `+` on int stays a JVM bytecode in
+ * Java while `Integer` carries the library. What this place declares is
+ * everything else: sign, comparison, rounding, roots, transcendentals,
+ * predicates, conversion.
+ *
+ * Every body below is Yon. Nothing is copied from any other implementation:
+ * the algorithms are the classical ones (Newton, Taylor, Euclid), the code is
+ * this file's own.
+ *
+ * MARKERS
+ *   [T] total     — written here, no dependency
+ *   [I] irreducible — touches the bit representation: MUST stay primitive
+ *   [E] partial   — needs the error cantiere (`on error`) to be honest
+ */
+place Number<64> is number {
+
+  /* ─── Sign and magnitude ─────────────────────────────────── [T] ─── */
+
+  fun abs(n: Number): Number {
+    return if n < 0 then 0 - n else n
+  }
+
+  fun negate(n: Number): Number {
+    return 0 - n
+  }
+
+  fun signum(n: Number): Number {
+    return if n > 0 then 1 else if n < 0 then 0 - 1 else 0
+  }
+
+  /* ─── Comparison ─────────────────────────────────────────── [T] ─── */
+
+  fun max(a: Number, b: Number): Number {
+    return if a > b then a else b
+  }
+
+  fun min(a: Number, b: Number): Number {
+    return if a < b then a else b
+  }
+
+  /* three-way: -1 if a < b, 0 if equal, 1 if a > b */
+  fun compare(a: Number, b: Number): Number {
+    return if a < b then 0 - 1 else if a > b then 1 else 0
+  }
+
+  fun clamp(n: Number, lo: Number, hi: Number): Number {
+    return if n < lo then lo else if n > hi then hi else n
+  }
+
+  /* ─── Predicates ─────────────────────────────────────────── [T] ─── */
+
+  fun is_zero(n: Number): Boolean     { return n == 0 }
+  fun is_positive(n: Number): Boolean { return n > 0 }
+  fun is_negative(n: Number): Boolean { return n < 0 }
+
+  /* ─── Rounding ───────────────────────────────────────────────────── */
+  /* [I] `truncate` is the irreducible one: it drops the fractional part,
+   *     which means touching the f64 representation. Everything else in this
+   *     group is derived from it. Until the intrinsic-declaration mechanism
+   *     exists (the sibling of `is <prim>` for BODIES), truncate BRIDGES
+   *     through the one existing intrinsic (Math.floor) — a bridge, not a
+   *     fake: the primitive surface of this group is still ONE function. */
+
+  fun truncate(n: Number): Number {
+    return if n < 0 then 0 - Math.floor(0 - n) else Math.floor(n)
+  }
+
+  fun floor(n: Number): Number {
+    be t holds truncate(n)
+    return if n < 0 and t != n then t - 1 else t
+  }
+
+  fun ceil(n: Number): Number {
+    be t holds truncate(n)
+    return if n > 0 and t != n then t + 1 else t
+  }
+
+  fun round(n: Number): Number {
+    return if n < 0 then 0 - floor(0 - n + 0.5) else floor(n + 0.5)
+  }
+
+  fun fract(n: Number): Number {
+    return n - truncate(n)
+  }
+
+  fun is_integer(n: Number): Boolean {
+    return truncate(n) == n
+  }
+
+  /* ─── Integer arithmetic (Euclid) ────────────────────────── [T] ─── */
+
+  fun gcd(a: Number, b: Number): Number {
+    be x holds abs(a)
+    be y holds abs(b)
+    return if y == 0 then x else gcd(y, x % y)
+  }
+
+  fun lcm(a: Number, b: Number): Number {
+    be g holds gcd(a, b)
+    return if g == 0 then 0 else abs(a * b) / g
+  }
+
+  /* integer exponent, by squaring */
+  fun ipow(base: Number, e: Number): Number {
+    return if e == 0 then 1
+           else if e < 0 then 1 / ipow(base, 0 - e)
+           else if e % 2 == 0 then ipow(base * base, e / 2)
+           else base * ipow(base * base, (e - 1) / 2)
+  }
+
+  /* ─── Square root (Newton–Raphson) ───────────────────────────────── */
+  /* [E] the negative domain needs the error cantiere: see the note at the
+   *     bottom of this file. For now the total core is exposed and the guard
+   *     is a TODO, not a lie. */
+
+  fun sqrt_step(x: Number, guess: Number, n: Number): Number {
+    return if n == 0 then guess
+           else sqrt_step(x, (guess + x / guess) / 2, n - 1)
+  }
+
+  fun sqrt(x: Number) on error DomainError: Number {
+    return if x < 0 then .-> DomainError { message "sqrt of a negative" }
+           else if x == 0 then 0
+           else sqrt_step(x, x, 24)
+  }
+
+  /* ─── Exponential and logarithm ──────────────────────────── [T] ─── */
+  /* exp by its Taylor series; ln by Newton on exp (ln x solves exp y = x,
+   * whose Newton step is y' = y - 1 + x / exp y). */
+
+  fun exp_step(x: Number, n: Number, acc: Number, term: Number): Number {
+    return if n > 24 then acc
+           else exp_step(x, n + 1, acc + term, term * x / (n + 1))
+  }
+
+  fun exp(x: Number): Number {
+    return exp_step(x, 0, 0, 1)
+  }
+
+  fun ln_step(x: Number, y: Number, n: Number): Number {
+    return if n == 0 then y
+           else ln_step(x, y - 1 + x / exp(y), n - 1)
+  }
+
+  fun ln(x: Number) on error DomainError: Number {
+    return if x <= 0 then .-> DomainError { message "ln of a non-positive" }
+           else if x == 1 then 0
+           else ln_step(x, 0, 24)
+  }
+
+  /* general power: b^e = exp(e * ln b), integer exponents go the exact way.
+     ln can fail, so pow PROPAGATES: the witness of the error arm is returned
+     as-is and the injection rule lifts it into pow's own coproduct. */
+  fun pow(base: Number, e: Number) on error DomainError: Number {
+    return if is_integer(e) then ipow(base, e)
+           else match ln(base) {
+             Number as l       => exp(e * l),
+             DomainError as d  => d
+           }
+  }
+
+  /* ─── Trigonometry (Taylor) ──────────────────────────────── [T] ─── */
+
+  fun sin_step(x: Number, n: Number, acc: Number, term: Number): Number {
+    return if n > 12 then acc
+           else sin_step(x, n + 1, acc + term,
+                         0 - term * x * x / ((2 * n + 2) * (2 * n + 3)))
+  }
+
+  fun sin(x: Number): Number {
+    return sin_step(x, 0, 0, x)
+  }
+
+  fun cos_step(x: Number, n: Number, acc: Number, term: Number): Number {
+    return if n > 12 then acc
+           else cos_step(x, n + 1, acc + term,
+                         0 - term * x * x / ((2 * n + 1) * (2 * n + 2)))
+  }
+
+  fun cos(x: Number): Number {
+    return cos_step(x, 0, 0, 1)
+  }
+
+  fun tan(x: Number) on error DomainError: Number {
+    be c holds cos(x)
+    return if c == 0 then .-> DomainError { message "tan at a pole of cos" }
+           else sin(x) / c
+  }
+
+  /* ─── Division, defended ─────────────────────────────────── [E] ─── */
+
+  fun divide(a: Number, b: Number) on error DomainError: Number {
+    return if b == 0 then .-> DomainError { message "division by zero" }
+           else a / b
+  }
+
+  /* ─── Constants ──────────────────────────────────────────── [T] ─── */
+
+  fun pi(): Number      { return 3.14159265358979 }
+  fun e(): Number       { return 2.71828182845905 }
+  fun epsilon(): Number { return 0.000000000000000222 }
+}
+
+/* Negate — a true additive homomorphism (negate(a+b) = negate(a)+negate(b))
+ * and an involution: apply it twice and you are home. Both are verifiable
+ * laws when the algebra cantiere lands. The clause gives the house. */
+morph Negate from Number to Number {
+  on object(n: Number): Number { return 0 - n }
+}
+
+morph Reciprocal from Number to Number {
+  on object(n: Number): Number { return 1 / n }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * WHAT IS NOT HERE, AND WHY — the honest list
+ *
+ * [I] IRREDUCIBLE (one function): `truncate`. Dropping the fractional part
+ *     means touching the f64 representation, so it cannot be written in Yon.
+ *     `floor`, `ceil`, `round`, `fract`, `is_integer` are all DERIVED from it
+ *     here — the primitive surface of this whole group is ONE function, not
+ *     five. Its body above BRIDGES through the existing Math.floor intrinsic
+ *     until the axiomatic-body mechanism (the sibling of `is <prim>`) exists.
+ *
+ * [E] PARTIAL — DRESSED: sqrt, ln, tan and divide now carry
+ *     `on error DomainError` (prelude/DomainError.yon, message by
+ *     composition); pow PROPAGATES ln's failure through its own coproduct
+ *     via match + witness. Still waiting on the cantiere: from_text/parse
+ *     (needs Text first).
+ *
+ * MISSING BECAUSE THEY NEED `Text` (the Integer-side half of Java's split):
+ *       to_text(n)      — format
+ *       from_text(t)    — parse                              [E]
+ *       to_text_radix(n, radix)
+ *     They belong here (they are observations OF a number) but their return
+ *     type lives in the sibling prelude place. Next stone.
+ *
+ * MISSING BECAUSE `number` IS f64, NOT AN INTEGER TYPE:
+ *     the whole bit-manipulation family of Java's `Integer` — bitCount,
+ *     highestOneBit, numberOfLeadingZeros, reverse, rotateLeft, shifts, and
+ *     the unsigned operations. They will make sense on a separate `Int` of
+ *     the prelude, or once `Number<32>` / `Number<64>` distinguish integers
+ *     from floats. Declaring them on an f64 face would be a lie.
+ *
+ * CONSTANTS NOT DECLARED: MAX_VALUE / MIN_VALUE. They need either exponent
+ *     notation in literals (1.797…e308 — unverified in the lexer) or a
+ *     hex/bit form. Left out rather than written wrong.
+ *
+ * ON THE ALGEBRAS: `+` and `*` stay operators. Their DECLARED face is the
+ *     algebra, not a method — `operation add(a, b) uses Additive` — and that
+ *     needs the `algebra` top-level construct, which is an open cantiere.
+ *     When it lands, this place gains its `operation`s and its `law`s.
+ * ═══════════════════════════════════════════════════════════════════ */

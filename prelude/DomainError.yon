@@ -1,0 +1,5 @@
+/* DomainError — the failure of a partial numeric observation (sqrt of a
+ * negative, ln of a non-positive, division by zero). Universal like the
+ * numbers themselves, hence prelude. `message` arrives BY COMPOSITION
+ * through the mono — nothing to redeclare. */
+place DomainError { this < Error }
