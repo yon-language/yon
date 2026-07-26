@@ -16,7 +16,7 @@ let check name cond =
   else (incr fail; Printf.printf "  [FAIL] %s\n" name)
 
 let mk_place ?(world = "__INFER") ?(arms = []) name : place_decl =
-  { pd_name = name; pd_type_params = []; pd_arms = arms; pd_world = world;
+  { pd_name = name; pd_type_params = []; pd_fusion = None; pd_width = None; pd_arms = arms; pd_world = world;
     pd_members = []; pd_over = None; pd_laws = [];
     pd_subcontains = None; pd_is_error = false; pd_on_error = None;
     pd_loc = dummy_loc }

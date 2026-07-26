@@ -19,7 +19,7 @@ place Entry { }
 //  [7-12] mode 3 pair_subtype from anchor 3: v=3,5,17,2049,96,2560  (vary => clade)
 //  [13-14] xor-function check: (3,5) and (1,7), both v^w=6  (must be equal)
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   // mode 0 — the suspected popcount collapse
   be o0 holds Leech.m24_orbit(Leech.embed(3, 0))
   be o1 holds Leech.m24_orbit(Leech.embed(5, 0))

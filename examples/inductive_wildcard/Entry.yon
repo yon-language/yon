@@ -1,4 +1,4 @@
-place Color { this > Red :U Green :U Blue(number) :U Gray(number) }
+place Color { this > Red :U Green :U Blue(Number) :U Gray(Number) }
 
 place Entry {
 // COSA: il ramo wildcard `_ =>` nell'eliminazione di un induttivo, mostrato
@@ -14,19 +14,19 @@ place Entry {
 
 
 // forma ESAUSTIVA: ogni costruttore elencato (il path senza wildcard)
-fun weight_exhaustive(c: Color): number {
+fun weight_exhaustive(c: Color): Number {
   return match c { Red => 0, Green => 0, Blue { _1 as n } => n, Gray { } => 0 }
 }
 
 // forma WILDCARD: la stessa intenzione, detta una volta
-fun weight_wild(c: Color): number {
+fun weight_wild(c: Color): Number {
   return match c { Blue { _1 as n } => n, _ => 0 }
 }
 
 // match-zucchero col wildcard
-fun is_blue(c: Color): number { return match c { Blue { } => 1, _ => 0 } }
+fun is_blue(c: Color): Number { return match c { Blue { } => 1, _ => 0 } }
 
-fun main(): number {
+fun main(): Number {
   // le due forme coincidono su ogni costruttore -> ciascuna differenza e' 0
   be d1 holds weight_exhaustive(.-> Blue { _1 7 })  - weight_wild(.-> Blue { _1 7 })
   be d2 holds weight_exhaustive(Red)      - weight_wild(Red)

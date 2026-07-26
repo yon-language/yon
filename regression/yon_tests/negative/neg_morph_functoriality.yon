@@ -9,10 +9,10 @@
 // and the functor's object action maps State ↦ EUState (`on object`). By
 // functoriality F(deposit) must be EUState → EUState. The `via` target
 // `wrong_sig` is number → number — INCOMPATIBLE → must be REJECTED (exit 3).
-place State { balance number }
-place EUState { balance number }
+place State { balance Number }
+place EUState { balance Number }
 
-fun wrong_sig(x: number): number { return x }
+fun wrong_sig(x: Number): Number { return x }
 
 topos Account where {
   
@@ -29,4 +29,4 @@ morph LiftEU from Account to AccountEU {
   on morphism deposit via wrong_sig
 }
 
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

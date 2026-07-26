@@ -3,11 +3,11 @@
 // mutuamente ricorsive (lex_from guarda il char, emit_at dispaccia e ricorre);
 // dispatch su String.char_at (un number) via catena if/else if, non hit_elim.
 // Oracolo: checksum strutturale di "2+3*4" = 309.
-place Token { this > TNum(number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 
 // decide il token per il carattere c in posizione i, poi prosegue da i+1
-fun emit_at(s: String, i: number, len: number, c: number): TokList {
+fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
     else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
     else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
@@ -18,7 +18,7 @@ fun emit_at(s: String, i: number, len: number, c: number): TokList {
 }
 
 // scandisce da i: a fine stringa chiude con TEnd, altrimenti legge e dispaccia
-fun lex_from(s: String, i: number, len: number): TokList {
+fun lex_from(s: String, i: Number, len: Number): TokList {
   return if i >= len
     then hit(TkCons, hit(TEnd), hit(TkNil))
     else emit_at(s, i, len, String.char_at(s, i))
@@ -29,8 +29,8 @@ fun lex(s: String): TokList {
 }
 
 // ── oracolo: ogni token pesa un valore distinto ─────────────────────────────
-fun motN(t: Token): number { return 0 }
-fun tok_weight(t: Token): number {
+fun motN(t: Token): Number { return 0 }
+fun tok_weight(t: Token): Number {
   return hit_elim(motN,
     [ TNum(n)  => n,
       TPlus    => 100,
@@ -40,8 +40,8 @@ fun tok_weight(t: Token): number {
       TEnd     => 0 ], t)
 }
 
-fun motL(l: TokList): number { return 0 }
-fun checksum(l: TokList): number {
+fun motL(l: TokList): Number { return 0 }
+fun checksum(l: TokList): Number {
   return hit_elim(motL,
     [ TkNil        => 0,
       TkCons(h, t) => tok_weight(h) + checksum(t) ], l)
@@ -56,6 +56,6 @@ fun src(): String {
 }
 
 // atteso: TNum2, TPlus, TNum3, TStar, TNum4, TEnd = 2+100+3+200+4+0 = 309
-fun main(): number {
+fun main(): Number {
   return checksum(lex(src())) - 309
 }

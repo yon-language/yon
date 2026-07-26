@@ -1,5 +1,5 @@
 // coverage: a parameter of `heyting<N>` TYPE (TyHeytInt), distinct from the
 // value ctor heyting(v). Grammar: HEYT_INT_KW LT NUM_LIT GT (parser.mly).
 // Well-formed iff 1 <= N <= 64 (tycheck.ml check_type_well_formed).
-fun bits(h: heyting<8>): number { return 0 }
-fun main(): number { return 0 }
+fun bits(h: heyting<8>): Number { return 0 }
+fun main(): Number { return 0 }

@@ -1,4 +1,4 @@
-fun main(): number {
+fun main(): Number {
   be acc holds 0
   iter 42 do { acc = acc + 1 }
   return acc

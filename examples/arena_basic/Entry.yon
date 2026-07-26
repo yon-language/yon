@@ -10,7 +10,7 @@ place Entry {
  *
  * Each of the six checks contributes 1; the program returns 6 when all hold. */
 
-fun main(): number {
+fun main(): Number {
   be a0 holds Arena.empty()
   be a1 holds Arena.put(a0, 1536, 42)
   be v holds Arena.get(a1, 1536)

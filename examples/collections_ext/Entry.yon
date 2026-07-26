@@ -1,7 +1,7 @@
 place Entry {
 /* Set.union / Set.intersect. A={1,2,3}, B={2,3,4}.
  * union size=4, intersect size=2 -> 4*10+2 = 42. */
-fun main(): number {
+fun main(): Number {
   be a0 holds HashSet.empty()
   be a1 holds HashSet.add(a0, 1)
   be a2 holds HashSet.add(a1, 2)

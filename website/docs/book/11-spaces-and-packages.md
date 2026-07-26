@@ -42,14 +42,14 @@ spaces  = ["sala", "cucina"]
 ```yon
 // sala/Order.yon
 place Order {
-  total number
+  total Number
 }
 ```
 
 ```yon
 // cucina/Ticket.yon
 place Ticket {
-  total number
+  total Number
 }
 ```
 
@@ -58,7 +58,7 @@ crossing is a `move`, a file in the `sala` Space:
 
 ```yon
 // sala/ToKitchen.yon
-fun withTax(x: number): number { return x * 110 / 100 }
+fun withTax(x: Number): Number { return x * 110 / 100 }
 move ToKitchen from Order to Ticket {
   total maps to total by withTax
 }
@@ -69,7 +69,7 @@ The entry place applies it:
 ```yon
 // Entry.yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be table4 holds .-> Order { total 40 }
   be fired holds apply_move(ToKitchen, table4)
   return fired.total          // 44: read on the transported instance
@@ -110,15 +110,15 @@ the dining room calls it across the boundary:
 
 ```yon
 // kitchen.yon, compiled to ./Kitchen_srv
-fun plate_price(dish: number): number { return dish * 3 }
-internal fun recipe_secret(dish: number): number { return dish + 1000 }
-fun main(): number { return 0 }
+fun plate_price(dish: Number): Number { return dish * 3 }
+internal fun recipe_secret(dish: Number): Number { return dish + 1000 }
+fun main(): Number { return 0 }
 ```
 
 ```yon
 // pass.yon, the entry binary
 import kitchen::plate_price from Kitchen
-fun main(): number {
+fun main(): Number {
   be three_plates holds plate_price(13)
   be _p holds IO.print_num(three_plates)
   return three_plates - 1        // prints 39, across two processes
@@ -163,7 +163,7 @@ verifier error:
 ```yon
 // Entry.yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be base holds 40
   scope Hermetic {
     be sealed holds base + 2    // `base` enters as an explicit capture

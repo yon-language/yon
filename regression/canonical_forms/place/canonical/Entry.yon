@@ -1,2 +1,2 @@
 place Entry { }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

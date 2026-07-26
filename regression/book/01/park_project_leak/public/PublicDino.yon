@@ -1,10 +1,10 @@
 // LEAK variant — public record tries to carry individual identity on the
 // cohort-quotient. Expected: REJECTED (place-level sheaf gate), same as the
 // inline park_leak_reject.yon which is already gated green.
-fun bucket_of(c: number): number { return c }
+fun bucket_of(c: Number): Number { return c }
 place PublicDino {
-  cohort number
-  individual_id number
+  cohort Number
+  individual_id Number
 }
 view LegalLens of PublicDino {
   show bucket = bucket_of(cohort)

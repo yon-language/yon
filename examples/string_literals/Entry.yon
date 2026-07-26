@@ -7,7 +7,7 @@ fun greet(who: String): String {
   return String.concat("ciao ", who)
 }
 
-fun main(): number {
+fun main(): Number {
   be lit holds "yon"
   be ok_len holds if String.length(lit) == 3 then 1 else 0
 

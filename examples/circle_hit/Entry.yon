@@ -1,11 +1,11 @@
 place Entry {
 // S1 from source: build the base point and eliminate it with a recursor.
 // hit_elim(motive, [base => 42, loop => plam i => 42], hit(base)) computes to 42.
-fun motive(x: S1): number { return 0 }
-fun circle_elim(): number {
+fun motive(x: S1): Number { return 0 }
+fun circle_elim(): Number {
   return hit_elim(motive, [base => 42, loop => plam i => 42], hit(base))
 }
-fun main(): number {
+fun main(): Number {
   return circle_elim()
 }
 }

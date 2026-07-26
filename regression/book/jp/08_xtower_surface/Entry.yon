@@ -17,7 +17,7 @@ place Entry { }
 // Stdout (one int per line): width0,width1,width2,width3, depth, class0, class2,
 // same_branch(same), same_branch(diff). Exit code: number of failed checks (0 = all pass).
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be w0 holds XTower.width(0)
   be w1 holds XTower.width(1)
   be w2 holds XTower.width(2)

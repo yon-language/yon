@@ -3,7 +3,7 @@ place Entry {
  * = / duration literals — lowered onto while, iter and Space cells.
  * (`forever` is exercised by a separate non-terminating probe.)
  * Expected exit: 42. */
-fun main(): number {
+fun main(): Number {
   be acc holds 0
   be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
 

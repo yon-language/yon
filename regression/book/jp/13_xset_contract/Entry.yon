@@ -7,7 +7,7 @@ place Entry { }
 //
 // Stdout (the 6 observed values, for inspection); exit code = failures.
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be s holds XSet.empty()
   s = XSet.add(s, Leech.embed(7, 0))
   s = XSet.add(s, Leech.embed(7, 0))

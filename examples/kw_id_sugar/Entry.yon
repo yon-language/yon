@@ -3,7 +3,7 @@ place Entry {
 // carrier A inferred from the endpoints; bare `clear` is reflexivity of that endpoint;
 // `induct(d, p)` is path induction `ind_path(0, d, p)` (operational motive).
 // The raw `Id` / `refl` / `ind_path` remain available in the KERNEL stratum.
-fun beta_fst(a: number, b: number): Same(fst(pair(a, b)), a) { return clear }
-fun diag(x: number): number { return x + 35 }
-fun main(): number { return induct(diag, clear 7) }   // -> 42
+fun beta_fst(a: Number, b: Number): Same(fst(pair(a, b)), a) { return clear }
+fun diag(x: Number): Number { return x + 35 }
+fun main(): Number { return induct(diag, clear 7) }   // -> 42
 }

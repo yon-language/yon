@@ -45,9 +45,9 @@ def _run(src: str, tmp_path, core_wf=False):
 def test_a1_dependent_types_certified(tmp_path):
     """El(Fam x) is certified by the kernel checker, not skipped."""
     src = """
-fun Fam(x: number): Type_0 { return number }
-fun takes(p: Sigma(x: number). El(Fam(x))): number { return 0 }
-fun main(): number { return 0 }
+fun Fam(x: Number): Type_0 { return Number }
+fun takes(p: Sigma(x: Number). El(Fam(x))): Number { return 0 }
+fun main(): Number { return 0 }
 """
     r = _run(src, tmp_path, core_wf=True)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-800:]
@@ -63,9 +63,9 @@ def test_rejects_el_of_non_code(tmp_path):
     """El(g(y)) where g : number -> number is El of a non-code: the surface accepts
     it, the kernel re-check rejects it."""
     src = """
-fun g(x: number): number { return x }
-fun f(y: number, p: El(g(y))): number { return 0 }
-fun main(): number { return 0 }
+fun g(x: Number): Number { return x }
+fun f(y: Number, p: El(g(y))): Number { return 0 }
+fun main(): Number { return 0 }
 """
     r = _run(src, tmp_path)
     assert r.returncode != 0, "gate accepted El of a non-code"
@@ -79,8 +79,8 @@ fun main(): number { return 0 }
 def test_ordinary_program_not_false_rejected(tmp_path):
     """A plain runtime program compiles: out-of-fragment types are skipped."""
     src = """
-fun add(a: number, b: number): number { return a }
-fun main(): number { return add(2, 3) }
+fun add(a: Number, b: Number): Number { return a }
+fun main(): Number { return add(2, 3) }
 """
     r = _run(src, tmp_path, core_wf=True)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-800:]

@@ -4,7 +4,7 @@ place Entry {
 // heyting(v) has no unknown trits; heyting(v, mask) marks the masked
 // ones; `&?` is trit-wise with mask propagation. The Omega connectives
 // (`&&?`, `=>?`) follow the intuitionistic rules, and to_bool decides.
-fun main(): number {
+fun main(): Number {
   be u holds unknown
   be p holds present
   be both holds p &&? u            // unknown: conjunction with the undecided

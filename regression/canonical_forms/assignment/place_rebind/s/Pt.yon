@@ -1,1 +1,1 @@
-place Pt { x number  y number }
+place Pt { x Number  y Number }

@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be base holds 7
   be m holds move(s: P) => .-> Q { v base } from P to Q
   be sp holds .-> P { v 0 }

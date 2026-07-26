@@ -8,7 +8,7 @@ sidebar_position: 3
 
 <!-- yon-gate: exit 62 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be answer holds 42
   be greeting holds "ciao"
   be who holds String.concat(greeting, " mondo")     // strings are values

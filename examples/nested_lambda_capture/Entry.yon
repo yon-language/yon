@@ -12,11 +12,11 @@ place Entry {
  *   total    = fold(0, (a,v) => a + inner(v)) over [1,2]
  *            = inner(1) + inner(2) = 25 + 27 = 52
  * Expected exit: 52. */
-fun main(): number {
+fun main(): Number {
   be base holds 10
   be xs holds List.cons(1, List.cons(2, List.empty(0)))
   be ys holds List.cons(1, List.cons(2, List.empty(0)))
-  be total holds xs.fold(0, fun(a: number, v: number) => a + ys.fold(0, fun(b: number, w: number) => b + w + v + base))
+  be total holds xs.fold(0, fun(a: Number, v: Number) => a + ys.fold(0, fun(b: Number, w: Number) => b + w + v + base))
   return total
 }
 }

@@ -1386,6 +1386,10 @@ let rec infer_mlir_ty (e : emitter)
        | t' -> infer_mlir_ty e env funcs t')
   | C.HITConstr _ ->
       raise (Cubical_stuck "a bare HIT constructor has no runtime type (it is a homotopy value); use it through hit_elim.")
+  | C.Unit ->
+      (* the terminal's value: lowered as the f64 0.0 placeholder (see
+         emit_term C.Unit), so that is its inferred carrier too. *)
+      "f64"
   | _ ->
       failwith "[emit_mlir infer] term form cannot be analyzed for type inference."
 

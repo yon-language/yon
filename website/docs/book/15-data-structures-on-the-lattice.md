@@ -60,7 +60,7 @@ is addressed by the content of its children:
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be l1 holds MerkleTree.leaf(7)
   be l2 holds MerkleTree.leaf(9)
   be t holds MerkleTree.child(l1, l2)
@@ -82,7 +82,7 @@ The module ships a fault injector so you can watch it work:
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be vl holds VoyagerList.empty()
   be vl2 holds VoyagerList.append(vl, 42)
   be damaged holds VoyagerList.corrupt_at(vl2, 0, 3)  // flip 3 bits in storage

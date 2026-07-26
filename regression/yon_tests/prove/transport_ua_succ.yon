@@ -1,7 +1,7 @@
-fun succ(n: number): number { return n + 1 }
-fun pred(n: number): number { return n - 1 }
+fun succ(n: Number): Number { return n + 1 }
+fun pred(n: Number): Number { return n - 1 }
 
-fun main(): number {
+fun main(): Number {
   be y holds transport(
     ua(equiv(succ, pred, fun(a) => refl(a), fun(b) => refl(b))),
     10)

@@ -5,6 +5,6 @@
 // fields/ops, no endpoint resolution), so a 1-cell whose dom/cod name undeclared
 // members is not rejected. A sound check would reject this -> exit != 0.
 place Circle {
-  base number
+  base Number
   cell loop from ghost to ghost
 }

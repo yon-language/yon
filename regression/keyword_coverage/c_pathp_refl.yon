@@ -14,5 +14,5 @@
 // modeled on the TyId arm + TyPi rename), identical PathP compare equal -> the
 // program type-checks -> exit 0. The companion negative neg_pathp_endpoint.yon
 // pins the other direction (different end endpoint -> rejected).
-fun reflPath(q: PathP(i, number, a, b)): PathP(i, number, a, b) { return q }
-fun main(): number { return 0 }
+fun reflPath(q: PathP(i, Number, a, b)): PathP(i, Number, a, b) { return q }
+fun main(): Number { return 0 }

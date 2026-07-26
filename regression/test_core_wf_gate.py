@@ -96,7 +96,7 @@ def test_gate_reports_body_check_counts():
 ILL_TYPED_SRC = """\
 fun bad(A: Type, B: Type, x: El(A)): El(B) { return x }
 
-fun main(): number { return 0 }
+fun main(): Number { return 0 }
 """
 
 

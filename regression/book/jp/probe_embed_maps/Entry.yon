@@ -23,7 +23,7 @@ place Entry { }
 //   e0 e1 e2 e3 e4            -- the 5 embedded xcoords
 //   of2(e0,e1) of2(e0,e2) of2(e0,e3) of2(e0,e4)   -- classes at Hamming 1/3/6/12
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   // mode 0 — duplicate
   be a0 holds Leech.embed(0, 0)
   be a1 holds Leech.embed(1, 0)

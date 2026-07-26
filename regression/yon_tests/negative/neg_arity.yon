@@ -1,4 +1,4 @@
 // Wrong number of arguments at a call site. f takes one parameter; calling it
 // with two trips check_call_signature ("expected 1 arguments, got 2") -> exit 3.
-fun f(a: number): number { return a }
-fun main(): number { return f(1, 2) }
+fun f(a: Number): Number { return a }
+fun main(): Number { return f(1, 2) }

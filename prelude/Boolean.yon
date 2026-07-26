@@ -1,0 +1,3 @@
+/* Boolean — the living coproduct: tt/ff kernel arms; the literals
+ * true/false resolve to them in construction and in match patterns. */
+place Boolean is boolean { this > tt :U ff }

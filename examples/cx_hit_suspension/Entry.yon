@@ -5,7 +5,7 @@ place Entry {
 // PERCHE': `match x { ctor => .. }` e' l'eliminatore universale (la parte per il
 // tutto: ogni costruttore un caso); i tipi induttivi SUPERIORI portano i cammini
 // fra i punti dentro il dato, e il ramo `merid` lo riflette con un `plam`.
-fun main(): number {
+fun main(): Number {
   return match hit(north) {
     north => 5,
     south => 5,

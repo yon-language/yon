@@ -1,8 +1,8 @@
 place Entry { }
 reduction Accumulate of Counter fold "sum_f64" {
   be seed holds 0
-  on tick(n: number) {
+  on tick(n: Number) {
     return n
   }
 }
-fun main(): number { return 7 }
+fun main(): Number { return 7 }

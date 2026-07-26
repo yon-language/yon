@@ -130,9 +130,17 @@ let place_is_terminal (pd : place_decl) : bool =
 
 (* Is the named place the terminal object of its world? *)
 let name_is_terminal (env : env) (name : string) : bool =
-  match lookup_place env name with
-  | Some pd -> place_is_terminal pd
-  | None -> false
+  (* Terminal-ness is STRUCTURAL: one point. A fused place (prelude,
+     `is <prim>`) is fieldless because its content is the axiomatic carrier
+     — NOT because it has one point — so fusion alone never makes a
+     terminal. The one exception is honest: Unit fuses with the prim `unit`
+     AND has exactly one nullary arm (star): one point, the terminal 1. *)
+  match Hashtbl.find_opt Surface_ast.fusion_places name with
+  | Some prim -> prim = "unit"
+  | None ->
+      match lookup_place env name with
+      | Some pd -> place_is_terminal pd
+      | None -> false
 
 (* ─── Place subtyping (row polymorphism) ─────────────────────────── *)
 
@@ -256,6 +264,7 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
 let is_terminal_ty (env : env) (t : ty) : bool =
   match t with
   | TyUser name -> name_is_terminal env name
+  | TyPrim "unit" -> true   (* the prim code of the terminal (prelude Unit) *)
   | _ -> false
 
 let lookup_op (env : env) (qualified : string) : op_sig option =
@@ -496,7 +505,7 @@ let with_builtins (env : env) : env =
   } in
   let output_place = {
     pd_name = "Output";
-    pd_type_params = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None;
     pd_arms = [];
     pd_world = "__Builtin";
     pd_members = [FoOp output_op_decl];

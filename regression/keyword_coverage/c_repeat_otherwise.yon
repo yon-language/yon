@@ -1,5 +1,5 @@
 // coverage: `repeat at most N times { } otherwise { }` with the otherwise tail
-fun main(): number {
+fun main(): Number {
   be acc holds 0
   repeat at most 3 times { acc = acc + 2 }
   otherwise { acc = acc + 1 }

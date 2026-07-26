@@ -9,7 +9,7 @@ place Entry { }
 //
 // Stdout (the 14 observed values); exit code = failures.
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be w0 holds XTower.width(0)
   be w1 holds XTower.width(1)
   be w2 holds XTower.width(2)

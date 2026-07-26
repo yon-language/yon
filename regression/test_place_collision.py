@@ -37,10 +37,10 @@ def _project(root: Path, second_place: str):
         '[world.Beta]\nobjects = ["Y"]\nspaces  = ["sb"]\n\n'
         '[runtime]\nbackend = "memory"\n'
     )
-    (root / "Entry.yon").write_text("place Entry { }\nfun main(): number { return 0 }\n")
-    (root / "sa" / "Dup.yon").write_text("place Dup { x number }\n")
+    (root / "Entry.yon").write_text("place Entry { }\nfun main(): Number { return 0 }\n")
+    (root / "sa" / "Dup.yon").write_text("place Dup { x Number }\n")
     (root / "sa" / "Topos.yon").write_text("topos AlphaT where {\n}\n")
-    (root / "sb" / f"{second_place}.yon").write_text(f"place {second_place} {{ y number }}\n")
+    (root / "sb" / f"{second_place}.yon").write_text(f"place {second_place} {{ y Number }}\n")
     (root / "sb" / "Topos.yon").write_text("topos BetaT where {\n}\n")
 
 

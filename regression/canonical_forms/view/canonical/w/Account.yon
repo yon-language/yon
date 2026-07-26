@@ -1,2 +1,2 @@
-place Account { balance number
-  fee number }
+place Account { balance Number
+  fee Number }

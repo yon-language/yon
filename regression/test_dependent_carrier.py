@@ -29,6 +29,9 @@ FRONTEND = Path(
 # number/money/text share the f64 scalar; boolean/unit share i1. The set spans both
 # scalar carriers, so an "always-number" bug would be caught by boolean/unit.
 PRIMS = ["number", "money", "text", "boolean", "unit"]
+# type-POSITION spelling: the prelude faces are capitalized; money has no face yet
+FACE = {"number": "Number", "money": "money", "text": "Text",
+        "boolean": "Boolean", "unit": "Unit"}
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -57,10 +60,10 @@ def _sig(mlir: str, fn: str):
 def test_constant_family_carrier(prim, tmp_path):
     """El(Fam k) with a constant family Fam(x) = P lowers to P's carrier."""
     src = f"""
-fun Fam(x: number): Type_0 {{ return {prim} }}
-fun viaEl(p: El(Fam(7))): number {{ return 0 }}
-fun direct(p: {prim}): number {{ return 0 }}
-fun main(): number {{ return 0 }}
+fun Fam(x: Number): Type_0 {{ return {prim} }}
+fun viaEl(p: El(Fam(7))): Number {{ return 0 }}
+fun direct(p: {FACE[prim]}): Number {{ return 0 }}
+fun main(): Number {{ return 0 }}
 """
     mlir = _emit(src, tmp_path)
     se, sd = _sig(mlir, "viaEl"), _sig(mlir, "direct")
@@ -72,9 +75,9 @@ def test_identity_type_family(prim, tmp_path):
     """El(Id P) = P: the identity functor on the universe computes away."""
     src = f"""
 fun Id_ty(t: Type_0): Type_0 {{ return t }}
-fun viaEl(p: El(Id_ty({prim}))): number {{ return 0 }}
-fun direct(p: {prim}): number {{ return 0 }}
-fun main(): number {{ return 0 }}
+fun viaEl(p: El(Id_ty({prim}))): Number {{ return 0 }}
+fun direct(p: {FACE[prim]}): Number {{ return 0 }}
+fun main(): Number {{ return 0 }}
 """
     mlir = _emit(src, tmp_path)
     se, sd = _sig(mlir, "viaEl"), _sig(mlir, "direct")
@@ -85,10 +88,10 @@ def test_sigma_computed_codomain(tmp_path):
     """The A1 headline: Sigma with a computed-codomain second component compiles and
     matches the concrete Sigma it computes to."""
     src = """
-fun Fam(x: number): Type_0 { return number }
-fun viaEl(p: Sigma(x: number). El(Fam(x))): number { return 0 }
-fun direct(p: Sigma(x: number). number): number { return 0 }
-fun main(): number { return 0 }
+fun Fam(x: Number): Type_0 { return Number }
+fun viaEl(p: Sigma(x: Number). El(Fam(x))): Number { return 0 }
+fun direct(p: Sigma(x: Number). Number): Number { return 0 }
+fun main(): Number { return 0 }
 """
     mlir = _emit(src, tmp_path)
     se, sd = _sig(mlir, "viaEl"), _sig(mlir, "direct")
@@ -99,9 +102,9 @@ def test_type_family_not_emitted(tmp_path):
     """A type-family function (universe codomain) is a compile-time citizen: it is
     consumed by the El conversion and must NOT reach codegen as a runtime function."""
     src = """
-fun Fam(x: number): Type_0 { return number }
-fun takes(p: El(Fam(3))): number { return 0 }
-fun main(): number { return 0 }
+fun Fam(x: Number): Type_0 { return Number }
+fun takes(p: El(Fam(3))): Number { return 0 }
+fun main(): Number { return 0 }
 """
     mlir = _emit(src, tmp_path)
     assert "func.func @Fam" not in mlir, "type-family Fam leaked into runtime codegen"

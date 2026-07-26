@@ -7,21 +7,21 @@
 world Park { Dino is Species }
 
 place Dinosaur in Park {
-  individual_id number
-  cohort number
-  heart_rate number
+  individual_id Number
+  cohort Number
+  heart_rate Number
 }
 
 world PublicPark = Park / cohort
 
 place PublicDino in PublicPark {
-  cohort number
+  cohort Number
 }
 
-fun bucket_of(c: number): number { return c }
+fun bucket_of(c: Number): Number { return c }
 
 view LegalLens of PublicDino {
   show bucket = bucket_of(cohort)
 }
 
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

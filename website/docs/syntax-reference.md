@@ -185,7 +185,7 @@ fun greet(who: String): String {
   return String.concat("ciao ", who)
 }
 
-fun main(): number {
+fun main(): Number {
   be msg holds greet("mondo")
   be _w holds File.write_text("/tmp/out.txt", msg)
   return String.length(msg)        // 10
@@ -301,7 +301,7 @@ outer binding the body uses enters as an **explicit capture**; an implicit
 reference is a *compiler error*, verified on the real IR.
 
 ```yon
-fun main(): number {
+fun main(): Number {
   be base holds 40
   scope Hermetic {
     be sealed holds base + 2    // `base` enters as an explicit capture
@@ -313,11 +313,11 @@ fun main(): number {
 ## Functions
 
 ```yon
-fun f(x: number, y: number): number { return x + y }
+fun f(x: Number, y: Number): Number { return x + y }
 fun g<A, B>(x: A): B { ... }                      // type parameters
-fun h(x: number): number visits Output { ... }    // declared effect
-internal fun secret(x: number): number { ... }    // not exported cross-Space
-partial fun p(x: number): number { ... }          // partial (may not return)
+fun h(x: Number): Number visits Output { ... }    // declared effect
+internal fun secret(x: Number): Number { ... }    // not exported cross-Space
+partial fun p(x: Number): Number { ... }          // partial (may not return)
 ```
 
 All four modifiers are ✓ verified. **Effect discipline (`visits`)**: calling a

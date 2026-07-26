@@ -13,14 +13,14 @@ place Entry { }
 //   diff_guard   = equal(t1,t3)=0            (t3 has one differing leaf)
 //   label_t1     = MerkleTree.label(t1)      (content-address of the whole tree)
 //   net_equal_ns = min ns for 1e6 equal() calls, baseline-subtracted (/1e6 = ns/equal)
-fun timed_base(iters: number): number visits Output {
+fun timed_base(iters: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter iters do { be _ holds Space.set(acc, Space.get(acc) + 1) }
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_eq(a: MerkleTree, b: MerkleTree, iters: number): number visits Output {
+fun timed_eq(a: MerkleTree, b: MerkleTree, iters: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter iters do { be e holds (if MerkleTree.equal(a, b) then 1 else 0)
@@ -28,20 +28,20 @@ fun timed_eq(a: MerkleTree, b: MerkleTree, iters: number): number visits Output 
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun min_base(reps: number, iters: number): number visits Output {
+fun min_base(reps: Number, iters: Number): Number visits Output {
   be m holds Space.make(timed_base(iters))
   iter reps do { be t holds timed_base(iters)
                  be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
   return Space.get(m)
 }
-fun min_eq(a: MerkleTree, b: MerkleTree, reps: number, iters: number): number visits Output {
+fun min_eq(a: MerkleTree, b: MerkleTree, reps: Number, iters: Number): Number visits Output {
   be m holds Space.make(timed_eq(a, b, iters))
   iter reps do { be t holds timed_eq(a, b, iters)
                  be _ holds Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
   return Space.get(m)
 }
 // A deep-ish tree built from the same leaf labels both times => content-equal.
-fun build_tree(x: number): MerkleTree {
+fun build_tree(x: Number): MerkleTree {
   be l1 holds MerkleTree.leaf(1445)
   be l2 holds MerkleTree.leaf(1280)
   be l3 holds MerkleTree.leaf(9999)
@@ -50,7 +50,7 @@ fun build_tree(x: number): MerkleTree {
   be b holds MerkleTree.node2(0, l3, l4)
   return MerkleTree.node2(7, a, b)
 }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be t1 holds build_tree(555)
   be t2 holds build_tree(555)         // same parts => content-equal to t1
   be t3 holds build_tree(556)         // one leaf differs => not equal

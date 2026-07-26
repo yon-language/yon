@@ -49,8 +49,8 @@ default. An order has a table and a running total, `sala/Order.yon`:
 <!-- yon-gate: illustrative -->
 ```yon
 place Order {
-  table number
-  total number
+  table Number
+  total Number
 }
 ```
 
@@ -61,7 +61,7 @@ surface. `Entry.yon`:
 <!-- yon-gate: illustrative -->
 ```yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be o holds .-> Order { table 5 total 40 }
   be _p holds IO.print_num(o.table)
   return o.total + 2                     // 42
@@ -83,10 +83,10 @@ items, and a kitchen ticket can be retagged:
 <!-- yon-gate: illustrative -->
 ```yon
 place Order {
-  table number
-  total number
-  operation add_item(price: number): number
-  functorial operation retag(x: number): number
+  table Number
+  total Number
+  operation add_item(price: Number): Number
+  functorial operation retag(x: Number): Number
 }
 ```
 
@@ -106,8 +106,8 @@ still an order, restricted:
 ```yon
 place VipOrder {
   this < Order
-  table number
-  total number
+  table Number
+  total Number
 }
 ```
 
@@ -136,8 +136,8 @@ compiler checks it. `sala/Tally.yon`:
 <!-- yon-gate: illustrative -->
 ```yon
 place Tally {
-  total number
-  operation add(a: number, b: number): number uses algebra Additive
+  total Number
+  operation add(a: Number, b: Number): Number uses algebra Additive
   law commutative
   law associative
 }
@@ -154,7 +154,7 @@ verification descends from `uses` by itself):
 <!-- yon-gate: illustrative -->
 ```yon
 place Tally {
-  operation add(a: number, b: number): number uses algebra Additive
+  operation add(a: Number, b: Number): Number uses algebra Additive
   law commutative
   law associative      // a false claim here is a COMPILE error
 }

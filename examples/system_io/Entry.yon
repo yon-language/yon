@@ -3,11 +3,11 @@ place Entry {
  * Strings are built with the verified from_char/concat machinery.
  * Expected exit: 1+2+4+8+16+32 = 63. */
 
-fun chr2(a: number, b: number): String {
+fun chr2(a: Number, b: Number): String {
   return String.concat(String.from_char(a), String.from_char(b))
 }
 
-fun main(): number {
+fun main(): Number {
   /* path = "/tmp/yio"  ( / t m p / y i o ) */
   be p1 holds chr2(47, 116)
   be p2 holds chr2(109, 112)

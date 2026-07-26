@@ -4,7 +4,7 @@ place Entry { }
 // oldest-first. Stdout: [1] length=3, [2] head=1445 (newest hatchling),
 // [3] head(tail)=1280 (its parent), [4] head(reverse)=1207 (the founder),
 // [5] length(tail)=2 (the ancestry behind the newest).
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be l holds List.empty(0)
   l = List.cons(1207, l)
   l = List.cons(1280, l)

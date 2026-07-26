@@ -1,6 +1,6 @@
 place Note {
-  id number
-  body text
+  id Number
+  body Text
 
   fun bulletins(): Stream<Note> {
     be s holds produce {

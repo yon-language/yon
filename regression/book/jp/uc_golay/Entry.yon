@@ -3,7 +3,7 @@ place Entry { }
 // -> open recovers. The list auto-seals on append, auto-opens on get with correction.
 // Stdout: [1] gene=1445, [2] open(corrupt(seal,2))=1445 (recovered), [3] list get after
 // corrupt_at(0,3)=1445 (auto-corrected, 3 is the radius).
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be cw holds VoyagerList.seal(1445)
   be readback holds VoyagerList.open(VoyagerList.corrupt(cw, 2))
   be _1 holds Output.print(String.from_int(1445))

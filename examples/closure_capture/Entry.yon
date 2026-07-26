@@ -9,11 +9,11 @@ place Entry {
 // argument with captured environment). Gate for Stage B, the twin of
 // higher_order_recursive.yon for Stage A.
 
-fun adder(x: number): number -> number {
-  return fun(y: number) => x + y
+fun adder(x: Number): Number -> Number {
+  return fun(y: Number) => x + y
 }
 
-fun main(): number {
+fun main(): Number {
   // adder(40) returns a closure that remembers 40; applying it to 2 gives 42.
   be add40 holds adder(40)
   return add40(2)

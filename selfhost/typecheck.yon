@@ -17,15 +17,15 @@
 // node3 at index 2 returns a sentinel at runtime (a real arity limit of the accessor),
 // so binary spines are the safe encoding for arity > 2.
 
-fun mk_lit(n: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
-fun mk_bool(b: number): MerkleTree { return MerkleTree.node2(4, MerkleTree.leaf(b), MerkleTree.leaf(0)) }
+fun mk_lit(n: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
+fun mk_bool(b: Number): MerkleTree { return MerkleTree.node2(4, MerkleTree.leaf(b), MerkleTree.leaf(0)) }
 fun mk_add(a: MerkleTree, b: MerkleTree): MerkleTree { return MerkleTree.node2(2, a, b) }
 fun mk_lt(a: MerkleTree, b: MerkleTree): MerkleTree { return MerkleTree.node2(5, a, b) }
 fun mk_if(c: MerkleTree, th: MerkleTree, el: MerkleTree): MerkleTree {
   return MerkleTree.node2(6, c, MerkleTree.node2(0, th, el))
 }
 
-fun infer(e: MerkleTree): number {
+fun infer(e: MerkleTree): Number {
   be t holds MerkleTree.label(e)
   return if t == 1 then 1                          // Lit : NUMBER
     else if t == 4 then 2                          // Bool : BOOL
@@ -45,7 +45,7 @@ fun infer(e: MerkleTree): number {
              then infer(MerkleTree.child(MerkleTree.child(e, 1), 0)) else 0) else 0)
 }
 
-fun main(): number {
+fun main(): Number {
   // well-typed: if (2 < 3) then 10 else 20  ->  NUMBER (1)
   be prog_ok holds mk_if(mk_lt(mk_lit(2), mk_lit(3)), mk_lit(10), mk_lit(20))
   // ill-typed: 2 + true  ->  ERROR (0)

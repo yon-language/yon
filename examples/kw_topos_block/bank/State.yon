@@ -1,1 +1,1 @@
-place State { balance number }
+place State { balance Number }

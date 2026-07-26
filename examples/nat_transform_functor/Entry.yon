@@ -1,7 +1,7 @@
 place Entry { }
-functor F(x: number) from W to V { return x }
-functor G(x: number) from W to V { return x }
+functor F(x: Number) from W to V { return x }
+functor G(x: Number) from W to V { return x }
 nat transform Eta from F to G {
   for each X by F
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

@@ -1,6 +1,6 @@
 place Reading {
-  temp number
-  label text
+  temp Number
+  label Text
 
   fun forecasts(): Stream<Reading> {
     be s holds produce {

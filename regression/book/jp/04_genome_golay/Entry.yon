@@ -3,7 +3,7 @@ place Entry { }
 // Seal a gene (12-bit datum) into a Golay (24,12,8) codeword, flip two of its bits,
 // and read it back. Golay's distance 8 corrects up to 3 errors, so `get` (which decodes)
 // returns the original. Expected stdout: 1445.
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be genome holds VoyagerList.empty()
   be g1 holds VoyagerList.append(genome, 1445)
   be damaged holds VoyagerList.corrupt_at(g1, 0, 2)

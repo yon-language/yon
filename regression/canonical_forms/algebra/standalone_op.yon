@@ -1,2 +1,2 @@
-operation twice(a: number): number uses algebra Additive
-fun main(): number { return 42 }
+operation twice(a: Number): Number uses algebra Additive
+fun main(): Number { return 42 }

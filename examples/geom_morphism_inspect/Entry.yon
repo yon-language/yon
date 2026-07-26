@@ -2,7 +2,7 @@ place Entry { }
 geomorph LiftEU from Account to AccountEU {
   pull(a: AccountEU): Account { return a }
 }
-fun check(): boolean {
+fun check(): Boolean {
   return directed_cell(LiftEU)
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

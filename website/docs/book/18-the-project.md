@@ -24,7 +24,7 @@ A library is a directory without a `main`. Publish it by pushing a tag:
 <!-- yon-gate: illustrative -->
 ```yon
 /* rates, currency conversion, published as a git package. */
-fun eur_to_usd(eur: number): number { return eur * 110 / 100 }
+fun eur_to_usd(eur: Number): Number { return eur * 110 / 100 }
 ```
 
 ```bash
@@ -44,19 +44,19 @@ convention.
 <!-- yon-gate: exit 0 -->
 ```yon
 /* The Bank service: pure domain logic, exported over the wire. */
-fun deposit_net(amount: number): number {
+fun deposit_net(amount: Number): Number {
   return amount - fee(amount)
 }
 
-fun fee(amount: number): number {
+fun fee(amount: Number): Number {
   return amount / 20            // 5%
 }
 
-internal fun audit_key(x: number): number { return x * 1789 }
+internal fun audit_key(x: Number): Number { return x * 1789 }
 
 /* A service package still has a main: the binary is both the program and
  * the server (serve mode is chosen at launch). An idle main is the rule. */
-fun main(): number { return 0 }
+fun main(): Number { return 0 }
 ```
 
 Compile it **as the server binary**, named for its Space and placed next to
@@ -88,7 +88,7 @@ calls that each cross a process boundary:
 import "yonproj/rates"
 import bank::deposit_net from Bank
 
-fun main(): number {
+fun main(): Number {
   be deposits holds List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
   be total holds 0
   for every d in deposits {

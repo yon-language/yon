@@ -1,1 +1,1 @@
-place AccountEU { balance number }
+place AccountEU { balance Number }

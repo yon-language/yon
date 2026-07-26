@@ -32,7 +32,7 @@
 
 place Entry { }
 
-fun wrong_sig(x: number): number { return x }
+fun wrong_sig(x: Number): Number { return x }
 
 morph LiftEU from Account to AccountEU {
   on object(s: Account): AccountEU {
@@ -41,4 +41,4 @@ morph LiftEU from Account to AccountEU {
   on morphism deposit via wrong_sig
 }
 
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

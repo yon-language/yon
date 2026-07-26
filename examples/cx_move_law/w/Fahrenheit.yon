@@ -1,1 +1,1 @@
-place Fahrenheit { degrees number }
+place Fahrenheit { degrees Number }

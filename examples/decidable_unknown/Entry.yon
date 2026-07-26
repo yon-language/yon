@@ -1,6 +1,6 @@
 place Entry {
 /* decide su unknown deve fallire a runtime (asserzione decidibilita'). */
-fun main(): number {
+fun main(): Number {
   be p holds unknown
   be d holds decide(p)
   be b holds to_bool_dec(d)

@@ -7,7 +7,7 @@ place Entry { }
 //
 // Stdout schema (4 ints): final_size, push_net_ns_per_N, get_acc, get_net_ns_per_M
 //   push: N = 100000 (net/N = ns/push) ; get: M = 1000000, K = 11 reps (net/M = ns/get).
-fun timed_push(n: number): number visits Output {
+fun timed_push(n: Number): Number visits Output {
   be vc holds Space.make(Vec.empty())
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -17,7 +17,7 @@ fun timed_push(n: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_push_base(n: number): number visits Output {
+fun timed_push_base(n: Number): Number visits Output {
   be i holds Space.make(0)
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -27,7 +27,7 @@ fun timed_push_base(n: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun build_vec(n: number): number {
+fun build_vec(n: Number): Number {
   be vc holds Space.make(Vec.empty())
   be i holds Space.make(0)
   iter n do { be k holds Space.get(i)
@@ -35,7 +35,7 @@ fun build_vec(n: number): number {
               be _2 holds Space.set(i, k + 1) }
   return Space.get(vc)
 }
-fun timed_get(v: number, m: number): number visits Output {
+fun timed_get(v: Number, m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be h holds Vec.get(v, 42)
@@ -43,15 +43,15 @@ fun timed_get(v: number, m: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_get_base(m: number): number visits Output {
+fun timed_get_base(m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be _ holds Space.set(acc, Space.get(acc) + 42) }
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun min2(f0: number, f1: number): number { return if f0 < f1 then f0 else f1 }
-fun main(): number visits Output {
+fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
+fun main(): Number visits Output {
   be n holds 100000
   // push throughput: min over a few reps, net of baseline
   be psh holds Space.make(timed_push(n))

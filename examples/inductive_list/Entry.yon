@@ -1,4 +1,4 @@
-place List { this > Nil :U Cons(number, List) }
+place List { this > Nil :U Cons(Number, List) }
 
 place Entry {
 // COSA: una lista RICORSIVA con nome, ripiegata con lo zucchero `match`. E' la
@@ -15,14 +15,14 @@ place Entry {
 // ci si aspetta da un linguaggio con i dati algebrici.
 
 
-fun sum(l: List): number {
+fun sum(l: List): Number {
   return match l {
     Nil => 0,
     Cons(h, t) => h + sum(t)
   }
 }
 
-fun main(): number {
+fun main(): Number {
   // Cons(10, Cons(15, Cons(17, Nil)))  ->  10 + 15 + 17 = 42
   return sum(.-> Cons { _1 10 _2 .-> Cons { _1 15 _2 .-> Cons { _1 17 _2 Nil } } })
 }

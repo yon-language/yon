@@ -1,4 +1,4 @@
 place Profile {
-  cohort number
-  secret number
+  cohort Number
+  secret Number
 }

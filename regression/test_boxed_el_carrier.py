@@ -89,14 +89,14 @@ def _ret(mlir: str, fn: str):
 # value-dependent case (the type really does depend on the runtime x). `Fam` is a
 # universe-codomain family, so type_erase drops it from codegen; `x` stays a runtime
 # parameter and `p : El(Fam(x))` reaches the carrier stuck.
-STUCK_FAM = "fun Fam(x: number): Type_0 { return Fam(x) }\n"
+STUCK_FAM = "fun Fam(x: Number): Type_0 { return Fam(x) }\n"
 
 
 def test_value_dependent_el_compiles(tmp_path):
     """A value-dependent `El` that previously FAILED emit now compiles to the box."""
     src = STUCK_FAM + (
-        "fun viaEl(x: number, p: El(Fam(x))): number { return 0 }\n"
-        "fun main(): number { return 0 }\n"
+        "fun viaEl(x: Number, p: El(Fam(x))): Number { return 0 }\n"
+        "fun main(): Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     sig = _sig(mlir, "viaEl")
@@ -109,11 +109,11 @@ def test_boxed_carrier_is_uniform(tmp_path):
     """Two DISTINCT stuck families produce the SAME carrier — uniformity is what lets a
     function over `El(stuck)` compile once, regardless of the code inside."""
     src = (
-        "fun Fam(x: number): Type_0 { return Fam(x) }\n"
-        "fun Gam(y: number): Type_0 { return Gam(y) }\n"
-        "fun useF(x: number, p: El(Fam(x))): number { return 0 }\n"
-        "fun useG(y: number, q: El(Gam(y))): number { return 0 }\n"
-        "fun main(): number { return 0 }\n"
+        "fun Fam(x: Number): Type_0 { return Fam(x) }\n"
+        "fun Gam(y: Number): Type_0 { return Gam(y) }\n"
+        "fun useF(x: Number, p: El(Fam(x))): Number { return 0 }\n"
+        "fun useG(y: Number, q: El(Gam(y))): Number { return 0 }\n"
+        "fun main(): Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     sf, sg = _sig(mlir, "useF"), _sig(mlir, "useG")
@@ -129,8 +129,8 @@ def test_boxed_value_round_trips_through_call(tmp_path):
     """The box round-trips through the calling convention: a function that takes
     `El(stuck)` and RETURNS `El(stuck)` carries the box through unmodified."""
     src = STUCK_FAM + (
-        "fun passBox(x: number, p: El(Fam(x))): El(Fam(x)) { return p }\n"
-        "fun main(): number { return 0 }\n"
+        "fun passBox(x: Number, p: El(Fam(x))): El(Fam(x)) { return p }\n"
+        "fun main(): Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     sig, ret = _sig(mlir, "passBox"), _ret(mlir, "passBox")
@@ -149,10 +149,10 @@ def test_computed_case_never_boxed(tmp_path):
     type) gets the CONCRETE carrier, NEVER the box. The box is strictly the last
     resort for a genuinely stuck code — it must not swallow the computed case."""
     src = (
-        "fun Fam(x: number): Type_0 { return number }\n"
-        "fun viaEl(p: El(Fam(7))): number { return 0 }\n"
-        "fun direct(p: number): number { return 0 }\n"
-        "fun main(): number { return 0 }\n"
+        "fun Fam(x: Number): Type_0 { return Number }\n"
+        "fun viaEl(p: El(Fam(7))): Number { return 0 }\n"
+        "fun direct(p: Number): Number { return 0 }\n"
+        "fun main(): Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     se, sd = _sig(mlir, "viaEl"), _sig(mlir, "direct")

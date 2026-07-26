@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be p holds .-> Pt { x 42 }
   return p.x
 }

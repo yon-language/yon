@@ -1,1 +1,1 @@
-place Account { balance number }
+place Account { balance Number }

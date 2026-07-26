@@ -1,5 +1,5 @@
-fun main(): number {
+fun main(): Number {
   be s holds produce { emit 41
     emit 1 }
-  return s.fold(0, fun(a: number, v: number) => a + v)
+  return s.fold(0, fun(a: Number, v: Number) => a + v)
 }

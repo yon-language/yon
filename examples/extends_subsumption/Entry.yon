@@ -1,6 +1,6 @@
 place Entry { }
-fun handle_err(e: Error): number { return 1 }
-fun process(s: SyntaxError): number {
+fun handle_err(e: Error): Number { return 1 }
+fun process(s: SyntaxError): Number {
   return handle_err(s)
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

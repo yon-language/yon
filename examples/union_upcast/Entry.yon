@@ -5,8 +5,8 @@ place Entry { }
 place Account {
   this > Opened :U Closed
 }
-fun accept(a: Account): number { return 7 }
-fun main(): number {
+fun accept(a: Account): Number { return 7 }
+fun main(): Number {
   be o holds .-> Opened { initial 42 }
   return accept(o)
 }

@@ -70,7 +70,7 @@ def _frame(obj) -> bytes:
 @pytest.mark.skipif(not LSP.exists(), reason="yon_lsp not built")
 def test_lsp_advertises_and_serves_formatting():
     uri = "file:///tmp/yonfmt_demo/demo.yon"
-    text = "fun   f(x: number):number{return x+1}\n"
+    text = "fun   f(x: Number):Number{return x+1}\n"
     msgs = [
         {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}},
         {"jsonrpc": "2.0", "method": "textDocument/didOpen",

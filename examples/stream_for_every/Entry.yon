@@ -2,11 +2,11 @@ place Entry {
 // for_every: the stream method. Each value is handed to the function;
 // the drain stops on its own at the structural close of the produce.
 // (Lists keep the `for every x in xs` statement; streams use the method.)
-fun display(v: number): number visits Output {
+fun display(v: Number): Number visits Output {
   be _p holds IO.print_num(v)
   return 0
 }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be s holds produce {
     emit 5
     emit 2

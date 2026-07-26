@@ -17,7 +17,7 @@ place Entry { }
 //
 // SELF-CHECKING. Return = number of failed laws; exit 0 = the construction holds.
 // Stdout: sVD, sRV, sSSV, sRX  (the four observed subtype classes).
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be R  holds Leech.embed(1, 3)
   be V  holds Leech.embed(7, 3)
   be D  holds Leech.embed(7, 3)

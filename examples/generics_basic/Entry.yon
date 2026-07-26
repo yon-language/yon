@@ -4,7 +4,7 @@ place Entry {
 fun identity<T>(x: T): T { return x }
 fun first<A, B>(x: A, y: B): A { return x }
 
-fun main(): number {
+fun main(): Number {
   be n holds identity(42)          // T = number
   be t holds first("ok", 0)        // A = text, B = number
   return n + String.length(t)      // 42 + 2 = 44

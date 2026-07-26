@@ -7,7 +7,7 @@ place Entry { }
 //
 // Stdout schema (4 ints): final_length, cons_net_ns_per_N, head_acc, head_net_ns_per_M
 //   cons: N = 100000 (net/N = ns/cons) ; head: M = 1000000, K = 11 reps (net/M = ns/head).
-fun timed_cons(n: number): number visits Output {
+fun timed_cons(n: Number): Number visits Output {
   be lc holds Space.make(List.empty(0))
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -17,7 +17,7 @@ fun timed_cons(n: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_cons_base(n: number): number visits Output {
+fun timed_cons_base(n: Number): Number visits Output {
   be i holds Space.make(0)
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -27,7 +27,7 @@ fun timed_cons_base(n: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun build_list(n: number): number {
+fun build_list(n: Number): Number {
   be lc holds Space.make(List.empty(0))
   be i holds Space.make(0)
   iter n do { be k holds Space.get(i)
@@ -35,7 +35,7 @@ fun build_list(n: number): number {
               be _2 holds Space.set(i, k + 1) }
   return Space.get(lc)
 }
-fun timed_head(l: number, m: number): number visits Output {
+fun timed_head(l: Number, m: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be h holds List.head(l)
@@ -43,15 +43,15 @@ fun timed_head(l: number, m: number): number visits Output {
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun timed_head_base(m: number, headv: number): number visits Output {
+fun timed_head_base(m: Number, headv: Number): Number visits Output {
   be acc holds Space.make(0)
   be t0 holds Time.now_ns(0)
   iter m do { be _ holds Space.set(acc, Space.get(acc) + headv) }
   be t1 holds Time.now_ns(0)
   return (t1 - t0)
 }
-fun min2(f0: number, f1: number): number { return if f0 < f1 then f0 else f1 }
-fun main(): number visits Output {
+fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
+fun main(): Number visits Output {
   be n holds 100000
   // cons throughput: min over a few reps, net of baseline
   be cns holds Space.make(timed_cons(n))

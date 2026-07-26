@@ -1,1 +1,1 @@
-place Profile { cohort number salary number }
+place Profile { cohort Number salary Number }

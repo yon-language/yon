@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parent.parent
 YON = ROOT / "toolchain" / "yon"
 YONC = ROOT / "toolchain" / "yonc"
 
-GOOD = "fun main(): number { return 2 + 3 * 4 }\n"          # exits 14
-BAD = 'fun bad(): number { return "text" + 1 }\nfun main(): number { return 0 }\n'
+GOOD = "fun main(): Number { return 2 + 3 * 4 }\n"          # exits 14
+BAD = 'fun bad(): Number { return "text" + 1 }\nfun main(): Number { return 0 }\n'
 
 
 def _yon(*args, **kw):

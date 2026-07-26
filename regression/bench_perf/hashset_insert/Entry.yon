@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be h holds Space.make(HashSet.empty())
   be i holds Space.make(0)
   iter 1000000 do { be k holds Space.get(i)

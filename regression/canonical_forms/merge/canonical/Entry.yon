@@ -1,7 +1,7 @@
 place Entry { }
-fun pick(a: number, b: number): number { return a }
-fun ident(x: number): number { return x }
-fun double(x: number): number { return x * 2 }
+fun pick(a: Number, b: Number): Number { return a }
+fun ident(x: Number): Number { return x }
+fun double(x: Number): Number { return x * 2 }
 move Merge unifies A, B {
   share v
   conflict on w resolves to pick
@@ -10,7 +10,7 @@ move Squeeze from Wide to Narrow {
   x maps to x by ident
   y aggregates to total by double
 }
-fun main(): number {
+fun main(): Number {
   be a holds .-> A { v 7
     w 1 }
   be b holds .-> B { v 7

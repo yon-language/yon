@@ -1,1 +1,1 @@
-place Slice over Base { weight number }
+place Slice over Base { weight Number }

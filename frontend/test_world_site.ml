@@ -106,8 +106,8 @@ let () =
   let odir = Filename.concat root "Orders" in
   Sys.mkdir root 0o755; Sys.mkdir odir 0o755;
   let write p s = let oc = open_out p in output_string oc s; close_out oc in
-  write (Filename.concat root "Main.yon") "fun main(): number { return 0 }\n";
-  write (Filename.concat odir "Order.yon") "place Order { id text }\n";
+  write (Filename.concat root "Main.yon") "fun main(): Number { return 0 }\n";
+  write (Filename.concat odir "Order.yon") "place Order { id Text }\n";
 
   let units = Package_layout.layout ~root in
   let find_path base =
@@ -190,7 +190,7 @@ let () =
 
   let entry_prog =
     Parser.program Lexer.token
-      (Lexing.from_string "place Entry { } fun main(): number { return 0 }") in
+      (Lexing.from_string "place Entry { } fun main(): Number { return 0 }") in
   let without_entry =
     Manifest.remove_entrypoint_container ~entry_name:"Entry" entry_prog in
   check "entrypoint container is removed before world inference, main remains"
@@ -332,7 +332,7 @@ let () =
       | Surface_ast.TopPlace pd when pd.Surface_ast.pd_name = name ->
           Some pd.Surface_ast.pd_world
       | _ -> None) prog in
-  let bare = parse_one "place Order { id text }" in
+  let bare = parse_one "place Order { id Text }" in
   check "assign: bare place parses as __INFER"
     (world_of_place_in bare "Order" = Some "__INFER");
   let assigned =

@@ -178,9 +178,9 @@ def test_wire_cross_world_rejected(tmp_path):
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n"
             "[world.Analytics]\nspaces = [\"Reports\"]\nobjects = [\"Report\"]\n")
     proj = _make_project(tmp_path / "cross", toml, {
-        "Orders/Order.yon": "place Order { id text }\nimport Mod::feed from Reports\n",
-        "Reports/Report.yon": "place Report { v number }\n",
-        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+        "Orders/Order.yon": "place Order { id Text }\nimport Mod::feed from Reports\n",
+        "Reports/Report.yon": "place Report { v Number }\n",
+        "Entry.yon": "place Entry { }\nfun main(): Number { return 0 }\n",
     })
     assert _emit_rc(proj) == 3
 
@@ -195,11 +195,11 @@ def test_wire_intra_world_ok(tmp_path):
             "[world.Commerce]\nspaces = [\"Orders\", \"Billing\"]\n"
             "objects = [\"Order\", \"Account\"]\n")
     proj = _make_project(tmp_path / "intra", toml, {
-        "Orders/Order.yon": "place Order { id text }\nimport Mod::feed from Billing\n",
+        "Orders/Order.yon": "place Order { id Text }\nimport Mod::feed from Billing\n",
         "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
-        "Billing/Account.yon": "place Account { balance number }\n",
+        "Billing/Account.yon": "place Account { balance Number }\n",
         "Billing/Topos.yon": "topos BillingCat where {\n}\n",
-        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+        "Entry.yon": "place Entry { }\nfun main(): Number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
 
@@ -211,9 +211,9 @@ def test_wire_orphan_space_rejected(tmp_path):
     toml = ("[package]\nname = \"x\"\n[runtime]\nbackend = \"memory\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "orphan", toml, {
-        "Orders/Order.yon": "place Order { id text }\n",
-        "Ghost/Lost.yon": "place Lost { x number }\n",
-        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+        "Orders/Order.yon": "place Order { id Text }\n",
+        "Ghost/Lost.yon": "place Lost { x Number }\n",
+        "Entry.yon": "place Entry { }\nfun main(): Number { return 0 }\n",
     })
     assert _emit_rc(proj) == 3
 
@@ -226,9 +226,9 @@ def test_entry_default_compiles(tmp_path):
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_default", toml, {
-        "Orders/Order.yon": "place Order { id text }\n",
+        "Orders/Order.yon": "place Order { id Text }\n",
         "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
-        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+        "Entry.yon": "place Entry { }\nfun main(): Number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
 
@@ -240,9 +240,9 @@ def test_entry_custom_name_compiles(tmp_path):
     toml = ("[package]\nname = \"x\"\nentry = \"Boot\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_custom", toml, {
-        "Orders/Order.yon": "place Order { id text }\n",
+        "Orders/Order.yon": "place Order { id Text }\n",
         "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
-        "Boot.yon": "place Boot { }\nfun main(): number { return 0 }\n",
+        "Boot.yon": "place Boot { }\nfun main(): Number { return 0 }\n",
     })
     assert _emit_rc(proj) == 0
 
@@ -254,8 +254,8 @@ def test_entry_absent_rejected(tmp_path):
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_absent", toml, {
-        "Orders/Order.yon": "place Order { id text }\n",
-        "Main.yon": "fun main(): number { return 0 }\n",   # no place Entry
+        "Orders/Order.yon": "place Order { id Text }\n",
+        "Main.yon": "fun main(): Number { return 0 }\n",   # no place Entry
     })
     assert _emit_rc(proj) == 3
 
@@ -266,7 +266,7 @@ def test_entry_duplicate_rejected(tmp_path):
         pytest.skip("frontend not built")
     toml = "[package]\nname = \"x\"\n"
     proj = _make_project(tmp_path / "entry_dup", toml, {
-        "Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+        "Entry.yon": "place Entry { }\nfun main(): Number { return 0 }\n",
         "Entry2.yon": "place Entry { }\n",
     })
     assert _emit_rc(proj) == 3
@@ -279,7 +279,7 @@ def test_entry_in_space_rejected(tmp_path):
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_space", toml, {
-        "Orders/Entry.yon": "place Entry { }\nfun main(): number { return 0 }\n",
+        "Orders/Entry.yon": "place Entry { }\nfun main(): Number { return 0 }\n",
     })
     assert _emit_rc(proj) == 3
 
@@ -303,11 +303,11 @@ def test_entry_main_inside_place(tmp_path):
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_inside", toml, {
-        "Orders/Order.yon": "place Order { id text }\n",
+        "Orders/Order.yon": "place Order { id Text }\n",
         "Orders/Topos.yon": "topos OrdersCat where {\n}\n",
         "Entry.yon": ("place Entry {\n"
-                      "  fun helper(x: number): number { return x + 1 }\n"
-                      "  fun main(): number { return helper(41) }\n"
+                      "  fun helper(x: Number): Number { return x + 1 }\n"
+                      "  fun main(): Number { return helper(41) }\n"
                       "}\n"),
     })
     assert _emit_rc(proj) == 0

@@ -1,4 +1,4 @@
 place Counter {
-  count number
-  operation tick(n: number): number
+  count Number
+  operation tick(n: Number): Number
 }

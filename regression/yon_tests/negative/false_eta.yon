@@ -1,2 +1,2 @@
-fun bogus(p: Sigma(x: number). number): Id(Sigma(x: number). number, pair(snd(p), fst(p)), p) { return refl(p) }
-fun main(): number { return 0 }
+fun bogus(p: Sigma(x: Number). Number): Id(Sigma(x: Number). Number, pair(snd(p), fst(p)), p) { return refl(p) }
+fun main(): Number { return 0 }

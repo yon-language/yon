@@ -33,17 +33,17 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not pr
 # carries a payload, or recurs into the type. (name, source, expected exit).
 BLOCK_FORMS = [
     ("nullary", "place Bit { this > one :U zero }\n"
-                "fun mot(b: Bit): number { return 0 }\n"
-                "fun v(b: Bit): number { return hit_elim(mot, [ one => 1, zero => 0 ], b) }\n"
-                "fun main(): number { return v(hit(one)) }", 1),
-    ("payload", "place Val { this > Lit(number) }\n"
-                "fun mot(v: Val): number { return 0 }\n"
-                "fun get(v: Val): number { return hit_elim(mot, [ Lit(n) => n ], v) }\n"
-                "fun main(): number { return get(hit(Lit, 42)) }", 42),
-    ("recursive", "place Term { this > Leaf(number) :U Node(Term) }\n"
-                  "fun mot(t: Term): number { return 0 }\n"
-                  "fun d(t: Term): number { return hit_elim(mot, [ Leaf(n) => n, Node(m) => d(m) ], t) }\n"
-                  "fun main(): number { return d(hit(Node, hit(Node, hit(Leaf, 7)))) }", 7),
+                "fun mot(b: Bit): Number { return 0 }\n"
+                "fun v(b: Bit): Number { return hit_elim(mot, [ one => 1, zero => 0 ], b) }\n"
+                "fun main(): Number { return v(hit(one)) }", 1),
+    ("payload", "place Val { this > Lit(Number) }\n"
+                "fun mot(v: Val): Number { return 0 }\n"
+                "fun get(v: Val): Number { return hit_elim(mot, [ Lit(n) => n ], v) }\n"
+                "fun main(): Number { return get(hit(Lit, 42)) }", 42),
+    ("recursive", "place Term { this > Leaf(Number) :U Node(Term) }\n"
+                  "fun mot(t: Term): Number { return 0 }\n"
+                  "fun d(t: Term): Number { return hit_elim(mot, [ Leaf(n) => n, Node(m) => d(m) ], t) }\n"
+                  "fun main(): Number { return d(hit(Node, hit(Node, hit(Leaf, 7)))) }", 7),
 ]
 
 
@@ -55,7 +55,7 @@ def test_block_form_declares_a_type(tmp_path, name, src, expected):
 def test_inductive_keyword_is_gone(tmp_path):
     # `inductive` was dropped: the reference must now reject it as a parse error.
     src = ("inductive Bit = O | I\n"
-           "fun main(): number { return 0 }\n")
+           "fun main(): Number { return 0 }\n")
     s = tmp_path / "old.yon"
     s.write_text(src)
     c = subprocess.run([str(YONC), str(s), "-o", str(tmp_path / "old")],

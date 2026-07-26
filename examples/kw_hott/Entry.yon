@@ -4,16 +4,16 @@ place Entry {
 // `pair`/`fst`/`snd` are its constructor and projections.
 // (`Type` in parameter position and `refl` path values do not lower
 // in these positions today.)
-fun takes(p: Sigma(x: number). number): number {
+fun takes(p: Sigma(x: Number). Number): Number {
   return fst(p) + snd(p)
 }
-fun proj_sum(a: number, b: number): number {
+fun proj_sum(a: Number, b: Number): Number {
   be p holds pair(a, b)
   be x holds fst(p)
   be y holds snd(p)
   return x + y
 }
-fun main(): number {
+fun main(): Number {
   be direct holds takes(pair(20, 10))
   return direct + proj_sum(7, 5)        // 30 + 12 = 42
 }

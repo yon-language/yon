@@ -1,6 +1,6 @@
-fun motive(q: Quotient): number { return 0 }
+fun motive(q: Quotient): Number { return 0 }
 
-fun main(): number {
+fun main(): Number {
   return hit_elim(
     motive,
     [inj(x, y) => x, quot(a, b, r) => plam i => 0],

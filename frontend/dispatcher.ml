@@ -313,6 +313,15 @@ let rec type_equal
    * Bidirectional, like boolean/proposition. *)
   | TyPrim "text", TyUser "String" -> true
   | TyUser "String", TyPrim "text" -> true
+  (* Fusion places (prelude): `place Number is number` — the declared face
+     and its primitive code are the SAME semantic object, bidirectionally
+     (the String/text pair above, promoted to a rule). *)
+  | TyPrim p, TyUser u when
+      (match Hashtbl.find_opt Surface_ast.fusion_places u with
+       | Some p' -> p' = p | None -> false) -> true
+  | TyUser u, TyPrim p when
+      (match Hashtbl.find_opt Surface_ast.fusion_places u with
+       | Some p' -> p' = p | None -> false) -> true
   (* Type application vs its head: a bare place `Box` (as built by `new Box`) is
    * compatible with an instance annotation `Box<number>`, and two instances of
    * the same generic agree — the checker is monomorphic, so the head decides. *)

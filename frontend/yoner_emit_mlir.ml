@@ -151,6 +151,10 @@ let () =
    * the reverse insertion order: the leaves loaded first. *)
   let all_sources = Hashtbl.fold (fun fn (m, src) acc -> (fn, m, src) :: acc) loaded [] in
   let all_sources = List.sort (fun (a,_,_) (b,_,_) -> compare a b) all_sources in
+  (* the prelude rides in front of every compilation, single-file or project *)
+  let all_sources =
+    (Project.prelude_sources () |> List.map (fun (p, s) -> (p, "", s)))
+    @ all_sources in
   (* parse each file (import-stripped source), accumulate the top_decls,
    * prefixing each imported module's declarations with `module::`. *)
   let internals = ref [] in

@@ -12,15 +12,15 @@ place Entry { }
 //    dal tipo di ritorno; il compilatore CONTROLLA che i lati riducano a una
 //    cosa sola (se no, rifiuta: vedi examples/false_coherence.yon).
 
-fun dbl(n: number): number { return n + n }
+fun dbl(n: Number): Number { return n + n }
 
 // forma nuda: Same(dbl(a), a + a) — i due lati computano allo stesso valore,
 // quindi la riflessivita' dell'endpoint la abita. Il compilatore verifica.
-fun coherence(a: number): Same(dbl(a), a + a) {
+fun coherence(a: Number): Same(dbl(a), a + a) {
   return clear
 }
 
-fun main(): number {
+fun main(): Number {
   be p holds clear 7                 // refl(7): cammino 7 ~> 7
   be r holds back clear 5            // inversione del cammino banale: ancora 5 ~> 5
   be s holds clear 5 through dbl     // trasporto lungo dbl: cammino 10 ~> 10

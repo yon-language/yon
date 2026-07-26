@@ -1,0 +1,3 @@
+/* Unit — the terminal object 1: one nullary arm, one point (star).
+ * NOT an empty body: the point IS the arm. */
+place Unit is unit { this > star }

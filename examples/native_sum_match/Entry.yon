@@ -17,11 +17,11 @@ place Entry {
 // (l'algebra iniziale content-addressed, che il tag lo dispaccia a runtime).
 
 // La firma di `declares` introduce i costruttori Box/Empty nell'ambiente.
-fun declares(s: (Box(number) | Empty)): number { return 0 }
+fun declares(s: (Box(Number) | Empty)): Number { return 0 }
 
-fun run(): number {
+fun run(): Number {
   return match hit(Box, 21) { Box(n) => n * 2, Empty => 0 }   // 21 * 2 = 42
 }
 
-fun main(): number { return run() }
+fun main(): Number { return run() }
 }

@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be acc holds Space.make(0)
   iter 1000000 do { be _ holds Space.set(acc, Space.get(acc) +
         MerkleTree.label(MerkleTree.node2(1445, MerkleTree.leaf(1280), MerkleTree.leaf(7)))) }

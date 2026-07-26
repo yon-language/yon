@@ -12,7 +12,7 @@ place Entry {
  *
  * Output esempio: solo un numero composito che dimostra che tutto compila e gira. */
 
-fun main(): number {
+fun main(): Number {
   /* Math */
   be m1 holds Math.floor(3.7)         /* = 3 */
   be m2 holds Math.ceil(3.2)          /* = 4 */

@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be t1 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
   be t2 holds MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
   be acc holds Space.make(0)

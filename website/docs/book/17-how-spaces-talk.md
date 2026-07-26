@@ -108,7 +108,7 @@ In the language this is the subscription pipeline:
 import weather::forecasts from Weather    // forecasts: fun(): Stream<Reading>
 
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be w holds wire to space Weather
   be sub holds w.awaits(forecasts)
   be readings holds sub.stream          // the drained frames, as a local stream

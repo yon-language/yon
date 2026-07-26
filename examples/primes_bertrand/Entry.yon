@@ -5,7 +5,7 @@ place Entry {
  * Each prime allocates one new leaf (w_i = 1) unless it collides with an
  * already allocated leaf. */
 
-fun main(): number {
+fun main(): Number {
   be n0 holds __xheap_used()
   be _p2 holds MerkleTree.leaf(2)
   be _p3 holds MerkleTree.leaf(3)

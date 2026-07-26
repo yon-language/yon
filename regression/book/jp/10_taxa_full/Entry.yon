@@ -4,7 +4,7 @@ place Entry { }
 // Do not hand-edit. GRADE = mode-0 orbit; CLADE = linear mode-3 pair_subtype.
 // See the script header for the exact output order the harness parses.
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be e0 holds Leech.embed(0, 0)        // Euparkeria (mode 0, type-2)
   be e1 holds Leech.embed(1, 0)        // Marasuchus (mode 0, type-2)
   be e2 holds Leech.embed(1, 0)        // Eoraptor (mode 0, type-2)

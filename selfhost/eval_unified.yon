@@ -1,11 +1,11 @@
 // Self-host, convergenza: un solo Term, un solo eval (lambda de Bruijn + aritmetica).
 // Forma wildcard: add_vals/mul_vals calcolano solo su due TLit, tutto il resto e' un
 // solo `_ => stuck`; shift/subst restano esaustivi. Oracolo: (lam. x+x) 21 = 42.
-place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
+place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }
 
-fun shift(d: number, c: number, t: Term): Term {
+fun shift(d: Number, c: Number, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
@@ -14,7 +14,7 @@ fun shift(d: number, c: number, t: Term): Term {
       TAdd(a, b)  => hit(TAdd, shift(d, c, a), shift(d, c, b)),
       TMul(a, b)  => hit(TMul, shift(d, c, a), shift(d, c, b)) ], t)
 }
-fun subst(j: number, s: Term, t: Term): Term {
+fun subst(j: Number, s: Term, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i == j then s else hit(TVar, i),
@@ -53,13 +53,13 @@ fun eval(t: Term): Term {
       TMul(a, b)  => mul_vals(eval(a), eval(b)) ], t)
 }
 
-fun motN(t: Term): number { return 0 }
-fun as_num(t: Term): number {
+fun motN(t: Term): Number { return 0 }
+fun as_num(t: Term): Number {
   return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
 }
 
 // ORACOLO: (lam. var0 + var0) 21  ->  21 + 21  ->  42
-fun main(): number {
+fun main(): Number {
   be r holds eval(hit(TApp,
                       hit(TLam, hit(TAdd, hit(TVar, 0), hit(TVar, 0))),
                       hit(TLit, 21)))

@@ -1,4 +1,4 @@
-place Tree { this > Leaf(number) :U Node(Tree, Tree) }
+place Tree { this > Leaf(Number) :U Node(Tree, Tree) }
 
 place Entry {
 // COSA: un place-oggetto algebrico RICORSIVO. La clausola `this >` lo dichiara
@@ -18,11 +18,11 @@ place Entry {
 
 
 
-fun total(t: Tree): number {
+fun total(t: Tree): Number {
   return match t { Leaf { _1 as v } => v, Node { _1 as l _2 as r } => total(l) + total(r) }
 }
 
-fun main(): number {
+fun main(): Number {
   // Node(Leaf(10), Node(Leaf(15), Leaf(17)))  ->  10 + 15 + 17 = 42
   return total(.-> Node { _1 .-> Leaf { _1 10 } _2 .-> Node { _1 .-> Leaf { _1 15 } _2 .-> Leaf { _1 17 } } })
 }

@@ -64,6 +64,46 @@ let root_of_file (path : string) : string option =
 (* Load a project. A file with an override uses that in-memory text instead of
  * disk; a file that fails to read or parse contributes nothing (the open file's
  * own parse error is reported through the LSP's single-file path). *)
+(* ─── The prelude ────────────────────────────────────────────────────
+   Real Yon source that travels WITH THE COMPILER (Rust's core/std model),
+   read into every compilation BEFORE user files. Resolution: $YON_PRELUDE,
+   else <exe>/../../../prelude (the dev tree), else ./prelude. A missing
+   directory is an empty prelude — never an error (old behavior preserved
+   for minimal environments). *)
+let prelude_dir () : string option =
+  let cands =
+    (match Sys.getenv_opt "YON_PRELUDE" with Some d -> [d] | None -> [])
+    @ [ Filename.concat (Filename.dirname Sys.executable_name)
+          "../../../prelude";
+        "prelude" ] in
+  List.find_opt (fun d -> Sys.file_exists d && Sys.is_directory d) cands
+
+let prelude_cache : (string * string) list option ref = ref None
+
+let prelude_sources () : (string * string) list =
+  match !prelude_cache with
+  | Some c -> c
+  | None ->
+      let c =
+        match prelude_dir () with
+        | None -> []
+        | Some d ->
+            Sys.readdir d |> Array.to_list |> List.sort compare
+            |> List.filter (fun f -> Filename.check_suffix f ".yon")
+            |> List.map (fun f ->
+                 let p = Filename.concat d f in (p, read_file p)) in
+      prelude_cache := Some c; c
+
+(* the place names the prelude declares — the collision fence consults this *)
+let prelude_place_names () : string list =
+  prelude_sources ()
+  |> List.concat_map (fun (path, text) ->
+       try
+         parse_text ~file:path text
+         |> List.filter_map
+              (function S.TopPlace pd -> Some pd.S.pd_name | _ -> None)
+       with _ -> [])
+
 let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded =
   let wm =
     let mpath = Filename.concat root Package_layout.manifest_name in
@@ -93,6 +133,13 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
               with _ -> None))
       (Package_layout.layout ~root)
   in
+  let files =
+    (prelude_sources ()
+     |> List.filter_map (fun (p, t) ->
+          try Some { fi_space = ""; fi_path = p;
+                     fi_prog = parse_text ~file:p t }
+          with _ -> None))
+    @ files in
   let merged = List.concat_map (fun f -> f.fi_prog) files in
   let place_space : (string, string) Hashtbl.t = Hashtbl.create 32 in
   let place_acc = ref [] and main_files = ref [] in

@@ -86,7 +86,7 @@ Create `hello.yon`:
 
 <!-- yon-gate: exit 0 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be greeting holds "ciao, mondo"   // interned on the heap
   be _ holds String.print(greeting)
   return 0

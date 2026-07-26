@@ -1,4 +1,4 @@
 // Duplicate parameter name: the second 'a' would silently shadow the first.
 // check_fun_decl_accum rejects duplicate parameter names -> exit 3.
-fun f(a: number, a: number): number { return a }
-fun main(): number { return 0 }
+fun f(a: Number, a: Number): Number { return a }
+fun main(): Number { return 0 }

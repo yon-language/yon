@@ -11,7 +11,7 @@ which returns a `number`:
 
 <!-- yon-gate: exit 0 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   return 0
 }
 ```
@@ -29,7 +29,7 @@ programs commonly use it as their observable result:
 
 <!-- yon-gate: exit 44 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   return 300   // the process exit code is main's value mod 256 -> 44
 }
 ```
@@ -38,7 +38,7 @@ Printing takes one call:
 
 <!-- yon-gate: exit 0 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be _p holds String.print("ciao, mondo")
   return 0
 }

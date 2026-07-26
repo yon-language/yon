@@ -1,4 +1,4 @@
-fun twice(x: number): number { return x * 2 }
-fun main(): number {
+fun twice(x: Number): Number { return x * 2 }
+fun main(): Number {
   return 21 |> twice()
 }

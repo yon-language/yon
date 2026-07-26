@@ -8,10 +8,10 @@
 // The opacity noted in c_ty_morph_handle.yon is confined to the topos
 // IDENTIFIERS (S1/S2 need no decl); it does NOT extend to the argument's
 // arrow-vs-handle distinction, so the call site bites here.
-fun plain(x: number): number { return x }
+fun plain(x: Number): Number { return x }
 
-fun run(m: morph from S1 to S2): number { return 0 }
+fun run(m: morph from S1 to S2): Number { return 0 }
 
-fun main(): number {
+fun main(): Number {
   return run(plain)
 }

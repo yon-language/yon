@@ -16,7 +16,7 @@ with three observable states, `present`, `absent`, `unknown`, and
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   be u holds unknown
   be p holds present
   be both holds p &&? u            // unknown: conjunction with the undecided
@@ -52,7 +52,7 @@ map into Ω you can evaluate:
 <!-- yon-gate: illustrative -->
 ```yon
 // in the space directory: State.yon
-place State { balance number }
+place State { balance Number }
 
 // in the same directory: Topos.yon
 topos Bank where {
@@ -61,7 +61,7 @@ topos Bank where {
 
 // Entry.yon
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be s holds .-> State { balance 5 }
   be bad holds is_overdrawn(s)
   return if bad then 0 else 42
@@ -86,17 +86,17 @@ drive `when`:
 
 ```yon
 // NodeA.yon, a place file in the site's space directory
-place NodeA { value number }
+place NodeA { value Number }
 
 // Entry.yon
 place Entry { }
-fun guard(): number {
-  forces NodeA value is number {
+fun guard(): Number {
+  forces NodeA value is Number {
     return 1
   }
   return 0
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }
 ```
 
 The block runs only where the condition holds at that stage. Patterns

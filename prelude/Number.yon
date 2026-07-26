@@ -1,0 +1,4 @@
+/* Number — the declared face of the primitive code number. `is number`
+ * declares the AXIOMATIC carrier: the leaf of the carrier functor
+ * recursion, not a bypass of it. */
+place Number<64> is number { }

@@ -1,1 +1,1 @@
-fun main(): number { return fst(pair(20, 22)) - 20 }
+fun main(): Number { return fst(pair(20, 22)) - 20 }

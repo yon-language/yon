@@ -1,4 +1,4 @@
-fun main(): number {
+fun main(): Number {
   y = 5
   return y
 }

@@ -5,11 +5,11 @@
 // Oracolo: il testo "\aa+a" -> TLam(TAdd(TVar 0, TVar 0)), applicato a 21 -> 42.
 
 // ── lexer esteso: + nomi (a..z) e '=' e il token lambda ──────────────────────
-place Token { this > TNum(number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd :U TName(number) :U TEq :U TLamTok }
+place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd :U TName(Number) :U TEq :U TLamTok }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 
 // controlli esatti e c>=97 (nomi) PRIMA di c>=48 (cifre), o '='/lettere diventano cifre
-fun emit_at(s: String, i: number, len: number, c: number): TokList {
+fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
     else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
     else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
@@ -21,17 +21,17 @@ fun emit_at(s: String, i: number, len: number, c: number): TokList {
     else if c >= 48 then hit(TkCons, hit(TNum, c - 48),  lex_from(s, i + 1, len))
     else lex_from(s, i + 1, len)
 }
-fun lex_from(s: String, i: number, len: number): TokList {
+fun lex_from(s: String, i: Number, len: Number): TokList {
   return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else emit_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 // ── Term unificato + eval (dal brief #6) ────────────────────────────────────
-place Term { this > TLit(number) :U TVar(number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
+place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
 fun motT(t: Term): Term { return hit(TLit, 0) }
 
-fun shift(d: number, c: number, t: Term): Term {
+fun shift(d: Number, c: Number, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
@@ -40,7 +40,7 @@ fun shift(d: number, c: number, t: Term): Term {
       TAdd(a, b)  => hit(TAdd, shift(d, c, a), shift(d, c, b)),
       TMul(a, b)  => hit(TMul, shift(d, c, a), shift(d, c, b)) ], t)
 }
-fun subst(j: number, s: Term, t: Term): Term {
+fun subst(j: Number, s: Term, t: Term): Term {
   return hit_elim(motT,
     [ TLit(n)     => hit(TLit, n),
       TVar(i)     => if i == j then s else hit(TVar, i),
@@ -77,22 +77,22 @@ fun eval(t: Term): Term {
 }
 
 // ── peek tag-based sulla TokList (tag: Num0 Plus1 Star2 LP3 RP4 End5 Name6 Eq7 Lam8) ──
-fun motTn(t: Token): number { return 0 }
-fun tok_tag(t: Token): number {
+fun motTn(t: Token): Number { return 0 }
+fun tok_tag(t: Token): Number {
   return hit_elim(motTn,
     [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5,
       TName(n)=>6, TEq=>7, TLamTok=>8 ], t)
 }
-fun tok_num(t: Token): number {
+fun tok_num(t: Token): Number {
   return hit_elim(motTn,
     [ TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0,
       TName(n)=>n, TEq=>0, TLamTok=>0 ], t)
 }
-fun motLn(l: TokList): number { return 0 }
-fun head_tag(l: TokList): number {
+fun motLn(l: TokList): Number { return 0 }
+fun head_tag(l: TokList): Number {
   return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
 }
-fun head_num(l: TokList): number {
+fun head_num(l: TokList): Number {
   return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
 }
 fun motLl(l: TokList): TokList { return hit(TkNil) }
@@ -101,10 +101,10 @@ fun tail(l: TokList): TokList {
 }
 
 // ── ambiente dei nomi -> indice de Bruijn ───────────────────────────────────
-place NameEnv { this > NEnvNil :U NEnvCons(number, NameEnv) }
-fun bump(k: number): number { return if k >= 0 then k + 1 else 0 - 1 }
-fun motNEn(e: NameEnv): number { return 0 }
-fun lookup(name: number, env: NameEnv): number {
+place NameEnv { this > NEnvNil :U NEnvCons(Number, NameEnv) }
+fun bump(k: Number): Number { return if k >= 0 then k + 1 else 0 - 1 }
+fun motNEn(e: NameEnv): Number { return 0 }
+fun lookup(name: Number, env: NameEnv): Number {
   return hit_elim(motNEn,
     [ NEnvNil => 0 - 1,
       NEnvCons(h, rest) => if h == name then 0 else bump(lookup(name, rest)) ], env)
@@ -142,7 +142,7 @@ fun expr_more(p: Parse, env: NameEnv): Parse {
                            then combine(1, left, parse_expr(tail(rest), env))
                            else hit(POk, left, rest) ], p)
 }
-fun combine(op: number, left: Term, p: Parse): Parse {
+fun combine(op: Number, left: Term, p: Parse): Parse {
   return hit_elim(motP,
     [ PErr => hit(PErr),
       POk(right, rest) =>
@@ -155,7 +155,7 @@ fun parse_lam(l: TokList, env: NameEnv): Parse {
     then bind_name(head_num(tail(l)), tail(tail(l)), env)
     else parse_expr(l, env)
 }
-fun bind_name(name: number, rest: TokList, env: NameEnv): Parse {
+fun bind_name(name: Number, rest: TokList, env: NameEnv): Parse {
   return wrap_lam(parse_expr(rest, hit(NEnvCons, name, env)))
 }
 fun wrap_lam(p: Parse): Parse {
@@ -165,8 +165,8 @@ fun wrap_lam(p: Parse): Parse {
 }
 
 // ── estrazione + oracolo ────────────────────────────────────────────────────
-fun motN(t: Term): number { return 0 }
-fun as_num(t: Term): number {
+fun motN(t: Term): Number { return 0 }
+fun as_num(t: Term): Number {
   return hit_elim(motN, [ TLit(n)=>n, TVar(i)=>i, _=>0 ], t)
 }
 fun motPt(p: Parse): Term { return hit(TLit, 0 - 1) }
@@ -182,7 +182,7 @@ fun src(): String {
                          String.from_char(97)))
 }
 
-fun main(): number {
+fun main(): Number {
   be tree holds parse_lam(lex(src()), hit(NEnvNil))
   // il Term deve essere TLam(TAdd(TVar 0, TVar 0)); applicato a 21 -> 42
   return as_num(eval(hit(TApp, term_of(tree), hit(TLit, 21)))) - 42

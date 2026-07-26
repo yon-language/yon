@@ -1,4 +1,4 @@
 /* p through f = ap(f, p): the path carried through a function. */
-fun dbl(n: number): number { return n + n }
-fun main(): number { be p holds clear 5 through dbl
+fun dbl(n: Number): Number { return n + n }
+fun main(): Number { be p holds clear 5 through dbl
   return p @ I0 }

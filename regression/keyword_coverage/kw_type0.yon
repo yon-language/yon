@@ -1,2 +1,2 @@
-fun take_universe(t: Type_0): number { return 5 }
-fun main(): number { return 5 }
+fun take_universe(t: Type_0): Number { return 5 }
+fun main(): Number { return 5 }

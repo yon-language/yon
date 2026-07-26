@@ -1,5 +1,5 @@
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be p holds .-> Plain { count 33 }
   return p.count
 }

@@ -13,10 +13,10 @@ place Entry { }
 // largest N. same_orbit addresses TWO points, so its twin calls Leech.point twice.
 //
 // Stdout schema (6 ints, ns/op): put@2k, put@5k, put@10k, put@20k, get@20k, same_orbit@20k
-fun warm(): number visits Output { be _ holds Leech.point(0) return 0 }
-fun mn(a: number, b: number): number { return if a < b then a else b }
+fun warm(): Number visits Output { be _ holds Leech.point(0) return 0 }
+fun mn(a: Number, b: Number): Number { return if a < b then a else b }
 
-fun lp1(n: number): number visits Output {
+fun lp1(n: Number): Number visits Output {
   be acc holds Space.make(0)
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -25,7 +25,7 @@ fun lp1(n: number): number visits Output {
               be _2 holds Space.set(i, k + 1) }
   return Time.now_ns(0) - t0
 }
-fun lp2(n: number): number visits Output {
+fun lp2(n: Number): Number visits Output {
   be acc holds Space.make(0)
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -34,7 +34,7 @@ fun lp2(n: number): number visits Output {
               be _2 holds Space.set(i, k + 1) }
   return Time.now_ns(0) - t0
 }
-fun put_loop(n: number): number visits Output {
+fun put_loop(n: Number): Number visits Output {
   be a holds Space.make(Arena.empty())
   be i holds Space.make(0)
   be t0 holds Time.now_ns(0)
@@ -43,7 +43,7 @@ fun put_loop(n: number): number visits Output {
               be _2 holds Space.set(i, k + 1) }
   return Time.now_ns(0) - t0
 }
-fun get_loop(n: number): number visits Output {
+fun get_loop(n: Number): Number visits Output {
   be a holds Space.make(Arena.empty())
   be i holds Space.make(0)
   iter n do { be k holds Space.get(i)
@@ -57,7 +57,7 @@ fun get_loop(n: number): number visits Output {
               be _2 holds Space.set(j, k + 1) }
   return Time.now_ns(0) - t0
 }
-fun so_loop(n: number): number visits Output {
+fun so_loop(n: Number): Number visits Output {
   be a holds Space.make(Arena.empty())
   be i holds Space.make(0)
   iter n do { be k holds Space.get(i)
@@ -71,19 +71,19 @@ fun so_loop(n: number): number visits Output {
               be _2 holds Space.set(j, k + 1) }
   return Time.now_ns(0) - t0
 }
-fun min_put(n: number): number visits Output {
+fun min_put(n: Number): Number visits Output {
   be m holds Space.make(put_loop(n))
   iter 2 do { be _ holds Space.set(m, mn(Space.get(m), put_loop(n))) }
   return Space.get(m)
 }
-fun min_lp1(n: number): number visits Output {
+fun min_lp1(n: Number): Number visits Output {
   be m holds Space.make(lp1(n))
   iter 2 do { be _ holds Space.set(m, mn(Space.get(m), lp1(n))) }
   return Space.get(m)
 }
-fun net_put(n: number): number visits Output { return (min_put(n) - min_lp1(n)) / n }
+fun net_put(n: Number): Number visits Output { return (min_put(n) - min_lp1(n)) / n }
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be _w holds warm()
   be _a holds Output.print(String.from_int(net_put(2000)))
   be _b holds Output.print(String.from_int(net_put(5000)))

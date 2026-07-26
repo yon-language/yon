@@ -10,7 +10,7 @@ Three kinds of test-in-Yon, mapped to three levels of "is this realized":
   negative/ false proofs / illegal captures. Expected: REJECTED at compile time
             (emit exit 3) -- the language refuses to prove something false.
 
-  runtime/  operational checks: `fun main(): number { return actual - expected }`
+  runtime/  operational checks: `fun main(): Number { return actual - expected }`
             returns 0 iff the property holds at run time. Expected: the native
             binary exits 0. This is where forms that only compute (not
             definitionally equal) are proved -- e.g. J on refl.

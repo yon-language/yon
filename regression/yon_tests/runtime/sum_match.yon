@@ -1,7 +1,7 @@
-fun quotient_motive(q: Quotient): number { return 0 }
-fun suspension_motive(s: Suspension): number { return 0 }
+fun quotient_motive(q: Quotient): Number { return 0 }
+fun suspension_motive(s: Suspension): Number { return 0 }
 
-fun main(): number {
+fun main(): Number {
   be payload holds hit_elim(
     quotient_motive,
     [inj(x) => x, quot(a, b, r) => plam i => 0],

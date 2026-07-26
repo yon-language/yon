@@ -1,3 +1,3 @@
 place Entry { }
-fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): number { return 0 }
-fun main(): number { return 0 }
+fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): Number { return 0 }
+fun main(): Number { return 0 }

@@ -1,7 +1,7 @@
 import "x/rates"
 import bank::deposit_net from Bank
 
-fun main(): number {
+fun main(): Number {
   be deposits holds List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
   be total holds 0
   for every d in deposits {

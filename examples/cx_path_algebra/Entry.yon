@@ -3,9 +3,9 @@ place Entry {
 // through (attraverso f). Riducono e compongono su cammini chiusi, ora in nativo.
 // PERCHE': un cammino e' un viaggio; invertirlo (back), comporlo (++) e portarlo
 // attraverso una funzione (through) e' calcolo vero, non decorazione.
-fun dbl(n: number): number { return n + n }
+fun dbl(n: Number): Number { return n + n }
 
-fun main(): number {
+fun main(): Number {
   be reversed holds back clear 5           // inv(clear 5)        = clear 5
   be joined holds clear 7 ++ clear 7       // concat(clear 7, clear 7) = clear 7
   be shadow holds clear 5 through dbl       // ap(dbl, clear 5)    = clear 10

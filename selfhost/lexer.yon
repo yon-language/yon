@@ -10,8 +10,8 @@
 // no whitespace/parens. Input "2+3*4" -> [NUM2,+,NUM3,*,NUM4] -> left-assoc (2+3)*4 = 20.
 
 // --- AST + eval (the catamorphism) ---
-fun mk_lit(n: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
-fun eval(e: MerkleTree): number {
+fun mk_lit(n: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
+fun eval(e: MerkleTree): Number {
   be t holds MerkleTree.label(e)
   return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
     else if t == 2 then eval(MerkleTree.child(e, 0)) + eval(MerkleTree.child(e, 1))
@@ -19,20 +19,20 @@ fun eval(e: MerkleTree): number {
 }
 
 // --- tokens (content-addressed): kind 1 = NUM(value), 2 = '+', 3 = '*' ---
-fun tok_num(v: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(v), MerkleTree.leaf(0)) }
-fun tok_op(kind: number): MerkleTree { return MerkleTree.node2(kind, MerkleTree.leaf(0), MerkleTree.leaf(0)) }
+fun tok_num(v: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(v), MerkleTree.leaf(0)) }
+fun tok_op(kind: Number): MerkleTree { return MerkleTree.node2(kind, MerkleTree.leaf(0), MerkleTree.leaf(0)) }
 fun toks_nil(): MerkleTree { return MerkleTree.leaf(0 - 1) }
 fun toks_cons(tok: MerkleTree, rest: MerkleTree): MerkleTree { return MerkleTree.node2(0, tok, rest) }
-fun is_nil(l: MerkleTree): number { return if MerkleTree.label(l) == (0 - 1) then 1 else 0 }
-fun tok_val(tok: MerkleTree): number { return MerkleTree.label(MerkleTree.child(tok, 0)) }
+fun is_nil(l: MerkleTree): Number { return if MerkleTree.label(l) == (0 - 1) then 1 else 0 }
+fun tok_val(tok: MerkleTree): Number { return MerkleTree.label(MerkleTree.child(tok, 0)) }
 
 // --- lexer: char codes '+' = 43, '*' = 42, digits '0'..'9' = 48..57 ---
-fun char_to_tok(c: number): MerkleTree {
+fun char_to_tok(c: Number): MerkleTree {
   return if c == 43 then tok_op(2)          // '+'
     else if c == 42 then tok_op(3)          // '*'
     else tok_num(c - 48)                     // a digit
 }
-fun lex_from(src: String, i: number, n: number): MerkleTree {
+fun lex_from(src: String, i: Number, n: Number): MerkleTree {
   return if i == n then toks_nil()
     else toks_cons(char_to_tok(String.char_at(src, i)), lex_from(src, i + 1, n))
 }
@@ -52,7 +52,7 @@ fun parse(toks: MerkleTree): MerkleTree {
   return parse_loop(MerkleTree.child(toks, 1), mk_lit(tok_val(MerkleTree.child(toks, 0))))
 }
 
-fun main(): number {
+fun main(): Number {
   be src holds "2+3*4"
   return eval(parse(lex(src)))
 }

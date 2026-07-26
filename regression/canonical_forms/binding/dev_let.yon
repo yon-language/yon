@@ -1,4 +1,4 @@
-fun main(): number {
+fun main(): Number {
   let x = 42
   return x
 }

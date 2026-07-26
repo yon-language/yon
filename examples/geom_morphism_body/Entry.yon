@@ -5,4 +5,4 @@ geomorph LiftBody from Account to AccountEU {
     return tmp
   }
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }

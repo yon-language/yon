@@ -1,6 +1,6 @@
 place Entry { }
 // pybench BASE (read): M accumulate-only iterations. op - base isolates the read op.
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be acc holds Space.make(0)
   iter 10000000 do { be _ holds Space.set(acc, Space.get(acc) + 1) }
   be _p holds Output.print(String.from_int(Space.get(acc)))

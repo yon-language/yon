@@ -73,11 +73,11 @@ let () =
    | Ok (TyId (TyPrim "number",
                TyTermExpr (EApp (EVar ("f", _), [EVar ("a", _)], _)),
                TyTermExpr (EApp (EVar ("f", _), [EVar ("a", _)], _)))) ->
-       check "ap(f:number->number, refl(a)) : Id(number, f(a), f(a))" true
+       check "ap(f:Number->number, refl(a)) : Id(number, f(a), f(a))" true
    | Ok other -> check (Printf.sprintf "ap: unexpected %s" (Tyenv.ty_to_string other)) false
    | Error e -> check (Printf.sprintf "ap: infer failed: %s" (Tycheck.error_to_string e)) false);
 
-  (* MISTYPED: ap(f:number->number, pt:Id(text,s,t)) — domain != carrier, reject *)
+  (* MISTYPED: ap(f:Number->number, pt:Id(text,s,t)) — domain != carrier, reject *)
   (match Tycheck.infer env ctx
            (ECall ("ap", [EVar ("f", dl); EVar ("pt", dl)], dl)) with
    | Error _ ->
@@ -85,11 +85,11 @@ let () =
    | Ok other ->
        check (Printf.sprintf "ap domain-mismatch WRONGLY accepted: %s" (Tyenv.ty_to_string other)) false);
 
-  (* transport(ua(e), a) : text — univalence maps the source (number) to B (text) *)
+  (* transport(ua(e), a) : Text — univalence maps the source (number) to B (text) *)
   (match Tycheck.infer env ctx
            (ECall ("transport", [ECall ("ua", [EVar ("e", dl)], dl); EVar ("a", dl)], dl)) with
    | Ok (TyPrim "text") ->
-       check "transport(ua(e:Equiv number text), a:number) : text" true
+       check "transport(ua(e:Equiv number text), a:number) : Text" true
    | Ok other -> check (Printf.sprintf "transport: unexpected %s" (Tyenv.ty_to_string other)) false
    | Error e -> check (Printf.sprintf "transport: infer failed: %s" (Tycheck.error_to_string e)) false);
 

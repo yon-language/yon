@@ -1,7 +1,7 @@
 place Entry {
 /* Stdlib estesa turno 33 part 7: String, Time, Random, Crypto. */
 
-fun main(): number {
+fun main(): Number {
   /* String */
   be s_42 holds String.from_int(42)
   be s_99 holds String.from_int(99)

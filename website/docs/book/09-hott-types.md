@@ -16,7 +16,7 @@ available in the lower stratum for when the endpoints do not determine it.
 ```yon
 // Entry.yon, at the project root
 place Entry { }
-fun main(): number {
+fun main(): Number {
   be p holds pair(40, 2)
   be x holds fst(p)
   be y holds snd(p)
@@ -43,11 +43,11 @@ really do reduce to one value before it accepts it:
 
 <!-- yon-gate: exit 0 -->
 ```yon
-fun f(x: number): number { return x }
-fun coherence(a: number): Same(f(a), a) {   // Id(number, f(a), a), carrier inferred
+fun f(x: Number): Number { return x }
+fun coherence(a: Number): Same(f(a), a) {   // Id(number, f(a), a), carrier inferred
   return clear                              // reflexivity of the endpoint: f(a) computes to a
 }
-fun main(): number { return 0 }
+fun main(): Number { return 0 }
 ```
 
 ## Paths as journeys
@@ -71,8 +71,8 @@ These compute. Read a closed path at an endpoint with `@ I0` (its start) or
 
 <!-- yon-gate: exit 22 -->
 ```yon
-fun dbl(n: number): number { return n + n }
-fun main(): number {
+fun dbl(n: Number): Number { return n + n }
+fun main(): Number {
   be reversed holds back clear 5        // inv(clear 5)              = clear 5
   be joined   holds clear 7 ++ clear 7  // concat(clear 7, clear 7)  = clear 7
   be shadow   holds clear 5 through dbl // ap(dbl, clear 5)          = clear 10
@@ -88,9 +88,9 @@ an equivalence is univalence in one word, `span e`, which is `ua(e)`. And you ca
 
 <!-- yon-gate: exit 11 -->
 ```yon
-fun succ(n: number): number { return n + 1 }
-fun pred(n: number): number { return n - 1 }
-fun main(): number {
+fun succ(n: Number): Number { return n + 1 }
+fun pred(n: Number): Number { return n - 1 }
+fun main(): Number {
   be bridge holds succ <=> pred    // the two-way bridge
   return carry 10 along bridge     // transport 10 across it: succ 10 = 11
 }
@@ -107,7 +107,7 @@ constructor, the result type read off the branches.
 
 <!-- yon-gate: exit 5 -->
 ```yon
-fun main(): number {
+fun main(): Number {
   return match hit(north) {
     north => 5,
     south => 5,
@@ -127,9 +127,9 @@ compatible pair over a cospan:
 ```yon
 // Entry.yon, at the project root
 place Entry { }
-fun f(x: number): number { return x }
-fun g(y: number): number { return y }
-fun main(): number {
+fun f(x: Number): Number { return x }
+fun g(y: Number): Number { return y }
+fun main(): Number {
   be p holds pullback(f, g, 3, 3)   // runtime-checked: f(3) == g(3)
   return 7
 }
@@ -142,12 +142,12 @@ The most Yon-flavoured citizen is the **comprehension**:
 ```yon
 // Account.yon, a place file in the site's space directory.
 // A separate Entry.yon at the project root supplies main.
-place Account { v number }
+place Account { v Number }
 
 /* The comprehension type: the subobject of Account carved out by the
  * (here, contractibility-flavoured) fibre. Declaring it type-checks;
  * the coercion runs {a : A where P} <: A (forgetful mono). */
-fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): number {
+fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): Number {
   return 7
 }
 ```

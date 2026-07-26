@@ -1,4 +1,4 @@
-place Triple { this > T3(number, number, number) :U Nil }
+place Triple { this > T3(Number, Number, Number) :U Nil }
 
 place Entry {
 // COSA: un costruttore induttivo di arita' 3, letto su TUTTI e tre i payload.
@@ -9,11 +9,11 @@ place Entry {
 
 
 
-fun sum3(t: Triple): number {
+fun sum3(t: Triple): Number {
   return match t { T3 { _1 as a _2 as b _3 as c } => a + b + c, Nil => 0 }
 }
 
-fun main(): number {
+fun main(): Number {
   return sum3(.-> T3 { _1 12 _2 13 _3 17 })   // 12 + 13 + 17 = 42, incluso il terzo (indice 2)
 }
 }

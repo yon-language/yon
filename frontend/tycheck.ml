@@ -61,7 +61,8 @@ let collect_wire_knowledge (p : program) : unit =
 
 let reset_scheme_env () =
   scheme_env := [];
-  Hashtbl.clear Surface_ast.bare_point_sites
+  Hashtbl.clear Surface_ast.bare_point_sites;
+  Hashtbl.clear Surface_ast.fused_elim_sites
 
 let add_scheme (name : string) (s : Ty_subst.scheme) =
   scheme_env := (name, s) :: !scheme_env
@@ -581,6 +582,10 @@ let hit_signature_of (env : Tyenv.env) (x_ty : ty)
   | TySum variants | TySumIn (variants, _) ->
       Some (sig_of_variants (Tyenv.type_tag x_ty) variants)
   | TyPrim n | TyPrimIn (n, _) | TyUser n ->
+      (* a fused prim eliminates through its declared face: match on a
+         `boolean` scrutinee sees Boolean's arms tt/ff *)
+      let n = match Hashtbl.find_opt Surface_ast.fusion_of_prim n with
+        | Some face -> face | None -> n in
       (match Tyenv.lookup_named_sum env n with
        | Some variants -> Some (sig_of_variants n variants)
        | None ->
@@ -679,6 +684,11 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
          A point branch that references its own payload binders cannot serve as
          the constant witness (payload-carrying HITs) — those keep hit_elim. *)
       let* x_ty = infer env ctx x in
+      (match x_ty with
+       | TyPrim p when Hashtbl.mem Surface_ast.fusion_of_prim p ->
+           Hashtbl.replace Surface_ast.fused_elim_sites
+             (loc.file, loc.start_line, loc.start_col) ()
+       | _ -> ());
       let point_body =
         List.fold_left
           (fun acc (_ctor, pat, body) ->
@@ -1016,10 +1026,11 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       (match lookup_scheme x with
        | Some scheme -> ok (Ty_subst.instantiate scheme)
        | None ->
-      if Carrier.is_prim_name x then
-        (* A primitive type name in term position is its Tarski code.  This is
-           the surface entry point for paths in the universe, e.g.
-           refl(number) : Id(Type_0, number, number). *)
+      if Carrier.is_prim_name x
+         || Hashtbl.mem Surface_ast.fusion_places x then
+        (* A primitive type name in term position is its Tarski code (the
+           surface entry point for paths in the universe); a FUSED FACE
+           (Number) is the same code as its prim. *)
         ok (TyUniverse 0)
       else
       match Tyenv.lookup_var env x with
@@ -1036,8 +1047,12 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
            with
            | Some (sum_name, _) ->
                Hashtbl.replace bare_point_sites
-                 (loc.file, loc.start_line, loc.start_col) x;
-               ok (TyUser sum_name)
+                 (loc.file, loc.start_line, loc.start_col) (x, sum_name);
+               (match Hashtbl.find_opt Surface_ast.fusion_places sum_name with
+                | Some prim ->
+                    (* fused coproduct: the point IS a literal of the carrier *)
+                    ok (TyPrim prim)
+                | None -> ok (TyUser sum_name))
            | None ->
            match Tyenv.lookup_morph_decl env x with
            | Some mp -> ok (TyMorphHandle (Some mp.mp_source, Some mp.mp_target))
@@ -1985,6 +2000,11 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
          (circle's loop, suspension's merid) has branches inhabiting a PATH
          over the motive, not the motive — those keep the synthesis path. *)
       let* x_ty = infer env ctx x in
+      (match x_ty with
+       | TyPrim p when Hashtbl.mem Surface_ast.fusion_of_prim p ->
+           Hashtbl.replace Surface_ast.fused_elim_sites
+             (loc.file, loc.start_line, loc.start_col) ()
+       | _ -> ());
       (match hit_signature_of env x_ty with
        | None -> fallback env e expected
        | Some (_, sig_) when sig_.Hit_env.hit_paths <> [] ->
@@ -3102,7 +3122,7 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
    (a Constant union yields a constant synthetic arm). *)
 let synth_place_of_arm (union_pd : place_decl) (v : variant) : place_decl =
   { pd_name = v.v_name;
-    pd_type_params = [];
+    pd_type_params = []; pd_fusion = None; pd_width = None;
     pd_arms = [];
     pd_world = union_pd.pd_world;
     pd_members =
@@ -3195,14 +3215,57 @@ let register_deltas (env : Tyenv.env) (p : program) : Tyenv.env =
        | _ -> env)
     env p
 
+let register_fusion (pd : place_decl) : unit =
+  (* collision fence: the prelude owns its names — a user place redeclaring
+     one is a LOUD error, never silent shadowing (the same doctrine as
+     duplicate arms across unions). The prelude registers first (it is
+     prepended to every compilation). *)
+  let in_prelude =
+    let f = pd.pd_loc.file and sub = "prelude/" in
+    let ls = String.length sub and lf = String.length f in
+    let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
+    go 0 in
+  (* idempotent under the checker's multiple registration passes: the SAME
+     fusion re-registering is not a collision; a DIFFERENT decl (no clause,
+     or another prim) under an owned name is. *)
+  (if not in_prelude then
+     match Hashtbl.find_opt Surface_ast.fusion_places pd.pd_name with
+     | Some owned when pd.pd_fusion <> Some owned ->
+         failwith (Printf.sprintf
+           "place %s collides with the prelude place of the same name: the prelude owns it (rename yours)" pd.pd_name)
+     | _ -> ());
+  match pd.pd_fusion with
+  | None -> ()
+  | Some prim ->
+      if not (Carrier.is_prim_name prim) then
+        failwith (Printf.sprintf
+          "place %s is %s: '%s' is not a primitive code (prim_carrier is the            one source of truth)" pd.pd_name prim prim);
+      (match pd.pd_width, prim with
+       | Some 64, "number" | None, _ -> ()
+       | Some w, _ ->
+           failwith (Printf.sprintf
+             "place %s<%d> is %s: width %d does not match the carrier of '%s'"
+             pd.pd_name w prim w prim));
+      Hashtbl.replace Surface_ast.fusion_places pd.pd_name prim;
+      Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name;
+      (match prim, pd.pd_arms with
+       | "boolean", [a; b] ->
+           Hashtbl.replace Surface_ast.fused_points a.v_name (`Bool true);
+           Hashtbl.replace Surface_ast.fused_points b.v_name (`Bool false)
+       | "unit", [a] ->
+           Hashtbl.replace Surface_ast.fused_points a.v_name `Unit
+       | _ -> ())
+
 let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   match td with
   | TopWorld wd -> Tyenv.add_world env wd
   | TopPlace pd when pd.pd_arms <> [] ->
       (* a place with arms IS the named sum: the same registration, not a
          field-place. One production, one rule. *)
+      register_fusion pd;
       register_named_sum env pd.pd_name pd.pd_arms
   | TopPlace pd ->
+      register_fusion pd;
       let env =
         List.fold_left
           (fun acc -> function
@@ -3847,9 +3910,11 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
        | _ -> ok ())
 
 and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
-  (* Check that the world is declared. *)
+  (* Check that the world is declared. A FUSED place (is <prim>) is the
+     constant presheaf: member of no world by nature (rule (f) extension),
+     so the membership check does not apply. *)
   let* () =
-    if pd.pd_world = "__Builtin" then ok ()
+    if pd.pd_world = "__Builtin" || pd.pd_fusion <> None then ok ()
     else match Tyenv.lookup_world env pd.pd_world with
     | Some _ -> ok ()
     | None -> err pd.pd_loc
@@ -4808,7 +4873,12 @@ let infer_place_worlds (p : program) : (program, type_error) result =
        | Error _ -> acc
        | Ok decls ->
            match td with
-           | TopPlace pd when pd.pd_world = "__INFER" && pd.pd_arms = [] ->
+           | TopPlace pd when pd.pd_world = "__INFER" && pd.pd_arms = []
+                           && pd.pd_fusion = None ->
+               (* a FUSED place (is <prim>) never enters contextual inference:
+                  a primitive is the constant presheaf — the same in every
+                  context of the site, member of no particular world (rule (f)
+                  extension: fusion implies Constant; 7 exists everywhere). *)
                (match infer_for pd with
                 | Ok w ->
                     Ok (TopPlace { pd with pd_world = w } :: decls)

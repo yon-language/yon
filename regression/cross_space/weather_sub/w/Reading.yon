@@ -1,4 +1,4 @@
 place Reading {
-  temp number
-  label text
+  temp Number
+  label Text
 }

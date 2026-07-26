@@ -1,2 +1,2 @@
-place A { v number
-  w number }
+place A { v Number
+  w Number }

@@ -7,28 +7,28 @@ place Entry {
 // still PRESENT (a known falsehood); `is not present` at unknown
 // stays unknown and an unknown condition decides to false; values
 // flow through parameters to defeat constant folding.
-fun chain_one(a: number, b: number): number visits Output {
+fun chain_one(a: Number, b: Number): Number visits Output {
   be p holds (a < b)
   when p is not absent {
     be _ holds String.print("p is not absent")
   }
   return 1
 }
-fun chain_two(d: number): number visits Output {
+fun chain_two(d: Number): Number visits Output {
   be u holds unknown
   when u is unknown {
     be _ holds String.print("u is unknown")
   }
   return d
 }
-fun chain_three(a: number, b: number): number visits Output {
+fun chain_three(a: Number, b: Number): Number visits Output {
   be p holds (a < b)
   when p is absent {
     be _ holds String.print("NEVER printed: p is a known truth")
   }
   return 3
 }
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be x holds chain_one(3, 5)
   be y holds chain_two(2)
   be z holds chain_three(3, 5)

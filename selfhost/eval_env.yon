@@ -14,23 +14,23 @@
 // Program:  let x = (2+3) in x * (x + 1)   =  5 * 6  =  30.  Verified: exit 30.
 
 // node tags: 1=Lit, 2=Add, 3=Mul, 4=Var(index in child0 leaf), 5=Let(vexpr=c0, body=c1)
-fun mk_lit(n: number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
-fun mk_var(i: number): MerkleTree { return MerkleTree.node2(4, MerkleTree.leaf(i), MerkleTree.leaf(0)) }
+fun mk_lit(n: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
+fun mk_var(i: Number): MerkleTree { return MerkleTree.node2(4, MerkleTree.leaf(i), MerkleTree.leaf(0)) }
 fun mk_let(vexpr: MerkleTree, body: MerkleTree): MerkleTree { return MerkleTree.node2(5, vexpr, body) }
 
 fun env_nil(): MerkleTree { return MerkleTree.leaf(0 - 1) }
-fun env_cons(v: number, rest: MerkleTree): MerkleTree {
+fun env_cons(v: Number, rest: MerkleTree): MerkleTree {
   return MerkleTree.node2(0, MerkleTree.leaf(v), rest)
 }
 
 // lookup de Bruijn index i (0 = innermost) in the environment cons-list
-fun lookup(env: MerkleTree, i: number): number {
+fun lookup(env: MerkleTree, i: Number): Number {
   return if i == 0 then MerkleTree.label(MerkleTree.child(env, 0))
          else lookup(MerkleTree.child(env, 1), i - 1)
 }
 
 // eval : AST -> (Env => number), curried here as (AST, Env) -> number
-fun eval(e: MerkleTree, env: MerkleTree): number {
+fun eval(e: MerkleTree, env: MerkleTree): Number {
   be t holds MerkleTree.label(e)
   return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
          else if t == 2 then eval(MerkleTree.child(e, 0), env) + eval(MerkleTree.child(e, 1), env)
@@ -39,7 +39,7 @@ fun eval(e: MerkleTree, env: MerkleTree): number {
          else eval(MerkleTree.child(e, 1), env_cons(eval(MerkleTree.child(e, 0), env), env))
 }
 
-fun main(): number {
+fun main(): Number {
   // body = x * (x + 1), with x = de Bruijn 0
   be body holds MerkleTree.node2(3, mk_var(0), MerkleTree.node2(2, mk_var(0), mk_lit(1)))
   be prog holds mk_let(MerkleTree.node2_commutative(2, mk_lit(2), mk_lit(3)), body)

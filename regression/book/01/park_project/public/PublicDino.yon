@@ -1,8 +1,8 @@
 // Public record — inherits world PublicPark (the "public" space), a quotient
 // of Park by cohort. May carry only cohort-invariant data.
-fun bucket_of(c: number): number { return c }
+fun bucket_of(c: Number): Number { return c }
 place PublicDino {
-  cohort number
+  cohort Number
 }
 view LegalLens of PublicDino {
   show bucket = bucket_of(cohort)

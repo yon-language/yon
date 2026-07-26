@@ -1,2 +1,2 @@
-place Wide { x number
-  y number }
+place Wide { x Number
+  y Number }

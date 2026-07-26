@@ -1,2 +1,2 @@
-place Tally { total number
-  operation add(x: number): number }
+place Tally { total Number
+  operation add(x: Number): Number }
