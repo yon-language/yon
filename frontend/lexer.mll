@@ -63,9 +63,6 @@
          direction. *)
       "functorial", FUNCTORIAL;
       "functor", FUNCTOR;
-      "forward", FORWARD;
-      "backward", BACKWARD;
-      "bi", BI;
 
       (* Algebra on a place: `operation f(...) uses algebra A` binds an
          operation to a named algebra from the certified catalog (Additive,
@@ -73,12 +70,9 @@
          satisfy (commutative, associative, ...); the compiler verifies the
          declared laws against the catalog and rejects a false claim.
          `verify P` then instantiates the verified place as a runnable handle. *)
-      "lawful", LAWFUL;
       "law", LAW;
       "uses", USES;
       "algebra", ALGEBRA;
-      "verify", VERIFY;
-      "invertible", INVERTIBLE;
       "fold", FOLD;             (* names the fold function, e.g. fold "sum_f64" *)
 
       (* The explicit vocabulary of category theory, exposed directly in the
@@ -93,7 +87,6 @@
       (* `objects` (OBJECTS_KW) RETIRED with topos-per-space: a topos no longer
        * declares an inline `objects { }` block; objects are filesystem-derived.
        * The token had no grammar production left (orphan) -> removed. *)
-      "morphisms", MORPHISMS_KW;
       (* `morphism` (singular): keyword declaring a single morphism inside a
          topos's `morphisms { }` block, and used in `on morphism N via M`. *)
       "morphism", MORPHISM_KW;
@@ -118,13 +111,11 @@
          (e.g. .rollback instead of .commit). `on error` is a two-word
          contextual phrase, not a reserved keyword. *)
       "error", ERROR_KW;
-      "subcontains", SUBCONTAINS;
 
       (* `be x holds e` is the sole binding form (immutable). It maps to the
          LET token because the core IR still calls such bindings let-bindings;
          mutation goes through `=`, not rebinding. *)
       "be", LET;
-      "partial", PARTIAL;
 
       (* Type-level and connective words. Most read as English in declarations:
          `list of T`, `map of K to V`, `e is pattern`, `move M from A to B`. *)
@@ -264,7 +255,6 @@
          the cubical primitives: stay=refl, back=inv, span=ua,
          carry..along=transport, through=ap. No new semantics. *)
       "back", BACK;
-      "span", SPAN;
       "carry", CARRY;
       "along", ALONG;
       "through", THROUGH;

@@ -21,7 +21,7 @@
  *     stmt:      SReturn of expr*location (259)
  *     param:     { param_name; param_ty } (312-315)
  *     fun_decl:  { fn_name; fn_type_params; fn_params; fn_return; fn_visits;
- *                  fn_partial; fn_internal; fn_body; fn_loc } (398-410)
+ *                  fn_internal; fn_body; fn_loc }
  *     top_decl:  TopFun of fun_decl (677) ;  program = top_decl list (772)
  *     dummy_loc  (24)
  *   hm_infer.ml:
@@ -87,7 +87,6 @@ let () =
       fn_params = [ { param_name = "x"; param_ty = TyUser "_" } ];
       fn_return = Some num;
       fn_visits = [];
-      fn_partial = false;
       fn_internal = false;
       fn_body = [ body_ret ];
       fn_loc = dl } in

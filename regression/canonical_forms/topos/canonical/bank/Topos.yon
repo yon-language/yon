@@ -1,9 +1,8 @@
 topos Bank where {
   terminal Unit1
-  morphisms {
-    morphism tag(s: State): number
-    functorial morphism lift(s: State): number
-  }
+  
+  morphism tag(s: State): number
+  functorial morphism lift(s: State): number
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
 topology j of State { return 1 }

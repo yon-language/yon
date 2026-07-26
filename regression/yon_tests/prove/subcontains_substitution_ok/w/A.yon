@@ -1,4 +1,4 @@
-place A subcontains B {
+place A { this < B
   value number
   extra number
 }

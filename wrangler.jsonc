@@ -7,6 +7,9 @@
   "main": "worker.js",
   "assets": {
     "directory": "./website/build",
-    "binding": "ASSETS"
+    "binding": "ASSETS",
+    // Without this, matching assets are served BEFORE the worker runs, so the
+    // security/cache headers in worker.js would never be applied.
+    "run_worker_first": true
   }
 }

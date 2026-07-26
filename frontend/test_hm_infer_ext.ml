@@ -71,7 +71,6 @@ let mkfun name params ret body : fun_decl =
     fn_params = params;
     fn_return = ret;
     fn_visits = [];
-    fn_partial = false;
     fn_internal = false;
     fn_body = body;
     fn_loc = dl }

@@ -24,7 +24,6 @@ type fun_sig = {
   fs_params : (string * ty) list;
   fs_return : ty;
   fs_visits : string list;
-  fs_partial : bool;
 }
 
 (* ─── Operation signatures ─────────────────────────────────────────── *)
@@ -328,7 +327,7 @@ let add_place (env : env) (pd : place_decl) : env =
     if has_algebra then
       { env with funs =
           (pd.pd_name ^ "_instantiate",
-           { fs_params = []; fs_return = TyUser "Magma"; fs_visits = []; fs_partial = false })
+           { fs_params = []; fs_return = TyUser "Magma"; fs_visits = []})
           :: env.funs }
     else env
   in
@@ -513,11 +512,8 @@ let with_builtins (env : env) : env =
     rd_of = "Output";
     rd_multi_shot = false;
     rd_clauses = [];
-    rd_direction = RdForward;
-    rd_lawful = false;
     rd_shot_ordering = OrdSequential;
     rd_type_params = [];
-    rd_invertible = false;
     rd_fold_name = None;
     rd_loc = dummy_loc;
   } in
@@ -529,13 +525,11 @@ let with_builtins (env : env) : env =
     fs_params = [("b", TyPrim "boolean")];
     fs_return = TyPrim "proposition";
     fs_visits = [];
-    fs_partial = false;
   } in
   let to_bool_sig = {
     fs_params = [("p", TyPrim "proposition")];
     fs_return = TyPrim "boolean";
     fs_visits = [];
-    fs_partial = false;
   } in
   (* Decidable. Makes explicit in the type system WHERE the classical boolean
    * fragment of an intuitionistic logic is used.
@@ -547,13 +541,11 @@ let with_builtins (env : env) : env =
     fs_params = [("p", TyPrim "proposition")];
     fs_return = TyPrim "Decidable";
     fs_visits = [];
-    fs_partial = false;
   } in
   let to_bool_dec_sig = {
     fs_params = [("d", TyPrim "Decidable")];
     fs_return = TyPrim "boolean";
     fs_visits = [];
-    fs_partial = false;
   } in
   env
   |> (fun e -> add_place e output_place)

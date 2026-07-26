@@ -55,12 +55,6 @@ The "equals" of the binding: it reads as English and it means *holds this value 
 
 Mutation, reserved to Space cells: `x = e`. Where `be` is a promise, `=` is an update; the surface has no `becomes` word (the older `becomes` keyword is retired, it survives only as an internal AST node). Rebinding a `be` name does not exist.
 
-#### `partial`
-
-Marks a function that may not return on every input. The checker treats its calls accordingly.
-
-## Control flow
-
 #### `when`
 
 The conditional chain: `when c { } when c2 { } otherwise { }`. Consecutive `when` blocks form one chain and the first true branch wins. Branches are for effects: a `return` inside a branch does not exit the function; select values with `if`/`then`/`else` instead.
@@ -409,25 +403,13 @@ Binds an operation to its algebra; the compiler checks the claim against the cat
 
 Declares an algebraic law on a place; a false claim is rejected at compile time.
 
-#### `lawful`
-
-Reduction modifier: the law is declared and verified.
-
-#### `invertible`
-
-Reduction modifier: the reduction is invertible.
-
-#### `verify`
-
-Instantiates a law-verified place as a runnable handle.
-
 #### `fold`
 
 Names a space's fold function: `with fold "sum_f64"`.
 
-<CodeWindow file="verify_algebra/"
-            run="yonc verify_algebra/ -o verify && ./verify; echo $?"
-            out={["3"]}>
+<CodeWindow file="kw_algebra/"
+            run="yonc kw_algebra/ -o kw_alg && ./kw_alg; echo $?"
+            out={["0"]}>
 {`// alg/Or.yon
 place Or {
   operation join(a: number, b: number): number uses algebra BooleanOr
@@ -437,10 +419,7 @@ place Or {
 // Entry.yon
 place Entry { }
 fun main(): number {
-  be m holds verify Or
-  be m1 holds Magma.gen(m, 1)
-  be m2 holds Magma.gen(m1, 2)
-  return Magma.closure_size(m2)
+  return 0
 }`}
 </CodeWindow>
 
@@ -462,73 +441,9 @@ Handle composition with kind discipline: `(compose f with g)(x) = g(f(x))`.
 
 Marks an operation that behaves as a functor: lifted automatically along world morphisms.
 
-#### `forward`
-
-Reduction direction: forward.
-
-#### `backward`
-
-Reduction direction: backward.
-
-#### `bi`
-
-Bidirectional reduction. Also a reserved word on its own; see the reference.
-
-<CodeWindow file="functor_compose_inline/"
-            run="yonc functor_compose_inline/ -o fcompose && ./fcompose; echo $?"
-            out={["0"]}>
-{`// yon.toml declares three worlds: [world.W] [world.V] [world.U]
-[package]
-name = "functor_compose_inline"
-
-[world.W]
-objects = ["X"]
-
-[world.V]
-objects = ["Y"]
-
-[world.U]
-objects = ["Z"]
-
-[runtime]
-backend = "memory"
-// Entry.yon
-place Entry { }
-fun main(): number {
-  be h holds compose (functor (x: number) => x from W to V) with (functor (y: number) => y from V to U)
-  return 0
-}`}
-</CodeWindow>
-
-<CodeWindow file="kw_reduction_modifiers/"
-            run="yonc kw_reduction_modifiers/ -o reduction_modifiers && ./reduction_modifiers; echo $?"
-            out={["0"]}>
-{`// w/Tally.yon
-place Tally { total number
-  operation add(x: number): number }
-// Entry.yon
-place Entry { }
-reduction bi lawful invertible Sum of Tally with multishot fold "sum_f64" {
-  be seed holds 0
-  on add(x: number) {
-    return x
-  }
-}
-reduction backward Rewind of Tally {
-  be seed holds 0
-}
-fun main(): number { return 0 }`}
-</CodeWindow>
-
-## The explicit topos vocabulary
-
 #### `topos`
 
 The first-class declaration: a category rich enough to do logic inside, with its terminal, morphisms and props in one `where` block. With topos-per-space, the objects are inferred from the filesystem (the place files in the Space), so a topos no longer carries an inline `objects { }` block (that keyword is retired).
-
-#### `morphisms`
-
-Lists the maps of the topos: operation signatures (the block that holds `morphism` declarations).
 
 #### `morphism`
 
@@ -556,10 +471,9 @@ place Unit1 { u number }
 // bank/Topos.yon  (objects are inferred from the place files in bank/)
 topos Bank where {
   terminal Unit1
-  morphisms {
-    morphism tag(s: State): number
-    functorial morphism lift(s: State): number
-  }
+  
+  morphism tag(s: State): number
+  functorial morphism lift(s: State): number
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
 topology j of State { return 1 }
@@ -713,32 +627,6 @@ The slice: `place P over X` declares objects equipped with a chosen map down to 
 #### `error`
 
 `error E subcontains Base { }`: an error is a place that is a subobject of Base, every E is a Base. A place declares its error morphism with the two-word phrase `on error E`.
-
-#### `subcontains`
-
-The subobject mono P into B (the older `extends` keyword is retired).
-
-<!-- yon-gate: illustrative -->
-```yon
-// error_morphism, split one place per file under the db/ space:
-//   db/Error.yon
-error Error { message number }
-//   db/QueryError.yon
-error QueryError subcontains Error { message number sqlstate number }
-//   db/QueryInsert.yon
-place QueryInsert on error QueryError { sql number }
-//   Entry.yon
-place Entry { }
-fun handle(e: Error): number { return 1 }
-fun on_query_fail(q: QueryError): number {
-  return handle(q)
-}
-fun main(): number { return 0 }   // exit 0
-```
-
-## Connectives and type words
-
-These read as English in declarations.
 
 #### `of`
 
@@ -1055,10 +943,6 @@ THE surface spelling of reflexivity, one keyword with two shapes. `clear a` is t
 #### `through`
 
 `p through f` carries the path `p` *through* the function `f`, sugar for `ap(f, p)`. If `p` runs from `a` to `b`, then `p through f` runs from `f a` to `f b`: structure preserved under the map (functoriality).
-
-#### `span`
-
-`span e` lays an equivalence `e` down as a *way*, a path between the two types it relates, sugar for `ua(e)`. Univalence in one word: a two-way bridge, seen as a road you can travel.
 
 #### `carry`
 

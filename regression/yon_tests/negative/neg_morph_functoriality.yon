@@ -15,9 +15,8 @@ place EUState { balance number }
 fun wrong_sig(x: number): number { return x }
 
 topos Account where {
-  morphisms {
-    morphism deposit(s: State): State
-  }
+  
+  morphism deposit(s: State): State
 }
 
 topos AccountEU where {

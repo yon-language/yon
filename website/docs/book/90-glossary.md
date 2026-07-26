@@ -54,7 +54,7 @@ per object (a natural transformation; a 2-cell).
 `f* ⊣ f∗`.
 
 **monomorphism (mono)**, an arrow that loses nothing; all Yon subtyping is
-travel along a mono: `subcontains` declares one, comprehension's coercion is
+travel along a mono: `this <` declares one, comprehension's coercion is
 one, `boolean → proposition` is one.
 
 **subobject**, a part of an object carved out by a property; in Yon, a
