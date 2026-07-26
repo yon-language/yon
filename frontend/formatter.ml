@@ -55,9 +55,9 @@ let rec fmt_ty (t : ty) : string =
   match t with
   | TyPrim s -> s
   | TyPrimIn (s, opts) -> s ^ " in " ^ String.concat ", " opts
-  | TyList t -> "list of " ^ fmt_ty t
-  | TyMap (k, v) -> "map of " ^ fmt_ty k ^ " to " ^ fmt_ty v
-  | TyStream t -> "stream of " ^ fmt_ty t
+  | TyList t -> "List<" ^ fmt_ty t ^ ">"
+  | TyMap (k, v) -> "Map<" ^ fmt_ty k ^ ", " ^ fmt_ty v ^ ">"
+  | TyStream t -> "Stream<" ^ fmt_ty t ^ ">"
   | TyArrow (a, b) -> fmt_ty a ^ " -> " ^ fmt_ty b
   | TyUser s -> s
   | TyVar s -> s

@@ -76,7 +76,7 @@ identity is kept in the checker, not thrown away.
 ## You rarely write a container
 
 The textbook next step is "now make a generic container". In Yon you usually do
-not, because the containers already exist and are built in. `stream of T` is a
+not, because the containers already exist and are built in. `Stream<T>` is a
 generic type in its own right (chapter 22); `Vec`, `List`, `HashMap`, and
 `HashSet` (chapters 12 and 15) are the standard containers, each holding Yon's
 uniform value. When you want "a sequence of numbers" or "a map from text", you

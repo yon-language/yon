@@ -63,7 +63,7 @@ consumer exerts **back-pressure** instead of dropping frames.
 ## Crossing by value: the DTO wire
 
 The numeric door above carries a *call*. A second path carries *data*. When a
-producer Space exports a `stream of <Place>` and a consumer subscribes to it,
+producer Space exports a `Stream<Place>` and a consumer subscribes to it,
 the values themselves cross, not handles to them. The model is a **wormhole**:
 a value is copied out of the producer, flattened to bytes, sent, and rebuilt in
 the consumer's own heap. Nothing is shared after transit; the two processes
@@ -105,7 +105,7 @@ In the language this is the subscription pipeline:
 
 ```yon
 // Entry.yon, the consumer
-import weather::forecasts from Weather    // forecasts: fun(): stream of Reading
+import weather::forecasts from Weather    // forecasts: fun(): Stream<Reading>
 
 place Entry { }
 fun main(): number {

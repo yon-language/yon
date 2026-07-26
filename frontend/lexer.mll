@@ -122,8 +122,6 @@
       "of", OF;
       "in", IN;
       "to", TO;
-      "list", LIST;
-      "map", MAP;
       "stream", STREAM;
   "wire", WIRE;
       "spawn", SPAWN;

@@ -1,5 +1,5 @@
 /* Interface of the Weather producer (nominal cross-Space import). */
-fun forecasts(): stream of Reading {
+fun forecasts(): Stream<Reading> {
   be s holds produce { emit .-> Reading { temp 10 label "ok" } }
   return s
 }

@@ -77,8 +77,6 @@ Every keyword, alphabetically:
 [`is`](/book/keywords#is) ·
 [`iter`](/book/keywords#iter) ·
 [`law`](/book/keywords#law) ·
-[`list`](/book/keywords#list) ·
-[`map`](/book/keywords#map) ·
 [`maps`](/book/keywords#maps) ·
 [`match`](/book/keywords#match) ·
 [`morph`](/book/keywords#morph) ·

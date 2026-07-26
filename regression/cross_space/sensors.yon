@@ -1,5 +1,5 @@
 /* The Sensors service: declares the producer (chapter 16 + wire design). */
-fun readings(): stream of number {
+fun readings(): Stream<number> {
   be s holds produce {
     emit 10
     emit 11

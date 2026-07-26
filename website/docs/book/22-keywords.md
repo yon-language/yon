@@ -692,18 +692,10 @@ fun main(): number visits Output {
 
 `move m ... requires CAP1, CAP2`: the capabilities a move demands.
 
-#### `list`
-
-The list type: `list of T`.
-
-#### `map`
-
-The map type: `map of K to V`.
-
 <CodeWindow file="kw_list_here.yon"
             run="yonc kw_list_here.yon -o list_here && ./list_here; echo $?"
             out={["21"]}>
-{`fun total(xs: list of number): number {
+{`fun total(xs: List<number>): number {
   be acc holds 0
   for every x in xs when here {
     acc = acc + x
@@ -724,17 +716,17 @@ fun main(): number {
 
 #### `stream`
 
-The stream type, `stream of T`, with its back-pressure modifiers in type position.
+In member position (`subscription.stream`): the subscription's stream handle. The stream TYPE is the generic `Stream<T>` (the spelling `stream of T` is retired).
 
 #### `wire`
 
-`wire to space S` opens the transport toward a Space. The producer side declares a public function returning `stream of T`; the consumer subscribes by name with `w.awaits(producer)` and materializes the emissions with `.stream`. Three errors are caught at compile time: an unknown Space, a function the Space does not declare, a declared function that is not a producer. The channel identity is the producer's dispatch selector: nominal on both sides, no literals anywhere.
+`wire to space S` opens the transport toward a Space. The producer side declares a public function returning `Stream<T>`; the consumer subscribes by name with `w.awaits(producer)` and materializes the emissions with `.stream`. Three errors are caught at compile time: an unknown Space, a function the Space does not declare, a declared function that is not a producer. The channel identity is the producer's dispatch selector: nominal on both sides, no literals anywhere.
 
 <CodeWindow file="subscriber.yon" run="yonc sensors.yon -o Sensors_srv && yonc subscriber.yon -o subscriber && ./Sensors_srv && ./subscriber; echo $?" out={["36"]}>
 
 ```yon
 // sensors.yon, the producer package -> ./Sensors_srv
-fun readings(): stream of number {
+fun readings(): Stream<number> {
   be s holds produce {
     emit 10
     emit 11

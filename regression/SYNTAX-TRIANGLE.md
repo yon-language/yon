@@ -9,7 +9,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `regression/CANONICAL-FORMS.md`. Regenerate this file with
 `python regression/test_syntax_triangle.py`.
 
-- lexer keywords: **115**
+- lexer keywords: **113**
 - corpus files: **361**
 - CodeWindows: **23**  (project **11**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **34**
@@ -71,8 +71,6 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `is` | `IS` | 14 | yes | exercised |
 | `iter` | `ITER_KW` | 2 | yes | exercised |
 | `law` | `LAW` | 7 | yes | exercised |
-| `list` | `LIST` | 1 | yes | exercised |
-| `map` | `MAP` | 1 | yes | exercised |
 | `maps` | `MAPS` | 4 | yes | exercised |
 | `match` | `MATCH_KW` | 16 | yes | exercised |
 | `morph` | `MORPH_KW` | 5 | yes | exercised |
@@ -82,7 +80,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `multishot` | `MULTI_SHOT` | 1 | yes | exercised |
 | `nat` | `NAT` | 1 | yes | exercised |
 | `not` | `NOT` | 5 | yes | exercised |
-| `of` | `OF` | 23 | yes | exercised |
+| `of` | `OF` | 10 | yes | exercised |
 | `operation` | `OPERATION` | 3 | yes | exercised |
 | `or` | `OR` | 1 | yes | exercised |
 | `otherwise` | `OTHERWISE` | 2 | yes | exercised |
@@ -113,13 +111,13 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `snd` | `SND` | 5 | yes | exercised |
 | `space` | `SPACE` | 5 | yes | exercised |
 | `spawn` | `SPAWN` | 1 | yes | exercised |
-| `stream` | `STREAM` | 16 | yes | exercised |
+| `stream` | `STREAM` | 5 | yes | exercised |
 | `terminal` | `TERMINAL_KW` | 1 | yes | exercised |
 | `then` | `THEN_KW` | 33 | yes | exercised |
 | `this` | `THIS` | 17 | yes | exercised |
 | `through` | `THROUGH` | 3 | yes | exercised |
 | `times` | `TIMES` | 2 | yes | exercised |
-| `to` | `TO` | 42 | yes | exercised |
+| `to` | `TO` | 41 | yes | exercised |
 | `topology` | `TOPOLOGY` | 1 | yes | exercised |
 | `topos` | `TOPOS_KW` | 61 | yes | exercised |
 | `true` | `BOOL_LIT` | 1 | yes | exercised |
