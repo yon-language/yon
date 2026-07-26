@@ -58,7 +58,7 @@ let () =
   let gm = {
     gm_name = "f"; gm_on_error = None; gm_source_site = "EU"; gm_target_site = "US";
     gm_pull = None; gm_push = None;
-    gm_adjunction = false; gm_f_star_exact = false; gm_f_lower_star_exact = false;
+ gm_f_star_exact = false; gm_f_lower_star_exact = false;
     gm_loc = dummy_loc;
   } in
   check "El(code of geom EU->US) = TyArrow(TyPrim EU, TyPrim US)"

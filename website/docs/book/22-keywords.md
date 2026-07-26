@@ -443,10 +443,6 @@ A natural transformation between two functors: `nat transform Eta from F to G { 
 
 Handle composition with kind discipline: `(compose f with g)(x) = g(f(x))`.
 
-#### `functorial`
-
-Marks an operation that behaves as a functor: lifted automatically along world morphisms.
-
 #### `topos`
 
 The first-class declaration: a category rich enough to do logic inside, with its terminal, morphisms and props in one `where` block. With topos-per-space, the objects are inferred from the filesystem (the place files in the Space), so a topos no longer carries an inline `objects { }` block (that keyword is retired).
@@ -479,7 +475,7 @@ topos Bank where {
   terminal Unit1
   
   morphism tag(s: State): Number
-  functorial morphism lift(s: State): Number
+  morphism lift(s: State): Number
   prop is_overdrawn(s: State): proposition = s.balance < 0
 }
 topology j of State { return 1 }
@@ -563,10 +559,6 @@ Inside a geomorph: the inverse image, the left adjoint.
 
 Inside a geomorph: the direct image, the right adjoint.
 
-#### `adjunction`
-
-Declares the adjoint pairing of the geomorph.
-
 #### `exact`
 
 `exact pull` / `exact push`: the inverse image preserves finite limits.
@@ -581,7 +573,6 @@ place AccountEU { balance Number }
 // Entry.yon
 place Entry {
   geomorph Lift from Account to AccountEU {
-    adjunction
     exact pull
     exact push
     pull(a: AccountEU): Account {

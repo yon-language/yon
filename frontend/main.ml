@@ -1584,7 +1584,7 @@ let test_place_visibility () =
     fd_name = n; fd_ty = t; fd_loc = dummy_loc
   } in
   let mk_op n = FoOp {
-    op_functorial = false;
+
     op_algebra = None;
     op_name = n; op_params = []; op_return = None; op_on_error = None;
     op_loc = dummy_loc
@@ -3072,7 +3072,7 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "y"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false; fn_on_error = None;
+    fn_visits = []; fn_internal = false; fn_on_error = None; fn_home = None;
     fn_body = [];
     fn_loc = loc;
   } in
@@ -3081,7 +3081,7 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "x"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false; fn_on_error = None;
+    fn_visits = []; fn_internal = false; fn_on_error = None; fn_home = None;
     fn_body = [];
     fn_loc = loc;
   } in
@@ -3091,7 +3091,7 @@ let test_geom_morphism_decl () =
     gm_target_site = "SiteB";
     gm_pull = Some pull_fn;
     gm_push = Some push_fn;
-    gm_adjunction = false;
+
     gm_f_star_exact = false;
     gm_f_lower_star_exact = false;
     gm_loc = loc;
@@ -3465,34 +3465,6 @@ let test_world_hierarchy () =
       Printf.printf "Status: PASS\n"; true
   | _ -> Printf.printf "FAIL\n"; false
 
-(* Test 178: Cross-world functorial operations.
- *
- * An operation marked `functorial` is lifted automatically along world
- * morphisms. Yoneda at the world level:
- *
- *   Op : Place_W -> Result_W
- *   lifting via geometric morphism f: W' -> W produces
- *   Op' : Place_W' -> Result_W'  (commutes with pull and push)
- *
- * The operation respects naturality with respect to the world morphisms. *)
-let test_functorial_op () =
-  Printf.printf "\n=== Test 178: cross-world functorial operations ===\n";
-  let op : Surface_ast.operation_decl = {
-    op_name = "compute";
-    op_params = [{ param_name = "x"; param_ty = TyPrim "number" }];
-    op_return = Some (TyPrim "number"); op_on_error = None;
-    op_functorial = true;
-    op_algebra = None;
-    op_loc = Surface_ast.dummy_loc;
-  } in
-  if op.op_functorial then
-    (Printf.printf "  functorial operation compute(x: Number): Number\n";
-     Printf.printf "  automatic lifting along the geometric morphism W' -> W\n";
-     Printf.printf "  naturality: compute_W' . f^* = f^* . compute_W\n";
-     Printf.printf "Status: PASS\n"; true)
-  else
-    (Printf.printf "FAIL\n"; false)
-
 (* Test 180: Explicit reduction composition.
  *
  * Compose two reductions: R = R1 . R2 applies R2 first, then R1.
@@ -3765,7 +3737,6 @@ let () =
     test_lawful_move;
     test_default_world_inference;
     test_world_hierarchy;
-    test_functorial_op;
     test_reduction_compose;
     test_shot_ordering;
     test_reduction_polymorphism;

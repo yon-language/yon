@@ -39,7 +39,7 @@ let lift_inline_block_lambda_to_fun
     fn_type_params = [];
     fn_params = fn_params;
     fn_return = Some (TyPrim "number");
-    fn_on_error = None; fn_visits = []; fn_internal = false;
+    fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
     fn_body = body @ [Surface_ast.SReturn
                         (Surface_ast.ELit (Surface_ast.LitNumber 0.0, loc), loc)];
     fn_loc = loc;
@@ -60,12 +60,28 @@ let lift_inline_lambda_to_fun
     fn_type_params = [];
     fn_params = fn_params;
     fn_return = Some (TyPrim "number");
-    fn_on_error = None; fn_visits = []; fn_internal = false;
+    fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
     fn_body = [Surface_ast.SReturn (body, loc)];
     fn_loc = loc;
   } in
   synth_decls := (Surface_ast.TopFun fd) :: !synth_decls;
   name
+
+(* qualified naming (the house gives the name): the place_decl action, which
+   KNOWS its own name and how many arrows its body hoisted (the PbiArrow
+   markers), retags the LAST [n] hoisted funs with fn_home = Some house.
+   Order is preserved by push_decl, so the suffix is exactly this body's. *)
+let retag_home (house : string) (n : int) : unit =
+  if n > 0 then
+    synth_decls := List.mapi (fun i d ->
+      (* push_decl PREPENDS: this body's hoisted arrows are the FIRST n *)
+      if i < n then
+        match d with
+        | Surface_ast.TopFun fd when fd.Surface_ast.fn_home = None
+                                  && house <> "Entry" ->
+            Surface_ast.TopFun { fd with Surface_ast.fn_home = Some house }
+        | other -> other
+      else d) !synth_decls
 
 let drain () : Surface_ast.top_decl list =
   let r = List.rev !synth_decls in

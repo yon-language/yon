@@ -5781,7 +5781,7 @@ let emit_geom_morphism_bootstrap (e : emitter)
                    v_struct v_one);
     let v_adj = fresh_ssa e in
     emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
-                   v_adj (if gm.gm_adjunction then 1 else 0));
+                   v_adj (if true then 1 else 0));
     let v_off0 = fresh_ssa e in
     emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_off0);
     let v_p0 = fresh_ssa e in
@@ -6077,7 +6077,24 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     String.iter (fun c -> h := !h lxor (Char.code c);
                           h := (!h * 16777619) land 0xffffffff) s;
     !h in
-  let op_sel name = (fnv1a name) land 0x7fffff in
+  (* THE WIRE SPEAKS THE BARE NAME: a house (qualified naming, Home__f) is
+     space-local — it has no meaning across the wire, and the consumer awaits
+     the bare name. Strip a KNOWN-PLACE prefix before hashing; two homes
+     exporting the same bare in one space collide loudly below (the wire
+     namespace is the space). *)
+  let wire_bare (name : string) : string =
+    match String.index_opt name '_' with
+    | Some i when i + 1 < String.length name && name.[i+1] = '_' ->
+        let pfx = String.sub name 0 i in
+        let known_place =
+          List.exists (fun (n, _) -> n = pfx) e.places_table
+          || List.exists (fun (pd : C.place_decl) -> pd.p_name = pfx)
+               e.places_decls in
+        if known_place then
+          String.sub name (i + 2) (String.length name - i - 2)
+        else name
+    | _ -> name in
+  let op_sel name = (fnv1a (wire_bare name)) land 0x7fffff in
   (* candidate functions: exactly one f64 parameter, f64 return, user-defined
    * (skip runtime externs and the synthetic ones). *)
   (* candidate functions: 0-4 f64 parameters, f64 return, user-defined

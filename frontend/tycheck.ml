@@ -3365,9 +3365,16 @@ let register_fusion (pd : place_decl) : unit =
       Hashtbl.replace Surface_ast.fusion_places pd.pd_name prim;
       Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name;
       (match prim, pd.pd_arms with
-       | "boolean", [a; b] ->
-           Hashtbl.replace Surface_ast.fused_points a.v_name (`Bool true);
-           Hashtbl.replace Surface_ast.fused_points b.v_name (`Bool false)
+       | "boolean", arms ->
+           (* by NAME, not by position: the arm IS the literal *)
+           List.iter (fun a ->
+             match a.v_name with
+             | "true" -> Hashtbl.replace Surface_ast.fused_points "true" (`Bool true)
+             | "false" -> Hashtbl.replace Surface_ast.fused_points "false" (`Bool false)
+             | other ->
+                 failwith (Printf.sprintf
+                   "place %s is boolean: arms must be the literals true/false, got %s"
+                   pd.pd_name other)) arms
        | "unit", [a] ->
            Hashtbl.replace Surface_ast.fused_points a.v_name `Unit
        | _ -> ())
@@ -3831,7 +3838,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = Some (TyPrim "proposition");
-                   fn_on_error = None; fn_visits = []; fn_internal = false;
+                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                    fn_body = [ SReturn (body, pr.pr_loc) ];
                    fn_loc = pr.pr_loc;
                  } in
@@ -5550,6 +5557,7 @@ let check_program (p : program) : check_result =
      methods on distinct places (`Square.area`, `Circle.area`) become distinct
      top-level names and the passes below stay on unique names. A no-op when no
      name is shared. *)
+  let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
   let p = Method_sugar.qualify_overloads p in
   (* Pre-check PRIMA di infer_fun_signatures/Hm_infer (che su questi input vanno
    * in failwith/crash): nome di funzione top-level duplicato, e tipo di ritorno
