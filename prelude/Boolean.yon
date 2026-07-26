@@ -1,3 +1,3 @@
-/* Boolean — the living coproduct: tt/ff kernel arms; the literals
- * true/false resolve to them in construction and in match patterns. */
-place Boolean is boolean { this > tt :U ff }
+/* Boolean — the living coproduct: two nullary arms NAMED BY THE
+ * LITERALS — one name, no translation layer (tt/ff are gone). */
+place Boolean is boolean { this > true :U false }

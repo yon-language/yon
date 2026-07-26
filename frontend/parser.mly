@@ -76,8 +76,6 @@
       (function GmItemPull p -> Some p | _ -> None) items in
     let push = List.find_map
       (function GmItemPush p -> Some p | _ -> None) items in
-    let has_adj = List.exists
-      (function GmItemAdjunction -> true | _ -> false) items in
     let f_star_ex = List.exists
       (function GmItemExactFStar -> true | _ -> false) items in
     let f_lower_ex = List.exists
@@ -87,7 +85,6 @@
       gm_target_site = dst_site;
       gm_pull = pull;
       gm_push = push;
-      gm_adjunction = has_adj;
       gm_f_star_exact = f_star_ex;
       gm_f_lower_star_exact = f_lower_ex;
       gm_loc = loc }
@@ -131,7 +128,6 @@
 %token GEOM_MORPHISM PULL PUSH
 %token PULLBACK PUSHOUT
 %token TOPOLOGY
-%token FUNCTORIAL
 %token FUNCTOR
 %token IMPORT
 %token INTERNAL
@@ -151,7 +147,7 @@
 %token TOPOS_KW MORPHISM_KW TERMINAL_KW PROP_KW
 %token MORPH_KW VIA_KW
 %token NAT
-%token ADJUNCTION_KW EXACT_KW
+%token EXACT_KW
 (* OVER is already declared below in the WHEN/SEQUENCE token group *)
 
 /* Type-related */
@@ -443,7 +439,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_on_error = None; fn_visits = []; fn_internal = false;
+                 fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                  fn_body = body;
                  fn_loc = mk_loc $startpos $endpos } in
       MItemOnObject fd }
@@ -462,7 +458,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_on_error = None; fn_visits = []; fn_internal = false;
+                 fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                  fn_body = [SReturn (body_expr, loc)];
                  fn_loc = loc } in
       MItemOnObject fd }
@@ -557,7 +553,7 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_on_error = None; fn_visits = []; fn_internal = false;
+                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   | PUSH LPAREN params = param_list RPAREN
@@ -567,12 +563,11 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_on_error = None; fn_visits = []; fn_internal = false;
+                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   (* Categorical clauses declaring properties of the geometric morphism. The
      runtime reads them to derive the coordination shape. *)
-  | ADJUNCTION_KW                                  { GmItemAdjunction }
   | EXACT_KW PULL                                   { GmItemExactFStar }
   | EXACT_KW PUSH                                   { GmItemExactFLowerStar }
 
@@ -610,7 +605,7 @@ place_decl:
     over = option(over_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
-    { let (members, variants, clauses) = mv in
+    { let (members, variants, clauses, _n_arrows) = mv in
       (* ONE production: a place, with or without arms; `error` is the same
          production marked. The canonical clauses may be written in the header
          (deprecated synonym) or as body lines (stage 4); the two merge here
@@ -644,6 +639,9 @@ place_decl:
         failwith ("error '" ^ name ^ "': an error place declares fields, "
                   ^ "not `this >` arms");
       let (width, tparams) = wp in
+      (* the house gives the name: retag this body's hoisted funs *)
+      (let (_, _, _, n_arrows) = mv in
+       Parser_state.retag_home name n_arrows);
       (* collision fence at the SOURCE: the prelude owns its four names. *)
       (if List.mem name ["Number"; "Text"; "Boolean"; "Unit"]
           && fusion = None then
@@ -691,7 +689,9 @@ place_member_list:
         List.concat_map (function PbiVariants vs -> vs | _ -> []) items in
       let clauses =
         List.filter_map (function PbiClause c -> Some c | _ -> None) items in
-      (members, variants, clauses) }
+      let n_arrows =
+        List.length (List.filter (function PbiArrow -> true | _ -> false) items) in
+      (members, variants, clauses, n_arrows) }
 
 (* `this > A :U B :U ...` — the coproduct clause. It names the arms this place
    is the sum of; each arm is a variant (an existing place, optionally with a
@@ -760,16 +760,8 @@ operation_decl:
             (`) on error E : T`)" name));
       { op_name = name; op_params = params; op_return = ret;
         op_on_error = oerr;
-        op_functorial = false;
+
         op_algebra = alg;
-        op_loc = mk_loc $startpos $endpos } }
-  | FUNCTORIAL OPERATION name = IDENT LPAREN params = param_list RPAREN
-    ret = option(return_type_decl)
-    (* A cross-world functorial operation. The operation is lifted
-     * automatically along world morphisms via the Yoneda lifting. *)
-    { { op_name = name; op_params = params; op_return = ret; op_on_error = None;
-        op_functorial = true;
-        op_algebra = None;
         op_loc = mk_loc $startpos $endpos } }
 
 (* v1.1: a topos's morphism declaration. Mirrors operation_decl but uses the
@@ -781,17 +773,11 @@ morphism_decl:
   | MORPHISM_KW name = IDENT LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
     { { op_name = name; op_params = params; op_return = ret; op_on_error = None;
-        op_functorial = false;
+
         op_algebra = None;
         op_loc = mk_loc $startpos $endpos } }
   (* `functorial morphism` — cross-world functorial morphism, lifted along
      world morphisms via Yoneda. Mirrors `functorial operation`. *)
-  | FUNCTORIAL MORPHISM_KW name = IDENT LPAREN params = param_list RPAREN
-    ret = option(return_type_decl)
-    { { op_name = name; op_params = params; op_return = ret; op_on_error = None;
-        op_functorial = true;
-        op_algebra = None;
-        op_loc = mk_loc $startpos $endpos } }
 
 (* operation uses algebra <Name> — instantiates a catalog algebra *)
 uses_algebra_clause:
@@ -962,7 +948,7 @@ hit_branch:
   | ctor = IDENT AS w = IDENT FATARROW v = expr { (ctor, PatWitness w, v) }
   (* the literals as patterns on the fused Boolean: `match b { true => ..,
      false => .. }` — they NAME the kernel arms tt/ff. *)
-  | b = BOOL_LIT FATARROW v = expr { ((if b then "tt" else "ff"), PatVars [], v) }
+  | b = BOOL_LIT FATARROW v = expr { ((if b then "true" else "false"), PatVars [], v) }
   | ctor = IDENT LPAREN vars = separated_list(COMMA, IDENT) RPAREN FATARROW v = expr
     { (ctor, PatVars vars, v) }
   /* the co-mediatrice: field names bind projections BY NAME — the mirror of
@@ -979,6 +965,10 @@ pat_field:
 variant:
   | name = IDENT
     { { v_name = name; v_args = [] } }
+  (* the literals as ARM NAMES (prelude Boolean: `this > true :U false`).
+     One name only — the tt/ff translation layer is dead. *)
+  | b = BOOL_LIT
+    { { v_name = (if b then "true" else "false"); v_args = [] } }
   | name = IDENT LPAREN args = separated_list(COMMA, type_expr) RPAREN
     { { v_name = name; v_args = args } }
 
@@ -1031,7 +1021,7 @@ fun_decl:
             (`) on error E : T`)" name));
       { fn_name = name; fn_type_params = tparams; fn_params = params;
         fn_return = ret; fn_on_error = oerr;
-        fn_visits = visits; fn_internal = internal;
+        fn_visits = visits; fn_internal = internal; fn_home = None;
         fn_body = body; fn_loc = mk_loc $startpos $endpos } }
 
 /* Optional type parameters: <A>, <A, B>, or empty. */

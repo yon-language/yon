@@ -279,7 +279,7 @@ let lift_capturing_lambda (prefix : string)
     S.fn_params = cap_params
       @ List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
     S.fn_return = Some ret_ty;
-    S.fn_on_error = None; fn_visits = []; fn_internal = false;
+    S.fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
     S.fn_body = [S.SReturn (body, loc)];
     S.fn_loc = loc;
   } in
@@ -1062,7 +1062,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         S.fn_params = cap_params @
           List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
         S.fn_return = Some (S.TyPrim "number");
-        S.fn_on_error = None; fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
         S.fn_body = [S.SReturn (body, _loc)];
         S.fn_loc = _loc;
       } in
@@ -1226,7 +1226,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         S.fn_params = [{ S.param_name = x_param_name;
                          S.param_ty = h1_src }];
         S.fn_return = Some h2_tgt;
-        S.fn_on_error = None; fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
         S.fn_body = [S.SReturn (S.ELit (S.LitNumber 0.0, loc), loc)];
         S.fn_loc = loc;
       } in
@@ -1620,7 +1620,7 @@ and desugar_stmts_with_locals (locals : string list) (stmts : S.stmt list) : C.t
         S.fn_params = cap_params @
           List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
         S.fn_return = Some (S.TyPrim "number");
-        S.fn_on_error = None; fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
         S.fn_body = [S.SReturn (body, lam_loc)];
         S.fn_loc = lam_loc;
       } in
@@ -2824,7 +2824,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
                 fn_type_params = [];
                 fn_params = params;
                 fn_return = Some (S.TyPrim "proposition");
-                fn_on_error = None; fn_visits = []; fn_internal = false;
+                fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                 fn_body = [ S.SReturn (body, pr.pr_loc) ];
                 fn_loc = pr.pr_loc;
               } in
@@ -2888,7 +2888,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
         S.fn_params = List.map (fun (n, t) ->
           { S.param_name = n; S.param_ty = t }) ft.S.ft_params;
         S.fn_return = Some (S.TyUser ft.S.ft_to_world);
-        S.fn_on_error = None; fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
         S.fn_body = [S.SReturn (ft.S.ft_body, ft.S.ft_loc)];
         S.fn_loc = ft.S.ft_loc;
       } in
@@ -3115,7 +3115,7 @@ let place_info = List.filter_map (function
                fn_params = [ { S.param_name = "__view_s";
                                param_ty = S.TyUser vd.S.vw_of } ];
                fn_return = Some (S.TyUser vd.S.vw_name);
-               fn_on_error = None; fn_visits = [];
+               fn_on_error = None; fn_visits = []; fn_home = None;
                fn_internal = false;
                fn_body = [ S.SReturn
                  (S.ENew (vd.S.vw_name, assigns, loc), loc) ];
@@ -3133,6 +3133,7 @@ let desugar_program ?(env : Tyenv.env option = None)
      function body to the unique inhabitant `()`. When None the absorber stays
      inert, so behavior is identical to before. *)
   let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
+  let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
   let p = Method_sugar.qualify_overloads p in  (* overloaded method decls -> Place__name (same as tycheck) *)
   current_env := env;
   build_sum_registry p;  (* ctor -> (tag, arg types) for the MerkleTree lowering *)
@@ -3256,7 +3257,7 @@ let desugar_program ?(env : Tyenv.env option = None)
             fn_type_params = [];
             fn_params = [param];
             fn_return = target_fd.S.fn_return;
-            fn_on_error = None; fn_visits = []; fn_internal = false;
+            fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
             fn_body = body;
             fn_loc = S.dummy_loc;
           }
@@ -3281,7 +3282,7 @@ let desugar_program ?(env : Tyenv.env option = None)
                            fn_type_params = [];
                            fn_params = [param];
                            fn_return = Some (S.TyPrim "number");
-                           fn_on_error = None; fn_visits = []; fn_internal = false;
+                           fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                            fn_body = [S.SReturn (body_expr, S.dummy_loc)];
                            fn_loc = S.dummy_loc;
                          }
@@ -3461,7 +3462,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           fn_type_params = [];
           fn_params = params;
           fn_return = Some ret_ty;
-          fn_on_error = None; fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
           fn_body = body;
           fn_loc = mp.S.mp_loc;
         } in
@@ -3520,7 +3521,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           fn_type_params = [];
           fn_params = params;
           fn_return = Some ret_ty;
-          fn_on_error = None; fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
           fn_body = body;
           fn_loc = nt.S.nt_loc;
         } in
@@ -3626,7 +3627,7 @@ let desugar_program ?(env : Tyenv.env option = None)
                      fn_params = [{S.param_name = "input";
                                    param_ty = S.TyPrim "number"}];
                      fn_return = Some (S.TyPrim "number");
-                     fn_on_error = None; fn_visits = []; fn_internal = false;
+                     fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                      fn_body = body;
                      fn_loc = loc;
                    } in
@@ -3719,7 +3720,7 @@ let desugar_program ?(env : Tyenv.env option = None)
                      fn_params = [{S.param_name = "seed";
                                    param_ty = S.TyPrim "number"}];
                      fn_return = Some (S.TyPrim "number");
-                     fn_on_error = None; fn_visits = []; fn_internal = false;
+                     fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
                      fn_body = body;
                      fn_loc = loc;
                    } in
@@ -3844,7 +3845,7 @@ let desugar_program ?(env : Tyenv.env option = None)
             S.fn_name = "floor"; fn_type_params = [];
             fn_params = [mk_param "x"];
             fn_return = Some (S.TyPrim "number");
-            fn_on_error = None; fn_visits = []; fn_internal = false;
+            fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
             fn_body = body; fn_loc = loc } in
           process_top_decl res (S.TopFun fd)
       in
@@ -3884,7 +3885,7 @@ let desugar_program ?(env : Tyenv.env option = None)
         fn_type_params = [];
         fn_params = [mk_param "fa"; mk_param "gb"; mk_param "a"; mk_param "b"];
         fn_return = Some (S.TyPrim "number");
-        fn_on_error = None; fn_visits = []; fn_internal = false;
+        fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
         fn_body = pack_body;
         fn_loc = loc;
       } in
@@ -3901,7 +3902,7 @@ let desugar_program ?(env : Tyenv.env option = None)
         fn_type_params = [];
         fn_params = [mk_param "p"];
         fn_return = Some (S.TyPrim "number");
-        fn_on_error = None; fn_visits = []; fn_internal = false;
+        fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
         fn_body = pi1_body;
         fn_loc = loc;
       } in
@@ -3916,7 +3917,7 @@ let desugar_program ?(env : Tyenv.env option = None)
         fn_type_params = [];
         fn_params = [mk_param "p"];
         fn_return = Some (S.TyPrim "number");
-        fn_on_error = None; fn_visits = []; fn_internal = false;
+        fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
         fn_body = pi2_body;
         fn_loc = loc;
       } in
@@ -3955,7 +3956,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "floor"; fn_type_params = [];
           fn_params = [mk_param "x"];
           fn_return = Some (S.TyPrim "number");
-          fn_on_error = None; fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -3979,7 +3980,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "__pow2"; fn_type_params = [];
           fn_params = [mk_param "n"];
           fn_return = Some (S.TyPrim "number");
-          fn_on_error = None; fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -3993,7 +3994,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "__shl"; fn_type_params = [];
           fn_params = [mk_param "a"; mk_param "n"];
           fn_return = Some (S.TyPrim "number");
-          fn_on_error = None; fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -4010,7 +4011,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "__shr"; fn_type_params = [];
           fn_params = [mk_param "a"; mk_param "n"];
           fn_return = Some (S.TyPrim "number");
-          fn_on_error = None; fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -4057,7 +4058,7 @@ let desugar_program ?(env : Tyenv.env option = None)
               fn_type_params = [];
               fn_params = fd.S.fn_params;
               fn_return = fd.S.fn_return;
-              fn_on_error = None; fn_visits = []; fn_internal = false;
+              fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
               fn_body = body;
               fn_loc = mp.S.mp_loc;
             } in
@@ -4126,7 +4127,7 @@ let desugar_program ?(env : Tyenv.env option = None)
             fn_type_params = [];
             fn_params = params;
             fn_return = ret_ty_opt;
-            fn_on_error = None; fn_visits = []; fn_internal = false;
+            fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
             fn_body = body;
             fn_loc = nt.S.nt_loc }
         in

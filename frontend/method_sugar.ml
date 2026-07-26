@@ -121,6 +121,82 @@ let first_param_place (fd : S.fun_decl) : string option =
   | p :: _ -> (match p.S.param_ty with S.TyUser pl -> Some pl | _ -> None)
   | [] -> None
 
+(* ─── Qualified naming: THE HOUSE GIVES THE NAME (Antonio's doctrine) ───
+   A fun hoisted from `place P { ... }` carries fn_home = Some P and its
+   canonical name is P__name (the same mangling the receiver dispatch and
+   the dot-call already speak: `P.name(args)` parses to `P__name(args)`).
+   The BARE name stays valid INSIDE the house: sibling calls in a homed
+   fun's body are rewritten to the qualified name (the sibling wins over a
+   global homonym — same rule as bare points). Outside the house the bare
+   name simply does not exist. Idempotent: an already-prefixed name is left
+   alone. Collisions (same house, same name) surface as genuine duplicates
+   downstream, loudly. *)
+let qualify_homes (p : S.program) : S.program =
+  (* home -> set of its fun names (pre-rename) *)
+  let home_funs : (string, string list) Hashtbl.t = Hashtbl.create 16 in
+  List.iter (function
+    | S.TopFun fd ->
+        (match fd.S.fn_home with
+         | Some h ->
+             let prev = Option.value ~default:[] (Hashtbl.find_opt home_funs h) in
+             Hashtbl.replace home_funs h (fd.S.fn_name :: prev)
+         | None -> ())
+    | _ -> ()) p;
+  let qual h n = h ^ "__" ^ n in
+  let rec rw_expr (sibs : string list) (h : string) (e : S.expr) : S.expr =
+    let r = rw_expr sibs h in
+    match e with
+    | S.ECall (n, args, l) when List.mem n sibs ->
+        S.ECall (qual h n, List.map r args, l)
+    | S.ECall (n, args, l) -> S.ECall (n, List.map r args, l)
+    | S.EApp (f, args, l) -> S.EApp (r f, List.map r args, l)
+    | S.EBinop (op, a, b, l) -> S.EBinop (op, r a, r b, l)
+    | S.EParen (x, l) -> S.EParen (r x, l)
+    | S.EIfThenElse (c, a, b, l) -> S.EIfThenElse (r c, r a, r b, l)
+    | S.EField (o, f, l) -> S.EField (r o, f, l)
+    | S.ERefl (x, l) -> S.ERefl (r x, l)
+    | S.EPathAbs (i, b, l) -> S.EPathAbs (i, r b, l)
+    | S.EPathApp (x, d, l) -> S.EPathApp (r x, d, l)
+    | S.EHITConstr (c, args, l) -> S.EHITConstr (c, List.map r args, l)
+    | S.EHITElim (m, brs, x, l) ->
+        S.EHITElim (r m, List.map (fun (c, pt, b) -> (c, pt, r b)) brs, r x, l)
+    | S.ELam (ps, b, l) -> S.ELam (ps, r b, l)
+    | S.ENew (n, fas, l) ->
+        S.ENew (n, List.map (fun fa -> { fa with S.fa_value = r fa.S.fa_value }) fas, l)
+    | S.EPair (a, b, l) -> S.EPair (r a, r b, l)
+    | S.EFst (x, l) -> S.EFst (r x, l)
+    | S.ESnd (x, l) -> S.ESnd (r x, l)
+    | S.ENot (x, l) -> S.ENot (r x, l)
+    | other -> other
+  in
+  let rec rw_stmt sibs h (st : S.stmt) : S.stmt =
+    match st with
+    | S.SLet (n, e, l) -> S.SLet (n, rw_expr sibs h e, l)
+    | S.SReturn (e, l) -> S.SReturn (rw_expr sibs h e, l)
+    | S.SCall (n, args, l) when List.mem n sibs ->
+        S.SCall (h ^ "__" ^ n, List.map (rw_expr sibs h) args, l)
+    | S.SCall (n, args, l) -> S.SCall (n, List.map (rw_expr sibs h) args, l)
+    | S.SAssignHolds (lv, e, l) -> S.SAssignHolds (lv, rw_expr sibs h e, l)
+    | S.SWhile (c, body, l) ->
+        S.SWhile (rw_expr sibs h c, List.map (rw_stmt sibs h) body, l)
+    | S.SForever (body, l) -> S.SForever (List.map (rw_stmt sibs h) body, l)
+    | S.SForEvery (k, v, e, body, l) ->
+        S.SForEvery (k, v, rw_expr sibs h e, List.map (rw_stmt sibs h) body, l)
+    | other -> other
+  in
+  List.map (function
+    | S.TopFun fd when fd.S.fn_home <> None ->
+        let h = Option.get fd.S.fn_home in
+        let sibs = Option.value ~default:[] (Hashtbl.find_opt home_funs h) in
+        let already =
+          let pfx = h ^ "__" in
+          String.length fd.S.fn_name >= String.length pfx
+          && String.sub fd.S.fn_name 0 (String.length pfx) = pfx in
+        let fd = if already then fd
+          else { fd with S.fn_name = qual h fd.S.fn_name } in
+        S.TopFun { fd with S.fn_body = List.map (rw_stmt sibs h) fd.S.fn_body }
+    | d -> d) p
+
 let qualify_overloads (p : S.program) : S.program =
   let names = List.filter_map (function S.TopFun fd -> Some fd.S.fn_name | _ -> None) p in
   let shared n = List.length (List.filter (String.equal n) names) > 1 in

@@ -434,9 +434,6 @@ type operation_decl = {
   op_params : param list;
   op_return : ty option;
   op_on_error : string option;      (* as fn_on_error, on a mediated arrow *)
-  op_functorial : bool;  (* cross-world functorial: the operation is lifted
-                            automatically along world morphisms (Yoneda lifting
-                            at the world level) *)
   op_algebra : string option;  (* `uses algebra <Name>`: instantiates an
                             algebra from the certified catalog. The place's laws
                             are verified against the catalog. *)
@@ -537,6 +534,10 @@ type fun_decl = {
   fn_on_error : string option;      (* `on error E`: the return type is the
                                        coproduct T + E; raising = returning a
                                        section of E, handling = a match branch *)
+  fn_home : string option;          (* the HOUSE: the place whose braces declare
+                                       this fun (qualified name = Home.name; the
+                                       bare name stays valid inside the house).
+                                       None = the entry container / legacy. *)
   fn_visits : string list;          (* effect signature — Yoneda-native "constraint":
                                        visits Ord means the function requires the
                                        place Ord with its operations to be active *)
@@ -661,7 +662,6 @@ type geom_morphism_decl = {
    *   only lax monoidal   -> eventual coordination (lax)
    *   neither/semilattice -> free_merge coordination (CRDT)
    *)
-  gm_adjunction : bool;
   gm_f_star_exact : bool;
   gm_f_lower_star_exact : bool;
   gm_loc : location;
@@ -674,7 +674,6 @@ type geom_morphism_item_kind =
   (* Categorical properties declared inside the geom_morphism block. They
      replace the old policy enum (direct/sharded/paxos/crdt) as the mechanism
      for declaring distributed semantics. *)
-  | GmItemAdjunction
   | GmItemExactFStar
   | GmItemExactFLowerStar
 

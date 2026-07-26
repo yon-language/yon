@@ -71,7 +71,9 @@ let doc_place (p : S.place_decl) =
 let doc_geomorph (g : S.geom_morphism_decl) =
   line (Printf.sprintf "### geomorph `%s`: `%s` → `%s`"
           g.S.gm_name g.S.gm_source_site g.S.gm_target_site);
-  if g.S.gm_adjunction then line "- adjunction: pull ⊣ push";
+  (* a geometric morphism IS an adjoint pair by definition (Antonio):
+     the line is unconditional now *)
+  line "- adjunction: pull ⊣ push";
   if g.S.gm_f_star_exact then line "- pull (f*) preserves finite limits";
   if g.S.gm_f_lower_star_exact then line "- push (f_*) preserves finite colimits";
   (match g.S.gm_pull with

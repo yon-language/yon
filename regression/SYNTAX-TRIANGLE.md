@@ -9,7 +9,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `regression/CANONICAL-FORMS.md`. Regenerate this file with
 `python regression/test_syntax_triangle.py`.
 
-- lexer keywords: **113**
+- lexer keywords: **111**
 - corpus files: **361**
 - CodeWindows: **23**  (project **11**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **34**
@@ -20,7 +20,6 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | keyword | token | corpus count | book #21 | status |
 |---|---|---|---|---|
 | `absent` | `ABSENT` | 3 | yes | exercised |
-| `adjunction` | `ADJUNCTION_KW` | 1 | yes | exercised |
 | `aggregates` | `AGGREGATES` | 1 | yes | exercised |
 | `algebra` | `ALGEBRA` | 1 | yes | exercised |
 | `along` | `ALONG` | 3 | yes | exercised |
@@ -45,7 +44,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `error` | `ERROR_KW` | 3 | yes | exercised |
 | `every` | `EVERY` | 5 | yes | exercised |
 | `exact` | `EXACT_KW` | 2 | yes | exercised |
-| `false` | `BOOL_LIT` | 2 | yes | exercised |
+| `false` | `BOOL_LIT` | 4 | yes | exercised |
 | `fold` | `FOLD` | 13 | yes | exercised |
 | `for` | `FOR` | 6 | yes | exercised |
 | `forces` | `FORCES` | 1 | yes | exercised |
@@ -54,7 +53,6 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `fst` | `FST` | 7 | yes | exercised |
 | `fun` | `FUN` | 368 | yes | exercised |
 | `functor` | `FUNCTOR` | 9 | yes | exercised |
-| `functorial` | `FUNCTORIAL` | 1 | yes | exercised |
 | `geomorph` | `GEOM_MORPHISM` | 5 | yes | exercised |
 | `hcomp` | `HCOMP` | 3 | yes | exercised |
 | `here` | `HERE` | 1 | yes | exercised |
@@ -120,7 +118,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `to` | `TO` | 41 | yes | exercised |
 | `topology` | `TOPOLOGY` | 1 | yes | exercised |
 | `topos` | `TOPOS_KW` | 61 | yes | exercised |
-| `true` | `BOOL_LIT` | 2 | yes | exercised |
+| `true` | `BOOL_LIT` | 5 | yes | exercised |
 | `unifies` | `UNIFIES` | 1 | yes | exercised |
 | `unknown` | `UNKNOWN` | 6 | yes | exercised |
 | `uses` | `USES` | 1 | yes | exercised |

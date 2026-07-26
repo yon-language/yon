@@ -1,6 +1,5 @@
 place Entry {
   geomorph Lift from Account to AccountEU {
-    adjunction
     exact pull
     exact push
     pull(a: AccountEU): Account {

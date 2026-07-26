@@ -499,7 +499,7 @@ let with_builtins (env : env) : env =
     op_name = "print";
     op_params = [{ param_name = "s"; param_ty = TyUser "String" }];
     op_return = Some (TyPrim "unit"); op_on_error = None;
-    op_functorial = false;
+
     op_algebra = None;
     op_loc = dummy_loc;
   } in

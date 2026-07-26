@@ -61,7 +61,6 @@
          respecting identity and composition). `functorial` marks an operation
          that behaves this way. `forward`/`backward`/`bi` give a functor's
          direction. *)
-      "functorial", FUNCTORIAL;
       "functor", FUNCTOR;
 
       (* Algebra on a place: `operation f(...) uses algebra A` binds an
@@ -100,7 +99,6 @@
          pull (f^*, inverse image, the left adjoint) and push (f_*, direct
          image, the right adjoint). `adjunction` names the pairing, `exact`
          the requirement that the inverse image preserve finite limits. *)
-      "adjunction", ADJUNCTION_KW;
       "exact", EXACT_KW;
 
       (* Error model. `error E subcontains Base { ... }` declares an error as a

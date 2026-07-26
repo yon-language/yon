@@ -543,7 +543,7 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
        if td.tp_morphisms <> [] then begin
          (* the `morphisms { }` wrapper is retired: bare morphism lines. *)
          List.iter (fun op ->
-           let kw = if op.op_functorial then "functorial morphism" else "morphism" in
+           let kw = "morphism" in
            let params = String.concat ", "
              (List.map (fun p -> p.param_name ^ ": " ^ fmt_ty p.param_ty) op.op_params) in
            let ret = match op.op_return with Some t -> ": " ^ fmt_ty t | None -> "" in
