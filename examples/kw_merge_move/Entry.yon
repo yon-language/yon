@@ -1,23 +1,24 @@
-place Entry { }
-fun pick(a: Number, b: Number): Number { return a }
-fun ident(x: Number): Number { return x }
-fun double(x: Number): Number { return x * 2 }
-move Merge unifies A, B {
-  share v
-  conflict on w resolves to pick
-}
-move Squeeze from Wide to Narrow {
-  x maps to x by ident
-  y aggregates to total by double
-}
-fun main(): Number {
-  be a holds .-> A { v 7
-    w 1 }
-  be b holds .-> B { v 7
-    w 9 }
-  be m holds Move.merge(Merge, a, b)
-  be wide holds .-> Wide { x 4
-    y 5 }
-  be narrow holds apply_move(Squeeze, wide)
-  return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
+place Entry {
+  fun pick(a: Number, b: Number): Number { return a }
+  fun ident(x: Number): Number { return x }
+  fun double(x: Number): Number { return x * 2 }
+  move Merge unifies A, B {
+    share v
+    conflict on w resolves to pick
+  }
+  move Squeeze from Wide to Narrow {
+    x maps to x by ident
+    y aggregates to total by double
+  }
+  fun main(): Number {
+    be a holds .-> A { v 7
+      w 1 }
+    be b holds .-> B { v 7
+      w 9 }
+    be m holds Move.merge(Merge, a, b)
+    be wide holds .-> Wide { x 4
+      y 5 }
+    be narrow holds apply_move(Squeeze, wide)
+    return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
+  }
 }

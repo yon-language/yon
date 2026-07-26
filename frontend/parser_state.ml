@@ -39,7 +39,7 @@ let lift_inline_block_lambda_to_fun
     fn_type_params = [];
     fn_params = fn_params;
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false;
+    fn_on_error = None; fn_visits = []; fn_internal = false;
     fn_body = body @ [Surface_ast.SReturn
                         (Surface_ast.ELit (Surface_ast.LitNumber 0.0, loc), loc)];
     fn_loc = loc;
@@ -60,7 +60,7 @@ let lift_inline_lambda_to_fun
     fn_type_params = [];
     fn_params = fn_params;
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false;
+    fn_on_error = None; fn_visits = []; fn_internal = false;
     fn_body = [Surface_ast.SReturn (body, loc)];
     fn_loc = loc;
   } in

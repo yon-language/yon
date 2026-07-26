@@ -1,8 +1,9 @@
-place Entry { }
-fun main(): Number visits Output {
-  be l holds List.cons(1445, List.cons(1280, List.empty(0)))
-  be acc holds Space.make(0)
-  iter 10000000 do { be _ holds Space.set(acc, Space.get(acc) + (List.head(l))) }
-  be _p holds Output.print(String.from_int(Space.get(acc)))
-  return 0
+place Entry {
+  fun main(): Number visits Output {
+    be l holds List.cons(1445, List.cons(1280, List.empty(0)))
+    be acc holds Space.make(0)
+    iter 10000000 do { be _ holds Space.set(acc, Space.get(acc) + (List.head(l))) }
+    be _p holds Output.print(String.from_int(Space.get(acc)))
+    return 0
+  }
 }

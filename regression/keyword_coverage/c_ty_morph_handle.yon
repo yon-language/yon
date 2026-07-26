@@ -1,5 +1,7 @@
 // coverage: a parameter of morph-handle type `morph from S1 to S2`
 // (TyMorphHandle). Grammar: MORPH_KW FROM IDENT TO IDENT (parser.mly).
 // The type is opaque: tycheck accepts any topos identifiers (no decl needed).
-fun run(m: morph from Account to AccountEU): Number { return 0 }
-fun main(): Number { return 0 }
+place Entry {
+  fun run(m: morph from Account to AccountEU): Number { return 0 }
+  fun main(): Number { return 0 }
+}

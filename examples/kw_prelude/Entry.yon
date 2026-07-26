@@ -1,12 +1,13 @@
-place Entry { }
-fun neg(b: Boolean): Boolean {
-  return match b { true => ff, false => tt }
-}
-fun pick(b: Boolean): Number {
-  return match b { tt => 30, ff => 12 }
-}
-fun main(): Number {
-  be x holds tt
-  be y holds neg(x)
-  return pick(x) + pick(y)
+place Entry {
+  fun neg(b: Boolean): Boolean {
+    return match b { true => ff, false => tt }
+  }
+  fun pick(b: Boolean): Number {
+    return match b { tt => 30, ff => 12 }
+  }
+  fun main(): Number {
+    be x holds tt
+    be y holds neg(x)
+    return pick(x) + pick(y)
+  }
 }

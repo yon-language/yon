@@ -2,4 +2,6 @@
    The prelude speaks it for Number/Text/Boolean/Unit; a user face of a
    non-reserved name is the same production. */
 place Meter is number { }
-fun main(): Number { return 42 }
+place Entry {
+  fun main(): Number { return 42 }
+}

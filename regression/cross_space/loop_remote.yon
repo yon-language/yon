@@ -1,10 +1,12 @@
 /* Remote call inside a loop (the lower_cross_space bug, part 144). */
 import bank::deposit_net from Bank
 
-fun main(): Number {
-  be total holds 0
-  for every d in List.cons(100, List.empty(0)) {
-    total = total + deposit_net(d)
+place Entry {
+  fun main(): Number {
+    be total holds 0
+    for every d in List.cons(100, List.empty(0)) {
+      total = total + deposit_net(d)
+    }
+    return total           // 95
   }
-  return total           // 95
 }

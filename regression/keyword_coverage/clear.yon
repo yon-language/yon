@@ -1,4 +1,6 @@
 /* clear a = the surface reflexivity: the trivial path on a value (kernel: refl). */
-fun main(): Number { be p holds clear 5
-  be q holds clear (5 + 0)
-  return (p @ I0) + (q @ I1) - 5 }
+place Entry {
+  fun main(): Number { be p holds clear 5
+    be q holds clear (5 + 0)
+    return (p @ I0) + (q @ I1) - 5 }
+}

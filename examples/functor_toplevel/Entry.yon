@@ -1,10 +1,11 @@
-place Entry { }
-functor Identity(x: Number) from W to V
-  law identity
-  law composition
-{
-  return x
-}
-fun main(): Number {
-  return 0
+place Entry {
+  functor Identity(x: Number) from W to V
+    law identity
+    law composition
+  {
+    return x
+  }
+  fun main(): Number {
+    return 0
+  }
 }

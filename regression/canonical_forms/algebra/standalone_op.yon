@@ -1,2 +1,4 @@
 operation twice(a: Number): Number uses algebra Additive
-fun main(): Number { return 42 }
+place Entry {
+  fun main(): Number { return 42 }
+}

@@ -1,11 +1,12 @@
-place Entry { }
-reduction Sum of Tally with multishot fold "sum_f64" {
-  be seed holds 0
-  on add(x: Number) {
-    return x
+place Entry {
+  reduction Sum of Tally with multishot fold "sum_f64" {
+    be seed holds 0
+    on add(x: Number) {
+      return x
+    }
   }
+  reduction Rewind of Tally {
+    be seed holds 0
+  }
+  fun main(): Number { return 0 }
 }
-reduction Rewind of Tally {
-  be seed holds 0
-}
-fun main(): Number { return 0 }

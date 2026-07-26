@@ -1,2 +1,4 @@
-fun beta_snd(a: Number, b: Number): Id(Number, snd(pair(a, b)), b) { return refl(b) }
-fun main(): Number { return 0 }
+place Entry {
+  fun beta_snd(a: Number, b: Number): Id(Number, snd(pair(a, b)), b) { return refl(b) }
+  fun main(): Number { return 0 }
+}

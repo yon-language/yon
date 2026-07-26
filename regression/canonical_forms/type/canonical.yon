@@ -1,2 +1,4 @@
-fun sum(xs: List<Number>): Number { return xs.fold(0, fun(a: Number, b: Number) => a + b) }
-fun main(): Number { return sum(List.cons(40, List.cons(2, List.empty(0)))) }
+place Entry {
+  fun sum(xs: List<Number>): Number { return xs.fold(0, fun(a: Number, b: Number) => a + b) }
+  fun main(): Number { return sum(List.cons(40, List.cons(2, List.empty(0)))) }
+}

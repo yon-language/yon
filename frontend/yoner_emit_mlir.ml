@@ -429,7 +429,9 @@ let () =
             Lexing.set_filename lexbuf fn;
             Parser_state.reset ();
             let p = Parser.program Lexer.token lexbuf in
-            let _ = Parser_state.drain () in
+            (* the drain carries the PLACE-HOSTED arrows (body rule): the
+               producer's `fun readings()` lives inside place Entry now *)
+            let p = Parser_state.drain () @ p in
             List.iter (function
               | Surface_ast.TopFun fd ->
                   Tycheck.register_remote_signature

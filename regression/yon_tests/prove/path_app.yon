@@ -1,4 +1,6 @@
-fun main(): Number {
-  be p holds plam i => 7
-  return (p @ I0) - 7
+place Entry {
+  fun main(): Number {
+    be p holds plam i => 7
+    return (p @ I0) - 7
+  }
 }

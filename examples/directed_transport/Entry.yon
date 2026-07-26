@@ -1,7 +1,8 @@
-place Entry { }
-fun proofId(a: Account): Account { return a }
-fun transport_demo(a: Account): Account {
-  be c holds coerce_incl(a, proofId)
-  return c
+place Entry {
+  fun proofId(a: Account): Account { return a }
+  fun transport_demo(a: Account): Account {
+    be c holds coerce_incl(a, proofId)
+    return c
+  }
+  fun main(): Number { return 0 }
 }
-fun main(): Number { return 0 }

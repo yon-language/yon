@@ -1,6 +1,7 @@
-place Entry { }
-fun handle(e: Error): Number { return 1 }
-fun on_query_fail(q: QueryError): Number {
-  return handle(q)
+place Entry {
+  fun handle(e: Error): Number { return 1 }
+  fun on_query_fail(q: QueryError): Number {
+    return handle(q)
+  }
+  fun main(): Number { return 0 }
 }
-fun main(): Number { return 0 }

@@ -2,5 +2,7 @@
 // Grammar: PATHP LPAREN IDENT COMMA type_expr COMMA IDENT COMMA IDENT RPAREN.
 // Well-formedness only checks the carrier type A (tycheck.ml); the endpoints
 // x, y are free term identifiers.
-fun usePath(p: PathP(i, Number, a, b)): Number { return 0 }
-fun main(): Number { return 0 }
+place Entry {
+  fun usePath(p: PathP(i, Number, a, b)): Number { return 0 }
+  fun main(): Number { return 0 }
+}

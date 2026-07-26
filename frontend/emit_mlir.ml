@@ -2878,8 +2878,12 @@ let rec emit_term (e : emitter)
       (v, "f64")
   | C.App (C.App (C.App (C.Var "MerkleTree__node2", arg_l), arg_c1), arg_c2) ->
       let (vl, _) = emit_term e env funcs arg_l in
-      let (vc1, _) = emit_term e env funcs arg_c1 in
-      let (vc2, _) = emit_term e env funcs arg_c2 in
+      let (vc1, t1) = emit_term e env funcs arg_c1 in
+      let (vc2, t2) = emit_term e env funcs arg_c2 in
+      (* a spine child may be a SECTION handle (error-coproduct injection):
+         coerce to the uniform f64 the node expects — the handle IS f64 *)
+      let vc1 = coerce_to_param e vc1 t1 "f64" in
+      let vc2 = coerce_to_param e vc2 t2 "f64" in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_node2(%s, %s, %s) : (f64, f64, f64) -> f64" v vl vc1 vc2);
@@ -4119,7 +4123,7 @@ let rec emit_term (e : emitter)
                        "[emit_mlir] alias %s does not name a zero-argument function." x))
             | _ -> emit_term e env funcs g)
        | _ -> emit_term e env funcs g)
-  | C.App (C.Lam (x, _, rest), value) ->
+  | C.App (C.Lam (x, xty, rest), value) ->
       (* Special case: the bound value is itself a Lam, so this is a function
          let-binding. Functions are already emitted as top-level func.func
          under their original name, so if x matches a known function we just
@@ -4192,6 +4196,18 @@ let rec emit_term (e : emitter)
                 emit_term e env' funcs rest
             | _ ->
                 let (vv, tv) = emit_term e env funcs value in
+                (* the binder ANNOTATION wins when it declares a SECTION and
+                   the value carries the uniform f64 handle (a spine child
+                   holding an error/union section: the type is knowledge the
+                   desugar had and the handle cannot express) *)
+                let (vv, tv) =
+                  (match xty with
+                   | C.TyPlace n when tv = "f64" && not (is_prim_name n) ->
+                       let ann = Printf.sprintf "!topos.section<\"%s\">" n in
+                       if is_section_ty_str ann then
+                         (coerce_to_param e vv tv ann, ann)
+                       else (vv, tv)
+                   | _ -> (vv, tv)) in
                 (match value with
                  | C.App (C.Var "Space__make", e0) ->
                      let ety = infer_mlir_ty e env funcs e0 in

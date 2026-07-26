@@ -82,7 +82,7 @@
       (function GmItemExactFStar -> true | _ -> false) items in
     let f_lower_ex = List.exists
       (function GmItemExactFLowerStar -> true | _ -> false) items in
-    { gm_name = name;
+    { gm_name = name; gm_on_error = None;
       gm_source_site = src_site;
       gm_target_site = dst_site;
       gm_pull = pull;
@@ -139,6 +139,7 @@
 %token USES
 %token ALGEBRA
 %token ERROR_KW
+%token ON_ERROR
 /* The tokens BACKED_BY/POL_DIRECT/POL_SHARDED/POL_PAXOS/POL_CRDT were removed:
  * they were distributed-policy keywords, replaced by geom_morphism +
  * space.with_fold. */
@@ -416,7 +417,7 @@ morph_decl:
         (function MItemOnObject fd -> Some fd | _ -> None) items in
       let mm = List.filter_map
         (function MItemOnMorphism (a, b) -> Some (a, b) | _ -> None) items in
-      { mp_name = name;
+      { mp_name = name; mp_on_error = None;
         mp_source = src;
         mp_target = tgt;
         mp_on_object = on_obj;
@@ -442,7 +443,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_visits = []; fn_internal = false;
+                 fn_on_error = None; fn_visits = []; fn_internal = false;
                  fn_body = body;
                  fn_loc = mk_loc $startpos $endpos } in
       MItemOnObject fd }
@@ -461,7 +462,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_visits = []; fn_internal = false;
+                 fn_on_error = None; fn_visits = []; fn_internal = false;
                  fn_body = [SReturn (body_expr, loc)];
                  fn_loc = loc } in
       MItemOnObject fd }
@@ -493,7 +494,7 @@ nat_transform_decl:
     LBRACE bindings = list(nat_transform_binding) RBRACE
     { if kind <> "transform" then
         failwith ("expected 'nat transform' declaration, got 'nat " ^ kind ^ "'");
-      { nt_name = name;
+      { nt_name = name; nt_on_error = None;
         nt_source_morph = src;
         nt_target_morph = tgt;
         nt_components = [];
@@ -556,7 +557,7 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_visits = []; fn_internal = false;
+                   fn_on_error = None; fn_visits = []; fn_internal = false;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   | PUSH LPAREN params = param_list RPAREN
@@ -566,7 +567,7 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_visits = []; fn_internal = false;
+                   fn_on_error = None; fn_visits = []; fn_internal = false;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   (* Categorical clauses declaring properties of the geometric morphism. The
@@ -671,11 +672,7 @@ over_clause:
  * plain identifier and validated contextually, the same scheme used by
  * the morph body clauses: `on` stays free as a user name. *)
 on_error_clause:
-  | tag = IDENT ERROR_KW e = IDENT
-    { if tag <> "on" then
-        failwith ("expected 'on error' clause in place header, got '"
-                  ^ tag ^ " error'");
-      e }
+  | ON_ERROR e = IDENT  { e }
 
 field_or_cell:
   | f = field_decl                          { FoField f }
@@ -717,11 +714,8 @@ place_member:
      (mirror of the coproduct's `this > arms` = this ⊃ arms). Absorbs the
      retired `subcontains` word; the AST clause is unchanged (pure respelling). */
   | THIS LT base = IDENT                  { PbiClause (PcSubcontains base) }
-  | tag = IDENT ERROR_KW e = IDENT
-    { if tag <> "on" then
-        failwith ("expected 'on error' clause in place body, got '"
-                  ^ tag ^ " error'");
-      PbiClause (PcOnError e) }
+  | ON_ERROR e = IDENT
+    { PbiClause (PcOnError e) }
   | fd = fun_decl                         { Parser_state.push_decl (TopFun fd); PbiArrow }
   | md = move_decl                        { Parser_state.push_decl (TopMove md); PbiArrow }
   | fct = functor_decl                    { Parser_state.push_decl fct; PbiArrow }
@@ -753,10 +747,19 @@ cell_decl:
         cell_loc = mk_loc $startpos $endpos } }
 
 operation_decl:
+  (* `) on error E : T` — Antonio's third way: the clause sits BEFORE the
+     return type, and the `:` after E disambiguates (no place member can
+     start with `:`). Return type MANDATORY with the clause. *)
   | OPERATION name = IDENT LPAREN params = param_list RPAREN
+    oerr = option(on_error_clause)
     ret = option(return_type_decl)
     alg = option(uses_algebra_clause)
-    { { op_name = name; op_params = params; op_return = ret;
+    { (if oerr <> None && ret = None then
+         failwith (Printf.sprintf
+           "operation %s: `on error` requires an explicit return type \
+            (`) on error E : T`)" name));
+      { op_name = name; op_params = params; op_return = ret;
+        op_on_error = oerr;
         op_functorial = false;
         op_algebra = alg;
         op_loc = mk_loc $startpos $endpos } }
@@ -764,7 +767,7 @@ operation_decl:
     ret = option(return_type_decl)
     (* A cross-world functorial operation. The operation is lifted
      * automatically along world morphisms via the Yoneda lifting. *)
-    { { op_name = name; op_params = params; op_return = ret;
+    { { op_name = name; op_params = params; op_return = ret; op_on_error = None;
         op_functorial = true;
         op_algebra = None;
         op_loc = mk_loc $startpos $endpos } }
@@ -777,7 +780,7 @@ operation_decl:
 morphism_decl:
   | MORPHISM_KW name = IDENT LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
-    { { op_name = name; op_params = params; op_return = ret;
+    { { op_name = name; op_params = params; op_return = ret; op_on_error = None;
         op_functorial = false;
         op_algebra = None;
         op_loc = mk_loc $startpos $endpos } }
@@ -785,7 +788,7 @@ morphism_decl:
      world morphisms via Yoneda. Mirrors `functorial operation`. *)
   | FUNCTORIAL MORPHISM_KW name = IDENT LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
-    { { op_name = name; op_params = params; op_return = ret;
+    { { op_name = name; op_params = params; op_return = ret; op_on_error = None;
         op_functorial = true;
         op_algebra = None;
         op_loc = mk_loc $startpos $endpos } }
@@ -804,7 +807,7 @@ functor_decl:
     laws = list(functor_law)
     LBRACE RETURN body = expr RBRACE
     { TopFunctor {
-        ft_name = name;
+        ft_name = name; ft_on_error = None;
         ft_from_world = from_w;
         ft_to_world = to_w;
         ft_params = List.map (fun (n, t) -> (n, t)) params;
@@ -954,6 +957,9 @@ type_atom:
 
 hit_branch:
   | ctor = IDENT FATARROW v = expr { (ctor, PatVars [], v) }
+  (* `Place as w =>` — classify-and-bind: `as` in the same trade it has in
+     field patterns (bind to a name), applied to the whole section. *)
+  | ctor = IDENT AS w = IDENT FATARROW v = expr { (ctor, PatWitness w, v) }
   (* the literals as patterns on the fused Boolean: `match b { true => ..,
      false => .. }` — they NAME the kernel arms tt/ff. *)
   | b = BOOL_LIT FATARROW v = expr { ((if b then "tt" else "ff"), PatVars [], v) }
@@ -1010,11 +1016,22 @@ fun_decl:
   | internal = boption(INTERNAL) FUN name = IDENT
     tparams = type_params_opt
     LPAREN params = param_list RPAREN
+    oerr = option(on_error_clause)
     ret = option(return_type_decl)
     visits = visits_clause
     LBRACE body = list(stmt) RBRACE
-    { { fn_name = name; fn_type_params = tparams; fn_params = params;
-        fn_return = ret; fn_visits = visits; fn_internal = internal;
+    { (* UNIFORM order across the arrow family: `) on error E : T` — after E
+         comes `:`, which no other construct can start, so the clause is
+         unambiguous in every host (the operation lesson). The return type is
+         MANDATORY with `on error`: an arrow that can fail declares what it
+         returns when it succeeds. *)
+      (if oerr <> None && ret = None then
+         failwith (Printf.sprintf
+           "fun %s: `on error` requires an explicit return type \
+            (`) on error E : T`)" name));
+      { fn_name = name; fn_type_params = tparams; fn_params = params;
+        fn_return = ret; fn_on_error = oerr;
+        fn_visits = visits; fn_internal = internal;
         fn_body = body; fn_loc = mk_loc $startpos $endpos } }
 
 /* Optional type parameters: <A>, <A, B>, or empty. */
@@ -1033,7 +1050,7 @@ move_decl:
   | MOVE name = IDENT FROM src = IDENT TO dst = IDENT
     caps = optional_requires
     LBRACE body = list(mapping_decl) RBRACE
-    { { mv_name = name; mv_from = [src]; mv_to = Some dst;
+    { { mv_name = name; mv_from = [src]; mv_to = Some dst; mv_on_error = None;
         mv_body = MoveMapping body;
         mv_policy = [];
         mv_requires_caps = caps;
@@ -1041,7 +1058,7 @@ move_decl:
   | MOVE name = IDENT UNIFIES srcs = ident_list
     caps = optional_requires
     LBRACE body = merge_body RBRACE
-    { { mv_name = name; mv_from = srcs; mv_to = None;
+    { { mv_name = name; mv_from = srcs; mv_to = None; mv_on_error = None;
         mv_body = MoveMerge body;
         mv_policy = [];
         mv_requires_caps = caps;
@@ -1106,7 +1123,7 @@ conflict_clause:
 view_decl:
   | VIEW name = IDENT OF p = IDENT
     LBRACE items = list(view_item) RBRACE
-    { { vw_name = name; vw_of = p; vw_items = items;
+    { { vw_name = name; vw_of = p; vw_items = items; vw_on_error = None;
         vw_loc = mk_loc $startpos $endpos } }
 
 view_item:
@@ -1125,7 +1142,7 @@ reduction_decl:
     LBRACE clauses = list(reduction_clause) RBRACE
     { (* No more distributed policy. The fold, if present, is explicit. The
        * cross-space semantics live in geom_morphism, not in the reduction. *)
-      { rd_name = name; rd_of = target; rd_multi_shot = multi;
+      { rd_name = name; rd_of = target; rd_multi_shot = multi; rd_on_error = None;
         rd_clauses = clauses;
         rd_shot_ordering = OrdSequential;
         rd_type_params = tp;

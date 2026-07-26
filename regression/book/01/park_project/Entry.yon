@@ -1,3 +1,4 @@
 // Project entrypoint: a `place Entry` in the root file that defines main.
-place Entry { }
-fun main(): Number { return 0 }
+place Entry {
+  fun main(): Number { return 0 }
+}

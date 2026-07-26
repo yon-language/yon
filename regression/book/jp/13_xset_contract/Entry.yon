@@ -1,4 +1,44 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be s holds XSet.empty()
+    s = XSet.add(s, Leech.embed(7, 0))
+    s = XSet.add(s, Leech.embed(7, 0))
+    be v1 holds XSet.size(s)                       // dedup by exact point -> 1
+    s = XSet.add(s, Leech.embed(11, 0))
+    be v2 holds XSet.size(s)                       // a distinct point counts -> 2
+    s = XSet.add(s, 1445)
+    be v3 holds XSet.size(s)                       // raw 1445 not type-2, dropped -> 2
+
+    be s3 holds XSet.empty()
+    s3 = XSet.add(s3, Leech.embed(7, 3))
+    be v4 holds XSet.size(s3)                       // one mode-3 point accepted -> 1
+
+    be a holds XSet.empty()
+    a = XSet.add(a, Leech.embed(7, 0))
+    a = XSet.add(a, Leech.embed(11, 0))
+    be b holds XSet.empty()
+    b = XSet.add(b, Leech.embed(11, 0))
+    be v5 holds XSet.size(XSet.intersect(a, b))     // {7,11} ^ {11} -> 1
+    be c holds XSet.empty()
+    c = XSet.add(c, Leech.embed(99, 0))
+    be v6 holds XSet.size(XSet.union(a, c))         // {7,11} u {99} -> 3
+
+    be _1 holds Output.print(String.from_int(v1))
+    be _2 holds Output.print(String.from_int(v2))
+    be _3 holds Output.print(String.from_int(v3))
+    be _4 holds Output.print(String.from_int(v4))
+    be _5 holds Output.print(String.from_int(v5))
+    be _6 holds Output.print(String.from_int(v6))
+
+    be f holds (if v1 == 1 then 0 else 1)
+             + (if v2 == 2 then 0 else 1)
+             + (if v3 == 2 then 0 else 1)
+             + (if v4 == 1 then 0 else 1)
+             + (if v5 == 1 then 0 else 1)
+             + (if v6 == 3 then 0 else 1)
+    return f
+  }
+}
 
 // XSet functional contract — SELF-CHECKING. Return = number of failed checks;
 // exit 0 means the contract holds. XSet indexes a value by its MPHF type-2 index;
@@ -7,42 +47,3 @@ place Entry { }
 //
 // Stdout (the 6 observed values, for inspection); exit code = failures.
 
-fun main(): Number visits Output {
-  be s holds XSet.empty()
-  s = XSet.add(s, Leech.embed(7, 0))
-  s = XSet.add(s, Leech.embed(7, 0))
-  be v1 holds XSet.size(s)                       // dedup by exact point -> 1
-  s = XSet.add(s, Leech.embed(11, 0))
-  be v2 holds XSet.size(s)                       // a distinct point counts -> 2
-  s = XSet.add(s, 1445)
-  be v3 holds XSet.size(s)                       // raw 1445 not type-2, dropped -> 2
-
-  be s3 holds XSet.empty()
-  s3 = XSet.add(s3, Leech.embed(7, 3))
-  be v4 holds XSet.size(s3)                       // one mode-3 point accepted -> 1
-
-  be a holds XSet.empty()
-  a = XSet.add(a, Leech.embed(7, 0))
-  a = XSet.add(a, Leech.embed(11, 0))
-  be b holds XSet.empty()
-  b = XSet.add(b, Leech.embed(11, 0))
-  be v5 holds XSet.size(XSet.intersect(a, b))     // {7,11} ^ {11} -> 1
-  be c holds XSet.empty()
-  c = XSet.add(c, Leech.embed(99, 0))
-  be v6 holds XSet.size(XSet.union(a, c))         // {7,11} u {99} -> 3
-
-  be _1 holds Output.print(String.from_int(v1))
-  be _2 holds Output.print(String.from_int(v2))
-  be _3 holds Output.print(String.from_int(v3))
-  be _4 holds Output.print(String.from_int(v4))
-  be _5 holds Output.print(String.from_int(v5))
-  be _6 holds Output.print(String.from_int(v6))
-
-  be f holds (if v1 == 1 then 0 else 1)
-           + (if v2 == 2 then 0 else 1)
-           + (if v3 == 2 then 0 else 1)
-           + (if v4 == 1 then 0 else 1)
-           + (if v5 == 1 then 0 else 1)
-           + (if v6 == 3 then 0 else 1)
-  return f
-}

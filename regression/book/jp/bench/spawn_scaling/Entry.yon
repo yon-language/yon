@@ -1,4 +1,27 @@
-place Entry { }
+place Entry {
+  fun heavy(seed: Number): Number {
+    be acc holds Space.make(seed)
+    iter 8000000 do { be _ holds Space.set(acc, Space.get(acc) + 7) }
+    return Space.get(acc)
+  }
+  fun run(n: Number): Number visits Output {
+    be results holds spawn in n parallel { promote heavy(spawn_index) }
+    return results.fold(0, fun(a: Number, v: Number) => a + v)
+  }
+  fun timed(n: Number): Number visits Output {
+    be t0 holds Time.now_ns(0)
+    be _r holds run(n)
+    return (Time.now_ns(0) - t0) / 1000000
+  }
+  fun main(): Number visits Output {
+    be _1 holds Output.print(String.from_int(timed(1)))
+    be _2 holds Output.print(String.from_int(timed(2)))
+    be _4 holds Output.print(String.from_int(timed(4)))
+    be _8 holds Output.print(String.from_int(timed(8)))
+    be _16 holds Output.print(String.from_int(timed(16)))
+    return 0
+  }
+}
 // Spawn-N parallel scaling (the multicore money shot). Each replica runs a FIXED
 // CPU-bound task (heavy) and promotes its result; the parent folds the collection.
 // `spawn in N parallel { ... }` forks N isolated process replicas over a shared-memory
@@ -6,25 +29,3 @@ place Entry { }
 // N grows up to the core count (the same wall-clock buys N times the total work), then
 // rises once replicas oversubscribe the cores. Requires IPC/SHM (fork + shared memory).
 // Stdout: wall ms for N = 1, 2, 4, 8, 16.
-fun heavy(seed: Number): Number {
-  be acc holds Space.make(seed)
-  iter 8000000 do { be _ holds Space.set(acc, Space.get(acc) + 7) }
-  return Space.get(acc)
-}
-fun run(n: Number): Number visits Output {
-  be results holds spawn in n parallel { promote heavy(spawn_index) }
-  return results.fold(0, fun(a: Number, v: Number) => a + v)
-}
-fun timed(n: Number): Number visits Output {
-  be t0 holds Time.now_ns(0)
-  be _r holds run(n)
-  return (Time.now_ns(0) - t0) / 1000000
-}
-fun main(): Number visits Output {
-  be _1 holds Output.print(String.from_int(timed(1)))
-  be _2 holds Output.print(String.from_int(timed(2)))
-  be _4 holds Output.print(String.from_int(timed(4)))
-  be _8 holds Output.print(String.from_int(timed(8)))
-  be _16 holds Output.print(String.from_int(timed(16)))
-  return 0
-}

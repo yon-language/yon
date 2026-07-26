@@ -1,4 +1,91 @@
-place Entry { }
+place Entry {
+  fun warm(): Number visits Output { be _ holds Leech.point(0) return 0 }
+  fun mn(a: Number, b: Number): Number { return if a < b then a else b }
+  fun lp1(n: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be i holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(acc, Space.get(acc) + Leech.point(k))
+                be _2 holds Space.set(i, k + 1) }
+    return Time.now_ns(0) - t0
+  }
+  fun lp2(n: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be i holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(acc, Space.get(acc) + Leech.point(k) + Leech.point(k + 1))
+                be _2 holds Space.set(i, k + 1) }
+    return Time.now_ns(0) - t0
+  }
+  fun put_loop(n: Number): Number visits Output {
+    be a holds Space.make(Arena.empty())
+    be i holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(a, Arena.put(Space.get(a), Leech.point(k), 7))
+                be _2 holds Space.set(i, k + 1) }
+    return Time.now_ns(0) - t0
+  }
+  fun get_loop(n: Number): Number visits Output {
+    be a holds Space.make(Arena.empty())
+    be i holds Space.make(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(a, Arena.put(Space.get(a), Leech.point(k), 7))
+                be _2 holds Space.set(i, k + 1) }
+    be acc holds Space.make(0)
+    be j holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(j)
+                be _ holds Space.set(acc, Space.get(acc) + Arena.get(Space.get(a), Leech.point(k)))
+                be _2 holds Space.set(j, k + 1) }
+    return Time.now_ns(0) - t0
+  }
+  fun so_loop(n: Number): Number visits Output {
+    be a holds Space.make(Arena.empty())
+    be i holds Space.make(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(a, Arena.put(Space.get(a), Leech.point(k), 7))
+                be _2 holds Space.set(i, k + 1) }
+    be acc holds Space.make(0)
+    be j holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(j)
+                be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(Space.get(a), Leech.point(k), Leech.point(k + 1)))
+                be _2 holds Space.set(j, k + 1) }
+    return Time.now_ns(0) - t0
+  }
+  fun min_put(n: Number): Number visits Output {
+    be m holds Space.make(put_loop(n))
+    iter 2 do { be _ holds Space.set(m, mn(Space.get(m), put_loop(n))) }
+    return Space.get(m)
+  }
+  fun min_lp1(n: Number): Number visits Output {
+    be m holds Space.make(lp1(n))
+    iter 2 do { be _ holds Space.set(m, mn(Space.get(m), lp1(n))) }
+    return Space.get(m)
+  }
+  fun net_put(n: Number): Number visits Output { return (min_put(n) - min_lp1(n)) / n }
+  fun main(): Number visits Output {
+    be _w holds warm()
+    be _a holds Output.print(String.from_int(net_put(2000)))
+    be _b holds Output.print(String.from_int(net_put(5000)))
+    be _c holds Output.print(String.from_int(net_put(10000)))
+    be _d holds Output.print(String.from_int(net_put(20000)))
+    be n holds 20000
+    be lpm holds min_lp1(n)
+    be getm holds Space.make(get_loop(n))
+    iter 2 do { be _ holds Space.set(getm, mn(Space.get(getm), get_loop(n))) }
+    be _e holds Output.print(String.from_int((Space.get(getm) - lpm) / n))
+    be lp2m holds Space.make(lp2(n))
+    iter 2 do { be _ holds Space.set(lp2m, mn(Space.get(lp2m), lp2(n))) }
+    be som holds Space.make(so_loop(n))
+    iter 2 do { be _ holds Space.set(som, mn(Space.get(som), so_loop(n))) }
+    be _f holds Output.print(String.from_int((Space.get(som) - Space.get(lp2m)) / n))
+    return 0
+  }
+}
 // BENCHMARK — the three Arena (Leech type-2 store) ops, each net of an EXACT-TWIN
 // baseline, in-process. The op's loop and its twin both generate the lattice address
 // with Leech.point(k); only the op performs the Arena operation. The subtraction
@@ -13,91 +100,5 @@ place Entry { }
 // largest N. same_orbit addresses TWO points, so its twin calls Leech.point twice.
 //
 // Stdout schema (6 ints, ns/op): put@2k, put@5k, put@10k, put@20k, get@20k, same_orbit@20k
-fun warm(): Number visits Output { be _ holds Leech.point(0) return 0 }
-fun mn(a: Number, b: Number): Number { return if a < b then a else b }
 
-fun lp1(n: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be i holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(acc, Space.get(acc) + Leech.point(k))
-              be _2 holds Space.set(i, k + 1) }
-  return Time.now_ns(0) - t0
-}
-fun lp2(n: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be i holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(acc, Space.get(acc) + Leech.point(k) + Leech.point(k + 1))
-              be _2 holds Space.set(i, k + 1) }
-  return Time.now_ns(0) - t0
-}
-fun put_loop(n: Number): Number visits Output {
-  be a holds Space.make(Arena.empty())
-  be i holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(a, Arena.put(Space.get(a), Leech.point(k), 7))
-              be _2 holds Space.set(i, k + 1) }
-  return Time.now_ns(0) - t0
-}
-fun get_loop(n: Number): Number visits Output {
-  be a holds Space.make(Arena.empty())
-  be i holds Space.make(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(a, Arena.put(Space.get(a), Leech.point(k), 7))
-              be _2 holds Space.set(i, k + 1) }
-  be acc holds Space.make(0)
-  be j holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(j)
-              be _ holds Space.set(acc, Space.get(acc) + Arena.get(Space.get(a), Leech.point(k)))
-              be _2 holds Space.set(j, k + 1) }
-  return Time.now_ns(0) - t0
-}
-fun so_loop(n: Number): Number visits Output {
-  be a holds Space.make(Arena.empty())
-  be i holds Space.make(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(a, Arena.put(Space.get(a), Leech.point(k), 7))
-              be _2 holds Space.set(i, k + 1) }
-  be acc holds Space.make(0)
-  be j holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(j)
-              be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(Space.get(a), Leech.point(k), Leech.point(k + 1)))
-              be _2 holds Space.set(j, k + 1) }
-  return Time.now_ns(0) - t0
-}
-fun min_put(n: Number): Number visits Output {
-  be m holds Space.make(put_loop(n))
-  iter 2 do { be _ holds Space.set(m, mn(Space.get(m), put_loop(n))) }
-  return Space.get(m)
-}
-fun min_lp1(n: Number): Number visits Output {
-  be m holds Space.make(lp1(n))
-  iter 2 do { be _ holds Space.set(m, mn(Space.get(m), lp1(n))) }
-  return Space.get(m)
-}
-fun net_put(n: Number): Number visits Output { return (min_put(n) - min_lp1(n)) / n }
 
-fun main(): Number visits Output {
-  be _w holds warm()
-  be _a holds Output.print(String.from_int(net_put(2000)))
-  be _b holds Output.print(String.from_int(net_put(5000)))
-  be _c holds Output.print(String.from_int(net_put(10000)))
-  be _d holds Output.print(String.from_int(net_put(20000)))
-  be n holds 20000
-  be lpm holds min_lp1(n)
-  be getm holds Space.make(get_loop(n))
-  iter 2 do { be _ holds Space.set(getm, mn(Space.get(getm), get_loop(n))) }
-  be _e holds Output.print(String.from_int((Space.get(getm) - lpm) / n))
-  be lp2m holds Space.make(lp2(n))
-  iter 2 do { be _ holds Space.set(lp2m, mn(Space.get(lp2m), lp2(n))) }
-  be som holds Space.make(so_loop(n))
-  iter 2 do { be _ holds Space.set(som, mn(Space.get(som), so_loop(n))) }
-  be _f holds Output.print(String.from_int((Space.get(som) - Space.get(lp2m)) / n))
-  return 0
-}

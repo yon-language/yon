@@ -1,9 +1,11 @@
-fun succ(n: Number): Number { return n + 1 }
-fun pred(n: Number): Number { return n - 1 }
-
-fun main(): Number {
-  be y holds transport(
-    ua(equiv(succ, pred, fun(a) => refl(a), fun(b) => refl(b))),
-    10)
-  return y - 11
+place Entry {
+  fun succ(n: Number): Number { return n + 1 }
+  fun pred(n: Number): Number { return n - 1 }
+  fun main(): Number {
+    be y holds transport(
+      ua(equiv(succ, pred, fun(a) => refl(a), fun(b) => refl(b))),
+      10)
+    return y - 11
+  }
 }
+

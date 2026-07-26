@@ -1,5 +1,7 @@
-fun main(): Number {
-  be x holds 42
-  when x is 42 { return 42 }
-  return 0
+place Entry {
+  fun main(): Number {
+    be x holds 42
+    when x is 42 { return 42 }
+    return 0
+  }
 }

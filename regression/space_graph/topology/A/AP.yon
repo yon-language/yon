@@ -1,2 +1,3 @@
-place AP { }
-fun af(): Number { be w holds wire to space B  return 0 }
+place AP {
+  fun af(): Number { be w holds wire to space B  return 0 }
+}

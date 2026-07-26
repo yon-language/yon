@@ -1,5 +1,7 @@
-fun motive(q: Quotient): Number { return 0 }
-
-fun main(): Number {
-  return hit_elim(motive, [inj(x) => x], hit(inj, 7))
+place Entry {
+  fun motive(q: Quotient): Number { return 0 }
+  fun main(): Number {
+    return hit_elim(motive, [inj(x) => x], hit(inj, 7))
+  }
 }
+

@@ -1,5 +1,7 @@
-fun main(): Number {
-  be x holds 42
-  Space.make(1)
-  return x
+place Entry {
+  fun main(): Number {
+    be x holds 42
+    Space.make(1)
+    return x
+  }
 }

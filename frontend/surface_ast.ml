@@ -74,6 +74,12 @@ let fused_points : (string, [ `Bool of bool | `Unit ]) Hashtbl.t = Hashtbl.creat
    arm names tt/ff keeps its spine elimination. Keyed like bare_point_sites. *)
 let fused_elim_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 8
 
+(* `on error E` (error cantiere): return sites where the checker proved the
+   expression inhabits ONE ARM of the coproduct T + E and desugar must wrap
+   it in that arm's injection. Site-keyed (the ledger rule), value = arm
+   index (0 = success, 1 = error). *)
+let return_inject_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 16
+
 (* Bare nullary points: `tt` in expression position IS the unique point of
    its terminal arm (the name denotes the point — no constructor call). The
    tycheck resolves the name (scope-aware: locals shadow) and records the
@@ -160,6 +166,12 @@ and variant = {
 
 and match_pat =
   | PatVars of string list                (* positional binders (legacy) *)
+  | PatWitness of string                  (* `Place as w`: classify-and-bind —
+                                             the WHOLE section as witness (the
+                                             classifier's answer, not a
+                                             constructor unpacking). Coexists
+                                             with field patterns: witness =
+                                             the object, fields = the pieces *)
   | PatFields of (string * string) list   (* (field, bound name); `head` alone
                                              binds as itself, `head as h` as h *)
 
@@ -358,6 +370,29 @@ and for_kind =
   | ForParallel       (* "for every x in xs" *)
   | ForWhenHere       (* "for every x in xs when here" — stream consumption *)
 
+(* The FACE name of a type (prelude spelling) — used to name the success arm
+   of an error coproduct. *)
+let face_name_of_ty (t : ty) : string =
+  match t with
+  | TyPrim "number" -> "Number" | TyPrim "text" -> "Text"
+  | TyPrim "boolean" -> "Boolean" | TyPrim "unit" -> "Unit"
+  | TyUser n -> n
+  | TyPrim p -> p
+  | _ -> "Value"
+
+(* `on error E` with declared return T: the coproduct T + E. ONE builder,
+   shared by tycheck (registration, checking) and desugar (registry, spine):
+   the two must agree on the arms or the tags diverge.
+   DISJOINTNESS AUTHORITY: in this coproduct the SPINE TAG is the authority,
+   not the content-address — an f64 success value in the child slot carries
+   NO identity root (it is an immediate, not a section); the root travels
+   only inside a section payload (the error arm). Anyone reading the spine
+   expecting the root-in-payload invariant of sections: it does not apply to
+   coproduct children that are primitives. *)
+let error_sum_of ~(ret : ty) ~(err : string) : ty =
+  TySum [ { v_name = face_name_of_ty ret; v_args = [ret] };
+          { v_name = err; v_args = [TyUser err] } ]
+
 (* Canonical NAME of a Tarski code term (for carrier lookup, pretty-printing,
  * El_<name> mangling). Simple codes are variables, exactly the old string;
  * applied codes (ECall / ERefl) get a readable synthesized name. *)
@@ -398,6 +433,7 @@ type operation_decl = {
   op_name : string;
   op_params : param list;
   op_return : ty option;
+  op_on_error : string option;      (* as fn_on_error, on a mediated arrow *)
   op_functorial : bool;  (* cross-world functorial: the operation is lifted
                             automatically along world morphisms (Yoneda lifting
                             at the world level) *)
@@ -498,6 +534,9 @@ type fun_decl = {
   fn_type_params : string list;     (* generic type parameters: fun id<A, B>(...) *)
   fn_params : param list;
   fn_return : ty option;
+  fn_on_error : string option;      (* `on error E`: the return type is the
+                                       coproduct T + E; raising = returning a
+                                       section of E, handling = a match branch *)
   fn_visits : string list;          (* effect signature — Yoneda-native "constraint":
                                        visits Ord means the function requires the
                                        place Ord with its operations to be active *)
@@ -531,6 +570,7 @@ type move_body =
 
 type move_decl = {
   mv_name : string;
+  mv_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
   mv_from : string list;  (* for Form A: [from]; for Form B: [list of worlds] *)
   mv_to : string option;  (* for Form A: Some to; for Form B: None *)
   mv_body : move_body;
@@ -550,6 +590,7 @@ type view_item =
 
 type view_decl = {
   vw_name : string;
+  vw_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
   vw_of : string;
   vw_items : view_item list;
   vw_loc : location;
@@ -577,6 +618,7 @@ type shot_ordering =
 
 type reduction_decl = {
   rd_name : string;
+  rd_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
   rd_of : string;
   rd_multi_shot : bool;
   rd_shot_ordering : shot_ordering;
@@ -600,6 +642,7 @@ type world_decl = {
 (* Geometric morphism as a first-class construct. *)
 type geom_morphism_decl = {
   gm_name : string;
+  gm_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
   gm_source_site : string;          (* source site (Sh(C)) *)
   gm_target_site : string;          (* target site (Sh(D)) *)
   gm_pull : fun_decl option;        (* f^* inverse image *)
@@ -697,6 +740,7 @@ and prop_decl = {
  *   - if mp_on_morphism_map is [], identity on morphisms *)
 type morph_decl = {
   mp_name : string;
+  mp_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
   mp_source : string;                       (* source topos *)
   mp_target : string;                       (* target topos *)
   mp_on_object : fun_decl option;
@@ -716,6 +760,7 @@ type morph_decl = {
  * `from F to G`. *)
 type functor_decl = {
   ft_name : string;
+  ft_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
   ft_from_world : string;
   ft_to_world : string;
   ft_params : (string * ty) list;
@@ -735,6 +780,7 @@ type morph_item_kind =
  * into another morph (both with the same source and target). *)
 type nat_transform_decl = {
   nt_name : string;
+  nt_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
   nt_source_morph : string;
   nt_target_morph : string;
   (* nt_components has two variants:
@@ -859,6 +905,11 @@ let pat_to_binders ~(fields : string list) (p : match_pat)
     : (string list, string) result =
   match p with
   | PatVars vs -> Ok vs
+  | PatWitness w ->
+      (* witness on a 1-payload arm binds the payload; the arity mismatch
+         cases are the CALLER's judgment (tycheck restricts) — here the
+         dense binder list is just [w] against a single slot. *)
+      Ok [w]
   | PatFields fs ->
       (match List.find_opt (fun (f, _) -> not (List.mem f fields)) fs with
        | Some (bad, _) -> Error bad
@@ -874,4 +925,5 @@ let pat_to_binders ~(fields : string list) (p : match_pat)
 let pat_bound_names (p : match_pat) : string list =
   match p with
   | PatVars vs -> vs
+  | PatWitness w -> [w]
   | PatFields fs -> List.map snd fs

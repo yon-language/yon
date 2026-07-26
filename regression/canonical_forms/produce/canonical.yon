@@ -1,5 +1,7 @@
-fun main(): Number {
-  be s holds produce { emit 41
-    emit 1 }
-  return s.fold(0, fun(a: Number, v: Number) => a + v)
+place Entry {
+  fun main(): Number {
+    be s holds produce { emit 41
+      emit 1 }
+    return s.fold(0, fun(a: Number, v: Number) => a + v)
+  }
 }

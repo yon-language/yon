@@ -1,2 +1,4 @@
-fun line(): Id(Number, 3, 3) { return plam i => 3 }
-fun main(): Number { return (line() @ I0) - 3 }
+place Entry {
+  fun line(): Id(Number, 3, 3) { return plam i => 3 }
+  fun main(): Number { return (line() @ I0) - 3 }
+}

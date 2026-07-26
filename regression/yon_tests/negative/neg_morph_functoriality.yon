@@ -12,7 +12,16 @@
 place State { balance Number }
 place EUState { balance Number }
 
-fun wrong_sig(x: Number): Number { return x }
+place Entry {
+  fun wrong_sig(x: Number): Number { return x }
+  morph LiftEU from Account to AccountEU {
+    on object(s: State): EUState {
+      return .-> EUState { balance s.balance }
+    }
+    on morphism deposit via wrong_sig
+  }
+  fun main(): Number { return 0 }
+}
 
 topos Account where {
   
@@ -22,11 +31,4 @@ topos Account where {
 topos AccountEU where {
 }
 
-morph LiftEU from Account to AccountEU {
-  on object(s: State): EUState {
-    return .-> EUState { balance s.balance }
-  }
-  on morphism deposit via wrong_sig
-}
 
-fun main(): Number { return 0 }

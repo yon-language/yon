@@ -711,11 +711,61 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
       in
       (match point_body with
        | None ->
-           err loc "match: cannot synthesize the result type. Its motive is \
-                    constant, so it needs a point branch whose body does not \
-                    read that branch's own payload (a base case like `Nil => 0`). \
-                    For an eliminator where every branch uses its payload, use \
-                    hit_elim with an explicit motive."
+           (* binder-aware synthesis: no closed base branch, but the payload
+              TYPES are in the signature — infer the first point branch's body
+              UNDER ITS BINDERS; that type is the constant motive, and every
+              branch is then checked against it in its own env (the checking
+              rule). This is what makes `match r { Number as v => v, E as e
+              => ... }` synthesizable without a base case. *)
+           (match hit_signature_of env x_ty with
+            | None ->
+                err loc "match: cannot synthesize the result type (the \
+                         scrutinee is not an inductive/coproduct)."
+            | Some (_, sig_) ->
+                let first_point =
+                  List.find_opt
+                    (fun (ctor, _, body) ->
+                       (match body with EPathAbs _ -> false | _ -> true)
+                       && Hit_env.find_constructor
+                            [sig_.Hit_env.hit_name, sig_] ctor <> None)
+                    branches in
+                (match first_point with
+                 | None ->
+                     err loc "match: cannot synthesize the result type \
+                              (no point branch)."
+                 | Some (ctor, pat, body) ->
+                     let params =
+                       match Hit_env.find_constructor
+                               [sig_.Hit_env.hit_name, sig_] ctor with
+                       | Some (_, kind) -> Hit_env.constructor_params kind
+                       | None -> [] in
+                     let vars = pat_bound_names pat in
+                     let benv =
+                       if List.length vars = List.length params then
+                         Tyenv.add_vars env
+                           (List.filter (fun (n, _) -> n <> "_")
+                              (List.combine vars (List.map snd params)))
+                       else env in
+                     let* motive_ty = infer benv ctx body in
+                     (* verifica ogni ramo contro il motive costante *)
+                     let* () =
+                       List.fold_left (fun acc (c2, p2, b2) ->
+                         let* () = acc in
+                         let params2 =
+                           match Hit_env.find_constructor
+                                   [sig_.Hit_env.hit_name, sig_] c2 with
+                           | Some (_, k2) -> Hit_env.constructor_params k2
+                           | None -> [] in
+                         let vars2 = pat_bound_names p2 in
+                         let benv2 =
+                           if List.length vars2 = List.length params2 then
+                             Tyenv.add_vars env
+                               (List.filter (fun (n, _) -> n <> "_")
+                                  (List.combine vars2 (List.map snd params2)))
+                           else env in
+                         check benv2 ctx b2 motive_ty)
+                         (ok ()) branches in
+                     ok motive_ty))
        | Some body ->
            let motive = ELam ([("__m", x_ty)], body, loc) in
            infer env ctx (EHITElim (motive, branches, x, loc)))
@@ -835,6 +885,14 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                       let* acc = acc in
                       match pat with
                       | PatVars vs -> ok ((ctor, vs, v) :: acc)
+                      | PatWitness w ->
+                          let* kind = constructor ctor in
+                          let n = List.length (Hit_env.constructor_params kind) in
+                          if n = 1 then ok ((ctor, [w], v) :: acc)
+                          else err loc (Printf.sprintf
+                            "match %s as %s: the witness binds a SINGLE payload \
+                             (this arm has %d); use field patterns or the bare \
+                             point" ctor w n)
                       | PatFields _ ->
                           let* kind = constructor ctor in
                           let n = List.length (Hit_env.constructor_params kind) in
@@ -1987,6 +2045,48 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
         | _ -> fallback env e expected
       in
       go env params expected
+  | EIfThenElse (c, a, b, _), expected_any ->
+      (* bidirectional if: the expected type is PUSHED into both branches —
+         under an error coproduct each branch performs its own injection
+         (mixed success/failure ifs are the normal raise shape) *)
+      let* () = check env ctx c (TyPrim "boolean") in
+      let* () = check env ctx a expected_any in
+      check env ctx b expected_any
+  | e_inj, (TySum variants as sum_ty)
+      when List.for_all (fun v -> List.length v.v_args = 1) variants
+           && (match e_inj with
+               | EHITElim (EVar ("__match", _), _, _, _) -> false
+               | _ -> true) ->
+      (* INJECTION into the coproduct (the universal property, checking side):
+         if e already HAS the sum type, pass through; else e must inhabit
+         exactly one arm's payload — that arm's injection is recorded BY SITE
+         (the ledger rule: never by name) for desugar to wrap. *)
+      let loc_e = location_of_expr e_inj in
+      let* ty_e =
+        match infer env ctx e_inj with
+        | Ok t -> ok (Some t)
+        | Error _ -> ok None in
+      (match ty_e with
+       | Some t when Dispatcher.type_equal env ctx t sum_ty -> ok ()
+       | _ ->
+           let hits =
+             List.filter (fun v ->
+                  match check env ctx e_inj (List.hd v.v_args) with
+                  | Ok () -> true | Error _ -> false) variants in
+           (match hits with
+            | [v] ->
+                Hashtbl.replace Surface_ast.return_inject_sites
+                  (loc_e.file, loc_e.start_line, loc_e.start_col) v.v_name;
+                ok ()
+            | [] ->
+                err loc_e (Printf.sprintf
+                  "expected %s: the value inhabits neither arm of the coproduct"
+                  (Tyenv.ty_to_string sum_ty))
+            | _ ->
+                err loc_e (Printf.sprintf
+                  "ambiguous injection into %s: the value inhabits more than \
+                   one arm; annotate the intended side"
+                  (Tyenv.ty_to_string sum_ty))))
   | EHITElim (EVar ("__match", _), branches, x, loc), _
       when (match x with
             | EVar (xv, _) -> not (ty_mentions_evar xv expected)
@@ -2036,6 +2136,12 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                              "match: branch %s expects %d payload binder(s), got %d"
                              ctor (List.length params) (List.length vs))
                          else ok vs
+                     | PatWitness w ->
+                         if List.length params = 1 then ok [w]
+                         else err loc (Printf.sprintf
+                           "match %s as %s: the witness binds a SINGLE payload \
+                            (this arm has %d); use field patterns or the bare \
+                            point" ctor w (List.length params))
                      | PatFields _ ->
                          let fields =
                            List.init (List.length params)
@@ -2100,6 +2206,12 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                            bridge projections are _1.._n. *)
                         match pat with
                         | PatVars vs -> ok vs
+                        | PatWitness w ->
+                            if List.length params = 1 then ok [w]
+                            else err loc (Printf.sprintf
+                              "match %s as %s: the witness binds a SINGLE \
+                               payload (this arm has %d)" ctor w
+                              (List.length params))
                         | PatFields _ ->
                             let fields =
                               List.init (List.length params)
@@ -3215,16 +3327,20 @@ let register_deltas (env : Tyenv.env) (p : program) : Tyenv.env =
        | _ -> env)
     env p
 
+(* a declaration whose source lives under prelude/ — the compiler's own
+   source, prepended to every compilation: site-free by construction. *)
+let in_prelude_file (loc : location) : bool =
+  let f = loc.file and sub = "prelude/" in
+  let ls = String.length sub and lf = String.length f in
+  let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
+  go 0
+
 let register_fusion (pd : place_decl) : unit =
   (* collision fence: the prelude owns its names — a user place redeclaring
      one is a LOUD error, never silent shadowing (the same doctrine as
      duplicate arms across unions). The prelude registers first (it is
      prepended to every compilation). *)
-  let in_prelude =
-    let f = pd.pd_loc.file and sub = "prelude/" in
-    let ls = String.length sub and lf = String.length f in
-    let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
-    go 0 in
+  let in_prelude = in_prelude_file pd.pd_loc in
   (* idempotent under the checker's multiple registration passes: the SAME
      fusion re-registering is not a collision; a DIFFERENT decl (no clause,
      or another prim) under an owned name is. *)
@@ -3255,6 +3371,49 @@ let register_fusion (pd : place_decl) : unit =
        | "unit", [a] ->
            Hashtbl.replace Surface_ast.fused_points a.v_name `Unit
        | _ -> ())
+
+(* ─── Mono = composition (error cantiere, correzione di Antonio) ─────────
+   If Wobble ↪ Error is a mono and Error has message : Error → Text, then
+   message ∘ ι : Wobble → Text EXISTS BY COMPOSITION — nothing to redeclare.
+   The sub-object is INSIDE the super, so it undergoes its projections, in
+   both directions: observation (w.message is the composite) and construction
+   (a section of Wobble carries message because its inhabitants ARE Error's).
+   Mechanically: each place with a subcontains chain gets the super's fields
+   (not shadowed by name) prepended to its members, ONCE, at the pipeline
+   chokepoint — everything downstream (field lookup, mediatrice arity,
+   subsumption, emit schema) then just works. Idempotent by the shadow check. *)
+let expand_mono_fields (p : program) : program =
+  let place_of n =
+    List.find_map
+      (function TopPlace q when q.pd_name = n -> Some q | _ -> None) p in
+  let rec inherited (seen : string list) (base : string) : field_or_op list =
+    if List.mem base seen then []   (* cycle guard: loud elsewhere, quiet here *)
+    else match place_of base with
+      | None -> []
+      | Some bq ->
+          let up = match bq.pd_subcontains with
+            | Some b2 -> inherited (base :: seen) b2
+            | None -> [] in
+          up @ List.filter (function FoField _ -> true | _ -> false)
+                 bq.pd_members
+  in
+  List.map
+    (function
+      | TopPlace pd when pd.pd_subcontains <> None ->
+          let base = Option.get pd.pd_subcontains in
+          let own_names =
+            List.filter_map
+              (function FoField f -> Some f.fd_name | _ -> None)
+              pd.pd_members in
+          let inh =
+            List.filter
+              (function
+                | FoField f -> not (List.mem f.fd_name own_names)
+                | _ -> false)
+              (inherited [pd.pd_name] base) in
+          TopPlace { pd with pd_members = inh @ pd.pd_members }
+      | td -> td)
+    p
 
 let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
   match td with
@@ -3308,6 +3467,26 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         match fn.fn_return with
         | Some t -> rebind_ty t
         | None -> TyPrim "unit"
+      in
+      (* `on error E`: the REGISTERED return type is the coproduct T + E.
+         Arms are SUB-OBJECTS (extensivity), named by the faces: the success
+         arm carries T under T's face name, the failure arm carries E. The
+         sum is anonymous and content-addressed (type_tag), so two arrows
+         failing the same way share one type. Elimination is the match with
+         the witness pattern (`Number as v`, `QueryError as e`) — the
+         classifier, not a constructor. *)
+      let rebound_return =
+        match fn.fn_on_error with
+        | None -> rebound_return
+        | Some e ->
+            let face_of t = match t with
+              | TyPrim "number" -> "Number" | TyPrim "text" -> "Text"
+              | TyPrim "boolean" -> "Boolean" | TyPrim "unit" -> "Unit"
+              | TyUser n -> n
+              | other -> Tyenv.ty_to_string other in
+            TySum [ { v_name = face_of rebound_return;
+                      v_args = [rebound_return] };
+                    { v_name = e; v_args = [TyUser e] } ]
       in
       let env =
         List.fold_left
@@ -3428,7 +3607,7 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
        * validates the parallelism. We also register the lifted function
        * (ft_name) for the body/lowering. *)
       let mp : morph_decl = {
-        mp_name = ft.ft_name;
+        mp_name = ft.ft_name; mp_on_error = None;
         mp_source = ft.ft_from_world;
         mp_target = ft.ft_to_world;
         mp_on_object = None;
@@ -3652,7 +3831,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = Some (TyPrim "proposition");
-                   fn_visits = []; fn_internal = false;
+                   fn_on_error = None; fn_visits = []; fn_internal = false;
                    fn_body = [ SReturn (body, pr.pr_loc) ];
                    fn_loc = pr.pr_loc;
                  } in
@@ -3914,7 +4093,11 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
      constant presheaf: member of no world by nature (rule (f) extension),
      so the membership check does not apply. *)
   let* () =
-    if pd.pd_world = "__Builtin" || pd.pd_fusion <> None then ok ()
+    if pd.pd_world = "__Builtin" || pd.pd_fusion <> None
+       || in_prelude_file pd.pd_loc
+       || (pd.pd_name = "Entry"
+           && List.for_all (function FoField _ -> false | _ -> true)
+                pd.pd_members) then ok ()
     else match Tyenv.lookup_world env pd.pd_world with
     | Some _ -> ok ()
     | None -> err pd.pd_loc
@@ -4199,6 +4382,13 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
                "El(%s): code does not decode to a carrier (only 0/1-cells supported)"
                (ty_term_to_name e)))
 
+(* TWIN CHECKERS, one reason (write it or they diverge — they already did
+   once, eating the on-error clause): check_fun_decl is FAIL-FAST, used for
+   synthetic/nested arrows (geomorph pull/push, morph on_object, place-hosted
+   validation); check_fun_decl_accum ACCUMULATES errors, used by
+   check_program's main loop so the user sees every problem at once. Any
+   semantic rule (expected_ret, coproduct, effects) MUST land in BOTH — or
+   better, be factored into a shared helper like error_sum_of. *)
 and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit tc_result =
   (* Step 1: rebind TyUser -> TyVar wherever the parser produced TyUser
    * for an identifier that's actually a declared type parameter. This
@@ -4291,9 +4481,14 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
          env
     |> (fun e -> Tyenv.set_effects e fn.fn_visits)
   in
-  let expected_ret = match fn.fn_return with
-    | Some t -> Some t
-    | None -> None
+  let expected_ret = match fn.fn_return, fn.fn_on_error with
+    | Some t, Some e ->
+        (* the body is checked against the COPRODUCT: `return 7` inhabits the
+           success arm, `return .-> E {..}` the failure arm — the injection
+           rule below records which, per site, for desugar *)
+        Some (Surface_ast.error_sum_of ~ret:t ~err:e)
+    | Some t, None -> Some t
+    | None, _ -> None
   in
   (* Body stmts: accumulate errors instead of stopping at first.
    * This gives the user the full picture of what's wrong, instead
@@ -4309,6 +4504,8 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
       Error e
 
 (* Variant that returns ALL errors from a function declaration. *)
+(* the ACCUMULATING twin of check_fun_decl — see the reason there; keep the
+   two semantically identical or factor shared pieces. *)
 and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     : type_error list =
   (* Re-do the same logic but always accumulating. *)
@@ -4383,7 +4580,9 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
          env
     |> (fun e -> Tyenv.set_effects e fn.fn_visits)
   in
-  let expected_ret = fn.fn_return in
+  let expected_ret = match fn.fn_return, fn.fn_on_error with
+    | Some t, Some e -> Some (Surface_ast.error_sum_of ~ret:t ~err:e)
+    | r, _ -> r in
   let (final_env, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
   let tail_errs = match expected_ret with
     | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
@@ -4874,7 +5073,15 @@ let infer_place_worlds (p : program) : (program, type_error) result =
        | Ok decls ->
            match td with
            | TopPlace pd when pd.pd_world = "__INFER" && pd.pd_arms = []
-                           && pd.pd_fusion = None ->
+                           && pd.pd_fusion = None
+                           && not (in_prelude_file pd.pd_loc)
+                           && not (pd.pd_name = "Entry"
+                                   && List.for_all
+                                        (function FoField _ -> false | _ -> true)
+                                        pd.pd_members) ->
+               (* the ENTRY CONTAINER is not a site object (the project mode
+                  already strips it): a fieldless Entry hosting only hoisted
+                  arrows has no world to infer, in single-file mode too. *)
                (* a FUSED place (is <prim>) never enters contextual inference:
                   a primitive is the constant presheaf — the same in every
                   context of the site, member of no particular world (rule (f)
@@ -5272,6 +5479,9 @@ let infer_effects (env : Tyenv.env) (p : program) : Tyenv.env =
 let same_sentinel = -424242
 
 let elaborate_id_sugar (p : program) : program =
+  (* mono = composition: expand inherited fields FIRST, so every path below
+     (and everything downstream of this chokepoint) sees the composed place *)
+  let p = expand_mono_fields p in
   let built =
     match infer_place_worlds (Method_sugar.normalize_program p) with
     | Error _ -> None
@@ -5319,6 +5529,7 @@ let elaborate_id_sugar (p : program) : program =
     List.map (function TopFun fd -> TopFun (resolve_fun fd) | d -> d) p
 
 let check_program (p : program) : check_result =
+  let p = expand_mono_fields p in   (* idempotente: shadow-check sui nomi *)
   Hashtbl.reset Surface_ast.method_resolutions;
   (* Method-call sugar (`s.add(...)`) is normalized away before any checking.
      Idempotent, so it is also safe to run at the start of desugar_program. *)

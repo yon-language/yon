@@ -1,12 +1,13 @@
 // The value-level mono: an Opened section passed where Account (its union)
 // is expected. The injection is IDENTITY on the handle (subtype_cast lowers
 // to identity) — the upcast costs nothing, like a set inclusion.
-place Entry { }
+place Entry {
+  fun accept(a: Account): Number { return 7 }
+  fun main(): Number {
+    be o holds .-> Opened { initial 42 }
+    return accept(o)
+  }
+}
 place Account {
   this > Opened :U Closed
-}
-fun accept(a: Account): Number { return 7 }
-fun main(): Number {
-  be o holds .-> Opened { initial 42 }
-  return accept(o)
 }

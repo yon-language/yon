@@ -1,6 +1,8 @@
-fun main(): Number {
-  be acc holds 0
-  be xs holds List.cons(20, List.cons(22, List.empty(0)))
-  for every x in xs { acc = acc + x }
-  return acc
+place Entry {
+  fun main(): Number {
+    be acc holds 0
+    be xs holds List.cons(20, List.cons(22, List.empty(0)))
+    for every x in xs { acc = acc + x }
+    return acc
+  }
 }

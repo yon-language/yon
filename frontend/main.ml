@@ -944,7 +944,7 @@ let test_move_mapping () =
     (Lam ("x", TyPlace "number", Var "x"));
   (* Register a move: from W1 to W2, mapping value->cost via double. *)
   let move_decl = {
-    Surface_ast.mv_name = "ToTarget";
+    Surface_ast.mv_name = "ToTarget"; mv_on_error = None;
     mv_from = ["W1"];
     mv_to = Some "W2";
     mv_body = MoveMapping [
@@ -1001,7 +1001,7 @@ let test_move_merge () =
                   App (App (Var "__gt", Var "a"), Var "b")),
              App (Lam ("_", TyPlace "unit", Var "a"), Var "b")))));
   let move_decl = {
-    Surface_ast.mv_name = "Unify";
+    Surface_ast.mv_name = "Unify"; mv_on_error = None;
     mv_from = ["W1"; "W2"];
     mv_to = None;
     mv_body = MoveMerge {
@@ -1160,7 +1160,7 @@ let test_catt_reduction_equiv () =
     [SReturn (EVar ("x", mk_loc), mk_loc)],
     mk_loc) in
   let r1 = {
-    rd_name = "RedA"; rd_of = "State"; rd_multi_shot = false;
+    rd_name = "RedA"; rd_of = "State"; rd_multi_shot = false; rd_on_error = None;
     rd_clauses = [
       mk_clause "get" (TyPrim "number");
       mk_clause "put" (TyPrim "number");
@@ -1171,7 +1171,7 @@ let test_catt_reduction_equiv () =
     rd_loc = mk_loc;
   } in
   let r2 = {
-    rd_name = "RedB"; rd_of = "State"; rd_multi_shot = false;
+    rd_name = "RedB"; rd_of = "State"; rd_multi_shot = false; rd_on_error = None;
     rd_clauses = [
       mk_clause "get" (TyPrim "number");
       mk_clause "put" (TyPrim "number");
@@ -1183,7 +1183,7 @@ let test_catt_reduction_equiv () =
   } in
   (* r3 differs in the parameter type of `put` *)
   let r3 = {
-    rd_name = "RedC"; rd_of = "State"; rd_multi_shot = false;
+    rd_name = "RedC"; rd_of = "State"; rd_multi_shot = false; rd_on_error = None;
     rd_clauses = [
       mk_clause "get" (TyPrim "number");
       mk_clause "put" (TyPrim "text");
@@ -1218,7 +1218,7 @@ let test_catt_move_equiv () =
     m_loc = mk_loc;
   } in
   let m1 = {
-    mv_name = "M1"; mv_from = ["W1"]; mv_to = Some "W2";
+    mv_name = "M1"; mv_from = ["W1"]; mv_to = Some "W2"; mv_on_error = None;
     mv_body = MoveMapping [
       mk_mapping "a" MapsTo "x" "f";
       mk_mapping "b" ConvertsTo "y" "g";
@@ -1229,7 +1229,7 @@ let test_catt_move_equiv () =
   } in
   (* m2: same mappings but listed in different order *)
   let m2 = {
-    mv_name = "M2"; mv_from = ["W1"]; mv_to = Some "W2";
+    mv_name = "M2"; mv_from = ["W1"]; mv_to = Some "W2"; mv_on_error = None;
     mv_body = MoveMapping [
       mk_mapping "b" ConvertsTo "y" "g";
       mk_mapping "a" MapsTo "x" "f";
@@ -1240,7 +1240,7 @@ let test_catt_move_equiv () =
   } in
   (* m3: different `by` function *)
   let m3 = {
-    mv_name = "M3"; mv_from = ["W1"]; mv_to = Some "W2";
+    mv_name = "M3"; mv_from = ["W1"]; mv_to = Some "W2"; mv_on_error = None;
     mv_body = MoveMapping [
       mk_mapping "a" MapsTo "x" "h";   (* different *)
       mk_mapping "b" ConvertsTo "y" "g";
@@ -1251,7 +1251,7 @@ let test_catt_move_equiv () =
   } in
   (* m4: merge form (different body shape) *)
   let m4 = {
-    mv_name = "M4"; mv_from = ["W1"; "W2"]; mv_to = None;
+    mv_name = "M4"; mv_from = ["W1"; "W2"]; mv_to = None; mv_on_error = None;
     mv_body = MoveMerge {
       merge_shares = ["name"];
       merge_conflicts = [];
@@ -1277,7 +1277,7 @@ let test_catt_move_merge_equiv () =
   Printf.printf "\n=== Test 64: CATT_R_Yon (merge form equivalence) ===\n";
   let open Surface_ast in
   let m1 = {
-    mv_name = "U1"; mv_from = ["W1"; "W2"]; mv_to = None;
+    mv_name = "U1"; mv_from = ["W1"; "W2"]; mv_to = None; mv_on_error = None;
     mv_body = MoveMerge {
       merge_shares = ["name"; "id"];
       merge_conflicts = [("priority", "max_fn")];
@@ -1289,7 +1289,7 @@ let test_catt_move_merge_equiv () =
   } in
   (* m2: same merge, shares in different order *)
   let m2 = {
-    mv_name = "U2"; mv_from = ["W1"; "W2"]; mv_to = None;
+    mv_name = "U2"; mv_from = ["W1"; "W2"]; mv_to = None; mv_on_error = None;
     mv_body = MoveMerge {
       merge_shares = ["id"; "name"];
       merge_conflicts = [("priority", "max_fn")];
@@ -1301,7 +1301,7 @@ let test_catt_move_merge_equiv () =
   } in
   (* m3: different conflict resolver *)
   let m3 = {
-    mv_name = "U3"; mv_from = ["W1"; "W2"]; mv_to = None;
+    mv_name = "U3"; mv_from = ["W1"; "W2"]; mv_to = None; mv_on_error = None;
     mv_body = MoveMerge {
       merge_shares = ["name"; "id"];
       merge_conflicts = [("priority", "min_fn")];
@@ -1328,7 +1328,7 @@ let test_catt_view_equiv () =
   Printf.printf "\n=== Test 65: CATT_R_Yon (view equivalence) ===\n";
   let open Surface_ast in
   let v1 = {
-    vw_name = "V1"; vw_of = "Item";
+    vw_name = "V1"; vw_of = "Item"; vw_on_error = None;
     vw_items = [
       VShowSimple "name";
       VShowLabel ("value", "price");
@@ -1337,7 +1337,7 @@ let test_catt_view_equiv () =
   } in
   (* v2: same view body, different declared name *)
   let v2 = {
-    vw_name = "V2"; vw_of = "Item";
+    vw_name = "V2"; vw_of = "Item"; vw_on_error = None;
     vw_items = [
       VShowSimple "name";
       VShowLabel ("value", "price");
@@ -1346,7 +1346,7 @@ let test_catt_view_equiv () =
   } in
   (* v3: different label on `value` *)
   let v3 = {
-    vw_name = "V3"; vw_of = "Item";
+    vw_name = "V3"; vw_of = "Item"; vw_on_error = None;
     vw_items = [
       VShowSimple "name";
       VShowLabel ("value", "cost");   (* different label *)
@@ -1586,7 +1586,8 @@ let test_place_visibility () =
   let mk_op n = FoOp {
     op_functorial = false;
     op_algebra = None;
-    op_name = n; op_params = []; op_return = None; op_loc = dummy_loc
+    op_name = n; op_params = []; op_return = None; op_on_error = None;
+    op_loc = dummy_loc
   } in
   let pd = {
     pd_name = "Account";
@@ -3071,7 +3072,7 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "y"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false;
+    fn_visits = []; fn_internal = false; fn_on_error = None;
     fn_body = [];
     fn_loc = loc;
   } in
@@ -3080,12 +3081,12 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "x"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false;
+    fn_visits = []; fn_internal = false; fn_on_error = None;
     fn_body = [];
     fn_loc = loc;
   } in
   let gm : Surface_ast.geom_morphism_decl = {
-    gm_name = "Inclusion";
+    gm_name = "Inclusion"; gm_on_error = None;
     gm_source_site = "SiteA";
     gm_target_site = "SiteB";
     gm_pull = Some pull_fn;
@@ -3256,7 +3257,7 @@ let test_sheafification_auto () =
     tp_loc = Surface_ast.dummy_loc;
   } in
   let move_a_to_b : Surface_ast.move_decl = {
-    mv_name = "transfer";
+    mv_name = "transfer"; mv_on_error = None;
     mv_from = ["PlaceA"];
     mv_to = Some "PlaceB";
     mv_body = MoveMapping [];
@@ -3395,7 +3396,7 @@ let test_world_quotient () =
 let test_lawful_move () =
   Printf.printf "\n=== Test 175: lawful move check ===\n";
   let mv : Surface_ast.move_decl = {
-    mv_name = "ExportToUS";
+    mv_name = "ExportToUS"; mv_on_error = None;
     mv_from = ["EU_Region"];
     mv_to = Some "US_Region";
     mv_body = MoveMapping [];
@@ -3479,7 +3480,7 @@ let test_functorial_op () =
   let op : Surface_ast.operation_decl = {
     op_name = "compute";
     op_params = [{ param_name = "x"; param_ty = TyPrim "number" }];
-    op_return = Some (TyPrim "number");
+    op_return = Some (TyPrim "number"); op_on_error = None;
     op_functorial = true;
     op_algebra = None;
     op_loc = Surface_ast.dummy_loc;
@@ -3521,7 +3522,7 @@ let test_reduction_compose () =
 let test_shot_ordering () =
   Printf.printf "\n=== Test 182: multi-shot effect ordering ===\n";
   let rd : Surface_ast.reduction_decl = {
-    rd_name = "MultiLog";
+    rd_name = "MultiLog"; rd_on_error = None;
     rd_of = "Log";
     rd_multi_shot = true;
     rd_shot_ordering = OrdParallel;
@@ -3554,7 +3555,7 @@ let test_shot_ordering () =
 let test_reduction_polymorphism () =
   Printf.printf "\n=== Test 184: reduction polymorphism ===\n";
   let rd : Surface_ast.reduction_decl = {
-    rd_name = "Replicated";
+    rd_name = "Replicated"; rd_on_error = None;
     rd_of = "Log";
     rd_multi_shot = false;
     rd_shot_ordering = OrdSequential;

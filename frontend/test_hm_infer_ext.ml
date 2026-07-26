@@ -70,7 +70,7 @@ let mkfun name params ret body : fun_decl =
     fn_type_params = [];
     fn_params = params;
     fn_return = ret;
-    fn_visits = [];
+    fn_on_error = None; fn_visits = [];
     fn_internal = false;
     fn_body = body;
     fn_loc = dl }

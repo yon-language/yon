@@ -74,8 +74,10 @@ let prelude_dir () : string option =
   let cands =
     (match Sys.getenv_opt "YON_PRELUDE" with Some d -> [d] | None -> [])
     @ [ Filename.concat (Filename.dirname Sys.executable_name)
-          "../../../prelude";
-        "prelude" ] in
+          "../../../prelude" ] in
+  (* NO cwd fallback: the prelude travels WITH THE COMPILER and must not be
+     user-writable — a project-local prelude/ would grant Constant (site-free
+     status) to arbitrary user places. $YON_PRELUDE stays for dev overrides. *)
   List.find_opt (fun d -> Sys.file_exists d && Sys.is_directory d) cands
 
 let prelude_cache : (string * string) list option ref = ref None

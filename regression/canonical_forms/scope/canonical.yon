@@ -1,5 +1,7 @@
-fun main(): Number {
-  be base holds 40
-  scope Hermetic { be sealed holds base + 2 }
-  return base + 2
+place Entry {
+  fun main(): Number {
+    be base holds 40
+    scope Hermetic { be sealed holds base + 2 }
+    return base + 2
+  }
 }

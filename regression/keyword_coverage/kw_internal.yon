@@ -1,2 +1,4 @@
-internal fun secret(x: Number): Number { return x + 1 }
-fun main(): Number { return secret(41) }
+place Entry {
+  internal fun secret(x: Number): Number { return x + 1 }
+  fun main(): Number { return secret(41) }
+}

@@ -1,6 +1,8 @@
 /* carry x along e = transport(ua(e), x): carrying a value along a bridge. */
-fun succ(n: Number): Number { return n + 1 }
-fun pred(n: Number): Number { return n - 1 }
-fun main(): Number {
-  be bridge holds succ <=> pred
-  return carry 10 along bridge }
+place Entry {
+  fun succ(n: Number): Number { return n + 1 }
+  fun pred(n: Number): Number { return n - 1 }
+  fun main(): Number {
+    be bridge holds succ <=> pred
+    return carry 10 along bridge }
+}

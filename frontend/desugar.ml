@@ -99,6 +99,12 @@ let fresh_sum_scrut () =
 let rec collect_sums_in_ty (t : S.ty) : unit =
   match t with
   | S.TySum variants | S.TySumIn (variants, _) ->
+      (* DEBITO (quarta occorrenza del pattern nome-nudo, review Antonio):
+         this registry is GLOBAL name->(tag,tys) with replace — homonymous
+         arms across DIFFERENT sums overwrite each other (last wins). Error
+         coproducts are safe among themselves (error_sum_of fixes positions:
+         face=0, E=1), but a user sum reordering a shared name would clash.
+         Fix path: key by (type_tag of the sum, arm). *)
       List.iteri (fun i (v : S.variant) ->
         Hashtbl.replace sum_ctor_registry v.S.v_name (i, v.S.v_args)) variants;
       List.iter (fun (v : S.variant) ->
@@ -127,7 +133,14 @@ let build_sum_registry (p : S.program) : unit =
   List.iter (function
     | S.TopFun fd ->
         List.iter scan_param fd.S.fn_params;
-        (match fd.S.fn_return with Some t -> collect_sums_in_ty t | None -> ())
+        (match fd.S.fn_return with Some t -> collect_sums_in_ty t | None -> ());
+        (* `on error E`: the synthetic coproduct T + E enters the registry so
+           the injections and the match tag-switch ride the SAME machinery
+           (error_sum_of is the ONE shared builder — tags cannot diverge) *)
+        (match fd.S.fn_return, fd.S.fn_on_error with
+         | Some t, Some e ->
+             collect_sums_in_ty (S.error_sum_of ~ret:t ~err:e)
+         | _ -> ())
     | S.TopPlace pd ->
         (* a place with arms IS the named sum (one production): register its
            name + constructors exactly as an inline sum. *)
@@ -266,7 +279,7 @@ let lift_capturing_lambda (prefix : string)
     S.fn_params = cap_params
       @ List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
     S.fn_return = Some ret_ty;
-    S.fn_visits = []; fn_internal = false;
+    S.fn_on_error = None; fn_visits = []; fn_internal = false;
     S.fn_body = [S.SReturn (body, loc)];
     S.fn_loc = loc;
   } in
@@ -531,6 +544,29 @@ and strip_parens (e : S.expr) : S.expr =
   | _ -> e
 
 and desugar_expr (e0 : S.expr) : C.term =
+  (* error-coproduct injection (site-keyed, CONSUMED on use so the recursive
+     desugar of the wrapped payload cannot re-fire) *)
+  let inject_site =
+    let loc_of = function
+      | S.ELit (_, l) | S.EVar (_, l) | S.ECall (_, _, l) | S.EField (_, _, l)
+      | S.EBinop (_, _, _, l) | S.EParen (_, l) | S.ENew (_, _, l)
+      | S.ENewIn (_, _, _, l) | S.EIfThenElse (_, _, _, l) | S.EApp (_, _, l)
+      | S.ERefl (_, l) | S.EHITConstr (_, _, l) | S.EHITElim (_, _, _, l) -> Some l
+      | _ -> None in
+    match loc_of e0 with
+    | Some l when Hashtbl.mem Surface_ast.return_inject_sites
+                    (l.S.file, l.S.start_line, l.S.start_col) ->
+        let arm = Hashtbl.find Surface_ast.return_inject_sites
+                    (l.S.file, l.S.start_line, l.S.start_col) in
+        Hashtbl.remove Surface_ast.return_inject_sites
+          (l.S.file, l.S.start_line, l.S.start_col);
+        (match Hashtbl.find_opt sum_ctor_registry arm with
+         | Some (tag, arg_tys) -> Some (tag, arg_tys, l)
+         | None -> None)
+    | _ -> None in
+  match inject_site with
+  | Some (tag, arg_tys, l) -> lower_sum_constr tag arg_tys [e0] l
+  | None ->
   let e = strip_parens e0 in
   match e with
   | S.ELit (lit, _) -> desugar_literal lit
@@ -585,6 +621,7 @@ and desugar_expr (e0 : S.expr) : C.term =
            alone — registry-free, same result. *)
         match pat with
         | S.PatVars vs -> vs
+        | S.PatWitness w -> [w]
         | S.PatFields fs ->
             (match Hashtbl.find_opt sum_ctor_registry ctor with
              | Some (_, arg_tys) ->
@@ -900,7 +937,12 @@ and desugar_expr (e0 : S.expr) : C.term =
          same value hit built — with the field assignments ordered by the
          bridge projections _1.._n. *)
       (match Hashtbl.find_opt sum_ctor_registry place_name with
-       | Some (tag, arg_tys) ->
+       (* a DECLARED field place shadows a homonymous sum arm (the error
+          coproduct names its failure arm after the error PLACE): the
+          mediatrice builds the SECTION; the arm's spine is the INJECTION's
+          job, recorded by site — never by name (the ledger rule). *)
+       | Some (tag, arg_tys)
+         when not (Hashtbl.mem armless_place_names place_name) ->
            let n = List.length arg_tys in
            let ordered =
              List.init n (fun i ->
@@ -912,7 +954,7 @@ and desugar_expr (e0 : S.expr) : C.term =
                      ".-> %s { ... }: missing projection %s (a spine has \
                       full arity)" place_name f)) in
            lower_sum_constr tag arg_tys ordered loc
-       | None ->
+       | _ ->
            let arg_terms = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
            curry_apply (C.Var ("__new_" ^ place_name)) arg_terms)
   | S.ENewIn (place_name, space_name, fas, _) ->
@@ -1020,7 +1062,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         S.fn_params = cap_params @
           List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
         S.fn_return = Some (S.TyPrim "number");
-        S.fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false;
         S.fn_body = [S.SReturn (body, _loc)];
         S.fn_loc = _loc;
       } in
@@ -1184,7 +1226,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         S.fn_params = [{ S.param_name = x_param_name;
                          S.param_ty = h1_src }];
         S.fn_return = Some h2_tgt;
-        S.fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false;
         S.fn_body = [S.SReturn (S.ELit (S.LitNumber 0.0, loc), loc)];
         S.fn_loc = loc;
       } in
@@ -1263,7 +1305,15 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
               payload_node j
           | _ -> label (payload_node j)
         in
-        (j + 1, C.App (C.Lam (v, C.TyPlace "number", acc), desugar_expr proj)))
+        let lam_ty = match vty with
+          | S.TyUser n when Hashtbl.mem armless_place_names n ->
+              (* an error-coproduct (or union) arm whose payload IS a field
+                 place: the binder is a SECTION — field projection needs to
+                 see it. Recursive inductive payloads keep the historic
+                 uniform annotation. *)
+              desugar_ty vty
+          | _ -> C.TyPlace "number" in
+        (j + 1, C.App (C.Lam (v, lam_ty, acc), desugar_expr proj)))
       (0, body_c) vars)
   in
   (* A `_` branch is the catch-all: it becomes the final else, and EVERY explicit
@@ -1570,7 +1620,7 @@ and desugar_stmts_with_locals (locals : string list) (stmts : S.stmt list) : C.t
         S.fn_params = cap_params @
           List.map (fun (n, t) -> { S.param_name = n; S.param_ty = t }) params;
         S.fn_return = Some (S.TyPrim "number");
-        S.fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false;
         S.fn_body = [S.SReturn (body, lam_loc)];
         S.fn_loc = lam_loc;
       } in
@@ -2596,6 +2646,16 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
          code — the carrier machinery already exists; declaring a section
          schema for it would invent a second representation. *)
       res
+  | S.TopPlace pd when
+      (let f = pd.S.pd_loc.S.file and sub = "prelude/" in
+       let ls = String.length sub and lf = String.length f in
+       let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
+       go 0) ->
+      (* an UNFUSED prelude place (Error): site-free by location, and its
+         decl does not ride into every program's MLIR — the corpus diff
+         stays empty. Its sections exist through the USER places that
+         declare `this <` into it (the mono is identity on the handle). *)
+      res
   | S.TopPlace pd ->
       let core_pd = desugar_place_decl pd in
       { res with ctx = Reduce.declare_place res.ctx core_pd }
@@ -2764,7 +2824,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
                 fn_type_params = [];
                 fn_params = params;
                 fn_return = Some (S.TyPrim "proposition");
-                fn_visits = []; fn_internal = false;
+                fn_on_error = None; fn_visits = []; fn_internal = false;
                 fn_body = [ S.SReturn (body, pr.pr_loc) ];
                 fn_loc = pr.pr_loc;
               } in
@@ -2828,7 +2888,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
         S.fn_params = List.map (fun (n, t) ->
           { S.param_name = n; S.param_ty = t }) ft.S.ft_params;
         S.fn_return = Some (S.TyUser ft.S.ft_to_world);
-        S.fn_visits = []; fn_internal = false;
+        S.fn_on_error = None; fn_visits = []; fn_internal = false;
         S.fn_body = [S.SReturn (ft.S.ft_body, ft.S.ft_loc)];
         S.fn_loc = ft.S.ft_loc;
       } in
@@ -3055,7 +3115,7 @@ let place_info = List.filter_map (function
                fn_params = [ { S.param_name = "__view_s";
                                param_ty = S.TyUser vd.S.vw_of } ];
                fn_return = Some (S.TyUser vd.S.vw_name);
-               fn_visits = [];
+               fn_on_error = None; fn_visits = [];
                fn_internal = false;
                fn_body = [ S.SReturn
                  (S.ENew (vd.S.vw_name, assigns, loc), loc) ];
@@ -3196,7 +3256,7 @@ let desugar_program ?(env : Tyenv.env option = None)
             fn_type_params = [];
             fn_params = [param];
             fn_return = target_fd.S.fn_return;
-            fn_visits = []; fn_internal = false;
+            fn_on_error = None; fn_visits = []; fn_internal = false;
             fn_body = body;
             fn_loc = S.dummy_loc;
           }
@@ -3221,7 +3281,7 @@ let desugar_program ?(env : Tyenv.env option = None)
                            fn_type_params = [];
                            fn_params = [param];
                            fn_return = Some (S.TyPrim "number");
-                           fn_visits = []; fn_internal = false;
+                           fn_on_error = None; fn_visits = []; fn_internal = false;
                            fn_body = [S.SReturn (body_expr, S.dummy_loc)];
                            fn_loc = S.dummy_loc;
                          }
@@ -3401,7 +3461,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           fn_type_params = [];
           fn_params = params;
           fn_return = Some ret_ty;
-          fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false;
           fn_body = body;
           fn_loc = mp.S.mp_loc;
         } in
@@ -3460,7 +3520,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           fn_type_params = [];
           fn_params = params;
           fn_return = Some ret_ty;
-          fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false;
           fn_body = body;
           fn_loc = nt.S.nt_loc;
         } in
@@ -3566,7 +3626,7 @@ let desugar_program ?(env : Tyenv.env option = None)
                      fn_params = [{S.param_name = "input";
                                    param_ty = S.TyPrim "number"}];
                      fn_return = Some (S.TyPrim "number");
-                     fn_visits = []; fn_internal = false;
+                     fn_on_error = None; fn_visits = []; fn_internal = false;
                      fn_body = body;
                      fn_loc = loc;
                    } in
@@ -3659,7 +3719,7 @@ let desugar_program ?(env : Tyenv.env option = None)
                      fn_params = [{S.param_name = "seed";
                                    param_ty = S.TyPrim "number"}];
                      fn_return = Some (S.TyPrim "number");
-                     fn_visits = []; fn_internal = false;
+                     fn_on_error = None; fn_visits = []; fn_internal = false;
                      fn_body = body;
                      fn_loc = loc;
                    } in
@@ -3784,7 +3844,7 @@ let desugar_program ?(env : Tyenv.env option = None)
             S.fn_name = "floor"; fn_type_params = [];
             fn_params = [mk_param "x"];
             fn_return = Some (S.TyPrim "number");
-            fn_visits = []; fn_internal = false;
+            fn_on_error = None; fn_visits = []; fn_internal = false;
             fn_body = body; fn_loc = loc } in
           process_top_decl res (S.TopFun fd)
       in
@@ -3824,7 +3884,7 @@ let desugar_program ?(env : Tyenv.env option = None)
         fn_type_params = [];
         fn_params = [mk_param "fa"; mk_param "gb"; mk_param "a"; mk_param "b"];
         fn_return = Some (S.TyPrim "number");
-        fn_visits = []; fn_internal = false;
+        fn_on_error = None; fn_visits = []; fn_internal = false;
         fn_body = pack_body;
         fn_loc = loc;
       } in
@@ -3841,7 +3901,7 @@ let desugar_program ?(env : Tyenv.env option = None)
         fn_type_params = [];
         fn_params = [mk_param "p"];
         fn_return = Some (S.TyPrim "number");
-        fn_visits = []; fn_internal = false;
+        fn_on_error = None; fn_visits = []; fn_internal = false;
         fn_body = pi1_body;
         fn_loc = loc;
       } in
@@ -3856,7 +3916,7 @@ let desugar_program ?(env : Tyenv.env option = None)
         fn_type_params = [];
         fn_params = [mk_param "p"];
         fn_return = Some (S.TyPrim "number");
-        fn_visits = []; fn_internal = false;
+        fn_on_error = None; fn_visits = []; fn_internal = false;
         fn_body = pi2_body;
         fn_loc = loc;
       } in
@@ -3895,7 +3955,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "floor"; fn_type_params = [];
           fn_params = [mk_param "x"];
           fn_return = Some (S.TyPrim "number");
-          fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -3919,7 +3979,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "__pow2"; fn_type_params = [];
           fn_params = [mk_param "n"];
           fn_return = Some (S.TyPrim "number");
-          fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -3933,7 +3993,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "__shl"; fn_type_params = [];
           fn_params = [mk_param "a"; mk_param "n"];
           fn_return = Some (S.TyPrim "number");
-          fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -3950,7 +4010,7 @@ let desugar_program ?(env : Tyenv.env option = None)
           S.fn_name = "__shr"; fn_type_params = [];
           fn_params = [mk_param "a"; mk_param "n"];
           fn_return = Some (S.TyPrim "number");
-          fn_visits = []; fn_internal = false;
+          fn_on_error = None; fn_visits = []; fn_internal = false;
           fn_body = body; fn_loc = loc } in
         process_top_decl res (S.TopFun fd)
     in
@@ -3997,7 +4057,7 @@ let desugar_program ?(env : Tyenv.env option = None)
               fn_type_params = [];
               fn_params = fd.S.fn_params;
               fn_return = fd.S.fn_return;
-              fn_visits = []; fn_internal = false;
+              fn_on_error = None; fn_visits = []; fn_internal = false;
               fn_body = body;
               fn_loc = mp.S.mp_loc;
             } in
@@ -4066,7 +4126,7 @@ let desugar_program ?(env : Tyenv.env option = None)
             fn_type_params = [];
             fn_params = params;
             fn_return = ret_ty_opt;
-            fn_visits = []; fn_internal = false;
+            fn_on_error = None; fn_visits = []; fn_internal = false;
             fn_body = body;
             fn_loc = nt.S.nt_loc }
         in

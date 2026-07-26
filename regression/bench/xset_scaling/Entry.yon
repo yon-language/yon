@@ -1,4 +1,62 @@
-place Entry { }
+place Entry {
+  fun build_xset(lo: Number, n: Number): Number {
+    be s holds Space.make(XSet.empty())
+    be i holds Space.make(0)
+    iter n do { be _ holds Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
+                be _2 holds Space.set(i, Space.get(i) + 1) }
+    return Space.get(s)
+  }
+  fun build_hset(lo: Number, n: Number): Number {
+    be s holds Space.make(HashSet.empty())
+    be i holds Space.make(0)
+    iter n do { be _ holds Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
+                be _2 holds Space.set(i, Space.get(i) + 1) }
+    return Space.get(s)
+  }
+  fun b_xi(a: Number, b: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter 30 do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
+    return (Time.now_ns(0) - t0) / 30
+  }
+  fun b_xu(a: Number, b: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter 30 do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
+    return (Time.now_ns(0) - t0) / 30
+  }
+  fun b_hi(a: Number, b: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter 30 do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
+    return (Time.now_ns(0) - t0) / 30
+  }
+  fun b_hu(a: Number, b: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter 30 do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
+    return (Time.now_ns(0) - t0) / 30
+  }
+  fun one(n: Number): Number visits Output {
+    be half holds n / 2
+    be xa holds build_xset(0, n)
+    be xb holds build_xset(half, n)
+    be ha holds build_hset(0, n)
+    be hb holds build_hset(half, n)
+    be _1 holds Output.print(String.from_int(b_xi(xa, xb)))
+    be _2 holds Output.print(String.from_int(b_hi(ha, hb)))
+    be _3 holds Output.print(String.from_int(b_xu(xa, xb)))
+    be _4 holds Output.print(String.from_int(b_hu(ha, hb)))
+    return 0
+  }
+  fun main(): Number visits Output {
+    be _a holds one(100)
+    be _b holds one(1000)
+    be _c holds one(10000)
+    be _d holds one(100000)
+    return 0
+  }
+}
 // XSet vs HashSet set-algebra at N = 100 / 1,000 / 10,000, to show the bit-parallel
 // advantage GROWS with N: XSet is O(1) in |set| (a fixed 196,560-bit AND/OR), HashSet
 // is O(N) (iterate). XSet's pool is 256, so allocating ops are timed once over a small
@@ -6,60 +64,3 @@ place Entry { }
 //
 // Schema: 3 groups of 4 ints (N=100, 1000, 10000), each:
 //   xset_inter_ns_per_op  hash_inter_ns_per_op  xset_union_ns_per_op  hash_union_ns_per_op
-fun build_xset(lo: Number, n: Number): Number {
-  be s holds Space.make(XSet.empty())
-  be i holds Space.make(0)
-  iter n do { be _ holds Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
-              be _2 holds Space.set(i, Space.get(i) + 1) }
-  return Space.get(s)
-}
-fun build_hset(lo: Number, n: Number): Number {
-  be s holds Space.make(HashSet.empty())
-  be i holds Space.make(0)
-  iter n do { be _ holds Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
-              be _2 holds Space.set(i, Space.get(i) + 1) }
-  return Space.get(s)
-}
-fun b_xi(a: Number, b: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter 30 do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
-  return (Time.now_ns(0) - t0) / 30
-}
-fun b_xu(a: Number, b: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter 30 do { be _ holds Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
-  return (Time.now_ns(0) - t0) / 30
-}
-fun b_hi(a: Number, b: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter 30 do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
-  return (Time.now_ns(0) - t0) / 30
-}
-fun b_hu(a: Number, b: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter 30 do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
-  return (Time.now_ns(0) - t0) / 30
-}
-fun one(n: Number): Number visits Output {
-  be half holds n / 2
-  be xa holds build_xset(0, n)
-  be xb holds build_xset(half, n)
-  be ha holds build_hset(0, n)
-  be hb holds build_hset(half, n)
-  be _1 holds Output.print(String.from_int(b_xi(xa, xb)))
-  be _2 holds Output.print(String.from_int(b_hi(ha, hb)))
-  be _3 holds Output.print(String.from_int(b_xu(xa, xb)))
-  be _4 holds Output.print(String.from_int(b_hu(ha, hb)))
-  return 0
-}
-fun main(): Number visits Output {
-  be _a holds one(100)
-  be _b holds one(1000)
-  be _c holds one(10000)
-  be _d holds one(100000)
-  return 0
-}

@@ -1,4 +1,70 @@
-place Entry { }
+place Entry {
+  fun timed_cons(n: Number): Number visits Output {
+    be lc holds Space.make(List.empty(0))
+    be i holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(lc, List.cons(k, Space.get(lc)))
+                be _2 holds Space.set(i, k + 1) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun timed_cons_base(n: Number): Number visits Output {
+    be i holds Space.make(0)
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(acc, k)
+                be _2 holds Space.set(i, k + 1) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun build_list(n: Number): Number {
+    be lc holds Space.make(List.empty(0))
+    be i holds Space.make(0)
+    iter n do { be k holds Space.get(i)
+                be _ holds Space.set(lc, List.cons(k, Space.get(lc)))
+                be _2 holds Space.set(i, k + 1) }
+    return Space.get(lc)
+  }
+  fun timed_head(l: Number, m: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter m do { be h holds List.head(l)
+                be _ holds Space.set(acc, Space.get(acc) + h) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun timed_head_base(m: Number, headv: Number): Number visits Output {
+    be acc holds Space.make(0)
+    be t0 holds Time.now_ns(0)
+    iter m do { be _ holds Space.set(acc, Space.get(acc) + headv) }
+    be t1 holds Time.now_ns(0)
+    return (t1 - t0)
+  }
+  fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
+  fun main(): Number visits Output {
+    be n holds 100000
+    // cons throughput: min over a few reps, net of baseline
+    be cns holds Space.make(timed_cons(n))
+    iter 4 do { be _ holds Space.set(cns, min2(Space.get(cns), timed_cons(n))) }
+    be cnsb holds Space.make(timed_cons_base(n))
+    iter 4 do { be _ holds Space.set(cnsb, min2(Space.get(cnsb), timed_cons_base(n))) }
+    be l holds build_list(n)
+    be len holds List.length(l)
+    be hv holds List.head(l)
+    be m holds 1000000
+    be hd holds Space.make(timed_head(l, m))
+    iter 11 do { be _ holds Space.set(hd, min2(Space.get(hd), timed_head(l, m))) }
+    be hdb holds Space.make(timed_head_base(m, hv))
+    iter 11 do { be _ holds Space.set(hdb, min2(Space.get(hdb), timed_head_base(m, hv))) }
+    be _1 holds Output.print(String.from_int(len))                                // final_length = N
+    be _2 holds Output.print(String.from_int((Space.get(cns) - Space.get(cnsb)))) // cons net ns for N
+    be _3 holds Output.print(String.from_int(hv))                                 // head guard (= N-1)
+    be _4 holds Output.print(String.from_int((Space.get(hd) - Space.get(hdb))))    // head net ns for M
+    return 0
+  }
+}
 // BENCHMARK — List (functional cons-list): cons throughput + head latency.
 // CONS: thread the list handle through a Space cell, prepend N entries, time it net of
 // a baseline loop (same cell-threading, no cons). HEAD: build a list of N once, then
@@ -7,68 +73,3 @@ place Entry { }
 //
 // Stdout schema (4 ints): final_length, cons_net_ns_per_N, head_acc, head_net_ns_per_M
 //   cons: N = 100000 (net/N = ns/cons) ; head: M = 1000000, K = 11 reps (net/M = ns/head).
-fun timed_cons(n: Number): Number visits Output {
-  be lc holds Space.make(List.empty(0))
-  be i holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(lc, List.cons(k, Space.get(lc)))
-              be _2 holds Space.set(i, k + 1) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun timed_cons_base(n: Number): Number visits Output {
-  be i holds Space.make(0)
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(acc, k)
-              be _2 holds Space.set(i, k + 1) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun build_list(n: Number): Number {
-  be lc holds Space.make(List.empty(0))
-  be i holds Space.make(0)
-  iter n do { be k holds Space.get(i)
-              be _ holds Space.set(lc, List.cons(k, Space.get(lc)))
-              be _2 holds Space.set(i, k + 1) }
-  return Space.get(lc)
-}
-fun timed_head(l: Number, m: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter m do { be h holds List.head(l)
-              be _ holds Space.set(acc, Space.get(acc) + h) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun timed_head_base(m: Number, headv: Number): Number visits Output {
-  be acc holds Space.make(0)
-  be t0 holds Time.now_ns(0)
-  iter m do { be _ holds Space.set(acc, Space.get(acc) + headv) }
-  be t1 holds Time.now_ns(0)
-  return (t1 - t0)
-}
-fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
-fun main(): Number visits Output {
-  be n holds 100000
-  // cons throughput: min over a few reps, net of baseline
-  be cns holds Space.make(timed_cons(n))
-  iter 4 do { be _ holds Space.set(cns, min2(Space.get(cns), timed_cons(n))) }
-  be cnsb holds Space.make(timed_cons_base(n))
-  iter 4 do { be _ holds Space.set(cnsb, min2(Space.get(cnsb), timed_cons_base(n))) }
-  be l holds build_list(n)
-  be len holds List.length(l)
-  be hv holds List.head(l)
-  be m holds 1000000
-  be hd holds Space.make(timed_head(l, m))
-  iter 11 do { be _ holds Space.set(hd, min2(Space.get(hd), timed_head(l, m))) }
-  be hdb holds Space.make(timed_head_base(m, hv))
-  iter 11 do { be _ holds Space.set(hdb, min2(Space.get(hdb), timed_head_base(m, hv))) }
-  be _1 holds Output.print(String.from_int(len))                                // final_length = N
-  be _2 holds Output.print(String.from_int((Space.get(cns) - Space.get(cnsb)))) // cons net ns for N
-  be _3 holds Output.print(String.from_int(hv))                                 // head guard (= N-1)
-  be _4 holds Output.print(String.from_int((Space.get(hd) - Space.get(hdb))))    // head net ns for M
-  return 0
-}

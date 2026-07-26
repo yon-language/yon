@@ -1,3 +1,5 @@
 // coverage: a parameter of `Map<text, number>` type (TyMap)
-fun size(m: Map<Text, Number>): Number { return 0 }
-fun main(): Number { return 0 }
+place Entry {
+  fun size(m: Map<Text, Number>): Number { return 0 }
+  fun main(): Number { return 0 }
+}

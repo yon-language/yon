@@ -1,4 +1,30 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be cw holds VoyagerList.seal(1445)
+    be _1 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 1))))
+    be _2 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 2))))
+    be _3 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 3))))
+    be _4 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 4))))
+    be _5 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 5))))
+    be _6 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 6))))
+
+    be mut holds VoyagerList.open(VoyagerList.corrupt(cw, 6))
+
+    be l0 holds VoyagerList.empty()
+    be l1 holds VoyagerList.append(l0, 1445)
+    be l2 holds VoyagerList.append(l1, 1445)
+    be l3 holds VoyagerList.append(l2, mut)
+    be l4 holds VoyagerList.append(l3, 100)
+    be l5 holds VoyagerList.append(l4, 200)
+    be _sz holds Output.print(String.from_int(VoyagerList.size(l5)))
+
+    be _o1 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1445, 3))))
+    be _o2 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(mut, 3))))
+    be _o3 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(100, 3))))
+    be _o4 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(200, 3))))
+    return 0
+  }
+}
 
 // 2.3 — the mutation, and the three notions of count.
 //
@@ -23,28 +49,3 @@ place Entry { }
 //  [7]    VoyagerList.size of the 5-append population (events = 5)
 //  [8-11] m24_orbit(embed(g,3)) for g in [1445, mutant(k=6), 100, 200]  (the classes)
 
-fun main(): Number visits Output {
-  be cw holds VoyagerList.seal(1445)
-  be _1 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 1))))
-  be _2 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 2))))
-  be _3 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 3))))
-  be _4 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 4))))
-  be _5 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 5))))
-  be _6 holds Output.print(String.from_int(VoyagerList.open(VoyagerList.corrupt(cw, 6))))
-
-  be mut holds VoyagerList.open(VoyagerList.corrupt(cw, 6))
-
-  be l0 holds VoyagerList.empty()
-  be l1 holds VoyagerList.append(l0, 1445)
-  be l2 holds VoyagerList.append(l1, 1445)
-  be l3 holds VoyagerList.append(l2, mut)
-  be l4 holds VoyagerList.append(l3, 100)
-  be l5 holds VoyagerList.append(l4, 200)
-  be _sz holds Output.print(String.from_int(VoyagerList.size(l5)))
-
-  be _o1 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(1445, 3))))
-  be _o2 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(mut, 3))))
-  be _o3 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(100, 3))))
-  be _o4 holds Output.print(String.from_int(Leech.m24_orbit(Leech.embed(200, 3))))
-  return 0
-}

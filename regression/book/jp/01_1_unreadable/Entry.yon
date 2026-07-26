@@ -1,6 +1,7 @@
-place Entry { }
-
-fun main(): Number {
-  be substrate holds 0
-  return substrate
+place Entry {
+  fun main(): Number {
+    be substrate holds 0
+    return substrate
+  }
 }
+

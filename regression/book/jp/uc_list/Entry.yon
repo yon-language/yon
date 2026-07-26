@@ -1,18 +1,19 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be l holds List.empty(0)
+    l = List.cons(1207, l)
+    l = List.cons(1280, l)
+    l = List.cons(1445, l)
+    be _1 holds Output.print(String.from_int(List.length(l)))
+    be _2 holds Output.print(String.from_int(List.head(l)))
+    be _3 holds Output.print(String.from_int(List.head(List.tail(l))))
+    be _4 holds Output.print(String.from_int(List.head(List.reverse(l))))
+    be _5 holds Output.print(String.from_int(List.length(List.tail(l))))
+    return 0
+  }
+}
 // §3b List — "the descent chain". A functional cons-list: cons prepends the newest
 // generation, head = newest, tail = the ancestors, length = generations, reverse =
 // oldest-first. Stdout: [1] length=3, [2] head=1445 (newest hatchling),
 // [3] head(tail)=1280 (its parent), [4] head(reverse)=1207 (the founder),
 // [5] length(tail)=2 (the ancestry behind the newest).
-fun main(): Number visits Output {
-  be l holds List.empty(0)
-  l = List.cons(1207, l)
-  l = List.cons(1280, l)
-  l = List.cons(1445, l)
-  be _1 holds Output.print(String.from_int(List.length(l)))
-  be _2 holds Output.print(String.from_int(List.head(l)))
-  be _3 holds Output.print(String.from_int(List.head(List.tail(l))))
-  be _4 holds Output.print(String.from_int(List.head(List.reverse(l))))
-  be _5 holds Output.print(String.from_int(List.length(List.tail(l))))
-  return 0
-}

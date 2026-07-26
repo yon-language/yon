@@ -1,4 +1,23 @@
-place Entry { }
+place Entry {
+  fun main(): Number visits Output {
+    be h holds HashSet.empty()
+    h = HashSet.add(h, 1445)
+    h = HashSet.add(h, 1445)
+    h = HashSet.add(h, 2361)
+    h = HashSet.add(h, 100)
+    h = HashSet.add(h, 200)
+    be _1 holds Output.print(String.from_int(HashSet.size(h)))
+
+    be x holds XSet.empty()
+    x = XSet.add(x, Leech.embed(1445, 0))
+    x = XSet.add(x, Leech.embed(1445, 0))
+    x = XSet.add(x, Leech.embed(2361, 0))
+    x = XSet.add(x, Leech.embed(100, 0))
+    x = XSet.add(x, Leech.embed(200, 0))
+    be _2 holds Output.print(String.from_int(XSet.size(x)))
+    return 0
+  }
+}
 
 // USE CASE A — "is this exact dinosaur already here?" (identity / dedup).
 // Inventory receives 5 genomes: [1445, 1445(dup), 2361, 100, 200] -> 4 distinct.
@@ -7,21 +26,3 @@ place Entry { }
 //   same-popcount values -> fewer than 4. FNV is the exact content-address here.
 // Stdout: [1] HashSet.size (expect 4), [2] XSet.size (<= 4, the collapse).
 
-fun main(): Number visits Output {
-  be h holds HashSet.empty()
-  h = HashSet.add(h, 1445)
-  h = HashSet.add(h, 1445)
-  h = HashSet.add(h, 2361)
-  h = HashSet.add(h, 100)
-  h = HashSet.add(h, 200)
-  be _1 holds Output.print(String.from_int(HashSet.size(h)))
-
-  be x holds XSet.empty()
-  x = XSet.add(x, Leech.embed(1445, 0))
-  x = XSet.add(x, Leech.embed(1445, 0))
-  x = XSet.add(x, Leech.embed(2361, 0))
-  x = XSet.add(x, Leech.embed(100, 0))
-  x = XSet.add(x, Leech.embed(200, 0))
-  be _2 holds Output.print(String.from_int(XSet.size(x)))
-  return 0
-}

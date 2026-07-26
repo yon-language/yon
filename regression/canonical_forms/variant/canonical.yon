@@ -1,4 +1,6 @@
-fun motive(value: A | B(Number)): Number { return 0 }
-fun main(): Number {
-  return hit_elim(motive, [A => 0, B(x) => x], hit(B, 7))
+place Entry {
+  fun motive(value: A | B(Number)): Number { return 0 }
+  fun main(): Number {
+    return hit_elim(motive, [A => 0, B(x) => x], hit(B, 7))
+  }
 }
