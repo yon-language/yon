@@ -180,6 +180,12 @@ and world_decl = {
  * no false identifications) until their binding arity is pinned down with full
  * bidirectional typing — the env is still threaded through their subterms so
  * alpha works for any Lam nested inside them. *)
+(* Identity registry of the CORE place decls that came from prelude files.
+   Site-keyed by construction (physical identity, not name): a user place
+   sharing a prelude place's name is a DIFFERENT decl and is never caught
+   by this list. Reset by Desugar at each program entry. *)
+let prelude_place_decls : place_decl list ref = ref []
+
 let var_alpha env x y =
   let rec ldepth l i = match l with
     | [] -> None | (a, _) :: r -> if a = x then Some i else ldepth r (i + 1) in

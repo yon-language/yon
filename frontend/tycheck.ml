@@ -4157,6 +4157,11 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
   let* () =
     match pd.pd_subcontains with
     | None -> ok ()
+    (* a PRELUDE place's mono (DomainError < Error) is validated by the
+       toolchain's own gates; re-checking it here against the USER env is a
+       name-capture bug — a user place named Error would shadow the prelude's
+       and the subsumption would be judged against the wrong place. *)
+    | Some _ when in_prelude_file pd.pd_loc -> ok ()
     | Some base ->
         (match Tyenv.lookup_place env base with
          | None ->

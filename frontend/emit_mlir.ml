@@ -6103,6 +6103,9 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     List.filter (fun (name, fs) ->
       name <> "main"   (* main returns i32 and is not a cross-Space operation *)
       && not (List.mem name internal_funs)   (* internal funs are NOT exported *)
+      && not (Hashtbl.mem Surface_ast.prelude_arrow_names name)
+         (* the wire namespace belongs to user spaces: prelude arrows never
+            enter the dispatch table (their bares would collide everywhere) *)
       && List.length fs.fn_params <= 4
       && List.for_all (fun (_, pty) -> core_ty_to_mlir_simple pty = "f64")
            fs.fn_params
@@ -6250,6 +6253,86 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "module {";
   push_indent e;
   let places = List.map snd dr.ctx.R.places in
+  (* PRELUDE TREE-SHAKING, computed ONCE and used by every pass below
+     (used-builtins, string literals, signatures, emission): the library
+     rides in front of every compilation, the binary carries only what the
+     program REACHES. Roots = every non-prelude function + main; edges =
+     C.Var occurrences naming a function. *)
+  let dr_functions_shaken =
+    if Hashtbl.length Surface_ast.prelude_arrow_names = 0 then dr.functions
+    else begin
+      let fnames = List.map fst dr.functions in
+      let is_prelude n = Hashtbl.mem Surface_ast.prelude_arrow_names n in
+      let rec vars_of (t : C.term) (acc : string list) : string list =
+        match t with
+        | C.Var v -> if List.mem v fnames then v :: acc else acc
+        | C.App (a, b) -> vars_of a (vars_of b acc)
+        | C.Lam (_, _, b) -> vars_of b acc
+        | C.PLam (_, b) -> vars_of b acc
+        | C.PApp (b, _) -> vars_of b acc
+        | C.HITConstr (_, args) -> List.fold_left (fun a x -> vars_of x a) acc args
+        | C.HITElim (brs, x) ->
+            vars_of x (List.fold_left (fun a (_, _, b) -> vars_of b a) acc brs)
+        | _ -> acc in
+      let reached : (string, unit) Hashtbl.t = Hashtbl.create 64 in
+      let queue = ref [] in
+      List.iter (fun (n, body) ->
+        if not (is_prelude n) then begin
+          Hashtbl.replace reached n ();
+          queue := body :: !queue
+        end) dr.functions;
+      (match dr.main with Some m -> queue := m :: !queue | None -> ());
+      let rec drain_q () =
+        match !queue with
+        | [] -> ()
+        | body :: rest ->
+            queue := rest;
+            List.iter (fun v ->
+              if not (Hashtbl.mem reached v) then begin
+                Hashtbl.replace reached v ();
+                (match List.assoc_opt v dr.functions with
+                 | Some b -> queue := b :: !queue
+                 | None -> ())
+              end) (vars_of body []);
+            drain_q () in
+      drain_q ();
+      List.filter (fun (n, _) ->
+        not (is_prelude n) || Hashtbl.mem reached n) dr.functions
+    end in
+  (* prelude PLACES on use: a program constructs P through __new_P — collect
+     those references from the SHAKEN bodies (+ main) and drop unused prelude
+     places from the LOCAL list every downstream pass consumes (topos.world,
+     places_table, schema registration, __new_ emission, op declarations). *)
+  let places =
+    if Hashtbl.length Surface_ast.prelude_place_names = 0 then places
+    else begin
+     let used : (string, unit) Hashtbl.t = Hashtbl.create 8 in
+     let rec scan (t : C.term) : unit =
+       (match t with
+        | C.Var v when String.length v > 6 && String.sub v 0 6 = "__new_" ->
+            Hashtbl.replace used (String.sub v 6 (String.length v - 6)) ()
+        | _ -> ());
+       match t with
+       | C.App (a, b) -> scan a; scan b
+       | C.Lam (_, _, b) | C.PLam (_, b) | C.PApp (b, _) -> scan b
+       | C.HITConstr (_, args) -> List.iter scan args
+       | C.HITElim (brs, x) -> scan x; List.iter (fun (_, _, b) -> scan b) brs
+       | _ -> () in
+     List.iter (fun (_, body) -> scan body) dr_functions_shaken;
+     (match dr.main with Some m -> scan m | None -> ());
+     (* keep is by IDENTITY (the decl's site), never by name: a USER place
+        that shares a prelude name is a different decl, kept unconditionally
+        — and it SHADOWS the prelude copy (tycheck resolves last-wins), so
+        the prelude homonym is dropped even when __new_<name> is used. *)
+     let is_prelude_pd pd = List.memq pd !C.prelude_place_decls in
+     let user_names =
+       List.filter_map (fun (pd : C.place_decl) ->
+         if is_prelude_pd pd then None else Some pd.p_name) places in
+     List.filter (fun (pd : C.place_decl) ->
+       if is_prelude_pd pd then
+         Hashtbl.mem used pd.p_name && not (List.mem pd.p_name user_names)
+       else true) places
+    end in
   let reductions = List.map snd dr.ctx.R.reductions in
   (* Fill places_table for field-projection lookup:
      place_name -> [(field_name, field_mlir_ty)]. *)
@@ -6305,7 +6388,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
    * mangled name (e.g. Ord__compare). *)
   let used_builtins = Hashtbl.create 16 in
   List.iter (fun (_, body) -> collect_used_builtins used_builtins body)
-    dr.functions;
+    dr_functions_shaken;
   (match dr.main with
    | Some m -> collect_used_builtins used_builtins m
    | None -> ());
@@ -6799,7 +6882,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
      module global per distinct content, and declare the interning runtime. *)
   Hashtbl.reset g_strlits;
   g_strlit_order := [];
-  List.iter (fun (_, body) -> collect_string_literals body) dr.functions;
+  List.iter (fun (_, body) -> collect_string_literals body) dr_functions_shaken;
   (match dr.main with
    | Some m -> collect_string_literals m
    | None -> ());
@@ -7089,7 +7172,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
       ) rd.r_handlers
     ) reductions
   in
-  let all_functions = dr.functions @ reduction_handler_funcs in
+  let all_functions = dr_functions_shaken @ reduction_handler_funcs in
   (* Two passes, to support forward references between functions (e.g. fun A
    * calling fun B declared later).
    *

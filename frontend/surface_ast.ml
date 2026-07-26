@@ -80,6 +80,16 @@ let fused_elim_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 8
    index (0 = success, 1 = error). *)
 let return_inject_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 16
 
+(* arrows DECLARED IN THE PRELUDE (qualified names, post-qualify_homes).
+   Two consumers: emit TREE-SHAKES them (a program carries only what it
+   reaches — the library is large and universal, the binary is not), and the
+   dispatch table EXCLUDES them (the wire namespace belongs to user spaces;
+   a prelude bare name in every table would collide with any user arrow). *)
+let prelude_arrow_names : (string, unit) Hashtbl.t = Hashtbl.create 64
+(* UNFUSED prelude places (Error, DomainError): declared normally, but the
+   emitter keeps them ON USE only — same shake philosophy as the arrows. *)
+let prelude_place_names : (string, unit) Hashtbl.t = Hashtbl.create 8
+
 (* Bare nullary points: `tt` in expression position IS the unique point of
    its terminal arm (the name denotes the point — no constructor call). The
    tycheck resolves the name (scope-aware: locals shadow) and records the
