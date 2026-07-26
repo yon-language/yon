@@ -2,7 +2,7 @@ place Reading {
   temp number
   label text
 
-  fun forecasts(): stream of Reading {
+  fun forecasts(): Stream<Reading> {
     be s holds produce {
       emit .-> Reading { temp 10 label "ok" }
       emit .-> Reading { temp 11 label "ok" }

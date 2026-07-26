@@ -1,2 +1,2 @@
-fun sum(xs: list of number): number { return xs.fold(0, fun(a: number, b: number) => a + b) }
+fun sum(xs: List<number>): number { return xs.fold(0, fun(a: number, b: number) => a + b) }
 fun main(): number { return sum(List.cons(40, List.cons(2, List.empty(0)))) }

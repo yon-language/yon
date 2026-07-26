@@ -1,7 +1,7 @@
 /* Interface (signature only) of the Meteo producer. The import is nominal:
  * the code lives in the Meteo Space (a separate process); the consumer needs
  * only the declared return type to typecheck awaits. */
-fun samples(): stream of Reading {
+fun samples(): Stream<Reading> {
   be s holds produce { emit .-> Reading { temp 10 humidity 50 } }
   return s
 }

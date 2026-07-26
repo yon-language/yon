@@ -154,7 +154,7 @@
 (* OVER is already declared below in the WHEN/SEQUENCE token group *)
 
 /* Type-related */
-%token OF IN TO LIST MAP STREAM IS NOT BY FROM WITH UNIFIES REQUIRES
+%token OF IN TO STREAM IS NOT BY FROM WITH UNIFIES REQUIRES
 %token WIRE
 %token SPAWN PROMOTE PARALLEL
 %token COMPOSE
@@ -827,12 +827,6 @@ type_expr:
     { a }
 
 type_atom:
-  | LIST OF t = type_atom
-    { TyList t }
-  | MAP OF k = type_atom TO v = type_atom
-    { TyMap (k, v) }
-  | STREAM OF t = type_atom
-    { TyStream t }
   | TYPE_KW
     { TyUniverse 0 }
   | n = TYPE_LEVEL
@@ -860,7 +854,19 @@ type_atom:
      Box<number> and Box<text> share one layout. Precise per-instantiation
      element typing (a TyApp node + monomorphisation) is the next increment. *)
   | name = IDENT LT args = separated_nonempty_list(COMMA, type_atom) GT
-    { TyApp (name, args) }
+    { (* The container types ARE generics: List<T>, Map<K,V>, Stream<T>
+         canonicalize to their dedicated nodes (the retired spellings were
+         `list of T`, `map of K to V`, `stream of T`). Wrong arity is an
+         honest parse-time failure, not a silent TyApp. *)
+      match name, args with
+      | "List", [t] -> TyList t
+      | "Map", [k; v] -> TyMap (k, v)
+      | "Stream", [t] -> TyStream t
+      | ("List" | "Map" | "Stream"), _ ->
+          failwith (Printf.sprintf
+            "%s expects %s type argument(s): List<T> | Map<K, V> | Stream<T>"
+            name (if name = "Map" then "2" else "1"))
+      | _ -> TyApp (name, args) }
   | name = IDENT
     { TyUser name }
   | name = IDENT IN ids = ident_list
@@ -1162,8 +1168,6 @@ return_stmt:
 call_or_new_stmt:
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
     { dot_call_stmt obj fld args (mk_loc $startpos $endpos) }
-  | obj = IDENT DOT MAP LPAREN args = expr_list RPAREN
-    { dot_call_stmt obj "map" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT FOLD LPAREN args = expr_list RPAREN
     { dot_call_stmt obj "fold" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN
@@ -1363,8 +1367,6 @@ chained_expr:
   | e = expr_atom                               { e }
   | recv = chained_expr DOT meth = IDENT LPAREN args = expr_list RPAREN
     { ECall (meth, recv :: args, mk_loc $startpos $endpos) }
-  | recv = chained_expr DOT MAP LPAREN args = expr_list RPAREN
-    { ECall ("map", recv :: args, mk_loc $startpos $endpos) }
   | recv = chained_expr DOT FOLD LPAREN args = expr_list RPAREN
     { ECall ("fold", recv :: args, mk_loc $startpos $endpos) }
 
@@ -1517,13 +1519,11 @@ expr_atom:
       EPullbackVal (f, g, a, b, mk_loc $startpos $endpos) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
     { dot_call_expr obj fld args (mk_loc $startpos $endpos) }
-  (* MAP, FOLD, and FILTER are keyword tokens (used by the type map<K,V> and
-   * by space-decl `with fold "..."`), so they do not match IDENT in method-name
-   * position. We add explicit rules for Class.map/fold/filter(args) as a
-   * method call. PUSH is a keyword too (geometric-morphism f_lower_star), so
-   * Vec.push(...) needs the same treatment. *)
-  | obj = IDENT DOT MAP LPAREN args = expr_list RPAREN
-    { dot_call_expr obj "map" args (mk_loc $startpos $endpos) }
+  (* FOLD and FILTER are keyword tokens (space-decl `with fold "..."`), so they
+   * do not match IDENT in method-name position: explicit rules for
+   * Class.fold/filter(args). PUSH is a keyword too (geometric-morphism
+   * f_lower_star), so Vec.push(...) needs the same treatment. `map` is a
+   * plain IDENT since the map keyword retired with `map of K to V`. *)
   | obj = IDENT DOT FOLD LPAREN args = expr_list RPAREN
     { dot_call_expr obj "fold" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN

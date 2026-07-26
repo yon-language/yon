@@ -46,8 +46,6 @@ let tok_name = function
   | Parser.OF -> "OF"
   | Parser.IN -> "IN"
   | Parser.TO -> "TO"
-  | Parser.LIST -> "LIST"
-  | Parser.MAP -> "MAP"
   | Parser.STREAM -> "STREAM"
   | Parser.IS -> "IS"
   | Parser.NOT -> "NOT"

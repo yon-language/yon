@@ -2,4 +2,4 @@ status: accept
 exit: 42
 covers: type_expr type_atom
 note: |
-  Types: list of T, map of K to V, T -> U, stream of T.
+  Types: List<T>, Map<K, V>, T -> U, Stream<T> — the containers are generics.
