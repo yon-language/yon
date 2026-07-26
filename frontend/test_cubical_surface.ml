@@ -116,7 +116,7 @@ let () =
      gate (Fix B); this oracle isolates the lowering contract. *)
   let unary_num : Tyenv.fun_sig = {
     fs_params = [("n", num)]; fs_return = num;
-    fs_visits = []; fs_partial = false } in
+    fs_visits = []} in
   let desugar_env =
     Tyenv.empty
     |> fun e -> Tyenv.add_fun e "succ" unary_num

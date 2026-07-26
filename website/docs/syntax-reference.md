@@ -30,9 +30,7 @@ Every keyword, alphabetically:
 [`as`](/book/keywords#as) ·
 [`at`](/book/keywords#at) ·
 [`back`](/book/keywords#back) ·
-[`backward`](/book/keywords#backward) ·
 [`be`](/book/keywords#be) ·
-[`bi`](/book/keywords#bi) ·
 [`by`](/book/keywords#by) ·
 [`carry`](/book/keywords#carry) ·
 [`cell`](/book/keywords#cell) ·
@@ -55,7 +53,6 @@ Every keyword, alphabetically:
 [`for`](/book/keywords#for) ·
 [`forces`](/book/keywords#forces) ·
 [`forever`](/book/keywords#forever) ·
-[`forward`](/book/keywords#forward) ·
 [`from`](/book/keywords#from) ·
 [`fst`](/book/keywords#fst) ·
 [`fun`](/book/keywords#fun) ·
@@ -77,18 +74,15 @@ Every keyword, alphabetically:
 [`ind_path`](/book/keywords#ind_path) ·
 [`induct`](/book/keywords#induct) ·
 [`internal`](/book/keywords#internal) ·
-[`invertible`](/book/keywords#invertible) ·
 [`is`](/book/keywords#is) ·
 [`iter`](/book/keywords#iter) ·
 [`law`](/book/keywords#law) ·
-[`lawful`](/book/keywords#lawful) ·
 [`list`](/book/keywords#list) ·
 [`map`](/book/keywords#map) ·
 [`maps`](/book/keywords#maps) ·
 [`match`](/book/keywords#match) ·
 [`morph`](/book/keywords#morph) ·
 [`morphism`](/book/keywords#morphism) ·
-[`morphisms`](/book/keywords#morphisms) ·
 [`most`](/book/keywords#most) ·
 [`move`](/book/keywords#move) ·
 [`multishot`](/book/keywords#multishot) ·
@@ -101,7 +95,6 @@ Every keyword, alphabetically:
 [`over`](/book/keywords#over) ·
 [`pair`](/book/keywords#pair) ·
 [`parallel`](/book/keywords#parallel) ·
-[`partial`](/book/keywords#partial) ·
 [`PathP`](/book/keywords#pathp) ·
 [`Pi`](/book/keywords#pi) ·
 [`place`](/book/keywords#place) ·
@@ -129,10 +122,8 @@ Every keyword, alphabetically:
 [`Sigma`](/book/keywords#sigma) ·
 [`snd`](/book/keywords#snd) ·
 [`space`](/book/keywords#space) ·
-[`span`](/book/keywords#span) ·
 [`spawn`](/book/keywords#spawn) ·
 [`stream`](/book/keywords#stream) ·
-[`subcontains`](/book/keywords#subcontains) ·
 [`terminal`](/book/keywords#terminal) ·
 [`then`](/book/keywords#then) ·
 [`this`](/book/keywords#this) ·
@@ -146,7 +137,6 @@ Every keyword, alphabetically:
 [`unifies`](/book/keywords#unifies) ·
 [`unknown`](/book/keywords#unknown) ·
 [`uses`](/book/keywords#uses) ·
-[`verify`](/book/keywords#verify) ·
 [`via`](/book/keywords#via) ·
 [`view`](/book/keywords#view) ·
 [`visits`](/book/keywords#visits) ·

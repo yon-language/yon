@@ -93,7 +93,7 @@ let kw_pool =
      "operation"; "number"; "text"; "true"; "false"; "and"; "or"; "not";
      "visits"; "import"; "topos"; "where";
      (* new surface: metonymic journey + cubical + HIT *)
-     "clear"; "back"; "span"; "carry"; "along"; "through"; "match";
+     "clear"; "back"; "carry"; "along"; "through"; "match";
      "refl"; "transport"; "plam"; "hit"; "hit_elim"; "hcomp"; "comp"; "I0"; "I1" |]
 let op_pool = [| "+"; "-"; "*"; "/"; "<"; ">"; "="; "=="; "("; ")"; "{"; "}"; ","; ":"; ";";
                  "++"; "<=>"; "@"; "=>" |]

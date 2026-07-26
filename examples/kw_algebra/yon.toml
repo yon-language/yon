@@ -1,5 +1,5 @@
 [package]
-name = "verify_algebra"
+name = "kw_algebra"
 
 [world.Alg]
 objects = ["X"]

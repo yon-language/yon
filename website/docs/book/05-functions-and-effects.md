@@ -82,7 +82,7 @@ constraints, no bounds, a type parameter is honest ignorance. The
 [Generics](/book/generics) chapter carries this further, to parameters on
 places and arrows and how a type variable anchors to the universe.
 
-**Sub-objects.** `place A subcontains B` does *not* declare inheritance: it
+**Sub-objects.** `this < B` in a place body does *not* declare inheritance: it
 declares a **monomorphism** `A → B`, and the checker verifies it
 structurally, `A` must carry at least all of `B`'s fields (*subsumption*),
 or the mono does not exist and the program is rejected. Where it holds, an
@@ -99,7 +99,7 @@ base:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place SyntaxError subcontains Error { message number  line number }
+place SyntaxError { this < Error message number  line number }
 
 fun describe(e: Error): number { return e.message }   // accepts any sub-object
 ```
@@ -116,7 +116,7 @@ fun main(): number {
 ```
 
 Nothing is inherited, there are no methods to inherit, and no overriding,
-because places have no behaviour of their own (chapter 0). `subcontains` is a
+because places have no behaviour of their own (chapter 0). `this <` is a
 *claim about structure* that the compiler checks, exactly like a `law`.
 
 **Coercions along monos.** The same direction appears twice more: the

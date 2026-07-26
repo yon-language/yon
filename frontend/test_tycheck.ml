@@ -32,13 +32,12 @@ let estr (s : string) : expr = ELit (LitString s, loc)
 (* A fun_decl with all fields defaulted; the caller overrides the ones that
    matter for the scenario. *)
 let mkfun ?(type_params=[]) ?(params=[]) ?(ret=Some (TyPrim "number"))
-          ?(visits=[]) ?(partial=false) ?(internal=false) ~body name : fun_decl =
+          ?(visits=[]) ?(internal=false) ~body name : fun_decl =
   { fn_name = name;
     fn_type_params = type_params;
     fn_params = params;
     fn_return = ret;
     fn_visits = visits;
-    fn_partial = partial;
     fn_internal = internal;
     fn_body = body;
     fn_loc = loc }

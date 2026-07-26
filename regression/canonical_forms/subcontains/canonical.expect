@@ -1,5 +1,5 @@
 status: accept
 exit: 0
-covers: subcontains_clause
+covers: place_member
 note: |
-  subcontains is the subobject mono P into B (the retired keyword was extends).
+  this < B is the subobject mono P into B (the retired words were extends, then subcontains): ⊂ as arrow, mirror of the coproduct's this >.

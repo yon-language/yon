@@ -99,18 +99,19 @@ object, not a pinned site. What each operation *means* is given later by a
 
 ## Sub-objects
 
-A place can carve out a sub-object of another with `subcontains`. A VIP order is
+A place can carve out a sub-object of another with `this <` — the mirror of the coproduct's `this >`: `>` reads "I contain" (⊃), `<` reads "I am contained" (⊂). A VIP order is
 still an order, restricted:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place VipOrder subcontains Order {
+place VipOrder {
+  this < Order
   table number
   total number
 }
 ```
 
-`subcontains` is the sub-object relation of the category: every `VipOrder` is an
+`this <` is the sub-object relation of the category: every `VipOrder` is an
 `Order`, and the compiler treats it as one where an `Order` is expected.
 
 ## Worlds compose, but you act on them with arrows
@@ -120,7 +121,7 @@ coproducts, quotients, sub-objects. That structure is mathematics, not a surface
 dialect. Yon gives you no world-algebra to *write* a composite world by hand.
 Instead you declare worlds in `yon.toml` and act on and between them with
 **arrows**: a `functor` translates one world into another, a `geomorph` relocates
-the site by an adjunction, and `subcontains` carves a sub-object. The categorical
+the site by an adjunction, and `this <` carves a sub-object. The categorical
 operations live in the arrows, where the compiler can check their laws, which is
 exactly where chapter 7 picks them up.
 
@@ -145,17 +146,17 @@ place Tally {
 `law commutative` is not a comment. The algebra verifier checks the declared laws
 against the named algebra (`Additive`, `Multiplicative`, `TropicalMax`,
 `TropicalMin`, `BooleanOr`, `BooleanAnd`, `Gcd`) and **rejects a false claim** at
-compile time. `verify P` then hands you the verified structure as a runnable
-Magma, so you can ask it, in the program, what the compiler already proved:
+compile time. The check is entirely static: a place whose operation names an
+algebra carries its laws as verified facts — there is nothing to ask at
+runtime, and no `verify` word to say (the explicit trigger is retired; the
+verification descends from `uses` by itself):
 
 <!-- yon-gate: illustrative -->
 ```yon
-place Entry { }
-fun main(): number {
-  be m holds verify Tally
-  be c holds Magma.is_commutative(m)
-  be a holds Magma.is_associative(m)
-  return if c and a then 42 else 0        // 42: both hold
+place Tally {
+  operation add(a: number, b: number): number uses algebra Additive
+  law commutative
+  law associative      // a false claim here is a COMPILE error
 }
 ```
 

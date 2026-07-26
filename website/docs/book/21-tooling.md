@@ -124,7 +124,7 @@ diagnostics-and-hover setup.
 ## yon-doc, API reference from source
 
 `yon-doc file.yon -o doc.md` walks the surface AST and emits a Markdown API
-reference: places (with their fields and `subcontains` sub-object lines) and
+reference: places (with their fields and `this <` sub-object lines) and
 functions with their signatures. The world is inferred from the filesystem, so it
 prints as `__INFER`. Run on the `SyntaxError.yon` file of chapter 5's subsumption
 example it produces, verbatim:
@@ -135,7 +135,7 @@ example it produces, verbatim:
 ## Places
 
 ### place `SyntaxError` in `__INFER`
-- subcontains (sub-object of): `Error`
+- sub-object of (`this <`): `Error`
 
 Fields:
 - `message`: number

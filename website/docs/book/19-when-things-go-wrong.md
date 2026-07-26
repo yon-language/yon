@@ -14,7 +14,7 @@ them *values or declarations*.
 ## Errors are places
 
 An `error` declaration is a place whose meaning is failure. Errors form
-their own sub-object hierarchy with `subcontains` (chapter 5's monomorphisms),
+their own sub-object hierarchy with `this <` (chapter 5's monomorphisms),
 and a place can declare its error morphism with `on error`. Each error and
 each place is its own file, so the declarations sit side by side in the space.
 `s/Error.yon` and `s/QueryError.yon`:
@@ -26,7 +26,7 @@ error Error { message number }
 
 <!-- yon-gate: illustrative -->
 ```yon
-error QueryError subcontains Error { message number  sqlstate number }
+error QueryError { this < Error message number  sqlstate number }
 ```
 
 A place names the error it can raise. `s/QueryInsert.yon`:

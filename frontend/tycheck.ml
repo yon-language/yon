@@ -3255,7 +3255,6 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         fs_params = rebound_params;
         fs_return = rebound_return;
         fs_visits = fn.fn_visits;
-        fs_partial = fn.fn_partial;
       } in
       Tyenv.add_fun env fn.fn_name sig_
       (* the delta-rule is NOT registered here: hoisted funs precede their
@@ -3287,7 +3286,7 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
        | Some (TyArrow (a, b)) ->
            Tyenv.add_fun env gm.gm_name
              ({ fs_params = [("x", a)]; fs_return = b;
-                fs_visits = []; fs_partial = false } : E.fun_sig)
+                fs_visits = []} : E.fun_sig)
        | _ ->
            (* Code does not decode (El) to a 1-cell arrow. Leave the name
               unregistered: the coherence check below is the SOLE arbiter and
@@ -3320,7 +3319,6 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
             fs_params = pr.pr_params;
             fs_return = TyPrim "proposition";
             fs_visits = [];
-            fs_partial = false;
           } in
           Tyenv.add_fun acc pr.pr_name fs)
         env_with_objs
@@ -3346,7 +3344,6 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
              fs_params = params;
              fs_return = return_ty;
              fs_visits = [];
-             fs_partial = false;
            } in
            let env1 = Tyenv.add_fun env mp.mp_name fs in
            Tyenv.add_fun env1 (mp.mp_name ^ "__on_object") fs
@@ -3357,7 +3354,6 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
           fs_params = [("x", TyPrim "number")];
           fs_return = TyPrim "number";
           fs_visits = [];
-          fs_partial = false;
         } in
         Tyenv.add_fun env_acc wrapper_name fs
       ) env_with_obj mp.mp_on_morphism_map
@@ -3384,7 +3380,6 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         fs_params = ft.ft_params;
         fs_return = TyUser ft.ft_to_world;
         fs_visits = [];
-        fs_partial = false;
       } in
       Tyenv.add_fun env ft.ft_name fs
 
@@ -3594,8 +3589,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = Some (TyPrim "proposition");
-                   fn_visits = [];
-                   fn_partial = false; fn_internal = false;
+                   fn_visits = []; fn_internal = false;
                    fn_body = [ SReturn (body, pr.pr_loc) ];
                    fn_loc = pr.pr_loc;
                  } in
@@ -5331,54 +5325,54 @@ let check_program (p : program) : check_result =
     let num = TyPrim "number" in
     let pack_sig : Tyenv.fun_sig = {
       fs_params = [("fa", num); ("gb", num); ("a", num); ("b", num)];
-      fs_return = num; fs_visits = []; fs_partial = false } in
+      fs_return = num; fs_visits = []} in
     let pi_sig : Tyenv.fun_sig = {
       fs_params = [("p", num)];
-      fs_return = num; fs_visits = []; fs_partial = false } in
+      fs_return = num; fs_visits = []} in
     let env = Tyenv.add_fun env_with_sigs "__pullback_pack" pack_sig in
     let env = Tyenv.add_fun env "__pullback_pi1" pi_sig in
     let env = Tyenv.add_fun env "__pullback_pi2" pi_sig in
     (* standard ops *)
     let env = Tyenv.add_fun env "floor"
       { fs_params = [("x", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__pow2"
       { fs_params = [("n", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__shl"
       { fs_params = [("a", num); ("n", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__shr"
       { fs_params = [("a", num); ("n", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__band"
       { fs_params = [("a", num); ("b", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__bxor"
       { fs_params = [("a", num); ("b", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__bor"
       { fs_params = [("a", num); ("b", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__bnot"
       { fs_params = [("a", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* simboli logici intuizionisti.
      * Firme: proposition -> proposition. Coercion boolean/number -> proposition
      * gestita a livello tycheck call (vedi check_call). *)
     let prop = TyPrim "proposition" in
     let env = Tyenv.add_fun env "__heyt_and"
       { fs_params = [("a", prop); ("b", prop)]; fs_return = prop;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_or"
       { fs_params = [("a", prop); ("b", prop)]; fs_return = prop;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_imp"
       { fs_params = [("a", prop); ("b", prop)]; fs_return = prop;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_not"
       { fs_params = [("a", prop)]; fs_return = prop;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* Register the signatures of the 5 builtins for heyt_int<N>. The signatures
      * accept an opaque `heyt_int` (N implicit).
      *
@@ -5388,114 +5382,114 @@ let check_program (p : program) : check_result =
     let hi = TyHeytInt 64 in
     let env = Tyenv.add_fun env "__heyt_int_make"
       { fs_params = [("value", num); ("mask", num)]; fs_return = hi;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_int_and"
       { fs_params = [("a", hi); ("b", hi)]; fs_return = hi;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_int_or"
       { fs_params = [("a", hi); ("b", hi)]; fs_return = hi;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_int_xor"
       { fs_params = [("a", hi); ("b", hi)]; fs_return = hi;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_int_not"
       { fs_params = [("a", hi)]; fs_return = hi;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* The value/mask projections. They extract i64 (exposed as number in Yon
      * after sitofp). *)
     let env = Tyenv.add_fun env "__heyt_int_value"
       { fs_params = [("a", hi)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__heyt_int_mask"
       { fs_params = [("a", hi)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* data structures backed by yon_xheap.
      * All the Map/Set/Dag primitives operate on number (f64 in the lowering) —
      * the content-addressing in the XLeech2 runtime is transparent. *)
     let env = Tyenv.add_fun env "__map_empty"
       { fs_params = []; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__map_put"
       { fs_params = [("m", num); ("k", num); ("v", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__map_get"
       { fs_params = [("m", num); ("k", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__map_contains"
       { fs_params = [("m", num); ("k", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__map_size"
       { fs_params = [("m", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__set_empty"
       { fs_params = []; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__set_add"
       { fs_params = [("s", num); ("e", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__set_contains"
       { fs_params = [("s", num); ("e", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__set_size"
       { fs_params = [("s", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__merkle_leaf"
       { fs_params = [("label", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__merkle_node2"
       { fs_params = [("label", num); ("c1", num); ("c2", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__merkle_label"
       { fs_params = [("node", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__merkle_child"
       { fs_params = [("node", num); ("idx", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__merkle_equal"
       { fs_params = [("a", num); ("b", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* observe via geom_morphism (pull/push lazy a read-time).
      * gm_kind: 0=identity, 1=scale10, 2=scale100, 3=centesimi, 4=negate. *)
     let env = Tyenv.add_fun env "__observe_alloc"
       { fs_params = [("value", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__observe_via_gm"
       { fs_params = [("slot", num); ("gm_kind", num); ("default", num)];
         fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__xheap_used"
       { fs_params = []; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* multi-process via fork(). *)
     let env = Tyenv.add_fun env "__spawn_self"
       { fs_params = [("n", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__spawn_index"
       { fs_params = []; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* Codice Golay (24,12,8). *)
     let env = Tyenv.add_fun env "__voyagerlist_seal"
       { fs_params = [("data12", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__voyagerlist_open"
       { fs_params = [("codeword24", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__voyagerlist_corrupt"
       { fs_params = [("codeword24", num); ("n_bits", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* capability tokens via Co_0 action su Leech. *)
     let env = Tyenv.add_fun env "__conway_gen_key"
       { fs_params = [("seed", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__conway_seal_slot"
       { fs_params = [("slot", num); ("key", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__conway_unseal_slot"
       { fs_params = [("sealed", num); ("key", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     let env = Tyenv.add_fun env "__conway_key_equal"
       { fs_params = [("a", num); ("b", num)]; fs_return = num;
-        fs_visits = []; fs_partial = false } in
+        fs_visits = []} in
     (* Seq.from_list/map/filter/fold are registered in stdlib_signatures
      * (stdlib_runtime.ml). The deep-matching pattern in emit_mlir recognizes
      * Seq.fold(Seq.filter(Seq.map(... Seq.from_list(l)... ))) and lowers it to
@@ -5529,7 +5523,6 @@ let check_program (p : program) : check_result =
             fs_params = params;
             fs_return = return_ty;
             fs_visits = [];
-            fs_partial = false;
           } in
           (* The variant __morph_in_<S>__<M> for each space S *)
           let env_acc1 = List.fold_left (fun env_acc' (sd : space_decl) ->
@@ -5599,7 +5592,6 @@ let check_program (p : program) : check_result =
           fs_params = params;
           fs_return = ret_ty;
           fs_visits = [];
-          fs_partial = false;
         } in
         Tyenv.add_fun env_acc' wrapper_name fs
       ) env_acc mp.mp_on_morphism_map
@@ -5648,7 +5640,6 @@ let check_program (p : program) : check_result =
           fs_params = params;
           fs_return = ret_ty;
           fs_visits = [];
-          fs_partial = false;
         } in
         Tyenv.add_fun env_acc' wrapper_name fs
       ) env_acc nt.nt_via_bindings
@@ -5704,7 +5695,6 @@ let check_program (p : program) : check_result =
           fs_params = params;
           fs_return = ret_ty;
           fs_visits = [];
-          fs_partial = false;
         } in
         (* The variant __morph_in_<S>__<wrapper_short> for each space *)
         let env_after_spaces = List.fold_left (fun env_acc'' (sd : space_decl) ->
@@ -5757,7 +5747,6 @@ let check_program (p : program) : check_result =
                      fs_params = [("input", TyPrim "number")];
                      fs_return = TyPrim "number";
                      fs_visits = [];
-                     fs_partial = false;
                    } in
                    let env_acc'' = Tyenv.add_fun env_acc' check_name fs in
                    let pbt_name = check_name ^ "_pbt" in
@@ -5765,7 +5754,6 @@ let check_program (p : program) : check_result =
                      fs_params = [("seed", TyPrim "number")];
                      fs_return = TyPrim "number";
                      fs_visits = [];
-                     fs_partial = false;
                    } in
                    Tyenv.add_fun env_acc'' pbt_name fs_pbt
                  ) env_acc_b common

@@ -470,7 +470,6 @@ type fun_decl = {
   fn_visits : string list;          (* effect signature — Yoneda-native "constraint":
                                        visits Ord means the function requires the
                                        place Ord with its operations to be active *)
-  fn_partial : bool;
   fn_internal : bool;               (* `internal fun`: not exported from its module *)
   fn_body : stmt list;
   fn_loc : location;
@@ -529,15 +528,6 @@ type reduction_clause =
   | RcOn of string * param list * stmt list * location
   | RcLet of string * expr * location
 
-(* The direction of a reduction.
- *   Forward  : applies P -> Q
- *   Backward : applies Q -> P (reverse handler)
- *   Bi       : both (univalence-ready) *)
-type reduction_direction =
-  | RdForward
-  | RdBackward
-  | RdBi
-
 (* The runtime materialization policy of a reduction was removed. The
  * distributed semantics now live in the declared geometric morphism (see
  * geom_morphism_decl with gm_adjunction, gm_f_star_exact,
@@ -558,11 +548,8 @@ type reduction_decl = {
   rd_name : string;
   rd_of : string;
   rd_multi_shot : bool;
-  rd_direction : reduction_direction;
-  rd_lawful : bool;
   rd_shot_ordering : shot_ordering;
   rd_type_params : string list;
-  rd_invertible : bool;                   (* forward o backward = id (univalence) *)
   rd_clauses : reduction_clause list;
   rd_fold_name : string option;           (* the canonical fold name, e.g. "sum_f64" *)
   rd_loc : location;

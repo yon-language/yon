@@ -124,7 +124,7 @@
 %token <string> QIDENT
 
 /* Top-level keywords */
-%token PLACE FUN MOVE VIEW REDUCTION OPERATION LET PARTIAL
+%token PLACE FUN MOVE VIEW REDUCTION OPERATION LET
 %token SPACE
 /* The BACKED token was removed (it was `space backed by reduction`). */
 %token CELL
@@ -135,15 +135,10 @@
 %token FUNCTOR
 %token IMPORT
 %token INTERNAL
-%token FORWARD BACKWARD BI
-%token LAWFUL
 %token LAW
 %token USES
 %token ALGEBRA
-%token VERIFY
-%token SUBCONTAINS
 %token ERROR_KW
-%token INVERTIBLE
 /* The tokens BACKED_BY/POL_DIRECT/POL_SHARDED/POL_PAXOS/POL_CRDT were removed:
  * they were distributed-policy keywords, replaced by geom_morphism +
  * space.with_fold. */
@@ -152,7 +147,7 @@
 /* First-class topos constructs. */
 /* MORPHISM_KW (singular): keyword for a single morphism declaration inside a
  * topos `morphisms { }` block, and for the `on morphism N via M` clause. */
-%token TOPOS_KW MORPHISMS_KW MORPHISM_KW TERMINAL_KW PROP_KW
+%token TOPOS_KW MORPHISM_KW TERMINAL_KW PROP_KW
 %token MORPH_KW VIA_KW
 %token NAT
 %token ADJUNCTION_KW EXACT_KW
@@ -222,7 +217,7 @@
 %token HIT_ELIM LBRACKET RBRACKET
 %token ATSIGN I0 I1 PLAM PATHP HIT_KW
 /* Metonymic surface sugar (journey metaphor): desugar to the cubical primitives. */
-%token BACK SPAN CARRY ALONG THROUGH
+%token BACK CARRY ALONG THROUGH
 %token PLUSPLUS          /* p ++ q = concat */
 %token LRARROW           /* f <=> g = equivalence */
 %token MATCH_KW          /* match x { ctor => .. } = hit_elim with synthesized motive */
@@ -396,7 +391,7 @@ topos_terminal_opt:
  * unchanged. *)
 topos_morphisms_opt:
   |                                                 { [] }
-  | MORPHISMS_KW LBRACE ops = list(morphism_decl) RBRACE   { ops }
+  | ops = nonempty_list(morphism_decl)              { ops }
 
 (* morph_decl.
  *
@@ -447,8 +442,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_visits = [];
-                 fn_partial = false; fn_internal = false;
+                 fn_visits = []; fn_internal = false;
                  fn_body = body;
                  fn_loc = mk_loc $startpos $endpos } in
       MItemOnObject fd }
@@ -467,8 +461,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_visits = [];
-                 fn_partial = false; fn_internal = false;
+                 fn_visits = []; fn_internal = false;
                  fn_body = [SReturn (body_expr, loc)];
                  fn_loc = loc } in
       MItemOnObject fd }
@@ -563,8 +556,7 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_visits = [];
-                   fn_partial = false; fn_internal = false;
+                   fn_visits = []; fn_internal = false;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   | PUSH LPAREN params = param_list RPAREN
@@ -574,8 +566,7 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_visits = [];
-                   fn_partial = false; fn_internal = false;
+                   fn_visits = []; fn_internal = false;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   (* Categorical clauses declaring properties of the geometric morphism. The
@@ -598,7 +589,6 @@ place_decl:
   | is_err = place_kw name = IDENT
     tparams = type_params_opt
     over = option(over_clause)
-    ext = option(subcontains_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
     { let (members, variants, clauses) = mv in
@@ -626,7 +616,7 @@ place_decl:
       let b_sub  = fold_clause "subcontains" (function PcSubcontains x -> Some x | _ -> None) in
       let b_oerr = fold_clause "on error" (function PcOnError x -> Some x | _ -> None) in
       let over = merge "over" over b_over in
-      let ext  = merge "subcontains" ext b_sub in
+      let ext  = b_sub in   (* the mono is a body clause only: this < B *)
       let oerr = merge "on error" oerr b_oerr in
       if is_err && (over <> None || oerr <> None) then
         failwith ("error '" ^ name ^ "': an error place takes only "
@@ -650,10 +640,6 @@ place_decl:
  * canonical reference to an instance of X. *)
 over_clause:
   | OVER base = IDENT  { base }
-
-(* place A subcontains B declares A as a sub-object of B. *)
-subcontains_clause:
-  | SUBCONTAINS base = IDENT  { base }
 
 (* place P ... on error E — an error morphism P -> E. `on` is read as a
  * plain identifier and validated contextually, the same scheme used by
@@ -701,7 +687,10 @@ place_member:
   /* stage 4: the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
   | OVER base = IDENT                     { PbiClause (PcOver base) }
-  | SUBCONTAINS base = IDENT              { PbiClause (PcSubcontains base) }
+  /* the mono as containment arrow: `this < B` = this ⊂ B, a sub-object of B
+     (mirror of the coproduct's `this > arms` = this ⊃ arms). Absorbs the
+     retired `subcontains` word; the AST clause is unchanged (pure respelling). */
+  | THIS LT base = IDENT                  { PbiClause (PcSubcontains base) }
   | tag = IDENT ERROR_KW e = IDENT
     { if tag <> "on" then
         failwith ("expected 'on error' clause in place body, got '"
@@ -962,14 +951,14 @@ ident_list:
 /* ─── Function declaration ──────────────────────────────────────────── */
 
 fun_decl:
-  | internal = boption(INTERNAL) partial = boption(PARTIAL) FUN name = IDENT
+  | internal = boption(INTERNAL) FUN name = IDENT
     tparams = type_params_opt
     LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
     visits = visits_clause
     LBRACE body = list(stmt) RBRACE
     { { fn_name = name; fn_type_params = tparams; fn_params = params;
-        fn_return = ret; fn_visits = visits; fn_partial = partial; fn_internal = internal;
+        fn_return = ret; fn_visits = visits; fn_internal = internal;
         fn_body = body; fn_loc = mk_loc $startpos $endpos } }
 
 /* Optional type parameters: <A>, <A, B>, or empty. */
@@ -1072,10 +1061,7 @@ view_item:
 /* ─── Reduction declaration ────────────────────────────────────────── */
 
 reduction_decl:
-  | REDUCTION dir = reduction_direction_opt
-    law = boption(LAWFUL)
-    inv = boption(INVERTIBLE)
-    name = IDENT
+  | REDUCTION name = IDENT
     tp = loption(reduction_type_params)
     OF target = IDENT
     multi = boption(WITH_MULTI_SHOT)
@@ -1085,11 +1071,8 @@ reduction_decl:
        * cross-space semantics live in geom_morphism, not in the reduction. *)
       { rd_name = name; rd_of = target; rd_multi_shot = multi;
         rd_clauses = clauses;
-        rd_direction = dir;
-        rd_lawful = law;
         rd_shot_ordering = OrdSequential;
         rd_type_params = tp;
-        rd_invertible = inv;
         rd_fold_name = explicit_fold;
         rd_loc = mk_loc $startpos $endpos } }
 
@@ -1107,13 +1090,6 @@ fold_decl_opt:
  *   reduction R<T1, T2> of P { ... } *)
 reduction_type_params:
   | LT tps = separated_nonempty_list(COMMA, IDENT) GT  { tps }
-
-(* Optional direction; defaults to forward. *)
-reduction_direction_opt:
-  |              { RdForward }
-  | FORWARD      { RdForward }
-  | BACKWARD     { RdBackward }
-  | BI           { RdBi }
 
 %inline WITH_MULTI_SHOT:
   | WITH MULTI_SHOT { () }
@@ -1492,8 +1468,6 @@ expr_atom:
        carry x along e = transport(ua(e), x)   (e a bridge / equivalence) *)
   | BACK e = expr_atom %prec PREFIX_APP
     { ECall ("inv", [e], mk_loc $startpos $endpos) }
-  | SPAN e = expr_atom %prec PREFIX_APP
-    { ECall ("ua", [e], mk_loc $startpos $endpos) }
   | CARRY x = expr_atom ALONG e = expr_atom %prec PREFIX_APP
     { let l = mk_loc $startpos $endpos in
       ECall ("transport", [ECall ("ua", [e], l); x], l) }
@@ -1580,10 +1554,6 @@ expr_atom:
     { ECall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
     { ECall (name, args, mk_loc $startpos $endpos) }   (* mod::fun(args) *)
-  | VERIFY place = IDENT
-    { (* verify P (an expression) -> @P_instantiate(). The verified place
-       * becomes a Magma handle inside Yon. *)
-      ECall (place ^ "_instantiate", [], mk_loc $startpos $endpos) }
   | x = IDENT DOT fs = separated_nonempty_list(DOT, IDENT)
     {
       (* Build a left-associative chain: x.f1.f2.f3 -> EField(EField(EField(x, f1), f2), f3) *)

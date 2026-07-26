@@ -1,1 +1,1 @@
-error QueryError subcontains Error { message number sqlstate number }
+error QueryError { this < Error message number sqlstate number }

@@ -8,13 +8,13 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
-- productions REDUCED by a fixture (Menhir-verified): **89 / 89** surface (+3 structural allowlisted)
+- productions REDUCED by a fixture (Menhir-verified): **87 / 87** surface (+3 structural allowlisted)
 - deviations enforced today: **20**
 - deviations registered as 1.2 debt (`enforce_1_2`): **1**
 
 | construct | fixture | status | exit | match |
 |---|---|---|---|---|
-| algebra | `canonical` | accept | 3 | — |
+| algebra | `canonical` | accept | 0 | — |
 | algebra | `standalone_op` | accept | 42 | — |
 | assignment | `canonical` | accept | 42 | — |
 | assignment | `dev_field_mutation` | reject_clean | 1 | `place sections are immutable` |

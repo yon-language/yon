@@ -400,16 +400,19 @@ let fmt_place (f : fmt) (pd : place_decl) : unit =
   (* An `error E { ... }` reuses the place structure with pd_is_error. The surface
      never writes `in W` (the world is filesystem-inferred, pd_world = "__INFER");
      only emit `in W` if a concrete world was actually annotated. Clause order
-     mirrors the parser: <over>? <subcontains>? <on error>?, then `with effects`. *)
+     mirrors the parser: <over>? <on error>? in the header; the mono is a BODY
+     clause (`this < B`), emitted as the first body line below. *)
   let kw = if pd.pd_is_error then "error" else "place" in
   let world =
     if pd.pd_world = "__INFER" || pd.pd_world = "" then "" else " in " ^ pd.pd_world in
   let over = match pd.pd_over with Some b -> " over " ^ b | None -> "" in
-  let subcontains = match pd.pd_subcontains with Some b -> " subcontains " ^ b | None -> "" in
   let on_error = match pd.pd_on_error with Some e -> " on error " ^ e | None -> "" in
-  line f (Printf.sprintf "%s %s%s%s%s%s {"
-            kw pd.pd_name world over subcontains on_error);
+  line f (Printf.sprintf "%s %s%s%s%s {"
+            kw pd.pd_name world over on_error);
   f.indent <- f.indent + 1;
+  (match pd.pd_subcontains with
+   | Some b -> line f ("this < " ^ b)
+   | None -> ());
   List.iter (fun m ->
     match m with
     | FoField fd -> line f (fd.fd_name ^ " " ^ fmt_ty fd.fd_ty)
@@ -533,17 +536,14 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
        f.indent <- f.indent + 1;
        (match td.tp_terminal with Some t -> line f ("terminal " ^ t) | None -> ());
        if td.tp_morphisms <> [] then begin
-         line f "morphisms {";
-         f.indent <- f.indent + 1;
+         (* the `morphisms { }` wrapper is retired: bare morphism lines. *)
          List.iter (fun op ->
            let kw = if op.op_functorial then "functorial morphism" else "morphism" in
            let params = String.concat ", "
              (List.map (fun p -> p.param_name ^ ": " ^ fmt_ty p.param_ty) op.op_params) in
            let ret = match op.op_return with Some t -> ": " ^ fmt_ty t | None -> "" in
            line f (Printf.sprintf "%s %s(%s)%s" kw op.op_name params ret))
-           td.tp_morphisms;
-         f.indent <- f.indent - 1;
-         line f "}"
+           td.tp_morphisms
        end;
        List.iter (fun pr ->
          let params = String.concat ", "
@@ -589,21 +589,15 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
    | TopPushout u ->
        line f (Printf.sprintf "place %s = pushout(%s, %s)" u.uni_name u.uni_f u.uni_g)
    | TopReduction rd ->
-       (* common form: `reduction <dir> <name> of <place> fold "<fn>" { <clauses> }`.
-          The exotic modifiers (lawful/invertible/multi-shot/type-params/non-default
-          ordering) are not covered yet -> Exit. *)
+       (* common form: `reduction <name> of <place> fold "<fn>" { <clauses> }`. *)
        if rd.rd_shot_ordering <> OrdSequential then raise Exit;  (* not surfaced *)
-       let dir = match rd.rd_direction with
-         | RdForward -> "forward " | RdBackward -> "backward " | RdBi -> "bi " in
-       let lawful = if rd.rd_lawful then "lawful " else "" in
-       let inv = if rd.rd_invertible then "invertible " else "" in
        let tps = match rd.rd_type_params with
          | [] -> "" | ps -> "<" ^ String.concat ", " ps ^ ">" in
        let multi = if rd.rd_multi_shot then " with multishot" else "" in
        let fold = match rd.rd_fold_name with
          | Some n -> Printf.sprintf " fold \"%s\"" n | None -> "" in
-       line f (Printf.sprintf "reduction %s%s%s%s%s of %s%s%s {"
-                 dir lawful inv rd.rd_name tps rd.rd_of multi fold);
+       line f (Printf.sprintf "reduction %s%s of %s%s%s {"
+                 rd.rd_name tps rd.rd_of multi fold);
        f.indent <- f.indent + 1;
        List.iter (function
          | RcLet (n, e, _) -> line f (Printf.sprintf "be %s holds %s" n (fmt_expr e))

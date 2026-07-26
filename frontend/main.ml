@@ -262,10 +262,10 @@ let test_parse_patterns () =
       Printf.printf "Status: PASS\n";
       true
 
-(* Test 19: parse program with partial fun and forever block. *)
+(* Test 19: parse program with when/is guards and forever block. *)
 let test_parse_partial_forever () =
   let src = {|
-    partial fun risky_op(input: number): number {
+    fun risky_op(input: number): number {
       when input is 0 {
         return error_value
       }
@@ -278,7 +278,7 @@ let test_parse_partial_forever () =
       }
     }
   |} in
-  Printf.printf "\n=== Test 19: parse partial fun + forever ===\n";
+  Printf.printf "\n=== Test 19: parse fun + when/is + forever ===\n";
   match parse_string src with
   | Error msg ->
       Printf.printf "FAIL — %s\n" msg;
@@ -1165,11 +1165,8 @@ let test_catt_reduction_equiv () =
       mk_clause "get" (TyPrim "number");
       mk_clause "put" (TyPrim "number");
     ];
-    rd_direction = RdForward;
-    rd_lawful = false;
     rd_shot_ordering = OrdSequential;
     rd_type_params = [];
-    rd_invertible = false;
     rd_fold_name = None;
     rd_loc = mk_loc;
   } in
@@ -1179,11 +1176,8 @@ let test_catt_reduction_equiv () =
       mk_clause "get" (TyPrim "number");
       mk_clause "put" (TyPrim "number");
     ];
-    rd_direction = RdForward;
-    rd_lawful = false;
     rd_shot_ordering = OrdSequential;
     rd_type_params = [];
-    rd_invertible = false;
     rd_fold_name = None;
     rd_loc = mk_loc;
   } in
@@ -1194,11 +1188,8 @@ let test_catt_reduction_equiv () =
       mk_clause "get" (TyPrim "number");
       mk_clause "put" (TyPrim "text");
     ];
-    rd_direction = RdForward;
-    rd_lawful = false;
     rd_shot_ordering = OrdSequential;
     rd_type_params = [];
-    rd_invertible = false;
     rd_fold_name = None;
     rd_loc = mk_loc;
   } in
@@ -3080,8 +3071,7 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "y"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = [];
-    fn_partial = false; fn_internal = false;
+    fn_visits = []; fn_internal = false;
     fn_body = [];
     fn_loc = loc;
   } in
@@ -3090,8 +3080,7 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "x"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = [];
-    fn_partial = false; fn_internal = false;
+    fn_visits = []; fn_internal = false;
     fn_body = [];
     fn_loc = loc;
   } in
@@ -3503,36 +3492,6 @@ let test_functorial_op () =
   else
     (Printf.printf "FAIL\n"; false)
 
-(* Test 179: Reduction con direction forward/backward/bi.
- *
- * A reduction can have a direction:
- *   forward  : applies P -> Q
- *   backward : applies Q -> P (reverse handler)
- *   bi       : both (univalence-ready)
- *
- * Syntax: `reduction backward UndoLog of Log { ... }`. *)
-let test_reduction_direction () =
-  Printf.printf "\n=== Test 179: reduction direction ===\n";
-  let rd : Surface_ast.reduction_decl = {
-    rd_name = "UndoLog";
-    rd_of = "Log";
-    rd_multi_shot = false;
-    rd_direction = RdBackward;
-    rd_clauses = [];
-    rd_lawful = false;
-    rd_shot_ordering = OrdSequential;
-    rd_type_params = [];
-    rd_invertible = false;
-    rd_fold_name = None;
-    rd_loc = Surface_ast.dummy_loc;
-  } in
-  match rd.rd_direction with
-  | RdBackward ->
-      Printf.printf "  reduction backward UndoLog of Log\n";
-      Printf.printf "  direzione = Backward (Q -> P, reverse handler)\n";
-      Printf.printf "Status: PASS\n"; true
-  | _ -> Printf.printf "FAIL\n"; false
-
 (* Test 180: Explicit reduction composition.
  *
  * Compose two reductions: R = R1 . R2 applies R2 first, then R1.
@@ -3552,36 +3511,6 @@ let test_reduction_compose () =
   else
     (Printf.printf "FAIL\n"; false)
 
-(* Test 181: Reduction lawfulness check.
- *
- * A reduction is lawful if it preserves the structure of the place: for each
- * operation op of the place, the reduction commutes with the composition of
- * operations. Categorically: the reduction is a geometric morphism, and
- * lawfulness = preservation of finite limits of f^* (left exactness).
- *
- * Syntax: `reduction lawful R of P { ... }`. *)
-let test_reduction_lawful () =
-  Printf.printf "\n=== Test 181: reduction lawfulness check ===\n";
-  let rd : Surface_ast.reduction_decl = {
-    rd_name = "LawfulLog";
-    rd_of = "Log";
-    rd_multi_shot = false;
-    rd_direction = RdForward;
-    rd_lawful = true;
-    rd_clauses = [];
-    rd_shot_ordering = OrdSequential;
-    rd_type_params = [];
-    rd_invertible = false;
-    rd_fold_name = None;
-    rd_loc = Surface_ast.dummy_loc;
-  } in
-  if rd.rd_lawful then
-    (Printf.printf "  reduction lawful LawfulLog of Log\n";
-     Printf.printf "  preservazione di limiti finiti (left exactness) richiesta\n";
-     Printf.printf "Status: PASS\n"; true)
-  else
-    (Printf.printf "FAIL\n"; false)
-
 (* Test 182: Multi-shot reductions con effect ordering.
  *
  * When a reduction is multi-shot (several handlers active at once), the
@@ -3595,12 +3524,9 @@ let test_shot_ordering () =
     rd_name = "MultiLog";
     rd_of = "Log";
     rd_multi_shot = true;
-    rd_direction = RdForward;
-    rd_lawful = false;
     rd_shot_ordering = OrdParallel;
     rd_clauses = [];
     rd_type_params = [];
-    rd_invertible = false;
     rd_fold_name = None;
     rd_loc = Surface_ast.dummy_loc;
   } in
@@ -3631,12 +3557,9 @@ let test_reduction_polymorphism () =
     rd_name = "Replicated";
     rd_of = "Log";
     rd_multi_shot = false;
-    rd_direction = RdForward;
-    rd_lawful = false;
     rd_shot_ordering = OrdSequential;
     rd_type_params = ["ConsistencyMode"; "ShardingStrategy"];
     rd_clauses = [];
-    rd_invertible = false;
     rd_fold_name = None;
     rd_loc = Surface_ast.dummy_loc;
   } in
@@ -3672,36 +3595,6 @@ let test_default_reduction () =
     (Printf.printf "FAIL (has_output=%b, has_console=%b)\n"
        has_output has_console;
      false)
-
-(* Test 186: Invertible reductions (univalence-style).
- *
- * A `bi` reduction with forward and backward forming a categorical
- * equivalence: forward . backward = id and backward . forward = id.
- * Univalence interpretation: the place P is equivalent to the place Q with
- * respect to this reduction, so univalent types `P =_{Type} Q` are derived
- * from the reduction. *)
-let test_reduction_invertible () =
-  Printf.printf "\n=== Test 186: invertible reductions (univalence) ===\n";
-  let rd : Surface_ast.reduction_decl = {
-    rd_name = "Encrypt";
-    rd_of = "Plaintext";
-    rd_multi_shot = false;
-    rd_direction = RdBi;
-    rd_lawful = true;
-    rd_shot_ordering = OrdSequential;
-    rd_type_params = [];
-    rd_invertible = true;
-    rd_clauses = [];
-    rd_fold_name = None;
-    rd_loc = Surface_ast.dummy_loc;
-  } in
-  if rd.rd_invertible && rd.rd_direction = RdBi then
-    (Printf.printf "  reduction bi invertible Encrypt of Plaintext\n";
-     Printf.printf "  forward . backward = id e backward . forward = id\n";
-     Printf.printf "  univalence: Plaintext =_{Type} Ciphertext via Encrypt\n";
-     Printf.printf "Status: PASS\n"; true)
-  else
-    (Printf.printf "FAIL\n"; false)
 
 (* Test 187: Reductions backed by a distributed policy.
  *
@@ -3872,13 +3765,10 @@ let () =
     test_default_world_inference;
     test_world_hierarchy;
     test_functorial_op;
-    test_reduction_direction;
     test_reduction_compose;
-    test_reduction_lawful;
     test_shot_ordering;
     test_reduction_polymorphism;
     test_default_reduction;
-    test_reduction_invertible;
   ] in
   let results = List.map (fun t -> t ()) tests in
   let passed = List.length (List.filter (fun b -> b) results) in
