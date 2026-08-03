@@ -453,11 +453,7 @@ A single map inside a topos's `morphisms { }` block, and the contextual word in 
 
 #### `prop`
 
-A subobject classifier map into Omega: `prop is_overdrawn(s): proposition = ...`. Syntactically it signals the categorical intent, a subobject rather than an arbitrary function.
-
-#### `topology`
-
-Equips a place with a Lawvere-Tierney operator j : Omega to Omega, the seed of sheaf semantics.
+A subobject classifier map into Omega: `prop is_overdrawn(s) = ...`. The return type is not written — `prop` already implies proposition. Syntactically it signals the categorical intent, a subobject rather than an arbitrary function.
 
 <CodeWindow file="kw_topos_block/"
             run="yonc kw_topos_block/ -o topos_block && ./topos_block; echo $?"
@@ -471,9 +467,8 @@ topos Bank where {
   
   morphism tag(s: State): Number
   morphism lift(s: State): Number
-  prop is_overdrawn(s: State): proposition = s.balance < 0
+  prop is_overdrawn(s: State) = s.balance < 0
 }
-topology j of State { return 1 }
 // Entry.yon
 place Entry {
   fun main(): Number {
@@ -544,7 +539,7 @@ place Entry {
 
 #### `geomorph`
 
-The geometric morphism between worlds: the adjoint pair `pull` (inverse image, f*) and `push` (direct image), with the clauses `adjunction`, `exact pull`, `exact push`.
+The geometric morphism between worlds: the adjoint pair `pull` (inverse image, f*) and `push` (direct image), with the clause `exact push` (`adjunction` and `exact pull` are retired: they declared the implied — f* is left exact by definition).
 
 #### `pull`
 
@@ -556,7 +551,7 @@ Inside a geomorph: the direct image, the right adjoint.
 
 #### `exact`
 
-`exact pull` / `exact push`: the inverse image preserves finite limits.
+`exact push`: the direct image f_* preserves finite limits — the exactness that is NOT automatic. `exact pull` is retired: f* is left exact in every geometric morphism by definition.
 
 <CodeWindow file="kw_geomorph_full/"
             run="yonc kw_geomorph_full/ -o geomorph_full && ./geomorph_full; echo $?"
@@ -568,7 +563,6 @@ place AccountEU { balance Number }
 // Entry.yon
 place Entry {
   geomorph Lift from Account to AccountEU {
-    exact pull
     exact push
     pull(a: AccountEU): Account {
       be tmp holds a
@@ -580,38 +574,6 @@ place Entry {
     }
   }
   fun main(): Number { return 0 }
-}`}
-</CodeWindow>
-
-#### `pullback`
-
-The limit: glues two maps over a shared target. As a declaration, `place P = pullback(f, g)` is kernel metadata; the runtime form `pullback(f, g, a, b)` checks the compatibility `f(a) == g(b)` and packs the pair.
-
-#### `pushout`
-
-The colimit: glues two maps under a shared source. The declaration is kernel metadata.
-
-<CodeWindow file="kw_pullback_pushout/"
-            run="yonc kw_pullback_pushout/ -o pullback_pushout && ./pullback_pushout; echo $?"
-            out={["12"]}>
-{`// w/A.yon
-place A { v Number }
-// w/B.yon
-place B { v Number }
-// w/P.yon  (kernel metadata: the pullback object)
-place P = pullback(f, g)
-// w/Q.yon  (kernel metadata: the pushout object)
-place Q = pushout(f, g)
-// Entry.yon
-place Entry {
-  fun f(x: Number): Number { return x * 2 }
-  fun g(y: Number): Number { return y + 6 }
-  fun main(): Number {
-    be p holds pullback(f, g, 6, 6)      // f(6)=12, g(6)=12: compatible
-    be a holds __pullback_pi1(p)
-    be b holds __pullback_pi2(p)
-    return a + b                          // 12
-  }
 }`}
 </CodeWindow>
 

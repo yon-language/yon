@@ -76,8 +76,6 @@
       (function GmItemPull p -> Some p | _ -> None) items in
     let push = List.find_map
       (function GmItemPush p -> Some p | _ -> None) items in
-    let f_star_ex = List.exists
-      (function GmItemExactFStar -> true | _ -> false) items in
     let f_lower_ex = List.exists
       (function GmItemExactFLowerStar -> true | _ -> false) items in
     { gm_name = name; gm_on_error = None;
@@ -85,7 +83,7 @@
       gm_target_site = dst_site;
       gm_pull = pull;
       gm_push = push;
-      gm_f_star_exact = f_star_ex;
+      gm_f_star_exact = true;   (* f^* è esatto per definizione *)
       gm_f_lower_star_exact = f_lower_ex;
       gm_loc = loc }
 
@@ -126,8 +124,6 @@
 /* The BACKED token was removed (it was `space backed by reduction`). */
 %token CELL
 %token GEOM_MORPHISM PULL PUSH
-%token PULLBACK PUSHOUT
-%token TOPOLOGY
 %token FUNCTOR
 %token IMPORT
 %token INTERNAL
@@ -299,9 +295,6 @@ top_decl:
   | rd = reduction_decl               { TopReduction rd }
   | od = standalone_op                { TopOperation od }
   | gm = geom_morphism_decl           { TopGeomMorphism gm }
-  | pb = pullback_decl                { TopPullback pb }
-  | po = pushout_decl                 { TopPushout po }
-  | tp = topology_decl                { TopTopology tp }
   | ld = top_let                      { ld }
 
   | td = topos_decl                   { TopTopos td }
@@ -374,9 +367,10 @@ topos_decl:
  * for readability. EXPR is evaluated in the tri-value Heyting algebra
  * (HPresent/HAbsent/HUnknown) via prop_eval. *)
 topos_prop_decl:
+  (* the return type is GONE: `prop` already implies proposition — six
+     words fewer per proposition (Antonio's lexicon verdict). *)
   | PROP_KW name = IDENT
     LPAREN params = param_list RPAREN
-    COLON _ret = type_expr
     EQ body = expr
     { { pr_name = name;
         pr_params = List.map (fun p -> (p.param_name, p.param_ty)) params;
@@ -385,7 +379,6 @@ topos_prop_decl:
   (* Abstract variant: signature only, no body. *)
   | PROP_KW name = IDENT
     LPAREN params = param_list RPAREN
-    COLON _ret = type_expr
     { { pr_name = name;
         pr_params = List.map (fun p -> (p.param_name, p.param_ty)) params;
         pr_body_opt = None;
@@ -526,12 +519,6 @@ nat_transform_binding:
  *     ...   // body that defines j: Omega -> Omega
  *   }
  *)
-topology_decl:
-  | TOPOLOGY name = IDENT OF of_place = IDENT
-    LBRACE body = list(stmt) RBRACE
-    { { tp_name = name; tp_of_place = of_place;
-        tp_body = body;
-        tp_loc = mk_loc $startpos $endpos } }
 
 (* pullback / pushout of a place via the universal property.
  *
@@ -540,15 +527,7 @@ topology_decl:
  *
  * f and g are names of already-declared moves or functions. P is the name
  * of the resulting place. *)
-pullback_decl:
-  | PLACE name = IDENT EQ PULLBACK LPAREN f = IDENT COMMA g = IDENT RPAREN
-    { { uni_name = name; uni_f = f; uni_g = g;
-        uni_loc = mk_loc $startpos $endpos } }
 
-pushout_decl:
-  | PLACE name = IDENT EQ PUSHOUT LPAREN f = IDENT COMMA g = IDENT RPAREN
-    { { uni_name = name; uni_f = f; uni_g = g;
-        uni_loc = mk_loc $startpos $endpos } }
 
 (* Geometric morphism as a first-class construct.
  *
@@ -586,8 +565,11 @@ geom_morphism_item:
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   (* Categorical clauses declaring properties of the geometric morphism. The
-     runtime reads them to derive the coordination shape. *)
-  | EXACT_KW PULL                                   { GmItemExactFStar }
+     runtime reads them to derive the coordination shape. `exact pull` is
+     RETIRED: f^* is left exact by definition in every geometric morphism —
+     declaring the implied is noise (same reason adjunction retired); the
+     flag below is stamped true at construction. `exact push` says something
+     real: the exactness of f_* is never automatic. *)
   | EXACT_KW PUSH                                   { GmItemExactFLowerStar }
 
 top_let:
@@ -1586,13 +1568,6 @@ expr_atom:
     { EHITConstr (ctor, [], mk_loc $startpos $endpos) }
   | HIT_KW LPAREN ctor = IDENT COMMA args = separated_nonempty_list(COMMA, expr) RPAREN
     { EHITConstr (ctor, args, mk_loc $startpos $endpos) }
-  | PULLBACK LPAREN f = IDENT COMMA g = IDENT COMMA a = expr COMMA b = expr RPAREN
-    { (* Runtime pullback. pullback(f, g, a, b) builds the compatible pair
-       * (a, b) with the constraint f(a) == g(b) checked at runtime. The no-arg
-       * pullback(f,g)/pushout(f,g) EXPRESSION forms were removed in v1.1 — they
-       * lowered to a 0.0 placeholder. The universal property lives in the
-       * `place P = pullback(f,g)` declaration (still supported). *)
-      EPullbackVal (f, g, a, b, mk_loc $startpos $endpos) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
     { dot_call_expr obj fld args (mk_loc $startpos $endpos) }
   (* FOLD and FILTER are keyword tokens (space-decl `with fold "..."`), so they

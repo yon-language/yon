@@ -3632,9 +3632,6 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
               rejects this case with a located error. Env-building stays
               best-effort and never raises, so the two phases agree. *)
            env)
-  | TopPullback _ -> env       (* kernel-only *)
-  | TopPushout _ -> env
-  | TopTopology _ -> env       (* kernel-only *)
   | TopReductionCompose _ -> env (* kernel-only *)
   | TopSpace sd ->
       (* Register the space name in declared_spaces for later validation of the
@@ -3939,9 +3936,6 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
              (Printf.sprintf
                 "geom morphism %s: code does not decode (El) to a directed arrow El(%s) -> El(%s)"
                 gm.gm_name gm.gm_source_site gm.gm_target_site))
-  | TopPullback _ -> ok ()
-  | TopPushout _ -> ok ()
-  | TopTopology _ -> ok ()  (* kernel-only *)
   | TopReductionCompose _ -> ok ()  (* kernel-only *)
   | TopSpace _ -> ok ()             (* no static checks for now *)
   (* Topoi are validated object by object via check_place_decl recursively. *)

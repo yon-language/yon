@@ -9,9 +9,9 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `regression/CANONICAL-FORMS.md`. Regenerate this file with
 `python regression/test_syntax_triangle.py`.
 
-- lexer keywords: **110**
-- corpus files: **357**
-- CodeWindows: **23**  (project **11**, single-file **12**)
+- lexer keywords: **107**
+- corpus files: **351**
+- CodeWindows: **22**  (project **10**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **34**
 - allowlisted reserved/kernel tokens: **5**
 
@@ -27,7 +27,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `as` | `AS` | 10 | yes | exercised |
 | `at` | `AT` | 2 | yes | exercised |
 | `back` | `BACK` | 3 | yes | exercised |
-| `be` | `LET` | 399 | yes | exercised |
+| `be` | `LET` | 396 | yes | exercised |
 | `by` | `BY` | 7 | yes | exercised |
 | `carry` | `CARRY` | 3 | yes | exercised |
 | `cell` | `CELL` | 1 | yes | exercised |
@@ -43,7 +43,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `emit` | `EMIT` | 26 | yes | exercised |
 | `error` | `ERROR_KW` | 3 | yes | exercised |
 | `every` | `EVERY` | 5 | yes | exercised |
-| `exact` | `EXACT_KW` | 2 | yes | exercised |
+| `exact` | `EXACT_KW` | 1 | yes | exercised |
 | `false` | `BOOL_LIT` | 4 | yes | exercised |
 | `fold` | `FOLD` | 13 | yes | exercised |
 | `for` | `FOR` | 6 | yes | exercised |
@@ -51,7 +51,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `forever` | `FOREVER` | 1 | yes | exercised |
 | `from` | `FROM` | 37 | yes | exercised |
 | `fst` | `FST` | 7 | yes | exercised |
-| `fun` | `FUN` | 368 | yes | exercised |
+| `fun` | `FUN` | 365 | yes | exercised |
 | `functor` | `FUNCTOR` | 9 | yes | exercised |
 | `geomorph` | `GEOM_MORPHISM` | 5 | yes | exercised |
 | `hcomp` | `HCOMP` | 3 | yes | exercised |
@@ -59,7 +59,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
 | `hit` | `HIT_KW` | 13 | yes | exercised |
 | `hit_elim` | `HIT_ELIM` | 8 | yes | exercised |
-| `holds` | `HOLDS` | 399 | yes | exercised |
+| `holds` | `HOLDS` | 396 | yes | exercised |
 | `if` | `IF_KW` | 33 | yes | exercised |
 | `import` | `IMPORT` | 11 | yes | exercised |
 | `in` | `IN` | 8 | yes | exercised |
@@ -78,30 +78,28 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `multishot` | `MULTI_SHOT` | 1 | yes | exercised |
 | `nat` | `NAT` | 1 | yes | exercised |
 | `not` | `NOT` | 5 | yes | exercised |
-| `of` | `OF` | 10 | yes | exercised |
+| `of` | `OF` | 9 | yes | exercised |
 | `operation` | `OPERATION` | 3 | yes | exercised |
 | `or` | `OR` | 1 | yes | exercised |
 | `otherwise` | `OTHERWISE` | 2 | yes | exercised |
 | `over` | `OVER` | 2 | yes | exercised |
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
-| `place` | `PLACE` | 305 | yes | exercised |
+| `place` | `PLACE` | 300 | yes | exercised |
 | `plam` | `PLAM` | 18 | yes | exercised |
 | `present` | `PRESENT` | 3 | yes | exercised |
 | `produce` | `PRODUCE` | 15 | yes | exercised |
 | `promote` | `PROMOTE` | 1 | yes | exercised |
 | `prop` | `PROP_KW` | 5 | yes | exercised |
-| `pull` | `PULL` | 6 | yes | exercised |
-| `pullback` | `PULLBACK` | 2 | yes | exercised |
+| `pull` | `PULL` | 5 | yes | exercised |
 | `push` | `PUSH` | 7 | yes | exercised |
-| `pushout` | `PUSHOUT` | 1 | yes | exercised |
 | `quote` | `QUOTE` | 3 | yes | exercised |
 | `reduction` | `REDUCTION` | 3 | yes | exercised |
 | `refl` | `REFL` | 13 | yes | exercised |
 | `repeat` | `REPEAT` | 2 | yes | exercised |
 | `requires` | `REQUIRES` | 1 | yes | exercised |
 | `resolves` | `RESOLVES` | 1 | yes | exercised |
-| `return` | `RETURN` | 360 | yes | exercised |
+| `return` | `RETURN` | 356 | yes | exercised |
 | `scope` | `SCOPE` | 2 | yes | exercised |
 | `sequence` | `SEQUENCE` | 1 | yes | exercised |
 | `share` | `SHARE` | 1 | yes | exercised |
@@ -115,8 +113,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `through` | `THROUGH` | 3 | yes | exercised |
 | `times` | `TIMES` | 2 | yes | exercised |
 | `to` | `TO` | 41 | yes | exercised |
-| `topology` | `TOPOLOGY` | 1 | yes | exercised |
-| `topos` | `TOPOS_KW` | 61 | yes | exercised |
+| `topos` | `TOPOS_KW` | 60 | yes | exercised |
 | `true` | `BOOL_LIT` | 5 | yes | exercised |
 | `unifies` | `UNIFIES` | 1 | yes | exercised |
 | `unknown` | `UNKNOWN` | 6 | yes | exercised |
@@ -125,7 +122,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `view` | `VIEW` | 6 | yes | exercised |
 | `visits` | `VISITS` | 18 | yes | exercised |
 | `when` | `WHEN` | 9 | yes | exercised |
-| `where` | `WHERE` | 62 | yes | exercised |
+| `where` | `WHERE` | 61 | yes | exercised |
 | `while` | `WHILE_KW` | 4 | yes | exercised |
 | `wire` | `WIRE` | 5 | yes | exercised |
 | `with` | `WITH` | 4 | yes | exercised |

@@ -2,6 +2,5 @@ topos Bank where {
   
   morphism tag(s: State): Number
   morphism lift(s: State): Number
-  prop is_overdrawn(s: State): proposition = s.balance < 0
+  prop is_overdrawn(s: State) = s.balance < 0
 }
-topology j of State { return 1 }

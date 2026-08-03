@@ -2777,15 +2777,6 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
         c
       in
       { res with geom_morphisms = gm :: res.geom_morphisms }
-  | S.TopPullback _ | S.TopPushout _ ->
-      (* universal-construction declarations are metadata for
-       * the topos kernel. *)
-      res
-  | S.TopTopology _ ->
-      (* Lawvere-Tierney topology is metadata for the topos
-       * kernel; runtime sheafification happens when the topology is
-       * applied. *)
-      res
   | S.TopReductionCompose _ ->
       (* reduction composition is metadata for the runtime;
        * actual composition is performed at handler-installation time. *)

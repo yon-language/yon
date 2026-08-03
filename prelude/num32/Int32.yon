@@ -1,0 +1,48 @@
+/* Int32 — la faccia dichiarata del codice primitivo i32, nel sito Num32.
+ *
+ * Int32, non Int: la casa dà il nome qualificato (Int32__widen_pos) e il
+ * world non vi entra — due gemelli con la stessa casa produrrebbero due
+ * simboli identici. Il world resta il SITO (Num32 e Num64 sono categorie
+ * distinte, Widen è un funtore fra loro); il nome porta la precisione
+ * perché il nome è ciò che viaggia nei simboli.
+ *
+ * Il trasporto runtime è l'f64 uniforme, esatto su tutto il range i32:
+ * la faccia i32 è l'INTENTO dichiarato del sito, la specializzazione
+ * nativa è del riconoscitore, non di questo file.
+ */
+place Int32 is i32 {
+
+  /* ─── L'allargamento senza intrinseci ────────────────────── [T] ─── */
+  /* E ora le firme dicono la verità: sorgente Int32, bersaglio Int64 —
+   * la freccia attraversa i world, come il funtore che la userà.
+   * La chiave: un LETTERALE INTEGRALE è punto di ogni faccia intera —
+   * si decompone in cifre nella faccia a 32 e si ricompone come
+   * letterali nella faccia a 64. Costa O(cifre) invece della singola
+   * sext: prima la verità, poi la velocità — l'ottimizzazione sarà un
+   * riconoscimento, non una magia.
+   * Terminazione: `n / 10` decresce strettamente, SCT la vede. */
+
+  /* la cifra come letterale: a sinistra confronto un Int32, a destra
+     ritorno letterali — e un letterale è punto di OGNI faccia intera */
+  fun digit64(d: Int32): Int64 {
+    return if d == 0 then 0
+      else if d == 1 then 1
+      else if d == 2 then 2
+      else if d == 3 then 3
+      else if d == 4 then 4
+      else if d == 5 then 5
+      else if d == 6 then 6
+      else if d == 7 then 7
+      else if d == 8 then 8
+      else 9
+  }
+
+  fun widen_pos(n: Int32): Int64 {
+    return if n == 0 then 0
+           else widen_pos(n / 10) * 10 + digit64(n % 10)
+  }
+
+  fun widen_i32_i64(n: Int32): Int64 {
+    return if n < 0 then 0 - widen_pos(0 - n) else widen_pos(n)
+  }
+}

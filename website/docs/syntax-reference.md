@@ -100,9 +100,7 @@ Every keyword, alphabetically:
 [`promote`](/book/keywords#promote) ·
 [`prop`](/book/keywords#prop) ·
 [`pull`](/book/keywords#pull) ·
-[`pullback`](/book/keywords#pullback) ·
 [`push`](/book/keywords#push) ·
-[`pushout`](/book/keywords#pushout) ·
 [`quote`](/book/keywords#quote) ·
 [`reduction`](/book/keywords#reduction) ·
 [`refl`](/book/keywords#refl) ·
@@ -125,7 +123,6 @@ Every keyword, alphabetically:
 [`through`](/book/keywords#through) ·
 [`times`](/book/keywords#times) ·
 [`to`](/book/keywords#to) ·
-[`topology`](/book/keywords#topology) ·
 [`topos`](/book/keywords#topos) ·
 [`true`](/book/keywords#true) ·
 [`Type`](/book/keywords#type) ·
