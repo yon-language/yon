@@ -1,4 +1,4 @@
-/* text: il file del package `text`, sotto prelude/.
+/* text.yon — il file del package `text`, sotto prelude/.
  *
  * IL SITO C(Txt): la categoria del testo.
  *
@@ -13,11 +13,12 @@
  * da giugno. Non è un'incoerenza: `text` è il nome del CODICE nel kernel,
  * `String` la faccia dichiarata. Nel toml il world è `Txt`.
  *
- * PERCHÉ `site.yon` E NON `text.yon`: il filesystem di macOS è
- * case-INSENSITIVE, quindi `text.yon` e `Text.yon` sono lo stesso file — e
- * un `rm Text.yon` cancella il file del package. Il nome-uguale-alla-
- * directory è una trappola su questa piattaforma; `site.yon` dice il ruolo
- * e non collide con nessun place (i place sono Maiuscoli, questo no).
+ * ATTENZIONE, macOS: il filesystem è case-INSENSITIVE, quindi questo file
+ * e un ipotetico `Text.yon` sarebbero LO STESSO FILE — un `rm Text.yon`
+ * cancella il package (è già successo, e nessun gate se ne accorse: il
+ * sito restò senza generatori). Il place del testo si chiama `String`,
+ * quindi oggi la collisione non esiste; se un giorno nascesse un place
+ * `Text`, questo file va rinominato PRIMA.
  */
 topos where {
 
