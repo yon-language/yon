@@ -1,0 +1,110 @@
+/* String — la faccia dichiarata del codice primitivo `text`.
+ *
+ * `is text` dichiara il carrier ASSIOMATICO: la foglia della ricorsione del
+ * funtore carrier. Il carrier di `text` è un handle sull'heap
+ * content-addressed (una rope interned: stesso letterale, stesso slot) — ma
+ * questo il preludio non lo dice: la fusione nomina il CODICE, non il layout.
+ *
+ * IL NUCLEO IRRIDUCIBILE resta CABLATO, e si chiama qualificato:
+ *   String.length, String.char_at, String.concat, String.from_char,
+ *   String.equal (O(1): content-addressing — due stringhe uguali hanno lo
+ *   stesso handle), String.parse_number, String.print, String.from_int,
+ *   String.substring, String.find_char.
+ * Il meccanismo per dichiararli senza corpo («questo corpo è assiomatico»,
+ * il fratello di `is <prim>` per i corpi) non esiste ancora — è lo stesso
+ * blocco di widen/narrow. Quando ci sarà, il nucleo si dichiara qui e il
+ * confine col silicio diventa visibile nel linguaggio.
+ *
+ * String.substring e String.find_char restano cablate ANCHE come fatto di
+ * macchina: emit riconosce quei nomi per pattern, quindi una ridefinizione
+ * Yon verrebbe ignorata in silenzio — la derivata onesta qui sotto usa nomi
+ * propri (index_of) o chiama la cablata. Fast-path per costruzione.
+ *
+ * MARKERS: [T] totale, scritta qui · [E] parziale, vestita con on error
+ */
+place String is text {
+
+  /* ─── Predicati ──────────────────────────────────────────────── [T] ─── */
+
+  fun is_empty(s: String): Boolean { return String.length(s) == 0 }
+
+  fun starts_with(s: String, p: String): Boolean {
+    return if String.length(p) > String.length(s) then false
+           else String.equal(String.substring(s, 0, String.length(p)), p)
+  }
+
+  fun ends_with(s: String, p: String): Boolean {
+    return if String.length(p) > String.length(s) then false
+           else String.equal(
+             String.substring(s, String.length(s) - String.length(p),
+                              String.length(p)), p)
+  }
+
+  /* ─── Estrazione ─────────────────────────────────────────────── [T] ─── */
+
+  fun take(s: String, n: Number): String {
+    return String.substring(s, 0, n)
+  }
+  /* `skip`, non `drop`: drop è keyword (il rilascio degli Space).
+     Stessa ragione di mul/times — il lessico del linguaggio ha precedenza. */
+  fun skip(s: String, n: Number): String {
+    return String.substring(s, n, String.length(s) - n)
+  }
+
+  /* ─── Ricerca: il contratto di Java indexOf (-1 se assente) ───── [T] ───
+   * `index_of`, nome proprio: la cablata String.find_char ha TRE argomenti
+   * (s, c, from) — questo è il contratto a due, derivato onestamente. */
+
+  fun index_of_step(s: String, c: Number, i: Number): Number {
+    return if i >= String.length(s) then 0 - 1
+           else if String.char_at(s, i) == c then i
+           else index_of_step(s, c, i + 1)
+  }
+
+  fun index_of(s: String, c: Number): Number { return index_of_step(s, c, 0) }
+
+  fun contains_char(s: String, c: Number): Boolean { return index_of(s, c) >= 0 }
+
+  /* ─── Trasformazione ─────────────────────────────────────────── [T] ───
+   * Derivate carattere per carattere: la definizione onesta prima, il
+   * riconoscimento del pattern dopo, se il profilo lo chiede (è sqrt con
+   * Newton). "" è il neutro del monoide, e un letterale è un punto della
+   * faccia — l'accumulatore è legittimo. */
+
+  fun reverse_step(s: String, i: Number, acc: String): String {
+    return if i < 0 then acc
+           else reverse_step(s, i - 1,
+                  String.concat(acc, String.from_char(String.char_at(s, i))))
+  }
+
+  fun reverse(s: String): String {
+    return reverse_step(s, String.length(s) - 1, "")
+  }
+
+  /* `replicate`, non `repeat`: repeat è keyword (repeat at most N times). */
+  fun replicate(s: String, n: Number): String {
+    return if n <= 0 then "" else String.concat(s, replicate(s, n - 1))
+  }
+
+  /* ─── L'endomorfismo, dichiarato come tale ───────────────────────────
+   * Reverse porta una legge vera: è un'INVOLUZIONE. Le altre restano `fun`
+   * — take/skip/index_of non preservano struttura interessante, e
+   * chiamarle morph sarebbe rumore. Le frecce sono incitate, non
+   * obbligatorie. */
+
+  morph Reverse from String to String {
+    on object(s: String): String { return reverse(s) }
+    law involutive        /* reverse(reverse(s)) == s */
+  }
+
+  /* ─── Verso i numeri — la freccia in ENTRATA ──────────────────── [E] ───
+   * `parse` è String -> Number: il contenitore compare come SORGENTE, che
+   * la regola di contenimento ammette — ed è dove Java la mette
+   * (Integer.parseInt prende una String). Il nucleo è cablato
+   * (String.parse_number); qui si veste la parzialità. */
+
+  fun parse(s: String) on error DomainError: Number {
+    return if is_empty(s) then .-> DomainError { message "parse: empty string" }
+           else String.parse_number(s)
+  }
+}
