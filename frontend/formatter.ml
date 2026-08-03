@@ -539,7 +539,6 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
           not covered yet -> Exit. *)
        line f (Printf.sprintf "topos %s where {" td.tp_name);
        f.indent <- f.indent + 1;
-       (match td.tp_terminal with Some t -> line f ("terminal " ^ t) | None -> ());
        if td.tp_morphisms <> [] then begin
          (* the `morphisms { }` wrapper is retired: bare morphism lines. *)
          List.iter (fun op ->

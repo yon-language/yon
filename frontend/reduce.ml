@@ -116,7 +116,7 @@ let is_value t =
       || starts_with "__coh_"
   | App _ ->
       (* Check if the outermost App is a constructor application
-       * __new_P v1 v2 ... by uncurrying the head. *)
+       * __section_P v1 v2 ... by uncurrying the head. *)
       let rec head_of = function
         | App (f, _) -> head_of f
         | Var v -> Some v
@@ -128,7 +128,7 @@ let is_value t =
              String.length head >= String.length prefix
              && String.sub head 0 (String.length prefix) = prefix
            in
-           starts_with "__new_"
+           starts_with "__section_"
        | None -> false)
   | Scope _ -> false
   | Emit _ -> false
@@ -227,7 +227,7 @@ let try_beta t =
  *
  * Representation (reuses App/Var only — no new AST constructor, so every
  * existing pattern-match stays exhaustive; these reserved names sit in the
- * same "__"-tagged namespace the reducer already owns for __num_, __new_,…):
+ * same "__"-tagged namespace the reducer already owns for __num_, __section_,…):
  *
  *   identity  id_A            ==  Var "__id"
  *                                 (the polymorphic identity, semantically λx.x)

@@ -3461,7 +3461,7 @@ let test_world_hierarchy () =
   | Some "Region" ->
       Printf.printf "  world EU_Region subset_of Region\n";
       Printf.printf "  categorical inclusion of the sub-topos Sh(EU) hookrightarrow Sh(Region)\n";
-      Printf.printf "  the places declared in EU_Region inherit constraints from Region\n";
+      Printf.printf "  the places declared in EU_Region are subject to Region's constraints by restriction along the inclusion\n";
       Printf.printf "Status: PASS\n"; true
   | _ -> Printf.printf "FAIL\n"; false
 

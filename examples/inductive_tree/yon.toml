@@ -1,5 +1,8 @@
 [package]
 name = "inductive_tree"
 
+[world.W]
+objects = ["Tree"]
+
 [runtime]
 backend = "memory"

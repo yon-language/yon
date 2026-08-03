@@ -20,7 +20,7 @@
  * impossible. If it ever bites, this is where it is written down.
  *
  * Grounded on:
- *   yon_rt.h  yon_rt_new_r(heap, fields, n, type_root, schema) — the
+ *   yon_rt.h  yon_rt_section_r(heap, fields, n, type_root, schema) — the
  *             root-prefixed constructor every place instance goes through.
  *   yon_rt.h  yon_rt_field_load(sec, off, size, out) — field offsets are
  *             FIELD-region offsets; the reader skips the root head.
@@ -40,8 +40,8 @@ int main(void) {
     uint64_t root_opened = 0x50726f6f74303141ULL;  /* stand-in roots: distinct */
     uint64_t root_shadow = 0x50726f6f74303142ULL;
 
-    yon_section_t a = yon_rt_new_r(heap, fields, sizeof fields, root_opened, 1);
-    yon_section_t b = yon_rt_new_r(heap, fields, sizeof fields, root_shadow, 1);
+    yon_section_t a = yon_rt_section_r(heap, fields, sizeof fields, root_opened, 1);
+    yon_section_t b = yon_rt_section_r(heap, fields, sizeof fields, root_shadow, 1);
     if (a == YON_SECTION_INVALID || b == YON_SECTION_INVALID) {
         printf("FAIL: new_r returned invalid section\n"); return 1;
     }
@@ -52,7 +52,7 @@ int main(void) {
     }
 
     /* same place, same fields: dedup MUST still hold (content addressing). */
-    yon_section_t a2 = yon_rt_new_r(heap, fields, sizeof fields, root_opened, 1);
+    yon_section_t a2 = yon_rt_section_r(heap, fields, sizeof fields, root_opened, 1);
     if (a2 != a) {
         printf("FAIL: same root + same fields did NOT dedup (a=%lld a2=%lld)\n",
                (long long)a, (long long)a2);
@@ -77,8 +77,8 @@ int main(void) {
     /* a FIELDLESS place (the terminal: place Entry { }, the nullary section)
        still carries a valid root head — no special case, or disjointness
        starts leaking exactly where the brief said it would. */
-    yon_section_t t1 = yon_rt_new_r(heap, NULL, 0, root_opened, 1);
-    yon_section_t t2 = yon_rt_new_r(heap, NULL, 0, root_shadow, 1);
+    yon_section_t t1 = yon_rt_section_r(heap, NULL, 0, root_opened, 1);
+    yon_section_t t2 = yon_rt_section_r(heap, NULL, 0, root_shadow, 1);
     if (t1 == YON_SECTION_INVALID || t2 == YON_SECTION_INVALID || t1 == t2) {
         printf("FAIL: fieldless places collapsed (t1=%lld t2=%lld)\n",
                (long long)t1, (long long)t2);

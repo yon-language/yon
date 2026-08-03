@@ -1,0 +1,188 @@
+/* Int — la faccia dichiarata del codice primitivo intero.
+ *
+ * `is i64` dichiara il carrier ASSIOMATICO: la foglia della ricorsione del
+ * funtore carrier, non un suo aggiramento. Int è il fratello di Number:
+ * stesso trattamento, carrier diverso, e aritmetica ESATTA — nessun
+ * arrotondamento, nessun epsilon.
+ *
+ * Int è ciò che Number non poteva essere: `number` è f64, quindi tutta la
+ * famiglia bit di Integer non aveva casa. Ora ce l'ha.
+ *
+ * LA FAMIGLIA BIT NON USA OPERATORI BITWISE. Yon non ha & | << >>, e qui non
+ * servono: su un carrier intero `/ 2` È uno shift a destra, `* 2` uno shift a
+ * sinistra, `% 2` È il bit basso. Tutta la famiglia sotto è tre operatori
+ * aritmetici, ricorsivamente. Non è un aggiramento: shiftare È dimezzare, e
+ * dirlo così è più onesto di un glifo.
+ *
+ * MARKERS
+ *   [T] totale        scritta qui, nessuna dipendenza
+ *   [E] parziale      vestita con `on error`
+ *   [?] da verificare dipende da qualcosa non confermato (nota inline)
+ */
+place Int is i64 {
+
+  /* ─── Segno e modulo ─────────────────────────────────────── [T] ─── */
+
+  fun abs(n: Int): Int    { return if n < 0 then 0 - n else n }
+  fun signum(n: Int): Int { return if n > 0 then 1 else if n < 0 then 0 - 1 else 0 }
+
+  /* L'endomorfismo dichiarato come tale: porta leggi vere.
+   * Le altre restano `fun` — floor/max/gcd non preservano struttura
+   * algebrica interessante, e chiamarle morph sarebbe rumore.
+   * Le sette frecce sono incitate, non obbligatorie. */
+  morph Negate from Int to Int {
+    on object(n: Int): Int { return 0 - n }
+    law involutive          /* negate(negate(n)) == n                     */
+    law additive            /* negate(a + b) == negate(a) + negate(b)     */
+  }
+
+  /* ─── Confronto ──────────────────────────────────────────── [T] ─── */
+
+  fun max(a: Int, b: Int): Int { return if a > b then a else b }
+  fun min(a: Int, b: Int): Int { return if a < b then a else b }
+  fun compare(a: Int, b: Int): Int {
+    return if a < b then 0 - 1 else if a > b then 1 else 0
+  }
+  fun clamp(n: Int, lo: Int, hi: Int): Int {
+    return if n < lo then lo else if n > hi then hi else n
+  }
+
+  /* ─── Predicati ──────────────────────────────────────────── [T] ─── */
+
+  fun is_zero(n: Int): Boolean     { return n == 0 }
+  fun is_positive(n: Int): Boolean { return n > 0 }
+  fun is_negative(n: Int): Boolean { return n < 0 }
+  fun is_even(n: Int): Boolean     { return n % 2 == 0 }
+  fun is_odd(n: Int): Boolean      { return n % 2 != 0 }
+
+  /* ─── Aritmetica esatta ──────────────────────────────────────────── */
+  /* [?] PRIMA SONDA DI TUTTE: `/` su un carrier Int è divisione INTERA?
+   *     div(7, 2) deve dare 3, non 3.5. Sul carrier i64 dovrebbe esserlo, ma
+   *     è NON VERIFICATO — e ogni funzione da qui in giù ci poggia, tutta la
+   *     famiglia bit compresa. Provarlo prima di fidarsi del file. */
+
+  fun gcd(a: Int, b: Int): Int {
+    be x holds abs(a)
+    be y holds abs(b)
+    return if y == 0 then x else gcd(y, x % y)
+  }
+
+  fun lcm(a: Int, b: Int): Int {
+    be g holds gcd(a, b)
+    return if g == 0 then 0 else abs(a * b) / g
+  }
+
+  /* potenza esatta per quadrati — il nucleo totale */
+  fun ipow_ok(base: Int, e: Int): Int {
+    return if e == 0 then 1
+           else if e % 2 == 0 then ipow_ok(base * base, e / 2)
+           else base * ipow_ok(base * base, (e - 1) / 2)
+  }
+
+  /* [E] un esponente negativo non ha risposta intera */
+  fun ipow(base: Int, e: Int) on error DomainError: Int {
+    return if e < 0 then .-> DomainError { message "ipow: negative exponent has no integer value" }
+           else ipow_ok(base, e)
+  }
+
+  /* [E] divisione e resto per zero sono indefiniti */
+  fun div(a: Int, b: Int) on error DomainError: Int {
+    return if b == 0 then .-> DomainError { message "div: division by zero" }
+           else a / b
+  }
+
+  fun rem(a: Int, b: Int) on error DomainError: Int {
+    return if b == 0 then .-> DomainError { message "rem: modulo by zero" }
+           else a % b
+  }
+
+  /* ─── La famiglia bit: tutta via / 2, % 2, * 2 ───────────── [T] ─── */
+
+  fun bit_count(n: Int): Int {
+    be x holds abs(n)
+    return if x == 0 then 0 else x % 2 + bit_count(x / 2)
+  }
+
+  fun bit_length(n: Int): Int {
+    be x holds abs(n)
+    return if x == 0 then 0 else 1 + bit_length(x / 2)
+  }
+
+  fun highest_one_bit(n: Int): Int {
+    be l holds bit_length(n)
+    return if l == 0 then 0 else ipow_ok(2, l - 1)
+  }
+
+  fun lowest_one_bit(n: Int): Int {
+    be x holds abs(n)
+    return if x == 0 then 0
+           else if x % 2 == 1 then 1
+           else 2 * lowest_one_bit(x / 2)
+  }
+
+  fun leading_zeros(n: Int): Int { return 64 - bit_length(n) }
+
+  fun trailing_zeros(n: Int): Int {
+    be x holds abs(n)
+    return if x == 0 then 64
+           else if x % 2 == 1 then 0
+           else 1 + trailing_zeros(x / 2)
+  }
+
+  fun shift_left(n: Int, k: Int): Int  { return n * ipow_ok(2, k) }
+  fun shift_right(n: Int, k: Int): Int { return n / ipow_ok(2, k) }
+
+  fun reverse_step(n: Int, acc: Int, k: Int): Int {
+    return if k == 0 then acc
+           else reverse_step(n / 2, acc * 2 + n % 2, k - 1)
+  }
+  fun reverse_bits(n: Int): Int { return reverse_step(n, 0, 64) }
+
+  fun rotate_left(n: Int, k: Int): Int {
+    be s holds k % 64
+    return shift_left(n, s) % ipow_ok(2, 64) + shift_right(n, 64 - s)
+  }
+  fun rotate_right(n: Int, k: Int): Int {
+    return rotate_left(n, 64 - k % 64)
+  }
+
+  /* ─── La larghezza la sa il SITO ─────────────────────────────────────
+   * width() è morta col parametro <64>: la precisione è il WORLD (Num64),
+   * non un parametro di tipo, e il letterale 64 qui sopra è il fatto del
+   * sito, scritto una volta per gamba. Il gemello a 32 scrive 32. */
+
+  /* ─── I generatori del sito, implementati ────────────────────────────
+   * num64.yon dichiara `morphism plus/times`; questi sono i bersagli che
+   * il funtore Widen citerà nelle sue `on morphism … via …`. */
+  fun plus_i64(a: Int, b: Int): Int  { return a + b }
+  fun mul_i64(a: Int, b: Int): Int  { return a * b }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+ * COSA NON C'È, E PERCHÉ
+ *
+ * SOSPESI (decisione di Antonio): `widen : Int → Number` e
+ *     `narrow : Number → Int`, l'aggiunzione fra i due tipi. Sono
+ *     IRRIDUCIBILI — reinterpretano un i64 come f64 e viceversa, toccano la
+ *     rappresentazione — quindi non hanno un corpo scrivibile in Yon. Servono
+ *     o il meccanismo dell'intrinseco (il fratello di `is <prim>` per i corpi)
+ *     o niente: un corpo che finge di convertire mentirebbe. Quando ci sarà:
+ *     `widen` va in Number.yon, `narrow` qui — la casa la dà il bersaglio.
+ *
+ * MAX/MIN: vogliono i letterali i64 più grandi, che vogliono la notazione
+ *     esponente o esadecimale nel lexer — non verificata. Non dichiarati,
+ *     invece di scritti sbagliati.
+ *
+ * VUOLE `Text`: to_text, to_text_radix (la famiglia toBinaryString di Java),
+ *     from_text/parse [E]. Appartengono qui; il tipo di ritorno vive nel place
+ *     fratello.
+ *
+ * UNSIGNED: divideUnsigned, remainderUnsigned, compareUnsigned. Vogliono
+ *     un'interpretazione senza segno del carrier — decisione di design (un
+ *     place UInt? un flag?). Non inventata qui.
+ *
+ * LE ALGEBRE: `+` e `*` restano operatori; la loro faccia dichiarata è
+ *     l'algebra (`operation add(a, b) uses Additive`), che aspetta il cantiere
+ *     algebre. Int è un modello più ricco di Number: è un ANELLO genuino,
+ *     quindi porterà Additive e Multiplicative con la distributività.
+ * ═══════════════════════════════════════════════════════════════════ */

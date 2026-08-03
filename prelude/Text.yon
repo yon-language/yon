@@ -1,3 +1,0 @@
-/* Text — the declared face of the primitive code text (the String
- * fusion promoted from one hardcoded line to prelude source). */
-place Text is text { }

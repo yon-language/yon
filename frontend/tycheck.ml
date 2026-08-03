@@ -268,6 +268,37 @@ let comprehension_coerces_to (env : Tyenv.env) (ctx : Reduce.ctx)
       Dispatcher.type_equal env ctx carrier super
   | _ -> false
 
+(* ─── Integer faces (Int is i64, …) ─────────────────────────────────────
+   The INTEGER prims. Arithmetic on them is exact over the f64 transport
+   within ±2^53; `/` and `%` diverge (truncating division) and get routed
+   to __idiv/__imod by site. i1 is boolean, not arithmetic. *)
+let int_prims = ["i8"; "i16"; "i32"; "i64"]
+
+let is_int_prim_ty (env : Tyenv.env) (ctx : Reduce.ctx) (t : ty) : bool =
+  List.exists (fun p -> Dispatcher.type_equal env ctx t (TyPrim p)) int_prims
+
+(* `/` and `%` on integer operands are the TRUNCATING ops: record the site
+   for desugar (one helper, used by the infer rule and the checking rule). *)
+let record_int_arith_site (op : binop) (loc : location) : unit =
+  let key = (loc.file, loc.start_line, loc.start_col,
+             loc.end_line, loc.end_col) in
+  match op with
+  | OpDiv -> Hashtbl.replace Surface_ast.int_arith_sites key "__idiv"
+  | OpMod -> Hashtbl.replace Surface_ast.int_arith_sites key "__imod"
+  | _ -> ()
+
+(* Literal admission: an INTEGRAL numeric literal is a point of every integer
+   face (the transport carries it exactly). A non-literal Number is NOT —
+   widen/narrow are declared morphisms, never free coercions. *)
+let admit_int_literal (env : Tyenv.env) (ctx : Reduce.ctx)
+    (e : expr) (inferred : ty) (expected : ty) : ty =
+  match e with
+  | ELit (LitNumber v, _)
+    when Float.is_integer v
+      && Dispatcher.type_equal env ctx inferred (TyPrim "number")
+      && is_int_prim_ty env ctx expected -> expected
+  | _ -> inferred
+
 (* Type of a binop result, given operand types. *)
 let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
     (env : Tyenv.env) (ctx : Reduce.ctx) (loc : location) : ty tc_result =
@@ -281,6 +312,12 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
   (* Arithmetic operators *)
   | OpAdd | OpSub | OpMul | OpDiv | OpMod ->
       if is lhs num && is rhs num then ok num
+      else if is_int_prim_ty env ctx lhs && is lhs rhs then begin
+        (* Integer arithmetic: + - * ride the f64 ops (exact within ±2^53);
+           / and % are TRUNCATING — record the site for desugar. *)
+        record_int_arith_site op loc;
+        ok lhs
+      end
       else if is lhs dur && is rhs dur && (op = OpAdd || op = OpSub) then ok dur
       else if is lhs mon && is rhs mon && (op = OpAdd || op = OpSub) then ok mon
       else if is lhs txt && is rhs txt && op = OpAdd then ok txt  (* string concat *)
@@ -290,7 +327,8 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
            (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs))
   (* Comparison operators *)
   | OpLt | OpGt | OpLeq | OpGeq ->
-      if is lhs rhs && (is lhs num || is lhs dur || is lhs mon) then ok bool_t
+      if is lhs rhs && (is lhs num || is lhs dur || is lhs mon
+                        || is_int_prim_ty env ctx lhs) then ok bool_t
       else err loc
         (Printf.sprintf
            "comparison requires matching ordered operands; got %s and %s"
@@ -1652,6 +1690,17 @@ got %s" (Tyenv.ty_to_string other)))
   | EBinop (op, e1, e2, loc) ->
       let* t1 = infer env ctx e1 in
       let* t2 = infer env ctx e2 in
+      (* 5 % 2, w == 0 - 1234: with an Int on the other side the integral
+         literal adapts, and a literal EXPRESSION adapts through the
+         bidirectional check (the EBinop rule pushes the face inward). *)
+      let adapt e t other =
+        let t = admit_int_literal env ctx e t other in
+        if is_int_prim_ty env ctx other
+           && Dispatcher.type_equal env ctx t (TyPrim "number")
+           && (match check env ctx e other with Ok () -> true | Error _ -> false)
+        then other else t in
+      let t1 = adapt e1 t1 t2 in
+      let t2 = adapt e2 t2 t1 in
       ty_of_binop op t1 t2 env ctx loc
 
   | EParen (inner, _) -> infer env ctx inner
@@ -1988,6 +2037,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
   else
   let fallback env e expected =
     let* actual = infer env ctx e in
+    let actual = admit_int_literal env ctx e actual expected in
     if Dispatcher.subtype env ctx ~sub:actual ~super:expected
        || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
     else err (location_of_expr e)
@@ -1995,6 +2045,15 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
          (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual))
   in
   match e, expected with
+  (* Bidirectional integer arithmetic: `0 - 1` against Int pushes Int into
+     both operands (the literal admission then fires leaf-by-leaf). The site
+     of a / or % is recorded HERE too — this path never reaches ty_of_binop. *)
+  | EBinop ((OpAdd | OpSub | OpMul | OpDiv | OpMod) as op, e1, e2, loc), _
+    when is_int_prim_ty env ctx expected ->
+      let* () = check env ctx e1 expected in
+      let* () = check env ctx e2 expected in
+      record_int_arith_site op loc;
+      ok ()
   | EHITConstr (ctor, args, loc), (TySum variants | TySumIn (variants, _)) ->
       (match List.find_opt (fun variant -> variant.v_name = ctor) variants with
        | None -> err loc (Printf.sprintf
@@ -2480,7 +2539,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
   in
   match Tyenv.lookup_fun env name with
   | Some fs ->
-      let* () = check_call_signature env ctx name fs.fs_params arg_tys loc in
+      let* () = check_call_signature ~arg_exprs:args env ctx name fs.fs_params arg_tys loc in
       (* Transitive effect propagation. If the called function declares
        * `visits E`, the caller must in turn cover E, either through its own
        * `visits E` (E in current_effects) or through an active handler for E.
@@ -2604,7 +2663,8 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                     name (List.length many)
                     (String.concat ", " (List.map (fun o -> o.E.os_place) many)))))
 
-and check_call_signature (env : Tyenv.env) (ctx : Reduce.ctx)
+and check_call_signature ?(arg_exprs : expr list = [])
+                         (env : Tyenv.env) (ctx : Reduce.ctx)
                          (fn_name : string)
                          (params : (string * ty) list)
                          (arg_tys : ty list)
@@ -2614,6 +2674,20 @@ and check_call_signature (env : Tyenv.env) (ctx : Reduce.ctx)
       "%s: expected %d arguments, got %d"
       fn_name (List.length params) (List.length arg_tys))
   else
+    (* integral literals — and literal EXPRESSIONS like `0 - 1234` — admit
+       into integer-face parameters: first the literal admission, then the
+       bidirectional check (the EBinop rule pushes the face into operands).
+       Site-visible: the expr rides along exactly when the caller has it. *)
+    let arg_tys =
+      if List.length arg_exprs = List.length arg_tys then
+        List.map2 (fun (e, aty) (_, pty) ->
+          let aty = admit_int_literal env ctx e aty pty in
+          if is_int_prim_ty env ctx pty
+             && Dispatcher.type_equal env ctx aty (TyPrim "number")
+             && (match check env ctx e pty with Ok () -> true | Error _ -> false)
+          then pty else aty)
+          (List.combine arg_exprs arg_tys) params
+      else arg_tys in
     let rec check_args = function
       | [], [] -> ok ()
       | (pname, pty) :: prest, aty :: arest ->
@@ -3356,14 +3430,30 @@ let register_fusion (pd : place_decl) : unit =
       if not (Carrier.is_prim_name prim) then
         failwith (Printf.sprintf
           "place %s is %s: '%s' is not a primitive code (prim_carrier is the            one source of truth)" pd.pd_name prim prim);
-      (match pd.pd_width, prim with
-       | Some 64, "number" | None, _ -> ()
-       | Some w, _ ->
-           failwith (Printf.sprintf
-             "place %s<%d> is %s: width %d does not match the carrier of '%s'"
-             pd.pd_name w prim w prim));
-      Hashtbl.replace Surface_ast.fusion_places pd.pd_name prim;
-      Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name;
+      (match pd.pd_width with
+       | None -> ()
+       | Some w ->
+           let carrier_bits =
+             match Carrier.prim_carrier prim with
+             | Some (Carrier.Scalar sw) -> Some (Carrier.scalar_bits sw)
+             | _ -> None in
+           if carrier_bits <> Some w then
+             failwith (Printf.sprintf
+               "place %s<%d> is %s: width %d does not match the carrier of '%s'"
+               pd.pd_name w prim w prim));
+      (* same face name in TWO prelude worlds (Int in Num32 and Num64):
+         the DEFAULT world's carrier wins the bare-name registry — never
+         the parse order. The non-default twin stays a declared intent
+         (its world distinguishes it; native lowering is a later cantiere). *)
+      (if in_prelude
+          && Hashtbl.mem Surface_ast.fusion_places pd.pd_name
+          && Hashtbl.find Surface_ast.fusion_places pd.pd_name <> prim
+          && pd.pd_world <> Surface_ast.prelude_default_world
+       then ()
+       else begin
+         Hashtbl.replace Surface_ast.fusion_places pd.pd_name prim;
+         Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name
+       end);
       (match prim, pd.pd_arms with
        | "boolean", arms ->
            (* by NAME, not by position: the arm IS the literal *)
@@ -3619,6 +3709,7 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
         mp_target = ft.ft_to_world;
         mp_on_object = None;
         mp_on_morphism_map = [];
+        mp_laws = [];
         mp_loc = ft.ft_loc;
       } in
       let env = { env with
@@ -3710,7 +3801,66 @@ let check_union_members (env : Tyenv.env) (ctx : Reduce.ctx)
              else "s")))
       (ok ()) pd.pd_arms
 
+(* ─── The containment rule (brief residui costruttore) ──────────────────
+   An arrow declared in the body of `place P` must TOUCH the house: P is the
+   source or the target of its clause. It need not coincide with both —
+   `morph Parse from Text to Number` inside `place Number` is legitimate.
+   `fun` has no clause: the house IS the container, always valid. Entry is
+   exempt (the entry pseudo-place hosts the program's arrows and is already
+   world-exempt; retag_home records no home for it). The home rides the SITE
+   (arrow_home_sites), never the name. *)
+let check_arrow_containment (td : top_decl) : unit tc_result =
+  let home (loc : location) =
+    Hashtbl.find_opt Surface_ast.arrow_home_sites
+      (loc.file, loc.start_line, loc.start_col) in
+  let touch (loc : location) (descr : string) (ends : string list) =
+    match home loc with
+    | None -> ok ()
+    | Some house ->
+        if List.mem house ends then ok ()
+        else
+          let hint = match ends with e :: _ -> e | [] -> house in
+          err loc (Printf.sprintf
+            "`%s` does not touch `%s` — declare it in `%s`."
+            descr house hint)
+  in
+  match td with
+  | TopMorph mp ->
+      touch mp.mp_loc
+        (Printf.sprintf "morph %s from %s to %s"
+           mp.mp_name mp.mp_source mp.mp_target)
+        [mp.mp_source; mp.mp_target]
+  | TopView vd ->
+      touch vd.vw_loc
+        (Printf.sprintf "view %s of %s" vd.vw_name vd.vw_of) [vd.vw_of]
+  | TopMove mv ->
+      let ends =
+        mv.mv_from @ (match mv.mv_to with Some t -> [t] | None -> []) in
+      touch mv.mv_loc
+        (Printf.sprintf "move %s (%s)" mv.mv_name (String.concat " -> " ends))
+        ends
+  | TopFunctor ft ->
+      touch ft.ft_loc
+        (Printf.sprintf "functor %s from %s to %s"
+           ft.ft_name ft.ft_from_world ft.ft_to_world)
+        [ft.ft_from_world; ft.ft_to_world]
+  | TopGeomMorphism gm ->
+      touch gm.gm_loc
+        (Printf.sprintf "geomorph %s from %s to %s"
+           gm.gm_name gm.gm_source_site gm.gm_target_site)
+        [gm.gm_source_site; gm.gm_target_site]
+  | TopNatTransform nt ->
+      touch nt.nt_loc
+        (Printf.sprintf "nat transform %s from %s to %s"
+           nt.nt_name nt.nt_source_morph nt.nt_target_morph)
+        [nt.nt_source_morph; nt.nt_target_morph]
+  | TopReduction rd ->
+      touch rd.rd_loc
+        (Printf.sprintf "reduction %s of %s" rd.rd_name rd.rd_of) [rd.rd_of]
+  | _ -> ok ()
+
 let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit tc_result =
+  let* () = check_arrow_containment td in
   match td with
   | TopWorld _ -> ok ()
   | TopPlace pd when pd.pd_arms <> [] ->
@@ -4096,12 +4246,13 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
        | _ -> ok ())
 
 and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
-  (* Check that the world is declared. A FUSED place (is <prim>) is the
-     constant presheaf: member of no world by nature (rule (f) extension),
-     so the membership check does not apply. *)
+  (* Check that the world is declared. CONSTANT IS DEAD (the num cantiere):
+     a fused or prelude place is NOT exempt any more — it lives in its
+     package's world (Num, Txt, Logic, Err), stamped from its space by the
+     loaders. The only standing exemptions: __Builtin (String) and the
+     fieldless Entry marker (the entrypoint is not a site object). *)
   let* () =
-    if pd.pd_world = "__Builtin" || pd.pd_fusion <> None
-       || in_prelude_file pd.pd_loc
+    if pd.pd_world = "__Builtin"
        || (pd.pd_name = "Entry"
            && List.for_all (function FoField _ -> false | _ -> true)
                 pd.pd_members) then ok ()
@@ -4959,7 +5110,11 @@ let arm_site_of (lookup : string -> place_decl option)
 let infer_place_worlds (p : program) : (program, type_error) result =
   (* Collect declared worlds. *)
   let worlds = List.filter_map
-    (function TopWorld wd -> Some wd.wd_name | _ -> None) p in
+    (function
+      | TopWorld wd
+        when not (Hashtbl.mem Surface_ast.prelude_world_names wd.wd_name) ->
+          Some wd.wd_name
+      | _ -> None) p in
   let known_place_worlds = List.filter_map
     (function
       | TopPlace pd when pd.pd_world <> "__INFER" -> Some (pd.pd_name, pd.pd_world)
@@ -5085,8 +5240,6 @@ let infer_place_worlds (p : program) : (program, type_error) result =
        | Ok decls ->
            match td with
            | TopPlace pd when pd.pd_world = "__INFER" && pd.pd_arms = []
-                           && pd.pd_fusion = None
-                           && not (in_prelude_file pd.pd_loc)
                            && not (pd.pd_name = "Entry"
                                    && List.for_all
                                         (function FoField _ -> false | _ -> true)
@@ -5094,10 +5247,10 @@ let infer_place_worlds (p : program) : (program, type_error) result =
                (* the ENTRY CONTAINER is not a site object (the project mode
                   already strips it): a fieldless Entry hosting only hoisted
                   arrows has no world to infer, in single-file mode too. *)
-               (* a FUSED place (is <prim>) never enters contextual inference:
-                  a primitive is the constant presheaf — the same in every
-                  context of the site, member of no particular world (rule (f)
-                  extension: fusion implies Constant; 7 exists everywhere). *)
+               (* CONSTANT IS DEAD: fusion and prelude no longer skip the
+                  inference — the prelude places arrive STAMPED from their
+                  space (never __INFER), and a user's fused place infers or
+                  errors like any other. A grant is a lockpick target. *)
                (match infer_for pd with
                 | Ok w ->
                     Ok (TopPlace { pd with pd_world = w } :: decls)
@@ -5143,7 +5296,32 @@ let infer_place_worlds (p : program) : (program, type_error) result =
             let out = List.rev rev_out in
             if !changed then phase2 out else Ok out
       in
-      phase2 (List.rev rev_decls)
+      (* CONSTANT IS DEAD, without survivors, UNDER A MANIFEST (Antonio, the
+         num cantiere): `Constant` is only the fixpoint's in-flight state.
+         In a manifested compilation a union still __INFER after the fixpoint
+         goes through the SAME contextual rules as an armless place — the
+         unique world sites it, nothing applying is an error: a project
+         declares its worlds. A BARE file (Yon0, the selfhost substrate)
+         carries no world machinery at all and keeps the historic verdict. *)
+      (match phase2 (List.rev rev_decls) with
+       | Error e -> Error e
+       | Ok decls when not !Surface_ast.user_manifest_present -> Ok decls
+       | Ok decls ->
+           List.fold_left
+             (fun acc td ->
+                match acc with
+                | Error _ -> acc
+                | Ok out ->
+                    match td with
+                    | TopPlace pd when pd.pd_world = "__INFER"
+                                    && pd.pd_arms <> [] ->
+                        (match infer_for pd with
+                         | Ok w ->
+                             Ok (TopPlace { pd with pd_world = w } :: out)
+                         | Error e -> Error e)
+                    | other -> Ok (other :: out))
+             (Ok []) decls
+           |> Result.map List.rev)
 
 (* ─── Pass 1.5: effect inference (transitive closure of `visits`) ────── *)
 

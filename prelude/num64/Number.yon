@@ -18,7 +18,7 @@
  *   [I] irreducible — touches the bit representation: MUST stay primitive
  *   [E] partial   — needs the error cantiere (`on error`) to be honest
  */
-place Number<64> is number {
+place Number is number {
 
   /* ─── Sign and magnitude ─────────────────────────────────── [T] ─── */
 
@@ -205,17 +205,17 @@ place Number<64> is number {
   fun pi(): Number      { return 3.14159265358979 }
   fun e(): Number       { return 2.71828182845905 }
   fun epsilon(): Number { return 0.000000000000000222 }
-}
 
-/* Negate — a true additive homomorphism (negate(a+b) = negate(a)+negate(b))
- * and an involution: apply it twice and you are home. Both are verifiable
- * laws when the algebra cantiere lands. The clause gives the house. */
-morph Negate from Number to Number {
-  on object(n: Number): Number { return 0 - n }
-}
+  /* Negate — a true additive homomorphism (negate(a+b) = negate(a)+negate(b))
+   * and an involution: apply it twice and you are home. Both are verifiable
+   * laws when the algebra cantiere lands. The HOUSE gives the name. */
+  morph Negate from Number to Number {
+    on object(n: Number): Number { return 0 - n }
+  }
 
-morph Reciprocal from Number to Number {
-  on object(n: Number): Number { return 1 / n }
+  morph Reciprocal from Number to Number {
+    on object(n: Number): Number { return 1 / n }
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════

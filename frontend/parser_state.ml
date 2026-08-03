@@ -72,6 +72,11 @@ let lift_inline_lambda_to_fun
    markers), retags the LAST [n] hoisted funs with fn_home = Some house.
    Order is preserved by push_decl, so the suffix is exactly this body's. *)
 let retag_home (house : string) (n : int) : unit =
+  let record (loc : Surface_ast.location) =
+    (* containment rule: the non-fun arrow remembers its house BY SITE *)
+    Hashtbl.replace Surface_ast.arrow_home_sites
+      (loc.Surface_ast.file, loc.Surface_ast.start_line,
+       loc.Surface_ast.start_col) house in
   if n > 0 then
     synth_decls := List.mapi (fun i d ->
       (* push_decl PREPENDS: this body's hoisted arrows are the FIRST n *)
@@ -80,6 +85,20 @@ let retag_home (house : string) (n : int) : unit =
         | Surface_ast.TopFun fd when fd.Surface_ast.fn_home = None
                                   && house <> "Entry" ->
             Surface_ast.TopFun { fd with Surface_ast.fn_home = Some house }
+        | Surface_ast.TopMorph mp when house <> "Entry" ->
+            record mp.Surface_ast.mp_loc; d
+        | Surface_ast.TopView vd when house <> "Entry" ->
+            record vd.Surface_ast.vw_loc; d
+        | Surface_ast.TopMove mv when house <> "Entry" ->
+            record mv.Surface_ast.mv_loc; d
+        | Surface_ast.TopFunctor ft when house <> "Entry" ->
+            record ft.Surface_ast.ft_loc; d
+        | Surface_ast.TopGeomMorphism gm when house <> "Entry" ->
+            record gm.Surface_ast.gm_loc; d
+        | Surface_ast.TopNatTransform nt when house <> "Entry" ->
+            record nt.Surface_ast.nt_loc; d
+        | Surface_ast.TopReduction rd when house <> "Entry" ->
+            record rd.Surface_ast.rd_loc; d
         | other -> other
       else d) !synth_decls
 

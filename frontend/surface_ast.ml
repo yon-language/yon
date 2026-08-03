@@ -65,6 +65,16 @@ let union_arm_upcasts : (string, string) Hashtbl.t = Hashtbl.create 16
 let fusion_places : (string, string) Hashtbl.t = Hashtbl.create 8
 (* inverse: prim code -> fusion place name *)
 let fusion_of_prim : (string, string) Hashtbl.t = Hashtbl.create 8
+(* Integer arithmetic sites: `/` and `%` on INTEGER-carrier operands diverge
+   from the f64 operators (divsi truncates, divf does not) — the tycheck,
+   which knows the operand types, records the site here; desugar consumes it
+   and routes the op to __idiv/__imod. Keyed by SITE, never by name. *)
+(* keyed by the FULL span (start AND end): nested binops share the left
+   corner (`x % 2 + f(x / 2)` — the + and the % start at the same column),
+   so a start-only key collapses distinct sites. Fifth occurrence of the
+   rule: no table keyed without the (complete) site. *)
+let int_arith_sites : (string * int * int * int * int, string) Hashtbl.t =
+  Hashtbl.create 16
 (* points of FUSED coproducts -> their literal value ("tt" -> true, "ff" ->
    false, "star" -> unit): a fused place's arms never build spines — the
    carrier already has canonical values, the arms are their declared NAMES. *)
@@ -89,6 +99,41 @@ let prelude_arrow_names : (string, unit) Hashtbl.t = Hashtbl.create 64
 (* UNFUSED prelude places (Error, DomainError): declared normally, but the
    emitter keeps them ON USE only — same shake philosophy as the arrows. *)
 let prelude_place_names : (string, unit) Hashtbl.t = Hashtbl.create 8
+
+(* The prelude package's WORLDS (Num, Txt, Logic, Err): they ride into every
+   compilation but are IMPLICIT — the user-facing world-inference heuristics
+   (unique-world above all) must not see them, or a bare file with one user
+   world stops inferring. Filled by the loaders when the prelude wm rides in. *)
+let prelude_world_names : (string, unit) Hashtbl.t = Hashtbl.create 8
+
+(* The numeric tower's DEFAULT world: bare `Int`/`Number` in user code mean
+   the 64-bit site (Antonio: "Number a 64 bit è il default del linguaggio").
+   The 32-bit twins exist in Num32 and are reached through their own site
+   (and, one day, the Widen functor); on a same-name collision between
+   prelude worlds, the default world's entry wins every bare-name table. *)
+let prelude_default_world = "Num64"
+
+(* Compilation mode: does the USER compilation carry a manifest (yon.toml)?
+   Set by both loaders at entry. Phase 3 of world inference enforces
+   "no place without a world" ONLY under a manifest: a project must declare
+   its worlds; a BARE file (Yon0, the selfhost substrate) has no world
+   machinery at all and keeps the historic behavior. *)
+let user_manifest_present : bool ref = ref false
+
+(* The prelude package's spaces and topoi are recognized BY SITE (their
+   decl's loc.file lives under prelude/), never by name: a user space named
+   `text` is a different site and keeps its own runtime behavior. *)
+let loc_in_prelude (loc : location) : bool =
+  let f = loc.file and sub = "prelude/" in
+  let ls = String.length sub and lf = String.length f in
+  let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
+  go 0
+
+(* The containment rule (brief residui costruttore): loc-keyed home of the
+   NON-fun arrows hoisted from a place body — (file, start_line, start_col)
+   of the arrow decl -> house name. fun rides fn_home; the other seven forms
+   ride the SITE (never the name: two arrows may share a name across houses). *)
+let arrow_home_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 64
 
 (* Bare nullary points: `tt` in expression position IS the unique point of
    its terminal arm (the name denotes the point — no constructor call). The
@@ -720,7 +765,6 @@ type topos_decl = {
    * without heuristics. *)
   tp_at_space : string option;
   tp_objects : place_decl list;            (* the objects of the topos *)
-  tp_terminal : string option;             (* opz: nome terminal, default 1_<name> *)
   tp_morphisms : operation_decl list;      (* internal operations *)
   tp_props : prop_decl list;               (* proposizioni classified *)
   tp_loc : location;
@@ -758,6 +802,9 @@ type morph_decl = {
    * the morphism `deposit_eu` of the source topos is mapped onto the morphism
    * `deposit_global` of the target. *)
   mp_on_morphism_map : (string * string) list;
+  mp_laws : string list;      (* `law involutive` — declared = respected;
+                                 undeclared = not claimed. One word for the
+                                 obligations; the algebra cantiere checks them. *)
   mp_loc : location;
 }
 
@@ -782,6 +829,7 @@ type functor_decl = {
 type morph_item_kind =
   | MItemOnObject of fun_decl
   | MItemOnMorphism of string * string
+  | MItemLaw of string
 
 (* A natural transformation as a first-class declaration.
  *

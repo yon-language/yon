@@ -1,5 +1,8 @@
 [package]
 name = "inductive_list"
 
+[world.W]
+objects = ["List"]
+
 [runtime]
 backend = "memory"

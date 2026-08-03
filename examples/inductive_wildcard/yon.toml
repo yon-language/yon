@@ -1,5 +1,8 @@
 [package]
 name = "inductive_wildcard"
 
+[world.W]
+objects = ["Color"]
+
 [runtime]
 backend = "memory"

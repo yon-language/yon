@@ -139,9 +139,16 @@ let is_prim_name = Carrier.is_prim_name
    for a non-primitive name). The primitive classification lives once in
    Carrier.prim_carrier; this is just its printer on the schema side. *)
 let prim_to_mlir n =
-  match Carrier.prim_carrier n with
-  | Some c -> Carrier.to_mlir c
-  | None -> Printf.sprintf "!topos.section<\"%s\">" n
+  (* INTEGER faces (Int is i64, …) ride the f64 TRANSPORT: every value slot,
+     signature and schema is f64 (exact within ±2^53); the integer-ness lives
+     only inside __idiv/__imod, which cast around divsi/remsi. i1 stays i1
+     (boolean is not arithmetic). The native i64 tower is a later cantiere. *)
+  match n with
+  | "i8" | "i16" | "i32" | "i64" -> "f64"
+  | _ ->
+      (match Carrier.prim_carrier n with
+       | Some c -> Carrier.to_mlir c
+       | None -> Printf.sprintf "!topos.section<\"%s\">" n)
 
 (* Wire DTO transport (seal 2): the per-place field-tag descriptor and its
    structural schema id, computed recursively. number/money -> SCALAR (8 bytes),
@@ -238,7 +245,14 @@ let core_is_comprehension = Carrier.core_is_comprehension
    and is rejected cleanly at compile time, a curried arrow flattens to one
    signature. The schema/value split is gone. *)
 let ty_to_mlir (t : C.ty) : string =
-  try Carrier.to_mlir (Carrier.of_core_ty t)
+  try
+    (match Carrier.of_core_ty t with
+     (* INTEGER faces ride the f64 transport (exact within ±2^53): the
+        integer-ness lives only inside __idiv/__imod. i1 stays i1. The
+        native integer tower is a later cantiere. *)
+     | Carrier.Scalar (Carrier.W_i8 | Carrier.W_i16 | Carrier.W_i32
+                      | Carrier.W_i64) -> "f64"
+     | c -> Carrier.to_mlir c)
   with Carrier.NoCarrier bad ->
     failwith (Printf.sprintf
       "[emit_mlir] type has no runtime carrier in lowering: %s. A code, \
@@ -1165,7 +1179,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.App _ as app ->
       (* General case for curried calls: uncurry_app gives the function name
          and argument list, which we then resolve against user functions, the
-         stdlib registry, and the __new_X constructors. *)
+         stdlib registry, and the __section_X constructors. *)
       (match uncurry_app app with
        | Some ("Move__merge", [C.Var move_name; _; _]) ->
            (* Move.merge returns the FIRST source place of the merge move,
@@ -1280,10 +1294,10 @@ let rec infer_mlir_ty (e : emitter)
                  | None ->
                      if is_stdlib_builtin fname then
                        let (_, ret) = List.assoc fname stdlib_registry in ret
-                     else if String.length fname > 9
-                          && String.sub fname 0 9 = "__new_in_" then begin
-                       (* __new_in_<S>_<P> returns section<P>. *)
-                       let rest = String.sub fname 9 (String.length fname - 9) in
+                     else if String.length fname > 13
+                          && String.sub fname 0 13 = "__section_in_" then begin
+                       (* __section_in_<S>_<P> returns section<P>. *)
+                       let rest = String.sub fname 13 (String.length fname - 13) in
                        match List.find_opt (fun (pd : C.place_decl) ->
                          let pn = pd.p_name in
                          let plen = String.length pn in
@@ -1294,13 +1308,16 @@ let rec infer_mlir_ty (e : emitter)
                        | Some pd -> Printf.sprintf "!topos.section<\"%s\">" pd.p_name
                        | None ->
                            failwith (Printf.sprintf
-                                       "[emit_mlir infer] __new_in_ place not identified in '%s'."
+                                       "[emit_mlir infer] __section_in_ place not identified in '%s'."
                                        fname)
                      end
-                     else if String.length fname > 6
-                          && String.sub fname 0 6 = "__new_" then
-                       let place = String.sub fname 6 (String.length fname - 6) in
+                     else if String.length fname > 10
+                          && String.sub fname 0 10 = "__section_" then
+                       let place = String.sub fname 10 (String.length fname - 10) in
                        Printf.sprintf "!topos.section<\"%s\">" place
+                     else if fname = "__idiv" || fname = "__imod" then
+                       (* integer division/remainder: f64 transport *)
+                       "f64"
                      else if rpc2_parse_synth fname <> None then
                        (* Idraulica v2 cross-Space invoke: numbers only *)
                        "f64"
@@ -1656,7 +1673,7 @@ let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
           && String.sub param_ty 0 15 = "!topos.section<" then begin
     (* The inverse coercion, at the consumer end of the DTO wormhole: a stream
        element that the emitter carries as f64 is, by the type discipline, a
-       place-typed value (the drain rebuilt it locally via yon_rt_new and put
+       place-typed value (the drain rebuilt it locally via yon_rt_section and put
        its handle on the stream as f64). fptosi recovers the xcoord, then
        xcoord_to_section materializes the local section. The typechecker is the
        gate: only place-typed values reach a section parameter, and the only one
@@ -2664,6 +2681,22 @@ let rec emit_term (e : emitter)
                      v_loaded v_buf field_ty);
       (v_loaded, field_ty)
       end
+  (* Integer division/remainder: operands travel as f64 (exact integers
+     within ±2^53), the operation is the SIGNED integer one — cast in,
+     divide, cast back. Truncating semantics, like arith.divsi. *)
+  | C.App (C.App (C.Var op, a), b) when op = "__idiv" || op = "__imod" ->
+      let (va, _) = emit_term e env funcs a in
+      let (vb, _) = emit_term e env funcs b in
+      let via_ = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i64" via_ va);
+      let vib = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i64" vib vb);
+      let vr = fresh_ssa e in
+      let iop = if op = "__idiv" then "arith.divsi" else "arith.remsi" in
+      emit_line e (Printf.sprintf "%s = %s %s, %s : i64" vr iop via_ vib);
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.sitofp %s : i64 to f64" v vr);
+      (v, "f64")
   | C.App (C.App (C.Var op, a), b) when
       (op = "__add" || op = "__sub" || op = "__mul" || op = "__div"
        || op = "__mod"
@@ -4604,7 +4637,7 @@ let rec emit_term (e : emitter)
                             v_converted v_gep tfty);
              let _ = source_field in ()
            ) target_offsets;
-           (* yon_rt_new on the target buffer. If apply_move(M, x) in
+           (* yon_rt_section on the target buffer. If apply_move(M, x) in
             * TargetSpace, the target heap_id is resolved via
             * yon_rt_lookup_space(name). Otherwise the default heap_id = 0
             * (__Default). *)
@@ -4624,7 +4657,7 @@ let rec emit_term (e : emitter)
                                "%s = func.call @yon_rt_lookup_space(%s) : (!llvm.ptr) -> i32"
                                v_heap v_ptr));
            (* If the target space has an inferred fold, emit
-            * yon_rt_fold_named instead of yon_rt_new (CRDT semantics). *)
+            * yon_rt_fold_named instead of yon_rt_section (CRDT semantics). *)
            let fold_name_opt =
              match target_space_opt with
              | None -> None
@@ -4645,7 +4678,7 @@ let rec emit_term (e : emitter)
                                v_xc v_heap v_prev v_buf v_size v_fold_str)
             | None ->
                 emit_line e (Printf.sprintf
-                               "%s = func.call @yon_rt_new(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
+                               "%s = func.call @yon_rt_section(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
                                v_xc v_heap v_buf v_size));
            let v_result = fresh_ssa e in
            emit_line e (Printf.sprintf
@@ -4805,7 +4838,7 @@ let rec emit_term (e : emitter)
            emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_heap);
            let v_xc = fresh_ssa e in
            emit_line e (Printf.sprintf
-                          "%s = func.call @yon_rt_new(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
+                          "%s = func.call @yon_rt_section(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
                           v_xc v_heap v_buf v_size);
            let v_result = fresh_ssa e in
            emit_line e (Printf.sprintf
@@ -4858,10 +4891,10 @@ let rec emit_term (e : emitter)
            emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                           v fname arg_str arg_ty_str ret_ty);
            (v, ret_ty)
-       (* place constructor in space — __new_in_<Space>_<Place> *)
+       (* place constructor in space — __section_in_<Space>_<Place> *)
        | Some (fname, args) when
-           String.length fname > 9 && String.sub fname 0 9 = "__new_in_" ->
-           let rest = String.sub fname 9 (String.length fname - 9) in
+           String.length fname > 13 && String.sub fname 0 13 = "__section_in_" ->
+           let rest = String.sub fname 13 (String.length fname - 13) in
            (* rest = "<Space>_<Place>". To split: find the place name among
             * those of the module as a suffix of rest. *)
            let place =
@@ -4875,7 +4908,7 @@ let rec emit_term (e : emitter)
              | Some pd -> pd.p_name
              | None ->
                  failwith (Printf.sprintf
-                             "[emit_mlir] __new_in_X_Y: place not identifiable in '%s'."
+                             "[emit_mlir] __section_in_X_Y: place not identifiable in '%s'."
                              rest)
            in
            let arg_vals = List.map (emit_term e env funcs) args in
@@ -4898,13 +4931,13 @@ let rec emit_term (e : emitter)
            emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                           v fname arg_str arg_ty_str result_ty);
            (v, result_ty)
-       (* A4: place constructor __new_X (default heap_id = 0) *)
+       (* A4: place constructor __section_X (default heap_id = 0) *)
        | Some (fname, args) when
-           String.length fname > 6 && String.sub fname 0 6 = "__new_" ->
-           let place = String.sub fname 6 (String.length fname - 6) in
+           String.length fname > 10 && String.sub fname 0 10 = "__section_" ->
+           let place = String.sub fname 10 (String.length fname - 10) in
            let arg_vals = List.map (emit_term e env funcs) args in
            (* The param_tys come from the place declaration, not from the
-            * args. The declaration of __new_X (the preamble) uses emit_ty on
+            * args. The declaration of __section_X (the preamble) uses emit_ty on
             * the field decls, which matches core_ty_to_mlir_simple. *)
            let param_tys =
              match List.assoc_opt place e.places_table with
@@ -5469,7 +5502,7 @@ let extract_morph_in_space (name : string) : (string * string) option =
    pure terminal-returning function has body C.Unit, which emit_term lowers as
    an f64 0.0 placeholder, but the declared return type is the section of a
    fieldless place. We materialize the terminal by calling its constructor
-   `@__new_<P>` (which, for a zero-field place, lowers to zero storage). This
+   `@__section_<P>` (which, for a zero-field place, lowers to zero storage). This
    replaces the type-mismatched `return %f64 : section<"P">`. Returns the SSA
    value to actually return. *)
 let coerce_return (e : emitter) (v : string) (v_ty : string)
@@ -5477,7 +5510,7 @@ let coerce_return (e : emitter) (v : string) (v_ty : string)
   if v_ty <> ret_ty && v_ty = "f64" then
     (* An inductive returns its MerkleTree f64 handle; pack it back into the
        section handle via the wire coercion, NOT the terminal constructor
-       (__new_ materializes a fieldless place, which an inductive is not). *)
+       (__section_ materializes a fieldless place, which an inductive is not). *)
     if is_ind_section ret_ty then coerce_to_param e v v_ty ret_ty
     else
       match extract_place_name ret_ty with
@@ -5486,7 +5519,7 @@ let coerce_return (e : emitter) (v : string) (v_ty : string)
              materialize the terminal value of that place. *)
           let v_unit = fresh_ssa e in
           emit_line e (Printf.sprintf
-            "%s = func.call @__new_%s() : () -> %s" v_unit place ret_ty);
+            "%s = func.call @__section_%s() : () -> %s" v_unit place ret_ty);
           v_unit
       | None -> v
   else v
@@ -6299,18 +6332,18 @@ let emit_program (dr : Desugar.desugar_result) : string =
       List.filter (fun (n, _) ->
         not (is_prelude n) || Hashtbl.mem reached n) dr.functions
     end in
-  (* prelude PLACES on use: a program constructs P through __new_P — collect
+  (* prelude PLACES on use: a program constructs P through __section_P — collect
      those references from the SHAKEN bodies (+ main) and drop unused prelude
      places from the LOCAL list every downstream pass consumes (topos.world,
-     places_table, schema registration, __new_ emission, op declarations). *)
+     places_table, schema registration, __section_ emission, op declarations). *)
   let places =
     if Hashtbl.length Surface_ast.prelude_place_names = 0 then places
     else begin
      let used : (string, unit) Hashtbl.t = Hashtbl.create 8 in
      let rec scan (t : C.term) : unit =
        (match t with
-        | C.Var v when String.length v > 6 && String.sub v 0 6 = "__new_" ->
-            Hashtbl.replace used (String.sub v 6 (String.length v - 6)) ()
+        | C.Var v when String.length v > 10 && String.sub v 0 10 = "__section_" ->
+            Hashtbl.replace used (String.sub v 10 (String.length v - 10)) ()
         | _ -> ());
        match t with
        | C.App (a, b) -> scan a; scan b
@@ -6323,7 +6356,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
      (* keep is by IDENTITY (the decl's site), never by name: a USER place
         that shares a prelude name is a different decl, kept unconditionally
         — and it SHADOWS the prelude copy (tycheck resolves last-wins), so
-        the prelude homonym is dropped even when __new_<name> is used. *)
+        the prelude homonym is dropped even when __section_<name> is used. *)
      let is_prelude_pd pd = List.memq pd !C.prelude_place_decls in
      let user_names =
        List.filter_map (fun (pd : C.place_decl) ->
@@ -6353,8 +6386,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
   ) dr.morphs;
   (* Index of topoi for the lookup `topos_name -> at_space_opt`. Replaces the
    * same-name heuristic in the emit of __morph_in_<S>__<M>. *)
-  e.toposes_index <- List.map (fun (td : Surface_ast.topos_decl) ->
-    (td.Surface_ast.tp_name, td.tp_at_space)
+  e.toposes_index <- List.filter_map (fun (td : Surface_ast.topos_decl) ->
+    (* a PRELUDE topos (by site) never instantiates user morphs: the
+       __morph_in_<S> family is user-space machinery *)
+    if Surface_ast.loc_in_prelude td.Surface_ast.tp_loc then None
+    else Some (td.Surface_ast.tp_name, td.tp_at_space)
   ) dr.toposes;
   e.declared_spaces <- dr.spaces;
   e.places_table <- List.map (fun (pd : C.place_decl) ->
@@ -6826,12 +6862,12 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_conway_unseal_slot(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_conway_key_equal(f64, f64) -> f64";
   emit_blank e;
-  (* Always emitted, regardless of the stdlib, because the __new_X
+  (* Always emitted, regardless of the stdlib, because the __section_X
      constructors and the field_load pre-walk of the lowering need them. *)
   if places <> [] then begin
     emit_line e "// Runtime external declarations (P8) for places";
-    emit_line e "func.func private @yon_rt_new(i32, !llvm.ptr, i32) -> i64";
-    emit_line e "func.func private @yon_rt_new_v(i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64";
+    emit_line e "func.func private @yon_rt_section(i32, !llvm.ptr, i32) -> i64";
+    emit_line e "func.func private @yon_rt_section_v(i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64";
     emit_line e "func.func private @yon_rt_register_schema(i32, i32, !llvm.ptr, i64) -> ()";
     emit_line e "func.func private @yon_rt_field_load(i64, i32, i32, !llvm.ptr) -> i32";
     (* fold_named plus the string constants naming the canonical folds. We
@@ -6903,10 +6939,10 @@ let emit_program (dr : Desugar.desugar_result) : string =
   end;
   (* Stream runtime declarations are emitted by the stdlib stubs block above
      when a Stream__ operation is used, so there is no duplicate here. *)
-  (* For each declared place, emit the constructor __new_<Place> as an
+  (* For each declared place, emit the constructor __section_<Place> as an
      identity-zero stub returning an opaque section. *)
   if places <> [] then begin
-    emit_line e "// Place constructors __new_<X> (P8) — alloca payload via yon_rt_new";
+    emit_line e "// Place constructors __section_<X> (P8) — alloca payload via yon_rt_section";
     (* Wire DTO descriptors: one global byte array of field tags per
        transportable place, addressed at startup by yon_rt_register_schema. *)
     List.iter (fun (pd : C.place_decl) ->
@@ -6954,11 +6990,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
 
       (* parametric body for the heap_id source.
        * heap_kind = `Default | `Lookup of string (the space name).
-       * Emits the stores + alloca + the yon_rt_new call with the heap_id
+       * Emits the stores + alloca + the yon_rt_section call with the heap_id
        * constant (0) or resolved via a runtime lookup.
        *
        * If ?fold_name is Some "sum_f64" etc., emits yon_rt_fold_named instead
-       * of yon_rt_new (CRDT semilattice-join semantics). *)
+       * of yon_rt_section (CRDT semilattice-join semantics). *)
       (* store the identity head at buffer offset 0 (root as i64, LE via store) *)
       let emit_store_root (v_buf : string) : unit =
         let v_root = fresh_ssa e in
@@ -6998,11 +7034,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
                   let v_ver = fresh_ssa e in
                   emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_ver id);
                   emit_line e (Printf.sprintf
-                                 "%s = func.call @yon_rt_new_v(%s, %s, %s, %s, %s) : (i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64"
+                                 "%s = func.call @yon_rt_section_v(%s, %s, %s, %s, %s) : (i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64"
                                  v_xc v_heap v_buf v_size v_null v_ver)
               | None ->
                   emit_line e (Printf.sprintf
-                                 "%s = func.call @yon_rt_new(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
+                                 "%s = func.call @yon_rt_section(%s, %s, %s) : (i32, !llvm.ptr, i32) -> i64"
                                  v_xc v_heap v_buf v_size)));
         v_xc
       in
@@ -7108,9 +7144,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
         end
       in
 
-      (* Emit __new_<Place> (default heap_id = 0). *)
+      (* Emit __section_<Place> (default heap_id = 0). *)
       emit_line e (Printf.sprintf
-                     "func.func @__new_%s(%s) -> %s {"
+                     "func.func @__section_%s(%s) -> %s {"
                      pd.p_name param_decl result_ty);
       push_indent e;
       emit_new_body `Default ();
@@ -7118,14 +7154,14 @@ let emit_program (dr : Desugar.desugar_result) : string =
       emit_line e "}";
 
       (* For each declared space, emit the variant
-         __new_in_<Space>_<Place>, which resolves the heap id via
+         __section_in_<Space>_<Place>, which resolves the heap id via
          yon_rt_lookup_space. If the space has a declared fold, pass its name
          to the constructor, which will emit yon_rt_fold_named instead of
-         yon_rt_new. *)
+         yon_rt_section. *)
       List.iter (fun (sd : Surface_ast.space_decl) ->
         let fold_name = sd.Surface_ast.sd_fold in
         emit_line e (Printf.sprintf
-                       "func.func @__new_in_%s_%s(%s) -> %s {"
+                       "func.func @__section_in_%s_%s(%s) -> %s {"
                        sd.sd_name pd.p_name param_decl result_ty);
         push_indent e;
         emit_new_body (`Lookup sd.sd_name) ~fold_name ();

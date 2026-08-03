@@ -1,5 +1,0 @@
-view Snapshot of Account {
-  show balance
-  show net = balance - fee
-  show fee as "monthly fee"
-}

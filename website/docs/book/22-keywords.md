@@ -308,12 +308,12 @@ The aliasing word: `import q as a`, `show f as "label"`.
             out={["8"]}>
 {`// w/Account.yon
 place Account { balance Number
-  fee Number }
-// w/Snapshot.yon
-view Snapshot of Account {
-  show balance
-  show net = balance - fee
-  show fee as "monthly fee"
+  fee Number
+  view Snapshot of Account {
+    show balance
+    show net = balance - fee
+    show fee as "monthly fee"
+  }
 }
 // Entry.yon
 place Entry {
@@ -445,15 +445,11 @@ Handle composition with kind discipline: `(compose f with g)(x) = g(f(x))`.
 
 #### `topos`
 
-The first-class declaration: a category rich enough to do logic inside, with its terminal, morphisms and props in one `where` block. With topos-per-space, the objects are inferred from the filesystem (the place files in the Space), so a topos no longer carries an inline `objects { }` block (that keyword is retired).
+The first-class declaration: a category rich enough to do logic inside, with its morphisms and props in one `where` block. With topos-per-space, the objects are inferred from the filesystem (the place files in the Space), so a topos no longer carries an inline `objects { }` block (that keyword is retired) — and the terminal is not declared either: every topos has one by definition (`terminal` is retired with it).
 
 #### `morphism`
 
 A single map inside a topos's `morphisms { }` block, and the contextual word in `on morphism N via M`.
-
-#### `terminal`
-
-Names the one-point object.
 
 #### `prop`
 
@@ -472,7 +468,6 @@ place State { balance Number }
 place Unit1 { u Number }
 // bank/Topos.yon  (objects are inferred from the place files in bank/)
 topos Bank where {
-  terminal Unit1
   
   morphism tag(s: State): Number
   morphism lift(s: State): Number

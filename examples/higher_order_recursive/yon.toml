@@ -1,5 +1,8 @@
 [package]
 name = "higher_order_recursive"
 
+[world.W]
+objects = ["IntList"]
+
 [runtime]
 backend = "memory"

@@ -9,8 +9,8 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `regression/CANONICAL-FORMS.md`. Regenerate this file with
 `python regression/test_syntax_triangle.py`.
 
-- lexer keywords: **111**
-- corpus files: **361**
+- lexer keywords: **110**
+- corpus files: **357**
 - CodeWindows: **23**  (project **11**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **34**
 - allowlisted reserved/kernel tokens: **5**
@@ -110,7 +110,6 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `space` | `SPACE` | 5 | yes | exercised |
 | `spawn` | `SPAWN` | 1 | yes | exercised |
 | `stream` | `STREAM` | 5 | yes | exercised |
-| `terminal` | `TERMINAL_KW` | 1 | yes | exercised |
 | `then` | `THEN_KW` | 33 | yes | exercised |
 | `this` | `THIS` | 17 | yes | exercised |
 | `through` | `THROUGH` | 3 | yes | exercised |

@@ -1,4 +1,7 @@
 place Profile {
   cohort Number
   secret Number
+  view PublicProfile of Profile {
+    show leak = secret
+  }
 }

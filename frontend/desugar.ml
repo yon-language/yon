@@ -956,15 +956,27 @@ and desugar_expr (e0 : S.expr) : C.term =
            lower_sum_constr tag arg_tys ordered loc
        | _ ->
            let arg_terms = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
-           curry_apply (C.Var ("__new_" ^ place_name)) arg_terms)
+           curry_apply (C.Var ("__section_" ^ place_name)) arg_terms)
   | S.ENewIn (place_name, space_name, fas, _) ->
-      (* new P in Space { ... } desugars to __new_in_<Space>_<Place>(args).
-       * The emitter recognizes the "__new_in_" prefix and emits the
-       * yon_rt_new call with the heap id resolved from the space registry. *)
+      (* new P in Space { ... } desugars to __section_in_<Space>_<Place>(args).
+       * The emitter recognizes the "__section_in_" prefix and emits the
+       * yon_rt_section call with the heap id resolved from the space registry. *)
       let arg_terms = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
-      curry_apply (C.Var ("__new_in_" ^ space_name ^ "_" ^ place_name)) arg_terms
-  | S.EBinop (op, e1, e2, _) ->
-      let op_name = binop_name op in
+      curry_apply (C.Var ("__section_in_" ^ space_name ^ "_" ^ place_name)) arg_terms
+  | S.EBinop (op, e1, e2, loc) ->
+      (* integer-carrier / and % diverge from the f64 ops: the tycheck
+         recorded the FULL-SPAN site, desugar routes it — and only for the
+         matching operator (a colliding span must never turn a + into remsi) *)
+      let op_name =
+        match op with
+        | S.OpDiv | S.OpMod ->
+            (match Hashtbl.find_opt Surface_ast.int_arith_sites
+                     (loc.S.file, loc.S.start_line, loc.S.start_col,
+                      loc.S.end_line, loc.S.end_col) with
+             | Some b when (op = S.OpDiv && b = "__idiv")
+                        || (op = S.OpMod && b = "__imod") -> b
+             | _ -> binop_name op)
+        | _ -> binop_name op in
       curry_apply (C.Var op_name) [desugar_expr e1; desugar_expr e2]
   | S.EParen (e, _) -> desugar_expr e
   | S.EAll (place_name, _cond, _) ->
@@ -1808,10 +1820,10 @@ and desugar_stmt (s : S.stmt) : C.term =
       curry_apply (C.Var name) args'
   | S.SNew (name, fas, _) ->
       let args = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
-      curry_apply (C.Var ("__new_" ^ name)) args
+      curry_apply (C.Var ("__section_" ^ name)) args
   | S.SNewIn (name, space_name, fas, _) ->
       let args = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
-      curry_apply (C.Var ("__new_in_" ^ space_name ^ "_" ^ name)) args
+      curry_apply (C.Var ("__section_in_" ^ space_name ^ "_" ^ name)) args
   | S.SWhen (c, body, elifs, otherwise, _) ->
       desugar_when c body elifs otherwise
   | S.SForEvery (kind, x, e, body, _) ->
@@ -2777,6 +2789,11 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
   | S.TopReductionCompose _ ->
       (* reduction composition is metadata for the runtime;
        * actual composition is performed at handler-installation time. *)
+      res
+  | S.TopSpace sd when S.loc_in_prelude sd.S.sd_loc ->
+      (* a PRELUDE space (by SITE): the checker sees its decl (worlds,
+         membership), the runtime never registers it — prelude constructions
+         ride heap 0 and an unregistered heap fails loudly if that changes. *)
       res
   | S.TopSpace sd ->
       (* A space declaration. Recorded in the result for propagation to the
@@ -4083,6 +4100,9 @@ let desugar_program ?(env : Tyenv.env option = None)
           List.fold_left (fun acc2 (td : S.topos_decl) ->
             match td.S.tp_at_space with
             | None -> acc2
+            | Some _ when S.loc_in_prelude td.S.tp_loc ->
+                (* a PRELUDE topos (by site) never instantiates user morphs *)
+                acc2
             | Some _ ->
                 let space_names = List.map
                   (fun (sd : S.space_decl) -> sd.S.sd_name) res.spaces in
@@ -4146,6 +4166,9 @@ let desugar_program ?(env : Tyenv.env option = None)
         List.fold_left (fun acc3 (td : S.topos_decl) ->
           match td.S.tp_at_space with
           | None -> acc3
+          | Some _ when S.loc_in_prelude td.S.tp_loc ->
+              (* a PRELUDE topos (by site) never instantiates user wrappers *)
+              acc3
           | Some _ ->
               let space_names = List.map
                 (fun (sd : S.space_decl) -> sd.S.sd_name) res.spaces in

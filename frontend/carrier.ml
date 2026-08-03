@@ -98,6 +98,16 @@ let prim_carrier (name : string) : t option =
    source of truth for the primitive set; emit aliases this. *)
 let is_prim_name (name : string) : bool = prim_carrier name <> None
 
+(* Bit width of a scalar carrier — the fusion width-check compares the
+   declared <w> against THIS, not against a hardcoded pair. *)
+let scalar_bits (w : width) : int =
+  match w with
+  | W_f64 | W_i64 -> 64
+  | W_f32 | W_i32 -> 32
+  | W_i16 -> 16
+  | W_i8 -> 8
+  | W_i1 -> 1
+
 (* The code a place-of-paths El decodes to, as far as the place layer sees it:
    a named place (section) or an opaque handle. Shared by both functors. *)
 let el_target (c : C.term) : [ `Named of string | `Opaque ] =

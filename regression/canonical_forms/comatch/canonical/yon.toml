@@ -1,0 +1,8 @@
+[package]
+name = "comatch_canonical"
+
+[world.W]
+objects = ["List"]
+
+[runtime]
+backend = "memory"

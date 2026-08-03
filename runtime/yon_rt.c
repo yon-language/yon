@@ -378,12 +378,12 @@ void yon_rt_space_input_closed(uint32_t id) {
 /* Place instance management                                       */
 /* ============================================================== */
 
-yon_section_t yon_rt_new(uint32_t heap_id,
+yon_section_t yon_rt_section(uint32_t heap_id,
                           const void *payload_bytes, uint32_t n_bytes) {
     ensure_init();
     if (heap_id >= g_n_spaces) {
         fprintf(stderr,
-                "[YON-RT] yon_rt_new: heap_id=%u not registered (n_spaces=%u)\n",
+                "[YON-RT] yon_rt_section: heap_id=%u not registered (n_spaces=%u)\n",
                 heap_id, g_n_spaces);
         return YON_SECTION_INVALID;
     }
@@ -398,7 +398,7 @@ yon_section_t yon_rt_new(uint32_t heap_id,
     uint32_t slot_idx = yon_xheap_put(h, payload_bytes, n_bytes, YON_TAG_USER1);
 
     if (slot_idx == YON_HEAP_SLOT_INVALID) {
-        fprintf(stderr, "[YON-RT] yon_rt_new: put failed (heap=%u n=%u)\n",
+        fprintf(stderr, "[YON-RT] yon_rt_section: put failed (heap=%u n=%u)\n",
                 heap_id, n_bytes);
         return YON_SECTION_INVALID;
     }
@@ -468,7 +468,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
 /* The outbound half of the wormhole. Copy the section's raw payload (stored
  * with no heap_id prefix) into out_buf and return the byte count, or -1
  * on error / if cap is too small. The bytes are pure content, valid in any
- * heap: rebuild with yon_rt_new(consumer_heap, buf, n) in the consumer's own
+ * heap: rebuild with yon_rt_section(consumer_heap, buf, n) in the consumer's own
  * heap. Scalar fields live inline in the payload, so for an all-scalar place
  * this is the whole story. Handle-valued fields (text, list) hold a foreign
  * handle inline and are NOT followed here; inlining them recursively is the
@@ -589,9 +589,9 @@ yon_section_t yon_rt_fold(uint32_t heap_id,
     if (!initial || n_bytes == 0 || !fold) return YON_SECTION_INVALID;
 
     /* Base case: prev INVALID -> allocate the initial slot (semilattice
-     * bottom). Equivalent to yon_rt_new, reuses the same pipeline. */
+     * bottom). Equivalent to yon_rt_section, reuses the same pipeline. */
     if (prev == YON_SECTION_INVALID) {
-        yon_section_t result = yon_rt_new(heap_id, initial, n_bytes);
+        yon_section_t result = yon_rt_section(heap_id, initial, n_bytes);
         if (result != YON_SECTION_INVALID) {
             fprintf(stderr,
                     "[YON-RT #86] fold init: heap=%u slot=%u (semilattice bottom)\n",
@@ -893,13 +893,13 @@ static const migration_entry_t *find_migration(const char *place_name,
     return NULL;
 }
 
-/* yon_rt_new_v: allocate with an explicit schema_version. Reuses the yon_rt_new
+/* yon_rt_section_v: allocate with an explicit schema_version. Reuses the yon_rt_section
  * path but calls yon_xheap_put_v instead of yon_xheap_put. */
 static void yon_root_write_le(uint8_t *dst, uint64_t root) {
     for (int i = 0; i < 8; i++) dst[i] = (uint8_t)(root >> (8 * i));
 }
 
-yon_section_t yon_rt_new_r(uint32_t heap_id,
+yon_section_t yon_rt_section_r(uint32_t heap_id,
                             const void *field_bytes, uint32_t n_bytes,
                             uint64_t type_root, uint32_t schema_version) {
     ensure_init();
@@ -952,7 +952,7 @@ uint64_t yon_rt_section_root(yon_section_t sec) {
     return r;
 }
 
-yon_section_t yon_rt_new_v(uint32_t heap_id,
+yon_section_t yon_rt_section_v(uint32_t heap_id,
                             const void *payload_bytes, uint32_t n_bytes,
                             const char *place_name, uint32_t schema_version) {
     ensure_init();
@@ -1955,7 +1955,7 @@ double Wire__subscription_stream(double chan_id) {
 
 /* Subscription .stream for a place DTO: drain a completed shm channel whose
  * slots are n_bytes-wide place payloads, rebuild each in THIS process's heap
- * (yon_rt_new), and emit the local handle into a structurally closed local
+ * (yon_rt_section), and emit the local handle into a structurally closed local
  * stream. The wormhole's inbound half: content crosses, the object is born
  * anew here, the producer's handle never leaves its process. EOF is the
  * channel's structural close (await rc == -2), not a value sentinel. */
@@ -7795,7 +7795,7 @@ double yon_rt_hashset_dir_capacity(double set_id) {
 /* The frame is [u32 schema_id][u32 payload_len][payload]. The payload
  * concatenates the fields in declaration order, positional, untagged: a
  * scalar is its 8 raw bytes, a string is [u32 len][len bytes]. The schema_id
- * (stamped on the instance by yon_rt_new_v, carried at the frame head) finds
+ * (stamped on the instance by yon_rt_section_v, carried at the frame head) finds
  * the descriptor and is the one cross-process type guard. Length prefixes are
  * u32 native-endian: the shm wire is one machine, one build, so no swap, and a
  * fixed width keeps every read trivially bounded. Both halves of the wormhole
@@ -7968,7 +7968,7 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
                 cur, payload_len);
         return YON_SECTION_INVALID;
     }
-    return yon_rt_new_r(heap_id, inst, sc->n_fields * 8u,
+    return yon_rt_section_r(heap_id, inst, sc->n_fields * 8u,
                         sc->type_root, schema_id);
 }
 

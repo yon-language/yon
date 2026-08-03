@@ -80,21 +80,60 @@ let prelude_dir () : string option =
      status) to arbitrary user places. $YON_PRELUDE stays for dev overrides. *)
   List.find_opt (fun d -> Sys.file_exists d && Sys.is_directory d) cands
 
-let prelude_cache : (string * string) list option ref = ref None
+(* ─── The prelude as a PACKAGE (the num cantiere) ──────────────────────
+   prelude/ carries a yon.toml ([world.Num] spaces=["num"], …) and its files
+   live in spaces (num/, text/, logic/, err/). Each unit rides with its SPACE
+   and the world map rides along, merging into every compilation (the USER
+   wins a collision). A flat file directly under prelude/ keeps space "".
+   A missing directory is an empty prelude — never an error. *)
+let prelude_units_cache :
+  ((string * string * string) list * Manifest.world_map option) option ref =
+  ref None
 
-let prelude_sources () : (string * string) list =
-  match !prelude_cache with
+let prelude_units () :
+  (string * string * string) list * Manifest.world_map option =
+  match !prelude_units_cache with
   | Some c -> c
   | None ->
       let c =
         match prelude_dir () with
-        | None -> []
+        | None -> ([], None)
         | Some d ->
-            Sys.readdir d |> Array.to_list |> List.sort compare
-            |> List.filter (fun f -> Filename.check_suffix f ".yon")
-            |> List.map (fun f ->
-                 let p = Filename.concat d f in (p, read_file p)) in
-      prelude_cache := Some c; c
+            let wm =
+              let mp = Filename.concat d Package_layout.manifest_name in
+              if Sys.file_exists mp then
+                (try Some (Manifest.parse_file mp)
+                 with Manifest.Manifest_error _ -> None)
+              else None in
+            let units =
+              Package_layout.layout ~root:d
+              |> List.filter_map (fun (u : Package_layout.unit_loc) ->
+                   try Some (u.Package_layout.ul_path,
+                             u.Package_layout.ul_space,
+                             read_file u.Package_layout.ul_path)
+                   with _ -> None) in
+            (units, wm) in
+      prelude_units_cache := Some c; c
+
+let prelude_space_nodes () : Surface_ast.top_decl list =
+  match prelude_dir () with
+  | None -> []
+  | Some d ->
+      (* the synthesized decls carry the PRELUDE SITE in their loc.file —
+         every downstream skip keys on the site, never on the bare name
+         (a user space named `text` must keep its runtime registration) *)
+      Package_layout.space_decls ~root:d
+      |> List.map (function
+        | Surface_ast.TopSpace sd ->
+            Surface_ast.TopSpace
+              { sd with Surface_ast.sd_loc =
+                  { Surface_ast.dummy_loc with
+                    Surface_ast.file =
+                      Filename.concat d sd.Surface_ast.sd_name } }
+        | other -> other)
+
+let prelude_sources () : (string * string) list =
+  List.map (fun (p, _, t) -> (p, t)) (fst (prelude_units ()))
 
 (* the place names the prelude declares — the collision fence consults this *)
 let prelude_place_names () : string list =
@@ -136,9 +175,9 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
       (Package_layout.layout ~root)
   in
   let files =
-    (prelude_sources ()
-     |> List.filter_map (fun (p, t) ->
-          try Some { fi_space = ""; fi_path = p;
+    (fst (prelude_units ())
+     |> List.filter_map (fun (p, sp, t) ->
+          try Some { fi_space = sp; fi_path = p;
                      fi_prog = parse_text ~file:p t }
           with _ -> None))
     @ files in
@@ -218,9 +257,18 @@ let topos_layout_diags (l : loaded) : Error_codes.t list =
  * code as the topos-per-space rule (E4001, "TOPOS LAYOUT ERROR"), so check_all
  * matches it -- the differential gate pins that they agree. *)
 let file_layout_diags (l : loaded) : Error_codes.t list =
+  let is_prelude_path p =
+    let sub = "prelude/" in
+    let ls = String.length sub and lp = String.length p in
+    let rec go i = i + ls <= lp && (String.sub p i ls = sub || go (i + 1)) in
+    go 0 in
   List.concat_map
     (fun f ->
        if f.fi_space = "" then []   (* the layout rules apply to Space files *)
+       else if is_prelude_path f.fi_path then []
+         (* the prelude ships WITH the compiler under the package convention
+            (num/num.yon is its topos file, the mod.rs lesson): the user
+            layout rules do not judge it — the driver is silent there too. *)
        else
          let basename = Filename.remove_extension (Filename.basename f.fi_path) in
          let place_names =
@@ -380,11 +428,39 @@ let load_remote_signatures (l : loaded) : unit =
  * they do not change what type-checks in a package (no `::` names, symbols still
  * local), and skipping them keeps type-error messages in surface names. *)
 let prepare_for_typecheck (l : loaded) : S.program =
+  Surface_ast.user_manifest_present := (l.wm <> None);
   match l.wm with
-  | None -> l.merged
+  | None ->
+      (* bare root: NO user project machinery (no container strip, no user
+         space nodes) — but the PRELUDE package's worlds still ride in, so
+         its places get their world from their space, never from a grant. *)
+      (match snd (prelude_units ()) with
+       | None -> l.merged
+       | Some pwm ->
+           Hashtbl.iter (fun _ w ->
+             Hashtbl.replace Surface_ast.prelude_world_names w ())
+             pwm.Manifest.space_world;
+           let prog =
+             Manifest.world_decls pwm @ prelude_space_nodes () @ l.merged in
+           let world_of_place n =
+             match Hashtbl.find_opt l.place_space n with
+             | Some sp -> Manifest.world_of_space pwm sp
+             | None -> None in
+           Manifest.assign_place_worlds
+             ~world_of_space:(Manifest.world_of_space pwm) world_of_place prog)
   | Some wm ->
       load_remote_signatures l;
-      let prog = Manifest.world_decls wm @ l.space_nodes @ l.merged in
+      (* the prelude worlds merge into the user manifest; the USER wins *)
+      (match snd (prelude_units ()) with
+       | Some pwm ->
+           Hashtbl.iter (fun _ w ->
+             Hashtbl.replace Surface_ast.prelude_world_names w ())
+             pwm.Manifest.space_world;
+           Manifest.merge_into wm pwm
+       | None -> ());
+      let prog =
+        Manifest.world_decls wm @ prelude_space_nodes ()
+        @ l.space_nodes @ l.merged in
       let prog = Manifest.remove_entrypoint_container ~entry_name:l.entry_name prog in
       (* topos name -> space, and space -> its place decls, from the per-file facts *)
       let ts_tbl : (string, string) Hashtbl.t = Hashtbl.create 16 in
@@ -416,7 +492,11 @@ let prepare_for_typecheck (l : loaded) : S.program =
       let prog =
         Manifest.assign_place_worlds
           ~world_of_space:(Manifest.world_of_space wm) world_of_place prog in
-      Desugar.expand_views prog
+      (* the house gives the name BEFORE the view freezes its exprs into a
+         synthetic fun: expand_views copies show-exprs verbatim, so sibling
+         calls must already be qualified (idempotent — tycheck/desugar rerun
+         qualify_homes harmlessly). *)
+      Desugar.expand_views (Method_sugar.qualify_homes prog)
 
 (* Whole-program type errors as canonical diagnostics. Each carries the file its
  * location was stamped with, so a caller (the LSP) can attribute it to the file
