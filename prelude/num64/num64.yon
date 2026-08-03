@@ -4,12 +4,13 @@
  * dichiarato in num32/num32.yon — un funtore vive nel package della sua
  * SORGENTE, quindi qui non si ripete.
  *
- *   OGGETTI  Int (i64), Number (f64) — contati dal compilatore.
+ *   OGGETTI  Int64 (i64), Number (f64) — contati dal compilatore.
  *   FRECCE   le `morphism` qui sotto, i generatori.
  *
- * I nomi dei place sono gli STESSI di num32 — `Int`, `Number` — perché
- * sono lo stesso oggetto a precisione diversa, e il world li distingue.
- * Come `Length` in Metric e `Length` in Imperial.
+ * Il world è il SITO (Num32 e Num64 sono categorie distinte, Widen è un
+ * funtore fra loro); il NOME porta la precisione — Int64, Int32 — perché
+ * il nome è ciò che viaggia nei simboli qualificati (Int64__gcd), e due
+ * gemelli con la stessa casa colliderebbero.
  *
  * Questo è il sito RICCO: `Number` a 64 bit è il default del linguaggio,
  * quindi la libreria completa — Newton, Taylor, Euclide, le parziali
@@ -27,8 +28,8 @@ topos where {
    * algebre: oggi la posizione non esiste in grammatica. */
   /* NB `mul`, non `times`: `times` è keyword del loop
      (`repeat at most N times`) e non è disponibile come nome. */
-  morphism plus(a: Int, b: Int): Int
-  morphism mul(a: Int, b: Int): Int
+  morphism plus(a: Int64, b: Int64): Int64
+  morphism mul(a: Int64, b: Int64): Int64
 
 
   /* ═══ IL FUNTORE VERSO Txt NON SI SCRIVE ══════════════════════════════
@@ -42,7 +43,7 @@ topos where {
    * garanzia. Con `law additive` sarebbe una BUGIA; senza law non
    * aggiungerebbe niente a una `fun`.
    *
-   * Quindi `to_text` resta una `fun` in Number.yon / Int.yon: è una
+   * Quindi `to_text` resta una `fun` in Number.yon / Int64.yon: è una
    * freccia fra OGGETTI, non fra categorie.
    *
    * Stesso discorso per i predicati verso Logic:

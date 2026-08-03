@@ -103,7 +103,6 @@ let used_function_names (prog : S.program) : string list =
               | S.RcOn (_, _, body, _) -> names_used_in_stmts body
               | S.RcLet (_, e, _) -> names_in_expr e)
             rd.S.rd_clauses
-      | S.TopTopology tp -> names_used_in_stmts tp.S.tp_body
       | S.TopFunctor ft -> names_in_expr ft.S.ft_body
       | S.TopNatTransform nt -> List.map snd nt.S.nt_via_bindings
       | _ -> [])

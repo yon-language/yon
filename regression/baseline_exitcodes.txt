@@ -66,7 +66,6 @@ RAN kw_paths exit=42
 RAN kw_patterns exit=6
 RAN kw_prelude exit=42
 RAN kw_produce_emit exit=42
-RAN kw_pullback_pushout exit=12
 RAN kw_reduction_modifiers exit=0
 RAN kw_stream_policies exit=33
 RAN kw_topos_block exit=42

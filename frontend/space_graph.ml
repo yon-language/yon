@@ -113,7 +113,6 @@ let wires_topdecl (td : S.top_decl) : (string * S.location) list =
           | S.RcLet (_, e, _) -> wires_expr e)
         rd.S.rd_clauses
   | S.TopFunctor ft -> wires_expr ft.S.ft_body
-  | S.TopTopology tp -> List.concat_map wires_stmt tp.S.tp_body
   | S.TopGeomMorphism gm ->
       (match gm.S.gm_pull with Some fd -> wires_fun fd | None -> [])
       @ (match gm.S.gm_push with Some fd -> wires_fun fd | None -> [])
@@ -130,7 +129,7 @@ let wires_topdecl (td : S.top_decl) : (string * S.location) list =
   (* declarations with no wire-bearing body: signatures, name-mappings, metadata *)
   | S.TopMove _ | S.TopMorph _ | S.TopOperation _
   | S.TopWorld _ | S.TopSpace _ | S.TopTopos _
-  | S.TopPullback _ | S.TopPushout _ | S.TopReductionCompose _
+  | S.TopReductionCompose _
   | S.TopImport _ | S.TopImportSym _ | S.TopImportFrom _ -> []
 
 (* ---- the one-pass extraction: both families, one source Space ---- *)

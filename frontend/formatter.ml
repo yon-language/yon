@@ -553,7 +553,7 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
          let params = String.concat ", "
            (List.map (fun (n, t) -> n ^ ": " ^ fmt_ty t) pr.pr_params) in
          let body = match pr.pr_body_opt with Some e -> " = " ^ fmt_expr e | None -> "" in
-         line f (Printf.sprintf "prop %s(%s): proposition%s" pr.pr_name params body))
+         line f (Printf.sprintf "prop %s(%s)%s" pr.pr_name params body))
          td.tp_props;
        f.indent <- f.indent - 1;
        line f "}"
@@ -584,14 +584,6 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
          mp.mp_on_morphism_map;
        f.indent <- f.indent - 1;
        line f "}"
-   | TopTopology tp ->
-       line f (Printf.sprintf "topology %s of %s {" tp.tp_name tp.tp_of_place);
-       f.indent <- f.indent + 1; List.iter (fmt_stmt f) tp.tp_body; f.indent <- f.indent - 1;
-       line f "}"
-   | TopPullback u ->
-       line f (Printf.sprintf "place %s = pullback(%s, %s)" u.uni_name u.uni_f u.uni_g)
-   | TopPushout u ->
-       line f (Printf.sprintf "place %s = pushout(%s, %s)" u.uni_name u.uni_f u.uni_g)
    | TopReduction rd ->
        (* common form: `reduction <name> of <place> fold "<fn>" { <clauses> }`. *)
        if rd.rd_shot_ordering <> OrdSequential then raise Exit;  (* not surfaced *)
@@ -651,8 +643,6 @@ let top_names (prog : program) : string list =
     | TopView vw -> Some ("view:" ^ vw.vw_name)
     | TopMorph mp -> Some ("morph:" ^ mp.mp_name)
     | TopReduction rd -> Some ("reduction:" ^ rd.rd_name)
-    | TopPullback u -> Some ("pullback:" ^ u.uni_name)
-    | TopPushout u -> Some ("pushout:" ^ u.uni_name)
     | _ -> None) prog
 
 (* Format with a guarantee. Return the output only if BOTH hold:

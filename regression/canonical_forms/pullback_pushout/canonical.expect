@@ -1,5 +1,0 @@
-status: accept
-exit: 12
-covers: pullback_decl pushout_decl
-note: |
-  A place defined by the universal property: pullback(f,g) / pushout(f,g).

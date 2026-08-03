@@ -729,7 +729,6 @@ type geom_morphism_item_kind =
   (* Categorical properties declared inside the geom_morphism block. They
      replace the old policy enum (direct/sharded/paxos/crdt) as the mechanism
      for declaring distributed semantics. *)
-  | GmItemExactFStar
   | GmItemExactFLowerStar
 
 (* A topos as a first-class declaration.
@@ -869,9 +868,6 @@ type top_decl =
   | TopLet of string * expr * location
   | TopOperation of operation_decl                    (* top-level operation outside place *)
   | TopGeomMorphism of geom_morphism_decl
-  | TopPullback of universal_decl                     (* P = pullback(f, g) *)
-  | TopPushout of universal_decl                      (* P = pushout(f, g) *)
-  | TopTopology of topology_decl                      (* Lawvere-Tierney topology *)
   | TopReductionCompose of reduction_compose_decl     (* R = R1 . R2 *)
   | TopTopos of topos_decl
   | TopMorph of morph_decl
