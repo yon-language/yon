@@ -57,6 +57,7 @@ Every keyword, alphabetically:
 [`fun`](/book/keywords#fun) ·
 [`functor`](/book/keywords#functor) ·
 [`geomorph`](/book/keywords#geomorph) ·
+[`given`](/book/keywords#given) ·
 [`hcomp`](/book/keywords#hcomp) ·
 [`here`](/book/keywords#here) ·
 [`heyting`](/book/keywords#heyting) ·

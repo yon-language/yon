@@ -35,7 +35,7 @@ let call name args = ECall (name, args, loc)
 let mkmain ~body : fun_decl =
   { fn_name = "main"; fn_type_params = []; fn_params = [];
     fn_return = Some (TyPrim "number"); fn_on_error = None; fn_visits = []; fn_home = None;
-    fn_internal = false; fn_body = body; fn_loc = loc }
+    fn_internal = false; fn_given = false; fn_body = body; fn_loc = loc }
 
 (* true iff the single-function program is ACCEPTED by the type checker *)
 let accepts (fn : fun_decl) : bool =

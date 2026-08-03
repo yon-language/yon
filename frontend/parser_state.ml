@@ -39,7 +39,7 @@ let lift_inline_block_lambda_to_fun
     fn_type_params = [];
     fn_params = fn_params;
     fn_return = Some (TyPrim "number");
-    fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
+    fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
     fn_body = body @ [Surface_ast.SReturn
                         (Surface_ast.ELit (Surface_ast.LitNumber 0.0, loc), loc)];
     fn_loc = loc;
@@ -60,7 +60,7 @@ let lift_inline_lambda_to_fun
     fn_type_params = [];
     fn_params = fn_params;
     fn_return = Some (TyPrim "number");
-    fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
+    fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
     fn_body = [Surface_ast.SReturn (body, loc)];
     fn_loc = loc;
   } in
@@ -72,33 +72,51 @@ let lift_inline_lambda_to_fun
    markers), retags the LAST [n] hoisted funs with fn_home = Some house.
    Order is preserved by push_decl, so the suffix is exactly this body's. *)
 let retag_home (house : string) (n : int) : unit =
+  let site (loc : Surface_ast.location) =
+    (loc.Surface_ast.file, loc.Surface_ast.start_line,
+     loc.Surface_ast.start_col) in
   let record (loc : Surface_ast.location) =
     (* containment rule: the non-fun arrow remembers its house BY SITE *)
-    Hashtbl.replace Surface_ast.arrow_home_sites
-      (loc.Surface_ast.file, loc.Surface_ast.start_line,
-       loc.Surface_ast.start_col) house in
+    Hashtbl.replace Surface_ast.arrow_home_sites (site loc) house in
+  (* topography, for EVERY form and EVERY house (Entry included): the
+     formatter reprints the arrow inside the house that hosted it. *)
+  let written (loc : Surface_ast.location) =
+    Hashtbl.replace Surface_ast.arrow_written_in (site loc) house in
   if n > 0 then
     synth_decls := List.mapi (fun i d ->
       (* push_decl PREPENDS: this body's hoisted arrows are the FIRST n *)
       if i < n then
         match d with
-        | Surface_ast.TopFun fd when fd.Surface_ast.fn_home = None
-                                  && house <> "Entry" ->
-            Surface_ast.TopFun { fd with Surface_ast.fn_home = Some house }
-        | Surface_ast.TopMorph mp when house <> "Entry" ->
-            record mp.Surface_ast.mp_loc; d
-        | Surface_ast.TopView vd when house <> "Entry" ->
-            record vd.Surface_ast.vw_loc; d
-        | Surface_ast.TopMove mv when house <> "Entry" ->
-            record mv.Surface_ast.mv_loc; d
-        | Surface_ast.TopFunctor ft when house <> "Entry" ->
-            record ft.Surface_ast.ft_loc; d
-        | Surface_ast.TopGeomMorphism gm when house <> "Entry" ->
-            record gm.Surface_ast.gm_loc; d
-        | Surface_ast.TopNatTransform nt when house <> "Entry" ->
-            record nt.Surface_ast.nt_loc; d
-        | Surface_ast.TopReduction rd when house <> "Entry" ->
-            record rd.Surface_ast.rd_loc; d
+        | Surface_ast.TopFun fd ->
+            written fd.Surface_ast.fn_loc;
+            if fd.Surface_ast.fn_home = None && house <> "Entry"
+            then Surface_ast.TopFun { fd with Surface_ast.fn_home = Some house }
+            else d
+        (* i due fatti sono DIVERSI e si registrano separatamente:
+           `written` è topografia (dove la freccia era scritta — sempre,
+           Entry inclusa, e serve al formatter per rimetterla in casa);
+           `record` è la regola di contenimento, da cui Entry è esente. *)
+        | Surface_ast.TopMorph mp ->
+            written mp.Surface_ast.mp_loc;
+            if house <> "Entry" then record mp.Surface_ast.mp_loc; d
+        | Surface_ast.TopView vd ->
+            written vd.Surface_ast.vw_loc;
+            if house <> "Entry" then record vd.Surface_ast.vw_loc; d
+        | Surface_ast.TopMove mv ->
+            written mv.Surface_ast.mv_loc;
+            if house <> "Entry" then record mv.Surface_ast.mv_loc; d
+        | Surface_ast.TopFunctor ft ->
+            written ft.Surface_ast.ft_loc;
+            if house <> "Entry" then record ft.Surface_ast.ft_loc; d
+        | Surface_ast.TopGeomMorphism gm ->
+            written gm.Surface_ast.gm_loc;
+            if house <> "Entry" then record gm.Surface_ast.gm_loc; d
+        | Surface_ast.TopNatTransform nt ->
+            written nt.Surface_ast.nt_loc;
+            if house <> "Entry" then record nt.Surface_ast.nt_loc; d
+        | Surface_ast.TopReduction rd ->
+            written rd.Surface_ast.rd_loc;
+            if house <> "Entry" then record rd.Surface_ast.rd_loc; d
         | other -> other
       else d) !synth_decls
 

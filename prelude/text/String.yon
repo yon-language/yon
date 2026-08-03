@@ -5,24 +5,46 @@
  * content-addressed (una rope interned: stesso letterale, stesso slot) — ma
  * questo il preludio non lo dice: la fusione nomina il CODICE, non il layout.
  *
- * IL NUCLEO IRRIDUCIBILE resta CABLATO, e si chiama qualificato:
- *   String.length, String.char_at, String.concat, String.from_char,
- *   String.equal (O(1): content-addressing — due stringhe uguali hanno lo
- *   stesso handle), String.parse_number, String.print, String.from_int,
- *   String.substring, String.find_char.
- * Il meccanismo per dichiararli senza corpo («questo corpo è assiomatico»,
- * il fratello di `is <prim>` per i corpi) non esiste ancora — è lo stesso
- * blocco di widen/narrow. Quando ci sarà, il nucleo si dichiara qui e il
- * confine col silicio diventa visibile nel linguaggio.
+ * IL NUCLEO ORA SI DICHIARA: `is given` è il corpo assiomatico (il `native`
+ * di Java). Non è una promessa muta — il compilatore VERIFICA che
+ * l'implementazione cablata esista e che la firma dichiarata sia quella
+ * cablata: nome mancante, arità diversa o tipo diverso sono errori. Il
+ * confine col silicio smette di essere invisibile e diventa una riga di Yon.
  *
- * String.substring e String.find_char restano cablate ANCHE come fatto di
- * macchina: emit riconosce quei nomi per pattern, quindi una ridefinizione
- * Yon verrebbe ignorata in silenzio — la derivata onesta qui sotto usa nomi
- * propri (index_of) o chiama la cablata. Fast-path per costruzione.
- *
- * MARKERS: [T] totale, scritta qui · [E] parziale, vestita con on error
+ * MARKERS: [G] given, corpo cablato · [T] totale, scritta qui ·
+ *          [E] parziale, vestita con on error
  */
 place String is text {
+
+  /* ─── IL NUCLEO ASSIOMATICO ──────────────────────────────────── [G] ───
+   *
+   * Le uniche che toccano la rope: misurare, indicizzare, allocare. Tutto
+   * il resto di questo file è DERIVATO da queste — il confine col silicio
+   * è piccolo, ed è il punto.
+   *
+   * `equal` è O(1) e non un confronto carattere per carattere: due stringhe
+   * uguali hanno lo STESSO handle per content-addressing. È il caso in cui
+   * l'identità-per-contenuto paga: non si scorre nulla.
+   *
+   * substring/find_char sono cablate anche loro, ed è un FATTO DI MACCHINA:
+   * emit riconosce quei nomi per pattern, quindi una ridefinizione in Yon
+   * verrebbe ignorata in silenzio. Dichiararle qui le rende visibili invece
+   * che invisibili; la derivata onesta a due argomenti è `index_of`. */
+
+  fun length(s: String): Number is given
+  fun char_at(s: String, i: Number): Number is given
+  fun concat(a: String, b: String): String is given
+  fun from_char(c: Number): String is given
+  fun equal(a: String, b: String): Boolean is given
+  fun substring(s: String, start: Number, len: Number): String is given
+  /* `pos`, non `from` né `at`: sono ENTRAMBE keyword (from/to delle frecce,
+     `repeat at most`). Il lessico del linguaggio ha precedenza sui nomi del
+     preludio — quarta collisione, dopo mul/times, skip/drop, replicate/repeat.
+     Uno sweep automatico contro il lessico del lexer ora è nel gate. */
+  fun find_char(s: String, c: Number, pos: Number): Number is given
+  fun parse_number(s: String): Number is given
+  fun from_int(n: Number): String is given
+  fun print(s: String): Number is given
 
   /* ─── Predicati ──────────────────────────────────────────────── [T] ─── */
 

@@ -3072,7 +3072,7 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "y"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false; fn_on_error = None; fn_home = None;
+    fn_visits = []; fn_internal = false; fn_given = false; fn_on_error = None; fn_home = None;
     fn_body = [];
     fn_loc = loc;
   } in
@@ -3081,7 +3081,7 @@ let test_geom_morphism_decl () =
     fn_type_params = [];
     fn_params = [{ param_name = "x"; param_ty = TyPrim "number" }];
     fn_return = Some (TyPrim "number");
-    fn_visits = []; fn_internal = false; fn_on_error = None; fn_home = None;
+    fn_visits = []; fn_internal = false; fn_given = false; fn_on_error = None; fn_home = None;
     fn_body = [];
     fn_loc = loc;
   } in

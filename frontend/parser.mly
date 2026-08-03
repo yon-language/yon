@@ -148,6 +148,8 @@
 
 /* Type-related */
 %token OF IN TO STREAM IS NOT BY FROM WITH UNIFIES REQUIRES
+/* `is given`: il corpo assiomatico — il `native` di Java */
+%token GIVEN
 %token WIRE
 %token SPAWN PROMOTE PARALLEL
 %token COMPOSE
@@ -337,6 +339,7 @@ topos_decl:
         Filename.remove_extension
           (Filename.basename $startpos.Lexing.pos_fname) in
       { tp_name = stem;
+        tp_anonymous = true;
         tp_world = None;
         tp_at_space = None;
         tp_objects = [];
@@ -349,6 +352,7 @@ topos_decl:
       props = list(topos_prop_decl)
     RBRACE
     { { tp_name = name;
+        tp_anonymous = false;
         tp_world = None;            (* inferred from the filesystem *)
         tp_at_space = None;         (* inferred from the filesystem *)
         tp_objects = [];            (* inferred from the filesystem *)
@@ -448,7 +452,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
+                 fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
                  fn_body = body;
                  fn_loc = mk_loc $startpos $endpos } in
       MItemOnObject fd }
@@ -467,7 +471,7 @@ morph_item:
                  fn_type_params = [];
                  fn_params = params;
                  fn_return = ret;
-                 fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
+                 fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
                  fn_body = [SReturn (body_expr, loc)];
                  fn_loc = loc } in
       MItemOnObject fd }
@@ -551,7 +555,7 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
+                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   | PUSH LPAREN params = param_list RPAREN
@@ -561,7 +565,7 @@ geom_morphism_item:
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = ret;
-                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
+                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
                    fn_body = body;
                    fn_loc = mk_loc $startpos $endpos } }
   (* Categorical clauses declaring properties of the geometric morphism. The
@@ -1004,6 +1008,26 @@ ident_list:
 /* ─── Function declaration ──────────────────────────────────────────── */
 
 fun_decl:
+  (* `is given` — il corpo assiomatico (il `native` di Java): la firma vive
+     nel linguaggio, la realizzazione è cablata nel compilatore. Il tycheck
+     verifica che esista davvero. Niente graffe: un corpo vuoto direbbe
+     «ritorna nulla», questo dice «il corpo è altrove, ed è un fatto». *)
+  | internal = boption(INTERNAL) FUN name = IDENT
+    tparams = type_params_opt
+    LPAREN params = param_list RPAREN
+    oerr = option(on_error_clause)
+    ret = option(return_type_decl)
+    visits = visits_clause
+    IS GIVEN
+    { (if oerr <> None && ret = None then
+         failwith (Printf.sprintf
+           "fun %s: `on error` requires an explicit return type \
+            (`) on error E : T`)" name));
+      { fn_name = name; fn_type_params = tparams; fn_params = params;
+        fn_return = ret; fn_on_error = oerr;
+        fn_visits = visits; fn_internal = internal; fn_given = true;
+        fn_home = None;
+        fn_body = []; fn_loc = mk_loc $startpos $endpos } }
   | internal = boption(INTERNAL) FUN name = IDENT
     tparams = type_params_opt
     LPAREN params = param_list RPAREN
@@ -1022,7 +1046,7 @@ fun_decl:
             (`) on error E : T`)" name));
       { fn_name = name; fn_type_params = tparams; fn_params = params;
         fn_return = ret; fn_on_error = oerr;
-        fn_visits = visits; fn_internal = internal; fn_home = None;
+        fn_visits = visits; fn_internal = internal; fn_given = false; fn_home = None;
         fn_body = body; fn_loc = mk_loc $startpos $endpos } }
 
 /* Optional type parameters: <A>, <A, B>, or empty. */

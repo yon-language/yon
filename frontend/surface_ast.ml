@@ -135,6 +135,15 @@ let loc_in_prelude (loc : location) : bool =
    ride the SITE (never the name: two arrows may share a name across houses). *)
 let arrow_home_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 64
 
+(* La casa di RICOSTRUZIONE: dove la freccia era SCRITTA, per ogni forma e
+   ogni casa, Entry inclusa. Distinta da arrow_home_sites (che serve al
+   contenimento e ne esclude Entry, perché Entry è esente dalla regola) e
+   da fn_home (che serve al naming e per Entry resta None, perché Entry non
+   dà il nome). Qui il fatto è solo topografico: il formatter deve
+   ristampare le frecce DENTRO la casa che le ospitava — sollevarle a
+   colonna zero produrrebbe un file che la pietra del contenimento vieta. *)
+let arrow_written_in : (string * int * int, string) Hashtbl.t = Hashtbl.create 64
+
 (* Bare nullary points: `tt` in expression position IS the unique point of
    its terminal arm (the name denotes the point — no constructor call). The
    tycheck resolves the name (scope-aware: locals shadow) and records the
@@ -596,7 +605,12 @@ type fun_decl = {
   fn_visits : string list;          (* effect signature — Yoneda-native "constraint":
                                        visits Ord means the function requires the
                                        place Ord with its operations to be active *)
-  fn_internal : bool;               (* `internal fun`: not exported from its module *)
+  fn_internal : bool;
+  fn_given : bool;            (* `is given`: il corpo è ASSIOMATICO — la
+                                 realizzazione è cablata nel compilatore (il
+                                 `native` di Java). Il tycheck VERIFICA che
+                                 l'implementazione esista davvero: una
+                                 promessa muta è peggio dell'assenza. *)               (* `internal fun`: not exported from its module *)
   fn_body : stmt list;
   fn_loc : location;
 }
@@ -755,6 +769,10 @@ type geom_morphism_item_kind =
  * place until the full lowering refactor is done. *)
 type topos_decl = {
   tp_name : string;
+  tp_anonymous : bool;      (* `topos where {}`: il nome viene dal FILE, non
+                               è scritto. Il formatter deve ristampare la
+                               forma che ha letto — sennò inventa un nome
+                               che il sorgente non ha. *)
   tp_world : string option;
   (* Explicit topos -> space binding. Syntax
    * `topos Account at EU_SPACE where { ... }`. When present, the space is the

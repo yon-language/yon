@@ -38,7 +38,7 @@ let mkfun ?(type_params=[]) ?(params=[]) ?(ret=Some (TyPrim "number"))
     fn_params = params;
     fn_return = ret;
     fn_on_error = None; fn_visits = visits; fn_home = None;
-    fn_internal = internal;
+    fn_internal = internal; fn_given = false;
     fn_body = body;
     fn_loc = loc }
 

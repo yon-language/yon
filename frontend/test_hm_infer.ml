@@ -87,7 +87,7 @@ let () =
       fn_params = [ { param_name = "x"; param_ty = TyUser "_" } ];
       fn_return = Some num;
       fn_on_error = None; fn_visits = []; fn_home = None;
-      fn_internal = false;
+      fn_internal = false; fn_given = false;
       fn_body = [ body_ret ];
       fn_loc = dl } in
   let prog : program = [ TopFun fn ] in

@@ -1,0 +1,7 @@
+place Entry {
+  fun main(): Number {
+    be a holds Math.floor(21.9)
+    be b holds Math.sqrt(441)
+    return a + b
+  }
+}
