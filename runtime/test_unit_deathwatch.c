@@ -41,7 +41,7 @@ int main(void) {
     if (id == YON_HEAP_ID_INVALID) { printf("register_space failed\n"); return 1; }
     unsigned char payload[64];
     memset(payload, 0xA5, sizeof payload);
-    (void)yon_rt_new(id, payload, (uint32_t)sizeof payload);  /* live bytes in the region */
+    (void)yon_rt_section(id, payload, (uint32_t)sizeof payload);  /* live bytes in the region */
     yon_xheap_t *h = yon_rt_heap_for(id);
     if (!h) { printf("no private heap (wrong backend)\n"); return 1; }
     uint32_t used_before = h->arena_used;

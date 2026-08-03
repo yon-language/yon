@@ -120,7 +120,6 @@ Every keyword, alphabetically:
 [`space`](/book/keywords#space) ·
 [`spawn`](/book/keywords#spawn) ·
 [`stream`](/book/keywords#stream) ·
-[`terminal`](/book/keywords#terminal) ·
 [`then`](/book/keywords#then) ·
 [`this`](/book/keywords#this) ·
 [`through`](/book/keywords#through) ·

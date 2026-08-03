@@ -1,7 +1,5 @@
 /* the fusion clause: a place that IS the declared face of a primitive code.
    The prelude speaks it for Number/Text/Boolean/Unit; a user face of a
-   non-reserved name is the same production. */
+   non-reserved name is the same production. Constant is dead: the face
+   lives in a world like every other place — the space gives it. */
 place Meter is number { }
-place Entry {
-  fun main(): Number { return 42 }
-}

@@ -14,7 +14,7 @@
  *   yon_rt.c:294  the bound:  (uint64_t)offset + (uint64_t)size > payload_size
  *                 -> returns -1 AND memset(out,0,size) (out zeroed on reject).
  *   yon_rt.c:290  null / never-written slot -> memset(out,0,size); return -1.
- *   yon_rt.h:131  yon_section_t yon_rt_new(uint32_t heap_id, const void*, uint32_t)
+ *   yon_rt.h:131  yon_section_t yon_rt_section(uint32_t heap_id, const void*, uint32_t)
  *   yon_rt.h:105  uint32_t yon_rt_register_space(const char *name)
  *
  * The 0xFFFFFFF8 + 16 probe is the 64-bit-promotion fix: in 32-bit arithmetic
@@ -40,10 +40,10 @@ int main(void) {
     for (int i = 0; i < 16; i++) payload[i] = (uint8_t)(i + 1);
     /* Root-prefixed constructor (the identity head): field offsets below are
        FIELD-region offsets, as everywhere in the system. */
-    yon_section_t sec = yon_rt_new_r(heap, payload, sizeof(payload),
+    yon_section_t sec = yon_rt_section_r(heap, payload, sizeof(payload),
                                      0x524f4f5464656d6fULL, 1);
     if (sec == YON_SECTION_INVALID) {
-        printf("[FAIL] yon_rt_new_r\n");
+        printf("[FAIL] yon_rt_section_r\n");
         return 1;
     }
 

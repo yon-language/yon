@@ -109,8 +109,8 @@ uint32_t yon_rt_register_space(const char *name);
  * (sum_f64, max_f64, min_f64, sum_i64, max_i64, min_i64, sum_vec_f64,
  * max_vec_f64, or_bitset).
  *
- * Runtime effect: the constructor __new_in_<S>_<P> emitted by the compiler
- * sees sd_fold declared and calls yon_rt_fold_named instead of yon_rt_new for
+ * Runtime effect: the constructor __section_in_<S>_<P> emitted by the compiler
+ * sees sd_fold declared and calls yon_rt_fold_named instead of yon_rt_section for
  * writes into the space. */
 uint32_t yon_rt_register_space_with_fold(const char *name, const char *fold_name);
 
@@ -157,7 +157,7 @@ void yon_rt_space_input_closed(uint32_t id);
  * Returns: an opaque yon_section_t (i64) usable as a handle. Content-addressed
  * allocation: the same (heap_id, payload) -> the same section.
  */
-yon_section_t yon_rt_new(uint32_t heap_id,
+yon_section_t yon_rt_section(uint32_t heap_id,
                           const void *payload_bytes,
                           uint32_t n_bytes);
 
@@ -176,7 +176,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
 /* Flatten a place into position-independent content bytes (the outbound half
  * of the cross-process wormhole). Writes the raw payload into out_buf and
  * returns the byte count, or -1 on error / if cap is too small. Rebuild with
- * yon_rt_new(consumer_heap, buf, n). All-scalar places only at this seal;
+ * yon_rt_section(consumer_heap, buf, n). All-scalar places only at this seal;
  * handle-valued fields are not yet followed. */
 int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
 
@@ -197,7 +197,7 @@ int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
  *
  * Both the producer pump and the consumer drain are generic runtime code, so
  * both recover the descriptor at runtime through this registry, keyed by the
- * schema_id stamped on the instance (yon_rt_new_v) and carried in the frame. */
+ * schema_id stamped on the instance (yon_rt_section_v) and carried in the frame. */
 #define YON_WIRE_TAG_SCALAR 0u
 #define YON_WIRE_TAG_STRING 1u
 #define YON_WIRE_TAG_NESTED 4u
@@ -362,17 +362,17 @@ int yon_rt_register_migration(const char *place_name,
                                uint32_t new_payload_size,
                                yon_migration_fn fn);
 
-/* Variant of yon_rt_new with an explicit schema_version. yon_rt_new(...) is
- * equivalent to yon_rt_new_v(..., 0). */
+/* Variant of yon_rt_section with an explicit schema_version. yon_rt_section(...) is
+ * equivalent to yon_rt_section_v(..., 0). */
 /* Root-prefixed constructor: every place instance's payload begins with the
    8-byte nominal type root (LE). Field offsets elsewhere are FIELD-region
    offsets (the root head is skipped by the readers). */
-yon_section_t yon_rt_new_r(uint32_t heap_id,
+yon_section_t yon_rt_section_r(uint32_t heap_id,
                             const void *field_bytes, uint32_t n_bytes,
                             uint64_t type_root, uint32_t schema_version);
 /* The type root recovered from the handle alone (0 if unavailable). */
 uint64_t yon_rt_section_root(yon_section_t sec);
-yon_section_t yon_rt_new_v(uint32_t heap_id,
+yon_section_t yon_rt_section_v(uint32_t heap_id,
                             const void *payload_bytes, uint32_t n_bytes,
                             const char *place_name, uint32_t schema_version);
 

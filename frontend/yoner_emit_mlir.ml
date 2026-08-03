@@ -186,6 +186,17 @@ let () =
         t
     | None -> Hashtbl.create 1
   in
+  (* The prelude PACKAGE: its units carry spaces (num/, err/, …) and its
+     worlds ride into every compilation, single-file included. Collected
+     SEPARATELY from the user census (never the Entry constraints, never
+     the drop/space graph): the prelude is implicit, not user surface. *)
+  Surface_ast.user_manifest_present := (project_wm <> None);
+  let prelude_wm = snd (Project.prelude_units ()) in
+  let prelude_space_of_path : (string, string) Hashtbl.t = Hashtbl.create 8 in
+  List.iter (fun (pp, sp, _) ->
+    if sp <> "" then Hashtbl.replace prelude_space_of_path pp sp)
+    (fst (Project.prelude_units ()));
+  let pw_prelude = ref [] in  (* (place, world) del preludio; l'utente OMBRA *)
   let prog =
     List.concat_map (fun (filename, modname, src) ->
       let lexbuf = Lexing.from_string src in
@@ -244,6 +255,26 @@ let () =
                       | _ -> ()) decls
                 | None -> ())
            | _ -> ());
+          (* prelude package files: topos/place structure + world pairs,
+             separate from the user census. *)
+          (match Hashtbl.find_opt prelude_space_of_path filename with
+           | Some sp ->
+               List.iter (function
+                 | Surface_ast.TopPlace pd ->
+                     places_by_space := (sp, pd) :: !places_by_space;
+                     (match prelude_wm with
+                      | Some pwm ->
+                          (match Manifest.world_of_space pwm sp with
+                           | Some w ->
+                               pw_prelude :=
+                                 (pd.Surface_ast.pd_name, w) :: !pw_prelude
+                           | None -> ())
+                      | None -> ())
+                 | Surface_ast.TopTopos td ->
+                     topos_space :=
+                       (td.Surface_ast.tp_name, sp) :: !topos_space
+                 | _ -> ()) decls
+           | None -> ());
           decls
         end
         else begin
@@ -380,6 +411,17 @@ let () =
         Manifest.world_decls wm @ Package_layout.space_decls ~root:path @ prog
     | None -> prog
   in
+  (* the prelude package's worlds and spaces ride in front — both modes;
+     they are IMPLICIT: the user world-inference must not see them *)
+  let prog =
+    match prelude_wm with
+    | Some pwm ->
+        Hashtbl.iter (fun _ w ->
+          Hashtbl.replace Surface_ast.prelude_world_names w ())
+          pwm.Manifest.space_world;
+        Manifest.world_decls pwm @ Project.prelude_space_nodes () @ prog
+    | None -> prog
+  in
   (* The entrypoint is the place `Entry`: declared once, in the project root,
      and the file that declares it carries `main`. The name defaults to "Entry"
      and may be set by [package] entry. In project mode these four conditions
@@ -453,8 +495,17 @@ let () =
      intact — same assumption assign_place_worlds already relies on. The maps
      were built per file at parse-assembly time, where each file's space tag was
      still known. Enforce one-topos-per-space first, before populating. *)
+  let eff_wm =
+    match project_wm, prelude_wm with
+    | None, p -> p
+    | Some u, None -> Some u
+    | Some u, Some pw ->
+        let m = Manifest.empty_world_map () in
+        Manifest.merge_into m u; Manifest.merge_into m pw;
+        m.Manifest.pkg_entry <- u.Manifest.pkg_entry;
+        Some m in
   let prog =
-    match project_wm with
+    match eff_wm with
     | Some wm ->
         (* one-topos-per-space was already enforced by Project.check_all above, so
            assign_topos_structure runs on a validated layout (exactly one topos per
@@ -484,7 +535,7 @@ let () =
      mode only; each file is re-parsed alone to find the place names it
      declares and the space (directory) it lives in. *)
   let prog =
-    match project_wm with
+    match eff_wm with
     | Some wm ->
         let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
         List.iter (fun (n, w) ->
@@ -501,6 +552,19 @@ let () =
                 n w' w;
               exit 6
           | _ -> Hashtbl.replace pw n w) !pw_pairs;
+        (* prelude places: the USER shadows a homonym (never exit 6 across
+           the prelude boundary — same doctrine as the emit identity-keep);
+           between prelude worlds the DEFAULT world wins the bare name. *)
+        let prelude_named : (string, unit) Hashtbl.t = Hashtbl.create 8 in
+        List.iter (fun (n, w) ->
+          match Hashtbl.find_opt pw n with
+          | None ->
+              Hashtbl.replace pw n w; Hashtbl.replace prelude_named n ()
+          | Some _ when Hashtbl.mem prelude_named n
+                        && w = Surface_ast.prelude_default_world ->
+              (* both entries are the prelude's own: the default world wins *)
+              Hashtbl.replace pw n w
+          | Some _ -> () (* the USER's entry: shadowing stands *)) !pw_prelude;
         Manifest.assign_place_worlds
           ~world_of_space:(Manifest.world_of_space wm)
           (fun n -> Hashtbl.find_opt pw n) prog
@@ -509,7 +573,9 @@ let () =
   (* Expand views only after filesystem world assignment. The synthetic view
      place copies its source place's world; expanding earlier would freeze
      __INFER and orphan the view in multi-world projects. *)
-  let prog = Desugar.expand_views prog in
+  (* qualify BEFORE expanding: the synthetic view fun copies show-exprs
+     verbatim (same ordering fix as Project.load; qualify is idempotent). *)
+  let prog = Desugar.expand_views (Method_sugar.qualify_homes prog) in
   (* Lower the Id-proposition sugar (Same / bare clear) before check + desugar. *)
   let prog = Tycheck.elaborate_id_sugar prog in
   let cr = Tycheck.check_program prog in

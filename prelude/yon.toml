@@ -1,0 +1,17 @@
+[package]
+name = "prelude"
+
+[world.Num64]
+spaces = ["num64"]
+
+[world.Num32]
+spaces = ["num32"]
+
+[world.Txt]
+spaces = ["text"]
+
+[world.Logic]
+spaces = ["logic"]
+
+[world.Err]
+spaces = ["err"]

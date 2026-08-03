@@ -35,7 +35,6 @@ let tok_name = function
   | Parser.FOLD -> "FOLD"
   | Parser.TOPOS_KW -> "TOPOS_KW"
   | Parser.MORPHISM_KW -> "MORPHISM_KW"
-  | Parser.TERMINAL_KW -> "TERMINAL_KW"
   | Parser.PROP_KW -> "PROP_KW"
   | Parser.MORPH_KW -> "MORPH_KW"
   | Parser.VIA_KW -> "VIA_KW"

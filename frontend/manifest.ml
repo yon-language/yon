@@ -46,6 +46,19 @@ type world_map = {
    locations, so the message names the manifest concern in plain words. *)
 exception Manifest_error of string
 
+(* Merge [extra] into [base]; BASE WINS on collision (the user's manifest
+   shadows the prelude's — same doctrine as place shadowing). Mutates base. *)
+let merge_into (base : world_map) (extra : world_map) : unit =
+  Hashtbl.iter (fun k v ->
+    if not (Hashtbl.mem base.space_world k) then
+      Hashtbl.replace base.space_world k v) extra.space_world;
+  Hashtbl.iter (fun k v ->
+    if not (Hashtbl.mem base.world_spaces k) then
+      Hashtbl.replace base.world_spaces k v) extra.world_spaces;
+  Hashtbl.iter (fun k v ->
+    if not (Hashtbl.mem base.wstructs k) then
+      Hashtbl.replace base.wstructs k v) extra.wstructs
+
 let empty_world_map () = {
   space_world  = Hashtbl.create 16;
   world_spaces = Hashtbl.create 8;

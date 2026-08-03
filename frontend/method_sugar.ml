@@ -138,8 +138,18 @@ let qualify_homes (p : S.program) : S.program =
     | S.TopFun fd ->
         (match fd.S.fn_home with
          | Some h ->
+             (* store the BASE name: on a rerun the fun is already
+                Home__name, and collecting that as a sibling would rewrite
+                calls to Home__Home__name — idempotence lives here. *)
+             let pfx = h ^ "__" in
+             let base =
+               if String.length fd.S.fn_name > String.length pfx
+                  && String.sub fd.S.fn_name 0 (String.length pfx) = pfx
+               then String.sub fd.S.fn_name (String.length pfx)
+                      (String.length fd.S.fn_name - String.length pfx)
+               else fd.S.fn_name in
              let prev = Option.value ~default:[] (Hashtbl.find_opt home_funs h) in
-             Hashtbl.replace home_funs h (fd.S.fn_name :: prev)
+             Hashtbl.replace home_funs h (base :: prev)
          | None -> ())
     | _ -> ()) p;
   let qual h n = h ^ "__" ^ n in
@@ -184,6 +194,23 @@ let qualify_homes (p : S.program) : S.program =
         S.SForEvery (k, v, rw_expr sibs h e, List.map (rw_stmt sibs h) body, l)
     | other -> other
   in
+  (* the ONE walk, applied to every expression carrier of every housed form.
+     A non-fun form finds its house by SITE (arrow_home_sites, filled by
+     retag_home at parse); its bare sibling calls are rewritten exactly like
+     a fun body's. Idempotent: a rewritten call is no longer in sibs.
+     Name-references (move `by f`, nat `via`) are names, not expressions —
+     move resolves through the handler lookup and stays untouched. *)
+  let house_of (loc : S.location) : string option =
+    Hashtbl.find_opt Surface_ast.arrow_home_sites
+      (loc.S.file, loc.S.start_line, loc.S.start_col) in
+  let in_house loc (f : string list -> string -> 'a) (dflt : 'a) : 'a =
+    match house_of loc with
+    | None -> dflt
+    | Some h ->
+        let sibs = Option.value ~default:[] (Hashtbl.find_opt home_funs h) in
+        if sibs = [] then dflt else f sibs h in
+  let rw_fd sibs h (fd : S.fun_decl) : S.fun_decl =
+    { fd with S.fn_body = List.map (rw_stmt sibs h) fd.S.fn_body } in
   List.map (function
     | S.TopFun fd when fd.S.fn_home <> None ->
         let h = Option.get fd.S.fn_home in
@@ -195,6 +222,37 @@ let qualify_homes (p : S.program) : S.program =
         let fd = if already then fd
           else { fd with S.fn_name = qual h fd.S.fn_name } in
         S.TopFun { fd with S.fn_body = List.map (rw_stmt sibs h) fd.S.fn_body }
+    | S.TopView vd ->
+        in_house vd.S.vw_loc (fun sibs h ->
+          S.TopView { vd with S.vw_items =
+            List.map (function
+              | S.VShowAs (n, e) -> S.VShowAs (n, rw_expr sibs h e)
+              | it -> it) vd.S.vw_items })
+          (S.TopView vd)
+    | S.TopReduction rd ->
+        in_house rd.S.rd_loc (fun sibs h ->
+          S.TopReduction { rd with S.rd_clauses =
+            List.map (function
+              | S.RcOn (op, ps, body, l) ->
+                  S.RcOn (op, ps, List.map (rw_stmt sibs h) body, l)
+              | S.RcLet (n, e, l) -> S.RcLet (n, rw_expr sibs h e, l))
+              rd.S.rd_clauses })
+          (S.TopReduction rd)
+    | S.TopMorph mp ->
+        in_house mp.S.mp_loc (fun sibs h ->
+          S.TopMorph { mp with S.mp_on_object =
+            Option.map (rw_fd sibs h) mp.S.mp_on_object })
+          (S.TopMorph mp)
+    | S.TopGeomMorphism gm ->
+        in_house gm.S.gm_loc (fun sibs h ->
+          S.TopGeomMorphism { gm with
+            S.gm_pull = Option.map (rw_fd sibs h) gm.S.gm_pull;
+            S.gm_push = Option.map (rw_fd sibs h) gm.S.gm_push })
+          (S.TopGeomMorphism gm)
+    | S.TopFunctor ft ->
+        in_house ft.S.ft_loc (fun sibs h ->
+          S.TopFunctor { ft with S.ft_body = rw_expr sibs h ft.S.ft_body })
+          (S.TopFunctor ft)
     | d -> d) p
 
 let qualify_overloads (p : S.program) : S.program =

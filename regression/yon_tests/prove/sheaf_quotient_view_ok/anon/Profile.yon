@@ -1,3 +1,6 @@
 place Profile {
   cohort Number
+  view PublicProfile of Profile {
+    show bucket = classify(cohort)
+  }
 }

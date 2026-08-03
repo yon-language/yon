@@ -138,6 +138,19 @@ let rec try_eval_binop (op : string) (a : term) (b : term) : term option =
        | Some _, Some 0.0 -> None  (* modulo by zero — stuck, like __div (no NaN leak) *)
        | Some x, Some y -> Some (encode_number (Float.rem x y))
        | _ -> None)
+  (* Integer division and remainder (Int is i64): TRUNCATING toward zero,
+     the same semantics arith.divsi/remsi give at runtime — the fold and
+     the binary must never disagree. *)
+  | "__idiv" ->
+      (match decode_number a, decode_number b with
+       | Some _, Some 0.0 -> None  (* division by zero — stuck *)
+       | Some x, Some y -> Some (encode_number (Float.trunc (x /. y)))
+       | _ -> None)
+  | "__imod" ->
+      (match decode_number a, decode_number b with
+       | Some _, Some 0.0 -> None
+       | Some x, Some y -> Some (encode_number (Float.rem x y))
+       | _ -> None)
   | "__lt"  -> with_number_to_bool ( < )
   | "__gt"  -> with_number_to_bool ( > )
   | "__leq" -> with_number_to_bool ( <= )
@@ -232,7 +245,7 @@ let output_place : place_decl = {
 
 (* Table mapping place names to their field name list, in declared order.
  * Populated by with_builtins so that __field_X projections can resolve
- * the right index of a __new_P record. *)
+ * the right index of a __section_P record. *)
 let place_fields_table : (string, string list) Hashtbl.t = Hashtbl.create 16
 
 (* Reset for tests. *)
@@ -291,7 +304,7 @@ let rec try_reduce_builtin (t : term) : term option =
   | App (App (Var op, a), b)
       when String.length op > 2 && String.sub op 0 2 = "__"
         && not (String.length op > 7 && String.sub op 0 7 = "__heyt_")
-        && not (String.length op > 6 && String.sub op 0 6 = "__new_")
+        && not (String.length op > 10 && String.sub op 0 10 = "__section_")
         && not (String.length op > 16
                 && String.sub op 0 16 = "__apply_move_in_") ->
       (* Also exclude __apply_move_in_<S> from the generic binary-op pattern,
@@ -356,9 +369,9 @@ let rec try_reduce_builtin (t : term) : term option =
        | None -> None)
   | App (Var name, arg) when String.length name > 8
                             && String.sub name 0 8 = "__field_" ->
-      (* Field projection: __field_<fname> applied to a __new_<Place> record.
+      (* Field projection: __field_<fname> applied to a __section_<Place> record.
        * The record is encoded as curried application:
-       *   App(App(...App(Var "__new_P", v1), v2)..., vn)
+       *   App(App(...App(Var "__section_P", v1), v2)..., vn)
        * We uncurry, look up the place's field list, and select by index. *)
       let arg' = match try_reduce_builtin arg with Some v -> v | None -> arg in
       let field_name = String.sub name 8 (String.length name - 8) in
@@ -369,12 +382,12 @@ let rec try_reduce_builtin (t : term) : term option =
         | _ -> None
       in
       (match uncurry arg' [] with
-       | Some (head, args) when String.length head > 6
-                              && String.sub head 0 6 = "__new_" ->
-           (* __new_in_<Space>_<Place> is equivalent to __new_<Place> for the
+       | Some (head, args) when String.length head > 10
+                              && String.sub head 0 10 = "__section_" ->
+           (* __section_in_<Space>_<Place> is equivalent to __section_<Place> for the
             * interpreter semantics (the space is runtime metadata, it does not
             * change the fields). *)
-           let raw_place = String.sub head 6 (String.length head - 6) in
+           let raw_place = String.sub head 10 (String.length head - 10) in
            let place_name =
              if String.length raw_place > 3
                 && String.sub raw_place 0 3 = "in_" then
@@ -478,9 +491,9 @@ let rec try_reduce_builtin (t : term) : term option =
        * computed value).
        *
        * Adapter: the surface representation of a place value is the
-       * curried application `__new_P v1 v2 ... vn`. We extract the
+       * curried application `__section_P v1 v2 ... vn`. We extract the
        * field list from place_fields_table, look up the move, apply
-       * each mapping by name, and produce `__new_Q v1' ... vm'`.
+       * each mapping by name, and produce `__section_Q v1' ... vm'`.
        *)
       let source' = match try_reduce_builtin source with
         | Some v -> v | None -> source in
@@ -492,9 +505,9 @@ let rec try_reduce_builtin (t : term) : term option =
         | _ -> None
       in
       (match uncurry source' [] with
-       | Some (head, args) when String.length head > 6
-                              && String.sub head 0 6 = "__new_" ->
-           let raw_place = String.sub head 6 (String.length head - 6) in
+       | Some (head, args) when String.length head > 10
+                              && String.sub head 0 10 = "__section_" ->
+           let raw_place = String.sub head 10 (String.length head - 10) in
            let src_place =
              if String.length raw_place > 3
                 && String.sub raw_place 0 3 = "in_" then
@@ -544,7 +557,7 @@ let rec try_reduce_builtin (t : term) : term option =
                                   Some (m.m_to, result))
                        mappings
                      in
-                     (* Build __new_<target_place> v1 v2 ... vm in the
+                     (* Build __section_<target_place> v1 v2 ... vm in the
                       * order of the target place's field declarations. *)
                      (match lookup_place_fields target_place with
                       | None -> None
@@ -556,7 +569,7 @@ let rec try_reduce_builtin (t : term) : term option =
                                | None -> Unit)
                             tgt_field_names
                           in
-                          let head_t = Var ("__new_" ^ target_place) in
+                          let head_t = Var ("__section_" ^ target_place) in
                           let result_term = List.fold_left
                             (fun acc v -> App (acc, v)) head_t ordered
                           in

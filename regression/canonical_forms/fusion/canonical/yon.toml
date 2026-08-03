@@ -1,0 +1,9 @@
+[package]
+name = "fusion_canonical"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"

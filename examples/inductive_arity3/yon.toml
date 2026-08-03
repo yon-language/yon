@@ -1,5 +1,8 @@
 [package]
 name = "inductive_arity3"
 
+[world.W]
+objects = ["Triple"]
+
 [runtime]
 backend = "memory"

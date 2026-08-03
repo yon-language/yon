@@ -1,0 +1,54 @@
+/* num64.yon — il file del package `num64`, sotto prelude/.
+ *
+ * IL SITO C(Num64): i numeri a 64 bit. È il BERSAGLIO del funtore `Widen`
+ * dichiarato in num32/num32.yon — un funtore vive nel package della sua
+ * SORGENTE, quindi qui non si ripete.
+ *
+ *   OGGETTI  Int (i64), Number (f64) — contati dal compilatore.
+ *   FRECCE   le `morphism` qui sotto, i generatori.
+ *
+ * I nomi dei place sono gli STESSI di num32 — `Int`, `Number` — perché
+ * sono lo stesso oggetto a precisione diversa, e il world li distingue.
+ * Come `Length` in Metric e `Length` in Imperial.
+ *
+ * Questo è il sito RICCO: `Number` a 64 bit è il default del linguaggio,
+ * quindi la libreria completa — Newton, Taylor, Euclide, le parziali
+ * vestite — vive in num64/Number.yon.
+ */
+topos where {
+
+  /* ─── I GENERATORI ──────────────────────────────────────────────────
+   *
+   * Speculari a quelli di num32: sono i BERSAGLI delle `on morphism` del
+   * funtore `Widen` (`on morphism plus via plus_i64` — plus_i64 vive in
+   * Int.yon, la casa la dà il bersaglio).
+   *
+   * `uses Additive`/`uses Multiplicative` arriveranno col cantiere
+   * algebre: oggi la posizione non esiste in grammatica. */
+  /* NB `mul`, non `times`: `times` è keyword del loop
+     (`repeat at most N times`) e non è disponibile come nome. */
+  morphism plus(a: Int, b: Int): Int
+  morphism mul(a: Int, b: Int): Int
+
+
+  /* ═══ IL FUNTORE VERSO Txt NON SI SCRIVE ══════════════════════════════
+   *
+   * E la ragione va scritta qui perché è la cosa che qualcuno riproverà:
+   *
+   *     to_text(2 + 3) = "5"      ≠      "2" ++ "3" = "23"
+   *
+   * La formattazione NON preserva la somma. Come funtore esisterebbe solo
+   * sugli oggetti, senza law algebriche — cioè non porterebbe nessuna
+   * garanzia. Con `law additive` sarebbe una BUGIA; senza law non
+   * aggiungerebbe niente a una `fun`.
+   *
+   * Quindi `to_text` resta una `fun` in Number.yon / Int.yon: è una
+   * freccia fra OGGETTI, non fra categorie.
+   *
+   * Stesso discorso per i predicati verso Logic:
+   *     is_positive(-1 + 2) = true
+   *     is_positive(-1) and is_positive(2) = false     ≠
+   * Un predicato non è un funtore: è un morfismo verso Ω, e vive come
+   * `prop` in un place.
+   */
+}

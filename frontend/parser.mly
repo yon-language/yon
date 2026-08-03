@@ -144,7 +144,7 @@
 /* First-class topos constructs. */
 /* MORPHISM_KW (singular): keyword for a single morphism declaration inside a
  * topos `morphisms { }` block, and for the `on morphism N via M` clause. */
-%token TOPOS_KW MORPHISM_KW TERMINAL_KW PROP_KW
+%token TOPOS_KW MORPHISM_KW PROP_KW
 %token MORPH_KW VIA_KW
 %token NAT
 %token EXACT_KW
@@ -331,9 +331,27 @@ top_decl:
  * topos_decl with empty objects and no at/in: tp_objects = [], tp_at_space =
  * None, tp_world = None. The `morphisms`, `terminal` and `props` blocks stay. *)
 topos_decl:
+  (* the NAMELESS form: the name derives from the file (num/num.yon -> num) —
+     one name, one home, nothing to diverge. The named form remains admitted
+     during the transition; the corpus migration (and the ban) is its own
+     commit, after the num cantiere. *)
+  | TOPOS_KW
+    WHERE LBRACE
+      morph_opt = topos_morphisms_opt
+      props = list(topos_prop_decl)
+    RBRACE
+    { let stem =
+        Filename.remove_extension
+          (Filename.basename $startpos.Lexing.pos_fname) in
+      { tp_name = stem;
+        tp_world = None;
+        tp_at_space = None;
+        tp_objects = [];
+        tp_morphisms = morph_opt;
+        tp_props = props;
+        tp_loc = mk_loc $startpos $endpos } }
   | TOPOS_KW name = IDENT
     WHERE LBRACE
-      term_opt = topos_terminal_opt
       morph_opt = topos_morphisms_opt
       props = list(topos_prop_decl)
     RBRACE
@@ -341,7 +359,6 @@ topos_decl:
         tp_world = None;            (* inferred from the filesystem *)
         tp_at_space = None;         (* inferred from the filesystem *)
         tp_objects = [];            (* inferred from the filesystem *)
-        tp_terminal = term_opt;
         tp_morphisms = morph_opt;
         tp_props = props;
         tp_loc = mk_loc $startpos $endpos } }
@@ -378,10 +395,6 @@ topos_prop_decl:
  * removed — the world is now inferred from the filesystem. The IN token stays
  * declared and is still used elsewhere (`place P in W`, `new P in Space`). *)
 
-topos_terminal_opt:
-  |                            { None }
-  | TERMINAL_KW t = IDENT      { Some t }
-
 (* v1.1: the `morphisms { }` block now declares its members with the singular
  * `morphism` keyword (morphism_decl), not the place-level `operation`. The
  * result is still a list of operation_decl, so the rest of the compiler is
@@ -413,11 +426,14 @@ morph_decl:
         (function MItemOnObject fd -> Some fd | _ -> None) items in
       let mm = List.filter_map
         (function MItemOnMorphism (a, b) -> Some (a, b) | _ -> None) items in
+      let laws = List.filter_map
+        (function MItemLaw l -> Some l | _ -> None) items in
       { mp_name = name; mp_on_error = None;
         mp_source = src;
         mp_target = tgt;
         mp_on_object = on_obj;
         mp_on_morphism_map = mm;
+        mp_laws = laws;
         mp_loc = mk_loc $startpos $endpos } }
 
 morph_item:
@@ -470,6 +486,9 @@ morph_item:
         failwith ("expected 'on morphism' clause in morph body, got '"
                   ^ tag ^ " morphism'");
       MItemOnMorphism (src_op, tgt_op) }
+  | LAW l = IDENT
+    { (* one word for the obligations, on the morph as on the place *)
+      MItemLaw l }
 
 (* natural transformation.
  *

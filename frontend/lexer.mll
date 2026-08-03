@@ -89,7 +89,6 @@
       (* `morphism` (singular): keyword declaring a single morphism inside a
          topos's `morphisms { }` block, and used in `on morphism N via M`. *)
       "morphism", MORPHISM_KW;
-      "terminal", TERMINAL_KW;
       "prop", PROP_KW;
       "each", EACH;             (* `for each X by Y` inside a nat transform *)
       "morph", MORPH_KW;
