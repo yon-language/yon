@@ -41,6 +41,33 @@ Brings a module or a qualified symbol into scope: `import "x/rates"`, `import q 
 
 Marks a function as not exported across Spaces: it never enters the cross-Space dispatch table.
 
+#### `given`
+
+`fun f(x: T): U is given` — the body is AXIOMATIC: the compiler realizes it, the language declares its face. It is Java's `native`, and it is the brother of `is <prim>`: that one says the CARRIER is a leaf of the recursion, this one says the BODY is.
+
+It is not a mute promise. The checker verifies that an implementation is actually wired under the name the house qualifies (`Math.floor` → `Math__floor`), and that the declared signature IS the wired one — a missing name, a different arity, or a different type are errors. So the boundary with the silicon stops being invisible and becomes a line of Yon: you can read where the language ends and the machine begins.
+
+A `given` function emits nothing: calls resolve to the builtin exactly as before, and the declaration lives in the checker, not in the lowering.
+
+<CodeWindow file="kw_given/"
+            run="yonc kw_given/ -o given && ./given; echo $?"
+            out={["42"]}>
+{`// w/Math.yon
+place Math { unit Number
+  // is given: il corpo è cablato nel compilatore, e il checker lo verifica
+  fun floor(x: Number): Number is given
+  fun sqrt(x: Number): Number is given
+}
+// Entry.yon
+place Entry {
+  fun main(): Number {
+    be a holds Math.floor(21.9)
+    be b holds Math.sqrt(441)
+    return a + b
+  }
+}`}
+</CodeWindow>
+
 ## Bindings and mutation
 
 #### `be`

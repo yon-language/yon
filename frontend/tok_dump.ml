@@ -42,6 +42,7 @@ let tok_name = function
   | Parser.TO -> "TO"
   | Parser.STREAM -> "STREAM"
   | Parser.IS -> "IS"
+  | Parser.GIVEN -> "GIVEN"
   | Parser.NOT -> "NOT"
   | Parser.BY -> "BY"
   | Parser.FROM -> "FROM"

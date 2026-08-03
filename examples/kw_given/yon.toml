@@ -1,0 +1,8 @@
+[package]
+name = "kw_given"
+
+[world.W]
+spaces = ["w"]
+
+[runtime]
+backend = "memory"

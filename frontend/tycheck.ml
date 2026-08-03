@@ -3856,8 +3856,57 @@ let check_arrow_containment (td : top_decl) : unit tc_result =
         (Printf.sprintf "reduction %s of %s" rd.rd_name rd.rd_of) [rd.rd_of]
   | _ -> ok ()
 
+(* ─── Il controllo di LIVELLO (Antonio, 2026-08-04) ─────────────────────
+   Il contenimento dice «il contenitore compare fra gli estremi». Non dice
+   di che TIPO sono gli estremi — e quella è la domanda che blocca i quattro
+   errori di categoria:
+
+     functor F from A to B   con A, B PLACE   -> un funtore non va fra oggetti
+     morph  M from A to B    con A, B WORLD   -> un morfismo non va fra categorie
+     (e, per composizione col contenimento) un functor scritto in un place,
+      un morph scritto nel file del package.
+
+   È decidibile e costa un confronto: il compilatore sa già cosa è world
+   (dal toml) e cosa è place (dai file). La VERIFICA DELLE LEGGI è un'altra
+   cosa — F(g∘f) = F(g)∘F(f) su frecce arbitrarie è il problema della
+   fermata — e va col cantiere algebre, dove `law` acquista un significato
+   meccanico: lì il riduttore arbitra sui GENERATORI (che sono pochi, ed è
+   il punto del sito piccolo) e quando non riduce dice «non ho potuto
+   verificare», non «è falsa». Stesso modello di `clear`. *)
+let check_arrow_level (env : Tyenv.env) (td : top_decl) : unit tc_result =
+  let is_world n = Tyenv.lookup_world env n <> None in
+  let is_place n = Tyenv.lookup_place env n <> None in
+  (* Il verdetto si dà solo su ciò che è INEQUIVOCABILE: un nome che è
+     insieme world e place (l'omonimia è legale) non decide niente, e un
+     nome non dichiarato è un altro errore, riportato altrove. Mai un
+     verdetto su un'ipotesi — la stessa disciplina del riduttore che
+     rifiuta invece di indovinare. *)
+  let only_place n = is_place n && not (is_world n) in
+  let only_world n = is_world n && not (is_place n) in
+  match td with
+  | TopFunctor ft ->
+      let a = ft.ft_from_world and b = ft.ft_to_world in
+      if only_place a && only_place b then
+        err ft.ft_loc (Printf.sprintf
+          "functor %s from %s to %s: %s and %s are PLACES, and a functor \
+           goes between CATEGORIES — an arrow between objects is a `morph`. \
+           (A functor's home is the package file; a morph's is its target place.)"
+          ft.ft_name a b a b)
+      else ok ()
+  | TopMorph mp ->
+      let a = mp.mp_source and b = mp.mp_target in
+      if only_world a && only_world b then
+        err mp.mp_loc (Printf.sprintf
+          "morph %s from %s to %s: %s and %s are WORLDS, and a morph goes \
+           between OBJECTS — an arrow between categories is a `functor`. \
+           (A morph's home is its target place; a functor's is the package file.)"
+          mp.mp_name a b a b)
+      else ok ()
+  | _ -> ok ()
+
 let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit tc_result =
   let* () = check_arrow_containment td in
+  let* () = check_arrow_level env td in
   match td with
   | TopWorld _ -> ok ()
   | TopPlace pd when pd.pd_arms <> [] ->
@@ -3982,7 +4031,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                    fn_type_params = [];
                    fn_params = params;
                    fn_return = Some (TyPrim "proposition");
-                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_home = None;
+                   fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
                    fn_body = [ SReturn (body, pr.pr_loc) ];
                    fn_loc = pr.pr_loc;
                  } in
@@ -4546,7 +4595,65 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    check_program's main loop so the user sees every problem at once. Any
    semantic rule (expected_ret, coproduct, effects) MUST land in BOTH — or
    better, be factored into a shared helper like error_sum_of. *)
+(* ─── `is given`: la verifica che rende la dichiarazione un fatto ───────
+   Il corpo è assiomatico, quindi non c'è niente da type-checkare DENTRO —
+   ma c'è tutto da verificare FUORI: l'implementazione cablata deve esistere
+   davvero, e la firma dichiarata deve essere quella cablata. Senza questo
+   `is given` sarebbe una promessa muta, e le promesse mute si ritirano
+   (la lezione di `topology`).
+
+   Il nome cablato è quello QUALIFICATO dalla casa (String__length): la
+   casa dà il nome, e il nome è la chiave del registro. *)
+and check_given_fun (env : Tyenv.env) (ctx : Reduce.ctx)
+    (fn : fun_decl) : unit tc_result =
+  (* il check gira DOPO qualify_homes, quindi il nome può essere già
+     qualificato: l'idempotenza vive nel prefisso, come nella walk del
+     naming (mai qualificare due volte -> String__String__length). *)
+  let qname = match fn.fn_home with
+    | Some h ->
+        let pfx = h ^ "__" in
+        let lp = String.length pfx in
+        if String.length fn.fn_name >= lp
+           && String.sub fn.fn_name 0 lp = pfx
+        then fn.fn_name else pfx ^ fn.fn_name
+    | None -> fn.fn_name in
+  match Stdlib_runtime.lookup_stdlib_signature qname with
+  | None ->
+      err fn.fn_loc (Printf.sprintf
+        "fun %s is given, but no implementation is wired under `%s`. \
+         `is given` declares the face of a body the compiler realizes: \
+         if nothing realizes it, the declaration is a mute promise — \
+         write the body in Yon, or wire the primitive first."
+        fn.fn_name qname)
+  | Some (wired_params, wired_ret) ->
+      let declared = List.map (fun (p : param) -> p.param_ty) fn.fn_params in
+      if List.length declared <> List.length wired_params then
+        err fn.fn_loc (Printf.sprintf
+          "fun %s is given: declared %d parameter(s), the wired `%s` takes %d"
+          fn.fn_name (List.length declared) qname (List.length wired_params))
+      else
+        let mismatch =
+          List.find_opt (fun (d, w) ->
+            not (Dispatcher.type_equal env ctx d w))
+            (List.combine declared wired_params) in
+        (match mismatch with
+         | Some (d, w) ->
+             err fn.fn_loc (Printf.sprintf
+               "fun %s is given: parameter declared %s, the wired `%s` \
+                takes %s — the declared face must be the wired truth"
+               fn.fn_name (Tyenv.ty_to_string d) qname (Tyenv.ty_to_string w))
+         | None ->
+             (match fn.fn_return with
+              | Some r when not (Dispatcher.type_equal env ctx r wired_ret) ->
+                  err fn.fn_loc (Printf.sprintf
+                    "fun %s is given: declared return %s, the wired `%s` \
+                     returns %s"
+                    fn.fn_name (Tyenv.ty_to_string r) qname
+                    (Tyenv.ty_to_string wired_ret))
+              | _ -> ok ()))
+
 and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit tc_result =
+  if fn.fn_given then check_given_fun env ctx fn else
   (* Step 1: rebind TyUser -> TyVar wherever the parser produced TyUser
    * for an identifier that's actually a declared type parameter. This
    * gives a clean view: TyVar means "generic, unifies with anything",
@@ -4665,6 +4772,11 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
    two semantically identical or factor shared pieces. *)
 and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     : type_error list =
+  (* `is given`: nessun corpo da accumulare, ma la verifica esterna vale
+     qui come nel gemello fail-fast (ogni regola semantica sta in entrambi). *)
+  if fn.fn_given then
+    (match check_given_fun env ctx fn with Ok () -> [] | Error e -> [e])
+  else
   (* Re-do the same logic but always accumulating. *)
   let rec rebind_ty (t : ty) : ty =
     match t with

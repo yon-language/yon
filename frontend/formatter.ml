@@ -348,11 +348,19 @@ let fmt_fun (f : fmt) (fn : fun_decl) : unit =
   let visits = match fn.fn_visits with
     | [] -> "" | vs -> " visits " ^ String.concat ", " vs in
   let prefix = if fn.fn_internal then "internal " else "" in
-  line f (Printf.sprintf "%sfun %s%s(%s)%s%s {" prefix fn.fn_name tps params ret visits);
-  f.indent <- f.indent + 1;
-  List.iter (fmt_stmt f) fn.fn_body;
-  f.indent <- f.indent - 1;
-  line f "}"
+  let oerr = match fn.fn_on_error with
+    | Some e -> " on error " ^ e | None -> "" in
+  if fn.fn_given then
+    (* `is given`: nessun corpo da stampare — la firma E la parola *)
+    line f (Printf.sprintf "%sfun %s%s(%s)%s%s%s is given"
+              prefix fn.fn_name tps params oerr ret visits)
+  else begin
+    line f (Printf.sprintf "%sfun %s%s(%s)%s%s {" prefix fn.fn_name tps params ret visits);
+    f.indent <- f.indent + 1;
+    List.iter (fmt_stmt f) fn.fn_body;
+    f.indent <- f.indent - 1;
+    line f "}"
+  end
 
 let descriptor_str = function
   | PdBy s -> "by " ^ s
@@ -380,8 +388,10 @@ let fmt_arm (v : variant) : string =
   else Printf.sprintf "%s(%s)" v.v_name
          (String.concat ", " (List.map fmt_ty v.v_args))
 
-let fmt_place (f : fmt) (pd : place_decl) : unit =
-  if pd.pd_arms <> [] && pd.pd_members = [] then
+(* ?close=false lascia la casa APERTA (graffa non chiusa, indent alzato):
+   il chiamante ci stampa dentro le frecce ospitate e chiude lui. *)
+let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
+  if close && pd.pd_arms <> [] && pd.pd_members = [] then
     (* a place declared by the arms it is the coproduct of: the canonical
        single-line form. *)
     line f (Printf.sprintf "place %s { this > %s }" pd.pd_name
@@ -398,8 +408,7 @@ let fmt_place (f : fmt) (pd : place_decl) : unit =
       | FoField fd -> line f (fd.fd_name ^ " " ^ fmt_ty fd.fd_ty)
       | FoOp _ | FoCell _ | FoLaw _ -> raise Exit  (* not enabled on unions *)
     ) pd.pd_members;
-    f.indent <- f.indent - 1;
-    line f "}"
+    if close then begin f.indent <- f.indent - 1; line f "}" end
   end
   else begin
   (* An `error E { ... }` reuses the place structure with pd_is_error. The surface
@@ -433,8 +442,7 @@ let fmt_place (f : fmt) (pd : place_decl) : unit =
         line f (Printf.sprintf "cell %s from %s to %s"
                   c.cell_name (fmt_expr c.cell_src) (fmt_expr c.cell_tgt))
   ) pd.pd_members;
-  f.indent <- f.indent - 1;
-  line f "}"
+  if close then begin f.indent <- f.indent - 1; line f "}" end
   end
 
 let fmt_functor (f : fmt) (ft : functor_decl) : unit =
@@ -537,7 +545,11 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
        (* v1.1 topos-per-space: objects/at/in are filesystem-inferred; the surface
           is `topos <name> where { <terminal>? <prop>* }`. The morphisms block is
           not covered yet -> Exit. *)
-       line f (Printf.sprintf "topos %s where {" td.tp_name);
+       (* la forma LETTA, non una inventata: il topos anonimo prende il
+          nome dal file, ristamparlo scriverebbe un nome che il sorgente
+          non ha (e il round-trip fail-safe lo rifiuta, giustamente). *)
+       line f (if td.tp_anonymous then "topos where {"
+               else Printf.sprintf "topos %s where {" td.tp_name);
        f.indent <- f.indent + 1;
        if td.tp_morphisms <> [] then begin
          (* the `morphisms { }` wrapper is retired: bare morphism lines. *)
@@ -614,13 +626,57 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
 let parse (source : string) : program option =
   Parser_state.reset ();   (* avoid stale synth_decls on re-parse *)
   let lexbuf = Lexing.from_string source in
-  try Some (Parser.program Lexer.token lexbuf)
+  try
+    let p = Parser.program Lexer.token lexbuf in
+    (* the arrows declared in a place body are HOISTED by push_decl and
+       live in the drain — without it the formatter never sees them and
+       `--write` would silently DELETE every fun in a place body. Since
+       the containment stone put every arrow inside a house, that is the
+       whole corpus. The drain comes first: push_decl prepends, so the
+       reversed order is the source order. *)
+    Some (Parser_state.drain () @ p)
   with _ -> None
+
+(* Il sito di una dichiarazione, per ritrovare la casa in cui era scritta. *)
+let site_of_top (td : top_decl) : (string * int * int) option =
+  let s (l : location) = Some (l.file, l.start_line, l.start_col) in
+  match td with
+  | TopFun fn -> s fn.fn_loc          | TopMorph mp -> s mp.mp_loc
+  | TopView vd -> s vd.vw_loc         | TopMove mv -> s mv.mv_loc
+  | TopFunctor ft -> s ft.ft_loc      | TopGeomMorphism gm -> s gm.gm_loc
+  | TopNatTransform nt -> s nt.nt_loc | TopReduction rd -> s rd.rd_loc
+  | _ -> None
+
+let house_of_top (td : top_decl) : string option =
+  match site_of_top td with
+  | None -> None
+  | Some k -> Hashtbl.find_opt Surface_ast.arrow_written_in k
 
 let format_program (prog : program) : string option =
   try
     let f = mk () in
-    List.iter (fmt_top f) prog;
+    (* LE FRECCE TORNANO NELLE LORO CASE. Il parser le solleva a top-level
+       (push_decl), ma la pietra del contenimento dice che una freccia vive
+       nel corpo del place che tocca: ristamparle a colonna zero produrrebbe
+       un file che il compilatore stesso rifiuta. La topografia è registrata
+       per SITO, quindi due frecce omonime in case diverse non si confondono. *)
+    let hosted = List.filter_map (fun td ->
+      match house_of_top td with Some h -> Some (h, td) | None -> None) prog in
+    List.iter (fun td ->
+      match td with
+      | TopPlace pd ->
+          let mine = List.filter_map
+            (fun (h, d) -> if h = pd.pd_name then Some d else None) hosted in
+          if mine = [] then fmt_place f pd
+          else begin
+            (* la casa si riapre per accogliere le sue frecce *)
+            fmt_place ~close:false f pd;
+            List.iter (fun d -> fmt_top f d) mine;
+            f.indent <- f.indent - 1;
+            line f "}"
+          end
+      | _ when house_of_top td <> None -> ()   (* già stampata nella casa *)
+      | _ -> fmt_top f td) prog;
     Some (Buffer.contents f.buf)
   with Exit -> None   (* uncovered construct: no output (fail-safe) *)
 

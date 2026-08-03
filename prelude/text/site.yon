@@ -1,0 +1,130 @@
+/* text: il file del package `text`, sotto prelude/.
+ *
+ * IL SITO C(Txt): la categoria del testo.
+ *
+ *   OGGETTI  String — il place di questa directory. Il compilatore lo conta.
+ *   FRECCE   le `morphism` qui sotto, i GENERATORI del sito.
+ *
+ * Il nome del topos non si scrive (viene dal file). Il terminale non si
+ * dichiara (ritirato: ogni topos ne ha uno per definizione).
+ *
+ * SUL NOME. Lo space si chiama `text` (il codice primitivo fuso), il place
+ * si chiama `String` — e la fusione `String -> text` è viva nel compilatore
+ * da giugno. Non è un'incoerenza: `text` è il nome del CODICE nel kernel,
+ * `String` la faccia dichiarata. Nel toml il world è `Txt`.
+ *
+ * PERCHÉ `site.yon` E NON `text.yon`: il filesystem di macOS è
+ * case-INSENSITIVE, quindi `text.yon` e `Text.yon` sono lo stesso file — e
+ * un `rm Text.yon` cancella il file del package. Il nome-uguale-alla-
+ * directory è una trappola su questa piattaforma; `site.yon` dice il ruolo
+ * e non collide con nessun place (i place sono Maiuscoli, questo no).
+ */
+topos where {
+
+  /* ─── IL GENERATORE — uno solo ────────────────────────────────────────
+   *
+   * `concat` è l'unica operazione da cui tutto discende: substring, reverse,
+   * take, skip, replicate, index_of sono costruite con concat + char_at +
+   * from_char, quindi sono DERIVATE e vivono nel place. Un funtore le
+   * ottiene per funtorialità — F(g∘f) = F(g)∘F(f) non lascia scelta.
+   *
+   * Mettere una freccia qui COSTA: ogni funtore uscente da Txt la deve
+   * tradurre. Un generatore solo è il sito più economico possibile.
+   *
+   * E `concat` è il MONOIDE NON COMMUTATIVO più pulito del preludio:
+   * associativo, con "" come neutro, e concat(a,b) != concat(b,a). Buon
+   * banco di prova per il cantiere algebre — gli altri monoidi del preludio
+   * (Additive su Number, Multiplicative su Int) sono tutti commutativi.
+   *
+   * `uses Additive` arriverà col cantiere algebre: oggi la posizione non
+   * esiste in grammatica.
+   */
+  morphism concat(a: String, b: String): String
+}
+
+/* ═══ IL FUNTORE Reverse — ED È CONTROVARIANTE ═════════════════════════
+ *
+ * `reverse` non è solo un'involuzione: è un ANTIOMOMORFISMO su concat.
+ *
+ *     reverse(concat(a, b))  =  concat(reverse(b), reverse(a))
+ *                                             ^^^^^^^^^^^^^
+ *                                             l'ordine SI SCAMBIA
+ *
+ * Quindi NON è un funtore covariante: è controvariante, cioè un funtore
+ * `Txt -> Txt^op`. È il primo esempio di controvarianza del linguaggio, e
+ * l'antiomomorfismo dell'inversione è il caso classico in algebra (la
+ * stessa struttura di (a·b)^-1 = b^-1·a^-1 nei gruppi).
+ *
+ * Dice più del `morph Reverse` che sta in String.yon: quello dichiara
+ * l'involuzione, questo dichiara anche COME agisce su concat.
+ *
+ * LA FORMA È PROGETTATA, NON VIVA — due blocchi mancano entrambi:
+ * `on object`/`on morphism` sul functor (oggi ha parametri e un corpo
+ * unico) e il modo di dire la controvarianza. Tre strade, DECISIONE DI
+ * ANTONIO:
+ *   (a) un world opposto nominabile (`Txt^op` / `op Txt`)
+ *   (b) una parola sul funtore (`functor Reverse contravariant from ...`)
+ *   (c) una law che lo dichiara (`law antihomomorphic`), grammatica
+ *       invariata — la meno invasiva, e coerente con «law unica parola
+ *       per gli obblighi»
+ * Qui sotto è scritta nella forma (c), la più conservativa.
+ *
+ *   functor Reverse from Txt to Txt {
+ *     on object(s: String): String { return String.reverse(s) }
+ *     on morphism concat via concat_flipped
+ *     law involutive          // reverse(reverse(s)) == s
+ *     law antihomomorphic     // reverse(a ++ b) == reverse(b) ++ reverse(a)
+ *   }
+ *
+ *   // l'immagine di concat sotto Reverse: gli argomenti scambiati. È ciò
+ *   // che rende il quadro commutativo — e il fatto che serva uno
+ *   // "flipped" È la controvarianza, resa esplicita.
+ *   fun concat_flipped(a: String, b: String): String {
+ *     return String.concat(b, a)
+ *   }
+ *
+ * ═══ L'ALTRO FUNTORE — genuino, bloccato su due decisioni ══════════════
+ *
+ *   functor MapChar from Txt to Txt        [bloccato]
+ *     on object(s: String): String { ...applica f a ogni carattere... }
+ *     on morphism concat via concat
+ *     law additive     // map(f, a ++ b) == map(f, a) ++ map(f, b) — VERO
+ *
+ * Questo È covariante e la sua legge È vera: applicare una funzione a ogni
+ * carattere distribuisce sulla concatenazione. Ma vuole (1) il place `Char`
+ * — oggi `char_at` ritorna un Number, quindi una funzione carattere→
+ * carattere non ha un tipo da nominare; (2) l'ENCODING deciso (byte o
+ * codepoint) — da cui dipende cosa sia un carattere. Entrambe a ledger.
+ *
+ * ═══ E I DUE CHE NON SI SCRIVONO — il commento-scudo ═══════════════════
+ *
+ * Verrebbe naturale dichiarare `Txt -> Num` (parse) o `Num -> Txt`
+ * (formattazione). Nessuno dei due è un funtore, e i controesempi sono
+ * aritmetici:
+ *
+ *   FORMATTAZIONE (Num -> Txt), non additiva:
+ *       to_text(2 + 3)            = "5"
+ *       to_text(2) ++ to_text(3)  = "23"      !=
+ *
+ *   PARSE (Txt -> Num), non additivo:
+ *       parse("1" ++ "2")         = 12
+ *       parse("1") + parse("2")   = 3         !=
+ *
+ * Concatenare stringhe e sommare numeri sono operazioni che non si
+ * corrispondono: nessuna delle due preserva la struttura monoidale. Come
+ * funtori esisterebbero solo sugli OGGETTI, senza law algebriche — cioè
+ * senza portare nessuna garanzia, e con `law additive` sarebbero BUGIE.
+ *
+ * Quindi `parse` e `from_int` restano `fun` nei place: sono frecce fra
+ * OGGETTI, non fra categorie. Non è pigrizia — è che il funtore
+ * dichiarerebbe qualcosa di falso.
+ *
+ * ATTENZIONE: questo è il posto dove qualcuno riproverà. Il commento resta.
+ *
+ * ─── LEDGER ───────────────────────────────────────────────────────────
+ * `List<String>` per `split`: vuole i contenitori del preludio (oggi
+ *     `List<T>` è un generic del linguaggio, non un place dichiarato).
+ * LE `law` DEL FUNCTOR non sono verificate da nessuno (`ft_laws` è letto
+ *     solo dal formatter): per il primo funtore controvariante del
+ *     linguaggio la verifica è ciò che darebbe senso alla controvarianza.
+ * ═══════════════════════════════════════════════════════════════════════ */

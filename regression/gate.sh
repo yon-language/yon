@@ -31,8 +31,11 @@ PICK=""
 add() { case " $PICK " in *" $1 "*) ;; *) PICK="$PICK $1";; esac; }
 for f in $DIRTY; do
   case "$f" in
-    frontend/parser.mly|frontend/lexer.mll|frontend/parser_state.ml)
-      add regression/test_syntax_triangle.py; add regression/test_canonical_forms.py ;;
+    frontend/parser.mly|frontend/lexer.mll|frontend/parser_state.ml|frontend/surface_ast.ml|frontend/formatter.ml)
+      add regression/test_syntax_triangle.py; add regression/test_canonical_forms.py
+      # il formatter è il gate piu esigente (round-trip + idempotenza + 100%
+      # copertura corpus): al tier 1 costa 4s, al tier 3 costa 11 minuti
+      add regression/test_formatter.py ;;
     frontend/tycheck.ml|frontend/desugar.ml|frontend/dispatcher.ml)
       add regression/test_project_diff.py; add regression/test_canonical_forms.py
       add regression/test_projects.py

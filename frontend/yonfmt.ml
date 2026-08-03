@@ -33,6 +33,15 @@ let () =
            let oc = open_out file in output_string oc out; close_out oc;
            Printf.printf "formatted: %s\n" file
        | None -> Printf.printf "left unchanged (fail-safe): %s\n" file)
+  | [_; "--raw"; file] ->
+      (* l'output GREZZO, prima del round-trip fail-safe: serve a vedere
+         PERCHE il guard rifiuta, invece di indovinarlo *)
+      (match Formatter.parse (read_file file) with
+       | None -> prerr_endline "parse failed"; exit 2
+       | Some prog ->
+           (match Formatter.format_program prog with
+            | None -> prerr_endline "format_program: Exit (costrutto non coperto)"; exit 3
+            | Some out -> print_string out))
   | [_; file] ->
       (match Formatter.safe_format (read_file file) with
        | Some out -> print_string out
