@@ -31,7 +31,7 @@ An object living in a world. A place is declared in one of two shapes, both insi
 
 #### `this`
 
-Heads the coproduct clause of a block place: `this > A :U B` declares the place as the sum of its arms. Each arm is a sub-object of the place (a coproduct injection, a mono), optionally carrying a payload (`Node(Tree, Tree)`). The name is what lets an arm's payload refer to the type being defined, so this is how a genuinely recursive type is written; an anonymous inline sum (`A | B`) cannot name itself. A value is built with the mediatrice `.-> Ctor { _1 a _2 b }` (a bare name denotes a nullary arm's point) and consumed with `match`, one branch per arm; `hit(Ctor, args)`/`hit_elim` remain the KERNEL spellings of the same constructor/eliminator (Yon0 and the cubical layer speak them directly). At runtime the value is a content-addressed node (the arm is the tag, its arguments are the children), so equal subvalues share storage.
+Heads the coproduct clause of a block place: `this > A :U B` declares the place as the sum of its arms. Each arm is a sub-object of the place (a coproduct injection, a mono), optionally carrying a payload (`Node(Tree, Tree)`). The name is what lets an arm's payload refer to the type being defined, so this is how a genuinely recursive type is written; an anonymous inline sum (`A | B`) cannot name itself. A value is built with the mediatrice `.-> Ctor { _1 a _2 b }` (a bare name denotes a nullary arm's point) and consumed with `match`, one branch per arm; `hit(Ctor, args)`/`hit_elim` remain the kernel spellings of the same constructor/eliminator (Yon0 and the cubical layer speak them directly). At runtime the value is a content-addressed node (the arm is the tag, its arguments are the children), so equal subvalues share storage.
 
 #### `import`
 
@@ -43,9 +43,9 @@ Marks a function as not exported across Spaces: it never enters the cross-Space 
 
 #### `given`
 
-`fun f(x: T): U is given` — the body is AXIOMATIC: the compiler realizes it, the language declares its face. It is Java's `native`, and it is the brother of `is <prim>`: that one says the CARRIER is a leaf of the recursion, this one says the BODY is.
+`fun f(x: T): U is given` — the body is axiomatic: the compiler realizes it, the language declares its face. It is Java's `native`, and it is the brother of `is <prim>`: that one says the *carrier* is a leaf of the recursion, this one says the *body* is.
 
-It is not a mute promise. The checker verifies that an implementation is actually wired under the name the house qualifies (`Math.floor` → `Math__floor`), and that the declared signature IS the wired one — a missing name, a different arity, or a different type are errors. So the boundary with the silicon stops being invisible and becomes a line of Yon: you can read where the language ends and the machine begins.
+It is not a mute promise. The checker verifies that an implementation is actually wired under the name the house qualifies (`Math.floor` → `Math__floor`), and that the declared signature is the wired one — a missing name, a different arity, or a different type are errors. So the boundary with the silicon stops being invisible and becomes a line of Yon: you can read where the language ends and the machine begins.
 
 A `given` function emits nothing: calls resolve to the builtin exactly as before, and the declaration lives in the checker, not in the lowering.
 
@@ -116,7 +116,7 @@ Introduces the body of `iter` and `while`.
 
 #### `for`
 
-With `every`: `for every x in e { }`, iteration over a List. In 1.0 execution is sequential.
+With `every`: `for every x in e { }`, iteration over a List. Execution is sequential.
 
 #### `every`
 
@@ -124,7 +124,7 @@ The companion of `for`; see above.
 
 #### `here`
 
-`for every x in e when here { }`: the Space filter in the for-every header. Declared intent in 1.0: execution is sequential and every element passes.
+`for every x in e when here { }`: the Space filter in the for-every header. Declared intent: execution is sequential and every element passes.
 
 #### `sequence`
 

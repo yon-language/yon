@@ -90,12 +90,11 @@ place Order {
 }
 ```
 
-A plain `operation` is pinned to the place that declares it. A `functorial`
-operation is lifted along world morphisms by Yoneda, so it travels with the
-object's relations instead of with one fixed implementation. That is the Yoneda
-principle of chapter 0 made operational: the operation follows the maps into the
-object, not a pinned site. What each operation *means* is given later by a
-`reduction`, in chapter 7.
+An `operation` is pinned to the place that declares it, and what it *means* is
+given later by a `reduction`, in chapter 7. (The `functorial` modifier, which
+declared a lifting along world morphisms, is retired: it was an obligation
+nobody verified. The lifting itself is the job of a `functor`, which goes
+between categories and says so in its clause.)
 
 ## Sub-objects
 

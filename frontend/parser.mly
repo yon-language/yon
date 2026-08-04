@@ -1549,8 +1549,8 @@ expr_atom:
   (* ─── Metonymic surface sugar (journey metaphor) ─────────────────────
      Prefix forms binding an atom; pure desugar to the cubical primitives.
        back p          = inv(p)
-       span e          = ua(e)
-       carry x along e = transport(ua(e), x)   (e a bridge / equivalence) *)
+       carry x along e = transport(ua(e), x)   (e a bridge / equivalence)
+     (`span` is retired: univalence is written `ua(e)` directly.) *)
   | BACK e = expr_atom %prec PREFIX_APP
     { ECall ("inv", [e], mk_loc $startpos $endpos) }
   | CARRY x = expr_atom ALONG e = expr_atom %prec PREFIX_APP

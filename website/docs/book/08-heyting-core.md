@@ -69,13 +69,11 @@ fun main(): Number {
 ```
 
 And Ω itself carries structure: a **Lawvere-Tierney topology** is an
-operator `j : Ω → Ω` (monotone, inflationary, idempotent) declared on a
-place, the seed of sheaf semantics:
-
-<!-- yon-gate: illustrative -->
-```yon
-topology j of P { return 1 }          // a Lawvere-Tierney j : Omega -> Omega
-```
+operator `j : Ω → Ω` (monotone, inflationary, idempotent), the seed of sheaf
+semantics. Yon had a `topology` declaration and it has been **retired**: it
+parsed, and sheafification was never wired behind it — a keyword that
+promises a semantics nobody enforces is worse than its absence. It returns
+with the sheaf design, and with something to enforce.
 
 ## Forcing at a stage
 

@@ -89,4 +89,4 @@ a result discipline where an operation's outcome is **Provato / Assurdo /
 Indeterminato**, proven, absurd, undecided, so "it failed" and "it has
 not decided yet" stop being the same thing. The trit machinery
 (`heyting`) is operational today; the surface unwrapping construct is
-post-1.0, and this book will gain a section when it lands.
+still ahead, and this book will gain a section when it lands.

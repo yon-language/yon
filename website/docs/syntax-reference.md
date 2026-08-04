@@ -2,12 +2,12 @@
 id: syntax-reference
 title: Syntax Reference
 sidebar_position: 2
-description: The normative syntax of Yon 1.0, derived from the actual grammar.
+description: The normative syntax of Yon 1.2, derived from the actual grammar.
 ---
 
 # Yon, Syntax Reference
 
-This is the **normative reference for Yon 1.0**. Every form below was
+This is the **normative reference for Yon 1.2**. Every form below was
 re-verified against the real grammar (`frontend/parser.mly` and
 `frontend/lexer.mll`) and the compiling examples under
 `regression/book/jp/*/Entry.yon`, not from memory, not from older documents.
@@ -148,9 +148,9 @@ Each construct carries a status:
 - **✗ rejected**, the grammar accepts it but the type checker refuses it
   cleanly, by design, with a specific error. A deviation, pinned by a negative
   fixture in `regression/canonical_forms/`.
-- **⚠ not implemented**, the grammar accepts it, but the 1.0 compiler does
+- **⚠ not implemented**, the grammar accepts it, but the compiler does
   not implement it (it fails at emission, or the construct cannot actually be
-  used). Listed for completeness; *not part of the 1.0 contract*.
+  used). Listed for completeness; *not part of the 1.2 contract*.
 
 ## Lexical structure
 
@@ -163,7 +163,7 @@ Each construct carries a status:
 | [`present`](/book/keywords#present), [`absent`](/book/keywords#absent), [`unknown`](/book/keywords#unknown) | ✓ | Heyting truth values (intuitionistic Ω) |
 | `mod::name` | ✓ | Qualified name (module namespace) |
 
-Duration literals (`100ms`, `5s`, `2min`) were **removed in v1.1.0**: `2s` now
+Duration literals (`100ms`, `5s`, `2min`) were **removed in v1.1**: `2s` now
 lexes as `NUM_LIT 2` followed by the identifier `s`. Currency literals
 (`10.50 EUR`) are likewise **not** in the grammar; the `money` *type* exists
 (see *Types*).
@@ -197,11 +197,11 @@ only numbers travel on the wire.
 | `be x holds e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword). Declares once per scope: re-`holds` of a name already bound in the same scope is a compile error (use `x = e` to reassign); nested-scope shadowing is allowed, `_`-prefixed names are exempt |
 | `x = e` | ✓ | **Space-cell assign** (the content-addressed mutation mechanism). The target binding is promoted to a Space cell: its `be` allocates the cell, reads go through it, `x = e` updates it. Works on locals and parameters. Snapshot semantics, no aliasing (`be y holds x` does not alias `x`'s cell) |
 | `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
-| `x.f = e` | ✗ rejected | Field mutation: place sections are immutable in 1.0; the type checker rejects it ("place sections are immutable"). Mutate through cells |
+| `x.f = e` | ✗ rejected | Field mutation: place sections are immutable; the type checker rejects it ("place sections are immutable"). Mutate through cells |
 
 `=` is the assignment operator. The same `=` token also appears in top-level
-categorical definitions (`place P = pullback(f, g)`), in `prop name(...) = e`
-inside a topos, and in `show f = e` inside views. There is no `becomes` keyword.
+categorical definitions, in `prop name(...) = e` inside a topos, and in
+`show f = e` inside views. There is no `becomes` keyword.
 
 ## Types
 
@@ -211,7 +211,7 @@ inside a topos, and in `show f = e` inside views. There is no `becomes` keyword.
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
 | `A \| B \| C(T)` | ✓ | Sum type; variants may carry arguments |
 | `list of T`, `map of K to V` | ✓ | Collections |
-| `stream of T` | ✓ | Stream type. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed in v1.1.0) |
+| `stream of T` | ✓ | Stream type. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed in v1.1) |
 | `T -> U` | ✓ | Function type, right-associative |
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
@@ -236,7 +236,7 @@ from the call sites.
 | `a \|> f(args)` | ✓ | Pipe: passes `a` as the **first** argument of the call |
 | `if c then a else b` | ✓ | Conditional expression (lowers to `scf.if`) |
 | `fun(x: T, y) => e` | ✓ | Inline lambda (unannotated params are inferred) |
-| `move(s: P) => new Q {...} from P to Q` | ✓ | Inline handle lambdas, one per arrow kind. They bind, compose |
+| `move(s: P) => .-> Q {...} from P to Q` | ✓ | Inline handle lambdas, one per arrow kind. They bind, compose |
 | `reduction(acc, x) => e of P` | ✓ | (kind-checked: same kind, or post-compose of view/reduction with |
 | `view(s: P) => e of P` | ✓ | a fun), and apply, a bound or composed handle is called like a |
 | `functor(x) => e from W to V [law id]*` | ✓ | function, and `apply_move` accepts a locally bound move-lambda. |
@@ -245,15 +245,13 @@ from the call sites.
 | *morphism body is closed* | ✓ | A `move`/`functor`/`view`/`reduction`/`morph` body may use only its parameters and top-level definitions; capturing an enclosing local is a compile-time error (it could not survive crossing a Space). A plain `fun` lambda, by contrast, captures enclosing locals at any nesting depth |
 | `f(args) in S` | ✓ | Call in a Space context (`apply_move ... in S`, morph dispatch) |
 | `all P where cond` | ✓ | Quantification over the sections of a place |
-| `verify P` | ✓ | Instantiate a law-verified place as a Magma handle |
-| `new P { field value }` | ✓ | Section construction, **no `=`** between field and value |
-| [`refl(t)`](/book/keywords#refl), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms |
-| [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is [`refl`](/book/keywords#refl) in evidence at the call site; a J stuck on a non-refl path is rejected at compile time (the runtime never decides path equality) |
+| `.-> P { field value }` | ✓ | Section construction through the mediatrice, **no `=`** between field and value. (`new` and `verify` are retired: the constructor is the mediating arrow, and a law-verified place is instantiated like any other) |
+| [`clear(t)`](/book/keywords#clear), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms. `clear` is the reflexivity proof: the path that needs no argument, because the two ends are definitionally the same |
+| [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is [`clear`](/book/keywords#clear) in evidence at the call site; a J stuck on a non-reflexive path is rejected at compile time (the runtime never decides path equality) |
 | [`plam i => e`](/book/keywords#plam) | ✓ | Path abstraction over a dimension `i`; the face system for the compositions is written `i = I0 => plam j => e` / `i = I1 => plam j => e` |
-| [`hit(ctor)`](/book/keywords#hit) / `hit(ctor, a)`, [`hit_elim(C, [b => e, ...], x)`](/book/keywords#hit_elim) | ✓ | Higher inductive type constructor and eliminator; one branch per constructor, the path branches respecting the points (`examples/circle_hit`) |
+| [`hit(ctor)`](/book/keywords#hit) / `hit(ctor, a)`, [`hit_elim(C, [b => e, ...], x)`](/book/keywords#hit_elim) | ✓ | The **kernel** spellings of the constructor and the eliminator. The surface writes `.-> Ctor { … }` (a bare name for a nullary arm) and `match`; Yon0 and the cubical layer speak `hit`/`hit_elim` directly (`examples/circle_hit`) |
 | [`comp(line)[faces]`](/book/keywords#comp) / [`hcomp T[faces]`](/book/keywords#hcomp) | ✓ | Kan composition along a line / homogeneous composition; reduced by the kernel (`regression/yon_tests/prove`) |
 | [`quote(c, a)`](/book/keywords#quote) / [`el_match(target, ret, body)`](/book/keywords#el_match) | ✓ | Universe-code introduction / elimination for `El(c)`; lowers to the inhabitant / the body application. The deeper Tarski reflection is 1.2 |
-| `pullback(f, g, a, b)` | ✓ | Runtime compatible pair with `f(a) == g(b)` checked. The no-arg expression forms `pullback(f, g)` / `pushout(f, g)` were removed in v1.1.0; the two-argument form survives **only** as the declaration `place P = pullback(f, g)` (see *Places*) |
 | `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
 ### Operators (by family)
@@ -283,9 +281,9 @@ from the call sites.
 | `produce { }` / `emit e` | ✓ | Producer block / emit into the active stream or handler |
 | `spawn { }` / `spawn in N parallel { }` / `promote e` | ✓ | Fork one or N isolated process replicas; each `promote e` contributes to the block's collection stream, drained by the parent with `.fold` / `.for_every`. `spawn_index` (0..N-1) is in scope in the body. Scaling measured in Appendix D |
 | `forces stage cond { }` | ✓ | Kripke–Joyal forcing block at a stage |
-| `for every x in e { }` (+ `when here`) | ✓ | Iteration over a List. **1.0 executes sequentially**; parallelism (and the `when here` space filter) are declared intent, not yet a runtime distinction |
+| `for every x in e { }` (+ `when here`) | ✓ | Iteration over a List. **1.2 executes sequentially**; parallelism (and the `when here` space filter) are declared intent, not yet a runtime distinction |
 | `in sequence over x in e { }` | ✓ | Sequential iteration over a List |
-| `repeat at most N times { } [otherwise { }]` | ✓ | The body runs exactly N times, then [`otherwise`](/book/keywords#otherwise) (if present) runs. A success-based early exit is a post-1.0 protocol |
+| `repeat at most N times { } [otherwise { }]` | ✓ | The body runs exactly N times, then [`otherwise`](/book/keywords#otherwise) (if present) runs. A success-based early exit is a later protocol |
 | `forever { }` | ✓ | Infinite loop (`while present`); typically paired with effects inside |
 
 ### Hermetic scope
@@ -312,7 +310,7 @@ fun f(x: Number, y: Number): Number { return x + y }
 fun g<A, B>(x: A): B { ... }                      // type parameters
 fun h(x: Number): Number visits Output { ... }    // declared effect
 internal fun secret(x: Number): Number { ... }    // not exported cross-Space
-partial fun p(x: Number): Number { ... }          // partial (may not return)
+fun p(x: Number) on error E: Number { ... }       // partial: it declares how it fails
 ```
 
 All four modifiers are ✓ verified. **Effect discipline (`visits`)**: calling a
@@ -341,16 +339,14 @@ A `place` then takes its world by inference from the project's toml, not from an
 
 | Form | Status | Meaning |
 |---|---|---|
-| `place P [over X] [subcontains B] [on error E] { members }` | ✓ | An object (its world is inferred from the toml; there is no `in W` clause). `over X` = slice (fibered over `X`); `subcontains B` = sub-object mono `P ↪ B`; `on error E` = error morphism `P → E` |
+| `place P [over X] [on error E] { members }` | ✓ | An object (its world is inferred from the toml; there is no `in W` clause). `over X` = slice (fibered over `X`); `on error E` = error morphism `P → E`. The sub-object mono is a **body clause**: `this < B` |
 | `place P ... with effects { ... }` | ✓ | Enables operations (1-cells) among the members |
-| `error E [subcontains B] { fields }` | ✓ | An error place (target of `on error`); world inferred from the toml, no `in W` clause |
+| `error E { fields }` | ✓ | An error place (target of `on error`); world inferred from the toml, no `in W` clause. The mono into a parent error is the body clause `this < B` |
 | `field_name type` | ✓ | Field, **no colon**: `balance number` |
 | `operation op(a: T): U` | ✓ | Operation (1-cell) |
-| `functorial operation op(...)` | ✓ | Operation lifted along world morphisms (Yoneda lifting) |
 | `operation op(...) uses algebra Additive` | ✓ | Bind to a catalog algebra; laws certified by the compiler |
 | `law commutative` etc. | ✓ | Declared law, verified (AlgebraVerifier) |
 | `cell c from e1 to e2` | ✓ | Higher cell between lower cells (CaTT witness) |
-| `place P = pullback(f, g)` / `pushout(f, g)` | ✓ | Place as a limit / colimit |
 
 Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 `BooleanOr`, `BooleanAnd`, `Gcd`.
@@ -365,27 +361,28 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | `morph F from W to V { on object(...) { } on morphism op via op2 }` | ✓ | Functor by components; `on object: fun(...) => e` inline form allowed; `on`, `object`, `morphism` stay free as user identifiers |
 | `functor F(x: T) from W to V [law identity] [law composition] { return e }` | ✓ | Functor given by a return expression with declared laws |
 | `nat transform t from F to G { for each X by fnX }` | ✓ | Natural transformation: one component per object |
-| `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: [`pull`](/book/keywords#pull) is the inverse image, [`push`](/book/keywords#push) the direct image; clauses [`adjunction`](/book/keywords#adjunction), `exact pull`, `exact push` declare its properties |
+| `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: [`pull`](/book/keywords#pull) is the inverse image, [`push`](/book/keywords#push) the direct image; the clause `exact push` declares that f∗ preserves finite limits. (`adjunction` and `exact pull` are retired: they declared what holds by definition) |
 | `view V of P { show f  show f = e  show f as "label" }` | ✓ | Derived projection of a place, lowered to a record place plus a constructor: `V(x)` builds the projection, fields read normally |
-| `topology j of P { ... }` | ✓ | **Lawvere–Tierney** topology: a body defining `j : Ω → Ω` |
-| `reduction [forward\|backward\|bi] [lawful] [invertible] R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | Reduction with direction and laws; clauses are contextual `on` handlers and [`be`](/book/keywords#be) bindings |
+| `reduction R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | A reduction; clauses are contextual `on` handlers and [`be`](/book/keywords#be) bindings. (The `forward`/`backward`/`bi` directions and the `lawful`/`invertible` modifiers are retired: they were obligations nobody verified) |
 
 ## Topos declarations
 
 ```yon
-topos Account where {
-  terminal Unit                                  // optional
-  morphisms { ...morphism declarations... }      // optional
-  prop is_overdrawn(s: State): proposition = s.balance < 0
+topos where {
+  morphism plus(a: Int64, b: Int64): Int64       // the site's generators
+  prop is_overdrawn(s: State) = s.balance < 0
 }
 ```
 
-Status: ✓ (regression examples). Under v1.1.0 *topos-per-space* there is no `in W`
-or `at SPACE` annotation and no inline `objects { }` block: the world, the
+Status: ✓ (regression examples). Under *topos-per-space* there is no `in W` or
+`at SPACE` annotation and no inline `objects { }` block: the world, the
 residence space, and the objects are all **inferred from the filesystem**. The
-`morphisms { }` block declares its members with the singular `morphism` keyword.
-A `prop` is a subobject classifier, a map into Ω; the abstract form (no `= body`)
-declares the signature only.
+name is not written either — it comes from the file, so it lives in one place
+and cannot diverge (the named form `topos Name where` is still accepted while
+the corpus migrates). The terminal is not declared: every topos has one by
+definition. A `prop` is a subobject classifier, a map into Ω, and it carries no
+return type — `prop` already implies `proposition`; the abstract form (no
+`= body`) declares the signature only.
 
 ## Spaces and packages
 
@@ -433,9 +430,9 @@ effects, move/morphism gating) with opt-in physical heap separation
 | `Vec` | `empty, push, get, set, size`, a dynamic array on an arena strip (in-place mutable, no malloc) |
 | `MerkleTree` | Content-addressed Merkle trees |
 | `VoyagerList` | Golay-sealed list (error-correcting) |
-| `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog`, with `verify P` |
+| `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog` |
 | `Stream` | `from_list, map, filter, fold, iterate, take` |
-| `Space` | `make, set, get`, mutable cells (the 1.0 mutation mechanism) |
+| `Space` | `make, set, get`, mutable cells (the mutation mechanism) |
 
 Failure convention: string-producing operations return the `0.0` handle on
 failure (missing file, unset variable, out-of-range index).
@@ -445,7 +442,7 @@ failure (missing file, unset variable, out-of-range index).
 - Nullary builtins are called with empty parens `()`: `XSet.empty()`,
   `Vec.empty()`. The few with a unit-argument signature take `(0)`:
   `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)`.
-- `new P { field value }` and place fields `name type`, no `=`, no `:`.
+- `.-> P { field value }` and place fields `name type`, no `=`, no `:`.
 - A program's exit code is `main`'s return value, truncated mod 256.
 - `return` inside a `when` branch does not exit the function; use
   `if/then/else` to select values.

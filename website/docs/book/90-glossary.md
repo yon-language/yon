@@ -58,7 +58,7 @@ travel along a mono: `this <` declares one, comprehension's coercion is
 one, `boolean → proposition` is one.
 
 **subobject**, a part of an object carved out by a property; in Yon, a
-comprehension type `{x : A where P}` or a `place ... subcontains` declaration.
+comprehension type `{x : A where P}` or the body clause `this < B`.
 
 **Ω (the classifier)**, the type of truth values; in Yon a Heyting algebra
 with `present`, `absent`, `unknown` (the subobject classifier of a topos, 

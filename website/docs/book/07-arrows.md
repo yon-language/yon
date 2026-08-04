@@ -206,8 +206,8 @@ geomorph Line from Order to Ticket {
 
 `push` sends an order to its ticket; `pull` brings a ticket back to its order.
 The point of the geomorph, over a bare pair of moves, is the *law*: `push` is
-left-adjoint to `pull` (you can mark `adjunction`, and `exact pull` / `exact
-push`), which is what makes "the ticket in the kitchen" and "the order in the
+left-adjoint to `pull` (and you can mark `exact push`, the exactness that is
+not automatic), which is what makes "the ticket in the kitchen" and "the order in the
 dining room" two faithful sides of one thing rather than two loosely related
 records. Where a move is a courier, a geomorph is a translation between two
 whole contexts, and the adjunction is its guarantee of coherence.

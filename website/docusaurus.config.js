@@ -84,7 +84,10 @@ const config = {
         respectPrefersColorScheme: false,
       },
       navbar: {
-        logo: { alt: 'Yon', src: 'img/logo.svg' },
+        // the brand kit ships three vectors: the badge for dark grounds, the
+        // light-ground variant, and a monochrome one that inherits the text
+        // colour. Docusaurus picks srcDark when the dark theme is active.
+        logo: { alt: 'Yon', src: 'img/yon-logo-light.svg', srcDark: 'img/yon-logo.svg' },
         title: 'Yon',
         items: [
           { to: '/intro', label: 'The Book', position: 'left' },

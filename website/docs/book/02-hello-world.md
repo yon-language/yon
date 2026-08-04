@@ -46,7 +46,7 @@ fun main(): Number {
 
 Two things are already visible here. First, `be x holds e` is *the* binding
 form of Yon, immutable, used everywhere (there is no `let`). Second, the
-string literal is a real value: since the 1.0 *string fusion*, `"ciao, mondo"`
+string literal is a real value: with the *string fusion*, `"ciao, mondo"`
 is a section of the builtin `String` place, interned on the content-addressed
 heap.
 
