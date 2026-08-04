@@ -758,7 +758,7 @@ Inside a `spawn` body, `promote E` emits `E` onto the parent's collection stream
 
 #### `parallel`
 
-The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in the parent before the fork and gives the number of replicas. (`=` is not yet supported inside a spawn body; use `Space.set`, or compute the value before the block. The full fix lands with the produce rework in 1.2.)
+The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in the parent before the fork and gives the number of replicas. (`=` is not yet supported inside a spawn body; use `Space.set`, or compute the value before the block. The full fix lands with the produce rework.)
 
 <CodeWindow file="spawn_parallel_collect.yon" run="yonc spawn_parallel_collect.yon -o spc && ./spc; echo $?" out={["10"]}>
 

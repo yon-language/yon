@@ -16,9 +16,21 @@
 module S = Surface_ast
 
 (* Minimal type printer (kept local to avoid cross-executable deps). *)
+(* The doc shows the SURFACE, so a primitive prints as its declared face:
+   the prelude place (Number, Text, Boolean, Unit), not the kernel code the
+   parser canonicalized it to. Writing the code would show a form the surface
+   rejects (E1001). The face is looked up in fusion_of_prim, so a new fused
+   place is picked up without touching this table. *)
 let rec fmt_ty (t : S.ty) : string =
   match t with
-  | S.TyPrim n -> n
+  | S.TyPrim n ->
+      (match Hashtbl.find_opt S.fusion_of_prim n with
+       | Some face -> face
+       | None ->
+           (match n with
+            | "number" -> "Number" | "text" -> "Text"
+            | "boolean" -> "Boolean" | "unit" -> "Unit"
+            | _ -> n))
   | S.TyPrimIn (n, opts) -> n ^ " in " ^ String.concat ", " opts
   | S.TyList t -> "list of " ^ fmt_ty t
   | S.TyMap (k, v) -> "map of " ^ fmt_ty k ^ " to " ^ fmt_ty v
@@ -50,7 +62,7 @@ let doc_world (w : S.world_decl) =
 let doc_place (p : S.place_decl) =
   line (Printf.sprintf "### place `%s` in `%s`" p.S.pd_name p.S.pd_world);
   (match p.S.pd_subcontains with
-   | Some b -> line (Printf.sprintf "- subcontains (sub-object of): `%s`" b) | None -> ());
+   | Some b -> line (Printf.sprintf "- sub-object of (`this <`): `%s`" b) | None -> ());
   (match p.S.pd_over with
    | Some x -> line (Printf.sprintf "- fibered over: `%s`" x) | None -> ());
   let fields = List.filter_map (function S.FoField f -> Some f | _ -> None) p.S.pd_members in

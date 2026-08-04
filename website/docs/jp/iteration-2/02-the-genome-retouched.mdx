@@ -53,7 +53,7 @@ a picture of a moon from a billion kilometres of static recovers a gene from a f
 Seal a gene, corrupt two of its bits, and read it back. It comes back whole.
 
 ```yon
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be genome holds VoyagerList.empty()
   be g1 holds VoyagerList.append(genome, 1445)      // a gene, sealed as a Golay codeword
   be damaged holds VoyagerList.corrupt_at(g1, 0, 2)  // two bits flipped, as in a bad join

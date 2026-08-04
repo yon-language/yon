@@ -129,7 +129,7 @@ before the consumer drains: the frames sit in the file-backed shared segment,
 which persists past the producer's exit, so a full cross-process crossing is
 exercised deterministically. The producer's exit is the synchronization point.
 The concurrent path, both processes live at once with the consumer draining a
-slot ring the producer is still filling under contention, is a known 1.2 item.
+slot ring the producer is still filling under contention, is a known open item.
 The scalar slot ring is 64 slots; the byte ring above it (the DTO wire) is the
 64&nbsp;KB frame ring. Neither number is a design ceiling on data, only the
 current in-flight window; the honest statement today is that the completed-drain
@@ -174,7 +174,7 @@ model, cells as the *only* identity. Yon's unit of concurrency is the
 **process**: Spaces in separate binaries, the numeric wire between them,
 shared-memory cells with `flock` and convergent folds where state must
 really be shared (chapter 14). `for every … when here` declares parallel
-*intent* at the surface, 1.2 executes it sequentially, and any future
+*intent* at the surface, the runtime executes it sequentially, and any future
 parallel execution will be process-shaped, not thread-shaped.
 
 ## Choosing a runtime backend

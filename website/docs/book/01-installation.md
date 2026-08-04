@@ -141,7 +141,7 @@ into `./yon_modules/` with an exact-commit `yon.lock`:
 ```toml
 [dependencies]
 rates = { git = "https://github.com/someone/rates" }
-# or pin: { git = "...", version = "1.2.0" }  /  { git = "...", rev = "<sha>" }
+# or pin: { git = "...", version = "1.2.1" }  /  { git = "...", rev = "<sha>" }
 ```
 
 ```bash

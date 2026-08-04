@@ -86,7 +86,6 @@ place Order {
   table Number
   total Number
   operation add_item(price: Number): Number
-  functorial operation retag(x: Number): Number
 }
 ```
 
@@ -147,8 +146,8 @@ against the named algebra (`Additive`, `Multiplicative`, `TropicalMax`,
 `TropicalMin`, `BooleanOr`, `BooleanAnd`, `Gcd`) and **rejects a false claim** at
 compile time. The check is entirely static: a place whose operation names an
 algebra carries its laws as verified facts — there is nothing to ask at
-runtime, and no `verify` word to say (the explicit trigger is retired; the
-verification descends from `uses` by itself):
+runtime, and no explicit trigger to write — the `verify` word was retired,
+and the verification descends from `uses` by itself:
 
 <!-- yon-gate: illustrative -->
 ```yon

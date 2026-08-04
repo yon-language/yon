@@ -13,7 +13,7 @@ import styles from './CodeWindow.module.css';
  * Usage (MDX):
  *   <CodeWindow file="kw_paths.yon" run="yonc kw_paths.yon -o p && ./p"
  *               out={["(exit 42)"]}>
- *   {`fun main(): number { return 42 }`}
+ *   {`fun main(): Number { return 42 }`}
  *   </CodeWindow>
  */
 export default function CodeWindow({ file, run, out, children }) {

@@ -56,7 +56,7 @@ the set contains.
 // Entry.yon, a herd as a content-addressed set
 place Entry { }
 
-fun main(): number visits Output {
+fun main(): Number visits Output {
   be herd0 holds HashSet.empty()
   be herd1 holds HashSet.add(herd0, 100247)
   be herd2 holds HashSet.add(herd1, 100247)

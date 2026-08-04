@@ -78,7 +78,7 @@ says to the world.
 // Entry.yon, the root entrypoint of a one-file park
 place Entry { }
 
-fun main(): number {
+fun main(): Number {
   be substrate holds 0
   return substrate
 }

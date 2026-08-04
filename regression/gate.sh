@@ -54,7 +54,11 @@ for f in $DIRTY; do
     prelude/*)
       add regression/test_projects.py ;;
     website/docs/book/*)
-      add regression/test_syntax_triangle.py ;;
+      add regression/test_syntax_triangle.py; add regression/test_website_surface.py ;;
+    website/*)
+      # the React pages and components have no compiler behind them: only this
+      # gate reads them, and it is where `fun main(): number` survived
+      add regression/test_website_surface.py ;;
   esac
 done
 if [ -n "$PICK" ]; then

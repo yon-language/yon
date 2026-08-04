@@ -45,7 +45,7 @@ To *select a value*, use the expression form `if c then a else b`.
 **Loops.** `iter n do { }` is the bounded loop (it always terminates);
 `while c do { }` is the general one. On top of these, Yon offers:
 
-- `for every x in list { }`, iteration over a `List` (1.2 executes both this
+- `for every x in list { }`, iteration over a `List` (execution is sequential for both this
   and `in sequence over x in list { }` sequentially; parallelism is declared
   intent, not yet a runtime distinction);
 - `repeat at most N times { } otherwise { }`, the body runs N times, then
