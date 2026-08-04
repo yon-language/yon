@@ -31,7 +31,7 @@ Yon says "prove it or don't claim it", for the algebras it knows.
 
 **From Lean/Idris/Agda.** Proof assistants verify arbitrary laws, with
 your labor. Yon sits at a different point: automatic, bounded
-verification, plus something proof assistants don't do: `verify` hands the
+verification, plus something proof assistants don't do: a law-verified place hands the
 verified structure back as a *runnable* object (chapter 6), whose
 reachability view carries the witness for each reachable value
 (chapter 12). Yon's HoTT layer (chapter 9) is a fragment of theirs; its
@@ -49,7 +49,7 @@ are vastly more mature; that is not in dispute.
 **What has no counterpart anywhere**, stated once and narrowly:
 allocation-as-deduplication with O(1) deep equality as a language
 guarantee; orbit canonicalization in the Arena (equality up to a symmetry group as
-storage semantics); `verify` returning verified algebras as runnable
+storage semantics); law-verified algebras as runnable
 objects; trit-valued integers with per-bit certainty; error-correcting
 storage in the standard library; topos constructs as compiled primitives
 rather than library encodings.

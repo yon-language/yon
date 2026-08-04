@@ -174,7 +174,7 @@ model, cells as the *only* identity. Yon's unit of concurrency is the
 **process**: Spaces in separate binaries, the numeric wire between them,
 shared-memory cells with `flock` and convergent folds where state must
 really be shared (chapter 14). `for every … when here` declares parallel
-*intent* at the surface, 1.0 executes it sequentially, and any future
+*intent* at the surface, 1.2 executes it sequentially, and any future
 parallel execution will be process-shaped, not thread-shaped.
 
 ## Choosing a runtime backend

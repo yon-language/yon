@@ -57,7 +57,7 @@ measured.)
 
 ## Lifetime
 
-There is no garbage collector in 1.0, and deliberately so: slots are stable
+There is no garbage collector, and deliberately so: slots are stable
 for the life of the heap, the heap lives for the life of the process, and
 deduplication means the heap grows with *distinct* content, not with
 allocations. A hot loop that rebuilds the same values costs no new memory.

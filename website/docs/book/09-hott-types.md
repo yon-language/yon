@@ -31,7 +31,7 @@ two sides are the same *by computation* is bare `clear` — reflexivity of the
 endpoint inferred from the goal, gated exactly as the kernel `refl` written by
 hand. Pairs are the Σ introduction with `fst`/`snd`
 projections. The runnable path fragment is wider than that one witness, though:
-the *journey vocabulary* in the next section (`back`, `++`, `through`, `span`,
+the *journey vocabulary* in the next section (`back`, `++`, `through`, `carry`,
 `carry`, `<=>`, and the `match` eliminator) compiles and computes. Path
 induction is `induct(d, p)`; the bare J eliminator `ind_path(C, d, p)` stays a
 proof-layer construct in the lower stratum, and `match` is the eliminator you
@@ -83,8 +83,8 @@ fun main(): Number {
 A journey can also run between *types*. An equivalence, written `f <=> g`, is a
 two-way bridge: the pair of maps together with the coherence that each undoes the
 other, and Yon synthesises the trivial coherences for you. Laid down as a path,
-an equivalence is univalence in one word, `span e`, which is `ua(e)`. And you can
-**carry** a value across the bridge:
+an equivalence is univalence itself, `ua(e)`. And you can **carry** a value
+across the bridge:
 
 <!-- yon-gate: exit 11 -->
 ```yon
@@ -121,20 +121,6 @@ fun main(): Number {
 with `plam`, a path-lambda over the interval. The eliminator needs no explicit
 motive: the branches give it away.
 
-Limits exist in expression form too, a runtime-checked pullback takes a
-compatible pair over a cospan:
-
-```yon
-// Entry.yon, at the project root
-place Entry { }
-fun f(x: Number): Number { return x }
-fun g(y: Number): Number { return y }
-fun main(): Number {
-  be p holds pullback(f, g, 3, 3)   // runtime-checked: f(3) == g(3)
-  return 7
-}
-```
-
 ## Comprehension types
 
 The most Yon-flavoured citizen is the **comprehension**:
@@ -158,7 +144,7 @@ fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account,
 silently usable as an `A` (the forgetful mono), applied pervasively by the
 type checker. The other direction is a proof obligation, and value-level
 *construction* of comprehension values (a surface constructor carrying the
-witness) is deliberately post-1.0: in 1.0 the comprehension is a type-level
+witness) is deliberately later: today the comprehension is a type-level
 discipline.
 
 This layer is also where the proof machinery lives: places carry higher

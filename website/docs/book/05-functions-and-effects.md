@@ -35,15 +35,53 @@ surrounding function's locals. (A *morphism* lambda, `move`, `functor`,
 
 **Modifiers.** `internal fun` is not exported across a package boundary, 
 from outside, it is indistinguishable from a function that does not exist.
-`partial fun` declares a function that may not return:
+## Failure is a coproduct: `on error`
+
+A function that can fail says *how*, in its signature. `on error E` makes the
+return type the coproduct `T + E`: the function returns either a `T` or an
+`E`, and the caller cannot forget the second case, because there is nothing to
+forget — it is in the type.
+
+Raising is **returning**: build a section of the error place with the
+mediatrice and hand it back. There is no second control-flow mechanism, no
+unwinding, no hidden path.
+
+<!-- yon-gate: exit 30 -->
+```yon
+place Entry {
+  fun half(n: Number) on error DomainError: Number {
+    return if n < 0 then .-> DomainError { message "half of a negative" }
+           else n / 2
+  }
+  fun main(): Number {
+    be a holds half(0 - 4)
+    return match a { Number as v => 1, DomainError as e => 30 }
+  }
+}
+```
+
+Handling is `match`, one arm per side of the coproduct, and the witness binder
+(`DomainError as e`) names the value on the arm that matched. The error places
+themselves live in the prelude: `Error` is the root, and a concrete error
+declares itself into it from below with the mono `this < Error` — the
+open-world direction, so `Error` never enumerates its children and never
+changes.
+
+**When a body is not writable in Yon**, the signature says that too. `is given`
+declares an axiomatic body — Java's `native` — and the compiler verifies that
+the wired implementation exists with exactly that signature. It is the brother
+of `is <prim>`: that one says the *carrier* is a leaf of the recursion, this
+one says the *body* is.
 
 <!-- yon-gate: illustrative -->
 ```yon
-partial fun spin(n: Number): Number {
-  forever { n = n + 1 }
-  return n
+place Math { unit Number
+  fun floor(x: Number): Number is given
+  fun sqrt(x: Number): Number is given
 }
 ```
+
+(The full project is `examples/kw_given`, and the keyword chapter runs it.)
 
 ## Effects: `visits`
 
