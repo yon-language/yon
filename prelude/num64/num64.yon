@@ -1,55 +1,56 @@
-/* num64.yon — il file del package `num64`, sotto prelude/.
+/* num64.yon — the package file of `num64`, under prelude/.
  *
- * IL SITO C(Num64): i numeri a 64 bit. È il BERSAGLIO del funtore `Widen`
- * dichiarato in num32/num32.yon — un funtore vive nel package della sua
- * SORGENTE, quindi qui non si ripete.
+ * The site C(Num64): the 64-bit numbers. It is the target of the `Widen`
+ * functor declared in num32/num32.yon — a functor lives in the package of
+ * its source, so it is not repeated here.
  *
- *   OGGETTI  Int64 (i64), Number (f64) — contati dal compilatore.
- *   FRECCE   le `morphism` qui sotto, i generatori.
+ *   Objects  Int64 (i64), Number (f64) — counted by the compiler.
+ *   Arrows   the `morphism` below, the generators.
  *
- * Il world è il SITO (Num32 e Num64 sono categorie distinte, Widen è un
- * funtore fra loro); il NOME porta la precisione — Int64, Int32 — perché
- * il nome è ciò che viaggia nei simboli qualificati (Int64__gcd), e due
- * gemelli con la stessa casa colliderebbero.
+ * The world is the site (Num32 and Num64 are distinct categories, Widen is
+ * a functor between them); the name carries the precision — Int64, Int32 —
+ * because the name is what travels in qualified symbols (Int64__gcd), and
+ * two twins with the same house would collide.
  *
- * Questo è il sito RICCO: `Number` a 64 bit è il default del linguaggio,
- * quindi la libreria completa — Newton, Taylor, Euclide, le parziali
- * vestite — vive in num64/Number.yon.
+ * This is the rich site: 64-bit `Number` is the language default, so the
+ * full library — Newton, Taylor, Euclid, the dressed partials — lives in
+ * num64/Number.yon.
  */
 topos where {
 
-  /* ─── I GENERATORI ──────────────────────────────────────────────────
+  /* ─── The generators ─────────────────────────────────────────────────
    *
-   * Speculari a quelli di num32: sono i BERSAGLI delle `on morphism` del
-   * funtore `Widen` (`on morphism plus via plus_i64` — plus_i64 vive in
-   * Int.yon, la casa la dà il bersaglio).
+   * Mirror images of num32's: they are the targets of the `on morphism`
+   * clauses of the `Widen` functor (`on morphism plus via plus_i64` —
+   * plus_i64 lives in Int64.yon, the house is given by the target).
    *
-   * `uses Additive`/`uses Multiplicative` arriveranno col cantiere
-   * algebre: oggi la posizione non esiste in grammatica. */
-  /* NB `mul`, non `times`: `times` è keyword del loop
-     (`repeat at most N times`) e non è disponibile come nome. */
+   * `uses Additive` / `uses Multiplicative` arrive with the algebra
+   * cantiere: the position does not exist in the grammar today. And
+   * `mul`, not `times`: `times` is a loop keyword (`repeat at most N
+   * times`) and is unavailable as a name. */
   morphism plus(a: Int64, b: Int64): Int64
   morphism mul(a: Int64, b: Int64): Int64
 
 
-  /* ═══ IL FUNTORE VERSO Txt NON SI SCRIVE ══════════════════════════════
+  /* ═══ The functor toward Txt is not written ═══════════════════════════
    *
-   * E la ragione va scritta qui perché è la cosa che qualcuno riproverà:
+   * And the reason belongs here, because this is what someone will try
+   * again:
    *
    *     to_text(2 + 3) = "5"      ≠      "2" ++ "3" = "23"
    *
-   * La formattazione NON preserva la somma. Come funtore esisterebbe solo
-   * sugli oggetti, senza law algebriche — cioè non porterebbe nessuna
-   * garanzia. Con `law additive` sarebbe una BUGIA; senza law non
-   * aggiungerebbe niente a una `fun`.
+   * Formatting does not preserve the sum. As a functor it would exist on
+   * objects only, with no algebraic law — that is, carrying no guarantee
+   * at all. With `law additive` it would be a lie; without any law it
+   * would add nothing to a `fun`.
    *
-   * Quindi `to_text` resta una `fun` in Number.yon / Int64.yon: è una
-   * freccia fra OGGETTI, non fra categorie.
+   * So `to_text` stays a `fun` in Number.yon / Int64.yon: it is an arrow
+   * between objects, not between categories.
    *
-   * Stesso discorso per i predicati verso Logic:
+   * The same holds for the predicates toward Logic:
    *     is_positive(-1 + 2) = true
    *     is_positive(-1) and is_positive(2) = false     ≠
-   * Un predicato non è un funtore: è un morfismo verso Ω, e vive come
-   * `prop` in un place.
+   * A predicate is not a functor: it is a morphism into Ω, and it lives as
+   * a `prop` in a place.
    */
 }

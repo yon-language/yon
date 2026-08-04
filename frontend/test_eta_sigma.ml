@@ -3,7 +3,7 @@
 (* test_eta_sigma.ml — oracle: eta-Sigma (surjective pairing) makes the binary
  * products of Syn(Yon) STRICT. The kernel contracts Pair(Fst t, Snd t) ~> t on
  * a NEUTRAL t, so the pairing mediator is unique (Syn(Yon) formalization sec.12:
- * "i prodotti di Syn(Yon) sono prodotti in senso stretto"). Built as CORE terms
+ * "the products of Syn(Yon) are products in the strict sense"). Built as core terms
  * and checked through the kernel normalizer, like test_path_core. *)
 
 open Ast

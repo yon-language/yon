@@ -1452,7 +1452,7 @@ let specialize_func (fs : func_sig)
     else if s = "!topos.proposition" then C.TyPlace "proposition"
     else if s = "!llvm.ptr" then C.TyPlace "text"
     else
-      (* Section type -> estrai nome place *)
+      (* Section type -> extract the place name *)
       let prefix = "!topos.section<\"" in
       let plen = String.length prefix in
       if String.length s > plen && String.sub s 0 plen = prefix then
@@ -1848,7 +1848,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_spawn_index() : () -> f64" v);
       (v, "f64")
   | C.Var x ->
-      (* Caso 1: variabile nell'env (parametro, let-binding) *)
+      (* Case 1: a variable in the env (parameter, let-binding) *)
       (match Env.find_opt x env with
        | Some (ssa, _) when String.length ssa > 10
                             && String.sub ssa 0 10 = "__hof_ref:" ->
@@ -3412,11 +3412,11 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_file_exists(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.Var "__stream_from_list", l) ->
-      (* Uno stream costruito da una lista, usato come VALORE (return/bind): il
-       * runtime non ha un costruttore di stream separato — lo stream È l'handle
-       * della lista. Nelle pipeline Seq (fold/filter/map) questo nodo viene
-       * spacchettato prima da `collect source`; qui copriamo l'uso standalone,
-       * che altrimenti cadeva nel throw "unknown function". *)
+      (* A stream built from a list and used as a value (return/bind): the
+       * runtime has no separate stream constructor — the stream IS the
+       * list's handle. In Seq pipelines (fold/filter/map) this node is
+       * unpacked earlier by `collect source`; here we cover the standalone
+       * use, which otherwise fell into the "unknown function" throw. *)
       let (vl, _) = emit_term e env funcs l in
       (vl, "f64")
   | C.App (C.Var "Seq__range", a) ->
@@ -6667,10 +6667,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_xset_union(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xset_intersect(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xset_to_list(f64) -> f64";
-  (* XRelSet / XRelMap / XSimplex — Leech-class collections. Le declaration
-     mancavano: il MLIR chiamava @yon_rt_xrel*/@yon_rt_xsimplex_* senza dichiararle
-     -> il verifier rifiutava (build-fail su 0 copertura, regressione silenziosa).
-     Le def esistono tutte in yon_rt.c. *)
+  (* XRelSet / XRelMap / XSimplex — Leech-class collections. The
+     declarations were missing: the MLIR called @yon_rt_xrel* and
+     @yon_rt_xsimplex_* without declaring them -> the verifier refused
+     (a build failure on zero coverage, a silent regression). All the
+     definitions exist in yon_rt.c. *)
   emit_line e "func.func private @yon_rt_xrelset_empty() -> f64";
   emit_line e "func.func private @yon_rt_xrelset_add_ref(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelset_add(f64, f64) -> f64";

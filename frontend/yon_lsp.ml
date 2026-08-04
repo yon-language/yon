@@ -6,8 +6,8 @@
  * existing frontend: parser, lexer, type checker. An LSP is a protocol wrapper
  * around parse + check; no new language logic here.
  *
- * Capacita' iniziali: diagnostics in tempo reale (errori di parse e di tipo
- * inline nell'editor) su didOpen / didChange. *)
+ * Initial capabilities: real-time diagnostics (parse and type errors
+ * inline in the editor) on didOpen / didChange. *)
 
 (* ─── Diagnostics: the core, testable without the protocol ──────────── *)
 
@@ -325,7 +325,7 @@ let hover_at (prog : Surface_ast.program) (line0 : int) (col0 : int)
     | _ -> ()) prog;
   match !best with Some (d, _) -> Some d | None -> None
 
-(* ─── Completion: keyword + nomi di top-level in scope ──────────────── *)
+(* ─── Completion: keywords + top-level names in scope ───────────────── *)
 
 let keywords = [
   "be"; "place"; "fun"; "holds"; "return"; "operation"; "import"; "as"; "internal"; "from";

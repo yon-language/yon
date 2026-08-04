@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Yon">
+  <title>Yon</title>
+  <circle cx="256" cy="256" r="226" fill="none" stroke="currentColor" stroke-width="40"/>
+  <g fill="none" stroke="currentColor" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M168 199 V163 h176 v36"/>
+    <path d="M168 313 V349 h176 v-36"/>
+  </g>
+  <circle cx="256" cy="256" r="44" fill="currentColor"/>
+</svg>

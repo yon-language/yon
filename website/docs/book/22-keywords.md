@@ -54,7 +54,7 @@ A `given` function emits nothing: calls resolve to the builtin exactly as before
             out={["42"]}>
 {`// w/Math.yon
 place Math { unit Number
-  // is given: il corpo è cablato nel compilatore, e il checker lo verifica
+  // is given: the body is wired in the compiler, and the checker verifies it
   fun floor(x: Number): Number is given
   fun sqrt(x: Number): Number is given
 }

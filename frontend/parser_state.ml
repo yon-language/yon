@@ -92,10 +92,10 @@ let retag_home (house : string) (n : int) : unit =
             if fd.Surface_ast.fn_home = None && house <> "Entry"
             then Surface_ast.TopFun { fd with Surface_ast.fn_home = Some house }
             else d
-        (* i due fatti sono DIVERSI e si registrano separatamente:
+        (* the two facts are different and are recorded separately:
            `written` è topografia (dove la freccia era scritta — sempre,
            Entry inclusa, e serve al formatter per rimetterla in casa);
-           `record` è la regola di contenimento, da cui Entry è esente. *)
+           `record` is the containment rule, from which Entry is exempt. *)
         | Surface_ast.TopMorph mp ->
             written mp.Surface_ast.mp_loc;
             if house <> "Entry" then record mp.Surface_ast.mp_loc; d

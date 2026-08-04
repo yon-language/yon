@@ -237,9 +237,10 @@ let () =
   check "sheaf: total Rel accepts a constant field"
     (ff ~canon:canon_total ~field:salary_const);
 
-  (* ─── aggancio: violazioni di fascio di un place su un world-quoziente ─────
-   * world Q = W / rel: rel è un campo di W (canon = fun u -> u.rel); ogni campo
-   * del place deve fattorizzare -> i campi che non fattorizzano sono violazioni. *)
+  (* ─── hook: sheaf violations of a place on a quotient world ────────────
+   * world Q = W / rel: rel is a field of W (canon = fun u -> u.rel); every
+   * field of the place must factor -> the fields that do not are
+   * violations. *)
   check "quotient_violations: salary & age violate, cohort (the rel) does not"
     (List.sort compare
        (Sheaf.quotient_violations sctx ~world:"User" ~rel_field:"cohort"

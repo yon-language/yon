@@ -34,8 +34,8 @@ let () =
            Printf.printf "formatted: %s\n" file
        | None -> Printf.printf "left unchanged (fail-safe): %s\n" file)
   | [_; "--raw"; file] ->
-      (* l'output GREZZO, prima del round-trip fail-safe: serve a vedere
-         PERCHE il guard rifiuta, invece di indovinarlo *)
+      (* the raw output, before the round-trip fail-safe: it shows why the
+         guard refuses, instead of leaving it to be guessed *)
       (match Formatter.parse (read_file file) with
        | None -> prerr_endline "parse failed"; exit 2
        | Some prog ->

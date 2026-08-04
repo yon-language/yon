@@ -68,7 +68,7 @@ double yon_rt_hsh_empty_mod(double e_value, double modulus) {
     L0->hash_set_id = yon_rt_hashset_add(yon_rt_hashset_empty(), e_value);
     L0->prev_level  = 0xFFFFFFFFu;
     L0->delta_count = 1;
-    st->vals[st->n_vals++] = e_value;       /* H_0 = {e} nell'array */
+    st->vals[st->n_vals++] = e_value;       /* H_0 = {e} in the array */
     L0->val_off = 0; L0->val_count = 1;
     L0->merkle_root = (uint32_t)yon_rt_merkle_leaf(e_value);
     st->n_levels = 1;
@@ -803,7 +803,7 @@ double yon_rt_alg_reachable_bounded(double op_id, const double *gen, double n_ge
     uint32_t r_n = 0;
     for (uint32_t i = 0; i < n_gen; i++) {
         double v = gen[i];
-        if (v > T) continue;                 /* pruning: oltre il target, inutile */
+        if (v > T) continue;                 /* pruning: past the target, useless */
         bool was_new = false;
         yon_xheap_put_or_get(H, &v, sizeof(v), YON_TAG_USER1, &was_new);
         if (was_new && r_n < (1u<<16)) R[r_n++] = v;

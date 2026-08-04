@@ -1,2 +1,10 @@
+/* err.yon — the package file of `err`, under prelude/.
+ *
+ * The site C(Err): the category of failure. Its objects are Error and the
+ * concrete errors that declare themselves into it from below.
+ *
+ * No generators: failure has no operation of its own. The arrows that
+ * matter are the monos (`this < Error`), and those live in the places
+ * that declare them — the house is given by the target. */
 topos where {
 }
