@@ -114,7 +114,7 @@ yon_xheap_t *yon_rt_heap_for(uint32_t heap_id) {
     return g_yon_heap;
 }
 
-/* Backward-compat: il vecchio `heap_for` interno chiama il pubblico. */
+/* Backward-compat: the old internal `heap_for` calls the public one. */
 static yon_xheap_t *heap_for(uint32_t heap_id) {
     return yon_rt_heap_for(heap_id);
 }
@@ -147,7 +147,7 @@ void yon_rt_init(void) {
     g_spaces[0].fold_name[0] = '\0';
     g_spaces[0].accumulator = YON_SECTION_INVALID;
     g_spaces[0].deathwatch_pending = -1;   /* the entry/default heap is never death-watched */
-    /* L2_SEPARATE/SHM: heap_id 0 ha il proprio heap. */
+    /* L2_SEPARATE/SHM: heap_id 0 has its own heap. */
     if (g_backend == YON_BACKEND_L2_SEPARATE) {
         g_spaces[0].heap = yon_xheap_create();
     } else if (g_backend == YON_BACKEND_L2_SHM) {
@@ -408,10 +408,10 @@ yon_section_t yon_rt_section(uint32_t heap_id,
     return result;
 }
 
-/* Safe f64 -> uint32 al confine non fidato della superficie: NaN, Inf e double
- * fuori range (una computazione utente come 5/0 dà Inf) castati a uint32_t sono
- * UNDEFINED BEHAVIOUR in C. Clampa a 0 (handle invalido / indice fuori-bound,
- * che i lookup a valle rifiutano) invece dell'UB. */
+/* Safe f64 -> uint32 at the untrusted boundary of the surface: NaN, Inf and
+ * out-of-range doubles (a user computation like 5/0 gives Inf) cast to
+ * uint32_t are undefined behaviour in C. Clamp to 0 (an invalid handle or
+ * out-of-bounds index, which the lookups downstream reject) instead. */
 static inline uint32_t yon_u32(double d) {
     if (d != d) return 0u;                          /* NaN */
     if (d < 0.0 || d >= 4294967296.0) return 0u;    /* Inf / out of [0, 2^32) */
@@ -1301,7 +1301,7 @@ uint32_t yon_rt_stream_create(const char *name,
                                uint32_t slot_size) {
     ensure_init();
     if (!name) return YON_STREAM_INVALID;
-    /* Idempotente: lookup per nome. */
+    /* Idempotent: lookup by name. */
     for (uint32_t i = 0; i < g_n_streams; i++) {
         if (strcmp(g_streams[i].name, name) == 0) return i;
     }
@@ -3458,8 +3458,8 @@ static ds_hashmap_t *hashmap_lookup(double map_id) {
     return hm;
 }
 
-/* Raddoppia la directory e ripiazza tutte le entry vive (rehash).
- * Le entry restano dove sono (slot xheap): si rimappano solo gli indici. */
+/* Doubles the directory and replaces every live entry (rehash).
+ * The entries stay where they are (xheap slot): only the indices move. */
 static int hashmap_grow(ds_hashmap_t *hm) {
     uint32_t new_slots = hm->dir_slots * 2;
     if (new_slots <= hm->dir_slots) return 0;   /* arithmetic overflow only */
@@ -3506,10 +3506,10 @@ double yon_rt_map_put(double map_id, double key, double value) {
     entry.value = value;
     entry.occupied = 1;
     entry.pad = 0;
-    /* 2026-06-04: allocazione via CHAIN — quando l'heap corrente e' pieno
-     * la catena si estende da sola (xleech2: HeapRef Registry + Chain).
-     * entry_slot[] contiene HeapRef globali (8 bit heap | 24 bit slot);
-     * per heap 0 il valore coincide col vecchio slot nudo. */
+    /* 2026-06-04: allocation through the chain — when the current heap is
+     * full the chain extends itself (xleech2: HeapRef Registry + Chain).
+     * entry_slot[] holds global HeapRefs (8 bits heap | 24 bits slot);
+     * for heap 0 the value coincides with the old bare slot. */
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, &entry, sizeof(entry), YON_TAG_USER1);
     if (slot == YON_HEAPREF_INVALID) return map_id;
     /* Crescita al 70% di load: mai saturazione silenziosa sotto DIR_MAX. */
@@ -3603,11 +3603,11 @@ double yon_rt_map_to_list(double map_id) {
 /* ---- HASHSET -------------------------------- */
 /* Drop HashSet-via-HashMap. Nuovo runtime dedicato:
  *
- * Storage: keys inline in directory (8 byte ciascuna), bitmap separato
- * per `occupied`. Niente xheap entries — risparmio 50% spazio rispetto
- * al riuso di HashMap (16 byte entry vs 8 byte key-only).
+ * Storage: keys inline in the directory (8 bytes each), separate bitmap
+ * for `occupied`. No xheap entries — 50% space saved over reusing HashMap
+ * (a 16-byte entry against an 8-byte key only).
  *
- * API: empty/add/contains/size/to_list. Niente get/has/set.
+ * API: empty/add/contains/size/to_list. No get/has/set.
  *
  * Hash function: the same FNV1a (general-purpose f64 key). */
 
@@ -6886,7 +6886,7 @@ extern uint32_t yon_mphf_unindex(uint32_t idx);
 
 /* Deterministic LCG (Numerical Recipes) for expanding seed -> key atoms.
  * Same seed -> same sequence -> same key (content-addressed
- * dedup naturale nel xheap). */
+ * dedup in the xheap). */
 static uint32_t lcg_next(uint32_t *state) {
     *state = (*state) * 1664525u + 1013904223u;
     return *state;
@@ -6926,7 +6926,7 @@ static uint32_t gen_random_co0_atom(uint32_t *lcg_state) {
     return sign | tag | val;
 }
 
-/* Layout payload di una key in xheap: array di N=8 atom (32 byte fissi). */
+/* Payload layout of a key in the xheap: an array of N=8 atoms (32 fixed bytes). */
 #pragma pack(push, 1)
 typedef struct {
     uint32_t atoms[YON_RT_LOCKEDRING_KEY_ATOMS];
@@ -7771,8 +7771,8 @@ double yon_rt_hashset_try_add(double set_id, double elem) {
 
 /* HashSet.at_bucket / dir_capacity.
  * Enable ZERO-ALLOC iteration over the HashSet keys[] via
- * outer loop (while in Yon). No to_list, niente cons cells.
- * Critico per multi-run: lo xheap non si esaurisce. */
+ * outer loop (while in Yon). No to_list, no cons cells.
+ * Critical for multi-run: the xheap does not run out. */
 double yon_rt_hashset_at_bucket(double set_id, double idx_d) {
     ds_hashset_t *hs = hashset_lookup(set_id);
     if (!hs) return -1.0;

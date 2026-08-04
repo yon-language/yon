@@ -83,7 +83,7 @@
       gm_target_site = dst_site;
       gm_pull = pull;
       gm_push = push;
-      gm_f_star_exact = true;   (* f^* è esatto per definizione *)
+      gm_f_star_exact = true;   (* f^* is exact by definition *)
       gm_f_lower_star_exact = f_lower_ex;
       gm_loc = loc }
 
@@ -148,7 +148,7 @@
 
 /* Type-related */
 %token OF IN TO STREAM IS NOT BY FROM WITH UNIFIES REQUIRES
-/* `is given`: il corpo assiomatico — il `native` di Java */
+/* `is given`: the axiomatic body — Java's `native` */
 %token GIVEN
 %token WIRE
 %token SPAWN PROMOTE PARALLEL
@@ -1008,10 +1008,11 @@ ident_list:
 /* ─── Function declaration ──────────────────────────────────────────── */
 
 fun_decl:
-  (* `is given` — il corpo assiomatico (il `native` di Java): la firma vive
+  (* `is given` — the axiomatic body (Java's `native`): the signature lives
      nel linguaggio, la realizzazione è cablata nel compilatore. Il tycheck
      verifica che esista davvero. Niente graffe: un corpo vuoto direbbe
-     «ritorna nulla», questo dice «il corpo è altrove, ed è un fatto». *)
+     "returns nothing", this says "the body is elsewhere, and it is a
+     fact". *)
   | internal = boption(INTERNAL) FUN name = IDENT
     tparams = type_params_opt
     LPAREN params = param_list RPAREN

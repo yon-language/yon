@@ -1,35 +1,37 @@
-/* String — la faccia dichiarata del codice primitivo `text`.
+/* String — the declared face of the primitive code `text`.
  *
- * `is text` dichiara il carrier ASSIOMATICO: la foglia della ricorsione del
- * funtore carrier. Il carrier di `text` è un handle sull'heap
- * content-addressed (una rope interned: stesso letterale, stesso slot) — ma
- * questo il preludio non lo dice: la fusione nomina il CODICE, non il layout.
+ * `is text` declares the axiomatic carrier: the leaf of the carrier
+ * functor's recursion. The carrier of `text` is a handle into the
+ * content-addressed heap (an interned rope: same literal, same slot) — but
+ * the prelude does not say so, because the fusion names the code, not the
+ * layout.
  *
- * IL NUCLEO ORA SI DICHIARA: `is given` è il corpo assiomatico (il `native`
- * di Java). Non è una promessa muta — il compilatore VERIFICA che
- * l'implementazione cablata esista e che la firma dichiarata sia quella
- * cablata: nome mancante, arità diversa o tipo diverso sono errori. Il
- * confine col silicio smette di essere invisibile e diventa una riga di Yon.
+ * The core now declares itself: `is given` is the axiomatic body (Java's
+ * `native`). It is not a mute promise — the compiler verifies that the
+ * wired implementation exists and that the declared signature is the wired
+ * one: a missing name, a different arity or a different type are errors.
+ * The boundary with the silicon stops being invisible and becomes a line
+ * of Yon.
  *
- * MARKERS: [G] given, corpo cablato · [T] totale, scritta qui ·
- *          [E] parziale, vestita con on error
+ * Markers: [G] given, wired body · [T] total, written here ·
+ *          [E] partial, dressed with on error
  */
 place String is text {
 
-  /* ─── IL NUCLEO ASSIOMATICO ──────────────────────────────────── [G] ───
+  /* ─── The axiomatic core ─────────────────────────────────────── [G] ───
    *
-   * Le uniche che toccano la rope: misurare, indicizzare, allocare. Tutto
-   * il resto di questo file è DERIVATO da queste — il confine col silicio
-   * è piccolo, ed è il punto.
+   * The only ones that touch the rope: measure, index, allocate. All the
+   * rest of this file is derived from these — the boundary with the
+   * silicon is small, and that is the point.
    *
-   * `equal` è O(1) e non un confronto carattere per carattere: due stringhe
-   * uguali hanno lo STESSO handle per content-addressing. È il caso in cui
-   * l'identità-per-contenuto paga: non si scorre nulla.
+   * `equal` is O(1), not a character-by-character comparison: two equal
+   * strings have the same handle under content-addressing. This is where
+   * identity-by-content pays: nothing is scanned.
    *
-   * substring/find_char sono cablate anche loro, ed è un FATTO DI MACCHINA:
-   * emit riconosce quei nomi per pattern, quindi una ridefinizione in Yon
-   * verrebbe ignorata in silenzio. Dichiararle qui le rende visibili invece
-   * che invisibili; la derivata onesta a due argomenti è `index_of`. */
+   * substring/find_char are wired too, and that is a machine fact: emit
+   * recognizes those names by pattern, so a redefinition in Yon would be
+   * silently ignored. Declaring them here makes them visible instead of
+   * invisible; the honest two-argument derivative is `index_of`. */
 
   fun length(s: String): Number is given
   fun char_at(s: String, i: Number): Number is given
@@ -37,16 +39,16 @@ place String is text {
   fun from_char(c: Number): String is given
   fun equal(a: String, b: String): Boolean is given
   fun substring(s: String, start: Number, len: Number): String is given
-  /* `pos`, non `from` né `at`: sono ENTRAMBE keyword (from/to delle frecce,
-     `repeat at most`). Il lessico del linguaggio ha precedenza sui nomi del
-     preludio — quarta collisione, dopo mul/times, skip/drop, replicate/repeat.
-     Uno sweep automatico contro il lessico del lexer ora è nel gate. */
+  /* `pos`, not `from` nor `at`: both are keywords (the from/to clauses of
+     the arrows, `repeat at most`). The language lexicon takes precedence
+     over prelude names — the fourth collision, after mul/times, skip/drop
+     and replicate/repeat. */
   fun find_char(s: String, c: Number, pos: Number): Number is given
   fun parse_number(s: String): Number is given
   fun from_int(n: Number): String is given
   fun print(s: String): Number is given
 
-  /* ─── Predicati ──────────────────────────────────────────────── [T] ─── */
+  /* ─── Predicates ─────────────────────────────────────────────── [T] ─── */
 
   fun is_empty(s: String): Boolean { return String.length(s) == 0 }
 
@@ -62,20 +64,21 @@ place String is text {
                               String.length(p)), p)
   }
 
-  /* ─── Estrazione ─────────────────────────────────────────────── [T] ─── */
+  /* ─── Extraction ─────────────────────────────────────────────── [T] ─── */
 
   fun take(s: String, n: Number): String {
     return String.substring(s, 0, n)
   }
-  /* `skip`, non `drop`: drop è keyword (il rilascio degli Space).
-     Stessa ragione di mul/times — il lessico del linguaggio ha precedenza. */
+  /* `skip`, not `drop`: drop is a keyword (releasing a Space). Same
+     reason as mul/times — the language lexicon takes precedence. */
   fun skip(s: String, n: Number): String {
     return String.substring(s, n, String.length(s) - n)
   }
 
-  /* ─── Ricerca: il contratto di Java indexOf (-1 se assente) ───── [T] ───
-   * `index_of`, nome proprio: la cablata String.find_char ha TRE argomenti
-   * (s, c, from) — questo è il contratto a due, derivato onestamente. */
+  /* ─── Search: Java's indexOf contract (-1 when absent) ───────── [T] ───
+   * `index_of` under its own name: the wired String.find_char takes three
+   * arguments (s, c, pos) — this is the two-argument contract, derived
+   * honestly. */
 
   fun index_of_step(s: String, c: Number, i: Number): Number {
     return if i >= String.length(s) then 0 - 1
@@ -87,11 +90,11 @@ place String is text {
 
   fun contains_char(s: String, c: Number): Boolean { return index_of(s, c) >= 0 }
 
-  /* ─── Trasformazione ─────────────────────────────────────────── [T] ───
-   * Derivate carattere per carattere: la definizione onesta prima, il
-   * riconoscimento del pattern dopo, se il profilo lo chiede (è sqrt con
-   * Newton). "" è il neutro del monoide, e un letterale è un punto della
-   * faccia — l'accumulatore è legittimo. */
+  /* ─── Transformation ─────────────────────────────────────────── [T] ───
+   * Derived character by character: the honest definition first, the
+   * pattern recognition later, if the profile asks for it (this is sqrt
+   * with Newton). "" is the monoid's neutral, and a literal is a point of
+   * the face — so the accumulator is legitimate. */
 
   fun reverse_step(s: String, i: Number, acc: String): String {
     return if i < 0 then acc
@@ -103,27 +106,27 @@ place String is text {
     return reverse_step(s, String.length(s) - 1, "")
   }
 
-  /* `replicate`, non `repeat`: repeat è keyword (repeat at most N times). */
+  /* `replicate`, not `repeat`: repeat is a keyword (repeat at most N times). */
   fun replicate(s: String, n: Number): String {
     return if n <= 0 then "" else String.concat(s, replicate(s, n - 1))
   }
 
-  /* ─── L'endomorfismo, dichiarato come tale ───────────────────────────
-   * Reverse porta una legge vera: è un'INVOLUZIONE. Le altre restano `fun`
-   * — take/skip/index_of non preservano struttura interessante, e
-   * chiamarle morph sarebbe rumore. Le frecce sono incitate, non
-   * obbligatorie. */
+  /* ─── The endomorphism, declared as such ─────────────────────────────
+   * Reverse carries a true law: it is an involution. The others stay
+   * `fun` — take/skip/index_of preserve no interesting structure, and
+   * calling them morph would be noise. The arrows are encouraged, not
+   * mandatory. */
 
   morph Reverse from String to String {
     on object(s: String): String { return reverse(s) }
     law involutive        /* reverse(reverse(s)) == s */
   }
 
-  /* ─── Verso i numeri — la freccia in ENTRATA ──────────────────── [E] ───
-   * `parse` è String -> Number: il contenitore compare come SORGENTE, che
-   * la regola di contenimento ammette — ed è dove Java la mette
-   * (Integer.parseInt prende una String). Il nucleo è cablato
-   * (String.parse_number); qui si veste la parzialità. */
+  /* ─── Toward the numbers — the incoming arrow ────────────────── [E] ───
+   * `parse` is String -> Number: the container appears as the source,
+   * which the containment rule admits — and it is where Java puts it
+   * (Integer.parseInt takes a String). The core is wired
+   * (String.parse_number); here the partiality gets dressed. */
 
   fun parse(s: String) on error DomainError: Number {
     return if is_empty(s) then .-> DomainError { message "parse: empty string" }

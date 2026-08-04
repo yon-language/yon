@@ -135,13 +135,13 @@ let loc_in_prelude (loc : location) : bool =
    ride the SITE (never the name: two arrows may share a name across houses). *)
 let arrow_home_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 64
 
-(* La casa di RICOSTRUZIONE: dove la freccia era SCRITTA, per ogni forma e
+(* The reconstruction house: where the arrow was written, for every form and
    ogni casa, Entry inclusa. Distinta da arrow_home_sites (che serve al
    contenimento e ne esclude Entry, perché Entry è esente dalla regola) e
    da fn_home (che serve al naming e per Entry resta None, perché Entry non
    dà il nome). Qui il fatto è solo topografico: il formatter deve
    ristampare le frecce DENTRO la casa che le ospitava — sollevarle a
-   colonna zero produrrebbe un file che la pietra del contenimento vieta. *)
+   column zero would produce a file the containment stone forbids. *)
 let arrow_written_in : (string * int * int, string) Hashtbl.t = Hashtbl.create 64
 
 (* Bare nullary points: `tt` in expression position IS the unique point of
@@ -606,11 +606,11 @@ type fun_decl = {
                                        visits Ord means the function requires the
                                        place Ord with its operations to be active *)
   fn_internal : bool;
-  fn_given : bool;            (* `is given`: il corpo è ASSIOMATICO — la
+  fn_given : bool;            (* `is given`: the body is axiomatic — the
                                  realizzazione è cablata nel compilatore (il
                                  `native` di Java). Il tycheck VERIFICA che
                                  l'implementazione esista davvero: una
-                                 promessa muta è peggio dell'assenza. *)               (* `internal fun`: not exported from its module *)
+                                 mute promise is worse than absence. *)               (* `internal fun`: not exported from its module *)
   fn_body : stmt list;
   fn_loc : location;
 }
@@ -640,7 +640,7 @@ type move_body =
 
 type move_decl = {
   mv_name : string;
-  mv_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
+  mv_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   mv_from : string list;  (* for Form A: [from]; for Form B: [list of worlds] *)
   mv_to : string option;  (* for Form A: Some to; for Form B: None *)
   mv_body : move_body;
@@ -660,7 +660,7 @@ type view_item =
 
 type view_decl = {
   vw_name : string;
-  vw_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
+  vw_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   vw_of : string;
   vw_items : view_item list;
   vw_loc : location;
@@ -688,7 +688,7 @@ type shot_ordering =
 
 type reduction_decl = {
   rd_name : string;
-  rd_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
+  rd_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   rd_of : string;
   rd_multi_shot : bool;
   rd_shot_ordering : shot_ordering;
@@ -712,7 +712,7 @@ type world_decl = {
 (* Geometric morphism as a first-class construct. *)
 type geom_morphism_decl = {
   gm_name : string;
-  gm_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
+  gm_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   gm_source_site : string;          (* source site (Sh(C)) *)
   gm_target_site : string;          (* target site (Sh(D)) *)
   gm_pull : fun_decl option;        (* f^* inverse image *)
@@ -769,10 +769,10 @@ type geom_morphism_item_kind =
  * place until the full lowering refactor is done. *)
 type topos_decl = {
   tp_name : string;
-  tp_anonymous : bool;      (* `topos where {}`: il nome viene dal FILE, non
-                               è scritto. Il formatter deve ristampare la
-                               forma che ha letto — sennò inventa un nome
-                               che il sorgente non ha. *)
+  tp_anonymous : bool;      (* `topos where {}`: the name comes from the file,
+                               it is not written. The formatter must reprint
+                               the form it read — otherwise it invents a name
+                               the source does not have. *)
   tp_world : string option;
   (* Explicit topos -> space binding. Syntax
    * `topos Account at EU_SPACE where { ... }`. When present, the space is the
@@ -810,7 +810,7 @@ and prop_decl = {
  *   - if mp_on_morphism_map is [], identity on morphisms *)
 type morph_decl = {
   mp_name : string;
-  mp_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
+  mp_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   mp_source : string;                       (* source topos *)
   mp_target : string;                       (* target topos *)
   mp_on_object : fun_decl option;
@@ -833,7 +833,7 @@ type morph_decl = {
  * `from F to G`. *)
 type functor_decl = {
   ft_name : string;
-  ft_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
+  ft_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   ft_from_world : string;
   ft_to_world : string;
   ft_params : (string * ty) list;
@@ -854,7 +854,7 @@ type morph_item_kind =
  * into another morph (both with the same source and target). *)
 type nat_transform_decl = {
   nt_name : string;
-  nt_on_error : string option;   (* `on error E`: T + E, la pietra delle frecce *)
+  nt_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   nt_source_morph : string;
   nt_target_morph : string;
   (* nt_components has two variants:

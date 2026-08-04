@@ -99,7 +99,7 @@ let fresh_sum_scrut () =
 let rec collect_sums_in_ty (t : S.ty) : unit =
   match t with
   | S.TySum variants | S.TySumIn (variants, _) ->
-      (* DEBITO (quarta occorrenza del pattern nome-nudo, review Antonio):
+      (* Debt (fourth occurrence of the bare-name pattern):
          this registry is GLOBAL name->(tag,tys) with replace — homonymous
          arms across DIFFERENT sums overwrite each other (last wins). Error
          coproducts are safe among themselves (error_sum_of fixes positions:
@@ -817,12 +817,12 @@ and desugar_expr (e0 : S.expr) : C.term =
        * naming. The surface still accepts Seq.X as a deprecated alias
        * (auto-mapped). *)
       let (name', args') =
-        (* Auto-wrap: la funzione di fold/map/filter passata per NOME nudo
-         * (`Seq.fold(s,0,g)`) viene avvolta in una lambda inline
-         * `fun(__sf0,..) => g(__sf0,..)` — cioè esattamente la forma suggerita
-         * `fun(a,b)=>g(a,b)`. Senza, l'emitter falliva con un'eccezione OCaml
-         * invece di accettare la funzione per nome. Le lambda gia' inline
-         * (non-EVar) passano intatte. *)
+        (* Auto-wrap: a fold/map/filter function passed by bare name
+         * (`Seq.fold(s,0,g)`) is wrapped in an inline lambda
+         * `fun(__sf0,..) => g(__sf0,..)` — exactly the suggested form
+         * `fun(a,b)=>g(a,b)`. Without it the emitter failed with an OCaml
+         * exception instead of accepting the function by name. Lambdas
+         * already inline (non-EVar) pass through untouched. *)
         let stream_fn_arity = function
           | "fold" -> 2 | "map" | "filter" -> 1 | _ -> 0 in
         let wrap_fn (arity : int) (args : S.expr list) : S.expr list =
@@ -2674,10 +2674,10 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
   | S.TopPlace pd ->
       let core_pd = desugar_place_decl pd in
       { res with ctx = Reduce.declare_place res.ctx core_pd }
-  (* `is given`: il corpo è cablato nel compilatore, quindi non c'è niente
-     da abbassare — la chiamata risolve al builtin come ha sempre fatto.
-     Emettere una func.func vuota produrrebbe MLIR invalido; la dichiarazione
-     vive nel checker (firma + verifica), non nell'emissione. *)
+  (* `is given`: the body is wired in the compiler, so there is nothing to
+     lower — the call resolves to the builtin as it always has. Emitting an
+     empty func.func would produce invalid MLIR; the declaration lives in
+     the checker (signature + verification), not in the lowering. *)
   | S.TopFun fn when fn.S.fn_given -> res
   | S.TopFun fn ->
       (let f = fn.S.fn_loc.S.file and sub = "prelude/" in
@@ -3756,14 +3756,14 @@ let desugar_program ?(env : Tyenv.env option = None)
   (* The runtime universal pullback. Detection: scan the original surface
    * program (pre-desugar) for EPullbackVal. If present, synthesize
    * __pullback_pack, _pi1, _pi2. *)
-  (* Traversata ESAUSTIVA su expr/stmt: true se `pred` vale su QUALSIASI
-   * sotto-espressione, ovunque — dentro loop, when, lambda, produce, spawn,
-   * scope, condizioni. Sostituisce i due walker parziali che saltavano il
-   * controllo di flusso e gli expr annidati (bug confermato: `floor`/synth
-   * builtin dentro un loop non veniva rilevato → "unknown function 'floor'").
-   * Niente `_ -> false`: il match è esaustivo, così l'aggiunta di un nuovo
-   * costruttore in surface_ast forza un aggiornamento qui invece di reintrodurre
-   * silenziosamente il buco. *)
+  (* Exhaustive traversal over expr/stmt: true if `pred` holds on any
+   * subexpression, anywhere — inside loops, when, lambdas, produce, spawn,
+   * scope, conditions. It replaces the two partial walkers that skipped
+   * control flow and nested exprs (confirmed bug: a `floor`/synth builtin
+   * inside a loop went undetected → "unknown function 'floor'").
+   * No `_ -> false`: the match is exhaustive, so adding a new constructor
+   * in surface_ast forces an update here instead of silently
+   * reintroducing the hole. *)
   let rec expr_any (pred : S.expr -> bool) (e : S.expr) : bool =
     pred e ||
     (let go = expr_any pred in
@@ -3828,8 +3828,9 @@ let desugar_program ?(env : Tyenv.env option = None)
   let needs_pullback_builtins =
     List.exists (function S.TopFun fd -> fn_body_any pred_pb fd | _ -> false) p
   in
-  (* Detection of shift/floor/pow2 builtins: cerca call a `floor`/`__shl`/
-   * `__shr`/`__pow2` ovunque nel corpo (loop/when/lambda inclusi). *)
+  (* Detection of the shift/floor/pow2 builtins: looks for calls to
+   * `floor`/`__shl`/`__shr`/`__pow2` anywhere in the body (loops, when and
+   * lambdas included). *)
   let prog_uses_name (name : string) : bool =
     let pred = function S.ECall (n,_,_) when n = name -> true | _ -> false in
     List.exists (function S.TopFun fd -> fn_body_any pred fd | _ -> false) p

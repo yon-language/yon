@@ -1,62 +1,63 @@
-/* num32.yon — il file del package `num32`, sotto prelude/.
+/* num32.yon — the package file of `num32`, under prelude/.
  *
- * IL SITO C(Num32): i numeri a 32 bit.
+ * The site C(Num32): the 32-bit numbers.
  *
- *   OGGETTI  Int32 (i32) — i place di questa directory. Il compilatore li
- *            conta: non si elencano.
- *   FRECCE   le `morphism` qui sotto — i GENERATORI del sito.
+ *   Objects  Int32 (i32) — the places of this directory. The compiler
+ *            counts them: they are not listed.
+ *   Arrows   the `morphism` below — the generators of the site.
  *
- * Il nome del topos non si scrive (viene dal file). Il terminale non si
- * dichiara (ogni topos ne ha uno per definizione).
+ * The topos name is not written (it comes from the file). The terminal is
+ * not declared (every topos has one by definition).
  *
- * PERCHÉ DUE PACKAGE E NON DUE FILE. La precisione è un WORLD, non un
- * parametro di tipo. Se `Number32` e `Number64` stessero nello stesso
- * sito sarebbero due oggetti della stessa categoria, e `Widen` non
- * sarebbe un funtore — un funtore va FRA categorie. Come `Length` in
- * Metric e `Length` in Imperial: stesso nome, due world, e il funtore
- * li collega. Il NOME porta la precisione (Int32/Int64) perché è ciò
- * che viaggia nei simboli qualificati; il world resta il sito.
+ * Why two packages and not two files. Precision is a world, not a type
+ * parameter. If `Number32` and `Number64` lived in the same site they
+ * would be two objects of the same category, and `Widen` would not be a
+ * functor — a functor goes between categories. Like `Length` in Metric and
+ * `Length` in Imperial: same name, two worlds, and the functor connects
+ * them. The name carries the precision (Int32/Int64) because the name is
+ * what travels in qualified symbols; the world stays the site.
  *
- * Conseguenza buona: sparito il parametro `<64>` e con lui la
- * duplicazione di `width()` — la larghezza la sa il sito.
+ * Good consequence: the `<64>` parameter is gone, and with it the
+ * duplication of `width()` — the site knows its own width.
  *
- * NIENTE Number (f32) PER ORA: un `place Number is f32` oggi
- * calcolerebbe in f64 travestito (il trasporto è uniforme) — la stessa
- * bugia dell'arrotondamento che tiene i float fuori dal funtore Widen.
- * Entra col meccanismo dell'intrinseco, o in world float propri.
+ * No Number (f32) yet: a `place Number is f32` would compute in disguised
+ * f64 today (the transport is uniform) — the same rounding lie that keeps
+ * floats out of the Widen functor. It arrives with the intrinsic
+ * mechanism, or in float worlds of its own.
  */
 topos where {
 
-  /* ─── I GENERATORI ──────────────────────────────────────────────────
+  /* ─── The generators ─────────────────────────────────────────────────
    *
-   * Poche per scelta: mettere una freccia qui COSTA, perché ogni funtore
-   * uscente la deve tradurre. Le derivate (gcd, ipow, bit_count, abs…)
-   * sono `fun` nei place, e il funtore le ottiene per funtorialità —
-   * F(g∘f) = F(g)∘F(f) non lascia scelta, quindi non si dichiarano.
+   * Few by choice: putting an arrow here costs, because every outgoing
+   * functor has to translate it. The derived ones (gcd, ipow, bit_count,
+   * abs…) are `fun` in the places, and a functor obtains them by
+   * functoriality — F(g∘f) = F(g)∘F(f) leaves no choice, so they are not
+   * declared.
    *
-   * `uses Additive`/`uses Multiplicative` arriveranno col cantiere
-   * algebre. */
-  /* NB `mul`, non `times`: `times` è keyword del loop
-     (`repeat at most N times`) e non è disponibile come nome. */
+   * `uses Additive` / `uses Multiplicative` arrive with the algebra
+   * cantiere. And `mul`, not `times`: `times` is a loop keyword
+   * (`repeat at most N times`) and is unavailable as a name. */
   morphism plus(a: Int32, b: Int32): Int32
   morphism mul(a: Int32, b: Int32): Int32
 
 
-  /* ═══ IL FUNTORE Widen — l'allargamento intero ════════════════════════
+  /* ═══ The Widen functor — integer widening ════════════════════════════
    *
-   * L'unico funtore genuino della torre numerica, e le sue law sono VERE
-   * perché l'aritmetica intera NON arrotonda:
+   * The one genuine functor of the numeric tower, and its laws are true
+   * because integer arithmetic does not round:
    *
-   *     widen(a + b) == widen(a) + widen(b)      ✓ esatto
-   *     widen(a * b) == widen(a) * widen(b)      ✓ esatto
+   *     widen(a + b) == widen(a) + widen(b)      exact
+   *     widen(a * b) == widen(a) * widen(b)      exact
    *
-   * Il floating point li rompe per costruzione: la somma in f32 ARROTONDA
-   * prima di allargare, e arrotondare non commuta col cambio di
-   * precisione. Per questo il funtore copre Int32→Int64 e NON Number.
+   * Floating point breaks them by construction: the sum in f32 rounds
+   * before widening, and rounding does not commute with a change of
+   * precision. That is why the functor covers Int32 → Int64 and not
+   * Number.
    *
-   * LA FORMA ASPETTA IL COSTRUTTO: `on object`/`on morphism` sul functor
-   * non esiste ancora (oggi il functor ha parametri e un corpo unico — è
-   * la riprogettazione a ledger). Quando ci sarà:
+   * The form waits for the construct: `on object` / `on morphism` on a
+   * functor does not exist yet (today a functor has parameters and a
+   * single body — the redesign is on the ledger). When it does:
    *
    *   functor Widen from Num32 to Num64 {
    *     on object(n: Int32): Int64 { return widen_i32_i64(n) }
@@ -67,8 +68,8 @@ topos where {
    *     law composition
    *   }
    *
-   * L'implementazione widen_i32_i64 vive GIÀ in Int32.yon (la casa la dà
-   * il bersaglio delle frecce Int→Int): decomposizione decimale, niente
-   * intrinseci — i letterali integrali fanno il ponte fra i carrier.
+   * The implementation widen_i32_i64 already lives in Int32.yon (the house
+   * is given by the target of the Int32 → Int64 arrows): decimal
+   * decomposition, no intrinsics — integral literals bridge the carriers.
    */
 }

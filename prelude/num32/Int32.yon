@@ -1,29 +1,35 @@
-/* Int32 — la faccia dichiarata del codice primitivo i32, nel sito Num32.
+/* Int32 — the declared face of the primitive code i32, in the Num32 site.
  *
- * Int32, non Int: la casa dà il nome qualificato (Int32__widen_pos) e il
- * world non vi entra — due gemelli con la stessa casa produrrebbero due
- * simboli identici. Il world resta il SITO (Num32 e Num64 sono categorie
- * distinte, Widen è un funtore fra loro); il nome porta la precisione
- * perché il nome è ciò che viaggia nei simboli.
+ * Int32, not Int: the house gives the qualified name (Int32__widen_pos)
+ * and the world does not enter it — two twins with the same house would
+ * produce two identical symbols. The world stays the site (Num32 and
+ * Num64 are distinct categories, Widen is a functor between them); the
+ * name carries the precision, because the name is what travels in the
+ * symbols.
  *
- * Il trasporto runtime è l'f64 uniforme, esatto su tutto il range i32:
- * la faccia i32 è l'INTENTO dichiarato del sito, la specializzazione
- * nativa è del riconoscitore, non di questo file.
+ * The runtime transport is the uniform f64, exact over the whole i32
+ * range: the i32 face is the declared intent of the site, and the native
+ * specialization belongs to the recognizer, not to this file.
+ *
+ * Markers: [T] total, written here
  */
 place Int32 is i32 {
 
-  /* ─── L'allargamento senza intrinseci ────────────────────── [T] ─── */
-  /* E ora le firme dicono la verità: sorgente Int32, bersaglio Int64 —
-   * la freccia attraversa i world, come il funtore che la userà.
-   * La chiave: un LETTERALE INTEGRALE è punto di ogni faccia intera —
-   * si decompone in cifre nella faccia a 32 e si ricompone come
-   * letterali nella faccia a 64. Costa O(cifre) invece della singola
-   * sext: prima la verità, poi la velocità — l'ottimizzazione sarà un
-   * riconoscimento, non una magia.
-   * Terminazione: `n / 10` decresce strettamente, SCT la vede. */
+  /* ─── Widening without intrinsics ────────────────────────── [T] ───
+   *
+   * The signatures tell the truth: source Int32, target Int64 — the arrow
+   * crosses the worlds, like the functor that will use it.
+   *
+   * The key: an integral literal is a point of every integer face, so the
+   * number decomposes into digits on the 32 side and recomposes as
+   * literals on the 64 side. It costs O(digits) instead of a single sext:
+   * truth first, speed later — the optimization will be a recognition,
+   * not a magic trick.
+   *
+   * Termination: `n / 10` strictly decreases, and SCT sees it. */
 
-  /* la cifra come letterale: a sinistra confronto un Int32, a destra
-     ritorno letterali — e un letterale è punto di OGNI faccia intera */
+  /* the digit as a literal: on the left an Int32 comparison, on the right
+     a literal return — and a literal is a point of every integer face */
   fun digit64(d: Int32): Int64 {
     return if d == 0 then 0
       else if d == 1 then 1

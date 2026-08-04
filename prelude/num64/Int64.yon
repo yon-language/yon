@@ -1,42 +1,41 @@
-/* Int64 — la faccia dichiarata del codice primitivo intero.
+/* Int64 — the declared face of the primitive integer code.
  *
- * `is i64` dichiara il carrier ASSIOMATICO: la foglia della ricorsione del
- * funtore carrier, non un suo aggiramento. Int64 è il fratello di Number:
- * stesso trattamento, carrier diverso, e aritmetica ESATTA — nessun
- * arrotondamento, nessun epsilon.
+ * `is i64` declares the axiomatic carrier: the leaf of the carrier
+ * functor's recursion, not a way around it. Int64 is Number's brother:
+ * same treatment, different carrier, and exact arithmetic — no rounding,
+ * no epsilon.
  *
- * Int64 è ciò che Number non poteva essere: `number` è f64, quindi tutta la
- * famiglia bit di Integer non aveva casa. Ora ce l'ha.
+ * Int64 is what Number could not be: `number` is f64, so Integer's whole
+ * bit family had no home. Now it has one.
  *
- * LA FAMIGLIA BIT NON USA OPERATORI BITWISE. Yon non ha & | << >>, e qui non
- * servono: su un carrier intero `/ 2` È uno shift a destra, `* 2` uno shift a
- * sinistra, `% 2` È il bit basso. Tutta la famiglia sotto è tre operatori
- * aritmetici, ricorsivamente. Non è un aggiramento: shiftare È dimezzare, e
- * dirlo così è più onesto di un glifo.
+ * The bit family uses no bitwise operators. Yon has no & | << >>, and they
+ * are not needed here: on an integer carrier `/ 2` is a right shift, `* 2`
+ * a left shift, `% 2` is the low bit. Everything below is three arithmetic
+ * operators, recursively. It is not a workaround: shifting is halving, and
+ * saying it this way is more honest than a glyph.
  *
- * MARKERS
- *   [T] totale        scritta qui, nessuna dipendenza
- *   [E] parziale      vestita con `on error`
- *   [?] da verificare dipende da qualcosa non confermato (nota inline)
+ * Markers
+ *   [T] total       written here, no dependency
+ *   [E] partial     dressed with `on error`
  */
 place Int64 is i64 {
 
-  /* ─── Segno e modulo ─────────────────────────────────────── [T] ─── */
+  /* ─── Sign and magnitude ─────────────────────────────────── [T] ─── */
 
   fun abs(n: Int64): Int64    { return if n < 0 then 0 - n else n }
   fun signum(n: Int64): Int64 { return if n > 0 then 1 else if n < 0 then 0 - 1 else 0 }
 
-  /* L'endomorfismo dichiarato come tale: porta leggi vere.
-   * Le altre restano `fun` — floor/max/gcd non preservano struttura
-   * algebrica interessante, e chiamarle morph sarebbe rumore.
-   * Le sette frecce sono incitate, non obbligatorie. */
+  /* The endomorphism declared as such: it carries true laws.
+   * The others stay `fun` — floor/max/gcd preserve no interesting
+   * algebraic structure, and calling them morph would be noise.
+   * The seven arrow forms are encouraged, not mandatory. */
   morph Negate from Int64 to Int64 {
     on object(n: Int64): Int64 { return 0 - n }
     law involutive          /* negate(negate(n)) == n                     */
     law additive            /* negate(a + b) == negate(a) + negate(b)     */
   }
 
-  /* ─── Confronto ──────────────────────────────────────────── [T] ─── */
+  /* ─── Comparison ─────────────────────────────────────────── [T] ─── */
 
   fun max(a: Int64, b: Int64): Int64 { return if a > b then a else b }
   fun min(a: Int64, b: Int64): Int64 { return if a < b then a else b }
@@ -47,7 +46,7 @@ place Int64 is i64 {
     return if n < lo then lo else if n > hi then hi else n
   }
 
-  /* ─── Predicati ──────────────────────────────────────────── [T] ─── */
+  /* ─── Predicates ─────────────────────────────────────────── [T] ─── */
 
   fun is_zero(n: Int64): Boolean     { return n == 0 }
   fun is_positive(n: Int64): Boolean { return n > 0 }
@@ -55,11 +54,11 @@ place Int64 is i64 {
   fun is_even(n: Int64): Boolean     { return n % 2 == 0 }
   fun is_odd(n: Int64): Boolean      { return n % 2 != 0 }
 
-  /* ─── Aritmetica esatta ──────────────────────────────────────────── */
-  /* [?] PRIMA SONDA DI TUTTE: `/` su un carrier Int64 è divisione INTERA?
-   *     div(7, 2) deve dare 3, non 3.5. Sul carrier i64 dovrebbe esserlo, ma
-   *     è NON VERIFICATO — e ogni funzione da qui in giù ci poggia, tutta la
-   *     famiglia bit compresa. Provarlo prima di fidarsi del file. */
+  /* ─── Exact arithmetic ───────────────────────────────────── [T] ───
+   * `/` and `%` on an integer carrier are the truncating operations:
+   * div(7, 2) is 3, not 3.5. The tycheck records those sites and routes
+   * them to __idiv/__imod, which lower to signed divsi/remsi — probed,
+   * and every function from here down (the whole bit family) rests on it. */
 
   fun gcd(a: Int64, b: Int64): Int64 {
     be x holds abs(a)
@@ -72,20 +71,20 @@ place Int64 is i64 {
     return if g == 0 then 0 else abs(a * b) / g
   }
 
-  /* potenza esatta per quadrati — il nucleo totale */
+  /* exact power by squaring — the total core */
   fun ipow_ok(base: Int64, e: Int64): Int64 {
     return if e == 0 then 1
            else if e % 2 == 0 then ipow_ok(base * base, e / 2)
            else base * ipow_ok(base * base, (e - 1) / 2)
   }
 
-  /* [E] un esponente negativo non ha risposta intera */
+  /* [E] a negative exponent has no integer answer */
   fun ipow(base: Int64, e: Int64) on error DomainError: Int64 {
     return if e < 0 then .-> DomainError { message "ipow: negative exponent has no integer value" }
            else ipow_ok(base, e)
   }
 
-  /* [E] divisione e resto per zero sono indefiniti */
+  /* [E] division and remainder by zero are undefined */
   fun div(a: Int64, b: Int64) on error DomainError: Int64 {
     return if b == 0 then .-> DomainError { message "div: division by zero" }
            else a / b
@@ -96,7 +95,7 @@ place Int64 is i64 {
            else a % b
   }
 
-  /* ─── La famiglia bit: tutta via / 2, % 2, * 2 ───────────── [T] ─── */
+  /* ─── The bit family: all of it via / 2, % 2, * 2 ────────── [T] ─── */
 
   fun bit_count(n: Int64): Int64 {
     be x holds abs(n)
@@ -146,43 +145,45 @@ place Int64 is i64 {
     return rotate_left(n, 64 - k % 64)
   }
 
-  /* ─── La larghezza la sa il SITO ─────────────────────────────────────
-   * width() è morta col parametro <64>: la precisione è il WORLD (Num64),
-   * non un parametro di tipo, e il letterale 64 qui sopra è il fatto del
-   * sito, scritto una volta per gamba. Il gemello a 32 scrive 32. */
+  /* ─── The site knows its width ───────────────────────────────────────
+   * width() died with the `<64>` parameter: precision is the world
+   * (Num64), not a type parameter, and the literal 64 above is the site's
+   * own fact, written once per leg. The 32-bit twin writes 32. */
 
-  /* ─── I generatori del sito, implementati ────────────────────────────
-   * num64.yon dichiara `morphism plus/times`; questi sono i bersagli che
-   * il funtore Widen citerà nelle sue `on morphism … via …`. */
+  /* ─── The site's generators, implemented ─────────────────────────────
+   * num64.yon declares `morphism plus/mul`; these are the targets the
+   * Widen functor will name in its `on morphism … via …` clauses. */
   fun plus_i64(a: Int64, b: Int64): Int64  { return a + b }
   fun mul_i64(a: Int64, b: Int64): Int64  { return a * b }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * COSA NON C'È, E PERCHÉ
+ * What is not here, and why
  *
- * SOSPESI (decisione di Antonio): `widen : Int64 → Number` e
- *     `narrow : Number → Int64`, l'aggiunzione fra i due tipi. Sono
- *     IRRIDUCIBILI — reinterpretano un i64 come f64 e viceversa, toccano la
- *     rappresentazione — quindi non hanno un corpo scrivibile in Yon. Servono
- *     o il meccanismo dell'intrinseco (il fratello di `is <prim>` per i corpi)
- *     o niente: un corpo che finge di convertire mentirebbe. Quando ci sarà:
- *     `widen` va in Number.yon, `narrow` qui — la casa la dà il bersaglio.
+ * Suspended (Antonio's decision): `widen : Int64 → Number` and
+ *     `narrow : Number → Int64`, the adjunction between the two types.
+ *     They are irreducible — they reinterpret an i64 as an f64 and back,
+ *     touching the representation — so they have no body writable in Yon.
+ *     They need either the intrinsic mechanism (the brother of `is <prim>`
+ *     for bodies) or nothing at all: a body that pretends to convert would
+ *     lie. When it arrives: `widen` goes in Number.yon, `narrow` here — the
+ *     house is given by the target.
  *
- * MAX/MIN: vogliono i letterali i64 più grandi, che vogliono la notazione
- *     esponente o esadecimale nel lexer — non verificata. Non dichiarati,
- *     invece di scritti sbagliati.
+ * MAX/MIN: they want the larger i64 literals, which want exponent or
+ *     hexadecimal notation in the lexer — unverified. Not declared, rather
+ *     than written wrong.
  *
- * VUOLE `Text`: to_text, to_text_radix (la famiglia toBinaryString di Java),
- *     from_text/parse [E]. Appartengono qui; il tipo di ritorno vive nel place
- *     fratello.
+ * Wants `Text`: to_text, to_text_radix (Java's toBinaryString family),
+ *     from_text/parse [E]. They belong here; the return type lives in the
+ *     sibling place.
  *
- * UNSIGNED: divideUnsigned, remainderUnsigned, compareUnsigned. Vogliono
- *     un'interpretazione senza segno del carrier — decisione di design (un
- *     place UInt? un flag?). Non inventata qui.
+ * Unsigned: divideUnsigned, remainderUnsigned, compareUnsigned. They want
+ *     an unsigned reading of the carrier — a design decision (a UInt place?
+ *     a flag?). Not invented here.
  *
- * LE ALGEBRE: `+` e `*` restano operatori; la loro faccia dichiarata è
- *     l'algebra (`operation add(a, b) uses Additive`), che aspetta il cantiere
- *     algebre. Int64 è un modello più ricco di Number: è un ANELLO genuino,
- *     quindi porterà Additive e Multiplicative con la distributività.
+ * The algebras: `+` and `*` stay operators; their declared face is the
+ *     algebra (`operation add(a, b) uses Additive`), which waits for the
+ *     algebra cantiere. Int64 is a richer model than Number: it is a
+ *     genuine ring, so it will carry Additive and Multiplicative with
+ *     distributivity.
  * ═══════════════════════════════════════════════════════════════════ */

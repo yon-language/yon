@@ -196,7 +196,7 @@ let () =
   List.iter (fun (pp, sp, _) ->
     if sp <> "" then Hashtbl.replace prelude_space_of_path pp sp)
     (fst (Project.prelude_units ()));
-  let pw_prelude = ref [] in  (* (place, world) del preludio; l'utente OMBRA *)
+  let pw_prelude = ref [] in  (* (place, world) from the prelude; the user shadows *)
   let prog =
     List.concat_map (fun (filename, modname, src) ->
       let lexbuf = Lexing.from_string src in

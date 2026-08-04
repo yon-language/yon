@@ -122,7 +122,7 @@
       "promote", PROMOTE;
       "parallel", PARALLEL;
       "is", IS;
-      (* `is given`: il corpo è ASSIOMATICO, realizzato dal compilatore —
+      (* `is given`: the body is axiomatic, realized by the compiler —
          il `native` di Java. Il tycheck verifica che l'implementazione
          cablata esista: una dichiarazione senza realizzazione è una
          promessa muta, e le promesse mute si ritirano. *)

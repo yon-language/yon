@@ -49,7 +49,7 @@ let lit_str = function
   | LitHeytUnknown -> "unknown"
 
 (* ─── Tipi ed espressioni (mutuamente ricorsivi: un tipo dipendente porta
-       termini, un'espressione porta annotazioni di tipo) ─────────────── *)
+       terms, an expression carries type annotations) ────────────────── *)
 
 let rec fmt_ty (t : ty) : string =
   match t with
@@ -351,7 +351,7 @@ let fmt_fun (f : fmt) (fn : fun_decl) : unit =
   let oerr = match fn.fn_on_error with
     | Some e -> " on error " ^ e | None -> "" in
   if fn.fn_given then
-    (* `is given`: nessun corpo da stampare — la firma E la parola *)
+    (* `is given`: no body to print — the signature and the word *)
     line f (Printf.sprintf "%sfun %s%s(%s)%s%s%s is given"
               prefix fn.fn_name tps params oerr ret visits)
   else begin
@@ -388,8 +388,8 @@ let fmt_arm (v : variant) : string =
   else Printf.sprintf "%s(%s)" v.v_name
          (String.concat ", " (List.map fmt_ty v.v_args))
 
-(* ?close=false lascia la casa APERTA (graffa non chiusa, indent alzato):
-   il chiamante ci stampa dentro le frecce ospitate e chiude lui. *)
+(* ?close=false leaves the house open (brace unclosed, indent raised):
+   the caller prints the hosted arrows inside it and closes it. *)
 let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
   if close && pd.pd_arms <> [] && pd.pd_members = [] then
     (* a place declared by the arms it is the coproduct of: the canonical
@@ -545,9 +545,10 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
        (* v1.1 topos-per-space: objects/at/in are filesystem-inferred; the surface
           is `topos <name> where { <terminal>? <prop>* }`. The morphisms block is
           not covered yet -> Exit. *)
-       (* la forma LETTA, non una inventata: il topos anonimo prende il
-          nome dal file, ristamparlo scriverebbe un nome che il sorgente
-          non ha (e il round-trip fail-safe lo rifiuta, giustamente). *)
+       (* the form that was read, not an invented one: a nameless topos
+          takes its name from the file, and reprinting it would write a
+          name the source does not have (which the round-trip fail-safe
+          rejects, rightly). *)
        line f (if td.tp_anonymous then "topos where {"
                else Printf.sprintf "topos %s where {" td.tp_name);
        f.indent <- f.indent + 1;
@@ -637,7 +638,7 @@ let parse (source : string) : program option =
     Some (Parser_state.drain () @ p)
   with _ -> None
 
-(* Il sito di una dichiarazione, per ritrovare la casa in cui era scritta. *)
+(* The site of a declaration, to find the house it was written in. *)
 let site_of_top (td : top_decl) : (string * int * int) option =
   let s (l : location) = Some (l.file, l.start_line, l.start_col) in
   match td with
@@ -655,11 +656,12 @@ let house_of_top (td : top_decl) : string option =
 let format_program (prog : program) : string option =
   try
     let f = mk () in
-    (* LE FRECCE TORNANO NELLE LORO CASE. Il parser le solleva a top-level
-       (push_decl), ma la pietra del contenimento dice che una freccia vive
-       nel corpo del place che tocca: ristamparle a colonna zero produrrebbe
-       un file che il compilatore stesso rifiuta. La topografia è registrata
-       per SITO, quindi due frecce omonime in case diverse non si confondono. *)
+    (* The arrows go back to their houses. The parser hoists them to
+       top level (push_decl), but the containment stone says an arrow
+       lives in the body of the place it touches: reprinting them at
+       column zero would produce a file the compiler itself rejects. The
+       topography is recorded by site, so two arrows with the same name in
+       different houses are never confused. *)
     let hosted = List.filter_map (fun td ->
       match house_of_top td with Some h -> Some (h, td) | None -> None) prog in
     List.iter (fun td ->
@@ -669,13 +671,13 @@ let format_program (prog : program) : string option =
             (fun (h, d) -> if h = pd.pd_name then Some d else None) hosted in
           if mine = [] then fmt_place f pd
           else begin
-            (* la casa si riapre per accogliere le sue frecce *)
+            (* the house reopens to take in its arrows *)
             fmt_place ~close:false f pd;
             List.iter (fun d -> fmt_top f d) mine;
             f.indent <- f.indent - 1;
             line f "}"
           end
-      | _ when house_of_top td <> None -> ()   (* già stampata nella casa *)
+      | _ when house_of_top td <> None -> ()   (* already printed inside its house *)
       | _ -> fmt_top f td) prog;
     Some (Buffer.contents f.buf)
   with Exit -> None   (* uncovered construct: no output (fail-safe) *)

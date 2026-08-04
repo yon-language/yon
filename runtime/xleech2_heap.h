@@ -280,7 +280,7 @@ const yon_xheap_slot_t *yon_xheap_get_chain(uint32_t heapref);
 /* Payload from a HeapRef: a convenience wrapper. */
 const void *yon_xheap_payload_chain(uint32_t heapref);
 
-/* Payload di uno slot risolvendo l'heap proprietario dal registry. */
+/* A slot's payload, resolving the owning heap from the registry. */
 const void *yon_xheap_slot_payload_any(const yon_xheap_slot_t *slot);
 
 #endif /* YON_XLEECH2_HEAP_H */

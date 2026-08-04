@@ -71,7 +71,7 @@ type env = {
      validate `nat_transform Name from F to G { ... }`, where F and G must be
      existing morphisms. *)
   declared_morphs : string list;
-  (* Places SYNTHESIZED from payload arms (place refactor, prima pietra):
+  (* Places synthesized from payload arms (place refactor, first stone):
      real places for identity/injection/world, but with no user-written
      declaration — construction of their sections lands with the mediatrice
      step, so `new` on them is rejected (transitional). *)

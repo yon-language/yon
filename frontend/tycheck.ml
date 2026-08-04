@@ -785,7 +785,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                               (List.combine vars (List.map snd params)))
                        else env in
                      let* motive_ty = infer benv ctx body in
-                     (* verifica ogni ramo contro il motive costante *)
+                     (* check every branch against the constant motive *)
                      let* () =
                        List.fold_left (fun acc (c2, p2, b2) ->
                          let* () = acc in
@@ -3856,31 +3856,34 @@ let check_arrow_containment (td : top_decl) : unit tc_result =
         (Printf.sprintf "reduction %s of %s" rd.rd_name rd.rd_of) [rd.rd_of]
   | _ -> ok ()
 
-(* ─── Il controllo di LIVELLO (Antonio, 2026-08-04) ─────────────────────
-   Il contenimento dice «il contenitore compare fra gli estremi». Non dice
-   di che TIPO sono gli estremi — e quella è la domanda che blocca i quattro
-   errori di categoria:
+(* ─── The level check ──────────────────────────────────────────────────
+   Containment says "the container appears among the endpoints". It does
+   not say what KIND the endpoints are — and that is the question which
+   blocks the four category errors:
 
-     functor F from A to B   con A, B PLACE   -> un funtore non va fra oggetti
-     morph  M from A to B    con A, B WORLD   -> un morfismo non va fra categorie
-     (e, per composizione col contenimento) un functor scritto in un place,
-      un morph scritto nel file del package.
+     functor F from A to B   with A, B places  -> a functor does not go
+                                                  between objects
+     morph  M from A to B    with A, B worlds  -> a morphism does not go
+                                                  between categories
+     (and, composed with containment) a functor written in a place,
+      a morph written in the package file.
 
-   È decidibile e costa un confronto: il compilatore sa già cosa è world
-   (dal toml) e cosa è place (dai file). La VERIFICA DELLE LEGGI è un'altra
-   cosa — F(g∘f) = F(g)∘F(f) su frecce arbitrarie è il problema della
-   fermata — e va col cantiere algebre, dove `law` acquista un significato
-   meccanico: lì il riduttore arbitra sui GENERATORI (che sono pochi, ed è
-   il punto del sito piccolo) e quando non riduce dice «non ho potuto
-   verificare», non «è falsa». Stesso modello di `clear`. *)
+   It is decidable and costs one comparison: the compiler already knows
+   what is a world (from the toml) and what is a place (from the files).
+   Verifying the LAWS is another matter — F(g∘f) = F(g)∘F(f) over
+   arbitrary arrows is the halting problem — and it belongs to the algebra
+   cantiere, where `law` acquires a mechanical meaning: there the reducer
+   arbitrates over the generators (few by design, which is the point of a
+   small site) and when it does not reduce it says "I could not
+   verify", not "it is false". The same model as `clear`. *)
 let check_arrow_level (env : Tyenv.env) (td : top_decl) : unit tc_result =
   let is_world n = Tyenv.lookup_world env n <> None in
   let is_place n = Tyenv.lookup_place env n <> None in
-  (* Il verdetto si dà solo su ciò che è INEQUIVOCABILE: un nome che è
-     insieme world e place (l'omonimia è legale) non decide niente, e un
-     nome non dichiarato è un altro errore, riportato altrove. Mai un
-     verdetto su un'ipotesi — la stessa disciplina del riduttore che
-     rifiuta invece di indovinare. *)
+  (* The verdict is given only on what is unambiguous: a name that is both
+     a world and a place (homonymy is legal) decides nothing, and an
+     undeclared name is a different error, reported elsewhere. Never a
+     verdict on a guess — the same discipline as the reducer, which
+     refuses rather than guesses. *)
   let only_place n = is_place n && not (is_world n) in
   let only_world n = is_world n && not (is_place n) in
   match td with
@@ -3913,7 +3916,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
       (* a place with arms IS the named sum: the sum check plus the stage-3
          member obligations. Not the field-place check. *)
       let* () = check_named_sum pd.pd_name pd.pd_arms pd.pd_loc in
-      (* prima pietra: a payload arm whose head ALSO names another place is a
+      (* first stone: a payload arm whose head also names another place is a
          genuine conflict — never picked silently (census 2026-07-24: zero).
          Two cases, both loud: (i) the head names a USER place; (ii) the head
          names the SYNTHETIC of a payload arm in ANOTHER union — synthetic
@@ -4595,20 +4598,20 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    check_program's main loop so the user sees every problem at once. Any
    semantic rule (expected_ret, coproduct, effects) MUST land in BOTH — or
    better, be factored into a shared helper like error_sum_of. *)
-(* ─── `is given`: la verifica che rende la dichiarazione un fatto ───────
-   Il corpo è assiomatico, quindi non c'è niente da type-checkare DENTRO —
-   ma c'è tutto da verificare FUORI: l'implementazione cablata deve esistere
-   davvero, e la firma dichiarata deve essere quella cablata. Senza questo
-   `is given` sarebbe una promessa muta, e le promesse mute si ritirano
-   (la lezione di `topology`).
+(* ─── `is given`: the check that makes the declaration a fact ───────────
+   The body is axiomatic, so there is nothing to type-check inside — and
+   everything to check outside: the wired implementation must really
+   exist, and the declared signature must be the wired one. Without this,
+   `is given` would be a mute promise, and mute promises get retired (the
+   lesson of `topology`).
 
-   Il nome cablato è quello QUALIFICATO dalla casa (String__length): la
-   casa dà il nome, e il nome è la chiave del registro. *)
+   The wired name is the one qualified by the house (String__length): the
+   house gives the name, and the name is the registry's key. *)
 and check_given_fun (env : Tyenv.env) (ctx : Reduce.ctx)
     (fn : fun_decl) : unit tc_result =
-  (* il check gira DOPO qualify_homes, quindi il nome può essere già
-     qualificato: l'idempotenza vive nel prefisso, come nella walk del
-     naming (mai qualificare due volte -> String__String__length). *)
+  (* the check runs after qualify_homes, so the name may already be
+     qualified: idempotence lives in the prefix, as in the naming walk
+     (never qualify twice -> String__String__length). *)
   let qname = match fn.fn_home with
     | Some h ->
         let pfx = h ^ "__" in
@@ -4678,7 +4681,7 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
   in
   let rebound_return = Option.map rebind_ty fn.fn_return in
   let fn = { fn with fn_params = rebound_params; fn_return = rebound_return } in
-  (* Reject duplicate parameter names: il secondo altrimenti shadowa il primo
+  (* Reject duplicate parameter names: the second would shadow the first
    * silenziosamente e si va in build-fail a valle. *)
   let* () =
     let rec dups seen = function
@@ -4691,7 +4694,7 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
     in
     dups [] fn.fn_params
   in
-  (* Reject empty body con tipo di ritorno dichiarato: altrimenti l'emit crasha
+  (* Reject an empty body with a declared return type: emit would crash
    * ("term form cannot be analyzed") non avendo un valore da inferire. *)
   let* () =
     if fn.fn_body = [] && fn.fn_return <> None then
@@ -4772,8 +4775,8 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
    two semantically identical or factor shared pieces. *)
 and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     : type_error list =
-  (* `is given`: nessun corpo da accumulare, ma la verifica esterna vale
-     qui come nel gemello fail-fast (ogni regola semantica sta in entrambi). *)
+  (* `is given`: no body to accumulate, but the external check holds here
+     as in the fail-fast twin (every semantic rule lives in both). *)
   if fn.fn_given then
     (match check_given_fun env ctx fn with Ok () -> [] | Error e -> [e])
   else
@@ -5825,7 +5828,7 @@ let elaborate_id_sugar (p : program) : program =
     List.map (function TopFun fd -> TopFun (resolve_fun fd) | d -> d) p
 
 let check_program (p : program) : check_result =
-  let p = expand_mono_fields p in   (* idempotente: shadow-check sui nomi *)
+  let p = expand_mono_fields p in   (* idempotent: shadow-check on the names *)
   Hashtbl.reset Surface_ast.method_resolutions;
   (* Method-call sugar (`s.add(...)`) is normalized away before any checking.
      Idempotent, so it is also safe to run at the start of desugar_program. *)
@@ -5848,10 +5851,11 @@ let check_program (p : program) : check_result =
      name is shared. *)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
   let p = Method_sugar.qualify_overloads p in
-  (* Pre-check PRIMA di infer_fun_signatures/Hm_infer (che su questi input vanno
-   * in failwith/crash): nome di funzione top-level duplicato, e tipo di ritorno
-   * funzionale `: T -> U` (un closure ritornato — non supportato, crasherebbe a
-   * emit con un'arità sballata). Rifiuto pulito invece di crash/build-fail.
+  (* Pre-check before infer_fun_signatures/Hm_infer (which crash or
+   * failwith on these inputs): a duplicate top-level function name, and a
+   * functional return type `: T -> U` (a returned closure — unsupported,
+   * it would crash emit with a wrong arity). A clean rejection instead of
+   * a crash or a build failure.
    * After qualify_overloads, a remaining duplicate is a genuine ambiguity:
    * same name with the same (or no) receiver type, which cannot be told apart. *)
   let fun_decls = List.filter_map (function TopFun fd -> Some fd | _ -> None) p in

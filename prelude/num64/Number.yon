@@ -1,10 +1,10 @@
 /* Number — the declared face of the primitive code `number`.
  *
- * `is number` declares the AXIOMATIC carrier: the leaf of the carrier functor
+ * `is number` declares the axiomatic carrier: the leaf of the carrier functor
  * recursion, not a bypass of it.
  *
- * The library lives HERE, in Yon, not in the compiler. The arithmetic
- * OPERATORS (+ - * / %) stay primitive — as `+` on int stays a JVM bytecode in
+ * The library lives here, in Yon, not in the compiler. The arithmetic
+ * Operators (+ - * / %) stay primitive — as `+` on int stays a jvm bytecode in
  * Java while `Integer` carries the library. What this place declares is
  * everything else: sign, comparison, rounding, roots, transcendentals,
  * predicates, conversion.
@@ -13,9 +13,9 @@
  * the algorithms are the classical ones (Newton, Taylor, Euclid), the code is
  * this file's own.
  *
- * MARKERS
+ * Markers
  *   [T] total     — written here, no dependency
- *   [I] irreducible — touches the bit representation: MUST stay primitive
+ *   [I] irreducible — touches the bit representation: Must stay primitive
  *   [E] partial   — needs the error cantiere (`on error`) to be honest
  */
 place Number is number {
@@ -63,9 +63,9 @@ place Number is number {
   /* [I] `truncate` is the irreducible one: it drops the fractional part,
    *     which means touching the f64 representation. Everything else in this
    *     group is derived from it. Until the intrinsic-declaration mechanism
-   *     exists (the sibling of `is <prim>` for BODIES), truncate BRIDGES
+   *     exists (the sibling of `is <prim>` for bodies), truncate bridges
    *     through the one existing intrinsic (Math.floor) — a bridge, not a
-   *     fake: the primitive surface of this group is still ONE function. */
+   *     fake: the primitive surface of this group is still one function. */
 
   fun truncate(n: Number): Number {
     return if n < 0 then 0 - Math.floor(0 - n) else Math.floor(n)
@@ -155,7 +155,7 @@ place Number is number {
   }
 
   /* general power: b^e = exp(e * ln b), integer exponents go the exact way.
-     ln can fail, so pow PROPAGATES: the witness of the error arm is returned
+     ln can fail, so pow propagates: the witness of the error arm is returned
      as-is and the injection rule lifts it into pow's own coproduct. */
   fun pow(base: Number, e: Number) on error DomainError: Number {
     return if is_integer(e) then ipow(base, e)
@@ -208,7 +208,7 @@ place Number is number {
 
   /* Negate — a true additive homomorphism (negate(a+b) = negate(a)+negate(b))
    * and an involution: apply it twice and you are home. Both are verifiable
-   * laws when the algebra cantiere lands. The HOUSE gives the name. */
+   * laws when the algebra cantiere lands. The house gives the name. */
   morph Negate from Number to Number {
     on object(n: Number): Number { return 0 - n }
   }
@@ -219,40 +219,40 @@ place Number is number {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * WHAT IS NOT HERE, AND WHY — the honest list
+ * What is not here, and why — the honest list
  *
- * [I] IRREDUCIBLE (one function): `truncate`. Dropping the fractional part
+ * [I] irreducible (one function): `truncate`. Dropping the fractional part
  *     means touching the f64 representation, so it cannot be written in Yon.
- *     `floor`, `ceil`, `round`, `fract`, `is_integer` are all DERIVED from it
- *     here — the primitive surface of this whole group is ONE function, not
- *     five. Its body above BRIDGES through the existing Math.floor intrinsic
+ *     `floor`, `ceil`, `round`, `fract`, `is_integer` are all derived from it
+ *     here — the primitive surface of this whole group is one function, not
+ *     five. Its body above bridges through the existing Math.floor intrinsic
  *     until the axiomatic-body mechanism (the sibling of `is <prim>`) exists.
  *
- * [E] PARTIAL — DRESSED: sqrt, ln, tan and divide now carry
+ * [E] partial — Dressed: sqrt, ln, tan and divide now carry
  *     `on error DomainError` (prelude/DomainError.yon, message by
- *     composition); pow PROPAGATES ln's failure through its own coproduct
+ *     composition); pow propagates ln's failure through its own coproduct
  *     via match + witness. Still waiting on the cantiere: from_text/parse
  *     (needs Text first).
  *
- * MISSING BECAUSE THEY NEED `Text` (the Integer-side half of Java's split):
+ * Missing because they need `Text` (the Integer-side half of Java's split):
  *       to_text(n)      — format
  *       from_text(t)    — parse                              [E]
  *       to_text_radix(n, radix)
- *     They belong here (they are observations OF a number) but their return
+ *     They belong here (they are observations of a number) but their return
  *     type lives in the sibling prelude place. Next stone.
  *
- * MISSING BECAUSE `number` IS f64, NOT AN INTEGER TYPE:
+ * Missing because `number` is f64, not an integer type:
  *     the whole bit-manipulation family of Java's `Integer` — bitCount,
  *     highestOneBit, numberOfLeadingZeros, reverse, rotateLeft, shifts, and
  *     the unsigned operations. They will make sense on a separate `Int` of
  *     the prelude, or once `Number<32>` / `Number<64>` distinguish integers
  *     from floats. Declaring them on an f64 face would be a lie.
  *
- * CONSTANTS NOT DECLARED: MAX_VALUE / MIN_VALUE. They need either exponent
+ * Constants not declared: MAX_VALUE / MIN_VALUE. They need either exponent
  *     notation in literals (1.797…e308 — unverified in the lexer) or a
  *     hex/bit form. Left out rather than written wrong.
  *
- * ON THE ALGEBRAS: `+` and `*` stay operators. Their DECLARED face is the
+ * On the algebras: `+` and `*` stay operators. Their declared face is the
  *     algebra, not a method — `operation add(a, b) uses Additive` — and that
  *     needs the `algebra` top-level construct, which is an open cantiere.
  *     When it lands, this place gains its `operation`s and its `law`s.
