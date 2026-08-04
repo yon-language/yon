@@ -27,7 +27,7 @@ const ROWS = [
   ['a category (a site)', 'world', '[world.Restaurant] in yon.toml'],
   ['(where objects live)', 'space', 'a directory: sala/'],
   ['an object', 'place', 'a file: sala/Order.yon'],
-  ['an element', 'section', 'a value: new Order { … }'],
+  ['an element', 'section', 'a value: .-> Order { … }'],
 ];
 
 export default function OntologyMap() {

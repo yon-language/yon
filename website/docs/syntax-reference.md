@@ -2,12 +2,12 @@
 id: syntax-reference
 title: Syntax Reference
 sidebar_position: 2
-description: The normative syntax of Yon 1.2, derived from the actual grammar.
+description: The normative syntax of Yon 1.2.1, derived from the actual grammar.
 ---
 
 # Yon, Syntax Reference
 
-This is the **normative reference for Yon 1.2**. Every form below was
+This is the **normative reference for Yon 1.2.1**. Every form below was
 re-verified against the real grammar (`frontend/parser.mly` and
 `frontend/lexer.mll`) and the compiling examples under
 `regression/book/jp/*/Entry.yon`, not from memory, not from older documents.
@@ -150,7 +150,7 @@ Each construct carries a status:
   fixture in `regression/canonical_forms/`.
 - **⚠ not implemented**, the grammar accepts it, but the compiler does
   not implement it (it fails at emission, or the construct cannot actually be
-  used). Listed for completeness; *not part of the 1.2 contract*.
+  used). Listed for completeness; *not part of the 1.2.1 contract*.
 
 ## Lexical structure
 
@@ -251,7 +251,7 @@ from the call sites.
 | [`plam i => e`](/book/keywords#plam) | ✓ | Path abstraction over a dimension `i`; the face system for the compositions is written `i = I0 => plam j => e` / `i = I1 => plam j => e` |
 | [`hit(ctor)`](/book/keywords#hit) / `hit(ctor, a)`, [`hit_elim(C, [b => e, ...], x)`](/book/keywords#hit_elim) | ✓ | The **kernel** spellings of the constructor and the eliminator. The surface writes `.-> Ctor { … }` (a bare name for a nullary arm) and `match`; Yon0 and the cubical layer speak `hit`/`hit_elim` directly (`examples/circle_hit`) |
 | [`comp(line)[faces]`](/book/keywords#comp) / [`hcomp T[faces]`](/book/keywords#hcomp) | ✓ | Kan composition along a line / homogeneous composition; reduced by the kernel (`regression/yon_tests/prove`) |
-| [`quote(c, a)`](/book/keywords#quote) / [`el_match(target, ret, body)`](/book/keywords#el_match) | ✓ | Universe-code introduction / elimination for `El(c)`; lowers to the inhabitant / the body application. The deeper Tarski reflection is 1.2 |
+| [`quote(c, a)`](/book/keywords#quote) / [`el_match(target, ret, body)`](/book/keywords#el_match) | ✓ | Universe-code introduction / elimination for `El(c)`; lowers to the inhabitant / the body application. The deeper Tarski reflection is still ahead |
 | `heyting(v)`, `heyting(v, mask)` | ✓ | Heyting-integer constructor (mask marks Unknown trits) |
 
 ### Operators (by family)
@@ -281,7 +281,7 @@ from the call sites.
 | `produce { }` / `emit e` | ✓ | Producer block / emit into the active stream or handler |
 | `spawn { }` / `spawn in N parallel { }` / `promote e` | ✓ | Fork one or N isolated process replicas; each `promote e` contributes to the block's collection stream, drained by the parent with `.fold` / `.for_every`. `spawn_index` (0..N-1) is in scope in the body. Scaling measured in Appendix D |
 | `forces stage cond { }` | ✓ | Kripke–Joyal forcing block at a stage |
-| `for every x in e { }` (+ `when here`) | ✓ | Iteration over a List. **1.2 executes sequentially**; parallelism (and the `when here` space filter) are declared intent, not yet a runtime distinction |
+| `for every x in e { }` (+ `when here`) | ✓ | Iteration over a List. **Execution is sequential**; parallelism (and the `when here` space filter) are declared intent, not yet a runtime distinction |
 | `in sequence over x in e { }` | ✓ | Sequential iteration over a List |
 | `repeat at most N times { } [otherwise { }]` | ✓ | The body runs exactly N times, then [`otherwise`](/book/keywords#otherwise) (if present) runs. A success-based early exit is a later protocol |
 | `forever { }` | ✓ | Infinite loop (`while present`); typically paired with effects inside |

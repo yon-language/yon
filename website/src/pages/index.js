@@ -89,7 +89,7 @@ function Heap() {
               </div>
               <pre>
                 <span className={styles.kw}>fun</span> <span className={styles.fn}>main</span>():{' '}
-                <span className={styles.ty}>number</span> {'{'}
+                <span className={styles.ty}>Number</span> {'{'}
                 {'\n'}
                 {'  '}
                 <span className={styles.kw}>be</span> greeting{' '}

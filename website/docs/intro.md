@@ -41,7 +41,7 @@ intermediate stage (for example to inspect the generated LLVM IR).
 ## Table of contents
 
 Start with the [Syntax Reference](./syntax-reference.md), the normative
-description of Yon 1.2, then follow the book:
+description of Yon 1.2.1, then follow the book:
 
 0. [Topos-Oriented Programming](./book/00-topos-oriented-programming.md), the paradigm: sites, the Yoneda principle, structure that works for you.
 1. [Installation](./book/01-installation.md), what you need, build, verify, the toolchain.

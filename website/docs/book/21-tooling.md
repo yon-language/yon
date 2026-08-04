@@ -138,8 +138,8 @@ example it produces, verbatim:
 - sub-object of (`this <`): `Error`
 
 Fields:
-- `message`: number
-- `line`: number
+- `message`: Number
+- `line`: Number
 ```
 
 It reads declarations, not comments. What it prints is what the checker checked.
