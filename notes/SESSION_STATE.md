@@ -39,20 +39,13 @@ git commit -m "construct coverage (#54/#57): comment-phantom audit + honest harn
 - #57: positivi già coperti da examples/c_*; slice-base / cell-endpoint / abstract-prop-param
   VERIFICATI accept-all (stub) → NON cablati (sarebbe falso-verde).
 
-## Aperto (prossimi passi, in ordine di valore)
-1. **#54 isolamento incidentali** (~80 keyword su 130 coperte solo dentro esempi grossi,
-   non da un micro-test dedicato). Ondate di micro-test isolati in `keyword_coverage/`,
-   derivati dai frammenti minimi degli esempi che già compilano (v1_control_flow → for-every/
-   in-sequence/when; kw_hott → Sigma/pair/fst/snd; ecc.). Ogni file deve emettere exit 0 (gate).
-2. **Hardening v1.2 dei 4 stub** (oracoli red→green pronti in `_pending_construct_tests/`):
-   - slice-base existence (`slice_over_undeclared_reject/`) — `pd_over` non valida la base.
-   - cell-endpoint existence (`cell_bad_endpoint_reject/`) — desugar scarta FoCell come metadata.
-   - abstract-prop param typing (`prop_bad_param_reject/`) — prop senza corpo non typecheck i param.
-   - morph via-signature (`neg_morph_via_signature.yon`) — functoriality non verificata se il topos
-     sorgente è fuori scope.
-   Tutti accettati oggi (exit 0). Indurire in tycheck con `Dispatcher.subtype`, Mac-gated contro
-   il corpus esempi (rischio false-reject, vedi saga PathP/morph). Partire dal più semplice (slice-base).
-3. #29 book-plan Docusaurus (in_progress, non toccato di recente).
+## Aperto (prossimi passi)
+
+> Assorbito in `todo.md` il 2026-08-04: i quattro stub accept-all, la copertura
+> keyword per isolamento e il resto vivono lì, nell'unico ledger. Questo file
+> resta lo stato di sessione (contesto build, git, mappa pipeline), non una
+> lista di lavoro parallela.
+
 
 ## Mappa pipeline (per orientarsi)
 lexer.mll → parser.mly → surface_ast → desugar.ml → kernel ast → tycheck/dispatcher →
