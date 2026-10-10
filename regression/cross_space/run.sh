@@ -15,6 +15,11 @@ do
 done
 cd "$TMP"
 fail=0
+# One world instance for the whole run: the producer and the consumer of
+# scenario 3 are started apart, so they join one world by sharing YON_WORLD
+# (the Spaces the clients launch inherit it anyway). A plain 4-char tag is
+# used as is in the kernel names (/y<tag>s_..., /y<tag>p_...).
+export YON_WORLD=$(printf 'c%03x' $(( $$ % 4096 )))
 "$YONC" bank.yon -o "$TMP/Bank_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: bank does not compile"; exit 1; }
 "$YONC" main.yon -o "$TMP/ledger" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: ledger does not compile"; exit 1; }
 out=$(timeout 20 ./ledger 2>/dev/null); rc=$?
@@ -35,7 +40,6 @@ timeout 20 ./loopr >/dev/null 2>&1; rc=$?
 # 64-slot ring read racing under contention) is Bug B, deferred to 1.2.
 "$YONC" wire_sensor.yon -o "$TMP/wsensor" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: wire_sensor does not compile"; exit 1; }
 "$YONC" wire_dashboard.yon -o "$TMP/wdash" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: wire_dashboard does not compile"; exit 1; }
-rm -f /dev/shm/yon_stream_9 /tmp/yon_stream_9 2>/dev/null
 timeout 20 ./wsensor >/dev/null 2>&1
 timeout 20 ./wdash >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: wire scenario rc=$rc (expected 36)"; fail=1; }
@@ -54,7 +58,6 @@ timeout 20 ./subscriber >/dev/null 2>&1; rc=$?
 # subscriber awaits(samples), drains .stream and folds a + r.temp. Each place
 # crosses the process boundary by value: the pump flattens it to bytes, the
 # drain rebuilds it in the consumer's own heap. Seal 1 of the wire-DTO wormhole.
-rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
 "$YONC" meteo_svc -o "$TMP/Meteo_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: meteo_svc does not compile"; exit 1; }
 "$YONC" meteo_sub -o "$TMP/sub_meteo" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: meteo_sub does not compile"; exit 1; }
 timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
@@ -65,7 +68,6 @@ timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
 # a + r.temp + String.length(r.label). Seal 2 of the wire-DTO wormhole: the
 # recursive length-prefixed frame carries the string content by value, rebuilt
 # in the consumer's own ds heap; (10+11+15) + length("ok")*3 = 36 + 6 = 42.
-rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
 "$YONC" weather_svc -o "$TMP/Weather_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather_svc does not compile"; exit 1; }
 "$YONC" weather_sub -o "$TMP/sub_weather" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather_sub does not compile"; exit 1; }
 timeout 20 ./sub_weather >/dev/null 2>&1; rc=$?
@@ -75,7 +77,6 @@ timeout 20 ./sub_weather >/dev/null 2>&1; rc=$?
 # about 270 bytes; the subscriber folds a + n.id + String.length(n.body) = 5 +
 # 250 = 255. Under seal 2b this frame could not cross (serialize > slot -> the
 # pump truncated); the dense byte ring of seal 2c carries it whole.
-rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
 "$YONC" weatherbig_svc -o "$TMP/WeatherBig_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weatherbig_svc does not compile"; exit 1; }
 "$YONC" weatherbig_sub -o "$TMP/sub_weather_big" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weatherbig_sub does not compile"; exit 1; }
 timeout 20 ./sub_weather_big >/dev/null 2>&1; rc=$?
@@ -86,11 +87,11 @@ timeout 20 ./sub_weather_big >/dev/null 2>&1; rc=$?
 # (8+4+2) = 26. The sub-place's frame is inlined recursively into the parent's
 # and rebuilt in the consumer's heap; the schema registry resolves the
 # sub-descriptor from the sub-frame's own id.
-rm -f /dev/shm/yon_stream_id_* /tmp/yon_stream_id_* 2>/dev/null
 "$YONC" nested_svc -o "$TMP/Nested_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: nested_svc does not compile"; exit 1; }
 "$YONC" nested_sub -o "$TMP/sub_nested" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: nested_sub does not compile"; exit 1; }
 timeout 20 ./sub_nested >/dev/null 2>&1; rc=$?
 [ "$rc" = "26" ] || { echo "CROSS-SPACE FAIL: nested-DTO scenario rc=$rc (expected 26)"; fail=1; }
 rm -rf "$TMP"
+rm -f /dev/shm/y"$YON_WORLD"* 2>/dev/null   # Linux: this world's segments (macOS: no shm fs)
 [ "$fail" = "0" ] && echo "CROSS-SPACE OK: 8 scenarios (ledger 209/42, remote-call-in-loop 95, wire 36, subscription 36, dto-place 36, dto-string 42, dto-large-frame 255, nested-dto 26)"
 exit $fail

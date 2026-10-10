@@ -111,7 +111,7 @@ $ echo $?
 
 What just happened, end to end: the first `deposit_net(100)` **forked and
 spawned `./Bank_srv`**; each iteration sent a selector and one `f64` through
-`/yon_stream_Bank` and waited for one `f64` back; `audit_key` was never on
+the channel named after `Bank` and waited for one `f64` back; `audit_key` was never on
 the wire (`internal`); the totals accumulated through a promoted cell
 (the `=` assignment); the conversion came from a git-pinned dependency under its
 `rates::` prefix; and when the program exited, the server it had spawned

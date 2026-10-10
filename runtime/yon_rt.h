@@ -97,6 +97,11 @@ static inline uint32_t yon_section_xcoord(yon_section_t s) {
 
 /* Runtime initialization. Idempotent. */
 void yon_rt_init(void);
+/* The world instance (YON_WORLD, chosen by the process that starts the world
+ * and inherited by every Space it launches) and the kernel name of an object
+ * it publishes: kind 'p' = a Space's shm heap, 's' = a stream or mailbox. */
+const char *yon_rt_world_tag(void);
+void yon_rt_ipc_name(char *out, size_t outsz, char kind, const char *name);
 
 /* Register a Space (a logical heap). Returns the assigned heap_id. Idempotent:
  * calling twice with the same name returns the same id.
@@ -755,7 +760,7 @@ double  Spawn__join_stream(double id);
 /* ============================================================== */
 /* Idraulica v2 — actor-model cross-Space RPC                      */
 /* ============================================================== */
-/* Named request mailbox per Space (/yon_stream_<Space>) + private reply
+/* Named request mailbox per Space (/y<world>s_<Space>) + private reply
  * channels per caller session; PROCESS_SHARED mutex/cond wakeup; request
  * correlation via (session nonce, per-call seq). See yon_rt.c for the full
  * design notes (locked decisions of 2026-06-03). */
