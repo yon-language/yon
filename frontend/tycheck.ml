@@ -694,6 +694,279 @@ let certify_dependent_cone (hname : string)
   | Some _ -> true
   | None -> false
 
+(* S-08 — the mobility of a closure over a cell (Harper ch. 31, 34, 41; Turbak
+   ch. 16, 18). A local reassigned with `=`, and a cell made with `Space.make`,
+   belong to the activation that creates them: both are freed when it returns
+   (space_mark/space_reset). A lambda that mentions such a cell captures its
+   HANDLE, not its value, so the closure lives in the fibre over this
+   activation's world. Leaving the activation is a transport to another world,
+   defined only for MOBILE values (Harper 34.6d: "the type returned by a
+   declaration must be mobile"; Turbak's letregion: the region must not occur in
+   what survives). The judgment has two parts, and a value is stopped only when
+   both hold: its type is not mobile (a value of a mobile type cannot carry a
+   closure, so `return g(1)` at `Number` is untouched), and it carries something
+   of this activation.
+
+   The analysis is flow-insensitive and syntax-total, so it never judges "does
+   not escape" a value that escapes:
+   - every binding of the function (`be`, `holds`, `=`, at any depth, loops
+     included) is recorded during checking and closed under a fixpoint at the
+     end, so a cell assigned after the `return` that reads it is still seen;
+   - the walks below match every expression and statement form with no
+     wildcard: a new form fails to compile here until it is classified;
+   - binders inside a body (match patterns, `for every`) are not subtracted:
+     that can only make more names count, never fewer.
+   The escape sites are: `return` and the implicit tail (leaving the call), a
+   store into a cell (`Space.set`), and the wire (`Wire.send*`, a call to a
+   function imported from another Space). At a store or on the wire the
+   function's own parameters of non-mobile type count too, since a closure
+   that came in from a caller carries the caller's cells. *)
+let mob_cells : Desugar.V1SS.t ref = ref Desugar.V1SS.empty
+let mob_params : string list ref = ref []
+(* every binding: (name, its type is mobile, the value bound) *)
+let mob_binds : (string * bool * expr) list ref = ref []
+(* every escape site: (is a store or the wire, the type is mobile, value, loc) *)
+let mob_sites : (bool * bool * expr * location) list ref = ref []
+(* every write into a named cell: (cell, the type is mobile, value, loc) *)
+let mob_stores : (string * bool * expr * location) list ref = ref []
+
+let mob_lam (e : expr) : ((string * ty) list * expr) option =
+  match e with
+  | ELam (ps, b, _) | EMoveLam (ps, b, _, _, _) | EMorphLam (ps, b, _, _, _)
+  | EFunctorLam (ps, b, _, _, _, _) | EReductionLam (ps, b, _, _)
+  | EViewLam (ps, b, _, _) -> Some (ps, b)
+  | _ -> None
+
+let rec mob_kids (e : expr) : expr list =
+  match e with
+  | ELit _ | EVar _ | EWireTo _ | EAll _ | EPullback _ | EPushout _ -> []
+  | EField (o, _, _) | EParen (o, _) | ENot (o, _) | EIn (o, _, _) | ERefl (o, _)
+  | EFst (o, _) | ESnd (o, _) | EPathApp (o, _, _) | EPathAbs (_, o, _)
+  | EQuote (_, o, _) -> [o]
+  | ECall (_, a, _) | EHITConstr (_, a, _) -> a
+  | EApp (f, a, _) -> f :: a
+  | EHITElim (c, br, x, _) -> c :: x :: List.map (fun (_, _, b) -> b) br
+  | EProduce (b, _) -> mob_stmts_kids b
+  | ESpawn (n, b, _) -> Option.to_list n @ mob_stmts_kids b
+  | ENew (_, fas, _) | ENewIn (_, _, fas, _) -> List.map (fun fa -> fa.fa_value) fas
+  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _)
+  | EPullbackVal (_, _, a, b, _) -> [a; b]
+  | EJ (a, b, c, _) | EElMatch (a, b, c, _) | EIfThenElse (a, b, c, _) -> [a; b; c]
+  | ELam (_, b, _) | EMoveLam (_, b, _, _, _) | EMorphLam (_, b, _, _, _)
+  | EFunctorLam (_, b, _, _, _, _) | EReductionLam (_, b, _, _)
+  | EViewLam (_, b, _, _) -> [b]
+and mob_stmts_kids (ss : stmt list) : expr list = List.concat_map mob_stmt_kids ss
+and mob_stmt_kids (s : stmt) : expr list =
+  match s with
+  | SLet (_, e, _) | SReturn (e, _) | SEmit (e, _) | SPromote (e, _) -> [e]
+  | SAssignHolds (_, e, _) | SAssignBecomes (_, e, _) -> [e]
+  | SCall (n, a, l) -> [ECall (n, a, l)]
+  | SNew (_, fas, _) | SNewIn (_, _, fas, _) -> List.map (fun fa -> fa.fa_value) fas
+  | SWhen (c, b, elifs, oth, _) ->
+      mob_cond_kids c @ mob_stmts_kids b
+      @ List.concat_map (fun (c, b) -> mob_cond_kids c @ mob_stmts_kids b) elifs
+      @ (match oth with Some o -> mob_stmts_kids o | None -> [])
+  | SForEvery (_, _, e, b, _) | SInSequence (_, e, b, _) | SIter (e, b, _)
+  | SWhile (e, b, _) -> e :: mob_stmts_kids b
+  | SRepeat (_, b, oth, _) ->
+      mob_stmts_kids b @ (match oth with Some o -> mob_stmts_kids o | None -> [])
+  | SForever (b, _) | SProduce (b, _) -> mob_stmts_kids b
+  | SScope (_, b, e, _) -> mob_stmts_kids b @ [e]
+  | SForces (_, c, b, _) -> mob_cond_kids c @ mob_stmts_kids b
+  | SDrop _ -> []
+and mob_cond_kids (c : condition) : expr list =
+  match c with
+  | CondExpr e | CondIs (e, _) | CondIsNot (e, _) -> [e]
+  | CondAnd (a, b) | CondOr (a, b) -> mob_cond_kids a @ mob_cond_kids b
+
+(* τ mobile: no arrow, no cell, no handle and no unknown anywhere in the
+   value's shape (fields, arm payloads, the base a `this <` inherits from). A
+   named type that is not a declared place, such as the cell type `Space`, is
+   not mobile. *)
+let ty_mobile (env : Tyenv.env) (t : ty) : bool =
+  let rec go seen t =
+    match t with
+    | TyPrim "unknown" | TyUser "unknown" -> false
+    | TyPrim _ | TyPrimIn _ | TyHeytInt _ -> true
+    | TyList x | TyStream x -> go seen x
+    | TyMap (k, v) -> go seen k && go seen v
+    | TySum vs | TySumIn (vs, _) -> List.for_all (fun v -> List.for_all (go seen) v.v_args) vs
+    | TyUser p when List.mem p seen -> true
+    | TyUser p ->
+        (match Tyenv.lookup_place env p with
+         | None -> false
+         | Some pd ->
+             let seen = p :: seen in
+             List.for_all (function FoField f -> go seen f.fd_ty | _ -> true) pd.pd_members
+             && List.for_all (fun v ->
+                  List.for_all (go seen) v.v_args
+                  && (match Tyenv.lookup_place env v.v_name with
+                      | Some _ -> go seen (TyUser v.v_name) | None -> true)) pd.pd_arms
+             && (match pd.pd_subcontains with
+                 | Some b -> go seen (TyUser b) | None -> true))
+    | _ -> false
+  in
+  go [] t
+
+(* A call that makes a cell of this activation, and the cell operations. *)
+let mob_allocates (n : string) : bool =
+  List.mem n ["Space__make"; "Space__new"; "Space.make"; "Space.new"]
+let mob_reads (n : string) : bool = List.mem n ["Space__get"; "Space.get"]
+let mob_writes (n : string) : bool = List.mem n ["Space__set"; "Space.set"]
+
+(* The cells this activation OWNS: locals bound only ever to a fresh cell.
+   Reading one yields its contents, a name of its own ("h#"); writing one is a
+   binding of those contents, not an escape. Set by mob_finish. *)
+let mob_owned : (string -> bool) ref = ref (fun _ -> false)
+let mob_contents (h : string) : string = h ^ "#"
+
+(* Does a free occurrence of a name satisfying [s] appear in [e]? *)
+let rec mob_mentions (s : string -> bool) (bound : string list) (e : expr) : bool =
+  match e with
+  | EVar (x, _) -> not (List.mem x bound) && s x
+  | ECall (n, a, _) ->
+      (not (List.mem n bound) && s n) || List.exists (mob_mentions s bound) a
+  | _ ->
+      (match mob_lam e with
+       | Some (ps, b) -> mob_mentions s (List.map fst ps @ bound) b
+       | None -> List.exists (mob_mentions s bound) (mob_kids e))
+
+(* Does [e] carry something of this activation, given the names [s] already
+   known to? Outside a lambda a cell occurrence is a read (a value); inside one
+   it is a captured handle. *)
+let rec mob_carries (s : string -> bool) (e : expr) : bool =
+  match e with
+  | EVar (x, _) -> s x
+  | ECall (n, [EVar (h, _)], _) when mob_reads n && !mob_owned h ->
+      s (mob_contents h)
+  | ECall (n, a, _) -> s n || mob_allocates n || List.exists (mob_carries s) a
+  | _ ->
+      (match mob_lam e with
+       | Some (ps, b) ->
+           mob_mentions (fun x -> s x || Desugar.V1SS.mem x !mob_cells)
+             (List.map fst ps) b
+       | None -> List.exists (mob_carries s) (mob_kids e))
+
+(* The least set of locals that carry, closed over every binding of the
+   function: [seed] names carry from the start. *)
+let mob_close (binds : (string * bool * expr) list) (seed : string -> bool)
+    : string -> bool =
+  let set = Hashtbl.create 16 in
+  let mem x = seed x || Hashtbl.mem set x in
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    List.iter (fun (x, mobile, e) ->
+      if not mobile && not (Hashtbl.mem set x) && mob_carries mem e then begin
+        Hashtbl.replace set x ();
+        changed := true
+      end) binds
+  done;
+  mem
+
+let mob_begin (fn : fun_decl) (non_mobile_params : string list) =
+  mob_cells := Desugar.v1_targets_stmts Desugar.V1SS.empty fn.fn_body;
+  mob_params := non_mobile_params;
+  mob_binds := [];
+  mob_sites := [];
+  mob_stores := []
+
+let mob_bind (env : Tyenv.env) (x : string) (t : ty) (e : expr) =
+  mob_binds := (x, ty_mobile env t, e) :: !mob_binds
+
+let mob_site (env : Tyenv.env) ~(crossing : bool) (t : ty) (e : expr) (loc : location) =
+  mob_sites := (crossing, ty_mobile env t, e, loc) :: !mob_sites
+
+(* A store into a cell, and the wire: the value arguments cross. The first
+   argument of Space.set / Wire.send* is the cell or the channel itself. *)
+let mob_note_call (env : Tyenv.env) (name : string) (args : expr list)
+    (arg_tys : ty list) (locate : expr -> location) =
+  let has_prefix p = String.length name >= String.length p
+                     && String.sub name 0 (String.length p) = p in
+  let values =
+    if List.mem name ["Space__set"; "Space.set"]
+       || has_prefix "Wire__send" || has_prefix "Wire.send" then
+      (match args with _ :: rest -> Some (1, rest) | [] -> None)
+    else if Hashtbl.mem wire_imports name then Some (0, args)
+    (* a cross-Space call, after Module_prefix: (op_selector, args...) *)
+    else if has_prefix "__yon_rpc2_invoke" then
+      (match args with _ :: rest -> Some (1, rest) | [] -> None)
+    else None in
+  match values, args with
+  | Some _, [EVar (h, _); v] when mob_writes name ->
+      let t = match arg_tys with [_; t] -> t | _ -> TyPrim "unknown" in
+      mob_stores := (h, ty_mobile env t, v, locate v) :: !mob_stores
+  | None, _ -> ()
+  | Some (skip, vs), _ ->
+      List.iteri (fun i v ->
+        let t = match List.nth_opt arg_tys (i + skip) with
+          | Some t when List.length arg_tys = List.length args -> t
+          | _ -> TyPrim "unknown" in
+        mob_site env ~crossing:true t v (locate v)) vs
+
+let mob_escape_msg =
+  "this value carries a closure that captures a mutable local or a cell of this \
+   function call, and it would outlive the call: the cell is freed on return, \
+   so the closure would read a dead slot. A value leaving its activation must be \
+   mobile (Harper ch. 34). Capture an immutable `be` binding instead (it is \
+   captured by value), or apply the closure inside this function."
+
+let mob_cross_msg =
+  "this value may carry a closure over a cell, and it is stored into a cell or \
+   sent across a Space: either way it would outlive the call that owns the \
+   cell. Only a mobile value (no closure, no cell) crosses (Harper ch. 34, 41)."
+
+(* The verdicts, once the whole body has been seen. *)
+let mob_finish () : type_error list =
+  let owned x =
+    let bs = List.filter (fun (y, _, _) -> y = x) !mob_binds in
+    bs <> [] && List.for_all (function
+      | (_, _, ECall (n, _, _)) -> mob_allocates n | _ -> false) bs in
+  mob_owned := owned;
+  let contents =
+    List.concat_map (function
+      | (h, _, ECall (_, init, _)) when owned h ->
+          List.map (fun v -> (mob_contents h, false, v)) init
+      | _ -> []) !mob_binds
+    @ List.filter_map (fun (h, _, v, _) ->
+        if owned h then Some (mob_contents h, false, v) else None) !mob_stores in
+  let foreign = List.filter_map (fun (h, mobile, v, loc) ->
+    if owned h then None else Some (true, mobile, v, loc)) !mob_stores in
+  let binds = contents @ !mob_binds in
+  let local = mob_close binds (fun _ -> false) in
+  let tainted = mob_close binds (fun x -> List.mem x !mob_params) in
+  List.filter_map (fun (crossing, mobile, e, loc) ->
+    if mobile then None
+    else if crossing && mob_carries tainted e then
+      Some { err_loc = loc; err_msg = mob_cross_msg }
+    else if (not crossing) && mob_carries local e then
+      Some { err_loc = loc; err_msg = mob_escape_msg }
+    else None) (List.rev (foreign @ !mob_sites))
+
+(* The values a body yields when it falls off its end (the implicit tail):
+   the last statement, and through a compound statement the tails of every
+   block it can end in. *)
+let rec mob_tails (body : stmt list) : (expr * location) list =
+  match List.rev body with
+  | [] -> []
+  | last :: _ ->
+      (match last with
+       | SReturn _ | SDrop _ -> []
+       | SLet (_, e, l) | SAssignHolds (_, e, l) | SAssignBecomes (_, e, l)
+       | SEmit (e, l) | SPromote (e, l) -> [(e, l)]
+       | SCall (n, a, l) -> [(ECall (n, a, l), l)]
+       | SNew (p, fas, l) -> [(ENew (p, fas, l), l)]
+       | SNewIn (s, p, fas, l) -> [(ENewIn (s, p, fas, l), l)]
+       | SWhen (_, b, elifs, oth, _) ->
+           mob_tails b @ List.concat_map (fun (_, b) -> mob_tails b) elifs
+           @ (match oth with Some o -> mob_tails o | None -> [])
+       | SRepeat (_, b, oth, _) ->
+           mob_tails b @ (match oth with Some o -> mob_tails o | None -> [])
+       | SForEvery (_, _, _, b, _) | SInSequence (_, _, b, _) | SIter (_, b, _)
+       | SWhile (_, b, _) | SForever (b, _) | SProduce (b, _)
+       | SForces (_, _, b, _) -> mob_tails b
+       | SScope (_, b, e, l) -> (e, l) :: mob_tails b)
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -2335,6 +2608,8 @@ and location_of_expr (e : expr) : location =
 
 and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                (name : string) (args : expr list) (arg_tys : ty list) (loc : location) : ty tc_result =
+  mob_note_call env name args arg_tys
+    (fun v -> if loc.start_line = 0 then location_of_expr v else loc);
   (* Builtin: apply_move(MoveName, source) — applies a registered move.
    * __apply_move_in_<S> respects the same signature. *)
   let is_apply_move =
@@ -2864,24 +3139,27 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
            ok (Tyenv.add_var env name t)
        | _ ->
            ok (Tyenv.add_var env name t))
+      |> (fun r -> mob_bind env name t e; r)      (* S-08 *)
 
-  | SAssignHolds (lv, e, loc) ->
+  | SAssignHolds (lv, e, loc) | SAssignBecomes (lv, e, loc) ->
       let* expected = type_of_lvalue env ctx lv loc in
       let* () = check env ctx e expected in
+      (* S-08: the target now holds e; a field write makes its object carry *)
+      (match lv with
+       | LVar x -> mob_bind env x expected e
+       | LField (o, _) -> mob_bind env o (TyPrim "unknown") e);
       ok env
 
-  | SAssignBecomes (lv, e, loc) ->
-      let* expected = type_of_lvalue env ctx lv loc in
-      let* () = check env ctx e expected in
-      ok env
-
-  | SReturn (e, _loc) ->
+  | SReturn (e, loc) ->
+      (* S-08: leaving the activation is a transport; it needs mobility *)
       (match expected_return with
        | Some t ->
            let* () = check env ctx e t in
+           mob_site env ~crossing:false t e loc;
            ok env
        | None ->
-           let* _ = infer env ctx e in
+           let* t = infer env ctx e in
+           mob_site env ~crossing:false t e loc;
            ok env)
 
   | SCall (name, args, loc) ->
@@ -3143,6 +3421,21 @@ and check_implicit_tail_return (env_after : Tyenv.env) (ctx : Reduce.ctx)
                           "function declares return type %s but its body ends with \
                            a value of type %s (add an explicit `return`)"
                           (Tyenv.ty_to_string rt) (Tyenv.ty_to_string t) }]))
+
+(* S-08, at the end of a function: the implicit tail leaves the activation
+   like a `return` does, then every recorded site gets its verdict. *)
+and mob_check_function (env_after : Tyenv.env) (ctx : Reduce.ctx)
+    (body : stmt list) (expected_ret : ty option) : type_error list =
+  List.iter (fun (e, loc) ->
+    let t = match expected_ret with
+      | Some rt -> rt
+      | None -> (match infer env_after ctx e with Ok t -> t | Error _ -> TyPrim "unknown") in
+    mob_site env_after ~crossing:false t e loc) (mob_tails body);
+  mob_finish ()
+
+and mob_non_mobile_params (env : Tyenv.env) (fn : fun_decl) : string list =
+  List.filter_map (fun p ->
+    if ty_mobile env p.param_ty then None else Some p.param_name) fn.fn_params
 
 and type_of_lvalue (env : Tyenv.env) (ctx : Reduce.ctx)
                    (lv : lvalue) (loc : location) : ty tc_result =
@@ -4760,10 +5053,11 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
   (* Body stmts: accumulate errors instead of stopping at first.
    * This gives the user the full picture of what's wrong, instead
    * of a one-error-at-a-time edit-fix-recompile cycle. *)
+  mob_begin fn (mob_non_mobile_params env fn);
   let (final_env, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
-  let tail_errs = match expected_ret with
+  let tail_errs = (match expected_ret with
     | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
-    | None -> [] in
+    | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret in
   match body_errs @ tail_errs with
   | [] -> ok ()
   | e :: _ ->
@@ -4855,10 +5149,11 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
   let expected_ret = match fn.fn_return, fn.fn_on_error with
     | Some t, Some e -> Some (Surface_ast.error_sum_of ~ret:t ~err:e)
     | r, _ -> r in
+  mob_begin fn (mob_non_mobile_params env fn);
   let (final_env, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
-  let tail_errs = match expected_ret with
+  let tail_errs = (match expected_ret with
     | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
-    | None -> [] in
+    | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret in
   List.rev_append (body_errs @ tail_errs) (List.rev !errs)
 
 and check_reduction_decl (env : Tyenv.env) (ctx : Reduce.ctx) (rd : reduction_decl) : unit tc_result =
