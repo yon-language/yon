@@ -100,12 +100,14 @@ def _run(cmd, **kw):
 #   string_literals        : exercises yon_rt_string_lit + String.* family
 #   collections_ext        : exercises yon_rt_hashset_* (set union/intersect)
 #   merkle_noncommutative  : exercises yon_rt_merkle_* (node2 / commutative)
-# An example name absent from examples/ makes _emit_ll() return None and the
-# node skips, so adding a name that is not built is harmless.
+# Every name here is an example the acceptance suite compiles and runs, so a
+# missing source or a failing stage is a FAILURE with the stage's diagnostics,
+# never a skip: a skip here once hid the whole gate (the names stopped resolving
+# when the corpus became directory projects, and every node skipped silently).
 EXAMPLES = ["arena_basic", "spawn_parallel_collect", "net_stream",
             "string_literals", "collections_ext", "merkle_noncommutative",
             # broadened to touch more runtime families (math, iteration,
-            # history/route). Any name absent or failing a pre-LLVM stage skips.
+            # history/route).
             # (primes_bertrand omitted: it has a facade call the best-effort
             # f64-abi heuristic flags — out of scope for a coverage broaden.)
             "math_ext", "iter_loop", "route_history"]
@@ -130,16 +132,19 @@ def _toolchain():
 
 def _emit_ll(name, tmp):
     """Run EMIT -> topos-opt (two lowering passes, MLIROPT fallback) ->
-    mlir-translate --mlir-to-llvmir and return the .ll text, or None if any
-    stage fails / produces no output (caller skips)."""
-    src = EXD / f"{name}.yon"
-    if not src.exists():
-        return None
+    mlir-translate --mlir-to-llvmir and return the .ll text. A missing source
+    or a failing stage FAILS the node with that stage's stderr."""
+    # a single examples/<name>.yon, or (since the Fase-1b migration) a project
+    # directory examples/<name>/ with a yon.toml: EMIT accepts both, as in
+    # run_regression.sh.
+    src = next((c for c in (EXD / f"{name}.yon", EXD / name) if c.exists()), None)
+    if src is None:
+        pytest.fail(f"{name}: example source not found ({EXD / name}[.yon])")
     mlir, s1, s2 = (tmp / f"{name}.{e}" for e in ("mlir", "s1", "s2"))
 
     r = _run([str(EMIT), str(src)])
     if r.returncode != 0 or not r.stdout:
-        return None
+        pytest.fail(f"{name}: EMIT failed\n{r.stderr.decode(errors='replace')[-2000:]}")
     mlir.write_bytes(r.stdout)
 
     lowered = False
@@ -154,29 +159,28 @@ def _emit_ll(name, tmp):
     if not lowered:
         f = _run([MLIROPT, str(mlir), *LOWER])
         if f.returncode != 0 or not f.stdout:
-            return None
+            pytest.fail(f"{name}: lowering failed (topos-opt and the MLIROPT fallback)\n"
+                        f"{a.stderr.decode(errors='replace')[-1500:]}\n"
+                        f"{f.stderr.decode(errors='replace')[-1500:]}")
         s2.write_bytes(f.stdout)
 
     t = _run([MLIRTRANS, str(s2), "--mlir-to-llvmir"])
     if t.returncode != 0 or not t.stdout:
-        return None
+        pytest.fail(f"{name}: mlir-translate failed\n{t.stderr.decode(errors='replace')[-2000:]}")
     return t.stdout.decode(errors="replace")
 
 
 def _emit_obj(name, tmp):
     """Carry one example all the way to a relocatable object: _emit_ll() then
     `llc -filetype=obj <name>.ll -o <name>.o` (the exact llc invocation from
-    test_yon_pipeline.py::_build_and_run). Returns the Path to the .o, or None
-    if the IR could not be produced or llc failed/produced no file (caller
-    skips). This is the last artifact BEFORE the slow link step."""
+    test_yon_pipeline.py::_build_and_run). Returns the Path to the .o; a failing
+    stage FAILS the node. This is the last artifact BEFORE the slow link step."""
     ll = _emit_ll(name, tmp)
-    if ll is None:
-        return None
     llf, obj = tmp / f"{name}.ll", tmp / f"{name}.o"
     llf.write_text(ll)
     r = _run([LLC, "-filetype=obj", str(llf), "-o", str(obj)])
     if r.returncode != 0 or not obj.exists() or obj.stat().st_size == 0:
-        return None
+        pytest.fail(f"{name}: llc failed\n{r.stderr.decode(errors='replace')[-2000:]}")
     return obj
 
 
@@ -260,8 +264,6 @@ def test_ll_emits(name, tmp_path):
     """The pipeline reaches valid LLVM IR: non-empty .ll containing a function
     `define` (a real function body, not just declarations)."""
     ll = _emit_ll(name, tmp_path)
-    if ll is None:
-        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
     assert ll.strip(), f"{name}: emitted .ll is empty"
     assert re.search(r"^\s*define\b", ll, re.MULTILINE), \
         f"{name}: .ll has no function 'define' (no function bodies reached)"
@@ -275,8 +277,6 @@ def test_ll_has_entry(name, tmp_path):
     become `define ... @main(` and `define ... @__yon_dispatch(`. We accept
     either definition as evidence the entry/dispatch scaffolding survived."""
     ll = _emit_ll(name, tmp_path)
-    if ll is None:
-        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
     defs = _module_defines(ll)
     assert ("main" in defs) or ("__yon_dispatch" in defs), (
         f"{name}: neither @main nor @__yon_dispatch is defined in the module; "
@@ -292,8 +292,6 @@ def test_ll_no_undefined_runtime_refs(name, tmp_path):
     This catches a renamed/removed runtime function (ABI drift, undefined ref)
     before the slow link step, and points straight at the offending symbol."""
     ll = _emit_ll(name, tmp_path)
-    if ll is None:
-        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
 
     refs = _runtime_refs(ll)
     if not refs:
@@ -323,8 +321,6 @@ def test_ll_f64_abi(name, tmp_path):
     require that the calls we can clearly parse mention `double`. If no such
     call is parseable (formatting variance), we skip rather than false-fail."""
     ll = _emit_ll(name, tmp_path)
-    if ll is None:
-        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
 
     # match: `call <ret> @sym(<args>)` for a facade symbol, on one logical line.
     call_re = re.compile(
@@ -386,8 +382,6 @@ def test_ll_child_exit_unreachable(name, tmp_path):
 
     Skips cleanly if the chosen example's IR has no child-exit call site."""
     ll = _emit_ll(name, tmp_path)
-    if ll is None:
-        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
 
     lines = _ll_lines(ll)
     # A call to the child-exit facade. Capture an optional SSA result name.
@@ -452,8 +446,6 @@ def test_ll_child_exit_noreturn(name, tmp_path):
     put the attribute inline on the declare/define OR in an `attributes #N`
     group; we accept either."""
     ll = _emit_ll(name, tmp_path)
-    if ll is None:
-        pytest.skip(f"{name}: a pre-LLVM stage failed/produced no output")
     m = re.search(
         r"^\s*(?:declare|define)[^\n]*@(?:Spawn__child_exit|"
         r"yon_rt_spawn_child_exit)\b[^\n]*$", ll, re.MULTILINE)
@@ -550,8 +542,6 @@ def test_ll_object_symbol_split(name, tmp_path):
     if not (shutil.which(LLC) or Path(LLC).exists()):
         pytest.skip(f"llc not found on PATH: {LLC}")
     obj = _emit_obj(name, tmp_path)
-    if obj is None:
-        pytest.skip(f"{name}: could not build object (pre-LLVM stage or llc)")
 
     defined = _nm_defined(obj)
     undef = _nm_undefined(obj)
