@@ -25,12 +25,21 @@ adding a production to the grammar without a fixture fails THERE.
 Artifact: regression/SYNTAX-TRIANGLE.md, the keyword matrix, regenerable with
 `python regression/test_syntax_triangle.py` and CI-checkable with `--check`.
 """
+import hashlib
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+
+def _stable_id(text: str) -> str:
+    """A node id stable across processes: Python's hash() of a str is salted
+    per interpreter (PYTHONHASHSEED), so parallel workers would collect
+    different ids for the same block."""
+    return hashlib.sha1(text.encode()).hexdigest()[:4]
+
 
 ROOT = Path(__file__).resolve().parent.parent
 LEXER = ROOT / "frontend" / "lexer.mll"
@@ -300,7 +309,7 @@ def test_leg4_codewindow_runs(cw, tmp_path):
 
 
 @pytest.mark.parametrize("blk", fenced_yon_blocks(),
-                         ids=lambda b: f"{b[0]}:{hash(b[2]) & 0xffff:04x}")
+                         ids=lambda b: f"{b[0]}:{_stable_id(b[2])}")
 def test_leg4_prose_block_marked(blk):
     chapter, marker, content = blk
     if content.splitlines() and PATH_MARKER.match(content.splitlines()[0]):
@@ -316,7 +325,7 @@ def test_leg4_prose_block_marked(blk):
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 @pytest.mark.parametrize(
     "blk", [b for b in fenced_yon_blocks() if b[1] and b[1].startswith("exit")],
-    ids=lambda b: f"{b[0]}:{hash(b[2]) & 0xffff:04x}")
+    ids=lambda b: f"{b[0]}:{_stable_id(b[2])}")
 def test_leg4_exit_marked_block_runs(blk, tmp_path):
     chapter, marker, content = blk
     want = int(marker.split()[1])
