@@ -9,7 +9,6 @@ description: "Measured per-operation timings for Yon's data structures on Apple 
 import ParallelScaling from '@site/src/components/ParallelScaling';
 import HeapGenerations from '@site/src/components/HeapGenerations';
 import PerOpLadder from '@site/src/components/PerOpLadder';
-import XSetScaling from '@site/src/components/XSetScaling';
 import ArenaPutO1 from '@site/src/components/ArenaPutO1';
 
 # Appendix D, Benchmarks
@@ -170,28 +169,12 @@ asserted before any timing, so the benchmark cannot compare invalid handles.)
 
 An `XSet` is a fixed 196,560-bit bitmap over the type-2 lattice points, so `intersect` and
 `union` are a machine-word AND or OR over about 3,072 words, **independent of how many elements
-the sets hold**. A `HashSet` must iterate, so its cost is O(N). The interesting number is not a
-single ratio but how the ratio behaves as the sets grow:
+the sets hold**. A `HashSet` must iterate, so its cost is O(N).
 
-| Set size N | `XSet.intersect` | `HashSet.intersect` | XSet advantage |
-|--:|--:|--:|--:|
-| 100 | 4.5 µs | 16 µs | 4× |
-| 1,000 | 4.9 µs | 43 µs | 9× |
-| 10,000 | 4.5 µs | 768 µs | 169× |
-| 100,000 | 4.6 µs | 47.7 ms | **10,454×** |
-
-<XSetScaling />
-
-`union` tells the same story, from 6× at N=100 to **33,776×** at N=100,000, where the HashSet union
-reaches about 168 ms against the same flat XSet cost. The XSet cost is **flat** across three orders
-of magnitude of set size, 4.5 to 5.0 µs throughout; the HashSet cost grows with N. So the advantage
-is not a fixed multiplier that happens to be large, it is asymptotic: the gap widens without bound as
-the sets grow, because one side is O(1) in the cardinality and the other is O(N). At small N the
-fixed bitmap is overhead and the lattice barely wins; it earns its keep as the sets grow, which is
-exactly when a constant-time set operation is worth most. That is the shape of the lattice's set
-algebra, and it is the reason the structures live on the lattice at all. (`regression/bench/xset_scaling`,
-median of nine runs. The XSet pool is a bounded prototype allocator, 256 sets, so the allocating ops
-are timed once over a small batch; the bitmap representation has no such bound.)
+**The scaling measurement is withdrawn.** At N=100,000 the `HashSet` runtime runs out of capacity
+(a defect, R-01 in the improvement plan): the benchmark kept running and its `HashSet` timings at that
+size measured the failure path, not the set operation. Until R-01 is closed the numbers of
+`regression/bench/xset_scaling` are not published, and this section shows none.
 
 ## Parallelism is multicore, for free
 
@@ -218,10 +201,10 @@ where fork and shared memory are unavailable.)
 <ParallelScaling />
 
 The same shared memory is the wire between Spaces. Two separate processes, a producer pushing
-messages onto a shared-memory `Wire` and a consumer draining them, move a message across the process
-boundary in about **1.1 µs**, roughly **900,000 messages a second** end to end (the consumer times
-itself draining 200,000 messages). That is a real inter-process hop, not a function call, and it is
-what lets one Space talk to another without a socket or a serializer in the path.
+messages onto a shared-memory `Wire` and a consumer draining them, move messages across the process
+boundary: a real inter-process hop, not a function call, and what lets one Space talk to another
+without a socket or a serializer in the path. **No latency figure is given here**: the earlier one
+did not reproduce on a later run, and the wire is being measured again on the reference M1.
 (`regression/book/jp/bench/wire_throughput`, gated by `regression/test_wire_throughput.py`,
 IPC-guarded like the spawn bench. Method note: the in-process stream is a bounded prototype, a fixed
 64-slot ring that silently drops past capacity, so it cannot be timed at high volume; the cross-process

@@ -243,9 +243,8 @@ function Sets() {
           fixed 3,072-word pass with no per-element work.
         </p>
         <div className={styles.stat}>
-          At 100,000 elements, <b>intersection is 10,454× faster</b> than a hash set on the same data
-          (Apple M1), and the gap only widens: one side is constant in the number of elements, the
-          other linear.
+          The scaling measurement against a hash set is withdrawn until a capacity defect of the
+          hash-set runtime is fixed: at large sizes it timed the failure path.
           <Link className={styles.statLink} to="/book/benchmarks">
             Benchmarks
           </Link>
