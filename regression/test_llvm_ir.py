@@ -23,9 +23,10 @@ Grounding for the .ll-shape assumptions (we cannot run the Mac toolchain here):
   * frontend/emit_mlir.ml:5554   emits  `func.func @__yon_dispatch(...) -> f64`,
     "Always emitted (even for non-Space programs) so the runtime's reference
     resolves at link time" (comment at 5517-5521).
-  * frontend/emit_mlir.ml runtime facade table (lines ~308-350) declares every
-    Stream__/Spawn__/yon_rt_* call as f64 -> f64 (the whole runtime facade is
-    f64); e.g. "Spawn__open", (["f64"], "f64").
+  * frontend/emit_mlir.ml runtime facade table declares the Stream__/Spawn__/
+    yon_rt_* calls, mostly f64 -> f64 (e.g. "Spawn__open", (["f64"], "f64"))
+    but with i1/Prop, ptr, i32 and void exceptions; test_ll_runtime_abi
+    checks each declaration against its C prototype instead of assuming f64.
   * runtime/yon_rt.c defines the runtime bodies: Stream__make (1214),
     Spawn__open (2440), __yon_dispatch extern decl (1730), and the many
     yon_rt_* functions. These land in the RTSET .o objects.
@@ -124,8 +125,8 @@ def _toolchain():
     missing += [n for n in RTSET if not Path(n).exists()]
     if missing:
         pytest.skip(f"toolchain not built: {missing[0]} (run dune build / make / cmake)")
-    # mlir-translate and nm must be runnable (they may be bare names on PATH).
-    for t in (MLIRTRANS, NM):
+    # mlir-translate, llc and nm must be runnable (they may be bare names on PATH).
+    for t in (MLIRTRANS, LLC, NM):
         if not (shutil.which(t) or Path(t).exists()):
             pytest.skip(f"tool not found on PATH: {t}")
 
@@ -215,34 +216,23 @@ _CHILD_EXIT = re.compile(
     r"@(Spawn__child_exit|yon_rt_spawn_child_exit)\b")
 
 
-def _ll_lines(ll):
-    """The .ll split into non-empty, comment-stripped logical lines, preserving
-    order. LLVM ';' starts a comment to end of line."""
-    out = []
-    for raw in ll.splitlines():
-        line = raw.split(";", 1)[0].rstrip()
-        if line.strip():
-            out.append(line)
-    return out
-
-
 _NM_CACHE = {"set": None}
 
 
 def _provided_symbols():
     """Symbols defined (text/data, i.e. not 'U') by the RTSET .o files,
-    normalized. Cached across nodes; skip if nm fails on every object."""
+    normalized. Cached across nodes. The toolchain fixture has already checked
+    that every RTSET object exists, so an object nm cannot read FAILS the node:
+    a silently partial provided-set would hide exactly the undefined reference
+    these nodes look for."""
     if _NM_CACHE["set"] is not None:
         return _NM_CACHE["set"]
     provided = set()
-    ran_any = False
     for obj in RTSET:
-        if not Path(obj).exists():
-            continue
         r = _run([NM, "-g", obj])
         if r.returncode != 0:
-            continue
-        ran_any = True
+            pytest.fail(f"nm could not read runtime object {obj}\n"
+                        f"{r.stderr.decode(errors='replace')[-1000:]}")
         for line in r.stdout.decode(errors="replace").splitlines():
             parts = line.split()
             # `<addr> <type> <name>`  or  `         <type> <name>` (undefined)
@@ -251,37 +241,28 @@ def _provided_symbols():
                 # defined symbols: any type letter that is not 'U' (undefined).
                 if typ.upper() != "U":
                     provided.add(_norm(sym))
-    if not ran_any:
-        _NM_CACHE["set"] = None
-        return None
     _NM_CACHE["set"] = provided
     return provided
 
 
 # ── nodes ──────────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("name", EXAMPLES)
-def test_ll_emits(name, tmp_path):
-    """The pipeline reaches valid LLVM IR: non-empty .ll containing a function
-    `define` (a real function body, not just declarations)."""
-    ll = _emit_ll(name, tmp_path)
-    assert ll.strip(), f"{name}: emitted .ll is empty"
-    assert re.search(r"^\s*define\b", ll, re.MULTILINE), \
-        f"{name}: .ll has no function 'define' (no function bodies reached)"
-
-
+# (test_ll_emits, "the .ll is non-empty and has a `define`", was removed:
+# _emit_ll already fails on an empty .ll, and test_ll_has_entry below, on the
+# same EXAMPLES, requires `define i32 @main()`, which implies a `define`.)
 @pytest.mark.parametrize("name", EXAMPLES)
 def test_ll_has_entry(name, tmp_path):
-    """The module defines the program entry. emit_mlir.ml emits both
-    `func.func @main() -> i32` (5364) and the always-emitted
-    `func.func @__yon_dispatch(...)` (5554); after lowering+translate these
-    become `define ... @main(` and `define ... @__yon_dispatch(`. We accept
-    either definition as evidence the entry/dispatch scaffolding survived."""
+    """The module defines the program entry with the C ABI the linker expects:
+    `define i32 @main()` (emit_mlir.ml emits `func.func @main() -> i32`).
+    `@__yon_dispatch` is NOT accepted as a substitute: it is emitted for every
+    program, so its presence proves nothing about the entry."""
     ll = _emit_ll(name, tmp_path)
-    defs = _module_defines(ll)
-    assert ("main" in defs) or ("__yon_dispatch" in defs), (
-        f"{name}: neither @main nor @__yon_dispatch is defined in the module; "
-        f"defines seen: {sorted(defs)[:20]}"
-    )
+    m = re.search(r"^\s*define\b[^\n]*?(\S+)\s+@main\s*\(([^)]*)\)", ll, re.MULTILINE)
+    assert m is not None, (
+        f"{name}: @main is not defined in the module; "
+        f"defines seen: {sorted(_module_defines(ll))[:20]}")
+    assert (m.group(1), m.group(2).strip()) == ("i32", ""), (
+        f"{name}: @main has signature `{m.group(1)} @main({m.group(2)})`, "
+        f"expected `i32 @main()`")
 
 
 @pytest.mark.parametrize("name", EXAMPLES)
@@ -294,12 +275,11 @@ def test_ll_no_undefined_runtime_refs(name, tmp_path):
     ll = _emit_ll(name, tmp_path)
 
     refs = _runtime_refs(ll)
-    if not refs:
-        pytest.skip(f"{name}: IR references no runtime-facade symbols")
+    # every program calls yon_rt_maybe_serve from main: an IR with no facade
+    # reference at all means the emitter (or this extraction) broke.
+    assert refs, f"{name}: IR references no runtime-facade symbols"
 
     provided = _provided_symbols()
-    if provided is None:
-        pytest.skip("nm could not read any runtime .o (cannot build provided set)")
 
     in_module = _module_defines(ll)
     available = provided | in_module
@@ -312,148 +292,135 @@ def test_ll_no_undefined_runtime_refs(name, tmp_path):
     )
 
 
+# ── the runtime ABI, read from the C side ───────────────────────────────────
+# The facade is NOT uniformly f64: emit_mlir.ml's table also has i1/Prop
+# arrows (yon_rt_to_prop/to_bool/decide: i8), a ptr (yon_rt_string_lit), an i32
+# (yon_rt_xheap_used) and a void control call (yon_rt_maybe_serve). The truth
+# the IR must agree with is the C prototype the runtime object is compiled
+# from, so that is the oracle: every facade declaration in the IR must have
+# exactly the return and parameter types of its prototype in runtime/*.[ch].
+_C2LL = {"double": "double", "void": "void", "int8_t": "i8", "uint8_t": "i8",
+         "bool": "i8", "int32_t": "i32", "uint32_t": "i32", "int": "i32",
+         "int64_t": "i64", "uint64_t": "i64"}
+_C_QUAL = re.compile(r"\b(?:const|static|inline|extern|volatile|restrict)\b")
+_DECLARE = re.compile(r"^declare\s+(\S+)\s+@([A-Za-z0-9_]+)\(([^)]*)\)", re.MULTILINE)
+_C_FUNC = re.compile(r"^[ \t]*((?:[A-Za-z_][A-Za-z0-9_]*[ \t*]+)+?)\**"
+                     r"([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*[{;]", re.MULTILINE)
+_C_INDEX = {"by_name": None}
+
+
+def _c_to_ll(ctype):
+    """The LLVM type a C type lowers to on our 64-bit targets, or None when
+    the text is not a type we know (e.g. `return` from a call statement)."""
+    t = " ".join(_C_QUAL.sub("", ctype).split())
+    if "*" in t:
+        return "ptr"
+    return _C2LL.get(t)
+
+
+def _c_param_type(param):
+    """`double a` -> double, `const char *s` -> ptr, `double` -> double."""
+    p = param.strip()
+    if "*" in p:
+        return "ptr"
+    words = p.split()
+    return _c_to_ll(" ".join(words[:-1]) if len(words) > 1 else p)
+
+
+def _c_prototypes(sym):
+    """Every (ret, [params]) signature the runtime sources give `sym`, from its
+    definitions and prototypes (a call statement such as `return sym(x);` is
+    filtered out because `return` is not a C type). The sources are indexed
+    once per process."""
+    if _C_INDEX["by_name"] is None:
+        text = "\n".join(p.read_text(errors="replace") for p in sorted(FT.glob("*.[ch]")))
+        idx = {}
+        for m in _C_FUNC.finditer(text):
+            idx.setdefault(m.group(2), []).append((m.group(1), m.group(3)))
+        _C_INDEX["by_name"] = idx
+    sigs = []
+    for ret, params in _C_INDEX["by_name"].get(sym, []):
+        r = _c_to_ll(ret)
+        if r is None:
+            continue
+        ps = [] if params.strip() in ("", "void") else \
+            [_c_param_type(x) for x in params.split(",")]
+        sigs.append((r, ps))
+    return sigs
+
+
+def _ll_param_types(args):
+    """`double %1, ptr @s` / `double, double` -> ['double', 'ptr']."""
+    return [a.split()[0] for a in args.split(",") if a.strip()]
+
+
+def _abi_violations(ll):
+    """The facade ABI mismatches of one module: (symbol, what is wrong).
+    Two checks: (1) each facade declaration matches every C prototype of the
+    symbol; (2) each facade call site passes and returns exactly the types of
+    the module's own declaration of that symbol."""
+    bad = []
+    declared = {}
+    for ret, sym, args in _DECLARE.findall(ll):
+        if not _RT_FAMILY.match("@" + sym):
+            continue
+        declared[sym] = (ret, _ll_param_types(args))
+        protos = _c_prototypes(sym)
+        if not protos:
+            bad.append((sym, "no C prototype in runtime/*.[ch]"))
+        for proto in protos:
+            if proto != declared[sym]:
+                bad.append((sym, f"IR declares {declared[sym]}, C has {proto}"))
+    call_re = re.compile(r"\bcall\s+(?:[a-z]+\s+)*?(\S+)\s+@([A-Za-z0-9_]+)\(([^)]*)\)")
+    for ret, sym, args in call_re.findall(ll):
+        if sym not in declared:
+            continue  # a call to a function defined in this module
+        got = (ret, _ll_param_types(args))
+        if got != declared[sym]:
+            bad.append((sym, f"call site {got} vs declaration {declared[sym]}"))
+    return bad
+
+
 @pytest.mark.parametrize("name", EXAMPLES)
-def test_ll_f64_abi(name, tmp_path):
-    """BEST-EFFORT. The runtime facade is uniformly f64 (emit_mlir.ml facade
-    table: every Spawn__/Stream__/yon_rt_* arrow is (f64.. -> f64)). So a *call*
-    to one of those symbols in the IR should pass/return `double`, never i32/i64
-    pointers in the value slots. We scan call sites with a tolerant regex and
-    require that the calls we can clearly parse mention `double`. If no such
-    call is parseable (formatting variance), we skip rather than false-fail."""
+def test_ll_runtime_abi(name, tmp_path):
+    """Every runtime-facade symbol the IR declares has, operand by operand,
+    the return and parameter types of its C prototype in runtime/*.[ch], and
+    every call site agrees with that declaration. This is the ABI drift the
+    linker cannot see (C symbols carry no types): a `double` argument passed
+    where the runtime reads an `int8_t` links fine and computes garbage."""
     ll = _emit_ll(name, tmp_path)
-
-    # match: `call <ret> @sym(<args>)` for a facade symbol, on one logical line.
-    call_re = re.compile(
-        r"\bcall\b[^\n@]*@(yon_rt_[A-Za-z0-9_]+|Spawn__[A-Za-z0-9_]+|"
-        r"Stream__[A-Za-z0-9_]+|__yon_dispatch)\s*\(([^)]*)\)")
-    # Symbols whose runtime signature involves !llvm.ptr (string-lit / rpc) and
-    # so legitimately are NOT pure-double — excluded from the f64 assertion.
-    ptr_syms = ("yon_rt_string_lit", "yon_rt_rpc2_invoke_named")
-
-    checked = 0
-    bad = []
-    for ret_and_args in call_re.finditer(ll):
-        sym = ret_and_args.group(1)
-        if any(sym.startswith(p) for p in ptr_syms):
-            continue
-        whole = ret_and_args.group(0)
-        args = ret_and_args.group(2).strip()
-        # A `call void @f()` (void return, no operands) is a CONTROL call — no
-        # value crosses the boundary (e.g. yon_rt_maybe_serve: poll the RPC
-        # serve-loop), so the f64 value-ABI simply does not apply to it.
-        if args == "" and re.search(r"\bcall\s+void\b", whole):
-            continue
-        # the call text should mention double somewhere (ret or an operand).
-        checked += 1
-        if "double" not in whole:
-            bad.append(sym)
-
-    if checked == 0:
-        pytest.skip(f"{name}: no parseable pure-f64 facade call sites in this IR")
-    assert not bad, (
-        f"{name}: facade call site(s) without a `double` operand/return, "
-        f"contradicting the f64 runtime ABI: {sorted(set(bad))}"
-    )
-
-
-@pytest.mark.parametrize("name", SPAWN_EXAMPLES)
-def test_ll_child_exit_unreachable(name, tmp_path):
-    """HIGH-VALUE concurrency/UB node. A spawn body's child arm ends in a call
-    to the child-exit facade (desugar.ml:1316 -> @Spawn__child_exit, whose body
-    yon_rt.c:2344 calls `_exit(0)`), so control NEVER returns from that call:
-    the child process is gone. The latent bug this guards against is the
-    compiler emitting code that *resumes the parent's continuation* after the
-    call — i.e. the call's result feeding a live computation, or the call not
-    being terminal in its block.
-
-    We DON'T require the literal `unreachable` opcode: the current lowering does
-    not mark the facade `noreturn`, so it emits the call followed by the normal
-    `__if_expr` merge and the call's result is simply discarded (dead) — which
-    is the safe shape, because `_exit` means the merge is never reached at run
-    time. The invariant we actually assert, tolerantly, is the SAFE one:
-
-      for each `call ... @<child_exit>(...)`:
-        - if the next significant line is `unreachable`/`ret`/a call to another
-          noreturn (abort/exit/_exit/llvm.trap)  -> ideal, pass;
-        - else the call's SSA result (if any) must NOT be consumed by a later
-          instruction in the same block (it is dead, never resumed)  -> pass;
-        - else (result feeds a live op after the call)  -> FAIL: the parent
-          continuation runs in the child, the UB this node exists to catch.
-
-    Skips cleanly if the chosen example's IR has no child-exit call site."""
-    ll = _emit_ll(name, tmp_path)
-
-    lines = _ll_lines(ll)
-    # A call to the child-exit facade. Capture an optional SSA result name.
-    call_re = re.compile(
-        r"^\s*(?:(%[A-Za-z0-9_.]+)\s*=\s*)?"     # optional `%r =`
-        r"(?:tail\s+|musttail\s+|notail\s+)?call\b"
-        r"[^\n]*@(?:Spawn__child_exit|yon_rt_spawn_child_exit)\b")
-    # opcodes that make the post-call line a clean terminal/no-return
-    terminal_re = re.compile(
-        r"^\s*(unreachable\b|ret\b|br\b|call[^\n]*@(?:abort|exit|_exit|"
-        r"llvm\.trap|llvm\.debugtrap)\b)")
-    # the block boundary: a label line `name:` or a terminator we've passed.
-    label_re = re.compile(r"^[A-Za-z0-9_.\"$-]+:\s*$")
-
-    sites = 0
-    bad = []
-    for i, line in enumerate(lines):
-        m = call_re.match(line)
-        if not m:
-            continue
-        sites += 1
-        res = m.group(1)
-        # collect the rest of this basic block (until next label or end).
-        rest = []
-        for nxt in lines[i + 1:]:
-            if label_re.match(nxt):
-                break
-            rest.append(nxt)
-            if re.match(r"^\s*(ret\b|br\b|unreachable\b|switch\b|"
-                        r"indirectbr\b|resume\b)", nxt):
-                break  # block terminator reached
-        # 1) ideal: the very next significant line is terminal / no-return.
-        if rest and terminal_re.match(rest[0]):
-            continue
-        # 2) safe-by-deadness: the call's result is never used downstream.
-        if res is None:
-            continue  # void/unused call: nothing can resume on its value
-        # word-boundary search for the SSA name being consumed after the call.
-        used = any(re.search(re.escape(res) + r"\b", r) for r in rest)
-        if not used:
-            continue
-        bad.append((res, rest[0].strip()))
-
-    if sites == 0:
-        pytest.skip(f"{name}: IR has no @Spawn__child_exit / "
-                    f"@yon_rt_spawn_child_exit call site")
-    assert not bad, (
-        f"{name}: child-exit call result is consumed by a live instruction "
-        f"after the (no-return) call — the parent continuation would run in "
-        f"the exited child (concurrency UB). Offending sites: {bad}"
-    )
+    declared = [s for _, s, _ in _DECLARE.findall(ll) if _RT_FAMILY.match("@" + s)]
+    assert declared, f"{name}: the IR declares no runtime-facade symbol"
+    bad = _abi_violations(ll)
+    assert not bad, f"{name}: runtime ABI mismatches: {bad[:10]}"
 
 
 @pytest.mark.parametrize("name", SPAWN_EXAMPLES)
 def test_ll_child_exit_noreturn(name, tmp_path):
-    """STRENGTHENED child-exit invariant. emit_mlir now marks the
-    `Spawn__child_exit` facade declaration with a noreturn passthrough, which
-    func->llvm forwards to the LLVM `noreturn` function attribute. We assert the
-    emitted `.ll` declares the child-exit symbol carrying `noreturn` — encoding
-    "control never resumes after child exit" in the IR rather than leaving it to
-    deadness. Pre-fix: no noreturn -> red; post-fix -> green. mlir-translate may
-    put the attribute inline on the declare/define OR in an `attributes #N`
-    group; we accept either."""
+    """The child-exit invariant: a spawn body's child arm ends in a call to the
+    child-exit facade (desugar.ml lowers it to `Spawn__child_exit(ch)`, whose
+    body calls `_exit(0)`), and control must never resume the parent's
+    continuation after it. emit_mlir marks the facade declaration with a
+    noreturn passthrough, which func->llvm forwards to the LLVM `noreturn`
+    attribute; we assert (a) the spawn program really calls the facade (the
+    declaration is only emitted when used, but a call site is what makes the
+    child exit) and (b) the declaration carries `noreturn`, inline or in an
+    `attributes #N` group.
+
+    (test_ll_child_exit_unreachable, which checked that the call's SSA result
+    is not consumed after the call, was removed: on the same SPAWN_EXAMPLES,
+    `noreturn` makes every instruction after the call unreachable by LLVM
+    semantics, so it implies that property.)"""
     ll = _emit_ll(name, tmp_path)
+    sites = re.findall(r"\bcall\b[^\n]*" + _CHILD_EXIT.pattern, ll)
+    assert sites, f"{name}: the spawn program has no child-exit call site"
     m = re.search(
-        r"^\s*(?:declare|define)[^\n]*@(?:Spawn__child_exit|"
-        r"yon_rt_spawn_child_exit)\b[^\n]*$", ll, re.MULTILINE)
-    if m is None:
-        pytest.skip(f"{name}: IR has no @Spawn__child_exit declaration")
+        r"^\s*(?:declare|define)[^\n]*" + _CHILD_EXIT.pattern + r"[^\n]*$",
+        ll, re.MULTILINE)
+    assert m is not None, f"{name}: IR calls but does not declare the child-exit facade"
     line = m.group(0)
     if "noreturn" in line:
-        return  # inline attribute — invariant satisfied
+        return  # inline attribute: invariant satisfied
     grp = re.search(r"#(\d+)\b", line)
     assert grp is not None, (
         f"{name}: @Spawn__child_exit has neither an inline `noreturn` nor an "
@@ -466,39 +433,41 @@ def test_ll_child_exit_noreturn(name, tmp_path):
         f"{attrs.group(0) if attrs else '(group #' + n + ' not found)'}")
 
 
-def _nm_undefined(obj):
-    """The set of UNDEFINED symbols ('U') in an object file, normalized
-    (one leading underscore stripped). Returns None if nm fails to read it."""
+def _nm_symbols(obj):
+    """(defined, undefined) symbol sets of an object file, normalized (one
+    leading underscore stripped). nm failing on an object llc just produced
+    FAILS the node."""
     r = _run([NM, str(obj)])
     if r.returncode != 0:
-        return None
-    undef = set()
+        pytest.fail(f"nm could not read {obj}\n{r.stderr.decode(errors='replace')[-1000:]}")
+    defined, undef = set(), set()
     for line in r.stdout.decode(errors="replace").splitlines():
         parts = line.split()
-        if len(parts) >= 2 and parts[-2].upper() == "U":
-            undef.add(_norm(parts[-1]))
-    return undef
+        if len(parts) >= 2:
+            (undef if parts[-2].upper() == "U" else defined).add(_norm(parts[-1]))
+    return defined, undef
 
 
-def _nm_defined(obj):
-    """The set of DEFINED text/data symbols (type letter not 'U'/'u'/'-') in an
-    object file, normalized. Returns None if nm fails."""
-    r = _run([NM, str(obj)])
-    if r.returncode != 0:
-        return None
-    defined = set()
-    for line in r.stdout.decode(errors="replace").splitlines():
-        parts = line.split()
-        if len(parts) >= 2 and parts[-2].upper() not in ("U",):
-            defined.add(_norm(parts[-1]))
-    return defined
-
-
-# libc / libm / pthread / compiler-builtin symbols an object may legitimately
-# leave undefined: the system linker resolves them, not our RTSET objects.
-# Tolerant: prefixes + an exact-name set. Anything matching here is NOT required
-# to be in the runtime-provided set.
-_SYS_PREFIXES = ("pthread_", "__", "_ZSt", "llvm.", "sem_", "atomic_")
+# libc / libm / pthread symbols an object may legitimately leave undefined:
+# the system linker resolves them, not our RTSET objects. Anything matching
+# here is NOT required to be in the runtime-provided set.
+#
+# There is deliberately NO blanket "__" prefix: it used to whitelist every
+# `__yon_*` runtime symbol, so a missing one passed as "system". The system
+# symbols that do start with "__" are listed by name (as they read after
+# _norm strips one underscore):
+#   __stack_chk_fail, __stack_chk_guard   stack protector (macOS ___stack_chk_*)
+#   __error                               macOS errno accessor (___error)
+#   __errno_location                      glibc errno accessor
+#   __stderrp, __stdoutp, __stdinp        macOS stdio streams
+#   __bzero, __memcpy_chk, __memmove_chk, __memset_chk, __strcpy_chk,
+#   __strcat_chk, __snprintf_chk, __sprintf_chk, __vsnprintf_chk
+#                                         FORTIFY_SOURCE builtins
+#   __assert_fail, __assert_rtn           glibc / macOS assert
+#   __udivti3, __umodti3, __divti3, __modti3  compiler-rt 128-bit division
+# (The objects emitted for EXAMPLES today leave none of them undefined: the
+# list is the tolerance an llc upgrade may need, not observed traffic.)
+_SYS_PREFIXES = ("pthread_", "_ZSt", "llvm.", "sem_", "atomic_")
 _SYS_EXACT = {
     "memcpy", "memmove", "memset", "memcmp", "strlen", "strcmp", "strncmp",
     "strcpy", "strncpy", "strcat", "strdup", "printf", "fprintf", "snprintf",
@@ -507,12 +476,17 @@ _SYS_EXACT = {
     "_Exit", "qsort", "memchr", "strchr", "strrchr", "strstr", "getenv",
     "open", "close", "read", "write", "lseek", "mmap", "munmap", "ftruncate",
     "fopen", "fclose", "fread", "feof", "ferror", "perror", "errno",
-    "__errno_location", "stderr", "stdout", "stdin", "sqrt", "pow", "fabs",
+    "stderr", "stdout", "stdin", "sqrt", "pow", "fabs",
     "floor", "ceil", "round", "fmod", "log", "exp", "sin", "cos", "nan",
     "shm_open", "shm_unlink", "usleep", "sleep", "nanosleep", "fork", "waitpid",
     "kill", "getpid", "socket", "bind", "listen", "accept", "connect", "send",
     "recv", "setsockopt", "htons", "ntohs", "inet_pton", "dprintf",
     "clock_gettime", "gettimeofday",
+    "__stack_chk_fail", "__stack_chk_guard", "__error", "__errno_location",
+    "__stderrp", "__stdoutp", "__stdinp", "__bzero", "__memcpy_chk",
+    "__memmove_chk", "__memset_chk", "__strcpy_chk", "__strcat_chk",
+    "__snprintf_chk", "__sprintf_chk", "__vsnprintf_chk", "__assert_fail",
+    "__assert_rtn", "__udivti3", "__umodti3", "__divti3", "__modti3",
 }
 
 
@@ -520,46 +494,33 @@ def _is_system_symbol(sym):
     return sym in _SYS_EXACT or sym.startswith(_SYS_PREFIXES)
 
 
-@pytest.mark.parametrize("name", ["arena_basic", "spawn_parallel_collect"])
+@pytest.mark.parametrize("name", EXAMPLES)
 def test_ll_object_symbol_split(name, tmp_path):
     """LINK-TIME invariant asserted BEFORE the slow link. Carry the example to a
     relocatable object (_emit_obj: _emit_ll -> `llc -filetype=obj`) and `nm` it.
     Assert the two halves of a clean link:
 
-      (a) the program entry is DEFINED here — `main` (or macOS `_main`) shows as
-          a text symbol (`T`/`t`), so the object actually provides an entry;
+      (a) the program entry `main` (macOS `_main`) is DEFINED here; the
+          always-emitted `__yon_dispatch` is not an entry and does not count;
       (b) every UNDEFINED ('U') symbol is resolvable: it is either provided by
-          the RTSET runtime objects (nm union of those .o) OR a tolerated
-          system symbol (libc/libm/pthread/compiler-builtin allowlist).
+          the RTSET runtime objects (nm union of those .o) OR a named system
+          symbol (libc/libm/pthread allowlist above).
 
     A 'U' that is neither runtime-provided nor a system symbol is precisely the
-    undefined reference that would blow up the link — caught here, named, and
-    localized to one symbol. All comparisons are over normalized symbol sets
-    (one leading `_` stripped for macOS), never exact IR text.
+    undefined reference that would blow up the link, caught here and named.
 
-    Skips cleanly if llc or nm is unavailable, if the IR/object cannot be built,
-    or if nm cannot read the runtime objects."""
-    if not (shutil.which(LLC) or Path(LLC).exists()):
-        pytest.skip(f"llc not found on PATH: {LLC}")
+    This is NOT the same check as test_ll_no_undefined_runtime_refs: that one
+    reads the IR, where every facade declaration (~220 per module) is visible
+    whether used or not, but only the facade families; this one reads the
+    object, where only the symbols actually referenced survive, of every
+    family (system symbols and non-facade runtime symbols included)."""
     obj = _emit_obj(name, tmp_path)
+    defined, undef = _nm_symbols(obj)
 
-    defined = _nm_defined(obj)
-    undef = _nm_undefined(obj)
-    if defined is None or undef is None:
-        pytest.skip(f"{name}: nm could not read the emitted object")
+    assert "main" in defined, (
+        f"{name}: object does not define `main`; defined sample: {sorted(defined)[:20]}")
 
-    # (a) entry defined. Accept either `main` or the macOS `_main` (post-_norm
-    # both collapse to `main`), and tolerate the dispatch scaffolding as entry.
-    assert ("main" in defined) or ("__yon_dispatch" in defined), (
-        f"{name}: object defines neither `main` nor `__yon_dispatch` as a text "
-        f"symbol; defined sample: {sorted(defined)[:20]}"
-    )
-
-    # (b) every undefined symbol must be resolvable.
     provided = _provided_symbols()
-    if provided is None:
-        pytest.skip("nm could not read any runtime .o (cannot build provided set)")
-
     unresolved = sorted(
         s for s in undef
         if s not in provided and not _is_system_symbol(s)

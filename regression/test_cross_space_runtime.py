@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 from multiprocessing import shared_memory
 from pathlib import Path
 
@@ -28,8 +29,12 @@ def _require_ipc_shm():
         if status != 0:
             raise OSError(f"fork probe child exited with status {status}")
     except (OSError, PermissionError) as exc:
+        # macOS and Linux support fork + POSIX shm: a failure there (e.g. an shm
+        # namespace exhausted by earlier runs) is a fault to report, not a skip.
+        if sys.platform.startswith(("darwin", "linux")):
+            pytest.fail(f"IPC/SHM probe failed on {sys.platform}, where it is supported: {exc}")
         pytest.skip(
-            f"cross-space runtime needs IPC/SHM, unavailable in this sandbox: {exc}"
+            f"cross-space runtime needs IPC/SHM, unavailable on {sys.platform}: {exc}"
         )
     finally:
         if shm is not None:

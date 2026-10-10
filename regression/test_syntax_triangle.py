@@ -1,15 +1,19 @@
 """The syntax triangle: lexer <-> corpus <-> book, closed as one invariant.
 
-`test_keyword_docs.py` guards a single edge (lexer -> book, keyword level). This
-suite closes the keyword triangle and keeps it closed in CI. Three legs plus a
-regenerable matrix:
+This suite closes the keyword triangle (lexer, corpus, book) and keeps it closed
+in CI; `test_keyword_docs.py` only keeps the book's keyword index in sync. Three
+legs plus a regenerable matrix:
 
   Leg 1  lexer -> book       every lexer keyword has a `#### `kw`` section in
                              website/docs/book/22-keywords.md.
   Leg 2  lexer -> corpus     every lexer keyword is exercised by a compiling
-                             example (examples/, keyword_coverage/, yon_tests/,
-                             cross_space/) or is in KEYWORD_ALLOWLIST (reserved /
-                             kernel tokens).
+                             example or is in KEYWORD_ALLOWLIST (reserved /
+                             kernel tokens). "Compiling" is literal: only files
+                             whose compilation a gate asserts count
+                             (compiling_corpus.compiling_files), never a rejected
+                             negative fixture or an EMITFAIL example. The
+                             generic declaration form is pinned to one fixture
+                             that compiles and runs (examples/generics_basic).
   Leg 4  book -> corpus       every CodeWindow `file="proj/"` block is byte-identical
                              to the real examples/proj files (net of omitted files);
                              every other `.yon` fenced block compiles to a recorded
@@ -33,13 +37,13 @@ from pathlib import Path
 
 import pytest
 
+import compiling_corpus as cc
 
 def _stable_id(text: str) -> str:
     """A node id stable across processes: Python's hash() of a str is salted
     per interpreter (PYTHONHASHSEED), so parallel workers would collect
     different ids for the same block."""
     return hashlib.sha1(text.encode()).hexdigest()[:4]
-
 
 ROOT = Path(__file__).resolve().parent.parent
 LEXER = ROOT / "frontend" / "lexer.mll"
@@ -58,8 +62,8 @@ CORPUS_ROOTS = [
 
 # Reserved / kernel-internal tokens a corpus `.yon` is not required to exercise.
 # Everything else must appear in a compiling example. The generics form `<A, B>`
-# is deliberately NOT here: it lives in the corpus (`identity<T>`), enforced by
-# test_leg2_generics_in_corpus_not_allowlist.
+# is deliberately NOT here: it lives in the corpus (`identity<T>`, `first<A, B>`),
+# enforced by test_leg2_generic_declaration_compiles_and_runs.
 KEYWORD_ALLOWLIST = {
     "El",      # kernel decode type; no surface syntax, exercised by the test_el oracle
     "PathP",   # cubical dependent path; kernel form, test_path_core
@@ -98,9 +102,11 @@ def corpus_files() -> list[Path]:
     return files
 
 
-def corpus_token_counts() -> dict[str, int]:
+def corpus_token_counts(files: list[Path] | None = None) -> dict[str, int]:
+    """Token counts over `files` (default: the whole corpus, as the matrix
+    reports it; leg 2 passes only the files known to compile)."""
     counts: dict[str, int] = {}
-    for p in corpus_files():
+    for p in corpus_files() if files is None else files:
         for t in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", _strip_comments(p.read_text())):
             counts[t] = counts.get(t, 0) + 1
     return counts
@@ -231,9 +237,17 @@ def test_leg1_every_keyword_documented():
 # =========================================================================== #
 # Leg 2 — lexer -> corpus (coverage)
 # =========================================================================== #
+def compiling_corpus_files() -> list[Path]:
+    """The corpus files whose compilation a gate asserts (same roots as the
+    matrix; loose cross_space/*.yon are compiled only by run.sh, so they drop)."""
+    roots = [r.resolve() for r in CORPUS_ROOTS]
+    return [p for p in cc.compiling_files()
+            if any(p.resolve().is_relative_to(r) for r in roots)]
+
+
 @pytest.mark.skipif(not LEXER.exists(), reason="lexer missing")
 def test_leg2_every_keyword_exercised():
-    counts = corpus_token_counts()
+    counts = corpus_token_counts(compiling_corpus_files())
     uncovered = []
     for kw in lexer_keyword_tokens():
         if counts.get(kw, 0) > 0:
@@ -243,18 +257,35 @@ def test_leg2_every_keyword_exercised():
         uncovered.append(kw)
     assert not uncovered, (
         "lexer keywords exercised by NO compiling example and not in KEYWORD_ALLOWLIST: "
-        f"{uncovered}. Add a gated example (preferred) or an allowlist entry with a reason."
+        f"{uncovered}. Add a gated example (preferred) or an allowlist entry with a reason. "
+        "A rejected negative fixture or an EMITFAIL example does not count."
     )
 
 
-def test_leg2_generics_in_corpus_not_allowlist():
-    """The generics form must live in the corpus, not the allowlist."""
-    counts = corpus_token_counts()
-    text = " ".join(_strip_comments(p.read_text()) for p in corpus_files())
-    assert re.search(r"\w+<[A-Za-z_][\w ,]*>", text), (
-        "no generics `<...>` occurrence in the corpus; the generic form must be "
-        "exercised by a real example (e.g. identity<T>), not allowlisted away."
-    )
+# The one fixture that carries the generic DECLARATION form: one and two type
+# parameters, instantiated at two types. RAN in the baseline with exit 44.
+GENERICS_FIXTURE = EXAMPLES / "generics_basic"
+GENERICS_EXIT = 44
+_GENERIC_DECL = re.compile(r"\bfun\s+(\w+)\s*<\s*([A-Z]\w*(?:\s*,\s*[A-Z]\w*)*)\s*>\s*\(")
+
+
+def test_leg2_generic_declaration_compiles_and_runs(tmp_path):
+    """The generics form lives in the corpus, not the allowlist: a real
+    `fun f<T>(...)` and `fun g<A, B>(...)` declaration (not a `List<T>` type
+    use) in a fixture that compiles and runs to its recorded exit."""
+    src = _strip_comments((GENERICS_FIXTURE / "Entry.yon").read_text())
+    decls = {name: [t.strip() for t in params.split(",")]
+             for name, params in _GENERIC_DECL.findall(src)}
+    assert any(len(ps) == 1 for ps in decls.values()), f"no one-parameter generic declaration: {decls}"
+    assert any(len(ps) >= 2 for ps in decls.values()), f"no multi-parameter generic declaration: {decls}"
+    assert cc.baseline().get(GENERICS_FIXTURE.name) == GENERICS_EXIT, (
+        "generics_basic must be RAN in baseline_exitcodes.txt with its exit")
+    if not YONC.exists():
+        pytest.skip("toolchain/yonc missing")
+    exe = tmp_path / "generics"
+    r = _run([str(YONC), str(GENERICS_FIXTURE), "-o", str(exe)])
+    assert r.returncode == 0, f"the generics fixture does not compile:\n{r.stderr[-800:]}"
+    assert _run([str(exe)]).returncode == GENERICS_EXIT
 
 
 # Leg 3 (production ledger: canonical form + rejected deviation per grammar

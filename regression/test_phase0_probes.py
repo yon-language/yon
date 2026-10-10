@@ -65,6 +65,19 @@ def _clean_rejection(rc: int, out: str) -> bool:
             and "stage0.topos.mlir" not in out)
 
 
+class ProbeOutcome(AssertionError):
+    """The probe's own verdict: the program ran and computed the wrong thing.
+    A DEFECT xfail whose defect shows as a wrong result names this type in
+    `raises=`, so a broken PRECONDITION (the probe program no longer compiles,
+    a helper's plain assert) fails the test instead of passing as the expected
+    failure."""
+
+
+def _verdict(ok: bool, msg: str):
+    if not ok:
+        raise ProbeOutcome(msg)
+
+
 # --- P-01 (D) S-01: strict positivity ----------------------------------------
 
 _BAD = """\
@@ -82,9 +95,15 @@ def test_p01_checker_terminates_on_negative_place(tmp_path):
     """The guarantee S-01 protects: the checker never diverges. Not reproduced
     on HEAD: the place construction `.-> Bad {...}` is opaque to the reducer, so
     the self-application is never unfolded (the TimeoutExpired would be the
-    defect)."""
+    defect). Terminating is not enough: the program asks `clear` to prove
+    Same(boom(n), 0), which is false, so the checker must REJECT it, cleanly
+    (a stable [E....] code, no uncaught OCaml exception). HEAD: E2001."""
     proj = _project(tmp_path, _BAD, '\n[world.W]\nobjects = ["Bad"]\n')
-    _compile(proj, tmp_path / "out", timeout=60)
+    rc, out = _compile(proj, tmp_path / "out", timeout=60)
+    assert "Fatal error" not in out, f"the checker crashed instead of deciding:\n{out}"
+    assert _clean_rejection(rc, out), (
+        f"Same(boom(n), 0) is false, so `clear` must be rejected with a diagnostic "
+        f"code (rc={rc}):\n{out}")
 
 
 @pytest.mark.xfail(strict=True, reason="DEFECT S-01: no strict-positivity check; "
@@ -127,7 +146,8 @@ place Entry {{
 
 # --- P-04, P-05 (D) S-03: Int64 precision ----------------------------------
 
-@pytest.mark.xfail(strict=True, reason="DEFECT S-03: Int64 is carried and computed "
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="DEFECT S-03: Int64 is carried and computed "
                    "as f64 (arith.mulf/addf), 2^53+1 is lost before any List")
 def test_p04_int64_exact_past_2_53_through_list(tmp_path):
     entry = """\
@@ -140,11 +160,13 @@ place Entry {
   }
 }
 """
-    assert _compile_and_run(tmp_path, entry) == 1
+    rc = _compile_and_run(tmp_path, entry)
+    _verdict(rc == 1, f"2^53+1 came back even (exit {rc}, expected 1)")
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="DEFECT S-03: 2^53+1 arrives even at the "
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="DEFECT S-03: 2^53+1 arrives even at the "
                    "remote Space (upstream loss, see P-04)")
 def test_p05_int64_exact_across_spaces(tmp_path):
     (tmp_path / "echo.yon").write_text("""\
@@ -169,7 +191,8 @@ place Entry {
     assert rc == 0, out
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
     assert rc == 0, out
-    assert _run(tmp_path / "client", cwd=tmp_path) == 7
+    rc = _run(tmp_path / "client", cwd=tmp_path)
+    _verdict(rc == 7, f"parity bits a + 2b + 4c = {rc}, expected 7 (all three odd)")
 
 
 # --- P-06 (D) S-04: the Widen law under overflow ---------------------------
@@ -192,10 +215,12 @@ def test_p06_widen_additive_law_today(tmp_path):
     assert _compile_and_run(tmp_path, _WIDEN % "holds_law") == 1
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT S-04 precondition: Int32 + Int32 is "
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="DEFECT S-04 precondition: Int32 + Int32 is "
                    "arith.addf on f64; Int32.MAX + 1 = 2147483648, not an Int32")
 def test_p06_int32_addition_wraps(tmp_path):
-    assert _compile_and_run(tmp_path, _WIDEN % "wrapped") == 1
+    rc = _compile_and_run(tmp_path, _WIDEN % "wrapped")
+    _verdict(rc == 1, f"Int32.MAX + 1 did not wrap below 0 (exit {rc}, expected 1)")
 
 
 # --- P-07 (D) S-05: hygiene of generated names ------------------------------
@@ -228,11 +253,13 @@ def test_p07_double_underscore_inside_name_is_exported(tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="DEFECT S-05: user functions named __x / "
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="DEFECT S-05: user functions named __x / "
                    "yon_rt_x silently drop out of the wire dispatch table")
 @pytest.mark.parametrize("fn,expected", [("__conto", 102), ("yon_rt_saldo", 104)])
 def test_p07_reserved_prefix_names_are_exported(tmp_path, fn, expected):
-    assert _call_remote(tmp_path, fn) == expected
+    rc = _call_remote(tmp_path, fn)
+    _verdict(rc == expected, f"remote {fn}(100) exited {rc}, expected {expected}")
 
 
 # --- P-08 (D) S-06: out-of-range sentinels ----------------------------------

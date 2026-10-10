@@ -5,9 +5,10 @@ Drives the full native pipeline on every example
          -> llc -> link against the C runtime -> native binary -> run
 and asserts the exit code matches regression/baseline_exitcodes.txt.
 
-Also runs the OCaml kernel oracles (test_*.exe, 0 failures) and the runtime
-MPHF bijection self-check. Mirrors regression/run_regression.sh, one pytest
-node per example so failures are isolated and named.
+Also runs the runtime MPHF bijection self-check (the OCaml kernel oracles,
+test_*.exe, are run by test_oracle_checks.py). Mirrors
+regression/run_regression.sh, one pytest node per example so failures are
+isolated and named.
 
 Tool discovery honours the same env vars as yonc (YONC_TOPOS_OPT, YONC_LLC,
 YONC_MLIR_TRANSLATE, YONC_MLIR_OPT, YONC_CC); falls back to the -18 suffix.
@@ -124,17 +125,6 @@ def test_example(name, tmp_path):
     expected = BASE[name]
     got = _build_and_run(name, tmp_path)
     assert got == expected, f"{name}: expected {expected}, got {got}"
-
-
-# --- OCaml kernel oracles (alpha-equivalence, paths, HIT, isEquiv, eta-Sigma) ---
-
-ORACLES = sorted(str(p) for p in (FE / "_build" / "default").glob("test_*.exe"))
-
-
-@pytest.mark.parametrize("oracle", ORACLES, ids=[Path(o).stem for o in ORACLES])
-def test_ocaml_oracle(oracle):
-    r = _run([oracle])
-    assert r.returncode == 0, r.stdout.decode(errors="replace")[-2000:]
 
 
 # --- runtime MPHF bijection self-check (196560 minimal vectors) ---

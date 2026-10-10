@@ -1,0 +1,6 @@
+[package]
+name = "morph_functoriality_reject"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w", "v"]

@@ -8,11 +8,17 @@ kernel-internal forms that have no surface syntax, an OCaml core oracle.
 Two kinds of node:
   - test_keyword_covered[kw]   : the keyword appears in a compiling example,
                                  or is a known kernel-internal form whose
-                                 oracle passes.
+                                 oracle passes. "Compiling" is literal: only the
+                                 files whose compilation a gate asserts count
+                                 (compiling_corpus.compiling_files); a rejected
+                                 negative fixture or an EMITFAIL example does not.
   - test_coverage_example_emits: each keyword_coverage/*.yon emits MLIR.
 
 This is the systematic per-keyword coverage; test_yon_pipeline.py is the
-behavioural regression (exit codes) on the example corpus.
+behavioural regression (exit codes) on the example corpus. It differs from
+test_syntax_triangle's leg 2 in its keyword set: every string literal of the lexer
+(capitalised kernel forms, `Type_`, `on`, ... included), with the kernel-internal
+ones discharged by running their OCaml oracle rather than by an allowlist.
 """
 
 import re
@@ -20,6 +26,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+import compiling_corpus as cc
 
 ROOT = Path(__file__).resolve().parent.parent
 LEXER = ROOT / "frontend" / "lexer.mll"
@@ -59,14 +67,8 @@ def _strip_comments(s):
 
 
 def _exercised_tokens():
-    srcs = (
-        list(EXAMPLES.glob("**/*.yon"))                       # incl. project dirs
-        + list(COVERAGE.glob("**/*.yon"))                     # incl. coverage project dirs
-        + list((COVERAGE / "yon_modules").glob("*.yon"))
-        + list((ROOT / "regression" / "yon_tests").glob("**/*.yon"))   # migrated projects
-        + list((ROOT / "regression" / "cross_space").glob("*/**/*.yon"))  # gated cross_space PROJECTS only (not loose files)
-    )
-    text = " ".join(_strip_comments(p.read_text()) for p in srcs)
+    """Identifier tokens of the files KNOWN TO COMPILE, comments stripped."""
+    text = " ".join(_strip_comments(p.read_text()) for p in cc.compiling_files())
     return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", text))
 
 

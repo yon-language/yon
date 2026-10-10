@@ -80,7 +80,7 @@ def test_no_retired_keyword_as_code(path):
     live = live_keywords()
     dead = [w for w in RETIRED if w not in live]
     text = path.read_text(errors="replace")
-    blob = code_zones(text, path.suffix == ".js")
+    blob = code_zones(text, path.suffix in (".js", ".jsx"))
     # A mention that SAYS the word was retired is legitimate prose, even in
     # backticks: the sentence is about the retirement. Judged per paragraph,
     # so "the `verify` word was retired" passes and a live example does not.
@@ -89,7 +89,7 @@ def test_no_retired_keyword_as_code(path):
             if re.search(r"`" + word + r"`", para) and re.search(
                     r"\bretire|\bwithdraw|\bno longer\b|\bwas removed\b", para):
                 continue
-            if re.search(r"\b" + word + r"\b", code_zones(para, path.suffix == ".js")):
+            if re.search(r"\b" + word + r"\b", code_zones(para, path.suffix in (".js", ".jsx"))):
                 return False
         return True
     found = sorted({w for w in dead
@@ -107,7 +107,7 @@ def test_no_lowercase_primitive_in_type_position(path):
     if rel in ALLOW:
         pytest.skip("documents the kernel codes themselves")
     text = path.read_text(errors="replace")
-    blob = code_zones(text, path.suffix == ".js")
+    blob = code_zones(text, path.suffix in (".js", ".jsx"))
     # `: number` / `-> text` / `of boolean` in a type position
     bad = set(re.findall(r"(?::\s*|->\s*|\bof\s+)(number|text|boolean|unit)\b", blob))
     # JSX splits `():{' '}` from `<span>number</span>`, so the colon is never

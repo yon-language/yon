@@ -11,7 +11,10 @@ but to assert that:
   (2) its correctness guards hold exactly (so a benchmark cannot silently rot into
       measuring nothing, and a regression that breaks the structure is caught), and
   (3) a few machine-independent DESIGN PROPERTIES hold with generous margins
-      (equality is O(1) in size; XSet set-algebra beats HashSet).
+      (equality is O(1) in size; XSet set-algebra beats HashSet), and
+  (4) the runtime never reports a capacity failure while the bench runs (a
+      "pool exhausted" / "directory full" line on stderr means the operation
+      being timed failed, and its timing measures the failure path).
 
 The per-position median across K runs is the source the benchmarks page renders
 from (website/src/data/bench-raw.json), but a test run never writes it: timings are
@@ -23,6 +26,7 @@ an explicit act, on a quiet machine:
 import hashlib
 import json
 import os
+import re
 import statistics
 import subprocess
 from pathlib import Path
@@ -60,13 +64,46 @@ GUARDS = {
 BENCHES = sorted(p.name for p in BENCH.iterdir() if p.is_dir()) if BENCH.exists() else []
 _results = {}
 
+# A runtime diagnostic that says an operation did not happen (a pool, arena,
+# directory or table ran out, an allocation or a lock failed). The runtime
+# prints these and carries on with a sentinel, so the exit code stays 0.
+_RT_FAILURE = re.compile(
+    r"^\[YON-[^\]]*\][^\n]*\b(?:exhausted|full|FULL|overflow|failed|FATAL|out of range)\b",
+    re.MULTILINE)
+
+
+class RuntimeCapacityError(AssertionError):
+    """A bench ran into a runtime capacity limit (see _RT_FAILURE). Its own
+    type so a known capacity defect can be xfail'd with `raises=` without
+    absorbing a compile, exit-code, guard or property failure."""
+
+
+# xset_scaling at N=100000 overflows the HashSet runtime: measured 2026-10-10,
+# each run prints 33616 x "hashset_add: directory full" and 6600042 x
+# "hashset_empty: arena exhausted" (exit 0), so its HashSet timings at the
+# largest N time the failure path. A runtime/bench defect, reported, not fixed
+# here; the xfail is strict and narrowed to RuntimeCapacityError.
+_CAPACITY_XFAIL = {
+    "xset_scaling": "HashSet directory/arena exhausted at N=100000 (runtime capacity)",
+}
+
+def _bench_params():
+    out = []
+    for b in BENCHES:
+        marks = ()
+        if b in _CAPACITY_XFAIL:
+            marks = pytest.mark.xfail(strict=True, raises=RuntimeCapacityError,
+                                      reason=_CAPACITY_XFAIL[b])
+        out.append(pytest.param(b, marks=marks, id=b))
+    return out
+
 
 def _ints(s):
     return [int(t) for t in s.split() if t.lstrip("-").isdigit()]
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
-@pytest.mark.parametrize("name", BENCHES)
+@pytest.mark.parametrize("name", _bench_params())
 def test_benchmark(name, tmp_path):
     binp = tmp_path / name
     comp = subprocess.run(
@@ -79,11 +116,16 @@ def test_benchmark(name, tmp_path):
         f"--- stdout ---\n{comp.stdout.decode(errors='replace')[-1000:]}"
     )
     runs = []
+    rt_failures = []
     for _ in range(K):
         r = subprocess.run([str(binp)], capture_output=True, timeout=180)
+        assert r.returncode == 0, (
+            f"{name}: the bench binary exited {r.returncode}, expected 0\n"
+            f"--- stderr ---\n{r.stderr.decode(errors='replace')[-2000:]}")
         nums = _ints(r.stdout.decode(errors="replace"))
         assert nums, f"{name}: produced no numeric output"
         runs.append(nums)
+        rt_failures += _RT_FAILURE.findall(r.stderr.decode(errors="replace"))
     L = min(len(r) for r in runs)
     median = [int(statistics.median(r[i] for r in runs)) for i in range(L)]
 
@@ -108,6 +150,25 @@ def test_benchmark(name, tmp_path):
             f"eq_constant: equality not O(1) in size? net(1)={net_1} net(32768)={net_32k}\n"
             f"raw runs={runs}"
         )
+    if name == "xset_scaling":
+        # 4 groups (N = 100, 1000, 10000, 100000) of
+        #   xset_inter  hash_inter  xset_union  hash_union   (ns per op)
+        assert len(median) == 16 and min(median) > 0, (
+            f"xset_scaling: expected 16 positive timings, got {median}")
+        g = [median[4 * i:4 * i + 4] for i in range(4)]
+        xi100, hi100 = g[0][0], g[0][1]
+        xi10k, hi10k = g[2][0], g[2][1]
+        # the point of the bench: XSet algebra is a fixed-width AND/OR, flat in
+        # N, while HashSet's is O(N). Compared at N=100 vs 10000 (the N=100000
+        # group is the capacity defect above). A 100x larger N: XSet stays
+        # within 3x (plus a 20 us floor for timer noise on a ~5 us op), HashSet
+        # grows more than 5x (measured ~45x), and XSet wins at 10000.
+        assert xi10k <= max(xi100 * 3, xi100 + 20_000), (
+            f"xset_scaling: XSet intersect not flat in N? @100={xi100} @10000={xi10k}")
+        assert hi10k > hi100 * 5, (
+            f"xset_scaling: HashSet intersect not growing with N? @100={hi100} @10000={hi10k}")
+        assert xi10k < hi10k, (
+            f"xset_scaling: XSet intersect not faster at N=10000? xset={xi10k} hash={hi10k}")
     if name == "xset":
         xset_inter, hash_inter = median[2], median[4]
         # the bit-parallel intersect must beat the O(N) hash intersect.
@@ -156,15 +217,38 @@ def test_benchmark(name, tmp_path):
 
     _results[name] = {"runs": K, "median": median, "all": runs}
 
+    # (4) last, so every other check above has already run on this bench
+    if rt_failures:
+        counts = {m: rt_failures.count(m) for m in sorted(set(rt_failures))}
+        raise RuntimeCapacityError(
+            f"{name}: the runtime reported failed operations while the bench ran "
+            f"(its timings measure the failure path): {counts}")
+
 
 def test_zz_write_results(pytestconfig):
-    """Explicit publication only (--bench-publish): persist the medians for the page."""
+    """Explicit publication only (--bench-publish): persist the medians for the
+    page, and check what was published. The page renders every benchmark, so a
+    publication must hold all of them, measured in THIS process: under xdist
+    each worker sees only its own share of _results, and a partial file would
+    silently drop rows from the page. The file is read back and must parse to
+    exactly what was measured."""
     if not pytestconfig.getoption("--bench-publish"):
         pytest.skip("site data is written only with --bench-publish")
-    if not _results:
-        pytest.skip("no benchmark results collected")
+    missing = sorted(set(BENCHES) - set(_results))
+    assert not missing, (
+        f"--bench-publish: no result for {missing} in this process (run it alone, "
+        f"without -n, and with every benchmark passing); nothing written")
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    json.dump(dict(sorted(_results.items())), open(OUT, "w"), indent=2)
+    with open(OUT, "w") as f:
+        json.dump(dict(sorted(_results.items())), f, indent=2)
+    with open(OUT) as f:
+        published = json.load(f)
+    assert sorted(published) == sorted(BENCHES), (
+        f"{OUT}: published {sorted(published)}, expected {sorted(BENCHES)}")
+    for name, row in published.items():
+        assert row["median"] == _results[name]["median"] and row["runs"] == K, (
+            f"{OUT}: {name} does not read back as measured: {row}")
+        assert len(row["all"]) == K, f"{OUT}: {name} has {len(row['all'])} runs, expected {K}"
 
 
 def test_zzz_site_data_untouched(pytestconfig):
@@ -173,3 +257,4 @@ def test_zzz_site_data_untouched(pytestconfig):
     if pytestconfig.getoption("--bench-publish"):
         pytest.skip("--bench-publish: this run is the explicit publication")
     assert _digest(OUT) == _OUT_BEFORE, f"{OUT} was rewritten by a plain test run"
+

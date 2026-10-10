@@ -208,6 +208,10 @@ REWRITES = [
         "heyting_short_circuit_in.mlir",
         [
             (r"topos\.heyt_and", False),  # AND(true,false) folded away
+            # ...into the constant `false`, and that constant is what @f returns
+            # (a fold to `true`, or an emptied function, fails here).
+            (r"(%\w+) = topos\.heyt false\b[^\n]*\n\s*return \1 : !topos\.proposition", True),
+            (r"topos\.heyt true", False),
         ],
         None,
         id="heyting-short-circuit",
@@ -227,6 +231,8 @@ REWRITES = [
         "coherence_elimination_in.mlir",
         [
             (r"topos\.coherence", False),  # dead coherence erased
+            # ...and only it: @f survives, still ending in its `return`.
+            (r"func\.func @f\(\)\s*\{[^}]*\breturn\b", True),
         ],
         None,
         id="coherence-elimination",
@@ -265,6 +271,11 @@ REWRITES = [
         "world_specialization_multi_in.mlir",
         [
             (r"topos\.static_world", False),  # multi-world: nothing marked
+            # ...and nothing removed: both worlds and their places survive.
+            (r"topos\.world @W1\b", True),
+            (r"topos\.world @W2\b", True),
+            (r"topos\.place @P1 in @W1\b", True),
+            (r"topos\.place @P2 in @W2\b", True),
         ],
         None,
         id="world-specialization-multi",
@@ -284,6 +295,11 @@ REWRITES = [
         "lower_topos_extensions_in.mlir",
         [
             (r"topos\.canonical_subplace", False),  # erased (F5a)
+            # ...and only it: the place it refined, the function and the
+            # classifier (an unlisted op the partial conversion leaves) survive.
+            (r"topos\.place @P in @W\b", True),
+            (r"topos\.field @x : f64", True),
+            (r"func\.func @f\(\)\s*\{\s*%\w+ = topos\.heyt true[^\n]*\n\s*return\b", True),
         ],
         None,
         id="lower-topos-extensions",

@@ -83,5 +83,9 @@ fun add(a: Number, b: Number): Number { return a }
 fun main(): Number { return add(2, 3) }
 """
     r = _run(src, tmp_path, core_wf=True)
-    assert r.returncode == 0, r.stderr.decode(errors="replace")[-800:]
-    assert "kernel re-check rejected" not in r.stderr.decode(errors="replace")
+    err = r.stderr.decode(errors="replace")
+    assert r.returncode == 0, err[-800:]
+    # the gate RAN on this single-file, top-level-fun program (the corpus scan in
+    # test_core_wf_gate only sees dir-projects), and rejected nothing
+    assert "[core-wf]" in err and "function bodies kernel-checked" in err, err[-400:]
+    assert "kernel re-check rejected" not in err

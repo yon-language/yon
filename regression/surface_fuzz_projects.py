@@ -18,7 +18,7 @@ the inline fuzzer:
 A crash is a real bug: an accepted-then-Fatal, or a malformed project that blows up
 instead of yielding a clean diagnostic. Run:
     python regression/surface_fuzz_projects.py [seed] [cases]
-Exit 0 iff zero crashes.
+Exit 0 iff zero crashes; exit 2 if the frontend executable is missing.
 """
 import random
 import subprocess
@@ -36,21 +36,24 @@ TYPES = ["number", "text"]
 def rand_place_file(rng, name):
     n = rng.randint(1, 3)
     fnames = [rng.choice(FIELDS) for _ in range(n)]
-    fields = "\n".join(f"  {fn} number" for fn in fnames)  # all-number: views/moves stay valid
-    extra, wf, has_op = "", "", False
+    fields = "\n".join(f"  {fn} Number" for fn in fnames)  # all-Number: views/moves stay valid
+    extra, has_op = "", False
     if rng.random() < 0.4:
         extra += f"\n  fun mm(): Number {{ return {rng.randint(0, 99)} }}"
-    if rng.random() < 0.3:  # with-effects place carries operations (reduction targets)
-        wf, has_op = " with effects", True
+    if rng.random() < 0.3:  # a place that carries an operation (a reduction target)
+        has_op = True
         extra += "\n  operation op(v: Number): Number"
-    return f"place {name}{wf} {{\n{fields}{extra}\n}}\n", fnames, has_op
+    return f"place {name} {{\n{fields}{extra}\n}}\n", fnames, has_op
 
 
 def rand_arrow(rng, pinfo):
-    """A random arrow decl. ~65% valid (real place + real field + correct syntax),
-    ~35% perturbed (ghost target, dropped `by`), to exercise both accept and reject."""
+    """A random arrow decl and the place whose body hosts it. An arrow must TOUCH
+    its house (the house is its source or target; Entry hosts anything), so a
+    valid arrow goes in the place it touches, a `functor` between worlds in Entry.
+    ~65% valid (real place + real field + correct syntax), ~35% perturbed (ghost
+    target, dropped `by`), to exercise both accept and reject."""
     if not pinfo:
-        return ""
+        return "", "Entry"
     names = list(pinfo.keys())
     p = rng.choice(names)
     q = rng.choice(names)
@@ -59,24 +62,25 @@ def rand_arrow(rng, pinfo):
     tgt = p if valid else "Ghost"
     kind = rng.choice(["view", "move", "reduction", "functor", "geomorph", "fun"])
     if kind == "view":
-        return f"view V{rng.randint(0,9)} of {tgt} {{ show {fld} }}\n"
+        return f"  view V{rng.randint(0,9)} of {tgt} {{ show {fld} }}\n", p
     if kind == "move":
         pf = pinfo[p]["fields"][0] if pinfo[p]["fields"] else "v"
         qf = pinfo[q]["fields"][0] if pinfo[q]["fields"] else "v"
         by = " by identity" if valid else ""
-        return (f"fun identity(x: Number): Number {{ return x }}\n"
-                f"move Mv{rng.randint(0,9)} from {p} to {q} {{ {qf} maps to {pf}{by} }}\n")
+        return (f"  fun identity(x: Number): Number {{ return x }}\n"
+                f"  move Mv{rng.randint(0,9)} from {p} to {q} {{ {qf} maps to {pf}{by} }}\n"), p
     if kind == "reduction":
-        # reduction needs a with-effects target (has an `operation`)
+        # reduction needs a target that carries an `operation`
         eff = [n for n in names if pinfo[n]["op"]]
         rt = rng.choice(eff) if (eff and valid) else tgt
-        return f"reduction R{rng.randint(0,9)} of {rt} {{ on op(v: Number) {{ return v }} }}\n"
+        return (f"  reduction R{rng.randint(0,9)} of {rt} {{ on op(v: Number) {{ return v }} }}\n",
+                rt if rt in pinfo else p)
     if kind == "functor":
-        return f"functor F{rng.randint(0,9)}(x: Number) from W to V {{ return x }}\n"
+        return f"  functor F{rng.randint(0,9)}(x: Number) from W to V {{ return x }}\n", "Entry"
     if kind == "geomorph":
-        return (f"geomorph G{rng.randint(0,9)} from {p} to {q} "
-                f"{{ pull(a: {q}): {p} {{ be t holds a  return t }} }}\n")
-    return f"fun top{rng.randint(0,99)}(x: Number): Number {{ return x * {rng.randint(1,9)} }}\n"
+        return (f"  geomorph G{rng.randint(0,9)} from {p} to {q} "
+                f"{{ pull(a: {q}): {p} {{ be t holds a  return t }} }}\n"), p
+    return f"  fun top{rng.randint(0,99)}(x: Number): Number {{ return x * {rng.randint(1,9)} }}\n", p
 
 
 def gen_files(rng):
@@ -96,8 +100,11 @@ def gen_files(rng):
             files[f"{s}/{nm}.yon"] = content
             pinfo[nm] = {"fields": fnames, "op": has_op, "space": s}
     if pinfo and rng.random() < 0.85:
-        nm = rng.choice(list(pinfo.keys()))
-        files[f"{pinfo[nm]['space']}/{nm}.yon"] += rand_arrow(rng, pinfo)
+        # an arrow lives in the body of its house: insert it before the closing brace
+        text, host = rand_arrow(rng, pinfo)
+        k = "Entry.yon" if host == "Entry" else f"{pinfo[host]['space']}/{host}.yon"
+        body = files[k].rstrip()
+        files[k] = body[:-1] + text + "}\n"
     return files, spaces, list(pinfo.keys())
 
 
@@ -161,7 +168,7 @@ def run(seed, cases):
     rng = random.Random(seed)
     acc = rej = 0
     bugs = []
-    kinds = ["view", "move ", "reduction", "functor", "geomorph", "with effects"]
+    kinds = ["view", "move ", "reduction", "functor", "geomorph", "operation"]
     cov = {k: [0, 0] for k in kinds}  # [generated, accepted]
     for _ in range(cases):
         files, spaces, places = gen_files(rng)
@@ -201,6 +208,7 @@ if __name__ == "__main__":
     seed = int(sys.argv[1]) if len(sys.argv) > 1 else 20260701
     cases = int(sys.argv[2]) if len(sys.argv) > 2 else 1500
     if not EMIT.exists():
-        print(f"SKIP: {EMIT} not built (cd frontend && dune build ./yoner_emit_mlir.exe)")
-        sys.exit(0)
+        # a fuzzer that cannot run has found nothing: that is not a pass
+        print(f"ERROR: {EMIT} is missing: build first (dune build --root frontend)")
+        sys.exit(2)
     sys.exit(run(seed, cases))

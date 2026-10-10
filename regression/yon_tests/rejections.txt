@@ -1,0 +1,45 @@
+# Rejection expectations: every NEGATIVE fixture of the suite, with the stable
+# diagnostic code it must be rejected with and a fragment of the message.
+#
+#   <path relative to the repo root> | <code> | <message fragment>
+#
+# Read by regression/compiling_corpus.py. Consumers:
+#   test_projects.py      the negative project directories (yon.toml)
+#   test_yon_selfhost.py  the single-file fixtures in yon_tests/negative/*.yon
+#   test_error_codes.py   the codes the negative fixtures produce
+# A negative fixture with no line here, or a line with no fixture, fails the
+# suite. The fragment pins WHICH rejection: a parse error or a different type
+# error must not pass for the one the fixture was written to show.
+
+# --- negative projects -------------------------------------------------------
+examples/union_cross_space_reject | E3003 | arms Opened (space a) and Closed (space b) live in different Spaces
+examples/union_cross_world_reject | E3003 | arms Opened (space a) and Closed (space b) live in different Spaces
+examples/union_field_obligation_reject | E2001 | field balance declared on the union is not exposed by arm Opened
+regression/book/01/park_project_leak | E2001 | field(s) individual_id are not invariant under `cohort`
+regression/yon_tests/negative/geomorph_transport_no_leak | E2001 | read: parameter a expects Account, got AccountEU
+regression/yon_tests/negative/morph_functoriality_reject | E2001 | 'on morphism deposit via wrong_sig' violates functoriality
+regression/yon_tests/negative/sheaf_quotient | E2001 | field(s) salary are not invariant under `cohort`
+regression/yon_tests/negative/sheaf_quotient_move_reject | E2001 | move Leak source field 'secret' reads finer than cohort
+regression/yon_tests/negative/sheaf_quotient_prop_reject | E2001 | prop leaks_secret parameter s reads finer than cohort
+regression/yon_tests/negative/sheaf_quotient_view_impure_reject | E2001 | view PublicProfile show bucket cannot be proven to factor through cohort
+regression/yon_tests/negative/sheaf_quotient_view_reject | E2001 | view PublicProfile show leak reads finer than cohort
+regression/yon_tests/negative/subcontains_structural_reject | E2001 | read: parameter b expects B, got A
+
+# --- single-file negative fixtures (false proofs, illegal programs) ----------
+regression/yon_tests/negative/false_eta.yon | E2001 | type mismatch: expected Id_Sigma(x : number). number(_code, p), got Id_Sigma(x : number). number(p, p)
+regression/yon_tests/negative/false_id.yon | E2001 | type mismatch: expected Id_number(
+regression/yon_tests/negative/hit_elim_missing_branch.yon | E2001 | hit_elim: missing branch(es): quot
+regression/yon_tests/negative/hit_elim_wrong_arity.yon | E2001 | hit_elim: branch inj expects 1 payload binder(s), got 2
+regression/yon_tests/negative/neg_arity.yon | E2001 | f: expected 1 arguments, got 2
+regression/yon_tests/negative/neg_assign_in_produce.yon | E2001 | is not yet supported inside a `produce` block
+regression/yon_tests/negative/neg_dup_param.yon | E2001 | function f: duplicate parameter 'a'
+regression/yon_tests/negative/neg_empty_body_with_return.yon | E2001 | function g: empty body but a return type is declared
+regression/yon_tests/negative/neg_handle_plain_fn.yon | E2001 | run: parameter m expects morph from S1 to S2, got number -> number
+regression/yon_tests/negative/neg_path_app_nonpath.yon | E2001 | path application (@): the head is not a path (Id type)
+regression/yon_tests/negative/neg_pathp_endpoint.yon | E2001 | expected PathP(<i> number, a, b), got PathP(<i> number, a, c)
+regression/yon_tests/negative/neg_quote_carrier_mismatch.yon | E2001 | quote: inhabitant has type text but El(number) carrier is number
+regression/yon_tests/negative/neg_rebind_holds.yon | E2001 | 'x' is already bound in this scope
+regression/yon_tests/negative/neg_return_tail_mismatch.yon | E2001 | function declares return type number but its body ends with a value of type text
+regression/yon_tests/negative/neg_return_type_mismatch.yon | E2001 | type mismatch: expected number, got text
+regression/yon_tests/negative/neg_unknown_var.yon | E2001 | unknown identifier: nonexistent
+regression/yon_tests/negative/sum_payload_wrong_type.yon | E2001 | type mismatch: expected number, got text
