@@ -23,7 +23,7 @@ YONC = ROOT / "toolchain" / "yonc"
 SRC = ROOT / "selfhost" / "emit_arith.yon"
 
 
-def _end_to_end(tmp_path, src_yon, out_mlir_path, expected_exit):
+def _end_to_end(tmp_path, src_yon, expected_exit):
     """Compile a Yon emitter, run it (it writes an MLIR module), compile that
     Yon-emitted MLIR through the backend, run it, and require expected_exit."""
     emitter = tmp_path / "emitter"
@@ -31,10 +31,10 @@ def _end_to_end(tmp_path, src_yon, out_mlir_path, expected_exit):
                         capture_output=True, text=True, timeout=180)
     assert c1.returncode == 0 and emitter.exists(), \
         f"{src_yon.name} did not compile:\n{c1.stderr[-800:]}"
-    out_mlir = Path(out_mlir_path)
-    if out_mlir.exists():
-        out_mlir.unlink()
-    subprocess.run([str(emitter)], capture_output=True, timeout=60)
+    work = tmp_path / "work"       # the emitter writes <its first argument>/out.mlir
+    work.mkdir()
+    out_mlir = work / "out.mlir"
+    subprocess.run([str(emitter), str(work)], capture_output=True, timeout=60)
     assert out_mlir.exists(), f"{src_yon.name} did not write an MLIR file"
     native = tmp_path / "native"
     c2 = subprocess.run([str(YONC), str(out_mlir), "-o", str(native)],
@@ -49,16 +49,14 @@ def _end_to_end(tmp_path, src_yon, out_mlir_path, expected_exit):
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m1_emit_arith(tmp_path):
     # M1: gen(Term -> MLIR) for a hand-built Term, `fun double(x){x+x}` / double(21).
-    _end_to_end(tmp_path, ROOT / "selfhost" / "emit_arith.yon",
-                "/tmp/yon_m1_out.mlir", 42)
+    _end_to_end(tmp_path, ROOT / "selfhost" / "emit_arith.yon", 42)
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m2_compile_arith(tmp_path):
     # M2: text -> Term -> MLIR. Parses "2+3*4" (precedence: * over +) and the
     # emitted program computes 2 + (3*4) = 14, not (2+3)*4 = 20.
-    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_arith.yon",
-                "/tmp/yon_m2_out.mlir", 14)
+    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_arith.yon", 14)
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
@@ -67,8 +65,7 @@ def test_m3_compile_fun(tmp_path):
     # numbers and identifiers, parses `fun main(): Number { be x holds 20
     # be y holds 22  return x + y }` into nested TLet with de Bruijn variables,
     # and the emitted program exits 42 = (20 + 22) mod 256.
-    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_fun.yon",
-                "/tmp/yon_m3_out.mlir", 42)
+    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_fun.yon", 42)
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
@@ -77,8 +74,7 @@ def test_m4_compile_if(tmp_path):
     # (scf.if with scf.yield). `return if x == y then 99 else x + y` with
     # x=20, y=22: the condition is false, so the else branch runs and the
     # emitted program exits 42 = (20 + 22) mod 256 (not 99).
-    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_if.yon",
-                "/tmp/yon_m4_out.mlir", 42)
+    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_if.yon", 42)
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
@@ -89,5 +85,4 @@ def test_m5_compile_rec(tmp_path):
     # (a name is emitted as @fn_<hash>). The recursive self-call sits in the
     # else branch, so scf.if's laziness bottoms the recursion out at n == 0;
     # fact(5) = 120, so the emitted program exits 120.
-    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_rec.yon",
-                "/tmp/yon_m5_out.mlir", 120)
+    _end_to_end(tmp_path, ROOT / "selfhost" / "compile_rec.yon", 120)

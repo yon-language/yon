@@ -12,10 +12,12 @@ right-associative (a-(b-c)) instead of left (a-b)-c, so `10 - 3 - 2` gave 9 wher
 the reference gave 5. The parser was fixed to left-associative and the two now
 converge (see the chain_sub / mixed_prec cases below).
 
-Note: selfhost_compiler.yon reads/writes fixed /tmp paths (Yon's argv access has
-friction), so these cases share global files and must run serially (as the rest of
-the self-host suite already does).
+selfhost_compiler.yon works in the directory given as its first argument
+(<dir>/in.yon -> <dir>/out.mlir), so every case uses its own and the cases run in
+parallel; test_two_runs_side_by_side pins that.
 """
+import fcntl
+import os
 import subprocess
 from pathlib import Path
 
@@ -24,8 +26,6 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
 COMPILER = ROOT / "selfhost" / "selfhost_compiler.yon"
-IN_PATH = Path("/tmp/yon_selfhost_in.yon")     # the tool's hardcoded input
-OUT_MLIR = Path("/tmp/yon_selfhost_out.mlir")  # the tool's hardcoded output
 
 # (name, Yon0 source, expected exit). The core assertion is reference == self-hosted;
 # `expected` is a sanity anchor that also rejects a shared-wrong-answer.
@@ -129,28 +129,37 @@ def _reference(tmp_path, src):
 
 def _self_hosted(tmp_path, compiler_bin, src):
     """Compile and run src with the Yon0-in-Yon compiler (prebuilt as compiler_bin)."""
-    IN_PATH.write_text(src)
-    if OUT_MLIR.exists():
-        OUT_MLIR.unlink()
-    subprocess.run([str(compiler_bin)], capture_output=True, timeout=60)
-    assert OUT_MLIR.exists(), "the Yon0-in-Yon compiler did not write an MLIR module"
+    work = tmp_path / "selfhost"
+    work.mkdir()
+    (work / "in.yon").write_text(src)
+    r = subprocess.run([str(compiler_bin), str(work)], capture_output=True, timeout=60)
+    out_mlir = work / "out.mlir"
+    assert out_mlir.exists(), (
+        f"the Yon0-in-Yon compiler did not write an MLIR module (exit {r.returncode})")
     b = tmp_path / "self_bin"
-    c = subprocess.run([str(YONC), str(OUT_MLIR), "-o", str(b)],
+    c = subprocess.run([str(YONC), str(out_mlir), "-o", str(b)],
                        capture_output=True, text=True, timeout=180)
     assert c.returncode == 0 and b.exists(), \
         f"MLIR emitted by the Yon0-in-Yon compiler did not compile:\n{c.stderr[-800:]}"
     return _run(b)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def compiler_bin(tmp_path_factory):
-    """Build the Yon0-in-Yon compiler once for the whole module."""
-    d = tmp_path_factory.mktemp("selfhostc")
-    b = d / "selfhost_compiler"
-    c = subprocess.run([str(YONC), str(COMPILER), "-o", str(b)],
-                       capture_output=True, text=True, timeout=240)
-    assert c.returncode == 0 and b.exists(), \
-        f"selfhost_compiler.yon did not build:\n{c.stderr[-800:]}"
+    """Build the Yon0-in-Yon compiler once for the whole session. Under xdist the
+    workers share the parent of their base temp dirs: the first to take the lock
+    builds, the others find the binary (built aside, then renamed into place)."""
+    shared = tmp_path_factory.getbasetemp().parent
+    b = shared / "selfhost_compiler"
+    with open(shared / "selfhost_compiler.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not b.exists():
+            part = shared / f"selfhost_compiler.part{os.getpid()}"
+            c = subprocess.run([str(YONC), str(COMPILER), "-o", str(part)],
+                               capture_output=True, text=True, timeout=240)
+            assert c.returncode == 0 and part.exists(), \
+                f"selfhost_compiler.yon did not build:\n{c.stderr[-800:]}"
+            part.rename(b)
     return b
 
 
@@ -163,3 +172,27 @@ def test_differential(tmp_path, compiler_bin, name, src, expected):
         f"[{name}] reference exited {a}, self-hosted exited {b} -- the compilers DIVERGE"
     assert a == expected, \
         f"[{name}] both compilers exited {a}, expected {expected}"
+
+
+def test_two_runs_side_by_side(tmp_path, compiler_bin):
+    """Two runs of the compiler at once, each in its own directory: neither sees
+    the other's input or output (a shared fixed path was a capture of names
+    between runs)."""
+    cases = [p for p in PROGRAMS if p[0] in ("fact5", "str_concat")]
+    procs = []
+    for name, src, _ in cases:
+        work = tmp_path / name
+        work.mkdir()
+        (work / "in.yon").write_text(src)
+        procs.append((name, work, subprocess.Popen([str(compiler_bin), str(work)],
+                                                   stdout=subprocess.DEVNULL,
+                                                   stderr=subprocess.DEVNULL)))
+    for name, work, p in procs:
+        p.wait(timeout=120)              # its exit code is the module's length
+        assert (work / "out.mlir").exists(), f"[{name}] no MLIR written"
+    for (name, work, _), (_, _, expected) in zip(procs, cases):
+        b = tmp_path / f"{name}_bin"
+        c = subprocess.run([str(YONC), str(work / "out.mlir"), "-o", str(b)],
+                           capture_output=True, text=True, timeout=180)
+        assert c.returncode == 0, f"[{name}] {c.stderr[-800:]}"
+        assert _run(b) == expected, name

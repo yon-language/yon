@@ -8,8 +8,7 @@ self-hosts iff out1 == out2 byte-for-byte -- the compiler compiled by yonc and
 the compiler compiled by itself agree exactly. (The backend, MLIR -> native, is
 reused via yonc by design; this pins the FRONTEND fixpoint over the Yon0 subset.)
 
-Uses the tool's fixed /tmp paths, so it runs serially like the rest of the
-self-host suite.
+Each stage works in a directory of its own (the compiler's first argument).
 """
 import subprocess
 from pathlib import Path
@@ -19,20 +18,19 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 YONC = ROOT / "toolchain" / "yonc"
 COMPILER = ROOT / "selfhost" / "selfhost_compiler.yon"
-IN_PATH = Path("/tmp/yon_selfhost_in.yon")
-OUT_PATH = Path("/tmp/yon_selfhost_out.mlir")
 
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 
 
-def _emit_self(binary):
-    """Run a self-host compiler on the compiler's own source; return the emitted MLIR."""
-    IN_PATH.write_text(COMPILER.read_text())
-    if OUT_PATH.exists():
-        OUT_PATH.unlink()
-    subprocess.run([str(binary)], capture_output=True, timeout=180)
-    assert OUT_PATH.exists(), "no MLIR emitted for the compiler's own source"
-    return OUT_PATH.read_text()
+def _emit_self(binary, work):
+    """Run a self-host compiler on the compiler's own source, in its own
+    directory `work`; return the emitted MLIR."""
+    work.mkdir()
+    (work / "in.yon").write_text(COMPILER.read_text())
+    subprocess.run([str(binary), str(work)], capture_output=True, timeout=180)
+    out = work / "out.mlir"
+    assert out.exists(), "no MLIR emitted for the compiler's own source"
+    return out.read_text()
 
 
 def test_frontend_fixpoint(tmp_path):
@@ -43,7 +41,7 @@ def test_frontend_fixpoint(tmp_path):
     assert c.returncode == 0 and s1.exists(), f"stage-1 build failed:\n{c.stderr[-800:]}"
 
     # stage-1 compiles the compiler source -> out1.
-    out1 = _emit_self(s1)
+    out1 = _emit_self(s1, tmp_path / "run1")
     assert len(out1) > 100_000, "sanity: the compiler's MLIR should be substantial"
 
     # lower out1 to the stage-2 binary.
@@ -55,7 +53,7 @@ def test_frontend_fixpoint(tmp_path):
     assert c.returncode == 0 and s2.exists(), f"stage-2 lowering failed:\n{c.stderr[-800:]}"
 
     # stage-2 compiles the compiler source -> out2. The fixpoint is out1 == out2.
-    out2 = _emit_self(s2)
+    out2 = _emit_self(s2, tmp_path / "run2")
     assert out1 == out2, (
         "self-host frontend fixpoint BROKEN: the compiler compiled by yonc and "
         "the compiler compiled by itself emit different MLIR for the compiler source "

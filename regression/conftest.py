@@ -192,18 +192,16 @@ def pytest_configure(config):
 # nodes:
 #   * machine-global names a program chooses itself: a TCP port, a fixed file
 #     path. Programs that can use one go to ONE worker (xdist_group "machine").
-#   * the fixed /tmp paths the self-host compiler reads and writes
-#     (/tmp/yon_selfhost_in.yon, /tmp/yon_selfhost_out.mlir): the two modules
-#     that drive it share the group "selfhost". (Each M1-M5 tool of
-#     test_selfhost_emit writes a file of its own, /tmp/yon_m<k>_out.mlir, and
-#     only its own test runs it.)
+#   * one artifact many nodes need: the differential cases all run the
+#     compiler-in-Yon, built once per session (~45 s). Spread over the workers,
+#     each would wait on that build instead of running something else; grouped
+#     ("selfhost_compiler"), one worker builds it and runs them.
 # Timing tests (speed "bench") measure wall clock and must not run under load at
 # all: gate.sh runs them in a second, serial phase.
 # Modules that refuse to run inside an xdist worker (they drive several OS
 # processes themselves, e.g. the cross-Space runner): marked `serial`, excluded
 # from the parallel phase and run in the serial one — never skipped by it.
 _SERIAL_MODULES = {"test_cross_space_runtime"}
-_SELFHOST_MODULES = {"test_selfhost_fixpoint", "test_selfhost_differential"}
 # A source that can touch a machine-global name: a network port, a file it
 # writes, the host system. Over-inclusion only costs parallelism.
 _MACHINE_SOURCE = re.compile(
@@ -241,9 +239,12 @@ def _param_uses_machine(v) -> bool:
     return False
 
 
+_ONE_ARTIFACT_MODULES = {"test_selfhost_differential": "selfhost_compiler"}
+
+
 def _xdist_group(item, mod: str, fn: str):
-    if mod in _SELFHOST_MODULES:
-        return "selfhost"
+    if mod in _ONE_ARTIFACT_MODULES:
+        return _ONE_ARTIFACT_MODULES[mod]
     if item.get_closest_marker("machine"):
         return "machine"
     callspec = getattr(item, "callspec", None)
