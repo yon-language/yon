@@ -2,7 +2,10 @@
 Double pin:
 
   - the specimen (place-arms + a field on the union, every arm exposing it)
-    COMPILES: the field-on-union obligation is satisfied;
+    COMPILES: the field-on-union obligation is satisfied. Pinned elsewhere, by
+    test_projects (emit exit 0) and test_yon_pipeline::test_example (RAN exit 0),
+    as are examples/error_morphism (`error` as sugar for a marked place) and
+    yon_tests/union_sited (a union's site derived from its arms);
   - the negative twin (an arm NOT exposing the field) is rejected with the
     obligation message — never the parser failwith again.
 
@@ -13,16 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
-SPEC = ROOT / "examples" / "union_field_obligation"
 REJECT = ROOT / "examples" / "union_field_obligation_reject"
-
-
-def test_union_field_obligation_compiles():
-    r = subprocess.run([str(EMIT), str(SPEC)], capture_output=True, timeout=60)
-    assert r.returncode == 0, (
-        f"the sum-of-products specimen no longer compiles (stage 3 broken):\n"
-        f"{r.stderr.decode(errors='replace')[-400:]}")
-    assert len(r.stdout) > 0, "specimen: exit 0 but empty MLIR"
 
 
 def test_union_field_obligation_reject_pins_the_obligation():
@@ -67,12 +61,6 @@ def test_duplicate_clause_rejected(tmp_path):
     assert b"declared both in the header and in the body" in r.stderr + r.stdout
 
 
-def test_error_is_sugar_for_marked_place():
-    """error_decl is dead: `error E ...` flows through the single place production."""
-    r = _emit(ROOT / "examples" / "error_morphism")
-    assert r.returncode == 0, r.stderr[-300:]
-
-
 # ---- stage 6 (fork 2 = reserved slot): path constructors -----------------
 
 def test_path_constructor_slot_is_reserved(tmp_path):
@@ -95,13 +83,6 @@ def test_path_constructor_slot_is_reserved(tmp_path):
 
 
 # ---- world-guard rule (f): the site of a union is DERIVED from its arms ----
-
-def test_sited_union_compiles():
-    """Arms in one world -> the union's site is derived (Sited), and the
-    project compiles. Phase 2 of the ONE world inferrer."""
-    r = _emit(ROOT / "regression" / "yon_tests" / "union_sited")
-    assert r.returncode == 0, r.stderr.decode(errors="replace")[-300:]
-
 
 def test_cross_world_union_is_incoherent():
     """Arms in two worlds -> a coproduct across topoi does not exist. The

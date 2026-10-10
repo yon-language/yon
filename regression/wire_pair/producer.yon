@@ -1,0 +1,25 @@
+// Wire pair, PRODUCER (test fixture for test_wire_throughput / test_wire_concurrent).
+// Same loop as the book's bench/wire_throughput/sensor.yon, plus a readiness signal
+// and an exit code that says whether every message went out.
+//   args: <ready-path> <n> <channel>
+// Creates shared-memory channel <channel>, THEN writes "ready" to <ready-path> (the
+// test makes it a FIFO, so the write is the handshake: the channel exists before
+// the test starts a consumer), then produces the values 3k+1 for k = 0 .. n-1 with
+// back-pressure, and closes the channel.
+// Exit: 0 all sent; 2 the channel could not be created; 3 the ready signal could
+// not be written; 4 a produce timed out (no consumer drained the ring).
+fun main(): Number visits Output {
+  be n holds String.parse_number(Args.get(2))
+  be ch holds String.parse_number(Args.get(3))
+  be w holds Wire.make_shm(ch, 1)
+  be ok holds File.write_text(Args.get(1), "ready")
+  be failed holds 0
+  be k holds 0
+  while k < n do {
+    be s holds Wire.produce_shm(w, 3 * k + 1)
+    failed = failed + (if s < 0 then 1 else 0)
+    k = k + 1
+  }
+  be _z holds Wire.close_shm(w)
+  return if w < 0 then 2 else if ok < 1 then 3 else if failed > 0 then 4 else 0
+}

@@ -15,6 +15,11 @@ the moment that regression happens.
 The fixture (regression/space_graph/topology): entry wires to A and imports from
 D; A and B wire to each other (a cycle); C has no arcs (isolated); D is reached
 only by the import from entry.
+
+test_selftest runs the extractor with no argument, its oracle mode (the in-memory
+graph pins plus the downstream-reclaim and `drop` pins on parsed source); this
+module is that oracle's runner, test_oracle_checks.py leaves it here. A missing
+extractor or fixture fails every node.
 """
 import re
 import subprocess
@@ -25,6 +30,13 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 EXE = ROOT / "frontend" / "_build" / "default" / "test_space_graph.exe"
 FIXTURE = ROOT / "regression" / "space_graph" / "topology"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _required():
+    """The extractor and its fixture are part of the suite: missing is a failure."""
+    assert EXE.exists(), f"{EXE} is missing: build first (dune build --root frontend)"
+    assert FIXTURE.is_dir(), f"fixture {FIXTURE} is missing"
 
 
 def _dump() -> str:
@@ -53,37 +65,27 @@ def _cycles_line(dump: str) -> str:
     return m.group(1).strip()
 
 
-@pytest.mark.skipif(not EXE.exists() or not FIXTURE.exists(),
-                    reason="graph extractor not built or fixture missing")
 def test_arc_present():
     """A declared wire shows up as an arc between the right Spaces."""
     assert ("A", "B", "wire") in _edges(_dump())
 
 
-@pytest.mark.skipif(not EXE.exists() or not FIXTURE.exists(),
-                    reason="graph extractor not built or fixture missing")
 def test_import_family_is_collected():
     """The import arc (entry imports from D) is in the graph, not just wires."""
     assert ("<root>", "D", "import") in _edges(_dump())
 
 
-@pytest.mark.skipif(not EXE.exists() or not FIXTURE.exists(),
-                    reason="graph extractor not built or fixture missing")
 def test_isolated_recognized():
     """A Space with no arcs at all is marked isolated (static-reclaimable)."""
     assert "C" in _isolated(_dump())
 
 
-@pytest.mark.skipif(not EXE.exists() or not FIXTURE.exists(),
-                    reason="graph extractor not built or fixture missing")
 def test_cycle_detected():
     """The A <-> B cycle is reported, not swallowed as acyclic."""
     line = _cycles_line(_dump())
     assert line != "acyclic" and "A" in line and "B" in line
 
 
-@pytest.mark.skipif(not EXE.exists() or not FIXTURE.exists(),
-                    reason="graph extractor not built or fixture missing")
 def test_import_only_space_is_not_isolated():
     """THE pin. `D` is reached only by an import (no wire). It MUST NOT be
     isolated: the import arc gives it in-degree >= 1. If this fails, the in/out
@@ -95,3 +97,13 @@ def test_import_only_space_is_not_isolated():
         "longer summing wire AND import edges. This is the soundness hole the "
         "graph exists to prevent."
     )
+
+
+def test_selftest():
+    """Run without arguments, the extractor checks its own pins: the in-memory
+    graph (isolation, import in-degree, cycle), the downstream reclaim analysis on
+    parsed source (one *_legal / *_illegal function per control-flow shape and arc
+    family) and the `drop` construct. Exit 0 and the OK line, or the named failures."""
+    r = subprocess.run([str(EXE)], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0 and "space_graph selftest OK" in r.stdout, (
+        f"space_graph selftest failed (exit {r.returncode}):\n{r.stdout[-2000:]}\n{r.stderr[-800:]}")

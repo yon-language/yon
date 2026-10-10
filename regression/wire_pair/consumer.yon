@@ -1,0 +1,34 @@
+// Wire pair, CONSUMER (test fixture for test_wire_throughput / test_wire_concurrent).
+// Same timed loop as the book's bench/wire_throughput/dash.yon, plus a check of every
+// message received.
+//   args: <n> <channel>
+// Attaches to shared-memory channel <channel>, receives n messages and checks that
+// message i is 3i+1 (values and FIFO order) and that their sum is 3n(n-1)/2 + n,
+// then that the next await reports end-of-stream (the producer closed the channel).
+// Prints ns/message (the receive loop's wall time over n).
+// Exit: 0 all checks hold; 2 the channel could not be attached; 3 a value out of
+// place (wrong value, wrong order, or an await that timed out with -1); 4 the sum
+// is wrong; 5 no end-of-stream after the n-th message.
+fun main(): Number visits Output {
+  be n holds String.parse_number(Args.get(1))
+  be ch holds String.parse_number(Args.get(2))
+  be w holds Wire.make_shm(ch, 0)
+  be bad holds 0
+  be sum holds 0
+  be i holds 0
+  be t0 holds Time.now_ns(0)
+  while i < n do {
+    be v holds Wire.await_shm(w)
+    bad = bad + (if v == 3 * i + 1 then 0 else 1)
+    sum = sum + v
+    i = i + 1
+  }
+  be t1 holds Time.now_ns(0)
+  be _p holds Output.print(String.from_int((t1 - t0) / n))
+  be eof holds Wire.await_shm(w)
+  return if w < 0 then 2
+         else if bad > 0 then 3
+         else if sum != 3 * (n * (n - 1) / 2) + n then 4
+         else if eof != 4294967295 then 5
+         else 0
+}

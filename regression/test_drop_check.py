@@ -145,7 +145,9 @@ def test_illegal_import_drop_rejected(tmp_path):
     # yonc wraps the frontend and reports its own nonzero code; the signal is a
     # failed compile carrying the DROP ERROR, not the exact frontend exit code.
     assert r.returncode != 0, f"expected a failed compile:\n{combined}"
-    assert "DROP ERROR" in combined and "Space D" in combined, combined
+    # the stable code, rendered additively after the historical prefix (this was
+    # test_error_codes::test_cli_carries_the_code, the same fixture and program)
+    assert "DROP ERROR [E3001]:" in combined and "Space D" in combined, combined
 
 
 @pytest.mark.skipif(not YONC.exists() or not FIXTURE.exists(),
@@ -159,7 +161,7 @@ def test_illegal_transitive_drop_rejected(tmp_path):
     # yonc wraps the frontend and reports its own nonzero code; the signal is a
     # failed compile carrying the DROP ERROR, not the exact frontend exit code.
     assert r.returncode != 0, f"expected a failed compile:\n{combined}"
-    assert "DROP ERROR" in combined and "Space D" in combined, combined
+    assert "DROP ERROR [E3001]:" in combined and "Space D" in combined, combined
 
 
 @pytest.mark.skipif(not YONC.exists() or not FIXTURE.exists(),
@@ -171,7 +173,8 @@ def test_illegal_unknown_space_rejected(tmp_path):
     r = _compile(proj, tmp_path / "out")
     combined = r.stdout + r.stderr
     assert r.returncode != 0, f"expected a failed compile:\n{combined}"
-    assert "DROP ERROR" in combined and "unknown Space" in combined and "Zeta" in combined, combined
+    assert ("DROP ERROR [E3002]:" in combined and "unknown Space" in combined
+            and "Zeta" in combined), combined
 
 
 @pytest.mark.skipif(not YONC.exists() or not FIXTURE.exists(),

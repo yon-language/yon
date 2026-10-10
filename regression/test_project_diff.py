@@ -131,6 +131,15 @@ def test_driver_and_check_all_agree(tmp_path, name, builder, code):
 @pytest.mark.skipif(not EMIT.exists() or not LSP.exists(),
                     reason="compiler or lsp not built")
 def test_valid_project_is_silent_from_both(tmp_path):
+    """Silence alone is not a verdict: two crashed tools also print no [Exxxx].
+    Each tool must positively accept the project -- the driver exits 0 having
+    emitted a module, check_all exits 0 (its exit code is the diagnostics count)
+    and says "OK: no errors"."""
     d = _mk_ok(tmp_path / "ok")
-    assert _driver_codes(d) == set(), "driver flagged a valid project"
-    assert _check_all_codes(d) == set(), "check_all flagged a valid project"
+    dr = subprocess.run([str(EMIT), str(d)], capture_output=True, text=True, timeout=120)
+    assert dr.returncode == 0, f"driver rejected a valid project:\n{dr.stderr[-600:]}"
+    assert "module {" in dr.stdout and "topos.world @W" in dr.stdout, dr.stdout[-600:]
+    assert _codes(dr.stdout + dr.stderr) == set(), "driver flagged a valid project"
+    ca = subprocess.run([str(LSP), "--check", str(d)], capture_output=True, text=True, timeout=120)
+    assert ca.returncode == 0 and "OK: no errors" in ca.stdout, ca.stdout + ca.stderr
+    assert _codes(ca.stdout + ca.stderr) == set(), "check_all flagged a valid project"

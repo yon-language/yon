@@ -37,7 +37,7 @@ def _project(root: Path, second_place: str):
         '[world.Beta]\nobjects = ["Y"]\nspaces  = ["sb"]\n\n'
         '[runtime]\nbackend = "memory"\n'
     )
-    (root / "Entry.yon").write_text("place Entry { }\nfun main(): Number { return 0 }\n")
+    (root / "Entry.yon").write_text("place Entry { }\nfun main(): Number { return 7 }\n")
     (root / "sa" / "Dup.yon").write_text("place Dup { x Number }\n")
     (root / "sa" / "Topos.yon").write_text("topos AlphaT where {\n}\n")
     (root / "sb" / f"{second_place}.yon").write_text(f"place {second_place} {{ y Number }}\n")
@@ -62,4 +62,11 @@ def test_distinct_place_names_no_collision(tmp_path):
         [str(YONC), str(proj), "-o", str(proj / "out")], capture_output=True, timeout=120
     )
     err = r.stderr.decode(errors="replace")
+    # Positive signal first: the absence of the message alone would also hold if
+    # yonc crashed earlier or printed nothing.
+    assert r.returncode == 0, f"distinct place names rejected (exit {r.returncode}):\n{err[-600:]}"
     assert "two different worlds" not in err, f"false collision:\n{err[-600:]}"
+    # And the binary it built runs: main returns 7 (not 0, which a no-op binary
+    # would also produce).
+    run = subprocess.run([str(proj / "out")], capture_output=True, timeout=60)
+    assert run.returncode == 7, f"built program exited {run.returncode}"

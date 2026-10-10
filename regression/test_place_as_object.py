@@ -52,12 +52,26 @@ def test_block_form_declares_a_type(tmp_path, name, src, expected):
     assert _run(tmp_path, src) == expected
 
 
+# The retired form and its lawful twin differ ONLY in the declaration line; both
+# carry a `place Entry` so the program is otherwise valid.
+_INDUCTIVE = ("inductive Bit = O | I\n"
+              "place Entry {\n  fun main(): Number { return 0 }\n}\n")
+_PLACE_TWIN = ("place Bit { this > O :U I }\n"
+               "place Entry {\n  fun main(): Number { return 0 }\n}\n")
+
+
 def test_inductive_keyword_is_gone(tmp_path):
-    # `inductive` was dropped: the reference must now reject it as a parse error.
-    src = ("inductive Bit = O | I\n"
-           "fun main(): Number { return 0 }\n")
+    """`inductive` was dropped: the reference rejects it as a PARSE error at the
+    declaration (line 1), with the syntax code E1001 -- not a type error, not a
+    crash. The twin with the block form compiles and runs, so the keyword is the
+    only thing the rejection can be about."""
+    assert _run(tmp_path, _PLACE_TWIN) == 0, "the lawful twin must compile and exit 0"
     s = tmp_path / "old.yon"
-    s.write_text(src)
+    s.write_text(_INDUCTIVE)
     c = subprocess.run([str(YONC), str(s), "-o", str(tmp_path / "old")],
                        capture_output=True, text=True, timeout=120)
+    out = c.stdout + c.stderr
     assert c.returncode != 0, "`inductive` should no longer be accepted by the reference"
+    assert "Fatal error: exception" not in out, out
+    assert "PARSE ERROR [E1001]" in out, f"expected a syntax error, got:\n{out[-600:]}"
+    assert f"{s.name}:1:" in out, f"the parse error must point at line 1:\n{out[-600:]}"

@@ -16,10 +16,12 @@ the generators, so it is insensitive to order and to duplicates.
 The logic is fixed by the OCaml oracle test_world_site.ml (built as
 test_world_site.exe). This module runs it and asserts each load-bearing property
 holds, one node per property, as the readable per-step contract for the site
-layer. The generic oracle sweep in test_yon_pipeline.py also runs it; this is
-the explicit, named version.
+layer. The oracle runs once per session (the `oracle_run` fixture) and every
+property node reads its cached output. test_oracle_checks.py leaves this oracle
+to this module.
 """
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -29,22 +31,24 @@ ROOT = Path(__file__).resolve().parent.parent
 ORACLE = ROOT / "frontend" / "_build" / "default" / "test_world_site.exe"
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _built():
-    if not ORACLE.exists():
-        pytest.skip("frontend not built (cd frontend && dune build)")
+@pytest.fixture(scope="session")
+def oracle_run():
+    """Run the site oracle ONCE per session (per xdist worker); every node below
+    reads this cached (exit code, output). A missing executable fails."""
+    assert ORACLE.exists(), f"{ORACLE} is missing: build first (dune build --root frontend)"
+    try:
+        r = subprocess.run([str(ORACLE)], capture_output=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"{ORACLE.name} did not finish within 120 s")
+    return r.returncode, r.stdout.decode(errors="replace") + r.stderr.decode(errors="replace")
 
 
-def _run():
-    r = subprocess.run([str(ORACLE)], capture_output=True, timeout=60)
-    return r.returncode, r.stdout.decode(errors="replace")
-
-
-def test_site_oracle_all_pass():
-    """The whole site oracle passes: exit 0 and no failed checks."""
-    rc, out = _run()
-    assert rc == 0, out[-2000:]
-    assert "0 failed" in out, out[-2000:]
+def test_site_oracle_all_pass(oracle_run):
+    """The whole site oracle passes: exit 0, a `0 failed` tally, no [FAIL] line."""
+    rc, out = oracle_run
+    fails = [l.strip() for l in out.splitlines() if "[FAIL]" in l]
+    assert rc == 0 and not fails, f"exit {rc}, failing:\n  " + "\n  ".join(fails) + out[-2000:]
+    assert re.search(r"^\s*\d+ passed, 0 failed\s*$", out, re.M), out[-2000:]
 
 
 # One node per load-bearing property of get_J and the topology lattice.
@@ -94,16 +98,23 @@ PROPERTIES = [
 
 
 @pytest.mark.parametrize("prop", PROPERTIES, ids=[p.split(":")[0].split("(")[0].strip() for p in PROPERTIES])
-def test_site_property(prop):
-    """Each generated-topology property is asserted PASS in the oracle output."""
-    _, out = _run()
-    assert f"[PASS] {prop}" in out, f"property not PASS: {prop!r}\n{out[-2000:]}"
+def test_site_property(prop, oracle_run):
+    """Each generated-topology property is asserted PASS in the oracle output:
+    exactly one `[PASS] <prop>` line, so a renamed or dropped check fails here."""
+    _, out = oracle_run
+    lines = [l.strip() for l in out.splitlines()]
+    assert lines.count(f"[PASS] {prop}") == 1, (
+        f"property not PASS exactly once: {prop!r}\n{out[-2000:]}")
 
 
 # ── end-to-end from source: a place on a quotient world is checked at compile time ──
 # These prove the WHOLE thread (filesystem deduction is separate; here the place
 # verb is the sheaf reject wired into tycheck on cr_errors / exit 3).
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
+
+
+def _require_emit():
+    assert EMIT.exists(), f"{EMIT} is missing: build first (dune build --root frontend)"
 
 
 def _emit_rc(src):
@@ -113,16 +124,14 @@ def _emit_rc(src):
 def test_sheaf_quotient_rejected():
     """A place on `Anon = User / cohort` with a non-invariant field `salary` is
     rejected at compile time (exit 3): it is not a sheaf on the quotient."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     src = ROOT / "regression" / "yon_tests" / "negative" / "sheaf_quotient"
     assert _emit_rc(src) == 3
 
 
 def test_sheaf_quotient_ok():
     """A place carrying only the relation field `cohort` is a sheaf -> exit 0."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     src = ROOT / "regression" / "yon_tests" / "prove" / "sheaf_quotient_ok"
     assert _emit_rc(src) == 0
 
@@ -133,8 +142,7 @@ def test_project_mode_compiles():
     manifest, materialises the worlds from the toml, declares each space bare,
     keeps the place bodies, reconstructs the explicit form, and emits MLIR ->
     exit 0. The files carry no world keyword; the space is the folder."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     proj = ROOT / "regression" / "yon_tests" / "project_min"
     assert _emit_rc(proj) == 0
 
@@ -145,8 +153,7 @@ def test_project_place_world_binding():
     `place Order` (in Orders/) is inferred into Commerce and the emitted MLIR
     binds it there -- not __Default. This is the propagation fix: the tycheck
     resolved the world all along, but the desugar/emit used to see __INFER."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     proj = ROOT / "regression" / "yon_tests" / "project_min"
     out = subprocess.run([str(EMIT), str(proj)],
                          capture_output=True, timeout=60).stdout.decode(errors="replace")
@@ -172,8 +179,7 @@ def _make_project(d, toml, files):
 def test_wire_cross_world_rejected(tmp_path):
     """Orders (world Commerce) wiring to Reports (world Analytics) crosses a
     world boundary -> rejected at compile time (exit 3, case C)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\n[runtime]\nbackend = \"memory\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n"
             "[world.Analytics]\nspaces = [\"Reports\"]\nobjects = [\"Report\"]\n")
@@ -189,8 +195,7 @@ def test_wire_intra_world_ok(tmp_path):
     """Two spaces in the same world wire freely (exit 0). Also exercises the
     place->space->world inheritance: with two spaces the place world is not
     unique, yet each place is bound through its directory."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\n[runtime]\nbackend = \"memory\"\n"
             "[world.Commerce]\nspaces = [\"Orders\", \"Billing\"]\n"
             "objects = [\"Order\", \"Account\"]\n")
@@ -206,8 +211,7 @@ def test_wire_intra_world_ok(tmp_path):
 
 def test_wire_orphan_space_rejected(tmp_path):
     """A space directory not listed in any [world] is rejected (exit 3, case D)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\n[runtime]\nbackend = \"memory\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "orphan", toml, {
@@ -221,8 +225,7 @@ def test_wire_orphan_space_rejected(tmp_path):
 def test_entry_default_compiles(tmp_path):
     """No [package] entry: the entrypoint defaults to `place Entry` in the root,
     in the file that defines main (exit 0)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_default", toml, {
@@ -235,8 +238,7 @@ def test_entry_default_compiles(tmp_path):
 
 def test_entry_custom_name_compiles(tmp_path):
     """[package] entry sets the entrypoint place name (exit 0)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\nentry = \"Boot\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_custom", toml, {
@@ -249,8 +251,7 @@ def test_entry_custom_name_compiles(tmp_path):
 
 def test_entry_absent_rejected(tmp_path):
     """No `place Entry` anywhere -> rejected (exit 3)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_absent", toml, {
@@ -262,8 +263,7 @@ def test_entry_absent_rejected(tmp_path):
 
 def test_entry_duplicate_rejected(tmp_path):
     """Two `place Entry` declarations -> rejected (exit 3)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = "[package]\nname = \"x\"\n"
     proj = _make_project(tmp_path / "entry_dup", toml, {
         "Entry.yon": "place Entry { }\nfun main(): Number { return 0 }\n",
@@ -274,8 +274,7 @@ def test_entry_duplicate_rejected(tmp_path):
 
 def test_entry_in_space_rejected(tmp_path):
     """`place Entry` inside a space (not the root) -> rejected (exit 3)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_space", toml, {
@@ -286,8 +285,7 @@ def test_entry_in_space_rejected(tmp_path):
 
 def test_entry_no_main_rejected(tmp_path):
     """`place Entry` whose file has no `fun main` -> rejected (exit 3)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = "[package]\nname = \"x\"\n"
     proj = _make_project(tmp_path / "entry_nomain", toml, {
         "Entry.yon": "place Entry { }\n",   # no main
@@ -298,8 +296,7 @@ def test_entry_no_main_rejected(tmp_path):
 def test_entry_main_inside_place(tmp_path):
     """A place body accepts fun: `place Entry { fun main() ... }` puts main
     inside the place, and the entrypoint check is satisfied (exit 0)."""
-    if not EMIT.exists():
-        pytest.skip("frontend not built")
+    _require_emit()
     toml = ("[package]\nname = \"x\"\n"
             "[world.Commerce]\nspaces = [\"Orders\"]\nobjects = [\"Order\"]\n")
     proj = _make_project(tmp_path / "entry_inside", toml, {

@@ -1,0 +1,3 @@
+topos Account where {
+  morphism deposit(s: State): State
+}

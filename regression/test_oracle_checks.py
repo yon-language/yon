@@ -1,14 +1,19 @@
-"""Per-CHECK unit nodes — the true measurable base of the pyramid.
+"""The OCaml unit oracles, one pytest node per oracle executable.
 
-Each OCaml oracle (frontend/_build/default/test_*.exe) prints one `[PASS]` /
-`[FAIL]` line per internal assertion and exits 0 iff all pass. The coarse node
-in test_yon_pipeline (test_ocaml_oracle) reports one result per *executable*,
-which UNDER-counts the unit layer: a single oracle bundles ~10-15 assertions.
+Each oracle (frontend/test_*.ml, built as frontend/_build/default/test_*.exe)
+runs a batch of internal assertions, prints one line per assertion (`[PASS]` /
+`[FAIL]` in most, `ok` / `FAIL` / a tally in a few) and exits 0 iff all hold.
 
-This module runs each oracle ONCE (at collection) and emits one pytest node per
-`[PASS]/[FAIL]` line, so the unit count reflects assertion granularity. It is the
-"program with the right numbers": `pytest -m unit` now measures real unit checks,
-not exe-sized buckets.
+The list of oracles is the build's own: the `test_*` names of the `(names ...)`
+stanza in frontend/dune, read from the file, never a glob of _build. A name in
+that list whose executable is missing FAILS: a stale or partial build must not
+shrink the suite. Collection runs nothing; each node runs its oracle once and
+asserts exit 0, no `[FAIL]` line and no non-zero "N failed" tally, quoting the
+failing assertion lines in the message.
+
+Oracles with a dedicated module are left to it (DEDICATED below), and
+test_dedicated_modules_run_their_oracle checks that each of those modules still
+runs that executable, so the exclusion cannot silently become a hole.
 
 Layer/kind: ocaml / unit (every oracle is an isolated module-level assertion).
 """
@@ -20,58 +25,72 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
+DUNE = ROOT / "frontend" / "dune"
 ORACLE_DIR = ROOT / "frontend" / "_build" / "default"
-_MARK = re.compile(r"\[(PASS|FAIL)\]")
+REGRESSION = Path(__file__).resolve().parent
+TIMEOUT = 600
 
 pytestmark = [pytest.mark.ocaml, pytest.mark.unit]
 
+# oracle -> the module that runs it with a stronger, named contract
+DEDICATED = {
+    "test_world_site": "test_site.py",                 # one node per site property
+    "test_surface_fuzz": "test_surface_fuzz.py",       # fixed + rotating seeds
+    "test_metatheory_fuzz": "test_metatheory_fuzz.py",  # fixed + rotating seeds
+    "test_kernel_independent": "test_kernel_independent.py",
+    "test_space_graph": "test_space_graph.py",         # fixture graph + selftest
+}
 
-def _collect():
-    """Run every oracle once; return (cases, exit_codes).
-
-    cases: list of (stem, idx, name, passed) — one per [PASS]/[FAIL] line.
-    exit_codes: {stem: returncode} — for a per-exe 'clean exit' node.
-    """
-    cases, codes = [], {}
-    if not ORACLE_DIR.exists():
-        return cases, codes
-    for exe in sorted(ORACLE_DIR.glob("test_*.exe")):
-        try:
-            r = subprocess.run([str(exe)], capture_output=True, timeout=120)
-        except Exception:
-            continue
-        codes[exe.stem] = r.returncode
-        out = r.stdout.decode(errors="replace") + r.stderr.decode(errors="replace")
-        idx = 0
-        for line in out.splitlines():
-            m = _MARK.search(line)
-            if not m:
-                continue
-            idx += 1
-            name = _MARK.sub("", line).strip(" .:|\t")[:70] or f"check{idx}"
-            passed = (m.group(1) == "PASS") and ("[FAIL]" not in line)
-            cases.append((exe.stem, idx, name, passed))
-    return cases, codes
+# a line that reports a failed assertion, in any of the oracles' formats
+_FAIL_LINE = re.compile(
+    r"\[FAIL\]|^\s*FAIL\b|✗|MISMATCH:|RESULT: FAIL|FAILED|\b[1-9]\d* (failed|FAIL)\b")
+_TALLY = re.compile(r"\b(\d+) failed\b")
 
 
-_CASES, _CODES = _collect()
+def _dune_oracles():
+    """The `test_*` executables the build declares, in declaration order."""
+    m = re.search(r"\(names\s+([^)]*)\)", DUNE.read_text())
+    assert m, f"no (names ...) stanza in {DUNE}"
+    return [n for n in m.group(1).split() if n.startswith("test_")]
 
 
-def _safe(s):
-    return re.sub(r"[^A-Za-z0-9_.-]+", "_", s)[:50]
+ALL_ORACLES = _dune_oracles()
+ORACLES = sorted(n for n in ALL_ORACLES if n not in DEDICATED)
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _built():
-    if not _CODES:
-        pytest.skip("OCaml oracles not built (run `dune build` in frontend/)")
+@pytest.mark.parametrize("oracle", ORACLES)
+def test_oracle(oracle):
+    exe = ORACLE_DIR / f"{oracle}.exe"
+    assert exe.exists(), (
+        f"{exe} is missing although frontend/dune declares it: build first "
+        "(dune build --root frontend)")
+    try:
+        r = subprocess.run([str(exe)], capture_output=True, timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        pytest.fail(f"{oracle} did not finish within {TIMEOUT} s (a hang in the oracle "
+                    "or in the code it checks)")
+    out = r.stdout.decode(errors="replace") + r.stderr.decode(errors="replace")
+    failing = [l.strip() for l in out.splitlines() if _FAIL_LINE.search(l)]
+    tally = [int(n) for n in _TALLY.findall(out)]
+    assert r.returncode == 0 and not failing and not any(tally), (
+        f"{oracle}: exit {r.returncode}, failing assertions:\n  "
+        + ("\n  ".join(failing) or "(none printed)")
+        + f"\n--- output tail ---\n{out[-1500:]}")
 
 
-@pytest.mark.parametrize(
-    "stem,idx,name,passed", _CASES,
-    ids=[f"{s}-{i:02d}-{_safe(n)}" for (s, i, n, _) in _CASES],
-)
-def test_oracle_check(stem, idx, name, passed):
-    # The per-exe 'exit clean' backstop lives in test_yon_pipeline::test_ocaml_oracle
-    # (one node per oracle); here we report each internal assertion as its own node.
-    assert passed, f"{stem}: assertion #{idx} '{name}' reported [FAIL]"
+def test_oracle_list_is_not_empty():
+    """The dune stanza still declares the oracles this module reads."""
+    assert len(ORACLES) >= 40, f"only {len(ORACLES)} oracles parsed from {DUNE}"
+    assert set(DEDICATED) <= set(ALL_ORACLES), (
+        f"DEDICATED names an oracle frontend/dune no longer builds: "
+        f"{sorted(set(DEDICATED) - set(ALL_ORACLES))}")
+
+
+@pytest.mark.parametrize("oracle,module", sorted(DEDICATED.items()))
+def test_dedicated_modules_run_their_oracle(oracle, module):
+    """An oracle left out of test_oracle is run by its dedicated module: the
+    module exists and points at that executable."""
+    src = REGRESSION / module
+    assert src.exists(), f"{module} (the dedicated runner of {oracle}) is gone"
+    assert f'"{oracle}.exe"' in src.read_text(), (
+        f"{module} no longer runs {oracle}.exe: put it back in test_oracle")

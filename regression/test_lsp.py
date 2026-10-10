@@ -7,8 +7,12 @@ finds the containing package, runs the WHOLE-PROGRAM drop check with the open
 buffer substituted, and reports it under its stable code E3001, without shelling
 out to the compiler. And that a well-placed drop raises nothing.
 """
+import json
+import os
+import select
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -38,19 +42,23 @@ fun main(): Number {
 """
 
 
-def _check(tmp_path, entry: str) -> str:
+def _check(tmp_path, entry: str) -> tuple[int, str]:
+    """Run `yon_lsp --check` on the fixture with `entry` as Entry.yon. Returns
+    (exit code, output); --check exits with the number of diagnostics and prints
+    "OK: no errors" only when there are none."""
     proj = tmp_path / "proj"
     shutil.copytree(FIXTURE, proj)
     (proj / "Entry.yon").write_text(entry)
     r = subprocess.run([str(LSP), "--check", str(proj / "Entry.yon")],
                        capture_output=True, text=True, timeout=60)
-    return r.stdout + r.stderr
+    return r.returncode, r.stdout + r.stderr
 
 
 @pytest.mark.skipif(not LSP.exists() or not FIXTURE.exists(),
                     reason="yon_lsp or fixture missing")
 def test_lsp_surfaces_drop_code(tmp_path):
-    out = _check(tmp_path, _ILLEGAL)
+    rc, out = _check(tmp_path, _ILLEGAL)
+    assert rc >= 1, out
     assert "E3001" in out, out
     assert "Space D" in out, out
 
@@ -58,7 +66,10 @@ def test_lsp_surfaces_drop_code(tmp_path):
 @pytest.mark.skipif(not LSP.exists() or not FIXTURE.exists(),
                     reason="yon_lsp or fixture missing")
 def test_lsp_no_false_drop_on_legal(tmp_path):
-    out = _check(tmp_path, _LEGAL)
+    rc, out = _check(tmp_path, _LEGAL)
+    # The positive signal first: an absence-only assert would also pass on a crash
+    # or on empty output.
+    assert rc == 0 and "OK: no errors" in out, out
     assert "E3001" not in out, out
 
 
@@ -102,8 +113,10 @@ def _world_project(root: Path):
     (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
     (root / "A" / "AP.yon").write_text(
         "place AP { }\nfun a_op(x: Number): Number { return x + 1 }\n")
+    # main uses a_op so the package is lint-clean too (no W1001 unused-function):
+    # the check below can then demand the full "OK: no errors" verdict.
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): Number { return 0 }\n")
+        "place Entry { }\nfun main(): Number { return a_op(0) - 1 }\n")
     return root
 
 
@@ -117,6 +130,7 @@ def test_lsp_no_false_cannot_infer_world_on_space_file(tmp_path):
         r = subprocess.run([str(LSP), "--check", str(f)],
                            capture_output=True, text=True, timeout=60)
         out = r.stdout + r.stderr
+        assert r.returncode == 0 and "OK: no errors" in out, f"{f}: {out}"
         assert "cannot infer world" not in out, f"{f}: {out}"
         assert "unknown world" not in out, f"{f}: {out}"
         assert "E2001" not in out, f"{f}: {out}"
@@ -216,3 +230,177 @@ def test_lsp_type_error_attributes_to_owning_file(tmp_path):
                        capture_output=True, text=True, timeout=60)
     aout = a.stdout + a.stderr
     assert "zzz" not in aout and "OK: no errors" in aout, aout
+
+
+# ─── Over the protocol: diagnostics follow the UNSAVED buffer ─────────────────
+#
+# Every test above drives `--check <file on disk>`. An editor never does: it sends
+# the buffer it holds over JSON-RPC, and that buffer differs from the disk exactly
+# while the user types. These tests speak the protocol (Content-Length framing on
+# stdio) and pin that the published diagnostics describe the BUFFER, in both
+# directions: a clean file with a broken buffer reports the error, a broken file
+# with a clean buffer reports nothing.
+
+
+class _LspClient:
+    """A minimal LSP client over the server's stdio. Reads are bounded by a
+    deadline via select(), never by sleeping."""
+
+    def __init__(self):
+        self.proc = subprocess.Popen([str(LSP)], stdin=subprocess.PIPE,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self._buf = b""
+        self._next_id = 0
+
+    def send(self, method, params=None, request=False):
+        msg = {"jsonrpc": "2.0", "method": method, "params": params or {}}
+        if request:
+            self._next_id += 1
+            msg["id"] = self._next_id
+        body = json.dumps(msg).encode()
+        self.proc.stdin.write(f"Content-Length: {len(body)}\r\n\r\n".encode() + body)
+        self.proc.stdin.flush()
+        return msg.get("id")
+
+    def _read_message(self, deadline):
+        fd = self.proc.stdout.fileno()
+        while True:
+            head, sep, rest = self._buf.partition(b"\r\n\r\n")
+            if sep:
+                length = None
+                for line in head.split(b"\r\n"):
+                    if line.lower().startswith(b"content-length:"):
+                        length = int(line.split(b":", 1)[1])
+                assert length is not None, f"frame without Content-Length: {head!r}"
+                if len(rest) >= length:
+                    self._buf = rest[length:]
+                    return json.loads(rest[:length])
+            remaining = deadline - time.monotonic()
+            assert remaining > 0, f"LSP deadline expired; buffered: {self._buf[-400:]!r}"
+            ready, _, _ = select.select([fd], [], [], remaining)
+            if not ready:
+                continue  # the loop re-checks the deadline
+            chunk = os.read(fd, 65536)
+            assert chunk, (f"LSP closed stdout (exit {self.proc.poll()}); "
+                           f"stderr: {self.proc.stderr.read()[-400:]!r}")
+            self._buf += chunk
+
+    def wait_for(self, pred, timeout=60.0):
+        """Read messages until one satisfies `pred`, or fail at the deadline."""
+        deadline = time.monotonic() + timeout
+        while True:
+            m = self._read_message(deadline)
+            if pred(m):
+                return m
+
+    def diagnostics_for(self, uri, timeout=60.0):
+        m = self.wait_for(lambda m: m.get("method") == "textDocument/publishDiagnostics"
+                          and m["params"]["uri"] == uri, timeout)
+        return m["params"]["diagnostics"]
+
+    def start(self):
+        rid = self.send("initialize", {"processId": None, "rootUri": None,
+                                       "capabilities": {}}, request=True)
+        init = self.wait_for(lambda m: m.get("id") == rid)
+        assert init["result"]["capabilities"]["textDocumentSync"] == 1, init
+        self.send("initialized")
+
+    def stop(self):
+        """Clean shutdown/exit, then assert the server actually exited."""
+        rid = self.send("shutdown", request=True)
+        resp = self.wait_for(lambda m: m.get("id") == rid)
+        assert resp.get("result") is None and "error" not in resp, resp
+        self.send("exit")
+        self.proc.stdin.close()
+        assert self.proc.wait(timeout=30) == 0
+
+    def kill(self):
+        if self.proc.poll() is None:
+            self.proc.kill()
+            self.proc.wait(timeout=30)
+
+
+_AP_CLEAN = "place AP { }\nfun a_op(n: Number): Number { return gee(n) + 1 }\n"
+_AP_BROKEN = "place AP { }\nfun a_op(n: Number): Number { return zzz + 1 }\n"
+
+
+def _uri(p: Path) -> str:
+    # path_of_uri does no percent-decoding, so the raw resolved path is the URI.
+    return "file://" + str(p.resolve())
+
+
+@pytest.mark.skipif(not LSP.exists(), reason="yon_lsp missing")
+def test_lsp_protocol_diagnoses_unsaved_broken_buffer(tmp_path):
+    """Disk clean, buffer broken: the error is published; then a didChange back to
+    the clean text clears it. The disk is never touched."""
+    root = _cross_file_call_project(tmp_path / "proj")
+    ap = root / "A" / "AP.yon"
+    assert ap.read_text() == _AP_CLEAN
+    uri = _uri(ap)
+    c = _LspClient()
+    try:
+        c.start()
+        c.send("textDocument/didOpen", {"textDocument": {
+            "uri": uri, "languageId": "yon", "version": 1, "text": _AP_BROKEN}})
+        diags = c.diagnostics_for(uri)
+        msgs = [d["message"] for d in diags]
+        assert any("zzz" in m for m in msgs), diags
+        assert any(d.get("code") == "E2001" for d in diags), diags
+        # The broken identifier is on line 1 (0-based) of the BUFFER.
+        assert all(d["range"]["start"]["line"] == 1 for d in diags
+                   if "zzz" in d["message"]), diags
+
+        c.send("textDocument/didChange", {
+            "textDocument": {"uri": uri, "version": 2},
+            "contentChanges": [{"text": _AP_CLEAN}]})
+        assert c.diagnostics_for(uri) == []
+        c.stop()
+    finally:
+        c.kill()
+    assert ap.read_text() == _AP_CLEAN, "the server wrote the buffer to disk"
+
+
+@pytest.mark.skipif(not LSP.exists(), reason="yon_lsp missing")
+def test_lsp_protocol_clean_buffer_over_broken_disk(tmp_path):
+    """The reverse: the file on disk is broken, the buffer is clean. The published
+    diagnostics are empty, because they describe the buffer. Control: --check on
+    the same disk file DOES report the error, so the empty list is not vacuous."""
+    root = _cross_file_call_project(tmp_path / "proj")
+    ap = root / "A" / "AP.yon"
+    ap.write_text(_AP_BROKEN)
+    r = subprocess.run([str(LSP), "--check", str(ap)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode >= 1 and "zzz" in r.stdout + r.stderr, r.stdout + r.stderr
+    uri = _uri(ap)
+    c = _LspClient()
+    try:
+        c.start()
+        c.send("textDocument/didOpen", {"textDocument": {
+            "uri": uri, "languageId": "yon", "version": 1, "text": _AP_CLEAN}})
+        assert c.diagnostics_for(uri) == []
+        c.stop()
+    finally:
+        c.kill()
+
+
+@pytest.mark.skipif(not LSP.exists() or not FIXTURE.exists(),
+                    reason="yon_lsp or fixture missing")
+def test_lsp_protocol_whole_program_drop_check_uses_buffer(tmp_path):
+    """The whole-program drop check (E3001) runs with the open buffer substituted
+    into the package: disk has the LEGAL order, the buffer the ILLEGAL one."""
+    proj = tmp_path / "proj"
+    shutil.copytree(FIXTURE, proj)
+    entry = proj / "Entry.yon"
+    entry.write_text(_LEGAL)
+    uri = _uri(entry)
+    c = _LspClient()
+    try:
+        c.start()
+        c.send("textDocument/didOpen", {"textDocument": {
+            "uri": uri, "languageId": "yon", "version": 1, "text": _ILLEGAL}})
+        diags = c.diagnostics_for(uri)
+        assert any(d.get("code") == "E3001" and "Space D" in d["message"]
+                   for d in diags), diags
+        c.stop()
+    finally:
+        c.kill()

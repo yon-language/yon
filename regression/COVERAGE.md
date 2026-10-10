@@ -17,8 +17,8 @@ Slice with `pytest -m`, e.g. `pytest -m "c and unit"`, `pytest -m functional`.
       n=$(python3 -m pytest regression -m "$k" --co -q 2>/dev/null | grep -c '::')
       echo "$k: $n"; done
 
-Suite ~707 nodes. unit is the dominant base (per-assertion oracle nodes via
-test_oracle_checks.py), functional in the middle, integration the tip.
+Suite ~707 nodes. unit is the dominant base (one node per OCaml oracle via
+test_oracle_checks.py, which fails on any internal [FAIL] line), functional in the middle, integration the tip.
 
   unit        — one module fn / one MLIR pass / one C fn, known-answer.
   functional  — a language feature emits / type-checks / is rejected (frontend).
@@ -65,7 +65,7 @@ DONE — handle-type STRATIFICATION negative: a plain arrow where a
 `yon_tests/negative/neg_handle_plain_fn.yon` (the handle opacity is confined to
 the topos identifiers, not the argument's arrow-vs-handle distinction).
 DONE — morph on-morphism FUNCTORIALITY hardened (W6): `yon_tests/negative/
-neg_morph_functoriality.yon` rejects an `on morphism .. via wrong_sig` whose
+morph_functoriality_reject/` (a project: spaces w, v) rejects an `on morphism .. via wrong_sig` whose
 signature is not F(dom) -> F(cod). (Earlier STUB note now resolved.)
 
 REMAINING — construct-specific semantic checks that are STUBS (accept-all on the
@@ -120,12 +120,12 @@ dup-param, empty-body, return-tail), dispatcher (directional subtype + type_equa
 sheaf (factor/non-factor), hm_infer (unify + occur-check). Plus the pre-existing
 cubical/kernel oracles (path, glue, isequiv, hit_*, eta_sigma, motive, j_tarski,
 o6, yoneda, core_check, el, type_erase, world_site) + ty_subst, kernel_alpha,
-leech_theta, sct. Each oracle's internal [PASS]/[FAIL] is one pytest node
-(test_oracle_checks.py).
+leech_theta, sct. Each oracle is one pytest node (test_oracle_checks.py); an internal [FAIL]
+line fails it.
 
 REMAINING:
 - [x] prop_eval — DONE: test_prop_eval.ml is wired in frontend/dune (built and
-      run; its [PASS]/[FAIL] lines become test_oracle_checks.py nodes). The Ω
+      run as a test_oracle_checks.py node). The Ω
       evaluator known-answer oracle, distinct from test_heyting (the algebra).
 - [ ] desugar — a Surface→Core oracle (let→App(Lam,v); inline-lambda lift).
 Pipeline-sufficient (skip): pretty, emit_mlir, carrier, drivers, tooling,
@@ -156,16 +156,17 @@ Note: lower-topos-to-llvm is an arith/scf→llvm lowering (not Topos-specific).
 
 ## Layer 4 — LLVM lowering (regression/test_llvm_ir.py)   [thin — to thicken]
 
-DONE — 6 examples (arena_basic, spawn_parallel_collect, net_stream,
-string_literals, collections_ext, merkle_noncommutative) ×: ll-emits (valid IR),
-has-entry (@main/@__yon_dispatch), no-undefined-runtime-refs (nm-checked),
-f64-abi (value-facade calls are double; void-control calls excluded). PLUS
-test_ll_object_symbol_split (nm the .o: `main` defined, undefined ⊆ RTSET+libc —
-link invariant before the slow link) and test_ll_child_exit_unreachable
-(TOLERANT form, see below).
+DONE — 9 examples ×: has-entry (`define i32 @main()`, nothing else counts),
+no-undefined-runtime-refs (nm-checked), runtime-abi (every facade declaration
+checked operand by operand against its C prototype, every call site against the
+declaration), object-symbol-split (nm the .o: `main` defined, undefined ⊆
+RTSET + libc + named system symbols — no blanket `__` prefix), and
+child_exit_noreturn (the call exists and its declaration is `noreturn`). A
+missing tool or an unreadable object FAILS. (test_ll_emits, f64_abi and
+child_exit_unreachable were folded into these on 2026-10-10.)
 
 REMAINING:
-- [ ] child_exit NORETURN — the test exists but asserts only the WEAK
+- [x] child_exit NORETURN — test_ll_child_exit_noreturn asserts the attribute. History: the test once asserted only the WEAK
       "safe-by-deadness" invariant, by design, because the lowering does NOT mark
       the facade noreturn. The real fix: in emit_mlir.ml (~L5715) emit
       `Spawn__child_exit` declaration with a noreturn passthrough so mlir-translate

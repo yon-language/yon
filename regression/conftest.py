@@ -47,7 +47,6 @@ _SPEED = {
     "test_surface_fuzz_projects": "fuzz",
     "test_metatheory_fuzz": "fuzz",
     "test_cross_space_runtime": "slow",
-    "test_source_binary_diff": "slow",
     "test_c_coverage": "slow",            # rebuilds the runtime instrumented (opt-in)
 }
 
@@ -60,6 +59,8 @@ _MODULE_DEFAULT = {
     "test_projects":      ("yon", "functional"),   # a project compiles
     "test_cross_space_runtime": ("yon", "integration"),  # multi-process, runs binaries
     "test_world_instance": ("yon", "integration"),     # two worlds side by side
+    "test_mlir_rewrite_semantics": ("mlir", "integration"),  # with vs without a pass
+    "test_wire_concurrent": ("yon", "integration"),    # producer and consumer alive at once
     "test_interp":        ("ocaml", "functional"),  # eval_runner (interpreter) over corpus
     "test_c_coverage":    ("c", "unit"),            # gcov floor gate (opt-in --gcov)
     "test_selfhost":      ("yon", "integration"),   # Yon-in-Yon seeds compile + run
@@ -72,7 +73,6 @@ _FUNC_OVERRIDE = {
         ("yon", "integration"),                    # module default
         {
             "test_example":       ("yon", "integration"),  # compile + run + exit code
-            "test_ocaml_oracle":  ("ocaml", "unit"),       # one test_*.exe per node
             "test_runtime_mphf":  ("c", "unit"),           # MPHF bijection self-test
         },
     ),
@@ -197,20 +197,12 @@ def pytest_configure(config):
 #     that drive it share the group "selfhost". (Each M1-M5 tool of
 #     test_selfhost_emit writes a file of its own, /tmp/yon_m<k>_out.mlir, and
 #     only its own test runs it.)
-#   * the dune build lock: the modules that run `dune build` share "dune".
 # Timing tests (speed "bench") measure wall clock and must not run under load at
 # all: gate.sh runs them in a second, serial phase.
 # Modules that refuse to run inside an xdist worker (they drive several OS
 # processes themselves, e.g. the cross-Space runner): marked `serial`, excluded
 # from the parallel phase and run in the serial one — never skipped by it.
 _SERIAL_MODULES = {"test_cross_space_runtime"}
-# Modules that invoke `dune build` themselves: concurrent dune runs on one
-# _build wait on its lock indefinitely (dune 3.20, macOS — reproduced: four at
-# once never finish), so they share one worker.
-_DUNE_MODULES = {
-    "test_surface_fuzz", "test_surface_fuzz_projects", "test_metatheory_fuzz",
-    "test_kernel_independent",
-}
 _SELFHOST_MODULES = {"test_selfhost_fixpoint", "test_selfhost_differential"}
 # A source that can touch a machine-global name: a network port, a file it
 # writes, the host system. Over-inclusion only costs parallelism.
@@ -252,8 +244,6 @@ def _param_uses_machine(v) -> bool:
 def _xdist_group(item, mod: str, fn: str):
     if mod in _SELFHOST_MODULES:
         return "selfhost"
-    if mod in _DUNE_MODULES:
-        return "dune"
     if item.get_closest_marker("machine"):
         return "machine"
     callspec = getattr(item, "callspec", None)

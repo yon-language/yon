@@ -1,0 +1,116 @@
+# Interpreter ledger: what the kernel interpreter (eval_runner --trace) does on
+# every RAN example of baseline_exitcodes.txt, measured 2026-10-10.
+#
+#   AGREE <name>              eval_runner prints `EXIT n` with n == the native
+#                             exit pinned in baseline_exitcodes.txt, no punt.
+#   INCOMPLETE <name> <how>   eval_runner does not evaluate the program and SAYS
+#                             so; <how> is the way it says it:
+#       punt        `EXIT 0` plus "[no extractable value, assuming 0]" on stderr
+#       refused     "EVAL INCOMPLETE" (exit 6): an imperative/effectful construct
+#       type-error  its own checker rejects what the native frontend accepts
+#       crash       an uncaught OCaml exception, no EXIT line
+#
+# Read by test_interp.py, one node per row. A value that differs from native
+# without a self-report fails whatever the row says. An INCOMPLETE row that
+# starts to agree fails too, asking for the row to become AGREE (a ratchet: the
+# ledger cannot go stale). The rows and the RAN set must match exactly.
+#
+# 2026-10-10: 48 AGREE, 49 INCOMPLETE (35 punt, 10 refused, 3 type-error, 1 crash).
+
+INCOMPLETE arena_basic punt
+AGREE      c_cell
+AGREE      c_morph_on_morphism
+AGREE      c_place_over
+AGREE      c_prop_abstract
+AGREE      c_topos_at_space
+INCOMPLETE capability_flow_demo refused
+AGREE      circle_hit
+AGREE      closed_morphism_capture
+INCOMPLETE closure_capture punt
+INCOMPLETE cluster_a_ast_commutative punt
+INCOMPLETE collections_ext punt
+AGREE      comprehension_carrier
+INCOMPLETE cx_carry punt
+INCOMPLETE cx_face_system type-error
+AGREE      cx_hit_suspension
+AGREE      cx_move_law
+INCOMPLETE cx_path_algebra punt
+INCOMPLETE cx_transport_refl type-error
+INCOMPLETE cx_univalence_distinct punt
+INCOMPLETE cx_univalence_named punt
+INCOMPLETE cx_univalence_succ punt
+INCOMPLETE decidable_ok punt
+INCOMPLETE decidable_unknown crash
+AGREE      directed_transport
+AGREE      effect_propagation
+AGREE      error_morphism
+AGREE      extends_subobject
+AGREE      extends_subsumption
+AGREE      forcing_demo
+AGREE      functor_compose_inline
+AGREE      functor_compose_local
+AGREE      functor_lambda
+AGREE      functor_linear
+AGREE      functor_toplevel
+INCOMPLETE generics_basic punt
+AGREE      geom_morphism_body
+AGREE      geom_morphism_cell
+AGREE      geom_morphism_inspect
+AGREE      handle_lambda_capture
+AGREE      handle_lambdas
+AGREE      hermetic_scope
+INCOMPLETE heyting_excluded_middle punt
+INCOMPLETE higher_order_recursive punt
+AGREE      id_endpoint_coherence
+INCOMPLETE inductive_arity3 punt
+INCOMPLETE inductive_list punt
+INCOMPLETE inductive_tree punt
+INCOMPLETE inductive_wildcard punt
+INCOMPLETE iter_loop refused
+AGREE      kw_algebra
+INCOMPLETE kw_clear punt
+AGREE      kw_geomorph_full
+INCOMPLETE kw_given punt
+INCOMPLETE kw_heyting punt
+AGREE      kw_hott
+AGREE      kw_id_sugar
+AGREE      kw_is_literal
+INCOMPLETE kw_list_here refused
+INCOMPLETE kw_merge_move punt
+AGREE      kw_morph
+AGREE      kw_paths
+AGREE      kw_patterns
+INCOMPLETE kw_prelude type-error
+INCOMPLETE kw_produce_emit refused
+AGREE      kw_reduction_modifiers
+AGREE      kw_stream_policies
+INCOMPLETE kw_topos_block punt
+AGREE      kw_view_show
+INCOMPLETE land_reach punt
+INCOMPLETE math_ext punt
+INCOMPLETE merkle_noncommutative punt
+AGREE      nat_transform_functor
+INCOMPLETE native_sum_match punt
+INCOMPLETE native_sum_runtime punt
+INCOMPLETE nested_lambda_capture refused
+AGREE      net_stream
+INCOMPLETE primes_bertrand punt
+AGREE      reduction_fold
+INCOMPLETE route_history punt
+AGREE      shm_backpressure
+AGREE      shm_stream
+INCOMPLETE spawn_parallel_collect refused
+INCOMPLETE stdlib_extended punt
+INCOMPLETE stdlib_showcase punt
+INCOMPLETE stream_for_every refused
+INCOMPLETE string_literals punt
+INCOMPLETE string_test punt
+AGREE      syslog_demo
+INCOMPLETE system_io punt
+AGREE      terminal_pure
+AGREE      union_field_obligation
+AGREE      union_upcast
+INCOMPLETE v1_control_flow refused
+INCOMPLETE vec_basic punt
+INCOMPLETE while_loop refused
+INCOMPLETE wire_eof refused

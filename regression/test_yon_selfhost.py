@@ -8,7 +8,10 @@ Three kinds of test-in-Yon, mapped to three levels of "is this realized":
             the oracle. Expected: EMIT succeeds (exit 0) == property holds.
 
   negative/ false proofs / illegal captures. Expected: REJECTED at compile time
-            (emit exit 3) -- the language refuses to prove something false.
+            (emit exit 3) -- the language refuses to prove something false --
+            with the stable code and message fragment recorded for the file in
+            yon_tests/rejections.txt, so a parse error or an unrelated type
+            error cannot pass for the refusal the fixture was written to show.
 
   runtime/  operational checks: `fun main(): Number { return actual - expected }`
             returns 0 iff the property holds at run time. Expected: the native
@@ -26,6 +29,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+import compiling_corpus as cc
 
 ROOT = Path(__file__).resolve().parent.parent
 FE = ROOT / "frontend"
@@ -80,14 +85,32 @@ def test_proof_in_yon(src):
     )
 
 
+EXPECT = cc.rejections()
+
+
 @pytest.mark.parametrize("src", NEGATIVE, ids=[Path(p).stem for p in NEGATIVE])
 def test_negative_in_yon(src):
-    """A false proof / illegal capture must be rejected at compile time (exit 3)."""
-    r = subprocess.run([str(EMIT), src], capture_output=True, timeout=60)
+    """A false proof / illegal capture must be rejected at compile time (exit 3),
+    cleanly, with its recorded code and message fragment."""
+    key = cc.rel(src)
+    assert key in EXPECT, f"{key}: negative fixture with no line in yon_tests/rejections.txt"
+    code, frag = EXPECT[key]
+    r = subprocess.run([str(EMIT), src], capture_output=True, text=True, timeout=60)
+    why = cc.rejection_failure(r.returncode, r.stdout + r.stderr, code, frag)
+    assert why is None, f"{key}: {why}\n{r.stderr[-800:]}"
     assert r.returncode == 3, (
         f"expected compile-time rejection (exit 3), got exit {r.returncode} -- "
         f"the language proved something it should not have"
     )
+
+
+def test_every_negative_fixture_has_an_expectation():
+    """yon_tests/negative/*.yon and the single-file lines of rejections.txt are
+    the same set (a stale line or an unlisted fixture both fail)."""
+    files = {cc.rel(p) for p in NEGATIVE}
+    listed = {k for k in EXPECT if k.endswith(".yon")}
+    assert files - listed == set(), f"fixtures without an expectation: {sorted(files - listed)}"
+    assert listed - files == set(), f"expectations for no fixture: {sorted(listed - files)}"
 
 
 @pytest.mark.parametrize("src", RUNTIME, ids=[Path(p).stem for p in RUNTIME])
@@ -117,9 +140,12 @@ def test_mlir_erasure(tmp_path):
     kw_paths is a dir-project (place migration), so emit through yonc, which mounts
     the project context; the raw frontend cannot infer a world for a bare place."""
     out = tmp_path / "kw_paths.mlir"
-    subprocess.run([str(ROOT / "toolchain" / "yonc"), "--emit=mlir",
-                    str(ROOT / "examples" / "kw_paths"), "-o", str(out)],
-                   capture_output=True, timeout=60)
-    mlir = out.read_text(errors="replace") if out.exists() else ""
+    r = subprocess.run([str(ROOT / "toolchain" / "yonc"), "--emit=mlir",
+                        str(ROOT / "examples" / "kw_paths"), "-o", str(out)],
+                       capture_output=True, text=True, timeout=60)
+    # Without this, a failed emit leaves no file and `not in ""` passes vacuously.
+    assert r.returncode == 0, f"yonc --emit=mlir failed on kw_paths:\n{r.stderr[-800:]}"
+    assert out.exists() and out.stat().st_size > 0, "yonc exited 0 but wrote no MLIR"
+    mlir = out.read_text(errors="replace")
     assert "!llvm.ptr" not in mlir, "type-level token leaked into the emitted code"
     assert "@universe_taker() -> f64" in mlir, "type-argument was not erased before emit"
