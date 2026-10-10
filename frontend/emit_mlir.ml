@@ -5559,10 +5559,12 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
        (* Reclaim this call's mutable-local cells on return. The high-water mark
           is captured before the body allocates any cell; once the return value is
           materialized (an f64, read out of any cell), resetting to the mark frees
-          every cell this activation made, so the slots recycle. The cells do not
-          escape (a `return` reads a value, never a cell handle), so this LIFO
-          discipline is sound and stops a reassigning helper called many times
-          from exhausting the registry. *)
+          every cell this activation made, so the slots recycle. A `return` reads
+          a value, never a cell handle — but a lambda that mentions a cell DOES
+          capture its handle, so the LIFO discipline is sound only because
+          tycheck stops every closure over a cell at the activation boundary
+          (S-08, the mobility judgment: ty_mobile / mob_carrying). It also stops
+          a reassigning helper called many times from exhausting the registry. *)
        let mark = fresh_ssa e in
        emit_line e (Printf.sprintf
          "%s = func.call @yon_rt_space_mark() : () -> f64" mark);

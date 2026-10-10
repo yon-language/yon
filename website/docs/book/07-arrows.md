@@ -158,32 +158,31 @@ the contract, and the compiler is the maître d'.
 
 An arrow travels. You bind it, `compose` it, and apply it elsewhere, possibly on
 the far side of a Space boundary, in another process with its own memory. So an
-arrow's body must be **closed**: it may use only its own parameters and the
-top-level definitions of the project (functions, places, worlds), never a local
-from the scope it was written in. This is enforced. A move that reaches for an
-enclosing local is a compile-time error:
+arrow carries every value it needs with it. It may mention a local of the scope
+it was written in, and that local is captured **by value**: the arrow takes the
+number, not the place where the number lives.
 
 <!-- yon-gate: illustrative -->
 ```yon
 be base holds 7
-be m holds move(s: Order) => .-> Ticket { total base } from Order to Ticket
+be m holds move(s: Order) => .-> Ticket { total base + s.qty } from Order to Ticket
 ```
 
-The compiler refuses it and says why: the move's body captures the enclosing
-local `base`; a morphism may use only its own parameters and top-level
-definitions, never a local from the surrounding scope, because it escapes its
-definition site and runs elsewhere, where a captured local would have nothing to
-point at. The fix is to pass `base` as a parameter, or lift it to a top-level
-`fun`.
+What an arrow cannot carry is a **cell**: a local reassigned with `=`, or a cell
+made with `Space.make`. A cell belongs to the call that made it and dies when
+that call returns, so an arrow that mentions one holds a place, not a value. It
+can be applied inside that call, or passed down to a callee, but it cannot leave:
+returning it, storing it in a cell, or sending it to another Space is a
+compile-time error, which says the value "would outlive the call". The fix is to
+read the cell into a `be` binding first and capture that.
 
 The reason is structural, and the restaurant makes it concrete. An instruction
-carried out in the kitchen cannot say "the number I was thinking of on the
-floor." It has to carry every value it needs with it, because by the time it
-runs, the dining room is out of reach. A `fun` is the opposite case, and
-deliberately so: a value combinator, the lambda you hand to `fold`, lives and
-dies on the spot, so it captures its enclosing locals freely, at any depth. A
-`fun` stays in the room; a morphism leaves it. The distinction *is* the
-discipline.
+carried out in the kitchen cannot say "the slate on the floor where I keep the
+running count." It has to carry the number written on it, because by the time
+it runs, the dining room is out of reach. The same holds for a `fun` value, the
+lambda you hand to `fold`: it captures its enclosing locals freely, at any
+depth, and while it stays in the room it may even hold a cell. The rule is not
+about the kind of arrow but about what crosses: only what is *mobile* leaves.
 
 ## `geomorph`: an adjunction between two sites
 

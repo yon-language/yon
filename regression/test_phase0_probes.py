@@ -286,10 +286,9 @@ place Entry {
 
 # --- P-11 (A) T-03: a cell handle must not outlive its reset ----------------
 
-@pytest.mark.xfail(strict=True, reason="ACCEPTANCE T-03 (and a live defect against "
-                   "emit_mlir.ml:5558 'cells do not escape'): an escaping closure "
-                   "reads another activation's cell, exit 99")
 def test_p11_escaping_closure_over_cell(tmp_path):
+    """S-08 closed: the closure over a cell is not mobile and is stopped at the
+    return (before: exit 99, another activation's cell read silently)."""
     entry = """\
 place Entry {
   fun mk(): Number -> Number { be c holds 10  c = 20  return fun(y: Number) => y + c }
@@ -301,6 +300,111 @@ place Entry {
     rc, out = _compile(proj, tmp_path / "out")
     # rejected at compile time, or the closure sees its own cell (20 + 1)
     assert _clean_rejection(rc, out) or (rc == 0 and _run(tmp_path / "out") == 21)
+
+
+# S-08: every route out of the activation that owns a cell. The judgment must
+# be conservative (never "does not escape" for a value that escapes), so each
+# route the analysis could miss is a case: mutating any part of it (the lambda
+# capture, the fixpoint over bindings, the walk over every expression form, the
+# implicit tail through compound statements, the allocation of a cell, the
+# tainted parameters at a store or on the wire) turns at least one case green.
+_S08_ESCAPES = {
+    # leaving the call
+    "alias": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  be h holds g  return h }",
+    "field": "fun mk(): Box { be c holds 10  c = 20  return .-> Box { f (fun(y: Number) => y + c) } }",
+    "through_call": "fun idf(g: Number -> Number): Number -> Number { return g }\n"
+                    "  fun mk(): Number -> Number { be c holds 10  c = 20  return idf(fun(y: Number) => y + c) }",
+    "implicit_tail": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c }",
+    "tail_through_when": "fun mk(): Number -> Number { be c holds 10  c = 20  when c > 0 { be g holds fun(y: Number) => y + c } "
+                         "otherwise { be h holds fun(y: Number) => y + c } }",
+    "return_in_while": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
+                       "while c > 0 do { return g }  return g }",
+    "if_expression": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
+                     "return if c > 0 then g else fun(y: Number) => y }",
+    "match_arms": "fun mk(b: Bit): Number -> Number { be c holds 10  c = 20  "
+                  "return match b { One => fun(y: Number) => y + c, Zero => fun(y: Number) => y + c } }",
+    "curried": "fun mk(): Number -> (Number -> Number) { be c holds 10  c = 20  return fun(y: Number) => fun(z: Number) => z + c }",
+    "lambda_over_alias": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
+                         "return fun(y: Number) => g(y) }",
+    "move_lambda": "fun mk(): move from P to Q { be c holds 10  c = 20  return move(s: P) => .-> Q { v c } from P to Q }",
+    "cell_holds_closure": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
+                          "k = fun(y: Number) => y + c  return k }",
+    "assigned_after_the_return": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  be i holds 0  "
+                                 "while i < 2 do { when i > 0 { return k }  k = fun(y: Number) => y + c  i = i + 1 }  return k }",
+    "alias_before_assignment": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
+                               "be h holds fun(y: Number) => y  be i holds 0  "
+                               "while i < 2 do { h = k  k = fun(y: Number) => y + c  i = i + 1 }  return h }",
+    "no_declared_return": "fun mk() { be c holds 10  c = 20  return fun(y: Number) => y + c }",
+    # a cell made with Space.make is freed on return as well
+    "space_cell_returned": "fun mk(): Space { be h holds Space.make(21)  be h2 holds h  return h2 }",
+    "space_cell_captured": "fun mk(): Number -> Number { be h holds Space.make(20)  return fun(y: Number) => y + Space.get(h) }",
+    "space_cell_contents_read_out": "fun mk(): Number -> Number { be h holds Space.make(0)  be c holds 10  c = 20  "
+                                    "be _s holds Space.set(h, fun(y: Number) => y + c)  return Space.get(h) }",
+    "space_cell_made_with_a_closure": "fun mk(): Number -> Number { be c holds 10  c = 20  "
+                                      "be h holds Space.make(fun(y: Number) => y + c)  return Space.get(h) }",
+    # stored into a cell the caller owns
+    "stored_in_outer_cell": "fun mk(k: Space): Number { be c holds 10  c = 20  be _s holds Space.set(k, fun(y: Number) => y + c)  return 0 }",
+    "stored_by_a_helper": "fun put(k: Space, g: Number -> Number): Number { be _s holds Space.set(k, g)  return 0 }\n"
+                          "  fun mk(k: Space): Number { be c holds 10  c = 20  return put(k, fun(y: Number) => y + c) }",
+    # sent on the wire
+    "wire_send": "fun mk(): Number { be ch holds Wire.make(4)  be c holds 10  c = 20  "
+                 "be _s holds Wire.send(ch, fun(y: Number) => y + c)  return 0 }",
+    "wire_send_by_a_helper": "fun sendit(ch: Number, g: Number -> Number): Number { be _s holds Wire.send(ch, g)  return 0 }\n"
+                             "  fun mk(): Number { be ch holds Wire.make(4)  be c holds 10  c = 20  "
+                             "return sendit(ch, fun(y: Number) => y + c) }",
+}
+
+_S08_PLACES = ("place Box { f Number -> Number }\nplace P { v Number }\nplace Q { v Number }\n"
+               "place Bit { this > One :U Zero }\n")
+
+
+@pytest.mark.parametrize("form", sorted(_S08_ESCAPES))
+def test_s08_every_escape_route_is_rejected(tmp_path, form):
+    entry = (f"{_S08_PLACES}place Entry {{\n  {_S08_ESCAPES[form]}\n"
+             "  fun main(): Number { return 0 }\n}\n")
+    proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Box", "P", "Q", "Bit"]\n')
+    rc, out = _compile(proj, tmp_path / "out")
+    assert _clean_rejection(rc, out) and ("outlive" in out or "crosses" in out), out
+
+
+def test_s08_closure_sent_to_another_space_is_rejected(tmp_path):
+    """The cross-Space call is a wire: the argument leaves the process."""
+    (tmp_path / "echo.yon").write_text(
+        "place Entry {\n  fun use_remote(g: Number -> Number): Number { return g(1) }\n"
+        "  fun main(): Number { return 0 }\n}\n")
+    (tmp_path / "client.yon").write_text(
+        "import echo::use_remote from Echo\n\nplace Entry {\n  fun main(): Number {\n"
+        "    be k holds 10\n    k = 20\n    return use_remote(fun(y: Number) => y + k)\n  }\n}\n")
+    rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
+    assert _clean_rejection(rc, out) and "crosses" in out, out
+
+
+@pytest.mark.parametrize("body,expected", [
+    # variant D: applied inside its own activation
+    ("fun mk(): Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  return g(1) }", 21),
+    # passed downward: the callee runs inside the owner's activation
+    ("fun apply(g: Number -> Number): Number { return g(1) }\n"
+     "  fun mk(): Number { be c holds 10  c = 20  return apply(fun(y: Number) => y + c) }", 21),
+    # an immutable binding is captured by value: the closure is mobile
+    ("fun mk2(): Number -> Number { be c holds 20  return fun(y: Number) => y + c }\n"
+     "  fun mk(): Number { be f holds mk2()  return f(1) }", 21),
+    # ... also when that value was read out of a cell
+    ("fun mk2(): Number -> Number { be c holds 10  c = 20  be n holds c + 0  return fun(y: Number) => y + n }\n"
+     "  fun mk(): Number { be f holds mk2()  return f(1) }", 21),
+    # a cell READ is a value, and so is what the closure computes
+    ("fun mk(): Number { be c holds 10  c = 20  return c }", 20),
+    ("fun mk(): Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  be n holds g(1)  return n }", 21),
+    # a Space cell used inside its activation, or handed back to its owner
+    ("fun mk(): Number { be h holds Space.make(20)  be g holds fun(y: Number) => y + Space.get(h)  return g(1) }", 21),
+    ("fun pass(k: Space): Space { return k }\n"
+     "  fun mk(): Number { be h holds Space.make(21)  be h2 holds pass(h)  return Space.get(h2) }", 21),
+    # what crosses the wire is the closure's value, a number
+    ("fun mk(): Number { be ch holds Wire.make(4)  be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
+     "be _s holds Wire.send(ch, g(1))  return Wire.recv(ch) }", 21),
+])
+def test_s08_mobile_uses_are_untouched(tmp_path, body, expected):
+    entry = f"place Entry {{\n  {body}\n  fun main(): Number {{ return mk() }}\n}}\n"
+    assert _compile_and_run(tmp_path, entry) == expected
 
 
 # --- P-12 (D? -> recorded) L-05: comprehension subobject policy -------------

@@ -6836,8 +6836,10 @@ double yon_rt_space_get(double space_id) {
 }
 
 /* Mutable-cell reclaim by stack discipline. A function's mutable-local cells do
- * NOT escape (you cannot return a cell handle: `return` reads the cell's value),
- * so they are LIFO with respect to calls. The compiler captures the high-water
+ * NOT escape: `return` reads the cell's value, and a closure that captures a
+ * cell's handle is rejected by the type checker before it can leave the call
+ * (S-08, the mobility judgment in tycheck.ml), so the cells are LIFO with
+ * respect to calls. The compiler captures the high-water
  * mark on entry (yon_rt_space_mark) and, once the return value is materialized,
  * frees every cell allocated during the call by resetting the counter to the mark
  * (yon_rt_space_reset). Freed slots are then reused by yon_rt_space_make, so a

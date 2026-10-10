@@ -44,6 +44,12 @@ of values, where same content is the same thing. Assignment with `=` (chapter
 3) is surface sugar over precisely this: a variable you reassign with `x = e`
 **is** a cell.
 
+A cell belongs to the call that made it: when that call returns, its cells are
+freed and their slots reused. So a cell, and a lambda that mentions one, never
+leaves its call: returning it, storing it in another cell, or sending it to
+another Space is a compile-time error. Read the value out first; the value is
+free to go anywhere.
+
 ## Types at runtime
 
 Types are a compile-time discipline; at the IR level the world is spartan:
