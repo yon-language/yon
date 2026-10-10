@@ -55,6 +55,13 @@
 #include <errno.h>     /* EBUSY: bounded lock acquisition */
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <time.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <sys/random.h>   /* getentropy: the world instance tag */
+#ifdef __APPLE__
+#include <sys/event.h>    /* kqueue: the reaper waits for the launcher */
+#endif
 
 /* ============================================================== */
 /* Physical singleton heap + Space table                          */
@@ -151,13 +158,112 @@ static void yon_rt_base36(uint32_t v, char *out) {
     out[YON_WORLD_TAG_LEN] = '\0';
 }
 
+/* ── The world is a region of names (Turbak ch. 18, letregion) ────────────
+ * Everything a world publishes in the kernel dies with the world, also when it
+ * dies badly (Scott ch. 9: release on the error path too). Three pieces:
+ *   - every process of the world that CREATES a kernel object appends its name
+ *     to the world's registry, a file named after the tag in $TMPDIR;
+ *   - the first creator also starts the world's reaper: a process of its own
+ *     session that waits for the launcher (the process that chose the tag) to
+ *     end, normally or by SIGKILL alike, and then removes every recorded name
+ *     and the registry. One mechanism for every way a world ends: the region
+ *     is released when its owner is gone.
+ * A world named from outside (YON_WORLD set, no YON_WORLD_LAUNCHER) has no
+ * launcher among its processes: whoever named it owns its cleanup. In every
+ * world a stream's consumer removes the stream's name when it reaches the end
+ * of the stream or gives up on it. */
+static pid_t g_world_launcher = 0;        /* 0 = this world has no launcher */
+static char  g_world_registry[512];       /* "" = nothing to record */
+
+static void yon_rt_world_sweep(void) {
+    if (!g_world_registry[0]) return;
+    int fd = open(g_world_registry, O_RDONLY);
+    if (fd >= 0) {
+        char buf[4096], line[256];
+        size_t len = 0;
+        ssize_t n;
+        while ((n = read(fd, buf, sizeof(buf))) > 0) {
+            for (ssize_t i = 0; i < n; i++) {
+                if (buf[i] == '\n') {
+                    line[len] = '\0';
+                    if (len > 0) shm_unlink(line);
+                    len = 0;
+                } else if (len + 1 < sizeof(line)) {
+                    line[len++] = buf[i];
+                }
+            }
+        }
+        close(fd);
+    }
+    unlink(g_world_registry);
+}
+
+/* Block until the launcher is gone. Only syscalls: this runs in a forked child
+ * of a possibly multi-threaded process. */
+static void yon_rt_world_wait_launcher(void) {
+#ifdef __APPLE__
+    int kq = kqueue();
+    if (kq >= 0) {
+        struct kevent ev;
+        EV_SET(&ev, g_world_launcher, EVFILT_PROC, EV_ADD | EV_ONESHOT, NOTE_EXIT, 0, NULL);
+        if (kevent(kq, &ev, 1, NULL, 0, NULL) == 0) {
+            struct kevent out;
+            while (kevent(kq, NULL, 0, &out, 1, NULL) < 0 && errno == EINTR) {}
+        }
+        close(kq);           /* registration fails with ESRCH: already gone */
+        return;
+    }
+#endif
+    while (kill(g_world_launcher, 0) == 0 || errno == EPERM) usleep(20000);
+}
+
+static void yon_rt_world_start_reaper(void) {
+    pid_t mid = fork();
+    if (mid < 0) return;
+    if (mid > 0) { waitpid(mid, NULL, 0); return; }
+    /* double fork: the reaper is nobody's child, so it leaves no zombie, and it
+     * lives in a session of its own, so killing the world's process group
+     * (or the launcher's terminal going away) does not take it along */
+    if (fork() != 0) _exit(0);
+    setsid();
+    int dn = open("/dev/null", O_RDWR);
+    if (dn >= 0) { dup2(dn, 0); dup2(dn, 1); dup2(dn, 2); }
+    /* hold nothing of the world open: no pipe of whoever started it, no shm */
+    for (int fd = 3; fd < 1024; fd++) close(fd);
+    yon_rt_world_wait_launcher();
+    yon_rt_world_sweep();
+    _exit(0);
+}
+
+/* Record a kernel object this process just created. */
+static void yon_rt_world_register(const char *kname) {
+    if (!g_world_registry[0]) return;
+    int fd = open(g_world_registry, O_WRONLY | O_APPEND | O_CREAT | O_EXCL, 0600);
+    if (fd >= 0) {
+        yon_rt_world_start_reaper();      /* the registry is new: one reaper */
+    } else {
+        fd = open(g_world_registry, O_WRONLY | O_APPEND | O_CREAT, 0600);
+        if (fd < 0) return;
+    }
+    char line[256];
+    int n = snprintf(line, sizeof(line), "%s\n", kname);
+    if (n > 0 && (size_t)n < sizeof(line)) (void)!write(fd, line, (size_t)n);
+    close(fd);
+}
+
 const char *yon_rt_world_tag(void) {
     if (g_world_tag[0]) return g_world_tag;
     const char *w = getenv("YON_WORLD");
     if (!w || !w[0]) {
-        char own[YON_WORLD_TAG_LEN + 1];
-        yon_rt_base36((uint32_t)getpid(), own);
-        setenv("YON_WORLD", own, 1);   /* inherited by every Space we launch */
+        /* this process starts the world: a fresh random instance per run, so a
+         * crashed run's names are never mistaken for the next one's */
+        uint32_t r = (uint32_t)getpid();
+        if (getentropy(&r, sizeof(r)) != 0) r ^= (uint32_t)time(NULL);
+        char own[YON_WORLD_TAG_LEN + 1], pid[16];
+        yon_rt_base36(r % (36u * 36u * 36u * 36u), own);
+        snprintf(pid, sizeof(pid), "%d", (int)getpid());
+        setenv("YON_WORLD", own, 1);            /* inherited by every Space we launch */
+        setenv("YON_WORLD_LAUNCHER", pid, 1);
         w = getenv("YON_WORLD");
     }
     uint32_t h = 2166136261u;          /* FNV-1a, folded into the tag width */
@@ -168,11 +274,21 @@ const char *yon_rt_world_tag(void) {
         plain = (w[i] >= '0' && w[i] <= '9') || (w[i] >= 'a' && w[i] <= 'z');
     if (plain) memcpy(g_world_tag, w, YON_WORLD_TAG_LEN + 1);
     else yon_rt_base36(h % (36u * 36u * 36u * 36u), g_world_tag);
+    const char *l = getenv("YON_WORLD_LAUNCHER");
+    if (l && l[0]) {
+        g_world_launcher = (pid_t)atoi(l);
+        const char *dir = getenv("TMPDIR");
+        if (!dir || !dir[0]) dir = "/tmp";
+        size_t dl = strlen(dir);
+        snprintf(g_world_registry, sizeof(g_world_registry), "%s%syon-world-%s",
+                 dir, (dl > 0 && dir[dl - 1] == '/') ? "" : "/", g_world_tag);
+    }
     return g_world_tag;
 }
 
 /* The kernel name of a published object of this world: kind 'p' = the shm
- * heap of a Space, 's' = a stream or a Space's RPC mailbox. */
+ * heap of a Space, 's' = a stream or a Space's RPC mailbox, 'r' = the private
+ * reply channel of an RPC session. */
 void yon_rt_ipc_name(char *out, size_t outsz, char kind, const char *name) {
     snprintf(out, outsz, "/y%s%c_%s", yon_rt_world_tag(), kind, name);
 }
@@ -204,6 +320,7 @@ void yon_rt_init(void) {
         yon_rt_ipc_name(shm_name, sizeof(shm_name), 'p', "__Default");
         g_spaces[0].heap = yon_xheap_create_with_backing(
             YON_HEAP_BACKING_SHM, shm_name, 1);
+        if (g_spaces[0].heap) yon_rt_world_register(shm_name);
         if (!g_spaces[0].heap) {
             fprintf(stderr,
                     "[YON-RT L2_SHM] failed shm for __Default, fallback PRIVATE\n");
@@ -261,6 +378,7 @@ uint32_t yon_rt_register_space(const char *name) {
         yon_rt_ipc_name(shm_name, sizeof(shm_name), 'p', name);
         g_spaces[id].heap = yon_xheap_create_with_backing(
             YON_HEAP_BACKING_SHM, shm_name, 1);
+        if (g_spaces[id].heap) yon_rt_world_register(shm_name);
         if (!g_spaces[id].heap) {
             fprintf(stderr,
                     "[YON-RT L2_SHM] failed to create/attach shm for space '%s'\n",
@@ -1620,6 +1738,7 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
     s->region_size = region_size;
     snprintf(s->name, sizeof(s->name), "%s", shm_name);
     s->in_use = 1;
+    if (create) yon_rt_world_register(shm_name);
     return s;
 }
 
@@ -1682,6 +1801,14 @@ int yon_rt_stream_shm_produce_blocking(yon_shm_stream_t *s, const void *value_pt
     return -1;                          /* timed out */
 }
 
+/* The consumer is the last to need a stream's name: at the end of the stream,
+ * and when it gives up on it (timeout, a loud error), it removes the name. The
+ * mappings already open stay valid; nobody new can attach a finished stream. */
+static int yon_shm_consumer_done(yon_shm_stream_t *s, int rc) {
+    shm_unlink(s->name);
+    return rc;
+}
+
 int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
@@ -1694,11 +1821,11 @@ int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
         if (yon_shm_hdr_lock(&hdr->mu) == 0) {
             int eof = (hdr->closed && hdr->count == 0);
             pthread_mutex_unlock(&hdr->mu);
-            if (eof) return -2;         /* EOF: closed + empty */
+            if (eof) return yon_shm_consumer_done(s, -2);   /* EOF: closed + empty */
         }
         usleep(YON_SHM_POLL_USEC);      /* empty but open: wait for a value */
     }
-    return -1;                          /* timed out (peer alive but silent) */
+    return yon_shm_consumer_done(s, -1);   /* timed out (peer alive but silent) */
 }
 
 /* Producer announces it will send no more: a clean shutdown so consumers can
@@ -1852,10 +1979,11 @@ int yon_rt_stream_shm_await_frame_blocking(yon_shm_stream_t *s,
     for (uint32_t i = 0; i < YON_SHM_MAX_POLLS; i++) {
         int rc = yon_rt_stream_shm_await_frame(s, out, out_cap, out_len);
         if (rc == 0) return 0;
-        if (rc == -2 || rc == -3) return rc;  /* EOF or loud error: stop */
+        if (rc == -2 || rc == -3)             /* EOF or loud error: stop */
+            return yon_shm_consumer_done(s, rc);
         usleep(YON_SHM_POLL_USEC);            /* empty but open: wait for a frame */
     }
-    return -1;
+    return yon_shm_consumer_done(s, -1);
 }
 
 
@@ -2275,6 +2403,8 @@ static void *yon_rpc2_map(const char *shm_name, size_t size, int *out_created) {
         close(fd);
         shm_unlink(shm_name);
         return NULL;
+    } else {
+        yon_rt_world_register(shm_name);
     }
     void *r = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);  /* the mapping persists */
@@ -2511,11 +2641,14 @@ static int yon_rpc2_session_arm(yon_rpc2_session_t *s, const char *space) {
     s->seq   = 0;
     s->nonce = yon_rpc2_random64();
     /* macOS caps shm names at 31 characters (PSHMNAMLEN, slash included):
-     * short prefix + 10 chars of Space + 12 hex of nonce = max 27.
+     * the world prefix "/y<tag>r_" (8) + 8 chars of Space + "_" + 12 hex of
+     * nonce = max 29.
      * The name is only a unique rendezvous: CORRELATION uses the FULL
      * 64-bit nonce inside the payload (nonce_echo). */
-    snprintf(s->reply_name, sizeof(s->reply_name), "/yr_%.10s_%012llx",
+    char rn[64];
+    snprintf(rn, sizeof(rn), "%.8s_%012llx",
              space, (unsigned long long)(s->nonce & 0xFFFFFFFFFFFFull));
+    yon_rt_ipc_name(s->reply_name, sizeof(s->reply_name), 'r', rn);
     int created = 0;
     s->rep = (yon_rpc2_reply_t *)
         yon_rpc2_map(s->reply_name, sizeof(yon_rpc2_reply_t), &created);
