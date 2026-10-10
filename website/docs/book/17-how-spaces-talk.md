@@ -55,11 +55,17 @@ process can map it wherever it likes. The header carries:
 
 Every name a world publishes, a Space's heap, a channel, a Space's mailbox, is
 scoped by the **instance** of that world: the process that starts the world
-picks the instance (its own process id) and exports it as `YON_WORLD`, and every
-Space it launches inherits it. Two runs of the same program, side by side, are
-two instances and never see each other's channels. Processes started
-separately, say a producer and a subscriber launched from two shells, join one
-world by setting `YON_WORLD` to the same value.
+picks the instance (a fresh random one for every run) and exports it as
+`YON_WORLD`, and every Space it launches inherits it. Two runs of the same
+program, side by side, are two instances and never see each other's channels.
+Processes started separately, say a producer and a subscriber launched from two
+shells, join one world by setting `YON_WORLD` to the same value.
+
+The names live exactly as long as their world. A channel's consumer removes its
+name when it reaches the end of the stream, or gives up on it. When the process
+that started the world ends, normally or killed, every name the world created
+is removed with it. A world named from outside with `YON_WORLD` has no such
+starter among its processes; whoever named it cleans up what is left.
 
 Cross-process `emit`/`await` are serialized with an exclusive `flock`. The RPC
 mailbox that carries a *call* is the stricter of the two: its region is claimed

@@ -94,6 +94,11 @@ done
 # Both phases check the skip ledger: a skip not declared in SKIPS.txt fails.
 JOBS="${YON_JOBS:-auto}"
 LEDGER="$ROOT/regression/SKIPS.txt"
+# Every world a test starts is released when it ends (runtime: the world's
+# reaper removes each name in $TMPDIR/yon-world-<tag>, then the registry): a
+# registry born during the suite and still there afterwards is a leaked world.
+WORLDS_DIR="${TMPDIR:-/tmp}"
+WORLDS_BEFORE=$(ls "$WORLDS_DIR" 2>/dev/null | grep '^yon-world-' | sort)
 say "tier 3: full pytest, parallel phase (-n $JOBS)"
 T3=$("$PYTEST" "$ROOT/regression/" -q -n "$JOBS" --dist loadgroup -m "not bench and not serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
@@ -102,4 +107,12 @@ say "tier 3: full pytest, serial phase (timing + no-xdist tests)"
 T3B=$("$PYTEST" "$ROOT/regression/" -q -m "bench or serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3B" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
 [ $rc -eq 0 ] || die "full pytest (serial phase)"
+leaked=""
+for _ in $(seq 50); do       # reapers wake on their launcher's exit: allow 10 s
+  leaked=$(comm -13 <(echo "$WORLDS_BEFORE") \
+           <(ls "$WORLDS_DIR" 2>/dev/null | grep '^yon-world-' | sort))
+  [ -z "$leaked" ] && break
+  sleep 0.2
+done
+[ -z "$leaked" ] || die "worlds not released after the suite: $leaked"
 echo "gate 3 green ($(( $(date +%s) - t0 ))s)"
