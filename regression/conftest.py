@@ -91,6 +91,12 @@ def pytest_addoption(parser):
              "bench rounds); 1.0 is the fast default, e.g. 100.0 for a nightly run",
     )
     parser.addoption(
+        "--bench-publish", action="store_true", default=False,
+        help="write the benchmark medians to website/src/data/bench-raw.json (the "
+             "data the benchmarks page renders); off by default, so a test run "
+             "never writes the site",
+    )
+    parser.addoption(
         "--gcov", action="store_true", default=False,
         help="run the opt-in C gcov coverage gate (rebuilds the runtime instrumented, "
              "then restores it); off by default",

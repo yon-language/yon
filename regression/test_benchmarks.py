@@ -13,11 +13,14 @@ but to assert that:
   (3) a few machine-independent DESIGN PROPERTIES hold with generous margins
       (equality is O(1) in size; XSet set-algebra beats HashSet).
 
-As a side effect, the per-position median across K runs is written to
-website/src/data/bench-raw.json, the source the benchmarks page renders from.
-Run:  pytest regression/test_benchmarks.py   (set BENCH_K to change the run count)
+The per-position median across K runs is the source the benchmarks page renders
+from (website/src/data/bench-raw.json), but a test run never writes it: timings are
+machine- and load-dependent, and the suite runs alongside other work. Publishing is
+an explicit act, on a quiet machine:
+  pytest regression/test_benchmarks.py --bench-publish   (BENCH_K changes the run count)
 """
 
+import hashlib
 import json
 import os
 import statistics
@@ -31,6 +34,14 @@ YONC = ROOT / "toolchain" / "yonc"
 BENCH = ROOT / "regression" / "bench"
 OUT = ROOT / "website" / "src" / "data" / "bench-raw.json"
 K = int(os.environ.get("BENCH_K", "3"))
+
+
+def _digest(path: Path):
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+
+
+# The site's data as it stood before this module ran: the suite must leave it so.
+_OUT_BEFORE = _digest(OUT)
 
 # bench -> [(output_index, expected_value)] : correctness guards that MUST hold.
 GUARDS = {
@@ -146,9 +157,19 @@ def test_benchmark(name, tmp_path):
     _results[name] = {"runs": K, "median": median, "all": runs}
 
 
-def test_zz_write_results():
-    """Side effect (runs last): persist the timing medians for the page to render."""
+def test_zz_write_results(pytestconfig):
+    """Explicit publication only (--bench-publish): persist the medians for the page."""
+    if not pytestconfig.getoption("--bench-publish"):
+        pytest.skip("site data is written only with --bench-publish")
     if not _results:
         pytest.skip("no benchmark results collected")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     json.dump(dict(sorted(_results.items())), open(OUT, "w"), indent=2)
+
+
+def test_zzz_site_data_untouched(pytestconfig):
+    """The suite never writes the site: bench-raw.json changes only on an explicit
+    --bench-publish run (the book: timings are measured, not re-derived each build)."""
+    if pytestconfig.getoption("--bench-publish"):
+        pytest.skip("--bench-publish: this run is the explicit publication")
+    assert _digest(OUT) == _OUT_BEFORE, f"{OUT} was rewritten by a plain test run"
