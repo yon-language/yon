@@ -41,8 +41,8 @@ In the language this transport is the `Wire` family: `Wire.make` /
 across processes, the `_net` variants across machines. `Stream` is the
 sequence (map, filter, fold); `Wire` is how Spaces talk.
 
-Transport is a POSIX shared-memory region named `/yon_stream_<Space>`,
-designed to be **position-independent**: a fixed header followed by a ring
+Transport is a POSIX shared-memory region named after the Space, inside the
+world instance it belongs to (below), designed to be **position-independent**: a fixed header followed by a ring
 buffer, all fields plain integers and offsets, no pointers, so every
 process can map it wherever it likes. The header carries:
 
@@ -52,6 +52,14 @@ process can map it wherever it likes. The header carries:
 - `slot_size`, `capacity`, `head`, `tail`, `count`, the ring;
 - `closed`, a clean-EOF flag from the producer;
 - `producers`, a live attach count, used for fault detection.
+
+Every name a world publishes, a Space's heap, a channel, a Space's mailbox, is
+scoped by the **instance** of that world: the process that starts the world
+picks the instance (its own process id) and exports it as `YON_WORLD`, and every
+Space it launches inherits it. Two runs of the same program, side by side, are
+two instances and never see each other's channels. Processes started
+separately, say a producer and a subscriber launched from two shells, join one
+world by setting `YON_WORLD` to the same value.
 
 Cross-process `emit`/`await` are serialized with an exclusive `flock`. The RPC
 mailbox that carries a *call* is the stricter of the two: its region is claimed
@@ -192,7 +200,7 @@ backend = "memory"     # or: separate | shm
 `YON_BACKEND` environment variable at launch still overrides it, as a
 deployment lever. The values:
 `memory` (the default, one private heap), `separate` (one heap per Space),
-`shm` (heaps in POSIX shared memory, `/yon_space_<name>`, enabling the
+`shm` (heaps in POSIX shared memory, named after the Space, enabling the
 cross-process cells and convergent shared folds of chapter 14). The
 language semantics do not change across backends; only the physical
 residence of the content does.

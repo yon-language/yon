@@ -15,7 +15,7 @@
  *                 reserved for the wire (the cross-process channel), never for
  *                 a Space heap.
  *   L2_SHM      — opt-in (YON_BACKEND=shm): each Space heap is backed by a named
- *                 POSIX shared-memory segment "/yon_space_<NAME>" so the heap
+ *                 POSIX shared-memory segment "/y<world>p_<NAME>" so the heap
  *                 itself is attachable from another process (PostgreSQL-style).
  *                 Falls back to a private heap if the shm segment cannot be
  *                 created.
@@ -128,6 +128,55 @@ static void yon_rt__report_drops(void) {
     fprintf(stderr, "[YON-RT] xheap_drops=%llu\n", n);
 }
 
+/* ── The world instance ───────────────────────────────────────────────
+ * Every name a process publishes in the kernel's shared namespaces (the shm
+ * heap of a Space, a stream, a Space's RPC mailbox) is scoped by the INSTANCE
+ * of the world it belongs to, so two runs of the same program, or two
+ * programs that both name a Space `Echo` or a channel 2, never meet. The
+ * instance is chosen once, by the process that starts the world: it takes its
+ * own pid, and exports it as YON_WORLD, so every Space it launches (a fork, a
+ * spawn replica, an exec'd server) inherits the same instance. Processes
+ * started apart join one world by setting YON_WORLD to the same value.
+ *
+ * In a name the instance is a fixed-width tag of YON_WORLD_TAG_LEN base-36
+ * characters ("/y<tag><kind>_<name>"): macOS caps shm names at 31 characters
+ * (PSHMNAMLEN, slash included), and a fixed width keeps the encoding
+ * unambiguous. A pid fits (36^4 > PID_MAX); a longer YON_WORLD is hashed. */
+#define YON_WORLD_TAG_LEN 4
+static char g_world_tag[YON_WORLD_TAG_LEN + 1];
+
+static void yon_rt_base36(uint32_t v, char *out) {
+    static const char digits[] = "0123456789abcdefghijklmnopqrstuvwxyz";
+    for (int i = YON_WORLD_TAG_LEN - 1; i >= 0; i--) { out[i] = digits[v % 36u]; v /= 36u; }
+    out[YON_WORLD_TAG_LEN] = '\0';
+}
+
+const char *yon_rt_world_tag(void) {
+    if (g_world_tag[0]) return g_world_tag;
+    const char *w = getenv("YON_WORLD");
+    if (!w || !w[0]) {
+        char own[YON_WORLD_TAG_LEN + 1];
+        yon_rt_base36((uint32_t)getpid(), own);
+        setenv("YON_WORLD", own, 1);   /* inherited by every Space we launch */
+        w = getenv("YON_WORLD");
+    }
+    uint32_t h = 2166136261u;          /* FNV-1a, folded into the tag width */
+    for (const char *p = w; *p; p++) { h ^= (uint32_t)(unsigned char)*p; h *= 16777619u; }
+    size_t n = strlen(w);
+    int plain = n == YON_WORLD_TAG_LEN;
+    for (size_t i = 0; plain && i < n; i++)
+        plain = (w[i] >= '0' && w[i] <= '9') || (w[i] >= 'a' && w[i] <= 'z');
+    if (plain) memcpy(g_world_tag, w, YON_WORLD_TAG_LEN + 1);
+    else yon_rt_base36(h % (36u * 36u * 36u * 36u), g_world_tag);
+    return g_world_tag;
+}
+
+/* The kernel name of a published object of this world: kind 'p' = the shm
+ * heap of a Space, 's' = a stream or a Space's RPC mailbox. */
+void yon_rt_ipc_name(char *out, size_t outsz, char kind, const char *name) {
+    snprintf(out, outsz, "/y%s%c_%s", yon_rt_world_tag(), kind, name);
+}
+
 void yon_rt_init(void) {
     if (g_initialized) return;
     /* Detect backend via env var. */
@@ -151,8 +200,10 @@ void yon_rt_init(void) {
     if (g_backend == YON_BACKEND_L2_SEPARATE) {
         g_spaces[0].heap = yon_xheap_create();
     } else if (g_backend == YON_BACKEND_L2_SHM) {
+        char shm_name[64];
+        yon_rt_ipc_name(shm_name, sizeof(shm_name), 'p', "__Default");
         g_spaces[0].heap = yon_xheap_create_with_backing(
-            YON_HEAP_BACKING_SHM, "/yon_space___Default", 1);
+            YON_HEAP_BACKING_SHM, shm_name, 1);
         if (!g_spaces[0].heap) {
             fprintf(stderr,
                     "[YON-RT L2_SHM] failed shm for __Default, fallback PRIVATE\n");
@@ -203,11 +254,11 @@ uint32_t yon_rt_register_space(const char *name) {
     if (g_backend == YON_BACKEND_L2_SEPARATE) {
         g_spaces[id].heap = yon_xheap_create();
     } else if (g_backend == YON_BACKEND_L2_SHM) {
-        /* The shm name is derived from the space name. Convention:
-         * /yon_space_<name>. Idempotent: the first process creates it, the
-         * others attach. */
+        /* The shm name is derived from the space name, in this world
+         * instance (yon_rt_ipc_name). Idempotent: the first process of the
+         * world creates it, the others attach. */
         char shm_name[256];
-        snprintf(shm_name, sizeof(shm_name), "/yon_space_%s", name);
+        yon_rt_ipc_name(shm_name, sizeof(shm_name), 'p', name);
         g_spaces[id].heap = yon_xheap_create_with_backing(
             YON_HEAP_BACKING_SHM, shm_name, 1);
         if (!g_spaces[id].heap) {
@@ -1449,7 +1500,6 @@ double Stream__close(double s)       { return (double)yon_rt_stream_close((uint3
  * process boundary. Different-CPU transport (sockets, a modern protocol) is
  * the next brick (B); SHM is same-machine. */
 
-#define YON_SHM_STREAM_PREFIX "/yon_stream_"
 
 /* Layout of the shared region: a fixed header followed by the ring buffer.
  * All fields are plain integers/bytes (no pointers) so the region is
@@ -1508,7 +1558,7 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
                                          uint32_t capacity,
                                          int create) {
     char shm_name[256];
-    snprintf(shm_name, sizeof(shm_name), "%s%s", YON_SHM_STREAM_PREFIX, name);
+    yon_rt_ipc_name(shm_name, sizeof(shm_name), 's', name);
     int flags = O_RDWR;
     if (create) flags |= O_CREAT;
     /* A create starts a FRESH stream: unlink any stale segment left by a prior
@@ -1659,7 +1709,7 @@ int yon_rt_stream_shm_await_blocking(yon_shm_stream_t *s, void *out_ptr) {
  * yon_rt_space_input_closed. The cross-process shm wire is not attributable to a
  * consumer Space HERE, for two independent reasons:
  *   (1) No id -> consumer map. An shm channel is named only by an integer id
- *       ("/yon_stream_id_<n>"); neither yon_shm_stream_t nor yon_shm_stream_hdr_t
+ *       ("/y<world>s_id_<n>"); neither yon_shm_stream_t nor yon_shm_stream_hdr_t
  *       carries the consumer Space, so this site cannot name which Space's arc
  *       just ended.
  *   (2) Wrong process. close_write runs in the PRODUCER process, whose g_spaces[]
@@ -1694,7 +1744,7 @@ void yon_rt_stream_shm_close(yon_shm_stream_t *s) {
 
 int yon_rt_stream_shm_unlink(const char *name) {
     char shm_name[256];
-    snprintf(shm_name, sizeof(shm_name), "%s%s", YON_SHM_STREAM_PREFIX, name);
+    yon_rt_ipc_name(shm_name, sizeof(shm_name), 's', name);
     return shm_unlink(shm_name);
 }
 
@@ -2012,6 +2062,10 @@ static void yon_rt_capture_args(int argc, char **argv, char **envp) {
         g_argc = argc;
         g_argv = argv;
     }
+    /* Fix the world instance at process start, before any Space is launched:
+     * yon_rt_init runs only in programs that declare Spaces, and a server may
+     * be forked before the first name is built. */
+    (void)yon_rt_world_tag();
 }
 
 /* Process plumbing shared with the v2 section. */
@@ -2041,9 +2095,10 @@ void yon_rt_maybe_serve(void) {
 /* private reply channels + PROCESS_SHARED mutex/cond wakeup       */
 /* ============================================================== */
 /* Locked decisions (docs/cross_package_design.md, 2026-06-03):
- *   1. Channel identity is the NOMINAL Space name: /yon_stream_<Space>.
- *      Zero collisions by construction; truncation+hash fallback only past
- *      the NAME_MAX budget.
+ *   1. Channel identity is the NOMINAL Space name within its world instance:
+ *      /y<world>s_<Space> (yon_rt_ipc_name). Zero collisions by construction,
+ *      also between two runs of one program; truncation+hash fallback only
+ *      past the NAME_MAX budget.
  *   2. Server mux: ONE shared request queue per Space (multi-producer) +
  *      a PRIVATE reply channel per caller session (Erlang-mailbox style).
  *      The server stays single-threaded and sequential: no locks in the
@@ -2071,7 +2126,6 @@ void yon_rt_maybe_serve(void) {
 #include <time.h>
 #include <errno.h>
 
-#define YON_RPC2_REQ_PREFIX  "/yon_stream_"   /* decision 1: nominal name */
 #define YON_RPC2_REP_PREFIX  "/yon_reply_"
 #define YON_RPC2_QUEUE_CAP   16u
 #define YON_RPC2_MAGIC       0x52504332u      /* "RPC2" */
@@ -2109,11 +2163,11 @@ typedef struct {
     uint64_t seq_echo;
 } yon_rpc2_reply_t;
 
-/* decision 1 fallback: nominal name, truncation+fnv1a only past NAME_MAX. */
-static void yon_rpc2_shm_name(char *out, size_t outsz,
-                              const char *prefix, const char *name) {
-    if (strlen(prefix) + strlen(name) < 200) {
-        snprintf(out, outsz, "%s%s", prefix, name);
+/* decision 1 fallback: nominal name (a stream of this world instance, the
+ * Space's mailbox), truncation+fnv1a only past NAME_MAX. */
+static void yon_rpc2_shm_name(char *out, size_t outsz, const char *name) {
+    if (strlen(name) < 190) {
+        yon_rt_ipc_name(out, outsz, 's', name);
         return;
     }
     uint32_t h = 2166136261u;
@@ -2121,7 +2175,9 @@ static void yon_rpc2_shm_name(char *out, size_t outsz,
         h ^= (uint32_t)(unsigned char)*p;
         h *= 16777619u;
     }
-    snprintf(out, outsz, "%s%.*s_%08x", prefix, 160, name, h);
+    char cut[192];
+    snprintf(cut, sizeof(cut), "%.160s_%08x", name, h);
+    yon_rt_ipc_name(out, outsz, 's', cut);
 }
 
 static void yon_rpc2_deadline(struct timespec *ts, uint32_t ms) {
@@ -2234,7 +2290,7 @@ static yon_rpc2_queue_t *yon_rpc2_queue_map_init(const char *space_name,
                                                  uint32_t epoch_hint,
                                                  int *out_created) {
     char nm[256];
-    yon_rpc2_shm_name(nm, sizeof(nm), YON_RPC2_REQ_PREFIX, space_name);
+    yon_rpc2_shm_name(nm, sizeof(nm), space_name);
     int created = 0;
     yon_rpc2_queue_t *q =
         (yon_rpc2_queue_t *)yon_rpc2_map(nm, sizeof(yon_rpc2_queue_t), &created);
@@ -2277,7 +2333,7 @@ void *yon_rt_rpc2_queue_open(const char *space_name, int as_server) {
              * recreate virgin, epoch advanced. Stragglers' mappings of the
              * orphaned object stay valid; they recover by name. */
             char nm[256];
-            yon_rpc2_shm_name(nm, sizeof(nm), YON_RPC2_REQ_PREFIX, space_name);
+            yon_rpc2_shm_name(nm, sizeof(nm), space_name);
             uint32_t e_old = q->epoch;
             munmap(q, sizeof(*q));
             shm_unlink(nm);
@@ -2305,7 +2361,7 @@ void yon_rt_rpc2_queue_close(void *qh) {
 
 int yon_rt_rpc2_queue_unlink(const char *space_name) {
     char nm[256];
-    yon_rpc2_shm_name(nm, sizeof(nm), YON_RPC2_REQ_PREFIX, space_name);
+    yon_rpc2_shm_name(nm, sizeof(nm), space_name);
     return shm_unlink(nm);
 }
 
@@ -2562,12 +2618,12 @@ void *yon_rt_spawn_open(double n_replicas_f64) {
     ctx->in_use = 1;
     ctx->n = n;
     /* macOS caps POSIX shm names at 31 chars (PSHMNAMLEN, slash included).
-     * yon_rpc2_queue_map_init prepends "/yon_stream_" (12), leaving 19 for this
+     * yon_rpc2_queue_map_init prepends "/y<world>s_" (8), leaving 23 for this
      * name. The old "spawncollect_%d_%u" overran (e.g.
      * "/yon_stream_spawncollect_<pid>_<n>" = 32 bytes) so shm_open failed before
      * fork on Darwin and the parent folded an invalid stream (hang). Hex bounds
      * the width: pid <= 6 hex (PID_MAX), counter <= 8 hex (u32) => "sc_%x_%x" is
-     * <= 18 chars, total <= 30. Same fix family as the reply_name cap. */
+     * <= 18 chars, total <= 26. Same fix family as the reply_name cap. */
     snprintf(ctx->name, sizeof(ctx->name), "sc_%x_%x",
              (unsigned)getpid(), g_yon_spawn_counter++);
     /* Parent is the consumer: create and claim the queue BEFORE forking so the
@@ -2990,7 +3046,7 @@ static int yon_rpc2_recover(const char *space) {
     munmap(sess->q, sizeof(*sess->q));
     sess->q = NULL;
     char nm[256];
-    yon_rpc2_shm_name(nm, sizeof(nm), YON_RPC2_REQ_PREFIX, space);
+    yon_rpc2_shm_name(nm, sizeof(nm), space);
     shm_unlink(nm);                       /* idempotent across recoverers */
     int created = 0;
     sess->q = yon_rpc2_queue_map_init(space, e_old + 1, &created);

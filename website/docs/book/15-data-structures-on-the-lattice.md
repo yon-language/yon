@@ -97,7 +97,7 @@ It is the à-la-Voyager bet: don't detect corruption, *outlive* it.
 
 The Space-cell story of chapter 14 extends across process boundaries by
 swapping the heap's backing: `YON_BACKEND=shm` places a Space's heap in
-POSIX shared memory (`/yon_space_<name>`), and cross-process updates are
+POSIX shared memory, named after the Space, and cross-process updates are
 serialized with an exclusive `flock` around the critical section. Shared
 folds are written so that concurrent writers **converge**, the
 fold-as-merge discipline (CRDT-flavoured) that the multi-process test suite

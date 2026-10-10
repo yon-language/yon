@@ -139,7 +139,7 @@ Compile each source to its own binary and run the caller:
 wire. Shutdown cascades when the caller exits.
 
 The wire is deliberately narrow: **only numbers**, at most **4 arguments**, over
-a named channel (`/yon_stream_<Space>`). Every value that crosses is an `f64`;
+a channel named after the Space (see chapter 17). Every value that crosses is an `f64`;
 the transport has no other type. Ask for a fifth argument and the compiler stops
 you before it builds, reporting that a cross-Space call may take at most 4 number
 arguments across a Space boundary.
