@@ -59,6 +59,7 @@ _MODULE_DEFAULT = {
     "test_interp":        ("ocaml", "functional"),  # eval_runner (interpreter) over corpus
     "test_c_coverage":    ("c", "unit"),            # gcov floor gate (opt-in --gcov)
     "test_selfhost":      ("yon", "integration"),   # Yon-in-Yon seeds compile + run
+    "test_phase0_probes": ("yon", "integration"),   # improvement-plan probes P-01..P-16
 }
 
 # modules that MIX kinds: per test-function-name overrides, plus a module default.
