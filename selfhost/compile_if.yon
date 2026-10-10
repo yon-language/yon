@@ -373,7 +373,7 @@ fun main(): Number {
   be full holds String.concat(mod_prefix(),
                   String.concat(er_code(r),
                     mod_suffix(er_ssa(r), er_ctr(r))))
-  be _w holds File.write_text("/tmp/yon_m4_out.mlir", full)
+  be _w holds File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
   be _p holds String.print(full)
   return String.length(full)
 }

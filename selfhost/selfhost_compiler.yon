@@ -2,8 +2,10 @@
  *
  * Same compiler machinery as M5 (compile_rec: lexer, recursive-descent parser,
  * de Bruijn scope, gen: Term -> MLIR, functions/calls/recursion), but instead of
- * a fixed source string it READS a Yon0 program from /tmp/yon_selfhost_in.yon and
- * WRITES the MLIR module to /tmp/yon_selfhost_out.mlir (File.read_text/write_text).
+ * a fixed source string it READS a Yon0 program from <dir>/in.yon and WRITES the
+ * MLIR module to <dir>/out.mlir (File.read_text/write_text), where <dir> is its
+ * first argument: every run works in a directory of its own, so two runs never
+ * share a file.
  *
  * This makes it a real tool: the differential oracle (regression/test_selfhost_
  * differential.py) writes an arbitrary Yon0 program, compiles it BOTH with the
@@ -1029,6 +1031,10 @@ fun rt_file_symbol(op: Number): String {
     else if op == hash_of("append_text") then "yon_rt_file_append_text"
     else ""
 }
+fun rt_args_symbol(op: Number): String {
+  return if op == hash_of("get") then "yon_rt_args_get"
+    else ""
+}
 fun rt_buffer_symbol(op: Number): String {
   return if op == hash_of("make") then "yon_rt_buffer_new"
     else if op == hash_of("append") then "yon_rt_buffer_append"
@@ -1039,6 +1045,7 @@ fun rt_symbol(m: Number, op: Number): String {
   return if m == hash_of("String") then rt_string_symbol(op)
     else if m == hash_of("File") then rt_file_symbol(op)
     else if m == hash_of("Buffer") then rt_buffer_symbol(op)
+    else if m == hash_of("Args") then rt_args_symbol(op)
     else ""
 }
 /* qualified call: MODULE '.' OP '(' args ')'. l at MODULE (an ident). */
@@ -1124,7 +1131,8 @@ fun string_stubs(): String {
     String.concat("  func.func private @yon_rt_string_print(f64) -> f64\n",
     String.concat("  func.func private @yon_rt_file_read_text(f64) -> f64\n",
     String.concat("  func.func private @yon_rt_file_write_text(f64, f64) -> f64\n",
-                  "  func.func private @yon_rt_file_append_text(f64, f64) -> f64\n")))))))))
+    String.concat("  func.func private @yon_rt_file_append_text(f64, f64) -> f64\n",
+                  "  func.func private @yon_rt_args_get(f64) -> f64\n"))))))))))
 }
 
 /* ---- module boilerplate ---- */
@@ -1158,10 +1166,12 @@ fun merkle_stubs(): String {
 }
 
 fun main(): Number {
-  /* file-driven compiler: read a Yon0 source, compile it, write the MLIR module.
-   * The differential oracle writes the input here and feeds the output back to the
-   * backend, so this same tool compiles any Yon0 program (not a fixed one). */
-  be source holds File.read_text("/tmp/yon_selfhost_in.yon")
+  /* file-driven compiler: read a Yon0 source, compile it, write the MLIR module,
+   * both in the directory given as the first argument. The differential oracle
+   * writes the input there and feeds the output back to the backend, so this
+   * same tool compiles any Yon0 program (not a fixed one). */
+  be dir    holds Args.get(1)
+  be source holds File.read_text(String.concat(dir, "/in.yon"))
   be prog   holds parse_items(lex(source), hit(CrNil))
   be funs   holds prog_funs(prog)
   be reg    holds prog_reg(prog)
@@ -1177,7 +1187,7 @@ fun main(): Number {
                           String.concat(er_code(rmain),
                             String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
                               stubs()))))))))
-  be _w holds File.write_text("/tmp/yon_selfhost_out.mlir", full)
+  be _w holds File.write_text(String.concat(dir, "/out.mlir"), full)
   return String.length(full)
 }
 /* accessors on the parsed Program. */

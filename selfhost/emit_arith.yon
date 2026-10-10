@@ -171,7 +171,7 @@ fun main(): Number {
                       String.concat(er_code(rmain),
                         String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
                           stubs())))))
-  be _w holds File.write_text("/tmp/yon_m1_out.mlir", full)   /* write the emitted MLIR */
+  be _w holds File.write_text(String.concat(Args.get(1), "/out.mlir"), full)   /* write the emitted MLIR */
   be _p holds String.print(full)
   return checksum(full)
 }

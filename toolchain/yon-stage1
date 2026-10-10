@@ -10,16 +10,19 @@
 # ==, single-argument calls, recursion). A program outside Yon0 produces no MLIR
 # (or MLIR the backend rejects); use `yon build --rooted` for full Yon.
 #
-# Note: the compiler-in-Yon currently reads/writes fixed /tmp paths (Yon's argv
-# access has friction), so this wrapper is single-build-at-a-time.
+# The compiler-in-Yon works in the directory given as its first argument
+# (<dir>/in.yon -> <dir>/out.mlir): each build gets its own, so builds can run
+# side by side.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 YONC="$HERE/yonc"
 SRC="$HERE/../selfhost/selfhost_compiler.yon"
 COMPILER="${YON_STAGE1_BIN:-/tmp/yon-stage1-compiler}"   # cached stage-1 binary
-IN="/tmp/yon_selfhost_in.yon"                            # the tool's fixed input
-OUT_MLIR="/tmp/yon_selfhost_out.mlir"                    # the tool's fixed output
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/yon-stage1.XXXXXX")"   # this build's own directory
+trap 'rm -rf "$WORK"' EXIT
+IN="$WORK/in.yon"
+OUT_MLIR="$WORK/out.mlir"
 
 die() { echo "yon-stage1: $*" >&2; exit 2; }
 
@@ -36,16 +39,17 @@ done
 [ -f "$file" ] || die "no such file: $file"
 
 # Build the stage-1 compiler (the compiler-in-Yon) with stage 0, cached by mtime.
+# (built aside, then renamed: a concurrent build never runs a half-written one)
 if [ ! -x "$COMPILER" ] || [ "$SRC" -nt "$COMPILER" ]; then
-  "$YONC" "$SRC" -o "$COMPILER" >/dev/null
+  "$YONC" "$SRC" -o "$WORK/compiler" >/dev/null
+  mv -f "$WORK/compiler" "$COMPILER"
 fi
 
-# Run it: it reads IN and emits the MLIR module to OUT_MLIR.
+# Run it in WORK: it reads IN and emits the MLIR module to OUT_MLIR.
 cp "$file" "$IN"
-rm -f "$OUT_MLIR"
-"$COMPILER" >/dev/null 2>&1 || true
+"$COMPILER" "$WORK" >/dev/null 2>&1 || true
 [ -f "$OUT_MLIR" ] || \
   die "the compiler-in-Yon produced no MLIR (is '$file' within Yon0? use 'yon build --rooted' for full Yon)"
 
 # Lower the emitted MLIR with the stage-0 backend.
-exec "$YONC" "$OUT_MLIR" -o "$out"
+"$YONC" "$OUT_MLIR" -o "$out"
