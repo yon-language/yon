@@ -29,7 +29,9 @@ snapshot, not re-derived each build. The build-time correctness gate that IS re-
   put is O(1) in the arena's fill (~80 ns, flat); get ~41 ns; same_orbit ~1.17 µs.
 - `xset_scaling-1c44e79-20260629.json` — XSet vs HashSet intersect/union, median over 9 runs at
   N = 100, 1000, 10000, 100000. `median_ns` is 16 values: per N, the four are
-  `[XSet_int, Hash_int, XSet_uni, Hash_uni]` in nanoseconds per operation.
+  `[XSet_int, Hash_int, XSet_uni, Hash_uni]` in nanoseconds per operation. **Withdrawn** (R-01): at
+  N = 100000 the HashSet runtime runs out of capacity, so those HashSet values time the failure path;
+  the record stays as history, not as a measurement to cite.
 - `spawn_scaling-1c44e79-20260629.json` — `spawn in N parallel` wall-time for N = 1, 2, 4, 8, 16
   replicas, each running a fixed 8M-iteration task (`regression/book/jp/bench/spawn_scaling`, an
   IPC-gated project; the design property is checked by `regression/test_spawn_scaling.py`, which
@@ -43,8 +45,9 @@ snapshot, not re-derived each build. The build-time correctness gate that IS re-
   ~340 ns by 1M); `add` flat (the inline contrast). Source `regression/bench/ds_ops`, gated by
   `test_benchmarks.py`.
 - `wire_throughput-1c44e79-20260629.json` — cross-process shared-memory `Wire` throughput: a producer
-  (sensor.yon) pushes 200,000 messages, a consumer (dash.yon) drains them and times itself. ~1.1 us
-  per message, ~900,000 messages/sec end to end. Source `regression/book/jp/bench/wire_throughput`,
+  (sensor.yon) pushes 200,000 messages, a consumer (dash.yon) drains them and times itself. Its
+  figure is not cited: a later run on another machine measured ~6 us/message, and the wire is to be
+  re-measured on the reference M1. Source `regression/book/jp/bench/wire_throughput`,
   design property gated by `regression/test_wire_throughput.py` (IPC-guarded, skips without fork+SHM).
   Method note: a single in-process stream cannot be timed at high volume, the optimizer (structural
   value numbering) collapses a loop of identical `emit`s to one; the cross-process wire, whose messages

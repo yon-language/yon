@@ -87,6 +87,14 @@ _CAPACITY_XFAIL = {
     "xset_scaling": "HashSet directory/arena exhausted at N=100000 (runtime capacity)",
 }
 
+# Benchmarks measured but NOT published: their numbers would say something
+# false. The page says so where the chart was (book ch. 93). Each entry leaves
+# with the item that closes it.
+WITHDRAWN = {
+    "xset_scaling": "R-01: its HashSet timings at N=100000 time the capacity failure path",
+}
+
+
 def _bench_params():
     out = []
     for b in BENCHES:
@@ -227,24 +235,26 @@ def test_benchmark(name, tmp_path):
 
 def test_zz_write_results(pytestconfig):
     """Explicit publication only (--bench-publish): persist the medians for the
-    page, and check what was published. The page renders every benchmark, so a
-    publication must hold all of them, measured in THIS process: under xdist
+    page, and check what was published. A publication holds every benchmark
+    except the WITHDRAWN ones, all measured in THIS process: under xdist
     each worker sees only its own share of _results, and a partial file would
     silently drop rows from the page. The file is read back and must parse to
     exactly what was measured."""
     if not pytestconfig.getoption("--bench-publish"):
         pytest.skip("site data is written only with --bench-publish")
-    missing = sorted(set(BENCHES) - set(_results))
+    published_set = sorted(set(BENCHES) - set(WITHDRAWN))
+    missing = sorted(set(published_set) - set(_results))
     assert not missing, (
         f"--bench-publish: no result for {missing} in this process (run it alone, "
         f"without -n, and with every benchmark passing); nothing written")
     OUT.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT, "w") as f:
-        json.dump(dict(sorted(_results.items())), f, indent=2)
+        json.dump({k: _results[k] for k in published_set}, f, indent=2)
     with open(OUT) as f:
         published = json.load(f)
-    assert sorted(published) == sorted(BENCHES), (
-        f"{OUT}: published {sorted(published)}, expected {sorted(BENCHES)}")
+    assert sorted(published) == published_set, (
+        f"{OUT}: published {sorted(published)}, expected {published_set}")
+    assert not set(published) & set(WITHDRAWN), f"{OUT}: a withdrawn benchmark was published"
     for name, row in published.items():
         assert row["median"] == _results[name]["median"] and row["runs"] == K, (
             f"{OUT}: {name} does not read back as measured: {row}")
@@ -258,3 +268,16 @@ def test_zzz_site_data_untouched(pytestconfig):
         pytest.skip("--bench-publish: this run is the explicit publication")
     assert _digest(OUT) == _OUT_BEFORE, f"{OUT} was rewritten by a plain test run"
 
+
+BOOK_PAGE = ROOT / "website" / "docs" / "book" / "93-benchmarks.mdx"
+
+
+@pytest.mark.parametrize("name", sorted(WITHDRAWN))
+def test_withdrawn_benchmark_is_not_on_the_site(name):
+    """A withdrawn benchmark is absent from the published data, and the page
+    says it is withdrawn, where its numbers were."""
+    with open(OUT) as f:
+        assert name not in json.load(f), f"{OUT} still publishes {name}"
+    page = BOOK_PAGE.read_text()
+    assert f"regression/bench/{name}" in page and "withdrawn" in page.lower(), (
+        f"{BOOK_PAGE.name} does not say that {name} is withdrawn")

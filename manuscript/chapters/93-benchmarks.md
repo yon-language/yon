@@ -165,20 +165,12 @@ design claims. That is the value of refusing to print a number you cannot explai
 The one result that is a shape rather than a number is `XSet` set algebra. An `XSet` is a fixed
 196,560-bit bitmap over the type-2 lattice points, so `intersect` and `union` are a machine-word AND
 or OR over about 3,072 words, independent of how many elements the sets hold. A `HashSet` must
-iterate, so its cost is O(N). Median over nine runs at four set sizes:
+iterate, so its cost is O(N).
 
-| Set size N | `XSet.intersect` | `HashSet.intersect` | ratio |
-|---|---|---|---|
-| 100 | 4.5 µs | 16 µs | 4× |
-| 1,000 | 4.9 µs | 43 µs | 9× |
-| 10,000 | 4.5 µs | 768 µs | 169× |
-| 100,000 | 4.6 µs | 47.7 ms | **10,454×** |
-
-`union` is the same story, from 6× at N=100 to **33,776×** at N=100,000, where the `HashSet` union
-reaches about 168 ms against the same flat `XSet` cost. The XSet line is **flat** across three orders
-of magnitude of set size, 4.5 to 5.0 µs throughout; the HashSet line rises with N. So the advantage
-is not a fixed multiplier that happens to be large, it is asymptotic: one side is O(1) in the
-cardinality, the other is O(N), and the gap widens without bound.
+**The scaling measurement is withdrawn.** At N=100,000 the `HashSet` runtime runs out of capacity
+(a defect, R-01 in the improvement plan): the benchmark kept running and its `HashSet` timings at that
+size measured the failure path, not the set operation. Until R-01 is closed the numbers of
+`regression/bench/xset_scaling` are not published, and this section shows none.
 
 Read it honestly in both directions. For small sets the fixed bitmap is pure overhead, and at N
 around a hundred the lattice barely wins; a hash set is the right tool there. The bitmap earns its
@@ -212,11 +204,11 @@ the shape, speedup rising with N up to the core count then bending, is the prope
 which skips cleanly where fork and shared memory are unavailable.)
 
 The same shared memory is the wire between Spaces. Two separate processes, a producer that pushes
-messages onto a shared-memory `Wire` and a consumer that drains them, move a message across the
-process boundary in about **1.1 µs**, roughly **900,000 messages a second** end to end, on the same
-M1 (the consumer times itself draining 200,000 messages). That is the cost of a real inter-process
-hop, not a function call, and it is what lets a Space talk to another Space without a socket or a
-serializer in the path. (Source `regression/book/jp/bench/wire_throughput`, gated by
+messages onto a shared-memory `Wire` and a consumer that drains them, move messages across the
+process boundary: a real inter-process hop, not a function call, and what lets a Space talk to
+another Space without a socket or a serializer in the path. No latency figure is given here: the
+earlier one did not reproduce on a later run, and the wire is being measured again on the reference
+M1. (Source `regression/book/jp/bench/wire_throughput`, gated by
 `regression/test_wire_throughput.py`, IPC-guarded like the spawn bench. A note on method: the
 in-process stream is a bounded prototype, a fixed 64-slot ring that silently drops past capacity
 (`yon_rt.h` `YON_STREAM_MAX_SLOTS`), so it cannot be timed at high volume; the cross-process wire,
