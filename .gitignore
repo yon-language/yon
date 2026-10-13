@@ -19,9 +19,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Local agent handoff state and scratch orchestration files.
-swarm/
-
 # Build artifacts and large local references (kept on disk, never committed).
 *.out
 a.out
@@ -34,7 +31,6 @@ a.out
 *.ll
 
 # copyrighted ebooks/PDFs — never commit
-books/
 # ebooks dropped in the repo root (Little Typer, Siek, Harper, Stump)
 /*.pdf
 /*.epub
@@ -44,4 +40,7 @@ books/
 physics/
 
 # local working notes (untracked, kept off the repo)
-notes/todo.md
+notes/
+
+# Wrangler local cache (holds the account id)
+.wrangler/

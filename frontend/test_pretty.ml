@@ -6,7 +6,7 @@
  * constructor has a fixed rendering; this pins them as known-answer. Covers
  * pp_ty, pp_interval, pp_term, pp_op_sig, pp_handler, pp_compact. The World /
  * Place / Reduction / Comp / HComp / GlueElem / Glue cases need heavy records or
- * face systems and are exercised through the corpus instead (see AUDIT.md). *)
+ * face systems and are exercised through the corpus instead. *)
 
 open Ast
 
