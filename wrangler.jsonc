@@ -5,6 +5,11 @@
   "name": "yon",
   "compatibility_date": "2026-06-04",
   "main": "worker.js",
+  // `wrangler deploy` builds the book first, so a deploy never ships a stale
+  // website/build. Connected to Workers Builds, every push to main does both.
+  "build": {
+    "command": "npm ci --prefix website && npm run build --prefix website"
+  },
   "assets": {
     "directory": "./website/build",
     "binding": "ASSETS",

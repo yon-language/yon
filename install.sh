@@ -174,7 +174,9 @@ say "${B}Install${N} -> $PREFIX"
 case "$PREFIX" in ""|/|"$HOME"|"$HOME"/) die "refusing to wipe '$PREFIX' — pick a dedicated --prefix like ~/.yon";; esac
 rm -rf "$PREFIX"
 mkdir -p "$PREFIX/toolchain" "$PREFIX/pkg" "$PREFIX/frontend/_build/default" "$PREFIX/mlir/build" "$PREFIX/runtime/vendor/mmgroup"
-cp "$SRC"/toolchain/yonc "$SRC"/toolchain/yon-lsp "$SRC"/toolchain/yon-fmt "$SRC"/toolchain/yon-lint "$SRC"/toolchain/yon-doc "$PREFIX/toolchain/"
+cp "$SRC"/toolchain/yon "$SRC"/toolchain/yonc "$SRC"/toolchain/yon-lsp "$SRC"/toolchain/yon-fmt "$SRC"/toolchain/yon-lint "$SRC"/toolchain/yon-doc "$PREFIX/toolchain/"
+# the prelude travels with the compiler: the frontend looks for it at <exe>/../../../prelude
+cp -R "$SRC/prelude" "$PREFIX/prelude"
 cp "$SRC"/pkg/yon-pkg "$PREFIX/pkg/"
 for e in $FIVE_EXE; do cp "$SRC/frontend/_build/default/$e" "$PREFIX/frontend/_build/default/"; done
 cp "$SRC/mlir/build/topos-opt" "$PREFIX/mlir/build/"
@@ -233,12 +235,16 @@ if [ -n "$CLONE" ]; then rm -rf "$CLONE"; ok "prune" "removed the clone"; fi
 
 # ---- smoke test -----------------------------------------------------------
 say "${B}Smoke test${N}:"
-TMP="$(mktemp -d)"; printf 'fun main(): number {\n  be _ holds String.print("yon ok")\n  return 42\n}\n' > "$TMP/hello.yon"
-YONC_LLC="$LLVM18_BIN/llc" YONC_MLIR_TRANSLATE="$LLVM18_BIN/mlir-translate" "$PREFIX/toolchain/yonc" "$TMP/hello.yon" -o "$TMP/hello" >/tmp/.yon-smoke.log 2>&1 \
-  && "$TMP/hello" >/dev/null 2>&1; rc=$?
-if [ "$rc" -eq 42 ]; then ok "yonc" "compiled + ran hello.yon (exit 42)"; else warn "yonc" "smoke test exit=$rc (see /tmp/.yon-smoke.log)"; fi
-"$PREFIX/toolchain/yon-lsp" --check "$TMP/hello.yon" >/dev/null 2>&1 && ok "yon-lsp" "--check works" || warn "yon-lsp" "--check failed"
+# a program is a directory with a yon.toml; the smoke test uses the prelude's
+# Number and Decision, so a missing prelude fails here and not in the user's hands
+TMP="$(mktemp -d)"; mkdir -p "$TMP/hello"
+printf '[package]\nname = "hello"\n\n[runtime]\nbackend = "memory"\n' > "$TMP/hello/yon.toml"
+printf 'place Entry {\n  fun main(): Number {\n    return match decide(unknown) { Present => 0, Absent => 0, Unknown => 42 }\n  }\n}\n' > "$TMP/hello/Entry.yon"
+YONC_LLC="$LLVM18_BIN/llc" YONC_MLIR_TRANSLATE="$LLVM18_BIN/mlir-translate" "$PREFIX/toolchain/yonc" "$TMP/hello" -o "$TMP/hello.bin" >"$TMP/smoke.log" 2>&1 \
+  && "$TMP/hello.bin" >/dev/null 2>&1; rc=$?
+if [ "$rc" -eq 42 ]; then ok "yonc" "compiled + ran a hello project (exit 42)"; else warn "yonc" "smoke test exit=$rc:"; sed 's/^/         /' "$TMP/smoke.log" >&2; fi
+"$PREFIX/toolchain/yon-lsp" --check "$TMP/hello" >/dev/null 2>&1 && ok "yon-lsp" "--check works" || warn "yon-lsp" "--check failed"
 rm -rf "$TMP"
 
 say ""
-say "${G}Done.${N} Restart your shell (or: source $PROFILE), then:  yonc --help"
+say "${G}Done.${N} Restart your shell (or: source $PROFILE), then:  yon help"
