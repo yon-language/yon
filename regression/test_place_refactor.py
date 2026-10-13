@@ -10,7 +10,7 @@ Double pin:
     obligation message — never the parser failwith again.
 
 A map out of a coproduct is a tuple of maps: a field declared on the union
-is an obligation on every arm (yon_place_grammar.md §3.4)."""
+is an obligation on every arm."""
 import subprocess
 from pathlib import Path
 

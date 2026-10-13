@@ -6,9 +6,9 @@ unless --gcov is passed, so it never runs in the default inner loop.
 
     pytest regression/test_c_coverage.py --gcov
 
-Asserts a per-module floor (unit layer, measured 2026-07-15). A module below its floor
+Asserts a per-module floor (unit layer). A module below its floor
 is a coverage regression; a deliberate drop lands with a lowered floor plus a rationale
-in AUDIT.md. Layer/kind/speed are assigned centrally in conftest: c / unit / slow.
+in the commit that lowers it. Layer/kind/speed are assigned centrally in conftest: c / unit / slow.
 """
 import re
 import subprocess
@@ -20,7 +20,7 @@ SCRIPT = Path(__file__).resolve().parent / "gcov_c.sh"
 
 # per-module line-coverage floors (unit layer, gcov, vendor excluded). yon_rt.c is
 # low here because its execution paths are integration-covered (corpus binaries run
-# the runtime), not unit-covered; see AUDIT.md.
+# the runtime), not unit-covered.
 FLOORS = {
     "yon_rt.c": 30.0,
     "xleech2_heap.c": 55.0,

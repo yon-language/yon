@@ -18,7 +18,7 @@ This is the `mlir` / `unit` slice of the suite (see regression/conftest.py
 markers). Run just this layer with:  pytest -m "mlir and unit"
 
 Every fixture's op syntax is grounded in mlir/TopOps.td assembly formats, the
-pass .cpp implementations, and the existing mlir_examples/ fixtures. The Mac
+pass .cpp implementations. The Mac
 gate runs these live against a real topos-opt build.
 """
 

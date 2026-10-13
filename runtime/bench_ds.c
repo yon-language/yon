@@ -2,8 +2,7 @@
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* bench_ds.c — direct-C microbenchmark for the five internal Level-2 structures
  * that have no frontend handle API: Deque, PriorityQueue, IndexedHeapMap,
- * MemoTable, FrozenMap. Feeds the "internal Level-2 structures" table in
- * ../data-structures.md.
+ * MemoTable, FrozenMap.
  *
  * Method: min of REPS reps, net of a same-trip baseline loop, one structure per
  * process invocation (argv[1] in {deque,pq,ihmap,memo,frozen}) so the shared

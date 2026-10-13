@@ -1,9 +1,0 @@
-[package]
-name = "prop_bad_param_reject"
-
-[world.Ledger]
-spaces  = ["bank"]
-objects = ["X"]
-
-[runtime]
-backend = "memory"

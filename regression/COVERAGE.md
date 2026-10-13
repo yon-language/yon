@@ -4,7 +4,7 @@ Single source of truth for the unified pytest harness across the 5 layers
 (Yon · OCaml · MLIR · LLVM · C). Goal: complete unit + functional + integration
 coverage, every construct / module / op / pass / function.
 
-Harness entry: `python3 -m pytest regression`  (gate: `bash swarm/hooks/gate.sh`
+Harness entry: `python3 -m pytest regression`  (gate: `regression/gate.sh`
 — rebuilds frontend `dune build` + runtime `make -C runtime`, then pytest,
 count-tolerant; then the adversarial ratchet).
 
@@ -71,9 +71,8 @@ signature is not F(dom) -> F(cod). (Earlier STUB note now resolved.)
 REMAINING — construct-specific semantic checks that are STUBS (accept-all on the
 structural/categorical content; VERIFIED this pass: each accepted in project
 context, exit 0). NOT wireable as negatives until hardened — wiring would be a
-false-green. Red→green oracles staged in `_pending_construct_tests/` (collected
-by nothing), each a minimal mutation of its passing example, verified ACCEPTED
-today; hardening must be Mac-gated against the example corpus (false-reject risk,
+false-green. Each needs a red→green oracle (a minimal mutation of its passing
+example) before it can be wired; hardening must be Mac-gated against the example corpus (false-reject risk,
 per the PathP/morph saga):
 - [ ] slice-base existence — `place P over Ghost` accepted; `pd_over` is read
       only by a hardcoded Some "Customer" branch (main.ml) + yon_doc, no general

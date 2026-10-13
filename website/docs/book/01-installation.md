@@ -71,8 +71,8 @@ export PATH="$PWD/toolchain:$PWD/pkg:$PATH"   # yonc and friends live in toolcha
 
 No environment variables are needed: `yonc` locates the LLVM tools on
 its own (PATH, the `-18` suffixed names, the distro dir, the Homebrew
-keg). Exact platform notes live in the repository: `INSTRUCTIONS.md`
-and, for Apple Silicon, `PORTING-MACOS.md`. The acceptance criterion
+keg). Exact platform notes live in the repository's `README.md`.
+The acceptance criterion
 on every platform is the regression suite:
 
 ```bash
