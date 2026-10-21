@@ -104,12 +104,12 @@ toolchain/yonc examples/inductive_tree -o tree && ./tree; echo $?
 Yon is a research language under active development (version 1.2 in
 progress). It is not ready for production use, and the syntax still changes.
 
-The regression suite is the source of truth. As of 2026-10-13, `regression/gate.sh 3`
+The regression suite is the source of truth. As of 2026-10-21, `regression/gate.sh 3`
 reports:
 
 | | |
 |---|---|
-| pytest | **1660 passed**, 10 skipped (each one declared in a register), **84 expected failures** |
+| pytest | **1661 passed**, 10 skipped (each one declared in a register), **84 expected failures** |
 | example programs | **101**, every exit code identical to a recorded baseline |
 | cross-Space scenarios | **8**, multi-process, over shared memory and the wire |
 | self-hosting | the frontend for a core subset, written in Yon, reproduces itself byte for byte |
@@ -168,9 +168,11 @@ No Python is needed to build: the mmgroup core is vendored under
 ## Testing
 
 The gate is hierarchical and stops at the first failure, so the cost matches
-the change:
+the change. The suite runs on its own Python environment; `python-flint` (Arb)
+is the oracle of the numeric tests and is needed by nothing else:
 
 ```bash
+python3 -m venv .venv && .venv/bin/pip install -r regression/requirements.txt
 regression/gate.sh 0   # build + smoke                              ~10 s
 regression/gate.sh 1   # + tests targeted at the files you changed  ~1-3 min
 regression/gate.sh 2   # + acceptance: examples and cross-Space      ~3-5 min
