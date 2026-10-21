@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be x holds 40
+    be x := 40
     x = 42
     return x
   }

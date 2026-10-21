@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be i holds 0
+    be i := 0
     while i < 42 do { i = i + 1 }
     return i
   }

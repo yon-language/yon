@@ -29,12 +29,12 @@ it holds is still immutable content.
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be v holds 7
-  be c1 holds Space.make(v)            // a cell holding 7
-  be c2 holds Space.make(v)            // ANOTHER cell holding 7
-  be _s holds Space.set(c1, 40)
-  be x holds Space.get(c1)             // 40
-  be y holds Space.get(c2)             // still 7: cells have identity
+  be v := 7
+  be c1 := Space.make(v)            // a cell holding 7
+  be c2 := Space.make(v)            // ANOTHER cell holding 7
+  be _s := Space.set(c1, 40)
+  be x := Space.get(c1)             // 40
+  be y := Space.get(c2)             // still 7: cells have identity
   return x + y - 5                     // 42
 }
 ```

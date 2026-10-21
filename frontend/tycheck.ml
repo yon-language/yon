@@ -609,7 +609,7 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
     | EPullback _ | EPushout _) -> e
 
 (* Stop-gap (1.1): `=` (Space-cell assign) inside a produce / spawn body desugars to
-   __space_update_here, which has no lowering — the cells promotion that turns `be x holds`
+   __space_update_here, which has no lowering — the cells promotion that turns `be x :=`
    into a Space cell and rewrites `x = e` into `Space.set` does not reach these
    expression-context blocks, so emit_mlir would crash with a Fatal error. A clean
    compile-time error rejects it instead.
@@ -841,7 +841,7 @@ let certify_dependent_cone (hname : string)
 
    The analysis is flow-insensitive and syntax-total, so it never judges "does
    not escape" a value that escapes:
-   - every binding of the function (`be`, `holds`, `=`, at any depth, loops
+   - every binding of the function (`be x := e`, `=`, at any depth, loops
      included) is recorded during checking and closed under a fixpoint at the
      end, so a cell assigned after the `return` that reads it is still seen;
    - the walks below match every expression and statement form with no
@@ -1818,7 +1818,7 @@ producer is declared `Wire<T>`" bare shown)
                 err loc "awaits takes the name of a producer function")
        | other ->
            err loc (Printf.sprintf
-             "awaits needs a wire receiver (be w holds wire to <Space>), \
+             "awaits needs a wire receiver (be w := wire to <Space>), \
 got %s" (Tyenv.ty_to_string other)))
 
   | ECall (name, args, loc) ->
@@ -3394,11 +3394,11 @@ and check_pattern (env : Tyenv.env) (ctx : Reduce.ctx)
  * expected_return; a `return e` statement checks e against it.
  *)
 
-(* Declare-once-per-scope (rule 1 of the `be holds` / `=` split, model A: every
-   `be x holds e` binds a fresh mutable local, and `x = e` reassigns it). Re-binding
-   the SAME name with `be ... holds` in the SAME block is a mistake, not a reassign;
+(* Declare-once-per-scope (rule 1 of the `be :=` / `=` split, model A: every
+   `be x := e` binds a fresh mutable local, and `x = e` reassigns it). Re-binding
+   the SAME name with `be ... :=` in the SAME block is a mistake, not a reassign;
    the fix is `x = ...`. A stack of frames, one per open block, records the names a
-   block bound with `be ... holds`. check_stmts pushes a frame per nested block;
+   block bound with `be ... :=`. check_stmts pushes a frame per nested block;
    check_stmts_accum resets and pushes at function entry. Names that begin with `_`
    are throwaways by convention (`_`, `_p`, `_1`) and are exempt. (Rule 2, `=` on an
    undeclared name, is already enforced by type_of_lvalue's "unbound variable".) *)
@@ -3419,7 +3419,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       ignore e;
       err loc (Printf.sprintf
         "'%s' is already bound in this scope; use `%s = ...` to reassign it, \
-         not `be %s holds ...` again"
+         not `be %s := ...` again"
         name name name)
   | SLet (name, e, loc) ->
       scope_add name;
@@ -3717,9 +3717,9 @@ and check_stmts_accum (env : Tyenv.env) (ctx : Reduce.ctx)
  * LAST statement (desugar_stmt_or_return): for a tail that is NOT a `return`,
  * that value must still inhabit the declared return type. tycheck only checks
  * `return e` statements against expected_ret, so a body ending in e.g.
- * `be y holds 3` while declaring a place return type silently produces the
+ * `be y := 3` while declaring a place return type silently produces the
  * wrong value. We check the tails whose value is a plain expression we can
- * infer (be / x holds e / a bare call), evaluated in the post-body env (the
+ * infer (be x := e / a bare call), evaluated in the post-body env (the
  * tail's own binding never feeds its own RHS), and ONLY when both the inferred
  * type and the declared type are CONCRETE — never the `unknown` f64-handle
  * placeholder, never a terminal (fieldless) place — so the loose handle
@@ -3775,7 +3775,7 @@ and type_of_lvalue (env : Tyenv.env) (ctx : Reduce.ctx)
        | None -> err loc (Printf.sprintf "unbound variable %s" x))
   | LField (x, fld) ->
       (* Place sections are immutable, so assigning to a field (`x.f = e`
-         or `x.f holds e`) is rejected by design. It has no lowering: it would
+         or `be x.f := e`) is rejected by design. It has no lowering: it would
          desugar to __space_update_here and crash emit_mlir, so it is stopped here
          with a clean type error instead. Mutate through a Space cell (a `be`-bound
          local reassigned with `=`), or build a fresh section with `.->`. *)

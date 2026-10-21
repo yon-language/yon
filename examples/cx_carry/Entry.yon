@@ -11,8 +11,8 @@ fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 
 fun main(): Number {
-  be bridge holds succ <=> pred        // il ponte: coerenze refl sintetizzate
-  be y holds carry 10 along bridge     // -> 11 (un Int64)
+  be bridge := succ <=> pred        // il ponte: coerenze refl sintetizzate
+  be y := carry 10 along bridge     // -> 11 (un Int64)
   return if y == 11 then 11 else 0
 }
 }

@@ -1,7 +1,7 @@
 place Entry {
   geomorph LiftBody from Account to AccountEU {
     pull(a: AccountEU): Account {
-      be tmp holds a
+      be tmp := a
       return tmp
     }
   }

@@ -5,9 +5,9 @@ place Entry {
 // the MLIR verifier. There is no arena: the region inlines at zero
 // runtime cost.
 fun main(): Number {
-  be base holds 40
+  be base := 40
   scope Hermetic {
-    be sealed holds base + 2
+    be sealed := base + 2
   }
   return base + 2
 }

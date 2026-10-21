@@ -52,14 +52,14 @@ def main():
     L.append("fun main(): number visits Output {")
     # mode-0 (quantized, type-2) embeddings  -- grade orbit + omega/triangle
     for i, (name, v, _) in enumerate(taxa):
-        L.append(f"  be e{i} holds Leech.embed({v}, 0)        // {name} (mode 0, type-2)")
+        L.append(f"  be e{i} := Leech.embed({v}, 0)        // {name} (mode 0, type-2)")
     # mode-3 (linear gcode) embeddings  -- clade pair_subtype + type-2 check
     for i, (name, v, _) in enumerate(taxa):
-        L.append(f"  be g{i} holds Leech.embed({v}, 3)        // {name} (mode 3, linear)")
+        L.append(f"  be g{i} := Leech.embed({v}, 3)        // {name} (mode 3, linear)")
     # xi-applied mode-0 embeddings for the frame-change demo (triple 0)
     a, b, c = (idx[n] for n in TRIPLES[0])
     for j in (a, b, c):
-        L.append(f"  be x{j} holds Leech.xi_apply(e{j})")
+        L.append(f"  be x{j} := Leech.xi_apply(e{j})")
     L.append("")
     # Block 1: GRADE orbit (mode 0)
     for i in range(N):

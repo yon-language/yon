@@ -9,16 +9,16 @@ sidebar_position: 4
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be x holds present
-  be acc holds 0
+  be x := present
+  be acc := 0
   when x is present { acc = 10 }
   otherwise { acc = 1 }
 
-  be grade holds if acc > 5 then 2 else 3            // expression form
+  be grade := if acc > 5 then 2 else 3            // expression form
   acc = acc + grade                                  // 12
 
   iter 3 do { acc = acc + 1 }                        // 15
-  be i holds 0
+  be i := 0
   while i < 2 do {
     acc = acc + 5                                    // 25
     i = i + 1
@@ -59,8 +59,8 @@ the expression form `if c then a else b`, or end the body with a
 <!-- yon-gate: exit 9 -->
 ```yon
 fun main(): Number {
-  be acc holds 0
-  be lst holds List.cons(5, List.cons(7, List.empty(0)))
+  be acc := 0
+  be lst := List.cons(5, List.cons(7, List.empty(0)))
   in sequence over y in lst { acc = acc + 1 }     // 2
   repeat at most 3 times { acc = acc + 2 }        // 8
   otherwise { acc = acc + 1 }                     // 9
@@ -73,10 +73,10 @@ A `forever` in flight (the loop runs without bound, printing as it goes):
 <!-- yon-gate: illustrative -->
 ```yon
 fun main(): Number {
-  be n holds 0
+  be n := 0
   forever {
     n = n + 1
-    when n > 3 { be _p holds IO.print_num(n) }
+    when n > 3 { be _p := IO.print_num(n) }
   }
   return 0
 }

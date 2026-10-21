@@ -37,8 +37,8 @@ def space_cell_no_alias():
     proj = "regression/book/jp/probe_no_alias"
     printed = run_project(proj)
     # The probe prints, in order:
-    #   x (= the cell, after `be x holds 3`),
-    #   y (a snapshot, after `be y holds x`),
+    #   x (= the cell, after `be x := 3`),
+    #   y (a snapshot, after `be y := x`),
     #   x (= the cell, after `x = 5`),
     #   y (again, after the store).
     assert len(printed) == 4, f"expected 4 printed numbers, got {printed}"
@@ -50,8 +50,8 @@ def space_cell_no_alias():
         "source": proj,
         "printed": printed,
         "steps": [
-            {"op": "bind",     "src": "be x holds 3", "cell": cell0, "y": None},
-            {"op": "snapshot", "src": "be y holds x", "cell": cell0, "y": y1},
+            {"op": "bind",     "src": "be x := 3", "cell": cell0, "y": None},
+            {"op": "snapshot", "src": "be y := x", "cell": cell0, "y": y1},
             {"op": "store",    "src": "x = 5",        "cell": cell2, "y": y2},
         ],
     }

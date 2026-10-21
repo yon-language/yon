@@ -7,13 +7,13 @@ place Entry {
  *              = 0b011 = 3
  * return (reach8 ? 100 : 0) + (reach9 ? 0 : 10) + witness8 = 100 + 10 + 3 = 113. */
 fun main(): Number {
-  be m0 holds Magma.empty(0)
-  be m1 holds Magma.gen(m0, 3)
-  be m2 holds Magma.gen(m1, 5)
-  be m3 holds Magma.gen(m2, 7)
-  be reach8 holds Land.reach(m3, 8)
-  be reach9 holds Land.reach(m3, 9)
-  be w8 holds Land.witness(m3, 8)
+  be m0 := Magma.empty(0)
+  be m1 := Magma.gen(m0, 3)
+  be m2 := Magma.gen(m1, 5)
+  be m3 := Magma.gen(m2, 7)
+  be reach8 := Land.reach(m3, 8)
+  be reach9 := Land.reach(m3, 9)
+  be w8 := Land.witness(m3, 8)
   return (if reach8 then 100 else 0) + (if reach9 then 0 else 10) + w8
 }
 }

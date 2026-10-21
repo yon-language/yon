@@ -4,8 +4,8 @@
  * the conditional, the first real control flow:
  *
  *   fun main(): number {
- *     be x holds 20
- *     be y holds 22
+ *     be x := 20
+ *     be y := 22
  *     return if x == y then 99 else x + y
  *   }
  *
@@ -24,7 +24,7 @@
 place Term { this > TLit(Number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) :U TEq(Term, Term) :U TIf(Term, Term, Term) }
 /* tokens (tags: Num0 Ident1 Fun2 Be3 Holds4 Return5 Number6 If7 Then8 Else9
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18). */
-place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TKwHolds :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd }
+place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 place Parse { this > POk(Term, TokList) :U PErr }
 /* SSA environment for the emitter: de Bruijn index -> ssa name. */
@@ -42,7 +42,6 @@ fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
 fun hash_of(s: String): Number { return word_hash(s, 0, String.length(s), 0) }
 fun kw_fun(): Number    { return hash_of("fun") }
 fun kw_be(): Number     { return hash_of("be") }
-fun kw_holds(): Number  { return hash_of("holds") }
 fun kw_return(): Number { return hash_of("return") }
 fun kw_number(): Number { return hash_of("number") }
 fun kw_if(): Number     { return hash_of("if") }
@@ -69,7 +68,6 @@ fun num_val(s: String, i: Number, j: Number, acc: Number): Number {
 fun classify(h: Number): Token {
   return if h == kw_fun() then hit(TKwFun)
     else if h == kw_be() then hit(TKwBe)
-    else if h == kw_holds() then hit(TKwHolds)
     else if h == kw_return() then hit(TKwReturn)
     else if h == kw_number() then hit(TKwNumber)
     else if h == kw_if() then hit(TKwIf)
@@ -78,14 +76,22 @@ fun classify(h: Number): Token {
     else hit(TIdent, h)
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
-  be j holds word_end(s, i, len)
+  be j := word_end(s, i, len)
   return hit(TkCons, classify(word_hash(s, i, j, 0)), lex_from(s, j, len))
 }
+/* ':=' (a definition: "is defined as") or a lone ':' (peek the next char
+   for '=' = 61). */
+fun lex_colon(s: String, i: Number, len: Number): TokList {
+  return if i + 1 >= len then hit(TkCons, hit(TColon), lex_from(s, i + 1, len))
+    else if String.char_at(s, i + 1) == 61
+    then hit(TkCons, hit(TColonEq), lex_from(s, i + 2, len))
+    else hit(TkCons, hit(TColon), lex_from(s, i + 1, len))
+}
 fun lex_num(s: String, i: Number, len: Number): TokList {
-  be j holds num_end(s, i, len)
+  be j := num_end(s, i, len)
   return hit(TkCons, hit(TNum, num_val(s, i, j, 0)), lex_from(s, j, len))
 }
-/* '=' is only valid as '==' in Yon0 (assignment is `holds`); a stray '=' is skipped. */
+/* '=' is only valid as '==' in Yon0 (a definition is `:=`, lexed at ':'); a stray '=' is skipped. */
 fun lex_eq(s: String, i: Number, len: Number): TokList {
   return if i + 1 >= len then hit(TkCons, hit(TEnd), hit(TkNil))
     else if String.char_at(s, i + 1) == 61
@@ -103,7 +109,7 @@ fun lex_at(s: String, i: Number, len: Number, c: Number): TokList {
     else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
     else if c == 123 then hit(TkCons, hit(TLBrace), lex_from(s, i + 1, len))
     else if c == 125 then hit(TkCons, hit(TRBrace), lex_from(s, i + 1, len))
-    else if c == 58 then hit(TkCons, hit(TColon),   lex_from(s, i + 1, len))
+    else if c == 58 then lex_colon(s, i, len)               /* ':' or ':=' */
     else if c >= 97 then lex_word(s, i, len)                 /* a-z: keyword or ident */
     else if c >= 48 then lex_num(s, i, len)                  /* 0-9: number */
     else lex_from(s, i + 1, len)                             /* skip anything else */
@@ -118,14 +124,14 @@ fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 fun motTn(t: Token): Number { return 0 }
 fun tok_tag(t: Token): Number {
   return hit_elim(motTn, [
-    TNum(n)=>0, TIdent(h)=>1, TKwFun=>2, TKwBe=>3, TKwHolds=>4, TKwReturn=>5,
+    TNum(n)=>0, TIdent(h)=>1, TKwFun=>2, TKwBe=>3, TColonEq=>4, TKwReturn=>5,
     TKwNumber=>6, TKwIf=>7, TKwThen=>8, TKwElse=>9, TPlus=>10, TStar=>11,
     TEqEq=>12, TLParen=>13, TRParen=>14, TLBrace=>15, TRBrace=>16, TColon=>17,
     TEnd=>18 ], t)
 }
 fun tok_num(t: Token): Number {
   return hit_elim(motTn, [
-    TNum(n)=>n, TIdent(h)=>h, TKwFun=>0, TKwBe=>0, TKwHolds=>0, TKwReturn=>0,
+    TNum(n)=>n, TIdent(h)=>h, TKwFun=>0, TKwBe=>0, TColonEq=>0, TKwReturn=>0,
     TKwNumber=>0, TKwIf=>0, TKwThen=>0, TKwElse=>0, TPlus=>0, TStar=>0,
     TEqEq=>0, TLParen=>0, TRParen=>0, TLBrace=>0, TRBrace=>0, TColon=>0,
     TEnd=>0 ], t)
@@ -224,7 +230,7 @@ fun if_after_else(cond: Term, thenE: Term, p: Parse): Parse {
       POk(elseE, rest) => hit(POk, hit(TIf, cond, thenE, elseE), rest) ], p)
 }
 
-/* ---- body parser: ('be' IDENT 'holds' expr)* 'return' expr ---- */
+/* ---- body parser: ('be' IDENT ':=' expr)* 'return' expr ---- */
 fun parse_body(l: TokList, env: NameEnv): Parse {
   return if head_tag(l) == 3          /* 'be' */
     then parse_let(l, env)
@@ -233,9 +239,9 @@ fun parse_body(l: TokList, env: NameEnv): Parse {
     else hit(PErr)
 }
 fun parse_let(l: TokList, env: NameEnv): Parse {
-  be name holds head_num(tail(l))              /* IDENT hash after 'be' */
-  be after_holds holds tail(tail(tail(l)))     /* skip be, IDENT, holds -> value */
-  return build_let(parse_expr(after_holds, env), name, env)
+  be name := head_num(tail(l))              /* IDENT hash after 'be' */
+  be after_def := tail(tail(tail(l)))     /* skip be, IDENT, holds -> value */
+  return build_let(parse_expr(after_def, env), name, env)
 }
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
   return hit_elim(motP,
@@ -303,8 +309,8 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
 }
 /* let: emit e1, push its ssa onto env, emit body in that env. */
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
-  be ea holds gen(e1, env, n)
-  be eb holds gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
+  be ea := gen(e1, env, n)
+  be eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
   return hit(ER, er_ssa(eb),
             String.concat(er_code(ea), er_code(eb)),
             er_ctr(eb))
@@ -312,10 +318,10 @@ fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
 /* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64".
  * for TEq the op carries its own comma ("arith.cmpf oeq,"). */
 fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
-  be ea holds gen(a, env, n)
-  be eb holds gen(b, env, er_ctr(ea))
-  be m  holds er_ctr(eb)
-  be rhs holds String.concat(String.concat(op, " "),
+  be ea := gen(a, env, n)
+  be eb := gen(b, env, er_ctr(ea))
+  be m  := er_ctr(eb)
+  be rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
   return hit(ER, ssa_name(m),
             String.concat(String.concat(er_code(ea), er_code(eb)),
@@ -326,17 +332,17 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
  * branches and yield their results. The branch code sits inside the { } blocks;
  * ssa defined in the enclosing scope (variables) is legal to read there. */
 fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: Number): EmitR {
-  be ec holds gen(c, env, n)
-  be et holds gen(thenT, env, er_ctr(ec))
-  be ee holds gen(elseT, env, er_ctr(et))
-  be m  holds er_ctr(ee)
-  be head holds String.concat(String.concat("  ", ssa_name(m)),
+  be ec := gen(c, env, n)
+  be et := gen(thenT, env, er_ctr(ec))
+  be ee := gen(elseT, env, er_ctr(et))
+  be m  := er_ctr(ee)
+  be head := String.concat(String.concat("  ", ssa_name(m)),
                   String.concat(" = scf.if ", String.concat(er_ssa(ec), " -> (f64) {\n")))
-  be then_part holds String.concat(er_code(et),
+  be then_part := String.concat(er_code(et),
                        String.concat("    scf.yield ", String.concat(er_ssa(et), " : f64\n")))
-  be else_part holds String.concat(er_code(ee),
+  be else_part := String.concat(er_code(ee),
                        String.concat("    scf.yield ", String.concat(er_ssa(ee), " : f64\n")))
-  be code holds String.concat(er_code(ec),
+  be code := String.concat(er_code(ec),
                   String.concat(head,
                     String.concat(then_part,
                       String.concat("  } else {\n",
@@ -352,7 +358,7 @@ fun stubs(): String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun mod_suffix(result_ssa: String, ctr: Number): String {
-  be rss holds ssa_name(ctr)
+  be rss := ssa_name(ctr)
   return String.concat(
     String.concat("    ", String.concat(rss,
       String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
@@ -362,18 +368,18 @@ fun mod_suffix(result_ssa: String, ctr: Number): String {
 
 /* the Yon0 source: a let-block whose return is a conditional. */
 fun src(): String {
-  return "fun main(): number {\n  be x holds 20\n  be y holds 22\n  return if x == y then 99 else x + y\n}\n"
+  return "fun main(): number {\n  be x := 20\n  be y := 22\n  return if x == y then 99 else x + y\n}\n"
 }
 
 fun main(): Number {
   /* full pipeline: source text -> tokens -> Term -> MLIR module -> file.
    * x==y is false, so the else branch (x + y = 42) runs -> emitted exit 42. */
-  be prog holds term_of(parse_program(lex(src())))
-  be r holds gen(prog, hit(SeNil), 0)
-  be full holds String.concat(mod_prefix(),
+  be prog := term_of(parse_program(lex(src())))
+  be r := gen(prog, hit(SeNil), 0)
+  be full := String.concat(mod_prefix(),
                   String.concat(er_code(r),
                     mod_suffix(er_ssa(r), er_ctr(r))))
-  be _w holds File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
-  be _p holds String.print(full)
+  be _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
+  be _p := String.print(full)
   return String.length(full)
 }

@@ -1,21 +1,21 @@
 place Entry {
   fun main(): Number visits Output {
-    be a holds 1536
-    be b holds 1280
-    be c holds 25167360
-    be d holds 512
+    be a := 1536
+    be b := 1280
+    be c := 25167360
+    be d := 512
 
-    be _1 holds Output.print(String.from_int(a))
-    be _2 holds Output.print(String.from_int(b))
-    be _3 holds Output.print(String.from_int(c))
-    be _4 holds Output.print(String.from_int(d))
+    be _1 := Output.print(String.from_int(a))
+    be _2 := Output.print(String.from_int(b))
+    be _3 := Output.print(String.from_int(c))
+    be _4 := Output.print(String.from_int(d))
 
-    be _5  holds Output.print(String.from_int(XSimplex.of2(a, b)))
-    be _6  holds Output.print(String.from_int(XSimplex.of2(a, c)))
-    be _7  holds Output.print(String.from_int(XSimplex.of2(a, d)))
-    be _8  holds Output.print(String.from_int(XSimplex.of2(b, c)))
-    be _9  holds Output.print(String.from_int(XSimplex.of2(b, d)))
-    be _10 holds Output.print(String.from_int(XSimplex.of2(c, d)))
+    be _5  := Output.print(String.from_int(XSimplex.of2(a, b)))
+    be _6  := Output.print(String.from_int(XSimplex.of2(a, c)))
+    be _7  := Output.print(String.from_int(XSimplex.of2(a, d)))
+    be _8  := Output.print(String.from_int(XSimplex.of2(b, c)))
+    be _9  := Output.print(String.from_int(XSimplex.of2(b, d)))
+    be _10 := Output.print(String.from_int(XSimplex.of2(c, d)))
     return 0
   }
 }

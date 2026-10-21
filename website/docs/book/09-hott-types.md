@@ -17,10 +17,10 @@ available in the lower stratum for when the endpoints do not determine it.
 // Entry.yon, at the project root
 place Entry { }
 fun main(): Number {
-  be p holds pair(40, 2)
-  be x holds fst(p)
-  be y holds snd(p)
-  be w holds clear x             // a path witness x = x
+  be p := pair(40, 2)
+  be x := fst(p)
+  be y := snd(p)
+  be w := clear x             // a path witness x = x
   return x + y                   // 42
 }
 ```
@@ -73,9 +73,9 @@ These compute. Read a closed path at an endpoint with `@ I0` (its start) or
 ```yon
 fun dbl(n: Number): Number { return n + n }
 fun main(): Number {
-  be reversed holds back clear 5        // inv(clear 5)              = clear 5
-  be joined   holds clear 7 ++ clear 7  // concat(clear 7, clear 7)  = clear 7
-  be shadow   holds clear 5 through dbl // ap(dbl, clear 5)          = clear 10
+  be reversed := back clear 5        // inv(clear 5)              = clear 5
+  be joined   := clear 7 ++ clear 7  // concat(clear 7, clear 7)  = clear 7
+  be shadow   := clear 5 through dbl // ap(dbl, clear 5)          = clear 10
   return (reversed @ I0) + (joined @ I0) + (shadow @ I0)   // 5 + 7 + 10 = 22
 }
 ```
@@ -92,8 +92,8 @@ other; on `Number`, a float, `(n + 1) - 1` is not always `n`):
 fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 fun main(): Number {
-  be bridge holds succ <=> pred    // the two-way bridge
-  be y holds carry 10 along bridge // transport 10 across it: succ 10 = 11
+  be bridge := succ <=> pred    // the two-way bridge
+  be y := carry 10 along bridge // transport 10 across it: succ 10 = 11
   return if y == 11 then 11 else 0
 }
 ```

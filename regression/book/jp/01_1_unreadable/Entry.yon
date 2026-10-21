@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be substrate holds 0
+    be substrate := 0
     return substrate
   }
 }

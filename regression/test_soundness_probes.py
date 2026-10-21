@@ -79,7 +79,7 @@ def _verdict(ok: bool, msg: str):
 _BAD = """\
 place Bad { f Bad -> Number }
 place Entry {
-  fun omega(b: Bad): Number { be g holds b.f  return g(b) }
+  fun omega(b: Bad): Number { be g := b.f  return g(b) }
   fun boom(n: Number): Number { return omega(.-> Bad { f omega }) }
   fun force(n: Number): Same(boom(n), 0) { return clear }
   fun main(): Number { return 0 }
@@ -154,7 +154,7 @@ def test_an_abstract_t_admits_no_literal_test(tmp_path):
     entry = """\
 place Entry {
   fun peek<T>(x: T): Number {
-    be r holds 0
+    be r := 0
     when x is 5 { r = 1 }
     return r
   }
@@ -201,7 +201,7 @@ place Entry {
   fun big(): Int64 { return Int64.ipow_ok(2, 53) + 1 }
   fun first(xs: List<Int64>): Int64 { return List.head(xs) }
   fun main(): Number {
-    be xs holds List.cons(big(), List.empty(0))
+    be xs := List.cons(big(), List.empty(0))
     return if Int64.is_odd(first(xs)) then 1 else 0
   }
 }
@@ -223,9 +223,9 @@ import echo::odd_remote from Echo
 
 place Entry {
   fun main(): Number {
-    be a holds odd_remote(Int64.ipow_ok(2, 40) + 1)
-    be b holds odd_remote(Int64.ipow_ok(2, 52) + 1)
-    be c holds odd_remote(Int64.ipow_ok(2, 53) + 1)
+    be a := odd_remote(Int64.ipow_ok(2, 40) + 1)
+    be b := odd_remote(Int64.ipow_ok(2, 52) + 1)
+    be c := odd_remote(Int64.ipow_ok(2, 53) + 1)
     return a + 2 * b + 4 * c
   }
 }
@@ -255,9 +255,9 @@ def test_int64_wraps_modulo_2_64(tmp_path):
     entry = """\
 place Entry {
   fun main(): Number {
-    be a holds if Int64.max_value() + 1 == Int64.min_value() then 1 else 0
-    be b holds if Int64.min_value() - 1 == Int64.max_value() then 10 else 0
-    be c holds if Int64.max_value() > 0 then 100 else 0
+    be a := if Int64.max_value() + 1 == Int64.min_value() then 1 else 0
+    be b := if Int64.min_value() - 1 == Int64.max_value() then 10 else 0
+    be c := if Int64.max_value() > 0 then 100 else 0
     return a + b + c
   }
 }
@@ -275,9 +275,9 @@ place Entry {
   fun unwrap(e: (Lit(Int64) | Nil)): Int64 { return match e { Lit(n) => n, Nil => 0 } }
   fun adder(k: Int64): Int64 -> Int64 { return fun(y: Int64) => k + y }
   fun same(x: Int64): Number {
-    be f holds adder(x)
-    be a holds if via_list(x) == x then 1 else 0
-    be c holds if unwrap(wrap(x)) == x then a else 0
+    be f := adder(x)
+    be a := if via_list(x) == x then 1 else 0
+    be c := if unwrap(wrap(x)) == x then a else 0
     return if f(0) == x then c else 0
   }
   fun main(): Number {
@@ -298,7 +298,7 @@ place Entry {
   fun odd(): Int64 { return 9007199254740993 }
   fun top(): Int64 { return 9223372036854775807 }
   fun main(): Number {
-    be a holds if Int64.is_odd(odd()) then 1 else 0
+    be a := if Int64.is_odd(odd()) then 1 else 0
     return if top() == Int64.max_value() then a + 10 else a
   }
 }
@@ -314,10 +314,10 @@ def test_int64_to_text_writes_its_exact_digits(tmp_path):
     entry = """\
 place Entry {
   fun main(): Number {
-    be _a holds String.print(Int64.to_text(Int64.max_value()))
-    be _b holds String.print(Int64.to_text(Int64.min_value()))
-    be _c holds String.print(Int64.to_text(9007199254740993))
-    be _d holds String.print(Int64.to_text(0 - 42))
+    be _a := String.print(Int64.to_text(Int64.max_value()))
+    be _b := String.print(Int64.to_text(Int64.min_value()))
+    be _c := String.print(Int64.to_text(9007199254740993))
+    be _d := String.print(Int64.to_text(0 - 42))
     return 0
   }
 }
@@ -436,7 +436,7 @@ def test_subobject_with_incompatible_field_rejected(tmp_path):
     entry = """\
 place Entry {
   fun read(b: B): Number { return b.value }
-  fun main(): Number { be a holds .-> A { value "hi" }  return read(a) }
+  fun main(): Number { be a := .-> A { value "hi" }  return read(a) }
 }
 """
     files = {"w/Topos.yon": "topos WTopos where {\n}\n",
@@ -454,9 +454,9 @@ def test_escaping_closure_over_cell(tmp_path):
     otherwise it would read another activation's cell (exit 99)."""
     entry = """\
 place Entry {
-  fun mk(): Number -> Number { be c holds 10  c = 20  return fun(y: Number) => y + c }
-  fun user(f: Number -> Number): Number { be d holds 90  d = 98  return f(1) }
-  fun main(): Number { be f holds mk()  return user(f) }
+  fun mk(): Number -> Number { be c := 10  c = 20  return fun(y: Number) => y + c }
+  fun user(f: Number -> Number): Number { be d := 90  d = 98  return f(1) }
+  fun main(): Number { be f := mk()  return user(f) }
 }
 """
     proj = _project(tmp_path, entry)
@@ -473,52 +473,52 @@ place Entry {
 # tainted parameters at a store or on the wire) turns at least one case green.
 _CELL_ESCAPES = {
     # leaving the call
-    "alias": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  be h holds g  return h }",
-    "field": "fun mk(): Box { be c holds 10  c = 20  return .-> Box { f (fun(y: Number) => y + c) } }",
+    "alias": "fun mk(): Number -> Number { be c := 10  c = 20  be g := fun(y: Number) => y + c  be h := g  return h }",
+    "field": "fun mk(): Box { be c := 10  c = 20  return .-> Box { f (fun(y: Number) => y + c) } }",
     "through_call": "fun idf(g: Number -> Number): Number -> Number { return g }\n"
-                    "  fun mk(): Number -> Number { be c holds 10  c = 20  return idf(fun(y: Number) => y + c) }",
-    "implicit_tail": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c }",
-    "tail_through_when": "fun mk(): Number -> Number { be c holds 10  c = 20  when c > 0 { be g holds fun(y: Number) => y + c } "
-                         "otherwise { be h holds fun(y: Number) => y + c } }",
-    "return_in_while": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
+                    "  fun mk(): Number -> Number { be c := 10  c = 20  return idf(fun(y: Number) => y + c) }",
+    "implicit_tail": "fun mk(): Number -> Number { be c := 10  c = 20  be g := fun(y: Number) => y + c }",
+    "tail_through_when": "fun mk(): Number -> Number { be c := 10  c = 20  when c > 0 { be g := fun(y: Number) => y + c } "
+                         "otherwise { be h := fun(y: Number) => y + c } }",
+    "return_in_while": "fun mk(): Number -> Number { be c := 10  c = 20  be g := fun(y: Number) => y + c  "
                        "while c > 0 do { return g }  return g }",
-    "if_expression": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
+    "if_expression": "fun mk(): Number -> Number { be c := 10  c = 20  be g := fun(y: Number) => y + c  "
                      "return if c > 0 then g else fun(y: Number) => y }",
-    "match_arms": "fun mk(b: Bit): Number -> Number { be c holds 10  c = 20  "
+    "match_arms": "fun mk(b: Bit): Number -> Number { be c := 10  c = 20  "
                   "return match b { One => fun(y: Number) => y + c, Zero => fun(y: Number) => y + c } }",
-    "curried": "fun mk(): Number -> (Number -> Number) { be c holds 10  c = 20  return fun(y: Number) => fun(z: Number) => z + c }",
-    "lambda_over_alias": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
+    "curried": "fun mk(): Number -> (Number -> Number) { be c := 10  c = 20  return fun(y: Number) => fun(z: Number) => z + c }",
+    "lambda_over_alias": "fun mk(): Number -> Number { be c := 10  c = 20  be g := fun(y: Number) => y + c  "
                          "return fun(y: Number) => g(y) }",
-    "move_lambda": "fun mk(): move from P to Q { be c holds 10  c = 20  return move(s: P) => .-> Q { v c } from P to Q }",
-    "cell_holds_closure": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
+    "move_lambda": "fun mk(): move from P to Q { be c := 10  c = 20  return move(s: P) => .-> Q { v c } from P to Q }",
+    "cell_holds_closure": "fun mk(): Number -> Number { be c := 10  c = 20  be k := fun(y: Number) => y  "
                           "k = fun(y: Number) => y + c  return k }",
-    "assigned_after_the_return": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  be i holds 0  "
+    "assigned_after_the_return": "fun mk(): Number -> Number { be c := 10  c = 20  be k := fun(y: Number) => y  be i := 0  "
                                  "while i < 2 do { when i > 0 { return k }  k = fun(y: Number) => y + c  i = i + 1 }  return k }",
-    "assigned_in_a_while_then_returned": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
-                                         "be i holds 0  while i < 2 do { k = fun(y: Number) => y + c  i = i + 1 }  return k }",
-    "stored_before_its_assignment_in_a_while": "fun mk(out: Space): Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
-                                               "be i holds 0  while i < 2 do { when i > 0 { be _s holds Space.set(out, k) }  "
+    "assigned_in_a_while_then_returned": "fun mk(): Number -> Number { be c := 10  c = 20  be k := fun(y: Number) => y  "
+                                         "be i := 0  while i < 2 do { k = fun(y: Number) => y + c  i = i + 1 }  return k }",
+    "stored_before_its_assignment_in_a_while": "fun mk(out: Space): Number { be c := 10  c = 20  be k := fun(y: Number) => y  "
+                                               "be i := 0  while i < 2 do { when i > 0 { be _s := Space.set(out, k) }  "
                                                "k = fun(y: Number) => y + c  i = i + 1 }  return 0 }",
-    "alias_before_assignment": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
-                               "be h holds fun(y: Number) => y  be i holds 0  "
+    "alias_before_assignment": "fun mk(): Number -> Number { be c := 10  c = 20  be k := fun(y: Number) => y  "
+                               "be h := fun(y: Number) => y  be i := 0  "
                                "while i < 2 do { h = k  k = fun(y: Number) => y + c  i = i + 1 }  return h }",
-    "no_declared_return": "fun mk() { be c holds 10  c = 20  return fun(y: Number) => y + c }",
+    "no_declared_return": "fun mk() { be c := 10  c = 20  return fun(y: Number) => y + c }",
     # a cell made with Space.make is freed on return as well
-    "space_cell_returned": "fun mk(): Space { be h holds Space.make(21)  be h2 holds h  return h2 }",
-    "space_cell_captured": "fun mk(): Number -> Number { be h holds Space.make(20)  return fun(y: Number) => y + Space.get(h) }",
-    "space_cell_contents_read_out": "fun mk(): Number -> Number { be h holds Space.make(0)  be c holds 10  c = 20  "
-                                    "be _s holds Space.set(h, fun(y: Number) => y + c)  return Space.get(h) }",
-    "space_cell_made_with_a_closure": "fun mk(): Number -> Number { be c holds 10  c = 20  "
-                                      "be h holds Space.make(fun(y: Number) => y + c)  return Space.get(h) }",
+    "space_cell_returned": "fun mk(): Space { be h := Space.make(21)  be h2 := h  return h2 }",
+    "space_cell_captured": "fun mk(): Number -> Number { be h := Space.make(20)  return fun(y: Number) => y + Space.get(h) }",
+    "space_cell_contents_read_out": "fun mk(): Number -> Number { be h := Space.make(0)  be c := 10  c = 20  "
+                                    "be _s := Space.set(h, fun(y: Number) => y + c)  return Space.get(h) }",
+    "space_cell_made_with_a_closure": "fun mk(): Number -> Number { be c := 10  c = 20  "
+                                      "be h := Space.make(fun(y: Number) => y + c)  return Space.get(h) }",
     # stored into a cell the caller owns
-    "stored_in_outer_cell": "fun mk(k: Space): Number { be c holds 10  c = 20  be _s holds Space.set(k, fun(y: Number) => y + c)  return 0 }",
-    "stored_by_a_helper": "fun put(k: Space, g: Number -> Number): Number { be _s holds Space.set(k, g)  return 0 }\n"
-                          "  fun mk(k: Space): Number { be c holds 10  c = 20  return put(k, fun(y: Number) => y + c) }",
+    "stored_in_outer_cell": "fun mk(k: Space): Number { be c := 10  c = 20  be _s := Space.set(k, fun(y: Number) => y + c)  return 0 }",
+    "stored_by_a_helper": "fun put(k: Space, g: Number -> Number): Number { be _s := Space.set(k, g)  return 0 }\n"
+                          "  fun mk(k: Space): Number { be c := 10  c = 20  return put(k, fun(y: Number) => y + c) }",
     # sent on the wire
-    "wire_send": "fun mk(): Number { be ch holds Wire.make(4)  be c holds 10  c = 20  "
-                 "be _s holds Wire.send(ch, fun(y: Number) => y + c)  return 0 }",
-    "wire_send_by_a_helper": "fun sendit(ch: Number, g: Number -> Number): Number { be _s holds Wire.send(ch, g)  return 0 }\n"
-                             "  fun mk(): Number { be ch holds Wire.make(4)  be c holds 10  c = 20  "
+    "wire_send": "fun mk(): Number { be ch := Wire.make(4)  be c := 10  c = 20  "
+                 "be _s := Wire.send(ch, fun(y: Number) => y + c)  return 0 }",
+    "wire_send_by_a_helper": "fun sendit(ch: Number, g: Number -> Number): Number { be _s := Wire.send(ch, g)  return 0 }\n"
+                             "  fun mk(): Number { be ch := Wire.make(4)  be c := 10  c = 20  "
                              "return sendit(ch, fun(y: Number) => y + c) }",
 }
 
@@ -551,33 +551,33 @@ def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
         "  fun main(): Number { return 0 }\n}\n")
     (tmp_path / "client.yon").write_text(
         "import echo::use_remote from Echo\n\nplace Entry {\n  fun main(): Number {\n"
-        "    be k holds 10\n    k = 20\n    return use_remote(fun(y: Number) => y + k)\n  }\n}\n")
+        "    be k := 10\n    k = 20\n    return use_remote(fun(y: Number) => y + k)\n  }\n}\n")
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
     assert _clean_rejection(rc, out) and "crosses" in out, out
 
 
 @pytest.mark.parametrize("body,expected", [
     # variant D: applied inside its own activation
-    ("fun mk(): Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  return g(1) }", 21),
+    ("fun mk(): Number { be c := 10  c = 20  be g := fun(y: Number) => y + c  return g(1) }", 21),
     # passed downward: the callee runs inside the owner's activation
     ("fun apply(g: Number -> Number): Number { return g(1) }\n"
-     "  fun mk(): Number { be c holds 10  c = 20  return apply(fun(y: Number) => y + c) }", 21),
+     "  fun mk(): Number { be c := 10  c = 20  return apply(fun(y: Number) => y + c) }", 21),
     # an immutable binding is captured by value: the closure is mobile
-    ("fun mk2(): Number -> Number { be c holds 20  return fun(y: Number) => y + c }\n"
-     "  fun mk(): Number { be f holds mk2()  return f(1) }", 21),
+    ("fun mk2(): Number -> Number { be c := 20  return fun(y: Number) => y + c }\n"
+     "  fun mk(): Number { be f := mk2()  return f(1) }", 21),
     # ... also when that value was read out of a cell
-    ("fun mk2(): Number -> Number { be c holds 10  c = 20  be n holds c + 0  return fun(y: Number) => y + n }\n"
-     "  fun mk(): Number { be f holds mk2()  return f(1) }", 21),
+    ("fun mk2(): Number -> Number { be c := 10  c = 20  be n := c + 0  return fun(y: Number) => y + n }\n"
+     "  fun mk(): Number { be f := mk2()  return f(1) }", 21),
     # a cell READ is a value, and so is what the closure computes
-    ("fun mk(): Number { be c holds 10  c = 20  return c }", 20),
-    ("fun mk(): Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  be n holds g(1)  return n }", 21),
+    ("fun mk(): Number { be c := 10  c = 20  return c }", 20),
+    ("fun mk(): Number { be c := 10  c = 20  be g := fun(y: Number) => y + c  be n := g(1)  return n }", 21),
     # a Space cell used inside its activation, or handed back to its owner
-    ("fun mk(): Number { be h holds Space.make(20)  be g holds fun(y: Number) => y + Space.get(h)  return g(1) }", 21),
+    ("fun mk(): Number { be h := Space.make(20)  be g := fun(y: Number) => y + Space.get(h)  return g(1) }", 21),
     ("fun pass(k: Space): Space { return k }\n"
-     "  fun mk(): Number { be h holds Space.make(21)  be h2 holds pass(h)  return Space.get(h2) }", 21),
+     "  fun mk(): Number { be h := Space.make(21)  be h2 := pass(h)  return Space.get(h2) }", 21),
     # what crosses the wire is the closure's value, a number
-    ("fun mk(): Number { be ch holds Wire.make(4)  be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
-     "be _s holds Wire.send(ch, g(1))  return Wire.recv(ch) }", 21),
+    ("fun mk(): Number { be ch := Wire.make(4)  be c := 10  c = 20  be g := fun(y: Number) => y + c  "
+     "be _s := Wire.send(ch, g(1))  return Wire.recv(ch) }", 21),
 ])
 def test_mobile_uses_of_a_cell_are_untouched(tmp_path, body, expected):
     entry = f"place Entry {{\n  {body}\n  fun main(): Number {{ return mk() }}\n}}\n"
@@ -633,7 +633,7 @@ def test_domain_error_reaches_the_caller(tmp_path, entry, expected):
 def test_latent_effect_in_arrow_type(tmp_path):
     entry = """\
 place Entry {
-  fun announce(n: Number): Number visits Output { be _u holds Output.print("hi")  return n }
+  fun announce(n: Number): Number visits Output { be _u := Output.print("hi")  return n }
   fun mk(): Number -> Number visits Output { return fun(y: Number) => announce(y) }
   fun apply(g: Number -> Number): Number { return g(41) }
   fun main(): Number visits Output { return apply(mk()) + 1 }
@@ -677,11 +677,11 @@ def test_cell_read_in_type_index(tmp_path):
     entry = """\
 place Entry {
   fun main(): Number {
-    be c holds 5
-    be p holds clear c
+    be c := 5
+    be p := clear c
     c = 6
-    be q holds clear c
-    be j holds p ++ q
+    be q := clear c
+    be j := p ++ q
     return (j @ I0) * 10 + (j @ I1)
   }
 }

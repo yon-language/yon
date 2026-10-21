@@ -45,9 +45,9 @@ And it holds *by construction*, whatever route built the value:
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be a holds "ab"
-  be b holds String.concat("a", "b")   // built by a different route
-  be same holds String.equal(a, b)     // 1.0: same content, same slot
+  be a := "ab"
+  be b := String.concat("a", "b")   // built by a different route
+  be same := String.equal(a, b)     // 1.0: same content, same slot
   return if same then 42 else 0
 }
 ```

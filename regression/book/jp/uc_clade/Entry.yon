@@ -1,23 +1,23 @@
 place Entry {
   fun main(): Number visits Output {
-    be R  holds Leech.embed(1, 3)
-    be V  holds Leech.embed(7, 3)
-    be D  holds Leech.embed(7, 3)
-    be S  holds Leech.embed(8, 3)
-    be SV holds Leech.embed(14, 3)
-    be X  holds Leech.embed(19, 3)
+    be R  := Leech.embed(1, 3)
+    be V  := Leech.embed(7, 3)
+    be D  := Leech.embed(7, 3)
+    be S  := Leech.embed(8, 3)
+    be SV := Leech.embed(14, 3)
+    be X  := Leech.embed(19, 3)
 
-    be sVD  holds Leech.pair_subtype(V, D)    // identical clade -> 0 distinguishing traits
-    be sRV  holds Leech.pair_subtype(R, V)    // distinguished by {feathered,carnivore}
-    be sSSV holds Leech.pair_subtype(S, SV)   // also {feathered,carnivore}
-    be sRX  holds Leech.pair_subtype(R, X)    // distinguished by {feathered,armored}
+    be sVD  := Leech.pair_subtype(V, D)    // identical clade -> 0 distinguishing traits
+    be sRV  := Leech.pair_subtype(R, V)    // distinguished by {feathered,carnivore}
+    be sSSV := Leech.pair_subtype(S, SV)   // also {feathered,carnivore}
+    be sRX  := Leech.pair_subtype(R, X)    // distinguished by {feathered,armored}
 
-    be _1 holds Output.print(String.from_int(sVD))
-    be _2 holds Output.print(String.from_int(sRV))
-    be _3 holds Output.print(String.from_int(sSSV))
-    be _4 holds Output.print(String.from_int(sRX))
+    be _1 := Output.print(String.from_int(sVD))
+    be _2 := Output.print(String.from_int(sRV))
+    be _3 := Output.print(String.from_int(sSSV))
+    be _4 := Output.print(String.from_int(sRX))
 
-    be f holds (if sVD == 0 then 0 else 1)      // identical trait-set -> nothing distinguishes them
+    be f := (if sVD == 0 then 0 else 1)      // identical trait-set -> nothing distinguishes them
              + (if sRV == sSSV then 0 else 1)    // same synapomorphy set -> same class (function of a^b)
              + (if sRV == 0 then 1 else 0)       // genuinely distinct animals -> nonzero
              + (if sRV == sRX then 1 else 0)     // a different synapomorphy -> a different class (it resolves)

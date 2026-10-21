@@ -10,13 +10,13 @@
   "steps": [
     {
       "op": "bind",
-      "src": "be x holds 3",
+      "src": "be x := 3",
       "cell": 3,
       "y": null
     },
     {
       "op": "snapshot",
-      "src": "be y holds x",
+      "src": "be y := x",
       "cell": 3,
       "y": 3
     },

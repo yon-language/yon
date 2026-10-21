@@ -2,12 +2,12 @@
 // 9), then closes it. Bare `fun main` (no place): the cross-Space wire scenarios run in
 // this form. Paired with dash.yon, which times receiving the N messages. Requires IPC/SHM.
 fun main(): Number {
-  be w holds Wire.make_shm(9, 1)
-  be k holds 0
+  be w := Wire.make_shm(9, 1)
+  be k := 0
   while k < 200000 do {
-    be _s holds Wire.produce_shm(w, k)
+    be _s := Wire.produce_shm(w, k)
     k = k + 1
   }
-  be _z holds Wire.close_shm(w)
+  be _z := Wire.close_shm(w)
   return 0
 }

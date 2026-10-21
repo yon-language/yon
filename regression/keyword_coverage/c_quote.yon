@@ -5,7 +5,7 @@
 // returns a plain number (quote lowers to its inhabitant `a` in desugar).
 place Entry {
   fun main(): Number {
-    be q holds quote(Number, 0)
+    be q := quote(Number, 0)
     return 0
   }
 }

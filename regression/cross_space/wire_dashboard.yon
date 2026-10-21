@@ -1,11 +1,11 @@
 // Consumer: attaches, drains eight readings in a loop, exits with the sum.
 place Entry {
   fun main(): Number {
-    be w holds Wire.make_shm(9, 0)
-    be total holds 0
-    be i holds 0
+    be w := Wire.make_shm(9, 0)
+    be total := 0
+    be i := 0
     while i < 8 do {
-      be v holds Wire.await_shm(w)
+      be v := Wire.await_shm(w)
       total = total + v
       i = i + 1
     }

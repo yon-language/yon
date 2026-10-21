@@ -1,10 +1,10 @@
 place Entry {
   fun main(): Number visits Output {
-    be genome holds VoyagerList.empty()
-    be g1 holds VoyagerList.append(genome, 1445)
-    be damaged holds VoyagerList.corrupt_at(g1, 0, 2)
-    be read holds VoyagerList.get(damaged, 0)
-    be _ holds Output.print(String.from_int(read))
+    be genome := VoyagerList.empty()
+    be g1 := VoyagerList.append(genome, 1445)
+    be damaged := VoyagerList.corrupt_at(g1, 0, 2)
+    be read := VoyagerList.get(damaged, 0)
+    be _ := Output.print(String.from_int(read))
     return 0
   }
 }

@@ -12,7 +12,7 @@
  *   W1001 dead-function   : a top-level fun referenced nowhere in the program
  *                           (NOT "unreachable from `main`": a Space's functions
  *                           are its cross-Space API, not called from one entry)
- *   W1002 unused-binding  : `be x holds e` whose x is never used afterwards
+ *   W1002 unused-binding  : `be x := e` whose x is never used afterwards
  *   W1003 unused-param    : a function parameter never used in the body
  *   W3001 unused-import   : an `import ... from S` whose symbol is never used --
  *                           a dead Space dependency (a communication arc with no
@@ -55,7 +55,7 @@ and names_used_in_stmt (s : S.stmt) : string list =
 
 (* ─── rules ───────────────────────────────────────────────────────────── *)
 
-(* W1002 unused-binding: a `be x holds e` whose x never appears later. A leading
+(* W1002 unused-binding: a `be x := e` whose x never appears later. A leading
  * underscore marks an intentional discard and is exempt. *)
 let rec unused_bindings (stmts : S.stmt list) : E.t list =
   match stmts with

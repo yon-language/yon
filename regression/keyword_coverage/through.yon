@@ -1,6 +1,6 @@
 /* p through f = ap(f, p): the path carried through a function. */
 place Entry {
   fun dbl(n: Number): Number { return n + n }
-  fun main(): Number { be p holds clear 5 through dbl
+  fun main(): Number { be p := clear 5 through dbl
     return p @ I0 }
 }

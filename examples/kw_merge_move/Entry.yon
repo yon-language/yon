@@ -11,14 +11,14 @@ place Entry {
     y aggregates to total by double
   }
   fun main(): Number {
-    be a holds .-> A { v 7
+    be a := .-> A { v 7
       w 1 }
-    be b holds .-> B { v 7
+    be b := .-> B { v 7
       w 9 }
-    be m holds Move.merge(Merge, a, b)
-    be wide holds .-> Wide { x 4
+    be m := Move.merge(Merge, a, b)
+    be wide := .-> Wide { x 4
       y 5 }
-    be narrow holds apply_move(Squeeze, wide)
+    be narrow := apply_move(Squeeze, wide)
     return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
   }
 }

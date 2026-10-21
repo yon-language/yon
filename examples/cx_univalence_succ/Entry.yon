@@ -8,7 +8,7 @@ fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 
 fun main(): Number {
-  be y holds transport(
+  be y := transport(
     ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)),
     10)
   return if y == 11 then 11 else 0     // y -> 11

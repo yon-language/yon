@@ -1,47 +1,47 @@
 place Entry {
   fun main(): Number visits Output {
     // XRelSet — dedup by orbit class
-    be r holds XRelSet.empty()
-    be _r0 holds XRelSet.add_ref(r, 1536)
+    be r := XRelSet.empty()
+    be _r0 := XRelSet.add_ref(r, 1536)
     r = XRelSet.add(r, 1536)
     r = XRelSet.add(r, 1536)
-    be v1 holds XRelSet.size(r)                 // a class, deduped -> 1
+    be v1 := XRelSet.size(r)                 // a class, deduped -> 1
     r = XRelSet.add(r, 1280)
-    be v2 holds XRelSet.size(r)                 // 1280 is a different class -> 2
+    be v2 := XRelSet.size(r)                 // 1280 is a different class -> 2
     r = XRelSet.add(r, 16778752)
-    be v3 holds XRelSet.size(r)                 // 16778752 is 1536's class -> still 2
+    be v3 := XRelSet.size(r)                 // 16778752 is 1536's class -> still 2
 
     // XRelMap — key = class, not specimen
-    be m holds XRelMap.empty()
-    be _m0 holds XRelMap.add_ref(m, 1536)
+    be m := XRelMap.empty()
+    be _m0 := XRelMap.add_ref(m, 1536)
     m = XRelMap.insert(m, 1536, 100)
-    be v4 holds match XRelMap.get(m, 1536) { Found(v) => v, Absent => 0 }      // exact point -> 100
-    be v5 holds match XRelMap.get(m, 1280) { Found(v) => v, Absent => 0 }      // different class -> Absent (0)
-    be v6 holds match XRelMap.get(m, 16778752) { Found(v) => v, Absent => 0 }  // same class (antipode) -> 100
+    be v4 := match XRelMap.get(m, 1536) { Found(v) => v, Absent => 0 }      // exact point -> 100
+    be v5 := match XRelMap.get(m, 1280) { Found(v) => v, Absent => 0 }      // different class -> Absent (0)
+    be v6 := match XRelMap.get(m, 16778752) { Found(v) => v, Absent => 0 }  // same class (antipode) -> 100
 
     // XSimplex — classify relations
-    be v7 holds XSimplex.of2(1536, 1280)
-    be v8 holds XSimplex.of2(1280, 1536)        // symmetric -> v8 == v7
-    be v9 holds XSimplex.omega(1536, 1280, 16778752)   // -1/0/+1
-    be acc holds XSimplex.empty()
+    be v7 := XSimplex.of2(1536, 1280)
+    be v8 := XSimplex.of2(1280, 1536)        // symmetric -> v8 == v7
+    be v9 := XSimplex.omega(1536, 1280, 16778752)   // -1/0/+1
+    be acc := XSimplex.empty()
     acc = XSimplex.add(acc, 1536, 1280)
     acc = XSimplex.add(acc, 1280, 16778752)
-    be v10 holds XSimplex.size(acc)             // 2 edges
-    be v11 holds XSimplex.dominant(acc)
+    be v10 := XSimplex.size(acc)             // 2 edges
+    be v11 := XSimplex.dominant(acc)
 
-    be _1 holds Output.print(String.from_int(v1))
-    be _2 holds Output.print(String.from_int(v2))
-    be _3 holds Output.print(String.from_int(v3))
-    be _4 holds Output.print(String.from_int(v4))
-    be _5 holds Output.print(String.from_int(v5))
-    be _6 holds Output.print(String.from_int(v6))
-    be _7 holds Output.print(String.from_int(v7))
-    be _8 holds Output.print(String.from_int(v8))
-    be _9 holds Output.print(String.from_int(v9))
-    be _10 holds Output.print(String.from_int(v10))
-    be _11 holds Output.print(String.from_int(v11))
+    be _1 := Output.print(String.from_int(v1))
+    be _2 := Output.print(String.from_int(v2))
+    be _3 := Output.print(String.from_int(v3))
+    be _4 := Output.print(String.from_int(v4))
+    be _5 := Output.print(String.from_int(v5))
+    be _6 := Output.print(String.from_int(v6))
+    be _7 := Output.print(String.from_int(v7))
+    be _8 := Output.print(String.from_int(v8))
+    be _9 := Output.print(String.from_int(v9))
+    be _10 := Output.print(String.from_int(v10))
+    be _11 := Output.print(String.from_int(v11))
 
-    be f holds (if v1 == 1 then 0 else 1)
+    be f := (if v1 == 1 then 0 else 1)
              + (if v2 == 2 then 0 else 1)
              + (if v3 == 2 then 0 else 1)
              + (if v4 == 100 then 0 else 1)

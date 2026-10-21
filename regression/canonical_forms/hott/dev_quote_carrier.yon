@@ -4,7 +4,7 @@
 // carrier is number" -> exit 3.
 place Entry {
   fun main(): Number {
-    be q holds quote(Number, "text")
+    be q := quote(Number, "text")
     return 0
   }
 }

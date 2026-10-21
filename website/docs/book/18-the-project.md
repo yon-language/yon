@@ -89,13 +89,13 @@ import "yonproj/rates"
 import bank::deposit_net from Bank
 
 fun main(): Number {
-  be deposits holds List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
-  be total holds 0
+  be deposits := List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
+  be total := 0
   for every d in deposits {
     total = total + deposit_net(d)           // three calls cross the wire
   }
-  be usd holds rates::eur_to_usd(total)      // 190 EUR -> 209 USD
-  be _p holds IO.print_num(usd)
+  be usd := rates::eur_to_usd(total)      // 190 EUR -> 209 USD
+  be _p := IO.print_num(usd)
   return usd - 167                           // 42
 }
 ```

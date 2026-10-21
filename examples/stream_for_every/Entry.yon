@@ -3,11 +3,11 @@ place Entry {
 // the drain stops on its own at the structural close of the produce.
 // (Lists keep the `for every x in xs` statement; streams use the method.)
 fun display(v: Number): Number visits Output {
-  be _p holds IO.print_num(v)
+  be _p := IO.print_num(v)
   return 0
 }
 fun main(): Number visits Output {
-  be s holds produce {
+  be s := produce {
     emit 5
     emit 2
   }

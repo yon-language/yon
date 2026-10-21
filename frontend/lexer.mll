@@ -102,7 +102,7 @@
          contextual phrase, not a reserved keyword. *)
       "error", ERROR_KW;
 
-      (* `be x holds e` is the sole binding form (immutable). It maps to the
+      (* `be x := e` is the sole binding form (immutable). It maps to the
          LET token because the core IR still calls such bindings let-bindings;
          mutation goes through `=`, not rebinding. *)
       "be", LET;
@@ -169,9 +169,6 @@
       "do", DO_KW;
       "drop", DROP;
       "while", WHILE_KW;
-      
-      (* Statement keywords *)
-      "holds", HOLDS;
       
       (* Operators (word form) *)
       "and", AND;

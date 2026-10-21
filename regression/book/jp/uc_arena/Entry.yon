@@ -1,15 +1,15 @@
 place Entry {
   fun main(): Number visits Output {
-    be a holds Arena.empty()
+    be a := Arena.empty()
     a = Arena.put(a, 1536, 42)
     a = Arena.put(a, 1280, 7)
-    be _1 holds Output.print(String.from_int(match Arena.get(a, 1536) { Found(v) => v, Absent => 0 }))
-    be _2 holds Output.print(String.from_int(if Arena.occupied(a, 1536) then 1 else 0))
-    be _3 holds Output.print(String.from_int(Arena.orbit(a, 1536)))
-    be _4 holds Output.print(String.from_int(Arena.same_orbit(a, 1536, 1280)))
-    be _5 holds Output.print(String.from_int(Arena.same_orbit(a, 1536, 16778752)))
+    be _1 := Output.print(String.from_int(match Arena.get(a, 1536) { Found(v) => v, Absent => 0 }))
+    be _2 := Output.print(String.from_int(if Arena.occupied(a, 1536) then 1 else 0))
+    be _3 := Output.print(String.from_int(Arena.orbit(a, 1536)))
+    be _4 := Output.print(String.from_int(Arena.same_orbit(a, 1536, 1280)))
+    be _5 := Output.print(String.from_int(Arena.same_orbit(a, 1536, 16778752)))
     a = Arena.fuse(a, 1536, 99, 7)
-    be _6 holds Output.print(String.from_int(Arena.fusion_count(a, 1536)))
+    be _6 := Output.print(String.from_int(Arena.fusion_count(a, 1536)))
     return 0
   }
 }

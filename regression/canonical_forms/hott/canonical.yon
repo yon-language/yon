@@ -1,7 +1,7 @@
 place Entry {
   fun main(): Number {
-    be p holds pair(40, 2)
-    be w holds refl(fst(p))
+    be p := pair(40, 2)
+    be w := refl(fst(p))
     return fst(p) + snd(p)
   }
 }

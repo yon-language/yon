@@ -96,7 +96,7 @@ _LAUNDER = {
 def test_a_path_does_not_prove_every_identity(tmp_path, voice):
     launder, call = _LAUNDER[voice]
     entry = (f"place Entry {{\n  {launder}\n"
-             f"  fun main(): Number {{ be q holds {call}  return (q @ I0) * 10 + (q @ I1) }}\n}}\n")
+             f"  fun main(): Number {{ be q := {call}  return (q @ I0) * 10 + (q @ I1) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     if _clean_rejection(rc, out):
         return
@@ -114,11 +114,58 @@ def test_an_identity_flows_into_path_by_forgetting_its_endpoints(tmp_path):
              "  fun seven(): Id(Number, 7, 7) { return refl(7) }\n"
              "  fun forget(): Path { return seven() }\n"
              "  fun weigh(p: Path): Number { return 7 }\n"
-             "  fun main(): Number { be q holds forget()  return weigh(q) + weigh(seven()) }\n"
+             "  fun main(): Number { be q := forget()  return weigh(q) + weigh(seven()) }\n"
              "}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert rc == 0, out
     assert _run(tmp_path / "out")[0] == 14
+
+
+# --- a name is defined: be x := e ----------------------------------------------
+# `:=` reads "is defined as", the same symbol as a field's `side := Number`:
+# x equals e by definition for its whole scope. `holds` is no word of the
+# language, so it is free as a name.
+
+def _run_entry_names(tmp_path, body):
+    proj = _project(tmp_path, "place Entry {}\n" + body)
+    rc, out = _compile(proj, tmp_path / "out")
+    if rc != 0:
+        return rc, out, None
+    code, _ = _run(tmp_path / "out")
+    return rc, out, code
+
+
+def test_a_name_is_defined_with_colon_eq(tmp_path):
+    rc, out, code = _run_entry_names(tmp_path,
+        "fun main(): Number {\n  be x := 1 + 2\n  return x\n}\n")
+    _verdict(rc == 0 and code == 3, f"be x := 1 + 2: rc={rc} code={code} {out[-200:]}")
+
+
+def test_holds_is_no_binder(tmp_path):
+    old_form = "be x " + "holds 3"     # the binder this probe refuses
+    rc, out, _ = _run_entry_names(tmp_path,
+        "fun main(): Number {\n  " + old_form + "\n  return x\n}\n")
+    _verdict(_clean_rejection(rc, out) and "E1001" in out,
+             f"{old_form} was not a clean syntax error: rc={rc} {out[-200:]}")
+
+
+def test_holds_is_an_ordinary_name(tmp_path):
+    rc, out, code = _run_entry_names(tmp_path,
+        "fun holds(n: Number): Number { return n + 1 }\n"
+        "fun main(): Number { return holds(41) }\n")
+    _verdict(rc == 0 and code == 42, f"fun holds: rc={rc} code={code} {out[-200:]}")
+
+
+def test_a_name_is_defined_once_in_its_scope(tmp_path):
+    (tmp_path / "twice").mkdir()
+    rc, out, _ = _run_entry_names(tmp_path / "twice",
+        "fun main(): Number {\n  be x := 1\n  be x := x + 1\n  return x\n}\n")
+    _verdict(_clean_rejection(rc, out) and "already bound" in out,
+             f"a second definition of x was not refused as such: rc={rc} {out[-200:]}")
+    (tmp_path / "again").mkdir()
+    rc, out, code = _run_entry_names(tmp_path / "again",
+        "fun main(): Number {\n  be x := 1\n  x = x + 1\n  return x\n}\n")
+    _verdict(rc == 0 and code == 2, f"be x := 1; x = x + 1: rc={rc} code={code} {out[-200:]}")
 
 
 # --- control flow --------------------------------------------------------------
@@ -209,7 +256,7 @@ def test_compose_applies_the_first_function_then_the_second(tmp_path):
   fun f(x: Number): Number { return x + 3 }
   fun g(y: Number): Number { return y * 2 }
   fun main(): Number {
-    be h holds compose f with g
+    be h := compose f with g
     return h(1)
   }
 }
@@ -222,7 +269,7 @@ def test_compose_requires_the_output_of_the_first_to_be_the_input_of_the_second(
   fun f(x: Number): Text { return "abc" }
   fun g(y: Number): Number { return y * 2 }
   fun main(): Number {
-    be h holds compose f with g
+    be h := compose f with g
     return h(1)
   }
 }
@@ -234,7 +281,7 @@ def test_compose_of_two_function_parameters_computes_their_composite(tmp_path):
     """A composite of runtime values (two parameters) is a closure over them."""
     entry = """place Entry {
   fun twice_then(f: Number -> Number, g: Number -> Number, x: Number): Number {
-    be h holds compose f with g
+    be h := compose f with g
     return h(x)
   }
   fun inc(x: Number): Number { return x + 3 }
@@ -250,9 +297,9 @@ def test_compose_of_two_function_parameters_computes_their_composite(tmp_path):
 def test_compose_of_two_bound_lambdas_computes_their_composite(tmp_path):
     entry = """place Entry {
   fun main(): Number {
-    be f holds fun(x: Number) => x + 3
-    be g holds fun(y: Number) => y * 2
-    be h holds compose f with g
+    be f := fun(x: Number) => x + 3
+    be g := fun(y: Number) => y * 2
+    be h := compose f with g
     return h(1)
   }
 }
@@ -307,11 +354,11 @@ def test_an_unbound_name_is_rejected_at_a_non_terminal_type(tmp_path):
 def test_every_emit_in_a_stream_has_the_element_type(tmp_path):
     entry = """place Entry {
 fun main(): Number {
-  be s holds produce {
+  be s := produce {
     emit 41
     emit "abc"
   }
-  be total holds s.fold(0, fun(a: Number, v: Number) => a + v)
+  be total := s.fold(0, fun(a: Number, v: Number) => a + v)
   return total
 }
 }
@@ -324,11 +371,11 @@ fun main(): Number {
 def test_every_promote_in_a_spawn_has_the_element_type(tmp_path):
     entry = """place Entry {
 fun main(): Number {
-  be results holds spawn in 2 parallel {
+  be results := spawn in 2 parallel {
     promote spawn_index + 1
     promote "abc"
   }
-  be total holds results.fold(0, fun(a: Number, v: Number) => a + v)
+  be total := results.fold(0, fun(a: Number, v: Number) => a + v)
   return total
 }
 }
@@ -367,11 +414,11 @@ fun main(): Number {
 def test_a_fold_function_body_is_type_checked(tmp_path):
     entry = """place Entry {
 fun main(): Number {
-  be s holds produce {
+  be s := produce {
     emit 41
     emit 1
   }
-  be total holds s.fold(0, fun(a: Number, v: Number) => a + "zz")
+  be total := s.fold(0, fun(a: Number, v: Number) => a + "zz")
   return total
 }
 }
@@ -403,8 +450,8 @@ def test_a_user_function_named_like_a_stream_combinator_is_called(tmp_path):
 def test_a_view_lambda_reads_its_section(tmp_path):
     entry = """place Entry {
   fun main(): Number {
-    be vw holds view(s: P) => s.v + 2 of P
-    be sp holds .-> P { v 40 }
+    be vw := view(s: P) => s.v + 2 of P
+    be sp := .-> P { v 40 }
     return vw(sp)
   }
 }
@@ -417,8 +464,8 @@ def test_a_view_lambda_reads_its_section(tmp_path):
 def test_a_view_lambda_body_is_type_checked(tmp_path):
     entry = """place Entry {
   fun main(): Number {
-    be vw holds view(s: P) => s.v + "x" of P
-    be sp holds .-> P { v 40 }
+    be vw := view(s: P) => s.v + "x" of P
+    be sp := .-> P { v 40 }
     return vw(sp)
   }
 }
@@ -435,8 +482,8 @@ def test_a_move_converts_a_field_through_its_handler(tmp_path):
   }
   fun double_it(x: Number): Number { return x * 2 }
   fun main(): Number {
-    be p holds .-> P { v 21 }
-    be q holds apply_move(PtoQ, p)
+    be p := .-> P { v 21 }
+    be q := apply_move(PtoQ, p)
     return q.v
   }
 }
@@ -453,8 +500,8 @@ def test_a_move_naming_an_unknown_handler_is_rejected(tmp_path):
   }
   fun double_it(x: Number): Number { return x * 2 }
   fun main(): Number {
-    be p holds .-> P { v 21 }
-    be q holds apply_move(PtoQ, p)
+    be p := .-> P { v 21 }
+    be q := apply_move(PtoQ, p)
     return q.v
   }
 }
@@ -478,7 +525,7 @@ fun main(): Number { return b(2) }
 def test_a_local_lambda_does_not_retype_a_parameter_elsewhere(tmp_path):
     entry = """place Entry {
 fun a(): Number {
-  be g holds fun(x: Number) => x + 1
+  be g := fun(x: Number) => x + 1
   return g(1)
 }
 fun b(g: Number): Number { return g + 40 }
@@ -522,11 +569,11 @@ def _world_env_lowering(tmp_path):
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
                    reason="a local binding shadows a top-level function of the same name")
 def test_a_local_binding_shadows_a_function_of_the_same_name(tmp_path):
-    """`be total holds 42` inside main makes `total` mean 42 there, even when a
+    """`be total := 42` inside main makes `total` mean 42 there, even when a
     top-level function is called `total`."""
     entry = ("place Entry {\n"
              "fun total(): Number { return 1 }\n"
-             "fun main(): Number {\n  be total holds 41 + 1\n  return total\n}\n}\n")
+             "fun main(): Number {\n  be total := 41 + 1\n  return total\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     _verdict(rc == 42, f"the local `total` should be 42, main returned {rc}")
 
@@ -534,7 +581,7 @@ def test_a_local_binding_shadows_a_function_of_the_same_name(tmp_path):
 def test_a_local_binding_with_a_fresh_name_is_kept(tmp_path):
     entry = ("place Entry {\n"
              "fun total(): Number { return 1 }\n"
-             "fun main(): Number {\n  be subtotal holds 41 + 1\n  return subtotal + total() - 1\n}\n}\n")
+             "fun main(): Number {\n  be subtotal := 41 + 1\n  return subtotal + total() - 1\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     assert rc == 42
 
@@ -545,8 +592,8 @@ _TWICE_RANDOM_lowering = ("place Entry {{\n"
                  "fun ident(y: Number): Number {{ return y }}\n"
                  "{twice}\n"
                  "fun main(): Number {{\n"
-                 "  be _s holds Random.seed(42)\n"
-                 "  be d holds {call}\n"
+                 "  be _s := Random.seed(42)\n"
+                 "  be d := {call}\n"
                  "  return if d == 0 then 7 else 9\n}}\n}}\n")
 
 
@@ -570,7 +617,7 @@ def test_a_higher_order_call_runs_an_argument_effect_once(tmp_path):
     entry = ("place Entry {\n"
              "fun ident(y: Number): Number { return y }\n"
              "fun twice(f: Number -> Number, x: Number): Number { return f(x) + f(x) }\n"
-             "fun main(): Number {\n  be d holds twice(ident, IO.print_num(5))\n  return 3\n}\n}\n")
+             "fun main(): Number {\n  be d := twice(ident, IO.print_num(5))\n  return 3\n}\n}\n")
     rc, out = _build_run_lowering(tmp_path, entry)
     assert rc == 3, out
     _verdict(out.split() == ["5"], f"the argument printed {out.split()!r}, expected one '5'")
@@ -582,7 +629,7 @@ def test_a_higher_order_call_evaluates_its_arguments_left_to_right(tmp_path):
     entry = ("place Entry {\n"
              "fun ident(y: Number): Number { return y }\n"
              "fun pick(f: Number -> Number, a: Number, b: Number): Number { return f(b) }\n"
-             "fun main(): Number {\n  be d holds pick(ident, IO.print_num(1), IO.print_num(2))\n  return 3\n}\n}\n")
+             "fun main(): Number {\n  be d := pick(ident, IO.print_num(1), IO.print_num(2))\n  return 3\n}\n}\n")
     rc, out = _build_run_lowering(tmp_path, entry)
     assert rc == 3, out
     assert out.split() == ["1", "2"], f"the arguments printed {out.split()!r}"
@@ -602,7 +649,7 @@ def test_sum_take_of_an_iterate_sums_the_prefix(tmp_path):
 
 def test_sum_take_of_a_named_stream_sums_the_prefix(tmp_path):
     entry = ("place Entry {\n" + _INC_lowering +
-             "fun f(): Number {\n  be s holds Stream.iterate(inc, 1)\n"
+             "fun f(): Number {\n  be s := Stream.iterate(inc, 1)\n"
              "  return Stream.sum_take(s, 4)\n}\n"
              "fun main(): Number { return f() }\n}\n")
     proj = _project(tmp_path, entry)
@@ -616,7 +663,7 @@ def test_sum_take_of_a_named_stream_sums_the_prefix(tmp_path):
 
 def test_a_named_stream_used_twice_is_read_twice(tmp_path):
     entry = ("place Entry {\n" + _INC_lowering +
-             "fun f(): Number {\n  be s holds Stream.iterate(inc, 1)\n"
+             "fun f(): Number {\n  be s := Stream.iterate(inc, 1)\n"
              "  return Stream.sum_take(s, 4) + Stream.sum_take(s, 2)\n}\n"
              "fun main(): Number { return f() }\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
@@ -625,8 +672,8 @@ def test_a_named_stream_used_twice_is_read_twice(tmp_path):
 
 def test_the_seed_of_a_named_stream_is_evaluated_once(tmp_path):
     entry = ("place Entry {\n" + _INC_lowering +
-             "fun main(): Number {\n  be s holds Stream.iterate(inc, IO.print_num(7))\n"
-             "  be a holds Stream.sum_take(s, 1)\n  be b holds Stream.sum_take(s, 1)\n"
+             "fun main(): Number {\n  be s := Stream.iterate(inc, IO.print_num(7))\n"
+             "  be a := Stream.sum_take(s, 1)\n  be b := Stream.sum_take(s, 1)\n"
              "  return 3\n}\n}\n")
     rc, out = _build_run_lowering(tmp_path, entry)
     assert rc == 3 and out.split() == ["7"], (rc, out)
@@ -677,7 +724,7 @@ _COUNTER_lowering = dict(_TOPOS_lowering, **{"w/Counter.yon":
 
 
 def test_an_operation_with_a_handler_runs_the_handler(tmp_path):
-    entry = ("place Entry {\n  reduction Bump of Counter {\n    be seed holds 0\n"
+    entry = ("place Entry {\n  reduction Bump of Counter {\n    be seed := 0\n"
              "    on tick(n: Number) {\n      return n + 1\n    }\n  }\n"
              "  fun main(): Number visits Counter { return Counter.tick(5) }\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry, _WORLD_lowering, _COUNTER_lowering)
@@ -699,7 +746,7 @@ def test_an_operation_without_a_handler_is_refused(tmp_path):
 
 def test_an_operation_called_in_a_condition_without_a_handler_is_refused(tmp_path):
     entry = ("place Entry {\n"
-             "  fun main(): Number visits Counter {\n    be r holds 0\n"
+             "  fun main(): Number visits Counter {\n    be r := 0\n"
              "    when Counter.tick(5) > 0 { r = 1 }\n    return r\n  }\n}\n")
     proj = _project(tmp_path, entry, _WORLD_lowering, _COUNTER_lowering)
     rc, out = _compile(proj, tmp_path / "out")
@@ -715,8 +762,8 @@ def test_integer_division_by_zero_is_not_an_ordinary_number(tmp_path):
              "fun d(a: Int64, b: Int64): Int64 { return a / b }\n"
              "fun m(a: Int64, b: Int64): Int64 { return a % b }\n"
              "fun main(): Number {\n"
-             "  be q holds d(7, 0)\n"
-             "  be r holds m(7, 0)\n"
+             "  be q := d(7, 0)\n"
+             "  be r := m(7, 0)\n"
              "  return if q + r == 0 then 5 else 6\n}\n}\n")
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "out")
@@ -739,15 +786,15 @@ def test_integer_division_by_a_nonzero_truncates(tmp_path):
 # --- mutable cells are local to their function ------------------------------------
 
 _P_lowering = dict(_TOPOS_lowering, **{"w/P.yon": "place P {\n  x Number\n}\n"})
-_H_lowering = ("fun h(): Number {\n  be c holds .-> P { x 1 }\n  c = .-> P { x 2 }\n  return c.x\n}\n")
+_H_lowering = ("fun h(): Number {\n  be c := .-> P { x 1 }\n  c = .-> P { x 2 }\n  return c.x\n}\n")
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
                    reason="a mutable number cell in main reads back the number stored in it")
 def test_a_cell_reads_its_own_type_beside_a_namesake_place_cell(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
-             "fun main(): Number {\n  be k holds IO.print_num(h())\n"
-             "  be c holds 0\n  c = 7\n  return c\n}\n}\n")
+             "fun main(): Number {\n  be k := IO.print_num(h())\n"
+             "  be c := 0\n  c = 7\n  return c\n}\n}\n")
     rc, out = _build_run_lowering(tmp_path, entry, _WORLD_lowering, _P_lowering)
     assert out.split() == ["2"], out
     _verdict(rc == 7, f"main's cell c holds 7, main returned {rc}")
@@ -757,8 +804,8 @@ def test_a_cell_reads_its_own_type_beside_a_namesake_place_cell(tmp_path):
                    reason="a mutable number cell is a number in arithmetic, whatever another function names its cells")
 def test_a_number_cell_beside_a_namesake_place_cell_compiles(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
-             "fun main(): Number {\n  be k holds h()\n"
-             "  be c holds 0\n  c = 7\n  return c + k * 10\n}\n}\n")
+             "fun main(): Number {\n  be k := h()\n"
+             "  be c := 0\n  c = 7\n  return c + k * 10\n}\n}\n")
     proj = _project(tmp_path, entry, _WORLD_lowering, _P_lowering)
     rc, out = _compile(proj, tmp_path / "out")
     _verdict(rc == 0, "a well-typed program is refused downstream:\n" + out[-600:])
@@ -768,8 +815,8 @@ def test_a_number_cell_beside_a_namesake_place_cell_compiles(tmp_path):
 
 def test_cells_with_distinct_names_keep_their_types(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
-             "fun main(): Number {\n  be k holds h()\n"
-             "  be d holds 0\n  d = 7\n  return d + k * 10\n}\n}\n")
+             "fun main(): Number {\n  be k := h()\n"
+             "  be d := 0\n  d = 7\n  return d + k * 10\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry, _WORLD_lowering, _P_lowering)
     assert rc == 27
 
@@ -780,8 +827,8 @@ _TEMPS_lowering = dict(_TOPOS_lowering, **{"w/Celsius.yon": "place Celsius { deg
                          "w/Fahrenheit.yon": "place Fahrenheit { degrees Number }\n"})
 _MOVE_lowering = ("place Entry {{\n{local}"
          "  move M from Celsius to Fahrenheit {{\n    degrees maps to degrees by {by}\n  }}\n"
-         "  fun main(): Number {{\n    be c holds .-> Celsius {{ degrees 100 }}\n"
-         "    be f holds apply_move(M, c)\n    return f.degrees + {bias}\n  }}\n}}\n")
+         "  fun main(): Number {{\n    be c := .-> Celsius {{ degrees 100 }}\n"
+         "    be f := apply_move(M, c)\n    return f.degrees + {bias}\n  }}\n}}\n")
 
 
 def test_a_move_applies_a_local_handler(tmp_path):
@@ -829,7 +876,7 @@ def _cross_space_call_lowering(tmp_path, offset):
     (tmp_path / "client.yon").write_text(
         "import shifter::shift from Shifter\n"
         "place Entry {\n  fun main(): Number {\n"
-        "    be _p holds IO.print_num(shift(0))\n    return 3\n  }\n}\n")
+        "    be _p := IO.print_num(shift(0))\n    return 3\n  }\n}\n")
     for src, out in (("shifter.yon", "Shifter_srv"), ("client.yon", "client")):
         rc, log = _compile(tmp_path / src, tmp_path / out, cwd=tmp_path)
         assert rc == 0, log
@@ -859,7 +906,7 @@ def test_any_number_is_a_legal_cross_space_result(tmp_path):
 
 _SHM_TOML_lowering = ('[package]\nname = "{name}"\n\n[runtime]\nbackend = "shm"\n\n'
              '[world.W]\nobjects = ["X"]\nspaces  = [{spaces}]\n')
-_SAMPLES_lowering = ("  fun samples(): Wire<Reading> {\n    be s holds produce {\n"
+_SAMPLES_lowering = ("  fun samples(): Wire<Reading> {\n    be s := produce {\n"
             "      emit .-> Reading { temp 10 humidity 50 }\n"
             "      emit .-> Reading { temp 11 humidity 51 }\n"
             "      emit .-> Reading { temp 15 humidity 52 }\n    }\n    return s\n  }\n")
@@ -874,15 +921,15 @@ def _wire_lowering(tmp_path, consumer_reading):
         svc / "w/Reading.yon": "place Reading {\n  temp Number\n  humidity Number\n\n" + _SAMPLES_lowering + "}\n",
         sub / "yon.toml": _SHM_TOML_lowering.format(name="meteo_sub", spaces='"w", "Meteo"'),
         sub / "Entry.yon": ("import meteo::samples from Meteo\n\nplace Entry {\n"
-                            "  fun main(): Number {\n    be w holds wire to space Meteo\n"
-                            "    be sub holds w.awaits(samples)\n    be s holds sub.stream\n"
-                            "    be total holds s.fold(0, fun(a: Number, r: Reading) => a + r.temp)\n"
+                            "  fun main(): Number {\n    be w := wire to space Meteo\n"
+                            "    be sub := w.awaits(samples)\n    be s := sub.stream\n"
+                            "    be total := s.fold(0, fun(a: Number, r: Reading) => a + r.temp)\n"
                             "    return total\n  }\n}\n"),
         sub / "w/Topos.yon": "topos WTopos where {\n}\n",
         sub / "w/Reading.yon": consumer_reading,
         sub / "yon_modules/meteo/meteo.yon": (
             "fun samples(): Wire<Reading> {\n"
-            "  be s holds produce { emit .-> Reading { temp 10 humidity 50 } }\n  return s\n}\n"),
+            "  be s := produce { emit .-> Reading { temp 10 humidity 50 } }\n  return s\n}\n"),
     }
     for p, text in files.items():
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -953,13 +1000,13 @@ def _lit_desugar(x):
 
 def _floor_program_desugar(form):
     calls = "\n".join(
-        f"  be _c{i} holds check(f({_lit_desugar(x)}), {_lit_desugar(_libm_desugar.floor(x))})"
+        f"  be _c{i} := check(f({_lit_desugar(x)}), {_lit_desugar(_libm_desugar.floor(x))})"
         for i, x in enumerate(FLOOR_GRID_desugar))
     return ("place Entry {}\n"
             f"fun f(x: Number): Number {{ return {form} }}\n"
             "fun check(got: Number, want: Number): Number {\n"
-            "  be _p holds IO.print_num(if got == want and 1 / got == 1 / want then 1 else 0)\n"
-            "  be _q holds IO.print_num(got)\n"
+            "  be _p := IO.print_num(if got == want and 1 / got == 1 / want then 1 else 0)\n"
+            "  be _q := IO.print_num(got)\n"
             "  return 0\n}\n"
             "fun main(): Number {\n" + calls + "\n  return 0\n}\n")
 
@@ -979,8 +1026,8 @@ def test_the_sign_of_negative_zero_survives_numbers_functions(tmp_path):
     src = ("place Entry {}\n"
            "fun neg(x: Number): Number { return if 1 / x < 0 then 1 else 0 }\n"
            "fun main(): Number {\n"
-           "  be z holds 0 * (0 - 1)\n"
-           "  be r holds match Number.sqrt(z) { Number as v => v, DomainError as d => 1 }\n"
+           "  be z := 0 * (0 - 1)\n"
+           "  be r := match Number.sqrt(z) { Number as v => v, DomainError as d => 1 }\n"
            "  return neg(r) * 1000 + neg(Number.sin(z)) * 100 + neg(Number.floor(z)) * 10\n"
            "       + neg(floor(z))\n"
            "}\n")
@@ -1014,8 +1061,8 @@ _SQUARE_desugar = ("place Square {\n  side := Number\n"
            "  fun area(s: Square): Number { return s.side * s.side }\n}\n")
 _ENTRY_RESOLVED_desugar = ("place Entry {}\n"
                    "fun main(): Number {\n"
-                   "  be sq holds .-> Square { side 5 }\n"
-                   "  be ci holds .-> Circle { r 2 }\n"
+                   "  be sq := .-> Square { side 5 }\n"
+                   "  be ci := .-> Circle { r 2 }\n"
                    "  return sq.area() + Circle.k(sq)\n"
                    "}\n")
 
@@ -1057,7 +1104,7 @@ def test_a_let_bound_lambda_wins_over_a_top_level_homonym_in_a_match_arm(tmp_pat
     src = ("place Entry {}\n"
            "fun sq(x: Number): Number { return 1000 }\n"
            "fun main(): Number {\n"
-           "  be sq holds fun(x: Number) => x * x\n"
+           "  be sq := fun(x: Number) => x * x\n"
            "  return match hit(Box, 3) { Box(v) => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
@@ -1069,7 +1116,7 @@ def test_a_let_bound_lambda_wins_over_a_top_level_homonym_in_a_match_arm(tmp_pat
 def test_a_let_bound_lambda_is_callable_from_a_match_arm(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be sq holds fun(x: Number) => x * x\n"
+           "  be sq := fun(x: Number) => x * x\n"
            "  return match hit(Box, 3) { Box(v) => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
@@ -1081,9 +1128,9 @@ def test_a_let_bound_lambda_is_callable_from_a_match_arm(tmp_path):
 def test_an_inner_binding_shadows_a_let_bound_lambda(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be f holds fun(x: Number) => x + 1\n"
+           "  be f := fun(x: Number) => x + 1\n"
            "  when true {\n"
-           "    be f holds 5\n"
+           "    be f := 5\n"
            "    return f\n"
            "  } otherwise {\n"
            "    return 0\n"
@@ -1096,7 +1143,7 @@ def test_an_inner_binding_shadows_a_let_bound_lambda(tmp_path):
 def test_a_let_bound_lambda_is_callable_directly(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be sq holds fun(x: Number) => x * x\n"
+           "  be sq := fun(x: Number) => x * x\n"
            "  return sq(3)\n"
            "}\n")
     assert _value_desugar(tmp_path, src) == 9
@@ -1160,7 +1207,7 @@ def test_a_trailing_wildcard_in_a_boolean_match(tmp_path):
 def test_forces_does_not_run_its_body_under_a_false_condition(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be acc holds 0\n"
+           "  be acc := 0\n"
            "  forces Stage 1 == 2 {\n"
            "    acc = acc + 5\n"
            "  }\n"
@@ -1175,7 +1222,7 @@ def test_forces_does_not_run_its_body_under_a_false_condition(tmp_path):
 def test_forces_rejects_an_ill_typed_condition(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be acc holds 0\n"
+           "  be acc := 0\n"
            "  forces Stage nowhere_defined + \"x\" {\n"
            "    acc = acc + 5\n"
            "  }\n"
@@ -1189,7 +1236,7 @@ def test_forces_rejects_an_ill_typed_condition(tmp_path):
 def test_when_does_not_run_its_body_under_a_false_condition(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be acc holds 0\n"
+           "  be acc := 0\n"
            "  when 1 == 2 {\n"
            "    acc = acc + 5\n"
            "  }\n"
@@ -1249,7 +1296,7 @@ def _reduction_desugar(body):
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
                    reason="a loop in a reduction handler body compiles like a loop in a function body")
 def test_a_reduction_handler_body_may_loop(tmp_path):
-    body = ("      be acc holds 0\n"
+    body = ("      be acc := 0\n"
             "      repeat at most 3 times { acc = acc + n }\n"
             "      return acc\n")
     v = _value_desugar(tmp_path, _reduction_desugar(body), _W_TOML_desugar, _COUNTER_desugar)
@@ -1259,7 +1306,7 @@ def test_a_reduction_handler_body_may_loop(tmp_path):
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
                    reason="a reassignment in a reduction handler body compiles like one in a function body")
 def test_a_reduction_handler_body_may_reassign(tmp_path):
-    body = ("      be acc holds 0\n"
+    body = ("      be acc := 0\n"
             "      acc = acc + n\n"
             "      return acc\n")
     v = _value_desugar(tmp_path, _reduction_desugar(body), _W_TOML_desugar, _COUNTER_desugar)
@@ -1275,7 +1322,7 @@ def test_a_reduction_handler_body_with_a_plain_return(tmp_path):
 def _stream_count_desugar(middle):
     return ("place Entry {\n"
             "fun main(): Number {\n"
-            "  be s holds produce {\n"
+            "  be s := produce {\n"
             "    emit 3\n"
             f"    emit {middle}\n"
             "    emit 1\n"
@@ -1302,8 +1349,8 @@ def test_a_stream_may_carry_4294967294(tmp_path):
 def test_a_named_path_is_in_scope_in_a_reassignment(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be p holds clear 7\n"
-           "  be acc holds 0\n"
+           "  be p := clear 7\n"
+           "  be acc := 0\n"
            "  acc = p @ I0\n"
            "  return acc\n"
            "}\n")
@@ -1318,8 +1365,8 @@ def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
            "place Entry {}\n"
            "fun code(b: Box): Number { return match b { Full(n) => n, Empty => 0 } }\n"
            "fun main(): Number {\n"
-           "  be v holds hit(Full, 5)\n"
-           "  be acc holds 0\n"
+           "  be v := hit(Full, 5)\n"
+           "  be acc := 0\n"
            "  acc = code(v)\n"
            "  return acc\n"
            "}\n")
@@ -1332,9 +1379,9 @@ def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
 def test_string_concat_method_form(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be a holds \"ab\"\n"
-           "  be b holds \"cde\"\n"
-           "  be s holds a.concat(b)\n"
+           "  be a := \"ab\"\n"
+           "  be b := \"cde\"\n"
+           "  be s := a.concat(b)\n"
            "  return String.length(s)\n"
            "}\n")
     v = _value_desugar(tmp_path, src)
@@ -1344,9 +1391,9 @@ def test_string_concat_method_form(tmp_path):
 def test_string_concat_qualified_form(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be a holds \"ab\"\n"
-           "  be b holds \"cde\"\n"
-           "  be s holds String.concat(a, b)\n"
+           "  be a := \"ab\"\n"
+           "  be b := \"cde\"\n"
+           "  be s := String.concat(a, b)\n"
            "  return String.length(s)\n"
            "}\n")
     assert _value_desugar(tmp_path, src) == 5
@@ -1355,8 +1402,8 @@ def test_string_concat_qualified_form(tmp_path):
 def test_a_named_path_is_in_scope_in_a_binding(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
-           "  be p holds clear 7\n"
-           "  be acc holds p @ I0\n"
+           "  be p := clear 7\n"
+           "  be acc := p @ I0\n"
            "  return acc\n"
            "}\n")
     assert _value_desugar(tmp_path, src) == 7
@@ -1412,8 +1459,8 @@ _BOOL_BIT_kernel = (
 def test_transport_along_a_named_univalence_path_lands_in_the_target(tmp_path):
     entry = _BOOL_BIT_kernel + (
         "fun main(): Number {\n"
-        "  be u holds ua(equiv(b2bit, bit2b, eta, eps))\n"
-        "  be y holds transport(u, tt)\n"
+        "  be u := ua(equiv(b2bit, bit2b, eta, eps))\n"
+        "  be y := transport(u, tt)\n"
         "  return match y { one => 1, zero => 0 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
     _verdict(rc == 0, f"a match on Bit constructors of the transported value was refused:\n{out[-300:]}")
@@ -1423,8 +1470,8 @@ def test_transport_along_a_named_univalence_path_lands_in_the_target(tmp_path):
 def test_transport_along_a_named_univalence_path_leaves_the_source(tmp_path):
     entry = _BOOL_BIT_kernel + (
         "fun main(): Number {\n"
-        "  be u holds ua(equiv(b2bit, bit2b, eta, eps))\n"
-        "  be y holds transport(u, tt)\n"
+        "  be u := ua(equiv(b2bit, bit2b, eta, eps))\n"
+        "  be y := transport(u, tt)\n"
         "  return match y { tt => 1, ff => 2 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
     if _clean_rejection(rc, out):
@@ -1437,7 +1484,7 @@ def test_transport_along_a_named_univalence_path_leaves_the_source(tmp_path):
 def test_transport_along_an_inline_univalence_path_lands_in_the_target(tmp_path):
     entry = _BOOL_BIT_kernel + (
         "fun main(): Number {\n"
-        "  be y holds transport(ua(equiv(b2bit, bit2b, eta, eps)), tt)\n"
+        "  be y := transport(ua(equiv(b2bit, bit2b, eta, eps)), tt)\n"
         "  return match y { one => 1, zero => 0 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
     assert rc == 0, out
@@ -1534,7 +1581,7 @@ def test_naturality_is_not_proven_for_a_square_that_does_not_commute(tmp_path):
 
 _IS_AND_kernel = ("place Entry {{\n"
            "  fun probe(y: Number, n: Number): Number {{\n"
-           "    be r holds 0\n"
+           "    be r := 0\n"
            "    when {cond} {{ r = 1 }}\n"
            "    return r\n  }}\n"
            "  fun main(): Number {{ return probe(5, 3) * 10 + probe(5, 7) }}\n}}\n")
@@ -1562,7 +1609,7 @@ def test_is_binds_tighter_than_and_on_the_left(tmp_path):
 @pytest.mark.parametrize("value, arm", [("present", 1), ("absent", 2), ("unknown", 3)])
 def test_unknown_does_not_become_false(tmp_path, value, arm):
     entry = ("place Entry {}\nfun main(): Number {\n"
-             f"  be p holds {value}\n"
+             f"  be p := {value}\n"
              "  return match decide(p) { Present => 1, Absent => 2, Unknown => 3 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert rc == 0, out
@@ -1570,7 +1617,7 @@ def test_unknown_does_not_become_false(tmp_path, value, arm):
 
 
 def test_a_decision_is_left_only_by_answering_unknown(tmp_path):
-    entry = ("place Entry {}\nfun main(): Number {\n  be p holds unknown\n"
+    entry = ("place Entry {}\nfun main(): Number {\n  be p := unknown\n"
              "  return match decide(p) { Present => 1, Absent => 2 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out) and "Unknown" in out, out
@@ -1578,7 +1625,7 @@ def test_a_decision_is_left_only_by_answering_unknown(tmp_path):
 
 @pytest.mark.parametrize("form", ["to_bool(p)", "to_bool_dec(decide(p))", "p"])
 def test_there_is_no_arrow_from_proposition_to_boolean(tmp_path, form):
-    entry = ("place Entry {}\nfun main(): Number {\n  be p holds unknown\n"
+    entry = ("place Entry {}\nfun main(): Number {\n  be p := unknown\n"
              f"  return if {form} then 1 else 2\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out), out
@@ -1609,8 +1656,8 @@ def test_a_proposition_is_not_a_boolean(tmp_path):
 
 _SUSP_kernel = ("place Entry {{\n"
          "fun main(): Number {{\n"
-         "  be n holds hit(north)\n"
-         "  be m holds hit(merid, 0)\n"
+         "  be n := hit(north)\n"
+         "  be m := hit(merid, 0)\n"
          "{body}"
          "  return match e {{ north => 5, south => 7, merid(a) => plam i => 9 }}\n"
          "}}\n}}\n")
@@ -1628,15 +1675,15 @@ def _ends_at_kernel(tmp_path, body, expected, what):
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
                    reason="a composition on an active face is the side at its far end: here merid(0) at I1, the south pole")
 def test_a_composition_on_an_active_face_is_the_side_at_its_end(tmp_path):
-    body = ("  be p holds plam i => hcomp Suspension [ i = I0 => plam j => m @ j ] n\n"
-            "  be e holds p @ I0\n")
+    body = ("  be p := plam i => hcomp Suspension [ i = I0 => plam j => m @ j ] n\n"
+            "  be e := p @ I0\n")
     _ends_at_kernel(tmp_path, body, 7, "hcomp at i = I0")
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
                    reason="a meridian is a path from the north pole to the south pole: merid(0) at I1 is south")
 def test_a_meridian_ends_at_the_south_pole(tmp_path):
-    _ends_at_kernel(tmp_path, "  be e holds m @ I1\n", 7, "merid(0) @ I1")
+    _ends_at_kernel(tmp_path, "  be e := m @ I1\n", 7, "merid(0) @ I1")
 
 
 # --- type erasure respects local binders ---------------------------------------
@@ -1671,7 +1718,7 @@ def test_an_inferred_section_is_not_a_number(tmp_path):
     entry = ("place Box { v Number }\n"
              "place Entry {\n"
              "  fun mk() { return .-> Box { v 1 } }\n"
-             "  fun main(): Number { be n holds mk() + 1  return n }\n}\n")
+             "  fun main(): Number { be n := mk() + 1  return n }\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _BOX_kernel)
     _verdict(_clean_rejection(rc, out),
              f"the checker accepted a section plus a number (rc={rc}, "
@@ -1728,7 +1775,7 @@ def test_drop_before_a_mutually_recursive_call_into_the_space_is_refused(tmp_pat
                    reason="calling a closure that calls into a Space is a use of that Space")
 def test_drop_before_calling_a_closure_into_the_space_is_refused(tmp_path):
     entry = ("import svc::d_op from D\nplace Entry { }\n"
-             "fun main(): Number {\n  be g holds fun(y: Number) => d_op(y)\n"
+             "fun main(): Number {\n  be g := fun(y: Number) => d_op(y)\n"
              "  drop D\n  return g(5)\n}\n")
     refused, rc, out = _drop_refused_frontend(tmp_path, entry)
     _verdict(refused, f"drop D accepted before g(5), whose body calls d_op in D: rc={rc}")
@@ -1746,7 +1793,7 @@ def test_drop_before_a_homed_call_into_the_space_is_refused(tmp_path):
 
 
 def test_drop_before_reading_a_handle_into_the_space_is_refused(tmp_path):
-    entry = ("place Entry { }\nfun main(): Number {\n  be p holds .-> DP { n 7 }\n"
+    entry = ("place Entry { }\nfun main(): Number {\n  be p := .-> DP { n 7 }\n"
              "  drop D\n  return p.n\n}\n")
     refused, rc, out = _drop_refused_frontend(tmp_path, entry)
     assert refused, out
@@ -1757,8 +1804,8 @@ def test_drop_before_reading_a_handle_into_the_space_is_refused(tmp_path):
 def test_drop_in_a_callee_while_the_caller_still_reads_the_space_is_refused(tmp_path):
     entry = ("place Entry { }\n"
              "fun cleanup(): Number {\n  drop D\n  return 0\n}\n"
-             "fun main(): Number {\n  be p holds .-> DP { n 7 }\n"
-             "  be z holds cleanup()\n  return p.n\n}\n")
+             "fun main(): Number {\n  be p := .-> DP { n 7 }\n"
+             "  be z := cleanup()\n  return p.n\n}\n")
     refused, rc, out = _drop_refused_frontend(tmp_path, entry)
     _verdict(refused, f"drop D inside cleanup() accepted, main reads p.n afterwards: rc={rc}")
 
@@ -1768,7 +1815,7 @@ def test_drop_in_a_callee_while_the_caller_still_reads_the_space_is_refused(tmp_
 def test_drop_before_reading_a_place_parameter_is_refused(tmp_path):
     entry = ("place Entry { }\n"
              "fun peek(a: DP): Number {\n  drop D\n  return a.n\n}\n"
-             "fun main(): Number {\n  be p holds .-> DP { n 7 }\n  return peek(p)\n}\n")
+             "fun main(): Number {\n  be p := .-> DP { n 7 }\n  return peek(p)\n}\n")
     refused, rc, out = _drop_refused_frontend(tmp_path, entry)
     _verdict(refused, f"drop D accepted before a.n with a: DP: rc={rc}")
 
@@ -1777,7 +1824,7 @@ def test_drop_before_reading_a_place_parameter_is_refused(tmp_path):
                    reason="a drop inside a spawn block obeys the same reachability check as any other drop")
 def test_drop_inside_a_spawn_block_is_checked(tmp_path):
     entry = ("import svc::d_op from D\nplace Entry { }\n"
-             "fun main(): Number {\n  be results holds spawn in 1 parallel {\n"
+             "fun main(): Number {\n  be results := spawn in 1 parallel {\n"
              "    drop D\n    promote d_op(1)\n  }\n"
              "  return results.fold(0, fun(a: Number, v: Number) => a + v)\n}\n")
     refused, rc, out = _drop_refused_frontend(tmp_path, entry)
@@ -1802,7 +1849,7 @@ def _boundary_project_frontend(tmp, a_body):
         "fun b_op(x: Number): Number { return x + 1 }\nplace BxP { }\n")
     (root / "C" / "CP.yon").write_text(
         "import svc::b_op from Bx\nplace CP { }\n"
-        "fun c_op(x: Number): Number { be r holds b_op(x)  return r }\n")
+        "fun c_op(x: Number): Number { be r := b_op(x)  return r }\n")
     (root / "Entry.yon").write_text("place Entry { }\nfun main(): Number { return 0 }\n")
     return root
 
@@ -1810,7 +1857,7 @@ def _boundary_project_frontend(tmp, a_body):
 def test_an_import_across_worlds_is_refused(tmp_path):
     root = _boundary_project_frontend(tmp_path,
         "import svc::b_op from Bx\nplace AP { }\n"
-        "fun a_op(x: Number): Number { be r holds b_op(x)  return r }\n")
+        "fun a_op(x: Number): Number { be r := b_op(x)  return r }\n")
     rc, out = _compile(root, tmp_path / "out")
     assert rc != 0 and "E3010" in out, out
 
@@ -1820,7 +1867,7 @@ def test_an_import_across_worlds_is_refused(tmp_path):
 def test_a_wire_across_worlds_is_refused(tmp_path):
     root = _boundary_project_frontend(tmp_path,
         "place AP { }\nfun a_op(x: Number): Number {\n"
-        "  be w holds wire to space Bx\n  return x\n}\n")
+        "  be w := wire to space Bx\n  return x\n}\n")
     rc, out = _compile(root, tmp_path / "out")
     _verdict(rc != 0 and "E3010" in out,
              f"wire from world W1 to Space Bx of world W2 accepted: rc={rc}")
@@ -1837,9 +1884,9 @@ fun main(): Number {
   return fa() + Other.fb()
 }
 fun fa(): Number {
-  be w holds wire to space Alpha
-  be sub holds w.awaits(pa)
-  be s holds sub.stream
+  be w := wire to space Alpha
+  be sub := w.awaits(pa)
+  be s := sub.stream
   return s.fold(0, fun(a: Number, r: Number) => a + r)
 }
 }
@@ -1851,9 +1898,9 @@ fun d2(): Number { return 0 }
 fun d3(): Number { return 0 }
 fun d4(): Number { return 0 }
 fun fb(): Number {
-  be w holds wire to space Beta
-  be sub holds w.awaits(pb)
-  be s holds sub.stream
+  be w := wire to space Beta
+  be sub := w.awaits(pb)
+  be s := sub.stream
   return s.fold(0, fun(a: Number, r: Number) => a + r)
 }
 }
@@ -1872,9 +1919,9 @@ def test_two_subscriptions_at_the_same_position_in_two_files_keep_their_spaces(t
     (root / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
     (root / "w" / "R.yon").write_text("place R { v Number }\n")
     (root / "yon_modules" / "pa" / "pa.yon").write_text(
-        "fun pa(): Wire<Number> {\n  be s holds produce { emit 1 }\n  return s\n}\n")
+        "fun pa(): Wire<Number> {\n  be s := produce { emit 1 }\n  return s\n}\n")
     (root / "yon_modules" / "pb" / "pb.yon").write_text(
-        "fun pb(): Wire<Number> {\n  be s holds produce { emit 2 }\n  return s\n}\n")
+        "fun pb(): Wire<Number> {\n  be s := produce { emit 2 }\n  return s\n}\n")
     (root / "Entry.yon").write_text(_AW_ENTRY_frontend)
     (root / "Other.yon").write_text(_AW_OTHER_frontend)
     r = subprocess.run([str(EMIT_frontend), str(root)], capture_output=True, text=True, timeout=120)
@@ -1952,7 +1999,7 @@ def test_a_sibling_call_resolves_to_the_sibling(tmp_path):
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
                    reason="a sibling call inside a when block resolves to the sibling, not to a global homonym")
 def test_a_sibling_call_inside_when_resolves_to_the_sibling(tmp_path):
-    body = "    be r holds 0\n    when 1 == 1 { r = helper() }\n    return r\n"
+    body = "    be r := 0\n    when 1 == 1 { r = helper() }\n    return r\n"
     rc, out = _compile(_homes_project_frontend(tmp_path, body), tmp_path / "out")
     assert rc == 0, out
     code, _ = _run(tmp_path / "out")
@@ -2107,7 +2154,7 @@ fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 fun go(p: Id(Type, Int64, Int64), v: Int64): Int64 { return transport(p, v) }
 fun main(): Number {
-  be y holds go(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)
+  be y := go(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)
   return if y == 11 then 11 else 0
 }
 }
@@ -2119,7 +2166,7 @@ def test_transport_along_an_inline_univalence_path_applies_the_equivalence(tmp_p
         "place Entry {\nfun succ(n: Int64): Int64 { return n + 1 }\n"
         "fun pred(n: Int64): Int64 { return n - 1 }\n"
         "fun main(): Number {\n"
-        "  be y holds transport(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)\n"
+        "  be y := transport(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)\n"
         "  return if y == 11 then 11 else 0\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     assert rc == 0, out
@@ -2198,8 +2245,8 @@ def test_formatting_keeps_a_function_error_clause(tmp_path):
                    reason="formatting keeps the when here filter of a stream loop")
 def test_formatting_keeps_a_when_here_filter(tmp_path):
     ok, out = _fmt_keeps_frontend(tmp_path,
-        "place Entry {\n  fun main(): Number {\n    be s holds produce { emit 1 }\n"
-        "    be t holds 0\n    for every x in s when here { t = t + x }\n    return t\n  }\n}\n",
+        "place Entry {\n  fun main(): Number {\n    be s := produce { emit 1 }\n"
+        "    be t := 0\n    for every x in s when here { t = t + x }\n    return t\n  }\n}\n",
         "when here")
     _verdict(ok, f"formatted text: {out!r}")
 
@@ -2232,7 +2279,7 @@ def _nested_dialect(tmp, node_src, literal):
     return _project(tmp, (
         "place Entry {\n"
         "  fun main(): Number {\n"
-        f"    be n holds .-> Node {{ {literal} }}\n"
+        f"    be n := .-> Node {{ {literal} }}\n"
         "    return n.child.v\n"
         "  }\n"
         "}\n"), extra=WORLD_dialect, files={
@@ -2286,7 +2333,7 @@ def test_section_literal_binds_fields_by_name(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {\n"
         "  fun main(): Number {\n"
-        "    be p holds .-> P { b 1 a 2 }\n"
+        "    be p := .-> P { b 1 a 2 }\n"
         "    return p.a * 10 + p.b\n"
         "  }\n"
         "}\n"), extra=WORLD_dialect, files={
@@ -2300,7 +2347,7 @@ def test_section_literal_binds_fields_of_different_types_by_name(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {\n"
         "  fun main(): Number {\n"
-        "    be q holds .-> Q { n 3 name \"ab\" }\n"
+        "    be q := .-> Q { n 3 name \"ab\" }\n"
         "    return String.length(q.name) * 10 + q.n\n"
         "  }\n"
         "}\n"), extra=WORLD_dialect, files={
@@ -2319,10 +2366,10 @@ def test_adding_to_a_set_leaves_the_original_unchanged(tmp_path):
         "place Entry {}\n"
         "fun sz(s: HashSet<Number>): Number { return HashSet.size(s) }\n"
         "fun main(): Number {\n"
-        "  be s holds HashSet.add(HashSet.empty(), 1)\n"
-        "  be t holds HashSet.add(s, 2)\n"
-        "  be b holds HashSet.size(s)\n"
-        "  be c holds sz(s)\n"
+        "  be s := HashSet.add(HashSet.empty(), 1)\n"
+        "  be t := HashSet.add(s, 2)\n"
+        "  be b := HashSet.size(s)\n"
+        "  be c := sz(s)\n"
         "  return b * 10 + c\n"
         "}\n"))
     rc, _ = _build_run_dialect(proj, tmp_path)
@@ -2336,10 +2383,10 @@ def test_setting_a_map_key_leaves_the_original_unchanged(tmp_path):
         "  return match HashMap.get(m, 1) { Found(v) => v, Absent => 0 }\n}\n"
         "fun look(m: HashMap<Number, Number>): Number { return at1(m) }\n"
         "fun main(): Number {\n"
-        "  be m holds HashMap.set(HashMap.empty(), 1, 5)\n"
-        "  be t holds HashMap.set(m, 1, 9)\n"
-        "  be b holds at1(m)\n"
-        "  be c holds look(m)\n"
+        "  be m := HashMap.set(HashMap.empty(), 1, 5)\n"
+        "  be t := HashMap.set(m, 1, 9)\n"
+        "  be b := at1(m)\n"
+        "  be c := look(m)\n"
         "  return b * 10 + c\n"
         "}\n"))
     rc, _ = _build_run_dialect(proj, tmp_path)
@@ -2354,8 +2401,8 @@ def test_scalar_negation_of_unknown_is_false(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {}\n"
         "fun main(): Number {\n"
-        "  be s holds match decide(!? unknown) { Present => 10, Absent => 0, Unknown => 20 }\n"
-        "  be t holds match decide(!? (!? unknown)) { Present => 1, Absent => 0, Unknown => 2 }\n"
+        "  be s := match decide(!? unknown) { Present => 10, Absent => 0, Unknown => 20 }\n"
+        "  be t := match decide(!? (!? unknown)) { Present => 1, Absent => 0, Unknown => 2 }\n"
         "  return s + t\n"
         "}\n"))
     rc, _ = _build_run_dialect(proj, tmp_path)
@@ -2368,7 +2415,7 @@ def test_heyting_integer_negation_of_unknown_is_decided(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {}\n"
         "fun main(): Number {\n"
-        "  be n holds ~? heyting(0, 1)\n"
+        "  be n := ~? heyting(0, 1)\n"
         "  return __heyt_int_mask(n)\n"
         "}\n"))
     rc, _ = _build_run_dialect(proj, tmp_path)
@@ -2381,7 +2428,7 @@ def test_heyting_integer_implies_itself(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {}\n"
         "fun main(): Number {\n"
-        "  be h holds heyting(0, 1)\n"
+        "  be h := heyting(0, 1)\n"
         "  return match decide(h =>? h) { Present => 7, Absent => 3, Unknown => 3 }\n"
         "}\n"))
     rc, out = _compile(proj, tmp_path / "a.out")
@@ -2405,7 +2452,7 @@ def test_a_handled_nullary_operation_returns_the_handler_value(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {\n"
         "  reduction Keep of Acc {\n"
-        "    be seed holds 0\n"
+        "    be seed := 0\n"
         "    on balance() {\n"
         "      return 40\n"
         "    }\n"
@@ -2456,7 +2503,7 @@ fun get(e: (Lit(Number) | Nil)): Number {
   return hit_elim(mot, [Lit(n) => n, Nil => 0], e)
 }
 fun main(): Number {
-  be _a holds IO.print_num(get(hit(Lit, %s)))
+  be _a := IO.print_num(get(hit(Lit, %s)))
   return 0
 }
 """
@@ -2481,7 +2528,7 @@ fun get(e: (Lit(Number) | Nil)): Number {
   return hit_elim(mot, [Lit(n) => n, Nil => 0], e)
 }
 fun main(): Number {
-  be n holds get(hit(Lit, %s))
+  be n := get(hit(Lit, %s))
   return if %s then 1 else 0
 }
 """
@@ -2524,7 +2571,7 @@ def test_a_value_is_never_cast_into_a_child(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be n holds MerkleTree.node2(9, 1.5, MerkleTree.leaf(0))
+  be n := MerkleTree.node2(9, 1.5, MerkleTree.leaf(0))
   return MerkleTree.label(MerkleTree.child(n, 0))
 }
 """
@@ -2545,7 +2592,7 @@ def test_prelude_sqrt_result_survives_its_success_arm(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be a holds match Number.sqrt(2) { Number as r => r, DomainError as d => 0 - 1 }
+  be a := match Number.sqrt(2) { Number as r => r, DomainError as d => 0 - 1 }
   return if a > 1.414 then (if a < 1.415 then 1 else 0) else 0
 }
 """
@@ -2559,8 +2606,8 @@ fun scaler(k: Number): Number -> Number {
   return fun(y: Number) => k * y
 }
 fun main(): Number {
-  be f holds scaler(%s)
-  be _a holds IO.print_num(f(10))
+  be f := scaler(%s)
+  be _a := IO.print_num(f(10))
   return 0
 }
 """
@@ -2589,7 +2636,7 @@ def test_list_length_counts_past_one_heap(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be _a holds IO.print_num(List.length(Sequence.range_to_list(200000)))
+  be _a := IO.print_num(List.length(Sequence.range_to_list(200000)))
   return 0
 }
 """
@@ -2600,12 +2647,12 @@ fun main(): Number {
 _REVERSE_runtime = """\
 place Entry {}
 fun main(): Number {
-  be m0 holds Magma.empty(0)
-  be m1 holds Magma.gen(m0, 3)
-  be m2 holds Magma.gen(m1, 5)
-  be before holds Land.witness(m2, 8)
-  be r holds List.reverse(Sequence.range_to_list(%d))
-  be after holds Land.witness(m2, 8)
+  be m0 := Magma.empty(0)
+  be m1 := Magma.gen(m0, 3)
+  be m2 := Magma.gen(m1, 5)
+  be before := Land.witness(m2, 8)
+  be r := List.reverse(Sequence.range_to_list(%d))
+  be after := Land.witness(m2, 8)
   return if before == after then 1 else 0
 }
 """
@@ -2645,8 +2692,8 @@ def _wire_runtime(tmp_path, svc_place, consumer_fold, consumer_place, iface):
     (sub / "yon_modules" / "weather" / "weather.yon").write_text(iface)
     (sub / "Entry.yon").write_text(
         "import weather::feed from Weather\n\nplace Entry {\n  fun main(): Number {\n"
-        "    be w holds wire to space Weather\n    be sub holds w.awaits(feed)\n"
-        "    be s holds sub.stream\n    be total holds s.fold(0, " + consumer_fold + ")\n"
+        "    be w := wire to space Weather\n    be sub := w.awaits(feed)\n"
+        "    be s := sub.stream\n    be total := s.fold(0, " + consumer_fold + ")\n"
         "    return total\n  }\n}\n")
     rc, out = _compile(svc, tmp_path / "Weather_srv")
     assert rc == 0, out
@@ -2662,7 +2709,7 @@ place R {
   t Number
 
   fun feed(): Wire<Number> {
-    be s holds produce {
+    be s := produce {
       emit 3
       emit %s
       emit 7
@@ -2671,7 +2718,7 @@ place R {
   }
 }
 """
-_NUM_IFACE_runtime = "fun feed(): Wire<Number> {\n  be s holds produce { emit 1 }\n  return s\n}\n"
+_NUM_IFACE_runtime = "fun feed(): Wire<Number> {\n  be s := produce { emit 1 }\n  return s\n}\n"
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -2694,14 +2741,14 @@ place R {
   body Text
 
   fun feed(): Wire<R> {
-    be s holds produce {
+    be s := produce {
       emit .-> R { id 5 body "%s" }
     }
     return s
   }
 }
 """
-_TEXT_IFACE_runtime = 'fun feed(): Wire<R> {\n  be s holds produce { emit .-> R { id 5 body "x" } }\n  return s\n}\n'
+_TEXT_IFACE_runtime = 'fun feed(): Wire<R> {\n  be s := produce { emit .-> R { id 5 body "x" } }\n  return s\n}\n'
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -2721,8 +2768,8 @@ def test_stream_visits_the_value_two_to_the_32_minus_one(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be s holds produce { emit 3 emit 4294967295 emit 7 emit 100 }
-  be n holds 0
+  be s := produce { emit 3 emit 4294967295 emit 7 emit 100 }
+  be n := 0
   for every v in s {
     n = n + 1
   }
@@ -2739,14 +2786,14 @@ def test_spawn_results_stay_distinct_after_many_spawns(tmp_path):
     entry = """\
 place Entry {}
 fun one(k: Number): Number {
-  be results holds spawn in 1 parallel {
+  be results := spawn in 1 parallel {
     promote k
   }
   return results.fold(0, fun(a: Number, v: Number) => a + v)
 }
 fun main(): Number {
-  be good holds 0
-  be i holds 0
+  be good := 0
+  be i := 0
   while i < 40 do {
     good = good + (if one(i + 100) == i + 100 then 1 else 0)
     i = i + 1
@@ -2764,7 +2811,7 @@ def test_hashset_union_keeps_minus_one(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be s holds HashSet.add(HashSet.empty(), 0 - 1)
+  be s := HashSet.add(HashSet.empty(), 0 - 1)
   return HashSet.size(HashSet.union(s, HashSet.empty()))
 }
 """
@@ -2776,7 +2823,7 @@ def test_hashset_union_keeps_four(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be s holds HashSet.add(HashSet.empty(), 4)
+  be s := HashSet.add(HashSet.empty(), 4)
   return HashSet.size(HashSet.union(s, HashSet.empty()))
 }
 """
@@ -2788,8 +2835,8 @@ def test_hashmap_set_leaves_the_source_map_unchanged(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m1 holds HashMap.set(HashMap.empty(), 1, 10)
-  be m2 holds HashMap.set(m1, 2, 20)
+  be m1 := HashMap.set(HashMap.empty(), 1, 10)
+  be m2 := HashMap.set(m1, 2, 20)
   return HashMap.size(m1) * 10 + HashMap.size(m2)
 }
 """
@@ -2804,9 +2851,9 @@ def test_a_missing_key_is_absent_not_zero(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m holds HashMap.set(HashMap.empty(), 1, 0)
-  be a holds match HashMap.get(m, 1) { Found(v) => (if v == 0 then 1 else 0), Absent => 5 }
-  be b holds match HashMap.get(m, 2) { Found(v) => 7, Absent => 10 }
+  be m := HashMap.set(HashMap.empty(), 1, 0)
+  be a := match HashMap.get(m, 1) { Found(v) => (if v == 0 then 1 else 0), Absent => 5 }
+  be b := match HashMap.get(m, 2) { Found(v) => 7, Absent => 10 }
   return a + b
 }
 """
@@ -2820,9 +2867,9 @@ def test_a_collection_holds_its_elements_bit_for_bit(tmp_path):
     entry = """\
 place Entry {}
 fun round_trip(x: Int64): Number {
-  be m holds HashMap.set(HashMap.empty(), 1, x)
-  be s holds HashSet.add(HashSet.empty(), x)
-  be a holds match HashMap.get(m, 1) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
+  be m := HashMap.set(HashMap.empty(), 1, x)
+  be s := HashSet.add(HashSet.empty(), x)
+  be a := match HashMap.get(m, 1) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
   return if HashSet.contains(s, x) then a else 0
 }
 fun main(): Number {
@@ -2858,11 +2905,11 @@ fun fill(m: HashMap<Number, Number>, i: Number, n: Number): HashMap<Number, Numb
   return if i >= n then m else fill(HashMap.set(m, i, i * 2), i + 1, n)
 }
 fun main(): Number {
-  be m10 holds fill(HashMap.empty(), 0, 10)
-  be m1000 holds fill(m10, 10, 1000)
-  be ok10 holds if HashMap.size(m10) == 10 then (if HashMap.has(m10, 500) then 0 else 1) else 0
-  be v999 holds match HashMap.get(m1000, 999) { Found(v) => v, Absent => 0 }
-  be ok1000 holds if HashMap.size(m1000) == 1000 then (if v999 == 1998 then 1 else 0) else 0
+  be m10 := fill(HashMap.empty(), 0, 10)
+  be m1000 := fill(m10, 10, 1000)
+  be ok10 := if HashMap.size(m10) == 10 then (if HashMap.has(m10, 500) then 0 else 1) else 0
+  be v999 := match HashMap.get(m1000, 999) { Found(v) => v, Absent => 0 }
+  be ok1000 := if HashMap.size(m1000) == 1000 then (if v999 == 1998 then 1 else 0) else 0
   return ok10 * 10 + ok1000
 }
 """
@@ -2875,9 +2922,9 @@ def test_a_key_is_identified_by_its_bits(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be negz holds 0.0 * (0 - 1)
-  be nan holds 0.0 / 0.0
-  be s holds HashSet.add(HashSet.add(HashSet.add(HashSet.empty(), 0.0), negz), nan)
+  be negz := 0.0 * (0 - 1)
+  be nan := 0.0 / 0.0
+  be s := HashSet.add(HashSet.add(HashSet.add(HashSet.empty(), 0.0), negz), nan)
   return HashSet.size(s) * 10 + (if HashSet.contains(s, nan) then 1 else 0)
 }
 """
@@ -2889,10 +2936,10 @@ def test_union_and_intersection_leave_their_operands(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be a holds HashSet.add(HashSet.add(HashSet.empty(), 1), 2)
-  be b holds HashSet.add(HashSet.add(HashSet.empty(), 2), 3)
-  be u holds HashSet.union(a, b)
-  be i holds HashSet.intersect(a, b)
+  be a := HashSet.add(HashSet.add(HashSet.empty(), 1), 2)
+  be b := HashSet.add(HashSet.add(HashSet.empty(), 2), 3)
+  be u := HashSet.union(a, b)
+  be i := HashSet.intersect(a, b)
   return HashSet.size(u) * 1000 + HashSet.size(i) * 100 + HashSet.size(a) * 10 + HashSet.size(b)
 }
 """
@@ -2906,8 +2953,8 @@ def test_a_call_with_effects_is_never_shared(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be _a holds IO.print_num(7)
-  be _b holds IO.print_num(7)
+  be _a := IO.print_num(7)
+  be _b := IO.print_num(7)
   return 0
 }
 """
@@ -2922,8 +2969,8 @@ fun held(x: Number): Number {
   return match XRelMap.get(XRelMap.insert(XRelMap.empty(), 1536, x), 1536) { Found(v) => v, Absent => 0 }
 }
 fun main(): Number {
-  be _a holds IO.print_num(held(2.5))
-  be _b holds IO.print_num(held(0 - 3))
+  be _a := IO.print_num(held(2.5))
+  be _b := IO.print_num(held(0 - 3))
   return 0
 }
 """
@@ -2938,8 +2985,8 @@ fun held(x: Number): Number {
   return match Arena.get(Arena.put(Arena.empty(), 1536, x), 1536) { Found(v) => v, Absent => 0 }
 }
 fun main(): Number {
-  be _a holds IO.print_num(held(2.5))
-  be _b holds IO.print_num(held(0 - 3))
+  be _a := IO.print_num(held(2.5))
+  be _b := IO.print_num(held(0 - 3))
   return 0
 }
 """
@@ -2982,11 +3029,11 @@ fun xrel_i(x: Int64): Number {
 fun both_n(x: Number): Number { return arena_n(x) * xrel_n(x) }
 fun both_i(x: Int64): Number { return arena_i(x) * xrel_i(x) }
 fun main(): Number {
-  be inf holds 1 / 0.0
-  be floats holds both_n(2.5) + both_n(0 - 3) + both_n(0.0 * (0 - 1)) + both_n(0.0 / 0.0)
+  be inf := 1 / 0.0
+  be floats := both_n(2.5) + both_n(0 - 3) + both_n(0.0 * (0 - 1)) + both_n(0.0 / 0.0)
                 + both_n(inf) + both_n(0 - inf)
-  be ints holds both_i(Int64.max_value()) + both_i(Int64.min_value()) + both_i(9007199254740993)
-  be empty holds match Arena.get(Arena.empty(), 1536) { Found(v) => 0, Absent => 1 }
+  be ints := both_i(Int64.max_value()) + both_i(Int64.min_value()) + both_i(9007199254740993)
+  be empty := match Arena.get(Arena.empty(), 1536) { Found(v) => 0, Absent => 1 }
   return floats * 100 + ints * 10 + empty
 }
 """
@@ -3001,7 +3048,7 @@ def test_a_value_that_does_not_fit_a_slot_is_refused(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be a holds Arena.put(Arena.empty(), 1536, true)
+  be a := Arena.put(Arena.empty(), 1536, true)
   return 0
 }
 """
@@ -3033,9 +3080,9 @@ def test_text_keys_equal_by_content_are_one_key(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m holds HashMap.set(HashMap.empty(), String.concat("ab", "c"), 7)
-  be m2 holds HashMap.set(m, String.concat("a", "bc"), 9)
-  be got holds match HashMap.get(m2, "abc") { Found(v) => v, Absent => 0 }
+  be m := HashMap.set(HashMap.empty(), String.concat("ab", "c"), 7)
+  be m2 := HashMap.set(m, String.concat("a", "bc"), 9)
+  be got := match HashMap.get(m2, "abc") { Found(v) => v, Absent => 0 }
   return HashMap.size(m2) * 10 + got
 }
 """
@@ -3047,10 +3094,10 @@ def test_a_text_value_rides_a_lattice_slot_by_its_handle(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m holds XRelMap.insert(XRelMap.empty(), 1536, String.concat("ab", "c"))
-  be a holds Arena.put(Arena.empty(), 1536, String.concat("a", "bc"))
-  be x holds match XRelMap.get(m, 1536) { Found(v) => (if v == "abc" then 1 else 0), Absent => 0 }
-  be y holds match Arena.get(a, 1536) { Found(v) => String.length(v), Absent => 0 }
+  be m := XRelMap.insert(XRelMap.empty(), 1536, String.concat("ab", "c"))
+  be a := Arena.put(Arena.empty(), 1536, String.concat("a", "bc"))
+  be x := match XRelMap.get(m, 1536) { Found(v) => (if v == "abc" then 1 else 0), Absent => 0 }
+  be y := match Arena.get(a, 1536) { Found(v) => String.length(v), Absent => 0 }
   return x * 10 + y
 }
 """
@@ -3062,7 +3109,7 @@ def test_a_text_key_in_a_lattice_collection_is_refused(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m holds XRelMap.insert(XRelMap.empty(), "abc", 7)
+  be m := XRelMap.insert(XRelMap.empty(), "abc", 7)
   return XRelMap.size(m)
 }
 """
@@ -3112,9 +3159,9 @@ def test_merkle_node3_children_are_its_leaves(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be pad1 holds MerkleTree.leaf(500)
-  be pad2 holds MerkleTree.leaf(600)
-  be n holds MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
+  be pad1 := MerkleTree.leaf(500)
+  be pad2 := MerkleTree.leaf(600)
+  be n := MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
   return MerkleTree.label(MerkleTree.child(n, 0)) + MerkleTree.label(MerkleTree.child(n, 1))
        + MerkleTree.label(MerkleTree.child(n, 2))
 }
@@ -3127,7 +3174,7 @@ def test_merkle_node3_streams_its_leaves(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be n holds MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
+  be n := MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
   return List.length(MerkleTree.to_stream(n))
 }
 """
@@ -3139,7 +3186,7 @@ def test_merkle_node2_children_are_its_leaves(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be n holds MerkleTree.node2(9, MerkleTree.leaf(11), MerkleTree.leaf(22))
+  be n := MerkleTree.node2(9, MerkleTree.leaf(11), MerkleTree.leaf(22))
   return MerkleTree.label(MerkleTree.child(n, 0)) + MerkleTree.label(MerkleTree.child(n, 1))
 }
 """
@@ -3181,11 +3228,11 @@ def test_land_reach_answers_the_same_on_every_call(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m0 holds Magma.empty(0)
-  be m1 holds Magma.gen(m0, 3)
-  be m2 holds Magma.gen(m1, 5)
-  be hits holds 0
-  be i holds 0
+  be m0 := Magma.empty(0)
+  be m1 := Magma.gen(m0, 3)
+  be m2 := Magma.gen(m1, 5)
+  be hits := 0
+  be i := 0
   while i < 400 do {
     hits = hits + (if Land.reach(m2, 8 + i - i) then 1 else 0)
     i = i + 1
@@ -3200,9 +3247,9 @@ fun main(): Number {
 _LAND_runtime = """\
 place Entry {}
 fun main(): Number {
-  be m0 holds %s
-  be m1 holds Magma.gen(m0, 5)
-  be m2 holds Magma.gen(m1, 0 - 3)
+  be m0 := %s
+  be m1 := Magma.gen(m0, 5)
+  be m2 := Magma.gen(m1, 0 - 3)
   return if Land.reach(m2, 2) then 1 else 0
 }
 """
@@ -3228,7 +3275,7 @@ def test_int64_shift_right_terminates_on_a_negative_count(tmp_path):
     entry = """\
 place Entry {
   fun main(): Number {
-    be a holds Int64.shift_right(8, 0 - 1)
+    be a := Int64.shift_right(8, 0 - 1)
     return if a == a then 7 else 9
   }
 }
@@ -3309,17 +3356,17 @@ def test_selfhost_two_names_with_distinct_hashes_call_their_own_bodies(tmp_path,
 _SHM_ENTRY_runtime = """\
 place Entry {
   fun probe(base: Number): Number {
-    be bad holds 0
-    be k holds 0
+    be bad := 0
+    be k := 0
     while k < 1000 do {
-      be p holds .-> P { v base + k }
+      be p := .-> P { v base + k }
       bad = bad + (if p.v == base + k then 0 else 1)
       k = k + 1
     }
     return bad
   }
   fun main(): Number {
-    be results holds spawn in 8 parallel {
+    be results := spawn in 8 parallel {
       promote probe(spawn_index * 100000 + 1)
     }
     return results.fold(0, fun(a: Number, v: Number) => a + v)
@@ -3370,8 +3417,8 @@ def test_private_space_heaps_keep_concurrent_sections_apart(tmp_path):
 # is not a channel.
 def _produce_returning(ty):
     return ("place Entry {}\n"
-            f"fun f(): {ty} {{\n  be s holds produce {{ emit 40\n emit 2 }}\n  return s\n}}\n"
-            "fun main(): Number {\n  be s holds f()\n"
+            f"fun f(): {ty} {{\n  be s := produce {{ emit 40\n emit 2 }}\n  return s\n}}\n"
+            "fun main(): Number {\n  be s := f()\n"
             "  return s.fold(0, fun(a: Number, v: Number) => a + v)\n}\n")
 
 

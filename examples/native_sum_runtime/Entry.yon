@@ -24,9 +24,9 @@ fun eval(e: (Lit(Number) | Neg(Number) | Add(Number))): Number {
 }
 
 fun main(): Number {
-  be a holds eval(hit(Lit, 5))     // 5
-  be b holds eval(hit(Neg, 3))     // 0 - 3 = -3
-  be c holds eval(hit(Add, 20))    // 20 + 20 = 40
+  be a := eval(hit(Lit, 5))     // 5
+  be b := eval(hit(Neg, 3))     // 0 - 3 = -3
+  be c := eval(hit(Add, 20))    // 20 + 20 = 40
   return a + b + c                  // 5 + (0-3) + 40 = 42
 }
 }

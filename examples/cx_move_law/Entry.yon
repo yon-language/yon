@@ -8,8 +8,8 @@ place Entry {
     degrees maps to degrees by c2f
   }
   fun main(): Number {
-    be c holds .-> Celsius { degrees 100 }
-    be f holds apply_move(ToFahrenheit, c)
+    be c := .-> Celsius { degrees 100 }
+    be f := apply_move(ToFahrenheit, c)
     return f.degrees
   }
 }

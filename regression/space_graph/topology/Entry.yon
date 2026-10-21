@@ -1,8 +1,8 @@
 import svc::d_op from D
 place Entry {
   fun main(): Number {
-    be w holds wire to space A
-    be r holds d_op(5)
+    be w := wire to space A
+    be r := d_op(5)
     return r - r
   }
 }

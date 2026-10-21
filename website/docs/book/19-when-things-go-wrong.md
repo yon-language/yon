@@ -47,7 +47,7 @@ fun on_query_fail(q: QueryError): Number {
 }
 
 fun main(): Number {
-  be q holds .-> QueryError { message 40  sqlstate 23505 }
+  be q := .-> QueryError { message 40  sqlstate 23505 }
   return on_query_fail(q) + 2    // 42
 }
 ```

@@ -1,13 +1,13 @@
 place Entry {
   fun main(): Number visits Output {
-    be cw holds VoyagerList.seal(1445)
-    be readback holds VoyagerList.open(VoyagerList.corrupt(cw, 2))
-    be _1 holds Output.print(String.from_int(1445))
-    be _2 holds Output.print(String.from_int(readback))
-    be l holds VoyagerList.empty()
+    be cw := VoyagerList.seal(1445)
+    be readback := VoyagerList.open(VoyagerList.corrupt(cw, 2))
+    be _1 := Output.print(String.from_int(1445))
+    be _2 := Output.print(String.from_int(readback))
+    be l := VoyagerList.empty()
     l = VoyagerList.append(l, 1445)
     l = VoyagerList.corrupt_at(l, 0, 3)
-    be _3 holds Output.print(String.from_int(VoyagerList.get(l, 0)))
+    be _3 := Output.print(String.from_int(VoyagerList.get(l, 0)))
     return 0
   }
 }

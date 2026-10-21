@@ -17,7 +17,7 @@
 // --- AST + eval (same catamorphism as seed 0/1) ---
 fun mk_lit(n: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
 fun eval(e: MerkleTree): Number {
-  be t holds MerkleTree.label(e)
+  be t := MerkleTree.label(e)
   return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
          else if t == 2 then eval(MerkleTree.child(e, 0)) + eval(MerkleTree.child(e, 1))
          else eval(MerkleTree.child(e, 0)) * eval(MerkleTree.child(e, 1))
@@ -50,7 +50,7 @@ fun parse(toks: MerkleTree): MerkleTree {
 
 fun main(): Number {
   // token stream for "2 + 3 * 4"
-  be ts holds toks_cons(tok_num(2),
+  be ts := toks_cons(tok_num(2),
               toks_cons(tok_op(2),
               toks_cons(tok_num(3),
               toks_cons(tok_op(3),

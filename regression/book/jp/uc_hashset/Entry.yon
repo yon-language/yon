@@ -1,12 +1,12 @@
 place Entry {
   fun main(): Number visits Output {
-    be inv holds HashSet.empty()
+    be inv := HashSet.empty()
     inv = HashSet.add(inv, 1445)
     inv = HashSet.add(inv, 1445)
     inv = HashSet.add(inv, 2361)
     inv = HashSet.add(inv, 100)
     inv = HashSet.add(inv, 200)
-    be _1 holds Output.print(String.from_int(HashSet.size(inv)))
+    be _1 := Output.print(String.from_int(HashSet.size(inv)))
     return 0
   }
 }

@@ -51,8 +51,8 @@ fun as_num(t: Term): Number {
 }
 
 fun main(): Number {
-  be id_lit   holds eval(hit(TApp, hit(TLam, hit(TVar, 0)), hit(TLit, 42)))
-  be fst_beta holds eval(hit(TFst, hit(TApp, hit(TLam, hit(TVar, 0)),
+  be id_lit   := eval(hit(TApp, hit(TLam, hit(TVar, 0)), hit(TLit, 42)))
+  be fst_beta := eval(hit(TFst, hit(TApp, hit(TLam, hit(TVar, 0)),
                                        hit(TPair, hit(TLit, 20), hit(TLit, 22)))))
   return (as_num(id_lit) - 42) + (as_num(fst_beta) - 20)
 }

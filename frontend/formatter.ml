@@ -248,20 +248,20 @@ let rec cond_str (c : condition) : string =
 
 let rec fmt_stmt (f : fmt) (s : stmt) : unit =
   match s with
-  (* `be x holds produce/spawn { ... }`: the rhs carries a statement block, so it
+  (* `be x := produce/spawn { ... }`: the rhs carries a statement block, so it
      is rendered multi-line here rather than through the single-line fmt_expr. *)
   | SLet (name, EProduce (body, _), _) ->
-      line f (Printf.sprintf "be %s holds produce {" name);
+      line f (Printf.sprintf "be %s := produce {" name);
       f.indent <- f.indent + 1; List.iter (fmt_stmt f) body; f.indent <- f.indent - 1;
       line f "}"
   | SLet (name, ESpawn (n_opt, body, _), _) ->
       let hdr = match n_opt with
-        | None -> Printf.sprintf "be %s holds spawn {" name
-        | Some n -> Printf.sprintf "be %s holds spawn in %s parallel {" name (fmt_expr n) in
+        | None -> Printf.sprintf "be %s := spawn {" name
+        | Some n -> Printf.sprintf "be %s := spawn in %s parallel {" name (fmt_expr n) in
       line f hdr;
       f.indent <- f.indent + 1; List.iter (fmt_stmt f) body; f.indent <- f.indent - 1;
       line f "}"
-  | SLet (name, e, _) -> line f (Printf.sprintf "be %s holds %s" name (fmt_expr e))
+  | SLet (name, e, _) -> line f (Printf.sprintf "be %s := %s" name (fmt_expr e))
   | SAssignBecomes (lv, e, _) ->
       (* reassignment (model A): the surface is `x = e`; there is no `becomes`
          keyword, so emitting one would produce code that never re-parses. *)
@@ -609,7 +609,7 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
                  rd.rd_name tps rd.rd_of multi fold);
        f.indent <- f.indent + 1;
        List.iter (function
-         | RcLet (n, e, _) -> line f (Printf.sprintf "be %s holds %s" n (fmt_expr e))
+         | RcLet (n, e, _) -> line f (Printf.sprintf "be %s := %s" n (fmt_expr e))
          | RcOn (ev, params, body, _) ->
              let ps = String.concat ", "
                (List.map (fun p -> p.param_name ^ ": " ^ fmt_ty p.param_ty) params) in

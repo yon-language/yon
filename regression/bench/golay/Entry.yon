@@ -1,48 +1,48 @@
 place Entry {
   fun timed_base(iters: Number): Number visits Output {
-    be acc holds Space.make(0)
-    be t0 holds Time.now_ns(0)
-    iter iters do { be _ holds Space.set(acc, Space.get(acc) + 1) }
-    be t1 holds Time.now_ns(0)
+    be acc := Space.make(0)
+    be t0 := Time.now_ns(0)
+    iter iters do { be _ := Space.set(acc, Space.get(acc) + 1) }
+    be t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_seal(g: Number, iters: Number): Number visits Output {
-    be acc holds Space.make(0)
-    be t0 holds Time.now_ns(0)
-    iter iters do { be _ holds Space.set(acc, Space.get(acc) + VoyagerList.seal(g)) }
-    be t1 holds Time.now_ns(0)
+    be acc := Space.make(0)
+    be t0 := Time.now_ns(0)
+    iter iters do { be _ := Space.set(acc, Space.get(acc) + VoyagerList.seal(g)) }
+    be t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_open(cw: Number, iters: Number): Number visits Output {
-    be acc holds Space.make(0)
-    be t0 holds Time.now_ns(0)
-    iter iters do { be _ holds Space.set(acc, Space.get(acc) + VoyagerList.open(VoyagerList.corrupt(cw, 2))) }
-    be t1 holds Time.now_ns(0)
+    be acc := Space.make(0)
+    be t0 := Time.now_ns(0)
+    iter iters do { be _ := Space.set(acc, Space.get(acc) + VoyagerList.open(VoyagerList.corrupt(cw, 2))) }
+    be t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun acc_open(cw: Number, iters: Number): Number visits Output {
-    be acc holds Space.make(0)
-    iter iters do { be _ holds Space.set(acc, Space.get(acc) + VoyagerList.open(VoyagerList.corrupt(cw, 2))) }
+    be acc := Space.make(0)
+    iter iters do { be _ := Space.set(acc, Space.get(acc) + VoyagerList.open(VoyagerList.corrupt(cw, 2))) }
     return Space.get(acc)
   }
   fun min2(a: Number, b: Number): Number { return if a < b then a else b }
   fun min_of(f0: Number, fseed: Number, reps: Number): Number { return fseed }
   fun main(): Number visits Output {
-    be g holds 1445
-    be cw holds VoyagerList.seal(g)
-    be n holds 1000000
-    be reps holds 11
+    be g := 1445
+    be cw := VoyagerList.seal(g)
+    be n := 1000000
+    be reps := 11
     // recovered guard: open a few, average must be the gene 1445
-    be guard holds (acc_open(cw, 1000) / 1000)
-    be base holds Space.make(timed_base(n))
-    iter reps do { be _ holds Space.set(base, min2(Space.get(base), timed_base(n))) }
-    be sl holds Space.make(timed_seal(g, n))
-    iter reps do { be _ holds Space.set(sl, min2(Space.get(sl), timed_seal(g, n))) }
-    be op holds Space.make(timed_open(cw, n))
-    iter reps do { be _ holds Space.set(op, min2(Space.get(op), timed_open(cw, n))) }
-    be _g holds Output.print(String.from_int(guard))                        // 1445 = correction works
-    be _1 holds Output.print(String.from_int(Space.get(sl) - Space.get(base)))
-    be _2 holds Output.print(String.from_int(Space.get(op) - Space.get(base)))
+    be guard := (acc_open(cw, 1000) / 1000)
+    be base := Space.make(timed_base(n))
+    iter reps do { be _ := Space.set(base, min2(Space.get(base), timed_base(n))) }
+    be sl := Space.make(timed_seal(g, n))
+    iter reps do { be _ := Space.set(sl, min2(Space.get(sl), timed_seal(g, n))) }
+    be op := Space.make(timed_open(cw, n))
+    iter reps do { be _ := Space.set(op, min2(Space.get(op), timed_open(cw, n))) }
+    be _g := Output.print(String.from_int(guard))                        // 1445 = correction works
+    be _1 := Output.print(String.from_int(Space.get(sl) - Space.get(base)))
+    be _2 := Output.print(String.from_int(Space.get(op) - Space.get(base)))
     return 0
   }
 }
