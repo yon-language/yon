@@ -544,13 +544,11 @@ let stdlib_registry : (string * (string list * string)) list = [
   "VoyagerList__corrupt",    (["f64"; "f64"], "f64");
   "VoyagerList__to_stream",  (["f64"], "f64");
   "Arena__empty",        ([], "f64");
-  "Arena__put",          (["f64"; "f64"; "f64"], "f64");
-  "Arena__value",          (["f64"; "f64"], "f64");
-  "Arena__occupied",     (["f64"; "f64"], "f64");
-  "Arena__orbit",        (["f64"; "f64"], "f64");
-  "Arena__same_orbit",   (["f64"; "f64"; "f64"], "f64");
-  "Arena__fuse",         (["f64"; "f64"; "f64"; "f64"], "f64");
-  "Arena__fusion_count", (["f64"; "f64"], "f64");
+  "Arena__put",          (["f64"; "i64"; "f64"], "f64");
+  "Arena__value",        (["f64"; "i64"], "f64");
+  "Arena__occupied",     (["f64"; "i64"], "f64");
+  "Arena__fuse",         (["f64"; "i64"; "f64"; "f64"], "f64");
+  "Arena__fusion_count", (["f64"; "i64"], "f64");
 ]
 
 (* Idraulica v2: map the synthetic cross-Space callable to its runtime
@@ -1073,8 +1071,9 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.App (C.App (C.Var "Arena__put", _), _), _) -> "f64"
   | C.App (C.App (C.Var "Arena__value", _), _) -> "f64"
   | C.App (C.App (C.Var "Arena__occupied", _), _) -> "i1"
-  | C.App (C.App (C.Var "Arena__orbit", _), _) -> "f64"
-  | C.App (C.App (C.App (C.Var "Arena__same_orbit", _), _), _) -> "f64"
+  | C.App (C.Var ("LatticePoint__is_point" | "LatticePoint__is_index"), _) -> "i1"
+  | C.App (C.Var ("LatticePoint__unchecked_coordinate" | "LatticePoint__unchecked_index"), _) -> "i64"
+  | C.App (C.Var ("LatticePoint__index" | "LatticePoint__orbit"), _) -> "f64"
   | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", _), _), _), _) -> "f64"
   | C.App (C.App (C.Var "Arena__fusion_count", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__to_stream", _) -> "f64"
@@ -3661,64 +3660,75 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_voyagerlist_append(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  (* Arena: the Leech type-2 arena as a first-class structure. *)
+  (* LatticePoint: a type-2 coordinate, carried as an i64. *)
+  | C.App (C.Var ("LatticePoint__is_point" | "LatticePoint__is_index" as f), arg) ->
+      let va = emit_f64 e env funcs arg in
+      let v = fresh_ssa e in
+      let sym = if f = "LatticePoint__is_point" then "yon_rt_lattice_is_point"
+                else "yon_rt_lattice_is_index" in
+      emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (f64) -> f64" v sym va);
+      let v_zero = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
+      let v_i1 = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v v_zero);
+      (v_i1, "i1")
+  | C.App (C.Var ("LatticePoint__unchecked_coordinate" | "LatticePoint__unchecked_index" as f), arg) ->
+      let va = emit_f64 e env funcs arg in
+      let v = fresh_ssa e in
+      let sym = if f = "LatticePoint__unchecked_coordinate" then "yon_rt_lattice_unchecked_coordinate"
+                else "yon_rt_lattice_unchecked_index" in
+      emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (f64) -> i64" v sym va);
+      (v, "i64")
+  | C.App (C.Var ("LatticePoint__index" | "LatticePoint__orbit" as f), arg) ->
+      let vp = emit_i64 e env funcs arg in
+      let v = fresh_ssa e in
+      let sym = if f = "LatticePoint__index" then "yon_rt_lattice_index"
+                else "yon_rt_lattice_orbit" in
+      emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (i64) -> f64" v sym vp);
+      (v, "f64")
+  (* Arena: the Leech type-2 arena, addressed by lattice points (i64). *)
   | C.App (C.App (C.App (C.Var "Arena__put", arg_a), arg_b), arg_c) ->
       let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
+      let vb = emit_i64 e env funcs arg_b in
       let vc = emit_f64 e env funcs arg_c in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_put(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
+        "%s = func.call @yon_rt_arena_put(%s, %s, %s) : (f64, i64, f64) -> f64" v va vb vc);
       (v, "f64")
   | C.App (C.App (C.Var "Arena__value", arg_a), arg_b) ->
       let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
+      let vb = emit_i64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_value(%s, %s) : (f64, f64) -> f64" v va vb);
+        "%s = func.call @yon_rt_arena_value(%s, %s) : (f64, i64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "Arena__occupied", arg_a), arg_b) ->
       let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
+      let vb = emit_i64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_occupied(%s, %s) : (f64, f64) -> f64" v va vb);
+        "%s = func.call @yon_rt_arena_occupied(%s, %s) : (f64, i64) -> f64" v va vb);
       (* a Boolean: occupied or not *)
       let v_zero = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
       let v_i1 = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v v_zero);
       (v_i1, "i1")
-  | C.App (C.App (C.Var "Arena__orbit", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_orbit(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.App (C.Var "Arena__same_orbit", arg_a), arg_b), arg_c) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let vc = emit_f64 e env funcs arg_c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_same_orbit(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
   | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", arg_a), arg_b), arg_c), arg_d) ->
       let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
+      let vb = emit_i64 e env funcs arg_b in
       let vc = emit_f64 e env funcs arg_c in
       let vd = emit_f64 e env funcs arg_d in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_fuse(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64" v va vb vc vd);
+        "%s = func.call @yon_rt_arena_fuse(%s, %s, %s, %s) : (f64, i64, f64, f64) -> f64" v va vb vc vd);
       (v, "f64")
   | C.App (C.App (C.Var "Arena__fusion_count", arg_a), arg_b) ->
       let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
+      let vb = emit_i64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_fusion_count(%s, %s) : (f64, f64) -> f64" v va vb);
+        "%s = func.call @yon_rt_arena_fusion_count(%s, %s) : (f64, i64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "VoyagerList__get", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
@@ -5296,6 +5306,11 @@ and emit_f64 (e : emitter) (env : (string * string) Env.t)
   let (v, ty) = emit_term e env funcs t in
   coerce_to_param e v ty "f64"
 
+and emit_i64 (e : emitter) (env : (string * string) Env.t)
+    (funcs : (string * func_sig) list) (t : C.term) : string =
+  let (v, ty) = emit_term e env funcs t in
+  coerce_to_param e v ty "i64"
+
 let emit_place (e : emitter) (world : string) (pd : C.place_decl) : unit =
   emit_indent e;
   let has_ops = pd.p_operations <> [] in
@@ -6864,13 +6879,17 @@ let emit_program (dr : Desugar.desugar_result) : string =
   (* VoyagerList as a collection. *)
   emit_line e "func.func private @yon_rt_voyagerlist_empty() -> f64";
   emit_line e "func.func private @yon_rt_arena_empty() -> f64";
-  emit_line e "func.func private @yon_rt_arena_put(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_value(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_occupied(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_orbit(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_same_orbit(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_fuse(f64, f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_fusion_count(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_put(f64, i64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_value(f64, i64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_occupied(f64, i64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_fuse(f64, i64, f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_fusion_count(f64, i64) -> f64";
+  emit_line e "func.func private @yon_rt_lattice_is_point(f64) -> f64";
+  emit_line e "func.func private @yon_rt_lattice_unchecked_coordinate(f64) -> i64";
+  emit_line e "func.func private @yon_rt_lattice_is_index(f64) -> f64";
+  emit_line e "func.func private @yon_rt_lattice_unchecked_index(f64) -> i64";
+  emit_line e "func.func private @yon_rt_lattice_index(i64) -> f64";
+  emit_line e "func.func private @yon_rt_lattice_orbit(i64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_append(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_get(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_size(f64) -> f64";

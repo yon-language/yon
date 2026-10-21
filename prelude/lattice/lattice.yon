@@ -1,0 +1,9 @@
+/* lattice.yon — the package file of `lattice`, under prelude/.
+ *
+ * The site of the Leech lattice's type-2 shell: its points, the frames that
+ * relate them, the Co0 words that carry one onto another. A point is an
+ * abstract type over its coordinate: made only where it is one, read only
+ * through what it offers. The lattice collections (prelude/coll) are keyed
+ * by these points. */
+topos where {
+}

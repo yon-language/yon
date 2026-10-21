@@ -121,6 +121,105 @@ def test_an_identity_flows_into_path_by_forgetting_its_endpoints(tmp_path):
     assert _run(tmp_path / "out")[0] == 14
 
 
+# --- a lattice point is made only where it is one --------------------------------
+# LatticePoint is an abstract type over its representation: `of` is the
+# characteristic map of the type-2 shell (a coordinate is a point, or a
+# DomainError), `at` the i-th point of the shell; no literal is a point and no
+# arithmetic applies.
+
+_LP_PROBE = """\
+place Entry {}
+fun of_ok(n: Number): Number {
+  return match LatticePoint.of_coordinate(n) { LatticePoint as p => 1, DomainError as d => 0 }
+}
+fun at_ok(i: Number): Number {
+  return match LatticePoint.at_index(i) { LatticePoint as p => 1, DomainError as d => 0 }
+}
+fun main(): Number {
+  be _a := IO.print_num(of_ok(1536))
+  be _b := IO.print_num(of_ok(1536.5))
+  be _c := IO.print_num(of_ok(0 - 1536))
+  be _d := IO.print_num(of_ok(7))
+  be _e := IO.print_num(at_ok(0))
+  be _f := IO.print_num(at_ok(196559))
+  be _g := IO.print_num(at_ok(196560))
+  be _h := IO.print_num(at_ok(0 - 1))
+  be _i := IO.print_num(at_ok(0.5))
+  return 0
+}
+"""
+
+
+def _compiles_and_runs(tmp_path, entry):
+    proj = _project(tmp_path, entry)
+    rc, out = _compile(proj, tmp_path / "out")
+    _verdict(rc == 0, f"the program does not compile: {out[-300:]}")
+    return _run(tmp_path / "out")
+
+
+def test_a_lattice_point_is_made_only_where_it_is_one(tmp_path):
+    code, out = _compiles_and_runs(tmp_path, _LP_PROBE)
+    got = out.split()
+    # 1536 is a type-2 point; a fraction, a negative and 7 are not; the shell
+    # has 196560 points, indexed from 0
+    _verdict(got == ["1", "0", "0", "0", "1", "1", "0", "0", "0"],
+             f"of_coordinate(1536, 1536.5, -1536, 7), at_index(0, 196559, 196560, -1, 0.5): {got}")
+
+
+def test_a_lattice_point_reads_its_index_and_orbit(tmp_path):
+    code, out = _compiles_and_runs(tmp_path, """\
+place Entry {}
+fun idx(i: Number): Number {
+  return match LatticePoint.at_index(i) { LatticePoint as p => LatticePoint.index(p), DomainError as d => 0 - 1 }
+}
+fun orb(n: Number): Number {
+  return match LatticePoint.of_coordinate(n) { LatticePoint as p => LatticePoint.orbit(p), DomainError as d => 0 - 1 }
+}
+fun main(): Number {
+  be _a := IO.print_num(idx(5))
+  be _b := IO.print_num(idx(196559))
+  be _c := IO.print_num(if orb(1536) == orb(1280) then 1 else 0)
+  return 0
+}
+""")
+    _verdict(out.split() == ["5", "196559", "1"], f"index(at_index 5), index(at_index 196559), same orbit: {out.split()}")
+
+
+def test_a_number_is_not_a_lattice_point(tmp_path):
+    rc, out = _compile(_project(tmp_path, """\
+place Entry {}
+fun main(): Number {
+  be a := Arena.put(Arena.empty(), 1536, 42)
+  return 0
+}
+"""), tmp_path / "out")
+    _verdict(_clean_rejection(rc, out), f"a Number used as a lattice point was accepted: rc={rc}")
+
+
+def test_a_lattice_point_has_no_arithmetic(tmp_path):
+    rc, out = _compile(_project(tmp_path, """\
+place Entry {}
+fun main(): Number {
+  return match LatticePoint.at_index(0) { LatticePoint as p => LatticePoint.index(p + 1), DomainError as d => 0 }
+}
+"""), tmp_path / "out")
+    _verdict(_clean_rejection(rc, out) and "LatticePoint" in out,
+             f"p + 1 on a lattice point was not refused: rc={rc} {out[-200:]}")
+
+
+def test_an_arena_is_addressed_by_lattice_points(tmp_path):
+    code, out = _compiles_and_runs(tmp_path, """\
+place Entry {}
+fun main(): Number {
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
+    DomainError as d => 0
+  }
+}
+""")
+    _verdict(code == 42, f"put then get at a lattice point: {code}")
+
+
 # --- a name is defined: be x := e ----------------------------------------------
 # `:=` reads "is defined as", the same symbol as a field's `side := Number`:
 # x equals e by definition for its whole scope. `holds` is no word of the
@@ -2981,13 +3080,16 @@ fun main(): Number {
 def test_arena_returns_the_stored_number(tmp_path):
     entry = """\
 place Entry {}
-fun held(x: Number): Number {
-  return match Arena.get(Arena.put(Arena.empty(), 1536, x), 1536) { Found(v) => v, Absent => 0 }
+fun held(p: LatticePoint, x: Number): Number {
+  return match Arena.get(Arena.put(Arena.empty(), p, x), p) { Found(v) => v, Absent => 0 }
+}
+fun both(p: LatticePoint): Number {
+  be _a := IO.print_num(held(p, 2.5))
+  be _b := IO.print_num(held(p, 0 - 3))
+  return 0
 }
 fun main(): Number {
-  be _a := IO.print_num(held(2.5))
-  be _b := IO.print_num(held(0 - 3))
-  return 0
+  return match LatticePoint.of_coordinate(1536) { LatticePoint as p => both(p), DomainError as d => 1 }
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
@@ -2998,7 +3100,9 @@ def test_arena_returns_a_small_integer(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  return match Arena.get(Arena.put(Arena.empty(), 1536, 42), 1536) { Found(v) => v, Absent => 0 }
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
+    DomainError as d => 0 }
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
@@ -3015,13 +3119,17 @@ fun same_n(v: Number, x: Number): Number {
          else (if v == v then 0 else 1)
 }
 fun arena_n(x: Number): Number {
-  return match Arena.get(Arena.put(Arena.empty(), 1536, x), 1536) { Found(v) => same_n(v, x), Absent => 0 }
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, x), p) { Found(v) => same_n(v, x), Absent => 0 }),
+    DomainError as d => 0 }
 }
 fun xrel_n(x: Number): Number {
   return match XRelMap.get(XRelMap.insert(XRelMap.empty(), 1536, x), 1536) { Found(v) => same_n(v, x), Absent => 0 }
 }
 fun arena_i(x: Int64): Number {
-  return match Arena.get(Arena.put(Arena.empty(), 1536, x), 1536) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, x), p) { Found(v) => (if v == x then 1 else 0), Absent => 0 }),
+    DomainError as d => 0 }
 }
 fun xrel_i(x: Int64): Number {
   return match XRelMap.get(XRelMap.insert(XRelMap.empty(), 1536, x), 1536) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
@@ -3033,7 +3141,9 @@ fun main(): Number {
   be floats := both_n(2.5) + both_n(0 - 3) + both_n(0.0 * (0 - 1)) + both_n(0.0 / 0.0)
                 + both_n(inf) + both_n(0 - inf)
   be ints := both_i(Int64.max_value()) + both_i(Int64.min_value()) + both_i(9007199254740993)
-  be empty := match Arena.get(Arena.empty(), 1536) { Found(v) => 0, Absent => 1 }
+  be empty := match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match Arena.get(Arena.empty(), p) { Found(v) => 0, Absent => 1 }),
+    DomainError as d => 0 }
   return floats * 100 + ints * 10 + empty
 }
 """
@@ -3095,9 +3205,11 @@ def test_a_text_value_rides_a_lattice_slot_by_its_handle(tmp_path):
 place Entry {}
 fun main(): Number {
   be m := XRelMap.insert(XRelMap.empty(), 1536, String.concat("ab", "c"))
-  be a := Arena.put(Arena.empty(), 1536, String.concat("a", "bc"))
   be x := match XRelMap.get(m, 1536) { Found(v) => (if v == "abc" then 1 else 0), Absent => 0 }
-  be y := match Arena.get(a, 1536) { Found(v) => String.length(v), Absent => 0 }
+  be y := match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, String.concat("a", "bc")), p) {
+      Found(v) => String.length(v), Absent => 0 }),
+    DomainError as d => 0 }
   return x * 10 + y
 }
 """
@@ -3119,7 +3231,7 @@ fun main(): Number {
 
 @pytest.mark.parametrize("call", ["HashMap.value(HashMap.set(HashMap.empty(), 1, 42), 1)",
                                   "XRelMap.value(XRelMap.insert(XRelMap.empty(), 1536, 42), 1536)",
-                                  "Arena.value(Arena.put(Arena.empty(), 1536, 42), 1536)"])
+                                  "match LatticePoint.of_coordinate(1536) { LatticePoint as p => Arena.value(Arena.put(Arena.empty(), p, 42), p), DomainError as d => 0 }"])
 def test_a_collection_offers_get_and_keeps_value_to_itself(tmp_path, call):
     """`value` reads a key the collection holds and stops on any other: it is
     how `get` is built, internal to its house. Outside, the face is `get`."""

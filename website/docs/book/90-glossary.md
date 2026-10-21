@@ -95,8 +95,8 @@ the heap (196,560 slots, its kissing number) and whose symmetries drive
 orbit canonicalization.
 
 **Co₀ / M₂₄ orbit**, an equivalence class of contents under the lattice's
-symmetry group; `Arena.orbit` returns the representative and `Arena.same_orbit`
-tests two contents for equivalence.
+symmetry group; `LatticePoint.orbit` returns the orbit of a point, and two
+points are equivalent when their orbits are equal.
 
 **Golay code (24,12,8)**, the error-correcting code sealing every
 `VoyagerList` element: 12 data bits in a 24-bit word, healing up to 3

@@ -63,10 +63,9 @@ by private memory or POSIX shared memory interchangeably.
 The lattice is not just sizing. Through the vendored mmgroup core, the runtime exposes
 **canonicalization under the lattice symmetries**: sign patterns canonical
 under the Golay-code stabilizer, M₂₄ orbit representatives, orbit ids. The
-**Arena** surfaces them directly, `Arena.orbit` returns the orbit id of a
-content and `Arena.same_orbit` tests two contents for equivalence under the
-symmetry group, so contents that are "the same up to symmetry" can be
-recognized as one. Content addressing, extended from bytes to orbits.
+**Arena** is addressed by them: a slot is a `LatticePoint`, and
+`LatticePoint.orbit` returns the orbit of a point, so two points that are "the
+same up to symmetry" are recognized as one by `orbit(p) == orbit(q)`. Content addressing, extended from bytes to orbits.
 
 ## The heap chain (HeapRef)
 

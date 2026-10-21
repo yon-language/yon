@@ -1,0 +1,40 @@
+/* LatticePoint — a point of the type-2 shell of the Leech lattice: one of
+ * its 196560 minimal vectors, named by its 25-bit coordinate. The
+ * representation is internal: a point is made only where it is one — by
+ * `of_coordinate`, the characteristic map of the shell (a coordinate is a point, or a
+ * DomainError), or by `at_index`, the i-th point of the shell — and read only
+ * through `index` and `orbit`. No literal is a point and no arithmetic
+ * applies: the sum of two points is not a point.
+ *
+ * Markers: [G] given, the runtime primitive · [E] partial, `on error` */
+place LatticePoint is internal i64 {
+
+  /* ─── The shell ─────────────────────────────────────────── [G] ─── */
+
+  /* whether n is the coordinate of a type-2 vector (an integer, in range,
+     on the shell) */
+  internal fun is_point(n: Number): Boolean is given
+  internal fun unchecked_coordinate(n: Number): LatticePoint is given
+  /* whether i indexes the shell: an integer in [0, 196560) */
+  internal fun is_index(i: Number): Boolean is given
+  internal fun unchecked_index(i: Number): LatticePoint is given
+
+  /* ─── Making a point ─────────────────────────────────────── [E] ─── */
+
+  fun of_coordinate(n: Number) on error DomainError: LatticePoint {
+    return if is_point(n) then unchecked_coordinate(n)
+           else .-> DomainError { message "not the coordinate of a type-2 point" }
+  }
+
+  fun at_index(i: Number) on error DomainError: LatticePoint {
+    return if is_index(i) then unchecked_index(i)
+           else .-> DomainError { message "not an index of the type-2 shell, an integer in [0, 196560)" }
+  }
+
+  /* ─── Reading a point ────────────────────────────────────── [G] ─── */
+
+  /* its place on the shell, in [0, 196560): at_index(index(p)) is p */
+  fun index(p: LatticePoint): Number is given
+  /* its orbit under M24, in [0, 12) */
+  fun orbit(p: LatticePoint): Number is given
+}

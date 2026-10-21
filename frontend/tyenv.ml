@@ -140,6 +140,9 @@ let name_is_terminal (env : env) (name : string) : bool =
      AND has exactly one nullary arm (star): one point, the terminal 1. *)
   match Hashtbl.find_opt Surface_ast.fusion_places name with
   | Some prim -> prim = "unit"
+  | None when Hashtbl.mem Surface_ast.internal_faces name ->
+      (* a representation internal to the house is a carrier too *)
+      Hashtbl.find Surface_ast.internal_faces name = "unit"
   | None ->
       match lookup_place env name with
       | Some pd -> place_is_terminal pd

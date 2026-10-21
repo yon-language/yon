@@ -55,10 +55,21 @@ What distinguishes them is what they make cheap:
 - **Cells**, not a collection: the one mechanism with identity
   (chapter 14). The `=` assignment and every loop are built on them; ~12 ns per
   set+get pair, 1,024 per process.
-- **`Arena<V>`**, the Leech-indexed pool: one slot per type-2 lattice point.
-  `Arena.orbit` returns the M₂₄ orbit id of a point and `Arena.same_orbit`
-  tests two points for equivalence under the symmetry group, equality up to
-  symmetry made explicit. `Arena.get` answers `Found(v)` or `Absent`.
+- **`Arena<V>`**, the Leech-indexed pool: one slot per type-2 lattice point,
+  addressed by a `LatticePoint`. `Arena.get` answers `Found(v)` or `Absent`.
+
+**A lattice point is made only where it is one.** `LatticePoint` is an
+abstract type over its representation, a 25-bit coordinate carried as an
+`i64` (`place LatticePoint is internal i64`): outside its house no literal is
+a point, no arithmetic applies (the sum of two points is not a point), and it
+is not an `Int64`. A point is made by `LatticePoint.of_coordinate(n)`, the
+characteristic map of the type-2 shell, which answers a point or a
+`DomainError` (a fraction, a negative, a coordinate off the shell), or by
+`LatticePoint.at_index(i)`, the i-th of the 196,560 points (a `DomainError`
+outside `[0, 196560)`). It is read through `LatticePoint.index(p)`, its place
+on the shell, and `LatticePoint.orbit(p)`, its M₂₄ orbit: an orbit belongs to
+the point, so two points are the same up to symmetry when
+`orbit(p) == orbit(q)`.
 
 **What a lattice slot holds.** `Arena<V>` and `XRelMap<K, V>` keep their
 values inline, in the slots of the lattice, never in the heap. Which values

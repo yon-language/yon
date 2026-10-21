@@ -182,7 +182,7 @@ def test_benchmark(name, tmp_path):
             f"xset: bit-parallel intersect not faster than hash? xset={xset_inter} hash={hash_inter}"
         )
     if name == "arena_ops":
-        put_2k, put_20k, get_20k, so_20k = median[0], median[3], median[4], median[5]
+        put_2k, put_20k = median[0], median[3]
         # the exact-twin nets must all be positive (twin mirrors the op; a <=0 net
         # would mean the baseline does not mirror it, the bug that hid the put cost).
         assert min(median) > 0, f"arena_ops: a net per-op is <= 0 (baseline not an exact twin)? {median}"
@@ -190,10 +190,6 @@ def test_benchmark(name, tmp_path):
         # resize/probing): a 10x larger N must not cost meaningfully more per op.
         assert put_20k <= max(put_2k, 1) * 3, (
             f"arena_ops: put not O(1) in N? put@2k={put_2k} put@20k={put_20k}"
-        )
-        # same_orbit recomputes the M24 orbit relation; it must cost more than a get.
-        assert so_20k > get_20k, (
-            f"arena_ops: same_orbit (M24 work) not heavier than get? so={so_20k} get={get_20k}"
         )
     if name == "ds_ops":
         cons_10k, cons_100k, set_10k, set_100k, add_100k = (
