@@ -65,6 +65,7 @@ _MODULE_DEFAULT = {
     "test_c_coverage":    ("c", "unit"),            # gcov floor gate (opt-in --gcov)
     "test_selfhost":      ("yon", "integration"),   # Yon-in-Yon seeds compile + run
     "test_soundness_probes": ("yon", "integration"),  # what the checker must refuse or accept
+    "test_number_functions_oracle": ("yon", "integration"),  # Number's functions against Arb
 }
 
 # modules that MIX kinds: per test-function-name overrides, plus a module default.
