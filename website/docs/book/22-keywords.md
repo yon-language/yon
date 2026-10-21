@@ -27,7 +27,7 @@ A Yon program is a list of these.
 
 #### `place`
 
-An object living in a world. A place is declared in one of two shapes, both inside `place Name { ... }`. As a **product**: named fields (`side := number`, or the bare `side number`), plus operations (mediated arrows, listed inline with the fields); instances are built with `.-> P { field value }`. As a **coproduct**: a `this >` clause naming the arms it is the sum of (`place Tree { this > Leaf(number) :U Node(Tree, Tree) }`). One place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
+An object living in a world. A place is declared in one of two shapes, both inside `place Name { ... }`. As a **product**: named fields (`side := Number`, or the bare `side Number`), plus operations (mediated arrows, listed inline with the fields); instances are built with `.-> P { field value }`. As a **coproduct**: a `this >` clause naming the arms it is the sum of (`place Tree { this > Leaf(Number) :U Node(Tree, Tree) }`). Inside a Space directory, one place per file, the file's basename is the place name; the world is inferred from the project layout. There is no surface `world` keyword: a world is declared in `yon.toml` (`[world.Name]`), and a Space is a directory under the project root, not a surface declaration. The `space` token survives only inside `wire to space S` (see `wire`).
 
 #### `this`
 
@@ -125,6 +125,22 @@ The companion of `for`; see above.
 #### `here`
 
 `for every x in e when here { }`: the Space filter in the for-every header. Declared intent: execution is sequential and every element passes.
+
+<CodeWindow file="kw_list_here.yon"
+            run="yonc kw_list_here.yon -o list_here && ./list_here; echo $?"
+            out={["21"]}>
+{`fun total(xs: List<Number>): Number {
+  be acc := 0
+  for every x in xs when here {
+    acc = acc + x
+  }
+  return acc
+}
+fun main(): Number {
+  be lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  return total(lst)
+}`}
+</CodeWindow>
 
 #### `sequence`
 
@@ -438,7 +454,7 @@ Declares an algebraic law on a place; a false claim is rejected at compile time.
 
 #### `fold`
 
-Names a space's fold function: `with fold "sum_f64"`.
+Names a reduction's canonical fold: `reduction R of P fold "sum_f64" { ... }`.
 
 <CodeWindow file="kw_algebra/"
             run="yonc kw_algebra/ -o kw_alg && ./kw_alg; echo $?"
@@ -473,7 +489,7 @@ Handle composition with kind discipline: `(compose f with g)(x) = g(f(x))`.
 
 #### `topos`
 
-The first-class declaration: a category rich enough to do logic inside, with its morphisms and props in one `where` block. With topos-per-space, the objects are inferred from the filesystem (the place files in the Space), so a topos no longer carries an inline `objects { }` block (that keyword is retired) — and the terminal is not declared either: every topos has one by definition (`terminal` is retired with it).
+The first-class declaration: a category rich enough to do logic inside, with its morphisms and props in one `where` block. With topos-per-space, the objects are inferred from the filesystem (the place files in the Space), so a topos no longer carries an inline `objects { }` block (that keyword is retired). The `terminal` keyword is retired too: every topos has a terminal object by definition, so it is not declared.
 
 #### `morphism`
 
@@ -617,7 +633,7 @@ The slice: `place P over X` declares objects equipped with a chosen map down to 
 
 #### `of`
 
-`list of T`, `view of P`, `reduction ... of P`, `map of K to V`.
+`view of P`, `reduction ... of P`.
 
 #### `in`
 
@@ -625,7 +641,7 @@ The slice: `place P over X` declares objects equipped with a chosen map down to 
 
 #### `to`
 
-`move m from A to B`, `maps to`, `resolves to`, `map of K to V`.
+`move m from A to B`, `maps to`, `resolves to`.
 
 #### `from`
 
@@ -672,28 +688,12 @@ fun main(): Number visits Output {
 
 #### `with`
 
-`with multishot`, `with fold`, `compose f with g`.
+`with multishot`, `compose f with g`.
 
 
 #### `requires`
 
-`move m ... requires CAP1, CAP2`: the capabilities a move demands.
-
-<CodeWindow file="kw_list_here.yon"
-            run="yonc kw_list_here.yon -o list_here && ./list_here; echo $?"
-            out={["21"]}>
-{`fun total(xs: List<Number>): Number {
-  be acc := 0
-  for every x in xs when here {
-    acc = acc + x
-  }
-  return acc
-}
-fun main(): Number {
-  be lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
-  return total(lst)
-}`}
-</CodeWindow>
+`move m ... requires CAP1, CAP2`: the capabilities a move declares. The check is emitted at each `apply_move` but not yet enforced (chapter 20).
 
 #### `multishot`
 
@@ -737,7 +737,7 @@ fun main(): Number {
 
 </CodeWindow>
 
-The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed in v1.1.0: `buffer` is no longer a reserved word. (`drop` was later reintroduced with an unrelated meaning, the Space-reclaim statement `drop X`; see below.)
+The stream back-pressure modifiers `buffer N` and `drop oldest` / `drop newest` were parsed but never consumed, and were removed: `buffer` is no longer a reserved word. (`drop` was later reintroduced with an unrelated meaning, the Space-reclaim statement `drop X`; see below.)
 
 #### `space`
 
@@ -759,7 +759,7 @@ Inside a `spawn` body, `promote E` emits `E` onto the parent's collection channe
 
 #### `parallel`
 
-The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in the parent before the fork and gives the number of replicas. (`=` is not yet supported inside a spawn body; use `Space.set`, or compute the value before the block. The full fix lands with the produce rework.)
+The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in the parent before the fork and gives the number of replicas. (`=` is not supported inside a spawn body, a compile-time error; use `Space.set`, or compute the value before the block.)
 
 <CodeWindow file="spawn_parallel_collect.yon" run="yonc spawn_parallel_collect.yon -o spc && ./spc; echo $?" out={["10"]}>
 
@@ -912,7 +912,7 @@ KERNEL FORM (the surface spelling is `clear`). The reflexivity path: the proof t
 
 #### `clear`
 
-THE surface spelling of reflexivity, one keyword with two shapes. `clear a` is the trivial path, the proof that `a` is clearly itself (kernel: `refl(a)`) — the journey that goes nowhere; read off at either end, it is just `a`. Bare `clear` is the proof that the two sides of a `Same` (or `Id`) return type are the same *by computation* — reflexivity of the endpoint, inferred from the goal; it is checked, not asserted: if the two sides do not reduce to one value the compiler rejects it, the same gate as the kernel `refl` written by hand, and it is valid only in return position, where the goal fixes which endpoint to reflect. Part of the *journey* vocabulary for paths (`clear`/`back`/`through`/`span`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
+THE surface spelling of reflexivity, one keyword with two shapes. `clear a` is the trivial path, the proof that `a` is clearly itself (kernel: `refl(a)`) — the journey that goes nowhere; read off at either end, it is just `a`. Bare `clear` is the proof that the two sides of a `Same` (or `Id`) return type are the same *by computation* — reflexivity of the endpoint, inferred from the goal; it is checked, not asserted: if the two sides do not reduce to one value the compiler rejects it, the same gate as the kernel `refl` written by hand, and it is valid only in return position, where the goal fixes which endpoint to reflect. Part of the *journey* vocabulary for paths (`clear`/`back`/`through`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
 
 #### `back`
 
@@ -958,8 +958,7 @@ fun main(): Number {
 
 These are active in the kernel today: their reductions are exercised by the
 `regression/yon_tests/prove` oracle (definitional equality, the emitter exits 0 only when the
-reducer agrees) and they run end to end (`examples/circle_hit`). The full pedagogical treatment of
-cubical type theory is future work (1.2). All are type-level or proof constructs: they reduce or
+reducer agrees) and they run end to end (`examples/circle_hit`). All are type-level or proof constructs: they reduce or
 erase at compile time, so they carry no runtime benchmark.
 
 #### `plam`
@@ -1009,7 +1008,7 @@ the points. The reducer never identifies `loop` with `refl`, so the circle stays
 
 #### `match`
 
-KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): number { return match t { Leaf { _1 as v } => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
+KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): Number { return match t { Leaf { _1 as v } => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
 
 #### `El`
 
@@ -1021,8 +1020,8 @@ introduces an inhabitant; `el_match` eliminates one.
 #### `quote`
 
 Universe-code introduction: `quote(c, a) : El(c)` packages an inhabitant `a` under the code `c` that
-names its type. It lowers to its inhabitant and runs; the deeper Tarski reflection (a code inspecting
-its own structure) is 1.2.
+names its type. It lowers to its inhabitant and runs; a code cannot inspect its own structure (no
+deeper Tarski reflection).
 
 #### `el_match`
 

@@ -3,9 +3,9 @@ import React from 'react';
 /**
  * "The gaps are the proof." Every per-operation cost on one log axis, cheapest to
  * dearest. The interesting thing is not any single bar but the distances: the
- * heap-cons ops (List.cons, HashMap.set) sit above the inline ops (Vec.push,
- * HashSet.add) by exactly the content-addressing price they pay for structural
- * sharing.
+ * heap-cons ops (List.cons, HashMap.set) sit above the inline ops (Vec.push, and
+ * HashSet.add as it was at commit 1c44e79, before HashSet became a hash trie) by
+ * the content-addressing price they pay for structural sharing.
  *
  * HONESTY CONTRACT:
  *   - Every nanosecond is the real per-op figure from Appendix D, measured on an
@@ -61,7 +61,7 @@ export default function PerOpLadder() {
       <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5, marginBottom: 8 }}>
         <strong style={{ color: C.text }}>Per-operation cost, cheapest to dearest.</strong> Log axis, so
         each gap is a ratio. The hash-cons ops sit one step above the inline ops by the sharing price
-        they pay. Apple M1.
+        they pay. Apple M1, commit 1c44e79 (HashSet as it was then, before it became a hash trie).
       </div>
 
       <svg viewBox={`0 0 360 ${H}`} style={{ width: '100%', maxWidth: 460 }} fontFamily={mono}>

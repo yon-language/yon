@@ -9,9 +9,9 @@ import LeechShells from '@site/src/components/LeechShells';
 :::note DRAFT (prose), code ✓
 The `.yon` below is **native-gated** (`regression/book/jp/uc_lattice`, `toolchain/yonc`: stdout
 `196560 12 1 2`). The kissing-number theorem is re-derived every build
-(`frontend/test_leech_theta.ml:26,33`, `N(2) = 196560`, `type2_count = 196560`); the perfect hash is
+(`frontend/test_leech_theta.ml`, checks `N(2) [norm 4: kissing]` and `type2_count [capacity]`: `N(2) = 196560`, `type2_count = 196560`); the perfect hash is
 proven exhaustively in `runtime/test_mphf.c` (a bijection to `[0, 196560)`, zero collisions, full
-cover); `196560` fits in 18 bits (`runtime/yon_rt.c:3077`). The LEECH SHELLS player replays the
+cover); `196560` fits in 18 bits (196,560 < 2¹⁸ = 262,144). The LEECH SHELLS player replays the
 shell counts.
 :::
 
@@ -56,7 +56,7 @@ places.
 slot in `[0, 196560)` by a **minimal perfect hash**, a bijection, zero collisions, full cover, proven
 exhaustively (`test_mphf.c`). Where the first heap, the FNV heap, has to compare bytes whenever two
 hashes collide, the Leech heap *never* collides: there is nothing to resolve, because the address function is exact by construction.
-And 196,560 fits in eighteen bits (`yon_rt.c:3077`), so the whole universe of addresses is a bitmap of
+And 196,560 fits in eighteen bits (196,560 < 2¹⁸ = 262,144), so the whole universe of addresses is a bitmap of
 24 kilobytes, every possible place a value could be, held in the space of a small photograph. The FNV
 heap takes any content and hashes it; the Leech heap takes only its own 196,560 points, and in
 exchange gives a perfect, compact, collision-free address.

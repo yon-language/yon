@@ -16,10 +16,11 @@ import ArenaPutO1 from '@site/src/components/ArenaPutO1';
 Numbers before claims, and the method before the numbers. A timing without its method is
 not a benchmark, it is a number someone saw once.
 
-This is the whole suite, not a highlight reel: sixteen per-operation timings, four scaling
-studies (set algebra, heap expansion, content interning, and multicore replicas), a
-cross-process wire measurement, and underneath all of them a correctness gate that re-runs
-every program and checks its result on each build. What follows is organized by what each
+This is the whole suite, not a highlight reel: sixteen per-operation timings, the scaling of
+equality with the size of the value, of content interning across heap generations, and of
+multicore replicas, and underneath all of them a correctness gate that re-runs every program and
+checks its result on each build. Two studies are not published: set-algebra scaling and the
+cross-process wire latency (their sections say why). What follows is organized by what each
 number teaches.
 
 ## How these were measured
@@ -45,7 +46,10 @@ python regression/bench_perf/summarize.py /tmp/perf.json
 | **Commit** | `1c44e79`, measured 2026-06-29 |
 
 A timing without a commit is not reproducible, since the code it measures moves; the commit
-and date above pin exactly what was run.
+and date above pin exactly what was run. Since that commit `HashSet` has become a persistent hash
+trie in the content-addressed heap (`prelude/coll/HashSet.yon`), and the arena bench builds its
+addresses with `LatticePoint.at_index`. The `HashSet` rows below measure the implementation of
+commit `1c44e79` and are not yet re-measured.
 
 Two rules, learned the hard way in this suite, keep the per-op numbers honest. The baseline must be
 an **exact twin**, everything the op does except the one operation, including any address generation,
@@ -101,8 +105,8 @@ the size of the value; it is just faster than this harness can see from outside.
 The heavier numbers tell their own truth, and the gaps between them are the proof. `Arena.get` is
 about 41 ns, the cost of finding a value at a lattice address. `List.cons` (~70 ns, flat) and `HashMap.set`
 (~130 to ~340 ns, growing with the map) each content-address their payload on the FNV heap, the
-hash-cons price that buys structural sharing, where `Vec.push` and `HashSet.add` store inline and skip
-it. (The arena ops are measured in-process net of an exact twin that makes the same lattice point,
+hash-cons price that buys structural sharing, where `Vec.push` and, at that commit, `HashSet.add`
+stored inline and skipped it. (The arena ops are measured in-process net of an exact twin that makes the same lattice point,
 since the arena is addressed by lattice points and making the point must be subtracted, not left in.)
 
 `MerkleTree.node2` at ~138 ns is given with a caveat: it rebuilds one identical tree, so it is a
@@ -117,21 +121,20 @@ at several N, publish per the outcome. They landed differently. `List.cons` is r
 ~70 ns**; the 204 was the one-time heap creation (`ds_ensure_init`) smearing over the small N a cons
 list allows, the Space-only baseline never paying it. `HashMap.set` is real and **grows with the
 map**, ~130 ns at 10k entries to ~340 ns by a million, because it content-addresses each `(key,value)`
-entry on the chaining heap and the probe resolves heaprefs across generations; `HashSet.add`, storing
-inline, stays flat at ~70 ns, which both proves the cause and names the optimization (a map that
-needs no sharing could store inline and stay flat). One corrected down to a clean number, one
+entry on the chaining heap and the probe resolves heaprefs across generations; `HashSet.add`, which
+at that commit stored inline, stayed flat at ~70 ns, which supported the cause. One corrected down to a clean number, one
 corrected into a curve. (`regression/bench/ds_ops`.)
 
 ### Arena.put is O(1), and the number that said otherwise
 
 An earlier run put `Arena.put` at about 31 µs and made it look super-linear, 1 µs at N=2,000 against
 31 µs at N=10,000, and it was kept out of the book until it was understood. Two methodological faults
-were stacked, neither in Yon. The baseline was not an exact twin: the put loop calls `Leech.point` to
+were stacked, neither in Yon. The baseline was not an exact twin: the put loop called `Leech.point` (at that commit) to
 build the address, the baseline did not, so the subtraction left that cost in. And the first
 `Leech.point`/`Arena.put` in a process pays a one-time mmgroup table init of about 200 ms (the first
 put measures 198 ms, every later put 105 ns); over a put loop of only N=10,000, all an arena of
 196,560 slots invites, that fixed cost smears to ~20 µs per op, which a non-twin baseline cannot
-remove. The runtime confirms put is O(1): `yon_arena_put_repr` (`runtime/yon_arena.c:60`) is a
+remove. The runtime confirms put is O(1): `yon_arena_put_value` (`runtime/yon_arena.c`) is a
 perfect-hash index plus four slot writes, no resize, no probing, the orbit sealed per point. Measured
 in-process net of an exact twin, with min-over-reps to drop the one-time init, it is flat in the fill:
 
@@ -165,12 +168,12 @@ asserted before any timing, so the benchmark cannot compare invalid handles.)
 
 An `XSet` is a fixed 196,560-bit bitmap over the type-2 lattice points, so `intersect` and
 `union` are a machine-word AND or OR over about 3,072 words, **independent of how many elements
-the sets hold**. A `HashSet` must iterate, so its cost is O(N).
+the sets hold**.
 
-**The scaling measurement is withdrawn.** At N=100,000 the `HashSet` runtime runs out of capacity:
-the benchmark kept running and its `HashSet` timings at that
-size measured the failure path, not the set operation. Until that defect is corrected the numbers of
-`regression/bench/xset_scaling` are not published, and this section shows none.
+**The scaling measurement is withdrawn.** At commit `1c44e79`, at N=100,000 the `HashSet`
+runtime of that time ran out of capacity, and its timings at that size measured the failure path,
+not the set operation. `HashSet` has since become a hash trie with no fixed capacity;
+`regression/bench/xset_scaling` is not yet re-measured, and this section shows no numbers.
 
 ## Parallelism is multicore, for free
 
@@ -199,8 +202,8 @@ where fork and shared memory are unavailable.)
 The same shared memory is the wire between Spaces. Two separate processes, a producer pushing
 messages onto a shared-memory `Wire` and a consumer draining them, move messages across the process
 boundary: a real inter-process hop, not a function call, and what lets one Space talk to another
-without a socket or a serializer in the path. **No latency figure is given here**: the earlier one
-did not reproduce on a later run, and the wire is being measured again on the reference M1.
+without a socket or a serializer in the path. **No latency figure is published**: the earlier one
+did not reproduce on a later run.
 (`regression/book/jp/bench/wire_throughput`, gated by `regression/test_wire_throughput.py`,
 IPC-guarded like the spawn bench. Method note: the in-process stream is a bounded prototype, a fixed
 64-slot ring that silently drops past capacity, so it cannot be timed at high volume; the cross-process

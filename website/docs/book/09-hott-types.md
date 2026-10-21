@@ -144,11 +144,10 @@ fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account,
 Σ whose first projection is monic when `P` is a mere proposition. The
 **coercion direction is `{x : A where P} <: A`**: a value of the subobject is
 silently usable as an `A` (the forgetful mono), applied pervasively by the
-type checker. The other direction is a proof obligation, and value-level
-*construction* of comprehension values (a surface constructor carrying the
-witness) is deliberately later: today the comprehension is a type-level
-discipline.
+type checker. The other direction is a proof obligation. There is no surface
+constructor that builds a comprehension value with its witness: the
+comprehension is a type-level discipline.
 
 This layer is also where the proof machinery lives: places carry higher
-`cell`s (CaTT witnesses), and the compiler extracts Core→CaTT proof terms for
-the directed structure, the book's research appendix will return to this.
+`cell`s (CaTT witnesses), and the frontend has a Core→CaTT translation for the
+directed structure (`frontend/catt_r_yon.ml`).

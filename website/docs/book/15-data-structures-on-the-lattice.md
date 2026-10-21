@@ -40,8 +40,8 @@ What distinguishes them is what they make cheap:
   a doubled strip past capacity, returning a new handle and handing the old
   strip's whole pages back to the OS via `madvise`; `get`/`set` are O(1).
   It is the building block for an indexed map.
-- **HashMap**, `f64 → f64`, with string handles as keys when you need
-  them (a handle is a number). A binary trie on the 32-bit hash of the key:
+- **`HashMap<K, V>`**, keys and values of any type (a string key is its
+  handle, a number). A binary trie on the 32-bit hash of the key:
   a `get` or a `set` walks at most one level per hash bit, and a `set`
   copies that path; bounded only by memory, its nodes spill across heaps
   transparently. A key is identified by its bits, the identity of the heap:
@@ -49,16 +49,14 @@ What distinguishes them is what they make cheap:
   general key→value store.
 - **VoyagerList**, the small, precious store: every element is sealed in
   a Golay codeword and healed on read. Use it where corruption is worse
-  than cost, configuration, ledger heads, calibration constants. The
-  seal costs roughly a factor of two over a raw cell read (Appendix D),
-  which is nothing for what it buys.
+  than cost, configuration, ledger heads, calibration constants.
 - **MerkleTree**, trees whose identity is their content. Use it for
   expression DAGs, audit trails, snapshots: building the same tree twice
   costs almost nothing (every node is a dedup hit), and comparing two
   4,096-leaf trees is one comparison.
 - **Cells**, not a collection: the one mechanism with identity
-  (chapter 14). The `=` assignment and every loop are built on them; ~12 ns per
-  set+get pair, 1,024 per process.
+  (chapter 14). The `=` assignment and every loop are built on them; 1,024 per
+  process.
 - **`Arena<V>`**, the Leech-indexed pool: one slot per type-2 lattice point,
   addressed by a `LatticePoint`. `Arena.get` answers `Found(v)` or `Absent`.
 

@@ -19,11 +19,11 @@ restaurant/
   Entry.yon          // place Entry { } + top-level fun main()
   sala/              // the Space "sala" (the dining room)
     Topos.yon        // topos SalaTopos where { }
-    Order.yon        // place Order { total number }
+    Order.yon        // place Order { total Number }
     ToKitchen.yon    // move ToKitchen from Order to Ticket
   cucina/            // the Space "cucina" (the kitchen)
     Topos.yon        // topos CucinaTopos where { }
-    Ticket.yon       // place Ticket { total number }
+    Ticket.yon       // place Ticket { total Number }
 ```
 
 ```toml
@@ -96,8 +96,9 @@ is the front door.
 The strong regime is the **package boundary**, and there hermeticity is not a
 type rule at all: it is the operating system. With `backend = "separate"` each
 Space compiles to its own process, so a Space is a heap behind a process
-boundary. Nothing reaches across except numbers over a named channel, because
-nothing else *can*: the kernel's memory protection is the fence. A section in
+boundary. Nothing reaches across except what the runtime carries over a named
+channel (numbers on a call, copies on a `Wire<T>`, chapter 17), because nothing
+else *can*: the kernel's memory protection is the fence. A section in
 `cucina` is a handle in the kitchen process; the dining-room process never holds
 its address. Hermeticity is the MMU, not a runtime check the program could be
 tricked into skipping.
@@ -138,14 +139,16 @@ Compile each source to its own binary and run the caller:
 `YON_SRV_DIR`), asks it to run `plate_price(13)`, and gets `39` back over the
 wire. Shutdown cascades when the caller exits.
 
-The wire is deliberately narrow: **only numbers**, at most **4 arguments**, over
-a channel named after the Space (see chapter 17). Every value that crosses is an `f64`;
-the transport has no other type. Ask for a fifth argument and the compiler stops
+A cross-Space **call** is deliberately narrow: **only numbers**, at most
+**4 arguments**, over a channel named after the Space (see chapter 17). Every
+argument and result of a call is an `f64`. Ask for a fifth argument and the compiler stops
 you before it builds, reporting that a cross-Space call may take at most 4 number
 arguments across a Space boundary.
 
-Strings and sections are process-local handles, so what travels is a number, not
-the object. `internal` functions are not exported. The importer of
+Strings and sections are process-local handles: a call does not carry them.
+A `String` parameter in a cross-Space signature is not yet refused; it compiles
+and the call returns a wrong value (chapter 19). Strings and places cross by
+copy on a `Wire<T>` (chapter 17). `internal` functions are not exported. The importer of
 `recipe_secret` compiles, but the first call gets a refusal from the server
 itself: the cross-Space call fails because `Kitchen_srv` reports the operation is
 not exported.

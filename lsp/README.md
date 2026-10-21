@@ -1,31 +1,36 @@
 # Yon LSP
 
-Language server per Yon. Gira sul client (stdin/stdout, JSON-RPC) — niente da
-hostare. Riusa il frontend (parser, lexer, typechecker): un diagnostic LSP e'
-un type_error del compilatore tradotto nel protocollo.
+The Yon language server. It runs on the client side (stdin/stdout, JSON-RPC):
+nothing to host. It reuses the frontend (lexer, parser, type checker, linter,
+formatter): an LSP diagnostic is a compiler diagnostic translated into the
+protocol.
 
-## Capacita' attuali
-- Diagnostics in tempo reale (errori di sintassi e di tipo) su didOpen/didChange.
-- Multi-error: tutti gli errori del programma, non solo il primo.
+## What it does
+- Diagnostics on `didOpen`/`didChange`: syntax and type errors (every error in
+  the program, not only the first) and linter warnings (`Wxxxx`).
+- Hover.
+- Document symbols.
+- Completion (keywords and names in scope; `.` is a trigger character).
+- Document formatting, through the shared formatter (fail-safe: it declines
+  rather than produce a different program).
 
 ## Build
-Il binario e' un executable del frontend (condivide i moduli):
+The binary is a frontend executable (it shares the modules):
 ```
 cd frontend && dune build
-# -> frontend/_build/default/yon_lsp.exe
+# -> frontend/_build/default/yon_lsp.exe   (wrapper: toolchain/yon-lsp)
 ```
 
-## Uso CLI (test/CI)
+## CLI use (tests/CI)
 ```
-yon_lsp.exe --check file.yon   # stampa diagnostics, exit code = #errori
+yon_lsp.exe --check file.yon   # prints the diagnostics; exit code = their number (at most 255)
+yon_lsp.exe --check dir/       # whole project (Project.check_all, the check the driver runs)
 ```
 
-## Editor
-- Neovim: vedi editors/neovim.lua (vim.lsp nativo, nessun plugin).
-- VSCode: vedi editors/vscode/ (client minimo + package.json).
+## Editors
+- Neovim: see `editors/neovim.lua` (native `vim.lsp`, no plugin).
+- VS Code and Cursor: see `editors/vscode/`.
 
-## Roadmap (non ancora implementato)
-- Hover: tipo di un'espressione al passaggio del mouse.
-- Go-to-definition: place, fun, reduction.
-- Completion: keyword, nomi di place/fun in scope.
-- Document symbols: outline di world/place/fun.
+## Not yet implemented
+- Go-to-definition.
+- Rename.

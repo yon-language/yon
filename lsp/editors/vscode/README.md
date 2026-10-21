@@ -34,10 +34,9 @@ Format-on-save, per language:
 
 ## Install
 
-From the Marketplace (once published): search "Yon Language Support", or
-`code --install-extension yon-lang.yon-lang`.
-
-From a local build: `Extensions` panel to "Install from VSIX...", or
-`code --install-extension yon-lang-<version>.vsix`.
+From the packaged `.vsix` in this directory (or one you build here with
+`npx @vscode/vsce package`): `Extensions` panel to "Install from VSIX...", or
+`code --install-extension yon-lang-<version>.vsix`. The repository's
+`./install.sh` does this for VS Code and Cursor.
 
 Works in VS Code and Cursor.

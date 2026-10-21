@@ -1,8 +1,10 @@
 # Yon — the book and the site
 
 This directory is a standard Docusaurus project. The book lives in
-`docs/book/` (chapters 00–20 plus appendices A–D); every Yon snippet in
-it was compiled and executed before being written.
+`docs/book/` (chapters 00–22 plus appendices A–D). The suite
+(`regression/test_syntax_triangle.py`) compiles the book's gated Yon blocks
+and CodeWindows; blocks marked `<!-- yon-gate: illustrative -->` are fragments
+and are not compiled on their own.
 
 Read it directly on GitHub (the Markdown renders fine), or build the
 site:

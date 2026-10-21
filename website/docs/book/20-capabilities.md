@@ -6,7 +6,9 @@ sidebar_position: 20
 
 # Capabilities
 
-A move can demand more than well-typed fields: it can demand **authority**.
+A move can declare more than well-typed fields: it can declare the **authority**
+it needs. The declaration is checked at run time but not yet enforced (see
+*Status* below).
 
 <!-- yon-gate: illustrative -->
 ```yon
@@ -54,18 +56,15 @@ returns `42`, the second `1`. `Cap.grant`, `Cap.check`, and `Cap.revoke` each
 take a token hash and return a number; the registry holds up to 256 distinct
 tokens.
 
-## Honest status for 1.0
+## Status
 
 At each `apply_move` the compiler emits a `Cap.check` for every capability the
-move `requires`. That call runs, and the token is looked up. What is not yet
-wired is the consequence: the checked result is computed and not acted on, so a
-move whose capability is absent is not refused today. Remove the `Cap.grant`
-line from the first program and it still returns `42`. The `requires` clause,
-the token registry, and the emitted check are stable; the gate that turns a
-missing token into a refusal is the next step, not this one.
+move `requires`. That call runs, and the token is looked up. The result is not
+acted on: a move whose capability is absent is not refused. Remove the
+`Cap.grant` line from the first program and it still returns `42`. The
+`requires` clause, the token registry and the emitted check exist; the refusal
+of a missing token does not exist yet.
 
-The *static* half is design in the same sense. The intended rule (a caller of a
-`requires` move must itself hold the capability) is the production shape, not
-yet enforced by the checker. Both halves are the model; both arrive together,
-like the Heyting unwrapping of chapter 19. The syntax you write today is the
-syntax authority will travel on when the gate closes.
+The *static* rule (a caller of a `requires` move must itself hold the
+capability) is not enforced by the checker either. Capabilities are declared,
+not enforced.

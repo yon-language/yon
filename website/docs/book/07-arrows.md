@@ -27,7 +27,7 @@ does the job, and the type checker holds you to it.
 | `view … of P` | a place → values | observe a place, read-only | read an order's total |
 | `move … from P to Q` | place → place | carry content across places (and Spaces) | send an order to the kitchen |
 | `reduction … of P` | a place's operations → a value | interpret operations (a handler) | tally the courses |
-| `geomorph … from P to Q` | site → site | an adjunction between two sites | link the dining room and the kitchen |
+| `geomorph … from P to Q` | site → site | an adjoint pair between two sites | link the dining room and the kitchen |
 | `functor … from W to V` | world → world | translate a whole context | convert one bank's world into another's |
 | `nat transform … from F to G` | functor → functor | relate two translations | the gap between two exchange rates |
 
@@ -125,11 +125,9 @@ place Ticket {
 }
 ```
 
-A move is a capability-gated border crossing: it may declare `requires CAP`, and
-it can touch only the fields its clauses name. That discipline is exactly what
-makes it sound to carry an order not just to another place but, later, across a
-**Space** boundary into another process. Content crosses on a move, or it does
-not cross.
+A move may declare `requires CAP`; the check is emitted at each `apply_move`
+but not yet enforced (chapter 20). A move can touch only the fields its clauses
+name.
 
 ## `reduction`: what the operations mean
 
@@ -184,14 +182,14 @@ lambda you hand to `fold`: it captures its enclosing locals freely, at any
 depth, and while it stays in the room it may even hold a cell. The rule is not
 about the kind of arrow but about what crosses: only what is *mobile* leaves.
 
-## `geomorph`: an adjunction between two sites
+## `geomorph`: an adjoint pair between two sites
 
 A move sends one order across, one way. But the `sala` and the `cucina` are not
 just two places with a courier between them; they are two *views of the same
 service*, and what an order is on one side has a counterpart on the other. That
-correspondence is a **geomorph**, an adjunction between the two sites. It is not
-one arrow but an adjoint pair, `push` and `pull`, that carry each side to the
-other and are held consistent by the adjunction. `cucina/Line.yon`:
+correspondence is a **geomorph**, a geometric morphism between the two sites. It
+is not one arrow but a pair, `pull` and `push`, that carry each side to the
+other. `cucina/Line.yon`:
 
 <!-- yon-gate: illustrative -->
 ```yon
@@ -204,12 +202,11 @@ geomorph Line from Order to Ticket {
 <GeomorphAdjunction />
 
 `push` sends an order to its ticket; `pull` brings a ticket back to its order.
-The point of the geomorph, over a bare pair of moves, is the *law*: `push` is
-left-adjoint to `pull` (and you can mark `exact push`, the exactness that is
-not automatic), which is what makes "the ticket in the kitchen" and "the order in the
-dining room" two faithful sides of one thing rather than two loosely related
-records. Where a move is a courier, a geomorph is a translation between two
-whole contexts, and the adjunction is its guarantee of coherence.
+In a geometric morphism the inverse image (`pull`) is left adjoint to the direct
+image (`push`), and `exact push` declares that `push` preserves finite limits.
+The geomorph declares that pair; the compiler does not yet check that the two
+components are adjoint. Where a move is a courier, a geomorph is a translation
+between two whole contexts.
 
 ## One level up: between worlds
 

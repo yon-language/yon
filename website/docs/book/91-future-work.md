@@ -1,18 +1,17 @@
 ---
 id: future-work
-title: "Appendix B. Future work"
+title: "Appendix B. Limits and honest status"
 sidebar_position: 91
 slug: /book/future-work
 ---
 
-# Appendix B, Future work
+# Appendix B, Limits and honest status
 
-1.1.0 draws its perimeter on purpose. A limit you know is a contract; a limit you
-discover is a bug. This page keeps the two apart: what the current version
-guarantees, what it leaves out by design and always will, and, held in outline on
-purpose, what is coming.
+A limit you know is a contract; a limit you discover is a bug. This page keeps
+the two apart: what the current version (`yon version` prints `1.2-dev`)
+guarantees, what it leaves out by design, and what it does not do yet.
 
-## The contract of 1.1.0
+## The contract of the current version
 
 These are numbers you can build on. Each is fixed by an encoding width, not by a
 timeout or a heuristic, so it holds at *every* size right up to the wall, where the
@@ -33,8 +32,9 @@ runtime refuses out loud rather than degrading in silence.
   streams, 16 RPC sessions. Like a fixed-width address bus, these buy predictable
   memory and rule out runaway allocation. Process isolation by the kernel's MMU
   keeps any local fault inside the one server binary that raised it.
-- **The wire**: at most four arguments per cross-Space call, all `f64`. Strings
-  and sections never cross; they are process-local handles.
+- **The call door**: at most four arguments per cross-Space call, all `f64`.
+  Strings and sections are process-local handles and do not travel on a call;
+  they cross by copy on a `Wire<T>` (chapter 17).
 - **Exit codes**: `main`'s value mod 256, like every Unix process.
 
 ## Absent by design
@@ -53,62 +53,51 @@ These are not on any roadmap. They are the design.
   place's presheaf of observations (chapters 0, 5).
 - **No central package registry.** Dependencies are git.
 
-## On the horizon
+## Honest status: not yet
 
-Some of what follows the grammar already reserves; some is being *proved* before it
-is promised. The shapes are drawn. What you get here is the outline, not the
-blueprint: the full telling belongs to the editions that land each one.
+What follows does not exist yet. Each line says what is absent today; none is a
+date.
 
-<div style={{display: 'grid', gap: 'var(--sp-4)', margin: 'var(--sp-5) 0'}}>
+- **Capabilities are declared, not enforced.** A move whose `requires`
+  capability is absent is not yet refused, and the static rule (a caller of a
+  `requires` move must itself hold the capability) is not yet checked
+  (chapter 20).
+- **A string in a cross-Space signature is not yet refused.** It compiles, and
+  the call returns a wrong value (`0`). This is a defect (chapter 19).
+- **The concurrent drain of a `Wire<T>`** (both processes live, the consumer
+  draining while the producer fills, under contention) is not yet verified; the
+  verified shape is the producer running to completion first (chapter 17).
+- **Runtime-driven Space release** is not yet there: a Space is released at a
+  `drop X` or at its last use, points the compiler names, not when its wires
+  fall silent at run time.
+- **An observer** of the live Space and Wire graph, and any debugger, do not
+  exist yet (chapter 21).
+- **Monomorphisation** is not yet done: a generic place has one uniform runtime
+  layout, and a place instance is not yet checked against its type argument
+  (chapter 10).
+- **A surface constructor for comprehension values**, carrying the witness, does
+  not exist yet; the comprehension is a type-level discipline (chapter 9).
+- **Law-licensed rewrites** are not yet in the optimizer: a declared law is
+  verified against the algebra catalog, and no pass rewrites code because of it
+  (chapter 0).
+- **The adjointness of a geomorph** is not yet checked: `pull` and `push` are
+  declared as a pair, and the compiler does not verify that they are adjoint
+  (chapter 7).
+- **Higher coherences** are not yet checked: the type checker computes by
+  conversion and the cubical surface lets a path compute (chapter 9), but the
+  equation behind each path is not yet checked.
+- **Deeper Tarski reflection** is not yet there: a universe code lowers to its
+  inhabitant and cannot inspect its own structure (chapter 22, `quote`).
+- **A full treatment of cubical type theory** in this book is not yet written;
+  chapter 9 and the keyword entries cover what the kernel runs.
+- **Prebuilt binaries and a Homebrew tap** do not exist yet; Yon builds from
+  source (chapter 1).
+- **The VS Code extension** is not yet published on the Marketplace; it is
+  installed from the packaged `.vsix` (chapter 21).
 
-<div style={{borderLeft: '3px solid var(--viz-accent)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
-
-**Memory that lets itself go.** Today a Space's heap is released at a point the
-compiler can name in your source. The next step teaches the runtime to watch its
-own topology and let a Space go the instant its conversations fall silent, read
-off a graph the compiler already proved, not a count it has to keep. Sound, because
-nothing is guessed. That is as much as it will say for now.
-
-</div>
-
-<div style={{borderLeft: '3px solid var(--viz-gold)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
-
-**A window on the living system.** Not a debugger that stops time, which fits an
-append-only world of isolated Spaces poorly, there being little "current line" to
-stop on. Something closer to an instrument: the Spaces and wires alive at an
-instant, the arcs opening and closing, over the very protocol the wire already
-speaks. The heap picture in this book is the still frame; this is the moving one.
-
-</div>
-
-<div style={{borderLeft: '3px solid var(--viz-green)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
-
-**A logic that proves more of what it means.** The type checker already computes by
-conversion, and the cubical surface of chapter 9 already lets a path *compute*: an
-equivalence doing real work on values. What the work underway adds is *checking*,
-letting the checker quantify the higher coherences the mathematics has been
-promising all along: the Yoneda correspondence in full, the equation behind each
-path and not only its computation. Where 1.1.0 checks the structural precondition,
-the coming editions check the equation.
-
-</div>
-
-<div style={{borderLeft: '3px solid var(--viz-accent-2)', background: 'rgba(28, 23, 62, 0.5)', borderRadius: '0 12px 12px 0', padding: 'var(--sp-4) var(--sp-5)', boxShadow: 'var(--elev-1)'}}>
-
-**The grammar, rounding out.** More syntax is reserved than 1.1.0 lowers to a stable
-runtime: ephemeral sub-runtimes and their reclaimed arenas, stream producers folded
-into settled streams, paths into a section's fields. Each parses and type-checks
-today and waits only on the runtime and the regression coverage that make a promise
-safe to print. The collection API, kept deliberately small, fills in alongside.
-
-</div>
-
-</div>
-
-## Measured, and measured next
+## Not yet measured
 
 Appendix D publishes the benchmarks with method and sources; the numbers on the
-landing page come from there, not from memory. Two empirical questions stay open in
-the development notes and will be answered the same way, numbers before claims: what
-the structural-collapse pass catches that classical value numbering does not, and
-the physical cost of the categorical structure in the final object code.
+landing page come from there. Two questions are not yet measured: what the
+structural-value-numbering pass catches that classical value numbering does not,
+and the physical cost of the categorical structure in the final object code.

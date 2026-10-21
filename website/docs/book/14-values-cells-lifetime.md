@@ -53,13 +53,11 @@ free to go anywhere.
 ## Types at runtime
 
 Types are a compile-time discipline; at the IR level the world is spartan:
-`number` is an `f64`, a section is an `f64` handle, `proposition` is a trit,
-`unit` vanishes. The categorical layers erase: the terminal object and
-comprehension *proofs* compile to zero bits of payload, you pay for the
-carrier, not for the discipline around it. (The honest footnote from the
-development diary: "zero-bit" is verified at the representation level;
-physical alloca-elimination in the final object code was not separately
-measured.)
+`Number` is an `f64`, a section is an `f64` handle, a value of Ω is a trit,
+`Unit` vanishes. The categorical layers erase: comprehension *proofs* compile
+to zero bits of payload, you pay for the carrier, not for the discipline around
+it. "Zero-bit" is verified at the representation level; the elimination of the
+corresponding allocas in the final object code was not separately measured.
 
 ## Lifetime
 
@@ -67,7 +65,7 @@ There is no garbage collector, and deliberately so: in the FNV heap
 (chapter 13) slots are stable for the life of the heap, the heap lives for the
 life of the process, and deduplication means the heap grows with *distinct*
 content, not with allocations. The Leech heap does not grow at all: its tables
-span the shell, fixed at 196,560 points. A hot loop that rebuilds the same values costs no new memory.
+cover the shell, fixed at 196,560 points. A hot loop that rebuilds the same values costs no new memory.
 
 Across packages, lifetime is process lifetime: the first cross-Space call
 spawns the server; shutdown cascades from the caller; a crashed server is

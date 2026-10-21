@@ -7,8 +7,9 @@ sidebar_position: 18
 # The project: a ledger in three packages
 
 Everything in one walkthrough: a git dependency, a service in its own Space,
-a client that loops over the wire. Three packages, and every file and
-command on this page was run, in this order, before being written down.
+a client that loops over the wire. Three packages. The files and commands
+on this page were run in this order; the two blocks marked illustrative were
+not compiled on their own.
 
 ```
 yonproj/

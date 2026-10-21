@@ -36,12 +36,13 @@ spaces  = ["sala"]
 The `[world.Restaurant]` table *is* the world: it lists the directories
 (`spaces`) whose files realize it, and the objects it carries. A **place** is one
 file inside such a directory. Its filename is its name, and it inherits its world
-from the directory it lives in. The toolchain enforces one place per file, so a
-project with several places is a project with several files. The space directory
+from the directory it lives in. Inside a Space directory the toolchain enforces
+one place per file, so a Space with several places is a directory with several
+files. The space directory
 also carries a `Topos.yon` that declares the topos of the site, and an
 `Entry.yon` holds the entry place and `main`.
 
-## A place is pure structure
+## A place is its structure
 
 A place body declares its **sections**, the fields it stores, and nothing else by
 default. An order has a table and a running total, `sala/Order.yon`:
@@ -54,9 +55,8 @@ place Order {
 }
 ```
 
-There are no methods here and no hidden state: a place is pure structure. You
-create one with the mediating arrow `.->`, read its sections with a dot, and that is the whole
-surface. `Entry.yon`:
+A place has no hidden state. You create one with the mediating arrow `.->` and
+read its sections with a dot. `Entry.yon`:
 
 <!-- yon-gate: illustrative -->
 ```yon
@@ -70,14 +70,14 @@ fun main(): Number {
 
 Note the conventions the `.->` shows: a field is written `name type` with no
 colon, `.-> P { field value }` fills the sections without an `=`, and access is
-the usual dot. What a place cannot do, on its own, is *behave*. Behaviour is not
-a method bolted to the object; it lives in arrows, and that is the whole of the
-next chapter.
+the usual dot. What a place does is said by arrows: the arrows that touch a
+place are declared in it (the prelude's `String` place declares its own
+functions), and the kinds of arrow are the whole of the next chapter.
 
 ## Operations: a place's effectful interface
 
-Where a place needs an effectful interface, it opens its body with `with
-effects` and lists **operations** alongside its sections. An order accumulates
+Where a place needs an effectful interface, it lists **operations** alongside
+its sections, directly in its body. An order accumulates
 items, and a kitchen ticket can be retagged:
 
 <!-- yon-gate: illustrative -->
@@ -119,7 +119,7 @@ coproducts, quotients, sub-objects. That structure is mathematics, not a surface
 dialect. Yon gives you no world-algebra to *write* a composite world by hand.
 Instead you declare worlds in `yon.toml` and act on and between them with
 **arrows**: a `functor` translates one world into another, a `geomorph` relocates
-the site by an adjunction, and `this <` carves a sub-object. The categorical
+the site by an adjoint pair (`pull`, `push`), and `this <` carves a sub-object. The categorical
 operations live in the arrows, where the compiler can check their laws, which is
 exactly where chapter 7 picks them up.
 
