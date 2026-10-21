@@ -53,21 +53,21 @@ function Heap() {
       <div className={styles.sectionIn}>
         <div className={styles.grid2}>
           <div>
-            <span className={styles.kicker}>The heap</span>
-            <h2 className={styles.h2}>The address of a value is its content.</h2>
+            <span className={styles.kicker}>The heaps</span>
+            <h2 className={styles.h2}>The address of a value is its content, or its point.</h2>
             <p className={styles.lede}>
-              Yon allocates into <strong>xleech2</strong>, a <strong>content-addressed</strong>{' '}
-              heap. Allocation hashes the bytes; identical content returns the existing slot, and a
-              hash collision is settled by a direct byte comparison, so distinct content never
-              aliases and <strong>same content ⇔ same slot</strong>. Equality of arbitrarily large
-              values is then one integer comparison: <strong>O(1) structural equality</strong>, by
-              construction. The work is done by content-addressing, not by lattice geometry. The
-              Leech lattice enters as a deliberate bound: a single heap addresses{' '}
-              <strong>196,560 contents</strong>, the count of minimal vectors of Λ<sub>24</sub>, and
-              chains into a successor heap when it fills rather than degrading silently. Where the
-              lattice is actually load-bearing is in the structures below (sets and error
-              correction) and in the Arena, whose Co<sub>0</sub>/M<sub>24</sub> orbit operations
-              recognize contents equal up to the lattice's symmetry group.
+              Yon has two heaps. Most values live in <strong>xleech2</strong>, the{' '}
+              <strong>FNV heap</strong>: allocation hashes the bytes; identical content returns the
+              existing slot, and a hash collision is settled by a direct byte comparison, so distinct
+              content never aliases and <strong>same content ⇔ same slot</strong>. Equality of
+              arbitrarily large values is then one integer comparison:{' '}
+              <strong>O(1) structural equality</strong>, by construction. There the Leech lattice is
+              only a bound: a single heap addresses <strong>196,560 contents</strong>, the count of
+              minimal vectors of Λ<sub>24</sub>, and chains into a successor heap when it fills
+              rather than degrading silently. The values that are lattice points live in the{' '}
+              <strong>Leech heap</strong>, where the address <em>is</em> the point, through a
+              bijection with the 196,560 minimal vectors: that is where the sets, the error
+              correction and the Co<sub>0</sub>/M<sub>24</sub> orbit operations live.
             </p>
             <div className={styles.stat}>
               <b>String.equal</b>: ~1 ns at 1 char and at 32,768 chars (Apple M1). Three orders of
@@ -93,12 +93,12 @@ function Heap() {
                 {'\n'}
                 {'  '}
                 <span className={styles.kw}>be</span> greeting{' '}
-                <span className={styles.kw}>holds</span>{' '}
+                :={' '}
                 <span className={styles.st}>"ciao, mondo"</span>{' '}
                 <span className={styles.cm}>// interned on the heap</span>
                 {'\n'}
                 {'  '}
-                <span className={styles.kw}>be</span> _ <span className={styles.kw}>holds</span>{' '}
+                <span className={styles.kw}>be</span> _ :={' '}
                 <span className={styles.ty}>String</span>.<span className={styles.fn}>print</span>
                 (greeting){'\n'}
                 {'  '}
@@ -310,7 +310,7 @@ export default function Home() {
   return (
     <Layout
       title="The Topos of Programming"
-      description="A topos-oriented programming language. Native via MLIR and LLVM, with a content-addressed heap and Leech-lattice sets and error correction."
+      description="A topos-oriented programming language. Native via MLIR and LLVM, with two heaps: one addressed by content, one by the points of the Leech lattice."
     >
       <main className={styles.page}>
         <Hero />

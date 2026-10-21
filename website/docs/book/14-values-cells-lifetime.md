@@ -63,10 +63,11 @@ measured.)
 
 ## Lifetime
 
-There is no garbage collector, and deliberately so: slots are stable
-for the life of the heap, the heap lives for the life of the process, and
-deduplication means the heap grows with *distinct* content, not with
-allocations. A hot loop that rebuilds the same values costs no new memory.
+There is no garbage collector, and deliberately so: in the FNV heap
+(chapter 13) slots are stable for the life of the heap, the heap lives for the
+life of the process, and deduplication means the heap grows with *distinct*
+content, not with allocations. The Leech heap does not grow at all: its tables
+span the shell, fixed at 196,560 points. A hot loop that rebuilds the same values costs no new memory.
 
 Across packages, lifetime is process lifetime: the first cross-Space call
 spawns the server; shutdown cascades from the caller; a crashed server is

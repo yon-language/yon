@@ -6,9 +6,11 @@ sidebar_position: 15
 
 # Data structures on the lattice
 
-Every collection in the stdlib is a *persistent* structure over the
-content-addressed heap. None of them mutates; every operation returns a new
-handle, and sharing makes that cheap.
+The collections of the FNV heap (chapter 13) are *persistent* structures:
+none of them mutates, every operation returns a new handle, and sharing
+makes that cheap. The structures of the Leech heap hold one table over the
+shell each, addressed by lattice points; `Vec` is a cell on a strip of the
+heap's arena. Both kinds are below.
 
 **List** is the classic cons chain: `List.cons(x, rest)` puts one new node;
 the rest is shared by address. **HashMap / HashSet** are persistent maps,
@@ -24,8 +26,10 @@ place or reallocates a doubled strip on growth, and `get`/`set` are O(1) with
 
 ## Choosing a structure
 
-Every structure below allocates through the heap chain (chapter 13), so
-none of them has a hard size ceiling of its own, the budget is memory.
+The structures of the FNV heap allocate through the heap chain (chapter 13),
+so none of them has a hard size ceiling of its own, the budget is memory; a
+structure of the Leech heap spans the shell, 196,560 points, by
+construction.
 What distinguishes them is what they make cheap:
 
 - **List**, the workhorse: an immutable cons list of `f64`. Use it for
@@ -72,10 +76,11 @@ the point, so two points are the same up to symmetry when
 `orbit(p) == orbit(q)`.
 
 **What a lattice slot holds.** `Arena<V>` and `XRelMap<K, V>` keep their
-values inline, in the slots of the lattice, never in the heap. Which values
+values inline, in the slots of the Leech heap (chapter 13), never in the
+FNV heap. Which values
 fit a slot is derived from their carrier: a scalar of 32 or 64 bits
 (`Int32`; `Int64` and `Number`), or a content-addressed handle (a `Text`,
-whose bits name its content in the heap); a value that does not fit (a
+whose bits name its content in the FNV heap); a value that does not fit (a
 `Boolean`, a place, a function) is a type error, never truncated. A key of
 `XRelMap` is a lattice point, a scalar of 64 bits: a handle names content but
 locates nothing, so a `Text` key is a type error here. Every other key
