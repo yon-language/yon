@@ -8,7 +8,7 @@ import trace from '@site/src/data/jp-traces/taxa_full.json';
  * THE POINT (real Yon numbers, regression/book/jp/10_taxa_full xi_demo): apply a
  * frame change ξ to all three points and the single EDGE classes (of2) move — of2
  * is Co2-invariant only (the gate's C–D counterexample, made visual). But the
- * triangle's omega does NOT move: it is Co0-invariant (runtime/yon_rt.c:4764,
+ * triangle's omega does NOT move: it is Co0-invariant (runtime/yon_rt.c, the comment above yon_rt_xsimplex_omega,
  * "verified: 0 deviations over 2e6 random triangles"), because the per-edge sign
  * is gauge and the product around the closed cycle cancels it. The one absolute
  * invariant in the family — the honest redemption of the Co0 claim of2 could not make.

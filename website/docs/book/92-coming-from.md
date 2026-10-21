@@ -16,10 +16,9 @@ equivalent; Yon's O(1) value equality has no Unison equivalent.
 
 **From Erlang/Elixir.** Erlang is the gold standard of process isolation,
 and its messaging (arbitrary terms, distribution across machines,
-supervision trees) is far richer than Yon's numeric wire. Yon's trade is
-deliberate: kernel processes instead of a VM, a wire the **type checker**
-polices (a string in a cross-Space signature does not compile), and
-handles that are *meaningless* in the wrong process rather than merely
+supervision trees) is far richer than Yon's numeric call door and copy-only `Wire<T>`. Yon's
+trade is deliberate: kernel processes instead of a VM, a narrow door between
+them, and handles that are *meaningless* in the wrong process rather than merely
 forbidden. Choose Erlang for distributed systems today; Yon's bet is that
 a narrower door makes a stronger wall.
 
@@ -48,8 +47,8 @@ are vastly more mature; that is not in dispute.
 
 **What has no counterpart anywhere**, stated once and narrowly:
 allocation-as-deduplication with O(1) deep equality as a language
-guarantee; orbit canonicalization in the Arena (equality up to a symmetry group as
-storage semantics); law-verified algebras as runnable
-objects; trit-valued integers with per-bit certainty; error-correcting
+guarantee; maps keyed by the Co₀/M₂₄ class of a lattice point (`XRelMap`:
+equality up to a symmetry group as storage semantics); compile-time
+law-verified algebras; trit-valued integers with per-bit certainty; error-correcting
 storage in the standard library; topos constructs as compiled primitives
 rather than library encodings.

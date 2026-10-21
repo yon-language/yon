@@ -25,8 +25,8 @@ is primary, content is incidental. TOP inverts this completely:
   sub-objects), but that composition is mathematics, not a surface dialect:
   you declare worlds in `yon.toml` and act between them with arrows, never
   with a world-algebra written by hand (chapter 6).
-- A **place** is an object *in* a world. It has no methods and no hidden
-  state; it is pure structure.
+- A **place** is an object *in* a world. It has no hidden state; its fields
+  are its structure, and the arrows that touch it are declared in it.
 - A value is a **section** of a place, immutable content, identified by
   that content (chapter 14).
 - All behaviour lives in **arrows**: moves, views, reductions, morphisms
@@ -40,8 +40,7 @@ is primary, content is incidental. TOP inverts this completely:
 
 ## The Yoneda principle
 
-Yon's design manifesto is *Yoneda-grounded* (the project's coherence
-document is literally titled "Yoneda-∞-ω"). The Yoneda lemma says an object
+Yon's design is *Yoneda-grounded*. The Yoneda lemma says an object
 is completely determined by its relationships, by the maps into it. As a
 design principle, this becomes: **a thing is what you can observe of it**.
 
@@ -84,11 +83,9 @@ The `structural-value-numbering` pass performs a *structure-guided* global value
 numbering: pure operations with the same structural fingerprint share one
 computation, so three syntactic copies of `(3 + 4) * 2` in the source
 become one computation in the IR, collapse by structure, before any
-classical optimization runs. The same philosophy returns at every level:
-**Co₀-orbit canonicalization** collapses heap contents equivalent under the
-Leech-lattice symmetries (chapter 15), η/unit rules collapse trivial
-coherence cells, and verified laws (chapter 6) license algebraic rewrites
-that an unverified `add` could never justify.
+classical optimization runs. The
+algebra verifier, which runs before it, checks a place's declared laws against the algebra
+catalog (chapter 6).
 
 That is the thesis of Topos-Oriented Programming in one line: **declare the
 structure honestly, and the structure does work for you**, in the type

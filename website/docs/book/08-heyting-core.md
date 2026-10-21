@@ -10,9 +10,9 @@ import HeytingOmega from '@site/src/components/HeytingOmega';
 
 Yon's logic is intuitionistic. The proposition type Ω is a Heyting algebra
 with three observable states, `present`, `absent`, `unknown`, and
-`boolean` holds its two decided values: a Boolean enters Ω through the
+`Boolean` holds its two decided values: a Boolean enters Ω through the
 characteristic mono (`true` is `present`, `false` is `absent`), and nothing
-leaves Ω for `boolean`, because `unknown` would have to become one of two
+leaves Ω for `Boolean`, because `unknown` would have to become one of two
 values that do not mean unknown.
 
 <HeytingOmega />
@@ -62,7 +62,7 @@ place State { balance Number }
 
 // in the same directory: Topos.yon
 topos Bank where {
-  prop is_overdrawn(s: State): proposition = s.balance < 0
+  prop is_overdrawn(s: State) = s.balance < 0
 }
 
 // Entry.yon

@@ -65,8 +65,9 @@ At the stdlib boundary, absence is in-band (chapter 12): a missing file, an
 unset variable, an out-of-range index all return the `0.0` handle. You test
 it like any number. The compiler does its part *before* runtime: a false
 `law` is rejected by AlgebraVerifier, a missing subsumption mono is rejected by
-the checker, a string in a cross-Space signature never compiles, entire
-categories of "going wrong" are moved from runtime to the type checker.
+the checker. One gap remains: a `String` parameter in a cross-Space signature
+is not yet refused. It compiles, and the call returns a wrong value (`0`), because
+a cross-Space call carries numbers only. This is a defect.
 
 ## When another process fails
 
@@ -81,12 +82,9 @@ error: cross-Space call failed, Space server './Bank_srv' did not
 answer or the operation is not exported
 ```
 
-## On the horizon
+## Undecided is not failed
 
-The third shape is the most Yon of all and is openly *in progress*: the
-Heyting unwrapping. Ω already has the three states (chapter 8); the plan is
-a result discipline where an operation's outcome is **Provato / Assurdo /
-Indeterminato**, proven, absurd, undecided, so "it failed" and "it has
-not decided yet" stop being the same thing. The trit machinery
-(`heyting`) is operational today; the surface unwrapping construct is
-still ahead, and this book will gain a section when it lands.
+Ω has three values (chapter 8), so "it failed" and "it has not been decided"
+are two different outcomes. `decide(p)` turns a proposition into a value of the
+prelude place `Decision`, the coproduct `Present :U Absent :U Unknown`, and a
+`match` answers each arm, the third one included.

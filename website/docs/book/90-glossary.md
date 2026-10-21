@@ -15,10 +15,10 @@ coproducts, quotients, sub-objects), but Yon gives you no world-algebra to
 write a composite world by hand, you act on worlds only through arrows (a
 category, used as a site).
 
-**place**, a pure structure written one per file (the filename is the place
-name): fields, optionally operations and laws; it has no methods and no
-hidden state, and its space is the directory it lives in (an object of the
-category).
+**place**, an object written one per file inside a Space directory (the
+filename is the place name): fields, optionally operations and laws, and the
+arrows declared in it; it has no hidden state, and its space is the directory
+it lives in (an object of the category).
 
 **section**, a value of a place, immutable and identified by its content
 (a generalized element; a section of the corresponding sheaf).
@@ -34,14 +34,15 @@ over cells.
 at different levels (see chapter 6's ladder).
 
 **move**, an arrow between places that transports sections, mapping fields
-clause by clause (a morphism of objects; the only border crossing).
+clause by clause (a morphism of objects); it may declare `requires CAP`,
+a capability that is not yet enforced (chapter 20).
 
 **view**, a read-only arrow out of a place (an observation; part of the
 place's presheaf).
 
-**reduction**, an interpretation of a place's operations into a value,
-activated as a handler with `with R of P` (an algebra / eliminator; an
-algebraic-effects handler).
+**reduction**, an interpretation of a place's operations into a value: its
+`on` clauses interpret them, and the inline form is `reduction(..) => e of P`
+(an algebra / eliminator; an algebraic-effects handler).
 
 **functor / morph**, an arrow between worlds, translating objects and
 operations together, with checkable laws (a functor between categories).
@@ -50,12 +51,12 @@ operations together, with checkable laws (a functor between categories).
 per object (a natural transformation; a 2-cell).
 
 **geomorph**, a pull/push pair between two sites (in the restaurant, the
-`sala` and `cucina` spaces): a geometric morphism, the adjunction
-`f* ⊣ f∗`.
+`sala` and `cucina` spaces): a geometric morphism, the adjoint pair
+`f* ⊣ f∗` (`pull` ⊣ `push`).
 
 **monomorphism (mono)**, an arrow that loses nothing; all Yon subtyping is
 travel along a mono: `this <` declares one, comprehension's coercion is
-one, `boolean → proposition` is one.
+one, `Boolean → Ω` is one.
 
 **subobject**, a part of an object carved out by a property; in Yon, a
 comprehension type `{x : A where P}` or the body clause `this < B`.
@@ -84,7 +85,7 @@ axiom).
 
 **Space**, a hermetic tenant: a directory under the project root, backed at
 runtime by its own heap and, across packages, its own process; content
-crosses only through moves and the numeric wire.
+crosses through moves, numeric cross-Space calls, and copies on a `Wire<T>`.
 
 **content addressing**, the FNV heap's contract: the address of a value
 is determined by its bytes, so same content is the same slot and equality
@@ -113,10 +114,8 @@ flips.
 
 **law**, an algebraic property declared on a place's operation and
 *verified* at compile time by AlgebraVerifier; a false law does not compile.
-
-**verify**, the keyword that hands you a law-verified place as a runnable
-`Magma`, so a program can query in code what the compiler already proved
-(`is_commutative`, `is_associative`, `identity`, `closure_size`).
+The verification follows from `uses algebra` (the former `verify` keyword is
+retired).
 
 **effect / visits**, what a function touches, written in its signature and
 checked transitively by the compiler (algebraic effects discipline).

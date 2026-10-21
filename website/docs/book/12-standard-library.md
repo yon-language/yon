@@ -186,5 +186,5 @@ place Entry {
 written in Yon — measuring a rope, indexing it, allocating one — the prelude
 says so with `is given`, and the compiler checks that the wired implementation
 exists with exactly that signature. Ten declarations at the top of `String.yon`
-are the whole of it; the other thirteen functions are derived above them, in
+are the whole of it; the other twelve functions are derived above them, in
 Yon.

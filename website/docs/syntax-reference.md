@@ -2,12 +2,12 @@
 id: syntax-reference
 title: Syntax Reference
 sidebar_position: 2
-description: The normative syntax of Yon 1.2.1, derived from the actual grammar.
+description: The normative syntax of Yon 1.2 (in development), derived from the actual grammar.
 ---
 
 # Yon, Syntax Reference
 
-This is the **normative reference for Yon 1.2.1**. Every form below was
+This is the **normative reference for Yon 1.2** (in development; `yon version` prints `1.2-dev`). Every form below was
 re-verified against the real grammar (`frontend/parser.mly` and
 `frontend/lexer.mll`) and the compiling examples under
 `regression/book/jp/*/Entry.yon`, not from memory, not from older documents.
@@ -149,27 +149,27 @@ Each construct carries a status:
   fixture in `regression/canonical_forms/`.
 - **⚠ not implemented**, the grammar accepts it, but the compiler does
   not implement it (it fails at emission, or the construct cannot actually be
-  used). Listed for completeness; *not part of the 1.2.1 contract*.
+  used). Listed for completeness; *not part of the 1.2 contract*.
 
 ## Lexical structure
 
 | Form | Status | Meaning |
 |---|---|---|
 | `// ...`, `/* ... */` | ✓ | Line / block comments |
-| `42`, `3.14` | ✓ | `number` literal (IEEE f64) |
-| `"ciao"` | ✓ | String literal, a real value of type `text`/`String` (see *Strings*) |
+| `42`, `3.14` | ✓ | `Number` literal (IEEE f64) |
+| `"ciao"` | ✓ | String literal, a real value of type `Text`/`String` (see *Strings*) |
 | [`true`](/book/keywords#true), [`false`](/book/keywords#false) | ✓ | Boolean literals |
 | [`present`](/book/keywords#present), [`absent`](/book/keywords#absent), [`unknown`](/book/keywords#unknown) | ✓ | Heyting truth values (intuitionistic Ω) |
 | `mod::name` | ✓ | Qualified name (module namespace) |
 
-Duration literals (`100ms`, `5s`, `2min`) were **removed in v1.1**: `2s` now
+Duration literals (`100ms`, `5s`, `2min`) were **removed**: `2s` now
 lexes as `NUM_LIT 2` followed by the identifier `s`. Currency literals
 (`10.50 EUR`) are likewise **not** in the grammar; the `money` *type* exists
 (see *Types*).
 
 ## Strings
 
-Since the **string fusion**, `text` and `String` are the *same semantic
+Since the **string fusion**, `Text` and `String` are the *same semantic
 object*: sections of the builtin `String` place. At runtime a string is a
 handle into the content-addressed heap; literals are interned, so the same
 literal is the same value and `String.equal` compares content:
@@ -186,8 +186,10 @@ fun main(): Number {
 }
 ```
 
-Strings are **process-local**: they cannot cross a Space (package) boundary, 
-only numbers travel on the wire.
+A cross-Space **call** carries numbers only (at most four arguments). Strings
+and places cross a Space boundary by copy, on a `Wire<T>` subscription
+(chapter 17). A `String` parameter in a cross-Space signature is not yet
+refused: it compiles, and the call returns a wrong value (0). This is a defect.
 
 ## Bindings and mutation
 
@@ -206,11 +208,11 @@ categorical definitions, in `prop name(...) = e` inside a topos, and in
 
 | Form | Status | Meaning |
 |---|---|---|
-| `number`, `text`, `boolean`, `proposition`, `money` | ✓ | Primitives. `boolean` ≡ `proposition` (Ω); `text` ≡ `String` |
+| `Number`, `Text`, `Boolean`, `Unit` | ✓ | Primitives, the prelude places. `Text` ≡ `String`. The lowercase spellings `number`, `text`, `boolean`, `unit` are the kernel codes and are rejected at the surface (E1001) |
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
-| `A \| B \| C(T)` | ✓ | Sum type; variants may carry arguments |
-| `list of T`, `map of K to V` | ✓ | Collections |
-| `Wire<T>` | ✓ | Channel type: what `produce`, `spawn` and a subscription give. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed in v1.1) |
+| `place P { this > A :U B(T) }` | ✓ | Coproduct (sum): the arms are places, an arm may carry arguments; see [`this`](/book/keywords#this) |
+| `List<T>`, `HashMap<K, V>`, `HashSet<T>` | ✓ | Collections |
+| `Wire<T>` | ✓ | Channel type: what `produce`, `spawn` and a subscription give. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed) |
 | `T -> U` | ✓ | Function type, right-associative |
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
@@ -240,10 +242,9 @@ from the call sites.
 | `view(s: P) => e of P` | ✓ | a fun), and apply, a bound or composed handle is called like a |
 | `functor(x) => e from W to V [law id]*` | ✓ | function, and `apply_move` accepts a locally bound move-lambda. |
 | `morph(s) => e from S1 to S2` | ✓ | Functor laws are checkable |
-| `compose h1 with h2` | ✓ | Handle composition, `(compose f with g)(x) = g(f(x))`. Kind discipline enforced: e.g. `reduction ∘ reduction` is rejected (the eliminator lands in `number`) |
-| *morphism body is closed* | ✓ | A `move`/`functor`/`view`/`reduction`/`morph` body may use only its parameters and top-level definitions; capturing an enclosing local is a compile-time error (it could not survive crossing a Space). A plain `fun` lambda, by contrast, captures enclosing locals at any nesting depth |
+| `compose h1 with h2` | ✓ | Handle composition, `(compose f with g)(x) = g(f(x))`. Kind discipline enforced: e.g. `reduction ∘ reduction` is rejected (the eliminator lands in `Number`) |
+| *capture by value* | ✓ | A `move`/`functor`/`view`/`reduction`/`morph` lambda, like a `fun` lambda, may mention enclosing locals; they are captured by value. A **cell** (a local reassigned with `=`, or `Space.make`) cannot leave its call: returning, storing or sending an arrow that mentions one is a compile-time error (chapter 7) |
 | `f(args) in S` | ✓ | Call in a Space context (`apply_move ... in S`, morph dispatch) |
-| `all P where cond` | ✓ | Quantification over the sections of a place |
 | `.-> P { field value }` | ✓ | Section construction through the mediatrice, **no `=`** between field and value. (`new` and `verify` are retired: the constructor is the mediating arrow, and a law-verified place is instantiated like any other) |
 | [`clear(t)`](/book/keywords#clear), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms. `clear` is the reflexivity proof: the path that needs no argument, because the two ends are definitionally the same |
 | [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is [`clear`](/book/keywords#clear) in evidence at the call site; a J stuck on a non-reflexive path is rejected at compile time (the runtime never decides path equality) |
@@ -276,7 +277,6 @@ from the call sites.
 | `iter n do { }` | ✓ | Bounded loop (always terminates; `scf.for`) |
 | `while c do { }` | ✓ | General loop (`scf.while`) |
 | `scope [Name] { }` | ✓ | **Hermetic block** (see below) |
-| `with R of P { }` | ✓ | Activate reduction `R` over `P` for the block |
 | `produce { }` / `emit e` | ✓ | Producer block / emit into the active stream or handler |
 | `spawn { }` / `spawn in N parallel { }` / `promote e` | ✓ | Fork one or N isolated process replicas; each `promote e` contributes to the block's collection stream, drained by the parent with `.fold` / `.for_every`. `spawn_index` (0..N-1) is in scope in the body. Scaling measured in Appendix D |
 | `forces stage cond { }` | ✓ | Kripke–Joyal forcing block at a stage |
@@ -340,10 +340,9 @@ A `place` then takes its world by inference from the project's toml, not from an
 | Form | Status | Meaning |
 |---|---|---|
 | `place P [over X] [on error E] { members }` | ✓ | An object (its world is inferred from the toml; there is no `in W` clause). `over X` = slice (fibered over `X`); `on error E` = error morphism `P → E`. The sub-object mono is a **body clause**: `this < B` |
-| `place P ... with effects { ... }` | ✓ | Enables operations (1-cells) among the members |
 | `error E { fields }` | ✓ | An error place (target of `on error`); world inferred from the toml, no `in W` clause. The mono into a parent error is the body clause `this < B` |
-| `field_name type` | ✓ | Field, **no colon**: `balance number` |
-| `operation op(a: T): U` | ✓ | Operation (1-cell) |
+| `field_name type` | ✓ | Field, **no colon**: `balance Number` |
+| `operation op(a: T): U` | ✓ | Operation (1-cell), written directly among the place's members |
 | `operation op(...) uses algebra Additive` | ✓ | Bind to a catalog algebra; laws certified by the compiler |
 | `law commutative` etc. | ✓ | Declared law, verified (AlgebraVerifier) |
 | `cell c from e1 to e2` | ✓ | Higher cell between lower cells (CaTT witness) |
@@ -378,10 +377,8 @@ Status: ✓ (regression examples). Under *topos-per-space* there is no `in W` or
 `at SPACE` annotation and no inline `objects { }` block: the world, the
 residence space, and the objects are all **inferred from the filesystem**. The
 name is not written either — it comes from the file, so it lives in one place
-and cannot diverge (the named form `topos Name where` is still accepted while
-the corpus migrates). The terminal is not declared: every topos has one by
-definition. A `prop` is a subobject classifier, a map into Ω, and it carries no
-return type — `prop` already implies `proposition`; the abstract form (no
+and cannot diverge (the named form `topos Name where` is also accepted). A `prop` is a subobject classifier, a map into Ω, and it carries no
+return type, since a `prop` always lands in Ω; the abstract form (no
 `= body`) declares the signature only.
 
 ## Spaces and packages
@@ -401,15 +398,16 @@ The import forms below are the surface syntax that *references* Spaces:
 | `import m::n from Space` | ✓ | **Cross-package import**: `n` becomes a remote arrow into `Space` |
 
 Cross-package calls are RPC over a named channel (`/yon_stream_<Space>`):
-only **numbers** cross the boundary, at most **4 arguments**; `internal`
+a call carries only **numbers**, at most **4 arguments** (strings and places
+cross by copy on a `Wire<T>`, chapter 17); `internal`
 functions are not exported; the server binary is `./<Space>_srv` by convention
 (override with `YON_SRV_DIR`), spawned on first contact, shut down in cascade,
 and **transparently recovered** after a crash (virgin channel, epoch advanced,
 one retry).
 
 Hermeticity model: **cross-package = process isolation** (kernel MMU, values
-only on the wire); **intra-package = typed/logical** (visibility, `internal`,
-effects, move/morphism gating) with opt-in physical heap separation
+only on the wire); **intra-package = typed/logical** (visibility, `internal`;
+a move's `requires` check is emitted but not yet enforced, chapter 20) with opt-in physical heap separation
 (`YON_BACKEND=separate`).
 
 ## Standard library (module index)

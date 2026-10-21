@@ -7,7 +7,7 @@ sidebar_position: 2
 # Hello, world
 
 A Yon program is a list of top-level declarations; execution starts at `main`,
-which returns a `number`:
+which returns a `Number`:
 
 <!-- yon-gate: exit 0 -->
 ```yon

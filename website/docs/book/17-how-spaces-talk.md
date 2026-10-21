@@ -107,7 +107,7 @@ this language.
 
 What crosses, recursively:
 
-- **scalars** (`number`, `money`) as their `f64`;
+- **scalars** (`Number`, `money`) as their `f64`;
 - **strings**, length-prefixed, re-interned into the consumer's `String` place
   on arrival, so a string that left as one slot arrives as one slot again;
 - **nested places**: a field that is itself a transportable place is serialized
@@ -141,13 +141,12 @@ stream, materialized from the completed channel, and the fold runs over that.
 Spaces never share a cell, and each `Reading` is a copy that lives in the
 consumer's heap, strings and nested places and all.
 
-One shape of the drain is verified end to end, and one is deferred. In 1.0 the
-producer runs to completion (it emits its frames, sets `closed`, and exits)
+One shape of the drain is verified end to end. The producer runs to completion (it emits its frames, sets `closed`, and exits)
 before the consumer drains: the frames sit in the file-backed shared segment,
 which persists past the producer's exit, so a full cross-process crossing is
 exercised deterministically. The producer's exit is the synchronization point.
 The concurrent path, both processes live at once with the consumer draining a
-slot ring the producer is still filling under contention, is a known open item.
+slot ring the producer is still filling under contention, is not yet verified.
 The scalar slot ring is 64 slots; the byte ring above it (the DTO wire) is the
 64&nbsp;KB frame ring. Neither number is a design ceiling on data, only the
 current in-flight window; the honest statement today is that the completed-drain
@@ -170,7 +169,8 @@ Two doors, two disciplines. The **call** door, `__yon_dispatch`, moves `f64`
 and nothing else: a selector plus at most four numeric arguments, and a fifth is
 rejected at compile time. A string or a bare section cannot ride it: it would be
 a handle into a heap the callee does not have (chapter 13), so only numbers cross
-the call door. The **subscription** door, just above, is the one that carries
+the call door. A `String` parameter in a cross-Space signature is not yet
+refused at compile time; the call returns a wrong value (chapter 19). The **subscription** door, just above, is the one that carries
 values, and it carries them by **copy**, never by handle: a value is serialized
 on the way out and rebuilt on the far side.
 
@@ -185,15 +185,16 @@ a `geomorph`); *between* binaries it is the kernel's process isolation.
 
 ## What about threads?
 
-There is no `thread`, no `spawn`, no intra-process concurrency primitive in
-1.0, by design, not omission. Shared-memory threading would puncture every
+There is no `thread` and no intra-process concurrency primitive, by design.
+`spawn` forks *processes*, not threads (chapter 22, `spawn`). Shared-memory threading would puncture every
 guarantee this book has described: hermetic Spaces, the no-aliasing value
 model, cells as the *only* identity. Yon's unit of concurrency is the
-**process**: Spaces in separate binaries, the numeric wire between them,
-shared-memory cells with `flock` and convergent folds where state must
-really be shared (chapter 14). `for every … when here` declares parallel
-*intent* at the surface, the runtime executes it sequentially, and any future
-parallel execution will be process-shaped, not thread-shaped.
+**process**: Spaces in separate binaries, the numeric call door and the copying
+`Wire<T>` between them,
+shared-memory cells and convergent folds where state must
+really be shared (chapter 14), and `spawn in N parallel` for N isolated
+replicas. `for every … when here` declares parallel *intent* at the surface;
+the runtime executes it sequentially.
 
 ## Choosing a runtime backend
 

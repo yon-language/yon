@@ -1,11 +1,12 @@
 import React from 'react';
 
 /**
- * A geomorph is an adjunction between two sites. In the restaurant, the sala and
+ * A geomorph is a geometric morphism between two sites. In the restaurant, the sala and
  * the cucina are two spaces, and what an Order is in the dining room corresponds
  * to what a Ticket is in the kitchen. The geomorph is the adjoint pair that carries
  * each side to the other: `push` sends an order to its ticket, `pull` brings a
- * ticket back to its order. The two are linked, `push` left-adjoint to `pull`.
+ * ticket back to its order. `pull` (inverse image) is left adjoint to `push`
+ * (direct image); the compiler does not yet check the adjointness.
  *
  * Static teaching figure. It draws the two spaces of the gated `restaurant` project
  * and the adjoint pair of `cucina/Line.yon`, which compiles (emit exit 0).
@@ -28,9 +29,9 @@ export default function GeomorphAdjunction() {
   return (
     <div style={{ fontFamily: 'var(--ifm-font-family-base)', color: C.text, maxWidth: 540, margin: '1.5rem auto' }}>
       <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5, marginBottom: 8 }}>
-        <strong style={{ color: C.text }}>A geomorph is an adjunction between two sites.</strong> An
-        Order in the sala corresponds to a Ticket in the cucina; the adjoint pair carries each to the
-        other. <code>push</code> is left-adjoint to <code>pull</code>.
+        <strong style={{ color: C.text }}>A geomorph is a geometric morphism between two sites.</strong> An
+        Order in the sala corresponds to a Ticket in the cucina; the pair carries each to the
+        other. <code>pull</code> (inverse image) is left adjoint to <code>push</code> (direct image).
       </div>
 
       <svg viewBox="0 0 440 190" style={{ width: '100%', maxWidth: 440 }} fontFamily={mono}>
@@ -64,13 +65,13 @@ export default function GeomorphAdjunction() {
         <path d="M302 112 C 240 142, 200 142, 138 112" fill="none" stroke={C.pull} strokeWidth="2" markerEnd="url(#ah-pull)" />
         <text x="220" y="150" textAnchor="middle" fontSize="11" fill={C.pull}>pull</text>
 
-        {/* the adjunction symbol */}
-        <text x="220" y="101" textAnchor="middle" fontSize="15" fill={C.faint}>push ⊣ pull</text>
+        {/* the adjointness symbol: pull is the left adjoint */}
+        <text x="220" y="101" textAnchor="middle" fontSize="15" fill={C.faint}>pull ⊣ push</text>
       </svg>
 
       <div style={{ fontSize: 12, color: C.faint, textAlign: 'center', marginTop: 2 }}>
-        Not one arrow but a linked pair: everything <code>push</code> carries into the kitchen,{' '}
-        <code>pull</code> can bring back, and the adjunction is the law that keeps them consistent.
+        Not one arrow but a pair: <code>push</code> carries an order into the kitchen,{' '}
+        <code>pull</code> brings a ticket back. The compiler does not yet check that the two are adjoint.
       </div>
     </div>
   );

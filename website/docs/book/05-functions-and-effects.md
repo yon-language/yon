@@ -37,8 +37,10 @@ sending it to another Space is rejected. Apply it, or pass it down, within the
 call. The same rule holds for the *morphism* lambdas, `move`, `functor`,
 `view`, `reduction`: see [Arrows are closed](/book/arrows#arrows-are-closed).
 
-**Modifiers.** `internal fun` is not exported across a package boundary, 
-from outside, it is indistinguishable from a function that does not exist.
+**Modifiers.** Inside a place, an `internal fun` is reachable only from the
+funs of that place; a call from anywhere else is a type error that names its
+house. An `internal` function is never exported across a package boundary.
+
 ## Failure is a coproduct: `on error`
 
 A function that can fail says *how*, in its signature. `on error E` makes the
@@ -160,13 +162,13 @@ fun main(): Number {
 }
 ```
 
-Nothing is inherited, there are no methods to inherit, and no overriding,
-because places have no behaviour of their own (chapter 0). `this <` is a
+Nothing is inherited and nothing is overridden: `this <` is a mono, not a
+subclass. `this <` is a
 *claim about structure* that the compiler checks, exactly like a `law`.
 
 **Coercions along monos.** The same direction appears twice more: the
-comprehension `{x : A where P} <: A` (chapter 9) and the `boolean` face of
-`proposition` (chapter 8). All Yon subtyping is travel along a declared or
+comprehension `{x : A where P} <: A` (chapter 9) and the `Boolean` face of
+Ω (chapter 8). All Yon subtyping is travel along a declared or
 derived monomorphism, never an implicit conversion.
 
 **What is missing, on purpose.** There are no interfaces, traits or

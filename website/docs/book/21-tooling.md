@@ -101,8 +101,8 @@ leaves the file exactly as it found it. The worst case is "not formatted", never
 ## Using these in an editor (VS Code)
 
 The language server, the linter, and the formatter reach the editor through one
-extension. Install the Yon extension (it ships as a `.vsix` with the GitHub
-releases, or build it from `lsp/editors/vscode`) and, if `yon-lsp` is not on your
+extension. Install the Yon extension (a packaged `.vsix` is in `lsp/editors/vscode`, and
+`./install.sh` installs it; or build it from that directory) and, if `yon-lsp` is not on your
 `PATH`, point the `yon.lspPath` setting at your built binary. With that in place:
 
 - **diagnostics and warnings appear inline as you type.** Compiler errors under
@@ -155,7 +155,5 @@ claims something about what the compiler does, this is how it was checked.
 
 There is no debugger. A step-into, break-point debugger sits badly with a system
 of isolated Spaces and append-only memory: there is little "current line" to stop
-on. The planned tool is an *observer* instead, a view of the live Space and Wire
-graph (which Space is running and which arcs are open at a moment), built on the
-same communication protocol the runtime already uses. It belongs with the dynamic
-Space reclamation of a later edition, and is described there, not here.
+on. An observer of the live Space and Wire graph does not exist yet
+(Appendix B).
