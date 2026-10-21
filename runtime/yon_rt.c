@@ -6165,11 +6165,37 @@ double yon_rt_leech_same_orbit(double signs_a, double signs_b) {
 }
 
 /* ============================================================== */
+/* LatticePoint: a point of the type-2 shell, carried as its 25-bit
+ * coordinate in an int64. The language makes one only where it is one: the
+ * characteristic map of the shell (is_point) and the MPHF bijection between
+ * the shell and [0, 196560) (is_index / at_index / index). */
+static int lattice_integral(double n, double lo, double hi) {
+    return n == n && n >= lo && n < hi && n == (double)(int64_t)n;
+}
+double yon_rt_lattice_is_point(double n) {
+    if (!lattice_integral(n, 0.0, (double)(YON_XCOORD_VALID_MASK) + 1.0)) return 0.0;
+    return yon_xcoord_is_type2((yon_xcoord_t)(uint32_t)n) ? 1.0 : 0.0;
+}
+int64_t yon_rt_lattice_unchecked_coordinate(double n) { return (int64_t)n; }
+double yon_rt_lattice_is_index(double i) {
+    return lattice_integral(i, 0.0, (double)YON_LEECH_TYPE2_COUNT) ? 1.0 : 0.0;
+}
+int64_t yon_rt_lattice_unchecked_index(double i) {
+    return (int64_t)yon_mphf_unindex((uint32_t)i);
+}
+double yon_rt_lattice_index(int64_t p) {
+    return (double)yon_mphf_index((yon_xcoord_t)(uint32_t)p);
+}
+double yon_rt_lattice_orbit(int64_t p) {
+    return (double)yon_arena_orbit_of((yon_xcoord_t)(uint32_t)p);
+}
+
+/* ============================================================== */
 /* Arena: the Leech type-2 arena, exposed to the language as a handle-based
- * structure (the same pattern as VoyagerList/Set). The handle is an f64 = id+1
- * into a pool of arena pointers (0 = invalid); each arena is mmap-backed via
- * yon_arena_create, so the pool holds pointers, not inline structs. Points are
- * type-2 xcoords; orbit/same_orbit read the pure M24 orbit from leech_orbits. */
+ * structure. The handle is an f64 = id+1 into a pool of arena pointers
+ * (0 = invalid); each arena is mmap-backed via yon_arena_create, so the pool
+ * holds pointers, not inline structs. A slot is addressed by a LatticePoint:
+ * a type-2 coordinate, made a point by the language before it gets here. */
 #define YON_ARENA_POOL_MAX 64u
 static ds_arena_t *g_arenas[YON_ARENA_POOL_MAX];
 static uint32_t g_n_arenas = 0;
@@ -6196,7 +6222,7 @@ double yon_rt_arena_empty(void) {
 static uint64_t slot_bits(double v) { uint64_t u; memcpy(&u, &v, sizeof u); return u; }
 static double slot_value(uint64_t u) { double v; memcpy(&v, &u, sizeof v); return v; }
 
-double yon_rt_arena_put(double h, double point, double value) {
+double yon_rt_arena_put(double h, int64_t point, double value) {
     ds_arena_t *a = arena_of(h);
     if (!a) return 0.0;
     yon_arena_put_value(a, (yon_xcoord_t)(uint32_t)point, slot_bits(value));
@@ -6205,43 +6231,30 @@ double yon_rt_arena_put(double h, double point, double value) {
 
 /* The value at an occupied point; at an empty one it stops the program (the
  * place's `get` asks `occupied` first and answers Absent). */
-double yon_rt_arena_value(double h, double point) {
+double yon_rt_arena_value(double h, int64_t point) {
     ds_arena_t *a = arena_of(h);
     uint64_t bits;
     if (!a || !yon_arena_get_value(a, (yon_xcoord_t)(uint32_t)point, &bits)) {
-        fprintf(stderr, "[YON-RT] arena: no value at point %.17g\n", point);
+        fprintf(stderr, "[YON-RT] arena: no value at point %lld\n", (long long)point);
         abort();
     }
     return slot_value(bits);
 }
 
-double yon_rt_arena_occupied(double h, double point) {
+double yon_rt_arena_occupied(double h, int64_t point) {
     ds_arena_t *a = arena_of(h);
     if (!a) return 0.0;
     return yon_arena_occupied(a, (yon_xcoord_t)(uint32_t)point) ? 1.0 : 0.0;
 }
 
-double yon_rt_arena_orbit(double h, double point) {
-    ds_arena_t *a = arena_of(h);
-    if (!a) return 0.0;
-    return (double)yon_arena_orbit(a, (yon_xcoord_t)(uint32_t)point);
-}
-
-double yon_rt_arena_same_orbit(double h, double pa, double pb) {
-    ds_arena_t *a = arena_of(h);
-    if (!a) return 0.0;
-    return yon_arena_same_orbit_exact((yon_xcoord_t)(uint32_t)pa,
-                                      (yon_xcoord_t)(uint32_t)pb, NULL, NULL) ? 1.0 : 0.0;
-}
-
-double yon_rt_arena_fuse(double h, double point, double value, double sigma) {
+double yon_rt_arena_fuse(double h, int64_t point, double value, double sigma) {
     ds_arena_t *a = arena_of(h);
     if (!a) return 0.0;
     yon_arena_put_fusion(a, (yon_xcoord_t)(uint32_t)point, slot_bits(value), (uint32_t)sigma);
     return h;   /* chainable */
 }
 
-double yon_rt_arena_fusion_count(double h, double point) {
+double yon_rt_arena_fusion_count(double h, int64_t point) {
     ds_arena_t *a = arena_of(h);
     if (!a) return 0.0;
     return (double)yon_arena_fusions(a, (yon_xcoord_t)(uint32_t)point, NULL, NULL);

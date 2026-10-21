@@ -4,8 +4,8 @@ import useAutoplay, { playLabel } from './_autoplay';
 /**
  * Arena — "store at a lattice address, know its kind, fuse lineages." The kind is the
  * M24 orbit; a fusion is recorded with a Conway-group certificate. Real run
- * (regression/book/jp/uc_arena -> get=42, same_orbit(1536,1280)=1,
- *  same_orbit(1536,16778752)=0, fusion_count=1).
+ * (regression/book/jp/uc_arena -> get=42, orbit(1536)==orbit(1280) is 1,
+ *  orbit(1536)==orbit(16778752) is 0, fusion_count=1).
  */
 
 const C = {
@@ -140,10 +140,10 @@ export default function ArenaOrbit() {
         }}
       >
         <span>
-          <span style={{ color: C.greenText }}>same_orbit(1536, 1280) = 1</span> — same kind
+          <span style={{ color: C.greenText }}>orbit(1536) == orbit(1280)</span> — same kind
         </span>
         <span>
-          <span style={{ color: C.redText }}>same_orbit(1536, 16778752) = 0</span> — different
+          <span style={{ color: C.redText }}>orbit(1536) ≠ orbit(16778752)</span> — different
         </span>
       </div>
 

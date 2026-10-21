@@ -2,10 +2,10 @@ import React from 'react';
 
 /**
  * "The gaps are the proof." Every per-operation cost on one log axis, cheapest to
- * dearest. The interesting thing is not any single bar but the distances: Arena.get
- * to Arena.same_orbit is the M24 orbit recomputation, made visible; the heap-cons
- * ops (List.cons, HashMap.set) sit above the inline ops (Vec.push, HashSet.add) by
- * exactly the content-addressing price they pay for structural sharing.
+ * dearest. The interesting thing is not any single bar but the distances: the
+ * heap-cons ops (List.cons, HashMap.set) sit above the inline ops (Vec.push,
+ * HashSet.add) by exactly the content-addressing price they pay for structural
+ * sharing.
  *
  * HONESTY CONTRACT:
  *   - Every nanosecond is the real per-op figure from Appendix D, measured on an
@@ -45,7 +45,6 @@ const OPS = [
   ['Arena.put (certified, O(1))', 80, 'mid'],
   ['MerkleTree.node2 (dedup hit)', 138, 'heavy'],
   ['HashMap.set (grows with map)', 340, 'heavy'],
-  ['Arena.same_orbit (M24 relation)', 1170, 'heavy'],
 ];
 
 const X0 = 176, X1 = 344; // bar area
@@ -61,8 +60,7 @@ export default function PerOpLadder() {
     <div style={{ fontFamily: 'var(--ifm-font-family-base)', color: C.text, maxWidth: 560, margin: '1.5rem auto' }}>
       <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5, marginBottom: 8 }}>
         <strong style={{ color: C.text }}>Per-operation cost, cheapest to dearest.</strong> Log axis, so
-        each gap is a ratio. The jump from <code>Arena.get</code> to <code>Arena.same_orbit</code> is the
-        M24 orbit recomputation; the hash-cons ops sit one step above the inline ops by the sharing price
+        each gap is a ratio. The hash-cons ops sit one step above the inline ops by the sharing price
         they pay. Apple M1.
       </div>
 

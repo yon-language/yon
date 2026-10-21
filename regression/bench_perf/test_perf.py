@@ -40,14 +40,13 @@ OPS = {
     "hashset_lookup": ("_read_base", 10_000_000),
     "list_head": ("_read_base", 10_000_000),
     "hashmap_get": ("_read_base", 10_000_000),
-    # NOTE: the three Arena ops (put, get, same_orbit) are NOT measured here. Their loops
-    # call Leech.point to generate the lattice address, which the shared baselines do not,
-    # so (op - base) leaves Leech.point's cost in instead of subtracting it; and the first
-    # Leech.point/Arena.put pays a one-time ~200 ms mmgroup table init that, at the small N
-    # an arena allows (196,560 slots), dominates the subprocess median and a non-twin
-    # baseline cannot remove (it surfaced as a ~31 us per-op artifact for put). They are
-    # measured in-process with an EXACT Leech.point twin + min-over-reps in
-    # regression/bench/arena_ops (put ~80 ns and O(1) in N, get ~41 ns, same_orbit ~1.1 us).
+    # NOTE: the Arena ops (put, get, the orbit comparison) are NOT measured here.
+    # Their loops make a lattice point to address the slot, which the shared baselines
+    # do not, so (op - base) leaves that cost in instead of subtracting it; and the
+    # first point/Arena.put pays a one-time ~200 ms mmgroup table init that, at the
+    # small N an arena allows (196,560 slots), dominates the subprocess median and a
+    # non-twin baseline cannot remove. They are measured in-process with an EXACT twin
+    # (the same point made the same way) + min-over-reps in regression/bench/arena_ops.
     "vec_push": ("_thru_base", 1_000_000),
     "hashset_insert": ("_thru_base", 1_000_000),
     # NOTE: list_cons and hashmap_set are NOT measured here. They put on the content-

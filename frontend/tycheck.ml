@@ -4065,7 +4065,14 @@ let register_fusion (pd : place_decl) : unit =
          the DEFAULT world's carrier wins the bare-name registry — never
          the parse order. The non-default twin stays a declared intent
          (its world distinguishes it; it has no native lowering). *)
-      (if in_prelude
+      (* a representation internal to the house: carried as prim, an abstract
+         type to every other reader, so never one object with prim *)
+      let internal =
+        Hashtbl.mem Surface_ast.internal_carrier_sites
+          (pd.pd_loc.file, pd.pd_loc.start_line, pd.pd_loc.start_col) in
+      (if internal then
+         Hashtbl.replace Surface_ast.internal_faces pd.pd_name prim
+       else if in_prelude
           && Hashtbl.mem Surface_ast.fusion_places pd.pd_name
           && Hashtbl.find Surface_ast.fusion_places pd.pd_name <> prim
           && pd.pd_world <> Surface_ast.prelude_default_world

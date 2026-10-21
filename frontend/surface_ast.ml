@@ -66,6 +66,15 @@ let fusion_places : (string, string) Hashtbl.t = Hashtbl.create 8
 (* inverse: prim code -> fusion place name *)
 let fusion_of_prim : (string, string) Hashtbl.t = Hashtbl.create 8
 
+(* Places whose representation is internal (`place P is internal <prim>`):
+   P is carried as <prim> at runtime and is an abstract type everywhere else.
+   The sites of their declarations (file, line, column) as the parser saw
+   them, and the faces themselves, name -> prim, filled at registration;
+   consulted by the lowering (TyUser P -> its carrier) and the lattice-slot
+   rule, never by type equality. *)
+let internal_carrier_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 4
+let internal_faces : (string, string) Hashtbl.t = Hashtbl.create 4
+
 (* The faces the language fuses to their primitive codes: a capitalized face
    and its code are one object, as a type (the parser) and as a code (a type
    named in a term). *)

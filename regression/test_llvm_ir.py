@@ -301,7 +301,9 @@ def test_ll_no_undefined_runtime_refs(name, tmp_path):
 # exactly the return and parameter types of its prototype in runtime/*.[ch].
 _C2LL = {"double": "double", "void": "void", "int8_t": "i8", "uint8_t": "i8",
          "bool": "i8", "int32_t": "i32", "uint32_t": "i32", "int": "i32",
-         "int64_t": "i64", "uint64_t": "i64"}
+         "int64_t": "i64", "uint64_t": "i64",
+         # the runtime's own scalar typedefs (yon_rt.h)
+         "yon_section_t": "i64"}
 _C_QUAL = re.compile(r"\b(?:const|static|inline|extern|volatile|restrict)\b")
 _DECLARE = re.compile(r"^declare\s+(\S+)\s+@([A-Za-z0-9_]+)\(([^)]*)\)", re.MULTILINE)
 _C_FUNC = re.compile(r"^[ \t]*((?:[A-Za-z_][A-Za-z0-9_]*[ \t*]+)+?)\**"

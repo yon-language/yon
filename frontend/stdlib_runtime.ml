@@ -321,7 +321,17 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   let tk = TyVar "K" and tv = TyVar "V" and tt = TyVar "T" in
   let hmap = TyApp ("HashMap", [tk; tv]) and hset = TyApp ("HashSet", [tt]) in
   let xrel = TyApp ("XRelMap", [tk; tv]) and arena = TyApp ("Arena", [tv]) in
+  let tpoint = TyUser "LatticePoint" in
   [
+    (* The primitives LatticePoint (prelude/lattice) declares `is given`. *)
+    "LatticePoint", [
+      "is_point", [tnum], tbool;
+      "unchecked_coordinate", [tnum], tpoint;
+      "is_index", [tnum], tbool;
+      "unchecked_index", [tnum], tpoint;
+      "index", [tpoint], tnum;
+      "orbit", [tpoint], tnum;
+    ];
     "List", [
       "empty", [tunit], TyList tunk;
       "cons", [tunk; tlist tunk], tlist tunk;
@@ -507,13 +517,11 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     (* The primitives Arena<V> (prelude/coll) declares `is given`. *)
     "Arena", [
       "empty", [], arena;
-      "put", [arena; tnum; tv], arena;
-      "occupied", [arena; tnum], tbool;
-      "value", [arena; tnum], tv;
-      "orbit", [arena; tnum], tnum;
-      "same_orbit", [arena; tnum; tnum], tnum;
-      "fuse", [arena; tnum; tv; tnum], arena;
-      "fusion_count", [arena; tnum], tnum;
+      "put", [arena; tpoint; tv], arena;
+      "occupied", [arena; tpoint], tbool;
+      "value", [arena; tpoint], tv;
+      "fuse", [arena; tpoint; tv; tnum], arena;
+      "fusion_count", [arena; tpoint], tnum;
     ];
     "Space", [
       "make", [tunk], TyUser "Space";

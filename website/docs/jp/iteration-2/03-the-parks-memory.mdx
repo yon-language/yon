@@ -143,16 +143,18 @@ inside it.)
 
 ## Storing on the lattice: the arena
 
-The `Arena` is the type-2 arena itself: it stores a value at a lattice address, knows that
-address's *kind* (its M24 orbit), and can record a certified fusion of two lineages.
+The `Arena` is the type-2 arena itself: it stores a value at a lattice address and can record a
+certified fusion of two lineages. An address is a `LatticePoint`, made only where it is one, and
+the point knows its own *kind* (its M24 orbit).
 
 ```yon
-be a := Arena.put(Arena.empty(), 1536, 42)
-be _v := Arena.get(a, 1536)                  // -> 42
-be _k := Arena.same_orbit(a, 1536, 1280)     // -> 1  (same kind)
-be _d := Arena.same_orbit(a, 1536, 16778752) // -> 0  (different)
-a = Arena.fuse(a, 1536, 99, 7)          // record a certified fusion
-be _f := Arena.fusion_count(a, 1536)         // -> 1
+// p, q, r: LatticePoint.of_coordinate(1536), (1280), (16778752)
+be a := Arena.put(Arena.empty(), p, 42)
+be _v := Arena.get(a, p)                                 // -> Found(42)
+be _k := LatticePoint.orbit(p) == LatticePoint.orbit(q)  // -> true  (same kind)
+be _d := LatticePoint.orbit(p) == LatticePoint.orbit(r)  // -> false (different)
+a = Arena.fuse(a, p, 99, 7)                              // record a certified fusion
+be _f := Arena.fusion_count(a, p)                        // -> 1
 ```
 
 `1536` and `1280` are different individuals of the same kind; `Arena.fuse` records, with a

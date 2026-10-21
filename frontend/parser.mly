@@ -596,7 +596,12 @@ place_params:
    the one source of truth). A primitive is the place whose carrier is
    axiomatic instead of derived: the leaf of the carrier functor's recursion. *)
 is_fusion_clause:
-  | IS c = IDENT  { c }
+  | IS c = IDENT  { (c, false) }
+  (* `is internal <prim>`: the representation is internal to the house. The
+     place is carried as <prim> at runtime, but outside its house it is an
+     abstract type: no literal is one of its points, no arithmetic applies,
+     and it is not the type <prim> — its values come only from its own funs. *)
+  | IS INTERNAL c = IDENT  { (c, true) }
 
 place_decl:
   | is_err = place_kw name = IDENT
@@ -647,6 +652,13 @@ place_decl:
           && fusion = None then
          failwith (Printf.sprintf
            "place %s collides with the prelude place of the same name: the             prelude owns it (rename yours)" name));
+      (match fusion with
+       | Some (_, true) ->
+           Hashtbl.replace Surface_ast.internal_carrier_sites
+             ($startpos.Lexing.pos_fname, $startpos.Lexing.pos_lnum,
+              $startpos.Lexing.pos_cnum - $startpos.Lexing.pos_bol) ()
+       | _ -> ());
+      let fusion = Option.map fst fusion in
       TopPlace { pd_name = name;
                  pd_type_params = tparams;
                  pd_fusion = fusion;

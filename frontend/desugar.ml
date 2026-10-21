@@ -352,6 +352,9 @@ let rec desugar_ty (t : S.ty) : C.ty =
      to (the fused pair is one semantic object; one source of truth) *)
   | S.TyUser u when Hashtbl.mem S.fusion_places u ->
       desugar_ty (S.TyPrim (Hashtbl.find S.fusion_places u))
+  (* an abstract type has no runtime existence: it is its representation *)
+  | S.TyUser u when Hashtbl.mem S.internal_faces u ->
+      desugar_ty (S.TyPrim (Hashtbl.find S.internal_faces u))
   | S.TyPrim n | S.TyPrimIn (n, _) ->
       (match n with
        | "text" | "number" | "boolean" | "money" -> C.TyPlace n

@@ -87,7 +87,6 @@ exact nanoseconds are this machine's, and yours will differ in the constants, no
 | `Arena.put` (certified insert, O(1) in fill) | ~80 ns |
 | `MerkleTree.node2` (repeated build) | ~138 ns |
 | `HashMap.set` (grows with the map) | ~130 to ~340 ns |
-| `Arena.same_orbit` (recomputes the M24 relation) | ~1.17 µs |
 
 <PerOpLadder />
 
@@ -100,14 +99,11 @@ sub-nanosecond. The in-process gate (`regression/bench/eq_constant`) is finer an
 the size of the value; it is just faster than this harness can see from outside.
 
 The heavier numbers tell their own truth, and the gaps between them are the proof. `Arena.get` is
-about 41 ns, the cost of finding a value at a lattice address. `Arena.same_orbit` is about 1.17 µs,
-and the roughly 1,130 ns between the two is the M24 orbit recomputation: the symmetry-group
-calculation, made visible. The heavy number is not slowness, it is the certificate doing real work,
-and the difference measures exactly how much. `List.cons` (~70 ns, flat) and `HashMap.set`
+about 41 ns, the cost of finding a value at a lattice address. `List.cons` (~70 ns, flat) and `HashMap.set`
 (~130 to ~340 ns, growing with the map) each content-address their payload on the FNV heap, the
 hash-cons price that buys structural sharing, where `Vec.push` and `HashSet.add` store inline and skip
-it. (The three arena ops are measured in-process net of an exact `Leech.point` twin, since the arena
-is addressed by lattice points and the address generation must be subtracted, not left in.)
+it. (The arena ops are measured in-process net of an exact twin that makes the same lattice point,
+since the arena is addressed by lattice points and making the point must be subtracted, not left in.)
 
 `MerkleTree.node2` at ~138 ns is given with a caveat: it rebuilds one identical tree, so it is a
 deduplication hit, not a fresh insert.

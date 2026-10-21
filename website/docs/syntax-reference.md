@@ -309,6 +309,7 @@ fun f(x: Number, y: Number): Number { return x + y }
 fun g<A, B>(x: A): B { ... }                      // type parameters
 fun h(x: Number): Number visits Output { ... }    // declared effect
 internal fun secret(x: Number): Number { ... }    // only its house calls it; not exported cross-Space
+place LatticePoint is internal i64 { ... }         // carried as i64, abstract outside its house
 fun p(x: Number) on error E: Number { ... }       // partial: it declares how it fails
 ```
 

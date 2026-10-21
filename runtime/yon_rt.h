@@ -638,13 +638,19 @@ double yon_rt_leech_same_orbit(double signs_a, double signs_b);
 
 /* Arena: Leech type-2 arena exposed to the language (handle = id+1 into a pool). */
 double yon_rt_arena_empty(void);
-double yon_rt_arena_put(double h, double point, double value);
-double yon_rt_arena_value(double h, double point);
-double yon_rt_arena_occupied(double h, double point);
-double yon_rt_arena_orbit(double h, double point);
-double yon_rt_arena_same_orbit(double h, double pa, double pb);
-double yon_rt_arena_fuse(double h, double point, double value, double sigma);
-double yon_rt_arena_fusion_count(double h, double point);
+double yon_rt_arena_put(double h, int64_t point, double value);
+double yon_rt_arena_value(double h, int64_t point);
+double yon_rt_arena_occupied(double h, int64_t point);
+double yon_rt_arena_fuse(double h, int64_t point, double value, double sigma);
+double yon_rt_arena_fusion_count(double h, int64_t point);
+
+/* LatticePoint: a type-2 coordinate carried in an int64 */
+double yon_rt_lattice_is_point(double n);
+int64_t yon_rt_lattice_unchecked_coordinate(double n);
+double yon_rt_lattice_is_index(double i);
+int64_t yon_rt_lattice_unchecked_index(double i);
+double yon_rt_lattice_index(int64_t p);
+double yon_rt_lattice_orbit(int64_t p);
 
 /* M_24 Mathieu orbit canonical + xi Conway involution. */
 double yon_rt_leech_m24_orbit(double v_24bit);
