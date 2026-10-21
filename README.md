@@ -49,11 +49,11 @@ place Entry {
 
   fun main(): Number {
     // Equal subtrees share one address: the heap is content-addressed.
-    be t holds .-> Node { _1 .-> Leaf { _1 20 } _2 .-> Leaf { _1 20 } }
+    be t := .-> Node { _1 .-> Leaf { _1 20 } _2 .-> Leaf { _1 20 } }
 
     // `unknown` is a truth value, not an error: deciding it has three outcomes.
-    be p holds unknown
-    be bonus holds match decide(p ||? (!? p)) { Present => 0, Absent => 0, Unknown => 2 }
+    be p := unknown
+    be bonus := match decide(p ||? (!? p)) { Present => 0, Absent => 0, Unknown => 2 }
 
     return total(t) + bonus   // 42
   }
@@ -88,7 +88,7 @@ toolchain/yonc examples/inductive_tree -o tree && ./tree; echo $?
   the implementation exists with exactly that signature.
 - **Collections are values.** `HashMap`, `HashSet` and friends are persistent:
   an insertion returns a new collection backed by the same content-addressed
-  heap. Mutation exists, but only as an explicit local cell (`be x holds e`,
+  heap. Mutation exists, but only as an explicit local cell (`be x := e`,
   then `x = e`).
 - **Spaces.** A program can be split into Spaces, separate processes that talk
   over shared memory and a typed wire protocol. Values cross by content, and a
@@ -109,7 +109,7 @@ reports:
 
 | | |
 |---|---|
-| pytest | **1668 passed**, 10 skipped (each one declared in a register), **85 expected failures** |
+| pytest | **1671 passed**, 10 skipped (each one declared in a register), **85 expected failures** |
 | example programs | **101**, every exit code identical to a recorded baseline |
 | cross-Space scenarios | **8**, multi-process, over shared memory and the wire |
 | self-hosting | the frontend for a core subset, written in Yon, reproduces itself byte for byte |

@@ -61,8 +61,8 @@ place Math { unit Number
 // Entry.yon
 place Entry {
   fun main(): Number {
-    be a holds Math.floor(21.9)
-    be b holds Math.sqrt(441)
+    be a := Math.floor(21.9)
+    be b := Math.sqrt(441)
     return a + b
   }
 }`}
@@ -72,11 +72,11 @@ place Entry {
 
 #### `be`
 
-The only binding form, and it is immutable: `be x holds e`. There is no `let` and no rebinding. Writing `be x holds e` a second time for a name already bound in the same scope is a compile error ("`x` is already bound in this scope; use `x = ...` to reassign it"); the fix is `x = e`. Shadowing in a nested scope (a loop or `when` body) is allowed, and names that begin with `_` are exempt as throwaways.
+The only binding form, and it is immutable: `be x := e`. There is no `let` and no rebinding. Writing `be x := e` a second time for a name already bound in the same scope is a compile error ("`x` is already bound in this scope; use `x = ...` to reassign it"); the fix is `x = e`. Shadowing in a nested scope (a loop or `when` body) is allowed, and names that begin with `_` are exempt as throwaways.
 
-#### `holds`
+#### `:=` (definition)
 
-The "equals" of the binding: it reads as English and it means *holds this value at this point*. A later `x = e` is a separate act (promotion to a Space cell), not a rebinding of the `be` name.
+The symbol of the binding: `be x := e` reads "x is defined as e". It is the `:=` of mathematics, a definition and not an assignment: x equals e by definition for its whole scope. It is the same symbol that defines a field (`side := Number`). A later `x = e` is a separate act (promotion to a Space cell), not a redefinition of the `be` name.
 
 #### `=` (assignment)
 
@@ -154,18 +154,18 @@ The infinite loop, typically wrapped around effects: a server, a producer, a hea
             run="yonc v1_control_flow.yon -o v1_control_flow && ./v1_control_flow; echo $?"
             out={["42"]}>
 {`fun main(): Number {
-  be acc holds 0
-  be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  be acc := 0
+  be lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
 
   for every x in lst { acc = acc + x }            // 21
   in sequence over y in lst { acc = acc + 1 }     // 24
   repeat at most 3 times { acc = acc + 2 }        // 30
   otherwise { acc = acc + 1 }                     // 31
 
-  be d holds 2000 + 500                           // 2500
+  be d := 2000 + 500                           // 2500
   when d == 2500 { acc = acc + 10 }               // 41
 
-  be i holds 0
+  be i := 0
   while i < 1 do {
     acc = acc + 1                                 // 42
     i = i + 1
@@ -182,9 +182,9 @@ The formally hermetic block: `scope { }` lowers to an MLIR `IsolatedFromAbove` r
             run="yonc hermetic_scope.yon -o hermetic_scope && ./hermetic_scope; echo $?"
             out={["42"]}>
 {`fun main(): Number {
-  be base holds 40
+  be base := 40
   scope Hermetic {
-    be sealed holds base + 2
+    be sealed := base + 2
   }
   return base + 2
 }`}
@@ -202,7 +202,7 @@ place NodeA { value Number }
 // Entry.yon
 place Entry {
   fun guard(): Number {
-    be r holds 0
+    be r := 0
     forces NodeA value is Number {
       r = 1
     }
@@ -224,11 +224,11 @@ Emits a value: into the channel of a `produce` block, or into the active handler
 
 ```yon
 fun main(): Number {
-  be s holds produce {
+  be s := produce {
     emit 41
     emit 1
   }
-  be total holds s.fold(0, fun(a: Number, v: Number) => a + v)
+  be total := s.fold(0, fun(a: Number, v: Number) => a + v)
   return total        // 41 + 1 = 42
 }
 ```
@@ -287,7 +287,7 @@ A representable functor on a place: the declaration `view V of P { show ... }` (
 
 #### `reduction`
 
-Folds a structure to a value. Declared `reduction ... of P { on op { } be seed holds e }` against a place that declares operations, or inline `reduction(acc, x) => e of P`.
+Folds a structure to a value. Declared `reduction ... of P { on op { } be seed := e }` against a place that declares operations, or inline `reduction(acc, x) => e of P`.
 
 #### `operation`
 
@@ -309,13 +309,13 @@ place R { v Number }
 // Entry.yon
 place Entry {
   fun main(): Number {
-    be m1 holds move(s: P) => .-> Q { v 1 } from P to Q
-    be m2 holds move(s: Q) => .-> R { v 2 } from Q to R
-    be mm holds compose m1 with m2
-    be sp holds .-> P { v 0 }
-    be sr holds mm(sp)
-    be vw holds view(s: P) => 40 of P
-    be forty holds vw(sp)
+    be m1 := move(s: P) => .-> Q { v 1 } from P to Q
+    be m2 := move(s: Q) => .-> R { v 2 } from Q to R
+    be mm := compose m1 with m2
+    be sp := .-> P { v 0 }
+    be sr := mm(sp)
+    be vw := view(s: P) => 40 of P
+    be forty := vw(sp)
     return forty + 4
   }
 }`}
@@ -346,9 +346,9 @@ place Account { balance Number
 // Entry.yon
 place Entry {
   fun main(): Number {
-    be acc holds .-> Account { balance 50
+    be acc := .-> Account { balance 50
       fee 8 }
-    be snap holds Snapshot(acc)
+    be snap := Snapshot(acc)
     return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
   }
 }`}
@@ -409,14 +409,14 @@ place Entry {
     y aggregates to total by double
   }
   fun main(): Number {
-    be a holds .-> A { v 7
+    be a := .-> A { v 7
       w 1 }
-    be b holds .-> B { v 7
+    be b := .-> B { v 7
       w 9 }
-    be m holds Move.merge(Merge, a, b)
-    be wide holds .-> Wide { x 4
+    be m := Move.merge(Merge, a, b)
+    be wide := .-> Wide { x 4
       y 5 }
-    be narrow holds apply_move(Squeeze, wide)
+    be narrow := apply_move(Squeeze, wide)
     return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
   }
 }`}
@@ -500,8 +500,8 @@ topos Bank where {
 // Entry.yon
 place Entry {
   fun main(): Number {
-    be s holds .-> State { balance 5 }
-    be bad holds is_overdrawn(s)
+    be s := .-> State { balance 5 }
+    be bad := is_overdrawn(s)
     return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
   }
 }`}
@@ -593,11 +593,11 @@ place Entry {
   geomorph Lift from Account to AccountEU {
     exact push
     pull(a: AccountEU): Account {
-      be tmp holds a
+      be tmp := a
       return tmp
     }
     push(a: Account): AccountEU {
-      be tmp holds a
+      be tmp := a
       return tmp
     }
   }
@@ -644,28 +644,28 @@ The pattern condition `e is pattern` (a variable, a literal, `present`, `absent`
             out={["x is seven", "city is rome", "other is not rome", "30"]}>
 {`fun pick(x: Number): Number visits Output {
   when x is 7 {
-    be _ holds String.print("x is seven")
+    be _ := String.print("x is seven")
   }
   return 10
 }
 fun name_check(a: Number, b: Number): Number visits Output {
-  be city holds "rome"
+  be city := "rome"
   when city is "rome" {
-    be _ holds String.print("city is rome")
+    be _ := String.print("city is rome")
   }
-  be other holds "paris"
+  be other := "paris"
   when other is not "rome" {
-    be _ holds String.print("other is not rome")
+    be _ := String.print("other is not rome")
   }
-  be y holds (a + b)
+  be y := (a + b)
   when y is a {
-    be _ holds String.print("NEVER: y equals a")
+    be _ := String.print("NEVER: y equals a")
   }
   return 20
 }
 fun main(): Number visits Output {
-  be r1 holds pick(7)
-  be r2 holds name_check(2, 3)
+  be r1 := pick(7)
+  be r2 := name_check(2, 3)
   return r1 + r2
 }`}
 </CodeWindow>
@@ -683,14 +683,14 @@ fun main(): Number visits Output {
             run="yonc kw_list_here.yon -o list_here && ./list_here; echo $?"
             out={["21"]}>
 {`fun total(xs: List<Number>): Number {
-  be acc holds 0
+  be acc := 0
   for every x in xs when here {
     acc = acc + x
   }
   return acc
 }
 fun main(): Number {
-  be lst holds List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  be lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
   return total(lst)
 }`}
 </CodeWindow>
@@ -714,7 +714,7 @@ In member position (`subscription.stream`): the subscription's channel, of type 
 ```yon
 // sensors.yon, the producer package -> ./Sensors_srv
 fun readings(): Wire<Number> {
-  be s holds produce {
+  be s := produce {
     emit 10
     emit 11
     emit 15
@@ -727,10 +727,10 @@ fun main(): Number { return 0 }
 import sensors::readings from Sensors
 
 fun main(): Number {
-  be w holds wire to space Sensors
-  be sub holds w.awaits(readings)
-  be s holds sub.stream
-  be total holds s.fold(0, fun(a: Number, v: Number) => a + v)
+  be w := wire to space Sensors
+  be sub := w.awaits(readings)
+  be s := sub.stream
+  be total := s.fold(0, fun(a: Number, v: Number) => a + v)
   return total      // 10+11+15 = 36, from another process
 }
 ```
@@ -765,10 +765,10 @@ The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in t
 
 ```yon
 fun main(): Number {
-  be results holds spawn in 4 parallel {
+  be results := spawn in 4 parallel {
     promote spawn_index + 1
   }
-  be total holds results.fold(0, fun(a: Number, v: Number) => a + v)
+  be total := results.fold(0, fun(a: Number, v: Number) => a + v)
   return total      // (0+1)+(1+1)+(2+1)+(3+1) = 1+2+3+4 = 10
 }
 ```
@@ -799,30 +799,30 @@ Pattern negation, `e is not pattern`: the Heyting negation of the positive test,
             run="yonc kw_patterns.yon -o patterns && ./patterns; echo $?"
             out={["p is not absent", "u is unknown", "6"]}>
 {`fun chain_one(a: Number, b: Number): Number visits Output {
-  be p holds (a < b)
+  be p := (a < b)
   when p is not absent {
-    be _ holds String.print("p is not absent")
+    be _ := String.print("p is not absent")
   }
   return 1
 }
 fun chain_two(d: Number): Number visits Output {
-  be u holds unknown
+  be u := unknown
   when u is unknown {
-    be _ holds String.print("u is unknown")
+    be _ := String.print("u is unknown")
   }
   return d
 }
 fun chain_three(a: Number, b: Number): Number visits Output {
-  be p holds (a < b)
+  be p := (a < b)
   when p is absent {
-    be _ holds String.print("NEVER printed: p is a known truth")
+    be _ := String.print("NEVER printed: p is a known truth")
   }
   return 3
 }
 fun main(): Number visits Output {
-  be x holds chain_one(3, 5)
-  be y holds chain_two(2)
-  be z holds chain_three(3, 5)
+  be x := chain_one(3, 5)
+  be y := chain_two(2)
+  be z := chain_three(3, 5)
   return x + y + z
 }`}
 </CodeWindow>
@@ -835,13 +835,13 @@ fun main(): Number visits Output {
             run="yonc kw_heyting.yon -o heyting && ./heyting; echo $?"
             out={["42"]}>
 {`fun main(): Number {
-  be u holds unknown
-  be p holds present
-  be both holds p &&? u            // unknown: conjunction with the undecided
-  be imp holds u =>? p             // present: anything implies the present
-  be h1 holds heyting(5)           // trits 101, all certain
-  be h2 holds heyting(5, 2)        // middle trit unknown
-  be hand holds h1 &? h2           // trit-wise, the unknown propagates
+  be u := unknown
+  be p := present
+  be both := p &&? u            // unknown: conjunction with the undecided
+  be imp := u =>? p             // present: anything implies the present
+  be h1 := heyting(5)           // trits 101, all certain
+  be h2 := heyting(5, 2)        // middle trit unknown
+  be hand := h1 &? h2           // trit-wise, the unknown propagates
   return match decide(imp) { Present => 42, Absent => 0, Unknown => 1 }
 }`}
 </CodeWindow>
@@ -891,13 +891,13 @@ Second projection of the pair.
   return fst(p) + snd(p)
 }
 fun proj_sum(a: Number, b: Number): Number {
-  be p holds pair(a, b)
-  be x holds fst(p)
-  be y holds snd(p)
+  be p := pair(a, b)
+  be x := fst(p)
+  be y := snd(p)
   return x + y
 }
 fun main(): Number {
-  be direct holds takes(pair(20, 10))
+  be direct := takes(pair(20, 10))
   return direct + proj_sum(7, 5)        // 30 + 12 = 42
 }`}
 </CodeWindow>
@@ -948,8 +948,8 @@ The universe of types (`Type_1`, `Type_2`, ... for the levels). A universe-typed
 {`fun diag(a: Number): Number { return a * 6 }
 fun universe_taker(t: Type): Number { return 7 }
 fun main(): Number {
-  be r holds clear 7                          // a path value, let-bound
-  be moved holds ind_path(0, diag, clear 7)   // J computes diag(7) = 42
+  be r := clear 7                          // a path value, let-bound
+  be moved := ind_path(0, diag, clear 7)   // J computes diag(7) = 42
   return moved
 }`}
 </CodeWindow>

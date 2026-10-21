@@ -1,19 +1,19 @@
 place Entry {
   fun main(): Number visits Output {
-    be kn      holds XTower.width(3)
-    be m24n    holds XTower.width(2)
-    be cls     holds Leech.m24_orbit(1536)
-    be a holds Leech.embed(100247, 0)
-    be b holds Leech.embed(100247, 0)
-    be c holds Leech.embed(555, 0)
-    be set0 holds XSet.empty()
-    be set1 holds XSet.add(set0, a)
-    be set2 holds XSet.add(set1, b)
-    be set3 holds XSet.add(set2, c)
-    be _1 holds Output.print(String.from_int(kn))
-    be _2 holds Output.print(String.from_int(m24n))
-    be _3 holds Output.print(String.from_int(cls))
-    be _4 holds Output.print(String.from_int(XSet.size(set3)))
+    be kn      := XTower.width(3)
+    be m24n    := XTower.width(2)
+    be cls     := Leech.m24_orbit(1536)
+    be a := Leech.embed(100247, 0)
+    be b := Leech.embed(100247, 0)
+    be c := Leech.embed(555, 0)
+    be set0 := XSet.empty()
+    be set1 := XSet.add(set0, a)
+    be set2 := XSet.add(set1, b)
+    be set3 := XSet.add(set2, c)
+    be _1 := Output.print(String.from_int(kn))
+    be _2 := Output.print(String.from_int(m24n))
+    be _3 := Output.print(String.from_int(cls))
+    be _4 := Output.print(String.from_int(XSet.size(set3)))
     return 0
   }
 }

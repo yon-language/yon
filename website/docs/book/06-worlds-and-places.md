@@ -62,8 +62,8 @@ surface. `Entry.yon`:
 ```yon
 place Entry { }
 fun main(): Number {
-  be o holds .-> Order { table 5 total 40 }
-  be _p holds IO.print_num(o.table)
+  be o := .-> Order { table 5 total 40 }
+  be _p := IO.print_num(o.table)
   return o.total + 2                     // 42
 }
 ```

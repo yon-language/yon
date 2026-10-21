@@ -63,7 +63,6 @@ Every keyword, alphabetically:
 [`heyting`](/book/keywords#heyting) ·
 [`hit`](/book/keywords#hit) ·
 [`hit_elim`](/book/keywords#hit_elim) ·
-[`holds`](/book/keywords#holds) ·
 [`I0`](/book/keywords#i0) ·
 [`I1`](/book/keywords#i1) ·
 [`Id`](/book/keywords#id) ·
@@ -181,8 +180,8 @@ fun greet(who: String): String {
 }
 
 fun main(): Number {
-  be msg holds greet("mondo")
-  be _w holds File.write_text("/tmp/out.txt", msg)
+  be msg := greet("mondo")
+  be _w := File.write_text("/tmp/out.txt", msg)
   return String.length(msg)        // 10
 }
 ```
@@ -194,8 +193,8 @@ only numbers travel on the wire.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `be x holds e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword). Declares once per scope: re-`holds` of a name already bound in the same scope is a compile error (use `x = e` to reassign); nested-scope shadowing is allowed, `_`-prefixed names are exempt |
-| `x = e` | ✓ | **Space-cell assign** (the content-addressed mutation mechanism). The target binding is promoted to a Space cell: its `be` allocates the cell, reads go through it, `x = e` updates it. Works on locals and parameters. Snapshot semantics, no aliasing (`be y holds x` does not alias `x`'s cell) |
+| `be x := e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword). Declares once per scope: a second `be x := ...` of a name already bound in the same scope is a compile error (use `x = e` to reassign); nested-scope shadowing is allowed, `_`-prefixed names are exempt |
+| `x = e` | ✓ | **Space-cell assign** (the content-addressed mutation mechanism). The target binding is promoted to a Space cell: its `be` allocates the cell, reads go through it, `x = e` updates it. Works on locals and parameters. Snapshot semantics, no aliasing (`be y := x` does not alias `x`'s cell) |
 | `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
 | `x.f = e` | ✗ rejected | Field mutation: place sections are immutable; the type checker rejects it ("place sections are immutable"). Mutate through cells |
 
@@ -295,9 +294,9 @@ reference is a *compiler error*, verified on the real IR.
 
 ```yon
 fun main(): Number {
-  be base holds 40
+  be base := 40
   scope Hermetic {
-    be sealed holds base + 2    // `base` enters as an explicit capture
+    be sealed := base + 2    // `base` enters as an explicit capture
   }
   return base + 2               // 42
 }
@@ -363,7 +362,7 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | `nat transform t from F to G { for each X by fnX }` | ✓ | Natural transformation: one component per object |
 | `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: [`pull`](/book/keywords#pull) is the inverse image, [`push`](/book/keywords#push) the direct image; the clause `exact push` declares that f∗ preserves finite limits. (`adjunction` and `exact pull` are retired: they declared what holds by definition) |
 | `view V of P { show f  show f = e  show f as "label" }` | ✓ | Derived projection of a place, lowered to a record place plus a constructor: `V(x)` builds the projection, fields read normally |
-| `reduction R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x holds e }` | ✓ | A reduction; clauses are contextual `on` handlers and [`be`](/book/keywords#be) bindings. (The `forward`/`backward`/`bi` directions and the `lawful`/`invertible` modifiers are retired: they were obligations nobody verified) |
+| `reduction R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x := e }` | ✓ | A reduction; clauses are contextual `on` handlers and [`be`](/book/keywords#be) bindings. (The `forward`/`backward`/`bi` directions and the `lawful`/`invertible` modifiers are retired: they were obligations nobody verified) |
 
 ## Topos declarations
 

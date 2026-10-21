@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be p holds .-> Pt { x 40 }
+    be p := .-> Pt { x 40 }
     p.x = 42
     return p.x
   }

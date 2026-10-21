@@ -29,7 +29,7 @@ let slet n x = S.SLet (n, svar x, dl)
 let () =
   Printf.printf "=== Surface->Core desugar (desugar.ml) oracle ===\n\n";
 
-  (* let -> App(Lam,v): `be x holds y ; return x`  ==>  (lambda x. x) y *)
+  (* let -> App(Lam,v): `be x := y ; return x`  ==>  (lambda x. x) y *)
   check "let: [SLet x y; return x]  =>  App(Lam(x, unit, Var x), Var y)"
     (term_equal_env []
        (Desugar.desugar_stmts [slet "x" "y"; sret "x"])

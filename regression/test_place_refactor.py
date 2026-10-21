@@ -124,7 +124,7 @@ def test_mediatrice_on_arm_requires_full_arity(tmp_path):
         "place List { this > Nil :U Cons(Number, List) }\n"
         "place Entry { }\n"
         "fun main(): Number {\n"
-        "  be c holds .-> Cons { _1 1 }\n"
+        "  be c := .-> Cons { _1 1 }\n"
         "  return 0\n}\n")
     r = _emit(twin)
     assert r.returncode != 0
@@ -160,7 +160,7 @@ def test_record_pattern_matches_by_name(tmp_path):
             "    %s => h + sum(t)\n"
             "  }\n}\n"
             "fun main(): Number {\n"
-            "  be xs holds hit(Cons, 5, hit(Cons, 37, hit(Nil)))\n"
+            "  be xs := hit(Cons, 5, hit(Cons, 37, hit(Nil)))\n"
             "  return sum(xs)\n}\n")
     for d, pat in ((a, "Cons { _1 as h _2 as t }"), (b, "Cons(h, t)")):
         shutil.copytree(ROOT / "examples" / "inductive_list", d)
@@ -188,7 +188,7 @@ def test_full_circle_no_constructors(tmp_path):
         "    Cons { _1 as h _2 as t } => h + sum(t)\n"
         "  }\n}\n"
         "fun main(): Number {\n"
-        "  be xs holds .-> Cons { _1 5 _2 (.-> Cons { _1 37 _2 Nil }) }\n"
+        "  be xs := .-> Cons { _1 5 _2 (.-> Cons { _1 37 _2 Nil }) }\n"
         "  return sum(xs)\n}\n")
     r = _emit(twin)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-400:]

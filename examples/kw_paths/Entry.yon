@@ -11,8 +11,8 @@ place Entry {
 fun diag(a: Number): Number { return a * 6 }
 fun universe_taker(t: Type): Number { return 7 }
 fun main(): Number {
-  be r holds clear 7                          // a path value, let-bound
-  be moved holds ind_path(0, diag, clear 7)   // J computes diag(7) = 42
+  be r := clear 7                          // a path value, let-bound
+  be moved := ind_path(0, diag, clear 7)   // J computes diag(7) = 42
   return moved
 }
 }

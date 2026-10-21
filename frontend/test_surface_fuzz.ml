@@ -88,7 +88,7 @@ let classify (src : string) : verdict =
 
 (* ---- generators ---- *)
 let kw_pool =
-  [| "be"; "holds"; "fun"; "return"; "if"; "then"; "else"; "while"; "do";
+  [| "be"; ":="; "fun"; "return"; "if"; "then"; "else"; "while"; "do";
      "for"; "every"; "in"; "place"; "internal"; "view"; "move"; "reduction";
      "operation"; "number"; "text"; "true"; "false"; "and"; "or"; "not";
      "visits"; "import"; "topos"; "where";
@@ -139,12 +139,12 @@ and gen_cubical d =
 
 let rec gen_stmt d =
   match Random.int 7 with
-  | 0 -> Printf.sprintf "be %s holds %s" (var_name ()) (gen_expr d)
+  | 0 -> Printf.sprintf "be %s := %s" (var_name ()) (gen_expr d)
   | 1 -> Printf.sprintf "%s = %s" (var_name ()) (gen_expr d)
   | 2 -> Printf.sprintf "if %s then { %s } else { %s }" (gen_expr d) (gen_stmt (d-1)) (gen_stmt (d-1))
   | 3 -> Printf.sprintf "while %s do { %s }" (gen_expr d) (gen_stmt (d-1))
   | 4 -> Printf.sprintf "for every %s in %s { %s }" (var_name ()) (gen_expr d) (gen_stmt (d-1))
-  | 5 -> Printf.sprintf "be _ holds %s" (gen_expr d)
+  | 5 -> Printf.sprintf "be _ := %s" (gen_expr d)
   | _ -> "return " ^ gen_expr d
 
 (* Helper functions the cubical generators reference (succ/pred are inverse, so
@@ -162,16 +162,16 @@ let gen_grammar () =
 
 (* corpus of real-ish seeds to mutate (near the valid manifold, where crashes hide) *)
 let seeds = [|
-  "fun main(): Number {\n  be x holds 0\n  return x\n}";
-  "fun main(): Number {\n  be s holds 0\n  be i holds 0\n  while i < 5 do { s = s + i  i = i + 1 }\n  return s\n}";
-  "fun deposit_net(amount: Number): Number { return amount - amount / 20 }\nfun main(): Number {\n  be d holds List.cons(100, List.cons(60, List.empty(0)))\n  be t holds 0\n  for every x in d { t = t + deposit_net(x) }\n  return t\n}";
-  "fun main(): Number {\n  iter 4 do { be _ holds 0 }\n  return 8\n}";
+  "fun main(): Number {\n  be x := 0\n  return x\n}";
+  "fun main(): Number {\n  be s := 0\n  be i := 0\n  while i < 5 do { s = s + i  i = i + 1 }\n  return s\n}";
+  "fun deposit_net(amount: Number): Number { return amount - amount / 20 }\nfun main(): Number {\n  be d := List.cons(100, List.cons(60, List.empty(0)))\n  be t := 0\n  for every x in d { t = t + deposit_net(x) }\n  return t\n}";
+  "fun main(): Number {\n  iter 4 do { be _ := 0 }\n  return 8\n}";
   "internal fun k(x: Number): Number { return x * 1789 }\nfun main(): Number { return k(2) }";
-  "fun main(): Number {\n  be g holds HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
+  "fun main(): Number {\n  be g := HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
   (* metonymic / cubical / generics seeds — near the new-syntax manifold *)
-  "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main(): Number {\n  be b holds succ <=> pred\n  return carry 10 along b\n}";
-  "fun main(): Number {\n  be p holds back (clear 5)\n  return p @ I0\n}";
-  "fun dbl(n: Number): Number { return n + n }\nfun main(): Number {\n  be s holds clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
+  "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main(): Number {\n  be b := succ <=> pred\n  return carry 10 along b\n}";
+  "fun main(): Number {\n  be p := back (clear 5)\n  return p @ I0\n}";
+  "fun dbl(n: Number): Number { return n + n }\nfun main(): Number {\n  be s := clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
   "fun main(): Number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
   "fun identity<T>(x: T): T { return x }\nfun main(): Number { return identity(7) }";
   "fun unwrap(b: Box<number>): Number { return b.value }\nfun main(): Number { return 0 }";

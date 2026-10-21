@@ -38,7 +38,7 @@ def test_lint_flags_dead_function(tmp_path):
 
 @pytest.mark.skipif(not LINT.exists(), reason="yon_lint not built")
 def test_lint_flags_unused_binding(tmp_path):
-    out = _lint(tmp_path, "fun main(): Number { be unusedb holds 99  return 0 }\n")
+    out = _lint(tmp_path, "fun main(): Number { be unusedb := 99  return 0 }\n")
     assert "W1002" in out and "unusedb" in out, out
 
 
@@ -56,7 +56,7 @@ def test_lint_flags_unused_import_dead_space_dep(tmp_path):
     out = _lint(tmp_path,
                 "import svc::used_op from A\n"
                 "import svc::dead_op from B\n"
-                "fun main(): Number { be a holds used_op(5)  return a }\n")
+                "fun main(): Number { be a := used_op(5)  return a }\n")
     assert "W3001" in out and "dead_op" in out and "Space B" in out, out
     assert "used_op" not in out.replace("used_op(5)", ""), f"used import flagged: {out}"
 
@@ -65,7 +65,7 @@ def test_lint_flags_unused_import_dead_space_dep(tmp_path):
 def test_lint_underscore_and_clean_are_quiet(tmp_path):
     # leading-underscore binding/param are intentional discards, not warned
     out = _lint(tmp_path,
-                "fun f(_ignored: Number): Number { be _tmp holds 1  return 0 }\n"
+                "fun f(_ignored: Number): Number { be _tmp := 1  return 0 }\n"
                 "fun main(): Number { return f(0) }\n")
     assert "no lint warnings" in out, out
 

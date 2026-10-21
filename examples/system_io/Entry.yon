@@ -9,33 +9,33 @@ fun chr2(a: Number, b: Number): String {
 
 fun main(): Number {
   /* path = "/tmp/yio"  ( / t m p / y i o ) */
-  be p1 holds chr2(47, 116)
-  be p2 holds chr2(109, 112)
-  be p3 holds chr2(47, 121)
-  be p4 holds chr2(105, 111)
-  be path holds String.concat(String.concat(p1, p2), String.concat(p3, p4))
+  be p1 := chr2(47, 116)
+  be p2 := chr2(109, 112)
+  be p3 := chr2(47, 121)
+  be p4 := chr2(105, 111)
+  be path := String.concat(String.concat(p1, p2), String.concat(p3, p4))
 
-  be content holds String.from_int(4242)          /* 4 chars */
+  be content := String.from_int(4242)          /* 4 chars */
 
   /* write (truncating): deterministic across runs */
-  be wr holds File.write_text(path, content)      /* 1.0 */
-  be r1 holds File.read_text(path)
-  be ok_rd holds if String.length(r1) == 4 then 1 else 0
+  be wr := File.write_text(path, content)      /* 1.0 */
+  be r1 := File.read_text(path)
+  be ok_rd := if String.length(r1) == 4 then 1 else 0
 
-  be _ap holds File.append_text(path, content)
-  be r2 holds File.read_text(path)
-  be ok_ap holds if String.length(r2) == 8 then 1 else 0
+  be _ap := File.append_text(path, content)
+  be r2 := File.read_text(path)
+  be ok_ap := if String.length(r2) == 8 then 1 else 0
 
   /* Env: PATH is always set ( P A T H ) */
-  be ev holds String.concat(chr2(80, 65), chr2(84, 72))
-  be ok_env holds if Env.has(ev) then 1 else 0
-  be ev_val holds Env.get(ev)
-  be _io holds IO.print_num(String.length(ev_val))
+  be ev := String.concat(chr2(80, 65), chr2(84, 72))
+  be ok_env := if Env.has(ev) then 1 else 0
+  be ev_val := Env.get(ev)
+  be _io := IO.print_num(String.length(ev_val))
 
   /* Args: at least argv[0], non-empty */
-  be ok_argc holds if Args.count(0) >= 1 then 1 else 0
-  be a0 holds Args.get(0)
-  be ok_a0 holds if String.length(a0) > 0 then 1 else 0
+  be ok_argc := if Args.count(0) >= 1 then 1 else 0
+  be a0 := Args.get(0)
+  be ok_a0 := if String.length(a0) > 0 then 1 else 0
 
   return wr + ok_rd * 2 + ok_ap * 4 + ok_env * 8 + ok_argc * 16 + ok_a0 * 32
 }

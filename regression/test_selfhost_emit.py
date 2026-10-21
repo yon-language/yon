@@ -7,7 +7,7 @@ robust (not a byte-diff of the text): the Yon program emits an MLIR module, we
 feed that Yon-emitted MLIR back through the same backend (topos-opt -> LLVM ->
 native), run it, and require the exit code the source program denotes.
 
-selfhost/emit_arith.yon compiles the Yon0 core `be x holds 20  be y holds 22
+selfhost/emit_arith.yon compiles the Yon0 core `be x := 20  be y := 22
 return x + y` (TLet/TLit/TAdd/TVar with an SSA environment) to a full MLIR module
 and writes it via File.write_text; the compiled module must exit 42 = (20+22) mod
 256. This pins that the emit catamorphism (constants, addf, fptosi, the SSA
@@ -62,8 +62,8 @@ def test_m2_compile_arith(tmp_path):
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m3_compile_fun(tmp_path):
     # M3: the Yon0 SURFACE. Lexes a real function with keywords, multi-digit
-    # numbers and identifiers, parses `fun main(): Number { be x holds 20
-    # be y holds 22  return x + y }` into nested TLet with de Bruijn variables,
+    # numbers and identifiers, parses `fun main(): Number { be x := 20
+    # be y := 22  return x + y }` into nested TLet with de Bruijn variables,
     # and the emitted program exits 42 = (20 + 22) mod 256.
     _end_to_end(tmp_path, ROOT / "selfhost" / "compile_fun.yon", 42)
 

@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be y holds transport(ua(idEquiv(Number)), 5)
+    be y := transport(ua(idEquiv(Number)), 5)
     return y - 5
   }
 }

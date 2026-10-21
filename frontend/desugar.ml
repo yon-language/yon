@@ -1315,7 +1315,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         | S.EVar (vname, _)
           when Move_engine.lookup_move vname = None
                && List.mem_assoc vname !handle_bindings ->
-            (* A local binding to a handle-lambda (`be f holds functor ...`).
+            (* A local binding to a handle-lambda (`be f := functor ...`).
              * We resolve the name to the lambda and recurse: `compose f with g`
              * becomes the composition of the lambdas, reusing the inline
              * lowering. A binding resolution, not a hack. *)
@@ -1660,7 +1660,7 @@ and inject_captured_args_in_stmt (old_n : string) (new_n : string)
 (* ─── Cubical `be`-binding inlining (surface level) ─────────────────────
  * The cubical desugar patterns for ua/transport fire only on the INLINE
  * surface shape — ua(equiv(..)), transport(ua(..),..). When a proof value is
- * named first (`be e holds equiv(..); .. ua(e) ..`), the use `ua(e)` otherwise
+ * named first (`be e := equiv(..); .. ua(e) ..`), the use `ua(e)` otherwise
  * falls through to a meaningless generic App(Var "ua", ..) that reaches codegen
  * as an unknown function. Cubical/proof values are PURE, so we inline such a
  * binding into its uses before desugaring; the inline patterns then see a
@@ -1926,7 +1926,7 @@ and desugar_spawn_block (count : S.expr option) (body : S.stmt list) : C.term =
 and desugar_stmt (s : S.stmt) : C.term =
   match s with
   | S.SLet (_name, e, _) ->
-      (* "be x holds e; rest" — but we handle this in the sequence
+      (* "be x := e; rest" — but we handle this in the sequence
          translation; here we just produce the value of e. The binding
          is established by the surrounding lambda. *)
       desugar_expr e
@@ -2254,7 +2254,7 @@ let desugar_world_decl (wd : S.world_decl) : C.world_decl =
  * for every / in sequence over / repeat at most / forever are lowered
  * STRUCTURALLY onto the verified primitives: while, iter and Space cells
  * (the one mutation mechanism of 1.0). `x = e` promotes the binding
- * of x to a Space cell: `be x holds e0` -> `be x holds Space.make(e0)`,
+ * of x to a Space cell: `be x := e0` -> `be x := Space.make(e0)`,
  * every read of x -> `Space.get(x)`, every `x = e` -> `Space.set(x, e)`.
  * The promotion is uniform per function (every binding of a becomes-target
  * name allocates a cell), which makes it shadowing-safe; lambda parameters
@@ -2270,10 +2270,10 @@ let v1_num n = S.ELit (S.LitNumber n, S.dummy_loc)
 
 (* A `s.fold(...)` on a produce/emit STREAM (marked in stream_method_table by its call
    site) lowers to STATEMENTS (a Stream__recv drain into an accumulator cell), so it only
-   works as a bare statement or the direct RHS of `be x holds` / `return` (the cases in
+   works as a bare statement or the direct RHS of `be x :=` / `return` (the cases in
    v1_lower_stmt). In any NESTED position — an operand of `+`, a call argument — it would
    fall through to the Sequence/list fold and read the stream handle as a list, yielding 0. This
-   pass lifts each such nested fold to `be __sf holds s.fold(...)` (which then hits the
+   pass lifts each such nested fold to `be __sf := s.fold(...)` (which then hits the
    correct statement lowering) and leaves a variable in its place. Only the common
    transparent wrappers are walked; an unwalked constructor keeps today's behaviour. *)
 let is_stream_fold_call = function
@@ -2283,7 +2283,7 @@ let is_stream_fold_call = function
 
 (* v1_hoist_operand: a bare stream fold in a sub-position IS hoisted to a fresh binding.
    v1_hoist_expr: recurse into transparent wrappers; a bare fold at the TOP is left in
-   place for v1_lower_stmt's direct `return` / `be holds` cases to lower. *)
+   place for v1_lower_stmt's direct `return` / `be :=` cases to lower. *)
 let rec v1_hoist_operand (e : S.expr) : S.stmt list * S.expr =
   if is_stream_fold_call e then
     let t = v1_fresh "sf" in
@@ -2378,14 +2378,14 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
     when Hashtbl.mem S.stream_method_table (eloc.S.start_line, eloc.S.start_col) ->
       (* `return s.fold(...)`: a stream fold drains via Stream__recv into an
          accumulator cell, which needs statement context. Hoist the drain (the
-         same lowering as `be x holds s.fold(...)`) and return its result.
+         same lowering as `be x := s.fold(...)`) and return its result.
          Without this the fold fell through to the Sequence/list fold, which read the
          stream handle as a list and yielded 0. *)
       let (stmts, result) = v1_lower_stream_fold recv init f loc in
       stmts @ [S.SReturn (result, loc)]
   | S.SLet (sub, S.ECall ("awaits", [S.EVar _; S.EVar _], eloc), loc)
     when Hashtbl.mem S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) ->
-      (* be sub holds w.awaits(producer): create the shm channel
+      (* be sub := w.awaits(producer): create the shm channel
          (creator side, id = the producer's dispatch selector, nominal
          by construction), send the reserved-selector subscription
          request (the server pump runs the producer and forwards over
@@ -2416,7 +2416,7 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
         S.SLet (sub, v1_num (float_of_int chan), loc) ]
   | S.SLet (x, S.EField (S.EVar (sub, _), "stream", floc), loc)
     when Hashtbl.mem S.substream_site_table (floc.S.start_line, floc.S.start_col) ->
-      (* be s holds sub.stream: drain the completed channel into a
+      (* be s := sub.stream: drain the completed channel into a
          structurally closed local stream; the methods work unchanged.
          N>0 means the channel carries place DTOs: drain N-byte frames and
          rebuild each place in the consumer's own heap. N=0 is the scalar
@@ -2996,7 +2996,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
        *                                                       per on_morphism
        *
        * The short alias `LiftEU` lets user code write
-       *   be usd holds LiftEU(eu)
+       *   be usd := LiftEU(eu)
        * directly, without exposing the compiler's synthesis.
        *
        * The `LiftEU__<N>` wrappers realize the static dispatch of the
@@ -3498,8 +3498,8 @@ let desugar_program ?(env : Tyenv.env option = None)
    * `for each obj by handler`, and for each morphism N common to the
    * mp_on_morphism_map of F and G, we synthesize a function
    *   fun __check_naturality_<eta>__<N>(input: number): number {
-   *     be lhs holds <eta>__<obj>(F__N(input))
-   *     be rhs holds G__N(<eta>__<obj>(input))
+   *     be lhs := <eta>__<obj>(F__N(input))
+   *     be rhs := G__N(<eta>__<obj>(input))
    *     when lhs - rhs == 0 { return 1 }
    *     otherwise { return 0 }
    *   }
@@ -3605,9 +3605,9 @@ let desugar_program ?(env : Tyenv.env option = None)
    * For each nat_transform for which a `__check_naturality_<eta>__<N>` was
    * synthesized, we also synthesize
    *   fun __check_naturality_<η>__<N>_pbt(seed: number): number {
-   *     be i0 holds __check_naturality_<η>__<N>(seed)
-   *     be i1 holds __check_naturality_<η>__<N>(seed + 1)
-   *     be i2 holds __check_naturality_<η>__<N>(seed * 2)
+   *     be i0 := __check_naturality_<η>__<N>(seed)
+   *     be i1 := __check_naturality_<η>__<N>(seed + 1)
+   *     be i2 := __check_naturality_<η>__<N>(seed * 2)
    *     ...
    *     return i0 * i1 * i2 * ... * i9
    *   }

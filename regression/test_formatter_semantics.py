@@ -163,7 +163,7 @@ def test_corpus_units_cover_the_formatter_corpus():
 _DROP_PROBE = """\
 place Entry { }
 fun main(): Number {
-  be x holds 1
+  be x := 1
   x = x + 41
   return x
 }

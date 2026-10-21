@@ -39,12 +39,12 @@ Printing takes one call:
 <!-- yon-gate: exit 0 -->
 ```yon
 fun main(): Number {
-  be _p holds String.print("ciao, mondo")
+  be _p := String.print("ciao, mondo")
   return 0
 }
 ```
 
-Two things are already visible here. First, `be x holds e` is *the* binding
+Two things are already visible here. First, `be x := e` is *the* binding
 form of Yon, immutable, used everywhere (there is no `let`). Second, the
 string literal is a real value: with the *string fusion*, `"ciao, mondo"`
 is a section of the builtin `String` place, interned on the content-addressed

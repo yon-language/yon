@@ -220,7 +220,7 @@
     inter-procedural via a downstream call whose callee has X in transitive_arcs.
   · GATE FIRST (before the construct, so the property is pinned before anything builds on it, and tested in isolation):
     the pins live in `frontend/test_space_graph.exe`'s no-arg self-test (test_* oracle family, run by test_ocaml_oracle),
-    self-describing (a `*_illegal` function's `be drop_X holds ..` point must be rejected, `*_legal` accepted). FOUR pins:
+    self-describing (a `*_illegal` function's `be drop_X := ..` point must be rejected, `*_legal` accepted). FOUR pins:
     back-edge, sequential, transitive (level-2 hookup inside level-3), scope (seen-through). NEGATIVE CONTROL proved each
     BITES: M1 break loop-rule -> loop_illegal fails; M2 break sequential-rest -> seq/scope/trans fail; M3 break call-hookup
     -> trans_illegal (isolated); M4 break scope-recursion -> scope_illegal (isolated). No pin passes unseen-to-fail.
@@ -769,7 +769,7 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
   (`kw_list_here.yon`). `=` is the surface token; `becomes` is retired
   (internal AST node `SAssignBecomes` only). **NOT** `x.f = e` (place field =
   by-design reject, sections immutable) nor `new…in` (vestige).
-- **bind vs assign** — `be x holds e` = immutable init; `x = e` = Space-cell assign.
+- **bind vs assign** — `be x := e` = immutable init; `x = e` = Space-cell assign.
 - **verdict scheme** — ✓ verified (test/oracle/example named) · declared (design-true,
   no test) · debt (open, with pointer).
 
@@ -830,7 +830,7 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
 - **Sample chapter (Ch 1.1)**: DRAFTED →
   `manuscript/chapters/01-1-the-unreadable-fragment.md` (voice/format specimen). Holds
   the book opening line + Prologue framing + First-Iteration epigraph + the 4-beat
-  chapter. Snippet `Entry.yon` (`be substrate holds 0; return substrate`) is **✓ GATED
+  chapter. Snippet `Entry.yon` (`be substrate := 0; return substrate`) is **✓ GATED
   on Mac (2026-06-26)**: `yoner_emit_mlir` exit 0, emitted `main` returns i32 0
   (`arith.constant 0.0 → fptosi → return`, confirming the chapter's silicon claim
   verbatim). Still awaiting author review of VOICE & FORMAT before it's canonical.
@@ -843,7 +843,7 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
   surface names (`=`, `new…in`, `x.f`) and real mechanisms (`Space__get/set`,
   package/dir) don't map 1:1. Even careful reading stumbles here. That makes the
   identity-vs-location chapter the most *valuable*, not the most fragile.
-- **No-aliasing VERIFIED (probe, 2026-06-27).** `be x holds 3; be y holds x; x = 5` prints
+- **No-aliasing VERIFIED (probe, 2026-06-27).** `be x := 3; be y := x; x = 5` prints
   `3 3 5 3` natively (`regression/book/jp/probe_no_alias/`): y stays 3 when x→5. The
   snapshot / no-alias semantics is now a MEASURED fact. This is the foundation of the
   rebind-vs-in-place argument: the semantics is immutable rebinding; the in-place cell
@@ -902,7 +902,7 @@ The Yon ontology, code-verified (see `00-jp-spec.md` §filesystem ontology):
 - **Name every cast at a type boundary.** A value does not silently "become" another type:
   e.g. `main`'s `f64` return is narrowed with `fptosi` to `i32`, which the OS reads as the
   exit status (`emit_mlir.ml:24`). Name the conversion; the hostile reader greps for it.
-- **`holds` is initialization, not eternal immutability.** `be x holds e` binds; a later
+- **`holds` is initialization, not eternal immutability.** `be x := e` binds; a later
   `x = e` is a separate act (promotion to a Space cell). Don't write "immutable, never
   overwritten" — it contradicts the Space-cell chapter.
 - **Signature images are spent once.** A striking line lands once; reusing it across

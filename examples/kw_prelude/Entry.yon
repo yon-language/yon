@@ -6,8 +6,8 @@ place Entry {
     return match b { true => 30, false => 12 }
   }
   fun main(): Number {
-    be x holds true
-    be y holds neg(x)
+    be x := true
+    be y := neg(x)
     return pick(x) + pick(y)
   }
 }

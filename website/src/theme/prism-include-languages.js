@@ -43,7 +43,7 @@ export default function prismIncludeLanguages(PrismObject) {
       // (object, oldest, newest, subset, conflict, transform) are free
       // identifiers and stay uncolored on purpose.
       '\\b(?:' +
-        'absent|aggregates|algebra|along|and|as|at|back|be|by|carry|cell|clear|comp|compose|converts|do|drop|each|el_match|else|emit|error|every|exact|fold|for|forces|forever|from|fst|fun|functor|geomorph|given|hcomp|here|heyting|hit|hit_elim|holds|if|import|in|ind_path|induct|internal|is|iter|law|maps|match|morph|morphism|most|move|multishot|nat|not|of|operation|or|otherwise|over|pair|parallel|place|plam|present|produce|promote|prop|pull|push|quote|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|space|spawn|stream|then|this|through|times|to|topos|unifies|unknown|uses|via|view|visits|when|where|while|wire|with' +
+        'absent|aggregates|algebra|along|and|as|at|back|be|by|carry|cell|clear|comp|compose|converts|do|drop|each|el_match|else|emit|error|every|exact|fold|for|forces|forever|from|fst|fun|functor|geomorph|given|hcomp|here|heyting|hit|hit_elim|if|import|in|ind_path|induct|internal|is|iter|law|maps|match|morph|morphism|most|move|multishot|nat|not|of|operation|or|otherwise|over|pair|parallel|place|plam|present|produce|promote|prop|pull|push|quote|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|space|spawn|stream|then|this|through|times|to|topos|unifies|unknown|uses|via|view|visits|when|where|while|wire|with' +
         ')\\b',
     ),
     boolean: /\b(?:true|false)\b/,

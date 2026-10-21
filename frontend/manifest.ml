@@ -8,7 +8,7 @@
    crossing a world boundary is rejected at compile time. The manifest is the
    sole source of the space -> world assignment; the surface grammar is not
    touched (a place still declares "place P in W", a space is still a heap,
-   a wire is still "wire to S" / "be s holds X.stream").
+   a wire is still "wire to S" / "be s := X.stream").
 
    Only the [world.*] sections are parsed here. The other sections
    ([package], [dependencies], [runtime]) are read elsewhere (the yonc
@@ -297,12 +297,12 @@ let spaces_of_world (wm : world_map) (w : string) : string list =
 
 (* ─── boundary check over a program ─────────────────────────────────── *)
 
-(* The mailbox name is the bare space name; "wire to S" and "be s holds X.s"
+(* The mailbox name is the bare space name; "wire to S" and "be s := X.s"
    both name the target space directly. A package's own space is now derived
    from the filesystem (directory = space, via package_layout), so there is no
    longer a surface `init Name as Space` declaration to read. *)
 
-(* Wire targets reached through "be s holds X.stream" (TopImportFrom: the
+(* Wire targets reached through "be s := X.stream" (TopImportFrom: the
    third field is the target space) together with their source location. *)
 let import_targets (p : program) : (string * location) list =
   List.filter_map (function

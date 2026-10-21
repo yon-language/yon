@@ -1,17 +1,17 @@
 place Entry {
   fun main(): Number visits Output {
-    be a holds XSet.empty()
+    be a := XSet.empty()
     a = XSet.add(a, Leech.embed(7, 0))
     a = XSet.add(a, Leech.embed(11, 0))
     a = XSet.add(a, Leech.embed(63, 0))
-    be b holds XSet.empty()
+    be b := XSet.empty()
     b = XSet.add(b, Leech.embed(11, 0))
     b = XSet.add(b, Leech.embed(63, 0))
     b = XSet.add(b, Leech.embed(99, 0))
-    be _1 holds Output.print(String.from_int(XSet.size(a)))
-    be _2 holds Output.print(String.from_int(XSet.size(b)))
-    be _3 holds Output.print(String.from_int(XSet.size(XSet.intersect(a, b))))
-    be _4 holds Output.print(String.from_int(XSet.size(XSet.union(a, b))))
+    be _1 := Output.print(String.from_int(XSet.size(a)))
+    be _2 := Output.print(String.from_int(XSet.size(b)))
+    be _3 := Output.print(String.from_int(XSet.size(XSet.intersect(a, b))))
+    be _4 := Output.print(String.from_int(XSet.size(XSet.union(a, b))))
     return 0
   }
 }

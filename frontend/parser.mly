@@ -168,7 +168,6 @@
 %token ITER_KW DO_KW WHILE_KW
 
 /* Statement keywords */
-%token HOLDS
 
 /* Boolean operators */
 /* No ALL ("all P where c"): its condition would be inert. */
@@ -569,8 +568,11 @@ geom_morphism_item:
      real: the exactness of f_* is never automatic. *)
   | EXACT_KW PUSH                                   { GmItemExactFLowerStar }
 
+/* `be x := e` defines x as e: `:=` reads "is defined as", the same symbol
+   that defines a field (`side := Number`). x equals e by definition for its
+   whole scope; a later `x = e'` is the assignment (model A). */
 top_let:
-  | LET name = IDENT HOLDS e = expr
+  | LET name = IDENT COLONEQ e = expr
     { TopLet (name, e, mk_loc $startpos $endpos) }
 
 /* ─── Place declaration ─────────────────────────────────────────────── */
@@ -1188,7 +1190,7 @@ reduction_type_params:
 
 reduction_clause:
   | rc = on_clause                        { rc }
-  | LET name = IDENT HOLDS e = expr
+  | LET name = IDENT COLONEQ e = expr
     { RcLet (name, e, mk_loc $startpos $endpos) }
 
 on_clause:
@@ -1232,14 +1234,14 @@ while_stmt:
       SWhile (c, body, mk_loc $startpos $endpos) }
 
 let_stmt:
-  | LET name = IDENT HOLDS e = expr
+  | LET name = IDENT COLONEQ e = expr
     { SLet (name, e, mk_loc $startpos $endpos) }
 
 assign_stmt:
   | lv = lvalue EQ e = expr
-    { (* Reassignment (model A). `be x holds e` declares a mutable local once;
-         `x = e` reassigns it (a same-scope re-`holds` is a compile error, the
-         declare-once rule). The cell is promoted lazily: the first `=` on a
+    { (* Reassignment (model A). `be x := e` declares a mutable local once;
+         `x = e` reassigns it (a second `be x := ...` in the same scope is a
+         compile error, the declare-once rule). The cell is promoted lazily: the first `=` on a
          name makes its `be` allocate a Space cell, reads go through it, `x = e`
          updates it. Snapshot semantics, no aliasing. *)
       SAssignBecomes (lv, e, mk_loc $startpos $endpos) }

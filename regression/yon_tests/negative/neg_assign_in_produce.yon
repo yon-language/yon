@@ -1,12 +1,12 @@
 // `=` (Space-cell assign) inside a produce/spawn body has no lowering (the cells
-// promotion that turns `be x holds` into a Space cell does not reach these
+// promotion that turns `be x :=` into a Space cell does not reach these
 // expression-context blocks), so it is rejected cleanly at type-check time (exit 3)
 // instead of crashing emit_mlir with a Fatal error. The fix is
 // `Space.set` or binding the value with `be` outside the block.
 place Entry {
   fun main(): Number {
-    be s holds produce {
-      be i holds 0
+    be s := produce {
+      be i := 0
       iter 3 do { emit i  i = i + 1 }
     }
     return 0

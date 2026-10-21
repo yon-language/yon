@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be c holds 1
+    be c := 1
     return if c == 1 then 42 else 0
   }
 }

@@ -6,18 +6,18 @@ place Entry {
  *   nc_distinct=1 (i due minus sono diversi), comm_same=1 (i due and uguali)
  *   = 1*10 + 1 = 11. */
 fun main(): Number {
-  be a holds MerkleTree.leaf(1)
-  be b holds MerkleTree.leaf(2)
+  be a := MerkleTree.leaf(1)
+  be b := MerkleTree.leaf(2)
 
   /* NON commutativo (es. label 300="minus"): ordine significativo */
-  be m_ab holds MerkleTree.node2(300, a, b)
-  be m_ba holds MerkleTree.node2(300, b, a)
-  be nc_distinct holds if m_ab == m_ba then 0 else 1   /* atteso 1: diversi */
+  be m_ab := MerkleTree.node2(300, a, b)
+  be m_ba := MerkleTree.node2(300, b, a)
+  be nc_distinct := if m_ab == m_ba then 0 else 1   /* atteso 1: diversi */
 
   /* commutativo (label 200="and"): ordine non significativo */
-  be and_ab holds MerkleTree.node2_commutative(200, a, b)
-  be and_ba holds MerkleTree.node2_commutative(200, b, a)
-  be comm_same holds if and_ab == and_ba then 1 else 0  /* atteso 1: uguali */
+  be and_ab := MerkleTree.node2_commutative(200, a, b)
+  be and_ba := MerkleTree.node2_commutative(200, b, a)
+  be comm_same := if and_ab == and_ba then 1 else 0  /* atteso 1: uguali */
 
   return nc_distinct * 10 + comm_same
 }

@@ -164,8 +164,8 @@ number, not the place where the number lives.
 
 <!-- yon-gate: illustrative -->
 ```yon
-be base holds 7
-be m holds move(s: Order) => .-> Ticket { total base + s.qty } from Order to Ticket
+be base := 7
+be m := move(s: Order) => .-> Ticket { total base + s.qty } from Order to Ticket
 ```
 
 What an arrow cannot carry is a **cell**: a local reassigned with `=`, or a cell
@@ -196,8 +196,8 @@ other and are held consistent by the adjunction. `cucina/Line.yon`:
 <!-- yon-gate: illustrative -->
 ```yon
 geomorph Line from Order to Ticket {
-  pull(t: Ticket): Order { be o holds t  return o }
-  push(o: Order): Ticket { be t holds o  return t }
+  pull(t: Ticket): Order { be o := t  return o }
+  push(o: Order): Ticket { be t := o  return t }
 }
 ```
 

@@ -79,7 +79,7 @@ says to the world.
 place Entry { }
 
 fun main(): Number {
-  be substrate holds 0
+  be substrate := 0
   return substrate
 }
 ```
@@ -97,8 +97,8 @@ Gated on the Mac, it compiles, and the computation at the heart of the `main` it
 return %v1 : i32
 ```
 
-There is nothing to see, and that is the point. `be substrate holds 0` binds a name to a
-value. `holds` is initialization, the act of giving `substrate` its starting value.
+There is nothing to see, and that is the point. `be substrate := 0` binds a name to a
+value. `:=` is a definition, the act of giving `substrate` its starting value.
 Changing a value later is a separate act in Yon, one the park reaches in a later
 Iteration; this program never uses it. `return substrate` hands the value to the process
 boundary. A Unix exit status is a small integer, not a floating-point number, so the

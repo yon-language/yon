@@ -4,7 +4,7 @@ place Entry {
   }
   fun read(a: Account): Number { return a.balance }
   fun main(): Number {
-    be eu holds .-> AccountEU { balance 7 }
+    be eu := .-> AccountEU { balance 7 }
     return read(eu)
   }
 }

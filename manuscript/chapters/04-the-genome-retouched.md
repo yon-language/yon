@@ -46,11 +46,11 @@ Seal a gene, corrupt two of its bits, and read it back. It comes back whole.
 
 ```yon
 fun main(): number visits Output {
-  be genome holds VoyagerList.empty()
-  be g1 holds VoyagerList.append(genome, 1445)      // a gene, sealed as a Golay codeword
-  be damaged holds VoyagerList.corrupt_at(g1, 0, 2)  // two bits flipped, as in a bad join
-  be read holds VoyagerList.get(damaged, 0)          // opening is decoding
-  be _ holds Output.print(String.from_int(read))     // 1445, recovered
+  be genome := VoyagerList.empty()
+  be g1 := VoyagerList.append(genome, 1445)      // a gene, sealed as a Golay codeword
+  be damaged := VoyagerList.corrupt_at(g1, 0, 2)  // two bits flipped, as in a bad join
+  be read := VoyagerList.get(damaged, 0)          // opening is decoding
+  be _ := Output.print(String.from_int(read))     // 1445, recovered
   return 0
 }
 ```

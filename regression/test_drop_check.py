@@ -46,9 +46,9 @@ _DEBUG_ENV = {**os.environ, "YON_DEBUG_DROPS": "1"}
 _HANDLE_ESCAPE = """\
 place Entry { }
 fun main(): Number {
-  be p holds .-> DP { n 7 }
-  be filler holds 1
-  be y holds p.n
+  be p := .-> DP { n 7 }
+  be filler := 1
+  be y := p.n
   return y
 }
 """
@@ -57,8 +57,8 @@ _AUTO_NO_DROP = """\
 import svc::d_op from D
 place Entry { }
 fun main(): Number {
-  be r holds d_op(5)
-  be s holds r + 1
+  be r := d_op(5)
+  be s := r + 1
   return s - s
 }
 """
@@ -73,7 +73,7 @@ import svc::d_op from D
 place Entry { }
 fun main(): Number {
   drop D
-  be r holds d_op(5)
+  be r := d_op(5)
   return r - r
 }
 """
@@ -81,10 +81,10 @@ fun main(): Number {
 _ILLEGAL_TRANSITIVE = """\
 import svc::d_op from D
 place Entry { }
-fun helper(): Number { be r holds d_op(9)  return r }
+fun helper(): Number { be r := d_op(9)  return r }
 fun main(): Number {
   drop D
-  be r holds helper()
+  be r := helper()
   return r - r
 }
 """
@@ -94,7 +94,7 @@ import svc::d_op from D
 place Entry { }
 fun main(): Number {
   drop Zeta
-  be r holds d_op(5)
+  be r := d_op(5)
   return r - r
 }
 """

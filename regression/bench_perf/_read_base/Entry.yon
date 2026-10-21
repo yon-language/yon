@@ -1,8 +1,8 @@
 place Entry {
   fun main(): Number visits Output {
-    be acc holds Space.make(0)
-    iter 10000000 do { be _ holds Space.set(acc, Space.get(acc) + 1) }
-    be _p holds Output.print(String.from_int(Space.get(acc)))
+    be acc := Space.make(0)
+    iter 10000000 do { be _ := Space.set(acc, Space.get(acc) + 1) }
+    be _p := Output.print(String.from_int(Space.get(acc)))
     return 0
   }
 }

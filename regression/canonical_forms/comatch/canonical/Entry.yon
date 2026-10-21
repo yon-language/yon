@@ -18,7 +18,7 @@ place Entry {
     }
   }
   fun main(): Number {
-    be xs holds hit(Cons, 10, hit(Cons, 15, hit(Cons, 17, hit(Nil))))
+    be xs := hit(Cons, 10, hit(Cons, 15, hit(Cons, 17, hit(Nil))))
     return sum(xs) + head_or_zero(hit(Nil))
   }
 }

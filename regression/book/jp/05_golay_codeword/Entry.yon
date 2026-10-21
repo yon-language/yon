@@ -1,13 +1,13 @@
 place Entry {
   fun main(): Number visits Output {
-    be data holds 1445
-    be cw   holds VoyagerList.seal(data)        // the 24-bit Golay codeword
-    be bad  holds VoyagerList.corrupt(cw, 2)    // 2 bits flipped
-    be readback holds VoyagerList.open(bad)         // decoded readback
-    be _1 holds Output.print(String.from_int(data))
-    be _2 holds Output.print(String.from_int(cw))
-    be _3 holds Output.print(String.from_int(bad))
-    be _4 holds Output.print(String.from_int(readback))
+    be data := 1445
+    be cw   := VoyagerList.seal(data)        // the 24-bit Golay codeword
+    be bad  := VoyagerList.corrupt(cw, 2)    // 2 bits flipped
+    be readback := VoyagerList.open(bad)         // decoded readback
+    be _1 := Output.print(String.from_int(data))
+    be _2 := Output.print(String.from_int(cw))
+    be _3 := Output.print(String.from_int(bad))
+    be _4 := Output.print(String.from_int(readback))
     return 0
   }
 }

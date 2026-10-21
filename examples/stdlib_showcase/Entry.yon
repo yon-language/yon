@@ -14,33 +14,33 @@ place Entry {
 
 fun main(): Number {
   /* Math */
-  be m1 holds Math.floor(3.7)         /* = 3 */
-  be m2 holds Math.ceil(3.2)          /* = 4 */
-  be m3 holds Math.pow(2, 8)          /* = 256 */
-  be m4 holds Math.min(50, 100)       /* = 50 */
+  be m1 := Math.floor(3.7)         /* = 3 */
+  be m2 := Math.ceil(3.2)          /* = 4 */
+  be m3 := Math.pow(2, 8)          /* = 256 */
+  be m4 := Math.min(50, 100)       /* = 50 */
 
   /* Bits */
-  be b1 holds Bits.popcount(255)      /* = 8 */
-  be b2 holds Bits.shl(1, 5)          /* = 32 */
-  be b3 holds Bits.band(255, 15)      /* = 15 */
+  be b1 := Bits.popcount(255)      /* = 8 */
+  be b2 := Bits.shl(1, 5)          /* = 32 */
+  be b3 := Bits.band(255, 15)      /* = 15 */
 
   /* Cap registry */
-  be cap1 holds Cap.grant(1001)
-  be cap_present holds Cap.check(1001)    /* = 1 */
-  be cap_absent holds Cap.check(9999)     /* = 0 */
+  be cap1 := Cap.grant(1001)
+  be cap_present := Cap.check(1001)    /* = 1 */
+  be cap_absent := Cap.check(9999)     /* = 0 */
 
   /* MoveRegistry */
-  be _ holds MoveRegistry.register_version(100, 3)
-  be mv holds MoveRegistry.current_version(100)   /* = 3 */
+  be _ := MoveRegistry.register_version(100, 3)
+  be mv := MoveRegistry.current_version(100)   /* = 3 */
 
   /* Leech sign canonical */
-  be l1 holds Leech.syndrome(255)     /* = 0 (255 codeword) */
-  be l2 holds Leech.syndrome(1)       /* = 1 */
+  be l1 := Leech.syndrome(255)     /* = 0 (255 codeword) */
+  be l2 := Leech.syndrome(1)       /* = 1 */
 
   /* Output composite tutto in un unico int (per check) */
-  be total holds m1 + m2 * 10 + b1 * 100 + b3 * 1000 + cap_present * 10000
+  be total := m1 + m2 * 10 + b1 * 100 + b3 * 1000 + cap_present * 10000
 
-  be _o holds IO.print_num(total)
+  be _o := IO.print_num(total)
   return total + l1 + l2
 }
 }

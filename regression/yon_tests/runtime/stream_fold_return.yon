@@ -8,11 +8,11 @@
 // returned a non-zero exit.
 place Entry {
   fun folded(): Number {
-    be s holds produce { emit 41 emit 1 }
+    be s := produce { emit 41 emit 1 }
     return s.fold(0, fun(a: Number, v: Number) => a + v)
   }
   fun nested(): Number {
-    be s holds produce { emit 10 emit 20 }
+    be s := produce { emit 10 emit 20 }
     return s.fold(0, fun(a: Number, v: Number) => a + v) + 12
   }
   fun main(): Number {

@@ -57,7 +57,7 @@
         },
         {
           "name": "keyword.other.binding.yon",
-          "match": "\\b(be|holds)\\b"
+          "match": "\\b(be)\\b"
         },
         {
           "name": "keyword.operator.word.yon",

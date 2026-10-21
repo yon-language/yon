@@ -26,7 +26,7 @@ fun mk_if(c: MerkleTree, th: MerkleTree, el: MerkleTree): MerkleTree {
 }
 
 fun infer(e: MerkleTree): Number {
-  be t holds MerkleTree.label(e)
+  be t := MerkleTree.label(e)
   return if t == 1 then 1                          // Lit : NUMBER
     else if t == 4 then 2                          // Bool : BOOL
     else if t == 2 then                            // Add : NUMBER when both NUMBER
@@ -47,8 +47,8 @@ fun infer(e: MerkleTree): Number {
 
 fun main(): Number {
   // well-typed: if (2 < 3) then 10 else 20  ->  NUMBER (1)
-  be prog_ok holds mk_if(mk_lt(mk_lit(2), mk_lit(3)), mk_lit(10), mk_lit(20))
+  be prog_ok := mk_if(mk_lt(mk_lit(2), mk_lit(3)), mk_lit(10), mk_lit(20))
   // ill-typed: 2 + true  ->  ERROR (0)
-  be prog_bad holds mk_add(mk_lit(2), mk_bool(1))
+  be prog_bad := mk_add(mk_lit(2), mk_bool(1))
   return infer(prog_ok) * 100 + infer(prog_bad)
 }

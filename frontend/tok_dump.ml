@@ -82,7 +82,6 @@ let tok_name = function
   | Parser.ITER_KW -> "ITER_KW"
   | Parser.DO_KW -> "DO_KW"
   | Parser.WHILE_KW -> "WHILE_KW"
-  | Parser.HOLDS -> "HOLDS"
   | Parser.AND -> "AND"
   | Parser.OR -> "OR"
   | Parser.WHERE -> "WHERE"

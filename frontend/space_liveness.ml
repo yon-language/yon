@@ -138,8 +138,8 @@ let awaits_arc_of (l : S.location) : string option =
    Linux, where MADV_DONTNEED zero-fills; masked on Darwin, which reclaims
    lazily). Collected flow-insensitively over the whole body (a binding anywhere
    maps the name everywhere): conservative, never frees early. Binders, closed
-   under aliasing by fixpoint: `be x holds .-> P { }`, `be x holds f( )` where f
-   returns a place, `be x holds y` where y is already bound. The result merges
+   under aliasing by fixpoint: `be x := .-> P { }`, `be x := f( )` where f
+   returns a place, `be x := y` where y is already bound. The result merges
    into the name->Space map (imap), so uses resolve through the same lookup as
    imported symbols. *)
 let section_bindings ~(imap : (string, string) Hashtbl.t)

@@ -28,7 +28,7 @@ fun sum(xs: IntList): Number {
 
 fun main(): Number {
   // [20, 20] -- map (y => y + 1) --> [21, 21] -- sum --> 42
-  be xs holds .-> Cons { _1 20 _2 .-> Cons { _1 20 _2 Nil } }
+  be xs := .-> Cons { _1 20 _2 .-> Cons { _1 20 _2 Nil } }
   return sum(map_list(fun(y: Number) => y + 1, xs))
 }
 }

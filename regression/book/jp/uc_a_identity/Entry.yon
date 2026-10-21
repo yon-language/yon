@@ -1,20 +1,20 @@
 place Entry {
   fun main(): Number visits Output {
-    be h holds HashSet.empty()
+    be h := HashSet.empty()
     h = HashSet.add(h, 1445)
     h = HashSet.add(h, 1445)
     h = HashSet.add(h, 2361)
     h = HashSet.add(h, 100)
     h = HashSet.add(h, 200)
-    be _1 holds Output.print(String.from_int(HashSet.size(h)))
+    be _1 := Output.print(String.from_int(HashSet.size(h)))
 
-    be x holds XSet.empty()
+    be x := XSet.empty()
     x = XSet.add(x, Leech.embed(1445, 0))
     x = XSet.add(x, Leech.embed(1445, 0))
     x = XSet.add(x, Leech.embed(2361, 0))
     x = XSet.add(x, Leech.embed(100, 0))
     x = XSet.add(x, Leech.embed(200, 0))
-    be _2 holds Output.print(String.from_int(XSet.size(x)))
+    be _2 := Output.print(String.from_int(XSet.size(x)))
     return 0
   }
 }

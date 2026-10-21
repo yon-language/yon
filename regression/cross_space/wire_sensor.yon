@@ -1,13 +1,13 @@
 // Producer: streams readings 1..8 into the wire, then closes it.
 place Entry {
   fun main(): Number {
-    be w holds Wire.make_shm(9, 1)
-    be k holds 1
+    be w := Wire.make_shm(9, 1)
+    be k := 1
     while k < 9 do {
-      be _s holds Wire.produce_shm(w, k)
+      be _s := Wire.produce_shm(w, k)
       k = k + 1
     }
-    be _z holds Wire.close_shm(w)
+    be _z := Wire.close_shm(w)
     return 0
   }
 }

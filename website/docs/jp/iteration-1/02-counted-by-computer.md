@@ -57,10 +57,10 @@ the set contains.
 place Entry { }
 
 fun main(): Number visits Output {
-  be herd0 holds HashSet.empty()
-  be herd1 holds HashSet.add(herd0, 100247)
-  be herd2 holds HashSet.add(herd1, 100247)
-  be _printed holds Output.print(String.from_int(HashSet.size(herd2)))
+  be herd0 := HashSet.empty()
+  be herd1 := HashSet.add(herd0, 100247)
+  be herd2 := HashSet.add(herd1, 100247)
+  be _printed := Output.print(String.from_int(HashSet.size(herd2)))
   return 0
 }
 ```
@@ -70,8 +70,8 @@ text, so the number is turned into a string first, and `main` marks itself `visi
 Output` to say plainly that it reaches outside the program. Effects like that are tracked in Yon,
 and we will return to them. `100247` stands in for a genome, a value identical in both
 adds.
-`HashSet.add` does not change the set in place; it returns a new one, the same way `holds`
-only ever binds. If you write C or Java, this is the shift that matters: you do not push a
+`HashSet.add` does not change the set in place; it returns a new one, the same way `:=`
+only ever defines. If you write C or Java, this is the shift that matters: you do not push a
 genome into a set, you compute a new state in which the set already contains it. After
 adding the same genome twice, the set contains one. Not two collapsed
 into one to save space: one, because the second add was the same value, and a

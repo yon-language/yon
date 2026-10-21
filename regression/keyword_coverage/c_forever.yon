@@ -5,7 +5,7 @@
 place Entry {
   fun spin(): Number visits Output {
     forever {
-      be _ holds String.print("tick")
+      be _ := String.print("tick")
     }
   }
   fun main(): Number { return 0 }

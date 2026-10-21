@@ -127,10 +127,10 @@ import weather::forecasts from Weather    // forecasts: fun(): Wire<Reading>
 
 place Entry { }
 fun main(): Number {
-  be w holds wire to space Weather
-  be sub holds w.awaits(forecasts)
-  be readings holds sub.stream          // the drained frames, as a local stream
-  be total holds readings.fold(0, sum_reading)
+  be w := wire to space Weather
+  be sub := w.awaits(forecasts)
+  be readings := sub.stream          // the drained frames, as a local stream
+  be total := readings.fold(0, sum_reading)
   return total
 }
 ```

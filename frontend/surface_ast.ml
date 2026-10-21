@@ -406,7 +406,7 @@ and pattern =
 (* ─── Statements ───────────────────────────────────────────────────── *)
 
 and stmt =
-  | SLet of string * expr * location                  (* "let x holds e" *)
+  | SLet of string * expr * location                  (* "be x := e" *)
   | SAssignHolds of lvalue * expr * location          (* "x holds e" or "x.f holds e" *)
   | SAssignBecomes of lvalue * expr * location        (* "x = e" or "x.f = e" (the `becomes` surface token is retired; this node is internal-only) *)
   | SReturn of expr * location

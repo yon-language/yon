@@ -4,10 +4,10 @@ place Entry {
 // stream is unordered, but the sum is order-independent, so the result is
 // deterministic: (0+1)+(1+1)+(2+1)+(3+1) = 1+2+3+4 = 10.
 fun main(): Number {
-  be results holds spawn in 4 parallel {
+  be results := spawn in 4 parallel {
     promote spawn_index + 1
   }
-  be total holds results.fold(0, fun(a: Number, v: Number) => a + v)
+  be total := results.fold(0, fun(a: Number, v: Number) => a + v)
   return total
 }
 }

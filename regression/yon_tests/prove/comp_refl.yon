@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be p holds plam i => comp (refl(Number)) [ i = I0 => plam j => 9 ] 5
+    be p := plam i => comp (refl(Number)) [ i = I0 => plam j => 9 ] 5
     return (p @ I0) - 9
   }
 }

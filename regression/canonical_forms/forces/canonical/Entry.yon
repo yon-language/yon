@@ -1,6 +1,6 @@
 place Entry {
   fun guard(): Number {
-    be r holds 0
+    be r := 0
     forces NodeA value is Number {
       r = 1
     }
