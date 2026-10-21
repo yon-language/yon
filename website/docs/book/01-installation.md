@@ -35,7 +35,7 @@ hand, and the path to take when you want each step under your control.
 - A C compiler (`gcc` or `clang`) to link the runtime
 
 That is the whole list. The mathematical core of the runtime (Golay
-code and Leech lattice, the machinery of the content-addressed heap)
+code and Leech lattice, the machinery of the Leech heap and its structures)
 is vendored in the repository under `runtime/vendor/mmgroup`
 (BSD-2-Clause) and built with the rest: no Python, no packages to
 install, and a Yon binary depends on libc and libpthread only.

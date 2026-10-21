@@ -86,13 +86,22 @@ axiom).
 runtime by its own heap and, across packages, its own process; content
 crosses only through moves and the numeric wire.
 
-**content addressing**, the allocator's contract: the address of a value
+**content addressing**, the FNV heap's contract: the address of a value
 is determined by its bytes, so same content is the same slot and equality
 is one comparison.
 
-**Leech lattice (Λ₂₄)**, the 24-dimensional lattice whose geometry sizes
-the heap (196,560 slots, its kissing number) and whose symmetries drive
-orbit canonicalization.
+**FNV heap**, the heap of general values (xleech2): identity by content, an
+FNV-1a hash confirmed by a byte comparison; slots allocated in sequence,
+196,560 per heap, then a chain.
+
+**Leech heap**, the heap of the values that are lattice points
+(`LatticePoint`, `Arena`, `XRelMap`, the X* sets): identity by the point,
+through a bijection with the 196,560 type-2 vectors; orbits and
+canonical forms live here.
+
+**Leech lattice (Λ₂₄)**, the 24-dimensional lattice whose 196,560 minimal
+vectors are the addresses of the Leech heap and the size of one FNV heap,
+and whose symmetries drive orbit canonicalization in the Leech heap.
 
 **Co₀ / M₂₄ orbit**, an equivalence class of contents under the lattice's
 symmetry group; `LatticePoint.orbit` returns the orbit of a point, and two

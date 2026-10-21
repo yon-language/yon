@@ -4,7 +4,7 @@ title: "Yon: a topos-oriented programming language"
 sidebar_label: Introduction
 sidebar_position: 1
 slug: /intro
-description: "Yon is a research programming language with topos-theoretic foundations, compiled to native code via MLIR and LLVM, with a content-addressed heap on the Leech lattice."
+description: "Yon is a research programming language with topos-theoretic foundations, compiled to native code via MLIR and LLVM, with two heaps: one addressed by content, one by the points of the Leech lattice."
 keywords: [topos, programming language, category theory, MLIR, LLVM, content-addressed, Leech lattice, HoTT]
 ---
 
@@ -59,7 +59,7 @@ description of Yon 1.2.1, then follow the book:
 
 **Part II, the machine model:**
 
-13. [The content-addressed heap](./book/13-content-addressed-heap.md), addresses are content, equality for free, the Leech lattice.
+13. [The content-addressed heap](./book/13-content-addressed-heap.md), the two heaps: addresses are content, or a point of the Leech lattice; equality for free.
 14. [Values, cells, and lifetime](./book/14-values-cells-lifetime.md), immutability, identity, types at runtime, no-GC by design.
 15. [Data structures on the lattice](./book/15-data-structures-on-the-lattice.md), persistent collections, MerkleTree, Golay-sealed storage, cells across processes.
 

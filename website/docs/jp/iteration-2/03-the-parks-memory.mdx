@@ -19,8 +19,8 @@ import OrbitClass from '@site/src/components/OrbitClass';
 The control room remembers things, and the way it remembers decides what it can answer.
 "Is this exact animal here?" and "do I have one of this kind?" and "are these two related?"
 are different questions, and each wants a different structure. Yon gives the park a toolkit,
-and the toolkit runs on two engines: a hash (FNV, content-addressed, takes anything) and the
-Leech lattice (24-dimensional, takes only its own points). They are not rivals. They answer
+and the toolkit runs on two heaps: the FNV heap (a hash, content-addressed, takes anything) and
+the Leech heap (24-dimensional, takes only its own points). They are not rivals. They answer
 different questions, and the honest skill is knowing which.
 
 Every number below is a real Yon run (the `regression/book/jp/uc_*` projects, compiled and run with

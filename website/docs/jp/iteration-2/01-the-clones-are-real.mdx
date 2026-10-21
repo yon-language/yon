@@ -45,20 +45,21 @@ chapters ahead. That there are exactly so many positions, perfectly addressed, i
 Among all its points, the closest ones to any given point, its true neighbours, the minimal vectors, 
 number exactly **196,560**. This is the *kissing number* in twenty-four dimensions: the most unit
 spheres that can touch one central sphere at once, the densest such arrangement known, and a theorem,
-not a measurement. Yon re-derives it every build (`test_leech_theta.ml`). Those 196,560 points are the
-addresses. A value is *placed* on the lattice, set down at its nearest point, and they organise
+not a measurement. Yon re-derives it every build (`test_leech_theta.ml`). Yon has two heaps, and
+those 196,560 points are the addresses of the second one, the **Leech heap**: there a value is
+*placed* on the lattice, set down at its nearest point, and the points organise
 themselves into just **12** symmetry classes under the lattice's own group of motions (the Mathieu
 group `M24`, a slice of Conway's `Co₀`). Twelve kinds of place; a hundred and ninety-six thousand
 places.
 
 **On the silicon.** Here is the part a hash cannot match. Each of the 196,560 points maps to a unique
 slot in `[0, 196560)` by a **minimal perfect hash**, a bijection, zero collisions, full cover, proven
-exhaustively (`test_mphf.c`). Where FNV had to compare bytes whenever two hashes collided, the lattice
-*never* collides: there is nothing to resolve, because the address function is exact by construction.
+exhaustively (`test_mphf.c`). Where the first heap, the FNV heap, has to compare bytes whenever two
+hashes collide, the Leech heap *never* collides: there is nothing to resolve, because the address function is exact by construction.
 And 196,560 fits in eighteen bits (`yon_rt.c:3077`), so the whole universe of addresses is a bitmap of
-24 kilobytes, every possible place a value could be, held in the space of a small photograph. FNV
-takes any content and hashes it; the lattice takes only its own 196,560 points, and in exchange gives
-a perfect, compact, collision-free address.
+24 kilobytes, every possible place a value could be, held in the space of a small photograph. The FNV
+heap takes any content and hashes it; the Leech heap takes only its own 196,560 points, and in
+exchange gives a perfect, compact, collision-free address.
 
 <LeechShells />
 

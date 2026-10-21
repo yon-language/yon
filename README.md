@@ -6,7 +6,7 @@
 
 <p align="center">
   A compiled, experimental programming language whose semantics come from category theory,<br>
-  running on a content-addressed heap built on the Leech lattice.
+  running on two heaps: one addressed by content, one by the points of the Leech lattice.
 </p>
 
 <p align="center">
@@ -25,12 +25,15 @@ of a place, and all behaviour lives in **arrows**. Logic is internal: truth is
 the subobject classifier Ω of a Heyting algebra, so `unknown` is an ordinary
 truth value rather than an error or a null.
 
-Underneath, every value lives in a **content-addressed heap**. Equal content
-gets the same address, so equality is a single machine comparison and
-deduplication is global. A heap holds 196,560 contents, the number of minimal
-vectors of the Leech lattice Λ₂₄, and chains into a new heap when it fills. The
-values that are lattice points (the X* structures, `LatticePoint`) are compared
-up to the lattice's symmetries: M₂₄ orbits and Co₀ canonical forms.
+Underneath, values live in **two heaps**. The **FNV heap** is content-addressed:
+equal content gets the same address (an FNV-1a hash confirmed by a byte
+comparison), so equality is a single machine comparison and deduplication is
+global; one heap holds 196,560 contents, the number of minimal vectors of the
+Leech lattice Λ₂₄, and chains into a new one when it fills. The **Leech heap**
+holds the values that are lattice points (`LatticePoint` and the X*
+structures): there the address is the point itself, through a bijection with
+the 196,560 type-2 vectors, and the canonicalization under the lattice's
+symmetries (M₂₄ orbits, Co₀ canonical forms) happens there only.
 
 Yon compiles to native code: OCaml frontend → a custom MLIR dialect (`topos`)
 → LLVM → a binary linked against a small, self-contained C runtime.
