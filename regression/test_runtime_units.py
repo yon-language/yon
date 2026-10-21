@@ -89,12 +89,11 @@ C_UNIT_TESTS = [
     # even under heavy 64-bit-hash collisions — memcmp settles them), dedup stable.
     # Refutes the pigeonhole/birthday critique. Self-provides __yon_dispatch.
     ("extensionality", "test_unit_extensionality.c", b"EXTENSIONALITY: PASS", False),
-    # P5 coverage of previously-untested runtime modules (2026-07-08): the fixed
+    # Runtime modules with no other test: the fixed
     # XLeech2 minimal-perfect-hash bijection {type-2 xcoords} <-> [0,196560); the
     # precomputed Curtis canon LUTs (idempotence, minimality, 98260 classes); and
     # yon_map/yon_unmap (round-trip, alignment, zeroing, shared mapping).
-    # (handler_stack was NOT added: that module is dead code — its .c/.h were
-    #  removed in 785ecab; only a stale, Makefile-less .o survives.)
+    # (handler_stack has no source and is not built: nothing to test.)
     ("mphf_ext",      "test_unit_mphf_ext.c",      b"MPHF_EXT: PASS",      True),
     ("curtis_canon",  "test_unit_curtis_canon.c",  b"CURTIS_CANON: PASS",  True),
     ("yon_mmap",      "test_unit_yon_mmap.c",       b"YON_MMAP: PASS",      True),

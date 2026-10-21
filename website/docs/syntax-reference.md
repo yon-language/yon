@@ -211,7 +211,7 @@ categorical definitions, in `prop name(...) = e` inside a topos, and in
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
 | `A \| B \| C(T)` | ✓ | Sum type; variants may carry arguments |
 | `list of T`, `map of K to V` | ✓ | Collections |
-| `stream of T` | ✓ | Stream type. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed in v1.1) |
+| `Wire<T>` | ✓ | Channel type: what `produce`, `spawn` and a subscription give. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed in v1.1) |
 | `T -> U` | ✓ | Function type, right-associative |
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
@@ -272,7 +272,7 @@ from the call sites.
 | Form | Status | Meaning |
 |---|---|---|
 | `return e` | ✓ | Return from the function |
-| `when c { } when c2 { } otherwise { }` | ✓ | Conditional chain. **A [`return`](/book/keywords#return) inside a branch does not exit the function**, branches are for effects; select values with `if/then/else` |
+| `when c { } when c2 { } otherwise { }` | ✓ | Conditional chain. Branches are for effects; a [`return`](/book/keywords#return) stands only at the end of the body, in each branch of a final `when … otherwise` (elsewhere: E2002); select values with `if/then/else` |
 | `e is pattern`, [`e is not pattern`](/book/keywords#not) | ✓ | Pattern conditions (in [`when`](/book/keywords#when)/[`forces`](/book/keywords#forces)): patterns are a variable, a literal, `present`, `absent`, `unknown`; chainable with `and`/`or` |
 | `iter n do { }` | ✓ | Bounded loop (always terminates; `scf.for`) |
 | `while c do { }` | ✓ | General loop (`scf.while`) |
@@ -427,11 +427,12 @@ effects, move/morphism gating) with opt-in physical heap separation
 | `Bits` | `and, or, xor, not, shl, shr, popcount, fold, *_64` |
 | `Crypto` | `fnv1a, hash_int` |
 | `List` / `HashMap` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
+| `Sequence` | `from_list, range, map, filter, fold`: a finite, pure sequence over a list, fused into one loop (not the `sequence` keyword) |
+| `Stream` | `iterate, take`: an infinite, pure unfold |
 | `Vec` | `empty, push, get, set, size`, a dynamic array on an arena strip (in-place mutable, no malloc) |
 | `MerkleTree` | Content-addressed Merkle trees |
 | `VoyagerList` | Golay-sealed list (error-correcting) |
 | `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog` |
-| `Stream` | `from_list, map, filter, fold, iterate, take` |
 | `Space` | `make, set, get`, mutable cells (the mutation mechanism) |
 
 Failure convention: string-producing operations return the `0.0` handle on
@@ -444,5 +445,6 @@ failure (missing file, unset variable, out-of-range index).
   `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)`.
 - `.-> P { field value }` and place fields `name type`, no `=`, no `:`.
 - A program's exit code is `main`'s return value, truncated mod 256.
-- `return` inside a `when` branch does not exit the function; use
+- `return` stands where the body ends (or at the end of each branch of a final
+  `when … otherwise`); anywhere else it is refused (E2002). Use
   `if/then/else` to select values.

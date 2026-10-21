@@ -84,7 +84,7 @@ per the PathP/morph saga):
       accepted; the bodyless form does not typecheck its param types (the
       body-bearing form, desugaring to a fun, would). Oracle:
       `prop_bad_param_reject/`.
-- [ ] morph via-signature (v1.2) — `on morphism deposit via wrong_sig` with
+- [ ] morph via-signature — `on morphism deposit via wrong_sig` with
       incompatible wrong_sig still accepted by `check_via_bindings` when the
       source topos is out of scope. Oracle: `neg_morph_via_signature.yon`.
 - [x] PathP type-equality — RESOLVED, and the original note was INVERTED.
@@ -161,8 +161,7 @@ checked operand by operand against its C prototype, every call site against the
 declaration), object-symbol-split (nm the .o: `main` defined, undefined ⊆
 RTSET + libc + named system symbols — no blanket `__` prefix), and
 child_exit_noreturn (the call exists and its declaration is `noreturn`). A
-missing tool or an unreadable object FAILS. (test_ll_emits, f64_abi and
-child_exit_unreachable were folded into these on 2026-10-10.)
+missing tool or an unreadable object FAILS.
 
 REMAINING:
 - [x] child_exit NORETURN — test_ll_child_exit_noreturn asserts the attribute. History: the test once asserted only the WEAK

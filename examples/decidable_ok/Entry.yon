@@ -1,10 +1,8 @@
 place Entry {
-/* Decidable: decide su una proposizione DECISA (present) passa,
- * to_bool_dec la porta nel mondo booleano in modo TOTALE. */
+/* decide porta una proposizione nei tre bracci di Decision, e il match
+ * risponde a ciascuno. Su una proposizione presente: il braccio Present. */
 fun main(): Number {
   be p holds present
-  be d holds decide(p)
-  be b holds to_bool_dec(d)
-  return if b then 42 else 0
+  return match decide(p) { Present => 42, Absent => 0, Unknown => 1 }
 }
 }

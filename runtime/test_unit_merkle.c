@@ -23,10 +23,13 @@
  *                 -> slot id; S_4 canonicalize-by-sort: all 24 perms share a slot
  *                    (yon_rt.c:5449).
  *   yon_rt.h:586  double yon_rt_merkle_label(double node_id);
- *                 -> stored label; bad id -> -1.0 (yon_rt.c:5467-5473).
+ *                 -> stored label; an id that is not a node stops the program.
  *   yon_rt.h:588  double yon_rt_merkle_child(double node_id, double child_idx);
- *                 -> child slot (idx 0/1 for node2); bad id or idx>1 -> 0.0
- *                    (yon_rt.c:5477-5487).
+ *                 -> child slot, for an index below the node's arity; an id that
+ *                    is not a node, or an index past the arity, stops the
+ *                    program (never a 0.0 that would read as a handle).
+ *   A child offered to a constructor must be a node handle; a value (1.5)
+ *   stops the program: it is never cast.
  *   yon_rt.h:590  double yon_rt_merkle_equal(double a, double b);
  *                 -> 1.0 iff a==b (handle equality == content equality),
  *                    else 0.0 (yon_rt.c:5490).
@@ -36,6 +39,9 @@
 
 #include "yon_rt.h"
 #include <stdio.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 /* Non-static in yon_rt.c:5403 but absent from yon_rt.h: declare it exactly. */
 extern double yon_rt_merkle_node2_commutative(double label, double c1, double c2);
@@ -45,6 +51,27 @@ static int fails = 0;
 static void check(int ok, const char *what) {
     printf("  %-56s : %s\n", what, ok ? "[PASS]" : "[FAIL]");
     if (!ok) fails++;
+}
+
+/* 1 iff running `f(arg)` in a child process stops it with SIGABRT. */
+static double g_node;
+static int stops(void (*f)(void)) {
+    fflush(stdout);
+    pid_t pid = fork();
+    if (pid == 0) {
+        freopen("/dev/null", "w", stderr);
+        f();
+        _exit(0);
+    }
+    int st = 0;
+    waitpid(pid, &st, 0);
+    return WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT;
+}
+static void label_of_a_non_node(void) { (void)yon_rt_merkle_label(0.0); }
+static void child_of_a_non_node(void) { (void)yon_rt_merkle_child(0.0, 0.0); }
+static void child_past_the_arity(void) { (void)yon_rt_merkle_child(g_node, 5.0); }
+static void value_as_a_child(void) {
+    (void)yon_rt_merkle_node2(1.0, 1.5, yon_rt_merkle_leaf(0.0));
 }
 
 int main(void) {
@@ -127,10 +154,12 @@ int main(void) {
               "node4 shuffled perm -> same slot");
     }
 
-    /* ---- error sentinels: bad ids ---- */
-    check(yon_rt_merkle_label(0.0) == -1.0, "label(invalid id) -> -1.0 sentinel");
-    check(yon_rt_merkle_child(0.0, 0.0) == 0.0, "child(invalid id) -> 0.0");
-    check(yon_rt_merkle_child(n_ab, 5.0) == 0.0, "child idx out of range -> 0.0");
+    /* ---- what is not a node, or not a child, stops the program ---- */
+    g_node = n_ab;
+    check(stops(label_of_a_non_node), "label(not a node) stops the program");
+    check(stops(child_of_a_non_node), "child(not a node) stops the program");
+    check(stops(child_past_the_arity), "child past the arity stops the program");
+    check(stops(value_as_a_child), "node2 with a value as a child stops the program");
     check(yon_rt_merkle_equal(a, a) == 1.0, "merkle_equal(x,x) == 1 (reflexive)");
 
     if (fails == 0) {

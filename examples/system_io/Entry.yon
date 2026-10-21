@@ -1,5 +1,5 @@
 place Entry {
-/* v1.0 perimeter (2026-06-03): File write side, Env, Args.
+/* The system perimeter: File write side, Env, Args.
  * Strings are built with the verified from_char/concat machinery.
  * Expected exit: 1+2+4+8+16+32 = 63. */
 

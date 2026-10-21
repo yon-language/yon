@@ -690,9 +690,9 @@ static yon_xheap_t *chain_extend(yon_xheap_t *prev) {
     yon_xheap_t *new_heap = yon_xheap_create();  /* auto-register inside */
     if (!new_heap) return NULL;
     pthread_mutex_lock(&g_registry_mutex);
-    /* 2026-06-04 FIX: link from the REAL predecessor, not always heap 0.
-     * The old g_heap_next[0] = new_heap broke the chain at the third heap
-     * (heap1 full -> next[0] overwritten, heap1 lost). */
+    /* Link from the REAL predecessor, not always heap 0: linking from heap 0
+     * would break the chain at the third heap (heap1 full -> next[0]
+     * overwritten, heap1 lost). */
     g_heap_next[prev->heap_id] = new_heap;
     pthread_mutex_unlock(&g_registry_mutex);
     return new_heap;
@@ -705,8 +705,7 @@ static yon_xheap_t *g_chain_hint[YON_HEAPREF_MAX_HEAPS] = {0};
 /* ============================================================== */
 /* GLOBAL content index (per chain root)                          */
 /* ============================================================== */
-/* 2026-06-04: put_chain's dedup phase no longer walks the chain heap by
- * heap: a single open-addressing table maps (root, hash64(content)) ->
+/* put_chain's dedup phase does not walk the chain heap by heap: a single open-addressing table maps (root, hash64(content)) ->
  * HeapRef. O(1) regardless of how many heaps the chain has. The index is
  * complete by construction: every allocation on a chain root goes through
  * put_chain, which updates it. Payload verification (size + memcmp via

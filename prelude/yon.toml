@@ -15,3 +15,6 @@ spaces = ["logic"]
 
 [world.Err]
 spaces = ["err"]
+
+[world.Coll]
+spaces = ["coll"]

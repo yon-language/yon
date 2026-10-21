@@ -39,7 +39,7 @@
     },
     "declarations": {
       "comment": "A declaration keyword followed by the name it binds.",
-      "match": "\\b(place|fun|move|view|reduction|operation|functor|morph|geomorph|topos|topology|prop|space|cell|error|terminal)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+      "match": "\\b(place|fun|move|view|reduction|operation|functor|morph|geomorph|topos|prop|space|cell|error)\\s+([A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
         "1": { "name": "storage.type.yon" },
         "2": { "name": "entity.name.type.yon" }
@@ -53,15 +53,15 @@
         },
         {
           "name": "storage.type.yon",
-          "match": "\\b(import|internal|partial|place|space|fun|move|view|reduction|operation|cell|geomorph|pullback|pushout|topology|functorial|functor|topos|morphisms|morphism|terminal|prop|nat|morph|error)\\b"
+          "match": "\\b(import|internal|place|space|fun|move|view|reduction|operation|cell|geomorph|functor|topos|morphism|prop|nat|morph|error)\\b"
         },
         {
           "name": "keyword.other.binding.yon",
-          "match": "\\b(be|holds|new)\\b"
+          "match": "\\b(be|holds)\\b"
         },
         {
           "name": "keyword.operator.word.yon",
-          "match": "\\b(of|in|to|by|from|with|as|where|over|subcontains|uses|algebra|verify|law|lawful|invertible|forward|backward|bi|fold|compose|hcomp|comp|unifies|requires|share|resolves|maps|converts|aggregates|via|exact|adjunction|pull|push|effects|visits|promote|spawn|parallel|show|each|and|or|not|is|multishot|drop)\\b"
+          "match": "\\b(of|in|to|by|from|with|as|where|over|uses|algebra|law|fold|compose|hcomp|comp|unifies|requires|share|resolves|maps|converts|aggregates|via|exact|pull|push|visits|promote|spawn|parallel|show|each|and|or|not|is|multishot|drop)\\b"
         },
         {
           "name": "constant.language.yon",
@@ -77,7 +77,7 @@
       "patterns": [
         {
           "name": "support.type.primitive.yon",
-          "match": "\\b(number|text|boolean|proposition|unit|money|person|address|tensor|cryptographic|duration|sum|Decidable|list|map|stream|wire|heyting|Type|Pi|Sigma|Id|PathP|El)\\b"
+          "match": "\\b(number|text|boolean|proposition|unit|money|person|address|tensor|cryptographic|duration|sum|list|map|stream|wire|heyting|Type|Pi|Sigma|Id|PathP|El)\\b"
         },
         {
           "comment": "Upper-case head = a place, module or type (String, List, Magma, ...).",

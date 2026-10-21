@@ -108,67 +108,6 @@ let list_append (a : term) (b : term) : term option =
       Some (encode_list new_id)
   | _ -> None
 
-(* ─── Map runtime ──────────────────────────────────────────────────── *)
-
-(* A Map is stored as a Hashtbl of term -> term, indexed by id.
- * Keys and values are encoded Yon terms (strings, numbers, or
- * arbitrary terms). *)
-
-let map_store : (int, (term, term) Hashtbl.t) Hashtbl.t = Hashtbl.create 64
-
-let encode_map (id : int) : term = Var (Printf.sprintf "__map_%d" id)
-
-let decode_map_id (t : term) : int option =
-  match t with
-  | Var name when String.length name > 6 && String.sub name 0 6 = "__map_" ->
-      (try Some (int_of_string (String.sub name 6 (String.length name - 6)))
-       with _ -> None)
-  | _ -> None
-
-let map_empty () : term =
-  let id = fresh_id () in
-  Hashtbl.add map_store id (Hashtbl.create 16);
-  encode_map id
-
-let map_set (m : term) (k : term) (v : term) : term option =
-  match decode_map_id m with
-  | None -> None
-  | Some id ->
-      let new_id = fresh_id () in
-      let original = try Hashtbl.find map_store id
-                     with Not_found -> Hashtbl.create 16 in
-      let new_tbl = Hashtbl.copy original in
-      Hashtbl.replace new_tbl k v;
-      Hashtbl.add map_store new_id new_tbl;
-      Some (encode_map new_id)
-
-let map_get (m : term) (k : term) : term option =
-  match decode_map_id m with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt map_store id with
-       | None -> None
-       | Some tbl ->
-           (match Hashtbl.find_opt tbl k with
-            | Some v -> Some v
-            | None -> Some (Var "__absent")))
-
-let map_has (m : term) (k : term) : term option =
-  match decode_map_id m with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt map_store id with
-       | None -> None
-       | Some tbl -> Some (encode_bool (Hashtbl.mem tbl k)))
-
-let map_size (m : term) : term option =
-  match decode_map_id m with
-  | None -> None
-  | Some id ->
-      (match Hashtbl.find_opt map_store id with
-       | None -> None
-       | Some tbl -> Some (encode_number (float_of_int (Hashtbl.length tbl))))
-
 (* ─── Space runtime ────────────────────────────────────────────────── *)
 
 (* A Space is a mutable reference cell. Unlike List/Map (which are
@@ -181,7 +120,7 @@ let map_size (m : term) : term option =
  * World-indexed Space (Yoneda multi-tenancy realization):
  * 
  * A Space is allocated relative to a world tag. The same surface code
- * `new Space initial_value` evaluated in two different world contexts
+ * `Space.make(initial_value)` evaluated in two different world contexts
  * (e.g., two different tenants, two different regions) produces TWO
  * DIFFERENT spaces with independent state. This realizes the topos-
  * theoretic intuition: a Space is a section of a sheaf, and sections
@@ -252,7 +191,7 @@ let space_set (sp : term) (v : term) : term option =
        | Some cell -> cell := v; Some Unit
        | None -> None)
 
-(* ─── Stream runtime (P8 #87) ──────────────────────────────────────── *)
+(* ─── Stream runtime ───────────────────────────────────────────────── *)
 
 (* A Stream is an in-memory FIFO buffer identified by an integer stream id.
  * Stream.make(target_heap) -> the encoded stream id as Var "__stream_<id>"
@@ -336,29 +275,17 @@ let try_reduce_stdlib (t : term) : term option =
   | App (App (Var "List__append", a), b) ->
       list_append a b
 
-  (* Map operations *)
-  | App (Var "Map__empty", _) ->
-      Some (map_empty ())
-  | App (App (App (Var "Map__set", m), k), v) ->
-      map_set m k v
-  | App (App (Var "Map__get", m), k) ->
-      map_get m k
-  | App (App (Var "Map__has", m), k) ->
-      map_has m k
-  | App (Var "Map__size", m) ->
-      map_size m
-
   (* Space operations *)
   | App (Var "Space__new", init) ->
       Some (space_new init)
-  | App (Var "Space__make", init) ->   (* alias to avoid `new` keyword clash *)
+  | App (Var "Space__make", init) ->
       Some (space_new init)
   | App (Var "Space__get", sp) ->
       space_get sp
   | App (App (Var "Space__set", sp), v) ->
       space_set sp v
 
-  (* Stream operations (P8 #87) *)
+  (* Stream operations *)
   | App (Var "Stream__make", target_heap) ->
       Some (stream_make target_heap)
   | App (App (Var "Stream__send", sid), v) ->
@@ -390,6 +317,10 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   let tunit = TyPrim "unit" in
   let tunk = TyPrim "unknown" in
   let tlist t = TyList t in
+  (* the generic collections' own parameters, as their places declare them *)
+  let tk = TyVar "K" and tv = TyVar "V" and tt = TyVar "T" in
+  let hmap = TyApp ("HashMap", [tk; tv]) and hset = TyApp ("HashSet", [tt]) in
+  let xrel = TyApp ("XRelMap", [tk; tv]) and arena = TyApp ("Arena", [tv]) in
   [
     "List", [
       "empty", [tunit], TyList tunk;
@@ -412,13 +343,14 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     ];
     (* HashMap is a real O(1) hash table via a content-addressed directory +
      * xheap. The user-facing hash map. *)
+    (* The primitives HashMap<K, V> (prelude/coll) declares `is given`. *)
     "HashMap", [
-      "empty", [], TyUser "Map";
-      "set", [TyUser "Map"; tunk; tunk], TyUser "Map";
-      "get", [TyUser "Map"; tunk], tnum;
-      "has", [TyUser "Map"; tunk], tbool;
-      "size", [TyUser "Map"], tnum;
-      "to_stream", [TyUser "Map"], tlist tunk;
+      "empty", [], hmap;
+      "set", [hmap; tk; tv], hmap;
+      "has", [hmap; tk], tbool;
+      "size", [hmap], tnum;
+      "value", [hmap; tk], tv;
+      "to_stream", [hmap], tlist tv;
     ];
     (* Route — versioned history store with three views: hash (O(1)
      * membership), voyager (witness extraction), merkle (sharing of the
@@ -432,18 +364,15 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "shared_levels", [tnum], tnum;              (* # levels with a shared Merkle root *)
       "levels", [tnum], tnum;                     (* # H_i levels *)
     ];
+    (* The primitives HashSet<T> (prelude/coll) declares `is given`. *)
     "HashSet", [
-      "empty", [], TyUser "Map";
-      "add", [TyUser "Map"; tunk], TyUser "Map";
-      "contains", [TyUser "Map"; tunk], tbool;
-      "size", [TyUser "Map"], tnum;
-      "union", [TyUser "Map"; TyUser "Map"], TyUser "Map";
-      "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
-      "to_stream", [TyUser "Map"], tlist tunk;
-      "try_add", [TyUser "Map"; tnum], tnum;
-      (* zero-alloc iteration *)
-      "at_bucket", [TyUser "Map"; tnum], tnum;
-      "dir_capacity", [tnum], tnum;
+      "empty", [], hset;
+      "add", [hset; tt], hset;
+      "contains", [hset; tt], tbool;
+      "size", [hset], tnum;
+      "union", [hset; hset], hset;
+      "intersect", [hset; hset], hset;
+      "to_stream", [hset], tlist tt;
     ];
     (* XSet, Set MPHF-backed Leech 24D.
      * Elements: xcoord type-2 (uint32 -> f64). 196560-bit bitmap.
@@ -471,13 +400,14 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     ];
     (* XRelMap: map keyed by Co0/M24 equivalence class (Leech 24D).
      * insert(m, point, value): the key is the class of point, not the specimen. *)
+    (* The primitives XRelMap<K, V> (prelude/coll) declares `is given`. *)
     "XRelMap", [
-      "empty", [], TyUser "Map";
-      "add_ref", [TyUser "Map"; tnum], tnum;   (* builds the reference frame before the freeze *)
-      "insert", [TyUser "Map"; tnum; tnum], TyUser "Map";
-      "get", [TyUser "Map"; tnum], tnum;
-      "contains", [TyUser "Map"; tnum], tbool;
-      "size", [TyUser "Map"], tnum;
+      "empty", [], xrel;
+      "add_ref", [xrel; tk], tnum;   (* builds the reference frame before the freeze *)
+      "insert", [xrel; tk; tv], xrel;
+      "contains", [xrel; tk], tbool;
+      "size", [xrel], tnum;
+      "value", [xrel; tk], tv;
     ];
     (* XSimplex: stateless classifier of a configuration of type-2 points.
      * triangle/omega take three points; pair (two points) is pending a surface
@@ -574,18 +504,19 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     (* Arena: the Leech type-2 arena as a first-class structure. Points are
      * type-2 xcoords; orbit/same_orbit read the pure M24 orbit. occupied and
      * same_orbit return 0/1 as numbers. *)
+    (* The primitives Arena<V> (prelude/coll) declares `is given`. *)
     "Arena", [
-      "empty", [], TyUser "Arena";
-      "put", [TyUser "Arena"; tnum; tnum], TyUser "Arena";
-      "get", [TyUser "Arena"; tnum], tnum;
-      "occupied", [TyUser "Arena"; tnum], tnum;
-      "orbit", [TyUser "Arena"; tnum], tnum;
-      "same_orbit", [TyUser "Arena"; tnum; tnum], tnum;
-      "fuse", [TyUser "Arena"; tnum; tnum; tnum], TyUser "Arena";
-      "fusion_count", [TyUser "Arena"; tnum], tnum;
+      "empty", [], arena;
+      "put", [arena; tnum; tv], arena;
+      "occupied", [arena; tnum], tbool;
+      "value", [arena; tnum], tv;
+      "orbit", [arena; tnum], tnum;
+      "same_orbit", [arena; tnum; tnum], tnum;
+      "fuse", [arena; tnum; tv; tnum], arena;
+      "fusion_count", [arena; tnum], tnum;
     ];
     "Space", [
-      "make", [tunk], TyUser "Space";   (* alias for "new" to avoid keyword clash *)
+      "make", [tunk], TyUser "Space";
       "new", [tunk], TyUser "Space";
       "get", [TyUser "Space"], tunk;
       "set", [TyUser "Space"; tunk], tunit;
@@ -669,6 +600,14 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     "IO", [
       "print_num", [tnum], tnum;
     ];
+    (* The given faces of Number: the libm primitives Math names, under the
+       name their house gives them (one function, two names). *)
+    "Number", [
+      "floor", [tnum], tnum;
+      "exp", [tnum], tnum;
+      "sin", [tnum], tnum;
+      "cos", [tnum], tnum;
+    ];
     (* stdlib estesa. *)
     "String", [
       "from_int", [tnum], TyUser "String";
@@ -686,7 +625,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     "File", [
       "read_text", [TyUser "String"], TyUser "String";
       "exists",    [TyUser "String"], tbool;
-      (* v1.0 perimeter (2026-06-03): write side *)
+      (* write side *)
       "write_text",  [TyUser "String"; TyUser "String"], tnum;
       "append_text", [TyUser "String"; TyUser "String"], tnum;
     ];
@@ -761,12 +700,12 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "take",     [tnum; tnum], tlist tnum;
       "sum_take", [tnum; tnum], tnum;
     ];
-    (* Seq.* per pipeline deforestata.
-     * Internally: Seq is a "lazy iterator" over a list. The map/filter/fold
+    (* Sequence.* per pipeline deforestata.
+     * Internally: a Sequence is a "lazy iterator" over a list. The map/filter/fold
      * ops are recognized as a complete pattern by emit_mlir and lowered to a
      * single scf.while with no intermediate buffers. f/p/g are top-level
      * function names (tunk = placeholder), NOT first-class functions. *)
-    "Seq", [
+    "Sequence", [
       "from_list", [tlist tunk], tnum;
       "map",       [tnum; tunk], tnum;
       "filter",    [tnum; tunk], tnum;
@@ -785,8 +724,10 @@ let lookup_stdlib_signature (qname : string) : (Surface_ast.ty list * Surface_as
      (unknown -> ... -> unknown) just for type checking. *)
   let tunk = Surface_ast.TyPrim "unknown" in
   let tnum = Surface_ast.TyPrim "number" in
-  (* Idraulica v2: __yon_rpc2_invoke<K>__<Space>(op_selector, arg1..argK).
-   * The Space travels nominally in the name; all wire values are numbers. *)
+  (* __yon_rpc2_invoke<K>__<Space>(op_selector, arg1..argK). The Space travels
+   * nominally in the name. Every wire value is a 64-bit slot: the selector is
+   * a number, an argument is any value, which crosses as its 64 bits (an
+   * Int64 is reinterpreted, never converted). *)
   let rpc2_prefix = "__yon_rpc2_invoke" in
   let rpc2_plen = String.length rpc2_prefix in
   if String.length qname > rpc2_plen + 3
@@ -794,7 +735,7 @@ let lookup_stdlib_signature (qname : string) : (Surface_ast.ty list * Surface_as
      && qname.[rpc2_plen] >= '0' && qname.[rpc2_plen] <= '4'
      && String.sub qname (rpc2_plen + 1) 2 = "__" then
     let k = Char.code qname.[rpc2_plen] - Char.code '0' in
-    Some (List.init (1 + k) (fun _ -> tnum), tnum)
+    Some (tnum :: List.init k (fun _ -> tunk), tnum)
   else
   if String.length qname > 9 && String.sub qname 0 9 = "__stream_" then begin
     match String.sub qname 9 (String.length qname - 9) with

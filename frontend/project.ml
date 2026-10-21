@@ -80,7 +80,7 @@ let prelude_dir () : string option =
      status) to arbitrary user places. $YON_PRELUDE stays for dev overrides. *)
   List.find_opt (fun d -> Sys.file_exists d && Sys.is_directory d) cands
 
-(* ─── The prelude as a PACKAGE (the num cantiere) ──────────────────────
+(* ─── The prelude as a PACKAGE ──────────────────────────────────────────
    prelude/ carries a yon.toml ([world.Num] spaces=["num"], …) and its files
    live in spaces (num/, text/, logic/, err/). Each unit rides with its SPACE
    and the world map rides along, merging into every compilation (the USER
@@ -376,9 +376,84 @@ let union_arm_space_diags (l : loaded) : Error_codes.t list =
                            n1 (if s1 = "" then "<root>" else s1)) ]))
       | _ -> []) l.merged
 
+(* A `return` is the value of its body: one that does not stand at the end of
+   a body would be a non-local jump, and the language has none. *)
+let tail_diags (l : loaded) : Error_codes.t list =
+  List.map
+    (fun loc ->
+       Error_codes.make ~range:loc Error_codes.Return_not_in_tail
+         (Printf.sprintf "[%s] " (Tyenv.loc_to_string loc) ^
+         "this `return` is not at the end of its body. A function's value is \
+          the value of its body, so `return` names it where the body ends. \
+          Write the alternatives as one case analysis whose branches each end \
+          in a `return` (`when c { return a } otherwise { return b }`, or \
+          `return if c then a else b`), or move the `return` after the \
+          branch."))
+    (Tail_position.check l.merged)
+
+(* The declared laws: a refuted one rejects the program with its
+   counterexample; one neither proven nor declared an axiom (`is given`) is
+   not certified, and rejects it too. *)
+let law_diags (l : loaded) : Error_codes.t list =
+  List.filter_map
+    (fun (sq : Law_check.square) ->
+       let nt = sq.Law_check.sq_nat in
+       let what = Printf.sprintf "naturality of %s at %s (via %s)"
+           nt.S.nt_name sq.Law_check.sq_morphism sq.Law_check.sq_object in
+       match sq.Law_check.sq_verdict with
+       | Law_check.Proven _ -> None
+       | Law_check.Refuted model ->
+           Some (Error_codes.make ~range:nt.S.nt_loc Error_codes.Law_refuted
+                   (Printf.sprintf "%s is refuted; counterexample: %s" what model))
+       | Law_check.Unknown why when not nt.S.nt_given ->
+           Some (Error_codes.make ~range:nt.S.nt_loc Error_codes.Law_uncertified
+                   (Printf.sprintf
+                      "%s is not certified (%s). If it holds, declare it an axiom: \
+                       `nat transform %s from %s to %s is given { ... }`"
+                      what why nt.S.nt_name nt.S.nt_source_morph nt.S.nt_target_morph))
+       | Law_check.Unknown _ -> None)
+    (Law_check.check l.merged)
+
+(* An operation is an effect: the program reaches a value only if every
+   operation it calls is handled by a reduction of its place (in the Kleisli
+   category of the effect, main must arrive at a value). A call to an
+   operation nothing handles is refused; it never runs into a body that
+   returns 0. *)
+let unhandled_op_diags (l : loaded) : Error_codes.t list =
+  let handled (place : string) (op : string) =
+    List.exists (function
+      | S.TopReduction rd when rd.S.rd_of = place ->
+          List.exists (function
+            | S.RcOn (n, _, _, _) -> n = op
+            | _ -> false) rd.S.rd_clauses
+      | _ -> false) l.merged in
+  let ops =
+    List.concat_map (function
+      | S.TopPlace pd ->
+          List.filter_map (function
+            | S.FoOp o -> Some (pd.S.pd_name ^ "__" ^ o.S.op_name, (pd.S.pd_name, o.S.op_name))
+            | _ -> None) pd.S.pd_members
+      | _ -> []) l.merged in
+  List.concat_map (function
+    | S.TopFun fd ->
+        List.filter_map (fun call ->
+          match List.assoc_opt call ops with
+          | Some (place, op) when not (handled place op) ->
+              Some (Error_codes.make ~range:fd.S.fn_loc Error_codes.Effect_unhandled
+                (Printf.sprintf
+                   "[%s] %s calls the operation %s.%s, but no reduction of %s \
+                    handles it: the effect is never discharged. Declare one \
+                    (`reduction R of %s { on %s(...) { ... } }`)."
+                   (Tyenv.loc_to_string fd.S.fn_loc) fd.S.fn_name place op place
+                   place op))
+          | _ -> None)
+          (Tycheck.collect_calls_in_stmts fd.S.fn_body)
+    | _ -> []) l.merged
+
 let check_all (l : loaded) : Error_codes.t list =
   drop_diags l @ boundary_diags l @ union_arm_space_diags l @ topos_layout_diags l
-  @ file_layout_diags l @ entrypoint_diags l
+  @ file_layout_diags l @ entrypoint_diags l @ tail_diags l @ law_diags l
+  @ unhandled_op_diags l
 
 (* ---- whole-program type check ---- *)
 

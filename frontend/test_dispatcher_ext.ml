@@ -15,18 +15,18 @@
  *     name (dispatcher.ml:359-374).
  *   - TyPi codomain compared UP TO the bound variable (dispatcher.ml:375-379).
  *   - TyArrow / TyMoveHandle / TyReductionHandle structural + wildcard arms.
- *   - El(code) equality (dispatcher.ml:346) — string/structural, NOT delta.
+ *   - El(code) equality — the same normal form of the codes.
  *   - subtype: the transitive number<:proposition arm, one-way direction,
  *     reflexive fall-through to type_equal.
  *   - Place fallback arm (dispatcher.ml:398-403) via transport pairs.
- *   - Behavioral known-answers: boolean/proposition canon, "unknown" wildcard,
+ *   - Behavioral known-answers: Boolean is not proposition (2 -> Omega is a
+ *     one-way inclusion), "unknown" wildcard,
  *     TyUser~TyPrim name fusion.
  *
  * Grounded on:
  *   dispatcher.ml:301 type_equal : env -> ctx -> ty -> ty -> bool
  *   dispatcher.ml:418 subtype   : env -> ctx -> sub:ty -> super:ty -> bool
- *   catt_r_yon.ml:436 ty_structural_eq (canon boolean/proposition; unknown)
- *   catt_r_yon.ml:1320 el_equal (El code decoded via ty_term_to_name)
+ *   catt_r_yon.ml ty_structural_eq (unknown wildcard; no canon of 2 and Omega)
  *   tyenv.ml:187 with_transport_pair, tyenv.ml:190 place_transportable
  *)
 
@@ -160,8 +160,12 @@ let () =
 
   (* ── behavioral known-answers (pin real ty_structural_eq behavior) ──── *)
   Printf.printf "-- behavioral known-answers --\n";
-  check "boolean == proposition (canonicalized to one sort)"
-    (eq (TyPrim "boolean") prop);
+  check "boolean /= proposition (2 and Omega are two objects)"
+    (not (eq (TyPrim "boolean") prop));
+  check "boolean <: proposition (the characteristic mono 2 -> Omega)"
+    (sub_ ~sub:(TyPrim "boolean") ~super:prop);
+  check "proposition is not <: boolean (Omega -> 2 needs decidability)"
+    (not (sub_ ~sub:prop ~super:(TyPrim "boolean")));
   check "unknown == number (\"unknown\" is a polymorphic wildcard)"
     (eq (TyPrim "unknown") num);
   check "TyUser \"number\" == TyPrim number (name fusion)"

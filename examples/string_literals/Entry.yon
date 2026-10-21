@@ -1,5 +1,5 @@
 place Entry {
-/* String fusion (2026-06-03): "..." literals ARE String values — sections of
+/* String fusion: "..." literals ARE String values — sections of
  * the builtin String place, interned to xheap handles (content-addressed:
  * same literal, same slot). Expected exit: 1+2+4+8+16 = 31. */
 

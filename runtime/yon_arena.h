@@ -11,10 +11,10 @@
  * a theorem verified by frontend/test_leech_theta.ml and guarded at compile time.
  * Indexing is the verified MPHF bijection, so two distinct type-2 points never
  * collide: zero collisions by construction, not by probability. Allocation is
- * mmap-always (yon_map). Values are never stored here, only their heaprefs: the
- * arena is the index over lattice positions, the heap is the content store.
+ * mmap-always (yon_map). A value lives inline in its slot, as its 64 bits,
+ * never in the heap; whether a slot holds one is its own occupancy bit.
  *
- * This header is the first brick: structure + canonical repr put/get. The
+ * This header is the first brick: structure + value put/get. The
  * sigma-certified fusion list and the M24-orbit layout follow as next steps. */
 #ifndef YON_ARENA_H
 #define YON_ARENA_H
@@ -31,13 +31,13 @@ typedef struct ds_arena ds_arena_t;
 ds_arena_t *yon_arena_create(yon_xheap_t *heap);
 void        yon_arena_destroy(ds_arena_t *a);
 
-/* Set the canonical repr (a heapref) for a type-2 point. Returns 1 on success,
- * 0 if `point` is not a type-2 vector. */
-int yon_arena_put_repr(ds_arena_t *a, yon_xcoord_t point, uint32_t repr);
+/* Store a value's 64 bits at a type-2 point. Returns 1 on success, 0 if
+ * `point` is not a type-2 vector. */
+int yon_arena_put_value(ds_arena_t *a, yon_xcoord_t point, uint64_t value);
 
-/* The canonical repr for a type-2 point, or YON_HEAPREF_INVALID if the slot is
- * empty or `point` is not type-2. */
-uint32_t yon_arena_get_repr(const ds_arena_t *a, yon_xcoord_t point);
+/* The value at a type-2 point: 1 and its bits in *out if the slot holds one,
+ * 0 otherwise (an empty slot has no value, not a sentinel). */
+int yon_arena_get_value(const ds_arena_t *a, yon_xcoord_t point, uint64_t *out);
 
 /* 1 if the type-2 point's slot is occupied, 0 otherwise (or non-type-2). */
 int yon_arena_occupied(const ds_arena_t *a, yon_xcoord_t point);
@@ -49,10 +49,10 @@ int yon_arena_occupied(const ds_arena_t *a, yon_xcoord_t point);
  * deduplicated) and pushes it onto the slot's list. Returns 1 on success, 0 if
  * `point` is not type-2, the slot is empty, or the heap allocation fails. */
 int yon_arena_put_fusion(ds_arena_t *a, yon_xcoord_t point,
-                         uint32_t value, uint32_t sigma);
+                         uint64_t value, uint32_t sigma);
 
 /* Visitor over a slot's fusions, most-recent first. */
-typedef void (*yon_arena_fusion_fn)(uint32_t value, uint32_t sigma, void *ctx);
+typedef void (*yon_arena_fusion_fn)(uint64_t value, uint32_t sigma, void *ctx);
 
 /* Walk the fusion list at `point`, calling `visit` for each fusion (LIFO order).
  * Returns the number of fusions visited (0 if empty or non-type-2). */

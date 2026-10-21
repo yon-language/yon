@@ -1,0 +1,13 @@
+/* HashSet<T> — a set, a persistent hash trie in the content-addressed heap
+ * (a map whose values are not read). An element is identified by its bits.
+ * Two sets with the same elements are the same value.
+ *
+ * Markers: [G] given, the runtime primitive */
+place HashSet<T> {
+  fun empty<T>(): HashSet<T> is given
+  fun add<T>(s: HashSet<T>, x: T): HashSet<T> is given
+  fun contains<T>(s: HashSet<T>, x: T): Boolean is given
+  fun size<T>(s: HashSet<T>): Number is given
+  fun union<T>(a: HashSet<T>, b: HashSet<T>): HashSet<T> is given
+  fun intersect<T>(a: HashSet<T>, b: HashSet<T>): HashSet<T> is given
+}

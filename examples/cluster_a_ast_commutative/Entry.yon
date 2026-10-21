@@ -1,5 +1,5 @@
 place Entry {
-/* Cluster A — AST commutative auto-quotient via MerkleTree.nodeN (turno 33 part 5).
+/* Cluster A — AST commutative auto-quotient via MerkleTree.nodeN.
  *
  * AST commutative operations (and, or, +) hanno ordine non significativo.
  * Encoding tradizionale: AST con figli posizionali → and(a, b) ≠ and(b, a)

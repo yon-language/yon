@@ -41,7 +41,7 @@ RTSET="$FT/yon_rt.o $FT/yon_mmap.o $FT/leech_orbits.o $FT/yon_arena.o $FT/yon_cu
 LOWER="--convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm --convert-arith-to-llvm --reconcile-unrealized-casts"
 EMIT="$FE/_build/default/yoner_emit_mlir.exe"
 OUT=/tmp/regression_now.txt; > "$OUT"
-# An example is a single examples/<name>.yon OR (after the Fase-1b migration)
+# An example is a single examples/<name>.yon OR
 # a directory examples/<name>/ with a yon.toml — the emit accepts both. The
 # old *.yon-only glob silently shrank the gate to ONE file when the corpus
 # became directory-projects.

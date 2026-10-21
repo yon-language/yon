@@ -48,8 +48,9 @@ design principle, this becomes: **a thing is what you can observe of it**.
 Three places where this is load-bearing in the implementation, not just
 philosophy:
 
-1. **Functorial operations** (chapter 6) are lifted along world morphisms,
-   the operation travels with the object's *relations*, not with a pinned
+1. **Transport between worlds is a `functor`** (chapter 6): it goes from one
+   world to another and says so in its header, sending objects to objects and
+   arrows to arrows, so what travels is the object's *relations*, not a pinned
    implementation. The compiler's world-inference and effect-propagation
    rules are written and audited as "Yoneda-coherent": if `f` calls `g` and
    `g` visits a world, `f` transitively does.

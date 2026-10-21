@@ -25,6 +25,25 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+/* The read compiled code performs never yields a zeroed value for a broken
+   handle: run it in a child, which must stop with SIGABRT. */
+static int read_stops(yon_section_t sec, uint32_t off, uint32_t size) {
+    fflush(stdout);
+    pid_t pid = fork();
+    if (pid == 0) {
+        uint8_t out[16];
+        freopen("/dev/null", "w", stderr);
+        (void)yon_rt_field_load_or_stop(sec, off, size, out);
+        _exit(0);
+    }
+    int st = 0;
+    waitpid(pid, &st, 0);
+    return WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT;
+}
 
 int main(void) {
     printf("=== yon_rt_field_load / yon_rt_flatten OOB oracle ===\n");
@@ -126,6 +145,16 @@ int main(void) {
         int ok = (r == -1) && zeroed;
         printf("  reserved slot 0 (no payload)   : r=%d zeroed=%d %s\n",
                r, zeroed, ok ? "[PASS]" : "[FAIL]");
+        if (!ok) fails++;
+    }
+
+    /* 6b) the read of compiled code: a never-written slot, the reserved slot
+     *     and an out-of-bounds field all stop the program. */
+    {
+        int ok = read_stops(yon_section_pack(heap, YON_HEAP_N_SLOTS - 1u), 0, 8)
+              && read_stops(yon_section_pack(heap, 0u), 0, 8)
+              && read_stops(sec, 8, 9);
+        printf("  compiled read of a broken handle stops : %s\n", ok ? "[PASS]" : "[FAIL]");
         if (!ok) fails++;
     }
 

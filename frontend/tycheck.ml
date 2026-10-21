@@ -98,11 +98,11 @@ let ty_of_literal (l : literal) : ty =
   match l with
   | LitNumber _ -> TyPrim "number"
   | LitString _ -> TyPrim "text"
-  (* A syntactic bool has type proposition (Omega), not a separate "boolean"
-   * type. Yon's logic is intuitionistic: there is a single type of decidable
-   * propositions. *)
-  | LitBool _ -> TyPrim "proposition"
-  | LitDuration _ -> TyPrim "number"  (* v1.0: a duration IS milliseconds *)
+  (* true and false are the two points of Boolean (2). Where a proposition is
+   * expected they are the top and the bottom of Omega, through the
+   * characteristic mono 2 -> Omega (Dispatcher.subtype). *)
+  | LitBool _ -> TyPrim "boolean"
+  | LitDuration _ -> TyPrim "number"  (* a duration IS milliseconds *)
   | LitCurrency (_, _) -> TyPrim "money"
   | LitHeytPresent | LitHeytAbsent | LitHeytUnknown -> TyPrim "proposition"
 
@@ -162,7 +162,7 @@ let rec resolve_tparams (tps : string list) (t : ty) : ty =
     match t with
     | TyUser n when List.mem n tps -> TyVar n
     | TyArrow (a, b) -> TyArrow (go a, go b)
-    | TyStream a -> TyStream (go a)
+    | TyChannel a -> TyChannel (go a)
     | _ -> t
 
 (* PRECISE instantiation: given a generic place's parameters and the concrete
@@ -180,7 +180,7 @@ let subst_place_tparams (params : string list) (args : ty list) (t : ty) : ty =
       | TyUser n when List.mem_assoc n pairs -> List.assoc n pairs
       | TyVar n when List.mem_assoc n pairs -> List.assoc n pairs
       | TyArrow (a, b) -> TyArrow (go a, go b)
-      | TyStream a -> TyStream (go a)
+      | TyChannel a -> TyChannel (go a)
       | _ -> t
     in
     go t
@@ -268,24 +268,48 @@ let comprehension_coerces_to (env : Tyenv.env) (ctx : Reduce.ctx)
       Dispatcher.type_equal env ctx carrier super
   | _ -> false
 
-(* ─── Integer faces (Int is i64, …) ─────────────────────────────────────
-   The INTEGER prims. Arithmetic on them is exact over the f64 transport
-   within ±2^53; `/` and `%` diverge (truncating division) and get routed
-   to __idiv/__imod by site. i1 is boolean, not arithmetic. *)
+(* ─── Integer faces ─────────────────────────────────────────────────────
+   Int64 is the ring Z/2^64 at runtime as in the checker: every operation on
+   it (+ - * / % and the comparisons) is recorded by site and lowers to the
+   i64 instruction (addi, muli, divsi, cmpi ...). The narrower integer faces
+   ride the f64 transport, exact within their range; on them only `/` and `%`
+   diverge from the f64 operators (truncating division) and are routed to
+   __idiv/__imod by site. i1 is boolean, not arithmetic. *)
 let int_prims = ["i8"; "i16"; "i32"; "i64"]
 
+(* "unknown" is equal to every type, so it is not an integer face: a value
+   of unknown type is not routed to an integer instruction. *)
+let is_placeholder_ty (t : ty) : bool =
+  match t with TyPrim "unknown" | TyUser "unknown" -> true | _ -> false
+
 let is_int_prim_ty (env : Tyenv.env) (ctx : Reduce.ctx) (t : ty) : bool =
-  List.exists (fun p -> Dispatcher.type_equal env ctx t (TyPrim p)) int_prims
+  not (is_placeholder_ty t)
+  && List.exists (fun p -> Dispatcher.type_equal env ctx t (TyPrim p)) int_prims
 
 (* `/` and `%` on integer operands are the TRUNCATING ops: record the site
    for desugar (one helper, used by the infer rule and the checking rule). *)
-let record_int_arith_site (op : binop) (loc : location) : unit =
+let record_int_arith_site ?(i64 = false) (op : binop) (loc : location) : unit =
   let key = (loc.file, loc.start_line, loc.start_col,
              loc.end_line, loc.end_col) in
+  let i64_name = function
+    | OpAdd -> Some "__i64_add" | OpSub -> Some "__i64_sub"
+    | OpMul -> Some "__i64_mul" | OpDiv -> Some "__i64_div"
+    | OpMod -> Some "__i64_mod" | OpLt -> Some "__i64_lt"
+    | OpGt -> Some "__i64_gt" | OpLeq -> Some "__i64_leq"
+    | OpGeq -> Some "__i64_geq" | OpEq -> Some "__i64_eq"
+    | OpNeq -> Some "__i64_neq" | _ -> None in
+  if i64 then
+    (match i64_name op with
+     | Some n -> Hashtbl.replace Surface_ast.int_arith_sites key n
+     | None -> ())
+  else
   match op with
   | OpDiv -> Hashtbl.replace Surface_ast.int_arith_sites key "__idiv"
   | OpMod -> Hashtbl.replace Surface_ast.int_arith_sites key "__imod"
   | _ -> ()
+
+let is_int64_ty (env : Tyenv.env) (ctx : Reduce.ctx) (t : ty) : bool =
+  not (is_placeholder_ty t) && Dispatcher.type_equal env ctx t (TyPrim "i64")
 
 (* Literal admission: an INTEGRAL numeric literal is a point of every integer
    face (the transport carries it exactly). A non-literal Number is NOT —
@@ -293,10 +317,20 @@ let record_int_arith_site (op : binop) (loc : location) : unit =
 let admit_int_literal (env : Tyenv.env) (ctx : Reduce.ctx)
     (e : expr) (inferred : ty) (expected : ty) : ty =
   match e with
-  | ELit (LitNumber v, _)
+  | ELit (LitNumber v, loc)
     when Float.is_integer v
       && Dispatcher.type_equal env ctx inferred (TyPrim "number")
-      && is_int_prim_ty env ctx expected -> expected
+      && is_int_prim_ty env ctx expected
+      (* at Int64, the digits as written must name a 64-bit integer *)
+      && (not (is_int64_ty env ctx expected)
+          || (match Hashtbl.find_opt Surface_ast.exact_int_literals
+                      (loc.file, loc.start_line, loc.start_col) with
+              | Some digits -> Int64.of_string_opt digits <> None
+              | None -> true)) ->
+      if is_int64_ty env ctx expected then
+        Hashtbl.replace Surface_ast.int64_literal_sites
+          (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col) ();
+      expected
   | _ -> inferred
 
 (* Type of a binop result, given operand types. *)
@@ -313,9 +347,7 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
   | OpAdd | OpSub | OpMul | OpDiv | OpMod ->
       if is lhs num && is rhs num then ok num
       else if is_int_prim_ty env ctx lhs && is lhs rhs then begin
-        (* Integer arithmetic: + - * ride the f64 ops (exact within ±2^53);
-           / and % are TRUNCATING — record the site for desugar. *)
-        record_int_arith_site op loc;
+        record_int_arith_site ~i64:(is_int64_ty env ctx lhs) op loc;
         ok lhs
       end
       else if is lhs dur && is rhs dur && (op = OpAdd || op = OpSub) then ok dur
@@ -328,13 +360,19 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
   (* Comparison operators *)
   | OpLt | OpGt | OpLeq | OpGeq ->
       if is lhs rhs && (is lhs num || is lhs dur || is lhs mon
-                        || is_int_prim_ty env ctx lhs) then ok bool_t
+                        || is_int_prim_ty env ctx lhs) then begin
+        if is_int64_ty env ctx lhs then record_int_arith_site ~i64:true op loc;
+        ok bool_t
+      end
       else err loc
         (Printf.sprintf
            "comparison requires matching ordered operands; got %s and %s"
            (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs))
   | OpEq | OpNeq ->
-      if is lhs rhs then ok bool_t
+      if is lhs rhs then begin
+        if is_int64_ty env ctx lhs then record_int_arith_site ~i64:true op loc;
+        ok bool_t
+      end
       else err loc
         (Printf.sprintf
            "equality requires matching operand types; got %s and %s"
@@ -573,8 +611,8 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
 (* Stop-gap (1.1): `=` (Space-cell assign) inside a produce / spawn body desugars to
    __space_update_here, which has no lowering — the cells promotion that turns `be x holds`
    into a Space cell and rewrites `x = e` into `Space.set` does not reach these
-   expression-context blocks, so emit_mlir would crash with a Fatal error. Until the full
-   fix lands with the produce rework in 1.2, reject it with a clean compile-time error.
+   expression-context blocks, so emit_mlir would crash with a Fatal error. A clean
+   compile-time error rejects it instead.
    Walks loop / when bodies but not nested produce/spawn (those run their own check). *)
 let rec first_assign_loc (ss : stmt list) : location option =
   List.fold_left (fun acc s ->
@@ -594,6 +632,77 @@ let rec first_assign_loc (ss : stmt list) : location option =
               | Some _ -> r
               | None -> (match oth with Some o -> first_assign_loc o | None -> None)))
       | _ -> None) None ss
+
+(* The lattice collections hold their values inline, in a slot of the type-2
+   lattice: which values fit is derived from their carrier — a scalar of 32
+   or 64 bits (Int32; Int64 and Number) — never listed per type; a key is a
+   lattice point (a 64-bit coordinate). The parameters each place puts in a
+   slot, by position. *)
+let lattice_slots = [ ("XRelMap", [ (0, `Point); (1, `Value) ]);
+                      ("Arena",   [ (0, `Value) ]) ]
+
+let carrier_bits (env : Tyenv.env) (t : ty) : int option =
+  let prim = match t with
+    | TyPrim p -> Some p
+    | TyUser n -> Hashtbl.find_opt Surface_ast.fusion_places n
+    | _ -> None in
+  ignore env;
+  match prim with
+  | Some p ->
+      (match Carrier.prim_carrier p with
+       | Some (Carrier.Scalar w) -> Some (Carrier.scalar_bits w)
+       | _ -> None)
+  | None -> None
+
+(* The first parameter of a lattice collection that does not fit its slot,
+   with why; None when every one fits (or is still open). *)
+let slot_misfit (env : Tyenv.env) (t : ty) : string option =
+  let found = ref None in
+  ignore (Ty_subst.map_leaves (function
+    | TyApp (n, args) when !found = None && List.mem_assoc n lattice_slots ->
+        List.iter (fun (i, role) ->
+          match List.nth_opt args i with
+          | Some (TyPrim "unknown" | TyUser "unknown" | TyVar _ | TyMetaVar _) | None -> ()
+          | Some a ->
+              let bits = carrier_bits env a in
+              let fits = match role, bits with
+                | `Value, Some (32 | 64) -> true
+                | `Point, Some 64 -> true
+                | _ -> false in
+              if not fits && !found = None then
+                found := Some (Printf.sprintf
+                  "%s<…>: %s does not fit a lattice slot — a %s is a scalar of %s \
+                   bits (its carrier), and %s is not"
+                  n (Tyenv.ty_to_string a)
+                  (match role with `Value -> "value" | `Point -> "key")
+                  (match role with `Value -> "32 or 64" | `Point -> "64 (a lattice point)")
+                  (Tyenv.ty_to_string a))) (List.assoc n lattice_slots);
+        None
+    | _ -> None) t);
+  !found
+
+(* The arms of a named sum at a type: `Lookup<Int64>` has the arms of Lookup
+   with V := Int64; a generic sum named without arguments has its parameters
+   open. *)
+let named_sum_instance (env : Tyenv.env) (t : ty) : (string * variant list) option =
+  let inst n args =
+    match Tyenv.lookup_named_sum env n with
+    | None -> None
+    | Some vs ->
+        let ps = Tyenv.named_sum_params env n in
+        let args = if List.length args = List.length ps then args
+                   else List.map (fun _ -> TyPrim "unknown") ps in
+        let m = List.combine ps args in
+        Some (n, List.map (fun v ->
+          { v with v_args = List.map (Ty_subst.subst_type_vars m) v.v_args }) vs) in
+  match t with
+  | TyApp (n, args) -> inst n args
+  | TyUser n -> inst n []
+  | _ -> None
+
+(* A named sum as a type: Name<args> for a generic one, Name otherwise. *)
+let named_sum_ty (env : Tyenv.env) (n : string) (args : ty list) : ty =
+  if Tyenv.named_sum_params env n = [] then TyUser n else TyApp (n, args)
 
 (* Resolve the point-constructor signature of an inductive from the scrutinee's
    type: a declared sum (`TySum`/`TySumIn`), a named `inductive T = ...` (via
@@ -619,13 +728,15 @@ let hit_signature_of (env : Tyenv.env) (x_ty : ty)
   match x_ty with
   | TySum variants | TySumIn (variants, _) ->
       Some (sig_of_variants (Tyenv.type_tag x_ty) variants)
+  | TyApp _ ->
+      Option.map (fun (n, vs) -> sig_of_variants n vs) (named_sum_instance env x_ty)
   | TyPrim n | TyPrimIn (n, _) | TyUser n ->
       (* a fused prim eliminates through its declared face: match on a
          `boolean` scrutinee sees Boolean's arms tt/ff *)
       let n = match Hashtbl.find_opt Surface_ast.fusion_of_prim n with
         | Some face -> face | None -> n in
-      (match Tyenv.lookup_named_sum env n with
-       | Some variants -> Some (sig_of_variants n variants)
+      (match named_sum_instance env (TyUser n) with
+       | Some (_, variants) -> Some (sig_of_variants n variants)
        | None ->
            Option.map (fun sig_ -> (n, sig_))
              (Hit_env.lookup Hit_env.builtin_env n))
@@ -694,7 +805,7 @@ let certify_dependent_cone (hname : string)
   | Some _ -> true
   | None -> false
 
-(* S-08 — the mobility of a closure over a cell (Harper ch. 31, 34, 41; Turbak
+(* The mobility of a closure over a cell (Harper ch. 31, 34, 41; Turbak
    ch. 16, 18). A local reassigned with `=`, and a cell made with `Space.make`,
    belong to the activation that creates them: both are freed when it returns
    (space_mark/space_reset). A lambda that mentions such a cell captures its
@@ -788,7 +899,7 @@ let ty_mobile (env : Tyenv.env) (t : ty) : bool =
     match t with
     | TyPrim "unknown" | TyUser "unknown" -> false
     | TyPrim _ | TyPrimIn _ | TyHeytInt _ -> true
-    | TyList x | TyStream x -> go seen x
+    | TyList x | TyChannel x -> go seen x
     | TyMap (k, v) -> go seen k && go seen v
     | TySum vs | TySumIn (vs, _) -> List.for_all (fun v -> List.for_all (go seen) v.v_args) vs
     | TyUser p when List.mem p seen -> true
@@ -967,6 +1078,48 @@ let rec mob_tails (body : stmt list) : (expr * location) list =
        | SForces (_, _, b, _) -> mob_tails b
        | SScope (_, b, e, l) -> (e, l) :: mob_tails b)
 
+(* A path between types is an identity in the universe, Id(Type, A, B), whose
+   endpoints are the codes of A and B (a type's name is its code). [code_of_ty]
+   and [ty_of_code] are the two directions of that naming; a type with no name
+   (an arrow, a Sigma) has no code here. *)
+let code_of_ty (t : ty) : expr option =
+  match t with
+  | TyPrim p -> Some (EVar (p, dummy_loc))
+  | TyUser n -> Some (EVar (n, dummy_loc))
+  | _ -> None
+
+let ty_of_code (env : Tyenv.env) (c : expr) : ty option =
+  match c with
+  | EVar (n, _) ->
+      (match Hashtbl.find_opt Surface_ast.fusion_places n, Surface_ast.prim_of_face n with
+       | Some prim, _ | None, Some prim -> Some (TyPrim prim)
+       | None, None ->
+           (* the inverse of code_of_ty, whatever the environment has loaded:
+              a primitive code names the primitive, any other name the named
+              type (no value inhabits an undeclared one) *)
+           ignore env;
+           if Carrier.is_prim_name n then Some (TyPrim n) else Some (TyUser n))
+  | _ -> None
+
+(* The source and target types of a path in the universe, read from its type. *)
+let universe_path_endpoints (env : Tyenv.env) (t : ty) : (ty * ty) option =
+  match t with
+  | TyId (TyUniverse _, TyTermExpr ca, TyTermExpr cb) ->
+      (match ty_of_code env ca, ty_of_code env cb with
+       | Some a, Some b -> Some (a, b)
+       | _ -> None)
+  | _ -> None
+
+(* A proposition offered where a Boolean is expected: the arrow from Omega to 2
+   exists only for a decided proposition. The diagnostic says how to get one. *)
+let omega_hint (expected : ty) (actual : ty) : string =
+  match expected, actual with
+  | TyPrim "boolean", (TyPrim "proposition" | TyUser "proposition") ->
+      ". A proposition is not a Boolean (it may be unknown): decide it and \
+       answer each of its three values, \
+       `match decide(p) { Present => ..., Absent => ..., Unknown => ... }`"
+  | _ -> ""
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
@@ -979,7 +1132,11 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
             (match ft with
              | TyArrow (_, cod) -> apply cod rest
              | TyPi (_, _, cod) -> apply cod rest
-             | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
+             | TyVar v -> err loc (Printf.sprintf
+                 "a value of the abstract type %s admits no operation: inside a \
+                  generic function it can only be passed on (its type is known \
+                  only at each call)" v)
+             | TyPrim "unknown" -> ok (TyPrim "unknown")
              | other ->
                  err loc (Printf.sprintf
                    "application: head is not a function, got %s"
@@ -1120,11 +1277,13 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
         match x_ty with
         | TySum variants | TySumIn (variants, _) ->
             Some (sig_of_variants (Tyenv.type_tag x_ty) variants)
+        | TyApp _ ->
+            Option.map (fun (n, vs) -> sig_of_variants n vs) (named_sum_instance env x_ty)
         | TyPrim n | TyPrimIn (n, _) | TyUser n ->
             (* a named sum (`inductive Tree = ...`) resolves to its variants; else a
                built-in HIT; else not an inductive. *)
-            (match Tyenv.lookup_named_sum env n with
-             | Some variants -> Some (sig_of_variants n variants)
+            (match named_sum_instance env (TyUser n) with
+             | Some (_, variants) -> Some (sig_of_variants n variants)
              | None ->
                  Option.map (fun sig_ -> (n, sig_))
                    (Hit_env.lookup Hit_env.builtin_env n))
@@ -1353,14 +1512,42 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                         check_args actual expected
                     | _ -> assert false
                   in
-                  let* () = check_args args variant.v_args in
+                  (* A generic named sum is instantiated at its constructor,
+                     like a generic call: its parameters become fresh unknowns
+                     solved by the arguments; one the arguments do not fix
+                     stays open. *)
+                  let generic =
+                    match Tyenv.named_sum_of_ctor env ctor with
+                    | Some (name, _) -> Tyenv.named_sum_params env name <> []
+                    | None -> false in
+                  let* (arg_tys, result) =
+                    if not generic then ok (variant.v_args, None) else
+                    let name = match Tyenv.named_sum_of_ctor env ctor with
+                      | Some (n, _) -> n | None -> assert false in
+                    let ps = Tyenv.named_sum_params env name in
+                    let fresh = List.map (fun v -> (v, Ty_subst.fresh_metavar ())) ps in
+                    let inst = Ty_subst.subst_type_vars fresh in
+                    let want = List.map inst variant.v_args in
+                    let* got = List.fold_right (fun a acc ->
+                      let* acc = acc in let* t = infer env ctx a in ok (t :: acc)) args (ok []) in
+                    let sigma = List.fold_left2 (fun sg w g ->
+                      match Ty_subst.try_unify (Ty_subst.apply_subst sg w) (Ty_subst.apply_subst sg g) with
+                      | Ok s -> Ty_subst.compose_subst s sg
+                      | Error _ -> sg) Ty_subst.empty_subst want got in
+                    let close t = Ty_subst.map_leaves (function
+                      | TyMetaVar _ -> Some (TyPrim "unknown") | _ -> None)
+                      (Ty_subst.apply_subst sigma t) in
+                    ok (List.map close want,
+                        Some (TyApp (name, List.map (fun (_, m) -> close m) fresh))) in
+                  let* () = check_args args arg_tys in
                   (* A named sum is nominal: `hit(Node, ..)` has type `Tree`, not
                      the expanded sum, so it unifies with `Tree`-typed positions
                      (including a constructor's own recursive arguments). An
                      anonymous inline sum keeps its structural type. *)
-                  (match Tyenv.named_sum_of_ctor env ctor with
-                   | Some (name, _) -> ok (TyUser name)
-                   | None -> ok (TySum variants))
+                  (match result, Tyenv.named_sum_of_ctor env ctor with
+                   | Some t, _ -> ok t
+                   | None, Some (name, _) -> ok (TyUser name)
+                   | None, None -> ok (TySum variants))
             | candidates ->
                 let signatures =
                   List.map
@@ -1428,6 +1615,16 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
            | None ->
            match Tyenv.lookup_fun env x with
            | Some fs ->
+               (* a generic function named as a value has no instance yet:
+                  its type parameters are open where it is used. Sound
+                  because its body was checked with them abstract. *)
+               let fs =
+                 let tvs = List.concat_map (fun (_, t) -> Ty_subst.type_vars t)
+                             fs.fs_params @ Ty_subst.type_vars fs.fs_return in
+                 if tvs = [] then fs else
+                 let m = List.map (fun v -> (v, TyPrim "unknown")) tvs in
+                 { fs with fs_params = List.map (fun (n, t) -> (n, Ty_subst.subst_type_vars m t)) fs.fs_params;
+                           fs_return = Ty_subst.subst_type_vars m fs.fs_return } in
                if fs.fs_params = [] then ok fs.fs_return
                else
                  let ty =
@@ -1497,19 +1694,20 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
         | _ -> 0
       in
       Hashtbl.replace substream_site_table (loc.start_line, loc.start_col) n_bytes;
-      ok (TyStream elem)
+      ok (TyChannel elem)
 
   | EField (obj, fld, loc) ->
-      (* The E1110 cross-Space field-read gate was type-gated on the retired
-       * `new P in Space` surface form. With that vestige gone, a place's space
-       * is its filesystem directory; same-binary isolation is physical
+      (* No cross-Space field-read gate: a place's space is its filesystem
+       * directory; same-binary isolation is physical
        * (`backend=separate` + the process/package boundary), not a field-read
        * type-check. See chapter 10. *)
       let* obj_ty = infer env ctx obj in
       (match obj_ty with
-       | TyPrim "unknown" | TyUser "unknown" | TyVar _ ->
-           (* Polymorphic types: accept field access and return unknown.
-            * Defers full typing until specialization. *)
+       | TyVar v -> err loc (Printf.sprintf
+                 "a value of the abstract type %s admits no operation: inside a \
+                  generic function it can only be passed on (its type is known \
+                  only at each call)" v)
+       | TyPrim "unknown" | TyUser "unknown" ->
            ok (TyPrim "unknown")
        | (TyUser place_name | TyApp (place_name, _)) as pt ->
            let targs = (match pt with TyApp (_, a) -> a | _ -> []) in
@@ -1534,7 +1732,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   | ECall (name, args, loc) when name = "awaits" ->
       (* w.awaits(producer): the receiver must be a wire to a Space; the
          argument is a producer FUNCTION NAME, imported from that same
-         Space and declared `stream of T`. All three are compile errors
+         Space and declared `Wire<T>`. All three are compile errors
          otherwise (design note, locked). *)
       (* Unified value-receiver form: `w.awaits(producer)` lowers to
          ECall("awaits", [EVar w; EVar producer]). The receiver is the first
@@ -1568,7 +1766,7 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                        | None -> Hashtbl.find_opt wire_fun_returns bare
                      in
                      (match ret with
-                      | Some (Some (TyStream elem)) ->
+                      | Some (Some (TyChannel elem)) ->
                           let sel = Module_prefix.op_selector bare in
                           (* The wire carries a variable-length frame, not the
                              raw payload, so the channel slot is a generous cap
@@ -1591,7 +1789,7 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                             | None -> "number") in
                           err floc (Printf.sprintf
                             "'%s' is not a producer: it returns %s; a \
-producer is declared `stream of T`" bare shown)
+producer is declared `Wire<T>`" bare shown)
                       | None ->
                           err floc (Printf.sprintf
                             "Space %s does not declare '%s'" sp bare)))
@@ -1730,10 +1928,10 @@ got %s" (Tyenv.ty_to_string other)))
         | "take" -> ("__stream_take", args)
         | "sum_take" -> ("__stream_sum_take", args)
         | "to_stream" -> ("__stream_to_stream", args)
-        | "Seq__map" -> ("__stream_map", args)
-        | "Seq__filter" -> ("__stream_filter", args)
-        | "Seq__fold" -> ("__stream_fold", args)
-        | "Seq__from_list" -> ("__stream_from_list", args)
+        | "Sequence__map" -> ("__stream_map", args)
+        | "Sequence__filter" -> ("__stream_filter", args)
+        | "Sequence__fold" -> ("__stream_fold", args)
+        | "Sequence__from_list" -> ("__stream_from_list", args)
         | "Stream__iterate" -> ("__stream_iterate", args)
         | "Stream__take" -> ("__stream_take", args)
         | "Stream__sum_take" -> ("__stream_sum_take", args)
@@ -1770,7 +1968,7 @@ got %s" (Tyenv.ty_to_string other)))
            && args <> [] then begin
           let* recv_ty = infer env ctx (List.hd args) in
           (match recv_ty with
-           | TyStream _ ->
+           | TyChannel _ ->
                Hashtbl.replace stream_method_table
                  (loc.start_line, loc.start_col) ();
                ok ()
@@ -1822,8 +2020,8 @@ got %s" (Tyenv.ty_to_string other)))
         in
         check_call env ctx name args arg_tys loc
       end else begin
-      (* (E1111 cross-Space argument gating retired with `new P in Space`; see
-       * E1110 above and chapter 10.)
+      (* (No cross-Space argument gate either: see the field read above and
+       * chapter 10.)
        * A call can be a user function, a qualified operation
        * (Place__op via the desugarer's mangling), or a built-in. *)
       let arg_tys_result =
@@ -1869,21 +2067,20 @@ got %s" (Tyenv.ty_to_string other)))
          is checked against the declared return type by the caller. *)
       (match first_assign_loc body with
        | Some l ->
-           err l "`=` (Space-cell assignment) is not yet supported inside a `produce` \
+           err l "`=` (Space-cell assignment) is not supported inside a `produce` \
                   block. Use `Space.set(cell, value)`, or compute the value before the \
-                  block and bind it with `be`. (Full support lands with the produce \
-                  rework in 1.2.)"
+                  block and bind it with `be`."
        | None ->
          let saved = !produce_emit_ty in
          produce_emit_ty := None;
          let* _ = !produce_check_ref env ctx body None in
          let elem = (match !produce_emit_ty with Some t -> t | None -> TyPrim "number") in
          produce_emit_ty := saved;
-         ok (TyStream elem))
+         ok (TyChannel elem))
   | ESpawn (count, body, loc) ->
       (* spawn { ... } / spawn in N parallel { ... } as an expression: the body
          runs in one or N isolated forked replicas; each `promote E` contributes
-         an element of type T; the whole construct is `stream of T`, collected in
+         an element of type T; the whole construct is `Wire<T>`, collected in
          the parent's heap. The count, if present, must be a number (evaluated in
          the parent before fork). A block with no promote is an error. *)
       let* () = (match count with
@@ -1891,10 +2088,9 @@ got %s" (Tyenv.ty_to_string other)))
         | None -> ok ()) in
       let* () = (match first_assign_loc body with
         | Some l ->
-            err l "`=` (Space-cell assignment) is not yet supported inside a `spawn` \
+            err l "`=` (Space-cell assignment) is not supported inside a `spawn` \
                    block. Use `Space.set(cell, value)`, or compute the value before the \
-                   block and bind it with `be`. (Full support lands with the produce \
-                   rework in 1.2.)"
+                   block and bind it with `be`."
         | None -> ok ()) in
       let saved = !spawn_promote_ty in
       spawn_promote_ty := None;
@@ -1907,7 +2103,7 @@ got %s" (Tyenv.ty_to_string other)))
       (match !spawn_promote_ty with
        | Some elem ->
            spawn_promote_ty := saved;
-           ok (TyStream elem)
+           ok (TyChannel elem)
        | None ->
            spawn_promote_ty := saved;
            err loc "spawn block has no promote: it must promote at least one value")
@@ -2011,7 +2207,11 @@ got %s" (Tyenv.ty_to_string other)))
       let* p_ty = infer env ctx p in
       (match p_ty with
        | TySigma (_, a, _) -> ok a
-       | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
+       | TyVar v -> err loc (Printf.sprintf
+                 "a value of the abstract type %s admits no operation: inside a \
+                  generic function it can only be passed on (its type is known \
+                  only at each call)" v)
+       | TyPrim "unknown" -> ok (TyPrim "unknown")
        | other ->
            err loc (Printf.sprintf "fst expects Sigma type, got %s"
                       (Tyenv.ty_to_string other)))
@@ -2019,7 +2219,11 @@ got %s" (Tyenv.ty_to_string other)))
       let* p_ty = infer env ctx p in
       (match p_ty with
        | TySigma (_, _, b) -> ok b
-       | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
+       | TyVar v -> err loc (Printf.sprintf
+                 "a value of the abstract type %s admits no operation: inside a \
+                  generic function it can only be passed on (its type is known \
+                  only at each call)" v)
+       | TyPrim "unknown" -> ok (TyPrim "unknown")
        | other ->
            err loc (Printf.sprintf "snd expects Sigma type, got %s"
                       (Tyenv.ty_to_string other)))
@@ -2058,7 +2262,11 @@ got %s" (Tyenv.ty_to_string other)))
               | TyPi (_, _dom, cod) -> ok cod
               | _ -> ok (TyPrim "unknown"))
            end
-       | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
+       | TyVar v -> err loc (Printf.sprintf
+                 "a value of the abstract type %s admits no operation: inside a \
+                  generic function it can only be passed on (its type is known \
+                  only at each call)" v)
+       | TyPrim "unknown" -> ok (TyPrim "unknown")
        | other ->
            err loc (Printf.sprintf "ind_path expects Id type as 3rd arg, got %s"
                       (Tyenv.ty_to_string other)))
@@ -2089,7 +2297,11 @@ got %s" (Tyenv.ty_to_string other)))
             | TyArrow (_dom, cod) -> ok cod
             | TyPi (_, _dom, cod) -> ok cod
             | _ -> ok (TyPrim "unknown"))
-       | TyPrim "unknown" | TyVar _ -> ok (TyPrim "unknown")
+       | TyVar v -> err loc (Printf.sprintf
+                 "a value of the abstract type %s admits no operation: inside a \
+                  generic function it can only be passed on (its type is known \
+                  only at each call)" v)
+       | TyPrim "unknown" -> ok (TyPrim "unknown")
        | other ->
            err loc (Printf.sprintf "el_match expects El(...) as 1st arg, got %s"
                       (Tyenv.ty_to_string other)))
@@ -2242,8 +2454,9 @@ got %s" (Tyenv.ty_to_string other)))
       ok (TyViewHandle (Some of_p))
 
   | EComposeWith (h1, h2, loc) ->
-      (* compose h1 with h2.
-       * Semantics: result(x) = h2(h1(x)).
+      (* compose h1 with h2 is h2 ∘ h1, written in diagrammatic order: h1 is
+       * applied first, h2 to its result — result(x) = h2(h1(x)). The two
+       * compose only where the target of h1 is the source of h2.
        *
        * Categorical composability check: the target of h1 must match the
        * source of h2.
@@ -2260,8 +2473,14 @@ got %s" (Tyenv.ty_to_string other)))
       let* t1 = infer env ctx h1 in
       let* t2 = infer env ctx h2 in
       (match t1, t2 with
-       (* fun o fun *)
-       | TyArrow (_a, _b), TyArrow (_, c) -> ok (TyArrow (_a, c))
+       (* fun o fun: the output of h1 flows into the input of h2 *)
+       | TyArrow (a, b), TyArrow (b', c) ->
+           if Dispatcher.subtype env ctx ~sub:b ~super:b' then ok (TyArrow (a, c))
+           else err loc (Printf.sprintf
+             "compose with: the first function returns %s, but the second \
+              takes %s; they compose only where the output of the first is \
+              the input of the second"
+             (Tyenv.ty_to_string b) (Tyenv.ty_to_string b'))
        (* move . move: the target of h1 = the source of h2 *)
        | TyMoveHandle (Some p1_from, Some p1_to),
          TyMoveHandle (Some p2_from, Some p2_to)
@@ -2314,8 +2533,9 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
     if Dispatcher.subtype env ctx ~sub:actual ~super:expected
        || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
     else err (location_of_expr e)
-      (Printf.sprintf "type mismatch: expected %s, got %s"
-         (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual))
+      (Printf.sprintf "type mismatch: expected %s, got %s%s"
+         (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual)
+         (omega_hint expected actual))
   in
   match e, expected with
   (* Bidirectional integer arithmetic: `0 - 1` against Int pushes Int into
@@ -2325,7 +2545,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
     when is_int_prim_ty env ctx expected ->
       let* () = check env ctx e1 expected in
       let* () = check env ctx e2 expected in
-      record_int_arith_site op loc;
+      record_int_arith_site ~i64:(is_int64_ty env ctx expected) op loc;
       ok ()
   | EHITConstr (ctor, args, loc), (TySum variants | TySumIn (variants, _)) ->
       (match List.find_opt (fun variant -> variant.v_name = ctor) variants with
@@ -2638,9 +2858,16 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
    * value. *)
   (match Tyenv.lookup_var env name with
    | Some var_ty when (match var_ty with TyArrow _ -> true | _ -> false) ->
+       let call_exprs = args in
        let rec apply_arrow t args =
          match t, args with
          | TyArrow (param, ret), arg :: rest ->
+             (* an integral literal is a point of an integer face, as at any
+                call *)
+             let arg =
+               match List.nth_opt call_exprs (List.length call_exprs - List.length args) with
+               | Some e -> admit_int_literal env ctx e arg param
+               | None -> arg in
              if Dispatcher.subtype env ctx ~sub:arg ~super:param
                 || param = TyPrim "unknown"
                 || arg = TyPrim "unknown"
@@ -2763,27 +2990,60 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                | Ok ty -> ok ty
                | Error msg -> err loc msg)))
   else
-  (* transport : Path U A B -> A -> B.  Precise for the operative univalence
-   * form transport(ua(e), x): e : Equiv A B is a Sigma headed by A -> B, so
-   * the univalence path runs from A to B, the result type is B, and the value
-   * x must have type A.  The reducer computes this to the equivalence's
-   * forward map applied to x (the ua anchor).  Any other form (a path bound to
-   * a variable, a within-type path) keeps the loose typing (transport stays in
-   * the source type) — see the Task 0-A gate note; no fake precision. *)
-  if name = "transport" then
-    (match args, arg_tys with
-     | [ECall ("ua", [e_e], _); _], [_; x_ty] ->
-         (match infer env ctx e_e with
-          | Ok (TySigma (_, TyArrow (a_ty, b_ty), _)) ->
-              if Dispatcher.type_equal env ctx x_ty a_ty then ok b_ty
-              else err loc "transport: the value's type must match the source type A \
-                            of the univalence path ua : Path U A B"
-          | _ ->
-              (match Cubical_bindings.check_call name arg_tys with
-               | Ok ty -> ok ty | Error msg -> err loc msg))
+  (* idEquiv(T) : Equiv(T, T), the identity equivalence on the type whose
+   * code is its argument. *)
+  if name = "idEquiv" then
+    (match args with
+     | [c] ->
+         (match ty_of_code env c with
+          | Some t -> ok (Cubical_bindings.mk_equiv_ty t t)
+          | None -> err loc "idEquiv expects a type, e.g. idEquiv(Number)")
+     | _ -> err loc (Printf.sprintf "idEquiv expects 1 argument (the type), got %d"
+                       (List.length args)))
+  else
+  (* ua : Equiv A B -> Id(Type, A, B). The equivalence's forward map names
+   * the two endpoints. *)
+  if name = "ua" then
+    (match arg_tys with
+     | [TySigma (_, TyArrow (a_ty, b_ty), _)] ->
+         (match code_of_ty a_ty, code_of_ty b_ty with
+          | Some ca, Some cb -> ok (TyId (TyUniverse 0, TyTermExpr ca, TyTermExpr cb))
+          | _ -> err loc (Printf.sprintf
+                   "ua: the equivalence runs between %s and %s; a path in the \
+                    universe names its endpoints, and only a named type has a code"
+                   (Tyenv.ty_to_string a_ty) (Tyenv.ty_to_string b_ty)))
      | _ ->
          (match Cubical_bindings.check_call name arg_tys with
           | Ok ty -> ok ty | Error msg -> err loc msg))
+  else
+  (* transport : Id(Type, A, B) -> A -> B. The target type is read from the
+   * type of the path, whatever form the path has: written inline, named, or
+   * received as a parameter. One rule, no syntactic case. `transp` is the
+   * same transport with an explicit starting point between the two. *)
+  if name = "transport" || name = "transp" then
+    (match arg_tys with
+     | [p_ty; x_ty] | [p_ty; _; x_ty] when name = "transp" || List.length arg_tys = 2 ->
+         (match universe_path_endpoints env p_ty with
+          | Some (a_ty, b_ty) ->
+              (* an integer literal is admitted at A, as against any expected
+                 type *)
+              let x_ty = match List.rev args with
+                | x :: _ -> admit_int_literal env ctx x x_ty a_ty
+                | [] -> x_ty in
+              if Dispatcher.subtype env ctx ~sub:x_ty ~super:a_ty then ok b_ty
+              else err loc (Printf.sprintf
+                     "transport: the path runs from %s to %s, but the value has \
+                      type %s"
+                     (Tyenv.ty_to_string a_ty) (Tyenv.ty_to_string b_ty)
+                     (Tyenv.ty_to_string x_ty))
+          | None ->
+              err loc (Printf.sprintf
+                "transport needs a path between types, Id(Type, A, B), whose \
+                 endpoints are known types; this path has type %s"
+                (Tyenv.ty_to_string p_ty)))
+     | _ -> err loc (Printf.sprintf "%s expects %s arguments, got %d" name
+                       (if name = "transp" then "2 or 3" else "2")
+                       (List.length arg_tys)))
   else
   (* First, try cubical primitives. *)
   if Cubical_bindings.is_primitive name then
@@ -2814,6 +3074,36 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
   in
   match Tyenv.lookup_fun env name with
   | Some fs ->
+      (* A generic function is instantiated at each call: its type
+         parameters become fresh unknowns, solved by unifying the declared
+         parameters with the arguments; the call is then checked, and typed,
+         at that instance. A parameter the arguments do not determine stays
+         open. *)
+      let fs =
+        let tvs = List.concat_map (fun (_, t) -> Ty_subst.type_vars t)
+                    fs.fs_params @ Ty_subst.type_vars fs.fs_return in
+        if tvs = [] then fs else
+        let fresh = List.map (fun v -> (v, Ty_subst.fresh_metavar ())) tvs in
+        let inst t = Ty_subst.subst_type_vars fresh t in
+        let params = List.map (fun (n, t) -> (n, inst t)) fs.fs_params in
+        let sigma =
+          if List.length params <> List.length arg_tys then Ty_subst.empty_subst
+          else List.fold_left2 (fun sg (_, pt) at ->
+            match Ty_subst.try_unify (Ty_subst.apply_subst sg pt)
+                                     (Ty_subst.apply_subst sg at) with
+            | Ok s -> Ty_subst.compose_subst s sg
+            | Error _ -> sg) Ty_subst.empty_subst params arg_tys in
+        let close t =
+          Ty_subst.map_leaves (function
+            | TyMetaVar _ -> Some (TyPrim "unknown")
+            | _ -> None) (Ty_subst.apply_subst sigma t) in
+        { fs with fs_params = List.map (fun (n, t) -> (n, close t)) params;
+                  fs_return = close (inst fs.fs_return) } in
+      let* () =
+        match List.find_map (slot_misfit env)
+                (fs.fs_return :: List.map snd fs.fs_params) with
+        | Some why -> err loc why
+        | None -> ok () in
       let* () = check_call_signature ~arg_exprs:args env ctx name fs.fs_params arg_tys loc in
       (* Transitive effect propagation. If the called function declares
        * `visits E`, the caller must in turn cover E, either through its own
@@ -2902,15 +3192,21 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                              name (List.length param_tys) (List.length arg_tys))
                          else
                            (* Stdlib uses "unknown" type as polymorphic placeholder.
-                            * We accept any actual type at those positions. *)
+                            * We accept any actual type at those positions. An
+                            * Int64 is not a Number, though: it never enters a
+                            * Number parameter, where its bits would be read as
+                            * a double. *)
                            let rec check_args = function
                              | [], [] -> ok ()
-                             | pty :: prest, _aty :: arest ->
-                                 (* Accept anything when expected is "unknown" (polymorphic). *)
-                                 (match pty with
-                                  | TyPrim "unknown" -> check_args (prest, arest)
-                                  | _ -> check_args (prest, arest))
-                                 (* For now, accept all — proper polymorphism. *)
+                             | pty :: prest, aty :: arest ->
+                                 if is_int64_ty env ctx aty
+                                    && not (is_placeholder_ty pty)
+                                    && not (is_int64_ty env ctx pty)
+                                 then err loc (Printf.sprintf
+                                   "%s: an Int64 is passed where %s is expected; an \
+                                    Int64 is not a Number, and no conversion is implicit"
+                                   name (Tyenv.ty_to_string pty))
+                                 else check_args (prest, arest)
                              | _ -> err loc "stdlib arg mismatch"
                            in
                            let* () = check_args (param_tys, arg_tys) in
@@ -2971,9 +3267,10 @@ and check_call_signature ?(arg_exprs : expr list = [])
           then check_args (prest, arest)
           else err loc
             (Printf.sprintf
-               "%s: parameter %s expects %s, got %s"
+               "%s: parameter %s expects %s, got %s%s"
                fn_name pname
-               (Tyenv.ty_to_string pty) (Tyenv.ty_to_string aty))
+               (Tyenv.ty_to_string pty) (Tyenv.ty_to_string aty)
+               (omega_hint pty aty))
       | _ -> err loc "internal: signature length mismatch"
     in
     check_args (params, arg_tys)
@@ -3139,19 +3436,19 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
            ok (Tyenv.add_var env name t)
        | _ ->
            ok (Tyenv.add_var env name t))
-      |> (fun r -> mob_bind env name t e; r)      (* S-08 *)
+      |> (fun r -> mob_bind env name t e; r)      (* the binding may carry a cell *)
 
   | SAssignHolds (lv, e, loc) | SAssignBecomes (lv, e, loc) ->
       let* expected = type_of_lvalue env ctx lv loc in
       let* () = check env ctx e expected in
-      (* S-08: the target now holds e; a field write makes its object carry *)
+      (* the target now holds e; a field write makes its object carry *)
       (match lv with
        | LVar x -> mob_bind env x expected e
        | LField (o, _) -> mob_bind env o (TyPrim "unknown") e);
       ok env
 
   | SReturn (e, loc) ->
-      (* S-08: leaving the activation is a transport; it needs mobility *)
+      (* leaving the activation is a transport; it needs mobility *)
       (match expected_return with
        | Some t ->
            let* () = check env ctx e t in
@@ -3179,7 +3476,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
            let recv = List.hd args in
            let* recv_ty = infer env ctx recv in
            (match recv_ty with
-            | TyStream _ ->
+            | TyChannel _ ->
                 Hashtbl.replace stream_method_table (loc.start_line, loc.start_col) ();
                 (* fold's init is a value: check it; the lambda is loose *)
                 let* _ = (match suf, args with
@@ -3257,7 +3554,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       let* coll_ty = infer env ctx collection in
       let elem_ty = match coll_ty with
         | TyList inner -> Some inner
-        | TyStream inner ->
+        | TyChannel inner ->
             (* stream collection: the desugar drains the wire instead of
                walking cons cells; register the site. *)
             Hashtbl.replace stream_foreach_table (loc.start_line, loc.start_col) ();
@@ -3422,7 +3719,7 @@ and check_implicit_tail_return (env_after : Tyenv.env) (ctx : Reduce.ctx)
                            a value of type %s (add an explicit `return`)"
                           (Tyenv.ty_to_string rt) (Tyenv.ty_to_string t) }]))
 
-(* S-08, at the end of a function: the implicit tail leaves the activation
+(* Mobility at the end of a function: the implicit tail leaves the activation
    like a `return` does, then every recorded site gets its verdict. *)
 and mob_check_function (env_after : Tyenv.env) (ctx : Reduce.ctx)
     (body : stmt list) (expected_ret : ty option) : type_error list =
@@ -3446,15 +3743,15 @@ and type_of_lvalue (env : Tyenv.env) (ctx : Reduce.ctx)
        | Some t -> ok t
        | None -> err loc (Printf.sprintf "unbound variable %s" x))
   | LField (x, fld) ->
-      (* Place sections are immutable in 1.0, so assigning to a field (`x.f = e`
+      (* Place sections are immutable, so assigning to a field (`x.f = e`
          or `x.f holds e`) is rejected by design. It has no lowering: it would
          desugar to __space_update_here and crash emit_mlir, so it is stopped here
          with a clean type error instead. Mutate through a Space cell (a `be`-bound
-         local reassigned with `=`), or build a fresh instance with `new`. *)
+         local reassigned with `=`), or build a fresh section with `.->`. *)
       err loc (Printf.sprintf
-        "cannot assign to place field '%s.%s': place sections are immutable in 1.0. \
+        "cannot assign to place field '%s.%s': place sections are immutable. \
          Mutate through a Space cell (a `be`-bound local reassigned with `=`), or \
-         build a new instance with `new`." x fld)
+         build a new section with `.-> P { ... }`." x fld)
 
 (* ─── Top-level declaration checking ───────────────────────────────── *)
 
@@ -3490,7 +3787,7 @@ let rec level_of_type (t : ty) : int =
       max (level_of_type a) (level_of_type b)
   | TyId (a, _, _) -> level_of_type a
   | TyPathP ((_, a), _, _) -> level_of_type a
-  | TyList inner | TyStream inner -> level_of_type inner
+  | TyList inner | TyChannel inner -> level_of_type inner
   | TyMap (k, v) -> max (level_of_type k) (level_of_type v)
   | TySum vs | TySumIn (vs, _) ->
       List.fold_left
@@ -3564,7 +3861,7 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
         (fun env variant ->
            List.fold_left register_sum_types_in_ty env variant.v_args)
         (Tyenv.add_sum_type env variants) variants
-  | TyList inner | TyStream inner | TySubscription (_, inner) ->
+  | TyList inner | TyChannel inner | TySubscription (_, inner) ->
       register_sum_types_in_ty env inner
   | TyMap (key, value) | TyArrow (key, value) ->
       register_sum_types_in_ty (register_sum_types_in_ty env key) value
@@ -3588,12 +3885,11 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
    (extensivity: every arm is a subobject of the union). PURE — no env: it
    also serves the pre-env world-inference path.
 
-   Projection-name convention, fixed once: `_1`, `_2`, ... (census
-   2026-07-24: no user field in the corpus is named `_N`). Today a place's
-   root is name-nominal (Type_root.leaf_root hashes the name only), so the
-   convention does not yet reach any address; the day place roots become
-   arrow-profile hashes, these names will enter them — fixed NOW so that
-   day changes nothing.
+   Projection-name convention, fixed once: `_1`, `_2`, ... (no user field
+   in the corpus is named `_N`). A place's root is name-nominal
+   (Type_root.leaf_root hashes the name only), so the convention reaches no
+   address; were roots arrow-profile hashes, these names would enter them,
+   and a fixed convention keeps that change neutral.
 
    The self-reference is preserved nominally: a payload type equal to the
    union's own name stays `TyUser union` — never expanded (recursion). The
@@ -3616,7 +3912,7 @@ let synth_place_of_arm (union_pd : place_decl) (v : variant) : place_decl =
 (* Resolution, ONE rule: an empty-payload arm resolves iff its head names a
    declared place; a payload arm IS a place — the synthetic one — unless its
    head ALSO names a user place (a genuine conflict, rejected upstream by
-   check_named_sum; census 2026-07-24: zero in the corpus). *)
+   check_named_sum; the corpus has none). *)
 let arm_resolves_with (lookup : string -> place_decl option)
     ?(union : place_decl option) (v : variant) : place_decl option =
   if v.v_args = [] then lookup v.v_name
@@ -3647,7 +3943,7 @@ let register_named_sum (env : Tyenv.env) (name : string)
 (* Place refactor stage 3, second pass: resolve the arm -> union injections
    AFTER every declaration is registered, so resolution does not depend on
    declaration order. An arm that resolves to a declared place IS that place,
-   and its injection rides the SAME machinery `subcontains` rides: the
+   and its injection rides the SAME machinery `this <` rides: the
    pd_subcontains chain Tyenv.place_subcontains walks; re-adding the arm's
    decl with pd_subcontains = Some union (add_place shadows) IS the
    registration — no parallel registry. An arm already inside a declared
@@ -3669,7 +3965,7 @@ let resolve_arm_injections (env : Tyenv.env) (p : program) : Tyenv.env =
                       Tyenv.add_place acc
                         { apd with pd_subcontains = Some pd.pd_name } in
                     (* a payload arm resolved to its SYNTHETIC place: mark it,
-                       so `new` on it is rejected until the mediatrice step. *)
+                       so a section of it is not built directly. *)
                     if v.v_args <> [] then
                       Tyenv.add_synthetic_marker acc apd.pd_name
                     else acc
@@ -3737,7 +4033,7 @@ let register_fusion (pd : place_decl) : unit =
       (* same face name in TWO prelude worlds (Int in Num32 and Num64):
          the DEFAULT world's carrier wins the bare-name registry — never
          the parse order. The non-default twin stays a declared intent
-         (its world distinguishes it; native lowering is a later cantiere). *)
+         (its world distinguishes it; it has no native lowering). *)
       (if in_prelude
           && Hashtbl.mem Surface_ast.fusion_places pd.pd_name
           && Hashtbl.find Surface_ast.fusion_places pd.pd_name <> prim
@@ -3762,7 +4058,7 @@ let register_fusion (pd : place_decl) : unit =
            Hashtbl.replace Surface_ast.fused_points a.v_name `Unit
        | _ -> ())
 
-(* ─── Mono = composition (error cantiere, correzione di Antonio) ─────────
+(* ─── Mono = composition ──────────────────────────────────────────────────
    If Wobble ↪ Error is a mono and Error has message : Error → Text, then
    message ∘ ι : Wobble → Text EXISTS BY COMPOSITION — nothing to redeclare.
    The sub-object is INSIDE the super, so it undergoes its projections, in
@@ -3812,7 +4108,11 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
       (* a place with arms IS the named sum: the same registration, not a
          field-place. One production, one rule. *)
       register_fusion pd;
-      register_named_sum env pd.pd_name pd.pd_arms
+      (* a generic sum's arms mention its parameters as rigid variables *)
+      let rigid = Ty_subst.rigid_type_params pd.pd_type_params in
+      let arms = List.map (fun v -> { v with v_args = List.map rigid v.v_args }) pd.pd_arms in
+      let env = Tyenv.add_named_sum_params env pd.pd_name pd.pd_type_params in
+      register_named_sum env pd.pd_name arms
   | TopPlace pd ->
       register_fusion pd;
       let env =
@@ -3837,20 +4137,7 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
        * type parameter declared in fn_type_params. Same logic as in
        * check_fun_decl, but applied at registration time so that
        * callers see TyVar in the signature. *)
-      let rec rebind_ty (t : ty) : ty =
-        match t with
-        | TyUser n when List.mem n fn.fn_type_params -> TyVar n
-        | TyList inner -> TyList (rebind_ty inner)
-        | TyMap (k, v) -> TyMap (rebind_ty k, rebind_ty v)
-        | TyStream inner -> TyStream (rebind_ty inner)
-        | TySum vs ->
-            TySum (List.map
-              (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs)
-        | TySumIn (vs, ws) ->
-            TySumIn (List.map
-              (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs, ws)
-        | other -> other
-      in
+      let rebind_ty = Ty_subst.rigid_type_params fn.fn_type_params in
       let rebound_params = List.map
         (fun p -> (p.param_name, rebind_ty p.param_ty)) fn.fn_params in
       let rebound_return =
@@ -4033,7 +4320,7 @@ let check_named_sum (name : string) (variants : variant list) (loc : location)
 (* Place refactor stage 3: members declared ON a union. A map out of a
    coproduct is a tuple of maps, so a field on the union is an OBLIGATION on
    every arm: each arm must expose it. Verified with the same machine
-   `subcontains` rides — place_field_subset, union as super, arm as sub —
+   `this <` rides — place_field_subset, union as super, arm as sub —
    in the opposite direction. Ops/cells/laws on a union are not enabled yet
    (fork 3 / stage 5): fail closed, never accept-and-ignore. *)
 let check_union_members (env : Tyenv.env) (ctx : Reduce.ctx)
@@ -4164,8 +4451,8 @@ let check_arrow_containment (td : top_decl) : unit tc_result =
    It is decidable and costs one comparison: the compiler already knows
    what is a world (from the toml) and what is a place (from the files).
    Verifying the LAWS is another matter — F(g∘f) = F(g)∘F(f) over
-   arbitrary arrows is the halting problem — and it belongs to the algebra
-   cantiere, where `law` acquires a mechanical meaning: there the reducer
+   arbitrary arrows is the halting problem — and it belongs to the algebra,
+   where `law` acquires a mechanical meaning: there the reducer
    arbitrates over the generators (few by design, which is the point of a
    small site) and when it does not reduce it says "I could not
    verify", not "it is false". The same model as `clear`. *)
@@ -4209,11 +4496,11 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
       (* a place with arms IS the named sum: the sum check plus the stage-3
          member obligations. Not the field-place check. *)
       let* () = check_named_sum pd.pd_name pd.pd_arms pd.pd_loc in
-      (* first stone: a payload arm whose head also names another place is a
-         genuine conflict — never picked silently (census 2026-07-24: zero).
+      (* a payload arm whose head also names another place is a genuine
+         conflict — never picked silently.
          Two cases, both loud: (i) the head names a USER place; (ii) the head
          names the SYNTHETIC of a payload arm in ANOTHER union — synthetic
-         identity is name-nominal today (leaf_root hashes the name only), so
+         identity is name-nominal (leaf_root hashes the name only), so
          same-named arms in two unions would share a root AND the injection
          chain is single-parent: the second would mis-resolve in silence. *)
       let* () =
@@ -4585,8 +4872,8 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
        | _ -> ok ())
 
 and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
-  (* Check that the world is declared. CONSTANT IS DEAD (the num cantiere):
-     a fused or prelude place is NOT exempt any more — it lives in its
+  (* Check that the world is declared. There is no Constant world:
+     a fused or prelude place is NOT exempt — it lives in its
      package's world (Num, Txt, Logic, Err), stamped from its space by the
      loaders. The only standing exemptions: __Builtin (String) and the
      fieldless Entry marker (the entrypoint is not a site object). *)
@@ -4640,7 +4927,7 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
          | None -> ok ())
     | None -> ok ()
   in
-  (* Check the monomorphism `place A subcontains B`. A is a sub-object of B
+  (* Check the monomorphism `this < B` of a place A. A is a sub-object of B
    * (A -> B) iff A has all the fields of B (structural subsumption). Reuses
    * place_is_subtype: place_is_subtype env ctx B A == true iff A has all the
    * fields of B. If A does not, the mono does not exist -> error. *)
@@ -4716,14 +5003,15 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
     (ok ()) pd.pd_members
 
 and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc_result =
-  (* Primitive types of Yon. Note both `boolean` and `proposition` are
-   * accepted: `proposition` is the canonical name (the subobject
-   * classifier Omega of the ambient topos, with Heyting tri-value semantics
-   * in the default non-Boolean topos), while `boolean` is retained as
-   * an alias for compatibility (operationally identical at the prototype
-   * level; `boolean` would specialize to two-valued Omega in a Boolean
-   * topos, which is a sub-case). *)
-  let primitives = ["text"; "number"; "boolean"; "proposition"; "Decidable";
+  match slot_misfit env t with
+  | Some why -> err loc why
+  | None ->
+  (* Primitive types of Yon. `boolean` and `proposition` are two types:
+   * `proposition` is the subobject classifier Omega (three values: present,
+   * absent, unknown), `boolean` its two decided values; Boolean enters
+   * proposition by the characteristic mono, and nothing leaves proposition
+   * toward Boolean (decide lands in the three arms of Decision). *)
+  let primitives = ["text"; "number"; "boolean"; "proposition";
                     "money"; "person";
                     "address"; "tensor"; "cryptographic"; "unit";
                     "duration"; "fun"; "world"; "sum"; "unknown"] in
@@ -4735,7 +5023,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    * `fun f(R: Space): ...` and `fun g(m: Map): ...` without having to register
    * them with `place`. *)
   let runtime_builtin = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH";
-                         "List"; "Stream"; "Seq"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower"; "MerkleTree";
+                         "List"; "Stream"; "Sequence"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower"; "MerkleTree";
                          "VoyagerList"; "String"; "Buffer"] in
   match t with
   | TyPrim n | TyPrimIn (n, _) ->
@@ -4778,7 +5066,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
        * just verify the carrier type is well-formed. *)
       check_type_well_formed env a loc
   | TyPathP ((_, a), _, _) -> check_type_well_formed env a loc
-  | TyList inner | TyStream inner ->
+  | TyList inner | TyChannel inner ->
       check_type_well_formed env inner loc
   | TyMap (k, v) ->
       let* () = check_type_well_formed env k loc in
@@ -4895,8 +5183,8 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    The body is axiomatic, so there is nothing to type-check inside — and
    everything to check outside: the wired implementation must really
    exist, and the declared signature must be the wired one. Without this,
-   `is given` would be a mute promise, and mute promises get retired (the
-   lesson of `topology`).
+   `is given` would be a mute promise: a word the compiler does not check
+   says nothing.
 
    The wired name is the one qualified by the house (String__length): the
    house gives the name, and the name is the registry's key. *)
@@ -4922,7 +5210,10 @@ and check_given_fun (env : Tyenv.env) (ctx : Reduce.ctx)
          write the body in Yon, or wire the primitive first."
         fn.fn_name qname)
   | Some (wired_params, wired_ret) ->
-      let declared = List.map (fun (p : param) -> p.param_ty) fn.fn_params in
+      (* a generic face declares its parameters as rigid variables *)
+      let rigid = Ty_subst.rigid_type_params fn.fn_type_params in
+      let fn = { fn with fn_return = Option.map rigid fn.fn_return } in
+      let declared = List.map (fun (p : param) -> rigid p.param_ty) fn.fn_params in
       if List.length declared <> List.length wired_params then
         err fn.fn_loc (Printf.sprintf
           "fun %s is given: declared %d parameter(s), the wired `%s` takes %d"
@@ -4954,20 +5245,7 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
    * for an identifier that's actually a declared type parameter. This
    * gives a clean view: TyVar means "generic, unifies with anything",
    * TyUser means "concrete place/world". *)
-  let rec rebind_ty (t : ty) : ty =
-    match t with
-    | TyUser n when List.mem n fn.fn_type_params -> TyVar n
-    | TyList inner -> TyList (rebind_ty inner)
-    | TyMap (k, v) -> TyMap (rebind_ty k, rebind_ty v)
-    | TyStream inner -> TyStream (rebind_ty inner)
-    | TySum vs ->
-        TySum (List.map
-          (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs)
-    | TySumIn (vs, ws) ->
-        TySumIn (List.map
-          (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs, ws)
-    | other -> other
-  in
+  let rebind_ty = Ty_subst.rigid_type_params fn.fn_type_params in
   let rebound_params =
     List.map (fun p -> { p with param_ty = rebind_ty p.param_ty })
              fn.fn_params
@@ -5075,20 +5353,7 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     (match check_given_fun env ctx fn with Ok () -> [] | Error e -> [e])
   else
   (* Re-do the same logic but always accumulating. *)
-  let rec rebind_ty (t : ty) : ty =
-    match t with
-    | TyUser n when List.mem n fn.fn_type_params -> TyVar n
-    | TyList inner -> TyList (rebind_ty inner)
-    | TyMap (k, v) -> TyMap (rebind_ty k, rebind_ty v)
-    | TyStream inner -> TyStream (rebind_ty inner)
-    | TySum vs ->
-        TySum (List.map
-          (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs)
-    | TySumIn (vs, ws) ->
-        TySumIn (List.map
-          (fun v -> { v with v_args = List.map rebind_ty v.v_args }) vs, ws)
-    | other -> other
-  in
+  let rebind_ty = Ty_subst.rigid_type_params fn.fn_type_params in
   let rebound_params =
     List.map (fun p -> { p with param_ty = rebind_ty p.param_ty })
              fn.fn_params
@@ -5458,12 +5723,10 @@ type check_result = {
    are INCOHERENT: a coproduct across topoi does not exist (it needs a
    geometric morphism).
 
-   TODO (prerequisite NOW SATISFIED — prima pietra 2026-07-24: payload arms
-   synthesize places): arm_site_of still does NOT consume payload arms (no
-   ~union passed here), so its outcome is unchanged by the synthesis —
-   deliberately: folding the payload types' worlds in would change rule (f)'s
-   verdict on unions that are Constant today. The extension is its own step,
-   decided separately. *)
+   arm_site_of does NOT consume payload arms (no ~union passed here), so the
+   places synthesized for payload arms do not move its outcome: folding the
+   payload types' worlds in would change rule (f)'s verdict on unions that are
+   Constant. That is a different rule, not a refinement of this one. *)
 type arm_site = Constant | Sited of string | Incoherent of string * string
 
 let arm_site_of (lookup : string -> place_decl option)
@@ -5700,8 +5963,8 @@ let infer_place_worlds (p : program) : (program, type_error) result =
             let out = List.rev rev_out in
             if !changed then phase2 out else Ok out
       in
-      (* CONSTANT IS DEAD, without survivors, UNDER A MANIFEST (Antonio, the
-         num cantiere): `Constant` is only the fixpoint's in-flight state.
+      (* No Constant UNDER A MANIFEST: `Constant` is only the fixpoint's
+         in-flight state.
          In a manifested compilation a union still __INFER after the fixpoint
          goes through the SAME contextual rules as an armless place — the
          unique world sites it, nothing applying is an error: a project
@@ -5745,7 +6008,11 @@ let infer_place_worlds (p : program) : (program, type_error) result =
  * the with's reduction targets a place in the inferred set. *)
 let collect_calls_in_stmts (stmts : stmt list) : string list =
   let calls = ref [] in
-  let rec walk_expr e =
+  let rec walk_cond c =
+    match c with
+    | CondExpr e | CondIs (e, _) | CondIsNot (e, _) -> walk_expr e
+    | CondAnd (a, b) | CondOr (a, b) -> walk_cond a; walk_cond b
+  and walk_expr e =
     match e with
     | ECall (name, args, _) ->
         if not (List.mem name !calls) then calls := name :: !calls;
@@ -5795,9 +6062,10 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
         List.iter walk_expr args
     | SNew (_, fas, _) -> List.iter (fun fa -> walk_expr fa.fa_value) fas
     | SNewIn (_, _, fas, _) -> List.iter (fun fa -> walk_expr fa.fa_value) fas
-    | SWhen (_, body, alts, otherwise, _) ->
+    | SWhen (c, body, alts, otherwise, _) ->
+        walk_cond c;
         List.iter walk_stmt body;
-        List.iter (fun (_, b) -> List.iter walk_stmt b) alts;
+        List.iter (fun (ac, b) -> walk_cond ac; List.iter walk_stmt b) alts;
         (match otherwise with Some os -> List.iter walk_stmt os | None -> ())
     | SForEvery (_, _, e, body, _) -> walk_expr e; List.iter walk_stmt body
     | SInSequence (_, e, body, _) -> walk_expr e; List.iter walk_stmt body
@@ -5809,7 +6077,7 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | SProduce (body, _) -> List.iter walk_stmt body
     | SEmit (e, _) -> walk_expr e
     | SPromote (e, _) -> walk_expr e
-    | SForces (_, _, body, _) -> List.iter walk_stmt body
+    | SForces (_, c, body, _) -> walk_cond c; List.iter walk_stmt body
     | SIter (n, body, _) -> walk_expr n; List.iter walk_stmt body
     | SWhile (c, body, _) -> walk_expr c; List.iter walk_stmt body
     | SDrop _ -> ()
@@ -6280,36 +6548,8 @@ let check_program (p : program) : check_result =
     let env = Tyenv.add_fun env "__heyt_int_mask"
       { fs_params = [("a", hi)]; fs_return = num;
         fs_visits = []} in
-    (* data structures backed by yon_xheap.
-     * All the Map/Set/Dag primitives operate on number (f64 in the lowering) —
+    (* the Merkle DAG primitives operate on number (f64 in the lowering) —
      * the content-addressing in the XLeech2 runtime is transparent. *)
-    let env = Tyenv.add_fun env "__map_empty"
-      { fs_params = []; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__map_put"
-      { fs_params = [("m", num); ("k", num); ("v", num)]; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__map_get"
-      { fs_params = [("m", num); ("k", num)]; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__map_contains"
-      { fs_params = [("m", num); ("k", num)]; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__map_size"
-      { fs_params = [("m", num)]; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__set_empty"
-      { fs_params = []; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__set_add"
-      { fs_params = [("s", num); ("e", num)]; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__set_contains"
-      { fs_params = [("s", num); ("e", num)]; fs_return = num;
-        fs_visits = []} in
-    let env = Tyenv.add_fun env "__set_size"
-      { fs_params = [("s", num)]; fs_return = num;
-        fs_visits = []} in
     let env = Tyenv.add_fun env "__merkle_leaf"
       { fs_params = [("label", num)]; fs_return = num;
         fs_visits = []} in
@@ -6367,9 +6607,9 @@ let check_program (p : program) : check_result =
     let env = Tyenv.add_fun env "__conway_key_equal"
       { fs_params = [("a", num); ("b", num)]; fs_return = num;
         fs_visits = []} in
-    (* Seq.from_list/map/filter/fold are registered in stdlib_signatures
+    (* Sequence.from_list/map/filter/fold are registered in stdlib_signatures
      * (stdlib_runtime.ml). The deep-matching pattern in emit_mlir recognizes
-     * Seq.fold(Seq.filter(Seq.map(... Seq.from_list(l)... ))) and lowers it to
+     * Sequence.fold(Sequence.filter(Sequence.map(... Sequence.from_list(l)... ))) and lowers it to
      * a single scf.while with zero intermediate buffers. f, p, g are top-level
      * function names (passed as unknown and bypassed by the type checker via
      * is_seq_with_fun_arg). *)

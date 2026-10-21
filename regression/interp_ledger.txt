@@ -1,5 +1,5 @@
 # Interpreter ledger: what the kernel interpreter (eval_runner --trace) does on
-# every RAN example of baseline_exitcodes.txt, measured 2026-10-10.
+# every RAN example of baseline_exitcodes.txt.
 #
 #   AGREE <name>              eval_runner prints `EXIT n` with n == the native
 #                             exit pinned in baseline_exitcodes.txt, no punt.
@@ -14,10 +14,8 @@
 # without a self-report fails whatever the row says. An INCOMPLETE row that
 # starts to agree fails too, asking for the row to become AGREE (a ratchet: the
 # ledger cannot go stale). The rows and the RAN set must match exactly.
-#
-# 2026-10-10: 48 AGREE, 49 INCOMPLETE (35 punt, 10 refused, 3 type-error, 1 crash).
 
-INCOMPLETE arena_basic punt
+INCOMPLETE arena_basic type-error
 AGREE      c_cell
 AGREE      c_morph_on_morphism
 AGREE      c_place_over
@@ -30,17 +28,17 @@ INCOMPLETE closure_capture punt
 INCOMPLETE cluster_a_ast_commutative punt
 INCOMPLETE collections_ext punt
 AGREE      comprehension_carrier
-INCOMPLETE cx_carry punt
+INCOMPLETE cx_carry type-error
 INCOMPLETE cx_face_system type-error
 AGREE      cx_hit_suspension
 AGREE      cx_move_law
 INCOMPLETE cx_path_algebra punt
 INCOMPLETE cx_transport_refl type-error
 INCOMPLETE cx_univalence_distinct punt
-INCOMPLETE cx_univalence_named punt
-INCOMPLETE cx_univalence_succ punt
-INCOMPLETE decidable_ok punt
-INCOMPLETE decidable_unknown crash
+INCOMPLETE cx_univalence_named type-error
+INCOMPLETE cx_univalence_succ type-error
+INCOMPLETE decidable_ok type-error
+INCOMPLETE decidable_unknown type-error
 AGREE      directed_transport
 AGREE      effect_propagation
 AGREE      error_morphism
@@ -59,7 +57,7 @@ AGREE      geom_morphism_inspect
 AGREE      handle_lambda_capture
 AGREE      handle_lambdas
 AGREE      hermetic_scope
-INCOMPLETE heyting_excluded_middle punt
+INCOMPLETE heyting_excluded_middle type-error
 INCOMPLETE higher_order_recursive punt
 AGREE      id_endpoint_coherence
 INCOMPLETE inductive_arity3 punt
@@ -71,7 +69,7 @@ AGREE      kw_algebra
 INCOMPLETE kw_clear punt
 AGREE      kw_geomorph_full
 INCOMPLETE kw_given punt
-INCOMPLETE kw_heyting punt
+INCOMPLETE kw_heyting type-error
 AGREE      kw_hott
 AGREE      kw_id_sugar
 AGREE      kw_is_literal
@@ -84,7 +82,7 @@ INCOMPLETE kw_prelude type-error
 INCOMPLETE kw_produce_emit refused
 AGREE      kw_reduction_modifiers
 AGREE      kw_stream_policies
-INCOMPLETE kw_topos_block punt
+INCOMPLETE kw_topos_block type-error
 AGREE      kw_view_show
 INCOMPLETE land_reach punt
 INCOMPLETE math_ext punt

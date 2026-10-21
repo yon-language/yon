@@ -1,0 +1,4 @@
+/* Lookup — what a collection answers when asked for a key: the value it
+ * holds there, or that it holds none. A coproduct, so whoever asks answers
+ * both arms; an absent key is never a value in disguise (no 0.0, no -1). */
+place Lookup<V> { this > Found(V) :U Absent }

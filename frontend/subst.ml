@@ -139,7 +139,7 @@ let rec subst_term_in_ty (x : string) (u : term) (t : ty) : ty =
   | TyType _ | TyDirUniverse _ | TyPlace _ -> t
   | TyArrow (a, b) ->
       TyArrow (subst_term_in_ty x u a, subst_term_in_ty x u b)
-  | TyStream a -> TyStream (subst_term_in_ty x u a)
+  | TyChannel a -> TyChannel (subst_term_in_ty x u a)
   | TyId (a, t1, t2) ->
       TyId (subst_term_in_ty x u a, subst x u t1, subst x u t2)
   | TyEl c -> TyEl (subst x u c)

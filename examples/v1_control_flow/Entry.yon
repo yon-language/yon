@@ -1,5 +1,5 @@
 place Entry {
-/* v1.0 (2026-06-04): for every / in sequence over / repeat..otherwise /
+/* for every / in sequence over / repeat..otherwise /
  * = / duration literals — lowered onto while, iter and Space cells.
  * (`forever` is exercised by a separate non-terminating probe.)
  * Expected exit: 42. */
@@ -12,7 +12,7 @@ fun main(): Number {
   repeat at most 3 times { acc = acc + 2 }        // 30
   otherwise { acc = acc + 1 }                     // 31
 
-  be d holds 2000 + 500                                 // 2500 (duration literals dropped in v1.1)
+  be d holds 2000 + 500                                 // 2500 (a duration is a number of milliseconds)
   when d == 2500 { acc = acc + 10 }               // 41
 
   be i holds 0

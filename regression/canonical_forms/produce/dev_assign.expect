@@ -1,5 +1,5 @@
 status: reject_clean
 exit: 1
-match: not yet supported
+match: is not supported inside
 note: |
-  = (Space-cell assign) inside a produce body is refused (1.1 stop-gap).
+  = (Space-cell assign) inside a produce body is refused: it has no lowering there.

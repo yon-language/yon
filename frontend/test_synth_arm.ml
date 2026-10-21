@@ -1,6 +1,6 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* test_synth_arm.ml — oracle for the first stone of the section cantiere:
+(* test_synth_arm.ml — oracle for arm synthesis:
    a coproduct arm with a positional payload IS a place (extensivity: every
    arm is a subobject). The synthesis names its projections (`_1`, `_2`, ...,
    fixed convention); it is PURE (no env: it also serves the pre-env world
@@ -25,7 +25,7 @@ let fields pd =
     pd.pd_members
 
 let () =
-  Printf.printf "=== synth_place_of_arm oracle (prima pietra) ===\n\n";
+  Printf.printf "=== synth_place_of_arm oracle ===\n\n";
 
   let tree = mk_place "Tree" ~arms:[] in
 

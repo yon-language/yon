@@ -27,7 +27,7 @@ const C = {
 const mono = 'var(--ifm-font-family-monospace)';
 
 export default function SpaceReclaim() {
-  // steps of a run: each `new`/write grows the Space arena; `drop` releases it.
+  // steps of a run: each section/write grows the Space arena; `drop` releases it.
   const W = 640;
   const H = 260;
   const padL = 44;

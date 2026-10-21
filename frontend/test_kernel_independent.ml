@@ -1,6 +1,6 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* test_kernel_independent.ml — the INDEPENDENT second checker (de Bruijn criterion, D1).
+(* test_kernel_independent.ml — the INDEPENDENT second checker (de Bruijn criterion).
  *
  * A self-contained reducer for the CORE fragment (β, Σ projections, J-on-refl, refl@, plus
  * congruence) with its OWN capture-avoiding substitution and OWN alpha-equality — it calls
@@ -8,10 +8,10 @@
  * implementation. It then DIFFERENTIALLY checks itself against the main kernel
  * (Builtins.reduce_with_builtins): on every generated closed core term, the two normal forms
  * must be alpha-equal. A mismatch is a bug in one of the two reducers — exactly the kind a
- * single audited kernel cannot catch alone. This discharges defect D1 of trusted-kernel.md
- * for the core conversion (the soundness-critical re-derivation).
+ * single audited kernel cannot catch alone. For the core conversion (the soundness-critical
+ * re-derivation) the kernel is therefore not the only witness of its own correctness.
  *
- * Scope: the proved-sound core. Cubical reduction (cubical.ml) is D2 (incomplete) and is out.
+ * Scope: the proved-sound core. Cubical reduction (cubical.ml) is incomplete and is out.
  *)
 
 open Ast
@@ -102,7 +102,7 @@ let rec gen_core d = if d <= 0 then gen_val 0 else match Random.int 7 with
   | 5 -> let a = gen_val 1 in J ("x", ty0, gen_val 1, Lam ("y", ty0, Var "y"), Refl a, a)
   | _ -> App (Lam ("x", ty0, Pair (Var "x", Var "x")), gen_core (d-1))
 
-(* ── independent SIMPLY-TYPED checker + Preservation (D1, typing half) ──
+(* ── independent SIMPLY-TYPED checker + Preservation (typing half) ──────
  * The kernel type-checks SURFACE and trusts the desugared Core (tycheck runs before
  * desugar), so the Core is never re-type-checked. This is a STANDALONE independent core
  * type-checker — bidirectional, simply-typed (Π as arrow, Σ as product, Id over a base) —

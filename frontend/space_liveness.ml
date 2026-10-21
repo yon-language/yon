@@ -63,9 +63,9 @@ let rec names_expr (e : S.expr) : (string * S.location) list =
       (match eo with Some e0 -> names_expr e0 | None -> [])
       @ List.concat_map names_stmt body
   | S.ENew (p, fas, l) | S.ENewIn (p, _, fas, l) ->
-      (* `new P { ... }` creates a P instance in P's Space: the place name P is an
+      (* `.-> P { ... }` creates a P section in P's Space: the place name P is an
          arc toward that Space (resolved via the place->space map, merged into
-         imap). The tp_at_space rewrite makes this explicit later; here P names it. *)
+         imap). The Space rewrite makes this explicit later; here P names it. *)
       (p, l) :: List.concat_map (fun fa -> names_expr fa.S.fa_value) fas
   | S.EAll (_, c, _) -> names_cond c
   | S.EPullback _ | S.EPushout _ -> []
@@ -138,7 +138,7 @@ let awaits_arc_of (l : S.location) : string option =
    Linux, where MADV_DONTNEED zero-fills; masked on Darwin, which reclaims
    lazily). Collected flow-insensitively over the whole body (a binding anywhere
    maps the name everywhere): conservative, never frees early. Binders, closed
-   under aliasing by fixpoint: `be x holds new P { }`, `be x holds f( )` where f
+   under aliasing by fixpoint: `be x holds .-> P { }`, `be x holds f( )` where f
    returns a place, `be x holds y` where y is already bound. The result merges
    into the name->Space map (imap), so uses resolve through the same lookup as
    imported symbols. *)
@@ -244,7 +244,7 @@ let callees ~(ftab : (string, S.fun_decl) Hashtbl.t) (fd : S.fun_decl) : string 
 let transitive_arcs ~(place_space : (string, string) Hashtbl.t)
     (prog : S.program) : (string, string list) Hashtbl.t =
   let imap = import_map prog in
-  (* place-creation arcs: `new P` reaches P's Space; merge into the name->Space
+  (* place-creation arcs: `.-> P { ... }` reaches P's Space; merge into the name->Space
      map so direct_arcs resolves a place name the same way as an imported one. *)
   Hashtbl.iter (fun p s -> Hashtbl.replace imap p s) place_space;
   let ftab = func_table prog in

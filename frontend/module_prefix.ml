@@ -247,9 +247,9 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.EBinop (op, a, b, ll) -> S.EBinop (op, rwe a, rwe b, ll)
       | S.EParen (x, ll) -> S.EParen (rwe x, ll)
       | S.EIfThenElse (c, a, b, ll) -> S.EIfThenElse (rwe c, rwe a, rwe b, ll)
-      (* 2026-06-04: the traversal was incomplete — remote calls inside
-         nested bodies (loops, when branches, lambdas, field values) were
-         never rewritten and reached tycheck as unknown names. Completed. *)
+      (* The traversal is total: a remote call inside a nested body (loop,
+         when branch, lambda, field value) is rewritten like one at the top,
+         otherwise it reaches tycheck as an unknown name. *)
       | S.ENot (x, ll) -> S.ENot (rwe x, ll)
       | S.EField (o, f, ll) -> S.EField (rwe o, f, ll)
       | S.ENew (n, fas, ll) ->

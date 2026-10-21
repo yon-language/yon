@@ -88,8 +88,8 @@ let () =
 
   (* ── (3) path / groupoid laws (builtins.ml: concat / inv / ap / path_app) ──
    *
-   * These pin the P2 fix: the path operations COMPUTE the groupoid laws as
-   * definitional reductions instead of returning the inert `__coh_witness`.
+   * The path operations COMPUTE the groupoid laws as definitional
+   * reductions, not an inert `__coh_witness`.
    * We drive them through try_reduce_builtin — the exact reducer arm — and
    * assert the reduced term is structurally the law's RHS (term_equal).
    *

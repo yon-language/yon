@@ -6,7 +6,7 @@ place Entry {
                 be _2 holds Space.set(i, Space.get(i) + 1) }
     return Space.get(s)
   }
-  fun build_hset(lo: Number, n: Number): Number {
+  fun build_hset(lo: Number, n: Number): HashSet<Number> {
     be s holds Space.make(HashSet.empty())
     be i holds Space.make(0)
     iter n do { be _ holds Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
@@ -27,14 +27,14 @@ place Entry {
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
-  fun batch_hinter(a: Number, b: Number, batch: Number): Number visits Output {
+  fun batch_hinter(a: HashSet<Number>, b: HashSet<Number>, batch: Number): Number visits Output {
     be acc holds Space.make(0)
     be t0 holds Time.now_ns(0)
     iter batch do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
-  fun batch_hunion(a: Number, b: Number, batch: Number): Number visits Output {
+  fun batch_hunion(a: HashSet<Number>, b: HashSet<Number>, batch: Number): Number visits Output {
     be acc holds Space.make(0)
     be t0 holds Time.now_ns(0)
     iter batch do { be _ holds Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }

@@ -38,9 +38,13 @@ cells are also usable directly as `Space.make / set / get`.)
 
 **`when` is the statement conditional.** It chains (`when c1 { } when c2 { }
 otherwise { }`) and accepts *pattern conditions*: `x is present`,
-`x is not 0`, combinable with `and`/`or`. One rule to know: a `return` inside
-a `when` branch does **not** exit the function, branches are for effects.
-To *select a value*, use the expression form `if c then a else b`.
+`x is not 0`, combinable with `and`/`or`. One rule to know: a function's value
+is the value of its body, so `return` stands where the body ends — its last
+statement, or the last statement of each branch of a `when … otherwise` that
+ends the body. A `return` anywhere else is refused (E2002): a `when` without
+`otherwise`, and the body of a loop, are for effects. To *select a value*, use
+the expression form `if c then a else b`, or end the body with a
+`when … otherwise` whose branches each `return`.
 
 **Loops.** `iter n do { }` is the bounded loop (it always terminates);
 `while c do { }` is the general one. On top of these, Yon offers:

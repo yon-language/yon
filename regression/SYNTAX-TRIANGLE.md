@@ -27,7 +27,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `as` | `AS` | 10 | yes | exercised |
 | `at` | `AT` | 2 | yes | exercised |
 | `back` | `BACK` | 3 | yes | exercised |
-| `be` | `LET` | 398 | yes | exercised |
+| `be` | `LET` | 397 | yes | exercised |
 | `by` | `BY` | 7 | yes | exercised |
 | `carry` | `CARRY` | 3 | yes | exercised |
 | `cell` | `CELL` | 1 | yes | exercised |
@@ -60,7 +60,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
 | `hit` | `HIT_KW` | 13 | yes | exercised |
 | `hit_elim` | `HIT_ELIM` | 8 | yes | exercised |
-| `holds` | `HOLDS` | 398 | yes | exercised |
+| `holds` | `HOLDS` | 397 | yes | exercised |
 | `if` | `IF_KW` | 33 | yes | exercised |
 | `import` | `IMPORT` | 11 | yes | exercised |
 | `in` | `IN` | 8 | yes | exercised |
@@ -71,7 +71,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `iter` | `ITER_KW` | 2 | yes | exercised |
 | `law` | `LAW` | 7 | yes | exercised |
 | `maps` | `MAPS` | 4 | yes | exercised |
-| `match` | `MATCH_KW` | 18 | yes | exercised |
+| `match` | `MATCH_KW` | 25 | yes | exercised |
 | `morph` | `MORPH_KW` | 5 | yes | exercised |
 | `morphism` | `MORPHISM_KW` | 5 | yes | exercised |
 | `most` | `MOST` | 2 | yes | exercised |
@@ -100,7 +100,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `repeat` | `REPEAT` | 2 | yes | exercised |
 | `requires` | `REQUIRES` | 1 | yes | exercised |
 | `resolves` | `RESOLVES` | 1 | yes | exercised |
-| `return` | `RETURN` | 356 | yes | exercised |
+| `return` | `RETURN` | 355 | yes | exercised |
 | `scope` | `SCOPE` | 2 | yes | exercised |
 | `sequence` | `SEQUENCE` | 1 | yes | exercised |
 | `share` | `SHARE` | 1 | yes | exercised |

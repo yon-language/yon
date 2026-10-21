@@ -22,7 +22,29 @@ die() { echo "GATE RED ($1) after $(( $(date +%s) - t0 ))s"; exit 1; }
 
 # --- tier 0: build + smoke ---------------------------------------------
 say "tier 0: build"
-dune build --root "$ROOT/frontend" 2>&1 | grep -E "^File|Error" && die "build"
+# The verdict is dune's exit code, never its output: what dune prints depends
+# on what the cache let it skip, and one tree must give one verdict.
+BOUT=$(dune build --root "$ROOT/frontend" 2>&1) || { echo "$BOUT"; die "build"; }
+# The runtime and the MLIR lowering are part of the compiler the suite runs:
+# built from this tree on every run (each tool rebuilds only what changed,
+# headers included), so no verdict rests on a binary built before.
+ROUT=$(make -C "$ROOT/runtime" 2>&1) || { echo "$ROUT"; die "build (runtime)"; }
+MOUT=$(ninja -C "$ROOT/mlir/build" 2>&1) || { echo "$MOUT"; die "build (MLIR lowering)"; }
+say "tier 0: grammar (Menhir on parser.mly, every run, outside the cache)"
+# Declared state of the grammar: no conflict, no useless precedence, no unused
+# token, no unreachable symbol, no production never reduced. Every
+# shift/reduce choice is written in parser.mly; none is left to Menhir.
+GDIR=$(mktemp -d)
+cp "$ROOT/frontend/parser.mly" "$GDIR/"
+GOUT=$(cd "$GDIR" && menhir --interpret parser.mly </dev/null 2>&1); grc=$?
+rm -rf "$GDIR"
+g_conf=$(echo "$GOUT" | grep -c "conflict")
+g_unused=$(echo "$GOUT" | grep -cE "never useful|unused|unreachable|never reduced")
+g_warn=$(echo "$GOUT" | grep -c "Warning")
+echo "   conflicts $g_conf, useless/unused $g_unused, warnings $g_warn (declared: 0, 0, 0)"
+if [ $grc -ne 0 ] || [ "$g_warn" -ne 0 ] || [ "$g_conf" -ne 0 ] || [ "$g_unused" -ne 0 ]; then
+  echo "$GOUT"; die "grammar"
+fi
 say "tier 0: smoke (one example compiles and runs)"
 "$ROOT/toolchain/yonc" "$ROOT/examples/vec_basic" -o /tmp/gate_smoke >/dev/null 2>&1 || die "smoke compile"
 /tmp/gate_smoke >/dev/null 2>&1

@@ -36,7 +36,10 @@ The `<T>` after the name binds a **type variable**. Read it "for any type `T`".
 return is a `T`, and the two are the *same* `T`, so whatever you put in is what
 you get out. The caller never spells `T` out. Writing `id(42)` fixes `T` to
 `number` by inference; the very same definition serves `id("ciao")` with `T` at
-`text`. One definition, every type.
+`text`. One definition, every type. That is why the body may do nothing with a
+`T` but pass it on: a `T` has no fields, cannot be called, added or compared
+with a literal, since any of these would hold at some types and not at others;
+the checker refuses them. The only total `T -> T` is the identity.
 
 ## More than one blank
 
@@ -76,8 +79,8 @@ identity is kept in the checker, not thrown away.
 ## You rarely write a container
 
 The textbook next step is "now make a generic container". In Yon you usually do
-not, because the containers already exist and are built in. `Stream<T>` is a
-generic type in its own right (chapter 22); `Vec`, `List`, `HashMap`, and
+not, because the containers already exist and are built in. `Wire<T>`, the
+channel, is a generic type in its own right (chapter 17); `Vec`, `List`, `HashMap`, and
 `HashSet` (chapters 12 and 15) are the standard containers, each holding Yon's
 uniform value. When you want "a sequence of numbers" or "a map from text", you
 reach for those. They are generic where it counts and you never had to write

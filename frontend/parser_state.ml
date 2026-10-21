@@ -29,7 +29,8 @@ let lift_inline_block_lambda_to_fun
     (body : Surface_ast.stmt list)
     (loc : Surface_ast.location) : string =
   (* Block-bodied inline lambda: fun(v) => { stmts }. Lifted like the
-     expression form; an effectful body falls through to return 0. *)
+     expression form. A body that ends in a value keeps its own tail; an
+     effectful body falls through to return 0. *)
   let name = fresh_inline_name "blk" in
   let fn_params = List.map (fun (n, t) ->
     { Surface_ast.param_name = n; param_ty = t }
@@ -40,8 +41,10 @@ let lift_inline_block_lambda_to_fun
     fn_params = fn_params;
     fn_return = Some (TyPrim "number");
     fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-    fn_body = body @ [Surface_ast.SReturn
-                        (Surface_ast.ELit (Surface_ast.LitNumber 0.0, loc), loc)];
+    fn_body =
+      (if Tail_position.ends_in_return body then body
+       else body @ [Surface_ast.SReturn
+                      (Surface_ast.ELit (Surface_ast.LitNumber 0.0, loc), loc)]);
     fn_loc = loc;
   } in
   synth_decls := (Surface_ast.TopFun fd) :: !synth_decls;

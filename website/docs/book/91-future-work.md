@@ -28,14 +28,11 @@ runtime refuses out loud rather than degrading in silence.
   through a process-wide content index, so O(1) equality survives the boundary. Up
   to 256 chained heaps: roughly 18&nbsp;GB of globally deduplicated content per
   process. Measured exact at a million map entries across six heaps.
-- **Fixed pools, loud refusal**: 256 instances per collection type, 64 Spaces, 64
+- **Fixed pools, loud refusal**: 256 instances per pooled collection type (a
+  HashMap or a HashSet is not pooled: it is a value in the heap), 64 Spaces, 64
   streams, 16 RPC sessions. Like a fixed-width address bus, these buy predictable
   memory and rule out runaway allocation. Process isolation by the kernel's MMU
   keeps any local fault inside the one server binary that raised it.
-- **Directories with no knobs**: HashMap and HashSet hold one invariant, load
-  factor ≤ 0.7, which under linear probing guarantees an expected O(1) probe at
-  every size; they double and rehash before it is ever violated. No maximum, no
-  degraded regime: growth is bounded by memory alone.
 - **The wire**: at most four arguments per cross-Space call, all `f64`. Strings
   and sections never cross; they are process-local handles.
 - **Exit codes**: `main`'s value mod 256, like every Unix process.

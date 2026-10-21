@@ -92,9 +92,9 @@ place String is text {
 
   /* ─── Transformation ─────────────────────────────────────────── [T] ───
    * Derived character by character: the honest definition first, the
-   * pattern recognition later, if the profile asks for it (this is sqrt
-   * with Newton). "" is the monoid's neutral, and a literal is a point of
-   * the face — so the accumulator is legitimate. */
+   * pattern recognition later, if the profile asks for it. "" is the
+   * monoid's neutral, and a literal is a point of the face — so the
+   * accumulator is legitimate. */
 
   fun reverse_step(s: String, i: Number, acc: String): String {
     return if i < 0 then acc

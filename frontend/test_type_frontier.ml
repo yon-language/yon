@@ -1,10 +1,10 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* test_type_frontier.ml — the I6 invariant of the Fase 1 carrier path.
+(* test_type_frontier.ml — the frontier between identity and layout of the carrier.
  *
  * type_root (a type's structural identity) and of_core_ty (a type's runtime
  * layout) are two partial functors over the same types. This oracle pins how
- * their partiality frontiers relate, the sharpened I6:
+ * their partiality frontiers relate:
  *
  *   (1) root => carrier. A type with a content-addressed root always has a
  *       runtime carrier. No phantom identity: the Step-2 wiring can never mint
@@ -61,7 +61,7 @@ let cases = [
 ]
 
 let () =
-  Printf.printf "=== type frontier (I6: root => carrier) ===\n";
+  Printf.printf "=== type frontier (root => carrier) ===\n";
 
   (* (1) root => carrier, over the whole spanning set. No exceptions allowed. *)
   List.iter (fun (lbl, t) ->
@@ -91,5 +91,5 @@ let () =
          (carrier_defined_core (Ast.TyPlace (Printf.sprintf "ind_%016Lx" r)))
    | None -> incr fails; Printf.printf "  FAIL List without a root\n");
 
-  if !fails = 0 then (Printf.printf "PASS type frontier: I6 holds\n"; exit 0)
+  if !fails = 0 then (Printf.printf "PASS type frontier: root => carrier holds\n"; exit 0)
   else (Printf.printf "FAIL type frontier: %d failed\n" !fails; exit 1)

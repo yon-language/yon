@@ -31,7 +31,7 @@ regression/yon_tests/negative/false_id.yon | E2001 | type mismatch: expected Id_
 regression/yon_tests/negative/hit_elim_missing_branch.yon | E2001 | hit_elim: missing branch(es): quot
 regression/yon_tests/negative/hit_elim_wrong_arity.yon | E2001 | hit_elim: branch inj expects 1 payload binder(s), got 2
 regression/yon_tests/negative/neg_arity.yon | E2001 | f: expected 1 arguments, got 2
-regression/yon_tests/negative/neg_assign_in_produce.yon | E2001 | is not yet supported inside a `produce` block
+regression/yon_tests/negative/neg_assign_in_produce.yon | E2001 | is not supported inside a `produce` block
 regression/yon_tests/negative/neg_dup_param.yon | E2001 | function f: duplicate parameter 'a'
 regression/yon_tests/negative/neg_empty_body_with_return.yon | E2001 | function g: empty body but a return type is declared
 regression/yon_tests/negative/neg_handle_plain_fn.yon | E2001 | run: parameter m expects morph from S1 to S2, got number -> number

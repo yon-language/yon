@@ -8,8 +8,8 @@
  * (2) HIGHER-ORDER use of a type-parametric function (used as a value, not a
  *     direct call) is REJECTED cleanly via [Higher_order_type_param] — a typed
  *     compile-time rejection on the canonical channel (exit 3 upstream), NOT a
- *     raw [failwith]. This encodes the 2026-06-17 decree: a well-typed term
- *     with no realizable lowering is refused, never crashed on.
+ *     raw [failwith]: a well-typed term with no realizable lowering is
+ *     refused, never crashed on.
  *
  * The front-end (tycheck) already forbids passing a type-parametric function
  * as a value, so this pass is a defensive second net; the oracle exercises it

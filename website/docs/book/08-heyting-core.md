@@ -10,7 +10,10 @@ import HeytingOmega from '@site/src/components/HeytingOmega';
 
 Yon's logic is intuitionistic. The proposition type Ω is a Heyting algebra
 with three observable states, `present`, `absent`, `unknown`, and
-`boolean` is just Ω's classical face.
+`boolean` holds its two decided values: a Boolean enters Ω through the
+characteristic mono (`true` is `present`, `false` is `absent`), and nothing
+leaves Ω for `boolean`, because `unknown` would have to become one of two
+values that do not mean unknown.
 
 <HeytingOmega />
 
@@ -21,11 +24,10 @@ fun main(): Number {
   be p holds present
   be both holds p &&? u            // unknown: conjunction with the undecided
   be imp holds u =>? p             // present: anything implies the present
-  be dec holds to_bool(imp)
   be h1 holds heyting(5)          // trits 101, all certain
   be h2 holds heyting(5, 2)       // middle trit unknown
   be hand holds h1 &? h2           // trit-wise, unknown propagates
-  return if dec then 42 else 0
+  return match decide(imp) { Present => 42, Absent => 0, Unknown => 1 }
 }
 ```
 
@@ -40,8 +42,12 @@ The operator families keep the two logics visually distinct:
   bit by bit. `heyting(v)` has no unknown bits; `heyting(v, mask)` marks
   the masked ones.
 
-Bridges: `to_bool`/`to_prop` move between the faces; `decide` guards on the
-undecided.
+Bridges: `to_prop` sends a Boolean into Ω. The way back is `decide(p)`,
+total, which lands in `Decision`, a coproduct of three arms, `Present`,
+`Absent` and `Unknown`; a `match` on it answers each arm, the third one
+included, and leaving it out is a type error. A proposition is not a
+condition: `if p` and `when p` on a proposition are refused, and the message
+shows the `match`.
 
 ## Ω as a place to do topology
 
@@ -64,7 +70,7 @@ place Entry { }
 fun main(): Number {
   be s holds .-> State { balance 5 }
   be bad holds is_overdrawn(s)
-  return if bad then 0 else 42
+  return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
 }
 ```
 
@@ -89,10 +95,11 @@ place NodeA { value Number }
 // Entry.yon
 place Entry { }
 fun guard(): Number {
+  be r holds 0
   forces NodeA value is Number {
-    return 1
+    r = 1
   }
-  return 0
+  return r
 }
 fun main(): Number { return 0 }
 ```

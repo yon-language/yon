@@ -11,9 +11,14 @@ content-addressed heap. None of them mutates; every operation returns a new
 handle, and sharing makes that cheap.
 
 **List** is the classic cons chain: `List.cons(x, rest)` puts one new node;
-the rest is shared by address. **HashMap / HashSet** are persistent maps
-backed by the content-addressed directory: every `set`/`add` returns a new
-handle and shares the unchanged structure by address. **Vec** is a dynamic array on an arena strip (no `malloc`): `push` appends in
+the rest is shared by address. **HashMap / HashSet** are persistent maps,
+hash tries of immutable nodes in the content-addressed heap: every
+`set`/`add` copies the path to its key and shares the rest by address, and
+the map it was given stays what it was. The heap deduplicates every node, so
+two maps with the same entries are the same nodes, the same handle, and a
+node may be shared by maps that know nothing of each other: no write ever
+happens on a node, and nothing is reused in place. A collection that has to
+change in place is not a value but a cell, declared in a Space's arena. **Vec** is a dynamic array on an arena strip (no `malloc`): `push` appends in
 place or reallocates a doubled strip on growth, and `get`/`set` are O(1) with
 `set` mutating in place.
 
@@ -32,10 +37,12 @@ What distinguishes them is what they make cheap:
   strip's whole pages back to the OS via `madvise`; `get`/`set` are O(1).
   It is the building block for an indexed map.
 - **HashMap**, `f64 → f64`, with string handles as keys when you need
-  them (a handle is a number). The directory starts at 4,096 slots and
-  doubles with a rehash at 70% load, bounded only by memory; entries spill
-  across heaps transparently. Use it as the general key→value store; measured at
-  half a million entries with exact recall.
+  them (a handle is a number). A binary trie on the 32-bit hash of the key:
+  a `get` or a `set` walks at most one level per hash bit, and a `set`
+  copies that path; bounded only by memory, its nodes spill across heaps
+  transparently. A key is identified by its bits, the identity of the heap:
+  `-0.0` and `0.0` are two keys, a NaN key finds itself. Use it as the
+  general key→value store.
 - **VoyagerList**, the small, precious store: every element is sealed in
   a Golay codeword and healed on read. Use it where corruption is worse
   than cost, configuration, ledger heads, calibration constants. The
@@ -48,10 +55,21 @@ What distinguishes them is what they make cheap:
 - **Cells**, not a collection: the one mechanism with identity
   (chapter 14). The `=` assignment and every loop are built on them; ~12 ns per
   set+get pair, 1,024 per process.
-- **Arena**, the Leech-indexed pool: `Arena.orbit` returns the M₂₄ orbit
-  id of a content and `Arena.same_orbit` tests two contents for
-  equivalence under the symmetry group, equality up to symmetry made
-  explicit.
+- **`Arena<V>`**, the Leech-indexed pool: one slot per type-2 lattice point.
+  `Arena.orbit` returns the M₂₄ orbit id of a point and `Arena.same_orbit`
+  tests two points for equivalence under the symmetry group, equality up to
+  symmetry made explicit. `Arena.get` answers `Found(v)` or `Absent`.
+
+**What a lattice slot holds.** `Arena<V>` and `XRelMap<K, V>` keep their
+values inline, in the slots of the lattice, never in the heap. Which values
+fit a slot is derived from their carrier: a scalar of 32 or 64 bits
+(`Int32`; `Int64` and `Number`); a value that does not fit (a `Boolean`, a
+place, a function) is a type error, never truncated. A value enters as its
+bits and comes back the same bits: identity inside a slot is identity of
+bits, the criterion of the whole runtime, so `-0.0` and `0.0` are two values
+and a `NaN` equals itself (arithmetic on the values read back stays
+IEEE). An empty slot is its own occupancy bit: reading it answers `Absent`,
+and no stored value ever means "empty".
 
 ## MerkleTree: content addressing made visible
 
@@ -63,8 +81,8 @@ is addressed by the content of its children:
 fun main(): Number {
   be l1 holds MerkleTree.leaf(7)
   be l2 holds MerkleTree.leaf(9)
-  be t holds MerkleTree.child(l1, l2)
-  be t2 holds MerkleTree.child(MerkleTree.leaf(7), MerkleTree.leaf(9))
+  be t holds MerkleTree.node2(1, l1, l2)
+  be t2 holds MerkleTree.node2(1, MerkleTree.leaf(7), MerkleTree.leaf(9))
   be same holds MerkleTree.equal(t, t2)    // same content, same tree, same slot
   return if same then 42 else 0
 }

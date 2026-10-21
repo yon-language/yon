@@ -191,7 +191,7 @@ let rec of_core_ty (ty : C.ty) : t =
          type: refl(x) is operationally x. Equality stays the reducer's job. *)
       of_core_ty a
   | C.TyType _ -> raise (NoCarrier ty)          (* a code/type: no runtime value (erased upstream) *)
-  | C.TyStream _ -> Scalar W_f64        (* a stream value at runtime is its id (f64) *)
+  | C.TyChannel _ -> Scalar W_f64        (* a stream value at runtime is its id (f64) *)
   | C.TyGlue (a, _, _) -> of_core_ty a
       (* Glue [phi |-> (T,e)] A carries A's layout: the equivalence is erased;
          univalence computes in the reducer, not in the runtime layout. *)
@@ -232,3 +232,29 @@ let rec to_mlir (c : t) : string =
          deferred payload TYPE — that split is the seat of the soundness argument in
          the `Boxed` constructor's doc. *)
       "!llvm.struct<(ptr, i64)>"
+
+(* ─── The layout of a section's field region ──────────────────────────────
+   One function lays out the fields of a place, for every reader and writer:
+   the emitter that builds a section, the emitter that reads a field, and the
+   MLIR lowering that generates a nested-place getter, which reads the
+   offsets this function wrote on each field. A field takes the bytes of its
+   printed carrier: a scalar its width (a Boolean one byte), a proposition its
+   i8, any handle (a section, a pointer, a closure) eight. Fields are packed
+   in declaration order, no padding: the region is copied, never mapped. *)
+let field_bytes (mlir_ty : string) : int =
+  match mlir_ty with
+  | "!topos.proposition" -> 1
+  | _ ->
+      (match prim_carrier mlir_ty with
+       | Some (Scalar w) -> max 1 (scalar_bits w / 8)
+       | _ -> 8)
+
+(* (offset, size) of each field, and the size of the whole region. *)
+let field_layout (tys : string list) : (int * int) list * int =
+  let total = ref 0 in
+  let placed = List.map (fun t ->
+    let size = field_bytes t in
+    let o = !total in
+    total := !total + size;
+    (o, size)) tys in
+  (placed, !total)

@@ -58,9 +58,8 @@ fun mod_reduce(x: Number, m: Number): Number {
   return if x >= m then mod_reduce(x - m, m) else x
 }
 /* rolling hash over s[i..j): h' = (h*31 + code) mod 2000003. The modulus keeps the
- * hash small (< 2^21) so it survives a round-trip through the MerkleTree runtime,
- * which truncates large values: without it, a long identifier hashed to a value
- * that differed once stored in a TIdent and read back, breaking keyword dispatch. */
+ * hash an integer below 2^21, exact in an f64 whatever the length of the
+ * identifier: h*31 of an unbounded hash would pass 2^53 and lose its low digits. */
 fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
   return if i >= j then h
     else word_hash(s, i + 1, j, mod_reduce(h * 31 + String.char_at(s, i), 2000003))
@@ -834,18 +833,21 @@ fun gen_inner_spine(spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
       TArgs(a, rest) => gen_spine_cons(0, a, rest, env, n, reg),
       _ => hit(ER, "%vERR", "", n) ], spine)
 }
-/* node2(node_tag, gen a, gen_inner_spine(rest)) -- one spine cell. The argument is
- * stored RAW as the child (a number directly, a nested-sum handle directly); this
- * is what the runtime + yonc's own emit do (child() reads it back raw). */
+/* node2(node_tag, leaf(gen a), gen_inner_spine(rest)) -- one spine cell. A child
+ * of a node is always a node handle: the argument (a number, or a nested-sum
+ * handle: Yon0 does not tell them apart) enters as a leaf whose label is its
+ * exact f64, and is read back with label(). */
 fun gen_spine_cons(node_tag: Number, a: Term, rest: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ea  holds gen(a, env, n, reg)                         /* the raw value/handle */
-  be inner holds gen_inner_spine(rest, env, er_ctr(ea), reg)
+  be ea  holds gen(a, env, n, reg)                         /* the value/handle */
+  be lv  holds ssa_name(er_ctr(ea))                        /* leaf(value) */
+  be inner holds gen_inner_spine(rest, env, er_ctr(ea) + 1, reg)
   be tc holds ssa_name(er_ctr(inner))                      /* node tag constant */
   be nd holds ssa_name(er_ctr(inner) + 1)                  /* the node2 handle */
   be code holds String.concat(er_code(ea),
-    String.concat(er_code(inner),
-      String.concat(line(tc, String.concat("arith.constant ", num_lit(node_tag))),
-        line_raw(nd, node2_call(tc, er_ssa(ea), er_ssa(inner))))))
+    String.concat(line_raw(lv, leaf_call(er_ssa(ea))),
+      String.concat(er_code(inner),
+        String.concat(line(tc, String.concat("arith.constant ", num_lit(node_tag))),
+          line_raw(nd, node2_call(tc, lv, er_ssa(inner)))))))
   return hit(ER, nd, code, er_ctr(inner) + 2)
 }
 /* hit(Ctor, args): nullary -> leaf(tag); with args -> node2(tag, leaf(a0), spine(rest)). */
@@ -868,7 +870,7 @@ fun motBRn(b: BindRes): Number { return 0 }
 fun br_env(b: BindRes):  SsaEnv { return hit_elim(motBRe, [ BR(e, c, n) => e ], b) }
 fun br_code(b: BindRes): String { return hit_elim(motBRs, [ BR(e, c, n) => c ], b) }
 fun br_n(b: BindRes):    Number { return hit_elim(motBRn, [ BR(e, c, n) => n ], b) }
-/* bind k number payloads projected from the scrutinee: payload j = label(child(tail_j, 0)),
+/* bind k payloads projected from the scrutinee: payload j = label(child(tail_j, 0)),
  * tail_0 = scrut, tail_{j+1} = child(tail_j, 1). Binds them innermost-last onto env. */
 fun gen_bind(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): BindRes {
   return if j >= k then hit(BR, env, "", n)
@@ -876,15 +878,17 @@ fun gen_bind(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): Bi
 }
 fun gen_bind_one(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): BindRes {
   be idx0 holds ssa_name(n)          /* constant 0 (child index) */
-  be pn holds ssa_name(n + 1)        /* payload = child(tail, 0), read RAW (no label) */
+  be pl holds ssa_name(n + 1)        /* the payload's leaf = child(tail, 0) */
   be idx1 holds ssa_name(n + 2)      /* constant 1 (child index) */
   be nt holds ssa_name(n + 3)        /* next tail = child(tail, 1) */
+  be pn holds ssa_name(n + 4)        /* payload = label(leaf) */
   be code0 holds String.concat(
     line(idx0, "arith.constant 0.0"),
-    String.concat(line_raw(pn, child_call(tail_ssa, idx0)),
+    String.concat(line_raw(pl, child_call(tail_ssa, idx0)),
       String.concat(line(idx1, "arith.constant 1.0"),
-        line_raw(nt, child_call(tail_ssa, idx1)))))
-  be rest holds gen_bind(nt, j + 1, k, hit(SeCons, pn, env), n + 4)
+        String.concat(line_raw(nt, child_call(tail_ssa, idx1)),
+          line_raw(pn, label_call(pl))))))
+  be rest holds gen_bind(nt, j + 1, k, hit(SeCons, pn, env), n + 5)
   return hit(BR, br_env(rest), String.concat(code0, br_code(rest)), br_n(rest))
 }
 /* bind the branch payloads, then emit the body (the unconditional last branch). */

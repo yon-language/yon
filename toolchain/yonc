@@ -176,6 +176,8 @@ if [ "$START" -le 0 ] && [ "$INPUT_EXT" = "yon" ]; then
     [ -x "$YONC_FRONTEND" ] || { echo "yonc: frontend not found/executable: $YONC_FRONTEND" >&2; echo "      build: cd $YONC_ROOT/frontend && dune build" >&2; exit 1; }
     NEXT="$WORKDIR/stage0.topos.mlir"
     "$YONC_FRONTEND" "$INPUT" > "$NEXT" 2>"$WORKDIR/fe.err" || { echo "yonc: frontend error:" >&2; cat "$WORKDIR/fe.err" >&2; exit 1; }
+    # What the frontend says reaches whoever compiles, also when it accepts.
+    if [ -s "$WORKDIR/fe.err" ]; then cat "$WORKDIR/fe.err" >&2; fi
     [ -s "$NEXT" ] || { echo "yonc: the frontend produced no MLIR (type/parse error?):" >&2; cat "$WORKDIR/fe.err" >&2; exit 1; }
     CURRENT="$NEXT"
 fi

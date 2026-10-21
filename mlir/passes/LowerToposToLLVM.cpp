@@ -10,10 +10,10 @@
 //   - llvm.struct<(i32, i32)>, llvm.{undef, insertvalue, extractvalue}
 //     (HeapRef already LLVM-typed)
 //   - func.func private declarations of the XLeech2 runtime (real ABI;
-//     the per-Space C arena family was RETIRED with the 81b resolution
-//     of 2026-06-03 — allocation goes through yon_rt_new and friends):
-//       @yon_handler_push   : () -> ()                          (M4 placeholder)
-//       @yon_handler_pop    : () -> ()                          (M4 placeholder)
+//     there is no per-Space C arena — allocation goes through yon_rt_new
+//     and friends):
+//       @yon_handler_push   : () -> ()                          (no-op)
+//       @yon_handler_pop    : () -> ()                          (no-op)
 //       @yon_handler_lookup : (i64) -> !llvm.ptr
 //   - func.func @<Place>__<op>(i32 xcoord, args...) -> result
 //   - func.func @<Move>__move(i32) -> i32

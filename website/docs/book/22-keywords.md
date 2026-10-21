@@ -84,7 +84,7 @@ Mutation, reserved to Space cells: `x = e`. Where `be` is a promise, `=` is an u
 
 #### `when`
 
-The conditional chain: `when c { } when c2 { } otherwise { }`. Consecutive `when` blocks form one chain and the first true branch wins. Branches are for effects: a `return` inside a branch does not exit the function; select values with `if`/`then`/`else` instead.
+The conditional chain: `when c { } when c2 { } otherwise { }`. Consecutive `when` blocks form one chain and the first true branch wins. Branches are for effects: a `return` stands only at the end of the body, in each branch of a final `when … otherwise` (elsewhere it is refused, E2002); select values with `if`/`then`/`else` instead.
 
 #### `otherwise`
 
@@ -128,7 +128,7 @@ The companion of `for`; see above.
 
 #### `sequence`
 
-`in sequence over x in e { }`: iteration that is sequential by declaration, not by accident.
+`in sequence over x in e { }`: iteration that is sequential by declaration, not by accident. The keyword is lowercase; `Sequence` with a capital is the place of finite pure sequences (chapter 12), a different name.
 
 #### `repeat`
 
@@ -202,10 +202,11 @@ place NodeA { value Number }
 // Entry.yon
 place Entry {
   fun guard(): Number {
+    be r holds 0
     forces NodeA value is Number {
-      return 1
+      r = 1
     }
-    return 0
+    return r
   }
   fun main(): Number { return 0 }
 }`}
@@ -213,11 +214,11 @@ place Entry {
 
 #### `produce`
 
-The producer block: `produce { ... }` builds a stream, the body emits into it, and the value of the block is the stream. Streams are consumed with the methods: `s.fold(init, fun(acc, v) => ...)` accumulates (state threads through the parameters), `s.for_every(f)` runs a function on each value. The close is structural: when the block ends, nobody can write any more, so the stream closes itself and the drain stops on its own. Lists keep the `for every x in xs` statement; streams use the methods.
+The producer block: `produce { ... }` opens a local channel, a `Wire<T>` (the same mechanism as the Wire between Spaces), the body emits into it, and the value of the block is the channel. Channels are consumed with the methods: `s.fold(init, fun(acc, v) => ...)` accumulates (state threads through the parameters), `s.for_every(f)` runs a function on each value. The close is structural: when the block ends, nobody can write any more, so the channel closes itself and the drain stops on its own. Lists keep the `for every x in xs` statement; channels use the methods.
 
 #### `emit`
 
-Emits a value: into the stream being built inside a `produce` block, or into the active handler inside a reduction's `on` clause.
+Emits a value: into the channel of a `produce` block, or into the active handler inside a reduction's `on` clause.
 
 <CodeWindow file="kw_produce_emit.yon" run="yonc kw_produce_emit.yon -o produce_emit && ./produce_emit; echo $?" out={["42"]}>
 
@@ -236,7 +237,7 @@ fun main(): Number {
 
 #### `return`
 
-Returns from the function. Inside a `when` branch it does not exit the function; branches are for effects.
+Names the function's value where its body ends: the last statement, or the last statement of each branch of a `when … otherwise` that ends the body. Anywhere else it is refused (E2002), since a `when` without `otherwise` and a loop body are for effects.
 
 #### `.->`
 
@@ -290,7 +291,7 @@ Folds a structure to a value. Declared `reduction ... of P { on op { } be seed h
 
 #### `operation`
 
-A method signature declared inline on a place; it carries an effect and may bind to a certified algebra with `uses algebra`.
+A method signature declared inline on a place; it carries an effect and may bind to a certified algebra with `uses algebra`. A call to an operation is the effect; a `reduction` of the place with an `on` clause for it is what discharges it, and a program that calls an operation no reduction handles is refused (E2003): it would never reach a value.
 
 #### `cell`
 
@@ -464,7 +465,7 @@ A map between worlds that preserves the categorical structure; composable with `
 
 #### `nat`
 
-A natural transformation between two functors: `nat transform Eta from F to G { for each X by F }`, the clause naming how each component is built. The naturality square (η_Y ∘ F(f) = G(f) ∘ η_X) is its law; 1.1.0 checks the structural precondition, the full equation is future work. (Example `nat_transform_functor`.)
+A natural transformation between two functors: `nat transform Eta from F to G { for each X by F }`, the clause naming how each component is built. The naturality square (η_Y ∘ F(f) = G(f) ∘ η_X) is its law, decided on the values the program computes with (a Number is an IEEE double, an Int64 a 64-bit integer): proven, it is reported; refuted, the counterexample rejects the program (E2101); neither, it is not certified and rejects the program (E2102) unless the transformation is declared an axiom, `nat transform Eta from F to G is given { … }`. (Example `nat_transform_functor`.)
 
 #### `compose`
 
@@ -476,7 +477,7 @@ The first-class declaration: a category rich enough to do logic inside, with its
 
 #### `morphism`
 
-A single map inside a topos's `morphisms { }` block, and the contextual word in `on morphism N via M`.
+A single map of a topos, one `morphism` line each inside its `where` block, and the contextual word in `on morphism N via M`.
 
 #### `prop`
 
@@ -501,7 +502,7 @@ place Entry {
   fun main(): Number {
     be s holds .-> State { balance 5 }
     be bad holds is_overdrawn(s)
-    return if bad then 0 else 42
+    return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
   }
 }`}
 </CodeWindow>
@@ -612,7 +613,7 @@ The slice: `place P over X` declares objects equipped with a chosen map down to 
 
 #### `error`
 
-`error E subcontains Base { }`: an error is a place that is a subobject of Base, every E is a Base. A place declares its error morphism with the two-word phrase `on error E`.
+`error QueryError { this < Error message Number sqlstate Number }` (examples/error_morphism/db/QueryError.yon): an error is a place that is a subobject of its base, every QueryError is an Error. A place declares its error morphism with the two-word phrase `on error E`.
 
 #### `of`
 
@@ -702,17 +703,17 @@ fun main(): Number {
 
 #### `stream`
 
-In member position (`subscription.stream`): the subscription's stream handle. The stream TYPE is the generic `Stream<T>` (the spelling `stream of T` is retired).
+In member position (`subscription.stream`): the subscription's channel, of type `Wire<T>`.
 
 #### `wire`
 
-`wire to space S` opens the transport toward a Space. The producer side declares a public function returning `Stream<T>`; the consumer subscribes by name with `w.awaits(producer)` and materializes the emissions with `.stream`. Three errors are caught at compile time: an unknown Space, a function the Space does not declare, a declared function that is not a producer. The channel identity is the producer's dispatch selector: nominal on both sides, no literals anywhere.
+`wire to space S` opens the transport toward a Space. The producer side declares a public function returning `Wire<T>`; the consumer subscribes by name with `w.awaits(producer)` and materializes the emissions with `.stream`. Three errors are caught at compile time: an unknown Space, a function the Space does not declare, a declared function that is not a producer. The channel identity is the producer's dispatch selector: nominal on both sides, no literals anywhere.
 
 <CodeWindow file="subscriber.yon" run="yonc sensors.yon -o Sensors_srv && yonc subscriber.yon -o subscriber && ./Sensors_srv && ./subscriber; echo $?" out={["36"]}>
 
 ```yon
 // sensors.yon, the producer package -> ./Sensors_srv
-fun readings(): Stream<Number> {
+fun readings(): Wire<Number> {
   be s holds produce {
     emit 10
     emit 11
@@ -750,11 +751,11 @@ A reserved word that appears in the surface only as the target of a wire, `wire 
 
 #### `spawn`
 
-`spawn { ... }` forks one isolated replica that runs the body in a separate OS process; `spawn in N parallel { ... }` forks N of them, which run on real cores at once. The value of a `spawn` block is the collection stream: every `promote` in the body contributes one element, and the parent drains it with the stream methods (`.fold`, `.for_every`). The replicas are isolated by construction (each gets its own heap), so the collection is unordered; an order-independent fold over it is deterministic.
+`spawn { ... }` forks one isolated replica that runs the body in a separate OS process; `spawn in N parallel { ... }` forks N of them, which run on real cores at once. The value of a `spawn` block is the collection channel, a `Wire<T>`: every `promote` in the body contributes one element, and the parent drains it with the channel methods (`.fold`, `.for_every`). The replicas are isolated by construction (each gets its own heap), so the collection is unordered; an order-independent fold over it is deterministic.
 
 #### `promote`
 
-Inside a `spawn` body, `promote E` emits `E` onto the parent's collection stream, the spawn counterpart of `emit`. A `spawn` block with no `promote` is a compile-time error (it would collect nothing). The implicit variable `spawn_index` (0 to N-1) is in scope in the body, the replica's own index.
+Inside a `spawn` body, `promote E` emits `E` onto the parent's collection channel, the spawn counterpart of `emit`. A `spawn` block with no `promote` is a compile-time error (it would collect nothing). The implicit variable `spawn_index` (0 to N-1) is in scope in the body, the replica's own index.
 
 #### `parallel`
 
@@ -784,7 +785,7 @@ The certain-true value of the Heyting tri-value, and a pattern in `when`/`forces
 
 #### `unknown`
 
-The third truth value: not provable, not refutable. An unknown condition decides to false: nothing provable, nothing run.
+The third truth value: not provable, not refutable. It is not false, and a proposition is never a condition: `decide(p)` gives its three values as the arms `Present`, `Absent`, `Unknown` of `Decision`, and a `match` answers each of them.
 
 #### `absent`
 
@@ -838,11 +839,10 @@ fun main(): Number visits Output {
   be p holds present
   be both holds p &&? u            // unknown: conjunction with the undecided
   be imp holds u =>? p             // present: anything implies the present
-  be dec holds to_bool(imp)
   be h1 holds heyting(5)           // trits 101, all certain
   be h2 holds heyting(5, 2)        // middle trit unknown
   be hand holds h1 &? h2           // trit-wise, the unknown propagates
-  return if dec then 42 else 0
+  return match decide(imp) { Present => 42, Absent => 0, Unknown => 1 }
 }`}
 </CodeWindow>
 

@@ -9,7 +9,7 @@ A fixture is a single `.yon` (compiled in file mode) OR a project directory of t
 name (compiled in directory mode) when the construct only exists at project scope, as the
 entrypoint rule does. Each `.expect` carries:
 
-  status : accept | reject_clean | enforce_1_2
+  status : accept | reject_clean | accepted_deviation
   exit   : the expected exit code (from the compiler, not assumed)
   match  : an error-message fragment that MUST appear (reject_clean only)
 
@@ -18,11 +18,12 @@ dressed as a true one, and `match` forbids it.
 
   accept        compile succeeds, the program runs and exits `exit`.
   reject_clean  compile FAILS with exit `exit` and stderr containing `match`.
-  enforce_1_2   a deviation the compiler accepts TODAY but must reject in 1.2. The gate
-                compiles it, asserts it still passes (so the ledger never lies about the
-                present), and records it as debt. When 1.2 enforcement lands, the fixture
-                starts failing to compile, and THAT failure is the cue to flip it to
-                reject_clean with a match. It becomes the acceptance test for the fix.
+  accepted_deviation
+                a deviation the language should reject and the compiler accepts. The
+                gate compiles it and asserts it passes (so the ledger says what the
+                compiler does). A checker that rejects it makes the fixture fail to
+                compile, and the fixture flips to reject_clean with a match: it is then
+                the acceptance test of that check.
 
 Three jobs, in order:
   1. Execution     every fixture behaves as its .expect says.
@@ -177,13 +178,13 @@ def test_fixture_behaves(fx, tmp_path):
             f"is a false green.\n--- stderr ---\n{cerr[-500:]}"
         )
 
-    elif status == "enforce_1_2":
+    elif status == "accepted_deviation":
         assert crc == 0, (
-            f"{construct}/{name} is a 1.2 debt (status: enforce_1_2) and was expected to "
-            f"COMPILE today, but it failed:\n{cerr[-400:]}\n\nIf 1.2 enforcement has landed, "
-            f"this is the cue: flip {name}.expect to status: reject_clean and add its match."
+            f"{construct}/{name} is an accepted deviation and was expected to COMPILE, "
+            f"but it failed:\n{cerr[-400:]}\n\nIf the checker now rejects it, flip "
+            f"{name}.expect to status: reject_clean and add its match."
         )
-        assert rrc == want_exit, f"{construct}/{name} (debt) ran to {rrc}, expected {want_exit}"
+        assert rrc == want_exit, f"{construct}/{name} (accepted deviation) ran to {rrc}, expected {want_exit}"
 
     else:
         pytest.fail(f"{construct}/{name}.expect has unknown status {status!r}")
@@ -235,10 +236,10 @@ def build_projection() -> str:
              f"**{len((prods - allow) & reduced)} / {len(prods - allow)}** "
              f"surface (+{len(allow)} structural allowlisted)")
     debts = sum(1 for rows in by_construct.values() for _, e in rows
-                if e.get("status") == "enforce_1_2")
-    L.append(f"- deviations enforced today: "
+                if e.get("status") == "accepted_deviation")
+    L.append(f"- deviations rejected: "
              f"**{sum(1 for rows in by_construct.values() for _, e in rows if e.get('status') == 'reject_clean')}**")
-    L.append(f"- deviations registered as 1.2 debt (`enforce_1_2`): **{debts}**")
+    L.append(f"- deviations still accepted (`accepted_deviation`): **{debts}**")
     L.append("")
     L.append("| construct | fixture | status | exit | match |")
     L.append("|---|---|---|---|---|")
@@ -250,15 +251,15 @@ def build_projection() -> str:
                 m=f"`{e['match']}`" if e.get("match") else "—"))
     L.append("")
     if debts:
-        L.append("## 1.2 enforcement debt")
+        L.append("## Accepted deviations")
         L.append("")
-        L.append("Deviations the compiler accepts today and must reject in 1.2. When the check")
-        L.append("lands, the fixture starts failing to compile and its `.expect` flips to")
-        L.append("`reject_clean` with a `match`; this gate then verifies the fix.")
+        L.append("Deviations the language should reject and the compiler accepts. A checker")
+        L.append("that rejects one makes its fixture fail to compile; its `.expect` then flips")
+        L.append("to `reject_clean` with a `match`, and this gate verifies the check.")
         L.append("")
         for construct in sorted(by_construct):
             for name, e in sorted(by_construct[construct]):
-                if e.get("status") == "enforce_1_2":
+                if e.get("status") == "accepted_deviation":
                     L.append(f"- `{construct}/{name}`")
         L.append("")
     return "\n".join(L) + "\n"

@@ -36,14 +36,14 @@ export default function prismIncludeLanguages(PrismObject) {
       pattern: /\b[A-Z][A-Za-z0-9_]*\b/,
     },
     keyword: new RegExp(
-      // Generated mechanically from frontend/lexer.mll (2026-06-08):
-      // every lowercase reserved word, minus true/false (boolean below).
-      // Capitalized reserved words (Pi, Sigma, Id, Type) are matched by
-      // the class-name rule above. Contextual phrase words (object,
-      // morphism, oldest, newest, subset, conflict, nat, transform) are
-      // free identifiers and stay uncolored on purpose.
+      // Exactly the lowercase reserved words of frontend/lexer.mll, minus
+      // true/false (boolean below); regression/test_website_surface.py holds
+      // the two lists equal. Capitalized reserved words (Pi, Sigma, Id, Type)
+      // are matched by the class-name rule above. Contextual phrase words
+      // (object, oldest, newest, subset, conflict, transform) are free
+      // identifiers and stay uncolored on purpose.
       '\\b(?:' +
-        'absent|adjunction|aggregates|algebra|all|and|as|at|backward|be|becomes|bi|buffer|by|cell|compose|converts|do|drop|each|effects|else|emit|error|every|exact|extends|fold|for|forces|forever|forward|from|fst|fun|functor|functorial|geomorph|here|heyting|holds|if|import|in|ind_path|init|internal|invertible|is|iter|law|lawful|list|map|maps|morph|morphisms|most|move|multishot|new|not|objects|of|operation|or|otherwise|over|pair|partial|place|present|produce|prop|pull|pullback|push|pushout|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|verify|space|stream|terminal|then|times|to|topology|topos|unifies|unknown|uses|via|view|visits|when|where|while|wire|with|world' +
+        'absent|aggregates|algebra|along|and|as|at|back|be|by|carry|cell|clear|comp|compose|converts|do|drop|each|el_match|else|emit|error|every|exact|fold|for|forces|forever|from|fst|fun|functor|geomorph|given|hcomp|here|heyting|hit|hit_elim|holds|if|import|in|ind_path|induct|internal|is|iter|law|maps|match|morph|morphism|most|move|multishot|nat|not|of|operation|or|otherwise|over|pair|parallel|place|plam|present|produce|promote|prop|pull|push|quote|reduction|refl|repeat|requires|resolves|return|scope|sequence|share|show|snd|space|spawn|stream|then|this|through|times|to|topos|unifies|unknown|uses|via|view|visits|when|where|while|wire|with' +
         ')\\b',
     ),
     boolean: /\b(?:true|false)\b/,

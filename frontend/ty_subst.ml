@@ -58,7 +58,7 @@ let rec apply_subst (sigma : subst) (t : ty) : ty =
        | None -> t)
   | TyList inner -> TyList (apply_subst sigma inner)
   | TyMap (k, v) -> TyMap (apply_subst sigma k, apply_subst sigma v)
-  | TyStream inner -> TyStream (apply_subst sigma inner)
+  | TyChannel inner -> TyChannel (apply_subst sigma inner)
   | TyPi (x, a, b) -> TyPi (x, apply_subst sigma a, apply_subst sigma b)
   | TySigma (x, a, b) -> TySigma (x, apply_subst sigma a, apply_subst sigma b)
   | TyId (a, x, y) -> TyId (apply_subst sigma a, x, y)
@@ -79,6 +79,56 @@ let rec apply_subst (sigma : subst) (t : ty) : ty =
   | TyApp (n, args) -> TyApp (n, List.map (apply_subst sigma) args)
   | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _
   | TyUniverse _ | TyHeytInt _ | TyEl _ -> t
+
+(* map_leaves f t: rebuild t, replacing every leaf type for which f answers
+   Some. One traversal of the type structure for every renaming of names
+   (a type parameter made rigid, a parameter freshened at a call). *)
+let rec map_leaves (f : ty -> ty option) (t : ty) : ty =
+  match f t with
+  | Some t' -> t'
+  | None ->
+      let go = map_leaves f in
+      match t with
+      | TyList inner -> TyList (go inner)
+      | TyMap (k, v) -> TyMap (go k, go v)
+      | TyChannel inner -> TyChannel (go inner)
+      | TyPi (x, a, b) -> TyPi (x, go a, go b)
+      | TySigma (x, a, b) -> TySigma (x, go a, go b)
+      | TyId (a, x, y) -> TyId (go a, x, y)
+      | TyPathP ((i, a), x, y) -> TyPathP ((i, go a), x, y)
+      | TyArrow (a, b) -> TyArrow (go a, go b)
+      | TySubscription (sp, inner) -> TySubscription (sp, go inner)
+      | TySum vs ->
+          TySum (List.map (fun v -> { v with v_args = List.map go v.v_args }) vs)
+      | TySumIn (vs, ws) ->
+          TySumIn (List.map (fun v -> { v with v_args = List.map go v.v_args }) vs, ws)
+      | TyApp (n, args) -> TyApp (n, List.map go args)
+      | TyMoveHandle _ | TyReductionHandle _ | TyMorphHandle _ | TyViewHandle _
+      | TyWire _ | TyPrim _ | TyPrimIn _ | TyUser _ | TyVar _ | TyMetaVar _
+      | TyUniverse _ | TyHeytInt _ | TyEl _ -> t
+
+(* A declared type parameter, written as a name, is a rigid variable: it
+   is equal only to itself. *)
+let rigid_type_params (tps : string list) (t : ty) : ty =
+  if tps = [] then t
+  else map_leaves (function
+    | TyUser n when List.mem n tps -> Some (TyVar n)
+    | _ -> None) t
+
+(* The type variables a type mentions. *)
+let type_vars (t : ty) : string list =
+  let acc = ref [] in
+  ignore (map_leaves (function
+    | TyVar n -> if not (List.mem n !acc) then acc := n :: !acc; Some (TyVar n)
+    | _ -> None) t);
+  List.rev !acc
+
+(* Replace type variables by the types given. *)
+let subst_type_vars (m : (string * ty) list) (t : ty) : ty =
+  if m = [] then t
+  else map_leaves (function
+    | TyVar n -> List.assoc_opt n m
+    | _ -> None) t
 
 (* compose_subst sigma1 sigma2: equivalent to "apply sigma1 after sigma2".
  * Result: { x |-> sigma1(t) | (x,t) in sigma2 } union { (x,t) in sigma1 | x not in dom(sigma2) }
@@ -102,7 +152,7 @@ let rec free_metavars (t : ty) : int list =
   | TyMetaVar n -> [n]
   | TyList inner -> free_metavars inner
   | TyMap (k, v) -> free_metavars k @ free_metavars v
-  | TyStream inner -> free_metavars inner
+  | TyChannel inner -> free_metavars inner
   | TyPi (_, a, b) | TySigma (_, a, b) -> free_metavars a @ free_metavars b
   | TyId (a, _, _) -> free_metavars a
   | TyPathP ((_, a), _, _) -> free_metavars a
@@ -151,6 +201,9 @@ let unify_error_to_string = function
 let rec unify (a : ty) (b : ty) : subst =
   match a, b with
   | TyMetaVar n, TyMetaVar m when n = m -> empty_subst
+  (* "unknown" carries no information: it leaves an unknown free, for a
+     later argument to fix *)
+  | TyMetaVar _, TyPrim "unknown" | TyPrim "unknown", TyMetaVar _ -> empty_subst
   | TyMetaVar n, t | t, TyMetaVar n ->
       if occur_check n t then
         raise (Unify_failure (UOccurCheck (n, t)))
@@ -179,7 +232,13 @@ let rec unify (a : ty) (b : ty) : subst =
       let s1 = unify k1 k2 in
       let s2 = unify (apply_subst s1 v1) (apply_subst s1 v2) in
       compose_subst s2 s1
-  | TyStream i1, TyStream i2 -> unify i1 i2
+  | TyChannel i1, TyChannel i2 -> unify i1 i2
+  (* an applied type: the same constructor, arguments pairwise *)
+  | TyApp (n1, a1), TyApp (n2, a2)
+    when n1 = n2 && List.length a1 = List.length a2 ->
+      List.fold_left2 (fun s x y ->
+        compose_subst (unify (apply_subst s x) (apply_subst s y)) s)
+        empty_subst a1 a2
   | TyPi (_, a1, b1), TyPi (_, a2, b2)
   | TySigma (_, a1, b1), TySigma (_, a2, b2) ->
       let s1 = unify a1 a2 in

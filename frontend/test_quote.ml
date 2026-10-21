@@ -9,7 +9,7 @@
  * two codes with the same carrier but different syntax (here, differing only in
  * the witness, which el_decode ignores) yield the SAME result for ANY branch.
  * No branch can observe the raw code, so none can separate two codes that the
- * per-carrier conversion (el_equal) declares equal.
+ * per-carrier conversion declares equal.
  *
  * This fixes the engine. The surface syntax (TyEl / quote / match) is the next
  * step and carries its own representation choices.

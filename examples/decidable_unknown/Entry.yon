@@ -1,9 +1,8 @@
 place Entry {
-/* decide su unknown deve fallire a runtime (asserzione decidibilita'). */
+/* decide su unknown non e' un errore e non e' false: e' il braccio Unknown,
+ * e il programma risponde anche a quello. */
 fun main(): Number {
   be p holds unknown
-  be d holds decide(p)
-  be b holds to_bool_dec(d)
-  return if b then 1 else 0
+  return match decide(p) { Present => 1, Absent => 0, Unknown => 2 }
 }
 }

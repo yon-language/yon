@@ -40,7 +40,7 @@ let normalize_result (deltas : (string * term) list)
     | TyPi (x, a, b) -> TyPi (x, nt a, nt b)
     | TySigma (x, a, b) -> TySigma (x, nt a, nt b)
     | TyId (a, t1, t2) -> TyId (nt a, ntm t1, ntm t2)
-    | TyStream a -> TyStream (nt a)
+    | TyChannel a -> TyChannel (nt a)
     | TyGlue (a, phi, sys) ->
         TyGlue (nt a, phi, List.map (fun (t, e) -> (nt t, ntm e)) sys)
     | TyPathP ((i, a), t1, t2) -> TyPathP ((i, nt a), ntm t1, ntm t2)

@@ -19,7 +19,7 @@ place Entry {
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
-  fun build_set(n: Number): Number {
+  fun build_set(n: Number): HashSet<Number> {
     be setc holds Space.make(HashSet.empty())
     be i holds Space.make(0)
     iter n do { be k holds Space.get(i)
@@ -27,7 +27,7 @@ place Entry {
                 be _2 holds Space.set(i, k + 1) }
     return Space.get(setc)
   }
-  fun timed_lookup(s: Number, m: Number): Number visits Output {
+  fun timed_lookup(s: HashSet<Number>, m: Number): Number visits Output {
     be acc holds Space.make(0)
     be t0 holds Time.now_ns(0)
     iter m do { be h holds (if HashSet.contains(s, 42) then 1 else 0)

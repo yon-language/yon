@@ -770,23 +770,33 @@ let test_tycheck_ua () =
            cr.cr_errors;
          false)
 
-(* Test 44: cubical primitive transport type-checks. *)
+(* Test 44: transport reads its target from the path's type: along a path
+   between known types it type-checks, along a path without endpoints it is
+   refused. *)
 let test_tycheck_transport () =
-  let src = {|
+  let src_known = {|
+    fun transport_value(p: Id(Type, Number, Number), x: Number): Number {
+      return transport(p, x)
+    }
+  |} in
+  let src_bare = {|
     fun transport_value(p: Path, x: Number): Number {
       return transport(p, x)
     }
   |} in
   Printf.printf "\n=== Test 44: type-check transport primitive ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "transport(p, x) type-checks. Status: PASS\n"; true)
+  match tc_program src_known, tc_program src_bare with
+  | Error msg, _ | _, Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
+  | Ok known, Ok bare ->
+      if known.cr_errors = [] && bare.cr_errors <> [] then
+        (Printf.printf "transport along Id(Type, A, B) type-checks, along a bare \
+                        Path it is refused. Status: PASS\n"; true)
       else
         (List.iter (fun e ->
            Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
+           known.cr_errors;
+         if bare.cr_errors = [] then
+           Printf.printf "  transport along a bare Path WRONGLY type-checks\n";
          false)
 
 (* ─── Stdlib runtime tests ─────────────────────────────────────────── *)
@@ -817,35 +827,6 @@ let test_stdlib_list_basic () =
   Printf.printf "  length = %s (expected 2): %b\n"
     (Pretty.pp_compact len) len_ok;
   if head_ok && len_ok then
-    (Printf.printf "Status: PASS\n"; true)
-  else
-    (Printf.printf "Status: FAIL\n"; false)
-
-(* Test 46: Map operations. *)
-let test_stdlib_map () =
-  Printf.printf "\n=== Test 46: stdlib Map — empty, set, get, has, size ===\n";
-  let open Ast in
-  let m = invoke_stdlib (App (Var "Map__empty", Unit)) in
-  let k1 = Builtins.encode_string "alice" in
-  let k2 = Builtins.encode_string "bob" in
-  let v1 = Builtins.encode_number 30.0 in
-  let v2 = Builtins.encode_number 25.0 in
-  let m1 = invoke_stdlib (App (App (App (Var "Map__set", m), k1), v1)) in
-  let m2 = invoke_stdlib (App (App (App (Var "Map__set", m1), k2), v2)) in
-  let g_alice = invoke_stdlib (App (App (Var "Map__get", m2), k1)) in
-  let g_bob = invoke_stdlib (App (App (Var "Map__get", m2), k2)) in
-  let has_eve = invoke_stdlib (App (App (Var "Map__has", m2),
-                                    Builtins.encode_string "eve")) in
-  let sz = invoke_stdlib (App (Var "Map__size", m2)) in
-  let ok1 = Builtins.decode_number g_alice = Some 30.0 in
-  let ok2 = Builtins.decode_number g_bob = Some 25.0 in
-  let ok3 = Builtins.decode_bool has_eve = Some false in
-  let ok4 = Builtins.decode_number sz = Some 2.0 in
-  Printf.printf "  get(alice) = 30: %b\n" ok1;
-  Printf.printf "  get(bob) = 25: %b\n" ok2;
-  Printf.printf "  has(eve) = false: %b\n" ok3;
-  Printf.printf "  size = 2: %b\n" ok4;
-  if ok1 && ok2 && ok3 && ok4 then
     (Printf.printf "Status: PASS\n"; true)
   else
     (Printf.printf "Status: FAIL\n"; false)
@@ -2006,33 +1987,38 @@ let test_proposition_type () =
            cr.cr_errors;
          false)
 
-(* Test 92: `boolean` and `proposition` are interchangeable.
- *
- * A function returning `proposition` should be usable in a context
- * expecting `boolean` (and vice versa), reflecting their semantic
- * equivalence: proposition is Omega of the topos, boolean is the
- * Boolean-topos specialization. *)
+(* Test 92: a Boolean flows into a proposition (the mono 2 -> Omega); a
+   proposition does not flow into a Boolean (it may be unknown). *)
 let test_boolean_proposition_alias () =
-  let src = {|
+  let src_into_omega = {|
+    fun returns_bool(x: Number): Boolean {
+      return x > 0
+    }
+    fun uses_prop(x: Number): proposition {
+      return returns_bool(x)
+    }
+  |} in
+  let src_out_of_omega = {|
     fun returns_prop(x: Number): proposition {
       return x > 0
     }
-    
     fun uses_bool(x: Number): Boolean {
       return returns_prop(x)
     }
   |} in
-  Printf.printf "\n=== Test 92: `proposition` and `boolean` are type-equivalent ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "Cross-type assignment between proposition/boolean works.\n";
+  Printf.printf "\n=== Test 92: Boolean flows into proposition, not back ===\n";
+  match tc_program src_into_omega, tc_program src_out_of_omega with
+  | Error msg, _ | _, Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
+  | Ok into_omega, Ok out_of_omega ->
+      if into_omega.cr_errors = [] && out_of_omega.cr_errors <> [] then
+        (Printf.printf "Boolean -> proposition accepted, proposition -> Boolean refused.\n";
          Printf.printf "Status: PASS\n"; true)
       else
         (List.iter (fun e ->
            Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
+           into_omega.cr_errors;
+         if out_of_omega.cr_errors = [] then
+           Printf.printf "  proposition -> Boolean WRONGLY accepted\n";
          false)
 
 (* Test 93: Heyting tri-value type interop with proposition.
@@ -2376,27 +2362,18 @@ let test_pi_type_parse () =
    dropped 'with' handler-scope. Effect-inference coverage (visits propagation)
    should be re-added as a 'with'-free test if wanted. *)
 
-(* Test 122: Coercion handles `present`/`absent` propositions explicitly. *)
+(* Test 122: the three values of a proposition keep three codes; unknown is
+   not absent. *)
 let test_bool_prop_coercion_explicit () =
-  let src = {|
-    fun main(): Boolean {
-      return to_bool(present)
-    }
-  |} in
-  Printf.printf "\n=== Test 122: to_bool(present) = true ===\n";
-  match parse_string src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok prog ->
-      let r = Desugar.desugar_program prog in
-      (match r.Desugar.main with
-       | Some term ->
-           let ctx = Builtins.with_builtins r.Desugar.ctx in
-           let final = Builtins.reduce_with_builtins ctx term in
-           (match Builtins.decode_bool final with
-            | Some true ->
-                Printf.printf "Status: PASS\n"; true
-            | _ -> Printf.printf "FAIL — got %s\n" (Pretty.pp_compact final); false)
-       | None -> false)
+  Printf.printf "\n=== Test 122: present, absent, unknown have three codes ===\n";
+  let code h =
+    let ctx = Builtins.with_builtins Reduce.empty_ctx in
+    Builtins.decode_number
+      (Builtins.reduce_with_builtins ctx
+         (Ast.App (Ast.Var "__prop_code", Heyting.encode_heyt h))) in
+  let got = List.map code Heyting.[HPresent; HAbsent; HUnknown] in
+  if got = [Some 0.0; Some 1.0; Some 2.0] then (Printf.printf "Status: PASS\n"; true)
+  else (Printf.printf "FAIL — the codes are not 0, 1, 2\n"; false)
 
 (* Test 123: TyId(A, a, b) == CTPath(A, a, b).
  *
@@ -3630,7 +3607,6 @@ let () =
     test_tycheck_ua;
     test_tycheck_transport;
     test_stdlib_list_basic;
-    test_stdlib_map;
     test_stdlib_space;
     test_hit_s1_base;
     test_hit_arity;

@@ -35,8 +35,8 @@ topos where {
    * functoriality — F(g∘f) = F(g)∘F(f) leaves no choice, so they are not
    * declared.
    *
-   * `uses Additive` / `uses Multiplicative` arrive with the algebra
-   * cantiere. And `mul`, not `times`: `times` is a loop keyword
+   * `uses Additive` / `uses Multiplicative` need the algebra construct,
+   * which the grammar does not have. And `mul`, not `times`: `times` is a loop keyword
    * (`repeat at most N times`) and is unavailable as a name. */
   morphism plus(a: Int32, b: Int32): Int32
   morphism mul(a: Int32, b: Int32): Int32

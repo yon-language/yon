@@ -100,7 +100,7 @@
     if List.mem name known then name
     else
       failwith (Printf.sprintf
-        "[parser P8 #86] line %d: fold name '%s' not recognized. Canonical folds: %s"
+        "[parser] line %d: fold name '%s' not recognized. Canonical folds: %s"
         loc_start.Lexing.pos_lnum
         name
         (String.concat ", " known))
@@ -112,7 +112,7 @@
 %token <float> NUM_LIT
 %token <string> STR_LIT
 %token <bool> BOOL_LIT
-/* DUR_LIT (duration literals 100ms/5s) removed in v1.1 — see lexer.mll. */
+/* No DUR_LIT: a duration is a number of milliseconds (see lexer.mll). */
 
 /* Identifiers */
 %token <string> IDENT
@@ -138,8 +138,8 @@
 %token FOLD  /* explicit fold name, e.g. fold "sum_f64" */
 
 /* First-class topos constructs. */
-/* MORPHISM_KW (singular): keyword for a single morphism declaration inside a
- * topos `morphisms { }` block, and for the `on morphism N via M` clause. */
+/* MORPHISM_KW: one line per morphism of a topos, and the word of the
+ * `on morphism N via M` clause. */
 %token TOPOS_KW MORPHISM_KW PROP_KW
 %token MORPH_KW VIA_KW
 %token NAT
@@ -157,7 +157,7 @@
 %token COMP
 %token SHARE RESOLVES
 
-/* Stream back-pressure modifiers (BUFFER/DROP) removed in v1.1 — were inert. */
+/* No stream back-pressure modifiers (BUFFER/DROP): they would be inert. */
 
 /* Control flow */
 %token WHEN OTHERWISE FOR EVERY EACH HERE SEQUENCE OVER REPEAT AT MOST TIMES
@@ -171,7 +171,7 @@
 %token HOLDS
 
 /* Boolean operators */
-/* ALL removed in v1.1 (EAll "all P where c" dropped — condition was inert). */
+/* No ALL ("all P where c"): its condition would be inert. */
 %token AND OR WHERE
 /* The symbols &&/|| as aliases for and/or. */
 %token AMPAMP PIPEPIPE
@@ -232,14 +232,30 @@
 %token EOF
 
 /* ─── Precedence and associativity ─────────────────────────────────── */
-/* These declarations help Menhir resolve shift/reduce conflicts
-   in expressions. Lower entries bind tighter. */
+/* Every shift/reduce choice of the grammar is decided here, none is left to
+   Menhir: regression/gate.sh checks that Menhir reports no conflict and no
+   useless precedence. Lower entries bind tighter. */
 
-/* Precedence for the `all X where C` form: the condition is greedy,
- * consuming as many AND/OR/comparison operators as possible. We give
- * the implicit "end of where-condition" the lowest precedence so that
- * any operator shift wins over reduction. */
+/* LOWEST ends an `if … then … else` and a condition: any operator shift
+ * wins over closing them, so a condition is as long as it can be. */
 %nonassoc LOWEST
+
+/* A statement has no terminator, so a construct that may end with an
+ * optional part meets the next token undecided. CLAUSE_END is the closing of
+ * such a construct; the tokens below CONTINUE it, and continuing wins: the
+ * longest reading, as a binder's body extends to the right.
+ *   - `operation f(x) on error E`: the clause belongs to the operation;
+ *   - `Sigma(x: A). B -> C`: the body of Σ is `B -> C`;
+ *   - `a.b.c`: one field path (so `a.b.c(…)` is not a call on `a.b`);
+ *   - `f(x) in S`: the call in a Space, not `f(x)` followed by `in …`;
+ *   - `T in A, B`: one constrained type over A and B;
+ *   - `functor (…) => e from W to V law L`: the law belongs to the functor;
+ *   - `compose f with g @ I0` and `plam i => e @ I0` / `.m(…)`: the
+ *     application belongs to the last operand / to the body;
+ *   - `clear e`: reflexivity on e; bare `clear` only when no atom follows. */
+%nonassoc CLAUSE_END
+%nonassoc ON_ERROR LAW IN COMMA ARROW DOT IDENT QIDENT VIEW REDUCTION PRODUCE
+          MOVE MORPH_KW FUNCTOR FUN DOTARROW
 %left PIPEGT             (* pipe forward, left-assoc, prio bassa *)
 %right FATARROW FATARROWQ
 %left OR PIPEPIPE PIPEPIPEQ
@@ -262,8 +278,6 @@
                              than @, so `back X @ I0` is always `(back X) @ I0` and
                              never `back (X @ I0)` — deterministic, not menhir-arbitrary */
 
-/* Precedence for IS pattern test. */
-%nonassoc IS
 
 /* Precedence for dangling-when. */
 %nonassoc NO_ELIF
@@ -303,33 +317,26 @@ top_decl:
   | mp = morph_decl                   { TopMorph mp }
   | nt = nat_transform_decl           { TopNatTransform nt }
 
-(* topos as a first-class declaration.
- *
- * Syntax:
- *   topos Account where {
- *     objects { ... place_decl ... }
- *     terminal Unit                       (* optional *)
- *     morphisms { ... operations ... }    (* optional *)
- *     prop is_overdrawn(s: State): proposition = s.balance < 0
- *     prop is_positive(s: State): proposition = s.balance > 0
- *   }
+(* topos as a first-class declaration: zero or more `morphism` lines and
+ * zero or more props, in one `where` block; the places of the topos live in
+ * their own files beside it. See examples/kw_topos_block/bank (morphisms and
+ * a prop with a body) and examples/c_prop_abstract/bank (an abstract prop).
  *
  * The props are subobject classifiers: given one or more objects of the topos,
  * a `prop` is a function into the classifier Omega (the proposition type). It
  * desugars internally to a fun_decl with return type proposition, but
  * syntactically it signals the categorical intent (a sub-object versus an
  * arbitrary function). *)
-(* v1.1 topos-per-space: a topos no longer declares `objects { }`, nor `at
- * Space`, nor `in World` in the surface. The objects are inferred from the
- * filesystem (one source file per object) by a separate agent; the at/in
+(* topos-per-space: a topos declares neither `objects { }`, nor `at Space`,
+ * nor `in World` in the surface. The objects are inferred from the
+ * filesystem (one source file per object) by a separate pass; the at/in
  * bindings are likewise inferred. The parser therefore produces a well-formed
  * topos_decl with empty objects and no at/in: tp_objects = [], tp_at_space =
- * None, tp_world = None. The `morphisms`, `terminal` and `props` blocks stay. *)
+ * None, tp_world = None. What the surface declares is its morphisms (one
+ * `morphism` line each) and its props. *)
 topos_decl:
   (* the NAMELESS form: the name derives from the file (num/num.yon -> num) —
-     one name, one home, nothing to diverge. The named form remains admitted
-     during the transition; the corpus migration (and the ban) is its own
-     commit, after the num cantiere. *)
+     one name, one home, nothing to diverge. The named form is admitted too. *)
   | TOPOS_KW
     WHERE LBRACE
       morph_opt = topos_morphisms_opt
@@ -360,9 +367,8 @@ topos_decl:
         tp_props = props;
         tp_loc = mk_loc $startpos $endpos } }
 
-(* v1.1 topos-per-space: `topos_at_opt` (the `at <SPACE>` annotation) was
- * removed — the residence space is now inferred from the filesystem, so the
- * topos surface no longer carries it. *)
+(* topos-per-space: no `at <SPACE>` annotation — the residence space is
+ * inferred from the filesystem, so the topos surface does not carry it. *)
 
 (* prop declaration as a subobject classifier.
  *   prop NAME(p1: T1, ..., pn: Tn): proposition = EXPR
@@ -388,14 +394,12 @@ topos_prop_decl:
         pr_body_opt = None;
         pr_loc = mk_loc $startpos $endpos } }
 
-(* v1.1 topos-per-space: `topos_world_opt` (the `in <World>` annotation) was
- * removed — the world is now inferred from the filesystem. The IN token stays
- * declared and is still used elsewhere (`place P in W`, `new P in Space`). *)
+(* topos-per-space: no `in <World>` annotation — the world is inferred from
+ * the filesystem. The IN token is used elsewhere (`place P in W`). *)
 
-(* v1.1: the `morphisms { }` block now declares its members with the singular
- * `morphism` keyword (morphism_decl), not the place-level `operation`. The
- * result is still a list of operation_decl, so the rest of the compiler is
- * unchanged. *)
+(* a topos declares its morphisms one `morphism` line each (morphism_decl),
+ * not with the place-level `operation`. The result is a list of
+ * operation_decl, the same record as for operations. *)
 topos_morphisms_opt:
   |                                                 { [] }
   | ops = nonempty_list(morphism_decl)              { ops }
@@ -475,7 +479,7 @@ morph_item:
                  fn_body = [SReturn (body_expr, loc)];
                  fn_loc = loc } in
       MItemOnObject fd }
-  (* v1.1: `morphism` is now a keyword (MORPHISM_KW), so the `on morphism N via
+  (* `morphism` is a keyword (MORPHISM_KW), so the `on morphism N via
    * M` clause consumes the keyword directly instead of reading it as an IDENT
    * with a string check. `on` stays a plain IDENT (it is NOT a keyword). *)
   | tag = IDENT MORPHISM_KW src_op = IDENT VIA_KW tgt_op = IDENT
@@ -502,11 +506,14 @@ morph_item:
  * is a two-word contextual phrase, not a reserved keyword pair: `nat`
  * and `transform` stay free as user identifiers. *)
 nat_transform_decl:
+  (* `is given`: the naturality is declared an axiom, accepted without a
+     proof — as `is given` on a fun declares its body. *)
   | NAT kind = IDENT name = IDENT FROM src = IDENT TO tgt = IDENT
+    given = boption(preceded(IS, GIVEN))
     LBRACE bindings = list(nat_transform_binding) RBRACE
     { if kind <> "transform" then
         failwith ("expected 'nat transform' declaration, got 'nat " ^ kind ^ "'");
-      { nt_name = name; nt_on_error = None;
+      { nt_name = name; nt_given = given; nt_on_error = None;
         nt_source_morph = src;
         nt_target_morph = tgt;
         nt_components = [];
@@ -517,20 +524,6 @@ nat_transform_binding:
   | FOR EACH obj = IDENT BY tgt = IDENT
     { (obj, tgt) }
 
-(* Lawvere-Tierney topology
- *
- *   topology j of P {
- *     ...   // body that defines j: Omega -> Omega
- *   }
- *)
-
-(* pullback / pushout of a place via the universal property.
- *
- *   place P = pullback(f, g)
- *   place P = pushout(f, g)
- *
- * f and g are names of already-declared moves or functions. P is the name
- * of the resulting place. *)
 
 
 (* Geometric morphism as a first-class construct.
@@ -677,6 +670,11 @@ over_clause:
 on_error_clause:
   | ON_ERROR e = IDENT  { e }
 
+(* the optional `on error E` right after an operation's parameters *)
+op_on_error:
+  | %prec CLAUSE_END        { None }
+  | e = on_error_clause     { Some e }
+
 field_or_cell:
   | f = field_decl                          { FoField f }
   | c = cell_decl                           { FoCell c }
@@ -707,17 +705,17 @@ variant_clause:
 place_member:
   | fc = field_or_cell                    { PbiMember fc }
   | vs = variant_clause                   { PbiVariants vs }
-  /* stage 5 (fork 3 = inline): an operation is a mediated arrow, listed with
-     the other arrows; a law is an algebraic obligation on the list. The
-     `with effects` block dies — effectfulness is a theorem of the list. */
+  /* an operation is a mediated arrow, listed with the other arrows; a law is
+     an algebraic obligation on the list. There is no `with effects` block —
+     effectfulness is a theorem of the list. */
   | od = operation_decl                   { PbiMember (FoOp od) }
   | LAW l = IDENT                         { PbiMember (FoLaw l) }
-  /* stage 4: the canonical clauses as body lines. `on` stays a bare IDENT
+  /* the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
   | OVER base = IDENT                     { PbiClause (PcOver base) }
   /* the mono as containment arrow: `this < B` = this ⊂ B, a sub-object of B
-     (mirror of the coproduct's `this > arms` = this ⊃ arms). Absorbs the
-     retired `subcontains` word; the AST clause is unchanged (pure respelling). */
+     (mirror of the coproduct's `this > arms` = this ⊃ arms). The AST clause
+     is PcSubcontains. */
   | THIS LT base = IDENT                  { PbiClause (PcSubcontains base) }
   | ON_ERROR e = IDENT
     { PbiClause (PcOnError e) }
@@ -756,7 +754,7 @@ operation_decl:
      return type, and the `:` after E disambiguates (no place member can
      start with `:`). Return type MANDATORY with the clause. *)
   | OPERATION name = IDENT LPAREN params = param_list RPAREN
-    oerr = option(on_error_clause)
+    oerr = op_on_error
     ret = option(return_type_decl)
     alg = option(uses_algebra_clause)
     { (if oerr <> None && ret = None then
@@ -769,7 +767,7 @@ operation_decl:
         op_algebra = alg;
         op_loc = mk_loc $startpos $endpos } }
 
-(* v1.1: a topos's morphism declaration. Mirrors operation_decl but uses the
+(* A topos's morphism declaration. Mirrors operation_decl but uses the
  * `morphism` keyword (MORPHISM_KW) instead of `operation`, and produces the
  * SAME operation_decl record (op_functorial = false, op_algebra = None). This
  * keeps `operation` for place members and `morphism` for topos morphisms,
@@ -781,8 +779,6 @@ morphism_decl:
 
         op_algebra = None;
         op_loc = mk_loc $startpos $endpos } }
-  (* `functorial morphism` — cross-world functorial morphism, lifted along
-     world morphisms via Yoneda. Mirrors `functorial operation`. *)
 
 (* operation uses algebra <Name> — instantiates a catalog algebra *)
 uses_algebra_clause:
@@ -795,7 +791,7 @@ uses_algebra_clause:
 functor_decl:
   | FUNCTOR name = IDENT LPAREN params = separated_list(COMMA, lambda_param) RPAREN
     FROM from_w = IDENT TO to_w = IDENT
-    laws = list(functor_law)
+    laws = functor_laws
     LBRACE RETURN body = expr RBRACE
     { TopFunctor {
         ft_name = name; ft_on_error = None;
@@ -810,6 +806,10 @@ functor_decl:
 (* The functor laws declared on a functor-lambda. *)
 functor_law:
   | LAW name = IDENT  { name }
+
+functor_laws:
+  | %prec CLAUSE_END                          { [] }
+  | l = functor_law rest = functor_laws       { l :: rest }
 
 standalone_op:
   | o = operation_decl                    { o }
@@ -843,7 +843,7 @@ lambda_param:
 type_expr:
   | a = type_atom ARROW b = type_expr
     { TyArrow (a, b) }
-  | a = type_atom
+  | a = type_atom %prec CLAUSE_END
     { a }
 
 type_atom:
@@ -874,17 +874,17 @@ type_atom:
      Box<number> and Box<text> share one layout. Precise per-instantiation
      element typing (a TyApp node + monomorphisation) is the next increment. *)
   | name = IDENT LT args = separated_nonempty_list(COMMA, type_atom) GT
-    { (* The container types ARE generics: List<T>, Map<K,V>, Stream<T>
-         canonicalize to their dedicated nodes (the retired spellings were
-         `list of T`, `map of K to V`, `stream of T`). Wrong arity is an
-         honest parse-time failure, not a silent TyApp. *)
+    { (* The container types ARE generics: List<T>, Map<K,V> and Wire<T>,
+         the channel (what produce, spawn and a subscription give), have
+         dedicated nodes. Wrong arity is an honest parse-time failure, not a
+         silent TyApp. *)
       match name, args with
       | "List", [t] -> TyList t
       | "Map", [k; v] -> TyMap (k, v)
-      | "Stream", [t] -> TyStream t
-      | ("List" | "Map" | "Stream"), _ ->
+      | "Wire", [t] -> TyChannel t
+      | ("List" | "Map" | "Wire"), _ ->
           failwith (Printf.sprintf
-            "%s expects %s type argument(s): List<T> | Map<K, V> | Stream<T>"
+            "%s expects %s type argument(s): List<T> | Map<K, V> | Wire<T>"
             name (if name = "Map" then "2" else "1"))
       | _ -> TyApp (name, args) }
   | name = IDENT
@@ -892,12 +892,9 @@ type_atom:
          and its primitive code are one object; parsing them to one node
          means no comparator downstream can ever tell them apart (the same
          move as the String/text normalization in desugar, one layer up). *)
-      match name with
-      | "Number" -> TyPrim "number"
-      | "Text" -> TyPrim "text"
-      | "Boolean" -> TyPrim "boolean"
-      | "Unit" -> TyPrim "unit"
-      | ("number" | "text" | "boolean" | "unit") when
+      match Surface_ast.prim_of_face name, name with
+      | Some prim, _ -> TyPrim prim
+      | None, ("number" | "text" | "boolean" | "unit") when
           not (let f = $startpos.Lexing.pos_fname in
                (* the prelude and the kernel corpus may speak the codes *)
                let has sub =
@@ -909,7 +906,7 @@ type_atom:
           failwith (Printf.sprintf
             "type `%s` is the kernel code: write `%s` (the prelude place)"
             name (String.capitalize_ascii name))
-      | _ -> TyUser name }
+      | None, _ -> TyUser name }
   | name = IDENT IN ids = ident_list
     { TyPrimIn (name, ids) }
   | first = IDENT PIPE rest = separated_nonempty_list(PIPE, variant)
@@ -982,8 +979,8 @@ variant:
    place, as data (`this > shift(nat, nat) : mk(a, b) = mk(a+1, b+1)`).
    The slot lives ONLY here (not in type-position sums, where the `:` tail
    would be ambiguous); enabling it requires the pinned path-over obligation
-   in the kernel (the branch checked against PathP (i. P(loop@i)), Fase 2).
-   Until then: a clean reject. */
+   in the kernel (the branch checked against PathP (i. P(loop@i))). Without
+   it: a clean reject. */
 arm:
   | v = variant  { v }
   | name = IDENT LPAREN separated_list(COMMA, type_expr) RPAREN
@@ -1000,10 +997,16 @@ arm:
    names the type being defined (Tree) is a plain type_expr (TyUser "Tree"), so
    recursion is expressible. There is no separate `inductive`/`place X = ...` form. *)
 
-(* stream_modifier / stream_mod_list removed in v1.1 (BUFFER/DROP were inert). *)
+(* No stream_modifier / stream_mod_list: BUFFER/DROP would be inert. *)
+
+(* x.f1.f2: the fields after the head, as one path *)
+field_path:
+  | f = IDENT %prec CLAUSE_END                     { [f] }
+  | f = IDENT DOT rest = field_path                { f :: rest }
 
 ident_list:
-  | items = separated_nonempty_list(COMMA, IDENT)  { items }
+  | x = IDENT %prec CLAUSE_END                     { [x] }
+  | x = IDENT COMMA rest = ident_list              { x :: rest }
 
 /* ─── Function declaration ──────────────────────────────────────────── */
 
@@ -1441,13 +1444,13 @@ expr:
       ECall ("__heyt_int_make", [v; ELit (LitNumber 0.0, loc)], loc) }
   | MINUS e = expr %prec UMINUS
     { EBinop (OpSub, ELit (LitNumber 0.0, dummy_loc), e, mk_loc $startpos $endpos) }
-  | e = chained_expr                            { e }
+  | e = chained_expr %prec CLAUSE_END           { e }
 
 (* method chaining.
  * `e.method(args)` itera su expr_atom, costruendo ECall(method, e :: args).
- * Tipico use: Seq.from_list(l).map(f).filter(p).fold(0, g). *)
+ * Tipico use: Sequence.from_list(l).map(f).filter(p).fold(0, g). *)
 chained_expr:
-  | e = expr_atom                               { e }
+  | e = expr_atom %prec CLAUSE_END              { e }
   | recv = chained_expr DOT meth = IDENT LPAREN args = expr_list RPAREN
     { ECall (meth, recv :: args, mk_loc $startpos $endpos) }
   | recv = chained_expr DOT FOLD LPAREN args = expr_list RPAREN
@@ -1484,7 +1487,7 @@ expr_atom:
     { EMorphLam (params, body, from_s, to_s, mk_loc $startpos $endpos) }
   | FUNCTOR LPAREN params = separated_list(COMMA, lambda_param) RPAREN
     FATARROW body = expr FROM from_w = IDENT TO to_w = IDENT
-    laws = list(functor_law)
+    laws = functor_laws
     { (* An anonymous first-class functor. Maps from world from_w to world
        * to_w. The declared functor laws (identity, composition) are checkable
        * by the compiler. *)
@@ -1499,7 +1502,7 @@ expr_atom:
   (* Handle composition.
    * Syntax: `compose <h1> with <h2>` produces a composed handle.
    * Semantics: result(x) = h2(h1(x)). *)
-  | COMPOSE h1 = expr_atom WITH h2 = expr_atom
+  | COMPOSE h1 = expr_atom WITH h2 = expr_atom %prec CLAUSE_END
     { EComposeWith (h1, h2, mk_loc $startpos $endpos) }
   | HCOMP ty_name = IDENT LBRACKET
       sides = separated_list(COMMA, hcomp_side) RBRACKET base = hcomp_base
@@ -1538,13 +1541,12 @@ expr_atom:
        clear     = refl(inferred endpoint)       (was: plainly)
      The bare form's endpoint is filled by Tycheck.elaborate_id_sugar from
      the enclosing function's return-type Id; here it is a sentinel var.
-     NOTE: after CLEAR, a token that can start an atom SHIFTS (greedy, same
-     as every prefix metonym) — the bare form fires only when nothing
-     parseable follows. This is the ONE state added to the s/r ledger
-     (11 -> 12 states; the arbitrated resolutions are all this shift). *)
+     After CLEAR, a token that can start an atom continues it (greedy, as
+     every prefix metonym): the bare form closes only when no atom follows
+     (CLAUSE_END, see the precedence block). *)
   | CLEAR e = expr_atom %prec PREFIX_APP
     { ERefl (e, mk_loc $startpos $endpos) }
-  | CLEAR
+  | CLEAR %prec CLAUSE_END
     { ERefl (EVar ("__plainly__", mk_loc $startpos $endpos), mk_loc $startpos $endpos) }
   (* ─── Metonymic surface sugar (journey metaphor) ─────────────────────
      Prefix forms binding an atom; pure desugar to the cubical primitives.
@@ -1626,11 +1628,11 @@ expr_atom:
          * __morph_in_<S>__<name> serves as a unique tag. *)
         ECall ("__morph_in_" ^ space ^ "__" ^ name, args,
                mk_loc $startpos $endpos) }
-  | name = IDENT LPAREN args = expr_list RPAREN
+  | name = IDENT LPAREN args = expr_list RPAREN %prec CLAUSE_END
     { ECall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
     { ECall (name, args, mk_loc $startpos $endpos) }   (* mod::fun(args) *)
-  | x = IDENT DOT fs = separated_nonempty_list(DOT, IDENT)
+  | x = IDENT DOT fs = field_path
     {
       (* Build a left-associative chain: x.f1.f2.f3 -> EField(EField(EField(x, f1), f2), f3) *)
       List.fold_left
@@ -1643,7 +1645,7 @@ expr_atom:
          chain above cannot accept it; dedicated rule *)
       EField (EVar (x, dummy_loc), "stream", mk_loc $startpos $endpos)
     }
-  | x = IDENT                                                          
+  | x = IDENT %prec CLAUSE_END
     { EVar (x, mk_loc $startpos $endpos) }
   | x = QIDENT
     { EVar (x, mk_loc $startpos $endpos) }   (* qualified name mod::fun *)
@@ -1667,8 +1669,8 @@ expr_atom:
        * value. Low precedence: captures as much of the expression to the right
        * as possible. *)
       EIfThenElse (c, a, b, mk_loc $startpos $endpos) }
-  (* EAll ("all P where c") removed in v1.1: condition was dropped at desugar,
-     __all had no lowering, unused in the corpus. *)
+  (* No EAll ("all P where c"): the condition would be dropped at desugar
+     and __all has no lowering. *)
 
 hcomp_side:
   | face_var = IDENT EQ I0 FATARROW PLAM binder = IDENT FATARROW body = expr

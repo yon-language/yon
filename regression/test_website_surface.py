@@ -18,9 +18,14 @@ Two legs, both cheap:
          `: unit`) appears in a type position. They are the kernel codes; the
          surface writes Number, Text, Boolean, Unit.
 
-Both read the live lexer for the keyword set, so a word that comes BACK stops
-being flagged without touching this file.
+  leg C  the two highlighters color exactly the words the lexer reserves: the
+         site's Prism keyword list is the lexer's lowercase table (minus
+         true/false), and the VS Code grammar names no word the lexer lacks.
+
+All legs read the live lexer for the keyword set, so a word that comes BACK
+stops being flagged without touching this file.
 """
+import json
 import re
 from pathlib import Path
 
@@ -35,7 +40,8 @@ SITE = ROOT / "website"
 RETIRED = [
     "terminal", "pullback", "pushout", "topology", "adjunction", "functorial",
     "lawful", "invertible", "subcontains", "verify", "becomes", "partial",
-    "span", "plainly", "stay",
+    "span", "plainly", "stay", "new", "morphisms", "objects", "forward",
+    "backward", "bi", "effects",
 ]
 
 # Files that may legitimately name a retired word as Yon code: the pages whose
@@ -62,7 +68,9 @@ def site_files():
 def code_zones(text: str, is_js: bool) -> str:
     """The parts of a file that claim to BE Yon code."""
     zones = re.findall(r"`[^`\n]+`", text)                       # inline code
-    zones += re.findall(r"```[a-z]*\n.*?```", text, re.S)        # fenced
+    # fenced, except blocks in another language (a yon.toml is not Yon code)
+    zones += [b for b in re.findall(r"```[a-z]*\n.*?```", text, re.S)
+              if not re.match(r"```(toml|sh|bash|console|json|text)\n", b)]
     zones += re.findall(r"<CodeWindow.*?</CodeWindow>", text, re.S)
     if is_js:
         zones += re.findall(r"<code>.*?</code>", text, re.S)     # JSX inline code
@@ -120,3 +128,27 @@ def test_no_lowercase_primitive_in_type_position(path):
         "primitives became prelude places, the surface writes Number, Text, "
         "Boolean, Unit — lowercase is E1001."
     )
+
+
+PRISM = SITE / "src" / "theme" / "prism-include-languages.js"
+VSCODE = ROOT / "lsp" / "editors" / "vscode" / "syntaxes" / "yon.tmLanguage.json"
+
+
+def test_prism_keywords_are_the_lexer_keywords():
+    m = re.search(r"keyword: new RegExp\((.*?)\)\\\\b", PRISM.read_text(), re.S)
+    assert m, f"{PRISM}: keyword RegExp not found"
+    words = set("".join(re.findall(r"'([^']*)'", m.group(1))).replace("\\\\b(?:", "").split("|"))
+    words.discard("")
+    want = live_keywords() - {"true", "false"}
+    assert words == want, (
+        f"site highlighter vs lexer: extra {sorted(words - want)}, missing {sorted(want - words)}")
+
+
+def test_vscode_grammar_names_only_live_words():
+    grammar = json.loads(VSCODE.read_text())
+    pats = [grammar["repository"]["declarations"]["match"]]
+    pats += [p["match"] for p in grammar["repository"]["keywords"]["patterns"]]
+    live = live_keywords() | set(re.findall(r'^\s*"([A-Za-z_][A-Za-z0-9_]*)",\s*[A-Z]',
+                                            LEXER.read_text(), re.M))
+    named = {w for p in pats for w in re.search(r"\\b\(([^)]*)\)", p).group(1).split("|")}
+    assert named <= live, f"VS Code grammar colors words the lexer lacks: {sorted(named - live)}"

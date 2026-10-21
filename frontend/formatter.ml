@@ -61,7 +61,7 @@ let rec fmt_ty (t : ty) : string =
   | TyPrimIn (s, opts) -> s ^ " in " ^ String.concat ", " opts
   | TyList t -> "List<" ^ fmt_ty t ^ ">"
   | TyMap (k, v) -> "Map<" ^ fmt_ty k ^ ", " ^ fmt_ty v ^ ">"
-  | TyStream t -> "Stream<" ^ fmt_ty t ^ ">"
+  | TyChannel t -> "Wire<" ^ fmt_ty t ^ ">"
   | TyArrow (a, b) -> fmt_ty a ^ " -> " ^ fmt_ty b
   | TyUser s -> s
   | TyVar s -> s
@@ -97,22 +97,21 @@ and fmt_ty_term (TyTermExpr e) = fmt_expr e
 
 and fmt_expr (e : expr) : string =
   match e with
+  | ELit (LitNumber _, loc)
+    when Hashtbl.mem Surface_ast.exact_int_literals
+           (loc.file, loc.start_line, loc.start_col) ->
+      (* an integral literal is printed with the digits it was written with *)
+      Hashtbl.find Surface_ast.exact_int_literals
+        (loc.file, loc.start_line, loc.start_col)
   | ELit (l, _) -> lit_str l
   | EVar (x, _) -> x
   | EField (o, f, _) -> fmt_expr o ^ "." ^ f
   | ECall (name, args, _) ->
       (* Undo the parser's normalization, to reprint the surface syntax the
        * user wrote:
-       *   - "P_instantiate" with 0 args  -> "verify P"
        *   - "Obj__method"                -> "Obj.method(...)"
        * so the round-trip preserves the form, not just the semantics. *)
-      let ends_with suffix s =
-        let ls = String.length s and lf = String.length suffix in
-        ls >= lf && String.sub s (ls - lf) lf = suffix in
       (match args, name with
-       | [], _ when ends_with "_instantiate" name ->
-           let place = String.sub name 0 (String.length name - String.length "_instantiate") in
-           "verify " ^ place
        | recv :: rest, ("fold" | "map") ->
            Printf.sprintf "%s.%s(%s)" (fmt_expr recv) name
              (String.concat ", " (List.map fmt_expr rest))
@@ -458,8 +457,9 @@ let fmt_functor (f : fmt) (ft : functor_decl) : unit =
 
 let fmt_nat_transform (f : fmt) (nt : nat_transform_decl) : unit =
   (* the surface keyword is two words, `nat transform`, not `nat_transform`. *)
-  line f (Printf.sprintf "nat transform %s from %s to %s {"
-            nt.nt_name nt.nt_source_morph nt.nt_target_morph);
+  line f (Printf.sprintf "nat transform %s from %s to %s%s {"
+            nt.nt_name nt.nt_source_morph nt.nt_target_morph
+            (if nt.nt_given then " is given" else ""));
   f.indent <- f.indent + 1;
   List.iter (fun (obj, tgt) ->
     line f (Printf.sprintf "for each %s by %s" obj tgt)
@@ -542,9 +542,9 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
        f.indent <- f.indent - 1;
        line f "}"
    | TopTopos td ->
-       (* v1.1 topos-per-space: objects/at/in are filesystem-inferred; the surface
+       (* topos-per-space: objects/at/in are filesystem-inferred; the surface
           is `topos <name> where { <terminal>? <prop>* }`. The morphisms block is
-          not covered yet -> Exit. *)
+          not covered -> Exit. *)
        (* the form that was read, not an invented one: a nameless topos
           takes its name from the file, and reprinting it would write a
           name the source does not have (which the round-trip fail-safe
@@ -553,7 +553,7 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
                else Printf.sprintf "topos %s where {" td.tp_name);
        f.indent <- f.indent + 1;
        if td.tp_morphisms <> [] then begin
-         (* the `morphisms { }` wrapper is retired: bare morphism lines. *)
+         (* a topos lists its morphisms as bare `morphism` lines. *)
          List.iter (fun op ->
            let kw = "morphism" in
            let params = String.concat ", "
@@ -694,7 +694,8 @@ let top_names (prog : program) : string list =
     | TopPlace pd -> Some ("place:" ^ pd.pd_name)
     | TopWorld wd -> Some ("world:" ^ wd.wd_name)
     | TopFunctor ft -> Some ("functor:" ^ ft.ft_name)
-    | TopNatTransform nt -> Some ("nat:" ^ nt.nt_name)
+    | TopNatTransform nt ->
+        Some ("nat:" ^ nt.nt_name ^ (if nt.nt_given then ":given" else ""))
     | TopSpace sd -> Some ("space:" ^ sd.sd_name)
     | TopMove mv -> Some ("move:" ^ mv.mv_name)
     | TopTopos td -> Some ("topos:" ^ td.tp_name)

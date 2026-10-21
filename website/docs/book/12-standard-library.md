@@ -12,17 +12,35 @@ code.
 
 ## Collections and streams
 
-`List`, `HashMap`, `HashSet`, `XSet` are immutable collections over the
-content-addressed heap; `Vec` is the mutable-array exception (its own section
-below). Streams chain with methods, and their combinators
-**require inline lambdas** (the fusion happens at emission, so the body must
-be visible):
+**One collection, one generic type.** Every collection is one place of the
+prelude, generic in what it holds: `List<T>`, `HashMap<K, V>`, `HashSet<T>`,
+`XRelMap<K, V>`, `Arena<V>`. Its representation (how wide a slot is, how a
+value is encoded) is derived from the carrier of its parameters, never
+written per type: there is no collection per precision or per element type,
+and no type of the same name in two worlds. A lookup answers with a
+coproduct, `Lookup<V> { Found(V) :U Absent }`: `match HashMap.get(m, k) {
+Found(v) => …, Absent => … }`, so an absent key is never a value in
+disguise. The runtime primitives are the places' `is given` bodies; `get` is
+written in Yon on top of them.
+
+`List`, `HashMap` and `HashSet` are values over the content-addressed heap:
+`HashMap.set` and `HashSet.add` return a new collection and leave the one they
+were given as it was, two equal collections are the same handle, and nothing
+is ever written in place on their nodes. `Vec` (its own section below) and
+`XSet` change in place.
+
+A `Sequence<T>` is finite and pure: built from a list (`Sequence.from_list`,
+`Sequence.range`), it chains `map`, `filter` and `fold`, fused into one loop
+when emitted, so their combinators **require inline lambdas** (the body must
+be visible). It is a place, `Sequence` with a capital: the lowercase
+`sequence` is the keyword of `in sequence over`. A `Stream<T>` is infinite
+and pure, an unfold (`Stream.iterate`, read with `take`):
 
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
   be l holds List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
-  be s holds Seq.from_list(l).map(fun(x) => x * 2).fold(0, fun(a, b) => a + b)
+  be s holds Sequence.from_list(l).map(fun(x) => x * 2).fold(0, fun(a, b) => a + b)
   return s + 30                    // 12 + 30 = 42
 }
 ```
@@ -58,7 +76,7 @@ hashes).
 fun main(): Number {
   be m holds HashMap.empty()
   be m2 holds HashMap.set(m, 1, 10)
-  be ten holds HashMap.get(m2, 1)
+  be ten holds match HashMap.get(m2, 1) { Found(v) => v, Absent => 0 }
   be g holds Math.gcd(12, 18)                    // 6
   be b holds Bits.band(12, 10)                    // 8
   be vl holds VoyagerList.empty()
@@ -108,9 +126,13 @@ prelude/
 
 `place Number is number` is a **fusion**: the place is the declared face of a
 primitive code, and `is <prim>` says the carrier is axiomatic — the leaf of the
-carrier functor's recursion, not a way around it. Everything else is ordinary
-Yon: `Number.gcd` is written with Euclid's algorithm, `Number.sqrt` with
-Newton's, `String.reverse` character by character.
+carrier functor's recursion, not a way around it. Most of the rest is ordinary
+Yon: `Number.gcd` is written with Euclid's algorithm, `String.reverse`
+character by character. Where the platform already has the function, the
+place declares it `is given` instead of writing a second one: `Number.floor`,
+`Number.exp`, `Number.sin`, `Number.cos` are the libm functions `Math.*`
+names, and `Number.sqrt`, `Number.ln` are libm's on their domain, with a
+`DomainError` outside it.
 
 <!-- yon-gate: exit 32 -->
 ```yon
@@ -128,8 +150,15 @@ place Entry {
 `Num64`, `Int32` in `Num32` — two distinct categories, so `Widen` between them
 is a genuine functor rather than an arrow between two objects of one site. The
 bare names in your code mean the 64-bit site, which is the language default.
-Integer arithmetic is exact: on an integer carrier `/` and `%` truncate, so
-`Int64.div(7, 2)` is 3.
+`Int64` is the ring ℤ/2⁶⁴ at runtime, as the checker proves its laws: its
+values are 64-bit integers from end to end, `+`, `-` and `*` wrap modulo 2⁶⁴
+(`Int64.max_value() + 1` is `Int64.min_value()`), `/` and `%` truncate, so
+`Int64.div(7, 2)` is 3. An integer literal written at an `Int64` is the exact
+integer its digits name, past 2⁵³ too (`9007199254740993` stays odd), and
+`Int64.to_text` writes the exact digits of any value. An `Int64` is not a
+`Number`: no conversion between them is implicit. Where a value travels in a uniform 64-bit slot (a list, a
+closure, a coproduct payload, the wire), an `Int64` crosses as its bits and
+comes back the same integer.
 
 **Partial functions declare how they fail.** `sqrt` of a negative, `ln` of a
 non-positive, division by zero: each is dressed with `on error DomainError`,

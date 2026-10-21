@@ -16,18 +16,16 @@
  *      folding, and simplify x+0 and x*1.
  *   2. Commutative canonicalization (canonicalize below): sort the operands of
  *      + and *, so 2*x and x*2 become the same term.
- *   3. Ring solver (ring_equal below): decide equality in the free commutative
- *      ring over the opaque leaves. This is what closes distributivity, e.g.
- *      x*(a+b) versus x*a + x*b, and collecting like terms, e.g. (x+1)^2
- *      versus x^2 + 2x + 1. On the polynomial fragment it is a decision
- *      procedure, so a positive answer is a real proof and a negative answer
- *      is genuine (not a failure to normalize).
+ *   3. The ring solver (ring_equal below) decides equality in Z/2^64 over the
+ *      opaque leaves; it is used for identities between Int64 values
+ *      (Dispatcher.ty_term_equal), never for these squares, which are between
+ *      Number functions, and Number (f64) is not a ring.
  *
  * The result is "Proven" when the two sides are equal, "Inconclusive" when
  * they leave the fragments above (opaque reduction-clauses, recursion,
  * branches the normalizer cannot align). Inconclusive is NOT "Disproven":
- * disproving the square needs a concrete counterexample, which is the job of
- * the runtime checks F2a/F2b, or an escalation to an SMT solver or Coq. This
+ * disproving the square needs a concrete counterexample, or an escalation to
+ * an SMT solver or Coq. This
  * file only decides positive symbolic equality. *)
 
 module S = Surface_ast
@@ -63,6 +61,7 @@ let rec expr_equal (a : S.expr) (b : S.expr) : bool =
       && List.length asa = List.length asb
       && List.for_all2 expr_equal asa asb
   | S.ERefl (ea, _), S.ERefl (eb, _) -> expr_equal ea eb
+  | S.EPathApp (pa, da, _), S.EPathApp (pb, db, _) -> da = db && expr_equal pa pb
   | S.EParen (ea, _), eb -> expr_equal ea eb
   | ea, S.EParen (eb, _) -> expr_equal ea eb
   | _ -> false  (* altre forme: pessimistico *)
@@ -73,6 +72,11 @@ and literal_equal (a : S.literal) (b : S.literal) : bool =
   | S.LitString x, S.LitString y -> x = y
   | _ -> a = b
 
+(* A form the substitution does not model. Passing it through unchanged would
+   leave the parameter unsubstituted on both sides of a square, which could
+   then look alike: the square is not decided instead. *)
+exception Not_substitutable of string
+
 let rec subst_var (var_name : string) (replacement : S.expr) (e : S.expr) : S.expr =
   let r = subst_var var_name replacement in
   match e with
@@ -82,7 +86,7 @@ let rec subst_var (var_name : string) (replacement : S.expr) (e : S.expr) : S.ex
   | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
   | S.EBinop (op, l, ri, loc) -> S.EBinop (op, r l, r ri, loc)
   | S.EParen (inner, loc) -> S.EParen (r inner, loc)
-  | _ -> e  (* altre forme: pass-through *)
+  | _ -> raise (Not_substitutable "a form other than arithmetic, fields and calls")
 
 let try_inline_fun (fun_idx : (string * S.fun_decl) list)
                    (name : string) (args : S.expr list) : S.expr option =
@@ -100,13 +104,9 @@ let try_inline_fun (fun_idx : (string * S.fun_decl) list)
 (* Constant folding + elementary algebra simplifications.
  * Rule:
  *   c1 OP c2 -> eval (se entrambi LitNumber)
- *   e + 0 -> e
- *   0 + e -> e
  *   e - 0 -> e
  *   e * 1 -> e
  *   1 * e -> e
- *   e * 0 -> 0
- *   0 * e -> 0
  * Iterated to a fixed point (max 100 iters for safety). *)
 let rec normalize_step (e : S.expr) : S.expr =
   match e with
@@ -123,15 +123,12 @@ let rec normalize_step (e : S.expr) : S.expr =
              | _ -> Float.nan) in
            if Float.is_nan v then S.EBinop (op, l', r', loc)
            else S.ELit (S.LitNumber v, loc)
-       | _, S.ELit (S.LitNumber 0.0, _) when op = S.OpAdd -> l'
-       | S.ELit (S.LitNumber 0.0, _), _ when op = S.OpAdd -> r'
+       (* only the identities that hold bit for bit on IEEE doubles: e - 0,
+          e * 1, 1 * e. Not e + 0 (-0 + 0 is +0) nor e * 0 (NaN * 0 is NaN,
+          -1 * 0 is -0). *)
        | _, S.ELit (S.LitNumber 0.0, _) when op = S.OpSub -> l'
        | _, S.ELit (S.LitNumber 1.0, _) when op = S.OpMul -> l'
        | S.ELit (S.LitNumber 1.0, _), _ when op = S.OpMul -> r'
-       | _, S.ELit (S.LitNumber 0.0, _) when op = S.OpMul ->
-           S.ELit (S.LitNumber 0.0, loc)
-       | S.ELit (S.LitNumber 0.0, _), _ when op = S.OpMul ->
-           S.ELit (S.LitNumber 0.0, loc)
        | _ -> S.EBinop (op, l', r', loc))
   | S.EParen (inner, _) -> normalize_step inner
   | S.ECall (n, args, loc) -> S.ECall (n, List.map normalize_step args, loc)
@@ -273,34 +270,18 @@ module AtomMap = Map.Make (String)
 type monomial = int AtomMap.t
 
 (* A polynomial: monomials (keyed by a canonical string of the monomial) mapped
-   to their rational coefficient, kept as a pair (num, den) in lowest terms.
-   A monomial absent from the map has coefficient zero. *)
+   to their coefficient. A monomial absent from the map has coefficient zero. *)
 module MonoMap = Map.Make (String)
 
-let rec gcd a b = if b = 0 then abs a else gcd b (a mod b)
+(* The ring is Z/2^64, the ring Int64 is: a coefficient is an Int64, and
+   OCaml's Int64 addition and multiplication wrap, which is exactly that ring,
+   so a coefficient never leaves its domain. Division is not a ring operation
+   and never enters (to_poly leaves the ring on it). *)
+type coeff = Int64.t
 
-(* A coefficient is an exact rational, so that division by an integer constant
-   (OpDiv by a literal) stays exact and 1/3 + 1/3 + 1/3 normalizes to 1. *)
-type coeff = { num : int; den : int }
-
-let mk_coeff n d =
-  if d = 0 then { num = n; den = 0 }  (* division by zero: left as a marker *)
-  else
-    let s = if d < 0 then -1 else 1 in
-    let n = n * s and d = d * s in
-    let g = gcd n d in
-    let g = if g = 0 then 1 else g in
-    { num = n / g; den = d / g }
-
-let coeff_add a b =
-  if a.den = 0 || b.den = 0 then { num = 0; den = 0 }
-  else mk_coeff (a.num * b.den + b.num * a.den) (a.den * b.den)
-
-let coeff_mul a b =
-  if a.den = 0 || b.den = 0 then { num = 0; den = 0 }
-  else mk_coeff (a.num * b.num) (a.den * b.den)
-
-let coeff_is_zero a = a.num = 0 && a.den <> 0
+let coeff_add = Int64.add
+let coeff_mul = Int64.mul
+let coeff_is_zero a = Int64.equal a 0L
 
 (* Print a monomial (its atom->exponent map) to a canonical key. Atoms are
    already sorted by AtomMap, so the key is unique for the monomial. *)
@@ -335,7 +316,7 @@ let poly_add (a : polynomial) (b : polynomial) : polynomial =
   MonoMap.fold (fun _ (m, c) acc -> poly_add_term acc m c) b a
 
 let poly_neg (a : polynomial) : polynomial =
-  MonoMap.map (fun (m, c) -> (m, coeff_mul c (mk_coeff (-1) 1))) a
+  MonoMap.map (fun (m, c) -> (m, Int64.neg c)) a
 
 let poly_mul (a : polynomial) (b : polynomial) : polynomial =
   MonoMap.fold (fun _ (ma, ca) acc ->
@@ -350,7 +331,7 @@ let poly_const (c : coeff) : polynomial =
 
 (* A single atom as a polynomial: the monomial atom^1 with coefficient 1. *)
 let poly_atom (key : string) : polynomial =
-  poly_add_term poly_zero (AtomMap.singleton key 1) (mk_coeff 1 1)
+  poly_add_term poly_zero (AtomMap.singleton key 1) 1L
 
 (* Raised when an opaque leaf has no INJECTIVE printed key, i.e. it contains a
    form outside the rendered fragment (a non-arithmetic operator, or a
@@ -370,9 +351,11 @@ exception Opaque_unrenderable
 let rec to_poly (e : S.expr) : polynomial option =
   match e with
   | S.ELit (S.LitNumber f, _) ->
-      (* Accept integer-valued literals exactly; a genuinely fractional literal
-         (2.5) is kept out of the integer-coefficient model. *)
-      if Float.is_integer f then Some (poly_const (mk_coeff (int_of_float f) 1))
+      (* an integer literal that is an Int64 is a ring element; anything else
+         (a fraction, a value past the Int64 range) is not *)
+      if Float.is_integer f && f >= -9.223372036854775808e18
+         && f < 9.223372036854775808e18
+      then Some (poly_const (Int64.of_float f))
       else None
   | S.EParen (inner, _) -> to_poly inner
   | S.EBinop (S.OpAdd, l, r, _) ->
@@ -387,22 +370,7 @@ let rec to_poly (e : S.expr) : polynomial option =
       (match to_poly l, to_poly r with
        | Some pl, Some pr -> Some (poly_mul pl pr)
        | _ -> None)
-  | S.EBinop (S.OpDiv, l, r, _) ->
-      (* Only division by a nonzero integer constant stays in the exact model;
-         dividing by a polynomial leaves the ring. *)
-      (match to_poly r with
-       | Some pr when MonoMap.cardinal pr = 1 ->
-           (match MonoMap.choose pr with
-            | (_, (m, c)) when AtomMap.for_all (fun _ e -> e = 0) m
-                               && not (coeff_is_zero c) ->
-                (match to_poly l with
-                 | Some pl ->
-                     let inv = mk_coeff c.den c.num in
-                     Some (poly_mul pl (poly_const inv))
-                 | None -> None)
-            | _ -> None)
-       | _ -> None)
-  | S.EBinop (S.OpMod, _, _, _) -> None
+  | S.EBinop ((S.OpDiv | S.OpMod), _, _, _) -> None
   | _ ->
       (* Any other leaf (variable, field access, opaque call) is an opaque
          indeterminate. We key it by its canonical printed form, so two
@@ -442,7 +410,7 @@ and expr_to_atom_key (e : S.expr) : string =
 let poly_equal (a : polynomial) (b : polynomial) : bool =
   let coeffs p =
     MonoMap.bindings p
-    |> List.map (fun (k, (_, c)) -> (k, (c.num, c.den)))
+    |> List.map (fun (k, (_, c)) -> (k, c))
     |> List.sort compare
   in
   coeffs a = coeffs b
@@ -469,8 +437,10 @@ let check (fun_idx : (string * S.fun_decl) list)
   (* RHS = G__N(η(input)) *)
   let rhs = S.ECall (g_n_name,
               [S.ECall (eta_name, [input_var], loc)], loc) in
-  let lhs_norm = normalize fun_idx lhs in
-  let rhs_norm = normalize fun_idx rhs in
+  match normalize fun_idx lhs, normalize fun_idx rhs with
+  | exception Not_substitutable form ->
+      Inconclusive ("the square contains " ^ form ^ ", outside the normalizer's fragment")
+  | lhs_norm, rhs_norm ->
   if expr_equal lhs_norm rhs_norm then Proven
   else
     (* Syntactic normal forms differ. Before giving up, try to decide the
@@ -478,12 +448,12 @@ let check (fun_idx : (string * S.fun_decl) list)
        two sides differ only by distributivity or by collecting like terms
        (x*(a+b) vs x*a + x*b, and similar). On the polynomial fragment this is
        a decision procedure, so a positive answer is a real proof. *)
-    (match ring_equal lhs_norm rhs_norm with
-     | Some true -> Proven
-     | _ ->
-         Inconclusive (
-           "post-normalization LHS and RHS are syntactically distinct; "
-           ^ "may still be semantically equal (commutativity, reduction-clauses, etc.)"))
+    (* The squares are between Number functions, and Number (f64) is not a
+       ring: the ring solver would prove laws that are false on f64, so it
+       is not consulted here. *)
+    Inconclusive (
+      "post-normalization LHS and RHS are syntactically distinct; "
+      ^ "may still be semantically equal (commutativity, reduction-clauses, etc.)")
 
 (* Helper that returns the normalized LHS and RHS (before the syntactic
  * comparison), so a caller can pass them to an external SMT solver. *)

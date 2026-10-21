@@ -109,7 +109,7 @@ def test_arm_section_at_union_boundary_upcasts_as_identity():
     assert b"topos.subtype_cast" in r.stdout, "the upcast is not a subtype_cast (identity) anymore"
 
 
-# ---- prima pietra (cantiere sezione): a payload arm IS a place ------------
+# ---- a payload arm IS a place ---------------------------------------------
 
 def test_mediatrice_on_arm_requires_full_arity(tmp_path):
     """FLIPPED (was the fail-closed guard): the mediatrice on a payload arm

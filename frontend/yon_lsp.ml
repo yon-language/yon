@@ -153,7 +153,7 @@ let rec ty_str (t : Surface_ast.ty) : string =
   | Surface_ast.TySumIn _ -> "sum"
   | Surface_ast.TyList t -> "list of " ^ ty_str t
   | Surface_ast.TyMap (k, v) -> "map of " ^ ty_str k ^ " to " ^ ty_str v
-  | Surface_ast.TyStream t -> "stream of " ^ ty_str t
+  | Surface_ast.TyChannel t -> "Wire<" ^ ty_str t ^ ">"
   | Surface_ast.TyUser s -> s
   | Surface_ast.TyVar s -> s
   | Surface_ast.TyMetaVar n -> Printf.sprintf "?%d" n
@@ -327,13 +327,14 @@ let hover_at (prog : Surface_ast.program) (line0 : int) (col0 : int)
 
 (* ─── Completion: keywords + top-level names in scope ───────────────── *)
 
-let keywords = [
-  "be"; "place"; "fun"; "holds"; "return"; "operation"; "import"; "as"; "internal"; "from";
-  "topos"; "subcontains"; "uses"; "algebra"; "law"; "verify"; "move"; "reduction"; "view";
-  "with"; "effects"; "is"; "if"; "then"; "else"; "where";
-  "commutative"; "associative"; "monotone"; "Additive"; "TropicalMax";
-  "TropicalMin"; "Multiplicative"; "BooleanOr"; "BooleanAnd"; "Gcd";
-]
+(* The keywords are the lexer's own table: a word the language does not
+   have is never offered. Law and algebra names are identifiers, not tokens,
+   so they are listed beside it. *)
+let keywords =
+  List.sort_uniq compare
+    (Hashtbl.fold (fun k _ acc -> k :: acc) Lexer.keyword_table [])
+  @ [ "commutative"; "associative"; "monotone"; "Additive"; "TropicalMax";
+      "TropicalMin"; "Multiplicative"; "BooleanOr"; "BooleanAnd"; "Gcd" ]
 
 let completions_of_program (prog : Surface_ast.program) : (string * int) list =
   (* CompletionItemKind: 14=Keyword, 3=Function, 7=Class, 6=Variable *)

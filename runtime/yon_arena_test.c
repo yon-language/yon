@@ -21,8 +21,8 @@
 #include <stdio.h>
 
 #define MAXF 8
-typedef struct { uint32_t val[MAXF]; uint32_t sig[MAXF]; int n; } collect_t;
-static void collect(uint32_t value, uint32_t sigma, void *ctx) {
+typedef struct { uint64_t val[MAXF]; uint32_t sig[MAXF]; int n; } collect_t;
+static void collect(uint64_t value, uint32_t sigma, void *ctx) {
     collect_t *c = (collect_t *)ctx;
     if (c->n < MAXF) { c->val[c->n] = value; c->sig[c->n] = sigma; c->n++; }
 }
@@ -39,15 +39,16 @@ int main(void) {
     for (uint32_t idx = 0; idx < YON_LEECH_TYPE2_COUNT; idx++) {
         yon_xcoord_t v = yon_mphf_unindex(idx);
         uint32_t orbit_before = yon_arena_orbit(a, v);   /* unoccupied: computed */
-        yon_arena_put_repr(a, v, idx + 1u);
-        if (yon_arena_get_repr(a, v) == idx + 1u) ok++; else wrong++;
+        uint64_t got = 0;
+        yon_arena_put_value(a, v, (uint64_t)idx + 1u);
+        if (yon_arena_get_value(a, v, &got) && got == (uint64_t)idx + 1u) ok++; else wrong++;
         uint32_t orbit_after = yon_arena_orbit(a, v);    /* occupied: sealed slot */
         if (orbit_before == orbit_after) orbit_consistent++; else orbit_bad++;
         if (orbit_after < 8192 && !seen_orbit[orbit_after]) {
             seen_orbit[orbit_after] = 1; distinct++;
         }
     }
-    printf("  repr round-trip   : %ld / %u  (mismatches %ld)\n",
+    printf("  value round-trip  : %ld / %u  (mismatches %ld)\n",
            ok, YON_LEECH_TYPE2_COUNT, wrong);
     printf("  orbit sealed==calc: %ld / %u  (inconsistent %ld)\n",
            orbit_consistent, YON_LEECH_TYPE2_COUNT, orbit_bad);
@@ -79,7 +80,7 @@ int main(void) {
 
     /* non-type-2 rejected, including orbit */
     yon_xcoord_t bad = 0;
-    int put_bad = yon_arena_put_repr(a, bad, 999u);
+    int put_bad = yon_arena_put_value(a, bad, 999u);
     uint32_t orb_bad = yon_arena_orbit(a, bad);
 
     /* --- brick 4: M24 equivariance + same_orbit_exact (filter decides, transport certifies) --- */

@@ -109,7 +109,7 @@ let rec collect_sums_in_ty (t : S.ty) : unit =
         Hashtbl.replace sum_ctor_registry v.S.v_name (i, v.S.v_args)) variants;
       List.iter (fun (v : S.variant) ->
         List.iter collect_sums_in_ty v.S.v_args) variants
-  | S.TyList inner | S.TyStream inner | S.TySubscription (_, inner) ->
+  | S.TyList inner | S.TyChannel inner | S.TySubscription (_, inner) ->
       collect_sums_in_ty inner
   | S.TyMap (a, b) | S.TyArrow (a, b) ->
       collect_sums_in_ty a; collect_sums_in_ty b
@@ -123,10 +123,20 @@ let rec collect_sums_in_ty (t : S.ty) : unit =
    only a DECLARED armless place can be an arm whose sections exist. *)
 let armless_place_names : (string, unit) Hashtbl.t = Hashtbl.create 32
 
+(* The layout of a place: its fields, in the order its carrier lays them out.
+   The one source for both the place's section and a literal `.-> P { … }`,
+   whose values are bound to fields by name, whatever their order in the
+   source. *)
+let place_fields (pd : S.place_decl) : S.field_decl list =
+  List.filter_map (function S.FoField f -> Some f | _ -> None) pd.S.pd_members
+
+let place_layouts : (string, string list) Hashtbl.t = Hashtbl.create 32
+
 let build_sum_registry (p : S.program) : unit =
   Hashtbl.clear sum_ctor_registry;
   Hashtbl.clear inductive_type_names;
   Hashtbl.clear armless_place_names;
+  Hashtbl.clear place_layouts;
   Hashtbl.clear Surface_ast.union_arm_upcasts;
   sum_scrut_counter := 0;
   let scan_param (pm : S.param) = collect_sums_in_ty pm.S.param_ty in
@@ -142,6 +152,8 @@ let build_sum_registry (p : S.program) : unit =
              collect_sums_in_ty (S.error_sum_of ~ret:t ~err:e)
          | _ -> ())
     | S.TopPlace pd ->
+        Hashtbl.replace place_layouts pd.S.pd_name
+          (List.map (fun (f : S.field_decl) -> f.S.fd_name) (place_fields pd));
         (* a place with arms IS the named sum (one production): register its
            name + constructors exactly as an inline sum. *)
         if pd.S.pd_arms <> [] then begin
@@ -164,6 +176,10 @@ let build_sum_registry (p : S.program) : unit =
  * is the binding resolution, exactly as for ordinary functions. *)
 let handle_bindings : (string * S.expr) list ref = ref []
 
+(* Local bindings to a plain lambda, name -> its parameters: a composite that
+   names one reads its source type here. *)
+let lambda_bindings : (string * (string * S.ty) list) list ref = ref []
+
 (* Mapping from topos name to its first place. Filled in process_top_decl for
  * S.TopTopos. Consulted by EMorphLam to choose the correct return type: for
  * `morph from T1 to T2`, the first place of T2 is the actual target. *)
@@ -183,7 +199,7 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.ECall (n, args, _) ->
       (* A value method call `recv.f(args)` is parsed as f(recv, args): the
          receiver is a plain first argument, captured by the args walk below.
-         Module-qualified calls (Seq__fold) and builtins (__band) carry no
+         Module-qualified calls (Sequence__fold) and builtins (__band) carry no
          receiver variable. No name parsing is needed. *)
       let base = if List.mem n bound then [] else [n] in
       base @ List.concat_map (free_vars_in_expr bound) args
@@ -232,8 +248,27 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.EPair (a, b, _) ->
       free_vars_in_expr bound a @ free_vars_in_expr bound b
   | S.EFst (sub, _) | S.ESnd (sub, _) -> free_vars_in_expr bound sub
+  | S.EWireTo _ | S.EAll _ | S.EPullback _ | S.EPushout _ -> []
+  | S.EPathApp (p, _, _) | S.EQuote (_, p, _) -> free_vars_in_expr bound p
+  | S.EPathAbs (i, body, _) -> free_vars_in_expr (i :: bound) body
+  | S.EHITConstr (c, args, _) ->
+      (if List.mem c bound then [] else [c])
+      @ List.concat_map (free_vars_in_expr bound) args
+  | S.EHITElim (m, branches, x, _) ->
+      free_vars_in_expr bound m @ free_vars_in_expr bound x
+      @ List.concat_map (fun (_, pat, b) ->
+          let binders = match pat with
+            | S.PatVars vs -> vs
+            | S.PatWitness w -> [w]
+            | S.PatFields fs -> List.map snd fs in
+          free_vars_in_expr (binders @ bound) b) branches
+  | S.EJ (a, b, c, _) | S.EElMatch (a, b, c, _) ->
+      free_vars_in_expr bound a @ free_vars_in_expr bound b @ free_vars_in_expr bound c
+  | S.EPullbackVal (_, _, a, b, _) -> free_vars_in_expr bound a @ free_vars_in_expr bound b
   | S.ESpawn (Some e, _, _) -> free_vars_in_expr bound e
-  | _ -> []
+  (* the statements of a block are not walked here: a block is a value of its
+     own, and its names are its own *)
+  | S.EProduce _ | S.ESpawn (None, _, _) -> []
 
 let uniq_strs (xs : string list) : string list =
   let seen = Hashtbl.create 8 in
@@ -252,6 +287,7 @@ let reset_synth () =
   compose_synth_bodies := [];
   user_fun_sigs := [];
   handle_bindings := [];
+  lambda_bindings := [];
   topos_to_first_place := []
 
 (* Lift a lambda (a plain arg-lambda OR a categorical handle-lambda: move, morph,
@@ -290,9 +326,23 @@ let lift_capturing_lambda (prefix : string)
 
 (* ─── Type translation ─────────────────────────────────────────────── *)
 
+(* A path between types is computed at compile time: the line of types it
+   runs along must be known where it is transported (written inline, or named
+   with `be`). A path whose line is not known there (one received as a
+   parameter) has no value to transport along; the program is refused rather
+   than given a value. *)
+exception Path_not_known of string
+
+let path_not_known () =
+  raise (Path_not_known
+    "transport along a path whose line of types is not known at compile time \
+     (for example a path received as a parameter). Transport along the path \
+     where it is built — transport(ua(e), x), or a path named with `be` — or \
+     pass the equivalence's function instead.")
+
 let rec desugar_ty (t : S.ty) : C.ty =
   match t with
-  (* String fusion (2026-06-04): normalize the nominal face "String" to the
+  (* String fusion: normalize the nominal face "String" to the
      primitive "text" ONCE, here, so every downstream layer (specialization,
      emit_ty, layouts, __new constructors) sees the already-fused type.
      Fixing this at the emit layer instead caused signature/call splits
@@ -320,7 +370,7 @@ let rec desugar_ty (t : S.ty) : C.ty =
          the runtime layout stays a uniform f64 handle (a Section), only the
          compile-time identity is now distinct. *)
       C.TyPlace (Tyenv.type_tag map_ty)
-  | S.TyStream inner -> C.TyStream (desugar_ty inner)
+  | S.TyChannel inner -> C.TyChannel (desugar_ty inner)
   | S.TyUser n when Hashtbl.mem inductive_type_names n ->
       (* A named inductive is carried at runtime as a MerkleTree handle (an f64):
          that layout is honest, a value is a handle. What was a lie is the
@@ -412,7 +462,7 @@ and ty_name (t : S.ty) : string =
   | S.TyPathP _ -> "PathP"
   | S.TyList _ -> "list"
   | S.TyMap _ -> "map"
-  | S.TyStream _ -> "stream"
+  | S.TyChannel _ -> "stream"
   | (S.TySum _ | S.TySumIn _) as sum_ty -> Tyenv.type_tag sum_ty
   | S.TyHeytInt n -> Printf.sprintf "heyt_int_%d" n
   | S.TyArrow _ -> "arrow"
@@ -569,6 +619,16 @@ and desugar_expr (e0 : S.expr) : C.term =
   | None ->
   let e = strip_parens e0 in
   match e with
+  | S.ELit (S.LitNumber v, loc)
+    when Hashtbl.mem Surface_ast.int64_literal_sites
+           (loc.S.file, loc.S.start_line, loc.S.start_col, loc.S.end_line, loc.S.end_col) ->
+      (* an integral literal admitted at Int64: an i64 constant, the exact
+         integer its digits name *)
+      (match Hashtbl.find_opt Surface_ast.exact_int_literals
+               (loc.S.file, loc.S.start_line, loc.S.start_col) with
+       | Some digits when Int64.of_string_opt digits <> None ->
+           C.Var ("__i64_" ^ Int64.to_string (Int64.of_string digits))
+       | _ -> C.Var (Printf.sprintf "__i64_%Ld" (Int64.of_float v)))
   | S.ELit (lit, _) -> desugar_literal lit
   (* Bare `psh_id` (no call parens) is the polymorphic presheaf identity id_A:
    * lower it to the reserved kernel marker `__id` so (F-id) fires. The call
@@ -675,6 +735,21 @@ and desugar_expr (e0 : S.expr) : C.term =
       let i = (match d with S.DI0 -> C.I0 | S.DI1 -> C.I1 | S.DIVar s -> C.IVar s) in
       C.PApp (desugar_expr p, i)
   | S.EPathAbs (i, e, _) -> C.PLam (i, desugar_expr e)
+  | S.ECall ("floor", [x], loc) ->
+      (* the bare name of Number's floor: one function, the libm floor *)
+      desugar_expr (S.ECall ("Number__floor", [x], loc))
+  | S.ECall ("decide", [p], loc) ->
+      (* The three values of a proposition, by their code (present 0, absent
+         1, unknown 2), become the three arms of Decision. The proposition is
+         evaluated once. *)
+      let v = fresh_synth_name "decided" in
+      let code = S.EVar (v, loc) in
+      let is_code n = S.EBinop (S.OpEq, code, S.ELit (S.LitNumber n, loc), loc) in
+      let arm a = S.EHITConstr (a, [], loc) in
+      let body = S.EIfThenElse (is_code 0.0, arm "Present",
+                   S.EIfThenElse (is_code 1.0, arm "Absent", arm "Unknown", loc), loc) in
+      C.App (C.Lam (v, C.TyPlace "number", desugar_expr body),
+             desugar_expr (S.ECall ("__prop_code", [p], loc)))
   | S.EHITConstr (ctor, args, loc) ->
       (* A custom sum constructor builds a MerkleTree node (tag + payload
          children); a built-in HIT constructor stays a homotopy value. *)
@@ -735,7 +810,7 @@ and desugar_expr (e0 : S.expr) : C.term =
     when Move_engine.lookup_move vname = None
          && (match List.assoc_opt vname !handle_bindings with
              | Some (S.EMoveLam _) -> true | _ -> false) ->
-      (* v1.0 (2026-06-04): apply_move on a LOCAL move-lambda binding.
+      (* apply_move on a LOCAL move-lambda binding.
        * The binding already holds the lifted function (__move_inline_N), so
        * the application is the direct call m(arg) — the same binding
        * resolution analyze_handle uses for compose. Declared moves keep the
@@ -748,10 +823,7 @@ and desugar_expr (e0 : S.expr) : C.term =
          the existing surface fallback until Stage 3d lowers ua/Glue lines. *)
       (match expr_as_ty type_code with
        | Some line_ty -> C.Transp (("__ti", line_ty), desugar_expr value)
-       | None ->
-           curry_apply (C.Var "transport")
-             [desugar_expr (S.ERefl (type_code, S.dummy_loc));
-              desugar_expr value])
+       | None -> path_not_known ())
   | S.ECall
       ("transport",
        [S.ECall ("ua", [S.ECall ("idEquiv", [type_code], _)], _); value], _) ->
@@ -761,13 +833,7 @@ and desugar_expr (e0 : S.expr) : C.term =
          then crosses the cubical bridge and computes by the Glue forward map. *)
       (match expr_as_ty type_code with
        | Some carrier -> C.Transp (ua_identity_line carrier, desugar_expr value)
-       | None ->
-           curry_apply (C.Var "transport")
-             [desugar_expr
-                (S.ECall
-                   ("ua", [S.ECall ("idEquiv", [type_code], S.dummy_loc)],
-                    S.dummy_loc));
-              desugar_expr value])
+       | None -> path_not_known ())
   | S.ECall
       ("transport",
        [S.ECall
@@ -777,12 +843,8 @@ and desugar_expr (e0 : S.expr) : C.term =
       (match forward_carriers f with
        | Some (source, target) ->
            C.Transp (ua_equiv_line source target equiv, desugar_expr value)
-       | None ->
-           curry_apply (C.Var "transport")
-             [curry_apply (C.Var "ua")
-                [curry_apply (C.Var "equiv")
-                   (List.map desugar_expr [f; g; eta; eps])];
-              desugar_expr value])
+       | None -> path_not_known ())
+  | S.ECall (("transport" | "transp"), _, _) -> path_not_known ()
   | S.ECall ("equiv", [f; g; eta; eps], _) ->
       equivalence_term f g eta eps
   (* ── Presheaf arrow-action + composition (A1.2 / A1.3, surface half) ──
@@ -813,12 +875,18 @@ and desugar_expr (e0 : S.expr) : C.term =
         | Some resolved -> resolved
         | None -> name
       in
-      (* Rename Seq -> __stream_. The "Seq" prefix is removed from the internal
-       * naming. The surface still accepts Seq.X as a deprecated alias
-       * (auto-mapped). *)
+      (* the given faces of Number are the Math primitives under the name
+         their house gives them: one function *)
+      let name =
+        match name with
+        | "Number__floor" | "Number__exp" | "Number__sin" | "Number__cos" ->
+            "Math__" ^ String.sub name 8 (String.length name - 8)
+        | _ -> name
+      in
+      (* The surface Sequence.X lowers to the internal __stream_X. *)
       let (name', args') =
         (* Auto-wrap: a fold/map/filter function passed by bare name
-         * (`Seq.fold(s,0,g)`) is wrapped in an inline lambda
+         * (`Sequence.fold(s,0,g)`) is wrapped in an inline lambda
          * `fun(__sf0,..) => g(__sf0,..)` — exactly the suggested form
          * `fun(a,b)=>g(a,b)`. Without it the emitter failed with an OCaml
          * exception instead of accepting the function by name. Lambdas
@@ -854,6 +922,10 @@ and desugar_expr (e0 : S.expr) : C.term =
               None
           with Not_found -> None
         in
+        (* a function the program declares is called by its name, whatever
+           the name: the combinators below are the meaning of a name only
+           when nothing in the program declares it *)
+        if List.mem_assoc name !user_fun_sigs then (name, args) else
         match name with
         | "map" -> ("__stream_map", wrap_fn 1 args)
         | "filter" -> ("__stream_filter", wrap_fn 1 args)
@@ -866,14 +938,14 @@ and desugar_expr (e0 : S.expr) : C.term =
         | "take" -> ("__stream_take", args)
         | "sum_take" -> ("__stream_sum_take", args)
         | "to_stream" -> ("__stream_to_stream", args)
-        (* Backward-compat: Seq.X e Stream.X surface syntax. *)
-        | "Seq__map" -> ("__stream_map", wrap_fn 1 args)
-        | "Seq__filter" -> ("__stream_filter", wrap_fn 1 args)
-        | "Seq__fold" -> ("__stream_fold", wrap_fn 2 args)
-        | "Seq__from_list" -> ("__stream_from_list", args)
-        (* Seq.range(n) desugara a stream da list. *)
-        | "Seq__range" ->
-            let list_call = S.ECall ("Seq__range_to_list", args, S.dummy_loc) in
+        (* Backward-compat: Sequence.X e Stream.X surface syntax. *)
+        | "Sequence__map" -> ("__stream_map", wrap_fn 1 args)
+        | "Sequence__filter" -> ("__stream_filter", wrap_fn 1 args)
+        | "Sequence__fold" -> ("__stream_fold", wrap_fn 2 args)
+        | "Sequence__from_list" -> ("__stream_from_list", args)
+        (* Sequence.range(n) desugara a stream da list. *)
+        | "Sequence__range" ->
+            let list_call = S.ECall ("Sequence__range_to_list", args, S.dummy_loc) in
             ("__stream_from_list", [list_call])
         (* Wire: the cross-Space channel family. Surface Wire.X maps to
            the runtime Stream__X symbols (the C names stay; renaming the
@@ -902,7 +974,7 @@ and desugar_expr (e0 : S.expr) : C.term =
           | "Stream__close_net") as old_name ->
             let op = String.sub old_name 8 (String.length old_name - 8) in
             failwith (Printf.sprintf
-              "[desugar] Stream.%s was renamed: the channel family lives under Wire (use Wire.%s). Stream is the sequence: map, filter, fold." op op)
+              "[desugar] Stream.%s: a channel is a Wire (use Wire.%s). A Stream is the infinite pure unfold (iterate, take)." op op)
         | "Stream__iterate" -> ("__stream_iterate", args)
         | "Stream__take" -> ("__stream_take", args)
         | "Stream__sum_take" -> ("__stream_sum_take", args)
@@ -955,13 +1027,14 @@ and desugar_expr (e0 : S.expr) : C.term =
                       full arity)" place_name f)) in
            lower_sum_constr tag arg_tys ordered loc
        | _ ->
-           let arg_terms = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
+           let arg_terms = List.map desugar_expr (by_layout place_name fas) in
            curry_apply (C.Var ("__section_" ^ place_name)) arg_terms)
   | S.ENewIn (place_name, space_name, fas, _) ->
-      (* new P in Space { ... } desugars to __section_in_<Space>_<Place>(args).
+      (* a section pinned to its Space (ENewIn, produced by the Space rewrite
+       * from `.-> P { ... }`) desugars to __section_in_<Space>_<Place>(args).
        * The emitter recognizes the "__section_in_" prefix and emits the
        * yon_rt_section call with the heap id resolved from the space registry. *)
-      let arg_terms = List.map (fun fa -> desugar_expr fa.S.fa_value) fas in
+      let arg_terms = List.map desugar_expr (by_layout place_name fas) in
       curry_apply (C.Var ("__section_in_" ^ space_name ^ "_" ^ place_name)) arg_terms
   | S.EBinop (op, e1, e2, loc) ->
       (* integer-carrier / and % diverge from the f64 ops: the tycheck
@@ -975,8 +1048,14 @@ and desugar_expr (e0 : S.expr) : C.term =
                       loc.S.end_line, loc.S.end_col) with
              | Some b when (op = S.OpDiv && b = "__idiv")
                         || (op = S.OpMod && b = "__imod") -> b
+             | Some b when b = int64_op_name op -> b
              | _ -> binop_name op)
-        | _ -> binop_name op in
+        | _ ->
+            (match Hashtbl.find_opt Surface_ast.int_arith_sites
+                     (loc.S.file, loc.S.start_line, loc.S.start_col,
+                      loc.S.end_line, loc.S.end_col) with
+             | Some b when b = int64_op_name op -> b
+             | _ -> binop_name op) in
       curry_apply (C.Var op_name) [desugar_expr e1; desugar_expr e2]
   | S.EParen (e, _) -> desugar_expr e
   | S.EAll (place_name, _cond, _) ->
@@ -1126,6 +1205,27 @@ and desugar_expr (e0 : S.expr) : C.term =
       (* A view is a projection P -> number; of_p is the source place. *)
       let _ = of_p in
       lift_capturing_lambda "view" params body (S.TyPrim "number") loc
+  | S.EComposeWith (h1, h2, loc)
+    when (let local h = match h with
+            | S.EVar (v, _) -> List.mem v !current_locals_ref
+                               && not (List.mem_assoc v !handle_bindings)
+            | _ -> false in
+          local h1 || local h2) ->
+      (* A composite of local values is a closure over them: it is the lambda
+         x => h2(h1(x)) in the current scope, which captures h1 and h2 as any
+         lambda captures the locals it names. *)
+      let src = match h1 with
+        | S.EVar (v, _) ->
+            (match List.assoc_opt v !lambda_bindings with
+             | Some ((_, t) :: _) -> t | _ -> S.TyPrim "number")
+        | S.ELam ((_, t) :: _, _, _) -> t
+        | _ -> S.TyPrim "number" in
+      let x = S.EVar ("__compose_x", loc) in
+      (* a named value is applied as the parser writes a call, h(a) *)
+      let apply h a = match h with
+        | S.EVar (v, _) -> S.ECall (v, [a], loc)
+        | _ -> S.EApp (h, [a], loc) in
+      desugar_expr (S.ELam ([("__compose_x", src)], apply h2 (apply h1 x), loc))
   | S.EComposeWith (h1, h2, loc) ->
       (* Handle composition. `compose h1 with h2` becomes a synthetic function
          computing h2(h1(x)). The dispatch is handle-aware: if h1 or h2 is the
@@ -1248,16 +1348,33 @@ and desugar_expr (e0 : S.expr) : C.term =
         :: !compose_synth_bodies;
       C.Var name
 
-(* Box a constructor argument for storage as a MerkleTree child: a number is
-   wrapped in a leaf; a nested sum value is already a handle, stored directly. *)
+(* The values of a literal `.-> P { … }`, bound to P's fields by name and put
+   in the order of P's layout. A place whose fields reach it by composition
+   through a mono (a sub-object of Error has `message` from Error) declares
+   none of its own: its values keep the order they are written in. *)
+and by_layout (place_name : string) (fas : S.field_assignment list) : S.expr list =
+  match Hashtbl.find_opt place_layouts place_name with
+  | Some names when List.length names = List.length fas
+                 && List.for_all (fun n ->
+                      List.exists (fun fa -> fa.S.fa_name = n) fas) names ->
+      List.map (fun n ->
+        (List.find (fun fa -> fa.S.fa_name = n) fas).S.fa_value) names
+  | _ -> List.map (fun fa -> fa.S.fa_value) fas
+
+(* Box a constructor argument for storage as a MerkleTree child. A child is
+   always a node handle: a value of a coproduct type already is one and is
+   stored directly; any other value (a number, a text or place handle, a
+   boolean) enters as a leaf whose label is its exact f64. *)
 and encode_sum_arg (arg : S.expr) (arg_ty : S.ty) (loc : S.location) : S.expr =
-  match arg_ty with
-  | S.TySum _ | S.TySumIn _ | S.TyUser _ -> arg
-  (* the four prelude faces canonicalize to TyPrim at parse; arm payloads
-     spelled with them must keep the HISTORIC TyUser encoding (raw child),
-     byte-identical MLIR *)
-  | S.TyPrim ("number" | "text" | "boolean" | "unit") -> arg
-  | _ -> S.ECall ("MerkleTree__leaf", [arg], loc)
+  if is_node_ty arg_ty then arg
+  else S.ECall ("MerkleTree__leaf", [arg], loc)
+
+(* A payload type whose values are themselves Merkle nodes: a coproduct. *)
+and is_node_ty (t : S.ty) : bool =
+  match t with
+  | S.TySum _ | S.TySumIn _ -> true
+  | S.TyUser n -> Hashtbl.mem inductive_type_names n
+  | _ -> false
 
 (* hit(Ctor, args) for a custom sum -> a right-nested spine of node2/leaf.
    Using ONLY node2/leaf (never node3/node4, whose runtime child access is
@@ -1311,11 +1428,12 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
       (fun (j, acc) v ->
         let vty = try List.nth arg_tys j with _ -> S.TyPrim "number" in
         let proj =
-          match vty with
-          | S.TySum _ | S.TySumIn _ | S.TyUser _
-          | S.TyPrim ("number" | "text" | "boolean" | "unit") ->
-              payload_node j
-          | _ -> label (payload_node j)
+          if is_node_ty vty then payload_node j
+          else match vty with
+            | S.TyPrim "boolean" ->
+                (* a Boolean entered as 0 or 1 *)
+                S.EBinop (S.OpEq, label (payload_node j), num 1, loc)
+            | _ -> label (payload_node j)
         in
         let lam_ty = match vty with
           | S.TyUser n when Hashtbl.mem armless_place_names n ->
@@ -1353,6 +1471,14 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
   in
   C.App (C.Lam (sv, C.TyPlace "number", chain explicit), desugar_expr scrut)
 
+(* The i64 instruction of an operator on Int64, as the tycheck records it. *)
+and int64_op_name (op : S.binop) : string =
+  match op with
+  | S.OpAdd -> "__i64_add" | S.OpSub -> "__i64_sub" | S.OpMul -> "__i64_mul"
+  | S.OpDiv -> "__i64_div" | S.OpMod -> "__i64_mod" | S.OpLt -> "__i64_lt"
+  | S.OpGt -> "__i64_gt" | S.OpLeq -> "__i64_leq" | S.OpGeq -> "__i64_geq"
+  | S.OpEq -> "__i64_eq" | S.OpNeq -> "__i64_neq" | _ -> ""
+
 and desugar_literal (l : S.literal) : C.term =
   match l with
   | S.LitNumber n -> Builtins.encode_number n
@@ -1365,7 +1491,7 @@ and desugar_literal (l : S.literal) : C.term =
    * interpreter side, independently of this encoding. *)
   | S.LitBool b -> Builtins.encode_bool b
   | S.LitDuration (n, u) ->
-      (* v1.0 (2026-06-04): a duration IS a number of milliseconds. 100ms=100,
+      (* a duration IS a number of milliseconds. 100ms=100,
          5s=5000, 2min=120000, 1h=3.6e6, 3d=2.592e8, 1y=3.1536e10 (365d). *)
       let factor = match u with
         | "ms" -> 1.0 | "s" -> 1000.0 | "min" -> 60000.0
@@ -1411,6 +1537,7 @@ let rec subst_var_in_expr (old_n : string) (new_n : string) (e : S.expr) : S.exp
   | S.EBinop (op, a, b, loc) -> S.EBinop (op, go a, go b, loc)
   | S.EParen (sub, loc) -> S.EParen (go sub, loc)
   | S.EIfThenElse (c, t, el, loc) -> S.EIfThenElse (go c, go t, go el, loc)
+  | S.EComposeWith (a, b, loc) -> S.EComposeWith (go a, go b, loc)
   | S.ELam (params, body, loc) ->
       (* Shadowing: if old_n is a parameter of the lambda, do not substitute inside. *)
       let shadowed = List.exists (fun (p, _) -> p = old_n) params in
@@ -1504,6 +1631,7 @@ let rec inject_captured_args (old_n : string) (new_n : string)
   | S.EBinop (op, a, b, loc) -> S.EBinop (op, go a, go b, loc)
   | S.EParen (sub, loc) -> S.EParen (go sub, loc)
   | S.EIfThenElse (c, t, el, loc) -> S.EIfThenElse (go c, go t, go el, loc)
+  | S.EComposeWith (a, b, loc) -> S.EComposeWith (go a, go b, loc)
   | S.ELam (params, body, loc) ->
       let shadowed = List.exists (fun (p, _) -> p = old_n) params in
       if shadowed then e
@@ -1660,6 +1788,8 @@ and desugar_stmts_with_locals (locals : string list) (stmts : S.stmt list) : C.t
        | S.EFunctorLam _ | S.EMoveLam _ | S.EMorphLam _
        | S.EReductionLam _ | S.EViewLam _ ->
            handle_bindings := (name, e) :: !handle_bindings
+       | S.ELam (params, _, _) ->
+           lambda_bindings := (name, params) :: !lambda_bindings
        | _ -> ());
       let value_term = desugar_expr e in
       let rest_term = desugar_stmts_with_locals (name :: locals) rest in
@@ -2119,7 +2249,7 @@ let desugar_world_decl (wd : S.world_decl) : C.world_decl =
     C.w_generators = generators }
 
 (* ===================================================================
- * v1.0 surface sugar lowering (2026-06-04).
+ * Surface sugar lowering.
  *
  * for every / in sequence over / repeat at most / forever are lowered
  * STRUCTURALLY onto the verified primitives: while, iter and Space cells
@@ -2142,7 +2272,7 @@ let v1_num n = S.ELit (S.LitNumber n, S.dummy_loc)
    site) lowers to STATEMENTS (a Stream__recv drain into an accumulator cell), so it only
    works as a bare statement or the direct RHS of `be x holds` / `return` (the cases in
    v1_lower_stmt). In any NESTED position — an operand of `+`, a call argument — it would
-   fall through to the Seq/list fold and read the stream handle as a list, yielding 0. This
+   fall through to the Sequence/list fold and read the stream handle as a list, yielding 0. This
    pass lifts each such nested fold to `be __sf holds s.fold(...)` (which then hits the
    correct statement lowering) and leaves a variable in its place. Only the common
    transparent wrappers are walked; an unwalked constructor keeps today's behaviour. *)
@@ -2204,9 +2334,8 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
   | S.SForever (b, loc) ->
       [S.SWhile (S.ELit (S.LitBool true, loc), body b, loc)]
   | S.SRepeat (n, b, oth, loc) ->
-      (* v1.0 semantics: the body runs exactly N times; the otherwise block
-         (if present) runs afterwards. A success-based early exit is a
-         post-1.0 protocol. *)
+      (* the body runs exactly N times; the otherwise block (if present)
+         runs afterwards. There is no success-based early exit. *)
       S.SIter (v1_num (float_of_int n), body b, loc)
       :: (match oth with None -> [] | Some o -> body o)
   | S.SForEvery (_kind, x, e, b, loc)
@@ -2250,7 +2379,7 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
       (* `return s.fold(...)`: a stream fold drains via Stream__recv into an
          accumulator cell, which needs statement context. Hoist the drain (the
          same lowering as `be x holds s.fold(...)`) and return its result.
-         Without this the fold fell through to the Seq/list fold, which read the
+         Without this the fold fell through to the Sequence/list fold, which read the
          stream handle as a list and yielded 0. *)
       let (stmts, result) = v1_lower_stream_fold recv init f loc in
       stmts @ [S.SReturn (result, loc)]
@@ -2483,7 +2612,7 @@ and v1_cell_stmt cells st =
   | S.SAssignBecomes (S.LVar x, e, loc) when V1SS.mem x cells ->
       S.SCall ("Space__set", [S.EVar (x, S.dummy_loc); re e], loc)
   | S.SAssignBecomes (S.LField _, _, _) ->
-      failwith ("[desugar v1.0] `x.f = e` is not implemented: place " ^
+      failwith ("[desugar] `x.f = e` is not implemented: place " ^
                 "sections are immutable; mutate through Space cells.")
   | S.SAssignBecomes (lv, e, loc) -> S.SAssignBecomes (lv, re e, loc)
   | S.SAssignHolds (lv, e, loc) -> S.SAssignHolds (lv, re e, loc)
@@ -2539,7 +2668,7 @@ let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
      function like `fun f(R: Space) { ... fold(fun(a,b) => Space.set(R, ...)) }`
      would fail with "variable R not in scope". *)
   let param_names = List.map (fun p -> p.S.param_name) fn.S.fn_params in
-  (* v1.0 sugar: loops + becomes lowering BEFORE Core desugaring. *)
+  (* surface sugar: loops + becomes lowering BEFORE Core desugaring. *)
   let lowered_body = v1_lower_body param_names fn.S.fn_body in
   let body = desugar_stmts_with_locals param_names lowered_body in
   let lam = curry_lam params body in
@@ -2638,7 +2767,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
   | S.TopPlace pd when pd.S.pd_arms <> [] ->
       (* a place with arms: the named sum — a compile-time type decl, no Core
          body; constructors are lowered at use sites via the sum registry.
-         Value-level mono (prima pietra, boundary stone): every BARE arm that
+         Value-level mono: every BARE arm that
          names a declared armless place gets an upcast entry — its section is
          usable where the union is expected, cast = identity on the handle. *)
       (match desugar_ty (S.TyUser pd.S.pd_name) with
@@ -2915,14 +3044,13 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
       } in
       process_top_decl res (S.TopFun fn)
 
-(* A pre-desugar rewriting that propagates the binding `topos T at S` to the
- * `new P { ... }` expressions inside.
+(* A pre-desugar rewriting that propagates a place's Space to the sections
+ * `.-> P { ... }` built inside.
  *
- * Rule: for every place P belonging to a topos T with tp_at_space =
- * Some space_name, each `new P { ... }` (the form without `in`) is rewritten
- * to `new P in space_name { ... }`. Forms with an explicit `in` are left
- * intact (the user can always override). This way the binding declared on the
- * topos propagates automatically to the instances.
+ * Rule: for every place P with a Space space_name (from the filesystem
+ * census), each construction `.-> P { ... }` (ENew) is rewritten to the same
+ * construction pinned to space_name (ENewIn). This way the Space of a place
+ * propagates automatically to its instances.
  *
  * Implemented as a recursive fold over expr and stmt, preserving locations
  * and other fields.
@@ -2981,7 +3109,7 @@ let rec rewrite_expr (m : (string * string) list) (e : S.expr) : S.expr =
   | _ -> e  (* literals, EVar, EAll, ecc.: pass-through *)
 
 (* Rewrite a condition for the tp_at_space propagation. Conditions contain
- * expressions that may in turn contain `new P { ... }`. *)
+ * expressions that may in turn contain `.-> P { ... }`. *)
 let rec rewrite_condition (m : (string * string) list) (c : S.condition) : S.condition =
   match c with
   | S.CondExpr e -> S.CondExpr (rewrite_expr m e)
@@ -2992,7 +3120,7 @@ let rec rewrite_condition (m : (string * string) list) (c : S.condition) : S.con
 
 (* Complete rewriting of statements. Every form containing an expr or
  * sub-statement is traversed recursively to propagate
- * `new P { ... }` -> `new P in S { ... }`. *)
+ * `.-> P { ... }` -> the same section pinned to S. *)
 let rec rewrite_stmt (m : (string * string) list) (s : S.stmt) : S.stmt =
   let stmts = List.map (rewrite_stmt m) in
   match s with
@@ -3042,9 +3170,9 @@ let rewrite_top_decl (m : (string * string) list) (td : S.top_decl) : S.top_decl
   | S.TopFun fd ->
       S.TopFun { fd with S.fn_body = List.map (rewrite_stmt m) fd.S.fn_body }
   | S.TopMorph mp ->
-      (* The on_object body must be rewritten because it contains `new P
-         { ... }` expressions internal to the morph (for example a
-         return new USDState { ... }). *)
+      (* The on_object body must be rewritten because it contains `.-> P
+         { ... }` sections internal to the morph (for example a
+         return .-> USDState { ... }). *)
       let mp' = match mp.S.mp_on_object with
         | None -> mp
         | Some fd ->
@@ -3159,8 +3287,8 @@ let desugar_program ?(env : Tyenv.env option = None)
   let p = Method_sugar.qualify_overloads p in  (* overloaded method decls -> Place__name (same as tycheck) *)
   current_env := env;
   build_sum_registry p;  (* ctor -> (tag, arg types) for the MerkleTree lowering *)
-  (* Pre-rewriting that propagates tp_at_space to the `new P { ... }`
-   * expressions inside functions. *)
+  (* Pre-rewriting that propagates a place's Space to the `.-> P { ... }`
+   * sections inside functions. *)
   reset_synth ();  (* reset the accumulator of handle lambdas *)
   (* The place->space membership for the at_space routing. In project mode the
      driver passes it from the filesystem census (a place lives in the Space of
@@ -3232,194 +3360,6 @@ let desugar_program ?(env : Tyenv.env option = None)
       | S.TopReduction rd -> Some (rd.S.rd_name, rd)
       | _ -> None
     ) p
-  in
-  (* Symbolic equation check of naturality.
-   *
-   * We build LHS = eta(F__N(x)) and RHS = G__N(eta(x)) as surface AST terms,
-   * normalize (inline + constant folding + elementary algebra), and compare
-   * alpha-equivalently.
-   *
-   * A positive result (Proven) = naturality holds for every input (modulo the
-   * soundness of normalization). A negative result (Inconclusive) = not
-   * determined; this does not disprove, runtime checks are needed for that.
-   *
-   * Output: stderr info messages, not error/warning. The runtime verification
-   * stays valid; this adds a static guarantee when it can.
-   *
-   * Declared limits:
-   *   - Only pure single-parameter functions with body { return e } (the
-   *     synthesized wrappers have this shape)
-   *   - No reduction clauses (opaque)
-   *   - No algebraic commutativity (2*x != x*2 syntactically)
-   *   - No recursion *)
-  let () =
-    (* Build an extended fun_idx that includes the virtual wrappers F__N, G__N,
-     * eta__obj as surface bodies reconstructed on the fly. Each virtual
-     * wrapper has the form:
-     *   - if the target is a fun: fun F__N(x) { return target(x) }
-     *   - if the target is a reduction R with a clause `on N(p) { return e }`:
-     *     fun F__N(p) { return e }  // inlining the clause
-     * The reduction is inlined to overcome the "opaque reduction" limit. *)
-    let synth_wrapper_decl (morph_name : string) (n_src : string) (m_tgt : string) : S.fun_decl option =
-      match List.assoc_opt m_tgt fun_decl_index with
-      | Some target_fd ->
-          let param = match target_fd.S.fn_params with
-            | p :: _ -> p
-            | [] -> {S.param_name = "x"; param_ty = S.TyPrim "number"}
-          in
-          let body : S.stmt list = [
-            S.SReturn (
-              S.ECall (m_tgt,
-                [S.EVar (param.S.param_name, S.dummy_loc)],
-                S.dummy_loc),
-              S.dummy_loc)
-          ] in
-          Some {
-            S.fn_name = morph_name ^ "__" ^ n_src;
-            fn_type_params = [];
-            fn_params = [param];
-            fn_return = target_fd.S.fn_return;
-            fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-            fn_body = body;
-            fn_loc = S.dummy_loc;
-          }
-      | None ->
-          (* The target may be a reduction. We inline the clause with a
-           * matching name if it has the form
-           *   on N(p) { return e } *)
-          (match List.assoc_opt m_tgt reduction_index with
-           | Some rd ->
-               let clause = List.find_opt (function
-                 | S.RcOn (cname, _, _, _) -> cname = n_src
-                 | _ -> false
-               ) rd.S.rd_clauses in
-               (match clause with
-                | Some (S.RcOn (_, params, body_stmts, _)) ->
-                    (match params, body_stmts with
-                     | [param], [S.SReturn (body_expr, _)] ->
-                         (* Direct inline: the wrapper body is the clause
-                          * body. *)
-                         Some {
-                           S.fn_name = morph_name ^ "__" ^ n_src;
-                           fn_type_params = [];
-                           fn_params = [param];
-                           fn_return = Some (S.TyPrim "number");
-                           fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-                           fn_body = [S.SReturn (body_expr, S.dummy_loc)];
-                           fn_loc = S.dummy_loc;
-                         }
-                     | _ -> None)
-                | _ -> None)
-           | None -> None)
-    in
-    let all_morphs = List.filter_map (function
-      | S.TopMorph mp -> Some mp | _ -> None) p in
-    let all_nats = List.filter_map (function
-      | S.TopNatTransform nt -> Some nt | _ -> None) p in
-    (* For each morph, synthesize the virtual wrappers and add to fun_idx *)
-    let wrapper_decls = List.concat_map (fun (mp : S.morph_decl) ->
-      List.filter_map (fun (n_src, m_tgt) ->
-        synth_wrapper_decl mp.S.mp_name n_src m_tgt
-      ) mp.S.mp_on_morphism_map
-    ) all_morphs in
-    let nat_wrapper_decls = List.concat_map (fun (nt : S.nat_transform_decl) ->
-      List.filter_map (fun (obj, tgt) ->
-        synth_wrapper_decl nt.S.nt_name obj tgt
-      ) nt.S.nt_via_bindings
-    ) all_nats in
-    let extended_idx =
-      fun_decl_index
-      @ List.map (fun (fd : S.fun_decl) -> (fd.S.fn_name, fd)) wrapper_decls
-      @ List.map (fun (fd : S.fun_decl) -> (fd.S.fn_name, fd)) nat_wrapper_decls
-    in
-    (* For each nat_transform, for each common morphism, run the check *)
-    List.iter (fun (nt : S.nat_transform_decl) ->
-      let src_opt = List.find_opt
-        (fun (mp : S.morph_decl) -> mp.S.mp_name = nt.S.nt_source_morph)
-        all_morphs in
-      let tgt_opt = List.find_opt
-        (fun (mp : S.morph_decl) -> mp.S.mp_name = nt.S.nt_target_morph)
-        all_morphs in
-      match src_opt, tgt_opt with
-      | Some src, Some tgt ->
-          let src_morphisms = List.map fst src.S.mp_on_morphism_map in
-          let tgt_morphisms = List.map fst tgt.S.mp_on_morphism_map in
-          let common = List.filter
-            (fun n -> List.mem n tgt_morphisms) src_morphisms in
-          (* For each binding and each common morphism *)
-          List.iter (fun (obj, _tgt_eta) ->
-            let eta_name = nt.S.nt_name ^ "__" ^ obj in
-            List.iter (fun n_common ->
-              let f_n_name = src.S.mp_name ^ "__" ^ n_common in
-              let g_n_name = tgt.S.mp_name ^ "__" ^ n_common in
-              let result = Naturality_symcheck.check
-                extended_idx eta_name f_n_name g_n_name "input" in
-              (match result with
-               | Naturality_symcheck.Proven ->
-                   Printf.eprintf
-                     "[symcheck F2c] naturality of %s at %s (via %s): PROVEN\n"
-                     nt.S.nt_name n_common obj
-               | Naturality_symcheck.Inconclusive _msg ->
-                   (* This does not mean "naturality fails". It means "we
-                      could not normalize the two sides to a syntactic match".
-                      The runtime checks F2a/F2b may still find evidence.
-                      If YON_F2D=1, escalate to the Z3 SMT solver; if YON_F3=1,
-                      escalate to Coq. The two are independent and opt-in. F2d
-                      gives a decision-procedure guarantee (Z3, not internally
-                      certified); F3 gives a proof-object guarantee (checked by
-                      the Coq kernel). *)
-                   let f2d_enabled =
-                     try Sys.getenv "YON_F2D" = "1" with Not_found -> false in
-                   let f3_enabled =
-                     try Sys.getenv "YON_F3" = "1" with Not_found -> false in
-                   if not f2d_enabled && not f3_enabled then
-                     Printf.eprintf
-                       "[symcheck F2c] naturality of %s at %s (via %s): INCONCLUSIVE (use F2a/F2b runtime, or YON_F2D=1 for SMT, or YON_F3=1 for Coq proof)\n"
-                       nt.S.nt_name n_common obj
-                   else begin
-                     let (lhs_norm, rhs_norm) =
-                       Naturality_symcheck.build_normalized_lhs_rhs
-                         extended_idx eta_name f_n_name g_n_name "input" in
-                     if f2d_enabled then
-                       (match Naturality_smtcheck.check lhs_norm rhs_norm with
-                        | Naturality_smtcheck.Smt_proven ->
-                            Printf.eprintf
-                              "[smtcheck F2d via z3] naturality of %s at %s (via %s): PROVEN_BY_SMT\n"
-                              nt.S.nt_name n_common obj
-                        | Naturality_smtcheck.Smt_disproven model ->
-                            Printf.eprintf
-                              "[smtcheck F2d via z3] naturality of %s at %s (via %s): DISPROVEN_BY_SMT\n  counterexample model: %s\n"
-                              nt.S.nt_name n_common obj model
-                        | Naturality_smtcheck.Smt_unknown reason ->
-                            Printf.eprintf
-                              "[smtcheck F2d via z3] naturality of %s at %s (via %s): UNKNOWN (%s)\n"
-                              nt.S.nt_name n_common obj reason
-                        | Naturality_smtcheck.Smt_unsupported reason ->
-                            Printf.eprintf
-                              "[smtcheck F2d via z3] naturality of %s at %s (via %s): UNSUPPORTED (%s)\n"
-                              nt.S.nt_name n_common obj reason);
-                     if f3_enabled then begin
-                       let theorem_name =
-                         "naturality_" ^ nt.S.nt_name ^ "_" ^ n_common ^ "_via_" ^ obj in
-                       match Naturality_coqcheck.check ~theorem_name lhs_norm rhs_norm with
-                       | Naturality_coqcheck.Coq_proven file ->
-                           Printf.eprintf
-                             "[coqcheck F3 via coqc] naturality of %s at %s (via %s): PROVEN_BY_COQ\n  proof object in %s\n"
-                             nt.S.nt_name n_common obj file
-                       | Naturality_coqcheck.Coq_handoff (file, reason) ->
-                           Printf.eprintf
-                             "[coqcheck F3 via coqc] naturality of %s at %s (via %s): HANDOFF (proof not auto-closed)\n  file emitted: %s\n  reason: %s\n"
-                             nt.S.nt_name n_common obj file reason
-                       | Naturality_coqcheck.Coq_unsupported reason ->
-                           Printf.eprintf
-                             "[coqcheck F3 via coqc] naturality of %s at %s (via %s): UNSUPPORTED (%s)\n"
-                             nt.S.nt_name n_common obj reason
-                     end
-                   end)
-            ) common
-          ) nt.S.nt_via_bindings
-      | _ -> ()
-    ) all_nats
   in
   (* Post-processing of the on_morphism wrappers with a dynamic signature.
    *
@@ -3568,7 +3508,7 @@ let desugar_program ?(env : Tyenv.env option = None)
    * equation on a sample input.
    *
    * Honest upfront: this does NOT prove universal naturality. It checks only
-   * for the inputs passed. The symbolic (F2c) or formal (F3) verification is
+   * for the inputs passed. The symbolic or formal (Coq) verification is
    * left open. The check is honest as a "categorical smoke test": if lhs != rhs
    * on a concrete input, naturality does not hold; if they are equal, it is a
    * hint (not a proof) of correctness.
@@ -3835,7 +3775,6 @@ let desugar_program ?(env : Tyenv.env option = None)
     let pred = function S.ECall (n,_,_) when n = name -> true | _ -> false in
     List.exists (function S.TopFun fd -> fn_body_any pred fd | _ -> false) p
   in
-  let needs_floor = prog_uses_name "floor" in
   let needs_pow2 = prog_uses_name "__pow2" in
   let needs_shl = prog_uses_name "__shl" in
   let needs_shr = prog_uses_name "__shr" in
@@ -3844,7 +3783,6 @@ let desugar_program ?(env : Tyenv.env option = None)
    *   __shr ⊃ __pow2, floor
    *   pullback (via __pullback_pi1) ⊃ floor *)
   let needs_pow2 = needs_pow2 || needs_shl || needs_shr in
-  let needs_floor = needs_floor || needs_shr || needs_pullback_builtins in
   let res =
     if not needs_pullback_builtins then res
     else
@@ -3853,25 +3791,6 @@ let desugar_program ?(env : Tyenv.env option = None)
       let var n = S.EVar (n, loc) in
       let eq a b = S.CondExpr (S.EBinop (S.OpEq, a, b, loc)) in
       let mk_param n = {S.param_name = n; param_ty = S.TyPrim "number"} in
-      (* pullback needs floor. Insert floor before the pullback to guarantee
-       * the registration order. Skip if already present to avoid
-       * duplicates. *)
-      let floor_already_present =
-        List.exists (fun (n, _) -> n = "floor") res.functions in
-      let res =
-        if floor_already_present then res
-        else
-          let body = [S.SReturn (
-            S.EBinop (S.OpSub, var "x",
-              S.EBinop (S.OpMod, var "x", num 1.0, loc), loc), loc)] in
-          let fd : S.fun_decl = {
-            S.fn_name = "floor"; fn_type_params = [];
-            fn_params = [mk_param "x"];
-            fn_return = Some (S.TyPrim "number");
-            fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-            fn_body = body; fn_loc = loc } in
-          process_top_decl res (S.TopFun fd)
-      in
       (* The pullback packing, encoded with decimal slots.
        *
        * The full universal property of a pullback (a compatible pair plus the
@@ -3915,7 +3834,7 @@ let desugar_program ?(env : Tyenv.env option = None)
       (* __pullback_pi1(p): return floor(p / 1000) *)
       let pi1_body = [
         S.SReturn (
-          S.ECall ("floor",
+          S.ECall ("Number__floor",
             [S.EBinop (S.OpDiv, var "p", num 1000.0, loc)],
             loc),
           loc)
@@ -3948,10 +3867,10 @@ let desugar_program ?(env : Tyenv.env option = None)
       let res = process_top_decl res (S.TopFun pi1_fd) in
       process_top_decl res (S.TopFun pi2_fd)
   in
-  (* Synthesize the builtins floor / __pow2 / __shl / __shr as pure arithmetic
-   * funs. Operation: float-based, no bit-level cast.
+  (* Synthesize the builtins __pow2 / __shl / __shr as pure arithmetic
+   * funs. Operation: float-based, no bit-level cast. (floor is not
+   * synthesized: it is Number.floor, the libm floor.)
    *
-   * floor(x):    x - x % 1
    * __pow2(n):   recursive 2*pow2(n-1), base n<=0 -> 1
    * __shl(a,n):  a * pow2(n)
    * __shr(a,n):  floor(a / pow2(n))
@@ -3967,22 +3886,8 @@ let desugar_program ?(env : Tyenv.env option = None)
     let minus a b = S.EBinop (S.OpSub, a, b, loc) in
     let mul a b = S.EBinop (S.OpMul, a, b, loc) in
     let div a b = S.EBinop (S.OpDiv, a, b, loc) in
-    let modop a b = S.EBinop (S.OpMod, a, b, loc) in
     let leq a b = S.CondExpr (S.EBinop (S.OpLeq, a, b, loc)) in
     let mk_param n = {S.param_name = n; param_ty = S.TyPrim "number"} in
-    let res = if not needs_floor then res
-      else if List.exists (fun (n, _) -> n = "floor") res.functions then res
-      else
-        (* fun floor(x): number { return x - (x % 1) } *)
-        let body = [S.SReturn (minus (var "x") (modop (var "x") (num 1.0)), loc)] in
-        let fd : S.fun_decl = {
-          S.fn_name = "floor"; fn_type_params = [];
-          fn_params = [mk_param "x"];
-          fn_return = Some (S.TyPrim "number");
-          fn_on_error = None; fn_visits = []; fn_internal = false; fn_given = false; fn_home = None;
-          fn_body = body; fn_loc = loc } in
-        process_top_decl res (S.TopFun fd)
-    in
     let res = if not needs_pow2 then res
       else
         (* fun __pow2(n): number {
@@ -4026,7 +3931,7 @@ let desugar_program ?(env : Tyenv.env option = None)
         (* fun __shr(a, n): number { return floor(a / __pow2(n)) }
          * Requires both __pow2 and floor. *)
         let body = [S.SReturn (
-          S.ECall ("floor",
+          S.ECall ("Number__floor",
             [div (var "a") (S.ECall ("__pow2", [var "n"], loc))],
             loc),
           loc)] in
@@ -4225,7 +4130,7 @@ let desugar_program ?(env : Tyenv.env option = None)
    * the tail of the final list, so after List.rev they are at the head and are
    * processed first in the fold. *)
   let is_synth_builtin n =
-    n = "floor" || n = "__pow2" || n = "__shl" || n = "__shr"
+    n = "__pow2" || n = "__shl" || n = "__shr"
     || n = "__pullback_pack" || n = "__pullback_pi1" || n = "__pullback_pi2"
   in
   let synth_morph_in_S = List.filter

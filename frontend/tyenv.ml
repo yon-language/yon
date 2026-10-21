@@ -46,6 +46,9 @@ type env = {
      list. Distinct from [sum_types] (anonymous inline sums) because the name is
      what lets a constructor argument refer to the type it defines. *)
   named_sums : (string * variant list) list;
+  (* the type parameters of a generic named sum (`place Lookup<V> { … }`):
+     its arms mention them as rigid variables, instantiated at each use *)
+  named_sum_params : (string * string list) list;
   intervals : interval_var list;
   places : (string * place_decl) list;
   worlds : (string * world_decl) list;
@@ -71,10 +74,9 @@ type env = {
      validate `nat_transform Name from F to G { ... }`, where F and G must be
      existing morphisms. *)
   declared_morphs : string list;
-  (* Places synthesized from payload arms (place refactor, first stone):
+  (* Places synthesized from payload arms:
      real places for identity/injection/world, but with no user-written
-     declaration — construction of their sections lands with the mediatrice
-     step, so `new` on them is rejected (transitional). *)
+     declaration — a section of one is not built directly. *)
   synthetic_places : string list;
   (* The full morph_decls, so we can read mp_source/mp_target while validating
      a nat_transform. *)
@@ -90,6 +92,7 @@ let empty : env = {
   vars = [];
   sum_types = [];
   named_sums = [];
+  named_sum_params = [];
   intervals = [];
   places = [];
   worlds = [];
@@ -163,20 +166,13 @@ let simple_ty_compatible (t1 : ty) (t2 : ty) : bool =
   let is_unknown = function
     | TyPrim "unknown" | TyUser "unknown" -> true
     | _ -> false in
-  (* "boolean" and "proposition" are the same semantic object (the Heyting
-   * algebra Omega, the subobject classifier). The name "boolean" survives as a
-   * syntactic alias. Semantically: t : boolean <=> t : proposition. *)
-  let is_omega = function
-    | TyPrim "boolean" | TyPrim "proposition" -> true
-    | _ -> false in
-  (* String fusion (2026-06-03): "text" and "String" are the same semantic
+  (* String fusion: "text" and "String" are the same semantic
    * object — sections of the builtin String place (runtime: an xheap handle).
    * "text" survives as the primitive-family alias. *)
   let is_text = function
     | TyPrim "text" | TyUser "String" -> true
     | _ -> false in
   if is_unknown t1 || is_unknown t2 then true
-  else if is_omega t1 && is_omega t2 then true
   else if is_text t1 && is_text t2 then true
   else
     match t1, t2 with
@@ -307,6 +303,13 @@ let add_named_sum (env : env) (name : string) (variants : variant list) : env =
 let lookup_named_sum (env : env) (name : string) : variant list option =
   List.assoc_opt name env.named_sums
 
+let add_named_sum_params (env : env) (name : string) (ps : string list) : env =
+  if ps = [] then env
+  else { env with named_sum_params = (name, ps) :: env.named_sum_params }
+
+let named_sum_params (env : env) (name : string) : string list =
+  match List.assoc_opt name env.named_sum_params with Some ps -> ps | None -> []
+
 (* The name of the named sum a constructor belongs to, if any. Constructor names
    are unique across sums, so this is unambiguous. *)
 let named_sum_of_ctor (env : env) (ctor : string) : (string * variant list) option =
@@ -327,8 +330,8 @@ let add_place (env : env) (pd : place_decl) : env =
   let env = { env with places = (pd.pd_name, pd) :: env.places } in
   (* If an operation of the place instantiates a catalog algebra (op_algebra),
    * register the function <P>_instantiate : () -> Magma. This is the function
-   * the AlgebraVerifier pass generates; the type checker must know it because
-   * `verify P` calls it. *)
+   * the AlgebraVerifier pass generates; the type checker knows it so that a
+   * call to it type-checks. *)
   let has_algebra =
     List.exists (function FoOp o -> o.op_algebra <> None | _ -> false) pd.pd_members
   in
@@ -454,7 +457,7 @@ let rec type_tag (t : ty) : string =
   | TyUniverse n -> Printf.sprintf "Type_%d" n
   | TyList inner -> "list_" ^ type_tag inner
   | TyMap (k, v) -> "map_" ^ type_tag k ^ "_" ^ type_tag v
-  | TyStream inner -> "stream_" ^ type_tag inner
+  | TyChannel inner -> "stream_" ^ type_tag inner
   | TyPi (_, _, _) -> "Pi"
   | TySigma (_, _, _) -> "Sigma"
   | TyId (a, _, _) -> "Id_" ^ type_tag a
@@ -526,43 +529,28 @@ let with_builtins (env : env) : env =
     rd_fold_name = None;
     rd_loc = dummy_loc;
   } in
-  (* Coercion builtins boolean ↔ proposition.
-   * to_prop : boolean -> proposition  (total, canonical injection)
-   * to_bool : proposition -> boolean  (partial: present->true, absent->false,
-   *                                    unknown lifts to indeterminate at runtime) *)
+  (* Between Boolean and the classifier.
+   * to_prop : boolean -> proposition  (the characteristic mono 2 -> Omega:
+   *           total, true to present, false to absent)
+   * decide  : proposition -> Decision (total: the three values of a
+   *           proposition as the three arms of a coproduct). There is no
+   *           arrow from proposition to boolean: it would send unknown to one
+   *           of two values that do not mean unknown. *)
   let to_prop_sig = {
     fs_params = [("b", TyPrim "boolean")];
     fs_return = TyPrim "proposition";
     fs_visits = [];
   } in
-  let to_bool_sig = {
-    fs_params = [("p", TyPrim "proposition")];
-    fs_return = TyPrim "boolean";
-    fs_visits = [];
-  } in
-  (* Decidable. Makes explicit in the type system WHERE the classical boolean
-   * fragment of an intuitionistic logic is used.
-   * decide : proposition -> Decidable   (total on the type; at runtime it fails
-   *          on HUnknown -> the point where the programmer asserts
-   *          decidability, made visible instead of implicit in to_bool).
-   * to_bool_dec : Decidable -> boolean  (total: a Decidable is already decided). *)
   let decide_sig = {
     fs_params = [("p", TyPrim "proposition")];
-    fs_return = TyPrim "Decidable";
-    fs_visits = [];
-  } in
-  let to_bool_dec_sig = {
-    fs_params = [("d", TyPrim "Decidable")];
-    fs_return = TyPrim "boolean";
+    fs_return = TyUser "Decision";
     fs_visits = [];
   } in
   env
   |> (fun e -> add_place e output_place)
   |> (fun e -> add_reduction e console_reduction)
   |> (fun e -> add_fun e "to_prop" to_prop_sig)
-  |> (fun e -> add_fun e "to_bool" to_bool_sig)
   |> (fun e -> add_fun e "decide" decide_sig)
-  |> (fun e -> add_fun e "to_bool_dec" to_bool_dec_sig)
 
 let rec ty_to_string (t : ty) : string =
   match t with
@@ -589,7 +577,7 @@ let rec ty_to_string (t : ty) : string =
   | TyEl (TyTermExpr e) -> Printf.sprintf "El(%s)" (ty_term_to_name e)
   | TyList inner -> "list of " ^ ty_to_string inner
   | TyMap (k, v) -> "map of " ^ ty_to_string k ^ " to " ^ ty_to_string v
-  | TyStream inner -> "stream of " ^ ty_to_string inner
+  | TyChannel inner -> "Wire<" ^ ty_to_string inner ^ ">"
   | TySum variants ->
       String.concat " | " (List.map variant_to_string variants)
   | TySumIn (variants, ws) ->
