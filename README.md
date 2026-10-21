@@ -27,8 +27,10 @@ truth value rather than an error or a null.
 
 Underneath, every value lives in a **content-addressed heap**. Equal content
 gets the same address, so equality is a single machine comparison and
-deduplication is global. Addresses are derived from the Leech lattice Λ₂₄ and
-canonicalized under the Conway group Co₀.
+deduplication is global. A heap holds 196,560 contents, the number of minimal
+vectors of the Leech lattice Λ₂₄, and chains into a new heap when it fills. The
+values that are lattice points (the X* structures, `LatticePoint`) are compared
+up to the lattice's symmetries: M₂₄ orbits and Co₀ canonical forms.
 
 Yon compiles to native code: OCaml frontend → a custom MLIR dialect (`topos`)
 → LLVM → a binary linked against a small, self-contained C runtime.
@@ -109,7 +111,7 @@ reports:
 
 | | |
 |---|---|
-| pytest | **1671 passed**, 10 skipped (each one declared in a register), **85 expected failures** |
+| pytest | **1676 passed**, 10 skipped (each one declared in a register), **85 expected failures** |
 | example programs | **101**, every exit code identical to a recorded baseline |
 | cross-Space scenarios | **8**, multi-process, over shared memory and the wire |
 | self-hosting | the frontend for a core subset, written in Yon, reproduces itself byte for byte |
