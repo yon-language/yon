@@ -14,7 +14,7 @@ place Arena<V> {
   fun occupied<V>(a: Arena<V>, p: Number): Boolean is given
   /* the value at an occupied point; at an empty one it stops the program
      (call it after `occupied`, as `get` does) */
-  fun value<V>(a: Arena<V>, p: Number): V is given
+  internal fun value<V>(a: Arena<V>, p: Number): V is given
   fun orbit<V>(a: Arena<V>, p: Number): Number is given
   fun same_orbit<V>(a: Arena<V>, p: Number, q: Number): Number is given
   fun fuse<V>(a: Arena<V>, p: Number, v: V, sigma: Number): Arena<V> is given

@@ -3070,6 +3070,44 @@ fun main(): Number {
     _verdict(_clean_rejection(rc, out), f"a Text key was accepted: rc={rc} {out[-300:]}")
 
 
+@pytest.mark.parametrize("call", ["HashMap.value(HashMap.set(HashMap.empty(), 1, 42), 1)",
+                                  "XRelMap.value(XRelMap.insert(XRelMap.empty(), 1536, 42), 1536)",
+                                  "Arena.value(Arena.put(Arena.empty(), 1536, 42), 1536)"])
+def test_a_collection_offers_get_and_keeps_value_to_itself(tmp_path, call):
+    """`value` reads a key the collection holds and stops on any other: it is
+    how `get` is built, internal to its house. Outside, the face is `get`."""
+    entry = f"place Entry {{}}\nfun main(): Number {{\n  return {call}\n}}\n"
+    rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
+    assert _clean_rejection(rc, out) and "is internal to" in out, out[-400:]
+
+
+# A function with a body is never replaced by a primitive: a primitive binds
+# to its `is given` declaration in the prelude, not to the string of its name.
+
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="a function with a body is never replaced by a primitive of the same name")
+def test_a_body_is_never_replaced_by_a_primitive_of_its_name(tmp_path):
+    prelude = tmp_path / "prelude"
+    shutil.copytree(ROOT / "prelude", prelude)
+    number = prelude / "num64" / "Number.yon"
+    src = number.read_text()
+    given = "  fun floor(n: Number): Number is given\n"
+    assert given in src, "the prelude no longer declares floor as given"
+    number.write_text(src.replace(
+        given, "  fun floor(n: Number): Number { return Math.floor(n) + 7 }\n"))
+    proj = _project(tmp_path, "place Entry {}\nfun main(): Number { return Number.floor(2.5) }\n")
+    r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "out")],
+                       capture_output=True, text=True, timeout=120,
+                       env={**os.environ, "YON_PRELUDE": str(prelude)})
+    out = r.stdout + r.stderr
+    if r.returncode != 0:
+        _verdict(_clean_rejection(r.returncode, out), f"not a clean rejection: {out[-300:]}")
+        return
+    code, _ = _run(tmp_path / "out")
+    _verdict(code == 9, f"Number.floor(2.5) with `+ 7` in its body gave {code}, expected 9 "
+                        "(the body) or a refusal")
+
+
 def test_merkle_node3_children_are_its_leaves(tmp_path):
     entry = """\
 place Entry {}

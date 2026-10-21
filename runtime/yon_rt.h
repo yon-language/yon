@@ -595,7 +595,6 @@ double yon_rt_map_empty(void);
 
 double yon_rt_map_put(double map_id, double key, double value);
 
-double yon_rt_map_get(double map_id, double key);
 double yon_rt_map_value(double map_id, double key);
 
 double yon_rt_map_contains(double map_id, double key);

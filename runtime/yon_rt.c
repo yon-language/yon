@@ -3730,11 +3730,6 @@ double yon_rt_map_put(double map_id, double key, double value) {
     ds_ensure_init();
     return (double)trie_put(trie_root(map_id), hash_f64(key), key, value, 0);
 }
-double yon_rt_map_get(double map_id, double key) {
-    ds_ensure_init();
-    const trie_leaf_t *l = trie_find(trie_root(map_id), key);
-    return l ? l->value : 0.0;
-}
 /* The value at a key the map holds. Asked of a key it does not hold, it
  * stops the program: an absent key has no value, not a 0.0 that would read
  * as one (the place's `get` asks `has` first and answers Absent). */
