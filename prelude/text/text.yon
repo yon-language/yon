@@ -36,12 +36,11 @@ topos where {
    *
    * And `concat` is the cleanest non-commutative monoid in the prelude:
    * associative, with "" as its neutral, and concat(a,b) != concat(b,a).
-   * A good test bench for the algebra cantiere — the prelude's other
+   * A good test bench for an algebra check — the prelude's other
    * monoids (Additive on Number, Multiplicative on Int64) are all
    * commutative.
    *
-   * `uses Additive` arrives with the algebra cantiere: the position does
-   * not exist in the grammar today.
+   * `uses Additive`: the position does not exist in the grammar.
    */
   morphism concat(a: String, b: String): String
 }

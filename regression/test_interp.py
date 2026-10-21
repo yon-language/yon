@@ -1,4 +1,4 @@
-"""Kernel interpreter <-> native binary differential (de Bruijn defect D3).
+"""Kernel interpreter <-> native binary differential (de Bruijn criterion).
 
 Every RAN example of baseline_exitcodes.txt is computed twice, independently:
 
@@ -17,11 +17,10 @@ The interpreter is incomplete for the imperative / effectful / stdlib layer, and
 says so in one of four ways (see interp_ledger.txt): a punt (`EXIT 0` with
 "[no extractable value, assuming 0]" on --trace stderr), a refusal ("EVAL
 INCOMPLETE", exit 6, for loop / produce / spawn / wire), a rejection by its own
-checker, or an uncaught exception. Earlier it returned a WRONG 0 silently for
-`iter` / `while` / `produce` / `spawn` / `wire` / `for every`; it now refuses
-instead, and on 2026-10-10 no example produced a silent wrong value. Completing the
-interpreter (evaluating the imperative layer instead of refusing) is the path to
-turning INCOMPLETE rows into AGREE rows.
+checker, or an uncaught exception. On `iter` / `while` / `produce` / `spawn` /
+`wire` / `for every` it refuses, never returns a silent wrong value. An
+interpreter that evaluates the imperative layer turns INCOMPLETE rows into AGREE
+rows.
 
 interp_ledger.txt pins the classification, one row per RAN example:
   - an AGREE example must print `EXIT n` == native, with no punt;

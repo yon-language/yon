@@ -433,42 +433,17 @@ let rec try_reduce_builtin (t : term) : term option =
            | Some true -> Some (Heyting.encode_heyt Heyting.HPresent)
            | Some false -> Some (Heyting.encode_heyt Heyting.HAbsent)
            | None -> None)
-  | App (Var "to_bool", arg) ->
-      (* proposition -> boolean coercion.
-       * Partial: present ↦ true, absent ↦ false, unknown is a
-       * runtime indeterminate — we map to false (conservative,
-       * makes downstream conditionals act as if the property is
-       * not established). A future refinement could fail explicitly
-       * or return a triple-valued boolean. *)
+  | App (Var "__prop_code", arg) ->
+      (* the code of a proposition: present 0, absent 1, unknown 2 *)
       let arg' = match try_reduce_builtin arg with Some v -> v | None -> arg in
-      (match decode_bool arg' with
-       | Some _ -> Some arg'  (* already a boolean *)
-       | None ->
-           match Heyting.decode_heyt arg' with
-           | Some Heyting.HPresent -> Some (encode_bool true)
-           | Some Heyting.HAbsent -> Some (encode_bool false)
-           | Some Heyting.HUnknown -> Some (encode_bool false)
-           | None -> None)
-  | App (Var "decide", arg) ->
-      (* proposition -> Decidable. An assertion of decidability: the value must
-       * be decided (present/absent). On HUnknown it fails explicitly: this is
-       * where the programmer declares "this proposition is decidable", made
-       * visible instead of silently coerced. The Decidable is represented by
-       * the Heyting value itself (already decided). *)
-      let arg' = match try_reduce_builtin arg with Some v -> v | None -> arg in
-      (match decode_bool arg' with
-       | Some _ -> Some arg'   (* already decided (boolean) *)
-       | None ->
-           match Heyting.decode_heyt arg' with
-           | Some Heyting.HPresent -> Some (Heyting.encode_heyt Heyting.HPresent)
-           | Some Heyting.HAbsent  -> Some (Heyting.encode_heyt Heyting.HAbsent)
-           | Some Heyting.HUnknown ->
-               failwith "decide: proposition is HUnknown — not decidable; \
-                         cannot collapse to boolean (intuitionistic guard)"
-           | None -> None)
+      (match Heyting.decode_heyt arg' with
+       | Some Heyting.HPresent -> Some (encode_number 0.0)
+       | Some Heyting.HAbsent -> Some (encode_number 1.0)
+       | Some Heyting.HUnknown -> Some (encode_number 2.0)
+       | None -> None)
   | App (Var "to_bool_dec", arg) ->
-      (* Decidable -> boolean. Total: a Decidable is already decided (decide has
-       * already excluded HUnknown). No silent loss. *)
+      (* a condition the compiler decides itself, on a proposition that is
+       * never unknown; an unknown here is a broken invariant, never false *)
       let arg' = match try_reduce_builtin arg with Some v -> v | None -> arg in
       (match decode_bool arg' with
        | Some _ -> Some arg'
@@ -590,18 +565,6 @@ let rec try_reduce_builtin (t : term) : term option =
        * the equality type, with no computational content. *)
       let arg' = match try_reduce_builtin arg with Some v -> v | None -> arg in
       Some arg'
-  | App (App (Var "transport", _path), value) ->
-      (* transport(p, x) : the path moves x along p. By regularity, if
-       * p is refl (the trivial path), transport is the identity. In
-       * the prototype we treat transport conservatively as identity:
-       * the result is the original value. Full transport semantics
-       * (substituting along a non-trivial path) requires interval
-       * variable evaluation, which we defer. *)
-      let value' = match try_reduce_builtin value with Some v -> v | None -> value in
-      Some value'
-  | App (App (Var "transp", _path), value) ->
-      let value' = match try_reduce_builtin value with Some v -> v | None -> value in
-      Some value'
   | App (App (Var "concat", p1), p2) ->
       (* Path concatenation with the groupoid UNIT laws as definitional
        * reductions (concat : Path A x y -> Path A y z -> Path A x z):
@@ -768,7 +731,7 @@ let rec ast_ty_to_surface (a : ty) : Surface_ast.ty =
       if Carrier.is_prim_name n then Surface_ast.TyPrim n
       else Surface_ast.TyUser n
   | TyType n -> Surface_ast.TyUniverse n
-  | TyStream t -> Surface_ast.TyStream (ast_ty_to_surface t)
+  | TyChannel t -> Surface_ast.TyChannel (ast_ty_to_surface t)
   | TyArrow (x, y) -> Surface_ast.TyArrow (ast_ty_to_surface x, ast_ty_to_surface y)
   | TyPi (x, p, q) -> Surface_ast.TyPi (x, ast_ty_to_surface p, ast_ty_to_surface q)
   | TySigma (x, p, q) -> Surface_ast.TySigma (x, ast_ty_to_surface p, ast_ty_to_surface q)
@@ -779,7 +742,7 @@ let rec surface_ty_to_ast (a : Surface_ast.ty) : ty =
   | Surface_ast.TyPrim n -> TyPlace n
   | Surface_ast.TyUser n -> TyPlace n
   | Surface_ast.TyUniverse n -> TyType n
-  | Surface_ast.TyStream t -> TyStream (surface_ty_to_ast t)
+  | Surface_ast.TyChannel t -> TyChannel (surface_ty_to_ast t)
   | Surface_ast.TyArrow (x, y) -> TyArrow (surface_ty_to_ast x, surface_ty_to_ast y)
   | Surface_ast.TyPi (x, p, q) -> TyPi (x, surface_ty_to_ast p, surface_ty_to_ast q)
   | Surface_ast.TySigma (x, p, q) -> TySigma (x, surface_ty_to_ast p, surface_ty_to_ast q)

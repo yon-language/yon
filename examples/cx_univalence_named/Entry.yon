@@ -4,12 +4,14 @@ place Entry {
 // PERCHE': dare un nome al ponte prima di attraversarlo e' leggibilita' senza
 // perdere il calcolo; l'intermedio legato viene inlineato prima del desugar cosi'
 // la macchina di univalenza resta chiusa e computa.
-fun succ(n: Number): Number { return n + 1 }
-fun pred(n: Number): Number { return n - 1 }
+// succ e pred su Int64 (Z/2^64), dove sono inversi davvero (su Number, f64,
+// (n + 1) - 1 non e' sempre n).
+fun succ(n: Int64): Int64 { return n + 1 }
+fun pred(n: Int64): Int64 { return n - 1 }
 
 fun main(): Number {
   be bridge holds equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)
   be y holds transport(ua(bridge), 10)
-  return y     // -> 11
+  return if y == 11 then 11 else 0     // y -> 11
 }
 }

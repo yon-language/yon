@@ -15,9 +15,9 @@ place Entry {
     be m holds XRelMap.empty()
     be _m0 holds XRelMap.add_ref(m, 1536)
     m = XRelMap.insert(m, 1536, 100)
-    be v4 holds XRelMap.get(m, 1536)            // exact point -> 100
-    be v5 holds XRelMap.get(m, 1280)            // different class -> miss (0)
-    be v6 holds XRelMap.get(m, 16778752)        // same class (antipode) -> 100
+    be v4 holds match XRelMap.get(m, 1536) { Found(v) => v, Absent => 0 }      // exact point -> 100
+    be v5 holds match XRelMap.get(m, 1280) { Found(v) => v, Absent => 0 }      // different class -> Absent (0)
+    be v6 holds match XRelMap.get(m, 16778752) { Found(v) => v, Absent => 0 }  // same class (antipode) -> 100
 
     // XSimplex — classify relations
     be v7 holds XSimplex.of2(1536, 1280)

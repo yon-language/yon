@@ -35,8 +35,7 @@ EXE = ROOT / "frontend" / "_build" / "default" / "test_surface_fuzz.exe"
 
 SEEDS = ["20260701", "1", "42"]
 CASES = "4000"
-# accepted share of the cases: measured 2026-10-10 at 2.6-2.8% on the fixed seeds
-# (106-111 of 4000). The accept-then-lower contract is only exercised by accepted
+# floor on the accepted share of the cases. The accept-then-lower contract is only exercised by accepted
 # programs, so a generator that drifts to rejection-only would make this gate vacuous.
 MIN_ACCEPT_SHARE = 0.01
 

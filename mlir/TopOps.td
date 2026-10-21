@@ -955,7 +955,7 @@ def Topos_PathOp : Topos_Op<"path", [Pure]> {
 }
 
 //===----------------------------------------------------------------------===//
-// P7 extended: pullback, pushout, topology, geom_morphism, forces
+// Extended: pullback, pushout, topology, geom_morphism, forces
 //===----------------------------------------------------------------------===//
 
 // topos.pullback @name = @f, @g
@@ -1851,8 +1851,8 @@ def Topos_SharingConstraintOp : Topos_Op<"sharing_constraint"> {
 // Each op here has let hasVerifier = 1 and a verify() implementation in
 // TopOps.cpp. The ops are grouped by area:
 //   - subtype coercion + bounded quantification + type classes
-//   - costruzioni topos-teoretiche (P2-bis)
-//   - costruzioni su world / coeffect (P5-bis)
+//   - costruzioni topos-teoretiche
+//   - costruzioni su world / coeffect
 //===----------------------------------------------------------------------===//
 
 // explicit subtype coercion.

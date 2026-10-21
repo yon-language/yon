@@ -1,4 +1,4 @@
-"""Conformance gate — independent second checker (de Bruijn defect D1).
+"""Conformance gate — independent second checker (de Bruijn criterion).
 
 Runs frontend/test_kernel_independent.ml: a self-contained reducer for the proved-sound
 core (own substitution, own small-step, own alpha-equality — calling neither Reduce nor Subst nor

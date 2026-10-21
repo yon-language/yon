@@ -120,7 +120,10 @@ and do not require the clause.)
 Yon has three forms of polymorphism, and deliberately lacks a fourth.
 
 **Parametric.** Type parameters on functions: `fun id<A>(x: A): A`. No
-constraints, no bounds, a type parameter is honest ignorance. The
+constraints, no bounds: inside the body `A` is abstract, known only from the
+arrows that pass it, so a value of type `A` can only be passed on. No field,
+no call, no arithmetic, no comparison with a literal reveals it, and the
+checker refuses each; every call fixes `A` for itself. The
 [Generics](/book/generics) chapter carries this further, to parameters on
 places and arrows and how a type variable anchors to the universe.
 

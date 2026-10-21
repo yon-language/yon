@@ -101,8 +101,8 @@ above; there is no way to reclaim a Space that is still spoken to.
 The release itself is one call, `madvise(MADV_DONTNEED)` over the arena's live
 bytes, page-aligned inward. The virtual mapping stays valid, so nothing dangles;
 the physical pages are handed back. Because the arc analysis counts *every* way a
-named Space's heap is touched, a wire, an import, a cross-Space call, a `new` at a
-topos bound to that Space, an `awaits`, the release can never fall before a read
+named Space's heap is touched, a wire, an import, a cross-Space call, a section `.-> P { ... }` of a
+place that lives in that Space, an `awaits`, the release can never fall before a read
 that still needs the pages.
 
 <SpaceReclaim />

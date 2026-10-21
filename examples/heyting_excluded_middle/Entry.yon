@@ -4,13 +4,14 @@ place Entry {
 fun main(): Number {
   be p holds unknown
   be lem holds p ||? (!? p)      // "p or not p": classicamente SEMPRE vero
-  be dec holds to_bool(lem)      // su unknown, in Heyting: NON decidibilmente vero
+  // su unknown, in Heyting, resta unknown: non e' present, e non e' absent
+  be dec holds match decide(lem) { Present => 100, Absent => 0, Unknown => 0 }
 
   be q holds present
   be lem_q holds q ||? (!? q)    // su un valore NOTO il terzo escluso vale
-  be dec_q holds to_bool(lem_q)
+  be dec_q holds match decide(lem_q) { Present => 1, Absent => 0, Unknown => 0 }
 
   // logica classica darebbe 101; Heyting da' 1 (LEM cade su unknown, tiene su present)
-  return (if dec then 100 else 0) + (if dec_q then 1 else 0)
+  return dec + dec_q
 }
 }

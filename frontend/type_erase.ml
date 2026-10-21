@@ -30,8 +30,8 @@ module C = Ast
 
 (* A function with type parameters used OUTSIDE a direct call (passed as a
    value, aliased, or partially applied) cannot have its type arguments erased
-   coherently yet — higher-order erasure is not lowered. Per the 2026-06-17
-   decree ("reject at compile time, not failwith"), this is a clean
+   coherently — higher-order erasure is not lowered. A program the compiler
+   cannot lower is rejected at compile time, never failwith'd: this is a clean
    compile-time rejection on the canonical error channel (exit 3): a well-typed
    term with no realizable lowering is refused with a diagnostic, never
    crashed on with a raw failwith. Carries the offending function name. *)

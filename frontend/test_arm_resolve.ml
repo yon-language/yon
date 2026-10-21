@@ -7,7 +7,7 @@
    stays a positional constructor.
 
    1c: registering `place U { this > P :U Q }` records the injection P -> U
-   on the SAME machinery `subcontains` rides: Tyenv.place_subcontains (the
+   on the SAME machinery `this <` rides: Tyenv.place_subcontains (the
    pd_subcontains chain walk) reports it, with no new api. *)
 
 open Surface_ast

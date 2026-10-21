@@ -62,7 +62,7 @@ let direct_operation_names (pd : place_decl) : string list =
 let related_places (pd : place_decl) : string list =
   let rec collect_from_ty = function
     | TyUser n -> [n]
-    | TyList inner | TyStream inner -> collect_from_ty inner
+    | TyList inner | TyChannel inner -> collect_from_ty inner
     | TyMap (k, v) -> collect_from_ty k @ collect_from_ty v
     | _ -> []
   in

@@ -1,0 +1,23 @@
+/* HashMap<K, V> — a map from keys to values, a persistent hash trie in the
+ * content-addressed heap. A key is identified by its bits. Two maps with the
+ * same entries are the same value.
+ *
+ * Markers: [G] given, the runtime primitive · [T] total, written here */
+place HashMap<K, V> {
+
+  /* ─── The primitives ─────────────────────────────────────── [G] ─── */
+
+  fun empty<K, V>(): HashMap<K, V> is given
+  fun set<K, V>(m: HashMap<K, V>, k: K, v: V): HashMap<K, V> is given
+  fun has<K, V>(m: HashMap<K, V>, k: K): Boolean is given
+  fun size<K, V>(m: HashMap<K, V>): Number is given
+  /* the value held at a key the map holds; asked of a key it does not hold,
+     it stops the program (call it after `has`, as `get` does) */
+  fun value<K, V>(m: HashMap<K, V>, k: K): V is given
+
+  /* ─── Reading ────────────────────────────────────────────── [T] ─── */
+
+  fun get<K, V>(m: HashMap<K, V>, k: K): Lookup<V> {
+    return if has(m, k) then hit(Found, value(m, k)) else Absent
+  }
+}

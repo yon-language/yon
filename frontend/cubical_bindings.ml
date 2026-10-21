@@ -129,23 +129,21 @@ let infer_path (arg_tys : ty list) : infer_result =
  * precisely, we conservatively return the second argument's type.
  * This is sound when paths in the universe represent type identity.
  *)
+(* transport is typed by the checker (Tycheck.check_call) from its path's type,
+ * Id(Type, A, B): one rule for every form of the path. This entry only
+ * records that transport is a cubical primitive of arity 2. *)
 let infer_transport (arg_tys : ty list) : infer_result =
-  match arg_tys with
-  | [_path; source_ty] -> ok_ty source_ty
-  | _ -> fail_ty (TyPrim "unit")
-           (Printf.sprintf "transport expects 2 arguments, got %d"
-              (List.length arg_tys))
+  fail_ty (TyPrim "unit")
+    (Printf.sprintf "transport is typed from its path's type (%d arguments)"
+       (List.length arg_tys))
 
 (* transp : same as transport with explicit start interval point.
  * Arity: 3 (or 2 in CCHM): line of types, starting interval, source value.
  *)
 let infer_transp (arg_tys : ty list) : infer_result =
-  match arg_tys with
-  | [_line; _i0; source_ty] -> ok_ty source_ty
-  | [_line; source_ty] -> ok_ty source_ty
-  | _ -> fail_ty (TyPrim "unit")
-           (Printf.sprintf "transp expects 2 or 3 arguments, got %d"
-              (List.length arg_tys))
+  fail_ty (TyPrim "unit")
+    (Printf.sprintf "transp is typed from its path's type (%d arguments)"
+       (List.length arg_tys))
 
 (* comp : forallA. (φ : Face) -> Partial -> A -> A
  * Composition operation. Arity 3.
@@ -173,10 +171,9 @@ let infer_hcomp (arg_tys : ty list) : infer_result =
 let infer_glue (arg_tys : ty list) : infer_result =
   match arg_tys with
   | [_partial; base_ty] ->
-      (* The result is a Glue type over base_ty. Represented as TyUser
-       * "Glue" for type checking purposes. *)
-      ignore base_ty;
-      ok_ty (TyUser "Glue")
+      (* The result is a Glue type over base_ty: it records its base, which
+       * unglue gives back. *)
+      ok_ty (TyApp ("Glue", [base_ty]))
   | _ -> fail_ty (TyUser "Glue")
            (Printf.sprintf "glue expects 2 arguments, got %d"
               (List.length arg_tys))
@@ -186,12 +183,11 @@ let infer_glue (arg_tys : ty list) : infer_result =
  *)
 let infer_unglue (arg_tys : ty list) : infer_result =
   match arg_tys with
-  | [glue_ty] ->
-      (* If the glue type is "Glue", we don't know the base statically
-       * in this monomorphic checker. Return a generic universe type;
-       * a richer implementation would unfold. *)
-      ignore glue_ty;
-      ok_ty (TyPrim "unknown")
+  | [TyApp ("Glue", [base_ty])] -> ok_ty base_ty
+  | [other] ->
+      fail_ty (TyPrim "unit")
+        (Printf.sprintf "unglue expects a glued value, Glue A; got %s"
+           (Tyenv.ty_to_string other))
   | _ -> fail_ty (TyPrim "unknown")
            (Printf.sprintf "unglue expects 1 argument, got %d"
               (List.length arg_tys))
@@ -293,7 +289,11 @@ let infer_inv (arg_tys : ty list) : infer_result =
  *)
 let infer_path_app (arg_tys : ty list) : infer_result =
   match arg_tys with
-  | [_path; _i] -> ok_ty (TyPrim "unknown")
+  | [TyId (a, _, _); _i] | [TyPathP ((_, a), _, _); _i] -> ok_ty a
+  | [other; _i] ->
+      fail_ty (TyPrim "unit")
+        (Printf.sprintf "path_app expects a path, Id(A, x, y); got %s"
+           (Tyenv.ty_to_string other))
   | _ -> fail_ty (TyPrim "unknown")
            (Printf.sprintf "path_app expects 2 arguments, got %d"
               (List.length arg_tys))
@@ -337,12 +337,12 @@ let infer_equiv (arg_tys : ty list) : infer_result =
 (* idEquiv : (A : U) -> Equiv A A — the identity equivalence, built soundly.
  * Arity 1.
  *)
+(* idEquiv is typed by the checker (Tycheck.check_call) from the code of its
+ * argument: idEquiv(T) : Equiv(T, T). This entry only records the arity. *)
 let infer_id_equiv (arg_tys : ty list) : infer_result =
-  match arg_tys with
-  | [_a] -> ok_ty (TyUser "Equiv")
-  | _ -> fail_ty (TyUser "Equiv")
-           (Printf.sprintf "idEquiv expects 1 argument (the type), got %d"
-              (List.length arg_tys))
+  fail_ty (TyUser "Equiv")
+    (Printf.sprintf "idEquiv is typed from the code of its argument (%d arguments)"
+       (List.length arg_tys))
 
 (* ─── Dispatch table ───────────────────────────────────────────────── *)
 

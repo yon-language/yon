@@ -2,6 +2,6 @@ place Entry {
   fun main(): Number {
     be s holds .-> State { balance 5 }
     be bad holds is_overdrawn(s)
-    return if bad then 0 else 42
+    return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
   }
 }

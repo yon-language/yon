@@ -2,4 +2,4 @@ status: accept
 exit: 42
 covers: call_or_new_stmt field_assign_list field_assign
 note: |
-  new P { field value } fills sections without an =.
+  .-> P { field value } fills sections without an =.

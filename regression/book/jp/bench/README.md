@@ -29,7 +29,7 @@ snapshot, not re-derived each build. The build-time correctness gate that IS re-
   put is O(1) in the arena's fill (~80 ns, flat); get ~41 ns; same_orbit ~1.17 µs.
 - `xset_scaling-1c44e79-20260629.json` — XSet vs HashSet intersect/union, median over 9 runs at
   N = 100, 1000, 10000, 100000. `median_ns` is 16 values: per N, the four are
-  `[XSet_int, Hash_int, XSet_uni, Hash_uni]` in nanoseconds per operation. **Withdrawn** (R-01): at
+  `[XSet_int, Hash_int, XSet_uni, Hash_uni]` in nanoseconds per operation. **Withdrawn**: at
   N = 100000 the HashSet runtime runs out of capacity, so those HashSet values time the failure path;
   the record stays as history, not as a measurement to cite.
 - `spawn_scaling-1c44e79-20260629.json` — `spawn in N parallel` wall-time for N = 1, 2, 4, 8, 16

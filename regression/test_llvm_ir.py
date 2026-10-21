@@ -135,7 +135,7 @@ def _emit_ll(name, tmp):
     """Run EMIT -> topos-opt (two lowering passes, MLIROPT fallback) ->
     mlir-translate --mlir-to-llvmir and return the .ll text. A missing source
     or a failing stage FAILS the node with that stage's stderr."""
-    # a single examples/<name>.yon, or (since the Fase-1b migration) a project
+    # a single examples/<name>.yon, or a project
     # directory examples/<name>/ with a yon.toml: EMIT accepts both, as in
     # run_regression.sh.
     src = next((c for c in (EXD / f"{name}.yon", EXD / name) if c.exists()), None)
@@ -294,7 +294,7 @@ def test_ll_no_undefined_runtime_refs(name, tmp_path):
 
 # ── the runtime ABI, read from the C side ───────────────────────────────────
 # The facade is NOT uniformly f64: emit_mlir.ml's table also has i1/Prop
-# arrows (yon_rt_to_prop/to_bool/decide: i8), a ptr (yon_rt_string_lit), an i32
+# arrows (yon_rt_to_prop/to_bool_dec: i8), a ptr (yon_rt_string_lit), an i32
 # (yon_rt_xheap_used) and a void control call (yon_rt_maybe_serve). The truth
 # the IR must agree with is the C prototype the runtime object is compiled
 # from, so that is the oracle: every facade declaration in the IR must have

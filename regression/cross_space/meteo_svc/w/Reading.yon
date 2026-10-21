@@ -2,7 +2,7 @@ place Reading {
   temp Number
   humidity Number
 
-  fun samples(): Stream<Reading> {
+  fun samples(): Wire<Reading> {
     be s holds produce {
       emit .-> Reading { temp 10 humidity 50 }
       emit .-> Reading { temp 11 humidity 51 }

@@ -74,8 +74,8 @@ fibre is `P`; usable as an `A` via the forgetful mono.
 implication without excluded middle, which is what lets `unknown` be a
 citizen.
 
-**topology (Lawvere–Tierney)**, an operator `j : Ω → Ω` declared on a
-place; the seed of sheaf semantics (a modal "locally true").
+**topology (Lawvere–Tierney)**, an operator `j : Ω → Ω`, the seed of sheaf
+semantics (a modal "locally true"). Yon has no declaration for it (chapter 8).
 
 **Yoneda principle**, a thing is what you can observe of it; in Yon: a
 place's interface is its bundle of arrows, and content addressing makes

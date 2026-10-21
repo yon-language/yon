@@ -84,15 +84,17 @@ A journey can also run between *types*. An equivalence, written `f <=> g`, is a
 two-way bridge: the pair of maps together with the coherence that each undoes the
 other, and Yon synthesises the trivial coherences for you. Laid down as a path,
 an equivalence is univalence itself, `ua(e)`. And you can **carry** a value
-across the bridge:
+across the bridge (here on `Int64`, where `succ` and `pred` really undo each
+other; on `Number`, a float, `(n + 1) - 1` is not always `n`):
 
 <!-- yon-gate: exit 11 -->
 ```yon
-fun succ(n: Number): Number { return n + 1 }
-fun pred(n: Number): Number { return n - 1 }
+fun succ(n: Int64): Int64 { return n + 1 }
+fun pred(n: Int64): Int64 { return n - 1 }
 fun main(): Number {
   be bridge holds succ <=> pred    // the two-way bridge
-  return carry 10 along bridge     // transport 10 across it: succ 10 = 11
+  be y holds carry 10 along bridge // transport 10 across it: succ 10 = 11
+  return if y == 11 then 11 else 0
 }
 ```
 

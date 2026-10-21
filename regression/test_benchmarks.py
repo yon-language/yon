@@ -78,20 +78,18 @@ class RuntimeCapacityError(AssertionError):
     absorbing a compile, exit-code, guard or property failure."""
 
 
-# xset_scaling at N=100000 overflows the HashSet runtime: measured 2026-10-10,
-# each run prints 33616 x "hashset_add: directory full" and 6600042 x
-# "hashset_empty: arena exhausted" (exit 0), so its HashSet timings at the
-# largest N time the failure path. A runtime/bench defect, reported, not fixed
-# here; the xfail is strict and narrowed to RuntimeCapacityError.
-_CAPACITY_XFAIL = {
-    "xset_scaling": "HashSet directory/arena exhausted at N=100000 (runtime capacity)",
-}
+# A bench that runs into a known runtime capacity limit is xfail'd here, strict
+# and narrowed to RuntimeCapacityError, so no other failure hides behind it.
+# None today: the HashSet is a persistent trie with no directory to exhaust.
+_CAPACITY_XFAIL = {}
 
 # Benchmarks measured but NOT published: their numbers would say something
-# false. The page says so where the chart was (book ch. 93). Each entry leaves
-# with the item that closes it.
+# false. The page says so where the chart was (book ch. 93). An entry leaves
+# when its numbers measure what they claim to.
 WITHDRAWN = {
-    "xset_scaling": "R-01: its HashSet timings at N=100000 time the capacity failure path",
+    "xset_scaling": "its published HashSet timings were taken on the mutable "
+                    "HashSet (which failed at N=100000); the persistent one is "
+                    "to be measured on the reference machine",
 }
 
 
@@ -205,13 +203,11 @@ def test_benchmark(name, tmp_path):
         assert cons_100k < max(cons_10k, 1) * 3, (
             f"ds_ops: cons not ~flat in N? cons@10k={cons_10k} cons@100k={cons_100k}"
         )
-        # set content-addresses each entry on the chaining heap and probes it back, so it
-        # GROWS with the map; add stores inline and stays flat. The growth and the contrast
-        # are the point: set must grow with N, and must be heavier than the inline add.
+        # a set copies the path to its key in a hash trie, one node per level, so
+        # it GROWS (logarithmically) with the map. HashSet.add is the same trie:
+        # there is no inline store to contrast it with.
         assert set_100k > set_10k, f"ds_ops: set not growing with map size? @10k={set_10k} @100k={set_100k}"
-        assert set_100k > add_100k, (
-            f"ds_ops: content-addressed set not heavier than inline add? set={set_100k} add={add_100k}"
-        )
+        _ = add_100k
     if name == "heap_expand":
         d_100k, d_1m, s_1m = median[1], median[2], median[3]
         # identical content dedups to one slot, so it must be cheaper than interning

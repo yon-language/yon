@@ -98,7 +98,7 @@ double yon_rt_hsh_step(double store_id, double a_i, double compose_op) {
     /* 1) copia H_{i-1} */
     for (uint32_t k = 0; k < base; k++) {
         double v = st->vals[k];
-        yon_rt_hashset_add(new_set, v);
+        new_set = yon_rt_hashset_add(new_set, v);   /* a set is a value */
         tmp[write++] = v;
     }
     /* 2) aggiungi (a_i + v) se nuovo */
@@ -107,7 +107,7 @@ double yon_rt_hsh_step(double store_id, double a_i, double compose_op) {
         double cv = st->vals[k] + a_i;                /* compose (ℕ,+) */
         if (st->modulus > 0.5) { cv = cv - st->modulus * (double)((long long)(cv / st->modulus)); } /* mod M */
         if (yon_rt_hashset_contains(new_set, cv) < 0.5) {
-            yon_rt_hashset_add(new_set, cv);
+            new_set = yon_rt_hashset_add(new_set, cv);
             if (write < YON_HSH_MAX_VALS) tmp[write++] = cv;
             if (delta_n == 0 || cv > dmax) dmax = cv;
             delta_n++;
@@ -179,24 +179,13 @@ double yon_rt_hsh_levels(double store_id) {
 }
 
 /* ============================================================================
- * Decidable — intuitionistic guard for the proposition -> boolean collapse.
- * Runtime proposition: i8 with 0=present, 1=absent, 2=unknown (Heyting).
- *   yon_rt_decide(p)       : asserts decidability. On unknown(2) it aborts
- *                            explicitly (not a silent coercion).
- *   yon_rt_to_bool_dec(d)  : Decidable -> boolean, total (unknown already
- *                            excluded).
+ * A condition the compiler decides itself, on a proposition it built and that
+ * is never unknown (0=present, 1=absent). An unknown here is a broken
+ * invariant of the compiler, and stops the program: it never becomes false.
  * ============================================================================ */
-int8_t yon_rt_decide(int8_t prop) {
-    if (prop == 2) {
-        fprintf(stderr, "[YON-RT] decide: proposition is unknown — not decidable; "
-                        "cannot collapse to boolean (intuitionistic guard)\n");
-        abort();
-    }
-    return prop;                 /* 0=present, 1=absent: already decided */
-}
 int8_t yon_rt_to_bool_dec(int8_t decided) {
-    if (decided == 2) {          /* invariante Decidable violato */
-        fprintf(stderr, "[YON-RT] to_bool_dec: unknown reached a Decidable slot\n");
+    if (decided == 2) {
+        fprintf(stderr, "[YON-RT] to_bool_dec: unknown reached a decided condition\n");
         abort();
     }
     return (decided == 0) ? 1 : 0;   /* present->true, absent->false */
@@ -220,38 +209,11 @@ double yon_rt_math_cosh(double x)  { return cosh(x); }
 double yon_rt_math_tanh(double x)  { return tanh(x); }
 
 /* ============================================================================
- * Collections: Set.union / Set.intersect / List.reverse.
+ * Collections: List.reverse (Set.union / Set.intersect live with the
+ * persistent sets in yon_rt.c).
  * Built on the existing primitives. Iteration via an explicit array to avoid
  * the slot-0/sentinel collision of cons lists (the HSH/XSet lesson).
  * ============================================================================ */
-/* Iteration via at_bucket (NOT to_list): avoids the slot-0/sentinel trap that
- * makes hashset_to_list lose elements (cons with tail in slot 0). */
-/* 2026-06-04: set directories are dynamic per-set; each set is iterated
- * over ITS OWN capacity (dir_capacity(set)), not a global constant. */
-double yon_rt_hashset_union(double a_id, double b_id) {
-    double out = yon_rt_hashset_empty();
-    double cap_a = yon_rt_hashset_dir_capacity(a_id);
-    for (double i = 0; i < cap_a; i += 1.0) {
-        double v = yon_rt_hashset_at_bucket(a_id, i);
-        if (v != -1.0) out = yon_rt_hashset_add(out, v);
-    }
-    double cap_b = yon_rt_hashset_dir_capacity(b_id);
-    for (double i = 0; i < cap_b; i += 1.0) {
-        double v = yon_rt_hashset_at_bucket(b_id, i);
-        if (v != -1.0) out = yon_rt_hashset_add(out, v);
-    }
-    return out;
-}
-double yon_rt_hashset_intersect(double a_id, double b_id) {
-    double out = yon_rt_hashset_empty();
-    double cap_a = yon_rt_hashset_dir_capacity(a_id);
-    for (double i = 0; i < cap_a; i += 1.0) {
-        double v = yon_rt_hashset_at_bucket(a_id, i);
-        if (v != -1.0 && yon_rt_hashset_contains(b_id, v) >= 0.5)
-            out = yon_rt_hashset_add(out, v);
-    }
-    return out;
-}
 double yon_rt_list_reverse(double list_id) {
     /* materialize into an array, rebuild in reverse via cons.
      * End guard: node == YON_RT_LIST_EMPTY (0xFFFFFFFF). With slot 0 reserved, a

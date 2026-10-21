@@ -20,7 +20,7 @@ let rec pp_ty t =
   | TyId (a, _, _) ->
       Printf.sprintf "Id_%s" (pp_ty a)
   | TyPlace n -> n
-  | TyStream t' -> Printf.sprintf "stream of %s" (pp_ty t')
+  | TyChannel t' -> Printf.sprintf "Wire<%s>" (pp_ty t')
   | TyDirUniverse n -> Printf.sprintf "U_omega_%d" n
   | TyEl _ -> "El(...)"
   | TyGlue (a, _, _) -> Printf.sprintf "Glue(%s)" (pp_ty a)

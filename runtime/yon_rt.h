@@ -178,6 +178,11 @@ yon_section_t yon_rt_section(uint32_t heap_id,
 int yon_rt_field_load(yon_section_t sec, uint32_t offset,
                       uint32_t size, void *out);
 
+/* The read compiled code performs: yon_rt_field_load, and a failure stops
+ * the program (a broken handle never reads as zero). Returns 0. */
+int yon_rt_field_load_or_stop(yon_section_t sec, uint32_t offset,
+                              uint32_t size, void *out);
+
 /* Flatten a place into position-independent content bytes (the outbound half
  * of the cross-process wormhole). Writes the raw payload into out_buf and
  * returns the byte count, or -1 on error / if cap is too small. Rebuild with
@@ -413,7 +418,7 @@ int yon_rt_handler_push(uint64_t hash, void *fn_ptr);
 int yon_rt_handler_pop(uint64_t hash);
 void *yon_rt_handler_lookup(uint64_t hash);
 
-/* ---- P8 #83: Coordination protocol cross-Space ---- */
+/* ---- Coordination protocol cross-Space ---- */
 
 /* When a function crosses multiple Spaces, the coordination protocol is
  * derived from the set of policies of the Spaces involved:
@@ -520,7 +525,7 @@ int yon_rt_lookup_geom_morphism(const char *source_topos,
  * active. Sections stay i64 packed (heap_id+xcoord), portable across
  * processes. */
 
-/* ---- P8 #87: Streams cross-Space (emit / produce / await) ---- */
+/* ---- Streams cross-Space (emit / produce / await) ---- */
 
 /* A Stream is a FIFO channel of typed values, associated with a Space (the
  * consumer's target space). The producer can be in any space; a cross-space
@@ -569,8 +574,6 @@ double yon_rt_stream_await_f64(double stream_id_f64);
 
 uint8_t yon_rt_text_to_prop(double h);   /* String fusion: handle */
 uint8_t yon_rt_to_prop(int8_t b);
-int8_t  yon_rt_to_bool(uint8_t prop);
-double  yon_rt_transport(double witness, double value);
 
 /* ---- Diagnostic ---- */
 
@@ -593,20 +596,11 @@ double yon_rt_map_empty(void);
 double yon_rt_map_put(double map_id, double key, double value);
 
 double yon_rt_map_get(double map_id, double key);
+double yon_rt_map_value(double map_id, double key);
 
 double yon_rt_map_contains(double map_id, double key);
 
 double yon_rt_map_size(double map_id);
-
-/* Set: number, content-addressed. A sub-case of Map with value=1. */
-
-double yon_rt_set_empty(void);
-
-double yon_rt_set_add(double set_id, double elem);
-
-double yon_rt_set_contains(double set_id, double elem);
-
-double yon_rt_set_size(double set_id);
 
 /* DAG: node = (label, children_slot_1, ..., children_slot_n).
  * Content-addressing -> identical sub-DAGs collapse into the same slot. */
@@ -646,7 +640,7 @@ double yon_rt_leech_same_orbit(double signs_a, double signs_b);
 /* Arena: Leech type-2 arena exposed to the language (handle = id+1 into a pool). */
 double yon_rt_arena_empty(void);
 double yon_rt_arena_put(double h, double point, double value);
-double yon_rt_arena_get(double h, double point);
+double yon_rt_arena_value(double h, double point);
 double yon_rt_arena_occupied(double h, double point);
 double yon_rt_arena_orbit(double h, double point);
 double yon_rt_arena_same_orbit(double h, double pa, double pb);
@@ -763,7 +757,7 @@ double  Spawn__join_stream(double id);
 /* Named request mailbox per Space (/y<world>s_<Space>) + private reply
  * channels per caller session; PROCESS_SHARED mutex/cond wakeup; request
  * correlation via (session nonce, per-call seq). See yon_rt.c for the full
- * design notes (locked decisions of 2026-06-03). */
+ * design notes. */
 
 typedef struct {
     uint64_t nonce;            /* caller session nonce */
@@ -1018,9 +1012,3 @@ double yon_rt_bits_or_64(double a, double b);
 double yon_rt_bits_and_64(double a, double b);
 double yon_rt_bits_xor_64(double a, double b);
 
-/* try_add returns added/dup flag. */
-double yon_rt_hashset_try_add(double set_id, double elem);
-
-/* zero-alloc iteration over HashSet buckets */
-double yon_rt_hashset_at_bucket(double set_id, double idx);
-double yon_rt_hashset_dir_capacity(double dummy);

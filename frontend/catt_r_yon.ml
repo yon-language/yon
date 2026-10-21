@@ -436,41 +436,36 @@ and op_equiv (o1 : operation_decl) (o2 : operation_decl) : bool =
       | _ -> false)
 
 and ty_structural_eq (t1 : ty) (t2 : ty) : bool =
-  let canon name =
-    match name with
-    | "boolean" | "proposition" -> "__bool_or_prop"
-    | other -> other
-  in
-  (* "unknown" is a polymorphic placeholder used by stdlib signatures.
-   * It unifies with any other type. Same for TyVar (true generic
-   * binders from fun<A>). *)
+  (* Boolean and proposition are two objects: 2 and Omega. Boolean flows
+     into proposition by the characteristic mono 2 -> Omega
+     (Dispatcher.subtype); they are never equal. *)
+  let canon name = name in
+  (* "unknown" is a placeholder used by stdlib signatures: it unifies with
+   * any other type. A type variable is not one: the parameter of a generic
+   * function is abstract in its body, equal only to itself (its instances
+   * are chosen at each call, see the call rule). *)
   let is_unknown t =
     match t with
     | TyPrim "unknown" -> true
     | TyUser "unknown" -> true
-    | TyVar _ -> true   (* generic binder unifies with anything *)
     | _ -> false
   in
-  (* Legacy "Path" (cubical) is structurally an Id type. We accept
-   * Path ↔ TyId _ as compatible to preserve backward compatibility
-   * of pre-HoTT-promotion code. *)
+  (* A bare "Path" names the total space of paths, Σ(x y : A). Id(A, x, y):
+   * a path whose endpoints are not recorded. It is equal only to itself. An
+   * Id(A, x, y) flows into it by forgetting its endpoints, a one-way
+   * inclusion that lives in Dispatcher.subtype, never in equality: the
+   * converse would let any path stand for any identity. *)
   let is_path_alias t =
     match t with
     | TyUser "Path" | TyPrim "Path" -> true
     | _ -> false
   in
-  let is_id_type t =
-    match t with
-    | TyId _ -> true
-    | _ -> false
-  in
   if is_unknown t1 || is_unknown t2 then true
-  else if (is_path_alias t1 && is_id_type t2)
-       || (is_path_alias t2 && is_id_type t1)
-       || (is_path_alias t1 && is_path_alias t2)
-  then true
+  else if is_path_alias t1 && is_path_alias t2 then true
   else
   match t1, t2 with
+  | TyVar a, TyVar b -> a = b
+  | TyVar _, _ | _, TyVar _ -> false
   | TyPrim n1, TyPrim n2 -> canon n1 = canon n2
   | TyPrim n1, TyPrimIn (n2, _) | TyPrimIn (n1, _), TyPrim n2 ->
       canon n1 = canon n2
@@ -480,7 +475,7 @@ and ty_structural_eq (t1 : ty) (t2 : ty) : bool =
   | TyList a, TyList b -> ty_structural_eq a b
   | TyMap (k1, v1), TyMap (k2, v2) ->
       ty_structural_eq k1 k2 && ty_structural_eq v1 v2
-  | TyStream a, TyStream b -> ty_structural_eq a b
+  | TyChannel a, TyChannel b -> ty_structural_eq a b
   | TySum vs1, TySum vs2 ->
       List.length vs1 = List.length vs2
       && List.for_all2 variant_eq vs1 vs2
@@ -1306,8 +1301,8 @@ let cell_of_geom_morphism_with_witness (gm : geom_morphism_decl)
      0-cell site code   TmVar s            ↦ nominal carrier  TyPrim s
      directed 1-cell    s ->_{*} t (geom)  ↦ arrow            El(s) -> El(t)
    What El does not recognize stays undecoded (None): no invented carrier.
-   Equality of El codes rests on the existing decidable (R_Yon) equality:
-   El(c1) ≡ El(c2)  iff  decidable_equal holds on the decoded carriers. *)
+   Equality of El types is equality of their codes (Dispatcher.type_equal:
+   the same normal form), never of what a code decodes or prints to. *)
 let rec el_decode (c : term) : Surface_ast.ty option =
   match dir_incl_parts c with
   | Some (src, tgt, _w) ->
@@ -1318,11 +1313,6 @@ let rec el_decode (c : term) : Surface_ast.ty option =
       (match c with
        | TmVar s -> Some (Surface_ast.TyPrim s)
        | _ -> None)
-
-let el_equal (env : Tyenv.env) (ctx : Reduce.ctx) (c1 : term) (c2 : term) : bool =
-  match el_decode c1, el_decode c2 with
-  | Some t1, Some t2 -> decidable_equal env ctx t1 t2
-  | _ -> false
 
 (* ─── Kripke-Joyal forcing: stage |- P ──────────────────────────────────────
 

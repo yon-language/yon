@@ -336,8 +336,8 @@ let () =
     | None -> []
   in
   (* Place->Space census: a place P in directory D/ belongs to Space D (the same
-     binding the tp_at_space rewrite propagates to `new P {}`). Built from the
-     per-file place accumulation, so `new P` downstream of a drop counts as an arc
+     binding the Space rewrite propagates to `.-> P {}`). Built from the
+     per-file place accumulation, so `.-> P {}` downstream of a drop counts as an arc
      toward P's Space. *)
   let place_space =
     let h = Hashtbl.create 32 in
@@ -378,6 +378,15 @@ let () =
    | diags ->
        List.iter (fun d -> Printf.eprintf "%s\n" (Error_codes.to_cli d)) diags;
        exit 3);
+  (* a proven law is part of the compilation's answer *)
+  List.iter (fun (sq : Law_check.square) ->
+      match sq.Law_check.sq_verdict with
+      | Law_check.Proven how ->
+          Printf.eprintf "naturality of %s at %s (via %s): proven (%s)\n"
+            sq.Law_check.sq_nat.Surface_ast.nt_name sq.Law_check.sq_morphism
+            sq.Law_check.sq_object how
+      | _ -> ())
+    !Law_check.last;
   (* Automatic reclaim at last-use (the mechanism `drop X` is the checked
      assertion of): insert an SDrop for each Space at its global last use in the
      entry's main. Runs AFTER check_drops (the inserted drops are legal by
@@ -601,14 +610,19 @@ let () =
     | Ok p -> p
     | Error _ -> prog
   in
-  (* Route `new P { }` to P's Space: pass the filesystem census (place -> its
+  (* Route `.-> P { }` to P's Space: pass the filesystem census (place -> its
      directory's Space, the same place_space the drop check uses) to the at_space
      rewrite. Reading the census directly keeps one source of truth; tp_objects
      stays empty (its double-registration hazard never arises). *)
   let desugared =
-    Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env)
-      ~place_to_space:(Hashtbl.fold (fun k v acc -> (k, v) :: acc) place_space [])
-      prog in
+    try
+      Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env)
+        ~place_to_space:(Hashtbl.fold (fun k v acc -> (k, v) :: acc) place_space [])
+        prog
+    with
+    | Desugar.Path_not_known msg ->
+        Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Type_check msg));
+        exit 3 in
   (* Kernel re-check: the dependent Core checker certifies the well-formedness of
      every dependent type the surface elaboration produced, over the ORIGINAL codes
      (before El_normalize computes them away). A genuine ill-formed dependent type is
@@ -685,6 +699,9 @@ let () =
            "this cubical term has no runtime value and cannot be lowered: %s \
             It is a compile-time-only citizen (a path/homotopy value in a \
             position that must produce a number)." msg)));
+      exit 3
+    | Emit_mlir.Stream_not_fused msg ->
+      Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Type_check msg));
       exit 3
   in
   print_string mlir_output

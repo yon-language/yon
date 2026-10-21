@@ -546,7 +546,7 @@ LogicalResult ApplyMoveOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// FieldLoadOp — Topos_FieldLoadOp verifier (P7-frontend A1)
+// FieldLoadOp — Topos_FieldLoadOp verifier
 //===----------------------------------------------------------------------===//
 
 // Verify:
@@ -854,8 +854,8 @@ LogicalResult CoproductOp::verify() {
           << "'" << symAttr.getValue() << "' lives in world '"
           << w << "' but the first component lives in world '"
           << firstWorld << "'.\n"
-          << "  fix: cross-Space coproduct is not yet supported "
-             "(scheduled for P8.1+). All components must share the "
+          << "  fix: a coproduct has no cross-Space form. "
+             "All components must share the "
              "same enclosing world.";
     }
   }
@@ -952,8 +952,8 @@ LogicalResult CoequalizerOp::verify() {
           << fMove.getTargetPlace() << "' (world '"
           << placeWorldName(tgtPlace) << "') belong to different "
              "worlds.\n"
-          << "  fix: cross-Space coequalizer is not yet supported "
-             "(scheduled for P8.1+).";
+          << "  fix: a coequalizer has no cross-Space form; "
+             "both places must share one world.";
     }
   }
 

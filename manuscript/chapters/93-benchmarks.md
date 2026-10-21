@@ -167,9 +167,9 @@ The one result that is a shape rather than a number is `XSet` set algebra. An `X
 or OR over about 3,072 words, independent of how many elements the sets hold. A `HashSet` must
 iterate, so its cost is O(N).
 
-**The scaling measurement is withdrawn.** At N=100,000 the `HashSet` runtime runs out of capacity
-(a defect, R-01 in the improvement plan): the benchmark kept running and its `HashSet` timings at that
-size measured the failure path, not the set operation. Until R-01 is closed the numbers of
+**The scaling measurement is withdrawn.** At N=100,000 the `HashSet` runtime runs out of capacity:
+the benchmark kept running and its `HashSet` timings at that
+size measured the failure path, not the set operation. Until that defect is corrected the numbers of
 `regression/bench/xset_scaling` are not published, and this section shows none.
 
 Read it honestly in both directions. For small sets the fixed bitmap is pure overhead, and at N

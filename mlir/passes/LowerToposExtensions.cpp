@@ -25,7 +25,7 @@
 //     dep_proposition         — proof-relevant declaration
 //     or_intro, exists_intro  — constructive proof introductions
 //     sharing_constraint      — SML-style sharing (type-checker only)
-//     class, instance         — type classes; TODO: lower to dict-passing
+//     class, instance         — type classes (not lowered to dict-passing)
 //     from_site, canonical_site, cech_nerve, kripke_joyal_forcing,
 //     canonical_subplace      — topos-theoretic declarations
 //     split_fibration, place_dependent, invert
@@ -562,7 +562,7 @@ struct LowerToposExtensionsPass
     // level support exercised only by hand-written MLIR. A
     // `probe_construct` whose uses are not all `probe_apply` is an
     // escaping probe: it is LEFT in place here (no E0701 check exists —
-    // closure conversion / F2b is RETIRED with the arena model). If one
+    // closure conversion belongs to the arena model, which does not exist). If one
     // ever survived, the `addIllegalOp<ProbeConstructOp, ProbeApplyOp>`
     // guard in LowerToposToStandard fails the conversion. We do not
     // fail here.
@@ -620,15 +620,15 @@ struct LowerToposExtensionsPass
       // Note: a `topos.probe_apply` that consumes a probe NOT
       // produced by a local `topos.probe_construct` (e.g. a block
       // argument) is not an error at this stage; it is left in place.
-      // F2b (closure conversion + runtime dispatcher) is RETIRED with
-      // the arena model, so there is no downstream rewrite into
+      // Closure conversion + runtime dispatcher belong to the arena
+      // model, which does not exist, so there is no downstream rewrite into
       // `@yon_probe_dispatch`. Such an apply, if it ever appeared,
       // would be rejected by the illegal-op guard in
       // LowerToposToStandard. The canonical frontend never produces it.
 
       // probe_collapse %instance is the devirtualisation directive
-      // that the instance is already flat. After F2 has fused the
-      // probes, this op is the identity on its operand.
+      // that the instance is already flat. Once the probes are fused,
+      // this op is the identity on its operand.
       SmallVector<ProbeCollapseOp> collapses;
       module.walk([&](ProbeCollapseOp c) { collapses.push_back(c); });
       for (ProbeCollapseOp c : collapses) {
@@ -638,8 +638,8 @@ struct LowerToposExtensionsPass
     }
 
     // Note: a `topos.probe_construct` that escapes its function (its
-    // uses are not all `topos.probe_apply`) is left in place. F2b
-    // (closure conversion / trampoline) is RETIRED; the illegal-op
+    // uses are not all `topos.probe_apply`) is left in place. There is
+    // no closure conversion / trampoline; the illegal-op
     // guard in LowerToposToStandard catches any survivor. The canonical
     // frontend never emits probe_construct, so this never fires.
 
@@ -653,9 +653,9 @@ struct LowerToposExtensionsPass
     }
 
     // ----------------------------------------------------------------
-    // Step 2b: 81b — inline hermetic scopes (structural, pre-conversion).
+    // Step 2b: inline hermetic scopes (structural, pre-conversion).
     //
-    // The arena model is RETIRED (resolution 2026-06-03): the formal
+    // There is no arena model: the formal
     // content of topos.scope / topos.scope_with_yield lives entirely in
     // the verifier (IsolatedFromAbove forces every outer dependency
     // through an explicit capture), which has already accepted the

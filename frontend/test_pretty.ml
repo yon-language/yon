@@ -29,7 +29,7 @@ let () =
   check "ty: sigma"        (Pretty.pp_ty (TySigma ("x", a, b))) "Sigma(x : A). B";
   check "ty: id"           (Pretty.pp_ty (TyId (a, Var "x", Var "y"))) "Id_A";
   check "ty: place"        (Pretty.pp_ty (TyPlace "Order")) "Order";
-  check "ty: stream"       (Pretty.pp_ty (TyStream (TyPlace "T"))) "stream of T";
+  check "ty: channel"      (Pretty.pp_ty (TyChannel (TyPlace "T"))) "Wire<T>";
   check "ty: dir universe" (Pretty.pp_ty (TyDirUniverse 2)) "U_omega_2";
   check "ty: el"           (Pretty.pp_ty (TyEl (Var "c"))) "El(...)";
   check "ty: pathp"        (Pretty.pp_ty (TyPathP (("i", a), Var "x", Var "y"))) "PathP(<i> A)";

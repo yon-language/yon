@@ -44,6 +44,12 @@ module R = Reduce
    `failwith` here reaches the user as a `Fatal error` crash. *)
 exception Cubical_stuck of string
 
+(* A stream in a form its one lowering does not read: built in one place and
+   consumed in another it cannot see (passed to or returned from a function,
+   stored). A clean compile-time rejection, like Cubical_stuck: never a body
+   that returns 0. *)
+exception Stream_not_fused of string
+
 (* ─── Output buffer ────────────────────────────────────────────────── *)
 
 type emitter = {
@@ -135,16 +141,29 @@ let fresh_ssa e =
    and the prim-name predicate has one definition. *)
 let is_prim_name = Carrier.is_prim_name
 
+(* The effect signature of a declared function, as an attribute: an empty
+   list is a function whose result is fixed by its operands and that changes
+   nothing (a read of an immutable value). The MLIR passes read it from the
+   callee's declaration; a declaration without it has effects. *)
+let no_effects = " attributes {topos.effects = []}"
+
+(* The fields of a place with their offsets in its region, and the region's
+   size: Carrier.field_layout, the one layout every reader and writer uses. *)
+let fields_offsets (fields : (string * string) list)
+    : (string * string * int) list * int =
+  let (placed, total) = Carrier.field_layout (List.map snd fields) in
+  (List.map2 (fun (n, t) (o, _) -> (n, t, o)) fields placed, total)
+
 (* prim_to_mlir: the SCHEMA string for a primitive place (or a section handle
    for a non-primitive name). The primitive classification lives once in
    Carrier.prim_carrier; this is just its printer on the schema side. *)
 let prim_to_mlir n =
-  (* INTEGER faces (Int is i64, …) ride the f64 TRANSPORT: every value slot,
-     signature and schema is f64 (exact within ±2^53); the integer-ness lives
-     only inside __idiv/__imod, which cast around divsi/remsi. i1 stays i1
-     (boolean is not arithmetic). The native i64 tower is a later cantiere. *)
+  (* Int64 is carried as i64, from signature to field. The narrower integer
+     faces ride the f64 transport (exact within their range); their
+     integer-ness lives only inside __idiv/__imod. i1 stays i1 (boolean is not
+     arithmetic). *)
   match n with
-  | "i8" | "i16" | "i32" | "i64" -> "f64"
+  | "i8" | "i16" | "i32" -> "f64"
   | _ ->
       (match Carrier.prim_carrier n with
        | Some c -> Carrier.to_mlir c
@@ -247,11 +266,10 @@ let core_is_comprehension = Carrier.core_is_comprehension
 let ty_to_mlir (t : C.ty) : string =
   try
     (match Carrier.of_core_ty t with
-     (* INTEGER faces ride the f64 transport (exact within ±2^53): the
-        integer-ness lives only inside __idiv/__imod. i1 stays i1. The
-        native integer tower is a later cantiere. *)
-     | Carrier.Scalar (Carrier.W_i8 | Carrier.W_i16 | Carrier.W_i32
-                      | Carrier.W_i64) -> "f64"
+     (* Int64 is i64. The narrower integer faces ride the f64 transport
+        (exact within their range): their integer-ness lives only inside
+        __idiv/__imod. i1 stays i1. *)
+     | Carrier.Scalar (Carrier.W_i8 | Carrier.W_i16 | Carrier.W_i32) -> "f64"
      | c -> Carrier.to_mlir c)
   with Carrier.NoCarrier bad ->
     failwith (Printf.sprintf
@@ -271,7 +289,7 @@ let core_ty_to_mlir_simple = ty_to_mlir
 
 (* ─── Body lowering ─────────────────────────────────────────────────── *)
 
-(* P7-frontend A4: stdlib builtin registry.
+(* Stdlib builtin registry.
  *
  * Map a function name to (the list of MLIR parameter types, the MLIR result
  * type). The functions listed here are treated as extern runtime stubs
@@ -284,8 +302,9 @@ let core_ty_to_mlir_simple = ty_to_mlir
 let stdlib_registry : (string * (string list * string)) list = [
   (* Coercion boolean ↔ proposition *)
   "to_prop", (["i1"], "!topos.proposition");
-  "to_bool", (["!topos.proposition"], "i1");
-  "decide", (["!topos.proposition"], "!topos.proposition");
+  (* the code of a proposition: present 0, absent 1, unknown 2 *)
+  "__prop_code", (["!topos.proposition"], "f64");
+  (* a condition the compiler itself decides: a value that is never unknown *)
   "to_bool_dec", (["!topos.proposition"], "i1");
 
   (* List builtin: a slot_index in the content-addressed xheap exposed as f64.
@@ -327,12 +346,6 @@ let stdlib_registry : (string * (string list * string)) list = [
      apply_move(MoveDecl, source) returns source unchanged (the move is an
      identity at the value level) but with the type read off the move's
      declared target. *)
-
-  (* transport (HoTT): given a witness that two types are equal and a value of
-     one, produce the value at the other. Kept as a stub with the simplified
-     signature (witness, value) -> value, both f64 for the numeric tests; the
-     real path-induction stays as the C.Refl primitive. *)
-  "transport", (["f64"; "f64"], "f64");
 
   (* Canonical coercion from text to proposition:
        present  iff  pointer is non-null and the string is non-empty
@@ -385,10 +398,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Stream__iterate",  (["f64"; "f64"], "f64");
   "Stream__take",     (["f64"; "f64"], "f64");
   "Stream__sum_take", (["f64"; "f64"], "f64");
-  "__stream_iterate",  (["f64"; "f64"], "f64");
-  "__stream_take",     (["f64"; "f64"], "f64");
-  "__stream_sum_take", (["f64"; "f64"], "f64");
-  "__stream_to_stream", (["f64"], "f64");
   (* Explicit conversions of the data structures to streams, recognized at
      compile time. *)
   "HashMap__to_stream", (["f64"], "f64");
@@ -499,8 +508,8 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Args__count", ([], "f64");
   "Args__get",  (["f64"], "f64");
   "File__exists",     (["f64"], "i1");
-  "Seq__range",        (["f64"], "f64");
-  "Seq__range_to_list", (["f64"], "f64");
+  "Sequence__range",        (["f64"], "f64");
+  "Sequence__range_to_list", (["f64"], "f64");
   "Bits__fold",       (["f64"; "f64"; "f64"], "f64");
   "Bits__bor_64",     (["f64"; "f64"], "f64");
   "Bits__band_64",    (["f64"; "f64"], "f64");
@@ -512,9 +521,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Random__range",    (["f64"; "f64"], "f64");
   "Crypto__fnv1a",    (["f64"], "f64");
   "Crypto__hash_int", (["f64"], "f64");
-  "HashSet__try_add", (["f64"; "f64"], "f64");
-  "HashSet__at_bucket", (["f64"; "f64"], "f64");
-  "HashSet__dir_capacity", (["f64"], "f64");
   "HashSet__union", (["f64"; "f64"], "f64");
   "HashSet__intersect", (["f64"; "f64"], "f64");
   "List__reverse", (["f64"], "f64");
@@ -539,13 +545,12 @@ let stdlib_registry : (string * (string list * string)) list = [
   "VoyagerList__to_stream",  (["f64"], "f64");
   "Arena__empty",        ([], "f64");
   "Arena__put",          (["f64"; "f64"; "f64"], "f64");
-  "Arena__get",          (["f64"; "f64"], "f64");
+  "Arena__value",          (["f64"; "f64"], "f64");
   "Arena__occupied",     (["f64"; "f64"], "f64");
   "Arena__orbit",        (["f64"; "f64"], "f64");
   "Arena__same_orbit",   (["f64"; "f64"; "f64"], "f64");
   "Arena__fuse",         (["f64"; "f64"; "f64"; "f64"], "f64");
   "Arena__fusion_count", (["f64"; "f64"], "f64");
-  "Map__to_stream",     (["f64"], "f64");
 ]
 
 (* Idraulica v2: map the synthetic cross-Space callable to its runtime
@@ -624,7 +629,7 @@ let rec collect_used_builtins (acc : (string, unit) Hashtbl.t) (t : C.term) : un
 module Env = Map.Make (String)
 module SS = Set.Make (String)
 
-(* String fusion (2026-06-03): per-module table of string literals.
+(* String fusion: per-module table of string literals.
  * content -> global symbol name. Filled by collect_string_literals during
  * the module prologue; consumed at every literal use site, which emits
  * llvm.mlir.addressof + a call to @yon_rt_string_lit (runtime interning on
@@ -676,7 +681,7 @@ let rec collect_string_literals (t : C.term) : unit =
 (* Free variables of a Core term. Used to build the EXPLICIT capture list of
  * topos.scope_with_yield: under IsolatedFromAbove the region may not refer
  * to outer SSA values implicitly, so every outer let-binding the scope body
- * touches must be passed as a capture (81b — hermeticity made formal).
+ * touches must be passed as a capture (hermeticity made formal).
  * Over-approximation is harmless: we intersect with the emitter env, so
  * function symbols and encoded literals fall away naturally. *)
 let rec term_free_vars (t : C.term) : SS.t =
@@ -724,7 +729,7 @@ type func_sig = {
   fn_type_params : string list;
 }
 
-(* P7-frontend A5: monomorphic instance of a polymorphic function.
+(* Monomorphic instance of a polymorphic function.
  * Created lazily at each call site of a polymorphic function.
  * key = (function_name, sorted list of concrete MLIR types for each
  *        type param)
@@ -759,7 +764,7 @@ let is_type_var (e : emitter) (name : string) : bool =
      captured parameters (see fresh_synth in desugar.ml). It must count as
      concrete (default f64), not a type variable: otherwise a lifted lambda
      with captures would be marked polymorphic and never emitted as a
-     func.func, breaking the Seq.fold pattern where the lambda captures a
+     func.func, breaking the Sequence.fold pattern where the lambda captures a
      Space handle or other variables. *)
   name <> "unknown"
   && not (is_prim_name name)
@@ -910,8 +915,6 @@ let rec infer_mlir_ty (e : emitter)
          | C.App (C.App (C.Var ("concat" | "ap"), _), _)) ->
            raise (Cubical_stuck "path-algebra op (inv/concat/ap) stuck over a free dimension: no runtime value to lower.")
        | t' -> infer_mlir_ty e env funcs t')
-  | C.Var "__map_empty" -> "f64"
-  | C.Var "Map__empty" -> "f64"
   | C.Var "HashMap__empty" -> "f64"
   | C.Var "HashSet__empty" -> "f64"
   | C.Var "XSet__empty" -> "f64"
@@ -921,11 +924,13 @@ let rec infer_mlir_ty (e : emitter)
   | C.Var "XTower__depth" -> "f64"
   | C.Var "VoyagerList__empty" -> "f64"
   | C.Var "Arena__empty" -> "f64"
-  | C.Var "__set_empty" -> "f64"
   | C.Var "__xheap_used" -> "f64"
   | C.Var "__spawn_index" -> "f64"
   | C.Var x ->
       if String.length x > 6 && String.sub x 0 6 = "__num_" then "f64"
+      else if String.length x > 6 && String.sub x 0 6 = "__i64_"
+              && Int64.of_string_opt (String.sub x 6 (String.length x - 6)) <> None
+      then "i64"
       else if String.length x > 13 && String.sub x 0 13 = "__drop_space_" then "f64"
       else if x = "__bool_true" || x = "__bool_false" then "i1"
       else if x = "__heyt_present" || x = "__heyt_absent"
@@ -990,13 +995,8 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "__heyt_int_not", _) -> "!topos.heyt_int<64>"
   | C.App (C.Var "__heyt_int_value", _) -> "f64"
   | C.App (C.Var "__heyt_int_mask", _) -> "f64"
-  (* Map/Set/Dag operations all return f64 (the encoded content-address slot
-     index). The empty-collection cases like __map_empty are caught earlier by
-     the general C.Var branch. *)
-  | C.App (C.App (C.App (C.Var "__map_put", _), _), _) -> "f64"
-  | C.App (C.App (C.App (C.Var "Map__set", _), _), _) -> "f64"
+  (* Collection operations return f64 (the handle). *)
   | C.App (C.App (C.App (C.Var "HashMap__set", _), _), _) -> "f64"
-  | C.App (C.App (C.Var "Map__has", _), _) -> "i1"
   | C.App (C.App (C.Var "HashMap__has", _), _) -> "i1"
   | C.App (C.Var "Magma__is_commutative", _) -> "i1"
   | C.App (C.Var "Magma__is_associative", _) -> "i1"
@@ -1016,7 +1016,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.App (C.Var "XRelSet__intersect", _), _) -> "f64"
   | C.App (C.Var "XRelSet__size", _) -> "f64"
   | C.App (C.App (C.Var "XRelMap__contains", _), _) -> "i1"
-  | C.App (C.App (C.Var "XRelMap__get", _), _) -> "f64"
+  | C.App (C.App (C.Var "XRelMap__value", _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "XRelMap__insert", _), _), _) -> "f64"
   | C.App (C.Var "XRelMap__size", _) -> "f64"
   | C.App (C.App (C.Var "XSimplex__of2", _), _) -> "f64"
@@ -1032,14 +1032,10 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "XTower__width", _) -> "f64"
   | C.App (C.App (C.App (C.Var "__merkle_node2", _), _), _) -> "f64"
   | C.App (C.App (C.Var op, _), _) when
-      (op = "__map_get" || op = "__map_contains"
-       || op = "Map__get" || op = "HashMap__get" || op = "HashSet__add"
-       || op = "__set_add" || op = "__set_contains"
+      (op = "HashMap__value" || op = "HashSet__add"
        || op = "__merkle_child" || op = "__merkle_equal") -> "f64"
   | C.App (C.Var op, _) when
-      (op = "__map_size" || op = "__set_size"
-       || op = "Map__size" || op = "Map__empty"
-       || op = "HashMap__size" || op = "HashSet__size"
+      (op = "HashMap__size" || op = "HashSet__size"
        || op = "__merkle_leaf" || op = "__merkle_label"
        || op = "__observe_alloc"
        || op = "__spawn_self" || op = "__voyagerlist_seal"
@@ -1056,6 +1052,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.App (C.Var "Stream__take", _), _) -> "f64"
   | C.App (C.App (C.Var "__stream_iterate", _), _) -> "f64"
   | C.App (C.App (C.Var "__stream_take", _), _) -> "f64"
+  | C.App (C.App (C.Var "__stream_sum_take", _), _) -> "f64"
   | C.App (C.Var "__stream_to_stream", _) -> "f64"
   | C.App (C.Var "HashMap__to_stream", _) -> "f64"
   | C.App (C.Var "HashSet__to_stream", _) -> "f64"
@@ -1074,18 +1071,17 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "VoyagerList__open", _) -> "f64"
   | C.App (C.App (C.Var "VoyagerList__corrupt", _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "Arena__put", _), _), _) -> "f64"
-  | C.App (C.App (C.Var "Arena__get", _), _) -> "f64"
-  | C.App (C.App (C.Var "Arena__occupied", _), _) -> "f64"
+  | C.App (C.App (C.Var "Arena__value", _), _) -> "f64"
+  | C.App (C.App (C.Var "Arena__occupied", _), _) -> "i1"
   | C.App (C.App (C.Var "Arena__orbit", _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "Arena__same_orbit", _), _), _) -> "f64"
   | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", _), _), _), _) -> "f64"
   | C.App (C.App (C.Var "Arena__fusion_count", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__to_stream", _) -> "f64"
   | C.App (C.Var "__merkle_to_stream", _) -> "f64"
-  | C.App (C.Var "Map__to_stream", _) -> "f64"
-  (* Seq.from_list/map/filter appear bare (after inline_seq they should
+  (* Sequence.from_list/map/filter appear bare (after inline_seq they should
    * disappear, but if the inlining fails, e.g. a variable used more than once,
-   * the inference must know the type). All f64 as a stub (Seq id). *)
+   * the inference must know the type). All f64 as a stub (Sequence id). *)
   | C.App (C.Var "__stream_from_list", _) -> "f64"
   | C.App (C.App (C.Var "__stream_map", _), _) -> "f64"
   | C.App (C.App (C.Var "__stream_filter", _), _) -> "f64"
@@ -1120,6 +1116,11 @@ let rec infer_mlir_ty (e : emitter)
          failwith (Printf.sprintf
                      "[emit_mlir infer] malformed section type: %s."
                      obj_ty))
+  | C.App (C.App (C.Var op, _), _)
+    when String.length op > 6 && String.sub op 0 6 = "__i64_" ->
+      (match op with
+       | "__i64_add" | "__i64_sub" | "__i64_mul" | "__i64_div" | "__i64_mod" -> "i64"
+       | _ -> "i1")
   | C.App (C.App (C.Var op, a), b) when
       (op = "__add" || op = "__sub" || op = "__mul" || op = "__div"
        || op = "__mod"
@@ -1127,7 +1128,9 @@ let rec infer_mlir_ty (e : emitter)
        || op = "__eq" || op = "__neq"
        || op = "__and" || op = "__or") ->
       (match op with
-       | "__add" | "__sub" | "__mul" | "__div" | "__mod" -> "f64"
+       | "__add" | "__sub" | "__mul" | "__div" | "__mod" ->
+           if infer_mlir_ty e env funcs a = "i64" || infer_mlir_ty e env funcs b = "i64"
+           then "i64" else "f64"
        | "__lt" | "__gt" | "__leq" | "__geq"
        | "__eq" | "__neq" -> "i1"
        | "__and" | "__or" ->
@@ -1327,7 +1330,7 @@ let rec infer_mlir_ty (e : emitter)
                                    fname))))
        | None ->
            failwith "[emit_mlir infer] unrecognized App form during type inference.")
-  (* P7-frontend A2: Pair/Fst/Snd type inference *)
+  (* Pair/Fst/Snd type inference *)
   | C.Pair (a, b) ->
       let ta = infer_mlir_ty e env funcs a in
       let tb = infer_mlir_ty e env funcs b in
@@ -1371,7 +1374,7 @@ let rec infer_mlir_ty (e : emitter)
            raise (Cubical_stuck "ind_path (path induction) stuck on a non-refl path: no runtime value to lower.")
        | t' -> infer_mlir_ty e env funcs t')
   | C.Scope (_, body) ->
-      (* hermetic scope yields its body value; same type (81b) *)
+      (* hermetic scope yields its body value; same type *)
       infer_mlir_ty e env funcs body
   | C.PLam (_, body) ->
       (* Paths are proof-erased at runtime and carry the representation of
@@ -1417,7 +1420,7 @@ let rec subst_ty (subst : (string * C.ty) list) (t : C.ty) : C.ty =
   | C.TyArrow (a, b) -> C.TyArrow (subst_ty subst a, subst_ty subst b)
   | C.TyPi (x, a, b) -> C.TyPi (x, subst_ty subst a, subst_ty subst b)
   | C.TySigma (x, a, b) -> C.TySigma (x, subst_ty subst a, subst_ty subst b)
-  | C.TyStream a -> C.TyStream (subst_ty subst a)
+  | C.TyChannel a -> C.TyChannel (subst_ty subst a)
   | _ -> t
 
 (* Mangle a function name with the concrete types of one specialization:
@@ -1539,6 +1542,9 @@ let mono_global : mono_registry ref = ref (make_mono_registry ())
    through every recursive call of emit_term. *)
 let hof_inline_stack : string list ref = ref []
 
+(* Fresh names for the arguments of an inlined call (see the HOF-inline case). *)
+let hof_arg_counter = ref 0
+
 (* The functions a closure value can target, in a STABLE dense order shared by the
    closure constructor (which stamps a node's tag with the target's index) and the
    __yon_closure_call dispatcher (which routes on that index). Both must read the
@@ -1560,10 +1566,13 @@ let closure_target_list (funcs : (string * func_sig) list)
      every section-returning function (an inductive fun, a place fun) would bloat
      the dispatcher and shift the dense indices, which regressed the inductive
      path. So sections are admitted ONLY for the lifted lambdas. *)
-  let ok_ty t = t = "f64" || is_section_ty_str t in
+  (* a 64-bit slot: a Number, or an Int64 carried as its bits (the
+     dispatcher reinterprets it to its real type) *)
+  let slot64 t = t = "f64" || t = "i64" in
+  let ok_ty t = slot64 t || is_section_ty_str t in
   let all_f64 fs =
-    List.for_all (fun (_, pt) -> core_ty_to_mlir_simple pt = "f64") fs.fn_params
-    && fs.fn_ret_mlir = "f64" in
+    List.for_all (fun (_, pt) -> slot64 (core_ty_to_mlir_simple pt)) fs.fn_params
+    && slot64 fs.fn_ret_mlir in
   let f64_or_section fs =
     List.for_all (fun (_, pt) -> ok_ty (core_ty_to_mlir_simple pt)) fs.fn_params
     && ok_ty fs.fn_ret_mlir in
@@ -1617,12 +1626,13 @@ let emit_closure_node (e : emitter) (funcs : (string * func_sig) list)
     emit_line e (Printf.sprintf
       "%s = func.call @yon_rt_merkle_node2(%s, %s, %s) : (f64, f64, f64) -> f64"
       v l a b); v in
+  (* a captured value enters the node as a leaf: its exact f64 is the label *)
   match caps with
   | [] -> (leaf (const idx), logical_ty)          (* no captures: a bare tag leaf *)
   | c0 :: rest ->
       let zero = const 0 in
-      let tail = List.fold_right (fun cap acc -> node2 zero cap acc) rest (leaf zero) in
-      (node2 (const idx) c0 tail, logical_ty)
+      let tail = List.fold_right (fun cap acc -> node2 zero (leaf cap) acc) rest (leaf zero) in
+      (node2 (const idx) (leaf c0) tail, logical_ty)
 
 (* Request a specialization of fs at the concrete types concrete_mlir. If it
    was already generated, return its mangled name; otherwise generate it,
@@ -1645,6 +1655,23 @@ let request_mono (mono : mono_registry) (_e : emitter) (fs : func_sig)
 let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
     (param_ty : string) : string =
   if arg_ty = param_ty then arg_ssa
+  else if (arg_ty = "i64" && param_ty = "f64") || (arg_ty = "f64" && param_ty = "i64")
+  then begin
+    (* an Int64 crossing a uniform f64 slot (a generic, a closure, a leaf, the
+       wire) travels as its 64 bits, reinterpreted, never converted: what goes
+       in comes out bit for bit *)
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.bitcast %s : %s to %s" v arg_ssa arg_ty param_ty);
+    v
+  end
+  else if arg_ty = "i1" && param_ty = "!topos.proposition" then begin
+    (* a Boolean where a proposition is expected: the characteristic mono
+       2 -> Omega (true the top, false the bottom) *)
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf
+      "%s = func.call @to_prop(%s) : (i1) -> !topos.proposition" v arg_ssa);
+    v
+  end
   else if is_section_subtype e arg_ty param_ty then begin
     let v = fresh_ssa e in
     emit_line e (Printf.sprintf
@@ -1718,6 +1745,14 @@ let rec emit_term (e : emitter)
          | C.App (C.App (C.Var ("concat" | "ap"), _), _)) ->
            raise (Cubical_stuck "path-algebra op (inv/concat/ap) stuck over a free dimension: no runtime value to lower.")
        | t' -> emit_term e env funcs t')
+  | C.Var x when String.length x > 6 && String.sub x 0 6 = "__i64_"
+                 && (match Int64.of_string_opt (String.sub x 6 (String.length x - 6)) with
+                     | Some _ -> true | None -> false) ->
+      (* an integral literal at Int64: an i64 constant *)
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant %s : i64" v
+                     (String.sub x 6 (String.length x - 6)));
+      (v, "i64")
   | C.Var x when String.length x > 6 && String.sub x 0 6 = "__num_" ->
       let nstr = String.sub x 6 (String.length x - 6) in
       let v = fresh_ssa e in
@@ -1764,7 +1799,7 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.constant 0 : i1" v);
       (v, "i1")
-  (* P7-frontend A3: costanti Heyting tri-valued (intuizionista) *)
+  (* costanti Heyting tri-valued (intuizionista) *)
   | C.Var "__heyt_present" ->
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = topos.heyt true : !topos.proposition" v);
@@ -1778,17 +1813,8 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = topos.heyt unknown : !topos.proposition" v);
       (v, "!topos.proposition")
   (* data structure 0-arg constructors. *)
-  | C.Var "__map_empty" ->
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_map_empty() : () -> f64" v);
-      (v, "f64")
-  (* Map.empty (0-arg) is parsed as ECall("Map__empty", []) and desugared to
-   * Var "Map__empty" (curry_apply f [] = f). *)
-  | C.Var "Map__empty" ->
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_map_empty() : () -> f64" v);
-      (v, "f64")
-  (* HashMap/HashSet are aliases of Map. *)
+  (* HashMap.empty (0-arg) is parsed as ECall("HashMap__empty", []) and
+   * desugared to Var "HashMap__empty" (curry_apply f [] = f). *)
   | C.Var "HashMap__empty" ->
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_map_empty() : () -> f64" v);
@@ -1830,10 +1856,6 @@ let rec emit_term (e : emitter)
   | C.Var "Vec__empty" ->
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_vec_empty() : () -> f64" v);
-      (v, "f64")
-  | C.Var "__set_empty" ->
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_set_empty() : () -> f64" v);
       (v, "f64")
   (* S5: __xheap_used 0-arg diagnostic *)
   | C.Var "__xheap_used" ->
@@ -2291,24 +2313,18 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.sitofp %s : i64 to f64" v v_i);
       (v, "f64")
-  (* Map/Set/Dag operations lower directly to func.call @yon_rt_<op>. The
-     empty-collection cases are caught earlier, before the C.Var fallback.
-     Map__set and HashMap__set are aliases of __map_put (the desugar and emit
-     names are aligned here). *)
-  | C.App (C.App (C.App (C.Var "Map__set", arg_m), arg_k), arg_v)
-  | C.App (C.App (C.App (C.Var "HashMap__set", arg_m), arg_k), arg_v)
-  | C.App (C.App (C.App (C.Var "__map_put", arg_m), arg_k), arg_v) ->
-      let (vm, _) = emit_term e env funcs arg_m in
-      let (vk, _) = emit_term e env funcs arg_k in
-      let (vv, _) = emit_term e env funcs arg_v in
+  (* Collection operations lower directly to func.call @yon_rt_<op>. *)
+  | C.App (C.App (C.App (C.Var "HashMap__set", arg_m), arg_k), arg_v) ->
+      let vm = emit_f64 e env funcs arg_m in
+      let vk = emit_f64 e env funcs arg_k in
+      let vv = emit_f64 e env funcs arg_v in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_map_put(%s, %s, %s) : (f64, f64, f64) -> f64" v vm vk vv);
       (v, "f64")
-  | C.App (C.App (C.Var "Map__has", arg_a), arg_b)
   | C.App (C.App (C.Var "HashMap__has", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v_f64 = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_map_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
@@ -2320,8 +2336,8 @@ let rec emit_term (e : emitter)
       (v_i1, "i1")
   | C.App (C.App (C.Var "HashSet__contains", arg_a), arg_b) ->
       (* HashSet dedicato: yon_rt_hashset_contains. *)
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v_f64 = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hashset_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
@@ -2332,8 +2348,8 @@ let rec emit_term (e : emitter)
         "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
       (v_i1, "i1")
   | C.App (C.App (C.Var "XSet__contains", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v_f64 = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
@@ -2344,36 +2360,36 @@ let rec emit_term (e : emitter)
         "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
       (v_i1, "i1")
   | C.App (C.App (C.Var "XSet__add", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_add(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XRelSet__add", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelset_add(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XRelSet__add_ref", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelset_add_ref(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XRelMap__add_ref", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelmap_add_ref(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XRelSet__contains", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v_f64 = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelset_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
@@ -2383,43 +2399,43 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
       (v_i1, "i1")
   | C.App (C.App (C.Var "XRelSet__union", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelset_union(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XRelSet__intersect", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelset_intersect(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.Var "XRelSet__size", arg) ->
-      let (va, _) = emit_term e env funcs arg in
+      let va = emit_f64 e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelset_size(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.App (C.App (C.Var "XRelMap__insert", arg_a), arg_b), arg_c) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
-      let (vc, _) = emit_term e env funcs arg_c in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
+      let vc = emit_f64 e env funcs arg_c in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelmap_insert(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
-  | C.App (C.App (C.Var "XRelMap__get", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+  | C.App (C.App (C.Var "XRelMap__value", arg_a), arg_b) ->
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelmap_get(%s, %s) : (f64, f64) -> f64" v va vb);
+        "%s = func.call @yon_rt_xrelmap_value(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XRelMap__contains", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v_f64 = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelmap_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
@@ -2429,7 +2445,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
       (v_i1, "i1")
   | C.App (C.Var "XRelMap__size", arg) ->
-      let (va, _) = emit_term e env funcs arg in
+      let va = emit_f64 e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xrelmap_size(%s) : (f64) -> f64" v va);
@@ -2514,43 +2530,41 @@ let rec emit_term (e : emitter)
         "%s = func.call @yon_rt_xtower_width(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.App (C.Var "XSet__union", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_union(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "XSet__intersect", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_intersect(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.Var "XSet__size", arg) ->
-      let (va, _) = emit_term e env funcs arg in
+      let va = emit_f64 e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_size(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.Var "XSet__to_stream", arg) ->
-      let (va, _) = emit_term e env funcs arg in
+      let va = emit_f64 e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_to_list(%s) : (f64) -> f64" v va);
       (v, "f64")
   | C.App (C.App (C.Var op, arg_a), arg_b) when
-      (op = "Map__get" || op = "HashMap__get" || op = "HashSet__add"
-       || op = "__map_get" || op = "__map_contains"
-       || op = "__set_add" || op = "__set_contains"
+      (op = "HashMap__value" || op = "HashSet__add"
        || op = "__merkle_child" || op = "__merkle_equal"
        || op = "__voyagerlist_corrupt"
        || op = "__conway_seal_slot" || op = "__conway_unseal_slot"
        || op = "__conway_key_equal") ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let rt_name = match op with
-        | "Map__get" | "HashMap__get" -> "yon_rt_map_get"
+        | "HashMap__value" -> "yon_rt_map_value"
         | "HashSet__add" -> "yon_rt_hashset_add"
         | _ -> "yon_rt_" ^ String.sub op 2 (String.length op - 2)
       in
@@ -2559,8 +2573,7 @@ let rec emit_term (e : emitter)
         "%s = func.call @%s(%s, %s) : (f64, f64) -> f64" v rt_name va vb);
       (v, "f64")
   | C.App (C.Var op, arg) when
-      (op = "Map__size" || op = "HashMap__size" || op = "HashSet__size"
-       || op = "__map_size" || op = "__set_size"
+      (op = "HashMap__size" || op = "HashSet__size"
        || op = "__merkle_leaf" || op = "__merkle_label"
        || op = "__observe_alloc"
        || op = "__spawn_self" || op = "__voyagerlist_seal"
@@ -2568,7 +2581,7 @@ let rec emit_term (e : emitter)
        || op = "__conway_gen_key") ->
       let (va, _) = emit_term e env funcs arg in
       let rt_name = match op with
-        | "Map__size" | "HashMap__size" -> "yon_rt_map_size"
+        | "HashMap__size" -> "yon_rt_map_size"
         | "HashSet__size" -> "yon_rt_hashset_size"
         | _ -> "yon_rt_" ^ String.sub op 2 (String.length op - 2)
       in
@@ -2626,7 +2639,7 @@ let rec emit_term (e : emitter)
                           failwith (Printf.sprintf
                                       "[emit_mlir] field '.%s' not declared in place '%s'. Add the field to the declaration of '%s', or fix the name."
                                       fname place_name place_name)) in
-      (* For a field of primitive type, use an explicit yon_rt_field_load (a
+      (* For a field of primitive type, use an explicit yon_rt_field_load_or_stop (a
        * verified runtime path). For a field of section type (a nested place),
        * we still use topos.field_load, since it needs a whole-record load
        * handled by the MLIR lowering. *)
@@ -2640,22 +2653,16 @@ let rec emit_term (e : emitter)
                        v v_obj fname obj_ty field_ty);
         (v, field_ty)
       end else begin
-      let mlir_ty_size_local = function
-        | "f64" -> 8 | "i1" -> 1 | "i8" -> 1
-        | "i32" -> 4 | "i64" -> 8 | "!llvm.ptr" -> 8
-        | "!topos.proposition" -> 1 | _ -> 8
-      in
       let field_offset =
-        match List.assoc_opt place_name e.places_table with
-        | Some fields ->
-            let acc = ref 0 in
-            let found = ref None in
-            List.iter (fun (fn, fty) ->
-              if fn = fname && !found = None then found := Some !acc;
-              acc := !acc + mlir_ty_size_local fty
-            ) fields;
-            (match !found with Some o -> o | None -> 0)
-        | None -> 0
+        let placed =
+          match List.assoc_opt place_name e.places_table with
+          | Some fields -> fst (fields_offsets fields)
+          | None -> [] in
+        match List.find_opt (fun (n, _, _) -> n = fname) placed with
+        | Some (_, _, o) -> o
+        | None ->
+            failwith (Printf.sprintf
+              "[emit_mlir] place '%s' lays out no field '%s'." place_name fname)
       in
       let v_xc = fresh_ssa e in
       emit_line e (Printf.sprintf
@@ -2665,7 +2672,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_off field_offset);
       let v_size = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
-                     v_size (mlir_ty_size_local field_ty));
+                     v_size (Carrier.field_bytes field_ty));
       let v_one_i64 = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.constant 1 : i64" v_one_i64);
       let v_buf = fresh_ssa e in
@@ -2673,7 +2680,7 @@ let rec emit_term (e : emitter)
                      "%s = llvm.alloca %s x i64 : (i64) -> !llvm.ptr" v_buf v_one_i64);
       let v_status = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_field_load(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> i32"
+        "%s = func.call @yon_rt_field_load_or_stop(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> i32"
         v_status v_xc v_off v_size v_buf);
       let _ = v_status in
       let v_loaded = fresh_ssa e in
@@ -2681,9 +2688,29 @@ let rec emit_term (e : emitter)
                      v_loaded v_buf field_ty);
       (v_loaded, field_ty)
       end
-  (* Integer division/remainder: operands travel as f64 (exact integers
-     within ±2^53), the operation is the SIGNED integer one — cast in,
-     divide, cast back. Truncating semantics, like arith.divsi. *)
+  (* Int64: the ring Z/2^64. Each operand is an i64 (an f64 slot carrying an
+     Int64 is its bits, reinterpreted); the instruction is the integer one:
+     addi/subi/muli wrap modulo 2^64, divsi/remsi truncate, cmpi compares. *)
+  | C.App (C.App (C.Var op, a), b)
+    when String.length op > 6 && String.sub op 0 6 = "__i64_" ->
+      let (va, ta) = emit_term e env funcs a in
+      let (vb, tb) = emit_term e env funcs b in
+      let va = coerce_to_param e va ta "i64" in
+      let vb = coerce_to_param e vb tb "i64" in
+      let v = fresh_ssa e in
+      let (instr, rty) = match op with
+        | "__i64_add" -> ("arith.addi", "i64") | "__i64_sub" -> ("arith.subi", "i64")
+        | "__i64_mul" -> ("arith.muli", "i64") | "__i64_div" -> ("arith.divsi", "i64")
+        | "__i64_mod" -> ("arith.remsi", "i64")
+        | "__i64_lt" -> ("arith.cmpi slt,", "i1") | "__i64_gt" -> ("arith.cmpi sgt,", "i1")
+        | "__i64_leq" -> ("arith.cmpi sle,", "i1") | "__i64_geq" -> ("arith.cmpi sge,", "i1")
+        | "__i64_eq" -> ("arith.cmpi eq,", "i1") | "__i64_neq" -> ("arith.cmpi ne,", "i1")
+        | _ -> failwith (Printf.sprintf "[emit_mlir] unknown Int64 operation %s" op) in
+      emit_line e (Printf.sprintf "%s = %s %s, %s : i64" v instr va vb);
+      (v, rty)
+  (* Integer division/remainder on the narrower faces: operands travel as
+     f64 (exact integers in their range), the operation is the SIGNED integer
+     one — cast in, divide, cast back. Truncating semantics, like divsi. *)
   | C.App (C.App (C.Var op, a), b) when op = "__idiv" || op = "__imod" ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
@@ -2697,6 +2724,20 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.sitofp %s : i64 to f64" v vr);
       (v, "f64")
+  (* An arithmetic or comparison the compiler synthesized (no tycheck site)
+     whose operand is already an i64 is an Int64 operation: it takes the
+     integer instruction, and a numeric literal beside it is an i64 constant. *)
+  | C.App (C.App (C.Var op, a), b) when
+      List.mem op ["__add"; "__sub"; "__mul"; "__div"; "__mod"; "__lt"; "__gt";
+                   "__leq"; "__geq"; "__eq"; "__neq"]
+      && (infer_mlir_ty e env funcs a = "i64" || infer_mlir_ty e env funcs b = "i64") ->
+      let as_i64 t = match t with
+        | C.Var x when String.length x > 6 && String.sub x 0 6 = "__num_"
+                       && Float.is_integer (float_of_string (String.sub x 6 (String.length x - 6))) ->
+            C.Var (Printf.sprintf "__i64_%Ld"
+                     (Int64.of_float (float_of_string (String.sub x 6 (String.length x - 6)))))
+        | t -> t in
+      emit_term e env funcs (C.App (C.App (C.Var ("__i64_" ^ String.sub op 2 (String.length op - 2)), as_i64 a), as_i64 b))
   | C.App (C.App (C.Var op, a), b) when
       (op = "__add" || op = "__sub" || op = "__mul" || op = "__div"
        || op = "__mod"
@@ -2823,7 +2864,7 @@ let rec emit_term (e : emitter)
   (* pipeline deforestata.
    *
    * Recognizes the composition
-   *   Seq.fold(Seq.filter(Seq.map(Seq.from_list(l), f), p), init, g)
+   *   Sequence.fold(Sequence.filter(Sequence.map(Sequence.from_list(l), f), p), init, g)
    * (with map/filter in arbitrary order) and emits it as a single scf.while
    * over a list-iterator with no intermediate buffers.
    *
@@ -2831,7 +2872,7 @@ let rec emit_term (e : emitter)
    * the inline func.call).
    *
    * Implementation: collect_stream_ops descends into the `source` argument,
-   * gathering Map(f)/Filter(p) down to Seq.from_list(l). *)
+   * gathering Map(f)/Filter(p) down to Sequence.from_list(l). *)
   (* * Monolithic pattern: Stream.sum_take(Stream.iterate(f, x0), n) lowered to
    * an scf.for with an accumulator. Full fusion: no intermediate list, no
    * allocation, a single loop. *)
@@ -2840,23 +2881,20 @@ let rec emit_term (e : emitter)
        * for List (the list IS already a stream).
        * for Map/Set/Merkle, the API
        * dedicated `map_to_stream(m)` / `set_to_stream(s)` calls
-       * yon_rt_map_to_list / yon_rt_set_to_list. A bare to_stream() is for
+       * yon_rt_map_to_list / yon_rt_hashset_to_list. A bare to_stream() is for
        * List only. *)
       emit_term e env funcs inner
   (* Explicit conversions to a stream for the Map/Set/Merkle data structures.
    * Each calls the runtime helper that produces a list, then the map/filter/
    * fold chain iterates. *)
-  | C.App (C.Var "__map_to_stream", arg)
-  | C.App (C.Var "HashMap__to_stream", arg)
-  | C.App (C.Var "Map__to_stream", arg) ->
-      let (vm, _) = emit_term e env funcs arg in
+  | C.App (C.Var "HashMap__to_stream", arg) ->
+      let vm = emit_f64 e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_map_to_list(%s) : (f64) -> f64" v vm);
       (v, "f64")
-  | C.App (C.Var "__set_to_stream", arg)
   | C.App (C.Var "HashSet__to_stream", arg) ->
-      let (vs, _) = emit_term e env funcs arg in
+      let vs = emit_f64 e env funcs arg in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_hashset_to_list(%s) : (f64) -> f64" v vs);
@@ -2871,7 +2909,15 @@ let rec emit_term (e : emitter)
         "%s = func.call @yon_rt_merkle_to_list(%s) : (f64) -> f64" v vm);
       (v, "f64")
   | C.App (C.Var "MerkleTree__leaf", arg) ->
-      let (va, _) = emit_term e env funcs arg in
+      let (va, ta) = emit_term e env funcs arg in
+      (* a value of any carrier enters as its f64: a section or a boolean
+         too, the label keeps it exactly *)
+      let va =
+        if ta = "i1" then begin
+          let vf = fresh_ssa e in
+          emit_line e (Printf.sprintf "%s = arith.uitofp %s : i1 to f64" vf va);
+          vf
+        end else coerce_to_param e va ta "f64" in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_leaf(%s) : (f64) -> f64" v va);
@@ -3414,17 +3460,17 @@ let rec emit_term (e : emitter)
   | C.App (C.Var "__stream_from_list", l) ->
       (* A stream built from a list and used as a value (return/bind): the
        * runtime has no separate stream constructor — the stream IS the
-       * list's handle. In Seq pipelines (fold/filter/map) this node is
+       * list's handle. In Sequence pipelines (fold/filter/map) this node is
        * unpacked earlier by `collect source`; here we cover the standalone
        * use, which otherwise fell into the "unknown function" throw. *)
       let (vl, _) = emit_term e env funcs l in
       (vl, "f64")
-  | C.App (C.Var "Seq__range", a) ->
+  | C.App (C.Var "Sequence__range", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_seq_range(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "Seq__range_to_list", a) ->
+  | C.App (C.Var "Sequence__range_to_list", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_seq_range(%s) : (f64) -> f64" v va);
@@ -3557,51 +3603,31 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_list_reverse(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.Var "HashSet__try_add", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_try_add(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "HashSet__at_bucket", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_at_bucket(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.Var "HashSet__dir_capacity", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_hashset_dir_capacity(%s) : (f64) -> f64" v va);
-      (v, "f64")
   (* Vec: persistent dynamic array. push/set return a fresh handle. *)
   | C.App (C.App (C.Var "Vec__push", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
+      let va = emit_f64 e env funcs a in
+      let vb = emit_f64 e env funcs b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_vec_push(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "Vec__get", a), b) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
+      let va = emit_f64 e env funcs a in
+      let vb = emit_f64 e env funcs b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_vec_get(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.App (C.Var "Vec__set", a), b), c) ->
-      let (va, _) = emit_term e env funcs a in
-      let (vb, _) = emit_term e env funcs b in
-      let (vc, _) = emit_term e env funcs c in
+      let va = emit_f64 e env funcs a in
+      let vb = emit_f64 e env funcs b in
+      let vc = emit_f64 e env funcs c in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_vec_set(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
   | C.App (C.Var "Vec__size", a) ->
-      let (va, _) = emit_term e env funcs a in
+      let va = emit_f64 e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_vec_size(%s) : (f64) -> f64" v va);
@@ -3637,54 +3663,59 @@ let rec emit_term (e : emitter)
       (v, "f64")
   (* Arena: the Leech type-2 arena as a first-class structure. *)
   | C.App (C.App (C.App (C.Var "Arena__put", arg_a), arg_b), arg_c) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
-      let (vc, _) = emit_term e env funcs arg_c in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
+      let vc = emit_f64 e env funcs arg_c in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_arena_put(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
-  | C.App (C.App (C.Var "Arena__get", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+  | C.App (C.App (C.Var "Arena__value", arg_a), arg_b) ->
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_get(%s, %s) : (f64, f64) -> f64" v va vb);
+        "%s = func.call @yon_rt_arena_value(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.Var "Arena__occupied", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_arena_occupied(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
+      (* a Boolean: occupied or not *)
+      let v_zero = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
+      let v_i1 = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v v_zero);
+      (v_i1, "i1")
   | C.App (C.App (C.Var "Arena__orbit", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_arena_orbit(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
   | C.App (C.App (C.App (C.Var "Arena__same_orbit", arg_a), arg_b), arg_c) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
-      let (vc, _) = emit_term e env funcs arg_c in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
+      let vc = emit_f64 e env funcs arg_c in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_arena_same_orbit(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
   | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", arg_a), arg_b), arg_c), arg_d) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
-      let (vc, _) = emit_term e env funcs arg_c in
-      let (vd, _) = emit_term e env funcs arg_d in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
+      let vc = emit_f64 e env funcs arg_c in
+      let vd = emit_f64 e env funcs arg_d in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_arena_fuse(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64" v va vb vc vd);
       (v, "f64")
   | C.App (C.App (C.Var "Arena__fusion_count", arg_a), arg_b) ->
-      let (va, _) = emit_term e env funcs arg_a in
-      let (vb, _) = emit_term e env funcs arg_b in
+      let va = emit_f64 e env funcs arg_a in
+      let vb = emit_f64 e env funcs arg_b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_arena_fusion_count(%s, %s) : (f64, f64) -> f64" v va vb);
@@ -3884,10 +3915,19 @@ let rec emit_term (e : emitter)
       pop_indent e;
       emit_line e "}";
       (Printf.sprintf "%s#0" v_result, "f64")
+  (* every other form of an iterate, a take or a sum_take: the stream is not
+     consumed where it is built *)
+  | C.App (C.App (C.Var ("__stream_iterate" | "__stream_take" | "__stream_sum_take" as op), _), _) ->
+      raise (Stream_not_fused (Printf.sprintf
+        "%s here is not consumed where its stream is built: an iterate is \
+         read by take or sum_take in the function that builds it (directly or \
+         through a name bound there); a stream passed to or returned from a \
+         function has no lowering."
+        (String.sub op 9 (String.length op - 9))))
   | C.App (C.App (C.App (C.Var "__stream_fold", source), init), g_expr) ->
-      (* Seq.* accepts only an inline lambda as its higher-order argument.
+      (* Sequence.* accepts only an inline lambda as its higher-order argument.
        * Top-level function names are not allowed; to use one, wrap it in a
-       * lambda: `Seq.map(s, fun(x) => f(x))`.
+       * lambda: `Sequence.map(s, fun(x) => f(x))`.
        *
        * Except __arg_lam_inline_N (a lifted bare lambda), which is handled
        * via a direct func.call. *)
@@ -3910,13 +3950,13 @@ let rec emit_term (e : emitter)
         | C.App _ ->
             (match peel_lifted_with_captures g_expr [] with
              | Some (n, caps) -> `LiftedFn (n, caps)
-             | None -> failwith "[emit_mlir Seq.fold] third arg must be an inline lambda (a, b) => body")
+             | None -> failwith "[emit_mlir Sequence.fold] third arg must be an inline lambda (a, b) => body")
         | C.Var n ->
             failwith (Printf.sprintf
-              "[emit_mlir Seq.fold] third arg must be an inline lambda \
+              "[emit_mlir Sequence.fold] third arg must be an inline lambda \
                (a, b) => body; top-level function name '%s' is not allowed. \
-               Use: Seq.fold(s, init, fun(a, b) => %s(a, b))" n n)
-        | _ -> failwith "[emit_mlir Seq.fold] third arg must be an inline lambda (a, b) => body") in
+               Use: Sequence.fold(s, init, fun(a, b) => %s(a, b))" n n)
+        | _ -> failwith "[emit_mlir Sequence.fold] third arg must be an inline lambda (a, b) => body") in
       let rec collect s =
         match s with
         | C.App (C.App (C.Var "__stream_map", inner), C.Lam (p, _, body)) ->
@@ -3927,9 +3967,9 @@ let rec emit_term (e : emitter)
             (lst, ops @ [`Map (`LiftedFn1 n)])
         | C.App (C.App (C.Var "__stream_map", _), C.Var fn) ->
             failwith (Printf.sprintf
-              "[emit_mlir Seq.map] second arg must be an inline lambda \
+              "[emit_mlir Sequence.map] second arg must be an inline lambda \
                (x) => body; top-level function name '%s' is not allowed. \
-               Use: Seq.map(s, fun(x) => %s(x))" fn fn)
+               Use: Sequence.map(s, fun(x) => %s(x))" fn fn)
         | C.App (C.App (C.Var "__stream_filter", inner), C.Lam (p, _, body)) ->
             let (lst, ops) = collect inner in
             (lst, ops @ [`Filter (`Inline1 (p, body))])
@@ -3938,9 +3978,9 @@ let rec emit_term (e : emitter)
             (lst, ops @ [`Filter (`LiftedFn1 n)])
         | C.App (C.App (C.Var "__stream_filter", _), C.Var pn) ->
             failwith (Printf.sprintf
-              "[emit_mlir Seq.filter] second arg must be an inline lambda \
+              "[emit_mlir Sequence.filter] second arg must be an inline lambda \
                (x) => body; top-level function name '%s' is not allowed. \
-               Use: Seq.filter(s, fun(x) => %s(x))" pn pn)
+               Use: Sequence.filter(s, fun(x) => %s(x))" pn pn)
         | C.App (C.Var "__stream_from_list", l) -> (l, [])
         | other -> (other, [])
       in
@@ -4329,11 +4369,29 @@ let rec emit_term (e : emitter)
               callee). Stack, not flag, so mutual recursion is caught too. *)
            && not (List.mem fname !hof_inline_stack) ->
            let fs = List.assoc fname funcs in
-           (* For each parameter and argument, substitute the parameter name
-            * with the Core IR argument. *)
+           (* One evaluation strategy, the call's: every argument is evaluated
+              once, before the body, left to right. A function argument (a
+              function name, a lambda) is substituted into the body, which is
+              what inlining is for; any other argument is first bound to a
+              fresh name (A-normal form) and the name is substituted, so a
+              parameter used twice reads one value and an argument's effect
+              happens once. *)
+           let bound = ref [] in
            let inlined_body = List.fold_left2 (fun body (pname, _ptype) arg ->
-             Subst.subst pname arg body
+             match arg with
+             | C.Var a when List.mem_assoc a funcs -> Subst.subst pname arg body
+             | C.Lam _ -> Subst.subst pname arg body
+             | _ ->
+                 incr hof_arg_counter;
+                 let a = Printf.sprintf "__hof_arg_%d" !hof_arg_counter in
+                 bound := (a, arg) :: !bound;
+                 Subst.subst pname (C.Var a) body
            ) fs.fn_body fs.fn_params args in
+           (* bound as the desugar binds a `be`: the value's own carrier *)
+           let inlined_body =
+             List.fold_left (fun body (a, arg) ->
+               C.App (C.Lam (a, C.TyPlace "unit", body), arg))
+               inlined_body !bound in
            (* Emit the inlined body in the current env, marking fname as being
              inlined so its self-call in the body takes the generic path. *)
            hof_inline_stack := fname :: !hof_inline_stack;
@@ -4348,7 +4406,9 @@ let rec emit_term (e : emitter)
            (* Partial application of a closure target = a closure VALUE: the given
               args are its captured environment. Build the closure node; its tag is
               fname's dense index, read back by __yon_closure_call at the call. *)
-           let cap_ssas = List.map (fun a -> fst (emit_term e env funcs a)) args in
+           (* a capture enters the node as its f64 slot (an Int64 as its bits) *)
+           let cap_ssas = List.map (fun a ->
+             let (v, t) = emit_term e env funcs a in coerce_to_param e v t "f64") args in
            emit_closure_node e funcs fname cap_ssas
        | Some (fname, args) when List.mem_assoc fname funcs ->
            let fs = List.assoc fname funcs in
@@ -4449,7 +4509,7 @@ let rec emit_term (e : emitter)
              | [src] -> src
              | _ ->
                  failwith (Printf.sprintf
-                             "[emit_mlir P8] move '%s' multi-source not handled."
+                             "[emit_mlir] move '%s' multi-source not handled."
                              move_name)
            in
            let target_ty = Printf.sprintf "!topos.section<\"%s\">" target_place in
@@ -4486,7 +4546,7 @@ let rec emit_term (e : emitter)
              | MoveMapping ms -> ms
              | MoveMerge _ ->
                  failwith (Printf.sprintf
-                             "[emit_mlir P8] move '%s' Form B (merge) not handled."
+                             "[emit_mlir] move '%s' Form B (merge) not handled."
                              move_name)
            in
            let target_fields =
@@ -4494,7 +4554,7 @@ let rec emit_term (e : emitter)
              | Some fs -> fs
              | None ->
                  failwith (Printf.sprintf
-                             "[emit_mlir P8] target place '%s' has no layout."
+                             "[emit_mlir] target place '%s' has no layout."
                              target_place)
            in
            let source_fields =
@@ -4502,35 +4562,12 @@ let rec emit_term (e : emitter)
              | Some fs -> fs
              | None ->
                  failwith (Printf.sprintf
-                             "[emit_mlir P8] source place '%s' has no layout."
+                             "[emit_mlir] source place '%s' has no layout."
                              source_place)
            in
-           (* Calcolo offset cumulativo target packed layout. *)
-           let mlir_ty_size = function
-             | "f64" -> 8 | "i1" -> 1 | "i8" -> 1
-             | "i32" -> 4 | "i64" -> 8 | "!llvm.ptr" -> 8
-             | "!topos.proposition" -> 1 | _ -> 8
-           in
-           let target_offsets =
-             let acc = ref 0 in
-             List.map (fun (fname, fty) ->
-               let o = !acc in
-               acc := !acc + mlir_ty_size fty;
-               (fname, fty, o)
-             ) target_fields
-           in
-           let source_offsets =
-             let acc = ref 0 in
-             List.map (fun (fname, fty) ->
-               let o = !acc in
-               acc := !acc + mlir_ty_size fty;
-               (fname, fty, o)
-             ) source_fields
-           in
-           let target_total =
-             List.fold_left (fun a (_, ty) -> a + mlir_ty_size ty) 0
-               target_fields
-           in
+           let mlir_ty_size = Carrier.field_bytes in
+           let (target_offsets, target_total) = fields_offsets target_fields in
+           let (source_offsets, _) = fields_offsets source_fields in
            (* Cast inst (section source) a i32 xcoord per field_load. *)
            let v_src_xc = fresh_ssa e in
            let source_ty = Printf.sprintf "!topos.section<\"%s\">" source_place in
@@ -4569,7 +4606,7 @@ let rec emit_term (e : emitter)
                     | Some (_, sty, soff) -> (m.m_from, soff, sty)
                     | None ->
                         failwith (Printf.sprintf
-                                    "[emit_mlir P8] mapping source field '%s' assente in '%s'."
+                                    "[emit_mlir] mapping source field '%s' assente in '%s'."
                                     m.m_from source_place))
                | None ->
                    (* Identity copy: same field name + same type. *)
@@ -4578,10 +4615,10 @@ let rec emit_term (e : emitter)
                     | Some (_, sty, soff) -> (tfname, soff, sty)
                     | None ->
                         failwith (Printf.sprintf
-                                    "[emit_mlir P8] target field '%s' has neither a mapping nor an identity."
+                                    "[emit_mlir] target field '%s' has neither a mapping nor an identity."
                                     tfname))
              in
-             (* Load source field via yon_rt_field_load. *)
+             (* Load source field via yon_rt_field_load_or_stop. *)
              let v_off = fresh_ssa e in
              emit_line e (Printf.sprintf "%s = arith.constant %d : i32"
                             v_off source_offset);
@@ -4596,7 +4633,7 @@ let rec emit_term (e : emitter)
                             v_tmp_buf v_tmp_one);
              let v_status = fresh_ssa e in
              emit_line e (Printf.sprintf
-                            "%s = func.call @yon_rt_field_load(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> i32"
+                            "%s = func.call @yon_rt_field_load_or_stop(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> i32"
                             v_status v_src_xc v_off v_size v_tmp_buf);
              let _ = v_status in
              let v_loaded = fresh_ssa e in
@@ -4729,25 +4766,9 @@ let rec emit_term (e : emitter)
                  failwith (Printf.sprintf
                              "[emit_mlir] place '%s' has no layout." p)
            in
-           let mlir_ty_size = function
-             | "f64" -> 8 | "i1" -> 1 | "i8" -> 1
-             | "i32" -> 4 | "i64" -> 8 | "!llvm.ptr" -> 8
-             | "!topos.proposition" -> 1 | _ -> 8
-           in
-           let offsets fields =
-             let acc = ref 0 in
-             List.map (fun (fname, fty) ->
-               let o = !acc in
-               acc := !acc + mlir_ty_size fty;
-               (fname, fty, o)
-             ) fields
-           in
-           let o1 = offsets (fields_of p1) in
-           let o2 = offsets (fields_of p2) in
-           let target_total =
-             List.fold_left (fun a (_, ty) -> a + mlir_ty_size ty) 0
-               (fields_of p1)
-           in
+           let mlir_ty_size = Carrier.field_bytes in
+           let (o1, target_total) = fields_offsets (fields_of p1) in
+           let (o2, _) = fields_offsets (fields_of p2) in
            let v_x1 = fresh_ssa e in
            emit_line e (Printf.sprintf
                           "%s = topos.section_to_xcoord %s : !topos.section<\"%s\"> to i64"
@@ -4790,7 +4811,7 @@ let rec emit_term (e : emitter)
                             v_tbuf v_t1);
              let v_st = fresh_ssa e in
              emit_line e (Printf.sprintf
-                            "%s = func.call @yon_rt_field_load(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> i32"
+                            "%s = func.call @yon_rt_field_load_or_stop(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> i32"
                             v_st v_xc v_off v_size v_tbuf);
              let _ = v_st in
              let v_l = fresh_ssa e in
@@ -4854,8 +4875,12 @@ let rec emit_term (e : emitter)
              | Some ks -> ks
              | None -> assert false in
            let runtime = rpc2_runtime_of_arity k in
+           (* every wire value is a 64-bit slot: an argument crosses as its
+              bits (an Int64 reinterpreted, not converted) *)
            let arg_vals =
-             List.map (fun a -> fst (emit_term e env funcs a)) args in
+             List.map (fun a ->
+               let (v, t) = emit_term e env funcs a in
+               coerce_to_param e v t "f64") args in
            let v_sp = fresh_ssa e in
            emit_line e (Printf.sprintf
                           "%s = llvm.mlir.addressof @yon_space_name_%s : !llvm.ptr"
@@ -4990,20 +5015,12 @@ let rec emit_term (e : emitter)
                                "%s = func.call @%s(%s) : (%s) -> %s"
                                v handler_name arg_str arg_ty_str ret_ty)
             | None ->
-                (* Fallback: stub <Place>__<op> with a dummy instance. *)
-                let v_inst = fresh_ssa e in
-                emit_line e (Printf.sprintf
-                               "%s = arith.constant 0 : i32" v_inst);
-                let param_tys = "i32"
-                  :: List.map (fun (_, t) -> core_ty_to_mlir_simple t)
-                       op_sig.op_params
-                in
-                let all_args = v_inst :: List.map fst arg_vals in
-                let arg_str = String.concat ", " all_args in
-                let arg_ty_str = String.concat ", " param_tys in
-                emit_line e (Printf.sprintf
-                               "%s = func.call @%s(%s) : (%s) -> %s"
-                               v fname arg_str arg_ty_str ret_ty));
+                (* the check refuses a call no reduction handles (E2003):
+                   reaching here is a broken invariant, never a stub *)
+                failwith (Printf.sprintf
+                  "[emit_mlir] the operation %s.%s is called with no reduction \
+                   handling it (the check should have refused it)."
+                  place_name op_sig.op_name));
            (v, ret_ty)
        | Some (fname, args) when
            (match Env.find_opt fname env with
@@ -5117,7 +5134,7 @@ let rec emit_term (e : emitter)
   | C.World _ ->
       failwith "[emit_mlir] World as a term-value not supported."
   | C.Scope (sname, body) ->
-      (* 81b — hermetic scope, formal layer. `scope S { ... }` becomes a
+      (* Hermetic scope, formal layer. `scope S { ... }` becomes a
        * topos.scope_with_yield region: IsolatedFromAbove makes any implicit
        * reference to outer SSA values an MLIR VERIFIER ERROR, so every outer
        * binding used inside is passed as an explicit, typed capture and
@@ -5202,7 +5219,7 @@ let rec emit_term (e : emitter)
        | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _ ->
            raise (Cubical_stuck "cubical term stuck after normalization: not decided at runtime.")
        | t' -> emit_term e env funcs t')
-  (* P7-frontend A2: Sigma pair (Pair, Fst, Snd) --> !llvm.struct *)
+  (* Sigma pair (Pair, Fst, Snd) --> !llvm.struct *)
   | C.Pair (a, b) ->
       let (va, ta) = emit_term e env funcs a in
       let (vb, tb) = emit_term e env funcs b in
@@ -5272,6 +5289,13 @@ let rec emit_term (e : emitter)
 
 (* ─── Place / reduction / world ─────────────────────────────────────── *)
 
+(* A value given to a runtime primitive that takes a uniform f64 slot: an
+   Int64 enters as its bits, a section as its handle. *)
+and emit_f64 (e : emitter) (env : (string * string) Env.t)
+    (funcs : (string * func_sig) list) (t : C.term) : string =
+  let (v, ty) = emit_term e env funcs t in
+  coerce_to_param e v ty "f64"
+
 let emit_place (e : emitter) (world : string) (pd : C.place_decl) : unit =
   emit_indent e;
   let has_ops = pd.p_operations <> [] in
@@ -5298,9 +5322,15 @@ let emit_place (e : emitter) (world : string) (pd : C.place_decl) : unit =
      block rather than zero blocks (which is rejected). *)
   if pd.p_fields = [] && pd.p_operations = [] then
     emit_line e "^bb0:";
-  List.iter (fun (fname, fty) ->
-    emit_line e (Printf.sprintf "topos.field @%s : %s" fname (emit_ty fty))
-  ) pd.p_fields;
+  (* each field carries its offset and size in the region, so the lowering
+     reads the layout instead of computing one of its own *)
+  let field_tys = List.map (fun (_, fty) -> emit_ty fty) pd.p_fields in
+  let (placed, _) = Carrier.field_layout field_tys in
+  List.iter2 (fun ((fname, _), ty) (o, size) ->
+    emit_line e (Printf.sprintf
+      "topos.field @%s : %s {topos.offset = %d : i64, topos.size = %d : i64}"
+      fname ty o size)
+  ) (List.combine pd.p_fields field_tys) placed;
   List.iter (fun (op : C.op_sig) ->
     let param_tys =
       List.map (fun (_, t) -> emit_ty t) op.op_params
@@ -5353,8 +5383,8 @@ let emit_world (e : emitter) (world_name : string) (places : C.place_decl list) 
   emit_line e "}";
   (* For each place that instantiates a catalog algebra, emit @<P>_instantiate()
    * outside the world (a valid top-level func.func) that
-   * instantiates it as a Magma handle. The verified place becomes runnable from
-   * Yon via `verify P`. The AlgebraVerifier pass remains the verifier of the laws. *)
+   * instantiates it as a Magma handle. The AlgebraVerifier pass is the
+   * verifier of the laws. *)
   List.iter (fun (pd : C.place_decl) ->
     let alg = List.fold_left (fun acc (op : C.op_sig) ->
       match acc, op.op_algebra with Some _, _ -> acc | None, a -> a) None pd.p_operations in
@@ -5507,7 +5537,8 @@ let extract_morph_in_space (name : string) : (string * string) option =
    value to actually return. *)
 let coerce_return (e : emitter) (v : string) (v_ty : string)
     (ret_ty : string) : string =
-  if v_ty <> ret_ty && v_ty = "f64" then
+  if v_ty = "i1" && ret_ty = "!topos.proposition" then coerce_to_param e v v_ty ret_ty
+  else if v_ty <> ret_ty && v_ty = "f64" then
     (* An inductive returns its MerkleTree f64 handle; pack it back into the
        section handle via the wire coercion, NOT the terminal constructor
        (__section_ materializes a fieldless place, which an inductive is not). *)
@@ -5563,7 +5594,7 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
           a value, never a cell handle — but a lambda that mentions a cell DOES
           capture its handle, so the LIFO discipline is sound only because
           tycheck stops every closure over a cell at the activation boundary
-          (S-08, the mobility judgment: ty_mobile / mob_carrying). It also stops
+          (the mobility judgment: ty_mobile / mob_carrying). It also stops
           a reassigning helper called many times from exhausting the registry. *)
        let mark = fresh_ssa e in
        emit_line e (Printf.sprintf
@@ -6142,9 +6173,10 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
          (* the wire namespace belongs to user spaces: prelude arrows never
             enter the dispatch table (their bares would collide everywhere) *)
       && List.length fs.fn_params <= 4
-      && List.for_all (fun (_, pty) -> core_ty_to_mlir_simple pty = "f64")
-           fs.fn_params
-      && fs.fn_ret_mlir = "f64"
+      (* a wire slot holds 64 bits: a Number, or an Int64 as its bits *)
+      && List.for_all (fun (_, pty) ->
+           List.mem (core_ty_to_mlir_simple pty) ["f64"; "i64"]) fs.fn_params
+      && List.mem fs.fn_ret_mlir ["f64"; "i64"]
       && not (String.length name >= 7 && String.sub name 0 7 = "yon_rt_")
       && not (String.length name >= 8 && String.sub name 0 8 = "Stream__")
       && not (String.length name >= 2 && String.sub name 0 2 = "__")) funcs in
@@ -6179,13 +6211,14 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     emit_line e (Printf.sprintf "%s = scf.if %s -> f64 {" res_v cmp_v);
     push_indent e;
     let call_v = fresh_ssa e in
-    let k = List.length fs.fn_params in
-    let args = List.init k (fun i -> Printf.sprintf "%%a%d" (i + 1)) in
-    let tys = List.init k (fun _ -> "f64") in
-    emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> f64"
+    let tys = List.map (fun (_, pty) -> core_ty_to_mlir_simple pty) fs.fn_params in
+    let args = List.mapi (fun i t ->
+      coerce_to_param e (Printf.sprintf "%%a%d" (i + 1)) "f64" t) tys in
+    emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                    call_v name (String.concat ", " args)
-                   (String.concat ", " tys));
-    emit_line e (Printf.sprintf "scf.yield %s : f64" call_v);
+                   (String.concat ", " tys) fs.fn_ret_mlir);
+    let call_f = coerce_to_param e call_v fs.fn_ret_mlir "f64" in
+    emit_line e (Printf.sprintf "scf.yield %s : f64" call_f);
     pop_indent e;
     emit_line e "} else {";
     push_indent e;
@@ -6237,13 +6270,17 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     push_indent e;
     let p = List.length fs.fn_params in
     let m = let m0 = cap_count name in if m0 > p then p else m0 in
-    (* read the m captured values off the node: cap_j at child((child _ 1)^j, 0) *)
+    (* read the m captured values off the node: cap_j is the label of the leaf
+       at child((child _ 1)^j, 0) *)
     let walker = ref "%clo" in
     let caps = ref [] in
     for _j = 0 to m - 1 do
+      let leafj = fresh_ssa e in
+      emit_line e (Printf.sprintf
+        "%s = func.call @yon_rt_merkle_child(%s, %s) : (f64, f64) -> f64" leafj !walker v_c0);
       let capj = fresh_ssa e in
       emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_merkle_child(%s, %s) : (f64, f64) -> f64" capj !walker v_c0);
+        "%s = func.call @yon_rt_merkle_label(%s) : (f64) -> f64" capj leafj);
       caps := capj :: !caps;
       let nxt = fresh_ssa e in
       emit_line e (Printf.sprintf
@@ -6425,6 +6462,10 @@ let emit_program (dr : Desugar.desugar_result) : string =
    * symbol conflicts when the program defines a place operation with the same
    * mangled name (e.g. Ord__compare). *)
   let used_builtins = Hashtbl.create 16 in
+  (* a Boolean flowing into a proposition is coerced where the types meet
+     (coerce_to_param / coerce_return), which a scan of the terms cannot see:
+     the mono 2 -> Omega is always declared *)
+  Hashtbl.replace used_builtins "to_prop" ();
   List.iter (fun (_, body) -> collect_used_builtins used_builtins body)
     dr_functions_shaken;
   (match dr.main with
@@ -6453,11 +6494,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
        conversion; otherwise it falls back to identity-zero. *)
     let runtime_mapping = [
       "to_prop",      `RT ("yon_rt_to_prop",      `BoolToProp);
-      "to_bool",      `RT ("yon_rt_to_bool",      `PropToBool);
-      "decide",       `RT ("yon_rt_decide",       `PropToProp);
+      "__prop_code",  `RT ("",                    `PropToCode);
       "to_bool_dec",  `RT ("yon_rt_to_bool_dec",  `PropToBool);
       "text_to_prop", `RT ("yon_rt_text_to_prop", `PtrToProp);
-      "transport",    `RT ("yon_rt_transport",    `F64F64ToF64);
       (* Immutable list over the content-addressed xheap *)
       "List__empty",  `RT ("yon_rt_list_empty",   `F64ToF64);
       "List__cons",   `RT ("yon_rt_list_cons",    `F64F64ToF64);
@@ -6495,8 +6534,15 @@ let emit_program (dr : Desugar.desugar_result) : string =
         emit_line e (Printf.sprintf "func.func private @%s(%s) -> %s%s"
                        name param_decl ret noret)
       end else begin
-      emit_line e (Printf.sprintf "func.func @%s(%s) -> %s {"
-                     name param_decl ret);
+      (* a conversion between the faces of a value (Boolean, proposition,
+         its code) has no effect: its signature says so, and value
+         numbering may share two equal calls *)
+      let effects =
+        match List.assoc_opt name runtime_mapping with
+        | Some (`RT (_, (`BoolToProp | `PropToBool | `PropToCode))) -> no_effects
+        | _ -> "" in
+      emit_line e (Printf.sprintf "func.func @%s(%s) -> %s%s {"
+                     name param_decl ret effects);
       push_indent e;
       (* If the builtin maps to a runtime function, emit the call plus the
          type conversions between MLIR and the runtime ABI (i8 for a
@@ -6531,23 +6577,16 @@ let emit_program (dr : Desugar.desugar_result) : string =
             emit_line e (Printf.sprintf
                            "%s = arith.trunci %s : i8 to i1" v_bool v_call);
             emit_line e (Printf.sprintf "return %s : i1" v_bool)
-        | `PropToProp ->
-            (* proposition -> proposition via runtime i8 (es. decide: guard su unknown) *)
-            let v_i8 = fresh_ssa e in
+        | `PropToCode ->
+            (* the code itself, no runtime call *)
+            let _ = rt_name in
+            let v_i32 = fresh_ssa e in
             emit_line e (Printf.sprintf
-                           "%s = topos.heyt_to_i32 %%arg0 : i32" v_i8);
-            let v_i8b = fresh_ssa e in
+                           "%s = topos.heyt_to_i32 %%arg0 : i32" v_i32);
+            let v_f = fresh_ssa e in
             emit_line e (Printf.sprintf
-                           "%s = arith.trunci %s : i32 to i8" v_i8b v_i8);
-            let v_call = fresh_ssa e in
-            emit_line e (Printf.sprintf
-                           "%s = func.call @%s(%s) : (i8) -> i8"
-                           v_call rt_name v_i8b);
-            let v_prop = fresh_ssa e in
-            emit_line e (Printf.sprintf
-                           "%s = topos.heyt_from_i8 %s : !topos.proposition"
-                           v_prop v_call);
-            emit_line e (Printf.sprintf "return %s : !topos.proposition" v_prop)
+                           "%s = arith.sitofp %s : i32 to f64" v_f v_i32);
+            emit_line e (Printf.sprintf "return %s : f64" v_f)
         | `PtrToProp ->
             (* String fusion: the argument is the f64 handle *)
             let v_call = fresh_ssa e in
@@ -6604,18 +6643,15 @@ let emit_program (dr : Desugar.desugar_result) : string =
       end
     ) used_list;
     (* External declarations of the runtime functions called by the stdlib. *)
-    emit_line e "// Runtime external declarations (P8) for stdlib";
+    emit_line e "// Runtime external declarations for stdlib";
     emit_line e "func.func private @yon_rt_to_prop(i8) -> i8";
-    emit_line e "func.func private @yon_rt_to_bool(i8) -> i8";
-    emit_line e "func.func private @yon_rt_decide(i8) -> i8";
     emit_line e "func.func private @yon_rt_to_bool_dec(i8) -> i8";
     emit_line e "func.func private @yon_rt_text_to_prop(f64) -> i8";
-    emit_line e "func.func private @yon_rt_transport(f64, f64) -> f64";
     emit_line e "func.func private @yon_rt_list_empty(f64) -> f64";
     emit_line e "func.func private @yon_rt_list_cons(f64, f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_head(f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_tail(f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_length(f64) -> f64";
+    emit_line e ("func.func private @yon_rt_list_head(f64) -> f64" ^ no_effects);
+    emit_line e ("func.func private @yon_rt_list_tail(f64) -> f64" ^ no_effects);
+    emit_line e ("func.func private @yon_rt_list_length(f64) -> f64" ^ no_effects);
     emit_line e "func.func private @yon_rt_space_make(f64) -> f64";
     emit_line e "func.func private @yon_rt_space_set(f64, f64) -> f64";
     emit_line e "func.func private @yon_rt_space_get(f64) -> f64";
@@ -6633,13 +6669,10 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "// Runtime declarations P10 — data structures (Map/Set/Dag)";
   emit_line e "func.func private @yon_rt_map_empty() -> f64";
   emit_line e "func.func private @yon_rt_map_put(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_map_get(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_map_contains(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_map_size(f64) -> f64";
-  emit_line e "func.func private @yon_rt_set_empty() -> f64";
-  emit_line e "func.func private @yon_rt_set_add(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_set_contains(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_set_size(f64) -> f64";
+  emit_line e ("func.func private @yon_rt_map_get(f64, f64) -> f64" ^ no_effects);
+  emit_line e ("func.func private @yon_rt_map_value(f64, f64) -> f64" ^ no_effects);
+  emit_line e ("func.func private @yon_rt_map_contains(f64, f64) -> f64" ^ no_effects);
+  emit_line e ("func.func private @yon_rt_map_size(f64) -> f64" ^ no_effects);
   (* Vec: persistent dynamic array; always declared like Map/Set so any program
      can call it without depending on used_list. *)
   emit_line e "func.func private @yon_rt_vec_empty() -> f64";
@@ -6651,15 +6684,15 @@ let emit_program (dr : Desugar.desugar_result) : string =
   if not list_decls_emitted_in_conditional then begin
     emit_line e "func.func private @yon_rt_list_empty(f64) -> f64";
     emit_line e "func.func private @yon_rt_list_cons(f64, f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_head(f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_tail(f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_length(f64) -> f64"
+    emit_line e ("func.func private @yon_rt_list_head(f64) -> f64" ^ no_effects);
+    emit_line e ("func.func private @yon_rt_list_tail(f64) -> f64" ^ no_effects);
+    emit_line e ("func.func private @yon_rt_list_length(f64) -> f64" ^ no_effects)
   end;
   (* dedicated HashSet *)
   emit_line e "func.func private @yon_rt_hashset_empty() -> f64";
   emit_line e "func.func private @yon_rt_hashset_add(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_contains(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_size(f64) -> f64";
+  emit_line e ("func.func private @yon_rt_hashset_contains(f64, f64) -> f64" ^ no_effects);
+  emit_line e ("func.func private @yon_rt_hashset_size(f64) -> f64" ^ no_effects);
   emit_line e "func.func private @yon_rt_hashset_to_list(f64) -> f64";
   (* XSet, backed by a minimal perfect hash function *)
   emit_line e "func.func private @yon_rt_xset_empty() -> f64";
@@ -6684,7 +6717,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_xrelmap_empty() -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_add_ref(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_insert(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelmap_get(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_xrelmap_value(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_contains(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_size(f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_empty() -> f64";
@@ -6704,13 +6737,12 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_xtower_depth() -> f64";
   (* to_stream conversions *)
   emit_line e "func.func private @yon_rt_map_to_list(f64) -> f64";
-  emit_line e "func.func private @yon_rt_set_to_list(f64) -> f64";
   emit_line e "func.func private @yon_rt_merkle_leaf(f64) -> f64";
   emit_line e "func.func private @yon_rt_merkle_node2(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_merkle_node2_commutative(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_merkle_label(f64) -> f64";
-  emit_line e "func.func private @yon_rt_merkle_child(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_merkle_equal(f64, f64) -> f64";
+  emit_line e ("func.func private @yon_rt_merkle_label(f64) -> f64" ^ no_effects);
+  emit_line e ("func.func private @yon_rt_merkle_child(f64, f64) -> f64" ^ no_effects);
+  emit_line e ("func.func private @yon_rt_merkle_equal(f64, f64) -> f64" ^ no_effects);
   emit_line e "func.func private @yon_rt_merkle_to_list(f64) -> f64";
   (* node3/node4 S_n canonical. *)
   emit_line e "func.func private @yon_rt_merkle_node3(f64, f64, f64, f64) -> f64";
@@ -6823,9 +6855,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_crypto_fnv1a(f64) -> f64";
   emit_line e "func.func private @yon_rt_crypto_hash_int(f64) -> f64";
   (* Extended stdlib. *)
-  emit_line e "func.func private @yon_rt_hashset_try_add(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_at_bucket(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_hashset_dir_capacity(f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_empty(f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_empty_mod(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hsh_step(f64, f64, f64) -> f64";
@@ -6837,7 +6866,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_voyagerlist_empty() -> f64";
   emit_line e "func.func private @yon_rt_arena_empty() -> f64";
   emit_line e "func.func private @yon_rt_arena_put(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_get(f64, f64) -> f64";
+  emit_line e "func.func private @yon_rt_arena_value(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_arena_occupied(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_arena_orbit(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_arena_same_orbit(f64, f64, f64) -> f64";
@@ -6868,11 +6897,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
   (* Always emitted, regardless of the stdlib, because the __section_X
      constructors and the field_load pre-walk of the lowering need them. *)
   if places <> [] then begin
-    emit_line e "// Runtime external declarations (P8) for places";
+    emit_line e "// Runtime external declarations for places";
     emit_line e "func.func private @yon_rt_section(i32, !llvm.ptr, i32) -> i64";
     emit_line e "func.func private @yon_rt_section_v(i32, !llvm.ptr, i32, !llvm.ptr, i32) -> i64";
     emit_line e "func.func private @yon_rt_register_schema(i32, i32, !llvm.ptr, i64) -> ()";
-    emit_line e "func.func private @yon_rt_field_load(i64, i32, i32, !llvm.ptr) -> i32";
+    emit_line e "func.func private @yon_rt_field_load_or_stop(i64, i32, i32, !llvm.ptr) -> i32";
     (* fold_named plus the string constants naming the canonical folds. We
        emit these whenever there are places: the cost is negligible and it
        keeps the code generation simple. *)
@@ -6945,7 +6974,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   (* For each declared place, emit the constructor __section_<Place> as an
      identity-zero stub returning an opaque section. *)
   if places <> [] then begin
-    emit_line e "// Place constructors __section_<X> (P8) — alloca payload via yon_rt_section";
+    emit_line e "// Place constructors __section_<X> — alloca payload via yon_rt_section";
     (* Wire DTO descriptors: one global byte array of field tags per
        transportable place, addressed at startup by yon_rt_register_schema. *)
     List.iter (fun (pd : C.place_decl) ->
@@ -6958,17 +6987,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
                          pd.p_name bytes n n)
       | _ -> ()
     ) places;
-    (* Helper to size the MLIR types (bytes). *)
-    let mlir_ty_size = function
-      | "f64" -> 8
-      | "i1"  -> 1
-      | "i8"  -> 1
-      | "i32" -> 4
-      | "i64" -> 8
-      | "!llvm.ptr" -> 8
-      | "!topos.proposition" -> 1
-      | _ -> 8  (* section/others: treated as an opaque pointer *)
-    in
     List.iter (fun (pd : C.place_decl) ->
       let field_tys = List.map (fun (_, fty) -> emit_ty fty) pd.p_fields in
       let param_strs = List.mapi (fun i ty ->
@@ -6976,14 +6994,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
       ) field_tys in
       let param_decl = String.concat ", " param_strs in
       let result_ty = Printf.sprintf "!topos.section<\"%s\">" pd.p_name in
-      let offsets_and_total =
-        let acc = ref 0 in
-        let offs = List.map (fun t ->
-          let o = !acc in acc := !acc + mlir_ty_size t; o
-        ) field_tys in
-        (offs, !acc)
-      in
-      let (offsets, total_size) = offsets_and_total in
+      let (placed, total_size) = Carrier.field_layout field_tys in
+      let offsets = List.map fst placed in
       (* Identity head: the payload begins with the place's 8-byte nominal
          type root (LE). Field offsets stay FIELD-region offsets everywhere
          (readers skip the head in the runtime); only the composed buffer is
@@ -7211,7 +7223,12 @@ let emit_program (dr : Desugar.desugar_result) : string =
       ) rd.r_handlers
     ) reductions
   in
-  let all_functions = dr_functions_shaken @ reduction_handler_funcs in
+  (* streams have one lowering, the one that reads a stream where it is
+     consumed: a stream bound to a name is put back where it is used, in
+     every function as in main *)
+  let all_functions =
+    List.map (fun (n, b) -> (n, Inline_seq.inline_seq_lets b))
+      (dr_functions_shaken @ reduction_handler_funcs) in
   (* Two passes, to support forward references between functions (e.g. fun A
    * calling fun B declared later).
    *
@@ -7249,6 +7266,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   (* reset the global monomorphization registry for this run *)
   mono_global := make_mono_registry ();
   hof_inline_stack := [];
+  hof_arg_counter := 0;
   (* Emit only the monomorphic functions (fn_type_params = []). The
      polymorphic ones are emitted on demand as specializations at the end of
      the module. *)
@@ -7278,8 +7296,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
    | Some body ->
        e.ssa_counter <- 0;
        (* A let-inline pass to preserve fusion when the user uses an
-        * intermediate `let a holds Seq.X`. Transforms
-        * `App (Lam (x, _, body), Seq.X)` -> `body[Seq.X/x]` if x appears at
+        * intermediate `let a holds Sequence.X`. Transforms
+        * `App (Lam (x, _, body), Sequence.X)` -> `body[Sequence.X/x]` if x appears at
         * most once. *)
        let body = Inline_seq.inline_seq_lets body in
        emit_main e func_sigs dr.spaces dr.reductions_surface dr.geom_morphisms dr.space_imports dr.internal_funs body

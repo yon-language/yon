@@ -2,35 +2,28 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* naturality_smtcheck.ml
  *
- * SMT-backed verification of naturality via Z3.
+ * SMT-backed verification of a naturality square via Z3. Given LHS and RHS
+ * (already inlined by the symbolic checker, over one variable `input`), Z3 is
+ * asked whether some input makes them differ:
  *
- * Strategy: given LHS = eta(F__N(x)) and RHS = G__N(eta(x)) as surface AST
- * terms (already inlined by the symbolic checker), generate an SMT-LIB
- * formula:
+ *   (assert (not (= <LHS> <RHS>)))   (check-sat)
  *
- *   (declare-const x Real)
- *   (assert (not (= <LHS_smt> <RHS_smt>)))
- *   (check-sat)
+ *   unsat   -> the sides agree on every input: proven
+ *   sat     -> an input where they differ: refuted, with Z3's model
+ *   unknown -> not decided
  *
- * - unsat   -> LHS = RHS for all x: PROVEN
- * - sat     -> there is an x with LHS != RHS: DISPROVEN (Z3 can give a model)
- * - unknown -> the solver does not decide
- *
- * Honest upfront about what it does and does not do:
- *
- *   + Distributivity: 2*(x+3) = 2*x+6 -> UNSAT on (LHS!=RHS) -> PROVEN
- *   + Linear and non-linear rational arithmetic: x*x != x*x+1
- *   + Concrete counterexamples on DISPROVEN
- *
- *   - Only arithmetic expressions (Real). No control flow, no strings, no
- *     complex booleans, no recursion.
- *   - Z3 timeout fixed at 5 seconds
- *   - Only pure mono-parameter funs (we reuse the symbolic checker inlining)
- *   - unknown from Z3 = INCONCLUSIVE (not a disproof)
- *
- * Output: stderr info messages PROVEN / DISPROVEN_BY_SMT(model) / UNKNOWN. *)
+ * The values are the ones the program computes with, never an idealization:
+ *   - Number is an IEEE double, (_ FloatingPoint 11 53), with +, -, *, /
+ *     rounded to nearest-even, as the runtime computes them;
+ *   - Int64 is a 64-bit two's-complement integer, (_ BitVec 64), with +, -, *
+ *     wrapping; division is left out (it is not total);
+ * and two values are the same iff they have the same bits: SMT-LIB `=`,
+ * the identity the runtime uses (NaN is one value, +0 and -0 are two). A
+ * constant is given by its exact bits, never by a decimal rendering. *)
 
 module S = Surface_ast
+
+type carrier = F64 | I64
 
 type smt_result =
   | Smt_proven                    (* Z3 returns unsat on LHS != RHS *)
@@ -38,60 +31,61 @@ type smt_result =
   | Smt_unknown of string         (* Z3 timeout or does not decide *)
   | Smt_unsupported of string     (* expr not translatable to SMT *)
 
-(* Translate a Surface expr to an SMT-LIB string. Supports only:
- *   - LitNumber (Real literal)
- *   - EVar (variable, declared as Real)
- *   - EBinop (+, -, *, /)
- *   - EParen
- *
- * Returns Some smt_str if translatable, None otherwise.
- *
- * The free variables are collected into a set for declare-const. *)
-let rec to_smt (vars : (string, unit) Hashtbl.t) (e : S.expr) : string option =
+let sort = function
+  | F64 -> "(_ FloatingPoint 11 53)"
+  | I64 -> "(_ BitVec 64)"
+
+let bits (n : Int64.t) (width : int) (from : int) : string =
+  String.init width (fun i ->
+    if Int64.logand (Int64.shift_right_logical n (from - 1 - i)) 1L = 1L then '1' else '0')
+
+(* A literal at its carrier, by its exact bits. *)
+let literal (carrier : carrier) (f : float) : string option =
+  match carrier with
+  | F64 ->
+      let b = Int64.bits_of_float f in
+      Some (Printf.sprintf "(fp #b%s #b%s #b%s)"
+              (bits b 1 64) (bits (Int64.shift_left b 1) 11 64)
+              (bits (Int64.shift_left b 12) 52 64))
+  | I64 ->
+      if Float.is_integer f && f >= -9.223372036854775808e18 && f < 9.223372036854775808e18
+      then Some (Printf.sprintf "#b%s" (bits (Int64.of_float f) 64 64))
+      else None
+
+let rec to_smt (carrier : carrier) (vars : (string, unit) Hashtbl.t) (e : S.expr)
+    : string option =
   match e with
-  | S.ELit (S.LitNumber n, _) ->
-      (* Z3 SMT-LIB: numbers negativi richiedono parentesi extra *)
-      if n < 0.0 then Some (Printf.sprintf "(- %g)" (-. n))
-      else Some (Printf.sprintf "%g" n)
+  | S.ELit (S.LitNumber n, _) -> literal carrier n
   | S.EVar (name, _) ->
       Hashtbl.replace vars name ();
       Some name
-  | S.EParen (inner, _) -> to_smt vars inner
+  | S.EParen (inner, _) -> to_smt carrier vars inner
   | S.EBinop (op, l, r, _) ->
-      let smt_op = match op with
-        | S.OpAdd -> Some "+"
-        | S.OpSub -> Some "-"
-        | S.OpMul -> Some "*"
-        | S.OpDiv -> Some "/"
-        | _ -> None  (* mod, lt/gt/eq/and/or not in the arithmetic subset *)
-      in
-      (match smt_op with
-       | None -> None
-       | Some opstr ->
-           (match to_smt vars l, to_smt vars r with
-            | Some ls, Some rs ->
-                Some (Printf.sprintf "(%s %s %s)" opstr ls rs)
-            | _ -> None))
+      let smt_op = match carrier, op with
+        | F64, S.OpAdd -> Some "fp.add RNE" | F64, S.OpSub -> Some "fp.sub RNE"
+        | F64, S.OpMul -> Some "fp.mul RNE" | F64, S.OpDiv -> Some "fp.div RNE"
+        | I64, S.OpAdd -> Some "bvadd" | I64, S.OpSub -> Some "bvsub"
+        | I64, S.OpMul -> Some "bvmul"
+        | _ -> None in
+      (match smt_op, to_smt carrier vars l, to_smt carrier vars r with
+       | Some o, Some ls, Some rs -> Some (Printf.sprintf "(%s %s %s)" o ls rs)
+       | _ -> None)
   | _ -> None
 
-(* Generate the SMT-LIB program: declare-const for all variables, assert
- * (not (= LHS RHS)), check-sat, optional get-model. *)
-let make_smt_program (lhs : S.expr) (rhs : S.expr) : string option =
+(* The SMT-LIB program: the variables at their sort, the negated equality,
+   check-sat, the model. *)
+let make_smt_program (carrier : carrier) (lhs : S.expr) (rhs : S.expr) : string option =
   let vars = Hashtbl.create 4 in
-  match to_smt vars lhs, to_smt vars rhs with
+  match to_smt carrier vars lhs, to_smt carrier vars rhs with
   | Some lhs_smt, Some rhs_smt ->
       let decls = Hashtbl.fold
         (fun name () acc ->
-          Printf.sprintf "(declare-const %s Real)\n" name :: acc)
+          Printf.sprintf "(declare-const %s %s)\n" name (sort carrier) :: acc)
         vars [] in
-      let program =
-        "(set-logic QF_NRA)\n"   (* nonlinear real arithmetic *)
-        ^ String.concat "" decls
-        ^ Printf.sprintf "(assert (not (= %s %s)))\n" lhs_smt rhs_smt
-        ^ "(check-sat)\n"
-        ^ "(get-model)\n"
-      in
-      Some program
+      Some ((match carrier with F64 -> "(set-logic QF_FP)\n" | I64 -> "(set-logic QF_BV)\n")
+            ^ String.concat "" decls
+            ^ Printf.sprintf "(assert (not (= %s %s)))\n" lhs_smt rhs_smt
+            ^ "(check-sat)\n(get-model)\n")
   | _ -> None
 
 (* Run z3 with the formula on stdin, return stdout. 5s timeout. *)
@@ -137,8 +131,8 @@ let parse_z3_result (output : string) : smt_result =
   | _ -> Smt_unknown (Printf.sprintf "z3 output: %s" first)
 
 (* MAIN entry point: given LHS and RHS, decide via Z3. *)
-let check (lhs : S.expr) (rhs : S.expr) : smt_result =
-  match make_smt_program lhs rhs with
+let check ~(carrier : carrier) (lhs : S.expr) (rhs : S.expr) : smt_result =
+  match make_smt_program carrier lhs rhs with
   | None -> Smt_unsupported "expr contains constructs outside the SMT arithmetic subset"
   | Some program ->
       (match run_z3 program with

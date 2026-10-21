@@ -1,18 +1,14 @@
-"""Phase 0 of YON_IMPROVEMENT_PLAN.md (v1.1): the sixteen probes, P-01 .. P-16.
+"""What the checker must refuse, and what it must accept.
 
-Every test states what the CORRECT language must do, not what HEAD does today.
-Three outcomes, three shapes:
+Every test states what the CORRECT language must do. Three shapes:
 
-  * not reproduced  -> a plain test, green today: it guards the property.
-  * defect reproduced (class D) -> xfail(strict=True), reason "DEFECT <item>".
-  * acceptance (class A, the capability does not exist yet)
-                    -> xfail(strict=True), reason "ACCEPTANCE <item>".
+  * the property holds -> a plain test: it guards the property.
+  * a wrong program is accepted, or computes a wrong value -> xfail(strict=True).
+  * a right program is refused or crashes -> xfail(strict=True).
 
-strict=True is the point: the day a fix lands the test XPASSes, the suite turns
-red, and the marker has to be removed on purpose. A failure of an ACCEPTANCE
-test is never evidence against its item (plan, rule 2).
-
-Recorded on HEAD d782ff2 (baseline 1898 passed / 49 skipped / 0 failed).
+strict=True is the point: when the language comes to satisfy the property the
+test XPASSes, the suite turns red, and the marker is removed on purpose. The
+reason of each xfail states the property, not the defect's history.
 """
 import os
 import subprocess
@@ -67,7 +63,7 @@ def _clean_rejection(rc: int, out: str) -> bool:
 
 class ProbeOutcome(AssertionError):
     """The probe's own verdict: the program ran and computed the wrong thing.
-    A DEFECT xfail whose defect shows as a wrong result names this type in
+    An xfail whose defect shows as a wrong result names this type in
     `raises=`, so a broken PRECONDITION (the probe program no longer compiles,
     a helper's plain assert) fails the test instead of passing as the expected
     failure."""
@@ -78,7 +74,7 @@ def _verdict(ok: bool, msg: str):
         raise ProbeOutcome(msg)
 
 
-# --- P-01 (D) S-01: strict positivity ----------------------------------------
+# --- strict positivity ---------------------------------------------------------
 
 _BAD = """\
 place Bad { f Bad -> Number }
@@ -91,13 +87,13 @@ place Entry {
 """
 
 
-def test_p01_checker_terminates_on_negative_place(tmp_path):
-    """The guarantee S-01 protects: the checker never diverges. Not reproduced
-    on HEAD: the place construction `.-> Bad {...}` is opaque to the reducer, so
-    the self-application is never unfolded (the TimeoutExpired would be the
-    defect). Terminating is not enough: the program asks `clear` to prove
-    Same(boom(n), 0), which is false, so the checker must REJECT it, cleanly
-    (a stable [E....] code, no uncaught OCaml exception). HEAD: E2001."""
+def test_checker_terminates_on_negative_place(tmp_path):
+    """The checker never diverges. The place construction `.-> Bad {...}` is
+    opaque to the reducer, so the self-application is never unfolded (a
+    TimeoutExpired would mean it diverged). Terminating is not enough: the
+    program asks `clear` to prove Same(boom(n), 0), which is false, so the
+    checker must REJECT it, cleanly (a stable [E....] code, no uncaught OCaml
+    exception)."""
     proj = _project(tmp_path, _BAD, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out", timeout=60)
     assert "Fatal error" not in out, f"the checker crashed instead of deciding:\n{out}"
@@ -106,20 +102,18 @@ def test_p01_checker_terminates_on_negative_place(tmp_path):
         f"code (rc={rc}):\n{out}")
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT S-01: no strict-positivity check; "
-                   "`place Bad { f Bad -> Number }` is accepted by the frontend")
-def test_p01_negative_place_rejected(tmp_path):
+@pytest.mark.xfail(strict=True, reason="a place that occurs negatively in its own "
+                   "fields, `place Bad { f Bad -> Number }`, is not strictly positive")
+def test_negative_place_rejected(tmp_path):
     entry = "place Bad { f Bad -> Number }\nplace Entry { fun main(): Number { return 0 } }\n"
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out")
     assert _clean_rejection(rc, out), out
 
 
-# --- P-02, P-03 (D) S-02: parametric generics ------------------------------
+# --- parametricity of generics ------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="DEFECT S-02: field access on an abstract T "
-                   "passes the checker; only emit_mlir dies (uncaught Failure)")
-def test_p02_no_field_access_on_abstract_t(tmp_path):
+def test_no_field_access_on_abstract_t(tmp_path):
     entry = """\
 place Entry {
   fun bad<T>(x: T): Number { return x.foo }
@@ -130,10 +124,8 @@ place Entry {
     assert _clean_rejection(rc, out), out
 
 
-@pytest.mark.xfail(strict=True, reason="DEFECT S-02: a T -> T that is not the "
-                   "identity type-checks and runs")
 @pytest.mark.parametrize("body", ["7", "x + 1", '"hello"'])
-def test_p03_t_to_t_is_the_identity(tmp_path, body):
+def test_t_to_t_is_the_identity(tmp_path, body):
     entry = f"""\
 place Entry {{
   fun notid<T>(x: T): T {{ return {body} }}
@@ -144,12 +136,66 @@ place Entry {{
     assert _clean_rejection(rc, out), out
 
 
-# --- P-04, P-05 (D) S-03: Int64 precision ----------------------------------
+@pytest.mark.parametrize("body", ["x(1)", "x.foo", "fst(x)"])
+def test_an_abstract_t_admits_no_operation(tmp_path, body):
+    """Inside a generic function a T can only be passed on."""
+    entry = f"""\
+place Entry {{
+  fun bad<T>(x: T): Number {{ return {body} }}
+  fun main(): Number {{ return 0 }}
+}}
+"""
+    rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
+    assert _clean_rejection(rc, out), out
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="DEFECT S-03: Int64 is carried and computed "
-                   "as f64 (arith.mulf/addf), 2^53+1 is lost before any List")
-def test_p04_int64_exact_past_2_53_through_list(tmp_path):
+
+def test_an_abstract_t_admits_no_literal_test(tmp_path):
+    """A test against a literal would reveal T: refused."""
+    entry = """\
+place Entry {
+  fun peek<T>(x: T): Number {
+    be r holds 0
+    when x is 5 { r = 1 }
+    return r
+  }
+  fun main(): Number { return peek(5) }
+}
+"""
+    rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
+    assert _clean_rejection(rc, out), out
+
+
+def test_a_generic_call_is_typed_at_its_instance(tmp_path):
+    """identity(41) is a Number, first("ok", 0) a String; a generic function
+    passed as a value fits the arrow it is passed to."""
+    entry = """\
+place Entry {
+  fun identity<T>(x: T): T { return x }
+  fun first<A, B>(x: A, y: B): A { return x }
+  fun apply(f: Number -> Number, x: Number): Number { return f(x) }
+  fun main(): Number {
+    return identity(40) + String.length(first("ok", 0)) + apply(identity, 0)
+  }
+}
+"""
+    assert _compile_and_run(tmp_path, entry) == 42
+
+
+def test_a_generic_result_is_not_another_type(tmp_path):
+    """The instance chosen by the arguments is the type of the result."""
+    entry = """\
+place Entry {
+  fun identity<T>(x: T): T { return x }
+  fun main(): Number { return String.length(identity(5)) }
+}
+"""
+    rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
+    assert _clean_rejection(rc, out), out
+
+
+# --- Int64 precision -----------------------------------------------------------
+
+def test_int64_exact_past_2_53_through_list(tmp_path):
     entry = """\
 place Entry {
   fun big(): Int64 { return Int64.ipow_ok(2, 53) + 1 }
@@ -165,10 +211,7 @@ place Entry {
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="DEFECT S-03: 2^53+1 arrives even at the "
-                   "remote Space (upstream loss, see P-04)")
-def test_p05_int64_exact_across_spaces(tmp_path):
+def test_int64_exact_across_spaces(tmp_path):
     (tmp_path / "echo.yon").write_text("""\
 place Entry {
   fun odd_remote(x: Int64): Number { return if Int64.is_odd(x) then 1 else 0 }
@@ -195,7 +238,99 @@ place Entry {
     _verdict(rc == 7, f"parity bits a + 2b + 4c = {rc}, expected 7 (all three odd)")
 
 
-# --- P-06 (D) S-04: the Widen law under overflow ---------------------------
+# --- Int64 is Z/2^64 at runtime, as the ring laws prove it ------------------------
+
+def test_int64_is_exact_past_2_53(tmp_path):
+    entry = """\
+place Entry {
+  fun big(): Int64 { return 9007199254740992 + 1 }
+  fun base(): Int64 { return 9007199254740992 }
+  fun main(): Number { return if big() - base() == 1 then 1 else 0 }
+}
+"""
+    assert _compile_and_run(tmp_path, entry) == 1
+
+
+def test_int64_wraps_modulo_2_64(tmp_path):
+    entry = """\
+place Entry {
+  fun main(): Number {
+    be a holds if Int64.max_value() + 1 == Int64.min_value() then 1 else 0
+    be b holds if Int64.min_value() - 1 == Int64.max_value() then 10 else 0
+    be c holds if Int64.max_value() > 0 then 100 else 0
+    return a + b + c
+  }
+}
+"""
+    assert _compile_and_run(tmp_path, entry) == 111
+
+
+def test_int64_crosses_every_uniform_slot_bit_for_bit(tmp_path):
+    """Int64.MAX, Int64.MIN and 2^53+1 come back equal through a List, a
+    coproduct payload and a closure capture."""
+    entry = """\
+place Entry {
+  fun via_list(x: Int64): Int64 { return List.head(List.cons(x, List.empty(0))) }
+  fun wrap(x: Int64): (Lit(Int64) | Nil) { return hit(Lit, x) }
+  fun unwrap(e: (Lit(Int64) | Nil)): Int64 { return match e { Lit(n) => n, Nil => 0 } }
+  fun adder(k: Int64): Int64 -> Int64 { return fun(y: Int64) => k + y }
+  fun same(x: Int64): Number {
+    be f holds adder(x)
+    be a holds if via_list(x) == x then 1 else 0
+    be c holds if unwrap(wrap(x)) == x then a else 0
+    return if f(0) == x then c else 0
+  }
+  fun main(): Number {
+    return same(Int64.max_value()) + same(Int64.min_value()) * 10
+         + same(9007199254740992 + 1) * 100
+  }
+}
+"""
+    rc = _compile_and_run(tmp_path, entry)
+    assert rc == 111, f"Int64 through the slots: {rc}"
+
+
+def test_an_integer_literal_past_2_53_is_exact(tmp_path):
+    """9007199254740993 at Int64 is that integer (odd), and the largest
+    literal is Int64.MAX; one past it is refused."""
+    entry = """\
+place Entry {
+  fun odd(): Int64 { return 9007199254740993 }
+  fun top(): Int64 { return 9223372036854775807 }
+  fun main(): Number {
+    be a holds if Int64.is_odd(odd()) then 1 else 0
+    return if top() == Int64.max_value() then a + 10 else a
+  }
+}
+"""
+    assert _compile_and_run(tmp_path, entry) == 11
+    over = "place Entry {\n  fun m(): Int64 { return 9223372036854775808 }\n  fun main(): Number { return 0 }\n}\n"
+    (tmp_path / "over").mkdir()
+    rc, out = _compile(_project(tmp_path / "over", over), tmp_path / "out2")
+    assert _clean_rejection(rc, out), out
+
+
+def test_int64_to_text_writes_its_exact_digits(tmp_path):
+    entry = """\
+place Entry {
+  fun main(): Number {
+    be _a holds String.print(Int64.to_text(Int64.max_value()))
+    be _b holds String.print(Int64.to_text(Int64.min_value()))
+    be _c holds String.print(Int64.to_text(9007199254740993))
+    be _d holds String.print(Int64.to_text(0 - 42))
+    return 0
+  }
+}
+"""
+    proj = _project(tmp_path, entry)
+    rc, out = _compile(proj, tmp_path / "out")
+    assert rc == 0, out
+    r = subprocess.run([str(tmp_path / "out")], capture_output=True, text=True, timeout=30)
+    assert r.stdout.split() == ["9223372036854775807", "-9223372036854775808",
+                                "9007199254740993", "-42"], r.stdout
+
+
+# --- the Widen law under overflow ----------------------------------------------
 
 _WIDEN = """\
 place Entry {
@@ -208,22 +343,23 @@ place Entry {
 """
 
 
-def test_p06_widen_additive_law_today(tmp_path):
-    """RECORDS the state of S-04: the law holds at Int32.MAX + 1 today only
-    because Int32 is carried as f64 and never overflows. This test is the
-    alarm: it goes red the day Int32 becomes a real i32 (see the next test)."""
+def test_widen_additive_law_at_int32_max(tmp_path):
+    """widen(a + b) = widen(a) + widen(b) at Int32.MAX + 1. It holds while
+    Int32 is carried as f64 and never overflows; it is the alarm that goes red
+    when Int32 becomes a wrapping i32 and the law needs its overflow side
+    condition (see the next test)."""
     assert _compile_and_run(tmp_path, _WIDEN % "holds_law") == 1
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="DEFECT S-04 precondition: Int32 + Int32 is "
-                   "arith.addf on f64; Int32.MAX + 1 = 2147483648, not an Int32")
-def test_p06_int32_addition_wraps(tmp_path):
+                   reason="Int32 addition is modular: Int32.MAX + 1 "
+                   "is negative, never 2147483648")
+def test_int32_addition_wraps(tmp_path):
     rc = _compile_and_run(tmp_path, _WIDEN % "wrapped")
     _verdict(rc == 1, f"Int32.MAX + 1 did not wrap below 0 (exit {rc}, expected 1)")
 
 
-# --- P-07 (D) S-05: hygiene of generated names ------------------------------
+# --- hygiene of generated names ------------------------------------------------
 
 _LEDGER = """\
 place Entry {
@@ -248,30 +384,30 @@ def _call_remote(tmp: Path, fn: str) -> int:
 
 
 @pytest.mark.slow
-def test_p07_double_underscore_inside_name_is_exported(tmp_path):
+def test_double_underscore_inside_name_is_exported(tmp_path):
     assert _call_remote(tmp_path, "a__b") == 108
 
 
 @pytest.mark.slow
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="DEFECT S-05: user functions named __x / "
-                   "yon_rt_x silently drop out of the wire dispatch table")
+                   reason="a user name is never confused with a "
+                   "generated one: __x and yon_rt_x are exported like any function")
 @pytest.mark.parametrize("fn,expected", [("__conto", 102), ("yon_rt_saldo", 104)])
-def test_p07_reserved_prefix_names_are_exported(tmp_path, fn, expected):
+def test_reserved_prefix_names_are_exported(tmp_path, fn, expected):
     rc = _call_remote(tmp_path, fn)
     _verdict(rc == expected, f"remote {fn}(100) exited {rc}, expected {expected}")
 
 
-# --- P-08 (D) S-06: out-of-range sentinels ----------------------------------
+# --- out-of-range access -------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="DEFECT S-06: in-band sentinels "
-                   "(Vec.get OOB -> 0.0, char_at/index_of -> -1)")
+@pytest.mark.xfail(strict=True, reason="an out-of-range access is a typed failure, "
+                   "never an in-band value such as 0.0 or -1")
 @pytest.mark.parametrize("expr,sentinel_exit", [
     ("Vec.get(Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30), 1000) + 1", 1),
     ('String.char_at("abc", 3) + 100', 99),
     ('String.index_of("abc", 122) + 100', 99),
 ])
-def test_p08_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
+def test_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
     """A failure must be a typed value the program has to handle. Either the
     sentinel-producing program is rejected, or it no longer yields the sentinel."""
     proj = _project(tmp_path, f"place Entry {{ fun main(): Number {{ return {expr} }} }}\n")
@@ -279,11 +415,11 @@ def test_p08_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
     assert rc != 0 or _run(tmp_path / "out") != sentinel_exit
 
 
-# --- P-09 (D? -> A on HEAD) T-06: internal places ---------------------------
+# --- internal places -----------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="ACCEPTANCE T-06: `internal` applies to fun "
-                   "only (parser.mly:1016,1032); an internal place is a parse error")
-def test_p09_internal_place_match_from_outside_rejected(tmp_path):
+@pytest.mark.xfail(strict=True, reason="`internal` hides a place from outside its "
+                   "Space, so matching on its arms from outside is refused")
+def test_internal_place_match_from_outside_rejected(tmp_path):
     entry = "place Entry { fun main(): Number { return match A { A => 1, B => 2 } } }\n"
     files = {"w/Topos.yon": "topos WTopos where {\n}\n",
              "w/Secret.yon": "internal place Secret { this > A :U B }\n"}
@@ -292,11 +428,11 @@ def test_p09_internal_place_match_from_outside_rejected(tmp_path):
     assert _clean_rejection(rc, out) and "PARSE ERROR" not in out, out
 
 
-# --- P-10 (D? -> checked on fields) T-07: `this <` --------------------------
+# --- subobjects: `this <` -------------------------------------------------------
 
-def test_p10_subobject_with_incompatible_field_rejected(tmp_path):
-    """Not reproduced: the mono is checked structurally on fields (by name and
-    type, tycheck.ml:3245), not merely declared. Operations are not probed."""
+def test_subobject_with_incompatible_field_rejected(tmp_path):
+    """The mono `this < B` is checked structurally on fields, by name and type,
+    not merely declared."""
     entry = """\
 place Entry {
   fun read(b: B): Number { return b.value }
@@ -311,11 +447,11 @@ place Entry {
     assert _clean_rejection(rc, out) and "subcontains" in out, out
 
 
-# --- P-11 (A) T-03: a cell handle must not outlive its reset ----------------
+# --- a cell handle must not outlive its activation --------------------------
 
-def test_p11_escaping_closure_over_cell(tmp_path):
-    """S-08 closed: the closure over a cell is not mobile and is stopped at the
-    return (before: exit 99, another activation's cell read silently)."""
+def test_escaping_closure_over_cell(tmp_path):
+    """A closure over a cell is not mobile and is stopped at the return;
+    otherwise it would read another activation's cell (exit 99)."""
     entry = """\
 place Entry {
   fun mk(): Number -> Number { be c holds 10  c = 20  return fun(y: Number) => y + c }
@@ -329,13 +465,13 @@ place Entry {
     assert _clean_rejection(rc, out) or (rc == 0 and _run(tmp_path / "out") == 21)
 
 
-# S-08: every route out of the activation that owns a cell. The judgment must
+# Every route out of the activation that owns a cell. The judgment must
 # be conservative (never "does not escape" for a value that escapes), so each
 # route the analysis could miss is a case: mutating any part of it (the lambda
 # capture, the fixpoint over bindings, the walk over every expression form, the
 # implicit tail through compound statements, the allocation of a cell, the
 # tainted parameters at a store or on the wire) turns at least one case green.
-_S08_ESCAPES = {
+_CELL_ESCAPES = {
     # leaving the call
     "alias": "fun mk(): Number -> Number { be c holds 10  c = 20  be g holds fun(y: Number) => y + c  be h holds g  return h }",
     "field": "fun mk(): Box { be c holds 10  c = 20  return .-> Box { f (fun(y: Number) => y + c) } }",
@@ -358,6 +494,11 @@ _S08_ESCAPES = {
                           "k = fun(y: Number) => y + c  return k }",
     "assigned_after_the_return": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  be i holds 0  "
                                  "while i < 2 do { when i > 0 { return k }  k = fun(y: Number) => y + c  i = i + 1 }  return k }",
+    "assigned_in_a_while_then_returned": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
+                                         "be i holds 0  while i < 2 do { k = fun(y: Number) => y + c  i = i + 1 }  return k }",
+    "stored_before_its_assignment_in_a_while": "fun mk(out: Space): Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
+                                               "be i holds 0  while i < 2 do { when i > 0 { be _s holds Space.set(out, k) }  "
+                                               "k = fun(y: Number) => y + c  i = i + 1 }  return 0 }",
     "alias_before_assignment": "fun mk(): Number -> Number { be c holds 10  c = 20  be k holds fun(y: Number) => y  "
                                "be h holds fun(y: Number) => y  be i holds 0  "
                                "while i < 2 do { h = k  k = fun(y: Number) => y + c  i = i + 1 }  return h }",
@@ -381,20 +522,29 @@ _S08_ESCAPES = {
                              "return sendit(ch, fun(y: Number) => y + c) }",
 }
 
-_S08_PLACES = ("place Box { f Number -> Number }\nplace P { v Number }\nplace Q { v Number }\n"
+_CELL_PLACES = ("place Box { f Number -> Number }\nplace P { v Number }\nplace Q { v Number }\n"
                "place Bit { this > One :U Zero }\n")
 
 
-@pytest.mark.parametrize("form", sorted(_S08_ESCAPES))
-def test_s08_every_escape_route_is_rejected(tmp_path, form):
-    entry = (f"{_S08_PLACES}place Entry {{\n  {_S08_ESCAPES[form]}\n"
+# A route that leaves through a `return` inside a loop is closed by structure:
+# a return stands only where its body ends, so the program is refused before
+# mobility is asked.
+_CLOSED_BY_STRUCTURE = {"return_in_while", "assigned_after_the_return"}
+
+
+@pytest.mark.parametrize("form", sorted(_CELL_ESCAPES))
+def test_every_escape_route_of_a_cell_is_rejected(tmp_path, form):
+    entry = (f"{_CELL_PLACES}place Entry {{\n  {_CELL_ESCAPES[form]}\n"
              "  fun main(): Number { return 0 }\n}\n")
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Box", "P", "Q", "Bit"]\n')
     rc, out = _compile(proj, tmp_path / "out")
-    assert _clean_rejection(rc, out) and ("outlive" in out or "crosses" in out), out
+    if form in _CLOSED_BY_STRUCTURE:
+        assert _clean_rejection(rc, out) and "[E2002]" in out, out
+    else:
+        assert _clean_rejection(rc, out) and ("outlive" in out or "crosses" in out), out
 
 
-def test_s08_closure_sent_to_another_space_is_rejected(tmp_path):
+def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
     """The cross-Space call is a wire: the argument leaves the process."""
     (tmp_path / "echo.yon").write_text(
         "place Entry {\n  fun use_remote(g: Number -> Number): Number { return g(1) }\n"
@@ -429,30 +579,30 @@ def test_s08_closure_sent_to_another_space_is_rejected(tmp_path):
     ("fun mk(): Number { be ch holds Wire.make(4)  be c holds 10  c = 20  be g holds fun(y: Number) => y + c  "
      "be _s holds Wire.send(ch, g(1))  return Wire.recv(ch) }", 21),
 ])
-def test_s08_mobile_uses_are_untouched(tmp_path, body, expected):
+def test_mobile_uses_of_a_cell_are_untouched(tmp_path, body, expected):
     entry = f"place Entry {{\n  {body}\n  fun main(): Number {{ return mk() }}\n}}\n"
     assert _compile_and_run(tmp_path, entry) == expected
 
 
-# --- P-12 (D? -> recorded) L-05: comprehension subobject policy -------------
+# --- comprehension subobjects --------------------------------------------------
 
 @pytest.mark.parametrize("arg,extra", [
     ("3", ""),                                                          # violating literal
     ("three(1)", "  fun three(k: Number): Number { return k + 2 }\n"),  # computed
     ("loopy(0)", "  fun loopy(k: Number): Number { return if k > 100 then k else loopy(k + 1) }\n"),
 ])
-def test_p12_bare_value_never_inhabits_a_subobject(tmp_path, arg, extra):
-    """RECORDED POLICY on HEAD: `{ n : A where P }` is a Sigma; a bare value is
-    never accepted for it - neither proved, nor checked at runtime, nor silently
-    admitted. A witness is required. (Boolean predicates such as `n > 0` do not
-    parse: the predicate is a type_expr, parser.mly:946.)"""
+def test_bare_value_never_inhabits_a_subobject(tmp_path, arg, extra):
+    """`{ n : A where P }` is a Sigma; a bare value is never accepted for it -
+    neither proved, nor checked at runtime, nor silently admitted. A witness is
+    required. (The predicate is a type, so a Boolean such as `n > 0` does not
+    parse there.)"""
     entry = (f"place Entry {{\n  fun five(x: {{ n : Number where Same(n, 5) }}): Number {{ return 0 }}\n"
              f"{extra}  fun main(): Number {{ return five({arg}) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out) and "five: parameter x expects" in out, out
 
 
-# --- P-13 (D) V-05: DomainError survives lowering ---------------------------
+# --- DomainError survives lowering ---------------------------------------------
 
 _HALF = """\
 place Entry {
@@ -471,16 +621,16 @@ place Entry {
     (_HALF % "0 - 4", 30),
     (_HALF % "8", 1),
 ])
-def test_p13_domain_error_reaches_the_caller(tmp_path, entry, expected):
-    """Not reproduced: the error arm survives MLIR lowering, also propagated."""
+def test_domain_error_reaches_the_caller(tmp_path, entry, expected):
+    """The error arm survives MLIR lowering, also when propagated."""
     assert _compile_and_run(tmp_path, entry) == expected
 
 
-# --- P-14 (A) T-04: effects escaping their cover ----------------------------
+# --- effects escaping their cover ----------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="ACCEPTANCE T-04: an arrow type carries no "
-                   "latent effect; `apply` (no visits) runs an Output closure")
-def test_p14_latent_effect_in_arrow_type(tmp_path):
+@pytest.mark.xfail(strict=True, reason="an arrow type carries its latent effect, so "
+                   "a function without `visits Output` cannot run an Output closure")
+def test_latent_effect_in_arrow_type(tmp_path):
     entry = """\
 place Entry {
   fun announce(n: Number): Number visits Output { be _u holds Output.print("hi")  return n }
@@ -493,11 +643,11 @@ place Entry {
     assert _clean_rejection(rc, out) and "visits" in out, out
 
 
-# --- P-15 (A) D-03: static deadlock analysis --------------------------------
+# --- static deadlock analysis --------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="ACCEPTANCE D-03: mutually synchronous RPC "
-                   "between two Spaces compiles without a diagnostic")
-def test_p15_mutual_sync_rpc_flagged(tmp_path):
+@pytest.mark.xfail(strict=True, reason="mutually synchronous calls between two "
+                   "Spaces can deadlock, and the compiler says so")
+def test_mutual_sync_rpc_flagged(tmp_path):
     (tmp_path / "alpha.yon").write_text("""\
 import beta::pong from Beta
 
@@ -519,11 +669,11 @@ place Entry {
     assert any(rc != 0 and "deadlock" in out.lower() for rc, out in outs), outs
 
 
-# --- P-16 (A) T-02: purity of dependent-type indices ------------------------
+# --- purity of dependent-type indices ------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="ACCEPTANCE T-02: `clear c ++ clear c` with a "
-                   "write to c in between is judged composable by the checker")
-def test_p16_cell_read_in_type_index(tmp_path):
+@pytest.mark.xfail(strict=True, reason="a type index is pure: `clear c ++ clear c` "
+                   "with a write to c in between does not compose")
+def test_cell_read_in_type_index(tmp_path):
     entry = """\
 place Entry {
   fun main(): Number {

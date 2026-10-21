@@ -8,9 +8,9 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
-- productions REDUCED by a fixture (Menhir-verified): **85 / 85** surface (+3 structural allowlisted)
-- deviations enforced today: **20**
-- deviations registered as 1.2 debt (`enforce_1_2`): **1**
+- productions REDUCED by a fixture (Menhir-verified): **88 / 88** surface (+3 structural allowlisted)
+- deviations rejected: **20**
+- deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
 |---|---|---|---|---|
@@ -29,7 +29,7 @@ from them; the `.yon` files are the specification, not this text.
 | coproduct | `canonical` | accept | 42 | — |
 | entrypoint | `canonical` | accept | 0 | — |
 | entrypoint | `dev_b` | reject_clean | 1 | `ENTRYPOINT ERROR` |
-| entrypoint | `dev_c` | enforce_1_2 | 0 | — |
+| entrypoint | `dev_c` | accepted_deviation | 0 | — |
 | error | `canonical` | accept | 0 | — |
 | expression | `canonical` | accept | 42 | — |
 | expression | `dev_arity` | reject_clean | 1 | `expected 1 arguments, got 2` |
@@ -58,10 +58,10 @@ from them; the `.yon` files are the specification, not this text.
 | nat_transform | `canonical` | accept | 0 | — |
 | new | `call_statement` | accept | 42 | — |
 | new | `canonical` | accept | 42 | — |
-| pattern | `canonical` | accept | 0 | — |
+| pattern | `canonical` | accept | 42 | — |
 | place | `canonical` | accept | 0 | — |
 | produce | `canonical` | accept | 42 | — |
-| produce | `dev_assign` | reject_clean | 1 | `not yet supported` |
+| produce | `dev_assign` | reject_clean | 1 | `is not supported inside` |
 | produce | `stmt_form` | accept | 42 | — |
 | reduction | `canonical` | accept | 0 | — |
 | repeat | `canonical` | accept | 0 | — |
@@ -81,11 +81,11 @@ from them; the `.yon` files are the specification, not this text.
 | when | `canonical` | accept | 42 | — |
 | while_loop | `canonical` | accept | 42 | — |
 
-## 1.2 enforcement debt
+## Accepted deviations
 
-Deviations the compiler accepts today and must reject in 1.2. When the check
-lands, the fixture starts failing to compile and its `.expect` flips to
-`reject_clean` with a `match`; this gate then verifies the fix.
+Deviations the language should reject and the compiler accepts. A checker
+that rejects one makes its fixture fail to compile; its `.expect` then flips
+to `reject_clean` with a `match`, and this gate verifies the check.
 
 - `entrypoint/dev_c`
 

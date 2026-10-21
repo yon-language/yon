@@ -44,7 +44,7 @@ timeout 20 ./wsensor >/dev/null 2>&1
 timeout 20 ./wdash >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: wire scenario rc=$rc (expected 36)"; fail=1; }
 # Scenario 4: wire subscription. The Sensors Space declares a producer
-# (a public function returning stream of number); the subscriber opens
+# (a public function returning Wire<Number>); the subscriber opens
 # wire to Sensors, awaits(readings), drains .stream with fold. The
 # server is spawned by the runtime on first contact; the channel id is
 # the producer's dispatch selector (nominal, no literals anywhere).
@@ -53,7 +53,7 @@ timeout 20 ./wdash >/dev/null 2>&1; rc=$?
 timeout 20 ./subscriber >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: subscription scenario rc=$rc (expected 36)"; fail=1; }
 # Scenario 5: wire subscription whose stream element is a PLACE (DTO), not a
-# scalar. The Meteo Space declares a producer returning stream of Reading
+# scalar. The Meteo Space declares a producer returning Wire<Reading>
 # (a fixed-size all-scalar place {temp, humidity}); it emits three places. The
 # subscriber awaits(samples), drains .stream and folds a + r.temp. Each place
 # crosses the process boundary by value: the pump flattens it to bytes, the
@@ -63,7 +63,7 @@ timeout 20 ./subscriber >/dev/null 2>&1; rc=$?
 timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
 [ "$rc" = "36" ] || { echo "CROSS-SPACE FAIL: DTO-place scenario rc=$rc (expected 36)"; fail=1; }
 # Scenario 6: a place with a STRING field crosses the wire. The Weather Space
-# declares a producer returning stream of Reading {temp number, label text} and
+# declares a producer returning Wire<Reading> {temp number, label text} and
 # emits three. The subscriber awaits(forecasts), drains .stream and folds
 # a + r.temp + String.length(r.label). Seal 2 of the wire-DTO wormhole: the
 # recursive length-prefixed frame carries the string content by value, rebuilt

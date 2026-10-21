@@ -40,32 +40,29 @@
       "operation", OPERATION;
       "cell", CELL;             (* higher-cell inside a place (CATT-style) *)
 
-      (* Constructions that build new objects from old ones, named after their
-         universal property. A `geomorph` is a map between two whole
-         worlds (categories). `pullback`/`pushout` are the categorical limit/
-         colimit: a pullback glues two maps over a shared target, a pushout
-         over a shared source. `over X` builds the slice category — objects
-         equipped with a chosen map down to X. `topology` equips a world with
-         a notion of covering (a Grothendieck topology). `subset_of` makes one
-         world a subcategory of another. *)
+      (* A `geomorph` is a geometric morphism between two whole worlds
+         (categories): inside it, `pull` is the inverse image f^* and `push`
+         the direct image f_*; `exact push` declares f_* exact (f^* is left
+         exact by definition). `over X` builds the slice category — objects
+         equipped with a chosen map down to X. *)
       "geomorph", GEOM_MORPHISM;
       "pull", PULL;
       "push", PUSH;
       "over", OVER;
 
       (* A `functor` is a first-class map between two worlds that preserves the
-         categorical structure (it sends objects to objects and maps to maps,
-         respecting identity and composition). `functorial` marks an operation
-         that behaves this way. `forward`/`backward`/`bi` give a functor's
-         direction. *)
+         categorical structure: it sends objects to objects and maps to maps,
+         respecting identity and composition. Its direction is its header,
+         `from W to V`; its laws are `law identity` and `law composition`.
+         Transport along a morphism of worlds is a functor. *)
       "functor", FUNCTOR;
 
       (* Algebra on a place: `operation f(...) uses algebra A` binds an
          operation to a named algebra from the certified catalog (Additive,
-         TropicalMax, ...). `law` declares an algebraic law the operation must
-         satisfy (commutative, associative, ...); the compiler verifies the
-         declared laws against the catalog and rejects a false claim.
-         `verify P` then instantiates the verified place as a runnable handle. *)
+         TropicalMax, ...). `law` names an obligation: on a functor, `identity`
+         or `composition`; on a place or a morph, an algebraic law of its
+         operations (commutative, associative, ...). Declared is claimed;
+         undeclared is not claimed. *)
       "law", LAW;
       "uses", USES;
       "algebra", ALGEBRA;
@@ -73,18 +70,16 @@
 
       (* The explicit vocabulary of category theory, exposed directly in the
          surface language. A `topos` is a category rich enough to do logic
-         inside it (it has a subobject classifier, `prop` below). `objects`/
-         `morphisms` list its content; `terminal` is the one-point object;
-         `morph` declares a single map; `on object`/`on morphism ... via ...`
+         inside it (it has a subobject classifier, `prop` below). Its objects
+         are the places of its directory; each `morphism` line declares one of
+         its maps; `morph` declares a single map between topoi; `on object`/`on morphism ... via ...`
          say how a functor acts on each. A `nat transform` (natural
          transformation) is a map *between two functors* F and G: for each
          object it gives a map F(X) -> G(X), coherently. *)
       "topos", TOPOS_KW;
-      (* `objects` (OBJECTS_KW) RETIRED with topos-per-space: a topos no longer
-       * declares an inline `objects { }` block; objects are filesystem-derived.
-       * The token had no grammar production left (orphan) -> removed. *)
-      (* `morphism` (singular): keyword declaring a single morphism inside a
-         topos's `morphisms { }` block, and used in `on morphism N via M`. *)
+      (* A topos has no `objects` word: its objects are filesystem-derived. *)
+      (* `morphism`: one line per morphism of a topos, and the word of the
+         `on morphism N via M` clause. *)
       "morphism", MORPHISM_KW;
       "prop", PROP_KW;
       "each", EACH;             (* `for each X by Y` inside a nat transform *)
@@ -97,7 +92,8 @@
          the requirement that the inverse image preserve finite limits. *)
       "exact", EXACT_KW;
 
-      (* Error model. `error E subcontains Base { ... }` declares an error as a
+      (* Error model. An `error` with `this < Base` in its body (see
+         examples/error_morphism/db/QueryError.yon) declares an error as a
          place that is a sub-object of Base (an injection E -> Base: every E
          is a Base, so E can be used wherever a Base is expected). `place P
          on error E` declares the error morphism P -> E: on failure, P is
@@ -142,8 +138,8 @@
          where the logic is not assumed two-valued. *)
       "heyting", HEYT_INT_KW;
 
-      (* Stream back-pressure modifiers (buffer/drop) were removed in v1.1:
-         they were parsed but never consumed (TyStream had no policy field). *)
+      (* No stream back-pressure modifiers (buffer/drop): a stream type has no
+         policy field, so a modifier would be parsed and never consumed. *)
 
       (* Control flow *)
       "when", WHEN;
@@ -180,8 +176,8 @@
       (* Operators (word form) *)
       "and", AND;
       "or", OR;
-      (* `all` (EAll, "all P where c") removed in v1.1: the condition was
-         dropped at desugar and the construct had no lowering. *)
+      (* No `all` ("all P where c"): the condition would be dropped at
+         desugar and the construct has no lowering. *)
       "where", WHERE;
       
       (* View keywords *)
@@ -256,8 +252,8 @@
       "along", ALONG;
       "through", THROUGH;
 
-      (* Note: duration literals (100ms/5s/3min) were removed in v1.1. `s`,
-         `ms`, etc. are now ordinary identifiers; `2s` lexes as NUM_LIT + IDENT. *)
+      (* No duration literals (100ms/5s/3min): `s`, `ms`, etc. are ordinary
+         identifiers; `2s` lexes as NUM_LIT + IDENT. *)
     ]
   
   let ident_or_keyword s =
@@ -279,13 +275,17 @@ rule token = parse
   | "//" [^ '\n']*   { token lexbuf }   (* line comment *)
   | "/*"             { block_comment lexbuf; token lexbuf }
   
-  (* Duration literals (100ms / 5s / 3min) and currency codes were removed in
-     v1.1: a duration was just a number (milliseconds) and the distinction
-     earned no test. `2s` now lexes as NUM_LIT 2 + IDENT s — the general rule. *)
+  (* No duration literals (100ms / 5s / 3min) and no currency codes: a
+     duration is just a number (milliseconds). `2s` lexes as NUM_LIT 2 +
+     IDENT s — the general rule. *)
 
   (* Numbers *)
   | digit+ '.' digit+ as n  { NUM_LIT (float_of_string n) }
-  | digit+ as n              { NUM_LIT (float_of_string n) }
+  | digit+ as n              { let p = Lexing.lexeme_start_p lexbuf in
+                               Hashtbl.replace Surface_ast.exact_int_literals
+                                 (p.Lexing.pos_fname, p.Lexing.pos_lnum,
+                                  p.Lexing.pos_cnum - p.Lexing.pos_bol) n;
+                               NUM_LIT (float_of_string n) }
   
   (* String literals *)
   | '"'              { string_lit (Buffer.create 32) lexbuf }

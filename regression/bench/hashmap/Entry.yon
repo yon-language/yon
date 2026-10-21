@@ -19,7 +19,7 @@ place Entry {
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
-  fun build_map(n: Number): Number {
+  fun build_map(n: Number): HashMap<Number, Number> {
     be mapc holds Space.make(HashMap.empty())
     be i holds Space.make(0)
     iter n do { be k holds Space.get(i)
@@ -27,10 +27,10 @@ place Entry {
                 be _2 holds Space.set(i, k + 1) }
     return Space.get(mapc)
   }
-  fun timed_get(mp: Number, m: Number): Number visits Output {
+  fun timed_get(mp: HashMap<Number, Number>, m: Number): Number visits Output {
     be acc holds Space.make(0)
     be t0 holds Time.now_ns(0)
-    iter m do { be v holds HashMap.get(mp, 42)
+    iter m do { be v holds HashMap.value(mp, 42)
                 be _ holds Space.set(acc, Space.get(acc) + v) }
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
@@ -59,7 +59,7 @@ place Entry {
     iter 11 do { be _ holds Space.set(gkb, min2(Space.get(gkb), timed_get_base(m))) }
     be _1 holds Output.print(String.from_int(sz))                                  // final_size = N
     be _2 holds Output.print(String.from_int((Space.get(ins) - Space.get(insb)))) // insert net ns for N
-    be _3 holds Output.print(String.from_int(HashMap.get(mp, 42)))                // get value guard (==43)
+    be _3 holds Output.print(String.from_int(HashMap.value(mp, 42)))                // get value guard (==43)
     be _4 holds Output.print(String.from_int((Space.get(gk) - Space.get(gkb))))   // get net ns for M
     return 0
   }
@@ -75,7 +75,7 @@ place Entry {
 //   [1] final_size          = HashMap.size after N sets   (== N = 100000)
 //   [2] insert_net_ns_per_N = min insert-loop ns net of baseline, for N sets
 //                             (divide by N=100000 => ns/insert)
-//   [3] get_value           = HashMap.get(map, 42) guard  (== 43; must be nonzero)
+//   [3] get_value           = HashMap.value(map, 42) guard  (== 43; must be nonzero)
 //   [4] get_net_ns_per_M    = min get-loop ns net of baseline, for M gets
 //                             (divide by M=1000000 => ns/get)
 //   N = 100000 (inserts) ; M = 1000000 (gets), K = 11 reps.

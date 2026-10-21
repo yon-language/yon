@@ -22,7 +22,7 @@ place Entry {
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
-  fun build_arena(n: Number): Number {
+  fun build_arena(n: Number): Arena<Number> {
     be ac holds Space.make(Arena.empty())
     be i holds Space.make(0)
     iter n do { be k holds Space.get(i)
@@ -31,10 +31,10 @@ place Entry {
                 be _2 holds Space.set(i, k + 1) }
     return Space.get(ac)
   }
-  fun timed_get(a: Number, addr: Number, m: Number): Number visits Output {
+  fun timed_get(a: Arena<Number>, addr: Number, m: Number): Number visits Output {
     be acc holds Space.make(0)
     be t0 holds Time.now_ns(0)
-    iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.get(a, addr)) }
+    iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.value(a, addr)) }
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
@@ -45,14 +45,14 @@ place Entry {
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
-  fun timed_so(a: Number, x: Number, y: Number, m: Number): Number visits Output {
+  fun timed_so(a: Arena<Number>, x: Number, y: Number, m: Number): Number visits Output {
     be acc holds Space.make(0)
     be t0 holds Time.now_ns(0)
     iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(a, x, y)) }
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
-  fun so_hits(a: Number, x: Number, y: Number, m: Number): Number {
+  fun so_hits(a: Arena<Number>, x: Number, y: Number, m: Number): Number {
     be acc holds Space.make(0)
     be i holds Space.make(0)
     iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.same_orbit(a, x, y))
@@ -69,7 +69,7 @@ place Entry {
     iter reps do { be _ holds Space.set(m, min2(Space.get(m), timed_put_base(n))) }
     return Space.get(m)
   }
-  fun min_get(a: Number, addr: Number, reps: Number, m: Number): Number visits Output {
+  fun min_get(a: Arena<Number>, addr: Number, reps: Number, m: Number): Number visits Output {
     be mm holds Space.make(timed_get(a, addr, m))
     iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_get(a, addr, m))) }
     return Space.get(mm)
@@ -79,7 +79,7 @@ place Entry {
     iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_get_base(m))) }
     return Space.get(mm)
   }
-  fun min_so(a: Number, x: Number, y: Number, reps: Number, m: Number): Number visits Output {
+  fun min_so(a: Arena<Number>, x: Number, y: Number, reps: Number, m: Number): Number visits Output {
     be mm holds Space.make(timed_so(a, x, y, m))
     iter reps do { be _ holds Space.set(mm, min2(Space.get(mm), timed_so(a, x, y, m))) }
     return Space.get(mm)
@@ -104,8 +104,8 @@ place Entry {
     // same_orbit latency, baseline-subtracted (same baseline shape, Mso iters)
     be so_net holds (min_so(a, x, y, reps_r, mso) - min_get_base(reps_r, mso))
 
-    be _1 holds Output.print(String.from_int(Arena.get(a, a0)))
-    be _2 holds Output.print(String.from_int(Arena.occupied(a, a0)))
+    be _1 holds Output.print(String.from_int(Arena.value(a, a0)))
+    be _2 holds Output.print(String.from_int(if Arena.occupied(a, a0) then 1 else 0))
     be _3 holds Output.print(String.from_int(put_net))
     be _4 holds Output.print(String.from_int(get_net))
     be _5 holds Output.print(String.from_int(so_net))

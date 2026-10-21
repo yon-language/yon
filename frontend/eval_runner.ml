@@ -212,8 +212,14 @@ let () =
          print_string "EVAL INCOMPLETE\n";
          exit 6
        with Not_found -> ());
-      let dr = Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env)
-                 ~place_to_space prog in
+      let dr =
+        try Desugar.desugar_program ~env:(Some cr.Tycheck.cr_env) ~place_to_space prog
+        with
+        | Desugar.Path_not_known msg ->
+            Printf.eprintf "EVAL INCOMPLETE: %s\n" msg;
+            print_string "EVAL INCOMPLETE\n";
+            exit 6
+ in
       (* Mount all the needed hooks, the same configuration as run_example.
        * Without them the stdlib (List/Map/Stream/Heyting) stays stuck and the
        * eval does not reproduce the compiler's semantics. *)

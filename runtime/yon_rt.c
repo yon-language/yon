@@ -98,7 +98,7 @@ static struct {
     char          fold_name[256];  /* empty string = no fold declared */
     yon_xheap_t  *heap;
     /* Tracking of the current accumulator section. When the space has a fold
-     * declared, each `new` calls fold with this as prev. Initially
+     * declared, each new section calls fold with this as prev. Initially
      * YON_SECTION_INVALID = bottom. */
     yon_section_t accumulator;
     /* Space death-watch (1.2 region-reaping, NOT a garbage collector). Counts
@@ -630,6 +630,20 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
     return 0;
 }
 
+/* A field read by compiled code. The layout is one function (the emitter
+ * writes the offsets, the lowering reads them), so a read that fails is a
+ * broken section handle: it stops the program, it never yields a zeroed
+ * value or the section 0. */
+int yon_rt_field_load_or_stop(yon_section_t sec, uint32_t offset,
+                              uint32_t size, void *out) {
+    if (yon_rt_field_load(sec, offset, size, out) != 0) {
+        fprintf(stderr, "[YON-RT] field read failed: section %llu, offset %u, size %u\n",
+                (unsigned long long)sec, offset, size);
+        abort();
+    }
+    return 0;
+}
+
 /* ============================================================== */
 /* Flatten: a place's content as position-independent bytes        */
 /* ============================================================== */
@@ -662,7 +676,7 @@ int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap) {
 
 
 /* ============================================================== */
-/* P8 #86: FREE_MERGE non-triviale via fold (CRDT-style)           */
+/* FREE_MERGE non-triviale via fold (CRDT-style)                   */
 /* ============================================================== */
 
 /* Canonical folds on f64. All commutative + associative.
@@ -891,7 +905,7 @@ yon_section_t yon_rt_fold_named(uint32_t heap_id,
 }
 
 /* ============================================================== */
-/* P8 #88: Stop-the-world checkpoint                              */
+/* Stop-the-world checkpoint                                      */
 /* ============================================================== */
 
 int yon_rt_checkpoint_begin(yon_rt_checkpoint_t *out) {
@@ -994,7 +1008,7 @@ int yon_rt_checkpoint_end(yon_rt_checkpoint_t *snap) {
 }
 
 /* ============================================================== */
-/* P8 #89 layer 0: Online schema evolution (versioning + migration) */
+/* Online schema evolution (versioning + migration)               */
 /* ============================================================== */
 
 #define YON_MAX_MIGRATIONS 32
@@ -1423,7 +1437,7 @@ void yon_rt_end_cross_space_op(uint32_t token) {
     ensure_init();
     uint32_t coord = token;
 
-    /* P8 #85: saga commit rimossa.
+    /* Nessun saga commit.
      *  - TWO_PHASE  -> unlock in reverse order
      *  - SAGA / FREE_MERGE / LOCAL -> no-op */
     if (coord == YON_COORD_TWO_PHASE) {
@@ -1519,8 +1533,8 @@ int yon_rt_stream_emit(uint32_t stream_id, const void *value_ptr) {
 }
 
 int yon_rt_stream_produce(uint32_t stream_id, const void *value_ptr) {
-    /* P8 #87: produce == emit in L1 (no failure, no back-pressure).
-     * In L2+ produce attendera' ack del consumer. */
+    /* produce == emit (no failure, no back-pressure): there is no
+     * consumer ack. */
     return yon_rt_stream_emit(stream_id, value_ptr);
 }
 
@@ -1545,7 +1559,7 @@ uint32_t yon_rt_stream_size(uint32_t stream_id) {
     return g_streams[stream_id].count;
 }
 
-/* ---- f64 wrappers for the frontend stdlib P8 #87 ---- */
+/* ---- f64 wrappers for the frontend stdlib streams ---- */
 
 /* Stream__make(target_heap_id_f64) -> stream_id as f64.
  * Creates a stream with an auto-generated name (in a future version the name
@@ -2222,7 +2236,7 @@ void yon_rt_maybe_serve(void) {
 /* Idraulica v2 — actor-model RPC: named request mailbox +         */
 /* private reply channels + PROCESS_SHARED mutex/cond wakeup       */
 /* ============================================================== */
-/* Locked decisions (docs/cross_package_design.md, 2026-06-03):
+/* Design (docs/cross_package_design.md):
  *   1. Channel identity is the NOMINAL Space name within its world instance:
  *      /y<world>s_<Space> (yon_rt_ipc_name). Zero collisions by construction,
  *      also between two runs of one program; truncation+hash fallback only
@@ -3490,10 +3504,9 @@ double Stream__close_net(double id)          { return yon_rt_stream_net_close_f6
 /* Stdlib coercions                                                */
 /* ============================================================== */
 
-/* String fusion (2026-06-03): a text/String value is an xheap handle.
+/* String fusion: a text/String value is an xheap handle.
  * text_to_prop: absent (1) for the 0.0 failure sentinel or an empty string,
- * present (0) otherwise — same semantics as the old pointer version, which
- * only ever received NULL (literals were emitted as llvm.mlir.zero). */
+ * present (0) otherwise. */
 uint8_t yon_rt_text_to_prop(double h) {
     const char *yon_ds_cstr_fwd(double);   /* defined later in this file */
     const char *s = h == 0.0 ? NULL : yon_ds_cstr_fwd(h);
@@ -3502,10 +3515,6 @@ uint8_t yon_rt_text_to_prop(double h) {
 }
 
 uint8_t yon_rt_to_prop(int8_t b) { return b ? 0 : 1; }
-int8_t  yon_rt_to_bool(uint8_t prop) { return (prop == 0) ? 1 : 0; }
-double  yon_rt_transport(double witness, double value) {
-    (void)witness; return value;
-}
 
 /* ============================================================== */
 /* Diagnostic                                                      */
@@ -3545,60 +3554,23 @@ static void ds_ensure_init(void) {
  * representable in f64. N_SLOTS = 196560 fits in 18 bits, so the full f64
  * range is fine. map_id = slot_index, 0 = empty. */
 
-/* ---- HASHMAP ----------------------------------------------------- */
-/* A real O(1) get/put HashMap.
+/* ---- HashMap / HashSet: persistent hash tries --------------------- */
+/* A map is a value: put and add return a new map and leave the one they
+ * were given as it was. It is a binary trie on the 32-bit hash of the key,
+ * made of immutable nodes in the content-addressed heap; an update copies
+ * the path from the root to the key and shares everything else.
  *
- * Design:
- *   - Storage entries (key, value): xheap arena content-addressed.
- *     Dedup naturale per entries (k, v) identiche.
- *   - Directory: an array of N_INDEX xheap slots (mutable in-place).
- *     hash(key) % N_INDEX -> directory slot -> xheap_get -> entry.
- *   - Collision resolution: linear probing in the directory.
+ * The trie of a key set does not depend on the order the keys went in: a
+ * prefix holding no key is EMPTY, one whose keys all have the same hash is
+ * a LEAF (a chain sorted by the keys' bits), any other a BRANCH on the next
+ * hash bit. So two maps with the same entries are the same nodes: equal
+ * maps are equal handles, as everywhere in the heap.
  *
- * HashMap_id = pointer to the directory (mapped to double via index in g_hashmaps[]).
- * 0 = empty (lazy init on first put).
- *
- * The old linked-list Map (O(n) walk) was removed. The new API keeps the same
- * yon_rt_map_* names for backward-compat of the MLIR emit; the surface API is
- * renamed HashMap.X (see tycheck/desugar).
- *
- * Honest: it does NOT use the xleech2 MPHF (which is specific to type-2
- * xcoords). It uses FNV1a on the f64 bit pattern, ideal for a general-purpose
- * f64 key. */
+ * A key is identified by its bits, the identity of the heap: -0.0 and 0.0
+ * are two keys, a NaN is a key equal to itself. A set is a map whose values
+ * are not read. A handle is the heapref of the root; 0.0 is the empty map. */
 
-/* 2026-06-04: DYNAMIC directory. Starts at YON_HM_DIR_INIT slots and
- * doubles (with rehash) when the load factor would exceed 70%. NO cap:
- * load α <= 0.7 is an INVARIANT, always upheld — with linear probing it
- * guarantees an expected O(1) probe count (~1/(1-α)) at every size. The
- * limit is memory, like the heap chain. No knobs to tune, no degraded
- * regimes. */
-#define YON_HM_DIR_INIT  4096u
-#define YON_HM_MAX_MAPS  256u    /* numero massimo di HashMap concorrenti */
-
-typedef struct {
-    double key;
-    double value;
-    uint32_t occupied;  /* 0 = empty, 1 = present, 2 = tombstone (deleted) */
-    uint32_t pad;
-} ds_hashmap_entry_t;
-
-typedef struct {
-    /* Directory: for each directory slot, the xheap slot of the entry.
-     * SLOT_INVALID = empty bucket. Allocata lazy, cresce con rehash. */
-    uint32_t dir_off;     /* arena strip on g_ds_heap: dir_slots HeapRefs */
-    uint32_t dir_slots;
-    uint32_t n_entries;
-    uint32_t is_used;  /* 1 = HashMap instantiated */
-} ds_hashmap_t;
-
-static ds_hashmap_t g_hashmaps[YON_HM_MAX_MAPS];
-static uint32_t g_n_hashmaps = 0;
-
-static uint32_t *hm_dir(const ds_hashmap_t *hm) {
-    return (uint32_t *)yon_xheap_strip_at(g_ds_heap, hm->dir_off);
-}
-
-/* FNV1a hash su 8 byte (f64 bit pattern) */
+/* FNV-1a on the 8 bytes of the key's bit pattern. */
 static uint32_t hash_f64(double key) {
     union { double d; uint64_t u; } conv;
     conv.d = key;
@@ -3611,350 +3583,218 @@ static uint32_t hash_f64(double key) {
     return h;
 }
 
-double yon_rt_map_empty(void) {
-    ds_ensure_init();
-    /* Allocate a new HashMap. Returns id+1 (shifted to avoid a valid 0). */
-    if (g_n_hashmaps >= YON_HM_MAX_MAPS) {
-        fprintf(stderr, "[YON-RT] map_empty: HashMap pool exhausted\n");
-        return 0.0;
-    }
-    uint32_t id = g_n_hashmaps++;
-    ds_hashmap_t *hm = &g_hashmaps[id];
-    hm->dir_slots = YON_HM_DIR_INIT;
-    hm->dir_off = yon_xheap_strip_alloc(g_ds_heap,
-                      hm->dir_slots * (uint32_t)sizeof(uint32_t));
-    if (hm->dir_off == 0) {
-        fprintf(stderr, "[YON-RT] map_empty: arena exhausted\n");
-        g_n_hashmaps--;
-        return 0.0;
-    }
-    {
-        uint32_t *dir = hm_dir(hm);
-        for (uint32_t i = 0; i < hm->dir_slots; i++)
-            dir[i] = YON_HEAP_SLOT_INVALID;
-    }
-    hm->n_entries = 0;
-    hm->is_used = 1;
-    return (double)(id + 1);
-}
+enum { TRIE_EMPTY = 0, TRIE_LEAF = 1, TRIE_BRANCH = 2 };
+#define TRIE_NONE YON_HEAPREF_INVALID
 
-static ds_hashmap_t *hashmap_lookup(double map_id) {
-    if (map_id < 0.5) return NULL;  /* empty marker */
-    uint32_t shifted = (uint32_t)map_id;
-    if (shifted == 0 || shifted > g_n_hashmaps) return NULL;
-    ds_hashmap_t *hm = &g_hashmaps[shifted - 1];
-    if (!hm->is_used) return NULL;
-    return hm;
-}
+typedef struct { uint32_t kind; uint32_t size; uint32_t child[2]; } trie_branch_t;
+typedef struct {
+    uint32_t kind;
+    uint32_t hash;
+    double   key;
+    double   value;
+    uint32_t next;    /* the next key with the same hash, or TRIE_NONE */
+    uint32_t size;    /* keys in this chain, from here */
+} trie_leaf_t;
 
-/* Doubles the directory and replaces every live entry (rehash).
- * The entries stay where they are (xheap slot): only the indices move. */
-static int hashmap_grow(ds_hashmap_t *hm) {
-    uint32_t new_slots = hm->dir_slots * 2;
-    if (new_slots <= hm->dir_slots) return 0;   /* arithmetic overflow only */
-    uint32_t nd_off = yon_xheap_strip_alloc(g_ds_heap,
-                          new_slots * (uint32_t)sizeof(uint32_t));
-    if (nd_off == 0) return 0;
-    uint32_t *nd = (uint32_t *)yon_xheap_strip_at(g_ds_heap, nd_off);
-    for (uint32_t i = 0; i < new_slots; i++) nd[i] = YON_HEAP_SLOT_INVALID;
-    uint32_t live = 0;
-    uint32_t *od = hm_dir(hm);
-    for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        uint32_t slot = od[i];
-        if (slot == YON_HEAP_SLOT_INVALID) continue;
-        const ds_hashmap_entry_t *e =
-            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(slot);
-        if (!e || e->occupied != 1) continue;   /* tombstone: si scarta */
-        uint32_t h = hash_f64(e->key);
-        for (uint32_t j = 0; j < new_slots; j++) {
-            uint32_t idx = (h + j) % new_slots;
-            if (nd[idx] == YON_HEAP_SLOT_INVALID) { nd[idx] = slot; live++; break; }
+static uint64_t key_bits(double k) { uint64_t u; memcpy(&u, &k, sizeof u); return u; }
+
+/* The law of these nodes. A node lives in the content-addressed heap and is
+ * deduplicated globally: the same content is the same node, wherever it is
+ * built. So two equal collections are the same handle, and a node may be
+ * shared by values that know nothing of each other. Hence no write ever
+ * happens on a node, not even on one a single collection seems to hold: a
+ * reuse in place would change a value somebody else holds, and the identity
+ * of equal collections would be lost. A collection that changes in place is
+ * not a value: it is a cell, declared in yon_arena. */
+static uint32_t trie_node(const void *n, uint32_t sz) {
+    uint32_t r = yon_xheap_put_chain(g_ds_heap, n, sz, YON_TAG_USER1);
+    if (r == YON_HEAPREF_INVALID) {
+        fprintf(stderr, "[YON-RT] map: the heap is exhausted\n");
+        abort();
+    }
+    return r;
+}
+static const uint32_t *trie_at(uint32_t ref) {
+    const uint32_t *p = (const uint32_t *)yon_xheap_payload_chain(ref);
+    if (!p || p[0] > TRIE_BRANCH) {
+        fprintf(stderr, "[YON-RT] map: %u is not a map\n", ref);
+        abort();
+    }
+    return p;
+}
+static uint32_t trie_empty(void) {
+    trie_branch_t e = { TRIE_EMPTY, 0, { 0, 0 } };
+    return trie_node(&e, sizeof e);
+}
+/* the root of a handle: 0.0 is the empty map */
+static uint32_t trie_root(double handle) {
+    if (handle == 0.0) return trie_empty();
+    if (!(handle > 0.0 && handle < 4294967296.0 && handle == (double)(uint32_t)handle)) {
+        fprintf(stderr, "[YON-RT] map: %.17g is not a map\n", handle);
+        abort();
+    }
+    (void)trie_at((uint32_t)handle);
+    return (uint32_t)handle;
+}
+static uint32_t trie_size(uint32_t ref) {
+    if (ref == TRIE_NONE) return 0;
+    const uint32_t *p = trie_at(ref);
+    if (p[0] == TRIE_LEAF) return ((const trie_leaf_t *)p)->size;
+    return ((const trie_branch_t *)p)->size;   /* 0 for the empty map */
+}
+static uint32_t mk_leaf(uint32_t h, double k, double v, uint32_t next) {
+    trie_leaf_t l;
+    memset(&l, 0, sizeof l);
+    l.kind = TRIE_LEAF; l.hash = h; l.key = k; l.value = v; l.next = next;
+    l.size = 1 + trie_size(next);
+    return trie_node(&l, sizeof l);
+}
+static uint32_t mk_branch(uint32_t c0, uint32_t c1) {
+    trie_branch_t b = { TRIE_BRANCH, trie_size(c0) + trie_size(c1), { c0, c1 } };
+    return trie_node(&b, sizeof b);
+}
+/* put into a chain of keys with hash h, kept sorted by the keys' bits */
+static uint32_t chain_put(uint32_t ref, uint32_t h, double k, double v) {
+    if (ref == TRIE_NONE) return mk_leaf(h, k, v, TRIE_NONE);
+    const trie_leaf_t *l = (const trie_leaf_t *)trie_at(ref);
+    double lk = l->key, lv = l->value;
+    uint32_t ln = l->next;
+    uint64_t kb = key_bits(k), lb = key_bits(lk);
+    if (kb == lb) return mk_leaf(h, k, v, ln);
+    if (kb < lb) return mk_leaf(h, k, v, ref);
+    return mk_leaf(h, lk, lv, chain_put(ln, h, k, v));
+}
+static uint32_t trie_put(uint32_t ref, uint32_t h, double k, double v, unsigned depth) {
+    const uint32_t *p = trie_at(ref);
+    if (p[0] == TRIE_EMPTY) return mk_leaf(h, k, v, TRIE_NONE);
+    if (p[0] == TRIE_LEAF) {
+        uint32_t lh = ((const trie_leaf_t *)p)->hash;
+        if (lh == h) return chain_put(ref, h, k, v);
+        uint32_t bn = (h >> depth) & 1u, bo = (lh >> depth) & 1u;
+        if (bn == bo) {
+            uint32_t sub = trie_put(ref, h, k, v, depth + 1);
+            uint32_t e = trie_empty();
+            return bn ? mk_branch(e, sub) : mk_branch(sub, e);
         }
+        uint32_t nl = mk_leaf(h, k, v, TRIE_NONE);
+        return bn ? mk_branch(ref, nl) : mk_branch(nl, ref);
     }
-    yon_xheap_strip_trim(g_ds_heap, hm->dir_off, 0u,
-                         hm->dir_slots * (uint32_t)sizeof(uint32_t));
-    hm->dir_off = nd_off;
-    hm->dir_slots = new_slots;
-    hm->n_entries = live;
-    return 1;
+    const trie_branch_t *b = (const trie_branch_t *)p;
+    uint32_t c0 = b->child[0], c1 = b->child[1];
+    if ((h >> depth) & 1u) c1 = trie_put(c1, h, k, v, depth + 1);
+    else                   c0 = trie_put(c0, h, k, v, depth + 1);
+    return mk_branch(c0, c1);
 }
-
-double yon_rt_map_put(double map_id, double key, double value) {
-    ds_ensure_init();
-    /* Lazy init: if map_id == 0, allocate a new HashMap. */
-    ds_hashmap_t *hm = (map_id < 0.5) ? NULL : hashmap_lookup(map_id);
-    if (!hm) {
-        double new_id = yon_rt_map_empty();
-        hm = hashmap_lookup(new_id);
-        if (!hm) return 0.0;
-        map_id = new_id;
-    }
-    /* Create a payload entry in the xheap (content-addressed dedup). */
-    ds_hashmap_entry_t entry;
-    entry.key = key;
-    entry.value = value;
-    entry.occupied = 1;
-    entry.pad = 0;
-    /* 2026-06-04: allocation through the chain — when the current heap is
-     * full the chain extends itself (xleech2: HeapRef Registry + Chain).
-     * entry_slot[] holds global HeapRefs (8 bits heap | 24 bits slot);
-     * for heap 0 the value coincides with the old bare slot. */
-    uint32_t slot = yon_xheap_put_chain(g_ds_heap, &entry, sizeof(entry), YON_TAG_USER1);
-    if (slot == YON_HEAPREF_INVALID) return map_id;
-    /* Crescita al 70% di load: mai saturazione silenziosa sotto DIR_MAX. */
-    if ((uint64_t)hm->n_entries * 10u >= (uint64_t)hm->dir_slots * 7u) {
-        (void)hashmap_grow(hm);
-    }
-    /* Linear probing in the directory. */
-    uint32_t h = hash_f64(key);
-    uint32_t *dir = hm_dir(hm);
-    for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        uint32_t idx = (h + i) % hm->dir_slots;
-        if (dir[idx] == YON_HEAP_SLOT_INVALID) {
-            /* Slot libero: inserisci. */
-            dir[idx] = slot;
-            hm->n_entries++;
-            return map_id;
-        }
-        /* Slot occupied: check if it is the same key (update value). */
-        {
-            const ds_hashmap_entry_t *e =
-                (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[idx]);
-            if (e && e->occupied == 1 && e->key == key) {
-                /* Same key: overwrite with a new slot. */
-                dir[idx] = slot;
-                return map_id;
+/* the leaf holding key k, or NULL */
+static const trie_leaf_t *trie_find(uint32_t ref, double k) {
+    uint32_t h = hash_f64(k);
+    uint64_t kb = key_bits(k);
+    for (unsigned depth = 0;; depth++) {
+        const uint32_t *p = trie_at(ref);
+        if (p[0] == TRIE_EMPTY) return NULL;
+        if (p[0] == TRIE_LEAF) {
+            const trie_leaf_t *l = (const trie_leaf_t *)p;
+            if (l->hash != h) return NULL;
+            for (;;) {
+                if (key_bits(l->key) == kb) return l;
+                if (l->next == TRIE_NONE) return NULL;
+                l = (const trie_leaf_t *)trie_at(l->next);
             }
         }
+        ref = ((const trie_branch_t *)p)->child[(h >> depth) & 1u];
     }
-    fprintf(stderr, "[YON-RT] map_put: directory full (load 100%%)\n");
-    return map_id;
+}
+/* visit every entry */
+typedef void (*trie_visit_fn)(double key, double value, void *ctx);
+static void trie_each(uint32_t ref, trie_visit_fn f, void *ctx) {
+    const uint32_t *p = trie_at(ref);
+    if (p[0] == TRIE_EMPTY) return;
+    if (p[0] == TRIE_LEAF) {
+        for (const trie_leaf_t *l = (const trie_leaf_t *)p;;) {
+            f(l->key, l->value, ctx);
+            if (l->next == TRIE_NONE) return;
+            l = (const trie_leaf_t *)trie_at(l->next);
+        }
+    }
+    const trie_branch_t *b = (const trie_branch_t *)p;
+    uint32_t c0 = b->child[0], c1 = b->child[1];
+    trie_each(c0, f, ctx);
+    trie_each(c1, f, ctx);
 }
 
+double yon_rt_map_empty(void) {
+    ds_ensure_init();
+    return (double)trie_empty();
+}
+double yon_rt_map_put(double map_id, double key, double value) {
+    ds_ensure_init();
+    return (double)trie_put(trie_root(map_id), hash_f64(key), key, value, 0);
+}
 double yon_rt_map_get(double map_id, double key) {
     ds_ensure_init();
-    ds_hashmap_t *hm = hashmap_lookup(map_id);
-    if (!hm) return 0.0;
-    uint32_t h = hash_f64(key);
-    uint32_t *dir = hm_dir(hm);
-    for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        uint32_t idx = (h + i) % hm->dir_slots;
-        if (dir[idx] == YON_HEAP_SLOT_INVALID) return 0.0;  /* not found */
-        const ds_hashmap_entry_t *e =
-            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[idx]);
-        if (!e) continue;
-        if (e->occupied == 1 && e->key == key) return e->value;
-    }
-    return 0.0;
+    const trie_leaf_t *l = trie_find(trie_root(map_id), key);
+    return l ? l->value : 0.0;
 }
-
+/* The value at a key the map holds. Asked of a key it does not hold, it
+ * stops the program: an absent key has no value, not a 0.0 that would read
+ * as one (the place's `get` asks `has` first and answers Absent). */
+double yon_rt_map_value(double map_id, double key) {
+    ds_ensure_init();
+    const trie_leaf_t *l = trie_find(trie_root(map_id), key);
+    if (!l) {
+        fprintf(stderr, "[YON-RT] map: no value at key %.17g\n", key);
+        abort();
+    }
+    return l->value;
+}
 double yon_rt_map_contains(double map_id, double key) {
     ds_ensure_init();
-    ds_hashmap_t *hm = hashmap_lookup(map_id);
-    if (!hm) return 0.0;
-    uint32_t h = hash_f64(key);
-    uint32_t *dir = hm_dir(hm);
-    for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        uint32_t idx = (h + i) % hm->dir_slots;
-        if (dir[idx] == YON_HEAP_SLOT_INVALID) return 0.0;
-        const ds_hashmap_entry_t *e =
-            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[idx]);
-        if (!e) continue;
-        if (e->occupied == 1 && e->key == key) return 1.0;
-    }
-    return 0.0;
+    return trie_find(trie_root(map_id), key) ? 1.0 : 0.0;
 }
-
 double yon_rt_map_size(double map_id) {
-    ds_hashmap_t *hm = hashmap_lookup(map_id);
-    if (!hm) return 0.0;
-    return (double)hm->n_entries;
+    ds_ensure_init();
+    return (double)trie_size(trie_root(map_id));
 }
 
-/* ---- HashMap.to_stream --------------------- */
-
+/* ---- HashMap.to_stream: the values --------------------- */
+static void cons_value(double k, double v, void *ctx) { (void)k; *(double *)ctx = yon_rt_list_cons(v, *(double *)ctx); }
+static void cons_key(double k, double v, void *ctx)   { (void)v; *(double *)ctx = yon_rt_list_cons(k, *(double *)ctx); }
 double yon_rt_map_to_list(double map_id) {
     ds_ensure_init();
-    ds_hashmap_t *hm = hashmap_lookup(map_id);
-    if (!hm) return yon_rt_list_empty(0.0);
     double list_id = yon_rt_list_empty(0.0);
-    uint32_t *dir = hm_dir(hm);
-    for (uint32_t i = 0; i < hm->dir_slots; i++) {
-        if (dir[i] == YON_HEAP_SLOT_INVALID) continue;
-        const ds_hashmap_entry_t *e =
-            (const ds_hashmap_entry_t *)yon_xheap_payload_chain(dir[i]);
-        if (!e || e->occupied != 1) continue;
-        list_id = yon_rt_list_cons(e->value, list_id);
-    }
+    trie_each(trie_root(map_id), cons_value, &list_id);
     return list_id;
 }
 
-/* ---- HASHSET -------------------------------- */
-/* Drop HashSet-via-HashMap. Nuovo runtime dedicato:
- *
- * Storage: keys inline in the directory (8 bytes each), separate bitmap
- * for `occupied`. No xheap entries — 50% space saved over reusing HashMap
- * (a 16-byte entry against an 8-byte key only).
- *
- * API: empty/add/contains/size/to_list. No get/has/set.
- *
- * Hash function: the same FNV1a (general-purpose f64 key). */
-
-/* 2026-06-04: dynamic directory, same invariant as the HashMap
- * (α <= 0.7 always, doubling with rehash, no cap). */
-#define YON_HS_DIR_INIT  4096u
-#define YON_HS_MAX_SETS  256u
-
-typedef struct {
-    uint32_t keys_off;    /* arena strip: dir_slots doubles                */
-    uint32_t occ_off;     /* arena strip: bitmap, dir_slots/32 uint32 each */
-    uint32_t dir_slots;
-    uint32_t n_entries;
-    uint32_t is_used;
-} ds_hashset_t;
-
-static ds_hashset_t g_hashsets[YON_HS_MAX_SETS];
-static uint32_t g_n_hashsets = 0;
-
-static double *hs_keys(const ds_hashset_t *hs) {
-    return (double *)yon_xheap_strip_at(g_yon_heap, hs->keys_off);
-}
-static uint32_t *hs_occ(const ds_hashset_t *hs) {
-    return (uint32_t *)yon_xheap_strip_at(g_yon_heap, hs->occ_off);
-}
-
-static inline int hs_bit_get(const uint32_t *bm, uint32_t idx) {
-    return (bm[idx >> 5] >> (idx & 31)) & 1;
-}
-static inline void hs_bit_set(uint32_t *bm, uint32_t idx) {
-    bm[idx >> 5] |= (1u << (idx & 31));
-}
-
-double yon_rt_hashset_empty(void) {
-    ds_ensure_init();
-    ensure_init();
-    if (g_n_hashsets >= YON_HS_MAX_SETS) {
-        fprintf(stderr, "[YON-RT] hashset_empty: pool exhausted\n");
-        return 0.0;
-    }
-    uint32_t id = g_n_hashsets++;
-    ds_hashset_t *hs = &g_hashsets[id];
-    hs->dir_slots = YON_HS_DIR_INIT;
-    hs->keys_off = yon_xheap_strip_alloc(g_yon_heap,
-                       hs->dir_slots * (uint32_t)sizeof(double));
-    hs->occ_off  = yon_xheap_strip_alloc(g_yon_heap,
-                       (hs->dir_slots / 32u) * (uint32_t)sizeof(uint32_t));
-    if (hs->keys_off == 0 || hs->occ_off == 0) {
-        fprintf(stderr, "[YON-RT] hashset_empty: arena exhausted\n");
-        g_n_hashsets--;
-        return 0.0;
-    }
-    memset(hs_occ(hs), 0, (hs->dir_slots / 32u) * sizeof(uint32_t));
-    hs->n_entries = 0;
-    hs->is_used = 1;
-    return (double)(id + 1);
-}
-
-static ds_hashset_t *hashset_lookup(double set_id) {
-    if (set_id < 0.5) return NULL;
-    uint32_t shifted = (uint32_t)set_id;
-    if (shifted == 0 || shifted > g_n_hashsets) return NULL;
-    ds_hashset_t *hs = &g_hashsets[shifted - 1];
-    if (!hs->is_used) return NULL;
-    return hs;
-}
-
-static int hashset_grow(ds_hashset_t *hs) {
-    uint32_t new_slots = hs->dir_slots * 2;
-    if (new_slots <= hs->dir_slots) return 0;
-    uint32_t nk_off = yon_xheap_strip_alloc(g_yon_heap,
-                          new_slots * (uint32_t)sizeof(double));
-    uint32_t no_off = yon_xheap_strip_alloc(g_yon_heap,
-                          (new_slots / 32u) * (uint32_t)sizeof(uint32_t));
-    if (nk_off == 0 || no_off == 0) return 0;
-    double   *nk = (double *)yon_xheap_strip_at(g_yon_heap, nk_off);
-    uint32_t *no = (uint32_t *)yon_xheap_strip_at(g_yon_heap, no_off);
-    memset(no, 0, (new_slots / 32u) * sizeof(uint32_t));
-    double   *ok = hs_keys(hs);
-    uint32_t *oo = hs_occ(hs);
-    for (uint32_t i = 0; i < hs->dir_slots; i++) {
-        if (!hs_bit_get(oo, i)) continue;
-        uint32_t h = hash_f64(ok[i]);
-        for (uint32_t j = 0; j < new_slots; j++) {
-            uint32_t idx = (h + j) % new_slots;
-            if (!hs_bit_get(no, idx)) { nk[idx] = ok[i]; hs_bit_set(no, idx); break; }
-        }
-    }
-    yon_xheap_strip_trim(g_yon_heap, hs->keys_off, 0u,
-                         hs->dir_slots * (uint32_t)sizeof(double));
-    yon_xheap_strip_trim(g_yon_heap, hs->occ_off, 0u,
-                         (hs->dir_slots / 32u) * (uint32_t)sizeof(uint32_t));
-    hs->keys_off = nk_off; hs->occ_off = no_off; hs->dir_slots = new_slots;
-    return 1;
-}
-
-double yon_rt_hashset_add(double set_id, double elem) {
-    ds_ensure_init();
-    ds_hashset_t *hs = (set_id < 0.5) ? NULL : hashset_lookup(set_id);
-    if (!hs) {
-        double new_id = yon_rt_hashset_empty();
-        hs = hashset_lookup(new_id);
-        if (!hs) return 0.0;
-        set_id = new_id;
-    }
-    if ((uint64_t)hs->n_entries * 10u >= (uint64_t)hs->dir_slots * 7u) {
-        (void)hashset_grow(hs);
-    }
-    uint32_t h = hash_f64(elem);
-    double *keys = hs_keys(hs);
-    uint32_t *occ = hs_occ(hs);
-    for (uint32_t i = 0; i < hs->dir_slots; i++) {
-        uint32_t idx = (h + i) % hs->dir_slots;
-        if (!hs_bit_get(occ, idx)) {
-            keys[idx] = elem;
-            hs_bit_set(occ, idx);
-            hs->n_entries++;
-            return set_id;
-        }
-        if (keys[idx] == elem) return set_id;  /* dedup */
-    }
-    fprintf(stderr, "[YON-RT] hashset_add: directory full\n");
-    return set_id;
-}
-
-double yon_rt_hashset_contains(double set_id, double elem) {
-    ds_hashset_t *hs = hashset_lookup(set_id);
-    if (!hs) return 0.0;
-    uint32_t h = hash_f64(elem);
-    double *keys = hs_keys(hs);
-    uint32_t *occ = hs_occ(hs);
-    for (uint32_t i = 0; i < hs->dir_slots; i++) {
-        uint32_t idx = (h + i) % hs->dir_slots;
-        if (!hs_bit_get(occ, idx)) return 0.0;
-        if (keys[idx] == elem) return 1.0;
-    }
-    return 0.0;
-}
-
-double yon_rt_hashset_size(double set_id) {
-    ds_hashset_t *hs = hashset_lookup(set_id);
-    if (!hs) return 0.0;
-    return (double)hs->n_entries;
-}
-
+/* ---- HashSet: a map whose values are not read ----------- */
+double yon_rt_hashset_empty(void) { return yon_rt_map_empty(); }
+double yon_rt_hashset_add(double set_id, double elem) { return yon_rt_map_put(set_id, elem, 1.0); }
+double yon_rt_hashset_contains(double set_id, double elem) { return yon_rt_map_contains(set_id, elem); }
+double yon_rt_hashset_size(double set_id) { return yon_rt_map_size(set_id); }
 double yon_rt_hashset_to_list(double set_id) {
     ds_ensure_init();
-    ds_hashset_t *hs = hashset_lookup(set_id);
-    if (!hs) return yon_rt_list_empty(0.0);
     double list_id = yon_rt_list_empty(0.0);
-    double *keys = hs_keys(hs);
-    uint32_t *occ = hs_occ(hs);
-    for (uint32_t i = 0; i < hs->dir_slots; i++) {
-        if (hs_bit_get(occ, i)) {
-            list_id = yon_rt_list_cons(keys[i], list_id);
-        }
-    }
+    trie_each(trie_root(set_id), cons_key, &list_id);
     return list_id;
+}
+static void union_add(double k, double v, void *ctx) { (void)v; *(double *)ctx = yon_rt_hashset_add(*(double *)ctx, k); }
+typedef struct { double other, out; } inter_ctx_t;
+static void inter_add(double k, double v, void *ctx) {
+    (void)v;
+    inter_ctx_t *c = (inter_ctx_t *)ctx;
+    if (yon_rt_hashset_contains(c->other, k) == 1.0) c->out = yon_rt_hashset_add(c->out, k);
+}
+double yon_rt_hashset_union(double a_id, double b_id) {
+    ds_ensure_init();
+    double out = (double)trie_root(a_id);
+    trie_each(trie_root(b_id), union_add, &out);
+    return out;
+}
+double yon_rt_hashset_intersect(double a_id, double b_id) {
+    ds_ensure_init();
+    inter_ctx_t c = { b_id, yon_rt_hashset_empty() };
+    trie_each(trie_root(a_id), inter_add, &c);
+    return c.out;
 }
 
 /* ============================================================== */
@@ -4923,19 +4763,26 @@ double yon_rt_xrelmap_insert(double id, double v, double value) {
     if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
     uint32_t rep = m->canon[idx];
     if (!yon_arena_occupied(m->arena, (yon_xcoord_t)rep)) m->n_classes++;
-    /* value lives inline in the lattice slot (repr), like yon_rt_arena_put; no heap */
-    yon_arena_put_repr(m->arena, (yon_xcoord_t)rep, (uint32_t)value);
+    /* the value lives inline in its class's lattice slot, as its 64 bits */
+    double bits_v = value;
+    uint64_t bits; memcpy(&bits, &bits_v, sizeof bits);
+    yon_arena_put_value(m->arena, (yon_xcoord_t)rep, bits);
     return id;
 }
 
-double yon_rt_xrelmap_get(double id, double v) {
+/* The value of a class the map holds; for one it does not hold it stops the
+ * program (the place's `get` asks `contains` first and answers Absent). */
+double yon_rt_xrelmap_value(double id, double v) {
     yon_xrelmap_t *m = xrelmap_lookup(id);
-    if (!m || !m->frozen) return 0.0;
+    uint64_t bits;
     uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
-    if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
-    uint32_t rep = m->canon[idx];
-    if (!yon_arena_occupied(m->arena, (yon_xcoord_t)rep)) return 0.0;
-    return (double)yon_arena_get_repr(m->arena, (yon_xcoord_t)rep);
+    if (!m || !m->frozen || idx >= YON_LEECH_TYPE2_COUNT
+        || !yon_arena_get_value(m->arena, (yon_xcoord_t)m->canon[idx], &bits)) {
+        fprintf(stderr, "[YON-RT] xrelmap: no value at point %.17g\n", v);
+        abort();
+    }
+    double out; memcpy(&out, &bits, sizeof out);
+    return out;
 }
 
 double yon_rt_xrelmap_contains(double id, double v) {
@@ -5328,8 +5175,8 @@ double yon_rt_xsimplex_empty(void) {
 static uint64_t xsimplex_bin_get(yon_xsimplex_hist_t *h, int c) {
     uint32_t rep = g_xsimplex_edge_rep[c];
     if (rep == 0xFFFFFFFFu) return 0;
-    if (!yon_arena_occupied(h->arena, (yon_xcoord_t)rep)) return 0;
-    return (uint64_t)yon_arena_get_repr(h->arena, (yon_xcoord_t)rep);
+    uint64_t count = 0;
+    return yon_arena_get_value(h->arena, (yon_xcoord_t)rep, &count) ? count : 0;
 }
 
 /* add the pair (a,b): classify its edge (0..11), bump that class's lattice slot.
@@ -5344,7 +5191,7 @@ double yon_rt_xsimplex_add(double id, double ad, double bd) {
             uint32_t rep = g_xsimplex_edge_rep[c];
             if (rep != 0xFFFFFFFFu) {
                 uint64_t cur = xsimplex_bin_get(h, c);
-                yon_arena_put_repr(h->arena, (yon_xcoord_t)rep, (uint32_t)(cur + 1));
+                yon_arena_put_value(h->arena, (yon_xcoord_t)rep, cur + 1);
             }
         }
     }
@@ -5775,30 +5622,6 @@ double yon_rt_xset_to_list(double set_id) {
     return list_id;
 }
 
-/* ---- Legacy yon_rt_set_* alias (backward-compat per pattern emit) -- */
-/* Routing to the new HashSet runtime. The old yon_rt_set_* calls (used by
- * __set_add, __set_contains, __set_size, Set__ etc) are forwarded to the
- * dedicated HashSet. */
-
-double yon_rt_set_empty(void) {
-    return yon_rt_hashset_empty();
-}
-
-double yon_rt_set_add(double set_id, double elem) {
-    return yon_rt_hashset_add(set_id, elem);
-}
-
-double yon_rt_set_contains(double set_id, double elem) {
-    return yon_rt_hashset_contains(set_id, elem);
-}
-
-double yon_rt_set_size(double set_id) {
-    return yon_rt_hashset_size(set_id);
-}
-
-double yon_rt_set_to_list(double set_id) {
-    return yon_rt_hashset_to_list(set_id);
-}
 
 /* ---- DAG ------------------------------------------------------ */
 
@@ -5834,6 +5657,48 @@ static void sort_children_4(uint32_t a[4]) {
     }
 }
 
+/* A child of a node is always a handle: the heapref of another node. A value
+ * travels as a leaf, whose label is its exact f64, and the node holds the
+ * leaf's handle. Anything else offered as a child (a fraction, a negative, a
+ * value past 2^32, a slot that is not a node) is a broken invariant of the
+ * caller: it stops the program, it is never cast. */
+static uint32_t merkle_child_handle(double child) {
+    if (child >= 0.0 && child < 4294967296.0 && child == (double)(uint32_t)child) {
+        const yon_xheap_slot_t *s = yon_xheap_get_chain((uint32_t)child);
+        if (s && (s->tag == YON_TAG_USER2 || s->tag == YON_TAG_USER3))
+            return (uint32_t)child;
+    }
+    fprintf(stderr, "[YON-RT] merkle: a child is not a node handle (%.17g); "
+                    "a value enters a node as a leaf\n", child);
+    abort();
+}
+
+/* The one reading of a node's layout. A leaf and a binary node share
+ * ds_merkle_node_t (tag USER2); a node of 3 or 4 children stores
+ * ds_merkle_nodeN_t (tag USER3). Every reader goes through here, so it reads
+ * what the constructor wrote. Returns the arity (0 for a leaf), -1 if the
+ * slot is not a node. */
+static int merkle_view(uint32_t slot, double *label, uint32_t children[4]) {
+    const yon_xheap_slot_t *s = yon_xheap_get_chain(slot);
+    if (!s) return -1;
+    const void *p = yon_xheap_slot_payload_any(s);
+    if (!p) return -1;
+    if (s->tag == YON_TAG_USER3) {
+        const ds_merkle_nodeN_t *n = (const ds_merkle_nodeN_t *)p;
+        *label = n->label;
+        for (uint32_t i = 0; i < n->arity && i < 4; i++) children[i] = n->children[i];
+        return (int)n->arity;
+    }
+    if (s->tag == YON_TAG_USER2) {
+        const ds_merkle_node_t *n = (const ds_merkle_node_t *)p;
+        *label = n->label;
+        children[0] = n->child1_slot;
+        children[1] = n->child2_slot;
+        return (int)n->arity;
+    }
+    return -1;
+}
+
 double yon_rt_merkle_leaf(double label) {
     ds_ensure_init();
     ds_merkle_node_t node;
@@ -5856,8 +5721,8 @@ double yon_rt_merkle_node2(double label, double child1, double child2) {
      * commutative operators (and/or/+). No magic table in the runtime:
      * commutativity is expressed by the choice of function, not by a parameter
      * or a set of hardcoded labels. */
-    uint32_t c1 = (uint32_t)child1;
-    uint32_t c2 = (uint32_t)child2;
+    uint32_t c1 = merkle_child_handle(child1);
+    uint32_t c2 = merkle_child_handle(child2);
     ds_merkle_node_t node;
     node.label = label;
     node.child1_slot = c1;
@@ -5877,8 +5742,8 @@ double yon_rt_merkle_node2_commutative(double label, double child1, double child
      * canonicalization of the S_2 orbit over the 2 positions — zero parameters,
      * a deterministic decision (comparison of the slots). Use only when L is
      * commutative: the frontend guarantees it by construction. */
-    uint32_t c1 = (uint32_t)child1;
-    uint32_t c2 = (uint32_t)child2;
+    uint32_t c1 = merkle_child_handle(child1);
+    uint32_t c2 = merkle_child_handle(child2);
     ds_merkle_node_t node;
     node.label = label;
     if (c1 <= c2) { node.child1_slot = c1; node.child2_slot = c2; }
@@ -5900,7 +5765,8 @@ double yon_rt_merkle_node2_commutative(double label, double child1, double child
  * node2. */
 double yon_rt_merkle_node3(double label, double c1, double c2, double c3) {
     ds_ensure_init();
-    uint32_t ch[3] = {(uint32_t)c1, (uint32_t)c2, (uint32_t)c3};
+    uint32_t ch[3] = {merkle_child_handle(c1), merkle_child_handle(c2),
+                      merkle_child_handle(c3)};
     sort_children_3(ch);
     ds_merkle_nodeN_t node;
     node.label = label;
@@ -5918,7 +5784,8 @@ double yon_rt_merkle_node3(double label, double c1, double c2, double c3) {
 double yon_rt_merkle_node4(double label, double c1, double c2,
                            double c3, double c4) {
     ds_ensure_init();
-    uint32_t ch[4] = {(uint32_t)c1, (uint32_t)c2, (uint32_t)c3, (uint32_t)c4};
+    uint32_t ch[4] = {merkle_child_handle(c1), merkle_child_handle(c2),
+                      merkle_child_handle(c3), merkle_child_handle(c4)};
     sort_children_4(ch);
     ds_merkle_nodeN_t node;
     node.label = label;
@@ -5935,25 +5802,22 @@ double yon_rt_merkle_node4(double label, double c1, double c2,
 
 double yon_rt_merkle_label(double node_id) {
     ds_ensure_init();
-    uint32_t slot = (uint32_t)node_id;
-    const yon_xheap_slot_t *s = yon_xheap_get_chain(slot);
-    if (!s) return -1.0;
-    const ds_merkle_node_t *n = (const ds_merkle_node_t *)yon_xheap_slot_payload_any(s);
-    if (!n) return -1.0;
-    return n->label;
+    double label; uint32_t ch[4];
+    if (merkle_view(merkle_child_handle(node_id), &label, ch) < 0) return -1.0;
+    return label;
 }
 
 double yon_rt_merkle_child(double node_id, double child_idx) {
     ds_ensure_init();
-    uint32_t slot = (uint32_t)node_id;
-    const yon_xheap_slot_t *s = yon_xheap_get_chain(slot);
-    if (!s) return 0.0;
-    const ds_merkle_node_t *n = (const ds_merkle_node_t *)yon_xheap_slot_payload_any(s);
-    if (!n) return 0.0;
-    int idx = (int)child_idx;
-    if (idx == 0) return (double)n->child1_slot;
-    if (idx == 1) return (double)n->child2_slot;
-    return 0.0;
+    double label; uint32_t ch[4];
+    int arity = merkle_view(merkle_child_handle(node_id), &label, ch);
+    if (!(child_idx >= 0.0 && child_idx < (double)arity
+          && child_idx == (double)(int)child_idx)) {
+        fprintf(stderr, "[YON-RT] merkle: child %.17g of a node with %d children\n",
+                child_idx, arity < 0 ? 0 : arity);
+        abort();
+    }
+    return (double)ch[(int)child_idx];
 }
 
 double yon_rt_merkle_equal(double a, double b) {
@@ -5974,8 +5838,8 @@ double yon_rt_merkle_to_list(double root_id) {
     ds_ensure_init();
     double list_id = yon_rt_list_empty(0.0);
     if (root_id == 0.0) return list_id;
-    /* 2026-06-04: DYNAMIC stack. The old fixed 256-entry array silently
-     * dropped children past the bound. The Merkle DAG is acyclic by
+    /* DYNAMIC stack: a fixed bound would silently drop the children past
+     * it. The Merkle DAG is acyclic by
      * construction (children are allocated before parents), so the visit
      * terminates; the stack only has to be able to grow. */
     ensure_init();
@@ -5984,9 +5848,9 @@ double yon_rt_merkle_to_list(double root_id) {
     if (off == 0) return list_id;
     uint32_t *stack = (uint32_t *)yon_xheap_strip_at(g_yon_heap, off);
     int sp = 0;
-    stack[sp++] = (uint32_t)root_id;
+    stack[sp++] = merkle_child_handle(root_id);
     while (sp > 0) {
-        if ((uint32_t)sp + 2 >= cap) {
+        if ((uint32_t)sp + 4 >= cap) {
             uint32_t nc = cap * 2;
             uint32_t noff = yon_xheap_strip_alloc(g_yon_heap, nc * (uint32_t)sizeof(uint32_t));
             if (noff == 0) break;
@@ -5996,18 +5860,16 @@ double yon_rt_merkle_to_list(double root_id) {
             stack = ns; off = noff; cap = nc;
         }
         uint32_t slot = stack[--sp];
-        const yon_xheap_slot_t *s = yon_xheap_get_chain(slot);
-        if (!s) continue;
-        const ds_merkle_node_t *n =
-            (const ds_merkle_node_t *)yon_xheap_slot_payload_any(s);
-        if (!n) continue;
-        if (n->arity == 0) {
+        double label; uint32_t ch[4];
+        int arity = merkle_view(slot, &label, ch);
+        if (arity < 0) continue;
+        if (arity == 0) {
             /* Leaf: emit label */
-            list_id = yon_rt_list_cons(n->label, list_id);
-        } else if (n->arity == 2) {
-            /* DFS: push child2 first to visit child1 FIRST (LIFO). */
-            stack[sp++] = n->child2_slot;
-            stack[sp++] = n->child1_slot;
+            list_id = yon_rt_list_cons(label, list_id);
+        } else {
+            /* DFS: push the last child first, to visit the first one FIRST
+               (LIFO). */
+            for (int i = arity - 1; i >= 0; i--) stack[sp++] = ch[i];
         }
     }
     yon_xheap_strip_trim(g_yon_heap, off, 0u, cap * (uint32_t)sizeof(uint32_t));
@@ -6333,17 +6195,29 @@ double yon_rt_arena_empty(void) {
     return (double)(id + 1);   /* handle = id + 1, 0 reserved as invalid */
 }
 
+/* A value enters its slot as its 64 bits and comes back the same bits: the
+ * declared type of the arena says how to read them (a Number, an Int64 ...);
+ * the slot carries no tag. Identity inside the arena is identity of bits. */
+static uint64_t slot_bits(double v) { uint64_t u; memcpy(&u, &v, sizeof u); return u; }
+static double slot_value(uint64_t u) { double v; memcpy(&v, &u, sizeof v); return v; }
+
 double yon_rt_arena_put(double h, double point, double value) {
     ds_arena_t *a = arena_of(h);
     if (!a) return 0.0;
-    yon_arena_put_repr(a, (yon_xcoord_t)(uint32_t)point, (uint32_t)value);
+    yon_arena_put_value(a, (yon_xcoord_t)(uint32_t)point, slot_bits(value));
     return h;   /* chainable: returns the same handle */
 }
 
-double yon_rt_arena_get(double h, double point) {
+/* The value at an occupied point; at an empty one it stops the program (the
+ * place's `get` asks `occupied` first and answers Absent). */
+double yon_rt_arena_value(double h, double point) {
     ds_arena_t *a = arena_of(h);
-    if (!a) return 0.0;
-    return (double)yon_arena_get_repr(a, (yon_xcoord_t)(uint32_t)point);
+    uint64_t bits;
+    if (!a || !yon_arena_get_value(a, (yon_xcoord_t)(uint32_t)point, &bits)) {
+        fprintf(stderr, "[YON-RT] arena: no value at point %.17g\n", point);
+        abort();
+    }
+    return slot_value(bits);
 }
 
 double yon_rt_arena_occupied(double h, double point) {
@@ -6368,7 +6242,7 @@ double yon_rt_arena_same_orbit(double h, double pa, double pb) {
 double yon_rt_arena_fuse(double h, double point, double value, double sigma) {
     ds_arena_t *a = arena_of(h);
     if (!a) return 0.0;
-    yon_arena_put_fusion(a, (yon_xcoord_t)(uint32_t)point, (uint32_t)value, (uint32_t)sigma);
+    yon_arena_put_fusion(a, (yon_xcoord_t)(uint32_t)point, slot_bits(value), (uint32_t)sigma);
     return h;   /* chainable */
 }
 
@@ -7027,7 +6901,7 @@ double yon_rt_space_get(double space_id) {
 /* Mutable-cell reclaim by stack discipline. A function's mutable-local cells do
  * NOT escape: `return` reads the cell's value, and a closure that captures a
  * cell's handle is rejected by the type checker before it can leave the call
- * (S-08, the mobility judgment in tycheck.ml), so the cells are LIFO with
+ * (the mobility judgment in tycheck.ml), so the cells are LIFO with
  * respect to calls. The compiler captures the high-water
  * mark on entry (yon_rt_space_mark) and, once the return value is materialized,
  * frees every cell allocated during the call by resetting the counter to the mark
@@ -7460,7 +7334,7 @@ double yon_rt_string_concat(double a_id_d, double b_id_d) {
     const char *pb = (const char *)yon_xheap_slot_payload_any(xb);
     if (!pa || !pb) return 0.0;
     size_t la = strlen(pa), lb = strlen(pb);
-    /* 2026-06-04: no length cap. Stack buffer for the common case, heap
+    /* No length cap. Stack buffer for the common case, heap
      * for large results; the limit is memory (and the heap arena, which
      * the chain extends by itself). */
     char stack_buf[1024];
@@ -7639,7 +7513,7 @@ double yon_rt_file_exists(double path_id_d) {
 }
 
 /* ============================================================== */
-/* v1.0 perimeter — File write, Env, Args (decision 2026-06-03)    */
+/* System perimeter — File write, Env, Args                        */
 /* ============================================================== */
 
 /* Shared idiom: a String is an xheap slot on g_ds_heap whose payload is a
@@ -7933,51 +7807,6 @@ double yon_rt_bits_and_64(double a, double b) {
 }
 double yon_rt_bits_xor_64(double a, double b) {
     return (double)((uint64_t)a ^ (uint64_t)b);
-}
-
-/* HashSet.try_add — returns 1.0 if new, 0.0 if already present. */
-double yon_rt_hashset_try_add(double set_id, double elem) {
-    ds_ensure_init();
-    ds_hashset_t *hs = (set_id < 0.5) ? NULL : hashset_lookup(set_id);
-    if (!hs) return -1.0;  /* error: invalid set_id */
-    if ((uint64_t)hs->n_entries * 10u >= (uint64_t)hs->dir_slots * 7u) {
-        (void)hashset_grow(hs);
-    }
-    uint32_t h = hash_f64(elem);
-    double *keys = hs_keys(hs);
-    uint32_t *occ = hs_occ(hs);
-    for (uint32_t i = 0; i < hs->dir_slots; i++) {
-        uint32_t idx = (h + i) % hs->dir_slots;
-        if (!hs_bit_get(occ, idx)) {
-            keys[idx] = elem;
-            hs_bit_set(occ, idx);
-            hs->n_entries++;
-            return 1.0;  /* new */
-        }
-        if (keys[idx] == elem) return 0.0;  /* already present */
-    }
-    return -1.0;  /* directory full */
-}
-
-
-/* HashSet.at_bucket / dir_capacity.
- * Enable ZERO-ALLOC iteration over the HashSet keys[] via
- * outer loop (while in Yon). No to_list, no cons cells.
- * Critical for multi-run: the xheap does not run out. */
-double yon_rt_hashset_at_bucket(double set_id, double idx_d) {
-    ds_hashset_t *hs = hashset_lookup(set_id);
-    if (!hs) return -1.0;
-    uint32_t idx = (uint32_t)idx_d;
-    if (idx >= hs->dir_slots) return -1.0;
-    if (!hs_bit_get(hs_occ(hs), idx)) return -1.0;
-    return hs_keys(hs)[idx];
-}
-
-/* Directory capacity of the given set (dynamic, per-set). */
-double yon_rt_hashset_dir_capacity(double set_id) {
-    ds_hashset_t *hs = hashset_lookup(set_id);
-    if (!hs) return 0.0;
-    return (double)hs->dir_slots;
 }
 
 /* ============================================================== */

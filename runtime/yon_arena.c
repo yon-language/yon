@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_arena.c — the Leech type-2 arena. See yon_arena.h.
- * Brick 1: structure + canonical repr put/get, mmap-always, MPHF-indexed. */
+ * Structure + value put/get, mmap-always, MPHF-indexed. */
 #include "yon_arena.h"
 #include "xleech2_mphf.h"   /* yon_mphf_index, YON_MPHF_INVALID */
 #include "xleech2_heap.h"   /* YON_HEAPREF_INVALID */
@@ -12,13 +12,13 @@
 #include <stddef.h>
 #include <string.h>
 
-/* One slot per type-2 lattice position. The form is final (road 3): the
- * canonical repr, the head of the sigma-certified fusion list, and occupancy.
- * Fusions are populated by a later brick; here fusions_head is set INVALID. */
+/* One slot per type-2 lattice position: the value, inline, as its 64 bits;
+ * the head of the sigma-certified fusion list; the orbit; and whether the
+ * slot holds a value. Occupancy is its own bit: no value means "empty". */
 typedef struct {
-    uint32_t repr;          /* heapref of the canonical value (valid iff occupied) */
+    uint64_t value;         /* the value's bits (meaningful iff occupied) */
     uint32_t fusions_head;  /* heapref of the fusion-list head, or INVALID */
-    uint32_t orbit;         /* M24 orbit invariant, sealed at put_repr */
+    uint32_t orbit;         /* M24 orbit invariant, sealed at put */
     uint8_t  occupied;
 } arena_slot_t;
 
@@ -26,7 +26,7 @@ typedef struct {
  * (a transport id, the Curtis witness) that carries it onto the canonical repr,
  * and the heapref of the next node. Built by put_fusion, never mutated. */
 typedef struct {
-    uint32_t value;
+    uint64_t value;  /* the fused value's bits */
     uint32_t sigma;
     uint32_t next;   /* heapref of the next node, or YON_HEAPREF_INVALID */
 } arena_fusion_node_t;
@@ -59,23 +59,24 @@ void yon_arena_destroy(ds_arena_t *a) {
     yon_unmap(a, sizeof(struct ds_arena));
 }
 
-int yon_arena_put_repr(ds_arena_t *a, yon_xcoord_t point, uint32_t repr) {
+int yon_arena_put_value(ds_arena_t *a, yon_xcoord_t point, uint64_t value) {
     uint32_t idx = yon_mphf_index(point);
     if (idx == YON_MPHF_INVALID) return 0;
     arena_slot_t *s = &a->slots[idx];
-    s->repr = repr;
+    s->value = value;
     s->fusions_head = YON_HEAPREF_INVALID;
     s->orbit = arena_m24_orbit(point);   /* sealed at allocation, never recomputed */
     s->occupied = 1;
     return 1;
 }
 
-uint32_t yon_arena_get_repr(const ds_arena_t *a, yon_xcoord_t point) {
+int yon_arena_get_value(const ds_arena_t *a, yon_xcoord_t point, uint64_t *out) {
     uint32_t idx = yon_mphf_index(point);
-    if (idx == YON_MPHF_INVALID) return YON_HEAPREF_INVALID;
+    if (idx == YON_MPHF_INVALID) return 0;
     const arena_slot_t *s = &a->slots[idx];
-    if (!s->occupied) return YON_HEAPREF_INVALID;
-    return s->repr;
+    if (!s->occupied) return 0;
+    *out = s->value;
+    return 1;
 }
 
 int yon_arena_occupied(const ds_arena_t *a, yon_xcoord_t point) {
@@ -85,7 +86,7 @@ int yon_arena_occupied(const ds_arena_t *a, yon_xcoord_t point) {
 }
 
 int yon_arena_put_fusion(ds_arena_t *a, yon_xcoord_t point,
-                         uint32_t value, uint32_t sigma) {
+                         uint64_t value, uint32_t sigma) {
     uint32_t idx = yon_mphf_index(point);
     if (idx == YON_MPHF_INVALID) return 0;
     arena_slot_t *s = &a->slots[idx];

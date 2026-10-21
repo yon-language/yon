@@ -55,7 +55,7 @@ let is_cubical_name (n : string) : bool =
 let rec classify_ty (t : ty) : fragment =
   match t with
   | TyUser n when is_cubical_name n -> FragCubical
-  | TyList inner | TyStream inner -> classify_ty inner
+  | TyList inner | TyChannel inner -> classify_ty inner
   | TyMap (k, v) ->
       (match classify_ty k, classify_ty v with
        | FragCubical, _ | _, FragCubical -> FragCubical
@@ -164,7 +164,7 @@ let rec lift_to_cubical (t : ty) : Cubical.ctype =
       Cubical.CTBase t
   | TyList inner -> Cubical.CTBase (TyList inner)
   | TyMap (k, v) -> Cubical.CTBase (TyMap (k, v))
-  | TyStream inner -> Cubical.CTBase (TyStream inner)
+  | TyChannel inner -> Cubical.CTBase (TyChannel inner)
   | TySum _ | TySumIn _ -> Cubical.CTBase t
   | TyHeytInt _ -> Cubical.CTBase t
   | TyArrow _ -> Cubical.CTBase t
@@ -263,6 +263,16 @@ let rec arith_of_ast (t : Ast.term) : Surface_ast.expr option =
   | Ast.App (Ast.App (Ast.Var "__sub", a), b) -> binop S.OpSub a b
   | Ast.App (Ast.App (Ast.Var "__mul", a), b) -> binop S.OpMul a b
   | Ast.App (Ast.App (Ast.Var "__div", a), b) -> binop S.OpDiv a b
+  (* the Int64 instructions are the same ring operations, in Z/2^64 *)
+  | Ast.App (Ast.App (Ast.Var "__i64_add", a), b) -> binop S.OpAdd a b
+  | Ast.App (Ast.App (Ast.Var "__i64_sub", a), b) -> binop S.OpSub a b
+  | Ast.App (Ast.App (Ast.Var "__i64_mul", a), b) -> binop S.OpMul a b
+  | Ast.App (Ast.App (Ast.Var "__i64_div", a), b) -> binop S.OpDiv a b
+  | Ast.Var name when String.length name > 6
+                       && String.sub name 0 6 = "__i64_"
+                       && Int64.of_string_opt (String.sub name 6 (String.length name - 6)) <> None ->
+      Some (S.ELit (S.LitNumber
+              (Int64.to_float (Int64.of_string (String.sub name 6 (String.length name - 6)))), loc))
   | Ast.Var name when String.length name > 6
                        && String.sub name 0 6 = "__num_" ->
       (try
@@ -280,10 +290,42 @@ let rec arith_of_ast (t : Ast.term) : Surface_ast.expr option =
  * inliner (Naturality_symcheck.normalize with its magic-number cap of 50) and
  * the global surface_fun_idx ref: one normalizer (the kernel), no parallel
  * surface path, no cap. *)
-let ty_term_equal
+(* A name in a code resolves as a name in a term does: a variable in scope
+   first, then a constructor of a known inductive (declared or built in, a
+   point or a path). A code written `C(base)` or `C(loop @ i)` and the code
+   the checker builds from the constructor are then the same term. *)
+let resolve_points (env : Tyenv.env) (e : expr) : expr =
+  let is_point x =
+    Tyenv.lookup_var env x = None
+    && ((match Tyenv.named_sum_of_ctor env x with
+         | Some (_, vs) -> List.exists (fun v -> v.v_name = x && v.v_args = []) vs
+         | None -> false)
+        || (match Hit_env.find_constructor Hit_env.builtin_env x with
+            | Some (_, kind) -> Hit_env.constructor_params kind = []
+            | None -> false)) in
+  List.fold_left
+    (fun e x ->
+       if is_point x then Desugar.subst_evar_in_expr x (EHITConstr (x, [], dummy_loc)) e
+       else match Surface_ast.prim_of_face x with
+         | Some prim when Tyenv.lookup_var env x = None ->
+             (* a fused face named in a code is its primitive code *)
+             Desugar.subst_evar_in_expr x (EVar (prim, dummy_loc)) e
+         | _ -> e)
+    e (List.sort_uniq compare (Desugar.free_vars_in_expr [] e))
+
+(* The ring laws hold where the carrier is a ring: Int64 is Z/2^64. Number
+   (f64) is not a ring — (x * 3) / 3 is not x, and addition does not
+   associate — so between Numbers only definitional equality holds. *)
+let is_ring_carrier (t : ty) : bool =
+  match t with
+  | TyUser "Int64" | TyPrim "i64" -> true
+  | _ -> false
+
+let ty_term_equal ?(carrier : ty option)
     (env : Tyenv.env) (ctx : Reduce.ctx) (t1 : ty_term) (t2 : ty_term) : bool =
   match t1, t2 with
   | TyTermExpr e1, TyTermExpr e2 ->
+      let e1 = resolve_points env e1 and e2 = resolve_points env e2 in
       if Naturality_symcheck.expr_equal e1 e2 then true
       else
         (match Desugar.desugar_expr_pure env e1,
@@ -294,9 +336,12 @@ let ty_term_equal
              let nf2 = Reduce.normalize dctx c2 in
              if Ast.term_equal nf1 nf2 then true
              else
-               (match arith_of_ast nf1, arith_of_ast nf2 with
-                | Some a1, Some a2 ->
-                    Naturality_symcheck.ring_equal a1 a2 = Some true
+               (match carrier with
+                | Some c when is_ring_carrier c ->
+                    (match arith_of_ast nf1, arith_of_ast nf2 with
+                     | Some a1, Some a2 ->
+                         Naturality_symcheck.ring_equal a1 a2 = Some true
+                     | _ -> false)
                 | _ -> false)
          | _ -> false)
 
@@ -308,7 +353,7 @@ let rec type_equal
    * type, so the equality is handled here before the dispatch. *)
   match t1, t2 with
   | TyHeytInt n1, TyHeytInt n2 -> n1 = n2
-  (* String fusion (2026-06-03): "text" and "String" are the SAME semantic
+  (* String fusion: "text" and "String" are the SAME semantic
    * object — sections of the builtin String place (runtime: xheap handle).
    * Bidirectional, like boolean/proposition. *)
   | TyPrim "text", TyUser "String" -> true
@@ -322,10 +367,13 @@ let rec type_equal
   | TyUser u, TyPrim p when
       (match Hashtbl.find_opt Surface_ast.fusion_places u with
        | Some p' -> p' = p | None -> false) -> true
-  (* Type application vs its head: a bare place `Box` (as built by `new Box`) is
-   * compatible with an instance annotation `Box<number>`, and two instances of
-   * the same generic agree — the checker is monomorphic, so the head decides. *)
-  | TyApp (n1, _), TyApp (n2, _) -> n1 = n2
+  (* Type application vs its head: a bare place `Box` (as built by `.-> Box { ... }`)
+   * is an instance whose arguments are open, compatible with `Box<number>`. Two
+   * instances are the same type when their arguments are: `Box<Int64>` is not
+   * `Box<Number>`. *)
+  | TyApp (n1, a1), TyApp (n2, a2) ->
+      n1 = n2 && List.length a1 = List.length a2
+      && List.for_all2 (type_equal env ctx) a1 a2
   | TyApp (n1, _), TyUser n2 | TyUser n1, TyApp (n2, _) -> n1 = n2
   (* NB: the one-way PROMOTIONS  number <: heyt_int  and  heyt_int <: proposition
    * used to live here as SYMMETRIC arms, which unsoundly also accepted the
@@ -360,10 +408,11 @@ let rec type_equal
        | None, _ | _, None -> true
        | Some n1, Some n2 -> n1 = n2)
   | TyEl c1, TyEl c2 ->
-      (* El(c1) = El(c2) iff the decoded carriers are equal. *)
-      let nm c = (match c with Surface_ast.TyTermExpr e -> Surface_ast.ty_term_to_name e) in
-      Catt_r_yon.el_equal env ctx
-        (Catt_r_yon.TmVar (nm c1)) (Catt_r_yon.TmVar (nm c2))
+      (* El(c1) = El(c2) iff c1 and c2 are the same code: the same normal form
+         under the certified deltas. A code's printed name only displays it;
+         it never decides an equality (two codes applied to different
+         arguments print alike). *)
+      ty_term_equal env ctx c1 c2
   | TyId (a1, x1, y1), TyId (a2, x2, y2) ->
       (* Identity types are equal iff the carriers AND both endpoints match.
        * This is what makes equiv's coherence check non-vacuous: the type
@@ -371,14 +420,16 @@ let rec type_equal
        * lift_to_cubical, which discards the endpoints — so any two paths over
        * the same carrier compared equal, and the coherence check was empty. *)
       type_equal env ctx a1 a2
-      && ty_term_equal env ctx x1 x2 && ty_term_equal env ctx y1 y2
+      && ty_term_equal ~carrier:a1 env ctx x1 x2
+      && ty_term_equal ~carrier:a1 env ctx y1 y2
   | TyPathP ((i1, a1), x1, y1), TyPathP ((i2, a2), x2, y2) ->
       (* Same soundness reason as the TyId arm above: a path from p to q is NOT
        * the same type as a path from p to r, so the carrier AND both endpoints
        * must match. Without this arm TyPathP fell through to lift_to_cubical,
        * which discards the endpoints (replacing them with the fixed placeholders
        * __endpoint_x/_y at L156), so any two PathP over the same carrier
-       * compared equal — the exact endpoint-blind hole TyId had before e44e5f9.
+       * compared equal — the same endpoint-blind hole a TyId would have
+       * without its own arm.
        *
        * Difference from TyId: PathP binds an interval variable i in the carrier
        * line (i. A), so the carriers are compared UP TO the bound interval-name,
@@ -387,7 +438,8 @@ let rec type_equal
        * no free i and are compared directly — exactly like TyId. *)
       let a2' = if String.equal i1 i2 then a2 else rename_ty i2 i1 a2 in
       type_equal env ctx a1 a2'
-      && ty_term_equal env ctx x1 x2 && ty_term_equal env ctx y1 y2
+      && ty_term_equal ~carrier:a1 env ctx x1 x2
+      && ty_term_equal ~carrier:a1 env ctx y1 y2
   | TyPi (v1, d1, c1), TyPi (v2, d2, c2) ->
       (* Dependent function types, compared up to the bound variable name. *)
       type_equal env ctx d1 d2
@@ -426,6 +478,13 @@ let rec type_equal
  *     number      <: heyt_int<N>   (mask=0: every bit certain; coerced at emit)
  *     heyt_int<N> <: proposition   (bit-by-bit lowered to scalar PROP at emit)
  *     number      <: proposition   (by transitivity)
+ *     boolean     <: proposition   (the characteristic mono 2 -> Omega:
+ *                                   true is the top, false the bottom; the
+ *                                   converse needs decidability)
+ *     Id(A, x, y) <: Path          (forget the endpoints: a bare Path is the
+ *                                   total space Σ(x y : A). Id(A, x, y); the
+ *                                   converse is refused, the endpoints of a
+ *                                   bare Path are not known)
  * These promotions previously lived as SYMMETRIC arms in type_equal, which
  * unsoundly accepted the reverse direction (a heyt_int where a number is
  * expected). Routing them through this directional relation, used only at
@@ -435,8 +494,10 @@ let subtype (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : boo
   type_equal env ctx super sub
   || (match sub, super with
       | TyPrim "number", TyHeytInt _ -> true
-      | TyHeytInt _, TyPrim "proposition" -> true
-      | TyPrim "number", TyPrim "proposition" -> true
+      | TyHeytInt _, (TyPrim "proposition" | TyUser "proposition") -> true
+      | TyPrim "number", (TyPrim "proposition" | TyUser "proposition") -> true
+      | TyPrim "boolean", (TyPrim "proposition" | TyUser "proposition") -> true
+      | TyId _, (TyUser "Path" | TyPrim "Path") -> true
       | _ -> false)
 
 (* ─── Term equality dispatcher ─────────────────────────────────────── *)

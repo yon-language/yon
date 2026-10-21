@@ -38,8 +38,12 @@ Shutdown cascades from the caller; nothing outlives the conversation.
 
 In the language this transport is the `Wire` family: `Wire.make` /
 `Wire.send` / `Wire.recv` within one process, the `_shm` variants
-across processes, the `_net` variants across machines. `Stream` is the
-sequence (map, filter, fold); `Wire` is how Spaces talk.
+across processes, the `_net` variants across machines. There is one
+concept of channel: the values a `produce { emit … }` block emits go
+through a local `Wire<T>`, by the same mechanism, and so do the values a
+`spawn` promotes and the emissions a subscription receives. `Wire<T>` is its
+type. A `Sequence<T>` (finite) and a `Stream<T>` (infinite) are pure values,
+not channels (chapter 12).
 
 Transport is a POSIX shared-memory region named after the Space, inside the
 world instance it belongs to (below), designed to be **position-independent**: a fixed header followed by a ring
@@ -77,7 +81,7 @@ consumer exerts **back-pressure** instead of dropping frames.
 ## Crossing by value: the DTO wire
 
 The numeric door above carries a *call*. A second path carries *data*. When a
-producer Space exports a `Stream<Place>` and a consumer subscribes to it,
+producer Space exports a `Wire<Place>` and a consumer subscribes to it,
 the values themselves cross, not handles to them. The model is a **wormhole**:
 a value is copied out of the producer, flattened to bytes, sent, and rebuilt in
 the consumer's own heap. Nothing is shared after transit; the two processes
@@ -119,7 +123,7 @@ In the language this is the subscription pipeline:
 
 ```yon
 // Entry.yon, the consumer
-import weather::forecasts from Weather    // forecasts: fun(): Stream<Reading>
+import weather::forecasts from Weather    // forecasts: fun(): Wire<Reading>
 
 place Entry { }
 fun main(): Number {

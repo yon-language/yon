@@ -13,9 +13,9 @@
 //
 // types: NUMBER=1, BOOL=2, ERROR=0.
 // AST tags: 1=Lit(number), 2=Add, 3=Mul, 4=Bool, 5=Lt(a,b):bool, 6=If(c, PAIR(t,e)).
-// NB If uses NESTED node2 (cond, node2(0,then,else)), not node3: MerkleTree.child on a
-// node3 at index 2 returns a sentinel at runtime (a real arity limit of the accessor),
-// so binary spines are the safe encoding for arity > 2.
+// NB If uses NESTED node2 (cond, node2(0,then,else)), not node3: a node3 is the same
+// node whatever the order of its children (they are sorted, an S_3 orbit), so it cannot
+// hold an ordered triple; binary spines keep the order for arity > 2.
 
 fun mk_lit(n: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
 fun mk_bool(b: Number): MerkleTree { return MerkleTree.node2(4, MerkleTree.leaf(b), MerkleTree.leaf(0)) }

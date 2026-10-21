@@ -48,7 +48,7 @@ Docusaurus site. The JP epub is supplied alongside this prompt; read it.
 3. **Exact vocabulary.** Use only the names that actually exist in Yon. In
    particular: there is NO `section` keyword — it is only the internal name of the
    MLIR type `!topos.section<"P">`. At the surface, an inhabitant of a place is
-   built with `new P { ... }` and a name is bound with `be x holds e`. Verify
+   built with the mediating arrow `.-> P { ... }` and a name is bound with `be x holds e`. Verify
    every keyword against `frontend/lexer.mll` before using it in an example.
 
 4. **Language:** the book's prose is in **English** (technical register, warm in
@@ -272,7 +272,7 @@ untouched; these are the corrections to apply when executing.
 
 Confirmed TRUE in the spec:
 - **No `section` keyword** — 0 matches. It is the MLIR type name only. ✓
-- `new P { ... }` builds an inhabitant — `NEW` token, `lexer.mll:173`. ✓
+- `.-> P { ... }` builds an inhabitant — `DOTARROW` token (`new` is not a keyword). ✓
 - `be x holds e` is the binding form — `LET`/`HOLDS`, `lexer.mll:121,186`. ✓
 - `place` / `space` / `wire` / `morphism` are real keywords. ✓
 - The four arrows `move` / `view` / `reduction` / `operation` are real. ✓
@@ -289,7 +289,7 @@ filename=placename"):
   `place Counter with effects { count number  operation tick(n: number): number }`
   (`examples/reduction_fold/w/Counter.yon`). (An earlier draft of this note said
   "no `place` keyword" — that was wrong; filename = place name is the constraint,
-  the keyword stays in the body. Verify the exact field/`new` syntax from examples
+  the keyword stays in the body. Verify the exact field/`.->` syntax from examples
   before any snippet.)
 - **directory = space.** The first path segment under the root is the space
   (`space_of`, `package_layout.ml:29-43`). `paddocks/Rex.yon` → space `paddocks`.

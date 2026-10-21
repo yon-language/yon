@@ -69,26 +69,19 @@ static std::string computeOpFingerprint(Operation *op,
 }
 
 // An op is a candidate for collapse if: it has exactly one result, no region,
-// and is pure. Purity is (1) the MemoryEffectFree trait, or (2) a func.call to
-// a runtime in the "known-pure" whitelist — Yon's content-addressed loaders,
-// which are referentially transparent (same SSA input => same output) even
-// though MLIR treats func.call as potentially having effects.
+// and is pure. Purity is (1) the MemoryEffectFree trait, or (2) a func.call
+// whose callee declares an empty effect signature (`topos.effects = []`): the
+// frontend states it on the declaration of a function whose result is fixed
+// by its operands and that changes nothing. A callee without it has effects.
+// The pass never decides purity from a callee's name.
 static bool isKnownPureCall(Operation *op) {
   auto call = llvm::dyn_cast<func::CallOp>(op);
   if (!call) return false;
-  StringRef callee = call.getCallee();
-  // Referentially-transparent runtimes: the value depends only on the SSA
-  // operands. field_load from a section, list head/tail, merkle equal, hsh
-  // contains/levels: all deterministic and with no observable side effect.
-  static const char *pureRuntimes[] = {
-      "yon_rt_field_load", "yon_rt_list_head",  "yon_rt_list_tail",
-      "yon_rt_list_length", "yon_rt_merkle_equal", "yon_rt_merkle_label",
-      "yon_rt_merkle_child", "yon_rt_hsh_contains", "yon_rt_hsh_levels",
-      "yon_rt_hashset_contains", "yon_rt_hashset_size", "yon_rt_map_get",
-      "to_prop", "to_bool", "to_bool_dec"};
-  for (const char *p : pureRuntimes)
-    if (callee == p) return true;
-  return false;
+  auto callee = SymbolTable::lookupNearestSymbolFrom<func::FuncOp>(
+      op, call.getCalleeAttr());
+  if (!callee) return false;
+  auto effects = callee->getAttrOfType<ArrayAttr>("topos.effects");
+  return effects && effects.empty();
 }
 
 static bool isCollapsible(Operation *op) {

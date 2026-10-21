@@ -26,8 +26,12 @@ yon_rt.o: yon_rt.c yon_rt_hsh.c
 # generated output we must not edit)
 vendor/mmgroup/%.o: vendor/mmgroup/%.c
 	$(CC) -std=c11 -O2 -Ivendor/mmgroup -c $< -o $@
+# every object depends on the headers it includes, as the compiler sees them:
+# a change to a header rebuilds what includes it
+DEPFLAGS = -MMD -MP
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 clean:
-	rm -f *.o vendor/mmgroup/*.o
+	rm -f *.o *.d vendor/mmgroup/*.o
 .PHONY: all clean
+-include $(OBJS:.o=.d)

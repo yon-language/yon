@@ -1,6 +1,6 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* test_path_typing.ml — Task 0-A: precise surface typing of path operators.
+(* test_path_typing.ml — precise surface typing of path operators.
  *
  * concat/inv compute the correct endpoints on STRUCTURED identity types
  * (Id A x y), and a non-composable concat is a CLEAN type error.  Checked
@@ -8,11 +8,10 @@
  * refl(a) : Id(A,a,a) (the ERefl node already tracks real endpoints), and
  * annotated variables p : Id(A,a,b).
  *
- * transport/ap full precision is a FLAGGED surface-architecture item, not a
- * silent gap: transport A->B over a universe path needs type-paths carried
- * as codes; ap : Id (f a)(f b) needs the argument *expression* of f (the
- * cubical dispatch currently receives only argument TYPES).  See the Task
- * 0-A gate report.  Not exercised here — no fake precision. *)
+ * A path between types is Id(Type, A, B), its endpoints the codes of A and B:
+ * transport reads its target from the path's type, whatever form the path
+ * has; a path whose endpoints are not known types is refused. path_app has
+ * the path's carrier type, unglue gives back the base its glue recorded. *)
 
 open Surface_ast
 
@@ -100,6 +99,38 @@ let () =
        check "transport(ua(e), text-value) REJECTED (source != A)" true
    | Ok other ->
        check (Printf.sprintf "transport source-mismatch WRONGLY accepted: %s" (Tyenv.ty_to_string other)) false);
+
+  (* a NAMED universe path: the target is read from its type *)
+  let env_u = Tyenv.add_vars env
+      [("u", TyId (TyUniverse 0, tt "number", tt "text")); ("p", TyUser "Path")] in
+  (match Tycheck.infer env_u ctx (ECall ("transport", [EVar ("u", dl); EVar ("a", dl)], dl)) with
+   | Ok (TyPrim "text") -> check "transport(u : Id(Type, Number, Text), a) : Text" true
+   | Ok other -> check (Printf.sprintf "transport along u: unexpected %s" (Tyenv.ty_to_string other)) false
+   | Error e -> check (Printf.sprintf "transport along u: infer failed: %s" (Tycheck.error_to_string e)) false);
+  (* a path without known endpoints carries no target: refused *)
+  (match Tycheck.infer env_u ctx (ECall ("transport", [EVar ("p", dl); EVar ("a", dl)], dl)) with
+   | Error _ -> check "transport(p : Path, a) REJECTED (no endpoints)" true
+   | Ok other -> check (Printf.sprintf "transport along a bare Path WRONGLY typed %s" (Tyenv.ty_to_string other)) false);
+
+  (* path_app has the carrier type of the path *)
+  (match Cubical_bindings.check_call "path_app" [TyId (num, tt "a", tt "b"); TyPrim "unknown"] with
+   | Ok t when t = num -> check "path_app(p : Id(number, a, b), i) : number" true
+   | Ok other -> check (Printf.sprintf "path_app: unexpected %s" (Tyenv.ty_to_string other)) false
+   | Error m -> check ("path_app: " ^ m) false);
+  (match Cubical_bindings.check_call "path_app" [num; TyPrim "unknown"] with
+   | Error _ -> check "path_app on a non-path REJECTED" true
+   | Ok _ -> check "path_app on a non-path WRONGLY accepted" false);
+
+  (* glue records its base; unglue gives it back *)
+  (match Cubical_bindings.check_call "glue" [TyPrim "unknown"; num] with
+   | Ok (TyApp ("Glue", [b])) when b = num ->
+       (match Cubical_bindings.check_call "unglue" [TyApp ("Glue", [num])] with
+        | Ok t when t = num -> check "unglue(glue(t, a : number)) : number" true
+        | _ -> check "unglue does not give back the glue's base" false)
+   | _ -> check "glue does not record its base" false);
+  (match Cubical_bindings.check_call "unglue" [num] with
+   | Error _ -> check "unglue on a non-glued value REJECTED" true
+   | Ok _ -> check "unglue on a non-glued value WRONGLY accepted" false);
 
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   if !fail > 0 then exit 1

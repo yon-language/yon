@@ -32,6 +32,10 @@ type code =
   | Lex_bad_token
   (* E2xxx type *)
   | Type_check
+  | Return_not_in_tail
+  | Effect_unhandled
+  | Law_refuted
+  | Law_uncertified
   (* E3xxx Space semantics *)
   | Union_arms_cross_space
   | Drop_still_live
@@ -52,6 +56,10 @@ let id : code -> string = function
   | Parse_syntax        -> "E1001"
   | Lex_bad_token       -> "E1002"
   | Type_check          -> "E2001"
+  | Return_not_in_tail  -> "E2002"
+  | Effect_unhandled    -> "E2003"
+  | Law_refuted         -> "E2101"
+  | Law_uncertified     -> "E2102"
   | Union_arms_cross_space -> "E3003"
   | Drop_still_live     -> "E3001"
   | Drop_unknown_space  -> "E3002"
@@ -66,7 +74,9 @@ let id : code -> string = function
   | Lint_unused_import  -> "W3001"
 
 let severity : code -> severity = function
-  | Parse_syntax | Lex_bad_token | Type_check
+  | Parse_syntax | Lex_bad_token | Type_check | Return_not_in_tail | Effect_unhandled
+  | Law_refuted
+  | Law_uncertified
   | Union_arms_cross_space
   | Drop_still_live | Drop_unknown_space | Wire_boundary
   | Topos_layout | Entrypoint | File_layout | Manifest -> Error
@@ -78,6 +88,9 @@ let severity : code -> severity = function
 let cli_prefix : code -> string = function
   | Parse_syntax | Lex_bad_token -> "PARSE ERROR"
   | Type_check                   -> "TYPE ERROR"
+  | Return_not_in_tail           -> "TYPE ERROR"
+  | Effect_unhandled             -> "TYPE ERROR"
+  | Law_refuted | Law_uncertified -> "LAW ERROR"
   | Union_arms_cross_space -> "TYPE ERROR"
   | Drop_still_live | Drop_unknown_space -> "DROP ERROR"
   | Wire_boundary                -> "WORLD BOUNDARY ERROR"
@@ -92,6 +105,10 @@ let title : code -> string = function
   | Parse_syntax        -> "syntax error"
   | Lex_bad_token       -> "lexical error"
   | Type_check          -> "type error"
+  | Return_not_in_tail  -> "a return stands at the end of its body"
+  | Effect_unhandled    -> "an operation is called that no reduction handles"
+  | Law_refuted         -> "a declared law is refuted by a counterexample"
+  | Law_uncertified     -> "a declared law is neither proven nor declared an axiom"
   | Union_arms_cross_space -> "the arms of a union must be places of one Space"
   | Drop_still_live     -> "cannot drop a Space still used downstream"
   | Drop_unknown_space  -> "drop of an unknown Space"
@@ -127,7 +144,9 @@ let to_cli (d : t) : string =
  * with the variant above; the gate (regression/test_error_codes.py) proves the
  * assigned ids are all distinct -- the one hazard hand-numbering invites. *)
 let all : code list =
-  [ Parse_syntax; Lex_bad_token; Type_check;
+  [ Parse_syntax; Lex_bad_token; Type_check; Return_not_in_tail; Effect_unhandled;
+    Law_refuted;
+    Law_uncertified;
     Union_arms_cross_space; Drop_still_live; Drop_unknown_space; Wire_boundary;
     Topos_layout; Entrypoint; File_layout; Manifest;
     Lint_dead_function; Lint_unused_binding; Lint_unused_param; Lint_unused_import ]

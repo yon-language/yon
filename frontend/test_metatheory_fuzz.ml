@@ -12,8 +12,8 @@
  *        STUCK refutes Progress; a core TIMEOUT refutes SN. Either fails the test.
  *   P2  CUBICAL no-stuck = the O2 hunt:  same, for cubical terms (PApp/Comp/HComp/HIT),
  *        incl cross-dimensional hcomp faces. A cubical STUCK is the *witness* of the known
- *        canonicity gap O2 (metatheory.md): REPORTED, but does NOT fail the build (O2 is
- *        open by record, not a regression).
+ *        canonicity gap of open cubical terms (metatheory.md): REPORTED, but does NOT
+ *        fail the build (canonicity there is an open question, not a regression).
  *   P3  CONFLUENCE / determinism proxy:  a term and a trivially-wrapped copy must reach
  *        the same normal form; a mismatch refutes determinism and fails.
  *
@@ -172,7 +172,7 @@ let () =
   if core_bug then begin
     Printf.printf "RESULT: FAIL — core Progress/SN or confluence violated.\n"; exit 1
   end else begin
-    (* NOTE (2026-07-08): these generated terms have FREE dimension variables, so a
+    (* These generated terms have FREE dimension variables, so a
        residual hcomp/comp is a legitimately NEUTRAL normal form, not an O2 gap. Closed
        canonicity (the real O2 question) is measured by test_o2_probe.ml — CCHM boundary
        laws + 8000/8000 closed corners → value, cross-dim included. The count below is

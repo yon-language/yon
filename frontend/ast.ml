@@ -55,7 +55,7 @@ type ty =
                                                   Tarski decoding. ty depends on a
                                                   term, exactly as TyId already does. *)
   | TyPlace of string                          (* a named place, e.g. Order *)
-  | TyStream of ty                             (* stream of T *)
+  | TyChannel of ty                             (* Wire<T>: a channel of T *)
   | TyGlue of ty * face_formula * (ty * term) list  (* Glue [phi |-> (T, e)] A *)
   | TyPathP of (string * ty) * term * term     (* PathP (<i> A) x y : dependent path; i binds in A, x:A0, y:A1 *)
 
@@ -274,7 +274,7 @@ and ty_equal_env env t1 t2 =
   | TyDirUniverse n1, TyDirUniverse n2 -> n1 = n2
   | TyEl c1, TyEl c2 -> term_equal_env env c1 c2
   | TyPlace n1, TyPlace n2 -> n1 = n2
-  | TyStream t1', TyStream t2' -> ty_equal_env env t1' t2'
+  | TyChannel t1', TyChannel t2' -> ty_equal_env env t1' t2'
   | _ -> false
 
 and term_equal t1 t2 = term_equal_env [] t1 t2

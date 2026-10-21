@@ -3,7 +3,7 @@ place Entry {
     be m holds HashMap.empty()
     m = HashMap.set(m, 1445, 1)
     m = HashMap.set(m, 1280, 2)
-    be _1 holds Output.print(String.from_int(HashMap.get(m, 1445)))
+    be _1 holds Output.print(String.from_int(match HashMap.get(m, 1445) { Found(v) => v, Absent => 0 }))
     be _2 holds Output.print(String.from_int(if HashMap.has(m, 9999) then 1 else 0))
     be _3 holds Output.print(String.from_int(HashMap.size(m)))
     return 0

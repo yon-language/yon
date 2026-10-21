@@ -3,8 +3,7 @@
 (* type_root.ml — the content-addressed identity of a type.
  *
  * A type is the Merkle root of its canonical form, computed with the same hash
- * as values (FNV-1a 64-bit, runtime/xleech2_heap.c). This is Fase 1 / Step 1 of
- * the Carrier Stage 2 path. The name screw is fixed to Nominal_type (decided by
+ * as values (FNV-1a 64-bit, runtime/xleech2_heap.c). The name screw is fixed to Nominal_type (decided by
  * the type_canon experiment): the type name enters the root; constructors are
  * positional (their names do not enter). So `Bool = True|False` and `Bit =
  * Zero|One` get distinct roots, and the equivalence between them stays a path
@@ -17,7 +16,7 @@
  *
  * Partiality (Zona 1). A type with no runtime value (a universe, a stuck code, a
  * bare type variable) has no root: [type_root] returns None. This frontier
- * coincides with the carrier's [NoCarrier] (Step 4 pins it as invariant I6).
+ * coincides with the carrier's [NoCarrier] (test_type_frontier pins it as an invariant).
  * The canonical form is the normal form: El codes are normalized before hashing.
  *)
 
@@ -61,7 +60,7 @@ let debruijn (name : string) (ctx : string list) : int option =
    concrete nominal leaf iff it names a place or a known runtime carrier; otherwise
    it is a type variable / unresolved and has no root. Mirrors tycheck's check_ty. *)
 let runtime_leaf = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH"; "List"; "Stream";
-                    "Seq"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower";
+                    "Sequence"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower";
                     "MerkleTree"; "VoyagerList"; "String"]
 let is_nominal_leaf (env : TE.env) (n : string) : bool =
   List.mem n runtime_leaf || TE.lookup_place env n <> None
@@ -85,7 +84,7 @@ let rec encode_ty (env : TE.env) (ctx : string list) buf (t : ty) : unit =
   | TySum variants | TySumIn (variants, _) ->
       add_u8 buf 0x04; encode_variants env ctx buf variants        (* anonymous: no type name *)
   | TyList inner -> add_u8 buf 0x05; encode_ty env ctx buf inner
-  | TyStream inner -> add_u8 buf 0x06; encode_ty env ctx buf inner
+  | TyChannel inner -> add_u8 buf 0x06; encode_ty env ctx buf inner
   | TyMap (k, v) -> add_u8 buf 0x07; encode_ty env ctx buf k; encode_ty env ctx buf v
   | TyApp (n, args) ->
       add_u8 buf 0x08; add_name buf n; add_u32 buf (List.length args);

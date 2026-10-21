@@ -1,5 +1,5 @@
 place Entry {
-/* Stdlib estesa turno 33 part 7: String, Time, Random, Crypto. */
+/* Stdlib estesa: String, Time, Random, Crypto. */
 
 fun main(): Number {
   /* String */

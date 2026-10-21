@@ -1,5 +1,5 @@
 place Entry {
-/* stdlib_showcase.yon — turno 33 part 4 (2026-05-30)
+/* stdlib_showcase.yon
  *
  * Showcase di tutti gli moduli stdlib introdotti:
  *   - Math (sqrt, abs, floor, ceil, round, min, max, pow, log, exp, sin, cos, pi, e)
@@ -7,7 +7,7 @@ place Entry {
  *   - Cap (grant, check, revoke)
  *   - MoveRegistry (register_version, current_version)
  *   - IO (print_num)
- *   - Seq (map, filter, fold via stream backbone)
+ *   - Sequence (map, filter, fold via stream backbone)
  *   - Leech (sign_canonical, syndrome, orbit_id, ecc.)
  *
  * Output esempio: solo un numero composito che dimostra che tutto compila e gira. */

@@ -30,10 +30,9 @@ EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
 
 SEEDS = ["20260701", "1"]
 CASES = "500"
-# accepted share of the cases: measured 2026-10-10 at 25-27% on seeds 20260701,
-# 1 and 7 (it was 0% before the generator learned `Number` and arrows-in-the-body:
-# the gate had been fuzzing the rejection path only). Below the floor, the
-# generator has drifted from the language again.
+# floor on the accepted share of the cases: a generator that produces no
+# accepted program fuzzes the rejection path only. Below the floor, the
+# generator has drifted from the language.
 MIN_ACCEPT_SHARE = 0.10
 
 

@@ -1,7 +1,7 @@
 # Declared skips: the only tests allowed not to run in a gate (gate.sh passes
 # --skip-ledger regression/SKIPS.txt to pytest; see conftest.py). Any other skip
 # fails the gate, and so does an entry below that ran. One node per line,
-# relative to regression/, then `# why`. Updated 2026-10-10.
+# relative to regression/, then `# why`.
 
 test_c_coverage.py::test_c_runtime_coverage_floor  # opt-in: --gcov rebuilds the runtime in place
 test_benchmarks.py::test_zz_write_results  # publisher: writes the site data only with --bench-publish

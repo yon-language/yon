@@ -62,7 +62,7 @@ let rec norm_ty (cc : cctx) (t : ty) : ty =
   | TyId (a, t1, t2) ->
       TyId (norm_ty cc a, reduce_full cc t1, reduce_full cc t2)
   | TyEl c -> TyEl (reduce_full cc c)
-  | TyStream a -> TyStream (norm_ty cc a)
+  | TyChannel a -> TyChannel (norm_ty cc a)
   | other -> other
 
 let rec ty_conv (cc : cctx) (env : (string * string) list) (a : ty) (b : ty) : bool =
@@ -93,7 +93,7 @@ let rec ty_conv (cc : cctx) (env : (string * string) list) (a : ty) (b : ty) : b
       && term_equal_env env a1 a2
       && term_equal_env env b1 b2
   | TyEl c1, TyEl c2 -> term_equal_env env c1 c2
-  | TyStream a1, TyStream a2 -> ty_conv cc env a1 a2
+  | TyChannel a1, TyChannel a2 -> ty_conv cc env a1 a2
   | _ -> false
 
 let rec sort_of (cc : cctx) (g : tctx) (t : ty) : int =

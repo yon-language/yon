@@ -12,9 +12,8 @@
 //
 //   Mapping of the ops to the real runtime:
 //
-//     scope { ... }          -> inlined by LowerToposExtensions (81b:
-//                              arena model retired, 2026-06-03)
-//     (section/restrict/probe-escape arena lowerings: RETIRED, 81b)
+//     scope { ... }          -> inlined by LowerToposExtensions (no arena)
+//     (section/restrict/probe-escape: no arena lowering, illegal here)
 //                              + yon_handler_lookup(hash) -> fn_ptr
 //                              + llvm.call indirect (arena, xc, arg)
 //     with_handler { ... }   -> yon_handler_push + body + yon_handler_pop
@@ -43,7 +42,7 @@
 //     apply_move -> func.call to the mangled Move__move (xcoord-based)
 //
 //   scope and handler:
-//     scope { body } -> structural inline (81b; no arena)
+//     scope { body } -> structural inline (no arena)
 //     with_handler { body } -> yon_handler_push + body + yon_handler_pop
 //
 // Operations NOT lowered in this pass (they stay at the Topos level):
@@ -85,7 +84,7 @@ using namespace mlir::topos;
 namespace {
 
 //===----------------------------------------------------------------------===//
-// PlaceLayout: layout dei field di un place (M2)
+// PlaceLayout: the layout of a place's fields, as the frontend wrote it
 //===----------------------------------------------------------------------===//
 
 // Layout information for a single place.
@@ -95,70 +94,54 @@ namespace {
 struct PlaceLayout {
   uint64_t totalSize = 0;
   llvm::StringMap<uint64_t> fieldOffsets;
+  // fieldSizes: field_name -> its size in bytes, as laid out by the frontend.
+  llvm::StringMap<uint64_t> fieldSizes;
   llvm::StringMap<Type> fieldTypes;
   // Ordered list of field names, in declaration order (needed for
   // topos.section, which receives the field_values by position, not by name).
   SmallVector<std::string, 4> fieldOrder;
 };
 
-// Calcola la size in byte di un MLIR type primitivo. Per ora supportiamo
-// only the types the Yon frontend produces: f64 (number, money), i64
-// (count, owner), i1 (boolean), i8 (proposition).
-// Unrecognized types produce 0 (the caller treats 0 as the error sentinel).
-static uint64_t getTypeSizeInBytes(Type t) {
-  if (auto intT = llvm::dyn_cast<IntegerType>(t)) {
-    return (intT.getWidth() + 7) / 8;
-  }
-  if (llvm::isa<Float64Type>(t)) return 8;
-  if (llvm::isa<Float32Type>(t)) return 4;
-  if (llvm::isa<PropositionType>(t)) return 1;  // i8 encoding
-  // Nested section: for now opaque at 8 bytes (a pointer). To be refined.
-  if (llvm::isa<SectionType>(t)) return 8;
-  return 0;
-}
 
-// Computa il layout di tutti i place del modulo. Allineamento naturale
-// dei field (8-byte boundary for f64/i64, 4 per i32, 1 per i8).
-// Strategy: walk all PlaceOps and for each FieldOp inside compute the aligned
-// cumulative offset.
+// The layout of every place of the module, read from its fields: the
+// frontend lays the fields out with one function and writes each field's
+// offset and size on it (`topos.offset`, `topos.size`), the same layout it
+// uses to build a section and to read a primitive field. This pass computes
+// none of its own. A field without them is a module this pass cannot lower
+// faithfully: it is reported, never given a guessed offset.
 static llvm::StringMap<PlaceLayout>
-computePlaceLayouts(ModuleOp module) {
+computePlaceLayouts(ModuleOp module, bool &missing) {
   llvm::StringMap<PlaceLayout> result;
   module.walk([&](PlaceOp place) {
     PlaceLayout layout;
-    uint64_t offset = 0;
     // A fieldless place (terminal object 1) has an empty body region.
     if (place.getBody().empty()) {
       layout.totalSize = 0;
       result[place.getSymName()] = std::move(layout);
       return;
     }
+    uint64_t end = 0;
     for (Operation &nested : place.getBody().front()) {
       auto field = llvm::dyn_cast<FieldOp>(&nested);
       if (!field) continue;
-      Type fieldType = field.getFieldType();
-      uint64_t size = getTypeSizeInBytes(fieldType);
-      if (size == 0) {
-        // Unsupported type: continue with alignment 8 so as not to block the
-        // layout (it will be reported during the lowering of the section).
-        size = 8;
+      auto offAttr = field->getAttrOfType<IntegerAttr>("topos.offset");
+      auto sizeAttr = field->getAttrOfType<IntegerAttr>("topos.size");
+      if (!offAttr || !sizeAttr) {
+        field.emitError("field without topos.offset / topos.size: "
+                        "the frontend lays out every field");
+        missing = true;
+        continue;
       }
-      // Allineamento naturale: offset = roundup(offset, size).
-      // size=1 -> no align; size=4 -> align 4; size=8 -> align 8.
-      uint64_t align = size;
-      if (align > 1) {
-        offset = (offset + align - 1) & ~(align - 1);
-      }
+      uint64_t offset = offAttr.getValue().getZExtValue();
+      uint64_t size = sizeAttr.getValue().getZExtValue();
       std::string name = field.getSymName().str();
       layout.fieldOffsets[name] = offset;
-      layout.fieldTypes[name] = fieldType;
+      layout.fieldSizes[name] = size;
+      layout.fieldTypes[name] = field.getFieldType();
       layout.fieldOrder.push_back(name);
-      offset += size;
+      end = std::max(end, offset + size);
     }
-    // Final padding to 8-byte alignment for safety in nested structs.
-    if (offset > 0)
-      offset = (offset + 7) & ~uint64_t(7);
-    layout.totalSize = offset;
+    layout.totalSize = end;
     result[place.getSymName()] = std::move(layout);
   });
   return result;
@@ -194,7 +177,7 @@ public:
     // lattice has a unique xcoord; the runtime resolves xcoord -> slot
     // via MPHF in O(1) without auxiliary tables.
     //
-    // L1 P8 cross-Space: section -> i64 (packed heap_id<<32 | xcoord).
+    // cross-Space: section -> i64 (packed heap_id<<32 | xcoord).
     // Was i32 (xcoord only). The typeConverter changes; ops that accept/produce
     // a section must now use i64.
     addConversion([this](SectionType /*st*/) -> Type {
@@ -1020,7 +1003,7 @@ static uint64_t typeIdFor(StringRef placeName) {
 }
 
 // Stable TYPEID_CLOSURE constant for the runtime: all closure
-// objects allocated by F2b share this id, so the runtime can
+// objects share this id, so the runtime can
 // dispatch them through yon_probe_dispatch regardless of which
 // (place, op) they were constructed from.
 static constexpr uint64_t YON_TYPEID_CLOSURE = 0x59'4F'4E'5F'43'4C'4F'53ULL;
@@ -1167,17 +1150,15 @@ static Value ptrOffset(OpBuilder &b, Location loc,
 //   replaceOp(%xcoord)
 //===----------------------------------------------------------------------===//
 
-// 81b resolution (2026-06-03): the arena-based lowering that lived here is
-// RETIRED together with the C arena model. The op keeps its dialect-level
-// verifier; a module still containing it past this pass fails legalization
-// loudly instead of silently allocating into a ghost arena.
+// There is no arena-based lowering and no C arena model. The op keeps its
+// dialect-level verifier; a module still containing it past this pass fails
+// legalization loudly instead of silently allocating into a ghost arena.
 
 
 //===----------------------------------------------------------------------===//
-// F2b (escaping-probe closure conversion: memref-encoded closures +
-// MPHF-resolved trampolines) — RETIRED (81b, 2026-06-03) with the arena
-// model. The lowering patterns and their helpers (closureSizeFor,
-// trampolineNameFor) were removed. `topos.probe_construct` /
+// Escaping-probe closure conversion (memref-encoded closures + MPHF-resolved
+// trampolines) belongs to the arena model, which does not exist: there is no
+// pattern for it. `topos.probe_construct` /
 // `topos.probe_apply` are never produced by the canonical frontend; they
 // are listed in `addIllegalOp` below as a hard invariant, so any survivor
 // fails the conversion (no pattern makes it legal) rather than being
@@ -1187,7 +1168,7 @@ static Value ptrOffset(OpBuilder &b, Location loc,
 //===----------------------------------------------------------------------===//
 // topos.section / topos.restrict / topos.glue — arena-section lowerings.
 //
-// RETIRED (81b, 2026-06-03) together with the arena memref model. There
+// No lowering: there is no arena memref model. There
 // is NO LowerSectionOp / LowerRestrictOp / LowerGlueOp pattern. These
 // three ops are listed in `addIllegalOp` below as a hard invariant: the
 // canonical frontend (emit_mlir) never emits them, so they never reach
@@ -1462,8 +1443,8 @@ struct LowerOpApplyOp : public OpConversionPattern<OpApplyOp> {
 // For the baseline we handle only an empty body = default identity copy.
 // Identity requires Src and Dst with the same layout — checked at runtime via
 // an assert on the size (in static MLIR it is a check on the types). A non-empty
-// body is left as TODO: it requires a sub-IR of move expressions that the
-// dialect does not formalize yet.
+// body is not lowered: it needs a sub-IR of move expressions that the dialect
+// does not formalize.
 
 struct LowerMoveOp : public OpConversionPattern<MoveOp> {
   LowerMoveOp(const TypeConverter &tc, MLIRContext *ctx,
@@ -1539,7 +1520,7 @@ struct LowerApplyMoveOp : public OpConversionPattern<ApplyMoveOp> {
 };
 
 //===----------------------------------------------------------------------===//
-// LowerFieldLoadOp (P7-frontend A1)
+// LowerFieldLoadOp
 //===----------------------------------------------------------------------===//
 //
 // topos.field_load %sec, "fname" : !topos.section<"P"> -> ResultTy
@@ -1585,15 +1566,14 @@ struct LowerFieldLoadOp : public OpConversionPattern<FieldLoadOp> {
 //   topos.scope { body }
 //   ->
 //   %slots     = arith.constant 196560 : i32        ; YON_TYPE2_COUNT
-//   (arena bracketing RETIRED — 81b resolution 2026-06-03)
+//   (no arena bracketing)
 //
-// Note: reserved_slots = YON_TYPE2_COUNT = 196560 hard-coded as the default. In
-// a future pass it can become configurable via the attribute
-// `topos.scope { reserved_slots = N }`.
+// Note: reserved_slots = YON_TYPE2_COUNT = 196560 is the fixed default; the
+// attribute `topos.scope { reserved_slots = N }` is not read.
 
-// 81b resolution (2026-06-03): topos.scope / topos.scope_with_yield are
-// inlined structurally by LowerToposExtensions (Step 2b) BEFORE this
-// conversion runs; the arena model is retired. No scope patterns here.
+// topos.scope / topos.scope_with_yield are inlined structurally by
+// LowerToposExtensions (Step 2b) BEFORE this conversion runs; there is no
+// arena model. No scope patterns here.
 
 
 //===----------------------------------------------------------------------===//
@@ -1624,8 +1604,13 @@ struct LowerToposToStandardPass
     ModuleOp module = getOperation();
     MLIRContext *ctx = &getContext();
 
-    // Precompute the layout of each place in the module.
-    auto layouts = computePlaceLayouts(module);
+    // The layout of each place, as the frontend wrote it.
+    bool missingLayout = false;
+    auto layouts = computePlaceLayouts(module, missingLayout);
+    if (missingLayout) {
+      signalPassFailure();
+      return;
+    }
 
     // Pre-pass to generate the runtime functions
     // `<Place>__get_<field>(section) -> FieldTy` referenced by each FieldLoadOp.
@@ -1648,7 +1633,7 @@ struct LowerToposToStandardPass
         }
       };
 
-      // Type yon_rt_field_load: (i64 section, i32 offset, i32 size,
+      // Type yon_rt_field_load_or_stop: (i64 section, i32 offset, i32 size,
       //                           !llvm.ptr out) -> i32 (status).
       // section is now i64 (heap_id+xcoord packed).
       auto i32Ty = builder.getIntegerType(32);
@@ -1658,7 +1643,7 @@ struct LowerToposToStandardPass
       auto rtFieldLoadFnTy = builder.getFunctionType(
           {i64Ty, i32Ty, i32Ty, ptrTy}, {i32Ty});
 
-      // P8: yon_rt_new: (i32 heap_id, ptr payload, i32 size) -> i64 section
+      // yon_rt_new: (i32 heap_id, ptr payload, i32 size) -> i64 section
       auto rtNewFnTy = builder.getFunctionType(
           {i32Ty, ptrTy, i32Ty}, {i64Ty});
 
@@ -1677,31 +1662,16 @@ struct LowerToposToStandardPass
         auto offsetIt = layout.fieldOffsets.find(fieldName);
         if (offsetIt == layout.fieldOffsets.end()) return;
         uint64_t offset = offsetIt->second;
+        // the field's size, as laid out by the frontend
+        uint64_t size = layout.fieldSizes.lookup(fieldName);
 
         Type resultTyHere = op.getResult().getType();
 
-        // Calcola size del result type.
-        // L1 P8: section nested -> i64 (era i32).
-        uint64_t size = 0;
-        if (auto intTy = llvm::dyn_cast<IntegerType>(resultTyHere)) {
-          size = (intTy.getWidth() + 7) / 8;
-        } else if (auto floatTy = llvm::dyn_cast<FloatType>(resultTyHere)) {
-          size = floatTy.getWidth() / 8;
-        } else if (llvm::isa<LLVM::LLVMPointerType>(resultTyHere)) {
-          size = 8;
-        } else if (llvm::isa<SectionType>(resultTyHere)) {
-          size = 8;  // section ora i64 (heap_id + xcoord)
-        } else if (llvm::isa<PropositionType>(resultTyHere)) {
-          size = 1;
-        } else {
-          return;
-        }
-
-        ensureRtDecl("yon_rt_field_load", rtFieldLoadFnTy);
+        ensureRtDecl("yon_rt_field_load_or_stop", rtFieldLoadFnTy);
         ensureRtDecl("yon_rt_new", rtNewFnTy);
 
         builder.setInsertionPointToEnd(module.getBody());
-        // L1 P8: param direttamente i64 (section packed encoding).
+        // param direttamente i64 (section packed encoding).
         auto fnType =
             builder.getFunctionType({i64Ty}, {resultTyHere});
         auto fn =
@@ -1715,12 +1685,14 @@ struct LowerToposToStandardPass
         Value sizeVal = builder.create<arith::ConstantIntOp>(
             op.getLoc(), (int64_t)size, i32Ty);
 
-        Value oneI64 = builder.create<arith::ConstantIntOp>(
-            op.getLoc(), 1, i64Ty);
+        // a buffer of the field's size: the runtime writes `size` bytes
+        Value nBytes = builder.create<arith::ConstantIntOp>(
+            op.getLoc(), (int64_t)size, i64Ty);
         Value buf = builder.create<LLVM::AllocaOp>(
-            op.getLoc(), ptrTy, i8Ty, oneI64, /*alignment=*/8);
+            op.getLoc(), ptrTy, i8Ty, nBytes, /*alignment=*/8);
 
-        auto rtFn = module.lookupSymbol<func::FuncOp>("yon_rt_field_load");
+        // the read stops the program on failure: never the section 0
+        auto rtFn = module.lookupSymbol<func::FuncOp>("yon_rt_field_load_or_stop");
         builder.create<func::CallOp>(
             op.getLoc(), rtFn,
             ValueRange{sectionVal, offsetVal, sizeVal, buf});
@@ -1829,9 +1801,8 @@ struct LowerToposToStandardPass
     patterns.add<MaterializeGeomMorphismOp>(typeConverter, ctx);
     patterns.add<LowerForcesOp>(typeConverter, ctx);
 
-    // F2b (escaping-probe closure conversion / trampolines) is RETIRED
-    // with the arena model (81b, 2026-06-03). No trampoline synthesis
-    // happens here. Escaping probes cannot be produced by the canonical
+    // Escaping-probe closure conversion / trampolines belong to the arena
+    // model, which does not exist. No trampoline synthesis happens here. Escaping probes cannot be produced by the canonical
     // frontend; any survivor is rejected by the addIllegalOp guard for
     // ProbeConstructOp/ProbeApplyOp below.
 

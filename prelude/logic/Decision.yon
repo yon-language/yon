@@ -1,0 +1,8 @@
+/* Decision — what is known of a proposition, as a value to eliminate.
+ *
+ * A proposition has three values, and leaving the classifier toward the two
+ * values of Boolean would lose one: unknown is not absent. `decide(p)` is
+ * total and lands here, in a coproduct of three arms; whoever uses it gives
+ * an answer for each arm with `match`, the third one included, because a
+ * coproduct is left only by an arrow out of every arm. */
+place Decision { this > Present :U Absent :U Unknown }

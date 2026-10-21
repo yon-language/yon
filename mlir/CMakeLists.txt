@@ -77,7 +77,7 @@ target_include_directories(MLIRTopos PUBLIC
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# Libreria dei pass di lowering (P7-#78+). Separata dalla libreria
+# Libreria dei pass di lowering. Separata dalla libreria
 # del dialect per permettere di linkare topos-opt con dialect+pass
 # ma di esporre la sola libreria del dialect via yoner-mlir-sys ai
 # consumer Rust.
@@ -150,7 +150,7 @@ target_link_libraries(topos-opt
   MLIRLLVMDialect
   MLIRMemRefDialect
   MLIRSCFDialect
-  # Conversion passes upstream (P7-#79: lowering verso LLVM dialect)
+  # Conversion passes upstream (lowering verso LLVM dialect)
   MLIRArithToLLVM
   MLIRControlFlowToLLVM
   MLIRFuncToLLVM

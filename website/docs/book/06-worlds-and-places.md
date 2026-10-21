@@ -55,7 +55,7 @@ place Order {
 ```
 
 There are no methods here and no hidden state: a place is pure structure. You
-create one with `new`, read its sections with a dot, and that is the whole
+create one with the mediating arrow `.->`, read its sections with a dot, and that is the whole
 surface. `Entry.yon`:
 
 <!-- yon-gate: illustrative -->
@@ -68,7 +68,7 @@ fun main(): Number {
 }
 ```
 
-Note the conventions the `new` shows: a field is written `name type` with no
+Note the conventions the `.->` shows: a field is written `name type` with no
 colon, `.-> P { field value }` fills the sections without an `=`, and access is
 the usual dot. What a place cannot do, on its own, is *behave*. Behaviour is not
 a method bolted to the object; it lives in arrows, and that is the whole of the

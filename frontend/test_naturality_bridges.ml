@@ -1,17 +1,17 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* test_naturality_bridges.ml — oracle for the Coq and SMT naturality bridges.
+(* test_naturality_bridges.ml — oracle for the SMT naturality bridge.
  *
- * naturality_coqcheck.ml and naturality_smtcheck.ml translate an arithmetic
- * naturality obligation (LHS = RHS over the reals) into a Coq .v program / an
- * SMT-LIB formula, then hand it to an external prover (coqc / z3).
+ * naturality_smtcheck.ml translates a naturality obligation (LHS = RHS over
+ * one input) into an SMT-LIB formula over the values the program computes
+ * with — IEEE doubles for Number, 64-bit bitvectors for Int64, constants by
+ * their exact bits, identity by bits — then hands it to z3.
  *
  * The TRANSLATION is pure and decidable and gets known-answer coverage here:
- * to_coq / make_coq_program, to_smt / make_smt_program, parse_z3_result, and the
- * Unsupported entry branch (reachable with no external tool). The two external
- * invocations (run_coqc, run_z3, via Sys.command) are the only lines left
- * uncovered by design: they require coqc / z3 on PATH, an external-world boundary
- * kept out of CI (see AUDIT.md). Each check is two-sided where a reject exists. *)
+ * to_smt / make_smt_program / literal, parse_z3_result, and the Unsupported
+ * entry branch (reachable with no external tool). The external invocation
+ * (run_z3, via Sys.command) needs z3 on PATH. Each check is two-sided where a
+ * reject exists. *)
 
 open Surface_ast
 
@@ -40,66 +40,56 @@ let contains hay needle =
   nl = 0 || go 0
 
 let () =
-  let module C = Naturality_coqcheck in
   let module Z = Naturality_smtcheck in
-  Printf.printf "=== naturality bridges (coq/smt translation) oracle ===\n\n";
+  Printf.printf "=== naturality bridge (smt translation) oracle ===\n\n";
 
-  (* ── Coq translation: to_coq (pure) ─────────────────────────────────── *)
-  check "coq: integer literal 3 -> (3)%R"
-    (C.to_coq (h ()) (num 3.0) = Some "(3)%R");
-  check "coq: negative literal -2 -> (- 2)%R"
-    (C.to_coq (h ()) (num (-2.0)) = Some "(- 2)%R");
-  check "coq: var x -> x"
-    (C.to_coq (h ()) (var "x") = Some "x");
-  check "coq: x + 3 -> (x + (3)%R)"
-    (C.to_coq (h ()) (add (var "x") (num 3.0)) = Some "(x + (3)%R)");
-  check "coq: 2 * (x + 3) nests"
-    (C.to_coq (h ()) (mul (num 2.0) (add (var "x") (num 3.0)))
-       = Some "((2)%R * (x + (3)%R))");
-  check "coq: unsupported op (mod) -> None"
-    (C.to_coq (h ()) (modop (var "x") (num 2.0)) = None);
-  check "coq: unsupported expr (call) -> None"
-    (C.to_coq (h ()) (call "f" [ var "x" ]) = None);
+  (* ── literals by their exact bits ──────────────────────────────────── *)
+  check "smt f64: 1.0 -> (fp #b0 #b01111111111 #b0...0)"
+    (Z.literal Z.F64 1.0 = Some ("(fp #b0 #b01111111111 #b" ^ String.make 52 '0' ^ ")"));
+  check "smt f64: -0.0 keeps its sign bit"
+    (Z.literal Z.F64 (-0.0) = Some ("(fp #b1 #b00000000000 #b" ^ String.make 52 '0' ^ ")"));
+  check "smt f64: 3.14159265 and 3.1415926 are two constants"
+    (Z.literal Z.F64 3.14159265 <> Z.literal Z.F64 3.1415926);
+  check "smt i64: 5 -> 64-bit two's complement"
+    (Z.literal Z.I64 5.0 = Some ("#b" ^ String.make 61 '0' ^ "101"));
+  check "smt i64: -1 -> all ones"
+    (Z.literal Z.I64 (-1.0) = Some ("#b" ^ String.make 64 '1'));
+  check "smt i64: a fraction is not an Int64 -> None"
+    (Z.literal Z.I64 2.5 = None);
 
-  (* ── Coq program builder + Unsupported entry ────────────────────────── *)
-  (match C.make_coq_program "nat_t" (add (var "x") (num 1.0)) (add (num 1.0) (var "x")) with
-   | None -> check "coq: make_coq_program on arithmetic -> Some" false
-   | Some prog ->
-       check "coq: program imports Reals" (contains prog "Require Import Reals.");
-       check "coq: program quantifies forall x : R" (contains prog "forall x : R");
-       check "coq: program closes with ring" (contains prog "Proof. intros. ring. Qed."));
-  check "coq: make_coq_program on non-arith lhs -> None"
-    (C.make_coq_program "t" (call "f" []) (num 1.0) = None);
-  check "coq: check on unsupported expr -> Coq_unsupported (no coqc)"
-    (match C.check ~theorem_name:"t" (call "f" []) (num 1.0) with
-     | C.Coq_unsupported _ -> true | _ -> false);
-
-  (* ── SMT translation: to_smt (pure) ─────────────────────────────────── *)
-  check "smt: integer literal 3 -> 3"
-    (Z.to_smt (h ()) (num 3.0) = Some "3");
-  check "smt: negative literal -2 -> (- 2)"
-    (Z.to_smt (h ()) (num (-2.0)) = Some "(- 2)");
+  (* ── to_smt (pure) ──────────────────────────────────────────────────── *)
   check "smt: var x -> x"
-    (Z.to_smt (h ()) (var "x") = Some "x");
-  check "smt: x + 3 -> prefix (+ x 3)"
-    (Z.to_smt (h ()) (add (var "x") (num 3.0)) = Some "(+ x 3)");
+    (Z.to_smt Z.F64 (h ()) (var "x") = Some "x");
+  check "smt f64: x + 3 -> (fp.add RNE x <3>)"
+    (match Z.to_smt Z.F64 (h ()) (add (var "x") (num 3.0)) with
+     | Some s -> contains s "(fp.add RNE x (fp " | None -> false);
+  check "smt i64: x * 2 -> (bvmul x <2>)"
+    (match Z.to_smt Z.I64 (h ()) (mul (var "x") (num 2.0)) with
+     | Some s -> contains s "(bvmul x #b" | None -> false);
   check "smt: unsupported op (mod) -> None"
-    (Z.to_smt (h ()) (modop (var "x") (num 2.0)) = None);
+    (Z.to_smt Z.F64 (h ()) (modop (var "x") (num 2.0)) = None);
   check "smt: unsupported expr (call) -> None"
-    (Z.to_smt (h ()) (call "f" [ var "x" ]) = None);
+    (Z.to_smt Z.F64 (h ()) (call "f" [ var "x" ]) = None);
 
   (* ── SMT program builder + Unsupported entry ────────────────────────── *)
-  (match Z.make_smt_program (add (var "x") (num 1.0)) (add (num 1.0) (var "x")) with
+  (match Z.make_smt_program Z.F64 (add (var "x") (num 1.0)) (add (num 1.0) (var "x")) with
    | None -> check "smt: make_smt_program on arithmetic -> Some" false
    | Some prog ->
-       check "smt: program sets QF_NRA" (contains prog "(set-logic QF_NRA)");
-       check "smt: program declares x : Real" (contains prog "(declare-const x Real)");
-       check "smt: program asserts the negated equation"
-         (contains prog "(assert (not (= (+ x 1) (+ 1 x))))"));
+       check "smt f64: program sets QF_FP" (contains prog "(set-logic QF_FP)");
+       check "smt f64: x is an IEEE double"
+         (contains prog "(declare-const x (_ FloatingPoint 11 53))");
+       check "smt: program asserts the negated equation by identity"
+         (contains prog "(assert (not (= (fp.add RNE x ");
+       check "smt: no real arithmetic" (not (contains prog "Real")));
+  (match Z.make_smt_program Z.I64 (add (var "x") (num 1.0)) (add (num 1.0) (var "x")) with
+   | None -> check "smt i64: make_smt_program on arithmetic -> Some" false
+   | Some prog ->
+       check "smt i64: program sets QF_BV" (contains prog "(set-logic QF_BV)");
+       check "smt i64: x is a 64-bit vector" (contains prog "(declare-const x (_ BitVec 64))"));
   check "smt: make_smt_program on non-arith -> None"
-    (Z.make_smt_program (call "f" []) (num 1.0) = None);
+    (Z.make_smt_program Z.F64 (call "f" []) (num 1.0) = None);
   check "smt: check on unsupported expr -> Smt_unsupported (no z3)"
-    (match Z.check (call "f" []) (num 1.0) with
+    (match Z.check ~carrier:Z.F64 (call "f" []) (num 1.0) with
      | Z.Smt_unsupported _ -> true | _ -> false);
 
   (* ── SMT output parsing: parse_z3_result (pure, all four verdicts) ───── *)

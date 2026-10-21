@@ -13,8 +13,8 @@
  * two twins with the same house would collide.
  *
  * This is the rich site: 64-bit `Number` is the language default, so the
- * full library — Newton, Taylor, Euclid, the dressed partials — lives in
- * num64/Number.yon.
+ * full library — Euclid, the libm functions given, the dressed partials —
+ * lives in num64/Number.yon.
  */
 topos where {
 
@@ -24,8 +24,8 @@ topos where {
    * clauses of the `Widen` functor (`on morphism plus via plus_i64` —
    * plus_i64 lives in Int64.yon, the house is given by the target).
    *
-   * `uses Additive` / `uses Multiplicative` arrive with the algebra
-   * cantiere: the position does not exist in the grammar today. And
+   * `uses Additive` / `uses Multiplicative`: the position does not exist
+   * in the grammar. And
    * `mul`, not `times`: `times` is a loop keyword (`repeat at most N
    * times`) and is unavailable as a name. */
   morphism plus(a: Int64, b: Int64): Int64

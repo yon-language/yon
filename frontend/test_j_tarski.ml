@@ -22,13 +22,13 @@ let () =
   let ctx = Reduce.empty_ctx in
   let a_ty = TyPrim "A" in
 
-  (* (1) GENUINE motive C : A -> Type. p = refl(a) gives endpoints "refl_arg".
-     d is bound at exactly El(C refl_arg (refl refl_arg)) so the base case
-     checks; the result must be El(C applied to the endpoint and the path). *)
+  (* (1) GENUINE motive C : A -> Type. p = refl(a) has endpoints a and a, so
+     the base case is d : El(C a (refl a)); the result must be El(C applied to
+     the far endpoint and the path). *)
   let motive_ty = TyArrow (a_ty, TyUniverse 0) in
-  let refl_arg = EVar ("refl_arg", dl) in
+  let a_e = EVar ("a", dl) in
   let expected_d =
-    TyEl (TyTermExpr (EApp (EVar ("C", dl), [refl_arg; ERefl (refl_arg, dl)], dl))) in
+    TyEl (TyTermExpr (EApp (EVar ("C", dl), [a_e; ERefl (a_e, dl)], dl))) in
   let env =
     Tyenv.add_vars Tyenv.empty
       [("C", motive_ty); ("d", expected_d); ("a", a_ty)] in
@@ -42,6 +42,20 @@ let () =
    | Error e ->
        check (Printf.sprintf "genuine motive: infer failed: %s"
                 (Tycheck.error_to_string e)) false);
+
+  (* (1b) a base case at another code is refused: El(C b (refl b)) is not
+     El(C a (refl a)), though both codes print alike. *)
+  let wrong_d =
+    TyEl (TyTermExpr (EApp (EVar ("C", dl),
+                            [EVar ("b", dl); ERefl (EVar ("b", dl), dl)], dl))) in
+  let env_wrong =
+    Tyenv.add_vars Tyenv.empty
+      [("C", motive_ty); ("d", wrong_d); ("a", a_ty); ("b", a_ty)] in
+  (match Tycheck.infer env_wrong ctx j with
+   | Error _ -> check "genuine motive: a base case at another code is refused" true
+   | Ok other ->
+       check (Printf.sprintf "genuine motive: wrong base accepted, result %s"
+                (Tyenv.ty_to_string other)) false);
 
   (* (2) PLACEHOLDER motive (literal 0): must NOT take the Tarski path; legacy
      non-dependent typing reads d's codomain (here A), never El(...). *)

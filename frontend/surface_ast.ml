@@ -65,6 +65,17 @@ let union_arm_upcasts : (string, string) Hashtbl.t = Hashtbl.create 16
 let fusion_places : (string, string) Hashtbl.t = Hashtbl.create 8
 (* inverse: prim code -> fusion place name *)
 let fusion_of_prim : (string, string) Hashtbl.t = Hashtbl.create 8
+
+(* The faces the language fuses to their primitive codes: a capitalized face
+   and its code are one object, as a type (the parser) and as a code (a type
+   named in a term). *)
+let prim_of_face (name : string) : string option =
+  match name with
+  | "Number" -> Some "number"
+  | "Text" -> Some "text"
+  | "Boolean" -> Some "boolean"
+  | "Unit" -> Some "unit"
+  | _ -> None
 (* Integer arithmetic sites: `/` and `%` on INTEGER-carrier operands diverge
    from the f64 operators (divsi truncates, divf does not) — the tycheck,
    which knows the operand types, records the site here; desugar consumes it
@@ -75,6 +86,14 @@ let fusion_of_prim : (string, string) Hashtbl.t = Hashtbl.create 8
    rule: no table keyed without the (complete) site. *)
 let int_arith_sites : (string * int * int * int * int, string) Hashtbl.t =
   Hashtbl.create 16
+(* integral literals the tycheck admitted at Int64: they lower to an i64
+   constant, never to a double converted afterwards. Keyed by the full span. *)
+let int64_literal_sites : (string * int * int * int * int, unit) Hashtbl.t =
+  Hashtbl.create 16
+(* the digits of every integral literal, as written, by the position where
+   it starts: a literal is a double only where it is a Number; at Int64 it
+   is the exact integer these digits name, past 2^53 too *)
+let exact_int_literals : (string * int * int, string) Hashtbl.t = Hashtbl.create 64
 (* points of FUSED coproducts -> their literal value ("tt" -> true, "ff" ->
    false, "star" -> unit): a fused place's arms never build spines — the
    carrier already has canonical values, the arms are their declared NAMES. *)
@@ -84,7 +103,7 @@ let fused_points : (string, [ `Bool of bool | `Unit ]) Hashtbl.t = Hashtbl.creat
    arm names tt/ff keeps its spine elimination. Keyed like bare_point_sites. *)
 let fused_elim_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 8
 
-(* `on error E` (error cantiere): return sites where the checker proved the
+(* `on error E`: return sites where the checker proved the
    expression inhabits ONE ARM of the coproduct T + E and desugar must wrap
    it in that arm's injection. Site-keyed (the ledger rule), value = arm
    index (0 = success, 1 = error). *)
@@ -177,7 +196,7 @@ type ty =
   | TySumIn of variant list * string list             (* "(...) in W" *)
   | TyList of ty                                      (* "list of T" *)
   | TyMap of ty * ty                                  (* "map of K to V" *)
-  | TyStream of ty                                    (* "stream of T" *)
+  | TyChannel of ty                                  (* Wire<T>: a channel of T *)
   | TyWire of string                                  (* the handle of "wire to Space"; carries the Space name *)
   | TySubscription of string * ty                     (* the handle of w.awaits(f); carries the Space name and the stream element type *)
   | TyUser of string                                  (* user-defined place name *)
@@ -239,9 +258,8 @@ and match_pat =
   | PatFields of (string * string) list   (* (field, bound name); `head` alone
                                              binds as itself, `head as h` as h *)
 
-(* Stream back-pressure modifiers (buffer/drop) were removed entirely in v1.1:
-   the surface syntax was parsed but never consumed, so a stream type is now
-   just `stream of T` (TyStream of ty). *)
+(* No channel back-pressure modifiers (buffer/drop): they would be parsed and
+   never consumed, so a channel type is just `Wire<T>` (TyChannel of ty). *)
 
 (* ─── Expressions ──────────────────────────────────────────────────── *)
 
@@ -283,7 +301,7 @@ and expr =
   | ENewIn of string * string * field_assignment list * location  (* retired: `new P in Space` removed (a place's space is its filesystem directory); constructor kept for exhaustive matches, no longer produced *)
   | EBinop of binop * expr * expr * location
   | EParen of expr * location
-  | EAll of string * condition * location             (* retired: the `all P where cond` surface form was removed in v1.1; constructor kept for exhaustive matches *)
+  | EAll of string * condition * location             (* no surface form produces it (`all P where cond` is not in the grammar); kept for exhaustive matches *)
   | EIn of expr * string * location                   (* "e in Context" *)
   (* HoTT-level term constructors *)
   | ERefl of expr * location                          (* refl(t) *)
@@ -295,11 +313,11 @@ and expr =
   | EElMatch of expr * expr * expr * location         (* el_match(target, ret, body): B eliminator, binds carrier *)
   (* pullback / pushout as an expression. Categorically: given f : A -> C and
    * g : B -> C, pullback(f, g) is the universal limit (A x_C B).
-   * RETIRED at the surface: the no-arg `pullback(f,g)` / `pushout(f,g)`
-   * expression forms were removed in v1.1 (they lowered to a 0.0 placeholder);
-   * the parser no longer produces these constructors. The universal property
-   * now lives in the `place P = pullback(f,g)` declaration, and the runtime
-   * pullback in EPullbackVal (the 4-arg form). The constructors are kept only
+   * Not at the surface: there are no `pullback(f,g)` / `pushout(f,g)`
+   * expression forms (they would lower to a 0.0 placeholder); the parser
+   * does not produce these constructors, nor any `pullback`/`pushout`
+   * declaration. The runtime pullback is EPullbackVal (the 4-arg form). The
+   * constructors are kept only
    * so downstream pattern matches stay exhaustive. *)
   | EPullback of string * string * location            (* retired surface form, no longer produced *)
   | EPushout of string * string * location             (* retired surface form, no longer produced *)
@@ -543,10 +561,9 @@ and cell_decl = {
    to the top level as a side effect by the parser, so they carry no payload
    here. The parser splits these back into members and variants: a place with
    variants and no fields IS its coproduct object and lowers like a sum. *)
-(* A canonical clause written as a BODY line (stage 4): `over X`,
-   `subcontains B`, `on error E`. The header spelling stays legal as a
-   deprecated synonym; the two merge in the parser action, duplicates are
-   rejected. *)
+(* A canonical clause written as a BODY line: `over X`, `this < B` (the
+   PcSubcontains clause), `on error E`. A clause also spelled in the header
+   merges with the body line in the parser action; duplicates are rejected. *)
 type place_clause =
   | PcOver of string
   | PcSubcontains of string
@@ -575,11 +592,11 @@ type place_decl = {
   pd_members : field_or_op list;
   pd_over : string option;          (* slice category C/X: a place fibered over X *)
   pd_laws : string list;            (* algebraic laws declared on the place *)
-  pd_subcontains : string option;       (* `place A subcontains B` declares the injection
+  pd_subcontains : string option;       (* `this < B` in the body declares the injection
                                        A -> B (A is a sub-object of B). A is usable
                                        wherever B is expected (subsumption).
                                        Checked: A must have all of B's fields. *)
-  pd_is_error : bool;                (* `error E subcontains Base` is a place marked as an
+  pd_is_error : bool;                (* an `error` declaration (examples/error_morphism) is a place marked as an
                                        error. An error place is the target of the
                                        `on_error` error morphism. It reuses the whole
                                        place structure (fields, subcontains, subsumption). *)
@@ -749,20 +766,11 @@ type geom_morphism_item_kind =
  *
  * A topos T groups together:
  *  - objects: the objects of the topos (the typed "states")
- *  - terminal (opt): name of the terminal object (synthesized default: 1_T)
+ *  - terminal: the terminal object, never declared (synthesized: 1_T)
  *  - morphisms: internal operations as a list of operation_decl
  *  - props: classified sub-objects (predicates on objects)
  *
- * Example syntax:
- *   topos Account where {
- *     objects { State { balance: number } }
- *     terminal Unit
- *     morphisms {
- *       operation deposit(x: number): number
- *       operation withdraw(x: number): number
- *     }
- *     prop is_overdrawn(s: State): Omega
- *   }
+ * Surface: see examples/kw_topos_block/bank and examples/c_prop_abstract/bank.
  *
  * For compatibility, topos_decl keeps a list of place_decl under sd_objects,
  * so the rest of the compiler (tycheck, emit) can keep seeing each object as a
@@ -821,7 +829,7 @@ type morph_decl = {
   mp_on_morphism_map : (string * string) list;
   mp_laws : string list;      (* `law involutive` — declared = respected;
                                  undeclared = not claimed. One word for the
-                                 obligations; the algebra cantiere checks them. *)
+                                 obligations; the algebra checks them. *)
   mp_loc : location;
 }
 
@@ -854,6 +862,7 @@ type morph_item_kind =
  * into another morph (both with the same source and target). *)
 type nat_transform_decl = {
   nt_name : string;
+  nt_given : bool;               (* `is given`: the naturality is an axiom *)
   nt_on_error : string option;   (* `on error E`: T + E, the arrow stone *)
   nt_source_morph : string;
   nt_target_morph : string;
@@ -956,8 +965,7 @@ and universal_decl = {
  *   j(p and q) = j(p) and j(q)
  *
  * It determines a sub-topos (the sheaves for j) of the base topos.
- * In Yon, `topology j of P { ... }` registers j as an idempotent operation
- * that governs the "locality" of P. *)
+ * No surface form produces it: `topology` is not a word of Yon. *)
 and topology_decl = {
   tp_name : string;
   tp_of_place : string;
