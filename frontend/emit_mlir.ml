@@ -6669,7 +6669,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "// Runtime declarations P10 — data structures (Map/Set/Dag)";
   emit_line e "func.func private @yon_rt_map_empty() -> f64";
   emit_line e "func.func private @yon_rt_map_put(f64, f64, f64) -> f64";
-  emit_line e ("func.func private @yon_rt_map_get(f64, f64) -> f64" ^ no_effects);
   emit_line e ("func.func private @yon_rt_map_value(f64, f64) -> f64" ^ no_effects);
   emit_line e ("func.func private @yon_rt_map_contains(f64, f64) -> f64" ^ no_effects);
   emit_line e ("func.func private @yon_rt_map_size(f64) -> f64" ^ no_effects);

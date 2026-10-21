@@ -633,6 +633,19 @@ let rec first_assign_loc (ss : stmt list) : location option =
               | None -> (match oth with Some o -> first_assign_loc o | None -> None)))
       | _ -> None) None ss
 
+(* A function declared `internal` in a place is part of how that place is
+   built, not of what it offers: it is reachable from the funs of its own
+   house and from nowhere else. The table maps each internal fun, by its
+   qualified name, to its house; the house of the fun being checked is the
+   other half of the rule. *)
+let internal_homes : (string, string) Hashtbl.t = Hashtbl.create 16
+let current_home : string option ref = ref None
+
+let with_home (fn : fun_decl) (k : unit -> 'a) : 'a =
+  let saved = !current_home in
+  current_home := fn.fn_home;
+  Fun.protect ~finally:(fun () -> current_home := saved) k
+
 (* The lattice collections hold their values inline, in a slot of the type-2
    lattice: which values fit is derived from their carrier — a scalar of 32
    or 64 bits (Int32; Int64 and Number), or a content-addressed handle (a
@@ -3081,6 +3094,16 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
          | _ -> name)
   in
   match Tyenv.lookup_fun env name with
+  | Some _ when (match Hashtbl.find_opt internal_homes name with
+                 | Some h -> !current_home <> Some h
+                 | None -> false) ->
+      let h = Hashtbl.find internal_homes name in
+      let base = let lp = String.length h + 2 in
+        String.sub name lp (String.length name - lp) in
+      err loc (Printf.sprintf
+        "%s.%s is internal to %s: it is part of how %s is built, reachable \
+         only from the funs of %s"
+        h base h h h)
   | Some fs ->
       (* A generic function is instantiated at each call: its type
          parameters become fresh unknowns, solved by unifying the declared
@@ -5248,6 +5271,10 @@ and check_given_fun (env : Tyenv.env) (ctx : Reduce.ctx)
               | _ -> ok ()))
 
 and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit tc_result =
+  with_home fn (fun () -> check_fun_decl_at_home env ctx fn)
+
+and check_fun_decl_at_home (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
+    : unit tc_result =
   if fn.fn_given then check_given_fun env ctx fn else
   (* Step 1: rebind TyUser -> TyVar wherever the parser produced TyUser
    * for an identifier that's actually a declared type parameter. This
@@ -5355,6 +5382,10 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
    two semantically identical or factor shared pieces. *)
 and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     : type_error list =
+  with_home fn (fun () -> check_fun_decl_accum_at_home env ctx fn)
+
+and check_fun_decl_accum_at_home (env : Tyenv.env) (ctx : Reduce.ctx)
+    (fn : fun_decl) : type_error list =
   (* `is given`: no body to accumulate, but the external check holds here
      as in the fail-fast twin (every semantic rule lives in both). *)
   if fn.fn_given then
@@ -6421,6 +6452,14 @@ let check_program (p : program) : check_result =
      top-level names and the passes below stay on unique names. A no-op when no
      name is shared. *)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
+  Hashtbl.reset internal_homes;
+  current_home := None;
+  List.iter (function
+    | TopFun fd when fd.fn_internal ->
+        (match fd.fn_home with
+         | Some h -> Hashtbl.replace internal_homes fd.fn_name h
+         | None -> ())
+    | _ -> ()) p;
   let p = Method_sugar.qualify_overloads p in
   (* Pre-check before infer_fun_signatures/Hm_infer (which crash or
    * failwith on these inputs): a duplicate top-level function name, and a

@@ -13,7 +13,7 @@ place HashMap<K, V> {
   fun size<K, V>(m: HashMap<K, V>): Number is given
   /* the value held at a key the map holds; asked of a key it does not hold,
      it stops the program (call it after `has`, as `get` does) */
-  fun value<K, V>(m: HashMap<K, V>, k: K): V is given
+  internal fun value<K, V>(m: HashMap<K, V>, k: K): V is given
 
   /* ─── Reading ────────────────────────────────────────────── [T] ─── */
 

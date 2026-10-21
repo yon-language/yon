@@ -16,7 +16,7 @@ place XRelMap<K, V> {
   fun size<K, V>(m: XRelMap<K, V>): Number is given
   /* the value of a class the map holds; asked of one it does not hold, it
      stops the program (call it after `contains`, as `get` does) */
-  fun value<K, V>(m: XRelMap<K, V>, k: K): V is given
+  internal fun value<K, V>(m: XRelMap<K, V>, k: K): V is given
 
   /* ─── Reading ────────────────────────────────────────────── [T] ─── */
 

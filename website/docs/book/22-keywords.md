@@ -39,7 +39,7 @@ Brings a module or a qualified symbol into scope: `import "x/rates"`, `import q 
 
 #### `internal`
 
-Marks a function as not exported across Spaces: it never enters the cross-Space dispatch table.
+Marks a function as part of how its owner is built, not of what it offers. Inside a place, an `internal fun` is reachable only from the funs of that place: called from anywhere else it is a type error that names its house. The prelude's collections keep `value` this way, so their public face is `get`. An `internal` function never enters the cross-Space dispatch table either.
 
 #### `given`
 

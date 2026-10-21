@@ -34,7 +34,7 @@ place Entry {
   fun timed_get(a: Arena<Number>, addr: Number, m: Number): Number visits Output {
     be acc holds Space.make(0)
     be t0 holds Time.now_ns(0)
-    iter m do { be _ holds Space.set(acc, Space.get(acc) + Arena.value(a, addr)) }
+    iter m do { be _ holds Space.set(acc, Space.get(acc) + (match Arena.get(a, addr) { Found(x) => x, Absent => 0 })) }
     be t1 holds Time.now_ns(0)
     return (t1 - t0)
   }
@@ -104,7 +104,7 @@ place Entry {
     // same_orbit latency, baseline-subtracted (same baseline shape, Mso iters)
     be so_net holds (min_so(a, x, y, reps_r, mso) - min_get_base(reps_r, mso))
 
-    be _1 holds Output.print(String.from_int(Arena.value(a, a0)))
+    be _1 holds Output.print(String.from_int((match Arena.get(a, a0) { Found(x) => x, Absent => 0 })))
     be _2 holds Output.print(String.from_int(if Arena.occupied(a, a0) then 1 else 0))
     be _3 holds Output.print(String.from_int(put_net))
     be _4 holds Output.print(String.from_int(get_net))
