@@ -39,6 +39,11 @@ type t =
   | Scalar of width            (* a machine scalar (f64, i1, i32, ...) *)
   | Proposition                (* Omega, the subobject classifier carrier *)
   | Section of string          (* an inhabitant of a named place: a section handle *)
+  | Handle of string           (* a content-addressed handle into the heap, carried
+                                  as an f64: its bits name the content, they are not
+                                  a quantity. Two equal contents are one handle, so
+                                  the handle is a lawful identity (a hash key), but
+                                  it is not a coordinate (not a lattice point). *)
   | Arrow of t list * t        (* a function value: flattened (args) -> ret signature *)
   | Struct of t list           (* a structural product (dependent pair, non-comprehension) *)
   | Opaque                     (* a pointer-sized opaque handle, no inspectable payload *)
@@ -82,7 +87,8 @@ exception NoCarrier of C.ty
    widths. *)
 let prim_carrier (name : string) : t option =
   match name with
-  | "number" | "money" | "text" | "f64" | "unknown" -> Some (Scalar W_f64)
+  | "number" | "money" | "f64" | "unknown" -> Some (Scalar W_f64)
+  | "text" -> Some (Handle "Text")
   | "boolean" | "unit" | "i1" -> Some (Scalar W_i1)
   | "i8" -> Some (Scalar W_i8)
   | "i16" -> Some (Scalar W_i16)
@@ -215,6 +221,7 @@ let rec to_mlir (c : t) : string =
   | Scalar w -> width_to_mlir w
   | Proposition -> "!topos.proposition"
   | Section name -> Printf.sprintf "!topos.section<\"%s\">" name
+  | Handle _ -> "f64"
   | Arrow (args, ret) ->
       Printf.sprintf "(%s) -> %s"
         (String.concat ", " (List.map to_mlir args))

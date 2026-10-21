@@ -109,7 +109,7 @@ reports:
 
 | | |
 |---|---|
-| pytest | **1661 passed**, 10 skipped (each one declared in a register), **84 expected failures** |
+| pytest | **1665 passed**, 10 skipped (each one declared in a register), **84 expected failures** |
 | example programs | **101**, every exit code identical to a recorded baseline |
 | cross-Space scenarios | **8**, multi-process, over shared memory and the wire |
 | self-hosting | the frontend for a core subset, written in Yon, reproduces itself byte for byte |

@@ -63,8 +63,12 @@ What distinguishes them is what they make cheap:
 **What a lattice slot holds.** `Arena<V>` and `XRelMap<K, V>` keep their
 values inline, in the slots of the lattice, never in the heap. Which values
 fit a slot is derived from their carrier: a scalar of 32 or 64 bits
-(`Int32`; `Int64` and `Number`); a value that does not fit (a `Boolean`, a
-place, a function) is a type error, never truncated. A value enters as its
+(`Int32`; `Int64` and `Number`), or a content-addressed handle (a `Text`,
+whose bits name its content in the heap); a value that does not fit (a
+`Boolean`, a place, a function) is a type error, never truncated. A key of
+`XRelMap` is a lattice point, a scalar of 64 bits: a handle names content but
+locates nothing, so a `Text` key is a type error here. Every other key
+belongs to `HashMap`. A value enters as its
 bits and comes back the same bits: identity inside a slot is identity of
 bits, the criterion of the whole runtime, so `-0.0` and `0.0` are two values
 and a `NaN` equals itself (arithmetic on the values read back stays

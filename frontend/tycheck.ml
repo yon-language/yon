@@ -635,23 +635,22 @@ let rec first_assign_loc (ss : stmt list) : location option =
 
 (* The lattice collections hold their values inline, in a slot of the type-2
    lattice: which values fit is derived from their carrier — a scalar of 32
-   or 64 bits (Int32; Int64 and Number) — never listed per type; a key is a
-   lattice point (a 64-bit coordinate). The parameters each place puts in a
-   slot, by position. *)
+   or 64 bits (Int32; Int64 and Number), or a content-addressed handle (a
+   Text), whose 64 bits name its content — never listed per type. A key is a
+   lattice point, a 64-bit coordinate: a handle names content but locates
+   nothing, so it is no key here (a key that is not a point belongs to
+   HashMap). The parameters each place puts in a slot, by position. *)
 let lattice_slots = [ ("XRelMap", [ (0, `Point); (1, `Value) ]);
                       ("Arena",   [ (0, `Value) ]) ]
 
-let carrier_bits (env : Tyenv.env) (t : ty) : int option =
+let slot_carrier (env : Tyenv.env) (t : ty) : Carrier.t option =
   let prim = match t with
     | TyPrim p -> Some p
     | TyUser n -> Hashtbl.find_opt Surface_ast.fusion_places n
     | _ -> None in
   ignore env;
   match prim with
-  | Some p ->
-      (match Carrier.prim_carrier p with
-       | Some (Carrier.Scalar w) -> Some (Carrier.scalar_bits w)
-       | _ -> None)
+  | Some p -> Carrier.prim_carrier p
   | None -> None
 
 (* The first parameter of a lattice collection that does not fit its slot,
@@ -664,19 +663,28 @@ let slot_misfit (env : Tyenv.env) (t : ty) : string option =
           match List.nth_opt args i with
           | Some (TyPrim "unknown" | TyUser "unknown" | TyVar _ | TyMetaVar _) | None -> ()
           | Some a ->
-              let bits = carrier_bits env a in
+              let bits = match slot_carrier env a with
+                | Some (Carrier.Scalar w) -> `Scalar (Carrier.scalar_bits w)
+                | Some (Carrier.Handle _) -> `Handle
+                | _ -> `None in
               let fits = match role, bits with
-                | `Value, Some (32 | 64) -> true
-                | `Point, Some 64 -> true
+                | `Value, (`Scalar (32 | 64) | `Handle) -> true
+                | `Point, `Scalar 64 -> true
                 | _ -> false in
               if not fits && !found = None then
                 found := Some (Printf.sprintf
-                  "%s<…>: %s does not fit a lattice slot — a %s is a scalar of %s \
-                   bits (its carrier), and %s is not"
+                  "%s<…>: %s does not fit a lattice slot — by its carrier, a %s \
+                   is %s, and %s is not%s"
                   n (Tyenv.ty_to_string a)
                   (match role with `Value -> "value" | `Point -> "key")
-                  (match role with `Value -> "32 or 64" | `Point -> "64 (a lattice point)")
-                  (Tyenv.ty_to_string a))) (List.assoc n lattice_slots);
+                  (match role with
+                   | `Value -> "a scalar of 32 or 64 bits or a content handle"
+                   | `Point -> "a lattice point, a scalar of 64 bits")
+                  (Tyenv.ty_to_string a)
+                  (match role with
+                   | `Value -> ""
+                   | `Point -> "; a key that is not a lattice point belongs to HashMap")))
+                (List.assoc n lattice_slots);
         None
     | _ -> None) t);
   !found

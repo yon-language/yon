@@ -3009,6 +3009,67 @@ fun main(): Number {
     assert _clean_rejection(rc, out), out
 
 
+# A key is where a value is found. A lattice collection is keyed by a lattice
+# point; any other key — a Text among them — goes to HashMap, whose trie
+# identifies a key by its identity: the bits of a scalar, the content-addressed
+# handle of a section. No collection holds a ceiling: every map is a value.
+
+def test_there_is_no_ceiling_on_the_number_of_maps(tmp_path):
+    entry = """\
+place Entry {}
+fun many(i: Number, acc: Number): Number {
+  return if i == 0 then acc
+         else many(i - 1, acc + HashMap.size(HashMap.set(HashMap.set(HashMap.empty(), i, 1), 0 - i, 2)))
+}
+fun main(): Number {
+  return many(1000, 0) / 1000
+}
+"""
+    rc, out = _build_run_runtime(tmp_path, entry)
+    _verdict(rc == 2, f"2000 live maps of two keys each: mean size {rc}, expected 2")
+
+
+def test_text_keys_equal_by_content_are_one_key(tmp_path):
+    entry = """\
+place Entry {}
+fun main(): Number {
+  be m holds HashMap.set(HashMap.empty(), String.concat("ab", "c"), 7)
+  be m2 holds HashMap.set(m, String.concat("a", "bc"), 9)
+  be got holds match HashMap.get(m2, "abc") { Found(v) => v, Absent => 0 }
+  return HashMap.size(m2) * 10 + got
+}
+"""
+    rc, out = _build_run_runtime(tmp_path, entry)
+    _verdict(rc == 19, f"size*10 + value at abc = {rc}, expected 19")
+
+
+def test_a_text_value_rides_a_lattice_slot_by_its_handle(tmp_path):
+    entry = """\
+place Entry {}
+fun main(): Number {
+  be m holds XRelMap.insert(XRelMap.empty(), 1536, String.concat("ab", "c"))
+  be a holds Arena.put(Arena.empty(), 1536, String.concat("a", "bc"))
+  be x holds match XRelMap.get(m, 1536) { Found(v) => (if v == "abc" then 1 else 0), Absent => 0 }
+  be y holds match Arena.get(a, 1536) { Found(v) => String.length(v), Absent => 0 }
+  return x * 10 + y
+}
+"""
+    rc, out = _build_run_runtime(tmp_path, entry)
+    _verdict(rc == 13, f"Text through XRelMap and Arena: {rc}, expected 13")
+
+
+def test_a_text_key_in_a_lattice_collection_is_refused(tmp_path):
+    entry = """\
+place Entry {}
+fun main(): Number {
+  be m holds XRelMap.insert(XRelMap.empty(), "abc", 7)
+  return XRelMap.size(m)
+}
+"""
+    rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
+    _verdict(_clean_rejection(rc, out), f"a Text key was accepted: rc={rc} {out[-300:]}")
+
+
 def test_merkle_node3_children_are_its_leaves(tmp_path):
     entry = """\
 place Entry {}
