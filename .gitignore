@@ -41,6 +41,10 @@ physics/
 
 # local working notes (untracked, kept off the repo)
 notes/
+runtime/*.d
 
 # Wrangler local cache (holds the account id)
 .wrangler/
+
+# Claude Code local settings
+.claude/
