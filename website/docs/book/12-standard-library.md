@@ -26,7 +26,10 @@ written in Yon on top of them.
 `List`, `HashMap` and `HashSet` are values over the content-addressed heap:
 `HashMap.set` and `HashSet.add` return a new collection and leave the one they
 were given as it was, two equal collections are the same handle, and nothing
-is ever written in place on their nodes. `Vec` (its own section below) and
+is ever written in place on their nodes. There is no ceiling on how many
+exist. A key is identified by what it is: a scalar by its bits, a `Text` by
+its content-addressed handle, so two texts with the same characters are one
+key however they were built. `Vec` (its own section below) and
 `XSet` change in place.
 
 A `Sequence<T>` is finite and pure: built from a list (`Sequence.from_list`,
