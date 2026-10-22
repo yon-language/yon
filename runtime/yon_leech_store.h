@@ -33,5 +33,9 @@ uint32_t    yon_leech_empty(const void *node, uint32_t size);
 /* Every Space has its own store; puts and reads go to the current one. */
 void        yon_leech_select(uint32_t space);
 uint32_t    yon_leech_current(void);
+/* The end of a Space's region: its nodes go, its names start again. */
+void        yon_leech_reset(uint32_t space);
+/* The bytes of the nodes a Space's store holds. */
+uint64_t    yon_leech_bytes(uint32_t space);
 
 #endif /* YON_LEECH_STORE_H */

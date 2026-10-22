@@ -96,6 +96,29 @@ const void *yon_leech_at(uint32_t k) {
     return t ? t + (size_t)(k % N) * YON_LEECH_NODE_BYTES : NULL;
 }
 
+/* The region of a Space ended: its generations go back to the system and its
+ * names start again from 0. */
+void yon_leech_reset(uint32_t space) {
+    pthread_once(&g_once, stores_init);
+    leech_store_t *st = g_stores[space % N_STORES];
+    if (!st) return;
+    pthread_mutex_lock(&g_gen_lock);
+    uint32_t made = st->next, gens = made ? (made - 1u) / N + 1u : 0u;
+    for (uint32_t g = 0; g < gens; g++) {
+        if (st->gens[g]) { yon_unmap((void *)st->gens[g], GEN_BYTES); st->gens[g] = NULL; }
+    }
+    st->next = 0;
+    st->empty = 0xFFFFFFFFu;
+    pthread_mutex_unlock(&g_gen_lock);
+}
+
+/* The bytes of nodes the current store holds. */
+uint64_t yon_leech_bytes(uint32_t space) {
+    pthread_once(&g_once, stores_init);
+    leech_store_t *st = g_stores[space % N_STORES];
+    return st ? (uint64_t)st->next * YON_LEECH_NODE_BYTES : 0u;
+}
+
 uint32_t yon_leech_generation(uint32_t k) { return k / N; }
 uint32_t yon_leech_index(uint32_t k)      { return k % N; }
 uint32_t yon_leech_count(void) {

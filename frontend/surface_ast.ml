@@ -62,6 +62,11 @@ let op_sigs : (string, int64 list) Hashtbl.t = Hashtbl.create 16
    result and of each argument. *)
 let cross_calls : (string * string, string * (int64 * bool) * (int64 * bool) list) Hashtbl.t =
   Hashtbl.create 8
+(* The Spaces with state that survives a call: their code keeps something in a
+   runtime registry (a stream, a pool) past the call. Every other Space is
+   stateless, and each call into it is a region of its own (with a declared
+   fold a Space has state too; the emitter adds those). *)
+let stateful_spaces : (string, unit) Hashtbl.t = Hashtbl.create 8
 
 (* Method resolution: a call `s.area()` parses to `area(s)`; when `area` is an
    overloaded method the tycheck resolves it to the receiver-qualified name

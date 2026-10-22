@@ -219,9 +219,9 @@ bool yon_xheap_is_occupied(const yon_xheap_t *h, uint32_t slot_index);
  * probe). */
 int yon_xheap_clear(yon_xheap_t *h, uint32_t slot_index);
 
-/* Full reset: all slots -> FREE, content_index -> INVALID, arena -> 0. Fast
- * O(N_INDEX). For scratchpad use (transient working sets) where each
- * invocation starts from a clean heap. */
+/* Make a heap empty and give its pages back (the end of a region): every page
+ * past the header is replaced by a fresh zero page, the header is set up as at
+ * creation, the heap keeps its id and is reused. 0, or -1. */
 int yon_xheap_reset(yon_xheap_t *h);
 
 size_t yon_xheap_occupancy(const yon_xheap_t *h);
@@ -269,6 +269,11 @@ uint32_t     yon_xheap_registry_count(void);
  * Accepted trade-off: heaps can be unbalanced (the first at 100%, the second
  * at 3% right after overflow). Conway stays intact on heap_id=0.
  */
+/* Every heap of a chain reset, its content index forgotten. */
+void yon_xheap_reset_chain(yon_xheap_t *head);
+/* The arena bytes a chain holds. */
+uint64_t yon_xheap_chain_bytes(const yon_xheap_t *head);
+
 uint32_t yon_xheap_put_chain(yon_xheap_t *h_first,
                               const void *payload, uint32_t n_bytes,
                               yon_xtag_t tag);

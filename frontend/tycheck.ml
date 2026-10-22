@@ -1192,6 +1192,15 @@ let rpc_msg what t =
      and collections of carried values. A %s has no frame."
     what (Tyenv.ty_to_string t) (Tyenv.ty_to_string t)
 
+(* A call that keeps something in a runtime registry past the call: a stream,
+   a wire, a pool of the runtime. The Space whose code makes it has state. *)
+let keeps_state (name : string) : bool =
+  List.exists (fun p ->
+    let has q = String.length name > String.length q
+                && String.sub name 0 (String.length q) = q in
+    has (p ^ "__") || has (p ^ "."))
+    ["Stream"; "Wire"; "XSet"; "VoyagerList"; "XSimplex"; "Spawn"; "Buffer"]
+
 (* The crossings of one call: into a function of another Space of this
    program, or to an imported function of another process. *)
 let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
@@ -3120,6 +3129,9 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
   mob_note_call env name args arg_tys
     (fun v -> if loc.start_line = 0 then location_of_expr v else loc);
   let* () = check_boundary env name args arg_tys loc in
+  (match !current_space with
+   | Some sp when keeps_state name -> Hashtbl.replace Surface_ast.stateful_spaces sp ()
+   | _ -> ());
   (* a call to an imported function has the type its remote signature declares *)
   let remote_ret = match remote_call name args with
     | Some (op, _) ->
@@ -6758,6 +6770,7 @@ let check_program (p : program) : check_result =
   Hashtbl.reset Surface_ast.rpc_sigs;
   Hashtbl.reset Surface_ast.op_sigs;
   Hashtbl.reset Surface_ast.cross_calls;
+  Hashtbl.reset Surface_ast.stateful_spaces;
   List.iter (function
     | TopFun fd ->
         (match Hashtbl.find_opt Surface_ast.user_file_space fd.fn_loc.file with
