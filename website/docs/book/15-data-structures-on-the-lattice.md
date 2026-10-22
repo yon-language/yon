@@ -70,7 +70,12 @@ What distinguishes them is what they make cheap:
   lookup walks at most 18 levels and two points never share a path. Any
   other key routes by the 64-bit hash of its bits, written in base 196,560:
   the first digit is a point, the rest follow, and only keys whose whole
-  hash agrees share a chain. For a key that is not a point the difference
+  hash agrees share a chain. The route is read off the key's bits, not its
+  type: a map has one key type (the generics are parametric), so an `Int64`
+  key that happens to equal a type-2 coordinate only takes the index route
+  inside the trie, with the same result and the same equality, and keys
+  that are sections are told apart by type already, by their 8-byte type
+  root. For a key that is not a point the difference
   from `HashMap` is the store, not the geometry. There is no index by
   content in the Leech heap: two maps with the same entries have the same
   shape, node for node, but not the same handle.
@@ -79,7 +84,7 @@ What distinguishes them is what they make cheap:
 "Two maps on the same keys"): every write, union and intersection costs
 less on the Leech heap, from about 2× at a thousand keys to 10× at 400,000
 `Text` keys, because its store writes the next place where the FNV heap
-first looks the content up; a read that finds its key costs about the same
+first looks the content up (two thirds of the time of a write, profiled); a read that finds its key costs about the same
 on both up to tens of thousands of keys. What the FNV heap buys with that
 lookup is identity by content: two equal collections are one handle,
 comparing them is one comparison, a union of two equal sets returns at
