@@ -61,51 +61,78 @@ corresponding allocas in the final object code was not separately measured.
 
 ## Lifetime
 
-There is no garbage collector, and deliberately so: in the FNV heap
-(chapter 13) slots are stable for the life of the heap, the heap lives for the
-life of the process, and deduplication means the heap grows with *distinct*
-content, not with allocations. The Leech heap does not grow at all: its tables
-cover the shell, fixed at 196,560 points. A hot loop that rebuilds the same values costs no new memory.
+There is no garbage collector, and deliberately so. Memory is reclaimed by
+**regions**, and the region is the Space. Every Space owns two heaps, and
+every value lives in the heaps of the Space whose code made it:
 
-Across packages, lifetime is process lifetime: the first cross-Space call
-spawns the server; shutdown cascades from the caller; a crashed server is
-respawned on a virgin channel with the epoch advanced. Handles never cross, 
-each process's heap is its own universe, which is what makes the model safe.
+| | the Space's FNV heap | the Space's Leech heap |
+|---|---|---|
+| **Identity** | by content | by point |
+| **Who lives there** | sections of places, `Text`, lists, `HashMap` / `HashSet` nodes, closures | `XRelMap` / `XRelSet` nodes |
+| **A name** | a HeapRef: the heap (which belongs to one Space) and the slot | (Space, name) as one exact integer: read in another Space it is an error |
+| **Freed** | with its Space's region, whole | with its Space's region, whole |
+
+There is no process-wide heap for values. `main` is a Space too, the entry
+Space. A value that leaves its Space is **copied**: a call into another
+Space of the same binary copies its arguments into the callee's heaps and its
+result back, by the codec of the wire, in memory. A call between processes
+and a `Wire<T>` copy the same way. So no name of one Space is ever held by
+another, and a region can end without asking anyone (chapter 17).
+
+The cells (`x = e`, `Space.make`) are not in the heaps: they belong to the
+call that made them and end with it (above).
+
+Across packages, a Space is a process: the first cross-Space call spawns the
+server, shutdown cascades from the caller, a crashed server is respawned on a
+virgin channel with the epoch advanced.
 
 ## Reclaiming a Space
 
-Within a process the heap does not shrink, and that is the design. There is one
-exception, and it is at the granularity of a whole Space: a Space keeps its
-sections in its own heap arena, and that arena can be released in a single move
-once the Space is finished with. Reclamation here is by *region*, never by
-tracing individual values; there is no per-object bookkeeping and nothing to
-scan.
+A region ends in one of two ways.
 
-You can state that point yourself. `drop X` is an assertion, checked at compile
-time, that Space `X` is no longer needed here. Two things are verified, in order:
-that `X` is a real Space (a directory named in a world's `spaces`; a typo is
-rejected as an unknown Space), and that no arc toward `X` is reachable downstream
-of the drop, no later `wire to space X`, no use of a symbol imported `from X`, no
-call that reaches either transitively. An early `drop`, with such an arc still
-ahead, is a compile error that names the offending arc. The keyword chapter gives
-the full rule; the point here is that the check is over the *source*, static, with
-no runtime watch.
+**With the Space.** `drop X` is an assertion, checked at compile time, that
+Space `X` is no longer needed here. Two things are verified, in order: that `X`
+is a real Space (a directory named in a world's `spaces`; a typo is rejected as
+an unknown Space), and that no arc toward `X` is reachable downstream of the
+drop: no later `wire to space X`, no use of a symbol imported `from X`, no
+call into `X`, no call that reaches one of these transitively. An early `drop`,
+with such an arc still ahead, is a compile error that names the offending arc.
+You usually do not need to write it: the compiler finds each Space's last use
+on its own and inserts the release there, and the death-watch releases a Space
+whose incoming wires have all closed.
 
-You usually do not need to write it. The same analysis runs the other way: the
-compiler finds each owned Space's last use on its own and inserts the release
-there automatically, so a `drop` is only an explicit assertion of a point the
-compiler would reach anyway. `drop X` earlier than that last use is the error
-above; there is no way to reclaim a Space that is still spoken to.
+**With every call, for a Space without state.** A Space whose code keeps
+nothing past a call, no stream, no wire, no pool of the runtime, is
+**stateless**, and the compiler knows it. Each call into it is a region of its
+own. When the call returns and its result has been copied out, both heaps of
+the Space are emptied (Turbak ch. 18, `letregion`: the region of a scope is
+freed whole when the scope ends, and what survives it was copied out). A
+Space with state keeps its heaps for as long as it lives.
 
-The release itself is one call, `madvise(MADV_DONTNEED)` over the arena's live
-bytes, page-aligned inward. The virtual mapping stays valid, so nothing dangles;
-the physical pages are handed back. Because the arc analysis counts *every* way a
-named Space's heap is touched, a wire, an import, a cross-Space call, a section `.-> P { ... }` of a
-place that lives in that Space, an `awaits`, the release can never fall before a read
-that still needs the pages.
+The release is the same in both cases. Both heaps of the Space are emptied:
+the sections, the FNV chain, the Leech store. Their pages are replaced by
+fresh zero pages, so the memory goes back to the system at once. Nothing
+dangles: every value that left the Space was copied out.
+
+Measured (Apple M1, 2026-10-22) on a Space that builds a `HashMap` and an
+`XRelMap` of 10<sup>5</sup> entries and returns their sizes: the resident
+memory of the process goes from 16&nbsp;MB to 254&nbsp;MB during the call, and
+back to 14&nbsp;MB when it returns.
+
+**The idiom: one Space per unit of work.** Collections are persistent: every
+`set` makes new nodes and keeps the old ones, and nothing frees a node one at a
+time. Work that builds and updates collections belongs in a Space, called for
+that work, whose region ends with it. A program that does the same work in one
+long-lived Space, `main` or a Space with state, **grows for as long as that
+Space lives**: its heaps grow by the same amount on every round, about
+12&nbsp;MB per round of 2·10<sup>4</sup> updates of a `HashMap` and an
+`XRelMap` in the regression probe. The FNV heap grows only with
+contents it has not seen, so a round that rebuilds the same values costs no
+new memory there. The Leech heap remakes every node.
 
 <SpaceReclaim />
 
 The whole point is that this needs no collector. The lifetime of a Space is a
-fact about the communication graph, which the compiler already has, so releasing
-its memory is a decision it can make, not a guess the runtime has to hedge.
+fact about the communication graph, which the compiler already has, and a value
+that outlives its Space has been copied out of it. Releasing the memory is a
+decision the compiler can make, not a guess the runtime has to hedge.

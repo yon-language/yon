@@ -84,7 +84,8 @@ indiscernibles literally identical (the Yoneda lemma, used as a design
 axiom).
 
 **Space**, a hermetic tenant: a directory under the project root, backed at
-runtime by its own heap and, across packages, its own process; content
+runtime by its own two heaps (FNV and Leech), freed whole as one region, and,
+across packages, its own process; content
 crosses through moves, numeric cross-Space calls, and copies on a `Wire<T>`;
 only a mobile value crosses (a closure, a cell or a region handle never does).
 
