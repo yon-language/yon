@@ -79,6 +79,12 @@ let internal_carrier_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.crea
    binds to such a declaration, never to a name alone: a name with a body in
    its declaration is not here, so no rewrite aimed at a primitive reaches it. *)
 let given_decls : (string, string * int * int) Hashtbl.t = Hashtbl.create 64
+
+(* The Space of each user source file: file path -> Space (its directory under
+   the root, "" for the root itself). Prelude files are not here: the prelude
+   is a library, not a Space a value lives in. A call from a function of one
+   Space into a function of another crosses the boundary between them. *)
+let user_file_space : (string, string) Hashtbl.t = Hashtbl.create 16
 let internal_faces : (string, string) Hashtbl.t = Hashtbl.create 4
 
 (* The faces the language fuses to their primitive codes: a capitalized face

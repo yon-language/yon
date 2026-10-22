@@ -47,6 +47,17 @@ let wire_fun_returns : (string, ty option) Hashtbl.t = Hashtbl.create 64
 let register_remote_signature (name : string) (ret : ty option) : unit =
   Hashtbl.replace wire_fun_returns name ret
 
+(* The declared parameter types of a remote function, by the same names. *)
+let remote_params : (string, ty list) Hashtbl.t = Hashtbl.create 64
+let register_remote_params (name : string) (ps : ty list) : unit =
+  Hashtbl.replace remote_params name ps
+
+(* The Space of every function of the program (qualified name -> Space), for
+   the functions declared in user files; and the Space of the function being
+   checked. Filled by check_program. *)
+let fun_space : (string, string) Hashtbl.t = Hashtbl.create 64
+let current_space : string option ref = ref None
+
 let collect_wire_knowledge (p : program) : unit =
   Hashtbl.reset wire_spaces;
   Hashtbl.reset wire_imports;
@@ -913,6 +924,7 @@ let ty_mobile (env : Tyenv.env) (t : ty) : bool =
     | TyPrim _ | TyPrimIn _ | TyHeytInt _ -> true
     | TyList x | TyChannel x -> go seen x
     | TyMap (k, v) -> go seen k && go seen v
+    | TyApp (p, args) -> go seen (TyUser p) && List.for_all (go seen) args
     | TySum vs | TySumIn (vs, _) -> List.for_all (fun v -> List.for_all (go seen) v.v_args) vs
     | TyUser p when List.mem p seen -> true
     | TyUser p ->
@@ -988,6 +1000,7 @@ let mob_close (binds : (string * bool * expr) list) (seed : string -> bool)
   mem
 
 let mob_begin (fn : fun_decl) (non_mobile_params : string list) =
+  current_space := Hashtbl.find_opt Surface_ast.user_file_space fn.fn_loc.file;
   mob_cells := Desugar.v1_targets_stmts Desugar.V1SS.empty fn.fn_body;
   mob_params := non_mobile_params;
   mob_binds := [];
@@ -1038,6 +1051,137 @@ let mob_cross_msg =
   "this value may carry a closure over a cell, and it is stored into a cell or \
    sent across a Space: either way it would outlive the call that owns the \
    cell. Only a mobile value (no closure, no cell) crosses (Harper ch. 34, 41)."
+
+(* The boundary between Spaces is the wire: what crosses it is what the wire
+   can carry, a mobile value, and nothing else (Harper ch. 34: only a mobile
+   type crosses between worlds). A call from a function of one Space into a
+   function of another, a call to a function imported from another process,
+   a value sent on a wire and the element of a producer's wire are crossings.
+   A closure, a cell or a region handle has no meaning in the other Space, so
+   it is refused there by its type, whatever it carries. *)
+let resolve_fused (t : ty) : ty =
+  match t with
+  | TyUser n ->
+      (match Hashtbl.find_opt Surface_ast.fusion_places n with
+       | Some p -> TyPrim p | None -> t)
+  | _ -> t
+
+(* What a call between processes carries: a scalar, as one f64. *)
+let rpc_carries (t : ty) : bool =
+  match resolve_fused t with
+  | TyPrim p ->
+      p <> "unknown"
+      && (match Carrier.prim_carrier p with Some (Carrier.Scalar _) -> true | _ -> false)
+  | _ -> false
+
+(* The imported operation a call names, and its value arguments. A lowered
+   call carries the selector first, then the arguments. *)
+let remote_call (name : string) (args : expr list) : (string * int) option =
+  let pre = "__yon_rpc2_invoke" in
+  let lp = String.length pre in
+  if Hashtbl.mem wire_imports name then Some (name, 0)
+  else if String.length name > lp + 3 && String.sub name 0 lp = pre then
+    let sp = String.sub name (lp + 3) (String.length name - lp - 3) in
+    match args with
+    | ELit (LitNumber sel, _) :: _ ->
+        (match Hashtbl.find_opt Module_prefix.rpc_ops (sp, int_of_float sel) with
+         | Some op -> Some (op, 1)
+         | None -> None)
+    | _ -> None
+  else None
+
+let boundary_msg what t =
+  Printf.sprintf
+    "%s of type %s crosses into another Space, and only what the wire can \
+     carry crosses a Space: a closure, a cell or a region handle means \
+     nothing on the other side (Harper ch. 34). Pass the values it is made of."
+    what (Tyenv.ty_to_string t)
+
+let rpc_msg what t =
+  Printf.sprintf
+    "%s of type %s crosses to another process, and a call between processes \
+     carries numbers only: a %s would arrive as a meaningless number. Send it \
+     on a Wire<T>."
+    what (Tyenv.ty_to_string t) (Tyenv.ty_to_string t)
+
+(* The crossings of one call: into a function of another Space of this
+   program, or to an imported function of another process. *)
+let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
+    (arg_tys : ty list) (loc : location) : unit tc_result =
+  let rec first = function
+    | [] -> ok ()
+    | (bad, msg) :: rest -> if bad then err loc msg else first rest in
+  let callee_space = Hashtbl.find_opt fun_space name in
+  let is_send = String.length name >= 10
+                && (String.sub name 0 10 = "Wire__send" || String.sub name 0 9 = "Wire.send") in
+  if is_send then
+    first (List.filteri (fun i _ -> i >= 1) arg_tys
+           |> List.map (fun t -> (not (ty_mobile env t),
+                                  boundary_msg "a value sent on a wire" t)))
+  else
+  match remote_call name args with
+  | Some (op, skip) ->
+      let vals = List.filteri (fun i _ -> i >= skip) arg_tys in
+      let ret = match Hashtbl.find_opt wire_fun_returns op with
+        | Some r -> r | None -> None in
+      (match Hashtbl.find_opt remote_params op with
+       | None -> ok ()
+       | Some ps ->
+           first (
+             [ (List.length ps <> List.length vals,
+                Printf.sprintf "%s takes %d arguments across the Space \
+                  boundary, given %d" op (List.length ps) (List.length vals)) ]
+             @ List.concat (List.mapi (fun i p ->
+                 let p = resolve_fused p in
+                 let what = Printf.sprintf "argument %d of %s" (i + 1) op in
+                 let given = match List.nth_opt vals i with
+                   | Some t -> resolve_fused t | None -> p in
+                 [ (not (ty_mobile env p), boundary_msg what p);
+                   (not (rpc_carries p), rpc_msg what p);
+                   (not (Tyenv.simple_ty_compatible p given),
+                    Printf.sprintf "%s expects %s, given %s" what
+                      (Tyenv.ty_to_string p) (Tyenv.ty_to_string given)) ]) ps)
+             @ (match ret with
+                | Some r ->
+                    let r = resolve_fused r in
+                    let what = Printf.sprintf "the result of %s" op in
+                    (match r with
+                     | TyChannel _ -> []   (* a producer: its elements cross on the wire *)
+                     | _ -> [ (not (ty_mobile env r), boundary_msg what r);
+                              (not (rpc_carries r), rpc_msg what r) ])
+                | None -> [])))
+  | None ->
+      (match callee_space, !current_space with
+       | Some there, Some here when there <> here ->
+           let ret = match Hashtbl.find_opt wire_fun_returns name with
+             | Some (Some r) -> [ (not (ty_mobile env r),
+                                   boundary_msg ("the result of " ^ name) r) ]
+             | _ -> [] in
+           first (List.mapi (fun i t ->
+               (not (ty_mobile env t),
+                boundary_msg (Printf.sprintf "argument %d of %s" (i + 1) name) t))
+             arg_tys @ ret)
+       | _ -> ok ())
+
+(* A producer's wire carries its elements to another Space. *)
+let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
+  match fn.fn_return with
+  | Some (TyChannel t) when not (ty_mobile env t) ->
+      [ { err_loc = fn.fn_loc; err_msg = boundary_msg "the element of this wire" t } ]
+  | Some (TyChannel t) ->
+      (* a scalar travels as one number, a place as its frame; anything else
+         would travel as a number that means nothing on the other side *)
+      let is_place = match resolve_fused t with
+        | TyUser p -> Tyenv.lookup_place env p <> None
+        | _ -> false in
+      if rpc_carries t || is_place then []
+      else [ { err_loc = fn.fn_loc;
+               err_msg = Printf.sprintf
+                 "the element of this wire has type %s, and a wire carries \
+                  numbers and places only: a %s would arrive as a meaningless \
+                  number. Wrap it in a place."
+                 (Tyenv.ty_to_string t) (Tyenv.ty_to_string t) } ]
+  | _ -> []
 
 (* The verdicts, once the whole body has been seen. *)
 let mob_finish () : type_error list =
@@ -2841,6 +2985,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                (name : string) (args : expr list) (arg_tys : ty list) (loc : location) : ty tc_result =
   mob_note_call env name args arg_tys
     (fun v -> if loc.start_line = 0 then location_of_expr v else loc);
+  let* () = check_boundary env name args arg_tys loc in
   (* Builtin: apply_move(MoveName, source) — applies a registered move.
    * __apply_move_in_<S> respects the same signature. *)
   let is_apply_move =
@@ -5369,7 +5514,8 @@ and check_fun_decl_at_home (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
   let (final_env, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
   let tail_errs = (match expected_ret with
     | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
-    | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret in
+    | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret
+    @ producer_errors env fn in
   match body_errs @ tail_errs with
   | [] -> ok ()
   | e :: _ ->
@@ -5456,7 +5602,8 @@ and check_fun_decl_accum_at_home (env : Tyenv.env) (ctx : Reduce.ctx)
   let (final_env, body_errs) = check_stmts_accum body_env ctx fn.fn_body expected_ret in
   let tail_errs = (match expected_ret with
     | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
-    | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret in
+    | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret
+    @ producer_errors env fn in
   List.rev_append (body_errs @ tail_errs) (List.rev !errs)
 
 and check_reduction_decl (env : Tyenv.env) (ctx : Reduce.ctx) (rd : reduction_decl) : unit tc_result =
@@ -6461,6 +6608,13 @@ let check_program (p : program) : check_result =
          | None -> ())
     | _ -> ()) p;
   let p = Method_sugar.qualify_overloads p in
+  Hashtbl.reset fun_space;
+  List.iter (function
+    | TopFun fd ->
+        (match Hashtbl.find_opt Surface_ast.user_file_space fd.fn_loc.file with
+         | Some sp -> Hashtbl.replace fun_space fd.fn_name sp
+         | None -> ())
+    | _ -> ()) p;
   (* Pre-check before infer_fun_signatures/Hm_infer (which crash or
    * failwith on these inputs): a duplicate top-level function name, and a
    * functional return type `: T -> U` (a returned closure — unsupported,

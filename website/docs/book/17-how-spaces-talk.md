@@ -169,8 +169,9 @@ Two doors, two disciplines. The **call** door, `__yon_dispatch`, moves `f64`
 and nothing else: a selector plus at most four numeric arguments, and a fifth is
 rejected at compile time. A string or a bare section cannot ride it: it would be
 a handle into a heap the callee does not have (chapter 13), so only numbers cross
-the call door. A `String` parameter in a cross-Space signature is not yet
-refused at compile time; the call returns a wrong value (chapter 19). The **subscription** door, just above, is the one that carries
+the call door. The checker reads the remote signature, checks every argument
+against its declared type, and refuses a `String` parameter or result before the
+program builds. The **subscription** door, just above, is the one that carries
 values, and it carries them by **copy**, never by handle: a value is serialized
 on the way out and rebuilt on the far side.
 
@@ -182,6 +183,40 @@ the wide door copies. This is the same hermeticity ladder as everywhere else:
 *inside* a binary a crossing goes through a declared arrow (a `move`, a `view`,
 a `geomorph`); *between* binaries it is the kernel's process isolation.
 `internal` functions are on neither door.
+
+## What crosses a Space
+
+The boundary between two Spaces is the wire, and what crosses it is what the
+wire can carry. The rule holds in four places:
+- a call from a function of one Space into a function of another, in the same
+  binary;
+- a call to a function imported from another process;
+- a value sent with `Wire.send`;
+- the element of a producer's `Wire<T>`.
+
+At each of them the type of what crosses must be **mobile**: numbers, strings,
+places made of mobile fields, and collections of mobile values. A closure, a
+cell (`Space.make`) or a region handle names something that exists only in the
+Space that made it. Given to another Space, it would name nothing there. So
+handing one over is a type error, and it is refused even when, today, both
+Spaces share one process:
+
+<!-- yon-gate: illustrative -->
+```yon
+place Entry {
+  fun main(): Number {
+    be k := 5
+    return Q.apply(fun(x: Number) => x + k, 1)   // Q lives in Space w: refused
+  }
+}
+```
+
+Inside one Space the same call is an ordinary call: the closure never leaves
+the Space that made it. The judgment is the one chapter 5 uses for a closure
+leaving its call (Harper ch. 34): only a mobile type crosses between worlds.
+Between processes the doors carry less than every mobile type: a call
+carries numbers, a wire numbers and places. Anything else is refused there at
+compile time, never delivered as a meaningless number.
 
 ## What about threads?
 

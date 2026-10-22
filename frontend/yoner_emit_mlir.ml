@@ -488,7 +488,12 @@ let () =
                   Tycheck.register_remote_signature
                     (m ^ "::" ^ fd.Surface_ast.fn_name) fd.Surface_ast.fn_return;
                   Tycheck.register_remote_signature
-                    fd.Surface_ast.fn_name fd.Surface_ast.fn_return
+                    fd.Surface_ast.fn_name fd.Surface_ast.fn_return;
+                  let ps = List.map (fun p -> p.Surface_ast.param_ty)
+                             fd.Surface_ast.fn_params in
+                  Tycheck.register_remote_params
+                    (m ^ "::" ^ fd.Surface_ast.fn_name) ps;
+                  Tycheck.register_remote_params fd.Surface_ast.fn_name ps
               | _ -> ()) p
           with _ -> ()) candidates
     | _ -> ()) prog;

@@ -62,8 +62,9 @@ date.
   capability is absent is not yet refused, and the static rule (a caller of a
   `requires` move must itself hold the capability) is not yet checked
   (chapter 20).
-- **A string in a cross-Space signature is not yet refused.** It compiles, and
-  the call returns a wrong value (`0`). This is a defect (chapter 19).
+- **A call between processes carries numbers only.** A string, a place or a
+  collection in a cross-Space signature is refused at compile time; the call
+  does not carry it yet (chapter 11).
 - **The concurrent drain of a `Wire<T>`** (both processes live, the consumer
   draining while the producer fills, under contention) is not yet verified; the
   verified shape is the producer running to completion first (chapter 17).
