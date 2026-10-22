@@ -137,8 +137,10 @@ def run_pair(producer_bin, consumer_bin, tmp: Path, n: int, channel: int,
     # fill and stall the producer mid-run
     perr_path = tmp / f"producer_{world}_{channel}.err"
     with open(perr_path, "wb") as perr_f:
+        # both run in the test's own directory: whatever a run writes by a
+        # relative path stays there, never in the directory pytest started in
         prod = subprocess.Popen([str(producer_bin), str(fifo), str(n), str(channel)],
-                                stdout=subprocess.DEVNULL, stderr=perr_f, env=env)
+                                stdout=subprocess.DEVNULL, stderr=perr_f, env=env, cwd=tmp)
     try:
         _read_ready(fifo, prod)
         if assert_producer_waits:
@@ -146,7 +148,7 @@ def run_pair(producer_bin, consumer_bin, tmp: Path, n: int, channel: int,
                 f"the producer exited ({prod.returncode}) before any consumer attached, "
                 f"with {n} messages for a 256-slot ring")
         cons = subprocess.run([str(consumer_bin), str(n), str(channel)],
-                              capture_output=True, timeout=RUN_DEADLINE_S, env=env)
+                              capture_output=True, timeout=RUN_DEADLINE_S, env=env, cwd=tmp)
         try:
             prod.wait(timeout=RUN_DEADLINE_S)
         except subprocess.TimeoutExpired:
