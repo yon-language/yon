@@ -111,13 +111,37 @@ What crosses, recursively:
 - **strings**, length-prefixed, re-interned into the consumer's `String` place
   on arrival, so a string that left as one slot arrives as one slot again;
 - **nested places**: a field that is itself a transportable place is serialized
-  as a **sub-frame** with its own schema id, written inline and rebuilt by a
+  as a **sub-frame** with its own type root, written inline and rebuilt by a
   recursive descent, so a chain like `o.inner.b` survives the crossing intact.
 
-Each place that travels registers a small **schema**, its field tags and a
-content-derived schema id, so the consumer can reconstruct the right shape.
-The registry is bounded (256 schemas, 64 fields each), and a missing or
-mismatched schema is an error, never a silent mis-read.
+Each place that travels registers a small **schema**, its field tags, under its
+type root, so the consumer can reconstruct the right shape. The registry is
+bounded (256 schemas, 64 fields each), and a missing schema is an error, never
+a silent mis-read.
+
+### Two Spaces connect only on the same type
+
+Two Spaces are compiled apart, each from its own declaration of the place
+that travels. They may disagree: one has `Reading { temp, humidity }`, the
+other the same fields swapped, or one renamed, or a `Number` that became a
+`Boolean`. Read positionally, such a frame would deliver humidities as
+temperatures, values of another shape that look right.
+
+The proof that both sides mean the same type is its **type root** (chapter 13):
+the hash of the place's name and of the name and root of each field, in
+declaration order. Any of the changes above gives another root. A frame starts
+with the root of its value, and the root is checked twice:
+
+- **at the connection**: `awaits` sends the root the consumer expects, and the
+  producer compares it with the root of its own element. When they differ it
+  refuses the subscription before the first frame, and the consumer stops
+  with a declared error;
+- **at each frame**: the consumer compares the root of every frame, nested
+  frames included, with the one it awaited, and stops with a declared error
+  on any other.
+
+So a wire connects two Spaces only when they declare the same type, and a
+value of another shape is never rebuilt.
 
 In the language this is the subscription pipeline:
 

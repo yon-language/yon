@@ -1049,8 +1049,6 @@ def test_a_place_crosses_the_wire_by_field(tmp_path):
 
 
 @_IPC_lowering
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a place whose fields are declared in another order is a different schema at the wire")
 def test_reordered_fields_do_not_cross_the_wire_by_position(tmp_path):
     rc = _wire_lowering(tmp_path, "place Reading {\n  humidity Number\n  temp Number\n}\n")
     _verdict(rc != 50 + 51 + 52,
