@@ -164,6 +164,53 @@ if [ -z "$OUTPUT" ]; then
     esac
 fi
 
+# === The content cache (YONC_CACHE_DIR, opt-in) ===========================
+# A compilation is decided by its sources, the prelude, the toolchain's
+# binaries, the runtime's objects, this script and its flags; their content
+# hash is the key (toolchain/yonc_cache_key.py). A key seen before is answered
+# from the cache: the same exit code, the same messages (the input path put
+# back in them), and on success the same artefact, as a file of its own. A key
+# not seen compiles here once, uncached, and is stored.
+if [ -n "${YONC_CACHE_DIR:-}" ] && [ -z "${YONC_CACHE_INNER:-}" ]; then
+    CACHE_PY="$YONC_ROOT/toolchain/yonc_cache_key.py"
+    mkdir -p "$YONC_CACHE_DIR"
+    CKEY_LINE="$(python3 "$CACHE_PY" key "$YONC_CACHE_DIR" "$INPUT" "$EMIT" \
+        "$YONC_RUNTIME_DIR" "$RUNTIME_OBJS_LIST" "$YONC_FRONTEND" "$YONC_TOPOS_OPT" \
+        "$YONC_MLIR_TRANSLATE" "$YONC_LLC" "$YONC_CC" "$0" -- "verbose=$VERBOSE")" || CKEY_LINE=""
+    if [ -n "$CKEY_LINE" ]; then
+        ENTRY="$YONC_CACHE_DIR/${CKEY_LINE%% *}"
+        echo "${CKEY_LINE##* }" > "$YONC_CACHE_DIR/.toolchain"   # the current toolchain
+        if [ ! -f "$ENTRY/rc" ]; then
+            STAGE="$(mktemp -d "$YONC_CACHE_DIR/.part.XXXXXX")"
+            VFLAG=""; [ "$VERBOSE" -eq 1 ] && VFLAG="-v"
+            CRC=0
+            YONC_CACHE_INNER=1 "$0" "$INPUT" "--emit=$EMIT" $VFLAG -o "$STAGE/out" \
+                > /dev/null 2> "$STAGE/err" || CRC=$?
+            if [ "$CRC" -ge 128 ]; then   # killed by a signal: not a verdict, not stored
+                cat "$STAGE/err" >&2; rm -rf "$STAGE"; exit "$CRC"
+            fi
+            python3 "$CACHE_PY" wrap "$INPUT" < "$STAGE/err" > "$STAGE/stderr"
+            rm -f "$STAGE/err"
+            echo "${CKEY_LINE##* }" > "$STAGE/toolchain"
+            [ -f "$STAGE/out" ] && chmod a-w "$STAGE/out"
+            echo "$CRC" > "$STAGE/rc"
+            python3 "$CACHE_PY" commit "$STAGE" "$ENTRY"
+        fi
+        python3 "$CACHE_PY" unwrap "$INPUT" < "$ENTRY/stderr" >&2
+        CRC="$(cat "$ENTRY/rc")"
+        if [ "$CRC" = "0" ]; then
+            rm -f "$OUTPUT"
+            # a file of its own (an APFS clone where the volume has them, else a
+            # copy), never a hard link: macOS at times kills a process that
+            # runs a binary whose file is shared by links
+            cp -c "$ENTRY/out" "$OUTPUT" 2>/dev/null || cp "$ENTRY/out" "$OUTPUT"
+            chmod u+w "$OUTPUT"
+            echo "$OUTPUT"
+        fi
+        exit "$CRC"
+    fi
+fi
+
 log() { [ "$VERBOSE" -eq 1 ] && echo "[yonc] $*" >&2; return 0; }
 
 WORKDIR="$(mktemp -d -t yonc.XXXXXX)"

@@ -48,3 +48,6 @@ runtime/*.d
 
 # Claude Code local settings
 .claude/
+
+# the content cache of yonc (regression/gate.sh)
+.yonc-cache/

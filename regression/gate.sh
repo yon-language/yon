@@ -14,6 +14,11 @@
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TIER="${1:-2}"
+# The content cache of yonc is opt-in: YONC_CACHE_DIR=<dir> answers a
+# compilation already made with this toolchain from the cache
+# (toolchain/yonc_cache_key.py). Off by default: on this machine the time is in
+# the system's check of every new binary, which a cached copy pays again.
+export YONC_CACHE_DIR="${YONC_CACHE_DIR-}"
 if [ "$TIER" = "bench" ]; then
   ROOT="$(cd "$(dirname "$0")/.." && pwd)"
   t0=$(date +%s)
@@ -151,4 +156,8 @@ for _ in $(seq 50); do       # reapers wake on their launcher's exit: allow 10 s
   sleep 0.2
 done
 [ -z "$leaked" ] || die "worlds not released after the suite: $leaked"
+# the cache keeps one toolchain: the entries of any other can never hit again
+if [ -n "$YONC_CACHE_DIR" ] && [ -f "$YONC_CACHE_DIR/.toolchain" ]; then
+  python3 "$ROOT/toolchain/yonc_cache_key.py" prune "$YONC_CACHE_DIR" "$(cat "$YONC_CACHE_DIR/.toolchain")"
+fi
 echo "gate 3 green ($(( $(date +%s) - t0 ))s)"
