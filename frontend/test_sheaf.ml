@@ -80,7 +80,7 @@ let () =
   let pd : C.place_decl =
     { C.p_name = "P"; C.p_site = C.TyPlace world;
       C.p_fields = ["class", C.TyPlace world; "address", C.TyPlace world];
-      C.p_operations = []; C.p_laws = [] } in
+      C.p_operations = []; C.p_laws = []; C.p_root = 0L } in
   check "place_violations: non-quotient world has no field reject ([])"
     (Sheaf.place_violations ctx site_no_quotient pd = []);
 

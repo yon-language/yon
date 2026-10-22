@@ -153,6 +153,7 @@ let test_place_equivalence () =
     p_fields = [("id", TyPlace "text"); ("amount", TyPlace "number")];
     p_operations = [];
     p_laws = [];
+    p_root = 0L;
   } in
   let p2 = {
     p_name = "Order";
@@ -160,6 +161,7 @@ let test_place_equivalence () =
     p_fields = [("id", TyPlace "text"); ("amount", TyPlace "number")];
     p_operations = [];
     p_laws = [];
+    p_root = 0L;
   } in
   let p3 = {
     p_name = "Order";
@@ -167,6 +169,7 @@ let test_place_equivalence () =
     p_fields = [("id", TyPlace "text")];  (* different! *)
     p_operations = [];
     p_laws = [];
+    p_root = 0L;
   } in
   let eq12 = Reduce.place_equivalent p1 p2 in
   let eq13 = Reduce.place_equivalent p1 p3 in

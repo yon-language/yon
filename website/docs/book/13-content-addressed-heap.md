@@ -56,6 +56,24 @@ fun main(): Number {
 }
 ```
 
+## The type is part of the content
+
+A section of a place begins with 8 bytes that name its type: the **type root**,
+a 64-bit hash computed by the same function as content hashes. It is made of
+the place's name, then of the name and the type root of each field, in
+declaration order. A field is read by its name, so its name belongs to the
+type. The layout follows the declaration, so reordering two fields gives
+another type. Constructors are positional, and a place without fields has the
+root of its arms, so two equivalent coproducts with different names (a
+`Bool` and a `Bit`) stay two types: their equivalence is a path, not an
+identity.
+
+The root enters the content. Two sections of different places never share a
+slot, even when their field bytes coincide: `Opened { balance 42 }` and
+`Shadow { balance 42 }` are two values. And it is one identity for the whole
+toolchain: the head of a section, the target of an upcast along a mono, and
+the type of a value on a wire (chapter 17) are the same number.
+
 ## Two heaps
 
 | | The FNV heap (xleech2) | The Leech heap |
