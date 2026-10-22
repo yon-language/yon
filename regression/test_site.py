@@ -151,8 +151,8 @@ def test_project_place_world_binding():
     """The inferred place->world binding reaches codegen. In project_min the
     folder Orders is the only space and the toml puts it in world Commerce, so
     `place Order` (in Orders/) is inferred into Commerce and the emitted MLIR
-    binds it there -- not __Default. This is the propagation fix: the tycheck
-    resolved the world all along, but the desugar/emit used to see __INFER."""
+    binds it there -- not __Default, and not __INFER: the world the tycheck
+    resolves is the world the desugar and emit see."""
     _require_emit()
     proj = ROOT / "regression" / "yon_tests" / "project_min"
     out = subprocess.run([str(EMIT), str(proj)],

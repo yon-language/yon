@@ -8,11 +8,10 @@
  * visibility set causes the proposition to evaluate to HUnknown,
  * propagating through Heyting operators.
  *
- * The evaluator is used at runtime by the SWhen statement (to choose
- * branches), by the EAll comprehension (to filter), and by any
- * boolean-like context. It is NOT used during type checking — type
- * checking proceeds as usual on the surface AST, and propositions
- * carry their place-relative semantics only at evaluation time.
+ * The evaluator is exercised only by test_prop_eval.ml and the main.ml
+ * self-tests; the compiled pipeline (desugar, tycheck, emit_mlir,
+ * eval_runner) does not call it. It is NOT used during type checking —
+ * type checking proceeds as usual on the surface AST.
  *
  * Three evaluation modes:
  *
@@ -142,7 +141,7 @@ let rec collect_names (e : expr) : string list =
   | EIfThenElse (c, a, b, _) -> collect_names c @ collect_names a @ collect_names b
   | ELam (_params, body, _) ->
       (* Inline lambda. The free vars of the body minus the parameter names;
-       * for now we return only the body (an over-approximation). *)
+       * we return all names of the body (an over-approximation). *)
       collect_names body
   | EMoveLam (_, body, _, _, _)
   | EReductionLam (_, body, _, _) ->
@@ -199,10 +198,10 @@ let eval_comparison
      * and comparing the resulting encoded values. *)
     let _lhs_term = ctx.ec_reducer (Ast.Var "_lhs_placeholder") in
     let _rhs_term = ctx.ec_reducer (Ast.Var "_rhs_placeholder") in
-    (* For the prototype, we delegate to a simple lookup: bindings
-     * carry encoded terms, so we evaluate by binding. A full impl
-     * would translate the surface expr to Yon Core and run the
-     * kernel. *)
+    (* Delegate to a simple lookup: bindings
+     * carry encoded terms, so we evaluate by binding. The surface
+     * expr is not translated to Yon Core and the kernel is not
+     * run. *)
     let resolve e =
       match e with
       | ELit (LitNumber n, _) -> Some (`Num n)
@@ -344,8 +343,8 @@ and eval_is_pattern (ctx : eval_ctx) (e : expr) (p : pattern)
          * literal. This is an equality check, place-aware. *)
         eval_comparison ctx OpEq e (ELit (l, dummy_loc))
     | PatType _ ->
-        (* Type-pattern matching: at runtime, we don't carry type
-         * tags on values in the prototype, so we conservatively say
+        (* Type-pattern matching: values carry no type tags
+         * here, so we conservatively say
          * HPresent (pattern matches structurally). *)
         Heyting.HPresent
 

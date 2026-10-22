@@ -80,16 +80,15 @@ class RuntimeCapacityError(AssertionError):
 
 # A bench that runs into a known runtime capacity limit is xfail'd here, strict
 # and narrowed to RuntimeCapacityError, so no other failure hides behind it.
-# None today: the HashSet is a persistent trie with no directory to exhaust.
+# None: the HashSet is a persistent trie with no directory to exhaust.
 _CAPACITY_XFAIL = {}
 
 # Benchmarks measured but NOT published: their numbers would say something
-# false. The page says so where the chart was (book ch. 93). An entry leaves
-# when its numbers measure what they claim to.
+# false. The page says so in place of the chart (book ch. 93). An entry belongs
+# here only while its numbers do not measure what they claim to.
 WITHDRAWN = {
-    "xset_scaling": "its published HashSet timings were taken on the mutable "
-                    "HashSet (which failed at N=100000); the persistent one is "
-                    "to be measured on the reference machine",
+    "xset_scaling": "its published HashSet timings do not measure the "
+                    "persistent HashSet",
 }
 
 

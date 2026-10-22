@@ -2,15 +2,15 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* cubical.ml — Cubical Type Theory fragment for Yon.
  *
- * A prototype of the (∞,1)-decidable layer of the federation, modelled on
+ * The (∞,1)-decidable layer of the federation, modelled on
  * Cohen-Coquand-Huber-Mörtberg 2016 "Cubical Type Theory: a
- * constructive interpretation of the univalence axiom." Scoped to a future
- * version (1.2): the composition/transport/glue rules below handle the basic
- * cases and fall back to a canonical form for the rest (see the "prototype"
+ * constructive interpretation of the univalence axiom." The
+ * composition/transport/glue rules below handle the basic
+ * cases and fall back to a canonical form for the rest (see the
  * notes in reduce_comp and the HIT comp), so this is not a complete CCHM
  * implementation.
  *
- * The cubical layer provides (in prototype form):
+ * The cubical layer provides (partially, as above):
  *
  *   1. The interval I with endpoints 0 and 1, and connections
  *      (min, max, negation) for face formulas.
@@ -33,7 +33,7 @@
  *   - Quotient types (e.g., Currency / equivalent_currency_set).
  *
  * The cubical fragment is decidable because cubical type checking is
- * decidable (the original CCHM result). In this prototype the composition
+ * decidable (the original CCHM result). Here the composition
  * and glue operations reduce to canonical forms on the basic cases and are
  * left as a canonical (un-reduced) form otherwise.
  *)
@@ -358,7 +358,7 @@ let unglue (t : cterm) : cterm =
  * a nested composition, comp at a Glue type uses transport, etc.
  *
  * The full computation rules require recursion on the structure of
- * the type. For the prototype we handle the basic cases and leave
+ * the type. Only the basic cases are handled; we leave
  * a structural fallback for the rest.
  *)
 
@@ -435,7 +435,7 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
           (* comp at a HIT type: consult the HIT signature to dispatch
            * on the constructor of the base term.
            *
-           * Semantics (prototype):
+           * Semantics:
            *   - If base is CHITConstr (cname, cargs) where cname is a
            *     POINT constructor with NO arguments (a "vertex" like
            *     S¹.base or S².base): the composition is the constant
@@ -445,7 +445,7 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
            *     compose each argument; reassemble.
            *   - If base is a PATH constructor: leave as canonical form
            *     (full path composition is the heart of cubical
-           *     reduction, beyond the prototype's scope).
+           *     reduction, and is not computed here).
            *   - If signature not found or base shape unrecognized:
            *     fall back to canonical CComp.
            *)
@@ -510,8 +510,8 @@ and reduce_hcomp (ty : ctype) (phi : face_formula)
                 * to_ctype/of_ctype in builtins.ml). Composition must handle ALL
                 * faces: on each psi_k the A-component is patched by the k-th
                 * forward map e_k applied to the filler computed in the k-th type
-                * T_k. The old code used (T_1,e_1) for the whole system, so any
-                * restriction to psi_k (k>1) produced e_1 — the multi-face bug. *)
+                * T_k. Using (T_1,e_1) for the whole system would make any
+                * restriction to psi_k (k>1) produce e_1. *)
                let tpart v = match v with CGlueElem (_, t, _) -> t | _ -> v in
                let t_sides = List.map (fun (nm, f, u) -> (nm, f, tpart u)) sides in
                let t0 = tpart base in
@@ -551,8 +551,7 @@ and reduce_hcomp (ty : ctype) (phi : face_formula)
                 * the default dispatch is the first pair's (off every psi_k the fiber
                 * is unobserved — a glue-elem degenerates to its base there). When all
                 * T_k share a rule (e.g. all CTBase) every per-face composite
-                * coincides, so this reduces to the old single composite: no change on
-                * the existing (non-varying) tests, correct on the varying ones. *)
+                * coincides, so this reduces to a single composite. *)
                let t1_ty = match partial with (tk, _) :: _ -> tk | [] -> a_ty in
                let t1_faces =
                  List.mapi
@@ -623,7 +622,7 @@ let rec reduce_transport ((i, ty) : string * ctype) (t : cterm) : cterm =
        * the marker __equiv_fwd (lowered to `App (Fst e, ·)` in builtins.ml)
        * and the inverse g via __equiv_bwd (`App (Fst (Snd e), ·)`).
        *
-       * The six CCHM steps, at the prototype level:
+       * The six CCHM steps, as implemented here:
        *
        *  (1) a0 = unglue^{i:=0} t0, the base value at the start.  On any glue
        *      face φ_k that is a TAUTOLOGY at i=0 the start type collapses to
@@ -641,7 +640,7 @@ let rec reduce_transport ((i, ty) : string * ctype) (t : cterm) : cterm =
        *
        *  (5) a1' = comp^j A [ φ ↦ ω ] a1 adjusts the base along ω.  RESIDUAL:
        *      ω needs the ε-homotopy of e_k as a genuine filler, which this
-       *      prototype does not compute, so we keep a1' = a1 (the un-adjusted
+       *      engine does not compute, so we keep a1' = a1 (the un-adjusted
        *      transport).  This leaves the base-boundary unglue(result)=a1 exact
        *      and the fibre-boundary result|φ_k = t1'_k exact; the only thing
        *      NOT enforced is that a1 = e_k.f(t1'_k) on φ_k (that is ω, the open
@@ -948,7 +947,7 @@ and ctype_equal (a : ctype) (b : ctype) : bool =
  *
  * An equivalence A ~= B in CCHM is a pair (f, isEquiv f). The
  * identity equivalence is (id_A, id-is-equiv). We don't track the
- * "isEquiv" proof at the prototype level — it's a coherence witness.
+ * "isEquiv" proof here — it's a coherence witness.
  *)
 let id_equiv (_a : ctype) : cterm =
   CVar "__id"   (* the identity function as the underlying map *)

@@ -207,7 +207,7 @@ def _cross_file_call_project(root: Path):
 @pytest.mark.skipif(not LSP.exists(), reason="yon_lsp missing")
 def test_lsp_resolves_cross_file_reference(tmp_path):
     """A function defined in a sibling file resolves: the LSP type-checks the WHOLE
-    package, so A calling B's `gee` is no longer a false "unknown function"."""
+    package, so A's call to B's `gee` resolves."""
     root = _cross_file_call_project(tmp_path / "proj")
     r = subprocess.run([str(LSP), "--check", str(root / "A" / "AP.yon")],
                        capture_output=True, text=True, timeout=60)

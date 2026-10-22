@@ -52,12 +52,11 @@ module S = Set.Make (String)
  * __stream_, …) — are identifiers over the alphabet [A-Za-z0-9_]
  * (lexer.mll: alpha/alnum). These names contain '#', which the lexer can
  * never emit. So no `Lam`/`HITElim`/`Reduction` can ever bind such a name
- * → no capture, by construction. It is the guarantee the FVar/BVar
- * migration (suspended) would give structurally; here it comes from the
- * alphabet.
+ * → no capture, by construction. The guarantee comes from the
+ * alphabet, not from an index-based term representation.
  *
- * (Before: the fixed name "__sheaf_x" was a valid user identifier →
- *  `fun(__sheaf_x) => self.address` could capture the point and leak.) *)
+ * (A name over the user alphabet, such as "__sheaf_x", could be captured:
+ *  `fun(__sheaf_x) => self.address` would capture the point.) *)
 let fresh_point = "#sheaf-point"
 let fresh_class = "#sheaf-class"
 let canon_arg   = "#sheaf-arg"

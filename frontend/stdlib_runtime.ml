@@ -7,7 +7,7 @@
  *   - Operations that read/write the storage and return encoded Yon Core values
  *
  * Operations are hooked into Builtins.try_reduce_builtin so that
- * surface Yon programs can invoke List.cons, Map.get, Space.set, etc.
+ * surface Yon programs can invoke List.cons, HashMap.get, Space, etc.
  * via the standard qualified-call syntax.
  *
  * The id-based indirection lets us model mutable state inside the
@@ -22,8 +22,7 @@ open Builtins
 (* ─── Counters and stores ──────────────────────────────────────────── *)
 
 (* Each stdlib structure has its own integer-id store. We use Hashtbl
- * because we need O(1) lookup by id and the prototype doesn't care
- * about persistence. *)
+ * because we need O(1) lookup by id; the stores are not persisted. *)
 
 let next_id : int ref = ref 0
 
@@ -475,7 +474,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "xi_apply", [tnum], tnum;
       (* Exact Co_0: a single canonicalizer, zero parameters.
        * co0_canonical(v) and co0_step(v) -> the exact reduce_type2 reduction.
-       * The max_iter parameter (which was free) and co0_orbit_size were removed. *)
+       * No iteration bound is exposed as a parameter. *)
       "co0_canonical", [tnum], tnum;
       "co0_step", [tnum], tnum;
       "co0_equivalent", [tnum; tnum], tbool;
@@ -511,9 +510,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "corrupt", [tnum; tnum], tnum;
       "to_stream", [TyUser "VoyagerList"], tlist tnum;
     ];
-    (* Arena: the Leech type-2 arena as a first-class structure. Points are
-     * type-2 xcoords; orbit/same_orbit read the pure M24 orbit. occupied and
-     * same_orbit return 0/1 as numbers. *)
+    (* Arena<V>: the Leech type-2 arena as a first-class structure. Points
+     * are LatticePoints; occupied answers a Boolean. *)
     (* The primitives Arena<V> (prelude/coll) declares `is given`. *)
     "Arena", [
       "empty", [], arena;
@@ -529,9 +527,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "get", [TyUser "Space"], tunk;
       "set", [TyUser "Space"; tunk], tunit;
     ];
-    (* The Lattice module was removed (dead code). No example uses it; the
-     * example topos_heyt_int_lattice.yon uses the __heyt_int_make builtins
-     * directly, not the Lattice surface API. *)
+    (* There is no Lattice module: heyt_int values are built with the
+     * __heyt_int_make builtins directly. *)
     (* Capability registry MVP. *)
     "Cap", [
       "grant", [tnum], tnum;
@@ -665,31 +662,31 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "fnv1a",    [TyUser "String"], tnum;
       "hash_int", [tnum], tnum;
     ];
-    (* Cross-Space streams.
-     * Stream.make(target_heap) -> stream_id as number
-     * Stream.send(stream_id, value) -> 0 on success
-     * Stream.recv(stream_id) -> value (or -1 if empty)
+    (* Cross-Space channels.
+     * Wire.make(target_heap) -> channel id as number
+     * Wire.send(id, value) -> 0 on success
+     * Wire.recv(id) -> value (or -1 if empty)
      * Note: we use send/recv to avoid a clash with the EMIT token (reserved
      * for `emit expr` statement effects). *)
-    (* Wire: the cross-Space channel family (formerly under Stream).
+    (* Wire: the cross-Space channel family.
        Wire is the transport; Stream is the sequence (map/filter/fold). *)
     "Wire", [
       "make", [tnum], tnum;
       "send", [tnum; tnum], tnum;
       "recv", [tnum], tnum;
       "close", [tnum], tnum;
-      (* Cross-PROCESS streams over POSIX shared memory (mattone A). Same f64-id
+      (* Cross-PROCESS streams over POSIX shared memory. Same f64-id
          convention; make_shm(id, create) rendezvous two isolated Space
          processes on a shared region. send_shm/recv_shm cross the boundary. *)
       "make_shm", [tnum; tnum], tnum;
       "send_shm", [tnum; tnum], tnum;
       "recv_shm", [tnum], tnum;
-      (* Blocking variants with back-pressure (3): produce waits for room,
+      (* Blocking variants with back-pressure: produce waits for room,
          await waits for a value. *)
       "produce_shm", [tnum; tnum], tnum;
       "await_shm", [tnum], tnum;
       "close_shm", [tnum], tnum;
-      (* Cross-MACHINE streams over TCP (Strato 4). make_net(id, port, is_server)
+      (* Cross-MACHINE streams over TCP. make_net(id, port, is_server)
          opens the conduit; send_net/recv_net cross the machine boundary with the
          same API as the SHM variants. *)
       "make_net", [tnum; tnum; tnum], tnum;

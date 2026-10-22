@@ -21,10 +21,9 @@
  * appears as the head of a direct application. Any OTHER occurrence of its name
  * (passed as a value, aliased through a let, used higher-order) would leave the
  * erased arity unmatched, so the pass REJECTS it loudly rather than emit wrong
- * code. This keeps the transform sound; lifting the restriction (full
- * higher-order erasure) is a later step. The rejection is a hard failure here
- * because the emit phase has no errors-as-values channel yet; routing it to a
- * positioned compile-time diagnostic waits on that separate piece. *)
+ * code. This keeps the transform sound; full higher-order erasure is not done.
+ * The rejection is a hard failure here because the emit phase has no
+ * errors-as-values channel, so it is not a positioned compile-time diagnostic. *)
 
 module C = Ast
 

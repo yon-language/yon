@@ -1,4 +1,4 @@
-"""The place-refactor gate — stage 3 (FLIPPED; it was stage 0's pinned red).
+"""The place-refactor gate: a field on a union is an obligation on every arm.
 Double pin:
 
   - the specimen (place-arms + a field on the union, every arm exposing it)
@@ -30,7 +30,7 @@ def test_union_field_obligation_reject_pins_the_obligation():
         f"obligation):\n{msg[-400:]}")
 
 
-# ---- stage 4: clauses in the body, `error` as sugar ----------------------
+# ---- clauses in the body, `error` as sugar --------------------------------
 
 def _emit(path):
     return subprocess.run([str(EMIT), str(path)], capture_output=True, timeout=60)
@@ -61,12 +61,12 @@ def test_duplicate_clause_rejected(tmp_path):
     assert b"declared both in the header and in the body" in r.stderr + r.stdout
 
 
-# ---- stage 6 (fork 2 = reserved slot): path constructors -----------------
+# ---- path constructors: a reserved slot ------------------------------------
 
 def test_path_constructor_slot_is_reserved(tmp_path):
-    """The grammar accepts the path-arm form; the parser rejects it cleanly
-    until the path-over obligation is pinned in the kernel. This test flips
-    when fork 2 opens."""
+    """The grammar accepts the path-arm form and the parser rejects it with a
+    clean "path constructor ... not yet enabled" diagnostic: a path constructor
+    needs a path-over obligation that the kernel does not check."""
     import shutil
     twin = tmp_path / "twin"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
@@ -98,12 +98,10 @@ def test_cross_world_union_is_incoherent():
 
 
 def test_arm_section_at_union_boundary_upcasts_as_identity():
-    """FLIPPED (was the fail-closed pin): the value-level injection landed —
-    an arm section where the union is expected emits a subtype_cast that
-    lowers to IDENTITY on the handle (the mono costs nothing). The e2e run
-    (exit 7) is pinned by examples/union_upcast in the acceptance baseline.
-    History: this exact program once produced a WRONG binary (exit 1) via
-    type-inconsistent MLIR; then a clean reject; now it works."""
+    """An arm upcasts to its union as identity: an arm section where the union
+    is expected emits a subtype_cast that lowers to IDENTITY on the handle (the
+    mono costs nothing). The e2e run (exit 7) is pinned by examples/union_upcast
+    in the acceptance baseline."""
     r = _emit(ROOT / "examples" / "union_upcast")
     assert r.returncode == 0, (r.stderr.decode(errors="replace"))[-400:]
     assert b"topos.subtype_cast" in r.stdout, "the upcast is not a subtype_cast (identity) anymore"
@@ -112,8 +110,7 @@ def test_arm_section_at_union_boundary_upcasts_as_identity():
 # ---- a payload arm IS a place ---------------------------------------------
 
 def test_mediatrice_on_arm_requires_full_arity(tmp_path):
-    """FLIPPED (was the fail-closed guard): the mediatrice on a payload arm
-    now LOWERS to the arm's spine — the same value hit built. What remains
+    """The mediatrice on a payload arm LOWERS to the arm's spine — the same value hit built. What remains
     guarded is completeness: a spine has full arity, there is no zero-fill,
     so a missing projection is a clean, positioned reject. The working full
     mediatrice is pinned by test_full_circle_no_constructors."""
@@ -146,10 +143,10 @@ def test_cross_space_union_rejected_same_world():
 # ---- the canonical match: the co-mediatrice pattern -----------------------
 
 def test_record_pattern_matches_by_name(tmp_path):
-    """`Cons { _1 as h _2 as t }` binds projections BY NAME (bridge names
-    _1.._n until the no-parens migration supplies real ones) — the mirror of
-    the mediatrice `.-> Cons { ... }`. Byte-equal lowering with the legacy
-    positional twin, e2e exit 42."""
+    """`Cons { _1 as h _2 as t }` binds projections BY NAME (an arm declared
+    with positional payloads names them _1.._n) — the mirror of the mediatrice
+    `.-> Cons { ... }`. Byte-equal lowering with the positional twin, e2e
+    exit 42."""
     import shutil
     a = tmp_path / "rec"; b = tmp_path / "pos"
     prog = ("place List { this > Nil :U Cons(Number, List) }\n"

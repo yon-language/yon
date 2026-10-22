@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_arena.c — the Leech type-2 arena. See yon_arena.h.
- * Structure + value put/get, mmap-always, MPHF-indexed. */
+ * Value put/get, fusion lists, orbits; mmap-always, MPHF-indexed. */
 #include "yon_arena.h"
 #include "xleech2_mphf.h"   /* yon_mphf_index, YON_MPHF_INVALID */
 #include "xleech2_heap.h"   /* YON_HEAPREF_INVALID */
@@ -32,7 +32,7 @@ typedef struct {
 } arena_fusion_node_t;
 
 struct ds_arena {
-    yon_xheap_t *heap;   /* canonical values and fusion nodes live here */
+    yon_xheap_t *heap;   /* fusion nodes live here */
     arena_slot_t slots[YON_LEECH_TYPE2_COUNT];
 };
 

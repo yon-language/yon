@@ -30,8 +30,7 @@ _counter = [0]
 def require_ipc_shm(fork=True):
     """POSIX shared memory (and, with fork=True, fork) must work. Where they are supported (macOS,
     Linux) a failure here is an environment fault the test must report: it
-    FAILS (an exhausted shm namespace, left by earlier runs, once turned the
-    whole IPC layer into skips). Elsewhere the test does not apply: skip.
+    FAILS. Elsewhere the test does not apply: skip.
     The wire pair itself never forks: fork=False spares an xdist worker (a
     threaded process, where Python warns about fork) the fork probe."""
     from multiprocessing import shared_memory

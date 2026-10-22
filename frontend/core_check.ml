@@ -17,7 +17,7 @@ exception Check_error of string
 exception Unsupported of string
 
 (* ── Delta-aware conversion context ─────────────────────────────────────────
-   The checker's definitional equality now unfolds user function definitions.
+   The checker's definitional equality unfolds user function definitions.
    [cc.deltas] is the SN-safe (SCT-certified) subset of the program's function
    bodies as curried-lambda Core terms; [cc.rctx] wraps them in the reducer's
    context so conversion beta-unfolds a call `f a` to `body[a]` alongside the
@@ -44,7 +44,7 @@ let cctx_of_deltas (deltas : (string * term) list) : cctx =
   { deltas; rctx = { Reduce.empty_ctx with Reduce.deltas } }
 
 (* Unified conversion reducer. The checker's definitional equality uses the SAME
- * engine as the evaluator, so conversion now includes delta-unfolding of
+ * engine as the evaluator, so conversion includes delta-unfolding of
  * certified user definitions, cubical computation (transport / Glue / hcomp)
  * and builtin arithmetic, not only beta/eta/J. reduce_with_builtins is a strict
  * superset of Reduce.reduce (it falls back to Reduce.step), so the non-cubical,
@@ -331,15 +331,14 @@ let certify_term ?(cc = empty_cctx) (g : tctx) (tm : term) (expected : ty)
   | Stack_overflow -> `Skipped "reducer did not terminate within stack"
   | Not_found | Invalid_argument _ -> `Skipped "reducer raised on a partial body"
 
-(* ── Public API, backward-compatible signatures ─────────────────────────────
-   The recursive core now threads a [cctx] as its first argument. To keep every
-   existing caller (and the test oracles) compiling unchanged, we expose the two
-   externally-used entry points [sort_of] and [ty_conv] with their ORIGINAL
-   positional shape plus an OPTIONAL [?cc] (defaulting to the empty, delta-free
-   context — identical to the old behaviour). The bindings below capture the
-   recursive functions before shadowing their names; the earlier internal users
-   (sort_of, infer, check, certify_ty, certify_term) already resolved to the
-   recursive versions, so only external references pick up these wrappers. *)
+(* ── Public API ─────────────────────────────
+   The recursive core threads a [cctx] as its first argument. For the external
+   callers (and the test oracles), we expose the two externally-used entry
+   points [sort_of] and [ty_conv] in positional shape plus an OPTIONAL [?cc]
+   (defaulting to the empty, delta-free context). The bindings below capture
+   the recursive functions before shadowing their names; the earlier internal
+   users (sort_of, infer, check, certify_ty, certify_term) already resolved to
+   the recursive versions, so only external references pick up these wrappers. *)
 let sort_of_rec = sort_of
 let ty_conv_rec = ty_conv
 

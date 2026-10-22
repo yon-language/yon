@@ -1,4 +1,4 @@
-// Yon-in-Yon, seed 5 (the final step): an OMEGA-VALUED typing judgment.
+// Yon-in-Yon, seed 5: an OMEGA-VALUED typing judgment.
 //
 // This is Heyting wired into the kernel's VERDICT, not into the AST dispatch. The
 // checked proposition is a definitional equality Eq(a, b), and its truth-value lives in
@@ -6,14 +6,15 @@
 // (stuck / undecided). The two logics cooperate exactly as they should:
 //
 //   * DECIDABLE, Boolean, meta: `MerkleTree.equal(a, b)` decides structural (alpha)
-//     equality on finite data. It gives TOP even for OPEN terms (refl: x = x), because
+//     equality on finite data. It gives TOP even for OPEN terms (reflexivity: x = x), because
 //     content-addressed identity is decidable precisely on finite values. This is the
 //     honest core the design calls "content-addressing is Yoneda made physical".
 //   * OMEGA-VALUED, Heyting, judgmental: when the terms are not structurally equal, the
 //     verdict is TOP/BOTTOM only if BOTH are closed (evaluate and compare). If either is
 //     OPEN, the conversion is STUCK and the verdict is UNKNOWN, the middle of Omega. That
-//     is exactly the kernel's `Cubical_stuck` ("stuck on a non-refl path: no runtime
-//     value") turned from an exception into a first-class Omega value.
+//     is the kernel's `Cubical_stuck` (a path-algebra op stuck over a free dimension,
+//     with no runtime value to lower) turned from an exception into a first-class Omega
+//     value.
 //
 // SOUNDNESS discipline: UNKNOWN never masquerades as TOP. A stuck conversion refuses to
 // claim the equality; it says "undecided", which is the intuitionistic honesty (no
@@ -44,7 +45,7 @@ fun eval_c(e: MerkleTree): Number {
 
 // check_eq : (Term, Term) -> Omega   (the omega-valued judgment)
 fun check_eq(a: MerkleTree, b: MerkleTree): Number {
-  return if MerkleTree.equal(a, b) then 0                       // refl: structural TOP (open ok)
+  return if MerkleTree.equal(a, b) then 0                       // reflexivity: structural TOP (open ok)
     else if is_closed(a) == 1 then
       (if is_closed(b) == 1
        then (if eval_c(a) == eval_c(b) then 0 else 1)           // closed conversion: TOP / BOTTOM

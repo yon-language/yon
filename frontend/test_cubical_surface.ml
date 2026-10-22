@@ -2,7 +2,7 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_cubical_surface.ml — oracle for the surface cubical apparatus.
  *
- * Stage 1: path application (p @ i).
+ * Path application (p @ i).
  *   - p @ i, with p : Id(A, x, y), is a point of the carrier A.
  *   - applying @ to a non-path is rejected.
  * The exact endpoint (refl-beta: refl(t)@i = t) is decided by reduction in
@@ -64,8 +64,8 @@ let () =
    | Error _ -> check "n @ I0 rejected (n is not a path)" true
    | Ok _ -> check "n @ I0 wrongly accepted" false);
 
-  (* Stage 3a: primitive type names are universe codes, and constant-line
-     transport is lowered to a genuine Core Transp node. *)
+  (* Primitive type names are universe codes, and constant-line transport is
+     lowered to a genuine Core Transp node. *)
   (match Tycheck.infer env ctx (ERefl (EVar ("number", dl), dl)) with
    | Ok (TyId (TyUniverse 0,
                   TyTermExpr (EVar ("number", _)),
@@ -111,9 +111,9 @@ let () =
        (Builtins.reduce_with_builtins Reduce.empty_ctx ua_core)
        five_core);
 
-  (* Stage 3d convincing, Fix C: a syntactic equiv carries its actual forward
-     map into Glue.  Typechecking the homotopies is intentionally a separate
-     gate (Fix B); this oracle isolates the lowering contract. *)
+  (* A syntactic equiv carries its actual forward map into Glue. Typechecking
+     the homotopies is intentionally a separate gate (Fix B); this oracle
+     isolates the lowering contract. *)
   let unary_num : Tyenv.fun_sig = {
     fs_params = [("n", num)]; fs_return = num;
     fs_visits = []} in

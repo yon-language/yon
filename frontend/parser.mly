@@ -1,9 +1,9 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-/* parser.mly — Menhir grammar for Yon v0.3 surface syntax.
+/* parser.mly — Menhir grammar for the Yon surface syntax.
  *
- * Follows the BNF specification of yon-language-spec-v0-3.md §5.
- * LL(1) with small lookahead. Menhir handles the lookahead automatically.
+ * Menhir builds an LR(1) parser; conflicts are resolved by the precedence
+ * declarations below.
  *
  * DESIGN NOTE — new syntax in TYPE position must be keyword-first.
  *   `expr` and `type_expr` overlap (both admit `Foo`, `Foo(...)`, ...). Any
@@ -54,17 +54,13 @@
     else SCall (fld, EVar (obj, loc) :: args, loc)
 
   (* support `by fun(...)` inline lambda in move
-   * conversion/mapping. Lifting via Parser_state module (esposto). *)
+   * conversion/mapping. Lifting via the Parser_state module. *)
   let lift_inline_lambda_to_fun = Parser_state.lift_inline_lambda_to_fun
 
-  (* Infer the canonical fold name from the reduction name. Convention: a name
-   * containing "Sum" -> "sum_f64", "Max" -> "max_f64", "Min" -> "min_f64".
-   * Otherwise None. *)
-  (* infer_fold_name was removed. It was a heuristic that, for reductions with
-   * a crdt/sharded policy, inferred the fold name from the substring
-   * "sum"/"max"/"min" in the name. That is categorically impure: the fold is a
-   * property of the topos (space), not of the reduction. It is now declared
-   * explicitly: space TALLY with fold "sum_f64". *)
+  (* The fold name is never inferred from a reduction's name: a substring
+   * heuristic would be categorically impure. The fold is declared
+   * explicitly on the reduction, with the `fold` clause (fold_decl_opt):
+   *   reduction R of P fold "sum_f64" { ... } *)
 
   (* Builder for the geomorph declaration. Extracts the declared
    * categorical flags and rebuilds the AST declaration. *)
@@ -121,7 +117,7 @@
 /* Top-level keywords */
 %token PLACE FUN MOVE VIEW REDUCTION OPERATION LET
 %token SPACE
-/* The BACKED token was removed (it was `space backed by reduction`). */
+/* A space is not declared in the surface: it is a directory. */
 %token CELL
 %token GEOM_MORPHISM PULL PUSH
 %token FUNCTOR
@@ -132,9 +128,8 @@
 %token ALGEBRA
 %token ERROR_KW
 %token ON_ERROR
-/* The tokens BACKED_BY/POL_DIRECT/POL_SHARDED/POL_PAXOS/POL_CRDT were removed:
- * they were distributed-policy keywords, replaced by geom_morphism +
- * space.with_fold. */
+/* Distributed semantics has no policy keywords: it is declared with
+ * geomorph and the reduction's `fold` clause. */
 %token FOLD  /* explicit fold name, e.g. fold "sum_f64" */
 
 /* First-class topos constructs. */
@@ -370,14 +365,14 @@ topos_decl:
  * inferred from the filesystem, so the topos surface does not carry it. *)
 
 (* prop declaration as a subobject classifier.
- *   prop NAME(p1: T1, ..., pn: Tn): proposition = EXPR
+ *   prop NAME(p1: T1, ..., pn: Tn) = EXPR
  *
- * The return type is always `proposition`, but it is explicit in the syntax
- * for readability. EXPR is evaluated in the tri-value Heyting algebra
- * (HPresent/HAbsent/HUnknown) via prop_eval. *)
+ * Its type is proposition, implied by `prop`; no return type is
+ * written. EXPR is a proposition in the tri-value Heyting algebra
+ * (present/absent/unknown). *)
 topos_prop_decl:
-  (* the return type is GONE: `prop` already implies proposition — six
-     words fewer per proposition (Antonio's lexicon verdict). *)
+  (* no return type: `prop` already implies proposition, so writing it
+     would only repeat it. *)
   | PROP_KW name = IDENT
     LPAREN params = param_list RPAREN
     EQ body = expr
@@ -570,7 +565,7 @@ geom_morphism_item:
 
 /* `be x := e` defines x as e: `:=` reads "is defined as", the same symbol
    that defines a field (`side := Number`). x equals e by definition for its
-   whole scope; a later `x = e'` is the assignment (model A). */
+   whole scope; a later `x = e'` is the assignment. */
 top_let:
   | LET name = IDENT COLONEQ e = expr
     { TopLet (name, e, mk_loc $startpos $endpos) }
@@ -764,7 +759,7 @@ cell_decl:
         cell_loc = mk_loc $startpos $endpos } }
 
 operation_decl:
-  (* `) on error E : T` — Antonio's third way: the clause sits BEFORE the
+  (* `) on error E : T` — the clause sits BEFORE the
      return type, and the `:` after E disambiguates (no place member can
      start with `:`). Return type MANDATORY with the clause. *)
   | OPERATION name = IDENT LPAREN params = param_list RPAREN
@@ -881,12 +876,11 @@ type_atom:
   | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
     { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
   | EL LPAREN c = expr RPAREN
-    { TyEl (TyTermExpr c) }   (* A1: c may be an APPLIED code El(Fam(x)), not just a bare name *)
-  (* Type application at use: `Box<number>`, `HashMap<text, number>`. For now the
-     arguments are accepted (readable annotations) and the type resolves to its
-     base — the checker is monomorphic and the runtime carrier is uniform f64, so
-     Box<number> and Box<text> share one layout. Precise per-instantiation
-     element typing (a TyApp node + monomorphisation) is the next increment. *)
+    { TyEl (TyTermExpr c) }   (* c may be an APPLIED code El(Fam(x)), not just a bare name *)
+  (* Type application at use: `Box<number>`, `HashMap<text, number>`.
+     List/Map/Wire map to their own nodes; any other name applied to
+     arguments is a TyApp. Wrong arity on List/Map/Wire fails at parse
+     time. *)
   | name = IDENT LT args = separated_nonempty_list(COMMA, type_atom) GT
     { (* The container types ARE generics: List<T>, Map<K,V> and Wire<T>,
          the channel (what produce, spawn and a subscription give), have
@@ -1183,14 +1177,13 @@ reduction_decl:
         rd_loc = mk_loc $startpos $endpos } }
 
 (* The explicit keyword `fold "sum_f64"` declares the canonical fold. When
-   present it takes precedence over the naming convention. *)
+   absent the reduction has no fold. *)
 fold_decl_opt:
   |                          { None }
   | FOLD name = STR_LIT      { Some (validate_fold_name name $startpos(name)) }
 
-(* reduction_policy_opt was removed: the keywords backed_by
- * direct|sharded|paxos|crdt no longer exist.
- * The distributed semantics lives entirely in geom_morphism. *)
+(* A reduction carries no distribution policy clause: the distributed
+ * semantics lives entirely in geomorph. *)
 
 (* The optional list of type parameters in angle brackets.
  *   reduction R<T1, T2> of P { ... } *)
@@ -1611,11 +1604,11 @@ expr_atom:
     { EHITConstr (ctor, args, mk_loc $startpos $endpos) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
     { dot_call_expr obj fld args (mk_loc $startpos $endpos) }
-  (* FOLD and FILTER are keyword tokens (space-decl `with fold "..."`), so they
-   * do not match IDENT in method-name position: explicit rules for
-   * Class.fold/filter(args). PUSH is a keyword too (geometric-morphism
+  (* FOLD is a keyword token (the reduction's `fold "..."` clause), so it
+   * does not match IDENT in method-name position: explicit rule for
+   * Class.fold(args). PUSH is a keyword too (geometric-morphism
    * f_lower_star), so Vec.push(...) needs the same treatment. `map` is a
-   * plain IDENT since the map keyword retired with `map of K to V`. *)
+   * plain IDENT: it is not a keyword. *)
   | obj = IDENT DOT FOLD LPAREN args = expr_list RPAREN
     { dot_call_expr obj "fold" args (mk_loc $startpos $endpos) }
   | obj = IDENT DOT PUSH LPAREN args = expr_list RPAREN

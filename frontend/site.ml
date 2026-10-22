@@ -20,7 +20,7 @@
  * exist, hence all joins). J(W) is the join, in that lattice, of the elementary
  * topology each construction generates. We represent J intensionally by its
  * generators (`get_J`); the join is their union. This module is the single home
- * for reading J off a world; the sheaf predicate (a later step) consumes it. *)
+ * for reading J off a world (test_world_site exercises it). *)
 
 module C = Ast
 

@@ -17,59 +17,47 @@
  * them. The name carries the precision (Int32/Int64) because the name is
  * what travels in qualified symbols; the world stays the site.
  *
- * Good consequence: the `<64>` parameter is gone, and with it the
- * duplication of `width()` — the site knows its own width.
+ * The width is the site's own fact: 32 here, 64 in num64.
  *
- * No Number (f32) yet: a `place Number is f32` would compute in disguised
- * f64 today (the transport is uniform) — the same rounding lie that keeps
- * floats out of the Widen functor. It arrives with the intrinsic
- * mechanism, or in float worlds of its own.
+ * No Number (f32) here: a `place Number is f32` would compute in disguised
+ * f64 (the transport is uniform) — the same rounding that keeps floats out
+ * of integer widening.
  */
 topos where {
 
   /* ─── The generators ─────────────────────────────────────────────────
    *
    * Few by choice: putting an arrow here costs, because every outgoing
-   * functor has to translate it. The derived ones (gcd, ipow, bit_count,
-   * abs…) are `fun` in the places, and a functor obtains them by
-   * functoriality — F(g∘f) = F(g)∘F(f) leaves no choice, so they are not
-   * declared.
+   * functor has to translate it. Derived arrows live as `fun` in the
+   * places, and a functor obtains them by functoriality — F(g∘f) =
+   * F(g)∘F(f) leaves no choice, so they are not declared.
    *
-   * `uses Additive` / `uses Multiplicative` need the algebra construct,
-   * which the grammar does not have. And `mul`, not `times`: `times` is a loop keyword
+   * No algebra is attached: an algebra is attached by `operation …
+   * uses algebra Additive` on a place, and a topos `morphism` has no
+   * `uses` position. And `mul`, not `times`: `times` is a loop keyword
    * (`repeat at most N times`) and is unavailable as a name. */
   morphism plus(a: Int32, b: Int32): Int32
   morphism mul(a: Int32, b: Int32): Int32
 
 
-  /* ═══ The Widen functor — integer widening ════════════════════════════
+  /* ═══ Integer widening Int32 → Int64 ═══════════════════════════════
    *
-   * The one genuine functor of the numeric tower, and its laws are true
-   * because integer arithmetic does not round:
+   * Widening is a homomorphism only where the 32-bit operation does not
+   * overflow:
    *
-   *     widen(a + b) == widen(a) + widen(b)      exact
-   *     widen(a * b) == widen(a) * widen(b)      exact
+   *     widen(a + b) == widen(a) + widen(b)    iff a + b fits in i32
+   *     widen(a * b) == widen(a) * widen(b)    iff a * b fits in i32
    *
-   * Floating point breaks them by construction: the sum in f32 rounds
-   * before widening, and rounding does not commute with a change of
-   * precision. That is why the functor covers Int32 → Int64 and not
-   * Number.
+   * Int32 is carried as an f64 that does not wrap, so at run time the
+   * additive equation also holds past the i32 bound
+   * (regression/test_soundness_probes.py pins it at Int32 MAX).
    *
-   * The form waits for the construct: `on object` / `on morphism` on a
-   * functor does not exist yet (today a functor has parameters and a
-   * single body — the redesign is on the ledger). When it does:
+   * Floating point breaks these equations by construction: the sum in f32
+   * rounds before widening, and rounding does not commute with a change of
+   * precision. That is why widening covers Int32 → Int64 and not Number.
    *
-   *   functor Widen from Num32 to Num64 {
-   *     on object(n: Int32): Int64 { return widen_i32_i64(n) }
-   *     on morphism plus  via plus_i64
-   *     on morphism mul   via mul_i64
-   *     law additive
-   *     law multiplicative
-   *     law composition
-   *   }
-   *
-   * The implementation widen_i32_i64 already lives in Int32.yon (the house
-   * is given by the target of the Int32 → Int64 arrows): decimal
+   * The implementation widen_i32_i64 lives in Int32.yon (the house is
+   * given by the target of the Int32 → Int64 arrows): decimal
    * decomposition, no intrinsics — integral literals bridge the carriers.
    */
 }

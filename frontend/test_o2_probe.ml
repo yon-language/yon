@@ -1,6 +1,6 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* test_o2_probe.ml — CCHM boundary/adjacency probe for the O2 canonicity claim.
+(* test_o2_probe.ml — CCHM boundary/adjacency probe for closed canonicity.
  *
  * The metatheory fuzzer reports ~490 cubical "stuck" hcomp witnesses. Those are
  * hcomp over FREE dimensions (i,j not bound by any PLam) — legitimately neutral.
@@ -53,7 +53,7 @@ let () =
   Printf.printf "open hcomp (i free) -> %s  [is_value=%b] (neutral is CORRECT)\n"
     (show open_h) (Reduce.is_value open_h);
 
-  (* ── Closed-canonicity sweep (the REAL O2 measurement) ─────────────────────
+  (* ── Closed-canonicity sweep ─────────────────────
      Generate cubical terms over two free dimensions {i,j}, then CLOSE them at
      every corner (i,j := I0/I1). At a corner all faces are decided, so a correct
      Kan engine must reduce to a VALUE (canonicity). A stuck corner is a genuine

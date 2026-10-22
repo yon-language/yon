@@ -1,7 +1,7 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_functoriality.ml — oracle for the abstract-presheaf functoriality
- * conversion rules (A1.2 arrow action + A1.3 functoriality laws) added to
+ * conversion rules (arrow action + functoriality laws) in
  * reduce.ml.
  *
  * Representation (reserved-Var encoding, no new AST constructor):
@@ -72,7 +72,7 @@ let () =
     (normalizes_to (fmap ff (compose g f)) (compose (fmap ff f) (fmap ff g)));
 
   (* The two ways of writing the pulled-back composite agree — the headline
-   * A1.3 property: F(f) ∘ F(g) and F(g ∘ f) normalize to the SAME term. *)
+   * law: F(f) ∘ F(g) and F(g ∘ f) normalize to the SAME term. *)
   check "confluent:  F(g ∘ f)  ≡  F(f) ∘ F(g)   (both normal forms equal)"
     (normalize_equal (fmap ff (compose g f)) (compose (fmap ff f) (fmap ff g)));
 

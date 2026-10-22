@@ -1,18 +1,11 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
-/* yon_shm.h — shared-memory backend for yon_xheap_t.
+/* yon_shm.h — declarations only.
  *
- * A shadow implementation of a content-addressed heap that lives in POSIX
- * shared memory (shm_open + mmap), portable across processes.
- *
- * Differences from the in-process yon_xheap_t:
- *   - Everything in a single pre-allocated shm region
- *   - No absolute pointers: blobs are offsets in the shm arena
- *   - Cross-process locking via flock() on the shm fd
- *
- * Identical observable semantics: (heap_id, xcoord) -> payload bytes.
- * Content-addressing partitioned by heap_id guarantees determinism across
- * processes.
+ * The functions declared here have no implementation in the repository, and
+ * no file includes this header. The shm-backed heap that the runtime uses is
+ * in xleech2_heap.c (yon_xheap_create_with_backing with
+ * YON_HEAP_BACKING_SHM).
  */
 #ifndef YON_SHM_H
 #define YON_SHM_H
@@ -26,10 +19,8 @@ extern "C" {
 #endif
 
 /* Fixed size.
- *   - slots:  2^17 = 131072 slots (~5MB of key/tag/offset)
- *   - arena:  16MB of payload storage
- *
- * Will become parametric via the YON_SHM_SIZE env var in a future phase. */
+ *   - slots:  2^17 = 131072 slots (~2MB of key/tag/offset/size)
+ *   - arena:  16MB of payload storage */
 #define YON_SHM_N_SLOTS    131072u
 #define YON_SHM_ARENA_SIZE (16u * 1024u * 1024u)
 #define YON_SHM_NAME_PREFIX "/yon_shm_heap_"

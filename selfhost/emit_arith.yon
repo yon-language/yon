@@ -1,10 +1,10 @@
-/* Self-host M1 -- gen: Term -> String (MLIR text), in Yon.
+/* gen: Term -> String (MLIR text), in Yon.
  *
- * The first piece of a Yon-in-Yon code generator. Where Stage 1 interpreted
- * (eval: Term -> value), this one compiles: the same hit_elim catamorphism over
- * Term, but the algebra is MLIR-text accumulation plus two threaded states (an
- * SSA counter and a name-to-ssa environment for variables), instead of
- * reduction. Yon0 now covers TLit/TAdd/TMul (arithmetic), TVar/TLet (the `be`
+ * A Yon-in-Yon code generator. Where an evaluator interprets (eval: Term ->
+ * value), this one compiles: the same hit_elim catamorphism over Term, but the
+ * algebra is MLIR-text accumulation plus two threaded states (an SSA counter and
+ * a name-to-ssa environment for variables), instead of reduction. It covers
+ * TLit/TAdd/TMul (arithmetic), TVar/TLet (the `be`
  * binder, de Bruijn variables), and TCall + top-level function definitions. It
  * produces a full MLIR module (helper functions, then `func.func @main`), wraps
  * it in the fixed boilerplate, writes it to a file, and the backend compiles+runs

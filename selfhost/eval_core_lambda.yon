@@ -1,7 +1,7 @@
-// Self-host Stage 1, incremento 2: shift / subst / beta / eval del lambda-nucleo
-// (de Bruijn), scritto in Yon. Forma wildcard: shift/subst restano esaustivi (ogni
-// costruttore ricorre in modo distinto), ma i rami-stuck di eval e i rami-zero di
-// as_num sono un solo `_ =>`. Oracolo: (lam.0) 42 = 42, Fst((lam.0) Pair(20,22)) = 20.
+// shift / subst / beta / eval of the lambda core (de Bruijn), written in Yon.
+// Wildcard form: shift/subst stay exhaustive (each constructor recurses in its own
+// way), but the stuck branches of eval and the zero branches of as_num are a single
+// `_ =>`. Oracle: (lam.0) 42 = 42, Fst((lam.0) Pair(20,22)) = 20.
 place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }

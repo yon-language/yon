@@ -5,8 +5,8 @@
  * same treatment, different carrier, and exact arithmetic — no rounding,
  * no epsilon.
  *
- * Int64 is what Number could not be: `number` is f64, so Integer's whole
- * bit family had no home. Now it has one.
+ * Int64 is what Number cannot be: `number` is f64, so Integer's whole
+ * bit family has its home here.
  *
  * The bit family uses no bitwise operators. Yon has no & | << >>, and they
  * are not needed here: on an integer carrier `/ 2` is a right shift, `* 2`
@@ -180,13 +180,12 @@ place Int64 is i64 {
   }
 
   /* ─── The site knows its width ───────────────────────────────────────
-   * width() died with the `<64>` parameter: precision is the world
-   * (Num64), not a type parameter, and the literal 64 above is the site's
-   * own fact, written once per leg. The 32-bit twin writes 32. */
+   * Precision is the world (Num64), not a type parameter: the literal 64
+   * above is the site's own fact. */
 
   /* ─── The site's generators, implemented ─────────────────────────────
-   * num64.yon declares `morphism plus/mul`; these are the targets the
-   * Widen functor will name in its `on morphism … via …` clauses. */
+   * num64.yon declares `morphism plus/mul`; plus_i64 / mul_i64 implement
+   * them. */
   fun plus_i64(a: Int64, b: Int64): Int64  { return a + b }
   fun mul_i64(a: Int64, b: Int64): Int64  { return a * b }
 }
@@ -194,25 +193,23 @@ place Int64 is i64 {
 /* ═══════════════════════════════════════════════════════════════════
  * What is not here, and why
  *
- * Suspended (Antonio's decision): `widen : Int64 → Number` and
- *     `narrow : Number → Int64`, the adjunction between the two types.
- *     They are irreducible — they reinterpret an i64 as an f64 and back,
- *     touching the representation — so they have no body writable in Yon.
- *     They need either the intrinsic mechanism (the brother of `is <prim>`
- *     for bodies) or nothing at all: a body that pretends to convert would
- *     lie. When it arrives: `widen` goes in Number.yon, `narrow` here — the
- *     house is given by the target.
+ * `widen : Int64 → Number` and `narrow : Number → Int64`, the adjunction
+ *     between the two types, are absent. They are irreducible — they
+ *     reinterpret an i64 as an f64 and back, touching the representation —
+ *     so they have no body writable in Yon, and a body that pretends to
+ *     convert would lie. If given, `widen` belongs in Number.yon and
+ *     `narrow` here — the house is given by the target.
  *
- * Wants more `Text`: to_text_radix (Java's toBinaryString family),
- *     from_text/parse [E]. They belong here; the return type lives in the
- *     sibling place.
+ * Text: to_text_radix (Java's toBinaryString family) and parsing into an
+ *     Int64 [E] are absent.
  *
  * Unsigned: divideUnsigned, remainderUnsigned, compareUnsigned. They want
  *     an unsigned reading of the carrier — a design decision (a UInt place?
  *     a flag?). Not invented here.
  *
- * The algebras: `+` and `*` stay operators; their declared face is the
- *     algebra (`operation add(a, b) uses Additive`), which the grammar does
- *     not have. Int64 is a richer model than Number: it is a genuine ring,
- *     so its algebra is Additive and Multiplicative with distributivity.
+ * The algebras: `+` and `*` stay operators. Their declared face is an
+ *     algebra, attached by `operation … uses algebra Additive` on a place;
+ *     Int64 declares no such operation. Int64 is a richer model than
+ *     Number: it is a genuine ring, so its algebra is Additive and
+ *     Multiplicative with distributivity.
  * ═══════════════════════════════════════════════════════════════════ */

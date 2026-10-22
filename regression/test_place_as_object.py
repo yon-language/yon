@@ -3,8 +3,8 @@
 Yon's one ontology is the place (carrier.ml: "an object, a presheaf Site ->
 Type"); every type lowers to a C.TyPlace. A named sum surfaces that directly: the
 `this >` clause declares the object X as the coproduct of its arms, each arm a
-sub-object (a coproduct injection). This is the single canonical form -- there is
-no `inductive`/`place X = ...`; both were dropped once the corpus was migrated.
+sub-object (a coproduct injection). This is the single canonical form: the
+grammar has no `inductive` and no `place X = ...`.
 This gate pins the block form: an arm may be nullary, carry a payload, or recur.
 """
 import subprocess
@@ -61,7 +61,7 @@ _PLACE_TWIN = ("place Bit { this > O :U I }\n"
 
 
 def test_inductive_keyword_is_gone(tmp_path):
-    """`inductive` was dropped: the reference rejects it as a PARSE error at the
+    """`inductive` is not Yon: the reference rejects it as a PARSE error at the
     declaration (line 1), with the syntax code E1001 -- not a type error, not a
     crash. The twin with the block form compiles and runs, so the keyword is the
     only thing the rejection can be about."""

@@ -68,8 +68,8 @@ let root_of_file (path : string) : string option =
    Real Yon source that travels WITH THE COMPILER (Rust's core/std model),
    read into every compilation BEFORE user files. Resolution: $YON_PRELUDE,
    else <exe>/../../../prelude (the dev tree), else ./prelude. A missing
-   directory is an empty prelude — never an error (old behavior preserved
-   for minimal environments). *)
+   directory is an empty prelude — never an error (so minimal
+   environments still compile). *)
 let prelude_dir () : string option =
   let cands =
     (match Sys.getenv_opt "YON_PRELUDE" with Some d -> [d] | None -> [])

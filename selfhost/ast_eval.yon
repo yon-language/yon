@@ -4,9 +4,9 @@
 // `eval` is a recursive fun dispatching on the node label. That fun IS the unique
 // arrow from the term algebra to (number, +, *): a hand-rolled catamorphism, running
 // on the content-addressed heap. This is the concrete, on-silicon core of the
-// "AST as an initial algebra / eval as a catamorphism" design, using what the shipped
-// language gives today (mu F is not yet first-class; the native W-type road is the
-// next step, see notes).
+// "AST as an initial algebra / eval as a catamorphism" design. This seed encodes the
+// AST on MerkleTree nodes by hand; parse_arith.yon and the compile_* files use
+// coproduct places.
 //
 // Commutative Add uses node2_commutative, so (2+3) and (3+2) canonicalize (S2 sort)
 // to ONE heap slot. Structural value numbering, for free, at the storage layer:

@@ -78,7 +78,7 @@ let () =
    | Ok other -> check (Printf.sprintf "coherence: unexpected %s" (Tyenv.ty_to_string other)) false
    | Error e -> check (Printf.sprintf "coherence: good rejected: %s" (Tycheck.error_to_string e)) false);
 
-  (* Stage 0: the structured Equiv flows into ua — the chain equiv -> ua types. *)
+  (* the structured Equiv flows into ua — the chain equiv -> ua types. *)
   let structured_equiv =
     (match Tycheck.infer env_good ctx call with Ok t -> t | Error _ -> TyPrim "unit") in
   let r_ua_struct = Cubical_bindings.infer_ua [structured_equiv] in

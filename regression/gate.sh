@@ -4,7 +4,7 @@
 #   gate.sh 0    build + smoke           (~10 s)
 #   gate.sh 1    0 + targeted on the dirty files (~1-3 min)
 #   gate.sh 2    1 + acceptance          (~3-5 min)   <- default
-#   gate.sh 3    2 + full pytest         (parallel + serial timing phase) <- end of a stone
+#   gate.sh 3    2 + full pytest         (parallel + serial timing phase)
 #
 # Each level runs only if the previous one is green. No silent skip:
 # tier 1 says which targeted tests it picked, and why.
@@ -60,7 +60,7 @@ for f in $DIRTY; do
     frontend/parser.mly|frontend/lexer.mll|frontend/parser_state.ml|frontend/surface_ast.ml|frontend/formatter.ml)
       add regression/test_syntax_triangle.py; add regression/test_canonical_forms.py
       # the formatter is the most demanding gate (round-trip + idempotence
-      # + 100% corpus coverage): 4s at tier 1, 11 minutes at tier 3
+      # + 100% corpus coverage)
       add regression/test_formatter.py ;;
     frontend/tycheck.ml|frontend/desugar.ml|frontend/dispatcher.ml)
       add regression/test_project_diff.py; add regression/test_canonical_forms.py
@@ -83,7 +83,7 @@ for f in $DIRTY; do
       add regression/test_syntax_triangle.py; add regression/test_website_surface.py ;;
     website/*)
       # the React pages and components have no compiler behind them: only this
-      # gate reads them, and it is where `fun main(): number` survived
+      # gate reads them
       add regression/test_website_surface.py ;;
   esac
 done

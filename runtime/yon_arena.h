@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
-/* yon_arena.h — the Leech type-2 arena (road 3).
+/* yon_arena.h — the Leech type-2 arena.
  *
- * An index from each of the 196560 type-2 lattice points to the canonical value
- * living in the content-addressed heap, plus, per occupied point, a persistent
- * list of fusions: a fused value together with the sigma in Co_0 that carries it
+ * One slot for each of the 196560 type-2 lattice points, holding its canonical
+ * value inline, plus, per occupied point, a persistent list of fusions (nodes
+ * in the content-addressed heap): a fused value together with the sigma in Co_0 that carries it
  * onto the canonical repr (the Curtis witness, already in the runtime).
  *
  * Capacity is exactly the kissing number, theta_coeff(2) = YON_LEECH_TYPE2_COUNT,
@@ -12,10 +12,7 @@
  * Indexing is the verified MPHF bijection, so two distinct type-2 points never
  * collide: zero collisions by construction, not by probability. Allocation is
  * mmap-always (yon_map). A value lives inline in its slot, as its 64 bits,
- * never in the heap; whether a slot holds one is its own occupancy bit.
- *
- * This header is the first brick: structure + value put/get. The
- * sigma-certified fusion list and the M24-orbit layout follow as next steps. */
+ * never in the heap; whether a slot holds one is its own occupancy bit. */
 #ifndef YON_ARENA_H
 #define YON_ARENA_H
 
@@ -26,8 +23,8 @@
 typedef struct ds_arena ds_arena_t;
 
 /* Create an empty arena over `heap` (mmap-backed, kernel-zeroed = every slot
- * unoccupied). The heap is where canonical values and fusion nodes live; the
- * arena only indexes them by lattice position. */
+ * unoccupied). Each slot holds its value inline; the heap is where the fusion
+ * nodes live. */
 ds_arena_t *yon_arena_create(yon_xheap_t *heap);
 void        yon_arena_destroy(ds_arena_t *a);
 
@@ -42,7 +39,7 @@ int yon_arena_get_value(const ds_arena_t *a, yon_xcoord_t point, uint64_t *out);
 /* 1 if the type-2 point's slot is occupied, 0 otherwise (or non-type-2). */
 int yon_arena_occupied(const ds_arena_t *a, yon_xcoord_t point);
 
-/* Record a fusion at `point`: a value (heapref) fused onto the slot's canonical
+/* Record a fusion at `point`: a value's 64 bits fused onto the slot's canonical
  * repr, carried by `sigma` (a transport id — the Curtis witness in Co_0). The
  * slot must already be occupied (have a repr). Allocates an immutable fusion
  * node {value, sigma, next} in the heap (content-addressed, so shared tails are

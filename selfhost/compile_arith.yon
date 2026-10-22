@@ -1,6 +1,6 @@
-/* Self-host M2 -- a full arithmetic compiler in Yon: text -> Term -> MLIR.
+/* A full arithmetic compiler in Yon: text -> Term -> MLIR.
  *
- * This joins the two halves that were separate in Stage 1 and M1:
+ * It joins a front and a back end:
  *   front (parse_arith.yon): text -> tokens -> AST, recursive descent with
  *                            precedence (* over +).
  *   back  (emit_arith.yon):  AST -> MLIR text, the gen catamorphism.

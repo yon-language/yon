@@ -174,7 +174,7 @@ let canonical_form (t : term) : term = canonicalize_term [] t
 let canonical_equal (t1 : term) (t2 : term) : bool =
   canonical_form t1 = canonical_form t2
 
-(* ─── A1: native hash-consing of cells over the canonical form ──────────────
+(* ─── Native hash-consing of cells over the canonical form ──────────────
 
    Once cells have a name-invariant canonical form (above), we can SHARE
    structurally-identical cells: interning a cell returns a single shared node
@@ -186,8 +186,8 @@ let canonical_equal (t1 : term) (t2 : term) : bool =
 
    This mirrors what an xleech2 content-addressed store would do at the C level
    (yon_xheap_put_or_get), but in-process: the canonical form is the content
-   key. When a network/serialization layer later needs cells as wire payloads,
-   the same canonical form maps directly onto an xleech2 block (the deferred A2).
+   key. The same canonical form is what cell_persist_key serializes (below):
+   it is also the shape a cell takes as a payload.
 
    The table is keyed by canonical form and maps to the interned representative.
    reset_cell_interning clears it (e.g. between compilation units). *)
@@ -250,8 +250,7 @@ let describe_cell (t : term) : string =
    Format: a deterministic textual S-expression of the canonical term. Textual
    (not Marshal) so it is inspectable and OCaml-version-independent. This writes
    from the compiler directly; it does NOT touch the C runtime arena (xleech2),
-   which would require an OCaml<->C bridge and is only needed for cross-NODE wire
-   payloads (the deferred distributed case). *)
+   which would require an OCaml<->C bridge. *)
 let rec serialize_term (t : term) : string =
   match t with
   | TmVar x -> "(var " ^ x ^ ")"
@@ -350,10 +349,9 @@ let incremental_stats () = (!incremental_skips, !incremental_checks)
  *
  *   coh_Gamma : A [σ]   where σ binds a variable to coh_Δ : B [τ]
  *
- * The reduction substitutes and may unfold the inner coherence. For
- * the prototype, we provide the structural beta-step that substitutes
- * a variable in a term. The full beta for CATT_R_Yon coheres at the
- * surface fun_decl level via the kernel.
+ * The reduction substitutes and may unfold the inner coherence. Here
+ * we provide the structural beta-step that substitutes
+ * a variable in a term; the inner coherence is not unfolded here.
  *)
 
 let rec subst_in_term (t : term) (sub : subst) : term =
@@ -482,12 +480,12 @@ and ty_structural_eq (t1 : ty) (t2 : ty) : bool =
   (* HoTT type equivalences with cumulative subtyping for universes. *)
   | TyUniverse n1, TyUniverse n2 ->
       (* This is a SYMMETRIC conversion/equality check, so universes are equal
-       * iff they are the SAME level: Type_n ≡ Type_m  ⇔  n = m. The old
-       * `n1=n2 || n1<n2 || n2<n1` was a trichotomy tautology — always true —
-       * so it accepted Type_0 ≡ Type_5, collapsing the universe hierarchy
-       * (a Girard-flavoured soundness hole, not "cumulativity"). Cumulative
-       * SUBTYPING (Type_n <: Type_m for n ≤ m) is a DIRECTED relation and, if
-       * ever needed, belongs at the subtyping site, not in this symmetric eq. *)
+       * iff they are the SAME level: Type_n ≡ Type_m ⇔ n = m. Accepting
+       * different levels (e.g. Type_0 ≡ Type_5) would collapse the universe
+       * hierarchy (a Girard-flavoured soundness hole, not "cumulativity").
+       * Cumulative SUBTYPING (Type_n <: Type_m for n ≤ m) is a DIRECTED
+       * relation and, if ever needed, belongs at the subtyping site, not in
+       * this symmetric eq. *)
       n1 = n2
   | TyPi (_x1, a1, b1), TyPi (_x2, a2, b2) ->
       (* Two Pi-types equivalent iff their domain and codomain are. *)
@@ -976,8 +974,8 @@ let rec is_well_formed_ps (ctx : ps_ctx) : bool =
   | [(_, CellStar)] -> true                       (* single object *)
   | [] -> false
   | _ ->
-      (* For the prototype, accept any context where types are well-
-       * structured (no free variables that aren't earlier bound). *)
+      (* Accept any context where types are well- structured (no free variables
+       * that aren't earlier bound). *)
       let bound = ref [] in
       List.for_all
         (fun (name, cell) ->
@@ -1037,8 +1035,8 @@ let decidable_equal
  *
  * Termination: each step is either a substitution (beta) or a
  * structural reduction (eta) — both strictly decreasing under a
- * well-founded measure (term size + ps_ctx depth). Bound iterations
- * to a safety limit to detect divergence (would indicate a bug). *)
+ * well-founded measure (term size + ps_ctx depth). Iterations are
+ * capped at 1000; on overrun the last term is returned. *)
 
 let rec normalize_coherence_step (t : term) : term =
   match t with
@@ -1057,8 +1055,8 @@ let rec normalize_coherence_step (t : term) : term =
           (fun (k, v) -> (k, normalize_coherence_step v)) sub in
         TmCoh (ps, ty, sub_normalized)
 
-(* Iterate to a fixpoint, bounded to detect divergence (should never
- * happen for well-formed R_Yon terms). *)
+(* Iterate to a fixpoint, at most 1000 steps; on overrun the
+ * last term is returned as is. *)
 let normalize_coherence (t : term) : term =
   let rec loop fuel cur =
     if fuel = 0 then cur
@@ -1359,21 +1357,19 @@ let stage_serving (piece : term) : string option =
 
    "If it isn't resolvable locally, fetch it from another node." We cannot run a
    real network fetch (there is one node, N=1, and no network runtime; and cells
-   evaporate at silicon). What we CAN build now is the RESOLUTION POINT: given a
+   evaporate at silicon). What is built is the RESOLUTION POINT: given a
    piece and the stage that needs it, decide how it would be obtained.
 
    - If the local stage already forces the piece -> Local (no fetch).
-   - Else if another stage serves it -> FetchFrom that stage (the hook a future
-     N>1 runtime turns into a real RPC; at N=1 there is no other stage, so this
-     only fires once more stages are registered).
+   - Else if another stage serves it -> FetchFrom that stage (at N=1 there is
+     no other stage, so this fires only when more stages are registered).
    - Else -> Unresolved (a genuine coverage gap; the compiler can refuse or warn).
 
-   This is (b) reduced to what is real today: the dispatch decision, not the
-   wire call. It is built ON TOP of (a)'s registry, which is why (a) had to come
-   first — the fetch target comes from stage_serving. *)
+   This is the dispatch decision, not the wire call. It is built ON TOP of the
+   forcing registry: the fetch target comes from stage_serving. *)
 type fetch_resolution =
   | Local                       (* resolvable on the requesting stage *)
-  | FetchFrom of string         (* served by another stage (future RPC point) *)
+  | FetchFrom of string         (* served by another stage *)
   | Unresolved                  (* no stage has it: coverage gap *)
 
 let resolve_piece (requesting_stage : string) (piece : term) : fetch_resolution =

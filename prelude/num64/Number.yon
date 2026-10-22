@@ -7,7 +7,7 @@
  * Operators (+ - * / %) stay primitive — as `+` on int stays a jvm bytecode in
  * Java while `Integer` carries the library. What this place declares is
  * everything else: sign, comparison, rounding, roots, transcendentals,
- * predicates, conversion.
+ * predicates.
  *
  * The bodies written here are Yon (Euclid, rounding derived from floor,
  * the defended partial functions). The transcendentals and floor are `is
@@ -131,7 +131,9 @@ place Number is number {
            else Math.log(x)
   }
 
-  /* general power: b^e = exp(e * ln b), integer exponents go the exact way.
+  /* general power: b^e = exp(e * ln b); integer exponents go by repeated
+     squaring (for an integer base and a non-negative exponent, exact
+     while every intermediate stays below 2^53).
      ln can fail, so pow propagates: the witness of the error arm is returned
      as-is and the injection rule lifts it into pow's own coproduct. */
   fun pow(base: Number, e: Number) on error DomainError: Number {
@@ -166,9 +168,9 @@ place Number is number {
   fun e(): Number       { return 2.71828182845905 }
   fun epsilon(): Number { return 0.000000000000000222 }
 
-  /* Negate — a true additive homomorphism (negate(a+b) = negate(a)+negate(b))
-   * and an involution: apply it twice and you are home. Both are verifiable
-   * laws once `law` has a mechanical check. The house gives the name. */
+  /* Negate — additive (negate(a+b) = negate(a)+negate(b)) and an
+   * involution: apply it twice and you are home. No law is declared on it.
+   * The house gives the name. */
   morph Negate from Number to Number {
     on object(n: Number): Number { return 0 - n }
   }
@@ -179,40 +181,30 @@ place Number is number {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
- * What is not here, and why — the honest list
+ * What is not here, and why
  *
- * [I] irreducible (one function): `truncate`. Dropping the fractional part
- *     means touching the f64 representation, so it cannot be written in Yon.
- *     `floor`, `ceil`, `round`, `fract`, `is_integer` are all derived from it
- *     here — the primitive surface of this whole group is one function, not
- *     five. Its body above bridges through the existing Math.floor intrinsic
- *     until the axiomatic-body mechanism (the sibling of `is <prim>`) exists.
+ * [G] the rounding group has one irreducible: `floor`, which is `is given`.
+ *     `truncate`, `ceil`, `round`, `fract`, `is_integer` are all derived
+ *     from it — the primitive surface of the whole group is one function,
+ *     not five.
  *
  * [E] partial — sqrt, ln, tan and divide carry `on error DomainError`
- *     (prelude/DomainError.yon, message by composition); pow propagates
+ *     (prelude/err/DomainError.yon, message by composition); pow propagates
  *     ln's failure through its own coproduct via match + witness.
- *     from_text/parse are absent: they need Text.
  *
- * Missing because they need `Text` (the Integer-side half of Java's split):
- *       to_text(n)      — format
- *       from_text(t)    — parse                              [E]
- *       to_text_radix(n, radix)
- *     They belong here (they are observations of a number) but their return
- *     type lives in the sibling prelude place. Next stone.
+ * Conversions to and from text live in String (the house is given by the
+ *     target): String.from_int is Number → String, String.parse and
+ *     String.parse_number are String → Number.
  *
- * Missing because `number` is f64, not an integer type:
- *     the whole bit-manipulation family of Java's `Integer` — bitCount,
- *     highestOneBit, numberOfLeadingZeros, reverse, rotateLeft, shifts, and
- *     the unsigned operations. They will make sense on a separate `Int` of
- *     the prelude, or once `Number<32>` / `Number<64>` distinguish integers
- *     from floats. Declaring them on an f64 face would be a lie.
+ * The bit family (bit_count, bit_length, shifts, rotations…) lives on
+ *     Int64: on an f64 face it would be a lie.
  *
- * Constants not declared: MAX_VALUE / MIN_VALUE. They need either exponent
- *     notation in literals (1.797…e308 — unverified in the lexer) or a
- *     hex/bit form. Left out rather than written wrong.
+ * Constants not declared: MAX_VALUE / MIN_VALUE. The lexer has no exponent
+ *     notation (1.797…e308), so MAX_VALUE has no exact literal; left out
+ *     rather than written wrong.
  *
- * On the algebras: `+` and `*` stay operators. Their declared face is the
- *     algebra, not a method — `operation add(a, b) uses Additive` — and that
- *     needs the `algebra` top-level construct, which the grammar does not
- *     have; with it, this place would carry its `operation`s and its `law`s.
+ * On the algebras: `+` and `*` stay operators. Their declared face is an
+ *     algebra, attached by `operation … uses algebra Additive` on a place;
+ *     Number declares no such operation. f64 addition is not associative,
+ *     so Number is not a ring.
  * ═══════════════════════════════════════════════════════════════════ */

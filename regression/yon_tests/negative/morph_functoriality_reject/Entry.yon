@@ -1,12 +1,12 @@
-// morph on-morphism FUNCTORIALITY (W6): `deposit : State -> State` is a morphism
+// morph on-morphism FUNCTORIALITY: `deposit : State -> State` is a morphism
 // of the declared source topos Account (space w), and the functor's object
 // action maps State |-> EUState (`on object`). By functoriality F(deposit) must
 // be EUState -> EUState. The `via` target `wrong_sig` is Number -> Number,
 // INCOMPATIBLE, so the morph must be REJECTED with the functoriality message.
 // Changing wrong_sig to `(x: EUState): EUState` makes this project compile: the
-// signature is the only fault. (Was neg_morph_functoriality.yon, a single file
-// that was rejected earlier, for "cannot infer world for place State", and so
-// never reached the functoriality check.)
+// signature is the only fault. It is a project (spaces w, v) so that the world
+// of State is inferred and the check reached is the functoriality one.
+//
 place Entry {
   fun wrong_sig(x: Number): Number { return x }
   morph LiftEU from Account to AccountEU {

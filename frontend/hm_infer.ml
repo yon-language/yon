@@ -22,7 +22,7 @@
  *   - Recursion: each fun is assumed with its partial signature before the
  *     walk of the body. No Mycroft-Tofte fixpoint.
  *   - Stdlib: uses Stdlib_runtime.lookup_stdlib_signature to obtain the types
- *     of the builtins (List.cons, Map.get, etc.).
+ *     of the builtins (List.cons, HashMap.get).
  *)
 
 open Surface_ast
@@ -182,7 +182,7 @@ let rec infer_expr (env : env) (cs : constraint_set) (e : expr) : ty =
                     fresh_metavar ()))
   | _ ->
       (* All the other constructs (ENew, EField, EAll, EPullbackPack, ...) are
-       * not yet handled by full HM. Return a fresh meta-variable as a graceful
+       * not handled by full HM. Return a fresh meta-variable as a graceful
        * fallback; the downstream tycheck verifies them. *)
       fresh_metavar ()
 

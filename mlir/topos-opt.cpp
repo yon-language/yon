@@ -113,8 +113,8 @@ int main(int argc, char **argv) {
   mlir::topos::registerStructuralVNPass();
   mlir::topos::registerCCCEquationsCheckPass();
 
-  // Batch C: 10 structural / analysis passes that implement the verifier
-  // items.
+  // Ten opt-in diagnostic passes (not in the yonc pipeline). Each checks one
+  // syntactic proxy, described at the pass.
   mlir::topos::registerTypePreservationPass();
   mlir::topos::registerProgressPass();
   mlir::topos::registerTypeEquivSanityPass();

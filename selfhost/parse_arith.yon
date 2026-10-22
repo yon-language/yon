@@ -1,10 +1,10 @@
-// Self-host, front-end: parser aritmetico in Yon, chiude la catena testo -> valore.
-// Discesa ricorsiva con precedenza (* sopra +) come catamorfismo su TokList; l'AST
-// e' un induttivo Expr, l'eval aritmetico un altro catamorfismo Expr -> number.
-// Include il lexer (Token/TokList/lex) nello stesso file. Niente parentesi in questo
-// giro. Oracolo: "2+3*4" = 2 + (3*4) = 14 (la precedenza e' il punto, NON 20).
+// Front end: an arithmetic parser in Yon, closing the chain text -> value.
+// Recursive descent with precedence (* over +) as a catamorphism over TokList; the AST
+// is the coproduct place Expr, the arithmetic eval another catamorphism Expr -> number.
+// The lexer (Token/TokList/lex) is in the same file. The parser has no parenthesized
+// factor. Oracle: "2+3*4" = 2 + (3*4) = 14 (precedence is the point, NOT 20).
 
-// ── lexer (dal brief #4) ────────────────────────────────────────────────────
+// ── lexer ───────────────────────────────────────────────────────────────────
 place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 
@@ -23,11 +23,11 @@ fun lex_from(s: String, i: Number, len: Number): TokList {
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
-// ── AST + risultato del parse ───────────────────────────────────────────────
+// ── AST + parse result ───────────────────────────────────────────────────────
 place Expr { this > ENum(Number) :U EAdd(Expr, Expr) :U EMul(Expr, Expr) }
-place Parse { this > POk(Expr, TokList) :U PErr }   // (albero, resto) oppure errore
+place Parse { this > POk(Expr, TokList) :U PErr }   // (tree, rest) or error
 
-// ── peek tag-based sulla TokList ────────────────────────────────────────────
+// ── tag-based peek on the TokList ───────────────────────────────────────────
 fun motTn(t: Token): Number { return 0 }
 fun tok_tag(t: Token): Number {
   return hit_elim(motTn, [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 ], t)
@@ -47,7 +47,7 @@ fun tail(l: TokList): TokList {
   return hit_elim(motLl, [ TkNil => hit(TkNil), TkCons(h, t) => t ], l)
 }
 
-// ── parser a discesa ricorsiva con precedenza ───────────────────────────────
+// ── recursive-descent parser with precedence ────────────────────────────────
 fun motP(p: Parse): Parse { return hit(PErr) }
 
 // factor := NUM
@@ -89,7 +89,7 @@ fun combine_add(left: Expr, p: Parse): Parse {
       POk(right, rest) => hit(POk, hit(EAdd, left, right), rest) ], p)
 }
 
-// eval aritmetico: catamorfismo Expr -> number
+// arithmetic eval: catamorphism Expr -> number
 fun motE(e: Expr): Number { return 0 }
 fun eval_expr(e: Expr): Number {
   return hit_elim(motE,
@@ -103,7 +103,7 @@ fun result_of(p: Parse): Number {
   return hit_elim(motPn, [ PErr => 0 - 1, POk(e, rest) => eval_expr(e) ], p)
 }
 
-// ── oracolo: "2+3*4" = 2 + (3*4) = 14 ───────────────────────────────────────
+// ── oracle:  "2+3*4" = 2 + (3*4) = 14 ───────────────────────────────────────
 fun src(): String {
   return String.concat(
            String.concat(String.from_char(50), String.from_char(43)),

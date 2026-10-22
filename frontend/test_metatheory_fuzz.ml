@@ -10,7 +10,7 @@
  *   P1  NO-STUCK (Progress / SN, core):  a should-compute CORE term must reduce to a
  *        VALUE, never to a non-value normal form ("stuck") and never time out. A core
  *        STUCK refutes Progress; a core TIMEOUT refutes SN. Either fails the test.
- *   P2  CUBICAL no-stuck = the O2 hunt:  same, for cubical terms (PApp/Comp/HComp/HIT),
+ *   P2  CUBICAL no-stuck:  same, for cubical terms (PApp/Comp/HComp/HIT),
  *        incl cross-dimensional hcomp faces. A cubical STUCK is the *witness* of the known
  *        canonicity gap of open cubical terms (metatheory.md): REPORTED, but does NOT
  *        fail the build (canonicity there is an open question, not a regression).
@@ -69,7 +69,7 @@ let rec gen_cubical d : term =
     | 2 -> HComp (ty0, [], [], gen_core (d-1))
     | 3 -> Comp (ty0, [], [], gen_core (d-1))
     | 4 -> Transp (("i", ty0), gen_core (d-1))
-    | 5 -> (* cross-dimensional hcomp face i=1 ∧ j=0 — the O2 target *)
+    | 5 -> (* cross-dimensional hcomp face i=1 ∧ j=0 — the key case *)
            HComp (ty0, [[("i", true); ("j", false)]],
                   [("i", [("i", true); ("j", false)], gen_val 1)], gen_core (d-1))
     | _ -> HITElim ([("c", ["x"], Var "x")], HITConstr ("c", [gen_val 1]))
@@ -112,7 +112,7 @@ let core_wit = ref [] and cub_wit = ref []
 let add l x = if List.length !l < 6 then l := x :: !l
 
 (* labeled diagnostic: classify ONE canonical instance of each cubical former, so the
- * O2 finding is pinned to a specific construct, not a generator artifact. *)
+ * finding is pinned to a specific construct, not a generator artifact. *)
 let diag () =
   let cases = [
     "refl @ r",                PApp (Refl (num 5), I0);
@@ -173,8 +173,8 @@ let () =
     Printf.printf "RESULT: FAIL — core Progress/SN or confluence violated.\n"; exit 1
   end else begin
     (* These generated terms have FREE dimension variables, so a
-       residual hcomp/comp is a legitimately NEUTRAL normal form, not an O2 gap. Closed
-       canonicity (the real O2 question) is measured by test_o2_probe.ml — CCHM boundary
+       residual hcomp/comp is a legitimately NEUTRAL normal form, not a canonicity gap.
+       Closed canonicity is measured by test_o2_probe.ml — CCHM boundary
        laws + 8000/8000 closed corners → value, cross-dim included. The count below is
        open-dimension neutrality, NOT a compute failure. *)
     Printf.printf "RESULT: core sound on this run%s.\n"

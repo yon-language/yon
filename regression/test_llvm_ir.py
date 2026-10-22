@@ -103,8 +103,7 @@ def _run(cmd, **kw):
 #   merkle_noncommutative  : exercises yon_rt_merkle_* (node2 / commutative)
 # Every name here is an example the acceptance suite compiles and runs, so a
 # missing source or a failing stage is a FAILURE with the stage's diagnostics,
-# never a skip: a skip here once hid the whole gate (the names stopped resolving
-# when the corpus became directory projects, and every node skipped silently).
+# never a skip: a name that stops resolving must not skip the gate silently.
 EXAMPLES = ["arena_basic", "spawn_parallel_collect", "net_stream",
             "string_literals", "collections_ext", "merkle_noncommutative",
             # broadened to touch more runtime families (math, iteration,
@@ -409,10 +408,8 @@ def test_ll_child_exit_noreturn(name, tmp_path):
     child exit) and (b) the declaration carries `noreturn`, inline or in an
     `attributes #N` group.
 
-    (test_ll_child_exit_unreachable, which checked that the call's SSA result
-    is not consumed after the call, was removed: on the same SPAWN_EXAMPLES,
-    `noreturn` makes every instruction after the call unreachable by LLVM
-    semantics, so it implies that property.)"""
+    `noreturn` also makes every instruction after the call unreachable by
+    LLVM semantics, so the call's SSA result is never consumed after it."""
     ll = _emit_ll(name, tmp_path)
     sites = re.findall(r"\bcall\b[^\n]*" + _CHILD_EXIT.pattern, ll)
     assert sites, f"{name}: the spawn program has no child-exit call site"
@@ -454,8 +451,8 @@ def _nm_symbols(obj):
 # the system linker resolves them, not our RTSET objects. Anything matching
 # here is NOT required to be in the runtime-provided set.
 #
-# There is deliberately NO blanket "__" prefix: it used to whitelist every
-# `__yon_*` runtime symbol, so a missing one passed as "system". The system
+# There is deliberately NO blanket "__" prefix: it would whitelist every
+# `__yon_*` runtime symbol, so a missing one would pass as "system". The system
 # symbols that do start with "__" are listed by name (as they read after
 # _norm strips one underscore):
 #   __stack_chk_fail, __stack_chk_guard   stack protector (macOS ___stack_chk_*)

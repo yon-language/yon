@@ -187,7 +187,7 @@ let subst_place_tparams (params : string list) (args : ty list) (t : ty) : ty =
 
 (* Recognize a type that is (syntactically) the mere-proposition predicate
    applied to some carrier, i.e. of the shape Pi(_:C).Pi(_:C).Id_C(_,_). Used by
-   later steps (comprehension) to check that a predicate's fibres are props. *)
+   comprehension checks below to check that a predicate's fibres are props. *)
 let is_isprop_shape (t : ty) : bool =
   match t with
   | TyPi (_, c1, TyPi (_, c2, TyId (c3, _, _))) ->
@@ -513,22 +513,21 @@ let free_vars_expr (e0 : expr) : string list =
   in
   go [] e0
 
-(* Closed-morphism discipline. The body of a handle lambda (move / reduction /
-   morph / functor / view) must be CLOSED: it may reference only its own
-   parameters and top-level definitions, never a local from the enclosing
-   scope. Capturing an enclosing local is rejected here, at type-check, with a
-   clear message — rather than crashing later in emit ("variable not in
-   scope"). Handle bodies are not closure-converted: a morphism escapes its
-   definition site (it is composed and applied elsewhere, possibly across a
-   Space boundary) and cannot carry an environment by reference. *)
-(* Stage C: a handle-lambda (move/reduction/morph/functor/view) MAY now capture an
-   enclosing local. The old closed-morphism discipline forbade it on the grounds
-   that a morphism escapes its definition site and "is not closure-converted", but
-   Stage B built exactly that: a handle-lambda that captures is lifted to a
-   content-addressed closure node (its dense tag + the captured env), so the
-   environment travels with the handle across composition and Space boundaries.
-   Kept as a no-op (still called by the five handle-lambda cases) so the removal
-   is one edit and the intent is documented at the site of the old check. *)
+(* Handle-lambda capture. The body of a handle lambda (move / reduction /
+   morph / functor / view) MAY reference a local from the enclosing scope:
+   a handle-lambda that captures is lifted to a content-addressed closure
+   node (its dense tag + the captured env), so the environment travels with
+   the handle across composition and Space boundaries, by value.
+   Accordingly forbid_local_capture accepts every body: it is a no-op,
+   still called by the five handle-lambda cases, that marks where capture
+   is decided. *)
+(* Why capture is safe: a morphism escapes its definition site (it is
+   composed and applied elsewhere, possibly across a Space boundary), so it
+   cannot carry its environment by reference. The closure node carries the
+   captured values themselves, content-addressed, so the handle is
+   self-contained wherever it goes. The lifting is done in desugar
+   (lift_capturing_lambda); the emitter admits section-typed params only
+   for these lifted lambdas (closure_target_list). *)
 let forbid_local_capture
     (_kind : string) (_params : (string * ty) list) (_body : expr)
     (_env : Tyenv.env) (_loc : location) : unit tc_result =
@@ -1264,10 +1263,9 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        *   motive C : HIT -> Type   (lands in the universe)
        *   point ctor: v : El(C ctor)
        *   result    : El(C x)
-       * Path constructors carry a dependent (path-over) type that Surface
-       * cannot yet express (no PathP in Surface_ast.ty); their branches are
-       * inferred and accepted, the full dependent path-over check being the
-       * next refinement. *)
+       * Path constructors carry a dependent (path-over) type; their branches
+       * are inferred and accepted, and the dependent path-over check is not
+       * performed here. *)
       let* c_ty = infer env ctx c in
       let* x_ty =
         match c_ty with
@@ -1881,7 +1879,7 @@ got %s" (Tyenv.ty_to_string other)))
          | [_name] -> ok (TyPrim "boolean")
          | _ -> err loc "directed_cell expects 1 argument: (morphism_name)")
       else
-      (* ── Presheaf arrow-action + composition (A1.2 / A1.3, surface half) ──
+      (* ── Presheaf arrow-action + composition (surface half) ──
        * These reserved calls give the surface counterparts of the kernel
        * conversion rules in reduce.ml (try_functoriality). The typing is the
        * standard categorical one, and it is SOUND-FIRST / conservative: each
@@ -2057,7 +2055,7 @@ got %s" (Tyenv.ty_to_string other)))
       (* A primitive type name in term position is its Tarski code (TyUniverse),
        * legitimate only in a universe-code slot (refl/Id/El/hcomp, handled
        * above). It has no runtime f64 representation, so as an ordinary call
-       * argument it used to slip through the lax stdlib arg check and then crash
+       * argument it would slip through the lax stdlib arg check and then crash
        * at emit ("variable '<T>' not in scope"). Reject it here, cleanly. *)
       let* () =
         (* The cubical/universe primitives (transport, transp, ua, idEquiv, refl,
@@ -2164,9 +2162,9 @@ got %s" (Tyenv.ty_to_string other)))
            ok (TyUser place_name))
 
   | ENewIn (place_name, _space_name, fas, loc) ->
-      (* Same type check as ENew. The space is validated at runtime via
-       * yon_rt_register_space (for now; a static check will come when the
-       * space binding is required by the type system). *)
+      (* Unreachable from source: the parser does not produce ENewIn (the
+       * constructor is kept for exhaustive matches). Same type check as
+       * ENew; the space name is not checked. *)
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in 'new in' expression" place_name)
        | Some pd ->
@@ -2206,7 +2204,7 @@ got %s" (Tyenv.ty_to_string other)))
            ok (TyList (TyUser place_name)))
 
   | EIn (inner, _ctx_name, _loc) ->
-      (* "e in Context" — for v0.3 prototype, the contextual type is
+      (* "e in Context" — the contextual type is
        * the same as the inner type. *)
       infer env ctx inner
 
@@ -3472,7 +3470,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
   | SAssignHolds (lv, e, loc) | SAssignBecomes (lv, e, loc) ->
       let* expected = type_of_lvalue env ctx lv loc in
       let* () = check env ctx e expected in
-      (* the target now holds e; a field write makes its object carry *)
+      (* the target takes e; a field write makes its object carry *)
       (match lv with
        | LVar x -> mob_bind env x expected e
        | LField (o, _) -> mob_bind env o (TyPrim "unknown") e);
@@ -4416,7 +4414,7 @@ let check_union_members (env : Tyenv.env) (ctx : Reduce.ctx)
              else "s")))
       (ok ()) pd.pd_arms
 
-(* ─── The containment rule (brief residui costruttore) ──────────────────
+(* ─── The containment rule ───────────────────────────
    An arrow declared in the body of `place P` must TOUCH the house: P is the
    source or the target of its clause. It need not coincide with both —
    `morph Parse from Text to Number` inside `place Number` is legitimate.
@@ -4607,7 +4605,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                 "geom morphism %s: code does not decode (El) to a directed arrow El(%s) -> El(%s)"
                 gm.gm_name gm.gm_source_site gm.gm_target_site))
   | TopReductionCompose _ -> ok ()  (* kernel-only *)
-  | TopSpace _ -> ok ()             (* no static checks for now *)
+  | TopSpace _ -> ok ()             (* a space is a directory *)
   (* Topoi are validated object by object via check_place_decl recursively. *)
   | TopTopos td ->
       (* Validate the explicit binding `topos T at S`: if present, the space S
@@ -5077,8 +5075,8 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
       else err loc (Printf.sprintf "unknown user type: %s" n)
   | TyApp (n, args) ->
       (* A type application `Box<number>`: the head must be a known type and each
-         argument must be well-formed. Arity against the declared parameters is a
-         later refinement (needs the head's type-param count threaded here). *)
+         argument must be well-formed. Arity against the declared parameters is
+         not checked here (the head's type-param count is not threaded here). *)
       let* () = check_type_well_formed env (TyUser n) loc in
       List.fold_left
         (fun acc a -> let* () = acc in check_type_well_formed env a loc)
@@ -5189,7 +5187,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
       (* A function used as a code family MUST return a universe. If the head of the
          code is a call to a function returning a PRIMITIVE value type (number, text,
          boolean, ...), the code is a value, not a type code: reject with a surface
-         location. Universe / generic / place returns are deferred to the decode
+         location. Universe / generic / place returns are left to the decode
          fallback and the Core gate, so a real family `El(Fam x)` is never rejected. *)
       let returns_value_prim =
         match head_return with
@@ -5960,10 +5958,10 @@ let infer_place_worlds (p : program) : (program, type_error) result =
                (* the ENTRY CONTAINER is not a site object (the project mode
                   already strips it): a fieldless Entry hosting only hoisted
                   arrows has no world to infer, in single-file mode too. *)
-               (* CONSTANT IS DEAD: fusion and prelude no longer skip the
-                  inference — the prelude places arrive STAMPED from their
-                  space (never __INFER), and a user's fused place infers or
-                  errors like any other. A grant is a lockpick target. *)
+               (* No place skips the inference: the prelude places arrive
+                  STAMPED from their space (never __INFER), and a user's
+                  fused place infers or errors like any other. An exemption
+                  would be a way around the check. *)
                (match infer_for pd with
                 | Ok w ->
                     Ok (TopPlace { pd with pd_world = w } :: decls)
@@ -6492,8 +6490,8 @@ let check_program (p : program) : check_result =
                            receiver type; methods on distinct places are fine, \
                            but these two cannot be distinguished)" fd.fn_name } ] }
   | None ->
-  (* A functional return type (T -> U) is now supported: the function returns a
-     first-class content-addressed closure, an f64 handle (Stage B). *)
+  (* A functional return type (T -> U) is supported: the function returns a
+     first-class content-addressed closure, an f64 handle. *)
   (* HM-light for fun
    * signatures with "_" param or missing return type. Heuristic best-effort
    * on call-sites. *)

@@ -102,8 +102,8 @@ let s1_signature : hit_signature = {
  *     base : S²
  *     surf : Square (refl base) (refl base) (refl base) (refl base)
  *
- * For the prototype, we model surf as a single path; a full
- * implementation would use a square (2-dimensional path constructor).
+ * We model surf as a single path, not as a square
+ * (a 2-dimensional path constructor).
  *)
 let s2_signature : hit_signature = {
   hit_name = "S2";

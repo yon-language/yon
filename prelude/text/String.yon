@@ -6,12 +6,11 @@
  * the prelude does not say so, because the fusion names the code, not the
  * layout.
  *
- * The core now declares itself: `is given` is the axiomatic body (Java's
+ * The core declares itself: `is given` is the axiomatic body (Java's
  * `native`). It is not a mute promise — the compiler verifies that the
  * wired implementation exists and that the declared signature is the wired
  * one: a missing name, a different arity or a different type are errors.
- * The boundary with the silicon stops being invisible and becomes a line
- * of Yon.
+ * The boundary with the silicon is a line of Yon.
  *
  * Markers: [G] given, wired body · [T] total, written here ·
  *          [E] partial, dressed with on error

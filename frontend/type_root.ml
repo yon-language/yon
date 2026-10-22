@@ -110,7 +110,7 @@ and encode_variants (env : TE.env) (ctx : string list) buf (variants : variant l
   List.iter (fun v ->
     add_u32 buf (List.length v.v_args);                            (* ctor name does not enter (positional) *)
     List.iter (encode_ty env ctx buf) v.v_args) variants;
-  add_u32 buf 0                                                    (* path-constructor slot: empty for point inductives (T3-ready) *)
+  add_u32 buf 0                                                    (* path-constructor slot: empty for point inductives *)
 
 and root_named (env : TE.env) (ctx : string list) (name : string) (variants : variant list) : int64 =
   let buf = Buffer.create 64 in

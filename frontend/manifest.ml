@@ -253,14 +253,13 @@ let is_empty (wm : world_map) : bool =
 (* A world's [world.<Name>] structure as a world_decl record. Every declared
    construction is carried through INDEPENDENTLY: desugar_world_decl emits one
    site generator per non-empty field, and the sheaf checker consumes each.
-   (Previously this collapsed to AT MOST ONE by a priority order coproduct >
-   product > quotient > subset, silently dropping the others -- so a world with
-   both a coproduct and a quotient lost its quotient generator and the
-   quotient's Rel-invariance sheaf condition was NEVER checked, a vacuous-check
-   soundness hole. The world_decl record has a separate field per construction
-   precisely so all can coexist; the manifest now matches desugar instead of
-   diverging from it.) With no construction, the world is the trivial site over
-   its objects, each an `is` world_place named "Code". Built directly on the
+   (Collapsing them to one by a priority order would drop the others -- a world
+   with both a coproduct and a quotient would lose its quotient generator, and
+   the quotient's Rel-invariance sheaf condition would never be checked. The
+   world_decl record has a separate field per construction precisely so all can
+   coexist; the manifest matches desugar.) With no construction, the world is
+   the trivial site over its objects, each an `is` world_place named "Code".
+   Built directly on the
    AST -- no surface text, no re-parse. *)
 let world_decl_of (name : string) (ws : world_struct) : world_decl =
   let base = {
@@ -298,9 +297,9 @@ let spaces_of_world (wm : world_map) (w : string) : string list =
 (* ─── boundary check over a program ─────────────────────────────────── *)
 
 (* The mailbox name is the bare space name; "wire to S" and "be s := X.s"
-   both name the target space directly. A package's own space is now derived
+   both name the target space directly. A package's own space is derived
    from the filesystem (directory = space, via package_layout), so there is no
-   longer a surface `init Name as Space` declaration to read. *)
+   surface declaration of it to read. *)
 
 (* Wire targets reached through "be s := X.stream" (TopImportFrom: the
    third field is the target space) together with their source location. *)
@@ -391,11 +390,11 @@ let assign_place_worlds
 
 (* ─── filesystem-derived topos structure ────────────────────────────── *)
 
-(* A topos now DERIVES its structure from the package layout instead of inline
+(* A topos DERIVES its structure from the package layout, not from inline
    surface syntax. The parser produces every `topos_decl` with tp_objects = [],
    tp_at_space = None, tp_world = None; this pass FILLS those fields from the
-   filesystem before tycheck/desugar/emit run. The record shape is UNCHANGED —
-   downstream reads the same fields; we just populate them in the driver.
+   filesystem before tycheck/desugar/emit run. Downstream reads the same
+   fields; they are populated in the driver.
 
    For each `TopTopos td`:
      - tp_at_space <- Some space   (the space whose directory holds the topos file)
@@ -403,8 +402,8 @@ let assign_place_worlds
      - tp_world    <- world_of_space space     (the space's world from yon.toml)
 
    The three callbacks are built by the driver at parse-assembly time, where the
-   per-file space tag (ul_space) is still known (the merged program no longer
-   carries per-file origin). Filling is purely additive: every existing consumer
+   per-file space tag (ul_space) is still known (the merged program does not
+   carry per-file origin). Filling is purely additive: every consumer
    (tyenv.first_place_in_topos, tycheck TopTopos, assign_place_worlds, desugar)
    already tolerates an empty list, so a topos whose space is unknown is left as
    the parser produced it. *)

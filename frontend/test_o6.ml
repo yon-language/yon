@@ -1,7 +1,7 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* test_o6.ml — oracle: O6, the witness that closes the classifier theorem of
- * Syn(Yon) (formalization sec.16). For an embedding m : B -> A, with image
+(* test_o6.ml — oracle: the embedding/comprehension witness of the classifier
+ * theorem of Syn(Yon). For an embedding m : B -> A, with image
  * predicate P(x) := Sigma(b:B). Id(m b, x), the comprehension {x:A | P} is
  * isomorphic to B:
  *     fwd : B -> {x:A | P},   fwd b      = (m b, (b, refl(m b)))
@@ -29,12 +29,12 @@ let () =
   let fwd t = Pair (mb t, Pair (t, Refl (mb t))) in
   let bwd p = Fst (Snd p) in
 
-  (* O6 round-trip 1: bwd (fwd b) ~ b, generically, by reduction. *)
+  (* round-trip 1: bwd (fwd b) ~ b, generically, by reduction. *)
   let b = Var "b" in
   check "round-trip 1: bwd(fwd b) reduces to b (generic b)"
     (term_equal_env [] (nf (bwd (fwd b))) b);
 
-  (* O6 round-trip 2: the witness is path induction
+  (* round-trip 2: the witness is path induction
    *     ind_path(C, \b. refl(fwd b), p),  C(x,p) := Id(fwd b, (x,(b,p)))
    * whose entire content is the diagonal case, and the diagonal case is the
    * beta of J:  J(C, d, refl(a), a) == d a.  Checked on a generic basepoint. *)
@@ -47,7 +47,7 @@ let () =
   check "round-trip 2: the diagonal at a is refl(fwd a)"
     (term_equal_env [] (nf (App (diag, a))) (nf (Refl (fwd a))));
 
-  (* eta-Sigma re-verified in the O6 setting, on the open term (fst s, snd s) ~ s *)
+  (* eta-Sigma re-verified in this setting, on the open term (fst s, snd s) ~ s *)
   let s = Var "s" in
   check "eta-Sigma (used by O6): (fst s, snd s) ~ s"
     (term_equal_env [] (nf (Pair (Fst s, Snd s))) s);

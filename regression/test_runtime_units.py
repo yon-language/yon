@@ -2,8 +2,7 @@
 
 Each runtime self-test .c is compiled against the built runtime objects and run;
 the node asserts exit 0 and a layer-specific success marker in stdout. This wires
-the previously-orphaned runtime tests (arena, spawn) and the shell-only ones
-(conway, quantizer) into the single pytest harness, alongside the MPHF bijection
+the runtime tests (arena, spawn, conway, quantizer) into the single pytest harness, alongside the MPHF bijection
 check already in test_yon_pipeline.
 
 Mirrors test_yon_pipeline.test_runtime_mphf: one node per runtime test, isolated
@@ -78,7 +77,7 @@ C_UNIT_TESTS = [
     # arena_used preserved), idempotent (no double-free), and opt-in (an unwatched
     # Space never reaps) — region-reaping, not a GC.
     ("deathwatch",    "test_unit_deathwatch.c",   b"DEATHWATCH: PASS",    True),
-    # Concurrency regression for the cross-process SHM wire (Bug B): producer and
+    # Concurrency regression for the cross-process SHM wire: producer and
     # consumer hammer one ring simultaneously; every value is 1, so a correct
     # transport delivers exactly N summing to N. Proves the PROCESS_SHARED header
     # mutex serializes head/tail/count where flock() on an shm fd did not on

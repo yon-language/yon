@@ -191,17 +191,17 @@ let collect (known : string list) (f : fundef) : scg list =
                          | None -> SMap.remove v de)
                       de vars
                   in
-                  (* (Removed a `peel` step that stripped the leading Lam binders
-                   * of the branch body and marked each (p, Strict) — a strict
-                   * subterm of the scrutinee. That is sound ONLY for constructor
+                  (* (The leading Lam binders of the branch body are NOT marked
+                   * (p, Strict) as strict subterms of the scrutinee. That is
+                   * sound ONLY for constructor
                    * payload binders, which are ALREADY handled by `vars` above;
                    * an ordinary user Lam at a branch-body head is not a
-                   * constructor component, so marking it Strict invents a bogus
-                   * strict descent and could FALSELY CERTIFY a non-terminating
-                   * delta rule → fuel-free kernel loop. Surface desugar lifts
+                   * constructor component, so marking it Strict would invent a
+                   * bogus strict descent and could FALSELY CERTIFY a
+                   * non-terminating delta rule. Surface desugar lifts
                    * lambdas out of expression position so a branch body is never
-                   * head-Lam — the case was dead; removed as defense-in-depth so
-                   * the soundness no longer rests on that desugar invariant.) *)
+                   * head-Lam; not relying on that keeps the soundness
+                   * independent of that desugar invariant.) *)
                   go de bterm acc)
                acc branches)
   in

@@ -462,8 +462,8 @@ def Topos_GlueOp : Topos_Op<"glue", [Pure]> {
 // Declares a morphism (a pure declaration) between two places. A move is a
 // categorical entity: it has no computational "body" nor inline code. Complex
 // moves (a non-identity Co_0 word) are expressed as a MoveOp plus a separate
-// runtime function associated via symbol lookup. For now each move is
-// implemented as identity, and the declaration suffices.
+// runtime function associated via symbol lookup. The lowering emits an
+// identity function `<name>__move` for each move.
 def Topos_MoveOp : Topos_Op<"move", [Symbol]> {
   let summary = "Declare a move (morphism between places)";
   let arguments = (ins
@@ -863,8 +863,8 @@ def Topos_HeytIntNotOp : Topos_Op<"heyt_int_not", [Pure, SameOperandsAndResultTy
 
 // topos.section_to_xcoord %s : i64
 // Extracts the underlying encoding (heap_id<<32 | xcoord) from a section.
-// Cross-space: section is now i64 (packed heap_id + xcoord); the op keeps the
-// historical name for syntactic compatibility.
+// Cross-space: section is i64 (packed heap_id + xcoord); the op name keeps the
+// word "xcoord".
 // Identity after conversion (typeConverter maps section -> i64).
 def Topos_SectionToXcoordOp : Topos_Op<"section_to_xcoord", [Pure]> {
   let summary = "Extract the underlying (heap_id, xcoord) encoding from a section";
@@ -986,8 +986,8 @@ def Topos_PushoutOp : Topos_Op<"pushout", [Symbol]> {
 // topos.coproduct @name = [@P1, @P2, ..., @Pn]
 //
 // Defines a place as the coproduct (a categorical colimit of discrete shape)
-// of N source places. Dual of `topos.product` (which in Yon is part of the
-// Pullback/restrict-to-product pattern).
+// of N source places. Dual of a product (which in Yon is expressed as a
+// right_object, or through the pullback/restrict pattern).
 //
 // Categorical semantics (Lurie 4.4.1):
 //   - for each i in {1..N} there is a canonical injection inj_i : Pi -> coprod
@@ -999,12 +999,11 @@ def Topos_PushoutOp : Topos_Op<"pushout", [Symbol]> {
 //   - N >= 1 (no empty coproduct in single-Space: the true "0" will be the
 //     `topos.initial`)
 //   - all Pi must resolve to existing `topos.place`
-//   - all Pi must belong to the same enclosing world (cross-space coproduct is
-//     deferred)
+//   - all Pi must belong to the same enclosing world (a cross-space coproduct
+//     is rejected)
 //
-// Lowering: currently a structural declaration (like Pullback/Pushout). The
-// operational lowering will come with the place-fusion pass or with
-// cross-space.
+// Lowering: a structural declaration only (like Pullback/Pushout); it is not
+// lowered to operational code.
 def Topos_CoproductOp : Topos_Op<"coproduct", [Symbol]> {
   let summary = "Define a place as the coproduct of N places";
   let description = [{
@@ -1040,9 +1039,9 @@ def Topos_CoproductOp : Topos_Op<"coproduct", [Symbol]> {
 //   - the resulting move `q` is introduced as a new symbol in the world;
 //     colliding with other symbols is an error
 //
-// Lowering: like Coproduct, currently structural. The true quotient requires a
-// representation of equivalence classes that comes with the world quotient + a
-// dedicated pass.
+// Lowering: like Coproduct, a structural declaration only; it is not lowered.
+// A real quotient would need a representation of equivalence classes, which
+// does not exist.
 def Topos_CoequalizerOp : Topos_Op<"coequalizer", [Symbol]> {
   let summary = "Define a place as the coequalizer of two parallel morphisms";
   let description = [{
@@ -1273,9 +1272,8 @@ def Topos_NatTransOp : Topos_Op<"nat_trans", [
 // topos.exponential @name in @world base @A target @B factorizer @curry eval @eval
 //
 // Right object speciale: B^A con factorizer curry e una nat_trans eval.
-// Special case of topos.right_object — emitted as such by the lowering of
-// future passes, but useful as a declaration
-// shortcut nei sorgenti MLIR.
+// Special case of topos.right_object: a declaration shortcut in MLIR sources
+// for a right_object.
 def Topos_ExponentialOp : Topos_Op<"exponential", [Symbol]> {
   let summary = "Exponential B^A as a Hagino right object";
   let description = [{
@@ -1341,28 +1339,20 @@ def Topos_CplElementOp : Topos_Op<"cpl_element", [Symbol]> {
 // Part II, sections 15-16; there is no single "Theorem 15.4" — the result is
 // the pair of adjoint functors developed across sections 12-16).
 //
-// The checks are structural (the full verification "T(L(F)) ~= F" would
-// require an entire homotopy theory, left to future passes). What we do here
-// is:
+// The checks are structural only; "T(L(F)) ~= F" is not checked (it would
+// require a homotopy theory). What the verifier does is:
 //
-//   (a) Top_0 membership: the world must have
-//       - exactly one TerminalOp        (presence of 1)
-//       - exactly one InitialOp         (presence of 0)
+//   Top_0 membership: the world must have
+//       - at least one TerminalOp       (presence of 1)
+//       - at least one InitialOp        (presence of 0)
 //       - at least one RightObjectOp    (exists product/exp/right limit)
 //       - at least one LeftObjectOp     (exists coproduct/left colimit)
 //       Without one of these, the world is not a Hagino-complete elementary
 //       topos and the adjunction T |- L does not apply (errors
 //       [TOPOS-E0990..E0993]).
 //
-//   (b) Lang correspondence: each ReduceOp in the world must have a
-//       corresponding MoveOp with the same source/target (the reduction
-//       "lives in the term theory L" iff the move "lives in the topos theory
-//       T"). Error [TOPOS-E0994].
-//
-//   (c) Canonical subobjects (Lambek-Scott 27o): for now the check is
-//       deferred; it requires an explicit declaration of a canonical subplace
-//       for each subobject. When the flag `--strict-canonical` is passed,
-//       adjoint_check requires it; otherwise it emits warning [TOPOS-W0995].
+// Not checked: the Lang correspondence (each ReduceOp matched by a MoveOp
+// with the same source/target) and canonical subobjects (Lambek-Scott 27o).
 //
 // adjoint_check does NOT prove T(L(F)) ~= F: it only rejects worlds that
 // structurally cannot belong to Top_0. It is a declarative certification, not
@@ -1371,10 +1361,10 @@ def Topos_AdjointCheckOp : Topos_Op<"adjoint_check", [Symbol]> {
   let summary = "Certify Top_0 membership for T |- L adjoint (Lambek-Scott Part II, sec. 15-16)";
   let description = [{
     Structural certification that the named world satisfies the
-    Top_0 conditions for the T |- L adjunction (Lambek-Scott Part II
-    Part II, sec. 15-16). Does NOT compute T(L(F)) ~= F; rejects worlds
-    that cannot be in Top_0 due to missing canonical infrastructure
-    (terminal, initial, right_object, left_object, canonical subobjects).
+    Top_0 conditions for the T |- L adjunction (Lambek-Scott Part II,
+    sec. 15-16). Does NOT compute T(L(F)) ~= F; rejects worlds that
+    cannot be in Top_0 because they have no terminal, initial,
+    right_object or left_object.
   }];
   let arguments = (ins
     SymbolNameAttr:$sym_name,
@@ -1523,11 +1513,11 @@ def Topos_TopologyOp : Topos_Op<"topology", [Symbol]> {
 // In Yon it is the construct that governs the passing of parameters and return
 // values between hermetic Spaces. Pull = copy-in (f^*), push = copy-out (f_*).
 //
-// The pull and push functors are declared separately as MoveOp (or runtime
-// functions) and referenced by name via symbols; the GeomMorphismOp is a
-// binding between worlds, not a container of code. This separates the
-// categorical identity (the pair of worlds) from the implementation (the
-// runtime functions f^*, f_*).
+// The op carries no code and no regions: it is a binding between worlds. The
+// lowering materialises the pull and push functors as two function
+// declarations `<name>__pull` and `<name>__push` (the runtime functions f^*,
+// f_*). This separates the categorical identity (the pair of worlds) from the
+// implementation.
 def Topos_GeomMorphismOp : Topos_Op<"geom_morphism", [Symbol]> {
   let summary = "First-class geometric morphism between topoi";
   let description = [{
@@ -1536,9 +1526,8 @@ def Topos_GeomMorphismOp : Topos_Op<"geom_morphism", [Symbol]> {
     functions `<name>__pull` and `<name>__push` that the backend uses for
     cross-space copy-in and copy-out.
 
-    The attribute `proper_base_change_attested` certifies that the pull is
-    left-exact; without the attestation, the left-exactness check is left to a
-    dedicated pass.
+    The attribute `proper_base_change_attested` records the user's claim that
+    the pull is left-exact; no pass verifies it.
   }];
   let arguments = (ins
     SymbolNameAttr:$sym_name,
@@ -1846,7 +1835,7 @@ def Topos_SharingConstraintOp : Topos_Op<"sharing_constraint"> {
 }
 
 //===----------------------------------------------------------------------===//
-// BATCH A — 12 new operations
+// Subtyping, bounded quantification, type classes, sites, coeffects
 //
 // Each op here has let hasVerifier = 1 and a verify() implementation in
 // TopOps.cpp. The ops are grouped by area:
@@ -1861,9 +1850,9 @@ def Topos_TheOp : Topos_Op<"the"> {
   let description = [{
     Applies an explicit subtype coercion: takes `source` of some type
     S and returns it tagged at type `target_type`. The verifier
-    enforces (for now) syntactic type equality between source and
-    target; a downstream pass extends to the full set of subtype
-    rules (arrow co/contra, record/oneof width+depth, forall, μ).
+    accepts only syntactic type equality between source and target;
+    no other subtype rule (arrow co/contra, record/oneof width+depth,
+    forall, μ) is applied.
   }];
   let arguments = (ins
     AnyType:$source,
@@ -2142,8 +2131,8 @@ def Topos_LoadWorldOp : Topos_Op<"load_world"> {
 //                     * (Coeffected[s, a] -> b)
 //                     -> Coeffected[r ⊗ s, b]
 //
-// The verifier enforces structural arity; the algebraic laws of the
-// comonad are checked by an analysis pass.
+// The verifiers check only that the algebra name is known; the comonad
+// laws are not checked.
 //===----------------------------------------------------------------------===//
 
 def Topos_CoeffectPureOp : Topos_Op<"coeffect_pure"> {
@@ -2168,9 +2157,9 @@ def Topos_CoeffectPureOp : Topos_Op<"coeffect_pure"> {
 def Topos_CoeffectExtractOp : Topos_Op<"coeffect_extract"> {
   let summary = "Counit of the coeffect-indexed comonad";
   let description = [{
-    Extracts a value from a coeffected context. The grade must be the
-    algebra's unit (1); otherwise the underlying coeffect would be
-    discarded silently.
+    Extracts a value from a coeffected context. The verifier checks
+    only that `algebra` is a known algebra name; the grade is not
+    checked.
   }];
   let arguments = (ins
     AnyType:$coeffected,
@@ -2189,9 +2178,8 @@ def Topos_CoeffectExtendOp : Topos_Op<"coeffect_extend"> {
   let description = [{
     Sequencing operation: given a coeffected value of grade r and a
     continuation that consumes a coeffected value of grade s, returns
-    a coeffected result of grade r ⊗ s. The composition law (r ⊗ s)
-    is left implicit at this layer and validated by a downstream
-    analysis pass.
+    a coeffected result of grade r ⊗ s. The composition r ⊗ s is
+    not checked.
   }];
   let arguments = (ins
     AnyType:$coeffected,

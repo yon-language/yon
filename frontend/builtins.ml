@@ -17,8 +17,8 @@
  *   bool true       ->  Var "__bool_true"
  *
  * Operations are evaluated by inspecting these patterns when they
- * appear as arguments. This is a "shallow" semantics — sufficient for
- * the first prototype, replaceable with a proper value layer later.
+ * appear as arguments. This is a "shallow" semantics: the encoded Var
+ * is the value layer the interpreter uses.
  *)
 
 open Ast
@@ -27,9 +27,9 @@ open Ast
 
 (* Shortest decimal string that round-trips to the SAME IEEE double. encode and
  * decode must be mutual inverses on every finite double — a faithful key, not a
- * lossy display. The old code used %g (6 significant digits, so 1.0/.3.0 became
- * 0.333333) and int_of_float (which overflows past 2^62 for large integer-valued
- * floats); both broke encode∘decode = id. We pick the least precision in
+ * lossy display. Plain %g (6 significant digits, so 1.0/.3.0 would be
+ * 0.333333) or int_of_float (which overflows past 2^62 for large integer-valued
+ * floats) would break encode∘decode = id. We pick the least precision in
  * {15,16,17} that round-trips: 15 keeps common decimals pretty (0.1 -> "0.1",
  * 5.0 -> "5"), higher precision kicks in only when needed (1/3). No int cast, so
  * no overflow. Caller (with_numbers) guards finiteness, so n is always finite. *)
@@ -99,8 +99,8 @@ let append_output (s : string) =
  * both a and b are decodable numbers, it produces the encoded result.
  * This requires hooking into the reduction step.
  *
- * For the prototype, we expose a helper function evaluate_builtin
- * that the main evaluator can call after a fixed point on R_Yon.
+ * reduce_with_builtins (below) interleaves these builtin steps
+ * with the R_Yon steps of Reduce.step.
  *)
 
 let rec try_eval_binop (op : string) (a : term) (b : term) : term option =
@@ -726,8 +726,7 @@ let rec ast_ty_to_surface (a : ty) : Surface_ast.ty =
   | TyPlace n ->
       (* A primitive place (number/text/...) maps to a surface primitive; any
          other place maps to a user type. Primitiveness is a property of the
-         name now that TyBase is gone (a primitive is a place whose name is
-         primitive). *)
+         name (a primitive is a place whose name is primitive). *)
       if Carrier.is_prim_name n then Surface_ast.TyPrim n
       else Surface_ast.TyUser n
   | TyType n -> Surface_ast.TyUniverse n
@@ -812,8 +811,8 @@ and of_cterm (c : Cubical.cterm) : term =
       (* backward map g = Fst (Snd e) of the quasi-inverse Pair *)
       App (Fst (Snd (of_cterm e)), of_cterm t')
   | Cubical.CHITConstr (name, args) ->
-      (* generic HIT constructor: base, loop, north, merid x, ... — now a
-       * first-class core term, no longer stuck at the bridge. *)
+      (* generic HIT constructor: base, loop, north, merid x, ... — a
+       * first-class core term. *)
       HITConstr (name, List.map of_cterm args)
   | Cubical.CHITElim (branches, scrut) ->
       HITElim

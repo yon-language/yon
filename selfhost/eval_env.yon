@@ -1,5 +1,5 @@
-// Yon-in-Yon, seed 1: the object language gains BINDERS (Var, Let), and with them
-// eval stops being a fold into `number` and becomes a catamorphism into the
+// Yon-in-Yon, seed 1: the object language has BINDERS (Var, Let), and with them
+// eval is not a fold into `number` but a catamorphism into the
 // EXPONENTIAL `Env => number`. That is the categorical reason a language with binding
 // needs a cartesian closed ambient (a topos is one): the algebra of the fold lands in
 // a function space, not a flat value. Concretely, eval carries an environment, and

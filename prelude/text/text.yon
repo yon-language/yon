@@ -6,29 +6,25 @@
  *   Arrows   the `morphism` below, the generators of the site.
  *
  * The topos name is not written (it comes from the file). The terminal is
- * not declared (retired: every topos has one by definition).
+ * not declared: every topos has one.
  *
  * On the name. The space is called `text` (the fused primitive code), the
- * place is called `String` — and the fusion `String -> text` has been live
- * in the compiler since June. It is not an inconsistency: `text` is the
- * name of the code in the kernel, `String` the declared face. In the toml
- * the world is `Txt`.
+ * place is called `String`, and the fusion is `String -> text`. It is not
+ * an inconsistency: `text` is the name of the code in the kernel, `String`
+ * the declared face. In the toml the world is `Txt`.
  *
  * Careful on macOS: the filesystem is case-insensitive, so this file and a
- * hypothetical `Text.yon` would be one and the same — an `rm Text.yon`
- * deletes the package (it already happened, and no gate noticed: the site
- * stood there with no generators). Today the text place is `String`, so
- * nothing collides; if a `Text` place is ever born, rename this file
- * first.
+ * `Text.yon` would be one and the same file — an `rm Text.yon` deletes the
+ * package. A place named `Text` needs this file renamed first.
  */
 topos where {
 
   /* ─── The generator — only one ───────────────────────────────────────
    *
-   * `concat` is the single operation everything else descends from:
-   * substring, reverse, take, skip, replicate and index_of are built from
-   * concat + char_at + from_char, so they are derived and live in the
-   * place. A functor obtains them by functoriality — F(g∘f) = F(g)∘F(f)
+   * `concat` is the single generator. reverse and replicate are built
+   * from concat, char_at and from_char; take and skip from the given
+   * substring; index_of from char_at and length. Derived arrows live in the
+   * place, and a functor obtains them by functoriality — F(g∘f) = F(g)∘F(f)
    * leaves no choice.
    *
    * Putting an arrow here costs: every functor leaving Txt has to
@@ -36,16 +32,17 @@ topos where {
    *
    * And `concat` is the cleanest non-commutative monoid in the prelude:
    * associative, with "" as its neutral, and concat(a,b) != concat(b,a).
-   * A good test bench for an algebra check — the prelude's other
-   * monoids (Additive on Number, Multiplicative on Int64) are all
-   * commutative.
+   * A good test bench for an algebra check — the prelude's other candidate
+   * monoid (addition and multiplication on Int64, Z/2^64) is commutative;
+   * f64 addition on Number is not even associative.
    *
-   * `uses Additive`: the position does not exist in the grammar.
+   * No algebra is attached: a topos `morphism` has no `uses algebra`
+   * position (that clause belongs to `operation` on a place).
    */
   morphism concat(a: String, b: String): String
 }
 
-/* ═══ The Reverse functor — and it is contravariant ═════════════════════
+/* ═══ Reverse is contravariant ═════════════════════════════════════════
  *
  * `reverse` is not merely an involution: it is an antihomomorphism on
  * concat.
@@ -54,51 +51,16 @@ topos where {
  *                                             ^^^^^^^^^^^^^
  *                                             the order swaps
  *
- * So it is not a covariant functor: it is contravariant, that is a functor
- * `Txt -> Txt^op`. It is the language's first example of contravariance,
- * and the antihomomorphism of inversion is the classical case in algebra
- * (the same structure as (a·b)^-1 = b^-1·a^-1 in groups).
+ * So as a functor it is not covariant: it is contravariant, a functor
+ * `Txt -> Txt^op`. The antihomomorphism of inversion is the classical case
+ * in algebra (the same structure as (a·b)^-1 = b^-1·a^-1 in groups). The
+ * image of concat under it is concat with the arguments swapped.
  *
- * It says more than the `morph Reverse` in String.yon: that one declares
- * the involution, this one also declares how it acts on concat.
+ * The `morph Reverse` in String.yon declares only the involution.
  *
- * The form is designed, not live — two pieces are missing: `on object` /
- * `on morphism` on a functor (today it has parameters and a single body)
- * and a way to say contravariance. Three roads, Antonio's decision:
- *   (a) a nameable opposite world (`Txt^op` / `op Txt`)
- *   (b) a word on the functor (`functor Reverse contravariant from ...`)
- *   (c) a law that declares it (`law antihomomorphic`), grammar unchanged
- *       — the least invasive, and coherent with "law is the one word for
- *       obligations"
- * Below it is written in form (c), the most conservative.
- *
- *   functor Reverse from Txt to Txt {
- *     on object(s: String): String { return String.reverse(s) }
- *     on morphism concat via concat_flipped
- *     law involutive          // reverse(reverse(s)) == s
- *     law antihomomorphic     // reverse(a ++ b) == reverse(b) ++ reverse(a)
- *   }
- *
- *   // the image of concat under Reverse: the arguments swapped. That is
- *   // what makes the square commute — and the fact that a "flipped" is
- *   // needed at all is the contravariance, made explicit.
- *   fun concat_flipped(a: String, b: String): String {
- *     return String.concat(b, a)
- *   }
- *
- * ═══ The other functor — genuine, blocked on two decisions ═════════════
- *
- *   functor MapChar from Txt to Txt        [blocked]
- *     on object(s: String): String { ...apply f to every character... }
- *     on morphism concat via concat
- *     law additive     // map(f, a ++ b) == map(f, a) ++ map(f, b) — true
- *
- * This one is covariant and its law is true: applying a function to every
- * character distributes over concatenation. But it wants (1) the `Char`
- * place — today `char_at` returns a Number, so a character-to-character
- * function has no type to name; (2) the encoding decided (byte or
- * codepoint) — on which what a character even is depends. Both on the
- * ledger.
+ * Mapping a character function over a string is covariant instead:
+ * map(f, a ++ b) == map(f, a) ++ map(f, b). It has no type to name here,
+ * because `char_at` returns a Number and there is no `Char` place.
  *
  * ═══ And the two that are not written — the shield comment ═════════════
  *
@@ -125,10 +87,9 @@ topos where {
  *
  * This is the place where someone will try again. The comment stays.
  *
- * ─── Ledger ───────────────────────────────────────────────────────────
- * `List<String>` for `split`: it wants the prelude's containers (today
- *     `List<T>` is a language generic, not a declared place).
- * The functor laws are verified by nobody (`ft_laws` is read only by the
- *     formatter): for the language's first contravariant functor, the
- *     verification is what would give the contravariance its meaning.
+ * `split` is absent: it would return `List<String>`, and `List<T>` is a
+ * language generic, not a declared place of the prelude.
+ *
+ * The laws of a `morph` are parsed and not checked; a `functor` accepts
+ * only `law identity` and `law composition`.
  * ═══════════════════════════════════════════════════════════════════════ */

@@ -62,14 +62,16 @@ def _units():
 
 UNITS = _units()
 
-# Units the oracle currently catches the formatter breaking. Strict: when the
-# formatter is fixed the xfail turns into a failure, and the entry must go.
+# Units whose formatting breaks the oracle, each with the law it breaks. Strict:
+# an entry whose unit formats correctly fails the run and must go.
+# kw_geomorph_full: formatter.ml (TopGeomMorphism) does not print the
+# `exact push` / `exact pull` clause (gm_f_lower_star_exact / gm_f_star_exact),
+# so the emitted MLIR changes (an i32 constant 1 -> 0); the round-trip
+# fail-safe does not see it.
 KNOWN_DEFECTS = {
     "examples/kw_geomorph_full": (
-        "DEFECT formatter.ml TopGeomMorphism: the `exact push` / `exact pull` "
-        "clause (gm_f_lower_star_exact / gm_f_star_exact) is not printed, so the "
-        "formatted geomorph loses its exactness flag and the emitted MLIR "
-        "changes (an i32 constant 1 -> 0); the round-trip fail-safe misses it"),
+        "formatting keeps the exactness of a geomorph's push/pull: the "
+        "formatted program emits the same MLIR"),
 }
 
 

@@ -1,11 +1,11 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* surface_ast.ml — abstract syntax tree of surface Yon v0.3.
+(* surface_ast.ml — abstract syntax tree of surface Yon.
  *
  * This is the AST produced by the parser. It is distinct from the
  * Yon Core AST (in ast.ml) which is the target of desugaring.
  *
- * The structure follows the BNF grammar of yon-language-spec-v0-3.md §5
+ * The structure follows the grammar in parser.mly
  * closely. Each grammar nonterminal has a corresponding type here.
  *)
 
@@ -135,10 +135,10 @@ let prelude_place_names : (string, unit) Hashtbl.t = Hashtbl.create 8
 let prelude_world_names : (string, unit) Hashtbl.t = Hashtbl.create 8
 
 (* The numeric tower's DEFAULT world: bare `Int`/`Number` in user code mean
-   the 64-bit site (Antonio: "Number a 64 bit è il default del linguaggio").
-   The 32-bit twins exist in Num32 and are reached through their own site
-   (and, one day, the Widen functor); on a same-name collision between
-   prelude worlds, the default world's entry wins every bare-name table. *)
+   the 64-bit site: 64-bit Number is the language default. The 32-bit twins
+   exist in Num32 and are reached through their own site; on a same-name
+   collision between prelude worlds, the default world's entry wins every
+   bare-name table. *)
 let prelude_default_world = "Num64"
 
 (* Compilation mode: does the USER compilation carry a manifest (yon.toml)?
@@ -157,7 +157,7 @@ let loc_in_prelude (loc : location) : bool =
   let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
   go 0
 
-(* The containment rule (brief residui costruttore): loc-keyed home of the
+(* The containment rule: loc-keyed home of the
    NON-fun arrows hoisted from a place body — (file, start_line, start_col)
    of the arrow decl -> house name. fun rides fn_home; the other seven forms
    ride the SITE (never the name: two arrows may share a name across houses). *)
@@ -416,7 +416,7 @@ and pattern =
 
 and stmt =
   | SLet of string * expr * location                  (* "be x := e" *)
-  | SAssignHolds of lvalue * expr * location          (* "x holds e" or "x.f holds e" *)
+  | SAssignHolds of lvalue * expr * location          (* internal: no surface form *)
   | SAssignBecomes of lvalue * expr * location        (* "x = e" or "x.f = e" (the `becomes` surface token is retired; this node is internal-only) *)
   | SReturn of expr * location
   | SCall of string * expr list * location            (* function call as statement *)
@@ -696,12 +696,10 @@ type reduction_clause =
   | RcOn of string * param list * stmt list * location
   | RcLet of string * expr * location
 
-(* The runtime materialization policy of a reduction was removed. The
- * distributed semantics now live in the declared geometric morphism (see
- * geom_morphism_decl with gm_adjunction, gm_f_star_exact,
- * gm_f_lower_star_exact). The `reduction_policy` type and its four
- * constructors (direct/sharded/paxos/crdt) no longer exist; the model is
- * geom_morphism + space.with_fold. *)
+(* A reduction carries no runtime materialization policy. The distributed
+ * semantics live in the declared geometric morphism (see geom_morphism_decl
+ * with gm_f_star_exact, gm_f_lower_star_exact) and in the reduction's `fold`
+ * clause. *)
 
 (* Ordering of multi-shot effects.
  *   Sequential : apply the shots one after another in declaration order
@@ -744,11 +742,10 @@ type geom_morphism_decl = {
   gm_pull : fun_decl option;        (* f^* inverse image *)
   gm_push : fun_decl option;        (* f_* direct image *)
   (* Explicitly declared categorical properties. The runtime derives the
-   * cross-space coordination shape from these, replacing the old policy enum.
+   * cross-space coordination shape from these.
    *
-   * adjunction = true means the caller declares that (pull, push) form an
-   * adjoint pair f^* |- f_*. Formally checking the unit/counit is left to the
-   * topos kernel and is not implemented here.
+   * (pull, push) are read as an adjoint pair f^* |- f_*; the unit/counit
+   * are not checked here.
    *
    * f_star_exact = true means f^* preserves finite limits;
    * f_lower_star_exact = true means f_* preserves finite colimits. These guide
@@ -766,9 +763,9 @@ type geom_morphism_decl = {
 type geom_morphism_item_kind =
   | GmItemPull of fun_decl
   | GmItemPush of fun_decl
-  (* Categorical properties declared inside the geom_morphism block. They
-     replace the old policy enum (direct/sharded/paxos/crdt) as the mechanism
-     for declaring distributed semantics. *)
+  (* Categorical properties declared inside the geomorph block. They
+     are the mechanism for declaring distributed semantics (there is no
+     policy enum). *)
   | GmItemExactFLowerStar
 
 (* A topos as a first-class declaration.
@@ -817,10 +814,9 @@ and prop_decl = {
  * objects to objects and morphisms to morphisms, preserving composition and
  * identities. In Yon it is the top-level declaration of a map between topoi.
  *
- * Terminological note: future editions of the language may add other kinds of
- * morphisms (geometric_morphism is already separate; one could imagine
- * lex_morph, regular_morph, etale_morph). For now "morph" is the ordinary
- * case.
+ * Terminological note: "morph" is the ordinary case of a map between
+ * topoi; the geometric morphism (geomorph) is a separate declaration
+ * (geom_morphism_decl).
  *
  * The two aspects (objects, morphisms) are optional:
  *   - if mp_on_object is missing, identity on objects
@@ -922,24 +918,14 @@ type top_decl =
  * The space is a logical runtime heap. sd_world optionally records the world
  * the space belongs to (from the toml), e.g. EU and US under Region.
  *
- * RETIRED model (kept for context, no longer in the record): a `sd_reduction`
- * field once bound the space to a reduction via the `backed by` keyword,
- * mapping a reduction policy to a cross-space transfer policy
- * (strong/idempotent/weak). Both the field and the `backed by` syntax are gone;
- * the current model is described just below. *)
-(* space_decl pulito.
- *
- * Previously `sd_reduction` bound the space to a reduction via the `backed by`
- * keyword, and the compiler mapped the reduction policy
- * (RpDirect/RpSharded/RpEventualCRDT) to a runtime enum
- * (YON_POLICY_STRONG/EVENTUAL/CRDT_MERGE) used for the coordination-shape
- * dispatch.
+ * A space is not bound to a reduction. *)
+(* space_decl.
  *
  * The space has no policy enum. Distributed properties are declared via the
- * geom_morphism that connects it to other spaces. For CRDT semilattices, the
- * only attribute the space itself has is the `fold` (the semilattice operation
- * internal to the topos). Example:
- *   space TALLY with fold "sum_f64"
+ * geomorph that connects it to other spaces. The only attribute the space
+ * itself has besides its name and world is sd_fold (a semilattice operation
+ * internal to the topos); package_layout.space_decls, which builds every
+ * space_decl, sets it to None.
  *)
 and space_decl = {
   sd_name      : string;

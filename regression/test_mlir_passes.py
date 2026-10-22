@@ -311,7 +311,7 @@ REWRITES = [
             # right (R1) has TWO inputs: the composition is generalized to take
             # all of right's inputs -> @C__reduce(%a,%b) is created...
             (r"@C__reduce", True),
-            # ...and the topos.compose_reductions op is consumed (no longer E0803).
+            # ...and the topos.compose_reductions op is consumed.
             (r"topos\.compose_reductions", False),
         ],
         None,

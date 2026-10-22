@@ -1,11 +1,11 @@
 // Yon-in-Yon, seed 4: an object language of INTUITIONISTIC propositions, evaluated in
 // the topos truth-object Omega.
 //
-// The conceptual point Antonio insisted on: in a topos, Omega (the subobject
+// The conceptual point: in a topos, Omega (the subobject
 // classifier) is a HEYTING ALGEBRA (Lawvere-Tierney), not a Boolean one. So the logic
 // of a language that "keeps the categorical structure" is intuitionistic: `heval` is a
 // CATAMORPHISM into Omega, and Omega's operations are the Godel G3 truth tables, the
-// same algebra as the runtime's heyting.ml (fixed from Kleene to G3 this session).
+// same algebra as frontend/heyting.ml.
 //
 // Omega, three-valued: PRESENT=0, ABSENT=1, UNKNOWN=2.
 // The G3 signature, distinct from Kleene/Boolean:

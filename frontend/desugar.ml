@@ -2,14 +2,10 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* desugar.ml — translation from surface Yon (Surface_ast) to Yon Core (Ast).
  *
- * Follows the translation table of yon-core-calculus-v0-1.md §7.
+ * Each surface declaration, statement and expression is translated to
+ * Core terms: place declarations, fun bodies, control flow,
+ * expressions, moves, HITs and cubical forms.
  *
- * This is the first version: handles the constructs needed to run small
- * programs (place declarations, fun bodies, with blocks, basic control
- * flow, base expressions). More advanced constructs (move, view, HIT,
- * cubical types, streams with backpressure) translate to placeholder
- * Core terms; they evaluate but their semantics is incomplete until the
- * interpreter is extended.
  *)
 
 module S = Surface_ast
@@ -232,11 +228,11 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.EComposeWith (h1, h2, _) ->
       free_vars_in_expr bound h1 @ free_vars_in_expr bound h2
   (* General application — e.g. a method call `recv.fold(init, lam)` parses as
-     EApp(EField(recv,"fold"), [init; lam]). Before this case fell through to
-     `| _ -> []`, the receiver and arguments of a nested combinator call inside
-     a lambda body were invisible to capture analysis: an outer lambda whose
-     body contained `ys.fold(...)` never captured `ys`, so the lifted function
-     crashed at emit with "variable 'ys' not in scope". Traversing EApp threads
+     EApp(EField(recv,"fold"), [init; lam]). Without this case, the receiver
+     and arguments of a nested combinator call inside a lambda body would be
+     invisible to capture analysis: an outer lambda whose body contained
+     `ys.fold(...)` would not capture `ys`, and the lifted function would fail
+     at emit with "variable 'ys' not in scope". Traversing EApp threads
      the capture through every nesting level. Over-approximation is safe: the
      caller intersects the result with `current_locals`, so non-local names
      (top-level functions, handles) are filtered out. *)
@@ -361,29 +357,27 @@ let rec desugar_ty (t : S.ty) : C.ty =
        | other -> C.TyPlace other)
   | (S.TySum _ | S.TySumIn _) as sum_ty ->
       (* A surface sum is the point-only HIT determined by its constructors.
-         Its Core carrier is content-addressed by that signature instead of
-         collapsing every distinct sum to the old nominal stub "sum". *)
+         Its Core carrier is content-addressed by that signature, so two
+         distinct sums never share one Core identity. *)
       C.TyPlace (Tyenv.type_tag sum_ty)
   | S.TyList inner -> C.TyPlace ("list_of_" ^ ty_name inner)
   | S.TyMap (_, _) as map_ty ->
       (* Content-address the map carrier by its key and value, like TySum above
-         and TyList to the left, instead of collapsing every distinct map to the
-         nominal stub "map" (which lost k and v, so Map<number,text> and
-         Map<text,number> shared one Core identity). type_tag gives "map_K_V";
-         the runtime layout stays a uniform f64 handle (a Section), only the
-         compile-time identity is now distinct. *)
+         and TyList to the left, so Map<number,text> and Map<text,number> have
+         distinct Core identities (a single nominal "map" would lose k and v).
+         type_tag gives "map_K_V"; the runtime layout is a uniform f64 handle
+         (a Section); only the compile-time identity is distinct. *)
       C.TyPlace (Tyenv.type_tag map_ty)
   | S.TyChannel inner -> C.TyChannel (desugar_ty inner)
   | S.TyUser n when Hashtbl.mem inductive_type_names n ->
       (* A named inductive is carried at runtime as a MerkleTree handle (an f64):
-         that layout is honest, a value is a handle. What was a lie is the
-         identity: reusing `number` conflated Tree and List. Its identity is now
-         its content-addressed type_root (the carrier path, Steps 2+3): the place
-         name `ind_<root>` is distinct per type, and carrier.ml carries it as a
-         Section, so the type surfaces in the MLIR as !topos.section<"ind_<root>">
-         and monomorphization keys on identity rather than collapsing onto f64.
-         Falls back to `number` when the typed env is absent (eval/fuzz) or the
-         type is outside Zona 1 (no root). *)
+         a value is a handle. Its identity is not `number` (that would conflate
+         Tree and List): it is its content-addressed type_root (the carrier
+         path): the place name `ind_<root>` is distinct per type, and
+         carrier.ml carries it as a Section, so the type surfaces in the MLIR
+         as !topos.section<"ind_<root>"> and monomorphization keys on identity
+         rather than collapsing onto f64. Falls back to `number` when the typed
+         env is absent (eval/fuzz) or the type has no type_root. *)
       (match !current_env with
        | Some env ->
            (match Type_root.type_root env (S.TyUser n) with
@@ -407,8 +401,8 @@ let rec desugar_ty (t : S.ty) : C.ty =
        * level, like TyId; populated by the cubical primitives. *)
       C.TyPathP ((i, desugar_ty a), C.Unit, C.Unit)
   | S.TyHeytInt _n ->
-      (* TyHeytInt<N> is opaque to the core AST for now; the real MLIR
-         lowering to tuple<i64, i64> comes later. *)
+      (* TyHeytInt<N> is opaque in Core (TyPlace "heyt_int"); emit types
+         its operations as !topos.heyt_int<64>. *)
       C.TyPlace "heyt_int"
   | S.TyArrow (a, b) ->
       (* preservo
@@ -491,9 +485,8 @@ and curry_lam params body =
   | [] -> body
   | (n, t) :: rest -> C.Lam (n, t, curry_lam rest body)
 
-(* Decode the surface fragment that denotes a type code.  Stage 3a only needs
-   nominal codes; structured and computed universe paths are handled when the
-   general ua transport lowering is introduced. *)
+(* Decode the surface fragment that denotes a type code.  Only nominal codes
+   are decoded; for structured and computed universe paths it returns None. *)
 and expr_as_ty (e : S.expr) : C.ty option =
   match e with
   | S.EVar (name, _) -> Some (C.TyPlace name)
@@ -822,8 +815,8 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.ECall ("transport", [S.ERefl (type_code, _); value], _) ->
       (* Constant type-line transport is a real cubical term.  Its reduction
          goes through Builtins.try_cubical/Cubical.reduce_transport, where a
-         CTBase line computes to the supplied value.  Non-static paths retain
-         the existing surface fallback until Stage 3d lowers ua/Glue lines. *)
+         CTBase line computes to the supplied value.  Non-static paths take
+         the surface fallback (path_not_known). *)
       (match expr_as_ty type_code with
        | Some line_ty -> C.Transp (("__ti", line_ty), desugar_expr value)
        | None -> path_not_known ())
@@ -832,7 +825,7 @@ and desugar_expr (e0 : S.expr) : C.term =
        [S.ECall ("ua", [S.ECall ("idEquiv", [type_code], _)], _); value], _) ->
       (* The endpoints are syntactically recoverable for idEquiv(T), so retain
          the full universe line as TyGlue instead of the lossy __type_glue tag
-         used by Cubical.ua's standalone type-as-term prototype.  Transport
+         used by Cubical.ua's standalone type-as-term form.  Transport
          then crosses the cubical bridge and computes by the Glue forward map. *)
       (match expr_as_ty type_code with
        | Some carrier -> C.Transp (ua_identity_line carrier, desugar_expr value)
@@ -850,7 +843,7 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.ECall (("transport" | "transp"), _, _) -> path_not_known ()
   | S.ECall ("equiv", [f; g; eta; eps], _) ->
       equivalence_term f g eta eps
-  (* ── Presheaf arrow-action + composition (A1.2 / A1.3, surface half) ──
+  (* ── Presheaf arrow-action + composition (surface half) ──
    * The kernel (reduce.ml try_functoriality) recognises the arrow action of an
    * abstract presheaf and its two functoriality laws on the exact reserved-Var
    * markers `__psh_map` / `__compose` / `__id`. These surface forms — plain
@@ -934,7 +927,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         | "filter" -> ("__stream_filter", wrap_fn 1 args)
         | "fold" -> ("__stream_fold", wrap_fn 2 args)
         | "for_every" -> ("__stream_for_every", args)
-        (* The Stream.X prefix is removed. iterate/take/sum_take become bare
+        (* iterate/take/sum_take map to bare stream
          * builtins; to_stream is a semantic no-op (the list is already a
          * stream). *)
         | "iterate" -> ("__stream_iterate", args)
@@ -951,8 +944,8 @@ and desugar_expr (e0 : S.expr) : C.term =
             let list_call = S.ECall ("Sequence__range_to_list", args, S.dummy_loc) in
             ("__stream_from_list", [list_call])
         (* Wire: the cross-Space channel family. Surface Wire.X maps to
-           the runtime Stream__X symbols (the C names stay; renaming the
-           runtime stack is Idraulica v2 territory). The old Stream.X
+           the runtime Stream__X symbols (the C runtime keeps the Stream__
+           names). The Stream.X
            channel spellings are rejected with guidance: Stream is the
            sequence (map/filter/fold), Wire is the transport. *)
         | "Wire__make" -> ("Stream__make", args)
@@ -988,12 +981,12 @@ and desugar_expr (e0 : S.expr) : C.term =
       in
       let args_terms = List.map desugar_expr args' in
       (* A zero-argument CALL is not the same surface as a bare name:
-         f() means "call now", f means "pass by name". The bare C.Var
-         erased that difference and the emitter re-executed the call at
-         every use of the bound result (the re-execution bug family).
+         f() means "call now", f means "pass by name". A bare C.Var
+         would erase that difference, and the emitter would re-execute the
+         call at every use of the bound result.
          Mark the call with a Unit application; the emitter resolves
          App(Var f, Unit) to one func.call for user functions and
-         degrades to the old bare-Var behavior for builtins. *)
+         treats it as the bare Var for builtins. *)
       (match args_terms with
        | [] -> C.App (C.Var name', C.Unit)
        | _ -> curry_apply (C.Var name') args_terms)
@@ -1062,7 +1055,7 @@ and desugar_expr (e0 : S.expr) : C.term =
       curry_apply (C.Var op_name) [desugar_expr e1; desugar_expr e2]
   | S.EParen (e, _) -> desugar_expr e
   | S.EAll (place_name, _cond, _) ->
-      (* "all P where c" — placeholder for the prototype *)
+      (* unreachable: EAll has no surface form *)
       C.App (C.Var "__all", C.Var place_name)
   | S.EIn (e, ctx, _) ->
       C.App (C.App (C.Var "__in", desugar_expr e), C.Var ctx)
@@ -1488,10 +1481,7 @@ and desugar_literal (l : S.literal) : C.term =
   | S.LitString s -> Builtins.encode_string s
   (* LitBool is encoded as a classic bool symbol for compatibility with the i1
    * flow. Semantically the type is proposition (see tycheck.ml and tyenv
-   * simple_ty_compatible), but the value at the MLIR level is i1.
-   *
-   * Note: prop_eval.ml already evaluates LitBool via Heyting.from_bool on the
-   * interpreter side, independently of this encoding. *)
+   * simple_ty_compatible), but the value at the MLIR level is i1. *)
   | S.LitBool b -> Builtins.encode_bool b
   | S.LitDuration (n, u) ->
       (* a duration IS a number of milliseconds. 100ms=100,
@@ -1613,8 +1603,8 @@ and subst_var_in_cond (old_n : string) (new_n : string) (c : S.condition) : S.co
  *
  * - `old_n(args)` -> `new_n(cap1, cap2, ..., args)`
  * - `old_n` (bare, as the argument of a higher-order function): a wrapper
- *   closure (skipped for now, since it would need currying for use as a
- *   function pointer). Only the direct call is handled. *)
+ *   closure is not built, since it would need currying for use as a
+ *   function pointer. Only the direct call is handled. *)
 let rec inject_captured_args (old_n : string) (new_n : string)
     (captured : string list) (loc_default : S.location) (e : S.expr) : S.expr =
   let go = inject_captured_args old_n new_n captured loc_default in
@@ -1717,7 +1707,7 @@ and subst_evar_in_stmt (name : string) (repl : S.expr) (s : S.stmt) : S.stmt =
 (* A statement list is translated to a chain of let bindings and
  * applications, ending in Unit (or the value of a return statement).
  *
- * For simplicity in the prototype, we translate each stmt to a Core
+ * For simplicity, we translate each stmt to a Core
  * term and sequence them via dummy lambda applications:
  *   stmts = s1; s2; s3; return e
  * becomes
@@ -1987,10 +1977,10 @@ and desugar_stmt (s : S.stmt) : C.term =
        * them into Stream__send. *)
       C.Emit (desugar_expr e)
   | S.SForces (stage, cond, body, _) ->
-      (* Kripke-Joyal forcing (now with semantics, not ignored): "stage forces
+      (* Kripke-Joyal forcing: "stage forces
        * cond" builds a directed cell stage -> c_cond into the forced sub-object,
        * registered for compile-time membership (stage_forces). Existence of the
-       * cell IS the forcing (user's answer: existence suffices, compile-time).
+       * cell IS the forcing (existence suffices, at compile time).
        * The body still runs; alpha keeps the cell a silicon no-op. The cond code
        * and witness are named from the condition's syntactic shape. *)
       let cond_code =
@@ -2111,8 +2101,7 @@ type desugar_result = {
   geom_morphisms : S.geom_morphism_decl list;
   (* The morphism-to-morphism maps declared inside
      `morph X from A to B { on_morphism N via M }`. For each morph name, the
-     list of pairs (src_op_name, tgt_op_name). Kept for future automatic
-     dispatch of cross-topos operations. *)
+     list of pairs (src_op_name, tgt_op_name), accumulated as declared. *)
   morphism_maps : (string * (string * string) list) list;
   (* The morphisms declared in the program, accumulated for post-processing in
      desugar_program: for each morph M and each space S we synthesize a mangled
@@ -2211,8 +2200,8 @@ let desugar_reduction_decl (rd : S.reduction_decl) : C.reduction_decl =
     C.r_fold_name = rd.S.rd_fold_name; }
 
 (* desugar_world_decl: reify a surface world into the Core site C(W). The
- * topology J is read off the CONSTRUCTION (Stage 1 of the Yoneda rebuild made
- * the world a Core citizen; here TopWorld stops being no-op and fills it):
+ * topology J is read off the CONSTRUCTION (the world is a Core citizen;
+ * TopWorld fills it here):
  *
  *   world C = A + B        -> GenCoproduct [A; B]   (disjoint cover)
  *   world Q = W / Rel      -> GenQuotient (W, Rel)  (the R-classes cover)
@@ -2256,10 +2245,10 @@ let desugar_world_decl (wd : S.world_decl) : C.world_decl =
  *
  * for every / in sequence over / repeat at most / forever are lowered
  * STRUCTURALLY onto the verified primitives: while, iter and Space cells
- * (the one mutation mechanism of 1.0). `x = e` promotes the binding
+ * (the one mutation mechanism). `x = e` promotes the binding
  * of x to a Space cell: `be x := e0` -> `be x := Space.make(e0)`,
  * every read of x -> `Space.get(x)`, every `x = e` -> `Space.set(x, e)`.
- * The promotion is uniform per function (every binding of a becomes-target
+ * The promotion is uniform per function (every binding of an assigned
  * name allocates a cell), which makes it shadowing-safe; lambda parameters
  * shadow as usual and are excluded inside their bodies.
  * =================================================================== *)
@@ -2348,9 +2337,9 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
          cells. Same cell technique as v1_lower_foreach below. *)
       v1_lower_foreach_stream x e (body b) loc
   | S.SForEvery (_kind, x, e, b, loc) ->
-      (* 1.0 executes both for-every kinds SEQUENTIALLY over a List;
+      (* Both for-every kinds execute SEQUENTIALLY over a List;
          parallelism (and the `when here` space filter) are declared
-         intent, not yet a runtime distinction. *)
+         intent, with no runtime distinction. *)
       v1_lower_foreach x e (body b) loc
   | S.SInSequence (x, e, b, loc) ->
       v1_lower_foreach x e (body b) loc
@@ -2518,7 +2507,7 @@ and v1_lower_stream_fold recv init f loc =
        loc) ],
    getacc ())
 
-(* ---- pass 2: becomes promotion ---- *)
+(* ---- pass 2: `x = e` promotion ---- *)
 let rec v1_targets_stmts acc ss = List.fold_left v1_targets_stmt acc ss
 and v1_targets_stmt acc st =
   match st with
@@ -2644,7 +2633,7 @@ and v1_cell_stmt cells st =
       S.SRepeat (n, rb b, (match oth with None -> None | Some o -> Some (rb o)), loc)
 
 (* Per-function entry point: loop lowering, then cell promotion (including
- * the prologue that promotes becomes-target PARAMETERS to cells). *)
+ * the prologue that promotes assigned PARAMETERS to cells). *)
 let v1_lower_body (params : string list) (body : S.stmt list) : S.stmt list =
   let body1 = List.concat_map v1_lower_stmt body in
   let cells = v1_targets_stmts V1SS.empty body1 in
@@ -2671,7 +2660,7 @@ let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
      function like `fun f(R: Space) { ... fold(fun(a,b) => Space.set(R, ...)) }`
      would fail with "variable R not in scope". *)
   let param_names = List.map (fun p -> p.S.param_name) fn.S.fn_params in
-  (* surface sugar: loops + becomes lowering BEFORE Core desugaring. *)
+  (* surface sugar: loops + `x = e` lowering BEFORE Core desugaring. *)
   let lowered_body = v1_lower_body param_names fn.S.fn_body in
   let body = desugar_stmts_with_locals param_names lowered_body in
   let lam = curry_lam params body in
@@ -2964,7 +2953,7 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
       in
       (* Props with a body become fun_decls with return type proposition.
        * Abstract props (without a body) stay metadata. The body is a Heyting
-       * expression (evaluated on the semantics side via prop_eval). *)
+       * expression. *)
       List.fold_left
         (fun acc (pr : S.prop_decl) ->
           match pr.pr_body_opt with
@@ -3954,12 +3943,9 @@ let desugar_program ?(env : Tyenv.env option = None)
    *     return M(x)
    *   }
    * This lets the syntax `M(x) in S` be lowered to a standard runtime call,
-   * with the target space name preserved in the function name for future
-   * extensions (cross-space announcement, dispatch coordination via gm).
+   * with the target space name carried in the function name.
    *
-   * Note: for now the body is a simple call to M. The runtime announcement
-   * of begin_cross_space_op via geom_morphism can be added as extra body
-   * later. *)
+   * The body is a call to M. *)
   let res_with_morph_in_S =
     List.fold_left (fun acc (mp : S.morph_decl) ->
       match mp.S.mp_on_object with

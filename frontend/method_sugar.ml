@@ -121,7 +121,7 @@ let first_param_place (fd : S.fun_decl) : string option =
   | p :: _ -> (match p.S.param_ty with S.TyUser pl -> Some pl | _ -> None)
   | [] -> None
 
-(* ─── Qualified naming: THE HOUSE GIVES THE NAME (Antonio's doctrine) ───
+(* ─── Qualified naming: THE HOUSE GIVES THE NAME ───
    A fun hoisted from `place P { ... }` carries fn_home = Some P and its
    canonical name is P__name (the same mangling the receiver dispatch and
    the dot-call already speak: `P.name(args)` parses to `P__name(args)`).
