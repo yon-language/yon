@@ -2565,7 +2565,6 @@ def test_a_handled_nullary_operation_returns_the_handler_value(tmp_path):
 
 # === the runtime, the prelude and the self-host -----------------------
 
-SELFHOST_runtime = ROOT / "selfhost" / "selfhost_compiler.yon"
 
 
 def _build_run_runtime(tmp_path, entry, timeout=30, env=None):
@@ -3438,12 +3437,9 @@ place Entry {
 # --- the compiler written in Yon: names are compared as names ---------------------------
 
 @pytest.fixture(scope="module")
-def selfhost_compiler_runtime(tmp_path_factory):
-    d = tmp_path_factory.mktemp("selfhost")
-    exe = d / "stage1"
-    rc, out = _compile(SELFHOST_runtime, exe, timeout=300)
-    assert rc == 0, out
-    return exe
+def selfhost_compiler_runtime(selfhost_compiler_bin):
+    # the compiler in Yon, built once for the session (conftest)
+    return selfhost_compiler_bin
 
 
 def _selfhost_run_runtime(tmp_path, compiler, src):
