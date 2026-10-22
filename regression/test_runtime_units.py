@@ -21,7 +21,7 @@ CC = os.environ.get("YONC_CC", "gcc")
 
 # Same runtime object set the end-to-end pipeline links against.
 _RT_NAMES = [
-    "yon_rt.o", "yon_mmap.o", "leech_orbits.o", "yon_arena.o", "yon_curtis_canon.o",
+    "yon_rt.o", "yon_mmap.o", "leech_orbits.o", "yon_arena.o", "yon_curtis_canon.o", "yon_trie.o", "yon_leech_store.o",
     "xleech2_coord.o", "xleech2_heap.o", "xleech2_mphf.o",
     "vendor/mmgroup/mat24_tables.o", "vendor/mmgroup/mat24_functions.o",
     "vendor/mmgroup/gen_leech.o", "vendor/mmgroup/gen_leech3.o",
@@ -102,6 +102,13 @@ C_UNIT_TESTS = [
     # changes a type (all 2^25 values), so frames from references hold v and
     # -v together; the 26-octad chain is the precomputed Curtis projection.
     ("xrel_frame",    "test_unit_xrel_frame.c",    b"XREL_FRAME: PASS",    True),
+    # The one persistent trie behind HashMap/HashSet (FNV heap, 32-bit hash
+    # route) and XRelMap/XRelSet (Leech node store, lattice route), plus a
+    # 3-bit route that forces chains: against a model, persistence of older
+    # roots, the canonical shape (another order, an equal trie; on the FNV
+    # heap the same node), union and intersection by merging, the lattice
+    # route of every point, the store's (generation, point) names.
+    ("trie",          "test_unit_trie.c",          b"TRIE: PASS",          True),
 ]
 
 

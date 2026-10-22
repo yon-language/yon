@@ -52,7 +52,7 @@ MLIRTRANS = _tool("mlir-translate", "YONC_MLIR_TRANSLATE")
 LLC = _tool("llc", "YONC_LLC")
 CC = os.environ.get("YONC_CC", "gcc")
 _RT_NAMES = [
-    "yon_rt.o", "yon_mmap.o", "leech_orbits.o", "yon_arena.o", "yon_curtis_canon.o",
+    "yon_rt.o", "yon_mmap.o", "leech_orbits.o", "yon_arena.o", "yon_curtis_canon.o", "yon_trie.o", "yon_leech_store.o",
     "xleech2_coord.o", "xleech2_heap.o", "xleech2_mphf.o",
     "vendor/mmgroup/mat24_tables.o", "vendor/mmgroup/mat24_functions.o",
     "vendor/mmgroup/gen_leech.o", "vendor/mmgroup/gen_leech3.o",

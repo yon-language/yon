@@ -54,7 +54,7 @@ REPO_URL="${YON_REPO_URL:-https://github.com/yon-language/yon.git}"
 PREFIX="${YON_PREFIX:-$HOME/.yon}"
 MODE="clone"; DO_EDITOR=1; DO_PROFILE=1; FORCE=0; CHECK_ONLY=0
 FIVE_EXE="yoner_emit_mlir.exe yon_lsp.exe yonfmt.exe yon_lint.exe yon_doc.exe"
-RUNTIME_OBJS="yon_rt.o yon_mmap.o leech_orbits.o yon_arena.o yon_curtis_canon.o xleech2_coord.o xleech2_heap.o xleech2_mphf.o vendor/mmgroup/mat24_tables.o vendor/mmgroup/mat24_functions.o vendor/mmgroup/gen_leech.o vendor/mmgroup/gen_leech3.o vendor/mmgroup/gen_leech_type.o vendor/mmgroup/gen_leech_reduce.o vendor/mmgroup/gen_xi_functions.o vendor/mmgroup/mm_group_n.o vendor/mmgroup/mm_index.o"
+RUNTIME_OBJS="yon_rt.o yon_mmap.o leech_orbits.o yon_arena.o yon_curtis_canon.o yon_trie.o yon_leech_store.o xleech2_coord.o xleech2_heap.o xleech2_mphf.o vendor/mmgroup/mat24_tables.o vendor/mmgroup/mat24_functions.o vendor/mmgroup/gen_leech.o vendor/mmgroup/gen_leech3.o vendor/mmgroup/gen_leech_type.o vendor/mmgroup/gen_leech_reduce.o vendor/mmgroup/gen_xi_functions.o vendor/mmgroup/mm_group_n.o vendor/mmgroup/mm_index.o"
 
 while [ $# -gt 0 ]; do case "$1" in
   --local) MODE="local"; shift ;;

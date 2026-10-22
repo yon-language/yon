@@ -46,7 +46,10 @@ What distinguishes them is what they make cheap:
   copies that path; bounded only by memory, its nodes spill across heaps
   transparently. A key is identified by its bits, the identity of the heap:
   `-0.0` and `0.0` are two keys, a NaN key finds itself. Use it as the
-  general key→value store.
+  general key→value store. `HashSet.union` and `HashSet.intersect` merge
+  the two tries rather than adding one element at a time: a subtree the two
+  sets share is reused whole, and the result is the same node the elements
+  would have built one by one.
 - **VoyagerList**, the small, precious store: every element is sealed in
   a Golay codeword and healed on read. Use it where corruption is worse
   than cost, configuration, ledger heads, calibration constants.
