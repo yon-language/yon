@@ -4940,13 +4940,40 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
            emit_line e (Printf.sprintf
                           "%s = llvm.mlir.addressof @yon_space_name_%s : !llvm.ptr"
                           v_sp sp);
+           let sel = match args with
+             | a0 :: _ -> (match Builtins.decode_number a0 with
+                           | Some f -> Some (int_of_float f) | None -> None)
+             | [] -> None in
+           (match (match sel with
+                   | Some n -> Hashtbl.find_opt Surface_ast.rpc_sigs (sp, n)
+                   | None -> None) with
+            | Some _ ->
+                (* a typed call: the signature the caller declares rides with
+                   the request, and every argument and the result cross by
+                   their type *)
+                let v_sig = fresh_ssa e in
+                emit_line e (Printf.sprintf
+                  "%s = llvm.mlir.addressof @yon_rpc_sig_%s_%d : !llvm.ptr"
+                  v_sig sp (Option.get sel));
+                let user = List.tl arg_vals in
+                let pad = List.init (4 - List.length user) (fun _ ->
+                  let z = fresh_ssa e in
+                  emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" z);
+                  z) in
+                let v = fresh_ssa e in
+                emit_line e (Printf.sprintf
+                  "%s = func.call @yon_rt_rpc2_invoke_typed(%s, %s, %s, %s) : \
+                   (!llvm.ptr, f64, !llvm.ptr, f64, f64, f64, f64) -> f64"
+                  v v_sp (List.hd arg_vals) v_sig (String.concat ", " (user @ pad)));
+                (v, "f64")
+            | None ->
            let v = fresh_ssa e in
            let f64s =
              String.concat ", " (List.map (fun _ -> "f64") arg_vals) in
            emit_line e (Printf.sprintf
                           "%s = func.call @%s(%s, %s) : (!llvm.ptr, %s) -> f64"
                           v runtime v_sp (String.concat ", " arg_vals) f64s);
-           (v, "f64")
+           (v, "f64"))
        (* stdlib builtin call (skipped if the name matches a place op, which
         * takes precedence). *)
        | Some (fname, args) when
@@ -5858,7 +5885,18 @@ let emit_srv_path_globals (e : emitter) (space_imports : string list) : unit =
     emit_line e (Printf.sprintf
                    "llvm.mlir.global internal constant @%s(dense<[%s]> : tensor<%d x i8>) : !llvm.array<%d x i8>"
                    sym2 chars2 (n2 + 1) (n2 + 1))
-  ) space_imports
+  ) space_imports;
+  (* the signature of each typed call between processes, as the caller
+     declares it (read by yon_rt_rpc2_invoke_typed) *)
+  let sigs = List.sort compare
+      (Hashtbl.fold (fun k v acc -> (k, v) :: acc) Surface_ast.rpc_sigs []) in
+  List.iter (fun ((sp, sel), words) ->
+    let n = List.length words in
+    emit_line e (Printf.sprintf
+                   "llvm.mlir.global internal constant @yon_rpc_sig_%s_%d(dense<[%s]> : tensor<%d x i64>) : !llvm.array<%d x i64>"
+                   sp sel (String.concat ", " (List.map Int64.to_string words)) n n)) sigs;
+  if sigs <> [] then
+    emit_line e "func.func private @yon_rt_rpc2_invoke_typed(!llvm.ptr, f64, !llvm.ptr, f64, f64, f64, f64) -> f64"
 
 let emit_main (e : emitter) (funcs : (string * func_sig) list)
     (spaces : Surface_ast.space_decl list)
@@ -5934,23 +5972,31 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
      so producer and consumer agree without exchanging anything. Runs before
      maybe_serve so a serve-mode producer has its descriptors ready. *)
   (* the types the wires carry, each under its root with the roots of its
-     parts, so both ends rebuild a value by its type *)
-  List.iteri (fun i (root, (kind, kids)) ->
-    let v_kids = fresh_ssa e in
-    (if kids = [] then
-       emit_line e (Printf.sprintf "%s = llvm.mlir.zero : !llvm.ptr" v_kids)
-     else
-       emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @yon_wire_kids_%d : !llvm.ptr"
-                      v_kids i));
-    let v_root = fresh_ssa e in
-    emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64" v_root root);
-    let v_kind = fresh_ssa e in
-    emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_kind kind);
-    let v_n = fresh_ssa e in
-    emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_n (List.length kids));
-    emit_line e (Printf.sprintf
-                   "func.call @yon_rt_register_type(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> ()"
-                   v_root v_kind v_n v_kids)) (wire_types_sorted ());
+     parts, so both ends rebuild a value by its type; and the signature of
+     every operation a call from another process can reach. Numbers only: a
+     root crosses as two exact 32-bit halves. *)
+  let num x =
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.constant %.1f : f64" v x);
+    v in
+  let halves r =
+    [ Int64.to_float (Int64.shift_right_logical r 32);
+      Int64.to_float (Int64.logand r 0xffffffffL) ] in
+  let call f xs =
+    let vs = List.map num xs in
+    emit_line e (Printf.sprintf "func.call @%s(%s) : (%s) -> ()" f
+                   (String.concat ", " vs)
+                   (String.concat ", " (List.map (fun _ -> "f64") vs))) in
+  List.iter (fun (root, (kind, kids)) ->
+    call "yon_rt_wire_type" (halves root @ [float_of_int kind; float_of_int (List.length kids)]);
+    List.iteri (fun i k ->
+      call "yon_rt_wire_type_part" (halves root @ [float_of_int i] @ halves k)) kids)
+    (wire_types_sorted ());
+  List.iter (fun (name, words) ->
+    List.iteri (fun i w ->
+      call "yon_rt_register_op_word" ([float_of_int (op_sel name); float_of_int i] @ halves w))
+      words)
+    (List.sort compare (Hashtbl.fold (fun k v acc -> (k, v) :: acc) Surface_ast.op_sigs []));
   (* Register the declared geometric morphisms so the later
      begin_cross_space_op finds them and uses the categorical derivation. *)
   emit_geom_morphism_bootstrap e geom_morphisms spaces;
@@ -6799,8 +6845,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_blank e;
   (* the producers register at startup in every program (main does it) *)
   emit_line e "func.func private @yon_rt_register_producer(f64, f64, f64, f64) -> ()";
-  if Hashtbl.length Surface_ast.wire_types > 0 then
-    emit_line e "func.func private @yon_rt_register_type(i64, i32, i32, !llvm.ptr) -> ()";
+  emit_line e "func.func private @yon_rt_wire_type(f64, f64, f64, f64) -> ()";
+  emit_line e "func.func private @yon_rt_wire_type_part(f64, f64, f64, f64, f64) -> ()";
+  emit_line e "func.func private @yon_rt_register_op_word(f64, f64, f64, f64) -> ()";
   (* Always emitted, regardless of the stdlib, because the __section_X
      constructors and the field_load pre-walk of the lowering need them. *)
   if places <> [] then begin
@@ -6878,15 +6925,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
      when a Stream__ operation is used, so there is no duplicate here. *)
   (* For each declared place, emit the constructor __section_<Place>:
      alloca payload, field stores, yon_rt_section call. *)
-  (* the parts of each type a wire carries: one global array of roots per
-     type, addressed at startup by yon_rt_register_type *)
-  List.iteri (fun i (_, (_, kids)) ->
-    if kids <> [] then
-      let n = List.length kids in
-      emit_line e (Printf.sprintf
-                     "llvm.mlir.global internal constant @yon_wire_kids_%d(dense<[%s]> : tensor<%d x i64>) : !llvm.array<%d x i64>"
-                     i (String.concat ", " (List.map Int64.to_string kids)) n n))
-    (wire_types_sorted ());
   if places <> [] then begin
     emit_line e "// Place constructors __section_<X> — alloca payload via yon_rt_section";
     List.iter (fun (pd : C.place_decl) ->

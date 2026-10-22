@@ -2678,6 +2678,7 @@ typedef struct {
     char              reply_name[128];
     yon_rpc2_reply_t *rep;
     yon_rpc2_queue_t *q;
+    int               rings;        /* the session's argument and result rings are open */
 } yon_rpc2_session_t;
 
 #define YON_RPC2_MAX_SESSIONS 16
@@ -2997,9 +2998,23 @@ double Spawn__join_stream(double id) {
  * then wait on the private reply channel. -777.0 = unreachable/failed (the
  * language layer turns the sentinel into a clear English error; the in-band
  * sentinel itself is scheduled to become a framed status in a later layer). */
+static double rpc2_call(const char *space_name, double selector,
+                        double argc, const double *args,
+                        uint32_t reply_timeout_ms,
+                        void (*after_enqueue)(void *), void *ctx);
+
 double yon_rt_rpc2_call_named(const char *space_name, double selector,
                               double argc, const double *args,
                               uint32_t reply_timeout_ms) {
+    return rpc2_call(space_name, selector, argc, args, reply_timeout_ms, NULL, NULL);
+}
+
+/* One call: the request enqueued, then after_enqueue (a typed call sends its
+ * framed arguments there, while the server reads them), then the reply. */
+static double rpc2_call(const char *space_name, double selector,
+                        double argc, const double *args,
+                        uint32_t reply_timeout_ms,
+                        void (*after_enqueue)(void *), void *ctx) {
     yon_rpc2_session_t *s = yon_rpc2_session(space_name);
     if (!s || !s->q || !s->rep) return -777.0;
     yon_rpc2_req_t req;
@@ -3014,6 +3029,7 @@ double yon_rt_rpc2_call_named(const char *space_name, double selector,
 
     if (yon_rpc2_enqueue(s->q, &req, YON_RPC2_ENQ_TIMEOUT_MS) != 0)
         return -777.0;
+    if (after_enqueue) after_enqueue(ctx);
 
     struct timespec dl;
     yon_rpc2_deadline(&dl, reply_timeout_ms);
@@ -3042,6 +3058,9 @@ double yon_rt_rpc2_call_named(const char *space_name, double selector,
     pthread_mutex_unlock(&s->rep->mu);
     return -777.0;
 }
+
+#define YON_RPC2_TYPED 0x100u   /* argc of a typed request: this flag | the framed count */
+static void rpc2_serve_typed(const yon_rpc2_req_t *req);
 
 /* ---- Strato 1: serve loop, name-keyed spawn/lifecycle, named invoke ---- */
 
@@ -3119,6 +3138,10 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
                 yon_rt_wire_buf_free(&msg);
                 yon_rt_stream_shm_close_write_f64(attach);
             }
+            continue;
+        }
+        if (req.argc & YON_RPC2_TYPED) {
+            rpc2_serve_typed(&req);
             continue;
         }
         double r = __yon_dispatch((double)req.selector,
@@ -3314,6 +3337,187 @@ double yon_rt_rpc2_invoke_named4(const char *sp, double sel, double x, double y,
                                  double z, double w) {
     double a[4] = { x, y, z, w };
     return yon_rt_rpc2_invoke_named_n(sp, sel, 4.0, a);
+}
+
+/* ---- Typed calls: arguments and result by their type ----
+ *
+ * The signature of an operation, as each side declares it, is an array of
+ * i64: [0] the signature root (the hash of the roots of the result and of the
+ * arguments), [1] the number of arguments n, [2] the result's type root, [3]
+ * 1 if the result travels as a frame, then for each argument its type root
+ * and 1 if it travels as a frame. A number travels as itself in the request;
+ * any other value as a frame on the session's argument ring, and a framed
+ * result on its result ring, both byte rings in pieces. The request carries
+ * the caller's signature root; the server answers only when it is its own,
+ * so two Spaces exchange a call only on the same types. */
+
+static uint32_t rpc2_ring(const yon_rpc2_session_t *s, int result) {
+    uint32_t base = (uint32_t)((s->nonce * 2654435761ull) >> 32) | 0x80000000u;
+    return (base & ~1u) | (result ? 1u : 0u);
+}
+
+typedef struct {
+    yon_rpc2_session_t *s;
+    const uint64_t     *sig;
+    const double       *args;
+    int                 err;
+} rpc2_args_t;
+
+static void rpc2_send_args(void *p) {
+    rpc2_args_t *c = (rpc2_args_t *)p;
+    int ch = yon_rt_shm_slot_of(rpc2_ring(c->s, 0));
+    yon_wire_buf_t msg = { 0 };
+    for (uint64_t i = 0; i < c->sig[1]; i++) {
+        if (!c->sig[5 + 2 * i]) continue;
+        if (ch < 0 || yon_rt_wire_encode(&msg, c->sig[4 + 2 * i], c->args[i]) != 0
+            || yon_rt_stream_shm_send_message(g_shm_stream_handles[ch], msg.p, msg.len) != 0) {
+            c->err = 1;
+            break;
+        }
+    }
+    yon_rt_wire_buf_free(&msg);
+}
+
+static void rpc2_refused(const char *space, double sel) {
+    fprintf(stderr,
+            "error: cross-Space call refused — Space '%s' declares the types of "
+            "operation %.0f differently (their signature roots differ)\n", space, sel);
+    exit(3);
+}
+
+double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *sig,
+                                double a1, double a2, double a3, double a4) {
+    double user[4] = { a1, a2, a3, a4 };
+    uint32_t reply_ms = 60000u;
+    if (!yon_rpc2_session_exists(space)) {
+        double pid = yon_rt_rpc2_spawn_server(space);
+        reply_ms = (pid >= 0.0) ? 10000u : 3000u;
+    }
+    yon_rpc2_session_t *s = yon_rpc2_session(space);
+    if (!s) return -777.0;
+    uint32_t framed = sig[3] ? 1u : 0u;
+    for (uint64_t i = 0; i < sig[1]; i++) framed += sig[5 + 2 * i] ? 1u : 0u;
+    if (framed && !s->rings) {
+        if (yon_rt_stream_shm_open_sized_f64(rpc2_ring(s, 0), 1.0, 0.0) < 0.0
+            || yon_rt_stream_shm_open_sized_f64(rpc2_ring(s, 1), 1.0, 0.0) < 0.0)
+            return -777.0;
+        s->rings = 1;
+    }
+    double req[8] = { 0 };
+    for (uint64_t i = 0; i < sig[1] && i < 4; i++)
+        req[i] = sig[5 + 2 * i] ? 0.0 : user[i];
+    req[4] = (double)rpc2_ring(s, 0);
+    req[5] = (double)rpc2_ring(s, 1);
+    req[6] = (double)(uint32_t)(sig[0] >> 32);
+    req[7] = (double)(uint32_t)sig[0];
+    uint32_t n_framed_args = framed - (sig[3] ? 1u : 0u);
+    rpc2_args_t ctx = { s, sig, user, 0 };
+    double argc = (double)(YON_RPC2_TYPED | n_framed_args);
+    double r = rpc2_call(space, sel, argc, req, reply_ms,
+                         n_framed_args ? rpc2_send_args : NULL, &ctx);
+    if (r == -777.0 && yon_rpc2_recover(space)) {
+        ctx.err = 0;
+        r = rpc2_call(space, sel, argc, req, 10000u,
+                      n_framed_args ? rpc2_send_args : NULL, &ctx);
+    }
+    if (r == YON_WIRE_TYPE_REFUSED) rpc2_refused(space, sel);
+    if (r == -777.0 || ctx.err) {
+        fprintf(stderr, "error: cross-Space call failed — Space '%s' did not "
+                        "answer or the operation is not exported\n", space);
+        return -777.0;
+    }
+    if (!sig[3]) return r;
+    /* the result, as a frame on the result ring */
+    yon_wire_buf_t msg = { 0 };
+    int ch = yon_rt_shm_slot_of(rpc2_ring(s, 1));
+    double v;
+    if (ch < 0 || yon_rt_stream_shm_recv_message(g_shm_stream_handles[ch], &msg) != 0
+        || yon_rt_wire_decode(msg.p, msg.len, YON_HEAP_ID_DEFAULT, sig[2], &v) != 0) {
+        fprintf(stderr, "error: cross-Space call — the result of operation %.0f "
+                        "could not be rebuilt as the declared type\n", sel);
+        exit(3);
+    }
+    yon_rt_wire_buf_free(&msg);
+    return v;
+}
+
+/* The operations of a binary a typed call can reach: selector -> signature. */
+#define YON_MAX_OPS 256u
+#define YON_OP_WORDS (4u + 2u * 4u)
+static struct { uint32_t sel; uint64_t sig[YON_OP_WORDS]; } g_ops[YON_MAX_OPS];
+static uint32_t g_n_ops = 0;
+
+/* One word of an operation's signature, as the lowered code registers it:
+ * numbers only, the word as two 32-bit halves. */
+void yon_rt_register_op_word(double sel, double i, double hi, double lo) {
+    uint32_t k = 0;
+    while (k < g_n_ops && g_ops[k].sel != (uint32_t)sel) k++;
+    if (k == g_n_ops) {
+        if (g_n_ops >= YON_MAX_OPS) return;
+        g_ops[k].sel = (uint32_t)sel;
+        memset(g_ops[k].sig, 0, sizeof g_ops[k].sig);
+        g_n_ops++;
+    }
+    if ((uint32_t)i < YON_OP_WORDS) g_ops[k].sig[(uint32_t)i] = yon_root_of_halves(hi, lo);
+}
+
+static const uint64_t *rpc2_op(uint32_t sel) {
+    for (uint32_t i = 0; i < g_n_ops; i++)
+        if (g_ops[i].sel == sel) return g_ops[i].sig;
+    return NULL;
+}
+
+/* The server's half of a typed call. */
+static void rpc2_serve_typed(const yon_rpc2_req_t *req) {
+    uint32_t n_framed = req->argc & 0xFFu;
+    uint32_t ring_a = (uint32_t)req->args[4], ring_r = (uint32_t)req->args[5];
+    uint64_t awaited = yon_root_of_halves(req->args[6], req->args[7]);
+    const uint64_t *sig = rpc2_op(req->selector);
+    int framed = n_framed > 0 || (sig && sig[3]);
+    if (framed) {   /* the rings exist only once a call of the session framed a value */
+        yon_rt_stream_shm_open_sized_f64(ring_a, 0.0, 0.0);
+        yon_rt_stream_shm_open_sized_f64(ring_r, 0.0, 0.0);
+    }
+    int cha = yon_rt_shm_slot_of(ring_a), chr = yon_rt_shm_slot_of(ring_r);
+    yon_wire_buf_t msg = { 0 };
+    if (!sig || sig[0] != awaited || (framed && (cha < 0 || chr < 0))) {
+        /* refused: the caller's framed arguments are read and dropped, so
+           the ring is clean for its next call */
+        for (uint32_t i = 0; i < n_framed && cha >= 0; i++)
+            if (yon_rt_stream_shm_recv_message(g_shm_stream_handles[cha], &msg) != 0) break;
+        yon_rt_wire_buf_free(&msg);
+        fprintf(stderr, "error: a call to operation %u awaits signature root %016llx, "
+                "and this Space declares %016llx: refused\n", (unsigned)req->selector,
+                (unsigned long long)awaited, (unsigned long long)(sig ? sig[0] : 0));
+        yon_rt_rpc2_reply(req, YON_WIRE_TYPE_REFUSED);
+        return;
+    }
+    double a[4] = { req->args[0], req->args[1], req->args[2], req->args[3] };
+    for (uint64_t i = 0; i < sig[1] && i < 4; i++) {
+        if (!sig[5 + 2 * i]) continue;
+        if (yon_rt_stream_shm_recv_message(g_shm_stream_handles[cha], &msg) != 0
+            || yon_rt_wire_decode(msg.p, msg.len, YON_HEAP_ID_DEFAULT, sig[4 + 2 * i], &a[i]) != 0) {
+            yon_rt_wire_buf_free(&msg);
+            yon_rt_rpc2_reply(req, YON_WIRE_TYPE_REFUSED);
+            return;
+        }
+    }
+    double r = __yon_dispatch((double)req->selector, a[0], a[1], a[2], a[3]);
+    if (!sig[3]) {
+        yon_rt_wire_buf_free(&msg);
+        yon_rt_rpc2_reply(req, r);
+        return;
+    }
+    /* a framed result: answered first, then sent, so the caller drains a
+       result longer than the ring while it is written */
+    yon_rt_rpc2_reply(req, 0.0);
+    if (yon_rt_wire_encode(&msg, sig[2], r) != 0) {
+        uint8_t none[YON_WIRE_HDR_BYTES] = { 0 };
+        yon_rt_stream_shm_send_message(g_shm_stream_handles[chr], none, sizeof none);
+    } else {
+        yon_rt_stream_shm_send_message(g_shm_stream_handles[chr], msg.p, msg.len);
+    }
+    yon_rt_wire_buf_free(&msg);
 }
 
 /* `--serve2 <SpaceName>` detection, mirroring yon_rt_should_serve (v1):
@@ -7412,27 +7616,50 @@ double yon_rt_bits_xor_64(double a, double b) {
 #define YON_WIRE_MAX_FIELDS 64u
 
 typedef struct {
-    uint64_t        root;
-    uint32_t        kind;   /* YON_WIRE_KIND_* */
-    uint32_t        n;      /* fields of a place; 1 for a list or set; 2 for a map */
-    const uint64_t *kids;   /* their type roots, static in the binary */
-    int             used;
+    uint64_t root;
+    uint32_t kind;   /* YON_WIRE_KIND_* */
+    uint32_t n;      /* fields of a place; 1 for a list or set; 2 for a map */
+    uint64_t kids[YON_WIRE_MAX_FIELDS];   /* their type roots */
+    int      used;
 } yon_wire_type_t;
 
 static yon_wire_type_t g_wire_types[YON_WIRE_MAX_TYPES];
 static uint32_t g_wire_n_types = 0;
 
-void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
-                          const uint64_t *kids) {
+static yon_wire_type_t *wire_type_slot(uint64_t root) {
     for (uint32_t i = 0; i < g_wire_n_types; i++)
-        if (g_wire_types[i].used && g_wire_types[i].root == root) return;
+        if (g_wire_types[i].used && g_wire_types[i].root == root) return &g_wire_types[i];
     if (g_wire_n_types >= YON_WIRE_MAX_TYPES) {
         fprintf(stderr, "[YON-RT] register_type: table full (root=%016llx)\n",
                 (unsigned long long)root);
         abort();
     }
     yon_wire_type_t *e = &g_wire_types[g_wire_n_types++];
-    e->root = root; e->kind = kind; e->n = n; e->kids = kids; e->used = 1;
+    memset(e, 0, sizeof *e);
+    e->root = root;
+    e->used = 1;
+    return e;
+}
+
+void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
+                          const uint64_t *kids) {
+    if (n > YON_WIRE_MAX_FIELDS) abort();
+    yon_wire_type_t *e = wire_type_slot(root);
+    e->kind = kind;
+    e->n = n;
+    for (uint32_t i = 0; i < n; i++) e->kids[i] = kids[i];
+}
+
+/* The same, as the lowered code calls it: numbers only, a root as two 32-bit
+ * halves; the type first, then each part by its index. */
+void yon_rt_wire_type(double hi, double lo, double kind, double n) {
+    yon_wire_type_t *e = wire_type_slot(yon_root_of_halves(hi, lo));
+    e->kind = (uint32_t)kind;
+    e->n = (uint32_t)n <= YON_WIRE_MAX_FIELDS ? (uint32_t)n : 0u;
+}
+void yon_rt_wire_type_part(double hi, double lo, double i, double khi, double klo) {
+    yon_wire_type_t *e = wire_type_slot(yon_root_of_halves(hi, lo));
+    if ((uint32_t)i < YON_WIRE_MAX_FIELDS) e->kids[(uint32_t)i] = yon_root_of_halves(khi, klo);
 }
 
 static const yon_wire_type_t *wire_type(uint64_t root) {

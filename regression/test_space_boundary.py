@@ -7,8 +7,9 @@ process, a value sent on a wire, the element of a producer's wire. A
 closure, a cell or a region handle has no meaning in the other Space, so
 handing one over is a type error, whatever it carries. A call between
 processes is checked on the types of the remote signature, not on the count
-of its arguments; what such a call cannot carry yet is refused, never
-delivered as a number that means nothing.
+of its arguments, and carries its arguments and its result by their type, as
+the wire does; the two sides compare their signature roots, so a caller and
+a server built from different versions of a signature never exchange a call.
 """
 from pathlib import Path
 import os
@@ -188,6 +189,32 @@ place Entry {
     assert _refused(rc, out, "argument 1 of twice"), out
 
 
+def test_a_call_to_another_version_of_the_signature_is_refused(tmp_path):
+    # the server is built from echo.yon; the caller then sees a twice that
+    # gives an Int64: same name and arity, another result type
+    (tmp_path / "echo.yon").write_text(_ECHO)
+    rc, out = _yonc(tmp_path / "echo.yon", tmp_path / "Echo_srv")
+    assert rc == 0, out
+    (tmp_path / "echo.yon").write_text(_ECHO.replace(
+        "fun twice(x: Number): Number", "fun twice(x: Number): Int64"))
+    (tmp_path / "client.yon").write_text("""import echo::twice from Echo
+
+place Entry {
+  fun main(): Number {
+    be r := twice(21)
+    return 0
+  }
+}
+""")
+    rc, out = _yonc(tmp_path / "client.yon", tmp_path / "client")
+    assert rc == 0, out
+    env = dict(os.environ, YON_WORLD="v%03x" % (os.getpid() % 4096))
+    r = subprocess.run([str(tmp_path / "client")], capture_output=True, text=True,
+                       timeout=60, cwd=str(tmp_path), env=env)
+    assert r.returncode == 3, (r.returncode, r.stderr)
+    assert "cross-Space call refused" in r.stderr, r.stderr
+
+
 def test_a_number_still_crosses_between_processes(tmp_path):
     rc, out = _between_processes(tmp_path, """import echo::twice from Echo
 
@@ -199,18 +226,6 @@ place Entry {
     assert _run_client(tmp_path) == 42
 
 
-def test_a_text_is_refused_while_calls_carry_numbers_only(tmp_path):
-    # never delivered as a number: refused until the call carries the frame
-    rc, out = _between_processes(tmp_path, """import echo::slen from Echo
-
-place Entry {
-  fun main(): Number { return slen("hello") }
-}
-""")
-    assert _refused(rc, out, "argument 1 of slen", "another process"), out
-
-
-@pytest.mark.xfail(strict=True, reason="calls between processes carry numbers only")
 def test_a_text_crosses_between_processes(tmp_path):
     rc, out = _between_processes(tmp_path, """import echo::slen from Echo
 
@@ -222,7 +237,6 @@ place Entry {
     assert _run_client(tmp_path) == 5
 
 
-@pytest.mark.xfail(strict=True, reason="calls between processes carry numbers only")
 def test_a_map_crosses_between_processes(tmp_path):
     rc, out = _between_processes(tmp_path, """import echo::build from Echo
 

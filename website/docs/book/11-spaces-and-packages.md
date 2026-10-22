@@ -139,18 +139,18 @@ Compile each source to its own binary and run the caller:
 `YON_SRV_DIR`), asks it to run `plate_price(13)`, and gets `39` back over the
 wire. Shutdown cascades when the caller exits.
 
-A cross-Space **call** is deliberately narrow: **only numbers**, at most
-**4 arguments**, over a channel named after the Space (see chapter 17). Every
-argument and result of a call is an `f64`. Ask for a fifth argument and the compiler stops
-you before it builds, reporting that a cross-Space call may take at most 4 number
-arguments across a Space boundary.
+A cross-Space **call** takes at most **4 arguments**, over a channel named
+after the Space (see chapter 17). Ask for a fifth and the compiler stops you
+before it builds.
 
-Strings and sections are process-local handles: a call does not carry them.
 The checker reads the signature of the imported function and checks every
-argument against its declared type. A parameter or a result that a call cannot
-carry, a `String` for instance, is refused before the program builds, so it
-never arrives as a number that means nothing. Strings and places cross by copy
-on a `Wire<T>` (chapter 17). `internal` functions are not exported. The importer of
+argument against its declared type. Arguments and the result cross **by their
+type**, like the values of a wire: a number as itself, a string, a place or a
+collection as a frame, rebuilt in the receiving process's heap. A parameter
+that has no frame, a closure for instance, is refused before the program
+builds. The call also carries the signature's type root, and the server answers
+only when its own is the same. A caller and a server built from two versions of
+`plate_price` never exchange a call: the caller stops with a declared error. `internal` functions are not exported. The importer of
 `recipe_secret` compiles, but the first call gets a refusal from the server
 itself: the cross-Space call fails because `Kitchen_srv` reports the operation is
 not exported.

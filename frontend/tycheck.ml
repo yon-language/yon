@@ -1131,6 +1131,27 @@ let wire_framed (root : int64) : bool =
   | Some (k, _) -> k <> wire_kind_scalar
   | None -> true
 
+(* The signature of an operation as a call between processes carries it: the
+   root and the framing of the result and of each argument, and the root of
+   the whole, which both sides compare. None when a part has no frame. *)
+let call_sig (env : Tyenv.env) (params : ty list) (ret : ty) : int64 list option =
+  let part t = match wire_desc env [] t with
+    | Some r -> Some (r, if wire_framed r then 1L else 0L)
+    | None -> None in
+  let rec parts = function
+    | [] -> Some []
+    | t :: rest ->
+        (match part t, parts rest with
+         | Some p, Some ps -> Some (p :: ps) | _ -> None) in
+  match part ret, parts params with
+  | Some (rr, rf), Some ps ->
+      let buf = Buffer.create 64 in
+      List.iter (Type_root.add_u64 buf) (rr :: List.map fst ps);
+      let root = Type_root.content_hash (Buffer.to_bytes buf) in
+      Some (root :: Int64.of_int (List.length ps) :: rr :: rf
+            :: List.concat_map (fun (r, f) -> [r; f]) ps)
+  | _ -> None
+
 (* What a call between processes carries: a scalar, as one f64. *)
 let rpc_carries (t : ty) : bool =
   match resolve_fused t with
@@ -1165,8 +1186,8 @@ let boundary_msg what t =
 let rpc_msg what t =
   Printf.sprintf
     "%s of type %s crosses to another process, and a call between processes \
-     carries numbers only: a %s would arrive as a meaningless number. Send it \
-     on a Wire<T>."
+     carries what a wire carries: numbers, strings, places of carried fields \
+     and collections of carried values. A %s has no frame."
     what (Tyenv.ty_to_string t) (Tyenv.ty_to_string t)
 
 (* The crossings of one call: into a function of another Space of this
@@ -1192,17 +1213,17 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
       (match Hashtbl.find_opt remote_params op with
        | None -> ok ()
        | Some ps ->
-           first (
+           let ps = List.map resolve_fused ps in
+           let* () = first (
              [ (List.length ps <> List.length vals,
                 Printf.sprintf "%s takes %d arguments across the Space \
                   boundary, given %d" op (List.length ps) (List.length vals)) ]
              @ List.concat (List.mapi (fun i p ->
-                 let p = resolve_fused p in
                  let what = Printf.sprintf "argument %d of %s" (i + 1) op in
                  let given = match List.nth_opt vals i with
                    | Some t -> resolve_fused t | None -> p in
                  [ (not (ty_mobile env p), boundary_msg what p);
-                   (not (rpc_carries p), rpc_msg what p);
+                   (wire_desc env [] p = None, rpc_msg what p);
                    (not (Tyenv.simple_ty_compatible p given),
                     Printf.sprintf "%s expects %s, given %s" what
                       (Tyenv.ty_to_string p) (Tyenv.ty_to_string given)) ]) ps)
@@ -1213,8 +1234,22 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
                     (match r with
                      | TyChannel _ -> []   (* a producer: its elements cross on the wire *)
                      | _ -> [ (not (ty_mobile env r), boundary_msg what r);
-                              (not (rpc_carries r), rpc_msg what r) ])
-                | None -> [])))
+                              (wire_desc env [] r = None, rpc_msg what r) ])
+                | None -> [])) in
+           (match ret with
+            | Some r when (match r with TyChannel _ -> false | _ -> true) ->
+                (* the caller's signature, by the Space and the selector of
+                   the operation, for the lowering of the call *)
+                let bare = match String.index_opt op ':' with
+                  | Some i -> String.sub op (i + 2) (String.length op - i - 2)
+                  | None -> op in
+                (match Hashtbl.find_opt wire_imports op, call_sig env ps r with
+                 | Some (sp, _), Some sg ->
+                     Hashtbl.replace Surface_ast.rpc_sigs
+                       (sp, Module_prefix.op_selector bare) sg
+                 | _ -> ());
+                ok ()
+            | _ -> ok ()))
   | None ->
       (match callee_space, !current_space with
        | Some there, Some here when there <> here ->
@@ -1230,6 +1265,15 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
 
 (* A producer's wire carries its elements to another Space. *)
 let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
+  (* an operation a call from another process can reach, with its signature *)
+  (match fn.fn_return with
+   | Some r when fn.fn_name <> "main" && not fn.fn_internal
+                 && (match r with TyChannel _ -> false | _ -> true) ->
+       (match call_sig env (List.map (fun p -> resolve_fused p.param_ty) fn.fn_params)
+                (resolve_fused r) with
+        | Some sg -> Hashtbl.replace Surface_ast.op_sigs fn.fn_name sg
+        | None -> ())
+   | _ -> ());
   match fn.fn_return with
   | Some (TyChannel t) when not (ty_mobile env t) ->
       [ { err_loc = fn.fn_loc; err_msg = boundary_msg "the element of this wire" t } ]
@@ -3047,6 +3091,16 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
   mob_note_call env name args arg_tys
     (fun v -> if loc.start_line = 0 then location_of_expr v else loc);
   let* () = check_boundary env name args arg_tys loc in
+  (* a call to an imported function has the type its remote signature declares *)
+  let remote_ret = match remote_call name args with
+    | Some (op, _) ->
+        (match Hashtbl.find_opt wire_fun_returns op with
+         | Some (Some (TyChannel _)) | Some None | None -> None
+         | Some (Some r) -> Some r)
+    | None -> None in
+  match remote_ret with
+  | Some r -> ok r
+  | None ->
   (* Builtin: apply_move(MoveName, source) — applies a registered move.
    * __apply_move_in_<S> respects the same signature. *)
   let is_apply_move =
@@ -6672,6 +6726,8 @@ let check_program (p : program) : check_result =
   Hashtbl.reset fun_space;
   Hashtbl.reset Surface_ast.producer_roots;
   Hashtbl.reset Surface_ast.wire_types;
+  Hashtbl.reset Surface_ast.rpc_sigs;
+  Hashtbl.reset Surface_ast.op_sigs;
   List.iter (function
     | TopFun fd ->
         (match Hashtbl.find_opt Surface_ast.user_file_space fd.fn_loc.file with
