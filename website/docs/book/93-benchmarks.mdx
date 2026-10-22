@@ -152,6 +152,101 @@ removed, not a property of the store. These numbers belong to the in-place `Aren
 measured then; the program, `regression/bench/xrel_ops`, now measures `XRelMap` on the same
 points.
 
+## Two maps on the same keys: HashMap and XRelMap
+
+`HashMap`/`HashSet` and `XRelMap`/`XRelSet` have the same semantics and the same trie code; what
+differs is the store (chapter 15). The FNV heap keeps one node per content, so a node is looked up by
+its content before it is made, and two equal maps are one handle. The Leech heap writes each node in
+the next place, (generation, point), and looks nothing up. The question this section answers is
+what that difference costs, on the same keys.
+
+**Method.** Measured on an Apple M1, 2026-10-22, at commit `599ae9d`, with
+`regression/bench/maps_compare/run.sh` (the program is written by `gen.py` next to it, one template
+for the six variants). One process per (family, key kind, N), the two families alternating at
+every N; in each, every figure is the minimum of three runs, in process, net of an exact twin (the
+same loop making the same keys without the map). `set` builds a map of N keys by N persistent sets;
+`has` reads N keys the map holds, or N it does not; `union` and `intersect` take two sets of N keys
+sharing N/2, per key. The data is in `website/src/data/maps-compare.json`. Measured on this
+machine, not re-derived each build; the programs themselves are gated by the suite.
+
+**`LatticePoint` keys**, ns per operation, `HashMap`/`HashSet` · `XRelMap`/`XRelSet`:
+
+| N | set | has (hit) | has (miss) | union | intersect |
+|--:|--:|--:|--:|--:|--:|
+| 1,000 | 908 · 471 | 219 · 161 | — | 196 · 98 | 130 · 77 |
+| 10,000 | 2,310 · 489 | 191 · 191 | — | 375 · 174 | 260 · 70 |
+| 100,000 | 3,863 · 891 | 584 · 499 | — | 592 · 211 | 409 · 195 |
+| 196,560 | 4,325 · 1,037 | 878 · 614 | — | 0 · 221 | 0 · 187 |
+
+**`Number` keys**, ns per operation, `HashMap`/`HashSet` · `XRelMap`/`XRelSet`:
+
+| N | set | has (hit) | has (miss) | union | intersect |
+|--:|--:|--:|--:|--:|--:|
+| 1,000 | 756 · 376 | 146 · 163 | 133 · 149 | 183 · 111 | 122 · 93 |
+| 10,000 | 2,190 · 467 | 244 · 280 | 217 · 197 | 399 · 207 | 218 · 112 |
+| 100,000 | 3,860 · 868 | 506 · 780 | 545 · 508 | 510 · 254 | 349 · 219 |
+| 400,000 | 6,531 · 1,209 | 1,104 · 1,048 | 1,226 · 733 | 2,099 · 942 | 557 · 266 |
+
+**`Text` keys**, ns per operation, `HashMap`/`HashSet` · `XRelMap`/`XRelSet`:
+
+| N | set | has (hit) | has (miss) | union | intersect |
+|--:|--:|--:|--:|--:|--:|
+| 1,000 | 870 · 391 | 189 · 189 | 195 · 180 | 181 · 113 | 126 · 90 |
+| 10,000 | 2,462 · 523 | 227 · 302 | 347 · 297 | 388 · 206 | 245 · 115 |
+| 100,000 | 4,028 · 924 | 648 · 609 | 992 · 631 | 618 · 242 | 408 · 214 |
+| 400,000 | 11,654 · 1,144 | 1,631 · 755 | 4,380 · 776 | 6,413 · 414 | 2,489 · 241 |
+
+What the numbers say, kind by kind:
+
+- **`set` is cheaper on the Leech heap, everywhere, and the gap grows with N**: from about 2× at
+  1,000 keys to about 4× at 100,000 and 10× for 400,000 `Text` keys. The trie copies the same path on both
+  stores, so the difference is the store: the FNV heap checks every new node against its content
+  index first, across the chain of heaps the map grows into, and the Leech store writes the next
+  place and checks nothing. (A cause read from the code, not profiled.)
+- **A read that finds its key costs about the same** on both up to 10,000 keys. At 100,000 it
+  depends on the key: `HashMap` is faster for `Number` keys (506 against 780 ns), `XRelMap` for
+  points (499 against 584) and about even for `Text`. At 400,000 `Text` keys the Leech map reads in
+  half the time. A read
+  that misses follows the hit, and is cheaper on the Leech heap from 10,000 keys on.
+- **Union and intersection are cheaper on the Leech heap**, by the same cause: both merge the two
+  tries, and every node the merge makes is a store write.
+- **The exception is identity by content.** At 196,560 point keys both sets are the whole shell (the
+  keys wrap around it), so they are equal; on the FNV heap equal sets are the same node, and `union`
+  and `intersect` return at the first comparison, in no measurable time. On the Leech heap two equal
+  sets are two tries, and the merge walks them.
+- **For keys that are not points the difference is the store, not the geometry.** A `Number` or a
+  `Text` key routes by the hash of its bits on both families; the lattice adds nothing to finding it.
+  For `LatticePoint` keys the route is the point's index on the shell, exact, 18 bits, and the
+  numbers above are what that buys today: a bounded path, with nothing faster in the read.
+
+**Memory**, counted by `runtime/bench_trie_nodes.c` over the same trie code, building a map of N
+`Number` keys by N sets:
+
+| N | FNV heap nodes | the same map rebuilt | Leech heap nodes (40 bytes each) | the same map rebuilt |
+|--:|--:|--:|--:|--:|
+| 1,000 | 10,277 | 0 | 10,927 | 10,926 |
+| 10,000 | 130,360 | 0 | 141,721 | 141,721 |
+| 100,000 | 1,600,061 | 0 | 1,746,005 | 1,746,005 |
+| 400,000 | 6,008,214 | 0 | 7,861,347 | 7,861,347 |
+
+Each set copies its path, 10 to 20 nodes, and every version of the map stays: neither heap reclaims
+a node no value reaches. The FNV heap shares the nodes whose content repeats (about a quarter fewer at
+400,000) and makes nothing at all when the same map is built again; the Leech heap makes everything
+again, 314 MB for the 400,000-key history.
+
+**The price of persistence.** The in-place `Arena` that `XRelMap` replaced, measured alternating with
+`regression/bench/xrel_ops` on the same points (its binaries built at `19596c5`, the last commit that
+had it), median of three: a write cost 77 to 100 ns where `XRelMap.set` costs 410 to 545, and a read
+273 ns where `XRelMap` costs 635 (both reads include making the point). In place is about five
+times cheaper to write and two times cheaper to read; it is also not a value, which is why it went.
+
+**Where each pays.** Use `HashMap`/`HashSet` when equality of whole collections matters (equal ones
+are one handle, comparing them is one comparison) or when the same contents recur (building the same
+map again costs no new memory). Use `XRelMap`/`XRelSet` when the collection is written more than it
+is compared, merged, or large: every write, union and intersection measured here is cheaper there,
+except a union or an intersection of two equal sets, which the FNV heap answers at once. For a
+`Number` key read at around 100,000 entries, `HashMap` was the faster of the two.
+
 ## Equality is flat in the size of the value
 
 The headline of the content-addressed heap is that equality does not grow with the data. The

@@ -75,6 +75,19 @@ What distinguishes them is what they make cheap:
   content in the Leech heap: two maps with the same entries have the same
   shape, node for node, but not the same handle.
 
+**Choosing between the two families.** Measured on the same keys (Appendix D,
+"Two maps on the same keys"): every write, union and intersection costs
+less on the Leech heap, from about 2× at a thousand keys to 10× at 400,000
+`Text` keys, because its store writes the next place where the FNV heap
+first looks the content up; a read that finds its key costs about the same
+on both up to tens of thousands of keys. What the FNV heap buys with that
+lookup is identity by content: two equal collections are one handle,
+comparing them is one comparison, a union of two equal sets returns at
+once, and building the same map again makes no new node, where the Leech
+heap makes every node again. So: `HashMap`/`HashSet` when collections are
+compared or their contents recur (memory); `XRelMap`/`XRelSet` when they
+are written, merged, or large (time).
+
 **A lattice point is made only where it is one.** `LatticePoint` is an
 abstract type over its representation, a 25-bit coordinate carried as an
 `i64` (`place LatticePoint is internal i64`): outside its house no literal is
