@@ -319,7 +319,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   (* the generic collections' own parameters, as their places declare them *)
   let tk = TyVar "K" and tv = TyVar "V" and tt = TyVar "T" in
   let hmap = TyApp ("HashMap", [tk; tv]) and hset = TyApp ("HashSet", [tt]) in
-  let xrel = TyApp ("XRelMap", [tk; tv]) and arena = TyApp ("Arena", [tv]) in
+  let xrel = TyApp ("XRelMap", [tk; tv]) and xset = TyApp ("XRelSet", [tt]) in
   let tpoint = TyUser "LatticePoint" in
   let tframe = TyUser "XRelFrame" in
   [
@@ -405,25 +405,20 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
       "to_stream", [TyUser "Map"], tlist tnum;
     ];
-    (* XRelSet: set of Co0/M24 equivalence classes (Leech 24D).
-     * Elements are type-2 points (xcoord -> f64); membership is by class. *)
+    (* The primitives XRelSet<T> and XRelMap<K, V> (prelude/coll) declare
+       `is given`: the collections of the Leech heap. *)
     "XRelSet", [
-      "empty", [], TyUser "Map";
-      "add_ref", [TyUser "Map"; tnum], tnum;   (* builds the reference frame before the freeze *)
-      "add", [TyUser "Map"; tnum], TyUser "Map";
-      "contains", [TyUser "Map"; tnum], tbool;
-      "size", [TyUser "Map"], tnum;
-      "union", [TyUser "Map"; TyUser "Map"], TyUser "Map";
-      "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
+      "empty", [], xset;
+      "add", [xset; tt], xset;
+      "contains", [xset; tt], tbool;
+      "size", [xset], tnum;
+      "union", [xset; xset], xset;
+      "intersect", [xset; xset], xset;
     ];
-    (* XRelMap: map keyed by Co0/M24 equivalence class (Leech 24D).
-     * insert(m, point, value): the key is the class of point, not the specimen. *)
-    (* The primitives XRelMap<K, V> (prelude/coll) declares `is given`. *)
     "XRelMap", [
       "empty", [], xrel;
-      "add_ref", [xrel; tk], tnum;   (* builds the reference frame before the freeze *)
-      "insert", [xrel; tk; tv], xrel;
-      "contains", [xrel; tk], tbool;
+      "set", [xrel; tk; tv], xrel;
+      "has", [xrel; tk], tbool;
       "size", [xrel], tnum;
       "value", [xrel; tk], tv;
     ];
@@ -518,17 +513,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "open", [tnum], tnum;
       "corrupt", [tnum; tnum], tnum;
       "to_stream", [TyUser "VoyagerList"], tlist tnum;
-    ];
-    (* Arena<V>: the Leech type-2 arena as a first-class structure. Points
-     * are LatticePoints; occupied answers a Boolean. *)
-    (* The primitives Arena<V> (prelude/coll) declares `is given`. *)
-    "Arena", [
-      "empty", [], arena;
-      "put", [arena; tpoint; tv], arena;
-      "occupied", [arena; tpoint], tbool;
-      "value", [arena; tpoint], tv;
-      "fuse", [arena; tpoint; tv; tnum], arena;
-      "fusion_count", [arena; tpoint], tnum;
     ];
     "Space", [
       "make", [tunk], TyUser "Space";

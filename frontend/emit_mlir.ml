@@ -543,12 +543,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "VoyagerList__open",       (["f64"], "f64");
   "VoyagerList__corrupt",    (["f64"; "f64"], "f64");
   "VoyagerList__to_stream",  (["f64"], "f64");
-  "Arena__empty",        ([], "f64");
-  "Arena__put",          (["f64"; "i64"; "f64"], "f64");
-  "Arena__value",        (["f64"; "i64"], "f64");
-  "Arena__occupied",     (["f64"; "i64"], "f64");
-  "Arena__fuse",         (["f64"; "i64"; "f64"; "f64"], "f64");
-  "Arena__fusion_count", (["f64"; "i64"], "f64");
 ]
 
 (* Idraulica v2: map the synthetic cross-Space callable to its runtime
@@ -897,6 +891,33 @@ let rec uncurry_app (t : C.term) : (string * C.term list) option =
             | _ -> None))
   | _ -> None
 
+(* The primitives of XRelMap / XRelSet (prelude/coll): name -> (runtime
+   symbol, arity, whether the answer is a Boolean). *)
+let xrel_ops = [
+  "XRelMap__set",       ("yon_rt_xrelmap_set", 3, false);
+  "XRelMap__has",       ("yon_rt_xrelmap_has", 2, true);
+  "XRelMap__value",     ("yon_rt_xrelmap_value", 2, false);
+  "XRelMap__size",      ("yon_rt_xrelmap_size", 1, false);
+  "XRelSet__add",       ("yon_rt_xrelset_add", 2, false);
+  "XRelSet__contains",  ("yon_rt_xrelset_contains", 2, true);
+  "XRelSet__size",      ("yon_rt_xrelset_size", 1, false);
+  "XRelSet__union",     ("yon_rt_xrelset_union", 2, false);
+  "XRelSet__intersect", ("yon_rt_xrelset_intersect", 2, false);
+]
+
+(* A full application of one of them: (symbol, arguments, is_bool, name). *)
+let xrel_call (t : C.term) : (string * C.term list * bool * string) option =
+  let rec spine t acc = match t with
+    | C.App (f, a) -> spine f (a :: acc)
+    | C.Var n -> Some (n, acc)
+    | _ -> None in
+  match spine t [] with
+  | Some (n, args) ->
+      (match List.assoc_opt n xrel_ops with
+       | Some (sym, arity, is_bool) when List.length args = arity -> Some (sym, args, is_bool, n)
+       | _ -> None)
+  | None -> None
+
 let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
@@ -921,7 +942,6 @@ let rec infer_mlir_ty (e : emitter)
   | C.Var "XSimplex__empty" -> "f64"
   | C.Var "XTower__depth" -> "f64"
   | C.Var "VoyagerList__empty" -> "f64"
-  | C.Var "Arena__empty" -> "f64"
   | C.Var ("XRelFrame__discrete" | "XRelFrame__whole" | "XRelFrame__curtis") -> "i64"
   | C.Var "__xheap_used" -> "f64"
   | C.Var "__spawn_index" -> "f64"
@@ -1007,17 +1027,8 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.App (C.Var "XSet__intersect", _), _) -> "f64"
   | C.App (C.Var "XSet__size", _) -> "f64"
   | C.App (C.Var "XSet__to_stream", _) -> "f64"
-  | C.App (C.App (C.Var "XRelSet__contains", _), _) -> "i1"
-  | C.App (C.App (C.Var "XRelSet__add", _), _) -> "f64"
-  | C.App (C.App (C.Var "XRelSet__add_ref", _), _) -> "f64"
-  | C.App (C.App (C.Var "XRelMap__add_ref", _), _) -> "f64"
-  | C.App (C.App (C.Var "XRelSet__union", _), _) -> "f64"
-  | C.App (C.App (C.Var "XRelSet__intersect", _), _) -> "f64"
-  | C.App (C.Var "XRelSet__size", _) -> "f64"
-  | C.App (C.App (C.Var "XRelMap__contains", _), _) -> "i1"
-  | C.App (C.App (C.Var "XRelMap__value", _), _) -> "f64"
-  | C.App (C.App (C.App (C.Var "XRelMap__insert", _), _), _) -> "f64"
-  | C.App (C.Var "XRelMap__size", _) -> "f64"
+  | t when xrel_call t <> None ->
+      (match xrel_call t with Some (_, _, true, _) -> "i1" | _ -> "f64")
   | C.App (C.App (C.Var "XSimplex__of2", _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "XSimplex__triangle", _), _), _) -> "f64"
   | C.App (C.App (C.App (C.Var "XSimplex__triangle_fine", _), _), _) -> "f64"
@@ -1069,15 +1080,10 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "VoyagerList__seal", _) -> "f64"
   | C.App (C.Var "VoyagerList__open", _) -> "f64"
   | C.App (C.App (C.Var "VoyagerList__corrupt", _), _) -> "f64"
-  | C.App (C.App (C.App (C.Var "Arena__put", _), _), _) -> "f64"
-  | C.App (C.App (C.Var "Arena__value", _), _) -> "f64"
-  | C.App (C.App (C.Var "Arena__occupied", _), _) -> "i1"
   | C.App (C.Var ("LatticePoint__is_point" | "LatticePoint__is_index"), _) -> "i1"
   | C.App (C.Var ("LatticePoint__unchecked_coordinate" | "LatticePoint__unchecked_index"), _) -> "i64"
   | C.App (C.Var ("LatticePoint__index" | "LatticePoint__orbit"), _) -> "f64"
   | C.App (C.App (C.Var ("XRelFrame__refine" | "XRelFrame__canon"), _), _) -> "i64"
-  | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", _), _), _), _) -> "f64"
-  | C.App (C.App (C.Var "Arena__fusion_count", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__to_stream", _) -> "f64"
   | C.App (C.Var "__merkle_to_stream", _) -> "f64"
   (* Sequence.from_list/map/filter appear bare (after inline_seq they should
@@ -1455,6 +1461,9 @@ let specialize_func (fs : func_sig)
     else if s = "i1" then C.TyPlace "boolean"
     else if s = "!topos.proposition" then C.TyPlace "proposition"
     else if s = "!llvm.ptr" then C.TyPlace "text"
+    (* a scalar carrier (i64 for an Int64 or a LatticePoint, i32, f32, ...)
+       is its own primitive name *)
+    else if Carrier.is_prim_name s then C.TyPlace s
     else
       (* Section type -> extract the place name *)
       let prefix = "!topos.section<\"" in
@@ -1857,11 +1866,6 @@ let rec emit_term (e : emitter)
         | _ -> "yon_rt_xframe_curtis" in
       emit_line e (Printf.sprintf "%s = func.call @%s() : () -> i64" v sym);
       (v, "i64")
-  | C.Var "Arena__empty" ->
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_empty() : () -> f64" v);
-      (v, "f64")
   | C.Var "Vec__empty" ->
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_vec_empty() : () -> f64" v);
@@ -2375,90 +2379,25 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_xset_add(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  | C.App (C.App (C.Var "XRelSet__add", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelset_add(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "XRelSet__add_ref", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelset_add_ref(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "XRelMap__add_ref", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelmap_add_ref(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "XRelSet__contains", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v_f64 = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelset_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
-      let v_zero = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
-      let v_i1 = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
-      (v_i1, "i1")
-  | C.App (C.App (C.Var "XRelSet__union", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelset_union(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "XRelSet__intersect", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelset_intersect(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.Var "XRelSet__size", arg) ->
-      let va = emit_f64 e env funcs arg in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelset_size(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  | C.App (C.App (C.App (C.Var "XRelMap__insert", arg_a), arg_b), arg_c) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let vc = emit_f64 e env funcs arg_c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelmap_insert(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
-      (v, "f64")
-  | C.App (C.App (C.Var "XRelMap__value", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelmap_value(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "XRelMap__contains", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_f64 e env funcs arg_b in
-      let v_f64 = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelmap_contains(%s, %s) : (f64, f64) -> f64" v_f64 va vb);
-      let v_zero = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
-      let v_i1 = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v_f64 v_zero);
-      (v_i1, "i1")
-  | C.App (C.Var "XRelMap__size", arg) ->
-      let va = emit_f64 e env funcs arg in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_xrelmap_size(%s) : (f64) -> f64" v va);
-      (v, "f64")
+  (* XRelMap / XRelSet: every argument travels as its 64 bits (f64 slots; an
+     i64 such as a LatticePoint is reinterpreted, not converted), and a
+     membership answers a Boolean. *)
+  | t when xrel_call t <> None ->
+      (match xrel_call t with
+       | Some (sym, args, is_bool, _) ->
+           let vs = List.map (emit_f64 e env funcs) args in
+           let v = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> f64" v sym
+                          (String.concat ", " vs)
+                          (String.concat ", " (List.map (fun _ -> "f64") vs)));
+           if is_bool then begin
+             let v_zero = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
+             let v_i1 = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v v_zero);
+             (v_i1, "i1")
+           end else (v, "f64")
+       | None -> assert false)
   | C.App (C.App (C.Var "XSimplex__of2", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
       let (vb, _) = emit_term e env funcs arg_b in
@@ -3704,50 +3643,6 @@ let rec emit_term (e : emitter)
       let sym = if f = "XRelFrame__refine" then "yon_rt_xframe_refine" else "yon_rt_xframe_canon" in
       emit_line e (Printf.sprintf "%s = func.call @%s(%s, %s) : (i64, i64) -> i64" v sym vf vp);
       (v, "i64")
-  (* Arena: the Leech type-2 arena, addressed by lattice points (i64). *)
-  | C.App (C.App (C.App (C.Var "Arena__put", arg_a), arg_b), arg_c) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_i64 e env funcs arg_b in
-      let vc = emit_f64 e env funcs arg_c in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_put(%s, %s, %s) : (f64, i64, f64) -> f64" v va vb vc);
-      (v, "f64")
-  | C.App (C.App (C.Var "Arena__value", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_i64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_value(%s, %s) : (f64, i64) -> f64" v va vb);
-      (v, "f64")
-  | C.App (C.App (C.Var "Arena__occupied", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_i64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_occupied(%s, %s) : (f64, i64) -> f64" v va vb);
-      (* a Boolean: occupied or not *)
-      let v_zero = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_zero);
-      let v_i1 = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v_i1 v v_zero);
-      (v_i1, "i1")
-  | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", arg_a), arg_b), arg_c), arg_d) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_i64 e env funcs arg_b in
-      let vc = emit_f64 e env funcs arg_c in
-      let vd = emit_f64 e env funcs arg_d in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_fuse(%s, %s, %s, %s) : (f64, i64, f64, f64) -> f64" v va vb vc vd);
-      (v, "f64")
-  | C.App (C.App (C.Var "Arena__fusion_count", arg_a), arg_b) ->
-      let va = emit_f64 e env funcs arg_a in
-      let vb = emit_i64 e env funcs arg_b in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_arena_fusion_count(%s, %s) : (f64, i64) -> f64" v va vb);
-      (v, "f64")
   | C.App (C.App (C.Var "VoyagerList__get", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
       let (vb, _) = emit_term e env funcs arg_b in
@@ -6737,19 +6632,12 @@ let emit_program (dr : Desugar.desugar_result) : string =
      @yon_rt_xsimplex_* without declaring them -> the verifier refused
      (a build failure on zero coverage, a silent regression). All the
      definitions exist in yon_rt.c. *)
+  List.iter (fun (_, (sym, arity, _)) ->
+      emit_line e (Printf.sprintf "func.func private @%s(%s) -> f64" sym
+                     (String.concat ", " (List.init arity (fun _ -> "f64")))))
+    xrel_ops;
   emit_line e "func.func private @yon_rt_xrelset_empty() -> f64";
-  emit_line e "func.func private @yon_rt_xrelset_add_ref(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelset_add(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelset_contains(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelset_size(f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelset_union(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelset_intersect(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xrelmap_empty() -> f64";
-  emit_line e "func.func private @yon_rt_xrelmap_add_ref(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelmap_insert(f64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelmap_value(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelmap_contains(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_xrelmap_size(f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_empty() -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_pair(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_xsimplex_triangle(f64, f64, f64) -> f64";
@@ -6894,12 +6782,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_hsh_levels(f64) -> f64";
   (* VoyagerList as a collection. *)
   emit_line e "func.func private @yon_rt_voyagerlist_empty() -> f64";
-  emit_line e "func.func private @yon_rt_arena_empty() -> f64";
-  emit_line e "func.func private @yon_rt_arena_put(f64, i64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_value(f64, i64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_occupied(f64, i64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_fuse(f64, i64, f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_arena_fusion_count(f64, i64) -> f64";
   emit_line e "func.func private @yon_rt_lattice_is_point(f64) -> f64";
   emit_line e "func.func private @yon_rt_lattice_unchecked_coordinate(f64) -> i64";
   emit_line e "func.func private @yon_rt_lattice_is_index(f64) -> f64";

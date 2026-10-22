@@ -6,11 +6,12 @@ sidebar_position: 15
 
 # Data structures on the lattice
 
-The collections of the FNV heap (chapter 13) are *persistent* structures:
+The collections of both heaps (chapter 13) are *persistent* structures:
 none of them mutates, every operation returns a new handle, and sharing
-makes that cheap. The structures of the Leech heap hold one table over the
-shell each, addressed by lattice points; `Vec` is a cell on a strip of the
-heap's arena. Both kinds are below.
+makes that cheap. The maps and sets come in two families with the same
+semantics and two stores: `HashMap`/`HashSet` in the FNV heap,
+`XRelMap`/`XRelSet` in the Leech heap. `Vec` is a cell on a strip of the
+heap's arena. All of them are below.
 
 **List** is the classic cons chain: `List.cons(x, rest)` puts one new node;
 the rest is shared by address. **HashMap / HashSet** are persistent maps,
@@ -60,8 +61,19 @@ What distinguishes them is what they make cheap:
 - **Cells**, not a collection: the one mechanism with identity
   (chapter 14). The `=` assignment and every loop are built on them; 1,024 per
   process.
-- **`Arena<V>`**, the Leech-indexed pool: one slot per type-2 lattice point,
-  addressed by a `LatticePoint`. `Arena.get` answers `Found(v)` or `Absent`.
+- **`XRelMap<K, V>`, `XRelSet<T>`**, the same map and set as `HashMap` and
+  `HashSet` (`set`, `has`, `get`, `size`; `add`, `contains`, `union`,
+  `intersect`), on another store: their trie is the same code, and its
+  nodes live only in the Leech heap, the k-th in the place (generation
+  k div 196,560, point `at_index(k mod 196,560)`), written once. A
+  `LatticePoint` key routes by its index on the shell, exactly, 18 bits: a
+  lookup walks at most 18 levels and two points never share a path. Any
+  other key routes by the 64-bit hash of its bits, written in base 196,560:
+  the first digit is a point, the rest follow, and only keys whose whole
+  hash agrees share a chain. For a key that is not a point the difference
+  from `HashMap` is the store, not the geometry. There is no index by
+  content in the Leech heap: two maps with the same entries have the same
+  shape, node for node, but not the same handle.
 
 **A lattice point is made only where it is one.** `LatticePoint` is an
 abstract type over its representation, a 25-bit coordinate carried as an
@@ -101,21 +113,18 @@ first: key it by `canon(f, p)`, not by `p`. The laws above are checked on
 every point of every frame the runtime builds
 (`runtime/test_unit_xrel_frame.c`).
 
-**What a lattice slot holds.** `Arena<V>` and `XRelMap<K, V>` keep their
-values inline, in the slots of the Leech heap (chapter 13), never in the
-FNV heap. Which values
-fit a slot is derived from their carrier: a scalar of 32 or 64 bits
-(`Int32`; `Int64` and `Number`), or a content-addressed handle (a `Text`,
-whose bits name its content in the FNV heap); a value that does not fit (a
-`Boolean`, a place, a function) is a type error, never truncated. A key of
-`XRelMap` is a lattice point, a scalar of 64 bits: a handle names content but
-locates nothing, so a `Text` key is a type error here. Every other key
-belongs to `HashMap`. A value enters as its
-bits and comes back the same bits: identity inside a slot is identity of
-bits, the criterion of the whole runtime, so `-0.0` and `0.0` are two values
-and a `NaN` equals itself (arithmetic on the values read back stays
-IEEE). An empty slot is its own occupancy bit: reading it answers `Absent`,
-and no stored value ever means "empty".
+**What a node of the Leech heap holds.** `XRelMap<K, V>` and `XRelSet<T>`
+keep their keys and values as 64 bits in the nodes of their trie, in the
+Leech heap (chapter 13), never in the FNV heap. Which types fit is derived
+from their carrier: a scalar of 32 or 64 bits (`Int32`; `Int64`, `Number`,
+a `LatticePoint`), or a content-addressed handle (a `Text`, whose bits name
+its content in the FNV heap, so two equal strings are one key); a type that
+does not fit (a `Boolean`, a place, a function) is a type error, never
+truncated. A key or a value enters as its bits and comes back the same bits:
+identity in a node is identity of bits, the criterion of the whole runtime,
+so `-0.0` and `0.0` are two keys and a `NaN` equals itself (arithmetic on
+the values read back stays IEEE). A key the map does not hold answers
+`Absent`, and no stored value ever means "empty".
 
 ## MerkleTree: content addressing made visible
 

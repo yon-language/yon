@@ -2,10 +2,12 @@
  *
  * The site C(Coll): the collections. Each is one place, generic in what it
  * holds; its representation is derived from the carrier of its parameters,
- * never written per type. HashMap and HashSet are values: an operation
- * that adds returns a new collection and leaves the one it was given.
- * Arena and XRelMap are written in place: `put` / `insert` return the
- * same handle.
+ * never written per type. Two families with the same semantics and two
+ * stores, like two implementations of one interface: HashMap / HashSet keep
+ * their nodes in the FNV heap (identity by content), XRelMap / XRelSet in
+ * the Leech heap (a place per node, written once). All four are values: an
+ * operation that adds returns a new collection and leaves the one it was
+ * given.
  *
  * The runtime primitives are the `is given` bodies; what can be said in
  * Yon is written here. */

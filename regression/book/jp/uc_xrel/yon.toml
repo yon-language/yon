@@ -1,5 +1,5 @@
 [package]
-name = "uc_arena"
+name = "uc_xrel"
 
 [world.Park]
 objects = ["Dinosaur"]

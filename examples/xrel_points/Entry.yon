@@ -1,0 +1,41 @@
+place Entry {
+/* XRelMap keyed by lattice points: a map whose nodes live in the Leech heap.
+ *
+ * A key is a LatticePoint, made only where it is one
+ * (LatticePoint.of_coordinate answers a point or a DomainError); it routes
+ * through the trie by its index on the shell. Exercises the map end to end:
+ *   set/get  : store a value at a point and read it back (get answers
+ *              Found(value) or Absent)
+ *   has      : the point is a key (a Boolean)
+ *   a value  : set returns a new map; the map it was given is unchanged
+ *   orbit    : the M24 orbit of the point (1536 is in orbit 0); it belongs to
+ *              the point, not to the map
+ *   1536 and 1280 share an orbit; 1536 and 16778752 do not
+ *
+ * Each of the five checks contributes 1; the program returns 5 when all hold. */
+
+fun orbit_at(n: Number): Number {
+  return match LatticePoint.of_coordinate(n) {
+    LatticePoint as q => LatticePoint.orbit(q), DomainError as d => 0 - 1 }
+}
+
+fun checks(p: LatticePoint): Number {
+  be a0 := XRelMap.empty()
+  be a1 := XRelMap.set(a0, p, 42)
+  be v := match XRelMap.get(a1, p) { Found(x) => x, Absent => 0 }
+  be has := XRelMap.has(a1, p) and not XRelMap.has(a0, p)
+  be o0 := LatticePoint.orbit(p)
+
+  be c_v := if v == 42 then 1 else 0
+  be c_has := if has then 1 else 0
+  be c_o0 := if o0 == 0 then 1 else 0
+  be c_same := if o0 == orbit_at(1280) then 1 else 0
+  be c_diff := if o0 != orbit_at(16778752) then 1 else 0
+  return c_v + c_has + c_o0 + c_same + c_diff
+}
+
+fun main(): Number {
+  return match LatticePoint.of_coordinate(1536) {
+    LatticePoint as p => checks(p), DomainError as d => 0 }
+}
+}

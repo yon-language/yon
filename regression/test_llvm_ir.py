@@ -95,7 +95,7 @@ def _run(cmd, **kw):
 
 
 # ── representative examples (from regression/baseline_exitcodes.txt, RAN) ──
-#   arena_basic            : pure arithmetic / arena, no spawn/stream
+#   xrel_points            : pure arithmetic / a Leech-heap map, no spawn/stream
 #   spawn_parallel_collect : exercises Spawn__* and Stream__* runtime calls
 #   net_stream             : exercises Stream__*_net send/recv runtime calls
 #   string_literals        : exercises yon_rt_string_lit + String.* family
@@ -104,7 +104,7 @@ def _run(cmd, **kw):
 # Every name here is an example the acceptance suite compiles and runs, so a
 # missing source or a failing stage is a FAILURE with the stage's diagnostics,
 # never a skip: a name that stops resolving must not skip the gate silently.
-EXAMPLES = ["arena_basic", "spawn_parallel_collect", "net_stream",
+EXAMPLES = ["xrel_points", "spawn_parallel_collect", "net_stream",
             "string_literals", "collections_ext", "merkle_noncommutative",
             # broadened to touch more runtime families (math, iteration,
             # history/route).

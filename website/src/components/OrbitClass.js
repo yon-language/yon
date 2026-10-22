@@ -2,9 +2,10 @@ import React from 'react';
 import useAutoplay, { playLabel } from './_autoplay';
 
 /**
- * XRelSet / XRelMap — "one of this kind?" Keys on the orbit CLASS (here the sign
- * orbit: a point and its antipode are one class), not the exact point. Insert with
- * one representative, recall with another. Real run
+ * XRelSet / XRelMap keyed by a class — "one of this kind?" The key is
+ * XRelFrame.canon(f, p), the representative of p's class in the frame f (here the
+ * frame by 1536: a point and its antipode are one class). Insert with one
+ * representative, recall with another. Real run
  * (regression/book/jp/14_xrel_contract -> get(1536)=100, get(16778752)=100 same
  *  class, get(1280)=miss different class).
  */
@@ -23,7 +24,7 @@ const C = {
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
-// sign-orbit classes: 1536 ~ 16778752 (antipode); 1280 is its own class.
+// classes of the frame by 1536: 1536 ~ 16778752 (antipode); 1280 lies in another.
 const QUERIES = [
   { k: 1536, cls: 0, hit: true, note: 'the key itself' },
   { k: 16778752, cls: 0, hit: true, note: 'the antipode — same class' },
@@ -45,9 +46,9 @@ export default function OrbitClass() {
     >
       <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5, marginBottom: 12 }}>
         <strong style={{ color: C.text }}>A map keyed by kind, not by specimen.</strong> Insert the
-        value at one point; recall it from any point in the same orbit class. The{' '}
-        <code>add_ref</code> you call first fixes the frame the class is computed against —{' '}
-        <code>XRelMap</code> is Co2, relative to it. Real run (<code>14_xrel_contract</code> →{' '}
+        value at one point; recall it from any point in the same class. The key goes through{' '}
+        <code>XRelFrame.canon(f, p)</code>, the projection onto the class of a frame: here the
+        frame by 1536, which a reference fixes. Real run (<code>14_xrel_contract</code> →{' '}
         <strong>100, 100, miss</strong>).
       </div>
 
@@ -64,7 +65,7 @@ export default function OrbitClass() {
           strokeDasharray="4 3"
         />
         <text x="22" y="34" fontSize="10" fontFamily={mono} fill={C.accentText}>
-          orbit class 0 · value 100
+          class 0 · value 100
         </text>
         {[
           { k: 1536, x: 80, y: 76 },
@@ -100,7 +101,7 @@ export default function OrbitClass() {
           strokeDasharray="4 3"
         />
         <text x="282" y="34" fontSize="10" fontFamily={mono} fill={C.redText}>
-          orbit class 1
+          class 1
         </text>
         {(() => {
           const lit = q.cls === 1;

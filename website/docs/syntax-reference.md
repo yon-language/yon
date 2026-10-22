@@ -231,7 +231,7 @@ from the call sites.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty()`, `XSet.empty()`, `Vec.empty()`, `Arena.empty()`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
+| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty()`, `XSet.empty()`, `Vec.empty()`, `XRelMap.empty()`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
 | `obj.field`, `x.f1.f2` | ✓ | Field access (chains left-associatively) |
 | `e.method(args).map(f).fold(0, g)` | ✓ | Method chaining: `recv.m(args)` ≡ `m(recv, args)` |
 | `a \|> f(args)` | ✓ | Pipe: passes `a` as the **first** argument of the call |

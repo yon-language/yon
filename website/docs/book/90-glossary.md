@@ -95,10 +95,11 @@ is one comparison.
 FNV-1a hash confirmed by a byte comparison; slots allocated in sequence,
 196,560 per heap, then a chain.
 
-**Leech heap**, the heap of the values that are lattice points
-(`LatticePoint`, `Arena`, `XRelMap`, the X* sets): identity by the point,
-through a bijection with the 196,560 type-2 vectors; orbits and
-canonical forms live here.
+**Leech heap**, the heap whose places are lattice points: identity by the
+point, through a bijection with the 196,560 type-2 vectors, generation after
+generation. `LatticePoint`, the nodes of `XRelMap`/`XRelSet` (node k in the
+place (k div 196,560, `at_index(k mod 196,560)`), written once) and the X*
+tables live here; orbits and canonical forms too.
 
 **Leech lattice (Λ₂₄)**, the 24-dimensional lattice whose 196,560 minimal
 vectors are the addresses of the Leech heap and the size of one FNV heap,

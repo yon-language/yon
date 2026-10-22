@@ -1,16 +1,17 @@
 import React from 'react';
 
 /**
- * "The 31 µs was a measurement artifact, named and removed." Arena.put is a
- * perfect-hash index plus four slot writes: O(1) in the fill. An earlier run read
+ * "The 31 µs was a measurement artifact, named and removed." Arena.put (the
+ * in-place store, removed in 1.1) was a perfect-hash index plus four slot writes:
+ * O(1) in the fill. An earlier run read
  * ~31 µs and looked super-linear; two stacked method faults (a non-twin baseline,
  * and a one-time 200 ms mmgroup init smeared over a small N) made a flat cost look
  * like a curve. Measured in-process against an exact Leech.point twin, with
  * min-over-reps to drop the init, it is flat.
  *
  * HONESTY CONTRACT:
- *   - The four per-op figures are the real gated numbers in regression/bench/arena_ops
- *     (Apple M1): 65, 75, 79, 81 ns at N = 2k, 5k, 10k, 20k. The 31 µs is the earlier
+ *   - The four per-op figures are the real gated numbers of the former
+ *     regression/bench/arena_ops (Apple M1): 65, 75, 79, 81 ns at N = 2k, 5k, 10k, 20k. The 31 µs is the earlier
  *     artifact, shown ghosted to make the correction visible, not a current reading.
  */
 
@@ -35,8 +36,9 @@ export default function ArenaPutO1() {
     <div style={{ fontFamily: 'var(--ifm-font-family-base)', color: C.text, maxWidth: 460, margin: '1.5rem auto' }}>
       <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5, marginBottom: 8 }}>
         <strong style={{ color: C.text }}>O(1), and the number that said otherwise.</strong>{' '}
-        <code>Arena.put</code> is flat in the fill: a perfect-hash index and four writes, no resize, no
-        probing. Apple M1 (<code>arena_ops</code>).
+        <code>Arena.put</code>, the in-place store removed in 1.1, was flat in the fill: a
+        perfect-hash index and four writes, no resize, no probing. Apple M1 (<code>arena_ops</code>,
+        as measured then).
       </div>
 
       <svg viewBox={`0 0 300 ${top + N.length * rowH + 26}`} style={{ width: '100%', maxWidth: 360 }} fontFamily={mono}>

@@ -64,13 +64,16 @@ fun main(): Number {
 | **Address** | a slot, allocated in sequence at the content's first appearance, carried as a HeapRef (8 bits of heap, 24 of slot) | the point's index under the minimal perfect hash, a bijection with `[0, 196560)` |
 | **Collisions** | two hashes may collide; the byte comparison settles it, so distinct contents never share a slot | none: the minimal perfect hash is a bijection |
 | **Geometry** | none: the lattice only fixes how many contents one heap holds (196,560), then the chain grows | M₂₄ orbits, relational classes under a frame, Co₀ canonical forms and transport |
-| **Who lives there** | strings, lists, `HashMap`/`HashSet` tries, `MerkleTree`, sections of places, closures | `LatticePoint`, `Arena`, `XRelMap`, `XSet`, `XRelSet`, `XSimplex` |
+| **Who lives there** | strings, lists, `HashMap`/`HashSet` tries, `MerkleTree`, sections of places, closures | `LatticePoint`, the nodes of `XRelMap`/`XRelSet`, `XSet`, `XSimplex` |
 | **The test that proves it** | `test_unit_extensionality`: 300,000 distinct contents across two heaps, every one on its own reference, the same content on the same one | `test_mphf.c` and `test_unit_mphf_ext.c`: the bijection, over the whole shell; `test_leech_theta`: the shell has 196,560 points |
 
 The FNV heap is one mapping that chains into the next when it fills. The
-Leech heap is not one mapping: each structure on it holds a table indexed by
-the shell (one slot per point, or one bit per point for the sets), so a
-point is the address in every one of them.
+Leech heap is a sequence of generations, each a table over the shell: the
+node store of `XRelMap`/`XRelSet` puts its k-th node in the place
+(generation k div 196,560, point `at_index(k mod 196,560)`), written once;
+`XSet` and `XSimplex` hold one table indexed by the shell. A point is the
+address in every one of them. There is no index by content in the Leech
+heap: two equal nodes are two places.
 
 **Why the FNV heap is sized by the lattice.** One FNV heap holds exactly
 **196,560 contents**, the kissing number of Λ₂₄. That is the only thing the
@@ -82,8 +85,9 @@ private memory or POSIX shared memory interchangeably.
 
 **Where the geometry lives.** In the Leech heap, through the vendored
 mmgroup core: sign patterns canonical under the Golay-code stabilizer, M₂₄
-orbit representatives, orbit ids. An `Arena` is addressed by a
-`LatticePoint`, and `LatticePoint.orbit` returns the orbit of a point, so two
+orbit representatives, orbit ids. An `XRelMap` keyed by `LatticePoint`
+routes each key by its index on the shell, and `LatticePoint.orbit` returns
+the orbit of a point, so two
 points that are "the same up to symmetry" are recognized as one by
 `orbit(p) == orbit(q)`.
 

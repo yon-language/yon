@@ -9,7 +9,7 @@ import React from 'react';
  *
  * HONESTY CONTRACT:
  *   - Every nanosecond is the real per-op figure from Appendix D, measured on an
- *     Apple M1 (regression/bench_perf + the in-process regression/bench/arena_ops,
+ *     Apple M1 (regression/bench_perf + the in-process regression/bench/arena_ops, now xrel_ops,
  *     ds_ops, eq_constant twins). The five sub-nanosecond ops are marked "below
  *     floor": the subprocess harness cannot resolve them, and the suite says so
  *     rather than printing noise; the in-process eq_constant gate resolves equality
@@ -39,10 +39,10 @@ const OPS = [
   ['HashMap.get', 7, 'fast'],
   ['List.head', 8, 'fast'],
   ['VoyagerList.open (Golay decode)', 10, 'fast'],
-  ['Arena.get (lattice address)', 41, 'mid'],
+  ['Arena.get (in place; removed in 1.1)', 41, 'mid'],
   ['HashSet.add', 69, 'mid'],
   ['List.cons (hash-cons)', 70, 'mid'],
-  ['Arena.put (certified, O(1))', 80, 'mid'],
+  ['Arena.put (in place, O(1); removed in 1.1)', 80, 'mid'],
   ['MerkleTree.node2 (dedup hit)', 138, 'heavy'],
   ['HashMap.set (grows with map)', 340, 'heavy'],
 ];

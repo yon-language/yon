@@ -15,7 +15,6 @@
 # starts to agree fails too, asking for the row to become AGREE (a ratchet: the
 # ledger cannot go stale). The rows and the RAN set must match exactly.
 
-INCOMPLETE arena_basic type-error
 AGREE      c_cell
 AGREE      c_morph_on_morphism
 AGREE      c_place_over
@@ -112,3 +111,4 @@ INCOMPLETE v1_control_flow refused
 INCOMPLETE vec_basic punt
 INCOMPLETE while_loop refused
 INCOMPLETE wire_eof refused
+INCOMPLETE xrel_points type-error
