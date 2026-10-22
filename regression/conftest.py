@@ -243,6 +243,35 @@ def _param_uses_machine(v) -> bool:
 _ONE_ARTIFACT_MODULES = {"test_selfhost_differential": "selfhost_compiler"}
 
 
+@pytest.fixture(scope="session")
+def selfhost_compiler_bin(tmp_path_factory):
+    """selfhost/selfhost_compiler.yon built once for the whole session: it is
+    the slowest compile of the suite, and every test that runs the compiler in
+    Yon uses this one binary. The root of the session's temp dirs is shared by
+    its xdist workers (and is the base temp itself without xdist, so a binary of
+    an earlier session is never reused): the first to take the lock builds,
+    aside, then renames into place; the others find it."""
+    import fcntl
+    import os
+    import subprocess
+    base = tmp_path_factory.getbasetemp()
+    shared = base.parent if os.environ.get("PYTEST_XDIST_WORKER") else base
+    root = Path(__file__).resolve().parent.parent
+    b = shared / "selfhost_compiler"
+    with open(shared / "selfhost_compiler.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not b.exists():
+            part = shared / f"selfhost_compiler.part{os.getpid()}"
+            c = subprocess.run([str(root / "toolchain" / "yonc"),
+                                str(root / "selfhost" / "selfhost_compiler.yon"),
+                                "-o", str(part)],
+                               capture_output=True, text=True, timeout=900)
+            assert c.returncode == 0 and part.exists(), \
+                f"selfhost_compiler.yon did not build:\n{c.stderr[-800:]}"
+            part.rename(b)
+    return b
+
+
 def _xdist_group(item, mod: str, fn: str):
     if mod in _ONE_ARTIFACT_MODULES:
         return _ONE_ARTIFACT_MODULES[mod]

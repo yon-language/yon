@@ -11,8 +11,6 @@ selfhost_compiler.yon works in the directory given as its first argument
 (<dir>/in.yon -> <dir>/out.mlir), so every case uses its own and the cases run in
 parallel; test_two_runs_side_by_side pins that.
 """
-import fcntl
-import os
 import subprocess
 from pathlib import Path
 
@@ -140,22 +138,9 @@ def _self_hosted(tmp_path, compiler_bin, src):
 
 
 @pytest.fixture(scope="session")
-def compiler_bin(tmp_path_factory):
-    """Build the Yon0-in-Yon compiler once for the whole session. Under xdist the
-    workers share the parent of their base temp dirs: the first to take the lock
-    builds, the others find the binary (built aside, then renamed into place)."""
-    shared = tmp_path_factory.getbasetemp().parent
-    b = shared / "selfhost_compiler"
-    with open(shared / "selfhost_compiler.lock", "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        if not b.exists():
-            part = shared / f"selfhost_compiler.part{os.getpid()}"
-            c = subprocess.run([str(YONC), str(COMPILER), "-o", str(part)],
-                               capture_output=True, text=True, timeout=240)
-            assert c.returncode == 0 and part.exists(), \
-                f"selfhost_compiler.yon did not build:\n{c.stderr[-800:]}"
-            part.rename(b)
-    return b
+def compiler_bin(selfhost_compiler_bin):
+    """The Yon0-in-Yon compiler, built once for the session (conftest)."""
+    return selfhost_compiler_bin
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")

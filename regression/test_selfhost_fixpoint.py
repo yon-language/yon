@@ -33,12 +33,9 @@ def _emit_self(binary, work):
     return out.read_text()
 
 
-def test_frontend_fixpoint(tmp_path):
-    # stage-1: build the compiler-in-Yon with yonc.
-    s1 = tmp_path / "stage1"
-    c = subprocess.run([str(YONC), str(COMPILER), "-o", str(s1)],
-                       capture_output=True, text=True, timeout=300)
-    assert c.returncode == 0 and s1.exists(), f"stage-1 build failed:\n{c.stderr[-800:]}"
+def test_frontend_fixpoint(tmp_path, selfhost_compiler_bin):
+    # stage-1: the compiler-in-Yon built by yonc, once for the session (conftest).
+    s1 = selfhost_compiler_bin
 
     # stage-1 compiles the compiler source -> out1.
     out1 = _emit_self(s1, tmp_path / "run1")
