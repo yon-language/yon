@@ -73,6 +73,31 @@ on the shell, and `LatticePoint.orbit(p)`, its M₂₄ orbit: an orbit belongs t
 the point, so two points are the same up to symmetry when
 `orbit(p) == orbit(q)`.
 
+**A frame is a quotient.** An `XRelFrame` is a partition of the 196,560
+points, an equivalence relation, and it is represented by its canonical
+projection: `XRelFrame.canon(f, p)` is the representative of p's class, the
+member with the smallest index, so `canon(f, canon(f, p))` is
+`canon(f, p)`. The frames form a lattice of partitions:
+
+- `XRelFrame.discrete()` is the finest, each point its own class: `canon` is
+  the identity.
+- `XRelFrame.whole()` is the coarsest, a single class.
+- `XRelFrame.refine(f, r)` splits each class of `f` by the type of `v ^ r`
+  (the meet of `f` with the partition that `r` draws); refining `discrete`
+  leaves it `discrete`. There is no bound on the number of references.
+- `XRelFrame.curtis()` is the frame of the 26 Curtis octads, refined from
+  `whole` octad by octad: 98,260 classes.
+
+A frame made from references never separates a point from its negative: the
+sign never changes the type of a vector (checked on all 2²⁵ values), so `v`
+and `-v` have the same type against every reference and fall in the same
+class. Such a frame is at best as fine as ±v, and Curtis reaches about that
+far (98,280 pairs, 98,260 classes); only `discrete` tells `v` from `-v`. A
+map on the classes is an ordinary map whose key goes through the projection
+first: key it by `canon(f, p)`, not by `p`. The laws above are checked on
+every point of every frame the runtime builds
+(`runtime/test_unit_xrel_frame.c`).
+
 **What a lattice slot holds.** `Arena<V>` and `XRelMap<K, V>` keep their
 values inline, in the slots of the Leech heap (chapter 13), never in the
 FNV heap. Which values

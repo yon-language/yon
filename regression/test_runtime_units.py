@@ -96,6 +96,12 @@ C_UNIT_TESTS = [
     ("mphf_ext",      "test_unit_mphf_ext.c",      b"MPHF_EXT: PASS",      True),
     ("curtis_canon",  "test_unit_curtis_canon.c",  b"CURTIS_CANON: PASS",  True),
     ("yon_mmap",      "test_unit_yon_mmap.c",       b"YON_MMAP: PASS",      True),
+    # XRelFrame: a partition of the shell by its canonical projection c. On
+    # every point: c(c(v)) = c(v), c(v) the least index of its class, the
+    # classes are the signatures against the references; the sign never
+    # changes a type (all 2^25 values), so frames from references hold v and
+    # -v together; the 26-octad chain is the precomputed Curtis projection.
+    ("xrel_frame",    "test_unit_xrel_frame.c",    b"XREL_FRAME: PASS",    True),
 ]
 
 

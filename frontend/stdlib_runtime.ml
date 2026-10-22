@@ -321,6 +321,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   let hmap = TyApp ("HashMap", [tk; tv]) and hset = TyApp ("HashSet", [tt]) in
   let xrel = TyApp ("XRelMap", [tk; tv]) and arena = TyApp ("Arena", [tv]) in
   let tpoint = TyUser "LatticePoint" in
+  let tframe = TyUser "XRelFrame" in
   [
     (* The primitives LatticePoint (prelude/lattice) declares `is given`. *)
     "LatticePoint", [
@@ -330,6 +331,14 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "unchecked_index", [tnum], tpoint;
       "index", [tpoint], tnum;
       "orbit", [tpoint], tnum;
+    ];
+    (* The primitives XRelFrame (prelude/lattice) declares `is given`. *)
+    "XRelFrame", [
+      "discrete", [], tframe;
+      "whole", [], tframe;
+      "curtis", [], tframe;
+      "refine", [tframe; tpoint], tframe;
+      "canon", [tframe; tpoint], tpoint;
     ];
     "List", [
       "empty", [tunit], TyList tunk;

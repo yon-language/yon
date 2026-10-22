@@ -4614,6 +4614,73 @@ static int xrel_is_curtis(const yon_xrel_t *f) {
 }
 
 /* ============================================================== */
+/* XRelFrame: a partition of the type-2 shell, represented by its   */
+/* canonical projection c, which sends a point to the representative */
+/* of its class: the member with the smallest MPHF index. So         */
+/* c(c(v)) = c(v). A frame is a value, its handle the table          */
+/* MPHF index -> index of the representative, mapped once and never  */
+/* written after it is built.                                        */
+/*   discrete: the finest frame, each point its own class; c is the  */
+/*     identity and has no table (handle 0).                         */
+/*   whole: the coarsest frame, one class.                           */
+/*   curtis: the frame of the 26 Curtis octads, precomputed.         */
+/*   refine(f, r): each class of f split by the type of v ^ r, the   */
+/*     meet of f with the partition by r. Refining the discrete      */
+/*     frame leaves it discrete. There is no bound on the number of  */
+/*     references: a class is the pair (class in f, type), not a     */
+/*     packed tuple.                                                 */
+/* The sign never changes a type, so a frame made from references    */
+/* holds v and -v in one class: it is at best as fine as +-v.        */
+/* ============================================================== */
+extern uint32_t yon_mphf_index(uint32_t v);
+extern uint32_t yon_mphf_unindex(uint32_t idx);
+
+typedef struct { uint64_t cls; uint32_t idx; } xframe_ci_t;
+static int xframe_ci_cmp(const void *a, const void *b) {
+    const xframe_ci_t *x = (const xframe_ci_t *)a;
+    const xframe_ci_t *y = (const xframe_ci_t *)b;
+    if (x->cls != y->cls) return (x->cls > y->cls) - (x->cls < y->cls);
+    return (x->idx > y->idx) - (x->idx < y->idx);
+}
+
+static const uint32_t g_xframe_whole[YON_LEECH_TYPE2_COUNT];   /* all zero: one class */
+
+int64_t yon_rt_xframe_discrete(void) { return 0; }
+int64_t yon_rt_xframe_whole(void)    { return (int64_t)(intptr_t)g_xframe_whole; }
+int64_t yon_rt_xframe_curtis(void)   { return (int64_t)(intptr_t)YON_CURTIS_CANON_IDX; }
+
+int64_t yon_rt_xframe_refine(int64_t f, int64_t r) {
+    extern uint32_t gen_leech2_type(uint64_t);
+    if (f == 0) return 0;
+    const uint32_t *parent = (const uint32_t *)(intptr_t)f;
+    uint32_t ref = (uint32_t)r & YON_XCOORD_VALID_MASK;
+    uint32_t n = YON_LEECH_TYPE2_COUNT;
+    xframe_ci_t *ci = (xframe_ci_t *)yon_map((size_t)n * sizeof(xframe_ci_t));
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t v = yon_mphf_unindex(i);
+        uint32_t t = gen_leech2_type((uint64_t)((v ^ ref) & YON_XCOORD_VALID_MASK)) & 0x7u;
+        ci[i].cls = ((uint64_t)parent[i] << 3) | t;
+        ci[i].idx = i;
+    }
+    qsort(ci, n, sizeof(xframe_ci_t), xframe_ci_cmp);
+    uint32_t *canon = (uint32_t *)yon_map((size_t)n * sizeof(uint32_t));
+    for (uint32_t g = 0; g < n;) {
+        uint32_t rep = ci[g].idx, h = g;   /* the first of a class has the smallest index */
+        while (h < n && ci[h].cls == ci[g].cls) canon[ci[h++].idx] = rep;
+        g = h;
+    }
+    yon_unmap(ci, (size_t)n * sizeof(xframe_ci_t));
+    return (int64_t)(intptr_t)canon;
+}
+
+int64_t yon_rt_xframe_canon(int64_t f, int64_t p) {
+    if (f == 0) return p;
+    const uint32_t *canon = (const uint32_t *)(intptr_t)f;
+    uint32_t idx = yon_mphf_index((uint32_t)p & YON_XCOORD_VALID_MASK);
+    return (int64_t)yon_mphf_unindex(canon[idx]);
+}
+
+/* ============================================================== */
 /* XRelMap: equivariant map keyed by relational class, stored on    */
 /* the Leech arena (MPHF-indexed), not a generic hash. At freeze, a  */
 /* canon_map LUT sends every type-2 (by MPHF index) to the canonical */
@@ -4627,8 +4694,6 @@ static int xrel_is_curtis(const yon_xrel_t *f) {
 /* ============================================================== */
 #define YON_XRELMAP_MAX  256u
 
-extern uint32_t yon_mphf_index(uint32_t v);
-extern uint32_t yon_mphf_unindex(uint32_t idx);
 
 typedef struct {
     yon_xrel_t  frame;      /* the reference frame, inline */

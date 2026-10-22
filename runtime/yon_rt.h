@@ -628,6 +628,14 @@ int64_t yon_rt_lattice_unchecked_index(double i);
 double yon_rt_lattice_index(int64_t p);
 double yon_rt_lattice_orbit(int64_t p);
 
+/* XRelFrame: a partition of the type-2 shell by its canonical projection;
+ * the handle is the projection's table (0: the discrete frame, the identity) */
+int64_t yon_rt_xframe_discrete(void);
+int64_t yon_rt_xframe_whole(void);
+int64_t yon_rt_xframe_curtis(void);
+int64_t yon_rt_xframe_refine(int64_t f, int64_t r);
+int64_t yon_rt_xframe_canon(int64_t f, int64_t p);
+
 /* M_24 Mathieu orbit canonical + xi Conway involution. */
 double yon_rt_leech_m24_orbit(double v_24bit);
 double yon_rt_leech_gcode_weight(double v_24bit);
