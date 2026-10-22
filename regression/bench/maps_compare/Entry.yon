@@ -1,0 +1,655 @@
+place Entry {
+  fun mn(a: Number, b: Number): Number { return if a < b then a else b }
+  fun hash_point_put(m: HashMap<LatticePoint, Number>, k: Number): HashMap<LatticePoint, Number> {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => HashMap.set(m, key, k), DomainError as d => m }
+  }
+  fun hash_point_has(m: HashMap<LatticePoint, Number>, k: Number): Number {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => (if HashMap.has(m, key) then 1 else 0), DomainError as d => 0 }
+  }
+  fun hash_point_add(s: HashSet<LatticePoint>, k: Number): HashSet<LatticePoint> {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => HashSet.add(s, key), DomainError as d => s }
+  }
+  fun hash_point_twin(k: Number): Number {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => 1, DomainError as d => 0 }
+  }
+  fun hash_point_build(n: Number): HashMap<LatticePoint, Number> {
+    be m := HashMap.empty()
+    be k := 0
+    iter n do {
+      m = hash_point_put(m, k)
+      k = k + 1
+    }
+    return m
+  }
+  fun hash_point_t_build(n: Number): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be m := hash_point_build(n)
+    be t1 := Time.now_ns(0)
+    return (t1 - t0) + 0 * HashMap.size(m)
+  }
+  fun hash_point_t_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_point_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_point_t_get(m: HashMap<LatticePoint, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_point_has(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_point_set(start: Number, n: Number): HashSet<LatticePoint> {
+    be s := HashSet.empty()
+    be k := start
+    iter n do {
+      s = hash_point_add(s, k)
+      k = k + 1
+    }
+    return s
+  }
+  fun hash_point_t_union(a: HashSet<LatticePoint>, b: HashSet<LatticePoint>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := HashSet.union(a, b)
+    return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
+  }
+  fun hash_point_t_inter(a: HashSet<LatticePoint>, b: HashSet<LatticePoint>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := HashSet.intersect(a, b)
+    return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
+  }
+  fun hash_point_row(n: Number): Number visits Output {
+    be m := hash_point_build(n)
+    be a := hash_point_set(0, n)
+    be b := hash_point_set(n / 2, n)
+    be tb := hash_point_t_build(n)
+    be tw := hash_point_t_twin(n)
+    be tg := hash_point_t_get(m, n)
+    be tm := 0
+    be tmw := 0
+    be tu := hash_point_t_union(a, b)
+    be ti := hash_point_t_inter(a, b)
+    iter 2 do {
+      tb = mn(tb, hash_point_t_build(n))
+      tw = mn(tw, hash_point_t_twin(n))
+      tg = mn(tg, hash_point_t_get(m, n))
+      tu = mn(tu, hash_point_t_union(a, b))
+      ti = mn(ti, hash_point_t_inter(a, b))
+    }
+    be _0 := Output.print(String.from_int((tb - tw) / n))
+    be _1 := Output.print(String.from_int((tg - tw) / n))
+    be _2 := Output.print(String.from_int((tm - tmw) / n))
+    be _3 := Output.print(String.from_int(tu / n))
+    be _4 := Output.print(String.from_int(ti / n))
+    return 0
+  }
+  fun hash_number_put(m: HashMap<Number, Number>, k: Number): HashMap<Number, Number> { return HashMap.set(m, k * 0.5, k) }
+  fun hash_number_has(m: HashMap<Number, Number>, k: Number): Number { return if HashMap.has(m, k * 0.5) then 1 else 0 }
+  fun hash_number_miss(m: HashMap<Number, Number>, k: Number): Number { return if HashMap.has(m, k * 0.5 + 0.25) then 1 else 0 }
+  fun hash_number_add(s: HashSet<Number>, k: Number): HashSet<Number> { return HashSet.add(s, k * 0.5) }
+  fun hash_number_twin(k: Number): Number {
+    be key := k * 0.5
+    return 1
+  }
+  fun hash_number_miss_twin(k: Number): Number {
+    be key := k * 0.5 + 0.25
+    return 1
+  }
+  fun hash_number_build(n: Number): HashMap<Number, Number> {
+    be m := HashMap.empty()
+    be k := 0
+    iter n do {
+      m = hash_number_put(m, k)
+      k = k + 1
+    }
+    return m
+  }
+  fun hash_number_t_build(n: Number): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be m := hash_number_build(n)
+    be t1 := Time.now_ns(0)
+    return (t1 - t0) + 0 * HashMap.size(m)
+  }
+  fun hash_number_t_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_number_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_number_t_get(m: HashMap<Number, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_number_has(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_number_t_miss(m: HashMap<Number, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_number_miss(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_number_t_miss_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_number_miss_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_number_set(start: Number, n: Number): HashSet<Number> {
+    be s := HashSet.empty()
+    be k := start
+    iter n do {
+      s = hash_number_add(s, k)
+      k = k + 1
+    }
+    return s
+  }
+  fun hash_number_t_union(a: HashSet<Number>, b: HashSet<Number>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := HashSet.union(a, b)
+    return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
+  }
+  fun hash_number_t_inter(a: HashSet<Number>, b: HashSet<Number>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := HashSet.intersect(a, b)
+    return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
+  }
+  fun hash_number_row(n: Number): Number visits Output {
+    be m := hash_number_build(n)
+    be a := hash_number_set(0, n)
+    be b := hash_number_set(n / 2, n)
+    be tb := hash_number_t_build(n)
+    be tw := hash_number_t_twin(n)
+    be tg := hash_number_t_get(m, n)
+    be tm := hash_number_t_miss(m, n)
+    be tmw := hash_number_t_miss_twin(n)
+    be tu := hash_number_t_union(a, b)
+    be ti := hash_number_t_inter(a, b)
+    iter 2 do {
+      tb = mn(tb, hash_number_t_build(n))
+      tw = mn(tw, hash_number_t_twin(n))
+      tg = mn(tg, hash_number_t_get(m, n))
+      tm = mn(tm, hash_number_t_miss(m, n))
+      tmw = mn(tmw, hash_number_t_miss_twin(n))
+      tu = mn(tu, hash_number_t_union(a, b))
+      ti = mn(ti, hash_number_t_inter(a, b))
+    }
+    be _0 := Output.print(String.from_int((tb - tw) / n))
+    be _1 := Output.print(String.from_int((tg - tw) / n))
+    be _2 := Output.print(String.from_int((tm - tmw) / n))
+    be _3 := Output.print(String.from_int(tu / n))
+    be _4 := Output.print(String.from_int(ti / n))
+    return 0
+  }
+  fun hash_text_put(m: HashMap<String, Number>, k: Number): HashMap<String, Number> { return HashMap.set(m, String.from_int(k), k) }
+  fun hash_text_has(m: HashMap<String, Number>, k: Number): Number { return if HashMap.has(m, String.from_int(k)) then 1 else 0 }
+  fun hash_text_miss(m: HashMap<String, Number>, k: Number): Number { return if HashMap.has(m, String.concat(String.from_int(k), "x")) then 1 else 0 }
+  fun hash_text_add(s: HashSet<String>, k: Number): HashSet<String> { return HashSet.add(s, String.from_int(k)) }
+  fun hash_text_twin(k: Number): Number {
+    be key := String.from_int(k)
+    return 1
+  }
+  fun hash_text_miss_twin(k: Number): Number {
+    be key := String.concat(String.from_int(k), "x")
+    return 1
+  }
+  fun hash_text_build(n: Number): HashMap<String, Number> {
+    be m := HashMap.empty()
+    be k := 0
+    iter n do {
+      m = hash_text_put(m, k)
+      k = k + 1
+    }
+    return m
+  }
+  fun hash_text_t_build(n: Number): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be m := hash_text_build(n)
+    be t1 := Time.now_ns(0)
+    return (t1 - t0) + 0 * HashMap.size(m)
+  }
+  fun hash_text_t_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_text_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_text_t_get(m: HashMap<String, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_text_has(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_text_t_miss(m: HashMap<String, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_text_miss(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_text_t_miss_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + hash_text_miss_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun hash_text_set(start: Number, n: Number): HashSet<String> {
+    be s := HashSet.empty()
+    be k := start
+    iter n do {
+      s = hash_text_add(s, k)
+      k = k + 1
+    }
+    return s
+  }
+  fun hash_text_t_union(a: HashSet<String>, b: HashSet<String>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := HashSet.union(a, b)
+    return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
+  }
+  fun hash_text_t_inter(a: HashSet<String>, b: HashSet<String>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := HashSet.intersect(a, b)
+    return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
+  }
+  fun hash_text_row(n: Number): Number visits Output {
+    be m := hash_text_build(n)
+    be a := hash_text_set(0, n)
+    be b := hash_text_set(n / 2, n)
+    be tb := hash_text_t_build(n)
+    be tw := hash_text_t_twin(n)
+    be tg := hash_text_t_get(m, n)
+    be tm := hash_text_t_miss(m, n)
+    be tmw := hash_text_t_miss_twin(n)
+    be tu := hash_text_t_union(a, b)
+    be ti := hash_text_t_inter(a, b)
+    iter 2 do {
+      tb = mn(tb, hash_text_t_build(n))
+      tw = mn(tw, hash_text_t_twin(n))
+      tg = mn(tg, hash_text_t_get(m, n))
+      tm = mn(tm, hash_text_t_miss(m, n))
+      tmw = mn(tmw, hash_text_t_miss_twin(n))
+      tu = mn(tu, hash_text_t_union(a, b))
+      ti = mn(ti, hash_text_t_inter(a, b))
+    }
+    be _0 := Output.print(String.from_int((tb - tw) / n))
+    be _1 := Output.print(String.from_int((tg - tw) / n))
+    be _2 := Output.print(String.from_int((tm - tmw) / n))
+    be _3 := Output.print(String.from_int(tu / n))
+    be _4 := Output.print(String.from_int(ti / n))
+    return 0
+  }
+  fun xrel_point_put(m: XRelMap<LatticePoint, Number>, k: Number): XRelMap<LatticePoint, Number> {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => XRelMap.set(m, key, k), DomainError as d => m }
+  }
+  fun xrel_point_has(m: XRelMap<LatticePoint, Number>, k: Number): Number {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => (if XRelMap.has(m, key) then 1 else 0), DomainError as d => 0 }
+  }
+  fun xrel_point_add(s: XRelSet<LatticePoint>, k: Number): XRelSet<LatticePoint> {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => XRelSet.add(s, key), DomainError as d => s }
+  }
+  fun xrel_point_twin(k: Number): Number {
+    return match LatticePoint.at_index(k % 196560) { LatticePoint as key => 1, DomainError as d => 0 }
+  }
+  fun xrel_point_build(n: Number): XRelMap<LatticePoint, Number> {
+    be m := XRelMap.empty()
+    be k := 0
+    iter n do {
+      m = xrel_point_put(m, k)
+      k = k + 1
+    }
+    return m
+  }
+  fun xrel_point_t_build(n: Number): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be m := xrel_point_build(n)
+    be t1 := Time.now_ns(0)
+    return (t1 - t0) + 0 * XRelMap.size(m)
+  }
+  fun xrel_point_t_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_point_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_point_t_get(m: XRelMap<LatticePoint, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_point_has(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_point_set(start: Number, n: Number): XRelSet<LatticePoint> {
+    be s := XRelSet.empty()
+    be k := start
+    iter n do {
+      s = xrel_point_add(s, k)
+      k = k + 1
+    }
+    return s
+  }
+  fun xrel_point_t_union(a: XRelSet<LatticePoint>, b: XRelSet<LatticePoint>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := XRelSet.union(a, b)
+    return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_point_t_inter(a: XRelSet<LatticePoint>, b: XRelSet<LatticePoint>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := XRelSet.intersect(a, b)
+    return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_point_row(n: Number): Number visits Output {
+    be m := xrel_point_build(n)
+    be a := xrel_point_set(0, n)
+    be b := xrel_point_set(n / 2, n)
+    be tb := xrel_point_t_build(n)
+    be tw := xrel_point_t_twin(n)
+    be tg := xrel_point_t_get(m, n)
+    be tm := 0
+    be tmw := 0
+    be tu := xrel_point_t_union(a, b)
+    be ti := xrel_point_t_inter(a, b)
+    iter 2 do {
+      tb = mn(tb, xrel_point_t_build(n))
+      tw = mn(tw, xrel_point_t_twin(n))
+      tg = mn(tg, xrel_point_t_get(m, n))
+      tu = mn(tu, xrel_point_t_union(a, b))
+      ti = mn(ti, xrel_point_t_inter(a, b))
+    }
+    be _0 := Output.print(String.from_int((tb - tw) / n))
+    be _1 := Output.print(String.from_int((tg - tw) / n))
+    be _2 := Output.print(String.from_int((tm - tmw) / n))
+    be _3 := Output.print(String.from_int(tu / n))
+    be _4 := Output.print(String.from_int(ti / n))
+    return 0
+  }
+  fun xrel_number_put(m: XRelMap<Number, Number>, k: Number): XRelMap<Number, Number> { return XRelMap.set(m, k * 0.5, k) }
+  fun xrel_number_has(m: XRelMap<Number, Number>, k: Number): Number { return if XRelMap.has(m, k * 0.5) then 1 else 0 }
+  fun xrel_number_miss(m: XRelMap<Number, Number>, k: Number): Number { return if XRelMap.has(m, k * 0.5 + 0.25) then 1 else 0 }
+  fun xrel_number_add(s: XRelSet<Number>, k: Number): XRelSet<Number> { return XRelSet.add(s, k * 0.5) }
+  fun xrel_number_twin(k: Number): Number {
+    be key := k * 0.5
+    return 1
+  }
+  fun xrel_number_miss_twin(k: Number): Number {
+    be key := k * 0.5 + 0.25
+    return 1
+  }
+  fun xrel_number_build(n: Number): XRelMap<Number, Number> {
+    be m := XRelMap.empty()
+    be k := 0
+    iter n do {
+      m = xrel_number_put(m, k)
+      k = k + 1
+    }
+    return m
+  }
+  fun xrel_number_t_build(n: Number): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be m := xrel_number_build(n)
+    be t1 := Time.now_ns(0)
+    return (t1 - t0) + 0 * XRelMap.size(m)
+  }
+  fun xrel_number_t_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_number_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_number_t_get(m: XRelMap<Number, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_number_has(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_number_t_miss(m: XRelMap<Number, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_number_miss(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_number_t_miss_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_number_miss_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_number_set(start: Number, n: Number): XRelSet<Number> {
+    be s := XRelSet.empty()
+    be k := start
+    iter n do {
+      s = xrel_number_add(s, k)
+      k = k + 1
+    }
+    return s
+  }
+  fun xrel_number_t_union(a: XRelSet<Number>, b: XRelSet<Number>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := XRelSet.union(a, b)
+    return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_number_t_inter(a: XRelSet<Number>, b: XRelSet<Number>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := XRelSet.intersect(a, b)
+    return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_number_row(n: Number): Number visits Output {
+    be m := xrel_number_build(n)
+    be a := xrel_number_set(0, n)
+    be b := xrel_number_set(n / 2, n)
+    be tb := xrel_number_t_build(n)
+    be tw := xrel_number_t_twin(n)
+    be tg := xrel_number_t_get(m, n)
+    be tm := xrel_number_t_miss(m, n)
+    be tmw := xrel_number_t_miss_twin(n)
+    be tu := xrel_number_t_union(a, b)
+    be ti := xrel_number_t_inter(a, b)
+    iter 2 do {
+      tb = mn(tb, xrel_number_t_build(n))
+      tw = mn(tw, xrel_number_t_twin(n))
+      tg = mn(tg, xrel_number_t_get(m, n))
+      tm = mn(tm, xrel_number_t_miss(m, n))
+      tmw = mn(tmw, xrel_number_t_miss_twin(n))
+      tu = mn(tu, xrel_number_t_union(a, b))
+      ti = mn(ti, xrel_number_t_inter(a, b))
+    }
+    be _0 := Output.print(String.from_int((tb - tw) / n))
+    be _1 := Output.print(String.from_int((tg - tw) / n))
+    be _2 := Output.print(String.from_int((tm - tmw) / n))
+    be _3 := Output.print(String.from_int(tu / n))
+    be _4 := Output.print(String.from_int(ti / n))
+    return 0
+  }
+  fun xrel_text_put(m: XRelMap<String, Number>, k: Number): XRelMap<String, Number> { return XRelMap.set(m, String.from_int(k), k) }
+  fun xrel_text_has(m: XRelMap<String, Number>, k: Number): Number { return if XRelMap.has(m, String.from_int(k)) then 1 else 0 }
+  fun xrel_text_miss(m: XRelMap<String, Number>, k: Number): Number { return if XRelMap.has(m, String.concat(String.from_int(k), "x")) then 1 else 0 }
+  fun xrel_text_add(s: XRelSet<String>, k: Number): XRelSet<String> { return XRelSet.add(s, String.from_int(k)) }
+  fun xrel_text_twin(k: Number): Number {
+    be key := String.from_int(k)
+    return 1
+  }
+  fun xrel_text_miss_twin(k: Number): Number {
+    be key := String.concat(String.from_int(k), "x")
+    return 1
+  }
+  fun xrel_text_build(n: Number): XRelMap<String, Number> {
+    be m := XRelMap.empty()
+    be k := 0
+    iter n do {
+      m = xrel_text_put(m, k)
+      k = k + 1
+    }
+    return m
+  }
+  fun xrel_text_t_build(n: Number): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be m := xrel_text_build(n)
+    be t1 := Time.now_ns(0)
+    return (t1 - t0) + 0 * XRelMap.size(m)
+  }
+  fun xrel_text_t_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_text_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_text_t_get(m: XRelMap<String, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_text_has(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_text_t_miss(m: XRelMap<String, Number>, n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_text_miss(m, k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_text_t_miss_twin(n: Number): Number visits Output {
+    be acc := 0
+    be k := 0
+    be t0 := Time.now_ns(0)
+    iter n do {
+      acc = acc + xrel_text_miss_twin(k)
+      k = k + 1
+    }
+    return Time.now_ns(0) - t0 + 0 * acc
+  }
+  fun xrel_text_set(start: Number, n: Number): XRelSet<String> {
+    be s := XRelSet.empty()
+    be k := start
+    iter n do {
+      s = xrel_text_add(s, k)
+      k = k + 1
+    }
+    return s
+  }
+  fun xrel_text_t_union(a: XRelSet<String>, b: XRelSet<String>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := XRelSet.union(a, b)
+    return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_text_t_inter(a: XRelSet<String>, b: XRelSet<String>): Number visits Output {
+    be t0 := Time.now_ns(0)
+    be u := XRelSet.intersect(a, b)
+    return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_text_row(n: Number): Number visits Output {
+    be m := xrel_text_build(n)
+    be a := xrel_text_set(0, n)
+    be b := xrel_text_set(n / 2, n)
+    be tb := xrel_text_t_build(n)
+    be tw := xrel_text_t_twin(n)
+    be tg := xrel_text_t_get(m, n)
+    be tm := xrel_text_t_miss(m, n)
+    be tmw := xrel_text_t_miss_twin(n)
+    be tu := xrel_text_t_union(a, b)
+    be ti := xrel_text_t_inter(a, b)
+    iter 2 do {
+      tb = mn(tb, xrel_text_t_build(n))
+      tw = mn(tw, xrel_text_t_twin(n))
+      tg = mn(tg, xrel_text_t_get(m, n))
+      tm = mn(tm, xrel_text_t_miss(m, n))
+      tmw = mn(tmw, xrel_text_t_miss_twin(n))
+      tu = mn(tu, xrel_text_t_union(a, b))
+      ti = mn(ti, xrel_text_t_inter(a, b))
+    }
+    be _0 := Output.print(String.from_int((tb - tw) / n))
+    be _1 := Output.print(String.from_int((tg - tw) / n))
+    be _2 := Output.print(String.from_int((tm - tmw) / n))
+    be _3 := Output.print(String.from_int(tu / n))
+    be _4 := Output.print(String.from_int(ti / n))
+    return 0
+  }
+  fun arg(i: Number): Number { return String.parse_number(Args.get(i)) }
+  fun smoke(n: Number): Number visits Output {
+    be _hash_point := hash_point_row(n)
+    be _hash_number := hash_number_row(n)
+    be _hash_text := hash_text_row(n)
+    be _xrel_point := xrel_point_row(n)
+    be _xrel_number := xrel_number_row(n)
+    be _xrel_text := xrel_text_row(n)
+    return 0
+  }
+  fun main(): Number visits Output {
+    be full := Args.count(0) >= 4
+    be fam := if full then arg(1) else 0
+    be kind := if full then arg(2) else 0
+    be n := if full then arg(3) else 1000
+    be _warm := hash_point_twin(0)
+    return if full then (if fam == 0 and kind == 0 then hash_point_row(n) else (if fam == 0 and kind == 1 then hash_number_row(n) else (if fam == 0 and kind == 2 then hash_text_row(n) else (if fam == 1 and kind == 0 then xrel_point_row(n) else (if fam == 1 and kind == 1 then xrel_number_row(n) else (if fam == 1 and kind == 2 then xrel_text_row(n) else 1)))))) else smoke(n)
+  }
+}
