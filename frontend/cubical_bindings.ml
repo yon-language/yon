@@ -7,11 +7,11 @@
  *   transport : forallA B. Path U A B -> A -> B
  *   ua : forallA B. (A ~= B) -> Path U A B
  *
- * These signatures do not go through Hm_infer; we implement them
- * via "shape-driven inference": when a call to a cubical primitive
- * is encountered, the checker inspects the argument types to derive
- * the result type. No type variables, no unification — just direct
- * computation on the shapes.
+ * These signatures do not go through Hm_infer (the checker's Algorithm W,
+ * ty_subst.ml): they are "shape-driven": when a call to a cubical primitive
+ * is encountered, the checker inspects the argument types to derive the
+ * result type. For these primitives only: no type variables and no
+ * unification, a direct computation on the shapes.
  *
  * For each primitive we expose:
  *   - The expected arity
