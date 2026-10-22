@@ -22,11 +22,13 @@ runtime refuses out loud rather than degrading in silence.
 - **The heap**: 196,560 *distinct* contents per heap (the count of minimal
   vectors of Λ<sub>24</sub>), on a 64&nbsp;MB payload arena. Deduplication makes
   repeats free; the budget is spent on distinct values, not on allocations.
-- **The heap chain**: when a heap fills, a successor is created and linked; a
-  reference is global (8-bit heap id, 24-bit slot), and deduplication stays global
-  through a process-wide content index, so O(1) equality survives the boundary. Up
-  to 256 chained heaps: roughly 18&nbsp;GB of globally deduplicated content per
-  process. Measured exact at a million map entries across six heaps.
+- **The heap chain**: every Space has its own chain; when a heap fills, a
+  successor is created and linked. A reference names its heap (8-bit heap id,
+  24-bit slot), so it says which Space it belongs to, and deduplication holds
+  across the heaps of one Space's chain: O(1) equality survives the boundary
+  between heaps. Two Spaces never share a slot: a value that crosses is copied.
+  Up to 256 heaps per process in all. Measured exact at a million map entries
+  across six heaps.
 - **Fixed pools, loud refusal**: 256 instances per pooled collection type (a
   HashMap or a HashSet is not pooled: it is a value in the heap), 64 Spaces, 64
   streams, 16 RPC sessions. Like a fixed-width address bus, these buy predictable
@@ -41,10 +43,12 @@ runtime refuses out loud rather than degrading in silence.
 
 These are not on any roadmap. They are the design.
 
-- **No garbage collector.** Slots are stable for the life of the process; the heap
-  grows with distinct content only (chapter 14). Reclamation is by *region*, never
-  tracing: a whole Space's heap is released in one move, at a checked `drop X` or
-  automatically at the Space's last use.
+- **No garbage collector.** Reclamation is by *region*, never tracing: both heaps
+  of a Space are released whole, at a checked `drop X`, at the Space's last use,
+  and, for a Space without state, at the end of every call into it (chapter 14).
+  Nothing is freed one value at a time, so a Space that lives long and keeps
+  updating collections grows for as long as it lives: the idiom is one Space per
+  unit of work.
 - **No threads.** The unit of concurrency is the process; Spaces talk over a
   shared-memory wire (chapter 17).
 - **No exceptions.** Failure is data, a declaration, or a process exit, never a
@@ -62,6 +66,10 @@ date.
   capability is absent is not yet refused, and the static rule (a caller of a
   `requires` move must itself hold the capability) is not yet checked
   (chapter 20).
+- **Deadlocks are not detected.** Spaces share no memory, so a data race cannot
+  happen by construction; but two Spaces whose synchronous calls form a cycle
+  can each wait for the other forever, and today the compiler does not detect
+  it, although the communication graph it would have to read is static.
 - **The concurrent drain of a `Wire<T>`** (both processes live, the consumer
   draining while the producer fills, under contention) is not yet verified; the
   verified shape is the producer running to completion first (chapter 17).
