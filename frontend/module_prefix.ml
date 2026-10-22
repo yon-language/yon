@@ -215,6 +215,10 @@ let op_selector (name : string) : int = (fnv1a name) land 0x7fffff
  *   yon_rt_rpc2_invoke_named(&"Measures", <op_sel>, x).
  * No hash%64 stream id: zero collisions by construction. Only number
  * arguments cross the boundary; arity 0-4. *)
+(* The operation a lowered call names: (Space, selector) -> the imported
+   name, so the type checker reads the remote signature of what it calls. *)
+let rpc_ops : (string * int, string) Hashtbl.t = Hashtbl.create 16
+
 let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
   (* map: local-callable-name -> (Space, op-name). The local name is the bare
    * operation name `n` (e.g. "rotate") or its qualified "mod::n". *)
@@ -239,10 +243,11 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
     in
     let rec rwe (e : S.expr) : S.expr =
       match e with
-      | S.ECall (name, args, _) when List.mem_assoc name remote ->
+      | S.ECall (name, args, ll) when List.mem_assoc name remote ->
           let (sp, op) = List.assoc name remote in
+          Hashtbl.replace rpc_ops (sp, op_selector op) name;
           S.ECall (invoke_name (List.length args) sp,
-                   mk_num (op_selector op) :: List.map rwe args, l)
+                   mk_num (op_selector op) :: List.map rwe args, ll)
       | S.ECall (n, args, ll) -> S.ECall (n, List.map rwe args, ll)
       | S.EBinop (op, a, b, ll) -> S.EBinop (op, rwe a, rwe b, ll)
       | S.EParen (x, ll) -> S.EParen (rwe x, ll)

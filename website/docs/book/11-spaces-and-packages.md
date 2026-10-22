@@ -146,9 +146,11 @@ you before it builds, reporting that a cross-Space call may take at most 4 numbe
 arguments across a Space boundary.
 
 Strings and sections are process-local handles: a call does not carry them.
-A `String` parameter in a cross-Space signature is not yet refused; it compiles
-and the call returns a wrong value (chapter 19). Strings and places cross by
-copy on a `Wire<T>` (chapter 17). `internal` functions are not exported. The importer of
+The checker reads the signature of the imported function and checks every
+argument against its declared type. A parameter or a result that a call cannot
+carry, a `String` for instance, is refused before the program builds, so it
+never arrives as a number that means nothing. Strings and places cross by copy
+on a `Wire<T>` (chapter 17). `internal` functions are not exported. The importer of
 `recipe_secret` compiles, but the first call gets a refusal from the server
 itself: the cross-Space call fails because `Kitchen_srv` reports the operation is
 not exported.

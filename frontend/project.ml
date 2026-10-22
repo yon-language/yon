@@ -450,7 +450,17 @@ let unhandled_op_diags (l : loaded) : Error_codes.t list =
           (Tycheck.collect_calls_in_stmts fd.S.fn_body)
     | _ -> []) l.merged
 
+(* Record the Space of every user file, for the boundary check of the type
+   checker (prelude files are left out). *)
+let record_file_spaces (l : loaded) : unit =
+  let prelude = List.map fst (prelude_sources ()) in
+  Hashtbl.reset Surface_ast.user_file_space;
+  List.iter (fun f ->
+    if not (List.mem f.fi_path prelude) then
+      Hashtbl.replace Surface_ast.user_file_space f.fi_path f.fi_space) l.files
+
 let check_all (l : loaded) : Error_codes.t list =
+  record_file_spaces l;
   drop_diags l @ boundary_diags l @ union_arm_space_diags l @ topos_layout_diags l
   @ file_layout_diags l @ entrypoint_diags l @ tail_diags l @ law_diags l
   @ unhandled_op_diags l
@@ -482,10 +492,13 @@ let load_remote_signatures (l : loaded) : unit =
                  List.iter
                    (function
                      | S.TopFun fd ->
+                         let ps = List.map (fun p -> p.S.param_ty) fd.S.fn_params in
                          Tycheck.register_remote_signature
                            (m ^ "::" ^ fd.S.fn_name) fd.S.fn_return;
                          Tycheck.register_remote_signature
-                           fd.S.fn_name fd.S.fn_return
+                           fd.S.fn_name fd.S.fn_return;
+                         Tycheck.register_remote_params (m ^ "::" ^ fd.S.fn_name) ps;
+                         Tycheck.register_remote_params fd.S.fn_name ps
                      | _ -> ())
                    (parse_text ~file:fn (read_file fn))
                with _ -> ())
@@ -577,6 +590,7 @@ let prepare_for_typecheck (l : loaded) : S.program =
  * location was stamped with, so a caller (the LSP) can attribute it to the file
  * that owns it. *)
 let typecheck_diags (l : loaded) : Error_codes.t list =
+  record_file_spaces l;
   let cr = Tycheck.check_program (prepare_for_typecheck l) in
   List.map
     (fun (e : Tycheck.type_error) ->

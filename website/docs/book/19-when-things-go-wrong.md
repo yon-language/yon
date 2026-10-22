@@ -65,9 +65,9 @@ At the stdlib boundary, absence is in-band (chapter 12): a missing file, an
 unset variable, an out-of-range index all return the `0.0` handle. You test
 it like any number. The compiler does its part *before* runtime: a false
 `law` is rejected by AlgebraVerifier, a missing subsumption mono is rejected by
-the checker. One gap remains: a `String` parameter in a cross-Space signature
-is not yet refused. It compiles, and the call returns a wrong value (`0`), because
-a cross-Space call carries numbers only. This is a defect.
+the checker, and a cross-Space call is checked against the types of the
+remote signature: an argument the call cannot carry is refused before the
+program builds.
 
 ## When another process fails
 
