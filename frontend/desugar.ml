@@ -63,6 +63,14 @@ let user_fun_sigs : (string * (S.ty list * S.ty)) list ref = ref []
    (degrades to current behavior). *)
 let current_env : Tyenv.env option ref = ref None
 
+(* The type root awaited at a wire site, as two exact 32-bit halves (a call
+   carries f64 numbers, and a 64-bit root does not fit in one). *)
+let root_halves (site : string * int * int) : float * float =
+  let r = match Hashtbl.find_opt Surface_ast.wire_elem_roots site with
+    | Some r -> r | None -> 0L in
+  (Int64.to_float (Int64.shift_right_logical r 32),
+   Int64.to_float (Int64.logand r 0xffffffffL))
+
 (* ── Native sum types → the content-addressed MerkleTree carrier ─────────────
    A custom (non-HIT) sum value gets a RUNTIME representation as a MerkleTree
    node: the tag is the constructor's index in its declaring type, and its
@@ -2389,6 +2397,8 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
          the channel), bind the subscription handle to the channel. *)
       let (sp, sel, chan, n_bytes) =
         Hashtbl.find S.awaits_site_table (eloc.S.start_line, eloc.S.start_col) in
+      let (root_hi, root_lo) =
+        root_halves (eloc.S.file, eloc.S.start_line, eloc.S.start_col) in
       let l = S.dummy_loc in
       let make_chan =
         if n_bytes > 0 then
@@ -2404,12 +2414,16 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
                     [v1_num (float_of_int chan); v1_num 1.0], loc)
       in
       [ make_chan;
+        (* the request carries the type root the consumer awaits; the
+           producer answers with a refusal when its own differs *)
         S.SLet (v1_fresh "sub_rq",
-                S.ECall (Printf.sprintf "__yon_rpc2_invoke3__%s" sp,
-                         [v1_num 4294967295.0;
-                          v1_num (float_of_int sel);
-                          v1_num (float_of_int chan);
-                          v1_num (float_of_int n_bytes)], l), loc);
+                v1_call "Wire__subscribed"
+                  [S.ECall (Printf.sprintf "__yon_rpc2_invoke4__%s" sp,
+                            [v1_num 4294967295.0;
+                             v1_num (float_of_int sel);
+                             v1_num (float_of_int chan);
+                             v1_num root_hi;
+                             v1_num root_lo], l)], loc);
         S.SLet (sub, v1_num (float_of_int chan), loc) ]
   | S.SLet (x, S.EField (S.EVar (sub, _), "stream", floc), loc)
     when Hashtbl.mem S.substream_site_table (floc.S.start_line, floc.S.start_col) ->
@@ -2421,9 +2435,11 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
       let n_bytes =
         Hashtbl.find S.substream_site_table (floc.S.start_line, floc.S.start_col) in
       if n_bytes > 0 then
+        let (root_hi, root_lo) =
+          root_halves (floc.S.file, floc.S.start_line, floc.S.start_col) in
         [ S.SLet (x,
                   v1_call "Wire__subscription_stream_dto"
-                    [S.EVar (sub, S.dummy_loc); v1_num (float_of_int n_bytes)], loc) ]
+                    [S.EVar (sub, S.dummy_loc); v1_num root_hi; v1_num root_lo], loc) ]
       else
         [ S.SLet (x, v1_call "Wire__subscription_stream" [S.EVar (sub, S.dummy_loc)], loc) ]
   | other -> [other]

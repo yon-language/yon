@@ -41,6 +41,12 @@ let stream_method_table : (int * int, unit) Hashtbl.t = Hashtbl.create 16
    field sites just the membership. *)
 let awaits_site_table : (int * int, string * int * int * int) Hashtbl.t = Hashtbl.create 16
 let substream_site_table : (int * int, int) Hashtbl.t = Hashtbl.create 16
+(* The type root a subscription awaits, at its awaits site and at its .stream
+   site: the consumer's own type of the element. *)
+let wire_elem_roots : (string * int * int, int64) Hashtbl.t = Hashtbl.create 16
+(* The producers of the program: function name -> the type root of its wire's
+   element and whether the element is a place (carried as frames). *)
+let producer_roots : (string, int64 * bool) Hashtbl.t = Hashtbl.create 8
 
 (* Method resolution: a call `s.area()` parses to `area(s)`; when `area` is an
    overloaded method the tycheck resolves it to the receiver-qualified name

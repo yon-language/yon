@@ -1066,6 +1066,16 @@ let resolve_fused (t : ty) : ty =
        | Some p -> TyPrim p | None -> t)
   | _ -> t
 
+(* The type root of a wire element, as the consumer declares it. *)
+let wire_elem_root (env : Tyenv.env) (t : ty) : int64 =
+  match resolve_fused t with
+  | TyPrim p -> Type_root.prim_root p
+  | TyUser p ->
+      (match Tyenv.lookup_place env p with
+       | Some pd -> Type_root.root_of_place env pd
+       | None -> Type_root.leaf_root p)
+  | t -> (match Type_root.type_root env t with Some r -> r | None -> 0L)
+
 (* What a call between processes carries: a scalar, as one f64. *)
 let rpc_carries (t : ty) : bool =
   match resolve_fused t with
@@ -1165,6 +1175,13 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
 
 (* A producer's wire carries its elements to another Space. *)
 let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
+  (match fn.fn_return with
+   | Some (TyChannel t) ->
+       let is_place = match t with
+         | TyUser p -> Tyenv.lookup_place env p <> None | _ -> false in
+       Hashtbl.replace Surface_ast.producer_roots fn.fn_name
+         (wire_elem_root env t, is_place)
+   | _ -> ());
   match fn.fn_return with
   | Some (TyChannel t) when not (ty_mobile env t) ->
       [ { err_loc = fn.fn_loc; err_msg = boundary_msg "the element of this wire" t } ]
@@ -1849,6 +1866,8 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
         | _ -> 0
       in
       Hashtbl.replace substream_site_table (loc.start_line, loc.start_col) n_bytes;
+      Hashtbl.replace Surface_ast.wire_elem_roots
+        (loc.file, loc.start_line, loc.start_col) (wire_elem_root env elem);
       ok (TyChannel elem)
 
   | EField (obj, fld, loc) ->
@@ -1937,6 +1956,8 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                           in
                           Hashtbl.replace awaits_site_table
                             (loc.start_line, loc.start_col) (sp, sel, sel, n_bytes);
+                          Hashtbl.replace Surface_ast.wire_elem_roots
+                            (loc.file, loc.start_line, loc.start_col) (wire_elem_root env elem);
                           ok (TySubscription (sp, elem))
                       | Some r ->
                           let shown = (match r with
@@ -6609,6 +6630,7 @@ let check_program (p : program) : check_result =
     | _ -> ()) p;
   let p = Method_sugar.qualify_overloads p in
   Hashtbl.reset fun_space;
+  Hashtbl.reset Surface_ast.producer_roots;
   List.iter (function
     | TopFun fd ->
         (match Hashtbl.find_opt Surface_ast.user_file_space fd.fn_loc.file with

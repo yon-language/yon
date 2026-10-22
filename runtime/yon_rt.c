@@ -1077,6 +1077,11 @@ static const migration_entry_t *find_migration(const char *place_name,
 static void yon_root_write_le(uint8_t *dst, uint64_t root) {
     for (int i = 0; i < 8; i++) dst[i] = (uint8_t)(root >> (8 * i));
 }
+static uint64_t yon_root_read_le(const uint8_t *src) {
+    uint64_t r = 0;
+    for (int i = 0; i < 8; i++) r |= (uint64_t)src[i] << (8 * i);
+    return r;
+}
 
 yon_section_t yon_rt_section_r(uint32_t heap_id,
                             const void *field_bytes, uint32_t n_bytes,
@@ -1875,7 +1880,7 @@ int yon_rt_stream_shm_unlink(const char *name) {
 
 /* ---- (4) Byte-ring variant for variable-length DTO frames. A DTO channel is
  * opened with slot_size == 0; then `capacity` is the ring size in BYTES and
- * head/tail/count are byte offsets/counts. Frames ([u32 schema_id][u32
+ * head/tail/count are byte offsets/counts. Frames ([u64 root][u32
  * payload_len][payload]) are written densely, wrapping at the buffer end by
  * splitting the copy in two; the frame's own header carries its length, so the
  * ring is self-delimiting and there is no fixed per-element cap (a frame is
@@ -1926,16 +1931,16 @@ int yon_rt_stream_shm_await_frame(yon_shm_stream_t *s,
     uint32_t cap = hdr->capacity;
     if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     int rc;
-    if (hdr->count < 8u) {
+    if (hdr->count < YON_WIRE_HDR_BYTES) {
         if (hdr->count == 0u) rc = hdr->closed ? -2 : -1;  /* EOF or empty */
         else                  rc = hdr->closed ? -3 : -1;  /* drift or wait */
     } else {
         uint32_t h = hdr->head;
-        uint8_t hb[8];
-        for (uint32_t i = 0; i < 8u; i++) hb[i] = buf[(h + i) % cap];
+        uint8_t hb[YON_WIRE_HDR_BYTES];
+        for (uint32_t i = 0; i < YON_WIRE_HDR_BYTES; i++) hb[i] = buf[(h + i) % cap];
         uint32_t payload_len;
-        memcpy(&payload_len, hb + 4, 4u);
-        uint32_t frame_len = 8u + payload_len;
+        memcpy(&payload_len, hb + 8, 4u);
+        uint32_t frame_len = YON_WIRE_HDR_BYTES + payload_len;
         if (hdr->count < frame_len) {
             rc = hdr->closed ? -3 : -1;       /* partial: drift if closed, else wait */
         } else if (frame_len > out_cap) {
@@ -2135,9 +2140,51 @@ double Wire__subscription_stream(double chan_id) {
  * stream. The wormhole's inbound half: content crosses, the object is born
  * anew here, the producer's handle never leaves its process. EOF is the
  * channel's structural close (await rc == -2), not a value sentinel. */
-double Wire__subscription_stream_dto(double chan_id, double n_bytes_d) {
-    uint32_t n = (uint32_t)n_bytes_d;
-    if (n == 0) return -1.0;             /* n>0 only signals "place DTO channel" */
+/* A 64-bit type root crosses a call as two exact 32-bit halves. */
+static uint64_t yon_root_of_halves(double hi, double lo) {
+    return ((uint64_t)(uint32_t)hi << 32) | (uint64_t)(uint32_t)lo;
+}
+
+/* The producers of this binary: the dispatch selector of each function that
+ * returns a Wire<T>, the type root of T, and whether T is a place (carried as
+ * frames) or a scalar (carried as numbers). A subscription is answered only
+ * when the root the consumer awaits is the producer's own. */
+#define YON_MAX_PRODUCERS 256u
+static struct { uint32_t sel; uint64_t root; int is_place; } g_producers[YON_MAX_PRODUCERS];
+static uint32_t g_n_producers = 0;
+
+void yon_rt_register_producer(double sel, double root_hi, double root_lo,
+                              double is_place) {
+    if (g_n_producers >= YON_MAX_PRODUCERS) return;
+    g_producers[g_n_producers].sel = (uint32_t)sel;
+    g_producers[g_n_producers].root = yon_root_of_halves(root_hi, root_lo);
+    g_producers[g_n_producers].is_place = is_place != 0.0;
+    g_n_producers++;
+}
+
+static int yon_producer_find(uint32_t sel) {
+    for (uint32_t i = 0; i < g_n_producers; i++)
+        if (g_producers[i].sel == sel) return (int)i;
+    return -1;
+}
+
+/* The answer of a subscription whose awaited type is not the producer's. */
+#define YON_WIRE_TYPE_REFUSED (-3.0)
+
+/* The consumer's end of the connection: a refused subscription is a declared
+ * error, before any frame, never a stream of values of another type. */
+double Wire__subscribed(double reply) {
+    if (reply == YON_WIRE_TYPE_REFUSED) {
+        fprintf(stderr,
+                "error: wire: the subscription was refused: the producer's Space "
+                "declares the element type differently (their type roots differ)\n");
+        exit(3);
+    }
+    return reply;
+}
+
+double Wire__subscription_stream_dto(double chan_id, double root_hi, double root_lo) {
+    uint64_t expected = yon_root_of_halves(root_hi, root_lo);
     char nm[64];
     snprintf(nm, sizeof(nm), "__sub_stream_%u", (unsigned)chan_id);
     double local = (double)yon_rt_stream_create(nm, 0, 8);
@@ -2153,8 +2200,14 @@ double Wire__subscription_stream_dto(double chan_id, double n_bytes_d) {
         int rc = yon_rt_stream_shm_await_frame_blocking(
                      g_shm_stream_handles[ch], buf, YON_WIRE_RING_BYTES, &flen);
         if (rc != 0) break;  /* -2 EOF, -3 loud error, -1 timeout: stop draining */
-        yon_section_t sec = yon_rt_deserialize(buf, flen, YON_HEAP_ID_DEFAULT);
-        if (sec == YON_SECTION_INVALID) break;
+        yon_section_t sec = yon_rt_deserialize(buf, flen, YON_HEAP_ID_DEFAULT, expected);
+        if (sec == YON_SECTION_INVALID) {
+            /* a frame of another type, or one that does not parse: a declared
+               error, never a stream that silently ends early */
+            fprintf(stderr, "error: wire: a frame could not be rebuilt as the "
+                            "awaited type; the stream is refused\n");
+            exit(3);
+        }
         yon_rt_stream_emit_f64(local, (double)(int64_t)(uint64_t)sec);
     }
     yon_xheap_strip_trim(g_yon_heap, buf_off, 0u, YON_WIRE_RING_BYTES);
@@ -3000,8 +3053,19 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
              * in the loop, by design (v1): producers terminate. */
             double producer_sel = req.args[0];
             double chan_id = req.args[1];
-            uint32_t elem_bytes = (uint32_t)req.args[2]; /* 0 = scalar f64;
-                                                            >0 = place DTO (byte-ring) */
+            uint64_t awaited = yon_root_of_halves(req.args[2], req.args[3]);
+            int pi = yon_producer_find((uint32_t)producer_sel);
+            if (pi < 0 || g_producers[pi].root != awaited) {
+                fprintf(stderr,
+                        "error: wire: a subscription awaits type root %016llx, "
+                        "and this producer's element has %016llx: refused\n",
+                        (unsigned long long)awaited,
+                        (unsigned long long)(pi < 0 ? 0 : g_producers[pi].root));
+                yon_rt_rpc2_reply(&req, YON_WIRE_TYPE_REFUSED);
+                continue;
+            }
+            uint32_t elem_bytes = (uint32_t)g_producers[pi].is_place; /* 0 = scalar f64;
+                                                            >0 = place frames (byte-ring) */
             double attach = (elem_bytes == 0)
                 ? yon_rt_stream_shm_open_f64(chan_id, 0.0)              /* scalar slot ring */
                 : yon_rt_stream_shm_open_sized_f64(chan_id, 0.0, 0.0); /* byte ring attach */
@@ -7320,79 +7384,79 @@ double yon_rt_bits_xor_64(double a, double b) {
 /* ============================================================== */
 /* Wire DTO transport, seal 2: recursive length-prefixed frames    */
 /* ============================================================== */
-/* The frame is [u32 schema_id][u32 payload_len][payload]. The payload
- * concatenates the fields in declaration order, positional, untagged: a
- * scalar is its 8 raw bytes, a string is [u32 len][len bytes]. The schema_id
- * (stamped on the instance by yon_rt_section_v, carried at the frame head) finds
- * the descriptor and is the one cross-process type guard. Length prefixes are
- * u32 native-endian: the shm wire is one machine, one build, so no swap, and a
- * fixed width keeps every read trivially bounded. Both halves of the wormhole
- * are generic runtime, so both recover the descriptor here at runtime. */
+/* The frame is [u64 root][u32 payload_len][payload]. The root is the type
+ * root of the value's place, the 8-byte identity head of every section: the
+ * name of the place, then the name and the root of each field in declaration
+ * order. Two Spaces that disagree on the type disagree on the root, so the
+ * root is the type guard of the wire: the consumer compares each frame with
+ * the root it awaited and refuses any other, never rebuilding a value of
+ * another shape. The payload concatenates the fields in declaration order,
+ * positional, untagged: a scalar is its 8 raw bytes, a string is [u32 len][len
+ * bytes], a nested place is its own frame. Lengths are u32 native-endian: the
+ * shm wire is one machine, one build, so no swap, and a fixed width keeps
+ * every read trivially bounded. */
 
 #define YON_WIRE_MAX_SCHEMAS 256u
 #define YON_WIRE_MAX_FIELDS  64u
 
 typedef struct {
-    uint32_t       schema_id;
-    uint32_t       n_fields;
-    const uint8_t *tags;   /* n_fields bytes, static in the binary */
-    int            used;
-    uint64_t type_root;   /* the place's nominal root: re-attached at rebuild */
+    uint64_t        root;
+    uint32_t        n_fields;
+    const uint8_t  *tags;   /* n_fields bytes, static in the binary */
+    const uint64_t *subs;   /* n_fields roots: the place of a nested field, else 0 */
+    int             used;
 } yon_wire_schema_t;
 
 static yon_wire_schema_t g_wire_schemas[YON_WIRE_MAX_SCHEMAS];
 static uint32_t g_wire_n_schemas = 0;
 
-void yon_rt_register_schema(uint32_t schema_id, uint32_t n_fields,
-                            const uint8_t *tags, uint64_t type_root) {
+void yon_rt_register_schema(uint64_t root, uint32_t n_fields,
+                            const uint8_t *tags, const uint64_t *subs) {
     for (uint32_t i = 0; i < g_wire_n_schemas; i++) {
-        if (g_wire_schemas[i].used && g_wire_schemas[i].schema_id == schema_id) {
+        if (g_wire_schemas[i].used && g_wire_schemas[i].root == root) {
             g_wire_schemas[i].n_fields = n_fields;  /* idempotent update */
             g_wire_schemas[i].tags = tags;
+            g_wire_schemas[i].subs = subs;
             return;
         }
     }
     if (g_wire_n_schemas >= YON_WIRE_MAX_SCHEMAS) {
-        fprintf(stderr, "[YON-RT] register_schema: table full (id=%u)\n", schema_id);
+        fprintf(stderr, "[YON-RT] register_schema: table full (root=%016llx)\n",
+                (unsigned long long)root);
         return;
     }
     yon_wire_schema_t *e = &g_wire_schemas[g_wire_n_schemas++];
-    e->schema_id = schema_id;
-    e->n_fields  = n_fields;
-    e->tags      = tags;
-    e->used      = 1;
-    e->type_root = type_root;
+    e->root     = root;
+    e->n_fields = n_fields;
+    e->tags     = tags;
+    e->subs     = subs;
+    e->used     = 1;
 }
 
-static const yon_wire_schema_t *yon_wire_lookup(uint32_t schema_id) {
+static const yon_wire_schema_t *yon_wire_lookup(uint64_t root) {
     for (uint32_t i = 0; i < g_wire_n_schemas; i++)
-        if (g_wire_schemas[i].used && g_wire_schemas[i].schema_id == schema_id)
+        if (g_wire_schemas[i].used && g_wire_schemas[i].root == root)
             return &g_wire_schemas[i];
     return NULL;
 }
 
 int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap) {
     ensure_init();
-    uint32_t heap_id  = yon_section_heap(sec);
-    uint32_t slot_idx = yon_section_slot(sec);
-    yon_xheap_t *h = heap_for(heap_id);
-    const yon_xheap_slot_t *slot = yon_xheap_get(h, slot_idx);
-    if (!slot || slot->payload_offset == 0) return -1;
-    uint32_t schema_id = slot->schema_version;
-    const yon_wire_schema_t *sc = yon_wire_lookup(schema_id);
+    uint8_t inst[8u + YON_WIRE_MAX_FIELDS * 8];
+    int32_t pn = yon_rt_flatten(sec, inst, sizeof(inst));
+    if (pn < 8) return -1;
+    uint64_t root = yon_root_read_le(inst);   /* the identity head */
+    const yon_wire_schema_t *sc = yon_wire_lookup(root);
     if (!sc) {
-        fprintf(stderr, "[YON-RT] serialize: unregistered schema id=%u\n", schema_id);
+        fprintf(stderr, "[YON-RT] serialize: no wire schema for root %016llx\n",
+                (unsigned long long)root);
         return -1;
     }
     if (sc->n_fields > YON_WIRE_MAX_FIELDS) return -1;
-
-    /* The instance payload is the 8-byte root head + n_fields * 8 bytes. */
-    uint8_t inst[8u + YON_WIRE_MAX_FIELDS * 8];
-    int32_t pn = yon_rt_flatten(sec, inst, sizeof(inst));
-    if (pn < 0 || (uint32_t)pn != 8u + sc->n_fields * 8u) return -1;
+    if ((uint32_t)pn != 8u + sc->n_fields * 8u) return -1;
 
     uint8_t *out = (uint8_t *)out_buf;
-    const uint32_t hdr = 8u;     /* schema_id + payload_len */
+    const uint32_t hdr = YON_WIRE_HDR_BYTES;
     if (cap < hdr) return -1;
     uint32_t w = hdr;            /* payload starts after the header */
     for (uint32_t i = 0; i < sc->n_fields; i++) {
@@ -7413,9 +7477,7 @@ int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap) {
         } else if (sc->tags[i] == YON_WIRE_TAG_NESTED) {
             /* nested place: the field slot holds the sub-section's coordinate
              * (heap is the default in-process heap). Recurse, inlining the
-             * sub-frame ([sub_schema_id][sub_payload_len][sub_payload]); the
-             * sub-instance carries its own schema id, so the registry resolves
-             * the sub-descriptor on the way back. */
+             * sub-frame, which carries its own root. */
             int64_t raw;
             memcpy(&raw, inst + off, 8u);
             yon_section_t sub = yon_section_pack(YON_HEAP_ID_DEFAULT, (uint32_t)raw);
@@ -7423,35 +7485,45 @@ int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap) {
             if (sn < 0) return -1;
             w += (uint32_t)sn;
         } else {
-            fprintf(stderr, "[YON-RT] serialize: tag %u unsupported at this seal\n",
+            fprintf(stderr, "[YON-RT] serialize: field tag %u is not carried\n",
                     (unsigned)sc->tags[i]);
             return -1;
         }
     }
     uint32_t payload_len = w - hdr;
-    memcpy(out + 0, &schema_id,   4u);
-    memcpy(out + 4, &payload_len, 4u);
+    memcpy(out + 0, &root,        8u);
+    memcpy(out + 8, &payload_len, 4u);
     return (int32_t)w;
 }
 
 yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
-                                 uint32_t heap_id) {
+                                 uint32_t heap_id, uint64_t expected_root) {
     ensure_init();
-    if (len < 8u) return YON_SECTION_INVALID;
+    if (len < YON_WIRE_HDR_BYTES) return YON_SECTION_INVALID;
     const uint8_t *in = (const uint8_t *)in_buf;
-    uint32_t schema_id, payload_len;
-    memcpy(&schema_id,   in + 0, 4u);
-    memcpy(&payload_len, in + 4, 4u);
-    if ((uint64_t)8u + payload_len > (uint64_t)len) return YON_SECTION_INVALID;
-    const yon_wire_schema_t *sc = yon_wire_lookup(schema_id);
+    uint64_t root;
+    uint32_t payload_len;
+    memcpy(&root,        in + 0, 8u);
+    memcpy(&payload_len, in + 8, 4u);
+    if ((uint64_t)YON_WIRE_HDR_BYTES + payload_len > (uint64_t)len)
+        return YON_SECTION_INVALID;
+    if (root != expected_root) {   /* another type: refused, never rebuilt */
+        fprintf(stderr,
+                "error: wire: a frame of type root %016llx arrived where %016llx "
+                "was awaited; the two Spaces declare different types\n",
+                (unsigned long long)root, (unsigned long long)expected_root);
+        return YON_SECTION_INVALID;
+    }
+    const yon_wire_schema_t *sc = yon_wire_lookup(root);
     if (!sc) {
-        fprintf(stderr, "[YON-RT] deserialize: unregistered schema id=%u\n", schema_id);
+        fprintf(stderr, "[YON-RT] deserialize: no wire schema for root %016llx\n",
+                (unsigned long long)root);
         return YON_SECTION_INVALID;
     }
     if (sc->n_fields > YON_WIRE_MAX_FIELDS) return YON_SECTION_INVALID;
 
     uint8_t inst[YON_WIRE_MAX_FIELDS * 8];
-    const uint8_t *p = in + 8u;
+    const uint8_t *p = in + YON_WIRE_HDR_BYTES;
     uint32_t cur = 0u;
     for (uint32_t i = 0; i < sc->n_fields; i++) {
         uint32_t off = i * 8u;
@@ -7473,19 +7545,19 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
             memcpy(inst + off, &sid, 8u);
             cur += slen;
         } else if (sc->tags[i] == YON_WIRE_TAG_NESTED) {
-            /* nested place: the inlined sub-frame begins at p+cur. Read its
-             * header to size it, recursively rebuild the sub-place in this
-             * heap, and store the sub-handle in the parent slot. */
-            if (cur + 8u > payload_len) return YON_SECTION_INVALID;
+            /* nested place: the inlined sub-frame begins at p+cur, and its
+             * root must be the one this field declares. */
+            if (cur + YON_WIRE_HDR_BYTES > payload_len) return YON_SECTION_INVALID;
             uint32_t sub_pl;
-            memcpy(&sub_pl, p + cur + 4u, 4u);
-            uint64_t sub_frame_len = (uint64_t)8u + (uint64_t)sub_pl;  /* 64-bit: no wrap, bounds-checked below */
+            memcpy(&sub_pl, p + cur + 8u, 4u);
+            uint64_t sub_frame_len = (uint64_t)YON_WIRE_HDR_BYTES + (uint64_t)sub_pl;
             if ((uint64_t)cur + sub_frame_len > (uint64_t)payload_len)
                 return YON_SECTION_INVALID;
-            yon_section_t sub = yon_rt_deserialize(p + cur, sub_frame_len, heap_id);
+            yon_section_t sub = yon_rt_deserialize(p + cur, (uint32_t)sub_frame_len,
+                                                   heap_id, sc->subs[i]);
             if (sub == YON_SECTION_INVALID) return YON_SECTION_INVALID;
             memcpy(inst + off, &sub, 8u);
-            cur += sub_frame_len;
+            cur += (uint32_t)sub_frame_len;
         } else {
             return YON_SECTION_INVALID;
         }
@@ -7496,8 +7568,7 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
                 cur, payload_len);
         return YON_SECTION_INVALID;
     }
-    return yon_rt_section_r(heap_id, inst, sc->n_fields * 8u,
-                        sc->type_root, schema_id);
+    return yon_rt_section_r(heap_id, inst, sc->n_fields * 8u, root, 0u);
 }
 
 /* ============================================================================

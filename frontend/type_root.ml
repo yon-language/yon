@@ -48,6 +48,12 @@ let add_u64 buf (n : int64) =
   done
 let add_name buf s = add_u32 buf (String.length s); Buffer.add_string buf s
 
+(* the root of a primitive type, as type_root computes it for TyPrim *)
+let prim_root (p : string) : int64 =
+  let buf = Buffer.create 16 in
+  add_u8 buf 0x01; add_name buf p;
+  content_hash (Buffer.to_bytes buf)
+
 (* a primitive / nominal-leaf root: fixed, canonical *)
 let leaf_root (s : string) : int64 = content_hash (Bytes.of_string ("\x50rim:" ^ s))
 

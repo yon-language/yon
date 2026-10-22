@@ -179,48 +179,57 @@ int yon_rt_field_load_or_stop(yon_section_t sec, uint32_t offset,
  * handle-valued fields are not yet followed. */
 int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
 
-/* ---- Wire DTO transport, seal 2: the recursive, length-prefixed frame ----
+/* ---- Wire DTO transport: the recursive, length-prefixed frame ----
  *
- * Inline encoding, schema-driven. A
- * frame is [u32 schema_id][u32 payload_len][payload]; the payload concatenates
- * the field encodings in declaration order, positional, no per-field type tag
- * (the schema is nominal and known on both sides). Field encodings:
- *   - scalar: 8 raw bytes, no prefix (size known from the schema)
+ * A frame is [u64 root][u32 payload_len][payload]. The root is the type root
+ * of the value's place, the identity head every section begins with: the
+ * place's name, then the name and the root of each field in declaration
+ * order. It is the type guard of the wire: two Spaces that declare the type
+ * differently have different roots, and a frame whose root is not the awaited
+ * one is refused, never rebuilt. The payload concatenates the field encodings
+ * in declaration order, positional, untagged:
+ *   - scalar: 8 raw bytes
  *   - string: [u32 len][len bytes] (NUL excluded on the wire)
- * The frame-level schema_id is the single cross-process type guard: it finds
- * the descriptor and lets the consumer assert the shape it awaited, turning a
- * schema drift into a loud error instead of silent corruption. Length prefixes
- * are u32 native-endian: producer and consumer are the same build on one
- * machine for the shm wire, so no byte-swap; a fixed width keeps every read
- * trivially bounded (unlike a varint, which can run off a drifted frame).
- *
- * Both the producer pump and the consumer drain are generic runtime code, so
- * both recover the descriptor at runtime through this registry, keyed by the
- * schema_id stamped on the instance (yon_rt_section_v) and carried in the frame. */
+ *   - nested place: its own frame
+ * Lengths are u32 native-endian: producer and consumer are the same build on
+ * one machine for the shm wire, so no byte-swap; a fixed width keeps every
+ * read trivially bounded (unlike a varint, which can run off a drifted frame).
+ * Both ends recover the descriptor of a root from this registry. */
 #define YON_WIRE_TAG_SCALAR 0u
 #define YON_WIRE_TAG_STRING 1u
 #define YON_WIRE_TAG_NESTED 4u
-/* reserved for later seals: 2=LIST, 3=MAP */
+#define YON_WIRE_HDR_BYTES  12u   /* u64 root + u32 payload_len */
+/* reserved: 2=LIST, 3=MAP */
 
-/* Register the field-tag descriptor for a transportable place type. The
- * emitter emits one call per type at startup; tags points to n_fields bytes,
- * one YON_WIRE_TAG_* per field in declaration order. Idempotent per id. */
-void yon_rt_register_schema(uint32_t schema_id, uint32_t n_fields,
-                            const uint8_t *tags, uint64_t type_root);
+/* Register the field-tag descriptor of a transportable place, by its root.
+ * tags points to n_fields bytes, one YON_WIRE_TAG_* per field in declaration
+ * order; subs to n_fields roots (the place of a nested field, 0 otherwise).
+ * Idempotent per root. */
+void yon_rt_register_schema(uint64_t root, uint32_t n_fields,
+                            const uint8_t *tags, const uint64_t *subs);
 
-/* Serialize a place instance into a wire frame. Reads the schema_id stamped on
- * the section, looks up its descriptor, writes the frame into out_buf. Returns
- * the total frame length, or -1 on error / unregistered schema / cap too
- * small. */
+/* Serialize a place instance into a wire frame, by the root in its identity
+ * head. Returns the total frame length, or -1 on error / no schema for the
+ * root / cap too small. */
 int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap);
 
 /* Rebuild a place instance from a wire frame into heap_id (the consumer's own
- * heap, the wormhole's copy semantics). Strings are reallocated locally. The
- * walk asserts it consumes exactly payload_len; a mismatch is a loud -1, not a
- * corrupt instance. Returns the reconstructed section, or YON_SECTION_INVALID
- * on error. */
+ * heap, the wormhole's copy semantics). The frame's root must be
+ * expected_root, and every nested frame the root its field declares; any
+ * other is a loud refusal. Strings are reallocated locally. The walk asserts
+ * it consumes exactly payload_len. Returns the reconstructed section, or
+ * YON_SECTION_INVALID. */
 yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
-                                 uint32_t heap_id);
+                                 uint32_t heap_id, uint64_t expected_root);
+
+/* The producers of a binary, registered at startup: selector, the type root of
+ * the element (two 32-bit halves), 1 if the element is a place. */
+void   yon_rt_register_producer(double sel, double root_hi, double root_lo,
+                                double is_place);
+/* The consumer's check of a subscription reply: a refusal (the two Spaces
+ * declare the element type differently) is a declared error, exit 3. */
+double Wire__subscribed(double reply);
+double Wire__subscription_stream_dto(double chan_id, double root_hi, double root_lo);
 
 
 /* ---- Non-trivial FREE_MERGE via a fold function ----
