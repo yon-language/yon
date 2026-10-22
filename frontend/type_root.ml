@@ -9,6 +9,12 @@
  * Zero|One` get distinct roots, and the equivalence between them stays a path
  * (ua), not a definitional identity, which is what univalence requires.
  *
+ * Fields are nominal: a field binds by its name, so the name of each field and
+ * the root of its type enter the root of its place, in declaration order (the
+ * layout follows that order, so a reorder is another type). Constructors stay
+ * positional. A place without fields has the root of its coproduct, so
+ * `Bool` and `Bit` stay distinct and keep the roots they had.
+ *
  * Two other screws, also fixed:
  *   - constructor order is significant (enters the stream as written);
  *   - recursion is a de Bruijn index (a self-reference serializes as an index,
@@ -69,10 +75,21 @@ let is_nominal_leaf (env : TE.env) (n : string) : bool =
 let rec encode_ty (env : TE.env) (ctx : string list) buf (t : ty) : unit =
   match t with
   | TyPrim n | TyPrimIn (n, _) -> add_u8 buf 0x01; add_name buf n
+  | TyVar n when debruijn n ctx <> None ->
+      (match debruijn n ctx with
+       | Some k -> add_u8 buf 0x02; add_u32 buf k                  (* a place's type parameter *)
+       | None -> raise No_root)
   | TyUser n ->
       (match debruijn n ctx with
        | Some k -> add_u8 buf 0x02; add_u32 buf k                  (* recursion: de Bruijn *)
        | None ->
+           match fused_prim env n with
+           | Some prim -> add_u8 buf 0x01; add_name buf prim       (* a fused place is its carrier *)
+           | None ->
+           match TE.lookup_place env n with
+           | Some pd when place_fields pd <> [] ->
+               add_u8 buf 0x0b; add_u64 buf (root_of_place_in env ctx pd)
+           | _ ->
            (match TE.lookup_named_sum env n with
             | Some variants -> add_u8 buf 0x03; add_u64 buf (root_named env ctx n variants)
             | None ->
@@ -119,6 +136,34 @@ and root_named (env : TE.env) (ctx : string list) (name : string) (variants : va
   encode_variants env (name :: ctx) buf variants;                (* push name for de Bruijn self-reference *)
   content_hash (Buffer.to_bytes buf)
 
+(* The root of a place: its name, its arms (positional), then the name and the
+   type of each field in declaration order. The place's own name and its type
+   parameters are de Bruijn indices inside it. *)
+and root_of_place_in (env : TE.env) (ctx : string list) (pd : place_decl) : int64 =
+  let name = pd.pd_name in
+  let variants = match TE.lookup_named_sum env name with Some vs -> vs | None -> [] in
+  match place_fields pd with
+  | [] -> root_named env ctx name variants
+  | fields ->
+      let inner = List.rev pd.pd_type_params @ (name :: ctx) in
+      let buf = Buffer.create 64 in
+      add_u8 buf 0x54;
+      add_name buf name;
+      encode_variants env inner buf variants;
+      add_u8 buf 0x46;                                             (* 'F': the fields *)
+      add_u32 buf (List.length fields);
+      List.iter (fun (f : field_decl) ->
+        add_name buf f.fd_name; encode_ty env inner buf f.fd_ty) fields;
+      content_hash (Buffer.to_bytes buf)
+
+and place_fields (pd : place_decl) : field_decl list =
+  List.filter_map (function FoField f -> Some f | _ -> None) pd.pd_members
+
+and fused_prim (env : TE.env) (n : string) : string option =
+  match TE.lookup_place env n with
+  | Some { pd_fusion = Some prim; _ } -> Some prim
+  | _ -> None
+
 (* a bare Catt_r_yon code term from a surface code expression (only the simple
    Var form is decoded here; anything richer stays stuck -> No_root upstream) *)
 and surface_code_of_expr (e : expr) : Catt_r_yon.term =
@@ -140,3 +185,10 @@ let type_root (env : TE.env) (t : ty) : int64 option =
           content_hash (Buffer.to_bytes buf)
     in Some r
   with No_root -> None
+
+(* The root of a place, the one identity of its type: the identity head of its
+   sections, the target of an upcast, the type of a wire frame. A place whose
+   fields have no root (a field typed by a universe, say) is named by its name
+   alone. *)
+let root_of_place (env : TE.env) (pd : place_decl) : int64 =
+  try root_of_place_in env [] pd with No_root -> leaf_root pd.pd_name

@@ -2178,7 +2178,10 @@ let desugar_place_decl (pd : S.place_decl) : C.place_decl =
     C.p_laws = pd.S.pd_laws;
     C.p_site = C.TyPlace pd.S.pd_world;
     C.p_fields = fields;
-    C.p_operations = ops; }
+    C.p_operations = ops;
+    C.p_root = (match !current_env with
+                | Some env -> Type_root.root_of_place env pd
+                | None -> Type_root.leaf_root pd.S.pd_name); }
 
 let desugar_reduction_decl (rd : S.reduction_decl) : C.reduction_decl =
   let handlers = List.filter_map

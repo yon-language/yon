@@ -240,6 +240,12 @@ let wire_tags_of_place (places : C.place_decl list) (pd : C.place_decl) : int li
 let wire_schema_id_of_place (places : C.place_decl list) (pd : C.place_decl) : int option =
   wire_place_schema_id places 0 pd
 
+(* The type root of a place, by the declaration of that name in the program. *)
+let place_root_of (places : C.place_decl list) (name : string) : int64 =
+  match List.find_opt (fun (p : C.place_decl) -> p.p_name = name) places with
+  | Some pd -> pd.p_root
+  | None -> Type_root.leaf_root name
+
 (* Core-level recognizer for the comprehension subobject. After desugaring, a
    comprehension { x : A where P } is C.TySigma(x, A, fibre) where the fibre is
    the mere-proposition shape Pi(_:A).Pi(_:A).Id_A(_,_). We recognize that shape
@@ -4697,7 +4703,7 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
            (* identity head: root of the TARGET place at buffer offset 0 *)
            let v_rt = fresh_ssa e in
            emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64"
-                          v_rt (Type_root.leaf_root target_place));
+                          v_rt (place_root_of e.places_decls target_place));
            let v_rz = fresh_ssa e in
            emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_rz);
            let v_rg = fresh_ssa e in
@@ -4899,7 +4905,7 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
            (* identity head: root of the TARGET place at buffer offset 0 *)
            let v_rt = fresh_ssa e in
            emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64"
-                          v_rt (Type_root.leaf_root target_place));
+                          v_rt (place_root_of e.places_decls target_place));
            let v_rz = fresh_ssa e in
            emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v_rz);
            let v_rg = fresh_ssa e in
@@ -5970,7 +5976,7 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
            the frame carries fields + schema id only). *)
         let v_root = fresh_ssa e in
         emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64"
-                       v_root (Type_root.leaf_root pd.p_name));
+                       v_root pd.p_root);
         emit_line e (Printf.sprintf
                        "func.call @yon_rt_register_schema(%s, %s, %s, %s) : (i32, i32, !llvm.ptr, i64) -> ()"
                        v_id v_nf v_tags v_root)
@@ -6951,7 +6957,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
          type root (LE). Field offsets stay FIELD-region offsets everywhere
          (readers skip the head in the runtime); only the composed buffer is
          head-prefixed: alloca +8, root stored at 0, field i at offsets[i]+8. *)
-      let place_root : int64 = Type_root.leaf_root pd.p_name in
+      let place_root : int64 = pd.p_root in
       let head = 8 in
 
       (* parametric body for the heap_id source.

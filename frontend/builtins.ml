@@ -239,6 +239,7 @@ let output_place : place_decl = {
       op_return = TyPlace "unit"; op_algebra = None; }
   ];
   p_laws = [];
+  p_root = Type_root.leaf_root "Output";
 }
 
 (* ─── Context augmented with built-ins ─────────────────────────────── *)

@@ -127,6 +127,7 @@ and place_decl = {
   p_fields : (string * ty) list;
   p_operations : op_sig list;
   p_laws : string list;          (* algebraic laws declared on the place *)
+  p_root : int64;                (* the type root: identity head, upcast target, wire type *)
 }
 
 and reduction_decl = {

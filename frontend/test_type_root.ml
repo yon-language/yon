@@ -27,6 +27,21 @@ let env =
   let e = TE.add_named_sum e "Seq" [v "Nil" []; v "Cons" [num; TyUser "Seq"]] in
   e
 
+(* places with fields: the root of a place is its name, then the name and the
+   type of each field in declaration order *)
+let fld n t = FoField { fd_name = n; fd_ty = t; fd_loc = dummy_loc }
+let place ?(params = []) name members =
+  { pd_name = name; pd_type_params = params; pd_fusion = None; pd_width = None;
+    pd_arms = []; pd_world = ""; pd_members = members; pd_over = None;
+    pd_laws = []; pd_subcontains = None; pd_is_error = false; pd_on_error = None;
+    pd_loc = dummy_loc }
+let reading = place "Reading" [fld "temp" num; fld "humidity" num]
+let place_root members = TR.root_of_place env (place "Reading" members)
+let tree_env = TE.add_place env
+    (place "Tree" [fld "label" num; fld "left" (TyUser "Tree")])
+let box_env = TE.add_place env (place ~params:["T"] "Box" [fld "value" (TyUser "T")])
+let holder_env = TE.add_place env reading
+
 (* two ANONYMOUS sums differing ONLY in constructor order (no type name to confound) *)
 let anon_ab = TySum [v "A" [num]; v "B" []]
 let anon_ba = TySum [v "B" []; v "A" [num]]
@@ -64,6 +79,33 @@ let () =
   (* order screw, on anonymous sums (no type name to confound) *)
   check "TySum [A|B] != [B|A] (order is significant)"
     (not (some_eq (TR.type_root env anon_ab) (TR.type_root env anon_ba)));
+
+  (* fields are nominal: a field binds by its name, so the name and the type of
+     each field are part of the type, in declaration order *)
+  let r = TR.root_of_place env reading in
+  check "a place: same declaration, same root" (Int64.equal r (place_root
+    [fld "temp" num; fld "humidity" num]));
+  check "a place: fields reordered -> another root"
+    (not (Int64.equal r (place_root [fld "humidity" num; fld "temp" num])));
+  check "a place: a field renamed -> another root"
+    (not (Int64.equal r (place_root [fld "temperature" num; fld "humidity" num])));
+  check "a place: Number -> Boolean -> another root"
+    (not (Int64.equal r (place_root [fld "temp" (TyPrim "boolean"); fld "humidity" num])));
+  check "a place: Number -> money -> another root"
+    (not (Int64.equal r (place_root [fld "temp" (TyPrim "money"); fld "humidity" num])));
+  check "a place: the place name is in the root"
+    (not (Int64.equal r (TR.root_of_place env
+       (place "Sample" [fld "temp" num; fld "humidity" num]))));
+  check "a place: a field of place type enters with that place's root"
+    (match TR.type_root holder_env (TyUser "Reading") with
+     | Some h -> not (Int64.equal h (TR.leaf_root "Reading")) | None -> false);
+  check "a recursive place has a root (de Bruijn)"
+    (TR.type_root tree_env (TyUser "Tree") <> None);
+  check "a generic place has a root (its parameter by index)"
+    (TR.type_root box_env (TyUser "Box") <> None);
+  check "a place without fields keeps the root of its coproduct (Bool)"
+    (some_eq (root "Bool")
+       (Some (TR.root_of_place env (place "Bool" []))));
 
   (* a primitive is a Zona-1 leaf *)
   check "number has a root (primitive)" (TR.type_root env num <> None);

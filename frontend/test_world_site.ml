@@ -253,7 +253,7 @@ let () =
                  w_generators = [GenQuotient ("User", "cohort")] } in
   let pl = { p_name = "Profile"; p_site = TyPlace "Anon";
              p_fields = [("cohort", TyPlace "number"); ("salary", TyPlace "number")];
-             p_operations = []; p_laws = [] } in
+             p_operations = []; p_laws = []; p_root = 0L } in
   check "place_violations: a place on User/cohort flags salary as non-invariant"
     (Sheaf.place_violations sctx site_q pl = ["salary"]);
   let site_triv = { w_name = "Plain"; w_objects = []; w_generators = [] } in
