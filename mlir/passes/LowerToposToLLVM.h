@@ -7,10 +7,9 @@
 //   arith.*, cf.*, scf.*, func.*, memref.*
 //   llvm.struct<(i32, i32)>     (HeapRef already LLVM)
 //   llvm.{undef, insertvalue, extractvalue}
-//   func.func private declarations of the XLeech2 runtime:
-//     @yon_current_heap, @yon_current_heap_id, @yon_get_heap_by_id,
-//     @yon_hexheap_alloc, @yon_hexheap_get_payload,
-//     @yon_space_request_alloc, @yon_probe_dispatch, ...
+//   func.func private declarations of the runtime functions that the earlier
+//     passes call (e.g. @yon_space_request_alloc, @yon_load_world,
+//     @yon_coeffect_pure/extract/extend)
 //
 // Output:
 //   LLVM dialect only, ready for `mlir-translate --mlir-to-llvmir` and the
@@ -23,7 +22,8 @@
 // previous pass is already made only of standard dialect ops that have official
 // conversion patterns.
 //
-// The canonical end-to-end pipeline is now:
+// The canonical end-to-end pipeline (toolchain/yonc) is:
+//   --algebra-verifier --structural-value-numbering
 //   --lower-topos-extensions
 //   --lower-topos-to-standard
 //   --lower-topos-to-llvm

@@ -2,8 +2,10 @@
  *
  * The site C(Coll): the collections. Each is one place, generic in what it
  * holds; its representation is derived from the carrier of its parameters,
- * never written per type. A collection is a value: an operation that adds
- * returns a new collection and leaves the one it was given.
+ * never written per type. HashMap and HashSet are values: an operation
+ * that adds returns a new collection and leaves the one it was given.
+ * Arena and XRelMap are written in place: `put` / `insert` return the
+ * same handle.
  *
  * The runtime primitives are the `is given` bodies; what can be said in
  * Yon is written here. */

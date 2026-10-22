@@ -1,57 +1,36 @@
 //===- LowerToposToStandard.cpp - Topos -> standard lowering -*- C++ -*-===//
 //
-// Complete lowering patterns for most of the Topos dialect ops.
+// Lowers the Topos dialect to func/arith/scf/cf/memref/llvm.
 //
-// Memory model aligned to the real XLeech2 ABI. All runtime calls match the
-// actual signatures of yon-runtime/xleech2_native:
+// Type mapping (ToposTypeConverter below):
 //
 //     !topos.section<P>      -> i64 (packed heap_id<<32 | xcoord)
 //     !topos.probe<src->dst> -> !llvm.struct<(i32, i32)> (HeapRef =
 //                              heap_id + xcoord)
 //     !topos.proposition     -> i8 (tri-valued: T=0, F=1, U=2)
 //
-//   Mapping of the ops to the real runtime:
+// Patterns registered in this file:
 //
-//     scope { ... }          -> inlined by LowerToposExtensions (no arena)
-//     (section/restrict/probe-escape: no arena lowering, illegal here)
-//                              + yon_handler_lookup(hash) -> fn_ptr
-//                              + llvm.call indirect (arena, xc, arg)
-//     with_handler { ... }   -> yon_handler_push + body + yon_handler_pop
+//     heyt, heyt_and/or/not/implies, heyt_is, HeytToI32, HeytFromI8,
+//     heyt_int_*                         -> arith / llvm struct ops
+//     field, path, coherence             -> erased
+//     subtype_cast, section_to_xcoord, xcoord_to_section
+//     operation                          -> func.func @<Place>__<op>
+//     op_apply                           -> func.call @<Place>__<op>
+//     field_load                         -> func.call @<Place>__get_<field>
+//     move                               -> func.func @<Move>__move (identity)
+//     apply_move                         -> func.call @<Move>__move
+//     reduce                             -> private func.func declaration
+//     geom_morphism                      -> private <name>__pull / __push
+//     forces                             -> scf.if
 //
-//   Fixed architectural decisions:
-//     Q1: section = a contiguous struct (opaque memref)
-//     Q2: reduce/handler = a runtime dispatch table via
-//         yon_handler_push/pop/lookup
-//     Q3: scope/arena = an explicit arena as a visible SSA value, passed via
-//         the first block-arg of func.func or created by topos.scope locally
+// scope / scope_with_yield are inlined by LowerToposExtensions before this
+// pass (no arena). section, restrict, glue, probe_construct and probe_apply
+// have no pattern and are illegal: a survivor fails the conversion.
 //
-//   Failure modes:
-//     (E1101 arena-exhaustion contract: RETIRED with the arena model)
-//                   (arena exhausted or payload > 48 bytes)
-//     [TOPOS-E1102] missing enclosing topos.scope
-//
-// PREVIOUS MILESTONES (still valid for ops below):
-//
-//   Algebra and type evidence:
-//     heyt/heyt_and/or/not -> arith ops
-//     field/path/coherence -> erase
-//     !topos.proposition -> i8
-//
-//   move:
-//     move -> func.func (identity body for an empty body)
-//     apply_move -> func.call to the mangled Move__move (xcoord-based)
-//
-//   scope and handler:
-//     scope { body } -> structural inline (no arena)
-//     with_handler { body } -> yon_handler_push + body + yon_handler_pop
-//
-// Operations NOT lowered in this pass (they stay at the Topos level):
-//   world, place (metadata containers, removed by a later pass)
-//   pullback, pushout (require span/cospan reasoning)
-//   geom_morphism with an operational body (E1001, scheduled later)
-//   topology (Lawvere-Tierney, later)
-//   view (derived projection, later)
-//   promote (cross-space, requires xleech2_space + heapref)
+// After the conversion, world, place, pullback, pushout, topology and view
+// are erased (metadata with no runtime semantics). Every other Topos op is
+// legal here and left in place.
 //
 //===----------------------------------------------------------------------===//
 
@@ -155,10 +134,10 @@ computePlaceLayouts(ModuleOp module, bool &missing) {
 //   !topos.probe<src->dst>    -> !llvm.struct<(i32, i32)>
 //                              = HeapRef { heap_id, xcoord }
 //
-// The PlaceLayout map is still needed by the ops that emit calls
-// into the runtime (sizes, field offsets, type ids), but the layout
-// is no longer the type itself: it's metadata used by the lowering
-// patterns to build the alloc/load/store calls.
+// The PlaceLayout map is used by the ops that emit calls into the
+// runtime (sizes, field offsets, type ids); the layout is not the
+// type itself: it is metadata used by the lowering patterns to build
+// the load/store calls.
 //===----------------------------------------------------------------------===//
 
 class ToposTypeConverter : public TypeConverter {
@@ -177,26 +156,19 @@ public:
     // lattice has a unique xcoord; the runtime resolves xcoord -> slot
     // via MPHF in O(1) without auxiliary tables.
     //
-    // cross-Space: section -> i64 (packed heap_id<<32 | xcoord).
-    // Was i32 (xcoord only). The typeConverter changes; ops that accept/produce
-    // a section must now use i64.
+    // cross-Space: section -> i64 (packed heap_id<<32 | xcoord); ops that
+    // accept or produce a section use i64.
     addConversion([this](SectionType /*st*/) -> Type {
       return IntegerType::get(this->ctx, 64);
     });
     // !topos.probe<src -> dst> -> !llvm.struct<(i32, i32)>
     //                         = HeapRef { heap_id, xcoord }
     //
-    // A probe is a closure stored in an arena slot with YON_TAG_CLOSURE.
-    // The HeapRef carries (heap_id, xcoord) so the probe can flow
-    // across function boundaries — and across Space boundaries via
-    // mailbox in future — without sharing physical pointers.
-    //
-    // At apply time (escape position), LowerProbeApplyEscape emits a
-    // (the retired trampoline read the closure via the arena ABI;
-    //  escaping probes are rejected upstream by LowerToposExtensions)
-    // calls yon_handler_lookup to obtain the function pointer of the
-    // per-(place, op) trampoline, then llvm.call indirect with
-    // (arena, closure_xcoord, arg) -> result.
+    // The HeapRef carries (heap_id, xcoord) so a probe value can flow
+    // across function boundaries without sharing physical pointers.
+    // No pattern here lowers a probe application: probe_construct and
+    // probe_apply are illegal in this pass (local pairs are fused into
+    // topos.op_apply by LowerToposExtensions).
     addConversion([this](ProbeType /*pt*/) -> Type {
       auto i32 = IntegerType::get(this->ctx, 32);
       return LLVM::LLVMStructType::getLiteral(this->ctx, {i32, i32});
@@ -255,10 +227,10 @@ struct EraseCoherenceOp : public OpConversionPattern<CoherenceOp> {
   }
 };
 
-// topos.world and topos.place: metadata containers, no runtime. They are
-// erased after all their children (field, operation) are lowered. The match
-// here checks that the body is empty: if it is not, we fail and the pattern is
-// retried after the inner patterns have done their work.
+// topos.world and topos.place: metadata containers, no runtime. The match
+// here checks that the body is empty and erases the op. These two patterns are
+// not added to the pattern set of this pass: world and place are erased by the
+// post-conversion cleanup at the end of runOnOperation.
 struct ErasePlaceOp : public OpConversionPattern<PlaceOp> {
   using OpConversionPattern<PlaceOp>::OpConversionPattern;
   LogicalResult matchAndRewrite(PlaceOp op, OpAdaptor /*adaptor*/,
@@ -395,15 +367,13 @@ struct MaterializeReduceOp : public OpConversionPattern<ReduceOp> {
 //
 // The geom_morphism's source_site and target_site identify world
 // names, not concrete places, so we cannot fix the section layout
-// at lowering time. We use an unranked memref<? x i8> on both ends;
+// at lowering time. We use a dynamic 1-D memref<? x i8> on both ends;
 // the runtime resolves the concrete shape from the named world.
 //
-// If the pull or push region is non-empty (the user has provided a
-// body that describes the operational behaviour), we report an
-// error: the lowering of operational bodies of geom_morphism requires
-// dependent typing of the section layouts across source and target
-// sites, which is not yet implemented. This is deliberately not
-// silently dropped.
+// The pattern emits two private function declarations, `<name>__pull`
+// and `<name>__push`, each annotated with the source/target site and
+// its kind, and erases the op. GeomMorphismOp has no regions, so there
+// is no body to lower.
 //===----------------------------------------------------------------------===//
 
 struct MaterializeGeomMorphismOp
@@ -413,7 +383,7 @@ struct MaterializeGeomMorphismOp
   LogicalResult matchAndRewrite(GeomMorphismOp op, OpAdaptor /*adaptor*/,
                                 ConversionPatternRewriter &rewriter)
       const override {
-    // GeomMorphismOp is now a pure declaration (no region). The lowering
+    // GeomMorphismOp is a pure declaration (no region). The lowering
     // emits two private functions `<name>__pull` and `<name>__push` that the
     // runtime resolves as cross-Space copy-in / copy-out.
 
@@ -422,7 +392,7 @@ struct MaterializeGeomMorphismOp
       return rewriter.notifyMatchFailure(
           op, "geom_morphism is not nested in a module");
 
-    // Unranked memref<? x i8> on both sides: the runtime knows the
+    // Dynamic memref<? x i8> on both sides: the runtime knows the
     // shape from the source/target world.
     auto i8Type = rewriter.getIntegerType(8);
     auto opaqueSection = MemRefType::get({ShapedType::kDynamic}, i8Type);
@@ -961,22 +931,6 @@ struct LowerSubtypeCastOp : public OpConversionPattern<SubtypeCastOp> {
 };
 
 //===----------------------------------------------------------------------===//
-// M2: topos.section -> memref.alloca + field stores
-//===----------------------------------------------------------------------===//
-//
-// Strategia:
-//   1. Allocate a memref<N x i8> where N = layout(P).totalSize.
-//   2. For each field_value, view the memref at the typed offset and store.
-//
-// The typed view is done via memref.view: a memref<N x i8> + offset + a
-// memref<1 x T> result allows a store of type T without resorting to a bitcast.
-// memref.view requires a source memref with static shape, which is our case.
-//
-// The allocation is alloca (stack), not alloc (heap). For now that is fine: the
-// sections live in the current scope. A later milestone introduces an arena
-// allocator for hermetic scopes.
-
-//===----------------------------------------------------------------------===//
 // Helper : emit a runtime function declaration on demand.
 // Same pattern as ensureRuntimeFunc in LowerToposExtensions.cpp.
 //===----------------------------------------------------------------------===//
@@ -1002,10 +956,8 @@ static uint64_t typeIdFor(StringRef placeName) {
   return llvm::hash_value(placeName);
 }
 
-// Stable TYPEID_CLOSURE constant for the runtime: all closure
-// objects share this id, so the runtime can
-// dispatch them through yon_probe_dispatch regardless of which
-// (place, op) they were constructed from.
+// TYPEID_CLOSURE constant ("YON_CLOS"): a single type id for closure
+// objects. Nothing in this file uses it.
 static constexpr uint64_t YON_TYPEID_CLOSURE = 0x59'4F'4E'5F'43'4C'4F'53ULL;
 
 // XCOORD_INVALID — sentinel returned by yon_hexheap_alloc on collision
@@ -1117,37 +1069,7 @@ static Value ptrOffset(OpBuilder &b, Location loc,
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// LowerSectionOp : topos.section -> yon_hexheap_alloc call.
-//
-// Source: %s = topos.section @P(%v1, %v2, ...)
-//             : (T1, T2, ...) -> !topos.section<"P">
-//
-// Target:
-//   ; Stage the payload on a stack scratch buffer (this is OK —
-//   ; the buffer is read by yon_hexheap_alloc and then released,
-//   ; the slot itself lives in the HexHeap).
-//   %scratch = memref.alloca() : memref<sizeP x i8>
-//   memref.view + memref.store for every field at its offset
-//
-//   ; Call the runtime allocator. It computes
-//   ;       slot = SipHash-1-3(payload) mod CAPACITY
-//   ; and stores the payload at that slot. Returns the xcoord that
-//   ; identifies the slot, or XCOORD_INVALID on collision exhaustion.
-//   %heap     = func.call @yon_current_heap() : () -> i64
-//   %xcoord   = func.call @yon_hexheap_alloc(
-//                 %heap, %scratch_as_ptr, %size, %typeid_P)
-//                 : (i64, memref<sizeP x i8>, i64, i64) -> i32
-//
-//   ; Hard-fail if the runtime returned the sentinel. This is the
-//   ; sheaf-compatibility moral equivalent at the allocation level:
-//   ; the HexHeap is "Leech pure" — collisions that exhaust probing
-//   ; cannot be silently recovered.
-//   %inv      = arith.constant 0xFFFFFFFF : i32
-//   %ok       = arith.cmpi ne, %xcoord, %inv : i32
-//   cf.assert %ok, "[TOPOS-E1101] yon_hexheap_alloc returned ..."
-//
-//   ; Replace the section value with the xcoord.
-//   replaceOp(%xcoord)
+// topos.section: no lowering pattern.
 //===----------------------------------------------------------------------===//
 
 // There is no arena-based lowering and no C arena model. The op keeps its
@@ -1156,13 +1078,11 @@ static Value ptrOffset(OpBuilder &b, Location loc,
 
 
 //===----------------------------------------------------------------------===//
-// Escaping-probe closure conversion (memref-encoded closures + MPHF-resolved
-// trampolines) belongs to the arena model, which does not exist: there is no
-// pattern for it. `topos.probe_construct` /
-// `topos.probe_apply` are never produced by the canonical frontend; they
-// are listed in `addIllegalOp` below as a hard invariant, so any survivor
-// fails the conversion (no pattern makes it legal) rather than being
-// rewritten into a trampoline or a `@yon_probe_dispatch` indirect call.
+// There is no escaping-probe closure conversion and no pattern for it.
+// `topos.probe_construct` / `topos.probe_apply` are never produced by the
+// canonical frontend; they are listed in `addIllegalOp` below as a hard
+// invariant, so any survivor fails the conversion (no pattern makes it
+// legal).
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
@@ -1173,17 +1093,13 @@ static Value ptrOffset(OpBuilder &b, Location loc,
 // three ops are listed in `addIllegalOp` below as a hard invariant: the
 // canonical frontend (emit_mlir) never emits them, so they never reach
 // this pass; if one ever did, the conversion fails (no pattern to make
-// it legal) rather than passing through un-lowered. The earlier
-// memref-copy lowering (inverse-image f^* for restrict, disjoint-cover
-// gluing for glue, including the open question of overlapping covers and
-// the sheaf compatibility check) lived here and was removed with the
-// arena model; the sheaf condition is discharged at the verifier layer.
+// it legal) rather than passing through un-lowered.
 //===----------------------------------------------------------------------===//
 
 
 
 //===----------------------------------------------------------------------===//
-// M2: topos.operation -> func.func (declaration or full func)
+// topos.operation -> func.func
 //===----------------------------------------------------------------------===//
 //
 // Name mangling: the op `topos.operation @withdraw` inside `topos.place
@@ -1191,9 +1107,10 @@ static Value ptrOffset(OpBuilder &b, Location loc,
 // between same-named ops in different places and allows referencing the op via
 // a flat symbol.
 //
-// For the base case (empty body or single-block-empty), we emit a
-// declaration (`func.func private`) without a body. For operations with a
-// default implementation in the body, a later milestone does the full lowering.
+// For an empty body (no block, or a block with no ops) we emit a stub body
+// that returns zero (or nothing for a void result); when the result type has
+// no zero constant here, a private declaration is emitted instead. A
+// non-empty body is cloned into the function.
 //
 // Note on signature: the operation has (arg_types, result_type) as MLIR
 // attributes. The generated func.func has the augmented signature
@@ -1218,7 +1135,7 @@ struct LowerOperationOp : public OpConversionPattern<OperationOp> {
     // Build the signature :
     //   (instance: i32 xcoord, args...) -> result
     //
-    // The instance is now an XLeech2 xcoord, the runtime address of
+    // The instance is an XLeech2 xcoord, the runtime address of
     // the slot in the HexHeap. The per-op function dereferences the
     // xcoord through the HexHeap when it needs to read the captured
     // fields — but at the dialect level the call site only passes
@@ -1246,8 +1163,8 @@ struct LowerOperationOp : public OpConversionPattern<OperationOp> {
 
     // Determine whether the operation body is non-empty. The body is AnyRegion;
     // it may be zero-block (absent) or single-block-empty (^bb0: with no ops) —
-    // both handled as "declaration only". If the body contains at least one
-    // non-terminator op, we treat it as a full func.
+    // both handled as the stub case below. If the body contains at least one
+    // op, we treat it as a full func.
     bool hasBody = false;
     if (!op.getBody().empty()) {
       Block &front = op.getBody().front();
@@ -1281,9 +1198,8 @@ struct LowerOperationOp : public OpConversionPattern<OperationOp> {
     }
 
     if (!hasBody) {
-      // Emit an identity-zero body instead of a private declaration. The real
-      // dispatch (via `with HANDLER { ... }`) will be provided later; for now
-      // the default stub allows linking.
+      // Emit a body that returns zero instead of a private declaration, so
+      // the module links.
       Block *entry = funcOp.addEntryBlock();
       rewriter.setInsertionPointToStart(entry);
       if (resultTypes.empty()) {
@@ -1349,8 +1265,8 @@ struct LowerOperationOp : public OpConversionPattern<OperationOp> {
       if (resultTypes.empty()) {
         rewriter.create<func::ReturnOp>(op.getLoc());
       } else {
-        // No result value to return — a typed function but there is no value.
-        // For now we report it. A later milestone refines with default values.
+        // No result value to return — a typed function but there is no value:
+        // the match fails.
         return rewriter.notifyMatchFailure(
             op, "non-empty body without explicit return for typed result");
       }
@@ -1365,16 +1281,15 @@ private:
 };
 
 //===----------------------------------------------------------------------===//
-// M2: topos.op_apply -> func.call al nome mangled
+// topos.op_apply -> func.call al nome mangled
 //===----------------------------------------------------------------------===//
 //
-// Strategy (baseline, no handler dispatch yet):
+// Strategy (a direct call, no runtime dispatch):
 //   topos.op_apply @op on %inst (%args) -> func.call @<Place>__<op>(%inst, %args)
 //
 // The name of the operation's enclosing place is deduced from the original AST
 // by scanning the module (find the OperationOp with sym_name == op_ref and take
-// its parent PlaceOp). A later milestone replaces the direct call with a
-// runtime dispatch table when topos.with_handler arrives.
+// its parent PlaceOp).
 
 struct LowerOpApplyOp : public OpConversionPattern<OpApplyOp> {
   using OpConversionPattern<OpApplyOp>::OpConversionPattern;
@@ -1427,7 +1342,7 @@ struct LowerOpApplyOp : public OpConversionPattern<OpApplyOp> {
 };
 
 //===----------------------------------------------------------------------===//
-// M3: topos.move -> func.func, topos.apply_move -> func.call
+// topos.move -> func.func, topos.apply_move -> func.call
 //===----------------------------------------------------------------------===//
 //
 // A topos.move @M from @Src to @Dst is declared top-level in the module (not
@@ -1558,19 +1473,6 @@ struct LowerFieldLoadOp : public OpConversionPattern<FieldLoadOp> {
   }
 };
 
-//===----------------------------------------------------------------------===//
-// topos.scope -> func.call with arena param
-//===----------------------------------------------------------------------===//
-//
-// Lowering :
-//   topos.scope { body }
-//   ->
-//   %slots     = arith.constant 196560 : i32        ; YON_TYPE2_COUNT
-//   (no arena bracketing)
-//
-// Note: reserved_slots = YON_TYPE2_COUNT = 196560 is the fixed default; the
-// attribute `topos.scope { reserved_slots = N }` is not read.
-
 // topos.scope / topos.scope_with_yield are inlined structurally by
 // LowerToposExtensions (Step 2b) BEFORE this conversion runs; there is no
 // arena model. No scope patterns here.
@@ -1635,7 +1537,7 @@ struct LowerToposToStandardPass
 
       // Type yon_rt_field_load_or_stop: (i64 section, i32 offset, i32 size,
       //                           !llvm.ptr out) -> i32 (status).
-      // section is now i64 (heap_id+xcoord packed).
+      // section is i64 (heap_id+xcoord packed).
       auto i32Ty = builder.getIntegerType(32);
       auto i64Ty = builder.getIntegerType(64);
       auto i8Ty = builder.getIntegerType(8);
@@ -1801,10 +1703,10 @@ struct LowerToposToStandardPass
     patterns.add<MaterializeGeomMorphismOp>(typeConverter, ctx);
     patterns.add<LowerForcesOp>(typeConverter, ctx);
 
-    // Escaping-probe closure conversion / trampolines belong to the arena
-    // model, which does not exist. No trampoline synthesis happens here. Escaping probes cannot be produced by the canonical
-    // frontend; any survivor is rejected by the addIllegalOp guard for
-    // ProbeConstructOp/ProbeApplyOp below.
+    // No closure conversion or trampoline synthesis happens here. Escaping
+    // probes cannot be produced by the canonical frontend; any survivor is
+    // rejected by the addIllegalOp guard for ProbeConstructOp/ProbeApplyOp
+    // above.
 
     populateFunctionOpInterfaceTypeConversionPattern<func::FuncOp>(
         patterns, typeConverter);

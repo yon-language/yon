@@ -7,7 +7,7 @@
  *   transport : forallA B. Path U A B -> A -> B
  *   ua : forallA B. (A ~= B) -> Path U A B
  *
- * Yon's surface type checker is monomorphic, so we implement these
+ * These signatures do not go through Hm_infer; we implement them
  * via "shape-driven inference": when a call to a cubical primitive
  * is encountered, the checker inspects the argument types to derive
  * the result type. No type variables, no unification — just direct

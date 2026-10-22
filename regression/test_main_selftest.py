@@ -1,14 +1,11 @@
 """Wire the built-in OCaml self-test suite (frontend/main.ml) into the harness.
 
-main.exe runs 144 known-answer self-tests (kernel eval, tycheck, cubical, HITs,
+main.exe runs the known-answer self-tests (kernel eval, tycheck, cubical, HITs,
 dispatcher, Heyting/Godel G3, catt, stdlib, move, place-visibility, diagnostics),
 exercising a large slice of the frontend that the per-oracle .exe tests do not.
 
-It was ORPHANED: nothing in the harness ran it. Two consequences had accumulated
-unnoticed: three Heyting self-tests had rotted to stale Kleene expectations after
-the K3 -> Godel G3 fix (main.ml Tests 72/73/75), and the driver printed the failing
-summary but still exited 0. Both are fixed; this node keeps them fixed by asserting
-the whole suite is green (via the Summary line) and that the process exits 0.
+This node asserts the whole suite is green (via the Summary line) and that the
+process exits 0: a failing summary with exit 0 would otherwise pass unseen.
 
 One node on purpose: a regression points here, and the per-test detail is in
 main.exe's stdout. Layer/kind: ocaml / functional.

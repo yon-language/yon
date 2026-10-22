@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     -o)   out="$2"; shift 2 ;;
     -o*)  out="${1#-o}"; shift ;;
-    -*)   shift ;;                # ignore other flags for now
+    -*)   shift ;;                # other flags are ignored
     *)    file="$1"; shift ;;
   esac
 done

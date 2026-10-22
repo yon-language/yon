@@ -8,7 +8,7 @@
  * part (the bodies of functions) into ordinary computation in the arith/scf/
  * func dialects, which then lower to LLVM.
  *
- * Body lowering currently covers:
+ * Body lowering, basic forms:
  *   - number literals (carried as Var "__num_N")        -> arith.constant f64
  *   - boolean literals (Var "__bool_true|false")        -> arith.constant i1
  *   - variables in scope                                -> environment lookup
@@ -25,9 +25,9 @@
  *   - boolean      -> i1
  *   - main's return -> i32 (the final f64 is converted with fptosi)
  *
- * Anything not covered fails loudly with a detailed failwith. There are no
- * stubs, no inline TODOs, no "return 0" placeholders: if the emitter does not
- * know how to lower something, it says so rather than emitting wrong code.
+ * Anything not covered fails loudly with a detailed failwith. Two zeros are
+ * deliberate: a stdlib builtin with no runtime mapping and no dedicated
+ * lowering gets a zero body (emit_zero_default), and Unit lowers to f64 0.0.
  *)
 
 module C = Ast
@@ -36,7 +36,7 @@ module R = Reduce
 (* A cubical term that survives to codegen with no runtime value — a
    path-algebra op (inv/concat/ap) or a J/transp/comp/hit_elim that stays
    stuck after full normalization. These are compile-time-only citizens: the
-   surface (monomorphic, permissive) checker accepts them, but they have no
+   surface (permissive) checker accepts them, but they have no
    f64/i64 representation to lower. This is a clean COMPILE-TIME REJECTION, not
    an internal invariant break — the driver reports it as a semantic error and
    exits, and the fuzzer classifies it as an intended reject. Raising a typed
@@ -252,17 +252,17 @@ let core_is_isprop_fibre = Carrier.core_is_isprop_fibre
 let core_is_comprehension = Carrier.core_is_comprehension
 
 (* CANONICAL type lowering (Yoneda + Knuth): ONE functor (Carrier.of_core_ty),
-   ONE printer (Carrier.to_mlir), ONE partiality (NoCarrier). The historical
-   `emit_ty` (schema) and `core_ty_to_mlir_simple` (value) were two parallel
-   functors lowering the same objects — the place-as-schema and the value
-   carrier are the same object seen twice. They are now THE SAME FUNCTION.
-   Measured behavior-preserving on the corpus: the branches where they used to
-   diverge (Id/PathP as opaque cells, universe/code as !llvm.ptr, curried-arrow
-   nesting) were dead — never reached by any place field, operation, or
-   constructor. The canonical forms therefore win at no observable cost: a path
-   lowers to its erased witness (refl x is x), a code / universe has NO carrier
-   and is rejected cleanly at compile time, a curried arrow flattens to one
-   signature. The schema/value split is gone. *)
+   ONE printer (Carrier.to_mlir), ONE partiality (NoCarrier). The names
+   `emit_ty` (schema) and `core_ty_to_mlir_simple` (value) are both this
+   function: the place-as-schema and the value carrier are the same object seen
+   twice, so one functor lowers both, and a place field, an operation
+   signature, a constructor and a body value all get the same carrier. The
+   canonical forms: a path lowers to its erased witness (refl x is x), a code /
+   universe has NO carrier and is rejected cleanly at compile time, a curried
+   arrow flattens to one signature. A type with no carrier is reported by the
+   failwith below, with
+   the type printed, rather than lowered to a placeholder: every caller (place
+   fields, operation signatures, constructors, bodies) gets a real carrier. *)
 let ty_to_mlir (t : C.ty) : string =
   try
     (match Carrier.of_core_ty t with
@@ -282,9 +282,9 @@ let ty_to_mlir (t : C.ty) : string =
    operation signatures, __new constructors); it IS the canonical lowering. *)
 let emit_ty = ty_to_mlir
 
-(* core_ty_to_mlir_simple was the body-side wrapper; it is now literally the
-   same canonical lowering as emit_ty. Kept as an alias so the body call sites
-   are unchanged while the schema/value duplication is gone. *)
+(* core_ty_to_mlir_simple is the name used at the body call sites (locals,
+   arguments, results); an alias of the same canonical lowering as
+   emit_ty, so schema and body agree on every carrier by construction. *)
 let core_ty_to_mlir_simple = ty_to_mlir
 
 (* ─── Body lowering ─────────────────────────────────────────────────── *)
@@ -292,10 +292,10 @@ let core_ty_to_mlir_simple = ty_to_mlir
 (* Stdlib builtin registry.
  *
  * Map a function name to (the list of MLIR parameter types, the MLIR result
- * type). The functions listed here are treated as extern runtime stubs
- * by the backend: the lowering emits a private func.func with an
- * identity-zero default. When the XLeech2 runtime provides the real
- * implementations, the functions are replaced via symbol resolution.
+ * type). A used entry takes one of three routes: a Stream__/Wire__/
+ * Spawn__/yon_rt_ name is a private declaration bound to the C runtime;
+ * an entry in runtime_mapping gets a body calling its yon_rt_* function;
+ * any other entry gets a zero body (emit_zero_default).
  *
  * This registry is Yon's minimal "operational stdlib". Extensible as real
  * programs require new builtins. *)
@@ -959,7 +959,7 @@ let rec infer_mlir_ty (e : emitter)
                      else if Carrier.is_prim_name x then
                        (* A primitive type name in term position is a universe
                           type-code (tycheck: `refl(number) : Id(Type_0, number,
-                          number)`), reached here via `stay <type>` / `refl(<type>)`.
+                          number)`), reached here via `refl(<type>)`.
                           It is a compile-time-only citizen with no runtime value —
                           a clean reject, not a Fatal "unknown variable" crash. *)
                        raise (Cubical_stuck (Printf.sprintf
@@ -1504,7 +1504,7 @@ let specialize_func (fs : func_sig)
     fn_params = specialized_params;
     fn_ret_mlir = specialized_ret;
     fn_body = fs.fn_body;  (* body unchanged: the Var "T" do not appear in the body *)
-    fn_type_params = [];  (* monomorphic now *)
+    fn_type_params = [];  (* monomorphic *)
   }
 
 (* Mutable registry of requested specializations. It holds both the instances
@@ -1553,18 +1553,18 @@ let closure_target_list (funcs : (string * func_sig) list)
     : (string * func_sig) list =
   let has_pfx p name =
     String.length name >= String.length p && String.sub name 0 (String.length p) = p in
-  (* a lifted lambda: the plain arg-lambda OR one of the five handle-lambdas
-     (Stage C), all of which are content-addressed closures when they capture. *)
+  (* a lifted lambda: the plain arg-lambda OR one of the five handle-lambdas,
+     all of which are content-addressed closures when they capture. *)
   let is_lifted_lambda name =
     has_pfx "__arg_lam_inline" name || has_pfx "__move_inline" name
     || has_pfx "__morph_inline" name || has_pfx "__reduction_inline" name
     || has_pfx "__functor_inline" name || has_pfx "__view_inline" name in
   (* A handle-lambda operates on sections (place-typed source/target), which are
      f64 handles at runtime; the closure carries them and the dispatcher coerces.
-     A plain named user function must stay all-f64 (the Stage B set): admitting
-     every section-returning function (an inductive fun, a place fun) would bloat
-     the dispatcher and shift the dense indices, which regressed the inductive
-     path. So sections are admitted ONLY for the lifted lambdas. *)
+     A plain named user function must stay all-f64: admitting every
+     section-returning function (an inductive fun, a place fun) would bloat
+     the dispatcher and shift the dense indices that the inductive path relies
+     on. So sections are admitted ONLY for the lifted lambdas. *)
   (* a 64-bit slot: a Number, or an Int64 carried as its bits (the
      dispatcher reinterprets it to its real type) *)
   let slot64 t = t = "f64" || t = "i64" in
@@ -1968,7 +1968,7 @@ let rec emit_term (e : emitter)
                 end
                 else if Carrier.is_prim_name x then
                   (* A primitive type name reached emission as a value: a
-                     universe type-code (`stay <type>` / `refl(<type>)`), which
+                     universe type-code (`refl(<type>)`), which
                      is compile-time-only and has no runtime representation.
                      Clean reject, mirroring the infer-side guard above. *)
                   raise (Cubical_stuck (Printf.sprintf
@@ -4484,8 +4484,8 @@ let rec emit_term (e : emitter)
         * type cast to the target place declared by the move.
         * Pattern: App(App(Var "apply_move", Var move_name), instance).
         * Recover the move from the Move_engine registry; the result type is
-        * !topos.section<"<target_place>">. The field conversion is delegated
-        * to the XLeech2 runtime; for now identity.
+        * !topos.section<"<target_place>">. The value is unchanged; only its
+        * type becomes the move's target.
         *
         * Extended pattern for __apply_move_in_<S>, the variant with an
         * explicit target space. The bind `target_space_opt` captures the space
@@ -4966,7 +4966,7 @@ let rec emit_term (e : emitter)
            emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                           v fname arg_str arg_ty_str result_ty);
            (v, result_ty)
-       (* A4: place constructor __section_X (default heap_id = 0) *)
+       (* place constructor __section_X (default heap_id = 0) *)
        | Some (fname, args) when
            String.length fname > 10 && String.sub fname 0 10 = "__section_" ->
            let place = String.sub fname 10 (String.length fname - 10) in
@@ -5219,7 +5219,7 @@ let rec emit_term (e : emitter)
        | t' -> emit_term e env funcs t')
   | (C.Transp _ | C.Comp _ | C.HComp _
     | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _) as ct ->
-      (* comp-in-MLIR (B2). A cubical term in emission position is normalized
+      (* comp-in-MLIR. A cubical term in emission position is normalized
          via the cubical bridge: closed paths/comp/transport compute and their
          result lowers to MLIR. A term still cubical after normalization is not
          decided at runtime — loud error, exactly as with a stuck J. *)
@@ -5732,16 +5732,14 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
   pop_indent e;
   emit_line e "}"
 
-(* policy_int_of_reduction was removed: it had become a no-op (always 0), so
-   it went away together with the register_space_with_policy path that used
-   it. *)
+(* A reduction carries no runtime policy integer: a space is registered
+   without one. *)
 
 (* Emit the startup registration of the declared spaces. Each space gets a
    global string for its name plus a sequence of runtime calls. A space may
-   carry a canonical fold (a semilattice structure on the topos): with
-   `with fold "NAME"` we use yon_rt_register_space_with_fold, otherwise
-   yon_rt_register_space. Distributed cross-space properties are declared
-   separately through geom_morphism. *)
+   carry a canonical fold (sd_fold, a semilattice on the topos): with one we
+   use yon_rt_register_space_with_fold, otherwise yon_rt_register_space.
+   Distributed cross-space properties are declared separately through geomorph. *)
 let emit_space_bootstrap (e : emitter) (spaces : Surface_ast.space_decl list)
     (_reductions : (string * Surface_ast.reduction_decl) list)
     : unit =
@@ -5768,7 +5766,7 @@ let emit_space_bootstrap (e : emitter) (spaces : Surface_ast.space_decl list)
           emit_line e (Printf.sprintf
                          "%s = func.call @yon_rt_register_space_with_fold(%s, %s) : (!llvm.ptr, !llvm.ptr) -> i32"
                          v_id v_ptr v_fold));
-      (* Space death-watch (1.2): arm the Space with its STATIC in-degree in the
+      (* Space death-watch: arm the Space with its STATIC in-degree in the
          inter-Space graph (wire + import arcs). Only in_degree > 0 arms it; an
          isolated / pure-producer Space (in_degree 0) is left unwatched and is
          reclaimed at process exit by the OS. The count is read off the compiler's
@@ -6253,8 +6251,8 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
    * calling a closure reads that index (O(1), a `label` read on the node) and
    * routes here. Keyed on the dense 0..k index, NOT the sparse name hash, so
    * the switch lowers to a jump table: the dispatch reads the postmark and
-   * indexes, it never scans. Always emitted; dead until a closure call is
-   * wired (Stage B). *)
+   * indexes, it never scans. Always emitted, whether or not a closure call
+   * reaches it. *)
   let closure_targets = closure_target_list funcs in
   let cap_count name =
     match List.assoc_opt name !Desugar.synth_cap_count with Some m -> m | None -> 0 in
@@ -6305,7 +6303,7 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     let caps = List.rev !caps in
     let lam = p - m in
     let passed = List.init lam (fun j -> Printf.sprintf "%%a%d" (j + 1)) in
-    (* the target's real param types: a handle-lambda (Stage C) has section params
+    (* the target's real param types: a handle-lambda has section params
        (place-typed source/target). Every arg arrives here as f64 (read off the
        node, or from the a1..a4 slots), so coerce each to its real type, and coerce
        the section-or-f64 return back to f64. coerce_to_param is a no-op on f64. *)
@@ -6989,8 +6987,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
   end;
   (* Stream runtime declarations are emitted by the stdlib stubs block above
      when a Stream__ operation is used, so there is no duplicate here. *)
-  (* For each declared place, emit the constructor __section_<Place> as an
-     identity-zero stub returning an opaque section. *)
+  (* For each declared place, emit the constructor __section_<Place>:
+     alloca payload, field stores, yon_rt_section call. *)
   if places <> [] then begin
     emit_line e "// Place constructors __section_<X> — alloca payload via yon_rt_section";
     (* Wire DTO descriptors: one global byte array of field tags per

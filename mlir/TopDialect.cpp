@@ -49,8 +49,7 @@ void ToposDialect::initialize() {
 // hasOperationAttrVerify = 1 in the dialect TD).
 LogicalResult ToposDialect::verifyOperationAttribute(Operation *op,
                                                        NamedAttribute attr) {
-  // For now: no special constraint. Extend when the passes require it (e.g.
-  // validate that `policy` is one of the enumerated ReductionPolicy values).
+  // No constraint: every operation-level attribute is accepted.
   return success();
 }
 

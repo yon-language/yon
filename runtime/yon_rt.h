@@ -7,9 +7,9 @@
  *   - Multiple heaps identified by heap_id (uint32_t).
  *   - heap_id = 0 is __Default (back-compat with single-Space examples).
  *   - heap_id = 1..N are user-defined Spaces.
- *   - All heap_ids currently point to the same physical heap (semantic
- *     indexing). Later each heap_id will have its own separate yon_xheap_t,
- *     and eventually they will map to remote nodes.
+ *   - Each Space owns its own heap, selected by YON_BACKEND: a private
+ *     yon_xheap_t per Space (separate, the default) or a heap backed by a
+ *     named POSIX shared-memory segment (shm). See the header of yon_rt.c.
  *
  * Section identity:
  *   yon_section_t = packed (heap_id << 32) | xcoord = uint64_t
@@ -63,36 +63,25 @@ static inline uint32_t yon_section_heap(yon_section_t s) {
     return (uint32_t)(s >> 32);
 }
 
-/* Legacy name kept for compatibility: now returns the hybrid slot_index. */
+/* The low 32 bits of a section: the arena slot_index. */
 static inline uint32_t yon_section_slot(yon_section_t s) {
     return (uint32_t)(s & 0xFFFFFFFFu);
 }
 
-/* Deprecated alias — transitional use. Previously this was xcoord. */
+/* Alias of yon_section_slot. Nothing in runtime/, mlir/ or toolchain/ calls
+ * it. */
 static inline uint32_t yon_section_xcoord(yon_section_t s) {
     return yon_section_slot(s);
 }
 
 /* ---- Lifecycle ---- */
 
-/* The policy enum was removed semantically.
- *
- * The policy enum was an anti-pattern: 4 hardcoded values that pretended to
- * encode distributed semantics but were only opaque flags. The correct
- * distributed semantics lives in the geometric_morphism declared between
- * topoi, and the coordination shape is derived from its properties
- * (adjunction, exact f_star, exact f_lower_star).
- *
- * The symbols below remain as empty 0 definitions so as not to break includes
- * of legacy code that references them. They no longer have any effect on the
- * runtime. yon_rt_register_space_with_policy ignores the policy parameter and
- * behaves like yon_rt_register_space.
- *
- * To declare distributed semantics, use geom_morphism in the .yon. The policy
- * functionality is replaced by:
+/* There is no Space policy. Distributed semantics lives in the geometric
+ * morphism declared between topoi:
  *   - yon_rt_register_space_with_fold for the topos semilattice fold
  *   - yon_rt_register_geom_morphism for cross-space relations
- * The coordination shape is derived categorically by
+ * The coordination shape is derived from the morphism's properties
+ * (adjunction, exact f_star, exact f_lower_star) by
  * yon_rt_derive_coordination_from_gm. */
 
 /* Runtime initialization. Idempotent. */
@@ -106,8 +95,8 @@ void yon_rt_ipc_name(char *out, size_t outsz, char kind, const char *name);
 /* Register a Space (a logical heap). Returns the assigned heap_id. Idempotent:
  * calling twice with the same name returns the same id.
  *
- * This function simply assigns an incremental heap_id to distinct names. Later
- * it will bind to a physical yon_xheap_t or to a remote node. */
+ * Assigns an incremental heap_id to each distinct name and creates the Space's
+ * heap according to YON_BACKEND (see the header of yon_rt.c). */
 uint32_t yon_rt_register_space(const char *name);
 
 /* Register a Space with a declared semilattice fold. fold_name is a whitelist
@@ -192,7 +181,7 @@ int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
 
 /* ---- Wire DTO transport, seal 2: the recursive, length-prefixed frame ----
  *
- * Inline encoding, schema-driven, decided on paper (design-wire-dto.md). A
+ * Inline encoding, schema-driven. A
  * frame is [u32 schema_id][u32 payload_len][payload]; the payload concatenates
  * the field encodings in declaration order, positional, no per-field type tag
  * (the schema is nominal and known on both sides). Field encodings:
@@ -236,10 +225,10 @@ yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
 
 /* ---- Non-trivial FREE_MERGE via a fold function ----
  *
- * When the space is CRDT_MERGE, each "write" is not a replace but a fold of
- * the new value over the existing payload. The fold function is provided by
- * the caller (ideally derived from the `backed_by sharded`/`crdt` reduction in
- * the .yon, currently passed as a C function pointer).
+ * When the space was registered with a fold (yon_rt_register_space_with_fold),
+ * each "write" is not a replace but a fold of the new value over the existing
+ * payload. The fold function is passed by the caller as a C function pointer
+ * (yon_rt_fold) or named from the whitelist (yon_rt_fold_named).
  *
  * Semantics:
  *   prev == YON_SECTION_INVALID
@@ -354,12 +343,8 @@ int yon_rt_checkpoint_end(yon_rt_checkpoint_t *snap);
  *   - yon_rt_field_load_v(sec, version, ...) applies the migration on the fly
  *     if the payload is written in a version different from the one requested
  *
- * Higher layers (future): `.yon` syntax to declare versions, hot-swap via
- * dlopen, deployment tooling, etc.
- *
- * Honest: layer 0 is only the runtime infrastructure. Without the layers
- * above, the programmer must register migrations in C and use the API
- * directly. Enough to demonstrate the pattern. */
+ * Layer 0 is only the runtime infrastructure: migrations are registered in C
+ * and used through this API directly. */
 
 typedef int (*yon_migration_fn)(const void *old_payload, uint32_t old_size,
                                  void *new_payload, uint32_t new_size);
@@ -391,8 +376,7 @@ yon_section_t yon_rt_section_v(uint32_t heap_id,
  * of migrate functions. If no chain is found, returns -1.
  *
  * Note: the migration produces a temporary, non-persisted payload (lazy
- * read-only). An "upgrade in place" would need write-back, left to a future
- * layer. */
+ * read-only); the slot is not upgraded in place. */
 int yon_rt_field_load_v(yon_section_t sec,
                          const char *place_name,
                          uint32_t requested_version,
@@ -401,14 +385,11 @@ int yon_rt_field_load_v(yon_section_t sec,
 /* Diagnostic: the number of registered migrations. */
 int yon_rt_migration_count(void);
 
-/* ---- Heap accessor (for the SAGA layer / debug) ----
+/* ---- Heap accessor ----
  *
- * Returns the physical yon_xheap_t* for the current heap_id, per backend.
- * Needed by modules like yon_saga.c that call yon_xheap_clear on slots for
- * compensating actions.
- *
- * Note: the returned pointer has a lifetime until yon_rt destroy. Currently it
- * always returns the same global heap.
+ * Returns the physical yon_xheap_t* for heap_id: the Space's own heap, or the
+ * global heap g_yon_heap when the id is out of range or the Space has no heap
+ * of its own.
  */
 yon_xheap_t *yon_rt_heap_for(uint32_t heap_id);
 
@@ -421,28 +402,22 @@ void *yon_rt_handler_lookup(uint64_t hash);
 /* ---- Coordination protocol cross-Space ---- */
 
 /* When a function crosses multiple Spaces, the coordination protocol is
- * derived from the set of policies of the Spaces involved:
- *   - All STRONG          -> 2PC (two-phase commit)
- *   - Mix STRONG+EVENTUAL -> SAGA (compensating actions)
- *   - All CRDT_MERGE      -> FREE_MERGE (no coordination)
- *   - Single Space        -> LOCAL (no coordination)
- *
- * In single-process mode these protocols are not operative (no failure, no
- * race); the framework is here to demonstrate the derivation and to be
- * materialized later in IPC and network modes. */
-#define YON_COORD_LOCAL      0   /* single space, no coordination */
-#define YON_COORD_TWO_PHASE  1   /* 2PC: all STRONG */
-#define YON_COORD_LAX        2   /* mix STRONG+EVENTUAL (one_exact adjunction) */
-#define YON_COORD_FREE_MERGE 3   /* all CRDT_MERGE */
+ * derived from the geometric morphisms registered between them (see
+ * yon_rt_derive_coordination_from_gm below). Only TWO_PHASE has a runtime
+ * effect: begin locks the heaps involved, end unlocks all registered heaps
+ * (the lock is a flock on shm-backed heaps and a no-op otherwise). */
+#define YON_COORD_LOCAL      0   /* no gm between the Spaces: no coordination */
+#define YON_COORD_TWO_PHASE  1   /* adjunction, both adjoints exact */
+#define YON_COORD_LAX        2   /* adjunction, exactly one adjoint exact */
+#define YON_COORD_FREE_MERGE 3   /* adjunction, neither adjoint exact */
 
 /* Open a "cross-space op" announcing the set of heap_ids involved. The runtime
  * deduces the coordination protocol and logs it to stderr (diagnostic).
  * Returns an opaque token to pass to yon_rt_end_cross_space_op. */
 uint32_t yon_rt_begin_cross_space_op(const uint32_t *heap_ids, uint32_t n);
 
-/* Close a cross-space op opened with begin. Currently a no-op plus a
- * diagnostic log. Later it will close the 2PC transaction or the saga, or
- * commit the CRDT merge. */
+/* Close a cross-space op opened with begin. Under TWO_PHASE, unlocks all
+ * registered heaps; in every case logs the op to stderr. */
 void yon_rt_end_cross_space_op(uint32_t token);
 
 /* Derive the coordination shape from the properties of the geometric morphism.
@@ -455,17 +430,15 @@ void yon_rt_end_cross_space_op(uint32_t token);
  *      linearizability)
  *
  *   adjunction + (f_star_exact XOR f_lower_star_exact)
- *     -> SAGA
- *     (only one is exact: compensation is needed on the non-exact side)
+ *     -> LAX
+ *     (only one is exact)
  *
  *   adjunction + neither_exact
  *     -> FREE_MERGE
  *     (both lax: eventual convergence via a semilattice)
  *
  *   no adjunction declared
- *     -> LOCAL (no cross-topos relation)
- *
- * Completely replaces the old policy enum table. */
+ *     -> LOCAL (no cross-topos relation) */
 typedef struct {
     uint32_t adjunction;          /* 1 if declared, 0 otherwise */
     uint32_t f_star_exact;        /* 1 if f^* preserves finite limits */
@@ -484,8 +457,7 @@ uint32_t yon_rt_derive_coordination_from_gm(
  *
  * The dispatch in begin_cross_space_op looks among the registered gm for the
  * one connecting the topoi involved in the operation and uses the categorical
- * derivation (yon_rt_derive_coordination_from_gm) instead of the legacy enum
- * table.
+ * derivation (yon_rt_derive_coordination_from_gm).
  *
  * Limit: the registry is a global singleton (max 32 gm). It is not propagated
  * cross-process (each process registers its own at startup). */
@@ -533,8 +505,9 @@ int yon_rt_lookup_geom_morphism(const char *source_topos,
  * backing reduction.
  *
  * In single-process mode: stream = in-memory ring buffer, no real threading,
- * emit is append, await is shift-front. Later: shared-memory queue / network
- * channel. */
+ * emit is append, await is shift-front. Across processes on one machine, the
+ * shm variant (yon_rt_stream_shm_* in yon_rt.c) backs the ring with POSIX
+ * shared memory. */
 
 #define YON_STREAM_MAX_SLOTS  64
 #define YON_STREAM_INVALID    ((uint32_t)0xFFFFFFFFu)
@@ -553,8 +526,8 @@ uint32_t yon_rt_stream_lookup(const char *name);
  * success, -1 if the stream is full or invalid. */
 int yon_rt_stream_emit(uint32_t stream_id, const void *value_ptr);
 
-/* Produce: append + ack. Currently == emit (no failure). The semantic
- * difference is preserved for the future (back-pressure). */
+/* Produce: same as emit (no consumer ack). Returns 0 on success, -1 if the
+ * stream is full or invalid. */
 int yon_rt_stream_produce(uint32_t stream_id, const void *value_ptr);
 
 /* Await: take the value at the head, copy into out_ptr. Returns 0 on success,
@@ -584,12 +557,15 @@ uint32_t yon_rt_space_count(void);
 /* Data structures — leveraging the content-addressed yon_xheap   */
 /* ============================================================== */
 
-/* Map: number -> number, content-addressed via the singleton xheap.
+/* Map: number -> number, a persistent binary hash trie in the singleton
+ * xheap.
  *
- * Semantic model: a "map" is identified by a map_id (double for MLIR f64
- * compatibility). map_id=0 = the empty map. Each put creates a new map_id that
- * encapsulates the previous one + (k,v). Automatic content-addressing
- * guarantees that maps with the same content share the same physical slot. */
+ * A map is identified by a map_id (double for MLIR f64 compatibility): the
+ * heapref of the trie root; 0 = the empty map. put returns a new map and leaves
+ * the given one as it was: it copies the path from the root to the key and
+ * shares every other subtree. The trie's shape depends only on the entries,
+ * not on insertion order, so maps with the same entries are the same nodes
+ * (equal handles). See the HashMap / HashSet section of yon_rt.c. */
 
 double yon_rt_map_empty(void);
 
@@ -668,7 +644,7 @@ double yon_rt_leech_transport(double v_24bit, double w_24bit);
 double yon_rt_leech_transport_apply(double x_24bit, double transport_id);
 
 /* ============================================================== */
-/* S5 — Phased memory: observe payload via geom_morphism           */
+/* Phased memory: observe payload via geom_morphism                */
 /* ============================================================== */
 
 /* yon_rt_observe(slot_id_f64, gm_kind, default_val):

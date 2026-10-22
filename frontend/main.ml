@@ -1,13 +1,12 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* main.ml — entry point with synthetic test programs
+(* main.ml — entry point of the interpreter self-tests
  *
- * Each test constructs a Yon Core term directly, runs it, and verifies
- * the reduction produces the expected normal form.
+ * The tests build Core terms and run them through the reducer, or run
+ * surface source through the parser, desugar and tycheck pipeline.
  *
- * These are not exhaustive — they probe the major reduction rules and
- * the dispatcher. A real test suite would have hundreds; this is enough
- * for a first prototype validation.
+ * They probe the major reduction rules and the dispatcher. The regression
+ * suites under regression/ and tests/ cover the compiler end to end.
  *)
 
 open Ast
@@ -134,13 +133,13 @@ let test_scope () =
     ~term
     ~expected:Unit
 
-(* ─── Test 6: with-handle (effect dispatch) ────────────────────────── *)
-(* Setup: a place Disk with an operation read(path: Text): Text          *)
-(*        a reduction MockDisk with on read(p) ↦ p (identity)            *)
-(* Program: with MockDisk in (read Unit)                                 *)
-(* Expected: Unit (the handler returned its argument)                    *)
+(* ─── Test 6: handler dispatch (no test) ───────────────── *)
+(* Core has no handler-activation term: the `with` block is *)
+(* retired, so no Core program activates a reduction. *)
+(* Reduce.try_op_handle reads ctx.active_handlers, which no *)
+(* caller fills, so there is no dispatch to test here. *)
 
-(* test_with_handle removed: tested the dropped 'with R { }' construct *)
+(* (no test function for Test 6) *)
 
 (* ─── Test 7: place equivalence ───────────────────────────── *)
 (* Two places with identical signatures should be equal under structural place equivalence. *)
@@ -177,11 +176,11 @@ let test_place_equivalence () =
   Printf.printf "Status: %s\n" (if ok then "PASS" else "FAIL");
   ok
 
-(* ─── Test 8: nested with-blocks ──────────────────────────────────── *)
-(* with Outer in (with Inner in (read Unit))                            *)
-(* should dispatch to Inner.read first (innermost handler wins).        *)
+(* ─── Test 8: nested handlers (no test) ────────────────── *)
+(* Nested handler activation has no Core form either *)
+(* (see Test 6), so there is nothing to dispatch. *)
 
-(* test_nested_handlers removed: tested the dropped 'with R { }' construct *)
+(* (no test function for Test 8) *)
 
 (* ─── Surface Yon parsing + desugaring tests ───────────────────────── *)
 
@@ -371,8 +370,8 @@ let test_conditional_program () =
            Printf.printf "No main function\n";
            false)
 
-(* Test 22: end-to-end program with Output.print and observable output. *)
-(* test_hello_world removed: Output via the dropped 'with' handler-scope *)
+(* Test 22: output through a handler scope (no test: the `with` *)
+(* handler scope is retired; Core has no handler-activation term) *)
 
 (* ─── Type checker tests ───────────────────────────────────────────── *)
 
@@ -473,8 +472,8 @@ let test_tycheck_with_visits () =
            cr.cr_errors;
          false)
 
-(* Test 28: type-check accepts effect via with-block (handler active). *)
-(* test_tycheck_with_handler removed: tested type-check of the dropped 'with' construct *)
+(* Test 28: type-check of an effect under an active handler (no *)
+(* test: the `with` block that activated it is retired). *)
 
 (* Test 29: type-check catches field access on non-place. *)
 let test_tycheck_bad_field_access () =
@@ -1963,8 +1962,8 @@ let test_reduce_visibility_table () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
-(* Test 90: end-to-end — `with R of P { ... }` sets current_place. *)
-(* test_reduce_with_propagation removed: tested the dropped 'with R { }' construct *)
+(* Test 90: current_place set by a handler block (no test: the *)
+(* `with R of P { ... }` block is retired). *)
 
 (* ─── proposition type integration ──────────────────────────────────── *)
 
@@ -2093,8 +2092,8 @@ let test_space_world_indexed () =
     (Printf.printf "Status: FAIL\n"; false)
 
 (* Test 96: Heyt surface literals dispatch via SWhen pattern.
- * Demonstrates the Prop_eval ↔ SWhen bridge end-to-end through a real
- * Yon program: a function takes a proposition argument, dispatches on
+ * A real Yon program goes through parse, desugar and evaluation:
+ * a function takes a proposition argument, dispatches on
  * present/absent/unknown via `is` patterns, returns the right branch. *)
 let test_heyt_surface_branch_present () =
   let src = {|
@@ -2337,30 +2336,27 @@ let test_pi_type_parse () =
       Printf.printf "  fun applied_at(f: Pi(x:Type). number, t: Type): Number parsed\n";
       Printf.printf "Status: PASS — Pi-type syntax operational\n"; true
 
-(* Test 113: Typeclass-style dispatch via Yoneda-native place + reduction.
+(* Test 113: Typeclass-style dispatch via place + reduction (no test).
  *
- * Closes a goal. The "instance resolution" of
- * type-class systems is realized STRUCTURALLY in Yoneda: a place is
+ * The "instance resolution" of
+ * type-class systems would be structural: a place is
  * an object of the site with an algebra of operations; reductions are
- * concrete handlers (instances). A function declaring `visits Ord`
- * requires an active reduction on Ord — the dispatch happens via
- * handler activation in a `with NumberOrd { ... }` block.
+ * concrete handlers (instances). Dispatch through an activated handler
+ * needed the `with` block, which is retired, and Core has no
+ * handler-activation term.
  *
- * No separate class/instance keyword machinery is needed: the
- * paradigm already expresses it through its primary constructs. *)
-(* test_yoneda_typeclass_dispatch removed: dispatch via the dropped 'with' handler-scope *)
+ * So there is no test function for Test 113.
+ *)
 
-(* Test 118: Effect inference — transitive closure of `visits`.
+(* Test 118: Effect inference — transitive closure of `visits` (no test).
  *
- * Yoneda-coherent: the visits set of a function includes not only the
- * declared effects, but also all those carried in by the calls. The fixpoint
- * over the call graph propagates coherently.
+ * The visits set of a function includes not only the
+ * declared effects, but also all those carried in by the calls, through a
+ * fixpoint over the call graph.
  *
- * Without transitive inference, middle_fn would have to declare visits Log
- * explicitly. With inference, it derives this from the call graph. *)
-(* test_effect_inference_transitive removed: drove effect inference through the
-   dropped 'with' handler-scope. Effect-inference coverage (visits propagation)
-   should be re-added as a 'with'-free test if wanted. *)
+ * The test that drove this went through the `with` handler scope, which
+ * is retired, so there is no test function for Test 118 here.
+ *)
 
 (* Test 122: the three values of a proposition keep three codes; unknown is
    not absent. *)
@@ -2917,8 +2913,8 @@ let test_univalence_computes () =
      (i=0 ↦ (A,e)) and the inverse at the TARGET face (i=1 ↦ (B,id_b)): the result
      is id_b.g(e.f(t)). id_b is the identity equivalence, whose inverse g collapses
      to the identity in the core, so this IS e.f(t) — univalence still computes.
-     (Was: the placeholder emitted the bare forward; the rule now goes through both
-     faces with the correct directions. transport_ua_succ pins the collapsed value.) *)
+     The rule goes through both faces with the correct directions;
+     transport_ua_succ pins the collapsed value. *)
   match transported with
   | Cubical.CHITConstr ("__equiv_bwd",
       [idq; Cubical.CHITConstr ("__equiv_fwd", [eq; arg])])
@@ -3222,8 +3218,8 @@ let test_lt_topology () =
  * left adjoint of the inclusion Sh(C,j) -> PSh(C), and it composes
  * automatically with a move between sites.
  *
- * For the prototype, we check that the system recognizes the situation
- * "move M from PlaceA to PlaceB with a topology on PlaceB". *)
+ * This test builds a topology_decl and a move_decl record and checks
+ * only their own fields; no sheafification code runs. *)
 let test_sheafification_auto () =
   Printf.printf "\n=== Test 170: automatic cross-site sheafification ===\n";
   (* Simulate two places with a topology and a move between them *)
@@ -3268,8 +3264,8 @@ let test_sheafification_auto () =
  *   p ⊩ forallx. φ(x)   ssi   forall q <= p, forall a in D(q): q ⊩ φ(a)
  *   p ⊩ existsx. φ(x)   ssi   exists covering {p_i}, a_i in D(p_i): p_i ⊩ φ(a_i)
  *
- * For the prototype, SForces is a syntactic construct; the forcing check is
- * delegated to the topos kernel. *)
+ * This test builds an SForces value and pattern-matches it; no forcing
+ * is evaluated. *)
 let test_forces_stmt () =
   Printf.printf "\n=== Test 171: integrated forcing semantics ===\n";
   let loc = Surface_ast.dummy_loc in
@@ -3487,13 +3483,12 @@ let test_shot_ordering () =
   else
     (Printf.printf "FAIL\n"; false)
 
-(* Test 183: Stack of active reductions during a nested `with`.
+(* Test 183: Stack of active reductions (no test).
  *
- * In a block `with R1 of P { with R2 of P { ... } }`, R2 is looked up first
- * (top of stack, LIFO). The prototype keeps `active_handlers` as a list with
- * the top at the head: the innermost handler wins. *)
-(* test_nested_with_stack removed: exercised active_handlers, the LIFO stack the
-   dropped 'with' construct populated. *)
+ * Reduce keeps `active_handlers` as a list with the top at the head
+ * (innermost first), but no caller fills it: the `with` block that
+ * populated it is retired. So there is no test function for Test 183.
+ *)
 
 (* Test 184: Reduction polymorphism.
  *
@@ -3546,20 +3541,12 @@ let test_default_reduction () =
        has_output has_console;
      false)
 
-(* Test 187: Reductions backed by a distributed policy.
+(* Test 187: Reductions backed by a distributed policy (no test).
  *
- * A reduction can be materialized with different policies:
- *   Direct          : in-memory single-node
- *   Sharded         : sharded across nodes (partition by key)
- *   ReplicatedPaxos : strong-consistency replicated via Paxos
- *   EventualCRDT    : eventually-consistent via CRDT merge
- *
- * Syntax: `reduction R of P backed_by paxos { ... }`. *)
-(* test_reduction_policy was removed.
- * It tested the `backed_by paxos` keyword, which was removed (see
- * surface_ast.ml: the reduction_policy type was eliminated). Distributed
- * semantics now goes exclusively through
- * geom_morphism. *)
+ * A reduction carries no distribution policy clause: distributed
+ * semantics is declared with geomorph and the reduction's `fold`
+ * clause. So there is no test function for Test 187.
+ *)
 
 (* ─── Entry point ──────────────────────────────────────────────────── *)
 

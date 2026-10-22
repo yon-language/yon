@@ -1,11 +1,12 @@
 /* logic.yon — the package file of `logic`, under prelude/.
  *
- * The site C(Logic): the category of truth. Its objects are Boolean (two
+ * The site C(Logic): the category of truth. Its objects are the places of
+ * this directory (the compiler counts them): among them Boolean (two
  * points) and Unit (one point, the terminal object).
  *
  * No generators declared: `and`, `or` and `not` are primitive operators of
- * the language, and their declared face is the algebra, which the grammar
- * does not have. Boolean is a Heyting algebra with two values;
+ * the language; their declared face is an algebra, attached by
+ * `operation … uses algebra` on a place, and none is declared. Boolean is a Heyting algebra with two values;
  * `proposition`, the subobject classifier, is a distinct type with three. */
 topos where {
 }

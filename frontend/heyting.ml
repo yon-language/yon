@@ -2,7 +2,7 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* heyting.ml — Heyting algebra runtime for Yon propositions.
  *
- * Yon's "boolean" type is not Boolean. It is the subobject classifier
+ * A proposition (the type `proposition`) is not Boolean. It lives in
  * Omega of the ambient topos, which for non-Boolean topoi has more than
  * two values. We implement the three-value fragment (present, absent,
  * unknown) which is sufficient for Yon's place-relative semantics.
@@ -130,8 +130,8 @@ let h_imp (a : heyt_value) (b : heyt_value) : heyt_value =
  *
  * NOTE this is a partial order on a three-element chain because we
  * only use the prop tri-value fragment. The full Omega of an arbitrary
- * topos has a richer structure (a complete Heyting algebra), but for
- * the prototype this is sufficient.
+ * topos has a richer structure (a complete Heyting algebra); only
+ * the three-element chain is here.
  *)
 let h_leq (a : heyt_value) (b : heyt_value) : bool =
   match a, b with

@@ -4,7 +4,7 @@
 // cons-list rather than over the term algebra. Lexing and parsing are stream folds in
 // the design ("Lexer: a stream fold"), and here parse_loop is exactly that fold: it
 // consumes the token list left to right, accumulating an AST. Left-associative, no
-// precedence (a precedence climber is the next refinement); enough to close the loop
+// precedence here (parse_arith.yon adds it); enough to close the loop
 // text -> tokens -> AST -> value on silicon.
 //
 // Tokens are content-addressed MerkleTree nodes too: NUM(v)=node2(1,leaf v,leaf 0),

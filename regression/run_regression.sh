@@ -42,9 +42,8 @@ LOWER="--convert-scf-to-cf --convert-cf-to-llvm --convert-func-to-llvm --convert
 EMIT="$FE/_build/default/yoner_emit_mlir.exe"
 OUT=/tmp/regression_now.txt; > "$OUT"
 # An example is a single examples/<name>.yon OR
-# a directory examples/<name>/ with a yon.toml — the emit accepts both. The
-# old *.yon-only glob silently shrank the gate to ONE file when the corpus
-# became directory-projects.
+# a directory examples/<name>/ with a yon.toml — the emit accepts both, so
+# the glob takes both.
 for f in "$EXD"/*.yon "$EXD"/*/; do
   name=$(basename "$f" .yon); name=${name%/}
   rm -f /tmp/rr   # never execute a stale binary when a compile stage fails
@@ -98,5 +97,5 @@ else
   echo "QUANTIZER BUILD FAIL:"; cat /tmp/qz_cc.txt; exit 1
 fi
 
-# Cross-Space suite (multi-process, outside the 112 baseline)
+# Cross-Space suite (multi-process, outside the .yon baseline)
 "$(dirname "$0")/cross_space/run.sh" || exit 1

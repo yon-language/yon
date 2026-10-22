@@ -4,13 +4,13 @@
  * pipeline as a well-formedness GATE over the dependent-type fragment.
  *
  * WHY. The pipeline type-checks the SURFACE (tycheck.ml) and then lowers to Core,
- * but the Core IR — what emit actually consumes, and what A1's El(Fam x)
- * normalization rewrites — was never re-checked by the kernel's dependent checker.
- * core_check was test-only (15 hand-built oracle terms). This pass runs it on the
+ * but the Core IR — what emit actually consumes, and what the El(Fam x)
+ * normalization rewrites — needs re-checking by the kernel's dependent checker.
+ * test_core_check exercises core_check on hand-built terms; this pass runs it on the
  * REAL desugared program: the kernel re-certifies every dependent type the surface
  * elaboration produced. It is the "kernel re-checks the elaborator" discipline of
  * Lean/Coq, scoped to the fragment core_check covers (Pi/Sigma/Id/El over the
- * dependent-lambda core), which is exactly where A1 lives.
+ * dependent-lambda core), which is where El(Fam x) lives.
  *
  * SAFE GATE. core_check does NOT cover the full runtime IR (Place, Emit, streams,
  * cubical formers, numeric literals). Running it naively would false-reject every

@@ -17,8 +17,9 @@
  *   L2_SHM      — opt-in (YON_BACKEND=shm): each Space heap is backed by a named
  *                 POSIX shared-memory segment "/y<world>p_<NAME>" so the heap
  *                 itself is attachable from another process (PostgreSQL-style).
- *                 Falls back to a private heap if the shm segment cannot be
- *                 created.
+ *                 If the shm segment cannot be created, __Default falls back
+ *                 to a private heap and any other Space to the global heap
+ *                 g_yon_heap.
  *
  * The ABI is identical across backends; only the heap backing differs.
  */
@@ -93,7 +94,7 @@ static int g_initialized = 0;
  * characteristic of the topos itself, not of the dispatch). The cross-space
  * relations are in the g_geom_morphisms[] registry. */
 static struct {
-    char          name[256];       /* inline (was strdup) */
+    char          name[256];       /* inline, no heap allocation */
     uint32_t      occupancy;
     char          fold_name[256];  /* empty string = no fold declared */
     yon_xheap_t  *heap;
@@ -121,7 +122,7 @@ yon_xheap_t *yon_rt_heap_for(uint32_t heap_id) {
     return g_yon_heap;
 }
 
-/* Backward-compat: the old internal `heap_for` calls the public one. */
+/* Internal short name for yon_rt_heap_for. */
 static yon_xheap_t *heap_for(uint32_t heap_id) {
     return yon_rt_heap_for(heap_id);
 }
@@ -366,8 +367,8 @@ uint32_t yon_rt_register_space(const char *name) {
     g_spaces[id].fold_name[0] = '\0';
     g_spaces[id].accumulator = YON_SECTION_INVALID;
     g_spaces[id].deathwatch_pending = -1;  /* unwatched until expect_inputs arms it */
-    /* Each space has its own physical heap under SEPARATE/SHM. In L1_SHARED it
-     * stays NULL (heap_for returns g_yon_heap). */
+    /* Each space has its own physical heap under SEPARATE/SHM. When it stays
+     * NULL, heap_for returns g_yon_heap. */
     if (g_backend == YON_BACKEND_L2_SEPARATE) {
         g_spaces[id].heap = yon_xheap_create();
     } else if (g_backend == YON_BACKEND_L2_SHM) {
@@ -528,11 +529,9 @@ void yon_rt_space_input_closed(uint32_t id) {
 /* Payload storage (no separate header)                             */
 /* ============================================================== */
 
-/* The blob helpers (alloc_payload_blob, blob_bytes, blob_length,
- * blob_heap_id) were retired, along with the old 4-byte length + 4-byte
- * heap_id payload header. The heap stores payloads directly in its
- * internal arena; yon_xheap_slot_t has payload_offset and payload_size with no
- * separate header. */
+/* The heap stores payloads directly in its internal arena, with no
+ * per-payload length or heap_id header; yon_xheap_slot_t has payload_offset
+ * and payload_size. */
 
 /* Content-addressing now happens inside yon_xheap_put, which looks up the
  * content_index and returns the existing slot_index (dedup) or allocates a new
@@ -811,16 +810,11 @@ yon_section_t yon_rt_fold(uint32_t heap_id,
         return YON_SECTION_INVALID;
     }
 
-    /* In-place mutation under a cross-process lock. The lock guarantees that
-     * concurrent folds do not overlap in load->op->store; commutativity of the
-     * fold already guaranteed eventual convergence, now we also have atomicity
-     * for each individual apply.
-     *
-     * Trade-off: the cost of flock per fold; benefit: formal convergence even
-     * on non-x86 hardware (ARM weak memory, etc).
-     *
-     * Under YON_BACKEND=L1_SHARED the lock is a no-op (no cross-process). Under
-     * SEPARATE/SHM it is a cross-process flock LOCK_EX. */
+    /* In-place mutation under the heap lock. On a shm-backed heap the lock
+     * is a cross-process flock LOCK_EX, so concurrent folds do not overlap in
+     * load->op->store; commutativity of the fold gives eventual convergence,
+     * the lock gives atomicity of each individual apply. On a private heap
+     * (YON_BACKEND=separate) yon_xheap_lock is a no-op. */
     if (yon_xheap_lock(h) != 0) {
         fprintf(stderr, "[YON-RT #86] fold: lock acquisition failed\n");
         return YON_SECTION_INVALID;
@@ -1139,14 +1133,12 @@ yon_section_t yon_rt_section_v(uint32_t heap_id,
                             const void *payload_bytes, uint32_t n_bytes,
                             const char *place_name, uint32_t schema_version) {
     ensure_init();
-    (void)place_name;  /* not used yet — reserved for higher layers */
+    (void)place_name;  /* not used */
     if (heap_id >= g_n_spaces) {
         fprintf(stderr,
                 "[YON-RT #89] new_v: heap_id=%u not registered\n", heap_id);
         return YON_SECTION_INVALID;
     }
-
-    /* Policy-based log removed; see the comment above. */
 
     yon_xheap_t *h = heap_for(heap_id);
     uint32_t slot_idx = yon_xheap_put_v(h, payload_bytes, n_bytes,
@@ -1190,8 +1182,8 @@ int yon_rt_field_load_v(yon_section_t sec,
         return -1;
     }
 
-    /* For simplicity: we support only direct migration v_slot -> v_req.
-     * A multi-step chain is a future layer. */
+    /* Only direct migration v_slot -> v_req is supported; a multi-step chain
+     * is not looked up. */
     const migration_entry_t *m = find_migration(place_name,
                                                   slot_version,
                                                   requested_version);
@@ -1247,20 +1239,18 @@ int yon_rt_field_load_v(yon_section_t sec,
 /* ============================================================== */
 
 /* Derivation of the coordination shape from the properties of the geometric
- * morphism. The 3 YON_POLICY_* macros and the function
- * yon_rt_derive_coordination were removed; the coordination shape is now
- * derived only via yon_rt_derive_coordination_from_gm, activated in
+ * morphism. It is the only derivation of the coordination shape, used by
  * begin_cross_space_op when it finds registered gm in the runtime registry.
  *
  * Categorically honest mapping:
  *   adj + both_exact  -> TWO_PHASE  (both adjoints preserve their limits
  *                                    -> linearizability)
- *   adj + one_exact   -> SAGA       (only one lax -> compensation needed)
+ *   adj + one_exact   -> LAX        (only one adjoint exact)
  *   adj + neither     -> FREE_MERGE (both lax -> semilattice join)
  *   no adj            -> LOCAL      (no cross-topos relation)
  *
- * Completely replaces the pre-existing policy enum table. The automatic
- * dispatch happens in begin_cross_space_op via yon_rt_lookup_geom_morphism. */
+ * The dispatch happens in begin_cross_space_op via
+ * yon_rt_lookup_geom_morphism. */
 uint32_t yon_rt_derive_coordination_from_gm(
     const yon_geom_morphism_props_t *props) {
     if (!props) return YON_COORD_LOCAL;
@@ -1364,10 +1354,10 @@ uint32_t yon_rt_begin_cross_space_op(const uint32_t *heap_ids, uint32_t n) {
      *
      * Lookup strategy: for each pair (heap_a, heap_b) with a != b in the set,
      * look for a gm a -> b or b -> a among the registered ones. If found (at
-     * least one): use derive_from_gm. Otherwise: enum fallback.
+     * least one): use derive_from_gm. Otherwise: LOCAL.
      *
      * Note: if several gm match different pairs, the most constraining wins
-     * (TWO_PHASE > SAGA > FREE_MERGE > LOCAL). This is the canonical robustness
+     * (TWO_PHASE > LAX > FREE_MERGE > LOCAL). This is the canonical robustness
      * order: better to over-coordinate than under. */
     uint32_t coord = YON_COORD_LOCAL;
     int found_gm = 0;
@@ -1411,16 +1401,12 @@ uint32_t yon_rt_begin_cross_space_op(const uint32_t *heap_ids, uint32_t n) {
     }
     fprintf(stderr, "]\n");
 
-    /* SAGA was removed from the runtime. The SAGA pattern is derived
-     * categorically from a geom_morphism (adjunction without f_star exact), but
-     * the runtime dispatch is no longer needed — the pattern is expressed via
-     * reductions directly.
-     *
-     *  - TWO_PHASE  -> lock heaps in ascending order to avoid deadlock
-     *  - FREE_MERGE / LOCAL / SAGA -> no-op (no runtime side effects) */
+    /* Runtime effect per coordination shape:
+     *  - TWO_PHASE  -> lock the heaps, in the order given in heap_ids
+     *  - LAX / FREE_MERGE / LOCAL -> no-op (no runtime side effects) */
     if (coord == YON_COORD_TWO_PHASE) {
-        /* Cross-process lock of all heaps involved. Only in L2_SHM does it
-         * have real effect (flock); elsewhere a no-op. */
+        /* Cross-process lock of all heaps involved. Only on shm-backed heaps
+         * does it have real effect (flock); elsewhere a no-op. */
         for (uint32_t i = 0; i < n; i++) {
             yon_xheap_t *h = heap_for(heap_ids[i]);
             if (h) yon_xheap_lock(h);
@@ -1428,8 +1414,7 @@ uint32_t yon_rt_begin_cross_space_op(const uint32_t *heap_ids, uint32_t n) {
         fprintf(stderr, "[YON-RT #84] 2pc lock acquired on %u heap(s)\n", n);
     }
 
-    /* Encode coord in the high bits of the token; low bits reserved for
-     * future extension. */
+    /* The token is the coordination shape. */
     return coord;
 }
 
@@ -1437,9 +1422,8 @@ void yon_rt_end_cross_space_op(uint32_t token) {
     ensure_init();
     uint32_t coord = token;
 
-    /* Nessun saga commit.
-     *  - TWO_PHASE  -> unlock in reverse order
-     *  - SAGA / FREE_MERGE / LOCAL -> no-op */
+    /*  - TWO_PHASE  -> unlock in reverse order
+     *  - LAX / FREE_MERGE / LOCAL -> no-op */
     if (coord == YON_COORD_TWO_PHASE) {
         /* Unlock in reverse order. Without heap_ids as input we cannot unlock
          * specific ones; instead, unlock all registered heaps (no-op if not
@@ -1464,7 +1448,7 @@ void yon_rt_end_cross_space_op(uint32_t token) {
 #define YON_MAX_STREAMS 32
 
 typedef struct yon_stream_s {
-    char      name[256];       /* inline (was strdup) */
+    char      name[256];       /* inline, no heap allocation */
     uint32_t  target_heap_id;  /* the consumer's space */
     uint32_t  slot_size;       /* bytes per value */
     /* inline ring: capacity (<=64) x slot_size (<=256) bytes; no malloc */
@@ -1533,8 +1517,8 @@ int yon_rt_stream_emit(uint32_t stream_id, const void *value_ptr) {
 }
 
 int yon_rt_stream_produce(uint32_t stream_id, const void *value_ptr) {
-    /* produce == emit (no failure, no back-pressure): there is no
-     * consumer ack. */
+    /* produce == emit: there is no consumer ack; it fails (-1) exactly when
+     * emit does. */
     return yon_rt_stream_emit(stream_id, value_ptr);
 }
 
@@ -1562,8 +1546,7 @@ uint32_t yon_rt_stream_size(uint32_t stream_id) {
 /* ---- f64 wrappers for the frontend stdlib streams ---- */
 
 /* Stream__make(target_heap_id_f64) -> stream_id as f64.
- * Creates a stream with an auto-generated name (in a future version the name
- * will come from the syntax `stream Name in Space { ty }`).
+ * Creates a stream with an auto-generated name.
  * slot_size fissato a 8 byte (f64). */
 double yon_rt_stream_make_f64(double target_heap_f64) {
     static uint32_t anon_counter = 0;
@@ -1615,22 +1598,20 @@ double Stream__recv(double s)        { return yon_rt_stream_await_f64(s); }
 double Stream__close(double s)       { return (double)yon_rt_stream_close((uint32_t)s); }
 
 /* ============================================================== */
-/* Cross-PROCESS streams over POSIX shared memory (mattone A)      */
+/* Cross-PROCESS streams over POSIX shared memory                  */
 /* ============================================================== */
 /* The in-process streams above live in g_streams (this process only).
  * For two isolated Space processes on the SAME machine (PostgreSQL-style:
  * separate processes, no shared address space, communicating only over an
  * explicit channel) we back the stream's ring buffer with POSIX shared
- * memory, reusing the exact pattern proven for the SHM heap:
- *   shm_open + mmap(MAP_SHARED) for the region, flock(LOCK_EX) around the
- *   head/tail/count updates so concurrent emit/await across processes are
- *   serialized. No absolute pointers: the buffer is an offset inside the
- *   mapped region, valid regardless of where each process maps it.
+ * memory: shm_open + mmap(MAP_SHARED) for the region, and the header's
+ *   process-shared mutex (taken with a bounded trylock, yon_shm_hdr_lock)
+ *   around the head/tail/count updates so concurrent emit/await across
+ *   processes are serialized. No absolute pointers: the buffer is an offset
+ *   inside the mapped region, valid regardless of where each process maps it.
  *
- * This is the L1->L2 jump the code anticipated ("In L2+ produce attendera'
- * ack del consumer"): same emit/await API, the buffer now crosses the
- * process boundary. Different-CPU transport (sockets, a modern protocol) is
- * the next brick (B); SHM is same-machine. */
+ * Same emit/await API as the in-process streams; the buffer crosses the
+ * process boundary. SHM is same-machine only. */
 
 
 /* Layout of the shared region: a fixed header followed by the ring buffer.
@@ -1646,9 +1627,9 @@ typedef struct {
     uint32_t closed;       /* 1 = producer closed the stream (clean EOF) */
     uint32_t producers;    /* live producer attach count (fault detection) */
     pthread_mutex_t mu;    /* PROCESS_SHARED: serializes head/tail/count across
-                            * processes. flock() on an shm fd is a no-op x-proc
-                            * on macOS, so the ring raced (Bug B); this replaces
-                            * it. Inited by the creator, used by every attacher. */
+                            * processes. flock() on an shm fd does not serialize
+                            * across processes on macOS, so a mutex is used.
+                            * Inited by the creator, used by every attacher. */
     /* ring buffer bytes follow immediately after this header */
 } yon_shm_stream_hdr_t;
 
@@ -1674,11 +1655,11 @@ typedef struct {
     int   fd;
     void *region;          /* mmap'd: header + buffer */
     size_t region_size;
-    char  name[256];       /* inline (was strdup) */
+    char  name[256];       /* inline, no heap allocation */
     int   in_use;          /* pool slot occupancy */
 } yon_shm_stream_t;
 
-/* Pool of shm-stream handles (was one malloc per open). Pointers into this
+/* Pool of shm-stream handles (no malloc per open). Pointers into this
  * BSS pool are stable; close() frees a slot by clearing in_use. */
 static yon_shm_stream_t g_shm_stream_pool[YON_MAX_SHM_STREAMS];
 
@@ -1756,7 +1737,8 @@ yon_shm_stream_t *yon_rt_stream_shm_open(const char *name,
     return s;
 }
 
-/* Emit a value across the process boundary. flock serializes the update. */
+/* Emit a value across the process boundary. The header mutex serializes the
+ * update. */
 int yon_rt_stream_shm_emit(yon_shm_stream_t *s, const void *value_ptr) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
@@ -1895,8 +1877,8 @@ int yon_rt_stream_shm_unlink(const char *name) {
  * payload_len][payload]) are written densely, wrapping at the buffer end by
  * splitting the copy in two; the frame's own header carries its length, so the
  * ring is self-delimiting and there is no fixed per-element cap (a frame is
- * bounded only by the ring size). flock + the closed flag give the same
- * back-pressure and EOF discipline as the slot ring. An oversized frame is a
+ * bounded only by the ring size). The header mutex + the closed flag give the
+ * same back-pressure and EOF discipline as the slot ring. An oversized frame is a
  * loud failure (rc -3), never a silent truncation. ---- */
 
 /* Emit one variable frame. rc 0 sent, -1 full (back-pressure), -3 frame larger
@@ -2766,11 +2748,10 @@ void *yon_rt_spawn_open(double n_replicas_f64) {
     ctx->n = n;
     /* macOS caps POSIX shm names at 31 chars (PSHMNAMLEN, slash included).
      * yon_rpc2_queue_map_init prepends "/y<world>s_" (8), leaving 23 for this
-     * name. The old "spawncollect_%d_%u" overran (e.g.
-     * "/yon_stream_spawncollect_<pid>_<n>" = 32 bytes) so shm_open failed before
-     * fork on Darwin and the parent folded an invalid stream (hang). Hex bounds
-     * the width: pid <= 6 hex (PID_MAX), counter <= 8 hex (u32) => "sc_%x_%x" is
-     * <= 18 chars, total <= 26. Same fix family as the reply_name cap. */
+     * name. A longer name makes shm_open fail before fork on Darwin, and the
+     * parent would fold an invalid stream (hang). Hex bounds the width:
+     * pid <= 6 hex (PID_MAX), counter <= 8 hex (u32) => "sc_%x_%x" is
+     * <= 18 chars, total <= 26. The reply_name cap follows the same rule. */
     snprintf(ctx->name, sizeof(ctx->name), "sc_%x_%x",
              (unsigned)getpid(), g_yon_spawn_counter++);
     /* Parent is the consumer: create and claim the queue BEFORE forking so the
@@ -3527,7 +3508,7 @@ uint32_t yon_rt_heap_occupancy(uint32_t heap_id) {
 }
 
 /* ============================================================== */
-/* P10 Data structures — singleton xheap content-addressed         */
+/* Data structures — singleton xheap content-addressed             */
 /* ============================================================== */
 
 #include "xleech2_heap.h"
@@ -3536,12 +3517,9 @@ static yon_xheap_t *g_ds_heap = NULL;
 
 static void ds_ensure_init(void) {
     if (!g_ds_heap) {
-        /* Unification of the Leech allocator. All data structures (List,
-         * HashSet, HashMap, XSet, Merkle) share the same xheap g_yon_heap.
-         * Benefit: content-addressing works cross-structure, and separate heaps
-         * are not exhausted. Previously g_ds_heap was a separate
-         * yon_xheap_create(), so list_cons could fill up even with an almost
-         * empty HashSet. Now g_ds_heap = g_yon_heap (unified). */
+        /* All data structures (List, HashSet, HashMap, XSet, Merkle) share
+         * the same xheap g_yon_heap, so content-addressing works
+         * cross-structure and no structure exhausts a heap of its own. */
         extern yon_xheap_t *g_yon_heap;
         if (!g_yon_heap) {
             g_yon_heap = yon_xheap_create();
@@ -3549,10 +3527,6 @@ static void ds_ensure_init(void) {
         g_ds_heap = g_yon_heap;
     }
 }
-
-/* slot_index encoding in the double: integers up to 2^53 are exactly
- * representable in f64. N_SLOTS = 196560 fits in 18 bits, so the full f64
- * range is fine. map_id = slot_index, 0 = empty. */
 
 /* ---- HashMap / HashSet: persistent hash tries --------------------- */
 /* A map is a value: put and add return a new map and leave the one they
@@ -5363,11 +5337,8 @@ double yon_rt_frozen_from_indexed(double src_id) {
     for (uint32_t i = 0; i < total; i++) l2[i].key_ref = YON_IHMAP_INVALID;
 
     /* Group entry indices by their level-1 bucket in a single O(n) counting
-     * pass, so the fill below walks each bucket's own members only. The old
-     * code re-scanned all n keys for every one of the ~n buckets (the
-     * `if (b1 != bi) continue` filter), making the build O(n^2). The placement
-     * logic and the a2 RNG stream are unchanged, so the frozen map built here is
-     * identical to before, only the construction is now O(n). */
+     * pass, so the fill below walks each bucket's own members only and the
+     * build is O(n) rather than re-scanning all n keys per bucket. */
     uint32_t starts_off = yon_xheap_strip_alloc(g_ds_heap, m * (uint32_t)sizeof(uint32_t));
     uint32_t cur_off    = yon_xheap_strip_alloc(g_ds_heap, m * (uint32_t)sizeof(uint32_t));
     uint32_t order_off  = yon_xheap_strip_alloc(g_ds_heap, n * (uint32_t)sizeof(uint32_t));
@@ -5972,7 +5943,7 @@ double yon_rt_leech_m24_orbit(double v_f64) {
     extern uint32_t yon_leech_m24_orbit_pure(uint32_t point);
     ds_ensure_init();
     /* full xcoord (incl. the sign bit) — the MPHF is over 25-bit leech2, so we
-     * must NOT mask to 24 bits the way the old (w_g,w_c) version did. */
+     * must NOT mask to 24 bits. */
     uint32_t v = yon_u32(v_f64);
     uint32_t canonical = yon_leech_m24_orbit_pure(v);  /* pure M24 orbit in [0,12), or INVALID */
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, &canonical, sizeof(canonical),
@@ -6037,9 +6008,8 @@ double yon_rt_leech_xi_apply(double v_24bit) {
  * detection. */
 double yon_rt_leech_co0_step(double v_24bit) {
     /* Exact Co_0: an alias of yon_rt_leech_co0_canonical_exact (defined in the
-     * HSH module). Replaces the old partial version (<xi>.M_24, min-lex of 3
-     * elements) that did NOT capture the full Co_0 orbit. Now a closed
-     * algebraic reduction via reduce_type2: zero parameters, exact. */
+     * HSH module), a closed algebraic reduction via reduce_type2: zero
+     * parameters, exact. */
     extern double yon_rt_leech_co0_canonical_exact(double);
     return yon_rt_leech_co0_canonical_exact(v_24bit);
 }
@@ -6118,36 +6088,19 @@ double yon_rt_leech_pair_subtype(double a_f, double b_f) {
     return (double)(gen_leech2_subtype((uint64_t)d) & 0xFFu);
 }
 
-/* NOTE (history): a bounded-BFS orbit closure with an open-addressing visited
- * HashSet used to live here. It was REMOVED (see the block below) because it
- * had two real defects: non-standard M_24 generators (#1, #1000, #100000 — in
- * M_24 but not guaranteed to generate it -> wrong, partial quotient) and a 65K
- * visited cap vs the 98,280 type-2 cosets -> truncated orbit, a free
- * parameter. Do not reintroduce: the exact closed-form reduction below
- * supersedes it. BFS enumeration remains the right tool for a DIFFERENT job
- * (enumerating an orbit, e.g. to build a perfect map), where the ground truth
- * is the orbit count theorem: type-2 must count exactly 98,280. */
-
 /* ============================================================
- * Co_0 canonicalization: exact via reduce_type2 (HSH module).
- * The entire bounded-BFS infrastructure was removed:
- *   - co0_bfs_explore (max_iter, a free parameter)
- *   - co0_hash_table/used (the BFS visited set)
- *   - m24_gen1/2/3 (non-standard M_24 generators: # 1,1000,100000, not
- *     guaranteed to generate all of M_24 -> partial orbit)
- *   - co0_init_m24_gens / co0_hashset_clear / co0_hashset_add / co0_queue
- * No heuristic, no parameter: the reduction is closed algebraic.
+ * Co_0 canonicalization: exact closed-form reduction via reduce_type2
+ * (HSH module). No heuristic, no parameter.
  * ============================================================ */
 
 double yon_rt_leech_co0_canonical(double v_24bit) {
-    /* One-argument signature: the old max_iter parameter (a relic of the
-     * removed bounded BFS) is gone everywhere. Exact closed reduction. */
+    /* One-argument signature: exact closed reduction. */
     extern double yon_rt_leech_co0_canonical_exact(double);
     return yon_rt_leech_co0_canonical_exact(v_24bit);
 }
 
 double yon_rt_leech_co0_orbit_size(double v_24bit, double max_iter_d) {
-    (void)v_24bit; (void)max_iter_d;  /* Deprecated: parametric bounded BFS removed */
+    (void)v_24bit; (void)max_iter_d;  /* computes nothing: always returns 0 */
     return 0.0;
 }
 
@@ -6317,7 +6270,7 @@ double yon_rt_leech_transport_apply(double x_f64, double transport_id_f64) {
 }
 
 /* ============================================================== */
-/* S5 — Phased memory: observe payload via geom_morphism           */
+/* Phased memory: observe payload via geom_morphism                */
 /* ============================================================== */
 
 /* Allocation: a single double in the global xheap (the singleton ds_heap).
@@ -6342,8 +6295,8 @@ double yon_rt_observe_alloc(double value) {
  *   4 = negate (-x)
  *   5 = double (x2)
  *
- * Honest: this is a demo. Arbitrary pulls require function pointers registered
- * in the runtime (future). */
+ * Only these kinds are supported; any other kind returns the value
+ * unchanged. */
 double yon_rt_observe(double slot_id_f64,
                        double gm_kind,
                        double default_val) {
@@ -6497,17 +6450,19 @@ double yon_rt_voyagerlist_corrupt(double codeword24_f64, double n_bits_f64) {
  *
  * Design:
  * - Pool max 256 VoyagerList concorrenti
- * - Each VL = array of 24-bit codewords (uint32_t), fixed capacity 1024
+ * - Each VL = array of 24-bit codewords (uint32_t), initial capacity 1024,
+ *   doubling
  * - append(vl, data12): auto-seal (data12 -> codeword24) before the store
  * - get(vl, idx): auto-open (codeword24 -> data12 with error correction)
  * - to_stream(vl): yields data12 of all elements (open each)
  *
- * Le 3 builtin esistenti (yon_rt_voyagerlist_seal/open/corrupt) restano
- * come funzioni pure utility per backward-compat. */
+ * yon_rt_voyagerlist_seal/open/corrupt are pure utility functions on a single
+ * codeword. */
 
 /* DYNAMIC capacity, doubling on an arena strip (no malloc): grow allocates a
  * new strip, copies, and trims the old strip's whole pages back to the OS.
- * No cap (limit = arena; guard on arithmetic overflow only). */
+ * No per-list cap (limit = arena; guard on arithmetic overflow only); at most
+ * YON_VL_MAX_LISTS (256) lists live in the pool. */
 #define YON_VL_MAX_LISTS  256u
 #define YON_VL_INIT       1024u
 
@@ -7465,8 +7420,7 @@ double yon_rt_string_find_char(double str_id_d, double char_code_d, double from_
     return -1.0;
 }
 
-/* String.from_literal(<inline payload>) — for now use from_int and concat.
- * Aggiungo char_to_string per costruire stringhe inline. */
+/* A one-character string from a character code (the low 8 bits). */
 double yon_rt_string_from_char(double char_code_d) {
     ds_ensure_init();
     char buf[2];
@@ -7493,9 +7447,9 @@ double yon_rt_file_read_text(double path_id_d) {
     long sz = ftell(f);
     fseek(f, 0, SEEK_SET);
     if (sz <= 0 || sz >= 16*1024*1024) { fclose(f); return 0.0; }
-    /* Read the whole file, no length cap: an mmap'd buffer sized to the file
-       (the old char[YON_STR_MAX_LEN] truncated the source at 1 KB, which is why
-       a large source, e.g. the self-host compiler itself, was cut off). */
+    /* Read the whole file, no fixed length cap (the size check above bounds it
+       at 16 MB): an mmap'd buffer sized to the file, so a large source, e.g.
+       the self-host compiler itself, is read whole. */
     size_t cap = (size_t)sz + 1;
     char *buf = mmap(NULL, cap, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -7761,9 +7715,7 @@ double yon_rt_random_range(double lo_d, double hi_d) {
     return (double)(lo + (int)(rng_state % (uint32_t)range));
 }
 
-/* Crypto: minimal SHA-256. Simple implementation. */
-/* For the MVP, use a fast non-cryptographic hash (FNV-1a) as a placeholder.
- * Real SHA-256 would require an OpenSSL dependency or a heavy in-house impl. */
+/* Crypto: FNV-1a 32-bit over the string bytes; not cryptographic. */
 double yon_rt_crypto_fnv1a(double str_id_d) {
     ds_ensure_init();
     uint32_t slot = (uint32_t)str_id_d;

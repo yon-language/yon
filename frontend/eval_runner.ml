@@ -6,11 +6,9 @@
  * Used by the cross-validation phase to compare the interpreter's semantics
  * with the native binary produced by the MLIR pipeline.
  *
- * Exit-code convention (mirroring the compiler's convention in emit_main):
- *   - number  -> arrotondato a int e modulo 256
- *   - boolean -> 0 (false) o 1 (true)
- *   - proposition -> 0 (present) | 1 (absent) | 2 (unknown)
- *   - text / section -> 0 (success placeholder)
+ * Exit code: the numeric value extracted from the final term
+ *   (deep_extract), taken modulo 256 into 0..255; when no numeric
+ *   value can be extracted, 0.
  *
  * Output stdout: a single line with "EXIT <n>".
  * Stderr: debug trace if the --trace flag is passed.

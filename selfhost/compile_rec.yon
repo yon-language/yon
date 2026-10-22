@@ -1,7 +1,7 @@
-/* Self-host M5 -- Yon0 with functions, calls and RECURSION: text -> Term -> MLIR.
+/* Yon0 with functions, calls and RECURSION: text -> Term -> MLIR.
  *
- * M4 (compile_if) compiled a single `fun main` with control flow. M5 adds
- * multiple top-level functions, a call form, and subtraction, which together
+ * Over the single `fun main` with control flow of compile_if.yon, this compiler
+ * adds multiple top-level functions, a call form, and subtraction, which together
  * make the first genuinely recursive Yon0 program compilable:
  *
  *   fun fact(n): number {
@@ -13,12 +13,11 @@
  *
  * fact(5) = 120, so the emitted module exits 120. Recursion is what finally
  * exercises scf.if's laziness: the else branch (with the self-call) only runs
- * when n != 0, so the recursion bottoms out at n == 0. This is the first program
- * the Stage 1 interpreter could run but the earlier compiler milestones could not.
+ * when n != 0, so the recursion bottoms out at n == 0.
  *
  * A function name is emitted as `@fn_<hash>` (the identifier hash is the identity
  * the lexer already carries), so no identifier string is ever stored; `main` is
- * the entry, emitted as the i32 `@main`. v1 boundary: at most one parameter per
+ * the entry, emitted as the i32 `@main`. Boundary: at most one parameter per
  * function, lowercase identifiers, a condition is a single `expr == expr`.
  */
 
@@ -28,7 +27,7 @@ place Term { this > TLit(Number) :U TAdd(Term, Term) :U TSub(Term, Term) :U TMul
 place Fun { this > FnDef(Number, Number, Term) }
 place FunList { this > FlNil :U FlCons(Fun, FunList) }
 place FunParse { this > FPOk(Fun, TokList) :U FPErr }
-/* tokens (tags: Num0 Ident1 Fun2 Be3 Holds4 Return5 Number6 If7 Then8 Else9
+/* tokens (tags: Num0 Ident1 Fun2 Be3 ColonEq4 Return5 Number6 If7 Then8 Else9
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18 Minus19). */
 place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
@@ -420,7 +419,7 @@ fun gen_fundef_text(name: Number, arity: Number, body: Term): String {
     String.concat(er_code(eb),
       String.concat(String.concat("    return ", er_ssa(eb)), " : f64\n  }\n")))
 }
-/* emit every function except main (main becomes the i32 entry, below). */
+/* emit every function except main (main is emitted as the i32 entry, below). */
 fun motGF(fs: FunList): String { return "" }
 fun gen_funs(fs: FunList, main_hash: Number): String {
   return hit_elim(motGF,

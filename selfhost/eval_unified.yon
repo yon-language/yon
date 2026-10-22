@@ -1,6 +1,6 @@
-// Self-host, convergenza: un solo Term, un solo eval (lambda de Bruijn + aritmetica).
-// Forma wildcard: add_vals/mul_vals calcolano solo su due TLit, tutto il resto e' un
-// solo `_ => stuck`; shift/subst restano esaustivi. Oracolo: (lam. x+x) 21 = 42.
+// One Term, one eval (de Bruijn lambda + arithmetic).
+// Wildcard form: add_vals/mul_vals compute only on two TLit, everything else is a
+// single `_ => stuck`; shift/subst stay exhaustive. Oracle: (lam. x+x) 21 = 42.
 place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
 
 fun motT(t: Term): Term { return hit(TLit, 0) }
@@ -27,7 +27,7 @@ fun beta(body: Term, arg: Term): Term {
   return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
 }
 
-// somma di due valori GIA' valutati: calcola su due TLit, altrimenti stuck
+// sum of two ALREADY evaluated values: computes on two TLit, otherwise stuck
 fun add_vals(x: Term, y: Term): Term {
   return hit_elim(motT,
     [ TLit(nx) => hit_elim(motT,
@@ -58,7 +58,7 @@ fun as_num(t: Term): Number {
   return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
 }
 
-// ORACOLO: (lam. var0 + var0) 21  ->  21 + 21  ->  42
+// ORACLE: (lam. var0 + var0) 21  ->  21 + 21  ->  42
 fun main(): Number {
   be r := eval(hit(TApp,
                       hit(TLam, hit(TAdd, hit(TVar, 0), hit(TVar, 0))),

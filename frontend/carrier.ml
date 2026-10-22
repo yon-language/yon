@@ -164,9 +164,8 @@ let rec of_core_ty (ty : C.ty) : t =
          a section to its handle — via the same functor (never a blind Section, so
          `El(Fam x)` that computed to `number` gets number's scalar layout).
 
-         COMPUTED case (`Named n`): UNCHANGED. This is the A1 path — the code
-         reduced to a concrete named type and decodes to that place's exact
-         carrier. Byte-for-byte identical to before; pinned by
+         COMPUTED case (`Named n`): the code reduced to a concrete named type
+         and decodes to that place's exact carrier; pinned by
          test_dependent_carrier.py.
 
          STUCK case (`Opaque`): a code that stays stuck under Δ because it
@@ -174,9 +173,9 @@ let rec of_core_ty (ty : C.ty) : t =
          free variable, or an `El(v)` for a runtime-chosen code v). Such a type has
          no SINGLE concrete layout — different runtime values yield different
          types. But it DOES have a single UNIFORM layout: the boxed carrier, a fat
-         pointer {payload-ptr, i64 tag} shared by every instance. So instead of the
-         old clean-but-incomplete `NoCarrier` failure, we lower it to `Boxed`: the
-         value-dependent El now COMPILES, uniformly, and soundly (the tag defers
+         pointer {payload-ptr, i64 tag} shared by every instance. So rather
+         than failing with `NoCarrier`, we lower it to `Boxed`: the
+         value-dependent El COMPILES, uniformly, and soundly (the tag defers
          the concrete type to runtime; see the `Boxed` doc above). *)
       (match c with
        | C.Var n when String.length n >= 5 && String.sub n 0 5 = "__tp_" ->

@@ -2,7 +2,7 @@
 # yonc — Yon end-to-end compiler.
 #
 # Compiles a Yon source (.yon) or a Topos MLIR (.mlir) to a native executable,
-# using EXACTLY the chain verified by the regression suite (107 green examples):
+# using EXACTLY the chain verified by the regression suite:
 #   yoner_emit_mlir -> topos-opt (extensions+to-standard) -> topos-opt (to-llvm)
 #   -> mlir-translate -> llc -> gcc -no-pie (link the self-contained runtime).
 #
@@ -98,13 +98,14 @@ fi
 # Input may be a FILE (.yon/.mlir) or a DIRECTORY (project, Maven-style in the
 # pom directory). A directory is a package: the frontend concatenates the .yon
 # files and resolves yon_modules/ (see yoner_emit_mlir). If yon.toml declares
-# dependencies not yet installed, we report it (yon-pkg install).
+# dependencies that are not installed, we refuse to build (yon-pkg install).
 IS_PROJECT=0
 if [ -d "$INPUT" ]; then
     IS_PROJECT=1
     INPUT_EXT="yon"   # a project enters via the frontend as Yon source
     START=0
-    # If a manifest declares real dependencies but yon_modules is missing, warn.
+    # If a manifest declares real dependencies but yon_modules is missing, refuse
+    # to build.
     # "Real dependency" = a `key = value` line inside the [dependencies] section
     # (not in [package], and not a commented-out example).
     if [ -f "$INPUT/yon.toml" ] && [ ! -d "$INPUT/yon_modules" ] \

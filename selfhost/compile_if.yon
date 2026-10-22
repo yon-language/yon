@@ -1,7 +1,7 @@
-/* Self-host M4 -- Yon0 surface with control flow: source text -> Term -> MLIR.
+/* Yon0 surface with control flow: source text -> Term -> MLIR.
  *
- * M3 (compile_fun) compiled a function with let-bindings and a return. M4 adds
- * the conditional, the first real control flow:
+ * Over the function with let-bindings and a return of compile_fun.yon, this
+ * compiler adds the conditional:
  *
  *   fun main(): number {
  *     be x := 20
@@ -9,20 +9,19 @@
  *     return if x == y then 99 else x + y
  *   }
  *
- * New over M3: an `==` token (lexed two chars at a time), the keywords if/then/
+ * Over compile_fun.yon: an `==` token (lexed two chars at a time), the keywords if/then/
  * else, a TEq comparison lowered to `arith.cmpf oeq` (an i1), and a TIf lowered
  * to `scf.if %c -> (f64) { .. scf.yield } else { .. scf.yield }` -- the exact form
  * the OCaml emitter uses, which the backend already lowers. x==y is 20==22 = false,
  * so the else branch runs and the emitted module exits 42 = (20 + 22) mod 256.
  *
- * v1 boundary: one function `fun main(): number { .. }`, lowercase identifiers,
- * a condition is a single `expr == expr`, no calls. The next increment adds TCall
- * and multiple top-level functions.
+ * Boundary: one function `fun main(): number { .. }`, lowercase identifiers,
+ * a condition is a single `expr == expr`, no calls.
  */
 
 /* one shared AST: arithmetic + de Bruijn variables + let + equality + if. */
 place Term { this > TLit(Number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) :U TEq(Term, Term) :U TIf(Term, Term, Term) }
-/* tokens (tags: Num0 Ident1 Fun2 Be3 Holds4 Return5 Number6 If7 Then8 Else9
+/* tokens (tags: Num0 Ident1 Fun2 Be3 ColonEq4 Return5 Number6 If7 Then8 Else9
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18). */
 place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
@@ -240,7 +239,7 @@ fun parse_body(l: TokList, env: NameEnv): Parse {
 }
 fun parse_let(l: TokList, env: NameEnv): Parse {
   be name := head_num(tail(l))              /* IDENT hash after 'be' */
-  be after_def := tail(tail(tail(l)))     /* skip be, IDENT, holds -> value */
+  be after_def := tail(tail(tail(l)))     /* skip be, IDENT, ':=' -> value */
   return build_let(parse_expr(after_def, env), name, env)
 }
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {

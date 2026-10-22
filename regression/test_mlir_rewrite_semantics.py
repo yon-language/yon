@@ -17,12 +17,11 @@ The "without" leg drops --structural-value-numbering too, the one rewrite pass
 yonc ships in stage 1, so that pass is measured like the others.
 
 Which passes: only those whose effect survives into the lowered program on
-real corpus input (measured over the 97 examples that emit: SVN changes 85,
-heyting-short-circuit and coherence-elimination change all 97).
-place-fusion and world-specialization rewrite the Topos module of 12 and 32
+real corpus input (SVN, heyting-short-circuit, coherence-elimination).
+place-fusion and world-specialization rewrite the Topos module of some
 examples, but their effect is erased by the lowering (the standard MLIR is
 byte-identical), and move-composition and topos-cps-conversion change no
-corpus example at all: for those four there is no program whose binary could
+corpus example: for those four there is no program whose binary could
 differ, so they run only in the combined "all" leg. Each (program, pass) node
 also asserts that the pass changed the standard MLIR, so a node can never
 pass by comparing a program with itself.

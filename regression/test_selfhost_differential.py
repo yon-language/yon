@@ -1,16 +1,11 @@
-"""Self-host M6 differential oracle -- the Yon0-in-Yon compiler agrees with yonc.
+"""Self-host differential oracle -- the Yon0-in-Yon compiler agrees with yonc.
 
 For a corpus of Yon0 programs, compile each one BOTH with the OCaml reference
 compiler (`yonc`) and with selfhost/selfhost_compiler.yon (the compiler written in
 Yon, which reads a source file and emits an MLIR module), run both native binaries,
-and require the SAME exit code. Agreement with the reference is the convergence
-metric toward the M-bootstrap: where the two compilers agree, the Yon-in-Yon
-frontend behaves as the reference does.
-
-This oracle already earned its keep: it caught a real bug -- `a - b - c` was parsed
-right-associative (a-(b-c)) instead of left (a-b)-c, so `10 - 3 - 2` gave 9 where
-the reference gave 5. The parser was fixed to left-associative and the two now
-converge (see the chain_sub / mixed_prec cases below).
+and require the SAME exit code: where the two compilers agree, the Yon-in-Yon
+frontend behaves as the reference does. `-` is left-associative in both:
+`10 - 3 - 2` = (10-3)-2 = 5 (the chain_sub / mixed_prec cases below).
 
 selfhost_compiler.yon works in the directory given as its first argument
 (<dir>/in.yon -> <dir>/out.mlir), so every case uses its own and the cases run in
@@ -176,7 +171,7 @@ def test_differential(tmp_path, compiler_bin, name, src, expected):
 
 def test_two_runs_side_by_side(tmp_path, compiler_bin):
     """Two runs of the compiler at once, each in its own directory: neither sees
-    the other's input or output (a shared fixed path was a capture of names
+    the other's input or output (a shared fixed path would capture names
     between runs)."""
     cases = [p for p in PROGRAMS if p[0] in ("fact5", "str_concat")]
     procs = []

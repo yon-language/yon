@@ -1,8 +1,8 @@
-// Rule 1 of the `be holds` / `=` split (model A: every `be x := e` binds a fresh
-// mutable local, and `x = e` reassigns it). Re-declaring the SAME name with
-// `be ... holds` in the SAME scope is a mistake, not a reassignment: the fix is
-// `x = ...`. Rejected at compile time (exit 3). The wildcard `_` is exempt; shadowing
-// in a NESTED scope is allowed; this is a flat same-scope redeclaration.
+// A name is defined once per scope: `be x := e` says x equals e for the whole
+// scope, so a second `be x :=` in the SAME scope is refused at compile time
+// ('x' is already bound in this scope). The wildcard `_` is exempt; shadowing
+// in a NESTED scope is allowed; this is a flat same-scope redefinition.
+//
 place Entry {
   fun main(): Number {
     be x := 1

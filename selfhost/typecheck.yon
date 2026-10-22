@@ -7,8 +7,8 @@
 // is exactly the naturality the design asks a pass to satisfy.
 //
 // HONEST scope: this is MONOMORPHIC synthesis (a fold into a 3-element type set), not
-// Hindley-Milner. No type variables, no unification, no polymorphism; that is the
-// frontend's hm_infer.ml and the next refinement. What it does show, on silicon, is the
+// Hindley-Milner. No type variables, no unification, no polymorphism; that is what
+// frontend/hm_infer.ml does. What it does show, on silicon, is the
 // pass as a type-valued catamorphism, checked two-sided (accepts good, rejects bad).
 //
 // types: NUMBER=1, BOOL=2, ERROR=0.

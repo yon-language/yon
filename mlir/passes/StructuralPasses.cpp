@@ -1,7 +1,7 @@
-//===- StructuralPasses.cpp - Batch C ---------------------------*- C++ -*-===//
+//===- StructuralPasses.cpp - Opt-in diagnostic passes ----------*- C++ -*-===//
 //
-// Implements 10 analysis passes that perform structural/categorical
-// well-formedness checks beyond what TableGen verifiers can express.
+// Implements 10 opt-in diagnostic passes (not in the yonc pipeline).
+// Each checks one syntactic proxy, described at the pass.
 //
 // Implementation strategy:
 //   - Each pass walks the module looking for a small set of patterns
@@ -11,11 +11,8 @@
 //     [TOPOS-Exxxx] code, a fix hint, and a brief context note.
 //   - These passes never modify the IR.
 //
-// The checks here are deliberately conservative: they catch obvious
-// violations and serve as a documentation point for which properties
-// each operation must satisfy. A fully complete analysis (deciding
-// e.g. Giraud's exactness axioms in full generality) is a research
-// task and is out of scope for the verifier layer.
+// The checks are syntactic proxies only: none of them decides the
+// categorical or type-theoretic property its pass is named after.
 //
 //===----------------------------------------------------------------------===//
 
@@ -33,17 +30,10 @@ using namespace mlir::topos;
 //===----------------------------------------------------------------------===//
 // type-preservation
 //
-// Walks every `topos.reduce` operation and checks the structural
-// property that the result of the reduction has the same type as the
-// place it operates on. This is a necessary condition for the
-// preservation theorem: a well-typed term should remain well-typed
-// after reduction.
-//
-// In MLIR the reduction's body is itself a region; we cannot fully
-// type-check that region without a full type inference pass (see
-// #18f), so we limit ourselves here to checking that any explicit
-// `topos.section` returned from the body has its `place` field
-// equal to the reduction's `of_place`.
+// Walks every `topos.reduce` operation and checks that every
+// `topos.section` built anywhere inside its body (returned or not) has
+// its `place` field equal to the reduction's `of_place` (E0101). The
+// body region is not otherwise type-checked.
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -94,11 +84,10 @@ struct TypePreservationPass
 //===----------------------------------------------------------------------===//
 // progress
 //
-// The progress theorem says that a well-typed term is either a value
-// or can take a step. At the MLIR layer we check a weaker structural
-// proxy: every `topos.move` referenced by a `topos.apply_move` must
-// have a non-empty body region, otherwise applying it produces no
-// step and the program would be "stuck" without being a value.
+// Looks up the `topos.move` named by each `topos.apply_move` and reports
+// E0102 if the move has no non-empty region. MoveOp has no regions (it
+// is a pure declaration), so every apply_move whose move resolves is
+// rejected; an apply_move whose move does not resolve is skipped.
 //===----------------------------------------------------------------------===//
 
 struct ProgressPass
@@ -125,8 +114,8 @@ struct ProgressPass
       });
       if (!target)
         return;
-      // The move op declares a body region of the same name; check
-      // it is non-empty.
+      // MoveOp declares no region, so this loop finds nothing and
+      // `empty` stays true.
       bool empty = true;
       for (Region &r : target->getRegions()) {
         for (Block &b : r) {
@@ -252,10 +241,8 @@ struct HMInferencePass
 // Giraud axiom check (structural)
 //
 // Giraud's theorem characterises Grothendieck topoi by five axioms.
-// We check here only the trivial structural one at the MLIR layer:
-//   - the world has at least one place (existence of a generating
-//     family is the witness that the topos is non-trivial).
-// The full Giraud check is delegated to a future analysis.
+// None of them is checked. The pass checks only that each world
+// contains at least one place (E0501).
 //===----------------------------------------------------------------------===//
 
 struct GiraudCheckPass
@@ -297,10 +284,10 @@ struct GiraudCheckPass
 //===----------------------------------------------------------------------===//
 // Simpson's six equivalences (structural)
 //
-// Simpson's characterisation of ∞-topoi by six equivalent properties.
-// We check the structural part: every `topos.from_site` is accompanied
-// by a declared topology, ensuring the site is genuine (rather than a
-// bare category).
+// Named after Simpson's six equivalent characterisations of ∞-topoi,
+// none of which is checked. The pass checks only that the topology of
+// each `topos.from_site` names a symbol declared in the module (E0502);
+// it does not check that the symbol is a `topos.topology`.
 //===----------------------------------------------------------------------===//
 
 struct Simpson6Pass
@@ -382,11 +369,10 @@ struct AccessibilityPass
 //===----------------------------------------------------------------------===//
 // localisation decomposition (structural)
 //
-// Every geometric morphism factors as an embedding followed by a
-// surjection. We check the weaker structural property that every
-// `topos.geom_morphism` declared with attribute
-// `proper_base_change_attested` is preceded in the module order by
-// the definition of its source and target worlds.
+// No factorisation of geometric morphisms is checked. The pass checks
+// only module order: every top-level `topos.geom_morphism` declared
+// with attribute `proper_base_change_attested` must appear after both
+// its source and its target world (E0504).
 //===----------------------------------------------------------------------===//
 
 struct LocalisationDecompPass
@@ -438,11 +424,11 @@ struct LocalisationDecompPass
 // internal-language consistency
 //
 // Yon's internal language is the Mitchell-Bénabou language of the
-// surrounding topos. The MLIR-level check we perform here:
-// every `topos.heyt`-typed value used as a classifier (via
-// `topos.canonical_subplace`) must originate from a Heyting op
-// (not from an arbitrary cast). This rules out fake propositions
-// smuggled in from other dialects.
+// surrounding topos. The check performed here: the classifier of each
+// `topos.canonical_subplace` must be a block argument or be produced by
+// one of heyt, heyt_and, heyt_or, heyt_not, heyt_implies, forces, path,
+// dep_proposition, or_intro, exists_intro (E0505). This rules out
+// propositions smuggled in from other dialects.
 //===----------------------------------------------------------------------===//
 
 struct InternalLanguageConsistencyPass
@@ -503,10 +489,8 @@ struct InternalLanguageConsistencyPass
 //===----------------------------------------------------------------------===//
 // alpha-rename pre-typecheck
 //
-// A pre-typecheck pass that flags shadowing in the symbol space of
-// nested places and worlds. Shadowing can mask bugs and confuse
-// later type-equivalence checks (which rely on names being unique
-// across nested scopes).
+// Flags a symbol name declared twice among the top-level operations of
+// the module (E0539). Nested scopes are not inspected.
 //===----------------------------------------------------------------------===//
 
 struct AlphaRenamePass

@@ -1,17 +1,18 @@
-"""Self-host M1 gate — Yon emits MLIR that compiles and runs.
+"""Self-host emit gate — Yon emits MLIR that compiles and runs.
 
-Stage 1 (test_selfhost.py) is a metacircular interpreter (eval: Term -> value).
-This is the first step toward a real Yon-compiler-in-Yon: an emit pass
-(gen: Term -> MLIR text) written in Yon. The oracle is end-to-end and format-
-robust (not a byte-diff of the text): the Yon program emits an MLIR module, we
-feed that Yon-emitted MLIR back through the same backend (topos-opt -> LLVM ->
-native), run it, and require the exit code the source program denotes.
+test_selfhost.py runs a metacircular interpreter (eval: Term -> value). This
+gate runs an emit pass (gen: Term -> MLIR text) written in Yon. The oracle is
+end-to-end and format-robust (not a byte-diff of the text): the Yon program
+emits an MLIR module, we feed that Yon-emitted MLIR back through the same
+backend (topos-opt -> LLVM -> native), run it, and require the exit code the
+source program denotes.
 
-selfhost/emit_arith.yon compiles the Yon0 core `be x := 20  be y := 22
-return x + y` (TLet/TLit/TAdd/TVar with an SSA environment) to a full MLIR module
-and writes it via File.write_text; the compiled module must exit 42 = (20+22) mod
-256. This pins that the emit catamorphism (constants, addf, fptosi, the SSA
-counter, the de Bruijn env lookup) stays correct.
+selfhost/emit_arith.yon emits `fun double(x) = x + x` and `main = double(21)`
+(TCall/TAdd/TVar with an SSA environment) as a full MLIR module and writes it
+via File.write_text; the compiled module must exit 42. The compile_* tests run
+the chain text -> Term -> MLIR on growing Yon0 programs. This pins that the
+emit catamorphism (constants, addf, fptosi, the SSA counter, the de Bruijn env
+lookup) stays correct.
 """
 import subprocess
 from pathlib import Path
@@ -48,20 +49,20 @@ def _end_to_end(tmp_path, src_yon, expected_exit):
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m1_emit_arith(tmp_path):
-    # M1: gen(Term -> MLIR) for a hand-built Term, `fun double(x){x+x}` / double(21).
+    # gen(Term -> MLIR) for a hand-built Term, `fun double(x){x+x}` / double(21).
     _end_to_end(tmp_path, ROOT / "selfhost" / "emit_arith.yon", 42)
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m2_compile_arith(tmp_path):
-    # M2: text -> Term -> MLIR. Parses "2+3*4" (precedence: * over +) and the
+    # text -> Term -> MLIR. Parses "2+3*4" (precedence: * over +) and the
     # emitted program computes 2 + (3*4) = 14, not (2+3)*4 = 20.
     _end_to_end(tmp_path, ROOT / "selfhost" / "compile_arith.yon", 14)
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m3_compile_fun(tmp_path):
-    # M3: the Yon0 SURFACE. Lexes a real function with keywords, multi-digit
+    # the Yon0 SURFACE. Lexes a real function with keywords, multi-digit
     # numbers and identifiers, parses `fun main(): Number { be x := 20
     # be y := 22  return x + y }` into nested TLet with de Bruijn variables,
     # and the emitted program exits 42 = (20 + 22) mod 256.
@@ -70,7 +71,7 @@ def test_m3_compile_fun(tmp_path):
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m4_compile_if(tmp_path):
-    # M4: control flow. Adds `==` (arith.cmpf oeq -> i1) and if/then/else
+    # control flow. Adds `==` (arith.cmpf oeq -> i1) and if/then/else
     # (scf.if with scf.yield). `return if x == y then 99 else x + y` with
     # x=20, y=22: the condition is false, so the else branch runs and the
     # emitted program exits 42 = (20 + 22) mod 256 (not 99).
@@ -79,7 +80,7 @@ def test_m4_compile_if(tmp_path):
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m5_compile_rec(tmp_path):
-    # M5: functions, calls and RECURSION. Compiles two top-level functions,
+    # functions, calls and RECURSION. Compiles two top-level functions,
     # `fun fact(n): Number { return if n == 0 then 1 else n * fact(n - 1) }`
     # and `fun main(): Number { return fact(5) }`, to real func.func/func.call
     # (a name is emitted as @fn_<hash>). The recursive self-call sits in the

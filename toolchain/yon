@@ -2,17 +2,17 @@
 # yon -- the unified Yon driver (thin).
 #
 # One entry point that dispatches across the compiler stages and the shared
-# tooling binaries. Build/run default to the SELF-HOSTED compiler (stage 2, the
-# fixpoint) and fall back to the OCaml reference (stage 0, "rooted") until the
-# bootstrap is closed. Everything else delegates to the stage-0 pipeline and the
-# tooling binaries. Commands not yet wired (diff, bootstrap, spec, ...) report
-# honestly rather than pretending to work.
+# tooling binaries. Build/run use stage 2 when toolchain/yon-stage2 exists;
+# otherwise the OCaml reference (stage 0, "rooted", yonc), with a notice.
+# Everything else delegates to the stage-0 pipeline and the tooling binaries.
+# Commands that are not wired (diff, bootstrap, spec, ...) say so and exit 2
+# rather than pretending to work.
 #
 # Stage vocabulary (Rust/Go/Lean standard):
 #   stage 0  rooted     -- the OCaml reference (yonc). The seed; compiles all Yon.
 #   stage 1  self-hosted-- the compiler-in-Yon built by stage 0. Compiles Yon0.
-#   stage 2  fixpoint   -- the compiler-in-Yon rebuilt by stage 1. Not reachable
-#                          until Yon0 covers the compiler's own source.
+#   stage 2  fixpoint   -- the compiler-in-Yon rebuilt by stage 1. Not present:
+#                          Yon0 does not cover the compiler's own source.
 #
 # On-disk model: only `yon` is meant to be on PATH; the stage compilers live here
 # as yonc (stage 0) and yon-stage1, and users do not type those directly.
@@ -21,7 +21,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 YONC="$HERE/yonc"                    # stage 0 (rooted, OCaml reference)
 STAGE1="$HERE/yon-stage1"            # stage 1 (self-hosted Yon0 path)
-STAGE2="$HERE/yon-stage2"            # stage 2 (fixpoint) -- not present yet
+STAGE2="$HERE/yon-stage2"            # stage 2 (fixpoint) -- not present
 FRONTEND="${YON_BIN_DIR:-$HERE/../frontend/_build/default}/yoner_emit_mlir.exe"
 
 die() { echo "yon: $*" >&2; exit 2; }
@@ -98,7 +98,7 @@ resolve_stage() {
     [ -x "$STAGE2" ] || die "stage 2 not available yet: Yon is not self-describing (stage 1 compiles only Yon0). Use --rooted (stage 0) or --stage 1 (self-hosted Yon0)."
     RESOLVED_CC=("$STAGE2"); return
   fi
-  # default: intend stage 2, fall back to rooted until the fixpoint exists.
+  # default: stage 2 if present, otherwise rooted.
   if [ -x "$STAGE2" ]; then
     RESOLVED_CC=("$STAGE2")
   else
@@ -193,7 +193,7 @@ case "$cmd" in
     usage
     ;;
 
-  # roadmap: real commands, not yet wired. Fail honestly instead of pretending.
+  # commands that are not implemented: fail honestly instead of pretending.
   diff|bootstrap|spec|keywords|prove|refute|root|carrier|normalize|type|eval|repl|\
   new|init|test|clean|add|deps|fetch|publish)
     die "$cmd: not implemented yet (roadmap). Run 'yon help' for what works today."

@@ -96,7 +96,7 @@ let () =
    * Each file is tagged with its MODULE: "" for the local project files
    * (passed on the command line), or the dependency name (last segment of the
    * import spec) for files pulled in via `import "dep"`. The module name is
-   * used to prefix the file's top-level declarations (Strato 2: namespaces). *)
+   * used to prefix the file's top-level declarations (namespaces). *)
   let module_name_of_spec (spec : string) : string =
     (* "./sub" -> "sub"; "host/user/repo" -> "repo"; "geometria" -> "geometria" *)
     let segs = String.split_on_char '/' spec
@@ -165,9 +165,9 @@ let () =
   let space_edges = ref [] in (* static Space graph: wire and import arcs, tagged by source Space *)
   let place_acc = ref [] in   (* (place_name, file, space) for every project place *)
   let main_files = ref [] in  (* files that define `fun main` *)
-  (* Filesystem-derived topos structure (Agent M). Captured per file at
+  (* Filesystem-derived topos structure. Captured per file at
      parse-assembly time, where the file's space tag (ul_space) is still known;
-     the merged program below no longer carries per-file origin. *)
+     the merged program below does not carry per-file origin. *)
   let places_by_space = ref [] in  (* (space, place_decl) for every project TopPlace *)
   let topos_space = ref [] in      (* (topos_name, space) for every TopTopos file *)
   (* Per-file record for the shared project diagnostic pass (Project.check_all):
@@ -220,12 +220,12 @@ let () =
                   Record each declared place (name, file, space) and whether the
                   file defines `main`, so the Entry constraints below can be
                   checked on the whole project. *)
-               (* Filesystem-derived topos structure (Agent M): in this same
+               (* Filesystem-derived topos structure: in this same
                   pass capture, per space, (a) the full place_decl of every
                   TopPlace — these become the topos's tp_objects — and (b) each
                   TopTopos's name->space binding. sp is "" for root files, which
                   belong to no space/topos. The file-layout / topos-count /
-                  boundary facts are no longer tallied here: Project.check_all
+                  boundary facts are not tallied here: Project.check_all
                   derives them from `files_acc` below, in one place. *)
                List.iter (function
                  | Surface_ast.TopPlace pd ->
@@ -396,8 +396,8 @@ let () =
      The reclaimable set is the OWNED (directory-backed) Spaces, not every declared
      Space: only those have a local heap and a `yon_space_str_<X>` global. A remote
      Space merely wired/imported (e.g. a subscriber's producer) is left to the
-     owner and to process exit -- reclaiming its local receive view is a later
-     precision gain, and referencing its missing global would fail emission. *)
+     owner and to process exit -- its local receive view is not reclaimed,
+     and referencing its missing global would fail emission. *)
   let owned_spaces =
     match project_wm with
     | Some _ ->
@@ -496,7 +496,7 @@ let () =
   let prog = Module_prefix.resolve_aliases prog in
   Module_prefix.check_visibility !internals prog;
   let prog = Module_prefix.mangle_decls prog in
-  (* Filesystem-derived topos structure (Agent M). The parser now produces every
+  (* Filesystem-derived topos structure. The parser produces every
      topos with tp_objects=[], tp_at_space=None, tp_world=None; FILL those from
      the package layout before assign_place_worlds (which reads tp_world /
      tp_at_space to world the inner objects). Project mode only. Names are

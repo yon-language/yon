@@ -1,6 +1,6 @@
 (* SPDX-License-Identifier: AGPL-3.0-only *)
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
-(* module_prefix.ml — namespace prefixing for imported modules (Strato 2).
+(* module_prefix.ml — namespace prefixing for imported modules.
  *
  * When a package M is pulled in via `import "M"`, every top-level function it
  * defines is renamed M::f, and every *internal* call to one of M's own
@@ -54,10 +54,10 @@ let rec rw_expr (rename : string -> string) (e : S.expr) : S.expr =
   | S.EViewLam (ps, b, pl, l) -> S.EViewLam (ps, r b, pl, l)
   | S.EComposeWith (a, b, l) -> S.EComposeWith (r a, r b, l)
   | S.EPullbackVal (f, g, a, b, l) -> S.EPullbackVal (f, g, r a, r b, l)
-  (* Previously dropped by `_ -> e`: a call inside any of these (esp. a
+  (* Every constructor is rewritten: a call inside any of these (esp. a
    * produce/spawn EXPRESSION block or a categorical-lambda body in an imported
-   * module) was left un-namespaced → wrong-target binding on collision, or the
-   * `internal` visibility check was bypassed. Now exhaustive (no `_`), so a new
+   * module) left un-namespaced would bind the wrong target on collision, or
+   * bypass the `internal` visibility check. Exhaustive (no `_`), so a new
    * constructor forces a compile error instead of a silent leak. *)
   | S.EApp (h, args, l) -> S.EApp (r h, List.map r args, l)
   | S.EHITElim (scrut, branches, ret, l) ->
@@ -348,12 +348,12 @@ let mangle_decls (decls : S.top_decl list) : S.top_decl list =
           S.fn_body = List.map (rw_stmt mangle_name) fn.S.fn_body }
     | other -> other) decls
 
-(* Selective import with alias (Strato 4b). For each `import M::name [as alias]`,
+(* Selective import with alias. For each `import M::name [as alias]`,
  * the local name (alias if present, else `name`) is rewritten to the qualified
  * `M::name` everywhere in the program. So `geo_scale(...)` -> `geometria::scale(...)`,
- * which Strato 2 has already materialized as a real symbol. *)
+ * which mangle_decls has already materialized as a real symbol. *)
 let resolve_aliases (decls : S.top_decl list) : S.top_decl list =
-  (* Names defined locally as functions (after Strato 2, imported modules carry
+  (* Names defined locally as functions (after mangling, imported modules carry
    * "::" in their names, so a plain unqualified TopFun name is a local one). *)
   let local_funs =
     List.filter_map (function

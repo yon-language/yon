@@ -122,10 +122,10 @@ def test_an_identity_flows_into_path_by_forgetting_its_endpoints(tmp_path):
 
 
 # --- a lattice point is made only where it is one --------------------------------
-# LatticePoint is an abstract type over its representation: `of` is the
-# characteristic map of the type-2 shell (a coordinate is a point, or a
-# DomainError), `at` the i-th point of the shell; no literal is a point and no
-# arithmetic applies.
+# LatticePoint is an abstract type over its representation: `of_coordinate` is
+# the characteristic map of the type-2 shell (a coordinate is a point, or a
+# DomainError), `at_index` the i-th point of the shell; no literal is a point
+# and no arithmetic applies.
 
 _LP_PROBE = """\
 place Entry {}
@@ -2457,8 +2457,8 @@ def test_section_literal_binds_fields_of_different_types_by_name(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Collections are values: adding to a set or a map does not change the one
-# you added to, so two reads of it agree however they are written.
+# A HashSet / HashMap is a value: adding to a set or a map does not change the
+# one you added to, so two reads of it agree however they are written.
 
 def test_adding_to_a_set_leaves_the_original_unchanged(tmp_path):
     proj = _project(tmp_path, (
@@ -3169,7 +3169,7 @@ fun main(): Number {
 # A key is where a value is found. A lattice collection is keyed by a lattice
 # point; any other key — a Text among them — goes to HashMap, whose trie
 # identifies a key by its identity: the bits of a scalar, the content-addressed
-# handle of a section. No collection holds a ceiling: every map is a value.
+# handle of a section. No collection holds a ceiling: every HashMap is a value.
 
 def test_there_is_no_ceiling_on_the_number_of_maps(tmp_path):
     entry = """\

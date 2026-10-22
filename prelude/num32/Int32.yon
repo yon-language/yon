@@ -3,9 +3,8 @@
  * Int32, not Int: the house gives the qualified name (Int32__widen_pos)
  * and the world does not enter it — two twins with the same house would
  * produce two identical symbols. The world stays the site (Num32 and
- * Num64 are distinct categories, Widen is a functor between them); the
- * name carries the precision, because the name is what travels in the
- * symbols.
+ * Num64 are distinct categories); the name carries the precision, because
+ * the name is what travels in the symbols.
  *
  * The runtime transport is the uniform f64, exact over the whole i32
  * range: the i32 face is the declared intent of the site, and the native
@@ -18,13 +17,11 @@ place Int32 is i32 {
   /* ─── Widening without intrinsics ────────────────────────── [T] ───
    *
    * The signatures tell the truth: source Int32, target Int64 — the arrow
-   * crosses the worlds, like the functor that will use it.
+   * crosses the worlds.
    *
    * The key: an integral literal is a point of every integer face, so the
    * number decomposes into digits on the 32 side and recomposes as
-   * literals on the 64 side. It costs O(digits) instead of a single sext:
-   * truth first, speed later — the optimization will be a recognition,
-   * not a magic trick.
+   * literals on the 64 side. It costs O(digits) instead of a single sext.
    *
    * Termination: `n / 10` strictly decreases, and SCT sees it. */
 

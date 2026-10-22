@@ -6,7 +6,7 @@
 // `OpName::verify()` method here. The verifiers cover the predicates TableGen
 // cannot express: symbolic lookups, cross-attribute consistency, categorical
 // constraints (e.g. reduction lawful for policy = paxos|crdt, geom_morphism
-// with both pull and push).
+// between declared worlds).
 //
 // Categorical references:
 //   - place_in_world: each place lives in a world (the HasParent trait covers
@@ -14,7 +14,7 @@
 //   - reduction = a geometric morphism with a fixed codomain
 //   - move = a morphism of the underlying category (same-world or cross via
 //     geom_morphism)
-//   - geom_morphism = an adjunction f^* |- f_* (both required)
+//   - geom_morphism: source and target must be declared worlds
 //
 //===----------------------------------------------------------------------===//
 
@@ -208,7 +208,7 @@ static StringRef derivedPlaceWorld(Operation *op, StringRef name) {
 }
 
 //===----------------------------------------------------------------------===//
-// Syntactic purity test (shared by #18g, #27k, #27q, #27h, ...).
+// Syntactic purity test (shared by several verifiers).
 //
 // A conservative, sound, syntactic purity test for the `topos`
 // dialect:
@@ -404,8 +404,7 @@ LogicalResult PlaceOp::verify() {
              << overName << "' not found (place '" << getSymName()
              << "' declared `over` an unknown place)";
     // Slice category C/X requires X in Obj(C): the base must be in the same
-    // world (or reachable via geom_morphism, but that case is left open: a
-    // later pass verifies it).
+    // world. A base reachable through a geom_morphism is not accepted.
     if (placeWorldName(base) != getWorld())
       return emitOpError("slice base place '")
              << overName << "' is in world '" << placeWorldName(base)
@@ -769,8 +768,8 @@ LogicalResult OpApplyOp::verify() {
 
 // Verify that f and g are moves existing in the module (cospan for pullback,
 // span for pushout). The categorical compatibility of the cospan (coinciding
-// codomains) or of the span (coinciding domains) is delegated to a later pass
-// that requires type information.
+// codomains) or of the span (coinciding domains) is not checked: it would
+// require type information.
 static LogicalResult verifyUniversalConstruction(
     Operation *op, StringRef name, StringRef fName, StringRef gName,
     StringRef kind) {
@@ -816,7 +815,7 @@ LogicalResult PushoutOp::verify() {
 //                              "0" is `topos.initial`)
 //   (2)               each component resolves to an existing PlaceOp
 //   (3) [TOPOS-E0951]  all components share the same world
-//                      enclosing (cross-space coproduct is deferred)
+//                      enclosing (a cross-space coproduct is rejected)
 LogicalResult CoproductOp::verify() {
   auto components = getComponents();
   if (components.empty()) {
@@ -1248,10 +1247,8 @@ LogicalResult AbsurdOp::verify() {
 //
 // productive check (Hagino Def 4.1.5): a functor-expr "P(X1,...,Xn)" is
 // productive in X_i if it contains X_i ONLY at the top level or inside a
-// functor itself productive in X_i. For now the check here is left declarative
-// (the full CSL grammar is out of scope for this phase);
-// emit a placeholder warning through optional attributes. The full check comes
-// with a dedicated `--cdt-productive` pass.
+// functor itself productive in X_i. Productivity is not checked here, and no
+// warning is emitted for it.
 //
 // kind = "right" o "left" per i messaggi.
 static LogicalResult verifyHaginoObject(Operation *op, StringRef name,
@@ -1512,8 +1509,8 @@ LogicalResult AdjointCheckOp::verify() {
   }
 
   // All structural checks passed. The world is (structurally) a candidate for
-  // Top_0 for the T |- L adjunction. The homotopy proof T(L(F)) ~= F is
-  // delegated to future passes.
+  // Top_0 for the T |- L adjunction. The homotopy T(L(F)) ~= F is not
+  // checked.
   return success();
 }
 
@@ -1590,9 +1587,8 @@ static FibrationOp findFibrationByName(Operation *op, StringRef name) {
 
 // FibrationOp verify:
 //   (a) base and total exist as worlds
-//   (b) base != total (the trivial fibration id_B is useful but we avoid it by
-//       default: emitted explicitly only via the attribute `self_fibration`
-//       if really needed. For now: an error if equal.)
+//   (b) base != total: base == total (the trivial fibration id_B) is an
+//       error.
 //   (c) generic_object, if present, must exist as a PlaceOp of the
 //       world `total`. Hermida 2.x: the generic object is in the total.
 LogicalResult FibrationOp::verify() {
@@ -1797,15 +1793,10 @@ LogicalResult TopologyOp::verify() {
 
 // Verifies a geometric morphism between two topoi:
 //   (1) source_site is a declared world;
-//   (2) target_site is a declared world;
-//   (3) if `proper_base_change_attested` is set, the pull region must
-//       be syntactically pure (proper base change requires
-//       a left-exact pull functor, which we approximate by syntactic
-//       purity of its body).
+//   (2) target_site is a declared world.
 //
-// The structural presence of both pull and push regions is already
-// enforced by TableGen via SizedRegion<1>; the semantic naturality
-// of the unit/counit of the adjunction is left to a downstream pass.
+// The op carries no regions and no code, so there is nothing else to check
+// here; the naturality of the unit/counit of the adjunction is not checked.
 LogicalResult GeomMorphismOp::verify() {
   if (!findWorldByName(*this, getSourceSite())) {
     return emitOpError("[TOPOS-E0431] geometric morphism '")
@@ -1822,12 +1813,9 @@ LogicalResult GeomMorphismOp::verify() {
               "morphism.";
   }
 
-  // (3) the left-exactness of pull is attested by the user via the attribute.
-  // The structural check of the pull functor as syntactically pure is no longer
-  // applicable at the dialect level (GeomMorphismOp is now a pure declaration —
-  // the functors live in separate runtime functions). The
-  // `--proper-base-change-check` pass will verify the purity of the
-  // `<name>__pull` function when it is emitted.
+  // The left-exactness of pull is attested by the user via the attribute
+  // `proper_base_change_attested` and is not checked: GeomMorphismOp is a
+  // pure declaration, and the functors live in separate runtime functions.
   return success();
 }
 
@@ -1856,9 +1844,9 @@ LogicalResult GeomMorphismOp::verify() {
 //   (3) the body region is syntactically pure.
 //
 // The third check enforces the purity restriction on polymorphism
-// introduction. Without it, polymorphic projection via `topos.pcall`
-// would have evaluation-order-dependent semantics, and parametricity
-// would silently fail.
+// introduction. Without it, instantiating the abstraction would have
+// evaluation-order-dependent semantics, and parametricity would silently
+// fail.
 LogicalResult PabsOp::verify() {
   ArrayAttr params = getTypeParams();
 
@@ -2078,9 +2066,8 @@ LogicalResult ExistsIntroOp::verify() {
 //   (2) both place names resolve to existing `topos.place` symbols
 //       in the enclosing module.
 //
-// The deeper semantic check that both places actually declare a type
-// constructor of the given name is deferred to a later analysis pass,
-// since it requires deep introspection of the place bodies.
+// Whether both places actually declare a type constructor of the given name
+// is not checked: it would require introspection of the place bodies.
 LogicalResult SharingConstraintOp::verify() {
   StringRef nameA = getPlaceA();
   StringRef nameB = getPlaceB();
@@ -2154,13 +2141,12 @@ LogicalResult CellOp::verify() {
 }
 
 //===----------------------------------------------------------------------===//
-// BATCH A — 12 verify() implementations
+// Verifiers from `topos.the` to `topos.coeffect_extend`
 //===----------------------------------------------------------------------===//
 
-// explicit subtype coercion. For now we accept iff the
-// source and target types are syntactically equal; the broader set of
-// subtype rules (arrow co/contra, record width/depth, oneof,
-// forall, μ) is delegated to a downstream pass.
+// explicit subtype coercion. Accepted iff the source and target types are
+// syntactically equal (S == T); no other subtype rule (arrow co/contra,
+// record width/depth, oneof, forall, μ) is applied.
 LogicalResult TheOp::verify() {
   Type s = getSource().getType();
   Type t = getTargetType();

@@ -5,7 +5,7 @@
  * Architecture chosen (aligned with CaTT / HoTT / Yoneda): the eliminator binds
  * the CARRIER, never the raw code. Modeled here as el_elim, which applies the
  * branch to carrier(c) = el_decode c. The coherence property — the very thing
- * that makes subject reduction hold — is the negative test Antonio asked for:
+ * that makes subject reduction hold — is checked by a negative test:
  * two codes with the same carrier but different syntax (here, differing only in
  * the witness, which el_decode ignores) yield the SAME result for ANY branch.
  * No branch can observe the raw code, so none can separate two codes that the

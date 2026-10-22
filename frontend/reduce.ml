@@ -4,25 +4,25 @@
  *
  * This file implements:
  *
- * (A) Small-step operational semantics from Yon Core Section 3.1:
- *     beta-reduction, scope-enter, scope-exit, with-handle, with-return, emit.
+ * (A) Small-step operational semantics of the Core term:
+ *     beta-reduction, scope-enter, scope-exit, operation handling, emit.
  *
- * (B) The seven families of R_Yon from Yon Core §4:
+ * (B) The seven families of R_Yon:
  *     1. Alpha-renaming (implicit in Subst, no explicit rule needed)
  *     2. Beta-reduction (operational beta; treated as equality)
  *     3. Eta-equivalence
  *     4. Place equivalence
  *     5. Reduction equivalence
- *     6. Move equivalence (omitted in this prototype — surface-only construct)
- *     7. View equivalence (omitted in this prototype — surface-only construct)
+ *     6. Move equivalence (decided in catt_r_yon.ml, not here)
+ *     7. View equivalence (decided in catt_r_yon.ml, not here)
  *
- * The dispatcher specified in v0.3 §6.4.1 orders reductions:
+ * The dispatcher orders reductions:
  *     structural (Families 4-7) -> cubical -> computational (Families 1-3)
  * We have Families 1-5; the cubical AST nodes (PLam/PApp/Transp/Comp/HComp/
  * Glue/HIT) are matched here for congruence and refl-beta, with their head
  * computation delegated to the Cubical engine via the bridge in builtins.ml.
  * The dispatcher is: place and reduction equivalence first, then beta+eta.
- * This gives deterministic, terminating reduction.
+ * This gives deterministic reduction.
  *)
 
 open Ast
@@ -30,7 +30,7 @@ open Ast
 (* ─── A small environment of declared places/reductions ────────────── *)
 
 (* A program context: globally declared places and reductions plus
- * an active stack of handler bindings (the "with R in ..." chain).
+ * an active stack of handler bindings (active_handlers).
  *)
 type ctx = {
   places : (string * place_decl) list;
@@ -41,10 +41,10 @@ type ctx = {
   active_handlers : (string * reduction_decl) list;  (* stack, top first *)
   current_place : string option;   (* current place for proposition evaluation *)
   visibility_table : (string * string list) list;  (* place_name -> visible names *)
-  (* delta-rules: SCT-certified function definitions, name -> Core body
+  (* delta-rules: functions this context may unfold, name -> Core body
    * (a curried lambda). The reducer unfolds f to its body alongside beta.
-   * Only certified-terminating rules are placed here, so normalization
-   * needs no fuel. Empty for evaluation contexts that don't want unfolding. *)
+   * Dispatcher/Core_wf pass only SCT-certified ones; the sheaf checks
+   * in tycheck pass every pure function. Empty when no unfolding. *)
   deltas : (string * term) list;
 }
 
@@ -58,8 +58,8 @@ let empty_ctx = {
   deltas = [];
 }
 
-(* World-tag setter: a hook the reducer calls when entering/leaving a
- * `with R of P { ... }` block. *)
+(* World-tag setter hook: main.ml, eval_runner.ml set it to
+ * Stdlib_runtime.set_current_world_tag *)
 let world_tag_setter : (string option -> unit) ref = ref (fun _ -> ())
 
 (* Hook to fully reduce a term using all available reduction strategies
@@ -90,7 +90,7 @@ let declare_world ctx w = { ctx with worlds = (w.w_name, w) :: ctx.worlds }
 (* ─── Value predicate ──────────────────────────────────────────────── *)
 
 (* A term is a value when no further reduction applies.
- * Yon Core Section 3.3: values are lambdas, places, reductions, place_values,
+ * Values are lambdas, places, reductions, place_values,
  * stream values, and Unit.
  *)
 let is_value t =
@@ -161,9 +161,9 @@ let place_equivalent p1 p2 = place_equal p1 p2
 (* ─── Reduction equivalence ──────────────────────────────── *)
 
 (* Two reductions are equal under reduction equivalence if their handler bodies are
- * beta-eta equivalent pointwise. For the prototype we check syntactic
- * equality (modulo our subst which is alpha-aware); a full implementation
- * would normalize each body with Families 2-3 and then compare.
+ * beta-eta equivalent pointwise. The check here is syntactic equality
+ * (reduction_equal); the handler bodies are not normalized with
+ * Families 2-3 before comparing.
  *)
 let reduction_equivalent r1 r2 = reduction_equal r1 r2
 
@@ -216,11 +216,11 @@ let try_beta t =
         Some (Subst.subst x arg body)
   | _ -> None
 
-(* ─── Functoriality of an abstract presheaf (A1.2 / A1.3) ─────────────
+(* ─── Functoriality of an abstract presheaf ───────────────
  *
- * A1.1 internalized the OBJECT action of a contravariant functor
- * F : Type_0 -> Type_0; El(F x) computes by delta-unfolding a CONCRETE F.
- * The pieces missing for an ABSTRACT presheaf symbol F (one that is NOT a
+ * The OBJECT action of a contravariant functor
+ * F : Type_0 -> Type_0 computes by delta-unfolding a CONCRETE F: El(F x).
+ * The pieces to add for an ABSTRACT presheaf symbol F (one that is NOT a
  * lambda the reducer can unfold) are the ARROW action F(f) and its two
  * functoriality laws. Those laws are conversions the KERNEL must apply,
  * because an abstract F(f) is otherwise stuck: there is nothing to unfold.
@@ -293,18 +293,15 @@ let try_scope_exit t =
   | Scope (_, v) when is_value v -> Some v
   | _ -> None
 
-(* ─── Operation dispatch (with-handle) ─────────────────────────────── *)
+(* ─── Operation dispatch ───────────────────────────────────────────── *)
 
-(* If the body of a `with R in ...` block makes a call to an operation
- * that R handles, replace the call with the handler body.
+(* If a term makes a call to an operation that a reduction on the
+ * active_handlers stack handles, replace the call with the handler body.
  *
- * For the prototype, we detect "operation call" syntactically as
- * "App (Var op_name, ...)" inside the with block, where op_name
- * matches a handler clause of R.
- *
- * In a full implementation, the elaborator from surface Yon would
- * mark operation calls explicitly. Here we use a lookup against the
- * active handlers stack.
+ * An "operation call" is detected syntactically as "App (Var op_name, ...)",
+ * where op_name matches a handler clause of a reduction on the stack.
+ * Operation calls are not marked by the elaborator; the lookup is by name
+ * against the active handlers stack.
  *)
 let lookup_handler ctx op_name =
   (* Handlers register clauses by unqualified op name (e.g., "print"),
@@ -389,19 +386,19 @@ let subst_hit_payloads body vars args =
 (* One step of reduction. Returns Some t' if a step was taken, None if
  * the term is a normal form (or stuck).
  *
- * Dispatcher order (per v0.3 §6.4.1 and Yon Core §8.2):
+ * Dispatcher order:
  *   1. Structural reductions first (place/reduction equivalence) — handled at construction
  *      since we identify places/reductions by signature; no in-term rules.
  *   2. Cubical reductions — congruence and refl-beta handled here; full
  *      head computation delegated to the Cubical engine (via builtins.ml).
- *   3. Computational reductions — beta, eta, scope-exit, with-return,
- *      with-handle, emit.
+ *   3. Computational reductions — beta, eta, scope-exit, operation
+ *      handling, emit.
  *)
 let rec step ctx t =
   match t with
   (* Computational reductions on the term head. *)
   | App _ ->
-      (* Presheaf functoriality (A1.2/A1.3): the head-level conversion rules
+      (* Presheaf functoriality: the head-level conversion rules
        * for an ABSTRACT presheaf's arrow action. Guarded to the exact
        * `__psh_map F __id` / `__psh_map F (__compose g f)` shape, whose head
        * is a bare Var (never a Lam), so it can never mask a beta- or
@@ -606,22 +603,22 @@ let rec step ctx t =
             | None -> None))
   | HITConstr _ -> None        (* value: no head reduction *)
   | Var f when List.mem_assoc f ctx.deltas ->
-      (* delta-step: unfold a certified function to its Core body. Beta then
-       * drives any application; SCT certification guarantees this terminates,
-       * so no fuel is needed. *)
+      (* delta-step: unfold a function to its Core body. Beta then
+       * drives any application; it terminates when the deltas are
+       * SCT-certified (the conversion path). *)
       Some (List.assoc f ctx.deltas)
   | Var _ | Place _ | Reduction _ | World _ | Unit -> None
 
 (* ─── Multi-step reduction ─────────────────────────────────────────── *)
 
-(* Reduce to normal form. NO FUEL, no step cap, no magic number.
- *
- * On the conversion path every delta-rule in ctx is SCT-certified and beta on
- * well-typed terms terminates, so a normal form is reached in finitely many
- * steps by THEOREM. On the evaluation path ctx.deltas is empty (no unfolding)
- * and reduction follows the term's own beta-structure. The old `fuel = 1000`
- * crutch silently returned a non-normal term on overrun (unsound); removing it
- * means reduction is either a true normal form or it does not return — honest. *)
+(* Reduce to normal form. This function itself has no step bound: it returns
+ * a normal form or does not return. Its stuck-argument hook
+ * (full_reduce_hook), the conversion path and the El normalizer go through
+ * Builtins.reduce_with_builtins, which stops after 1000 steps and returns the
+ * term reached. Deltas from Dispatcher/Core_wf are SCT-certified; the sheaf
+ * checks in tycheck pass uncertified ones.
+ * Without deltas, reduction follows the term's own beta-structure.
+ *)
 let rec reduce ctx t =
   match step ctx t with
   | Some t' -> reduce ctx t'

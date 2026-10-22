@@ -1,8 +1,8 @@
 # CMakeLists.txt for the Topos MLIR dialect.
 #
-# Genera lo scaffolding C++ dal file TableGen TopOps.td usando mlir-tblgen,
-# poi compila la libreria condivisa libToposDialect.a / libToposDialect.so
-# che verrà linkata dal crate Rust yoner-mlir-sys via FFI.
+# Generates the C++ scaffolding from TopOps.td with mlir-tblgen, then builds
+# the dialect library MLIRTopos, the pass library MLIRToposPasses and the
+# driver topos-opt.
 
 cmake_minimum_required(VERSION 3.20)
 project(ToposDialect LANGUAGES C CXX)
@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Trova MLIR/LLVM installato sul sistema.
-# Tipicamente: sudo apt install llvm-17-dev libmlir-17-dev mlir-17-tools
+# Tipicamente: sudo apt install llvm-18-dev libmlir-18-dev mlir-18-tools
 find_package(MLIR REQUIRED CONFIG)
 find_package(LLVM REQUIRED CONFIG)
 
@@ -51,7 +51,6 @@ mlir_tablegen(TopDialect.cpp.inc -gen-dialect-defs -dialect=topos)
 add_public_tablegen_target(ToposDialectIncGen)
 
 # Libreria del dialect.
-# Quando i file C++ stub esistono (TopDialect.cpp), li aggiungiamo qui.
 add_mlir_dialect_library(MLIRTopos
   TopDialect.cpp
   TopOps.cpp
@@ -71,16 +70,14 @@ add_mlir_dialect_library(MLIRTopos
   MLIRSideEffectInterfaces
 )
 
-# Esponiamo gli include directory ai consumer (il crate Rust yoner-mlir-sys).
+# Esponiamo gli include directory ai consumer della libreria.
 target_include_directories(MLIRTopos PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-# Libreria dei pass di lowering. Separata dalla libreria
-# del dialect per permettere di linkare topos-opt con dialect+pass
-# ma di esporre la sola libreria del dialect via yoner-mlir-sys ai
-# consumer Rust.
+# Libreria dei pass di lowering, separata dalla libreria del dialect;
+# topos-opt linka entrambe.
 add_mlir_library(MLIRToposPasses
   passes/LowerToposToStandard.cpp
   passes/LowerToposExtensions.cpp

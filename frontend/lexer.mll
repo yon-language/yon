@@ -15,10 +15,10 @@
   let () =
     List.iter (fun (k, v) -> Hashtbl.add keyword_table k v) [
       (* Top-level declarations. A Yon program is a list of these.
-         A `world` is a category (a collection of objects and the structure-
-         preserving maps between them); a `place` is an object living in a
-         world; a `space` is a runtime heap where instances of a place are
-         allocated and addressed. *)
+         A `place` is an object living in a world; a `space` is a runtime
+         heap where instances of a place are allocated and addressed. `world`
+         is not a surface keyword: a world is given by the project's toml and
+         filesystem. *)
       "import", IMPORT;
       "internal", INTERNAL;
       "place", PLACE;
@@ -28,7 +28,7 @@
       "space", SPACE;
       "nat", NAT;
 
-      (* The four kinds of "handle": values that name a map in the category.
+      (* The handle keywords: values that name a map in the category.
          `move` and `view` map between objects; `reduction` folds a structure
          to a value; `operation` is a method exposed by a place that carries an
          effect. They are static structures of the topos, not runtime values:
@@ -88,8 +88,8 @@
 
       (* A geometric morphism between topoi is an adjoint pair of functors:
          pull (f^*, inverse image, the left adjoint) and push (f_*, direct
-         image, the right adjoint). `adjunction` names the pairing, `exact`
-         the requirement that the inverse image preserve finite limits. *)
+         image, the right adjoint). `exact push` declares f_* exact; f^* is
+         left exact by definition, so `exact` is only said of push. *)
       "exact", EXACT_KW;
 
       (* Error model. An `error` with `this < Base` in its body (see
@@ -108,7 +108,7 @@
       "be", LET;
 
       (* Type-level and connective words. Most read as English in declarations:
-         `list of T`, `map of K to V`, `e is pattern`, `move M from A to B`. *)
+         `e is pattern`, `move M from A to B`. *)
       "of", OF;
       "in", IN;
       "to", TO;
@@ -119,9 +119,9 @@
       "parallel", PARALLEL;
       "is", IS;
       (* `is given`: the body is axiomatic, realized by the compiler —
-         il `native` di Java. Il tycheck verifica che l'implementazione
-         cablata esista: una dichiarazione senza realizzazione è una
-         promessa muta, e le promesse mute si ritirano. *)
+         like Java's `native`. tycheck checks that the wired implementation
+         exists: a declaration with no realization is rejected rather than
+         left as a silent promise. *)
       "given", GIVEN;
       "not", NOT;
       "by", BY;
@@ -242,7 +242,7 @@
       "PathP", PATHP;            (* dependent path type *)
 
       (* Metonymic surface sugar (journey metaphor) — pure NAMES that desugar to
-         the cubical primitives: stay=refl, back=inv, span=ua,
+         the cubical primitives: back=inv,
          carry..along=transport, through=ap. No new semantics. *)
       "back", BACK;
       "carry", CARRY;
@@ -365,7 +365,7 @@ rule token = parse
   | "Type_" (digit+ as n)  { TYPE_LEVEL (int_of_string n) }
   
   (* Identifiers — keyword or user-defined name.
-     Currency codes (3 uppercase) are also identifiers; we let the parser decide. *)
+     A keyword is recognized by lookup in keyword_table. *)
   | (alpha alnum_id* "::" alpha alnum_id* ("::" alpha alnum_id*)*) as s
       { QIDENT s }   (* qualified name mod::fun (namespaces) *)
   | (alpha alnum_id*) as s   { ident_or_keyword s }

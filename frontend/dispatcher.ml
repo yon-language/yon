@@ -285,11 +285,9 @@ let rec arith_of_ast (t : Ast.term) : Surface_ast.expr option =
 (* Endpoint equality: two path endpoints are equal iff their underlying
  * expressions are syntactically equal, or become equal after KERNEL
  * normalization with delta-conversion. The delta-rules are the SCT-certified
- * function definitions from the environment; normalization is fuel-free
- * because certification guarantees termination. This replaces the old surface
- * inliner (Naturality_symcheck.normalize with its magic-number cap of 50) and
- * the global surface_fun_idx ref: one normalizer (the kernel), no parallel
- * surface path, no cap. *)
+ * function definitions from the environment; Reduce.normalize has no step cap
+ * of its own, and the certification is what bounds the delta-unfolding. There
+ * is one normalizer (the kernel), no parallel surface inliner. *)
 (* A name in a code resolves as a name in a term does: a variable in scope
    first, then a constructor of a known inductive (declared or built in, a
    point or a path). A code written `C(base)` or `C(loop @ i)` and the code
@@ -376,10 +374,10 @@ let rec type_equal
       && List.for_all2 (type_equal env ctx) a1 a2
   | TyApp (n1, _), TyUser n2 | TyUser n1, TyApp (n2, _) -> n1 = n2
   (* NB: the one-way PROMOTIONS  number <: heyt_int  and  heyt_int <: proposition
-   * used to live here as SYMMETRIC arms, which unsoundly also accepted the
+   * are not arms here: symmetric arms would unsoundly also accept the
    * reverse (a heyt_int where a number is expected, a prop where a heyt_int is
-   * expected). type_equal is now strict equality; the directional promotions
-   * moved to `subtype` below and are applied only at value-flow sites
+   * expected). type_equal is strict equality; the directional promotions
+   * live in `subtype` below and are applied only at value-flow sites
    * (argument passing, return, assignment, field store). *)
   (* Structural equality on TyArrow. *)
   | TyArrow (a1, b1), TyArrow (a2, b2) ->
@@ -485,10 +483,10 @@ let rec type_equal
  *                                   total space Σ(x y : A). Id(A, x, y); the
  *                                   converse is refused, the endpoints of a
  *                                   bare Path are not known)
- * These promotions previously lived as SYMMETRIC arms in type_equal, which
- * unsoundly accepted the reverse direction (a heyt_int where a number is
+ * As SYMMETRIC arms in type_equal these promotions would
+ * unsoundly accept the reverse direction (a heyt_int where a number is
  * expected). Routing them through this directional relation, used only at
- * value-flow sites, removes that hole while keeping the legitimate coercions.
+ * value-flow sites, keeps the legitimate coercions and only those.
  * CATT/HoTT conversion (type_equal's dispatch) is untouched. *)
 let subtype (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : bool =
   type_equal env ctx super sub

@@ -1,21 +1,20 @@
 """Value-dependent `El` lowers to a UNIFORM boxed carrier.
 
-Complements test_dependent_carrier.py (the A1 COMPUTED case: `El(Fam x)` where the
+Complements test_dependent_carrier.py (the COMPUTED case: `El(Fam x)` where the
 code reduces to a concrete type → that type's concrete carrier). This file pins the
 OPEN case: a code that stays STUCK under Δ because it genuinely depends on a runtime
 value (a non-constant / non-terminating family applied to a free variable). Such a
 type has no single concrete layout, but it DOES have a single UNIFORM layout — a fat
-pointer `{ptr, i64-tag}` shared by every stuck-El instance. Before this feature the
-frontend emit FAILED on such a type ("type has no runtime carrier"); now it lowers to
-the box and functions over it compile once.
+pointer `{ptr, i64-tag}` shared by every stuck-El instance. The frontend emit lowers
+such a type to the box, and functions over it compile once.
 
 What this pins:
-  1. A value-dependent `El` now COMPILES (emit exit 0) instead of failing.
+  1. A value-dependent `El` COMPILES (emit exit 0).
   2. Its carrier is the uniform box `!llvm.struct<(ptr, i64)>`, identical across
      distinct stuck families (uniformity → compile-once ABI).
   3. The box ROUND-TRIPS through the calling convention: a function taking `El(stuck)`
      and returning `El(stuck)` carries the box through unmodified.
-  4. The A1 computed case is UNCHANGED — a constant family still gets the CONCRETE
+  4. The computed case keeps its carrier — a constant family still gets the CONCRETE
      carrier, never the box (soundness guard: the box is the last resort, only for a
      genuinely stuck code).
 
@@ -93,7 +92,7 @@ STUCK_FAM = "fun Fam(x: Number): Type_0 { return Fam(x) }\n"
 
 
 def test_value_dependent_el_compiles(tmp_path):
-    """A value-dependent `El` that previously FAILED emit now compiles to the box."""
+    """A value-dependent `El` lowers to the uniform box {ptr, i64}."""
     src = STUCK_FAM + (
         "fun viaEl(x: Number, p: El(Fam(x))): Number { return 0 }\n"
         "fun main(): Number { return 0 }\n"
@@ -145,7 +144,7 @@ def test_boxed_value_round_trips_through_call(tmp_path):
 
 
 def test_computed_case_never_boxed(tmp_path):
-    """SOUNDNESS GUARD / A1 unchanged: a CONSTANT family (code computes to a concrete
+    """SOUNDNESS GUARD: a CONSTANT family (code computes to a concrete
     type) gets the CONCRETE carrier, NEVER the box. The box is strictly the last
     resort for a genuinely stuck code — it must not swallow the computed case."""
     src = (

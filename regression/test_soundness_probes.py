@@ -345,9 +345,9 @@ place Entry {
 
 def test_widen_additive_law_at_int32_max(tmp_path):
     """widen(a + b) = widen(a) + widen(b) at Int32.MAX + 1. It holds while
-    Int32 is carried as f64 and never overflows; it is the alarm that goes red
-    when Int32 becomes a wrapping i32 and the law needs its overflow side
-    condition (see the next test)."""
+    Int32 is carried as f64 and never overflows; it goes red if Int32 is
+    carried as a wrapping i32, where the law needs its overflow side condition
+    (see the next test)."""
     assert _compile_and_run(tmp_path, _WIDEN % "holds_law") == 1
 
 

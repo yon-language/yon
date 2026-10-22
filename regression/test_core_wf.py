@@ -1,8 +1,8 @@
 """Core well-formedness gate: the dependent Core checker (core_check.ml) re-checks
-the desugared IR in the compile pipeline (core_wf.ml), no longer test-only.
+the desugared IR in the compile pipeline (core_wf.ml).
 
 Three properties pin the wiring:
-  1. A1 dependent types are CERTIFIED, not skipped — the gate actually exercises the
+  1. Dependent types are CERTIFIED, not skipped — the gate actually exercises the
      kernel checker on `El(Fam x)` (YON_CORE_WF=1 reports a nonzero certified count).
   2. The gate REJECTS a genuinely ill-formed dependent type that the surface checker
      let through — `El(g(y))` where g does not return a universe — with exit 3 and a
@@ -70,7 +70,7 @@ fun main(): Number { return 0 }
     r = _run(src, tmp_path)
     assert r.returncode != 0, "gate accepted El of a non-code"
     err = r.stderr.decode(errors="replace")
-    # Rejected either at the surface (tycheck now flags a value-returning code with a
+    # Rejected either at the surface (tycheck flags a value-returning code with a
     # location) or by the Core well-formedness gate downstream — both are correct.
     assert ("not a type code" in err) or ("El of a non-code" in err), \
         f"unexpected rejection reason:\n{err[-600:]}"

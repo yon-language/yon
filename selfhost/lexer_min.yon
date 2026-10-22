@@ -1,12 +1,12 @@
-// Self-host, front-end: lexer minimale scritto in Yon. Legge una String e produce
-// una TokList (cifre singole e operatori + * ( ), spazi ignorati). Due funzioni
-// mutuamente ricorsive (lex_from guarda il char, emit_at dispaccia e ricorre);
-// dispatch su String.char_at (un number) via catena if/else if, non hit_elim.
-// Oracolo: checksum strutturale di "2+3*4" = 309.
+// Front end: a minimal lexer written in Yon. It reads a String and produces a
+// TokList (single digits and the operators + * ( ), spaces ignored). Two mutually
+// recursive functions (lex_from looks at the char, emit_at dispatches and recurs);
+// dispatch on String.char_at (a number) via an if/else-if chain, not hit_elim.
+// Oracle: structural checksum of "2+3*4" = 309.
 place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 
-// decide il token per il carattere c in posizione i, poi prosegue da i+1
+// decide the token for the character c at position i, then continue from i+1
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
     else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
@@ -17,7 +17,7 @@ fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
     else lex_from(s, i + 1, len)
 }
 
-// scandisce da i: a fine stringa chiude con TEnd, altrimenti legge e dispaccia
+// scan from i: at the end of the string close with TEnd, otherwise read and dispatch
 fun lex_from(s: String, i: Number, len: Number): TokList {
   return if i >= len
     then hit(TkCons, hit(TEnd), hit(TkNil))
@@ -28,7 +28,7 @@ fun lex(s: String): TokList {
   return lex_from(s, 0, String.length(s))
 }
 
-// ── oracolo: ogni token pesa un valore distinto ─────────────────────────────
+// ── oracle: each token weighs a distinct value ──────────────────────────────
 fun motN(t: Token): Number { return 0 }
 fun tok_weight(t: Token): Number {
   return hit_elim(motN,
@@ -47,7 +47,7 @@ fun checksum(l: TokList): Number {
       TkCons(h, t) => tok_weight(h) + checksum(t) ], l)
 }
 
-// sorgente "2+3*4" = codici 50 43 51 42 52
+// source "2+3*4" = codes 50 43 51 42 52
 fun src(): String {
   return String.concat(
            String.concat(String.from_char(50), String.from_char(43)),
@@ -55,7 +55,7 @@ fun src(): String {
                          String.from_char(52)))
 }
 
-// atteso: TNum2, TPlus, TNum3, TStar, TNum4, TEnd = 2+100+3+200+4+0 = 309
+// expected: TNum2, TPlus, TNum3, TStar, TNum4, TEnd = 2+100+3+200+4+0 = 309
 fun main(): Number {
   return checksum(lex(src())) - 309
 }

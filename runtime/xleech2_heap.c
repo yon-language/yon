@@ -25,8 +25,8 @@
 #include <pthread.h>
 
 /* Global mutex to serialize calls into libmmgroup (not thread-safe).
- * Previously defined in xleech2_move.c, moved here as the canonical
- * definition. Referenced via extern from xleech2_mphf.c and xleech2_coord.c. */
+ * The canonical definition; referenced via extern from xleech2_mphf.c and
+ * xleech2_coord.c. */
 pthread_mutex_t mmgroup_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* ============================================================== */
@@ -282,8 +282,7 @@ int yon_xheap_unlink_shm(const char *shm_name) {
 static uint32_t arena_alloc(yon_xheap_t *h, uint32_t n_bytes) {
     /* Widen to uint64_t before the align/compare so the bound check is sound
      * regardless of caller (a 32-bit  used + aligned  could wrap and pass the
-     * test). Same class fixed in yon_rt.c; pure widening, no behaviour change
-     * on any in-range input. */
+     * test). Pure widening, no behaviour change on any in-range input. */
     uint64_t aligned = ((uint64_t)n_bytes + 7u) & ~(uint64_t)7u;
     if ((uint64_t)h->arena_used + aligned > (uint64_t)YON_HEAP_ARENA_BYTES) return 0;
     uint32_t off = h->arena_used;
@@ -550,7 +549,7 @@ int yon_xheap_clear(yon_xheap_t *h, uint32_t slot_index) {
     s->tag = YON_TAG_FREE;
     s->payload_offset = 0;
     s->payload_size = 0;
-    /* Note: the arena space stays orphaned. Compaction is future work. */
+    /* Note: the arena space stays orphaned; nothing compacts it. */
     /* Note: n_occupied does NOT decrease here, so slot_index stays
      * monotonically increasing. A new put always reuses n_occupied as the next
      * slot, but if intermediate slots were freed, n_occupied does not reflect

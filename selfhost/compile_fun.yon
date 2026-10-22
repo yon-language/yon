@@ -1,7 +1,7 @@
-/* Self-host M3 -- a Yon0 surface compiler in Yon: source text -> Term -> MLIR.
+/* A Yon0 surface compiler in Yon: source text -> Term -> MLIR.
  *
- * M2 (compile_arith) compiled bare arithmetic. M3 lifts the front end to the
- * actual Yon surface: a function with let-bindings and a return,
+ * Over the bare arithmetic of compile_arith.yon, the front end reads the Yon
+ * surface: a function with let-bindings and a return,
  *
  *   fun main(): number {
  *     be x := 20
@@ -9,20 +9,20 @@
  *     return x + y
  *   }
  *
- * The lexer now recognises multi-character keywords (fun/be/return/number)
- * and multi-digit numbers and lowercase identifiers; the parser threads a de
- * Bruijn name environment (from parse_scope) so `be x := e` becomes a TLet and
- * a variable reference becomes a TVar index; the emitter is M1's gen (TLit/TAdd/
- * TMul/TVar/TLet over an SSA environment). The emitted module exits 42 = (20 + 22)
+ * The lexer recognises multi-character keywords (fun/be/return/number), the
+ * two-character `:=`, multi-digit numbers and lowercase identifiers; the parser
+ * threads a de Bruijn name environment (from parse_scope) so `be x := e` is read
+ * as a TLet and a variable reference as a TVar index; the emitter is the gen of
+ * emit_arith.yon (TLit/TAdd/TMul/TVar/TLet over an SSA environment). The emitted module exits 42 = (20 + 22)
  * mod 256. One AST (Term) shared by parser and emitter; no interpreter in the loop.
  *
- * v1 boundary: one function `fun main(): number { ... }`, lowercase identifiers,
- * + and * only, no calls. The next increment adds if/else (scf.if) and TCall.
+ * Boundary: one function `fun main(): number { ... }`, lowercase identifiers,
+ * + and * only, no calls.
  */
 
 /* one shared AST: arithmetic + de Bruijn variables + let. */
 place Term { this > TLit(Number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) }
-/* tokens: literals, identifiers, the five keywords, operators, punctuation. */
+/* tokens: literals, identifiers, the four keywords, `:=`, operators, punctuation. */
 place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TPlus :U TStar :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 place Parse { this > POk(Term, TokList) :U PErr }
@@ -114,7 +114,7 @@ fun lex_from(s: String, i: Number, len: Number): TokList {
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
-/* ---- token/list peeking (tags: Num0 Ident1 Fun2 Be3 Holds4 Return5 Number6
+/* ---- token/list peeking (tags: Num0 Ident1 Fun2 Be3 ColonEq4 Return5 Number6
  * Plus7 Star8 LParen9 RParen10 LBrace11 RBrace12 Colon13 End14) ---- */
 fun motTn(t: Token): Number { return 0 }
 fun tok_tag(t: Token): Number {
@@ -190,7 +190,7 @@ fun combine(op: Number, left: Term, p: Parse): Parse {
 }
 
 /* ---- body parser: ('be' IDENT ':=' expr)* 'return' expr ---- */
-/* each `be x := e` becomes TLet(e, <rest with x bound innermost>). */
+/* each `be x := e` is read as TLet(e, <rest with x bound innermost>). */
 fun parse_body(l: TokList, env: NameEnv): Parse {
   return if head_tag(l) == 3          /* 'be' */
     then parse_let(l, env)
@@ -200,7 +200,7 @@ fun parse_body(l: TokList, env: NameEnv): Parse {
 }
 fun parse_let(l: TokList, env: NameEnv): Parse {
   be name := head_num(tail(l))              /* IDENT hash after 'be' */
-  be after_def := tail(tail(tail(l)))     /* skip be, IDENT, holds -> value */
+  be after_def := tail(tail(tail(l)))     /* skip be, IDENT, ':=' -> value */
   return build_let(parse_expr(after_def, env), name, env)
 }
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
@@ -217,7 +217,7 @@ fun wrap_let(val: Term, pb: Parse): Parse {
 
 /* ---- program parser: 'fun' IDENT '(' ')' ':' 'number' '{' body '}' ---- */
 fun skip7(l: TokList): TokList {
-  /* consume the fixed header of `fun main(): number {` (v1: main has no params). */
+  /* consume the fixed header of `fun main(): number {` (main has no params). */
   return tail(tail(tail(tail(tail(tail(tail(l)))))))
 }
 fun parse_program(l: TokList): Parse {

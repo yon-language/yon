@@ -30,12 +30,12 @@
  *
  * RESIDUAL (honestly NOT verified / not enforced): the fibre-correction
  * coherence ω_k : e_k.f(t1'_k) ~ a1 (CCHM step 5, the comp^j A [φ↦ω] a1
- * adjustment of the base along ω).  This prototype keeps a1' = a1 un-adjusted
+ * adjustment of the base along ω).  The engine keeps a1' = a1 un-adjusted
  * (so the base boundary above is EXACT) and takes the fibre centre e_k.g(a1)
  * WITHOUT the ε-homotopy filler.  The single equation that is therefore left
  * open is  a1 = e_k.f(t1'_k)  on φ_k.  It is the same class of residual the
  * hcomp-Glue coherence patch carries; it needs a genuine ε filler (available as
- * the __equiv_eps marker) and is out of scope for the decidable prototype.
+ * the __equiv_eps marker), which the engine does not build.
  *)
 
 open Surface_ast

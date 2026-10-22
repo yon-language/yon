@@ -7,8 +7,8 @@
  * transport delivers exactly N values summing to N. If the cross-process lock
  * around head/tail/count does not actually serialize (e.g. flock() on an shm fd
  * that is a no-op across processes on this platform), the counters race: values
- * are lost or double-read and got/sum diverge from N. This is Bug B, exercised
- * concurrently instead of sequentially.
+ * are lost or double-read and got/sum diverge from N. The test exercises the
+ * ring concurrently instead of sequentially.
  *
  * Handles are passed as void* — yon_shm_stream_t is anonymous inside yon_rt.c;
  * a pointer is a pointer at the ABI, so the opaque form links cleanly. */

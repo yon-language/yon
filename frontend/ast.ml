@@ -2,8 +2,8 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* ast.ml — abstract syntax tree for Yon Core
  *
- * Implements the six primitives + two derived constructs specified in
- * Yon Core §2:
+ * Implements the six primitives + one derived construct of the
+ * Core calculus:
  *   1. Variable                  — x
  *   2. Lambda abstraction        — lambdax:T.t
  *   3. Application               — t u
@@ -11,19 +11,18 @@
  *   5. Reduction                 — {R : P -> handler}
  *   6. Scope                     — ⟨t⟩_S
  * plus derived:
- *   - with R in t                — handler activation
  *   - emit t                     — stream emission
+ *   (Core has no handler-activation term)
  *
- * Variables use a string-name representation here for clarity.
- * For production-grade work, de Bruijn indices avoid alpha-renaming
- * issues; we'll switch later if needed. For the prototype, names
- * suffice and make debugging traceable.
+ * Variables use a string-name representation: names keep debugging
+ * traceable, and term_equal compares terms up to alpha-equivalence,
+ * so bound names do not matter for equality.
  *)
 
 (* Types in Yon Core kernel — the small dependent type theory used
  * for the operational semantics.
  *
- * Yon Core §2 (extended for HoTT):
+ * Core types (extended for HoTT):
  *   T, U ::= Type_n                            universe of level n
  *         |  Pi(x:T). U                         dependent function
  *         |  Sigma(x:T). U                         dependent pair
@@ -90,10 +89,10 @@ and face_formula = face list
 
 and term =
   | Var of string
-  (* Locally-nameless (de Bruijn) migration is SUSPENDED: the BVar/FVar
-   * constructors and their shift/open/close machinery live in
-   * locally_nameless.ml, kept out of the build until the migration is wired
-   * into the pipeline. The kernel term type stays on the legacy `Var`. *)
+  (* The term type uses named variables (`Var`); there are no index-based
+   * constructors. Equality of terms is alpha-equivalence (term_equal),
+   * which compares bound variables by binder depth.
+   *)
   | Lam of string * ty * term
   | App of term * term
   | Place of place_decl
@@ -135,7 +134,7 @@ and reduction_decl = {
   r_target : string;
   r_handlers : handler_clause list;
   r_multi_shot : bool;
-  r_fold_name : string option;       (* canonical fold name, declared explicitly via `fold "..."` (no longer inferred) *)
+  r_fold_name : string option;       (* canonical fold name, declared explicitly via `fold "..."` *)
 }
 
 (* A generator of the Grothendieck topology J on the site C(W). Each way of
@@ -168,17 +167,15 @@ and world_decl = {
  * The pretty-printer lives in pretty.ml; here we just need
  * structural equality for tests.
  *
- * de Bruijn migration, stadio 3: term_equal is now ALPHA-EQUIVALENCE. A
- * renaming environment threads pairs (name-in-t1, name-in-t2) of the binders
- * crossed so far, innermost first. At a bound Var the comparison is by DEPTH in
- * that environment — the depth is exactly the de Bruijn index — so two terms
- * that differ only in bound names compare equal: (fun x. x) = (fun y. y).
- * Free variables (not in the env) compare by name; BVar by index; FVar by name.
- * Scope/With names are Space/reduction labels (semantically meaningful, not
+ * term_equal is ALPHA-EQUIVALENCE. A renaming environment threads pairs
+ * (name-in-t1, name-in-t2) of the binders crossed so far, innermost first. At
+ * a bound Var the comparison is by DEPTH in that environment — the depth is
+ * exactly the de Bruijn index — so two terms that differ only in bound names
+ * compare equal: (fun x. x) = (fun y. y). Free variables (not in the env)
+ * compare by name. Scope names are Space labels (semantically meaningful, not
  * alpha-renameable) so they stay literal. Lam binders are made alpha; the J
- * motive and TyPi/TySigma binders are compared literally for now (conservative:
- * no false identifications) until their binding arity is pinned down with full
- * bidirectional typing — the env is still threaded through their subterms so
+ * motive and TyPi/TySigma binders are compared literally (conservative: no
+ * false identifications) — the env is still threaded through their subterms so
  * alpha works for any Lam nested inside them. *)
 (* Identity registry of the CORE place decls that came from prelude files.
    Site-keyed by construction (physical identity, not name): a user place

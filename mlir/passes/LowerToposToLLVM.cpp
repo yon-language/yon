@@ -9,22 +9,17 @@
 //     calls)
 //   - llvm.struct<(i32, i32)>, llvm.{undef, insertvalue, extractvalue}
 //     (HeapRef already LLVM-typed)
-//   - func.func private declarations of the XLeech2 runtime (real ABI;
-//     there is no per-Space C arena — allocation goes through yon_rt_new
-//     and friends):
-//       @yon_handler_push   : () -> ()                          (no-op)
-//       @yon_handler_pop    : () -> ()                          (no-op)
-//       @yon_handler_lookup : (i64) -> !llvm.ptr
+//   - func.func private declarations of the runtime (there is no per-Space
+//     C arena — allocation goes through yon_rt_new and friends)
 //   - func.func @<Place>__<op>(i32 xcoord, args...) -> result
 //   - func.func @<Move>__move(i32) -> i32
-//   - func.func @<Place>__<op>__trampoline(memref<?xi8>, i32, arg) -> result
 //
 // Output: solo LLVM dialect, pronto per `mlir-translate --mlir-to-llvmir`.
 //
-// Strategy: use the standard MLIR conversion patterns. No Topos-specific
-// patterns in this pass — the Topos dialect no longer exists in the input
-// because the previous pass already fully lowered it. It is only a matter of
-// bringing the mix of intermediate dialects to uniform LLVM.
+// Strategy: use the standard MLIR conversion patterns. There are no
+// Topos-specific patterns in this pass: it expects input in which the earlier
+// passes have lowered or erased every Topos op. It only brings the mix of
+// intermediate dialects to uniform LLVM.
 //
 // Conversion targets:
 //   - scf      -> cf       (via populateSCFToControlFlowConversionPatterns)
@@ -126,8 +121,8 @@ struct LowerToposToLLVMPass
     // and a single LLVMTypeConverter so that struct, memref, and
     // function signatures are converted consistently.
     // Step 3: useBarePtrCallConv = false (default).
-    // It is no longer necessary to force bare-ptr because the runtime
-    // signatures are already pure !llvm.ptr in the Topos->Standard lowering.
+    // Bare-ptr is not forced: the runtime signatures are already pure
+    // !llvm.ptr in the Topos->Standard lowering.
     // The MemRef descriptor unpacking still concerns only the user functions
     // that use memref in their own signatures, not the XLeech2 runtimes.
     LowerToLLVMOptions options(ctx);

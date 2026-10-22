@@ -3,7 +3,7 @@
 // Lowers operations not handled by `LowerToposToStandard`, organised
 // in five families. See LowerToposExtensions.h for the scope of each.
 //
-// Design constraints lifted from sintesi.md:
+// Design constraints:
 //
 //   - The XLeech2 runtime is GC-free: blocks are pre-allocated in MPHF
 //     tables; no `malloc`/`gc_alloc` is to be emitted by this lowering.
@@ -102,8 +102,8 @@ static func::FuncOp ensureRuntimeFunc(ModuleOp mod, StringRef name,
 // `HeytImpliesOp` lowering lives in `LowerToposToStandard.cpp`,
 // alongside the existing `LowerHeytAndOp` / `LowerHeytOrOp` /
 // `LowerHeytNotOp` patterns, so it shares the same `TypeConverter`
-// that maps `!topos.proposition` to `i8`. This file no longer
-// contains a pattern for it.
+// that maps `!topos.proposition` to `i8`. This file contains no
+// pattern for it.
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
@@ -276,11 +276,9 @@ static LogicalResult lowerComposeReductions(ModuleOp module) {
 // We adopt instead a peephole strategy that closes the probe into a
 // direct `topos.op_apply` whenever the probe is constructed and
 // applied within the same function. This is sound because, for the
-// patterns that arise from Yon source code, the probe lifetime is
-// always local (Tortoise stages 7-8, "CPS conversion + closure
-// conversion", are scheduled as a follow-up; until then, escaping
-// probes are rejected with a diagnostic that tells the user exactly
-// what is missing).
+// patterns handled here, the probe lifetime is local. An escaping
+// probe is left in place; the illegal-op target of
+// LowerToposToStandard then fails the conversion.
 //
 // `probe_collapse %instance` is defined in the dialect as the
 // devirtualisation directive that the runtime representation of
@@ -301,10 +299,10 @@ static LogicalResult lowerComposeReductions(ModuleOp module) {
 // and have no runtime semantics. Once verification has succeeded they
 // are removed.
 //
-// NOTE on `class`/`instance`: a future dictionary-passing pass should
-// rewrite uses of class operations to receive an explicit dictionary
-// argument. Until that pass exists, we erase here; downstream consumers
-// of class operations will fail loudly via the ConversionTarget.
+// NOTE on `class`/`instance`: they are erased here; no pass rewrites
+// uses of class operations into explicit dictionary passing.
+// Downstream consumers of class operations fail via the
+// ConversionTarget.
 //===----------------------------------------------------------------------===//
 
 template <typename Op>
@@ -350,8 +348,7 @@ struct IdentityCoerceOp : public OpConversionPattern<Op> {
 // `extract` unboxes at the unit grade; `extend` composes a coeffected
 // value with a continuation, producing a coeffected result at the
 // composite grade. In the runtime they are emitted as calls to small
-// trampolines; the grade composition is delegated to a downstream
-// indexed-comonad analysis pass.
+// trampolines; the grade composition is not checked anywhere.
 //===----------------------------------------------------------------------===//
 
 struct LoadWorldLowering : public OpConversionPattern<LoadWorldOp> {
@@ -464,10 +461,8 @@ struct CoeffectExtendLowering
 // own yon_hexheap_alloc on the local arena, and replies with the
 // new xcoord. The reply slot is read back synchronously.
 //
-// The result type at the dialect level is still `!topos.section<P>`
-// (xcoord). The HeapRef wrapping happens implicitly when the
-// surface compiler decides to make the cross-Space-ness explicit
-// in the type system (deferred to a future dialect extension).
+// The result type at the dialect level is `!topos.section<P>`
+// (xcoord); the type does not record that the value crossed Spaces.
 //
 // The target_space name is hashed at compile time; the runtime
 // resolves the hash through its MPHF index of registered Spaces.
@@ -557,21 +552,20 @@ struct LowerToposExtensionsPass
     // The transformation matches each (probe_construct, probe_apply)
     // pair and replaces it with a single `topos.op_apply`.
     //
-    // Reachability note (2026-06): the canonical frontend (emit_mlir)
+    // Reachability note: the canonical frontend (emit_mlir)
     // does NOT emit `topos.probe_construct`; this fusion is dialect-
     // level support exercised only by hand-written MLIR. A
     // `probe_construct` whose uses are not all `probe_apply` is an
-    // escaping probe: it is LEFT in place here (no E0701 check exists —
-    // closure conversion belongs to the arena model, which does not exist). If one
-    // ever survived, the `addIllegalOp<ProbeConstructOp, ProbeApplyOp>`
+    // escaping probe: it is LEFT in place here (no E0701 check exists).
+    // If one survives, the `addIllegalOp<ProbeConstructOp, ProbeApplyOp>`
     // guard in LowerToposToStandard fails the conversion. We do not
     // fail here.
     // ----------------------------------------------------------------
     {
       // Iterate over every `topos.probe_construct`. For each one,
       // every use must be a `topos.probe_apply`. We synthesise a
-      // `topos.op_apply` per use (no longer requiring a single
-      // use: multi-use probes are perfectly fine, since a probe
+      // `topos.op_apply` per use (a single use is not required:
+      // multi-use probes are fine, since a probe
       // is a referential function — applying it N times is N
       // independent calls), then erase the construct.
       //

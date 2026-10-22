@@ -2,10 +2,10 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* package_layout.ml — the filesystem IS the declaration.
  *
- * A Yon program is a directory tree. The path carries the ontology the surface
- * keywords used to carry. The LIVE rule is in `space_of`/`place_of` below:
+ * A Yon program is a directory tree. The path carries the ontology, not
+ * surface keywords. The rule is in `space_of`/`place_of` below:
  *   - a .yon FILE is a PLACE: its basename is the place name (`Rex.yon` -> Rex);
- *     one place per file, no `place` keyword in the body (commit "no 'place'");
+ *     one place per file, no `place` keyword in the body;
  *   - a DIRECTORY under the root is a SPACE: the first path segment
  *     (`paddocks/Rex.yon` -> space `paddocks`);
  *   - a file directly under the root belongs to no space — the entrypoint area

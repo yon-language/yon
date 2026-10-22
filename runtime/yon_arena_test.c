@@ -1,10 +1,10 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
-/* yon_arena_test.c — oracle for the Leech type-2 arena (road 3, bricks 1-4).
+/* yon_arena_test.c — oracle for the Leech type-2 arena.
  *
- * Brick 1: repr round-trip + zero collisions over all 196560 points.
- * Brick 2: sigma-certified fusion list (LIFO, walked back exactly).
- * Brick 3: the M24 orbit sealed into the slot at allocation — the orbit read
+ * Part 1: repr round-trip + zero collisions over all 196560 points.
+ * Part 2: sigma-certified fusion list (LIFO, walked back exactly).
+ * Part 3: the M24 orbit sealed into the slot at allocation — the orbit read
  *          back from the slot matches the computation, the 196560 points
  *          partition into a small number of orbits, invariant under sign.
  *
@@ -34,7 +34,7 @@ int main(void) {
     yon_xheap_t *heap = yon_xheap_create();
     ds_arena_t *a = yon_arena_create(heap);
 
-    /* --- bricks 1 & 3: repr round-trip, zero collisions, orbit sealed --- */
+    /* --- repr round-trip, zero collisions, orbit sealed --- */
     long ok = 0, wrong = 0, orbit_consistent = 0, orbit_bad = 0, distinct = 0;
     for (uint32_t idx = 0; idx < YON_LEECH_TYPE2_COUNT; idx++) {
         yon_xcoord_t v = yon_mphf_unindex(idx);
@@ -66,7 +66,7 @@ int main(void) {
     printf("  sign vs M24 orbit : %d/5 probes change orbit under negate (M24 = perms only)\n",
            neg_diff);
 
-    /* --- brick 2: sigma-certified fusions, LIFO --- */
+    /* --- sigma-certified fusions, LIFO --- */
     yon_xcoord_t p = yon_mphf_unindex(100u);
     int f1 = yon_arena_put_fusion(a, p, 11u, 101u);
     int f2 = yon_arena_put_fusion(a, p, 22u, 202u);
@@ -83,7 +83,7 @@ int main(void) {
     int put_bad = yon_arena_put_value(a, bad, 999u);
     uint32_t orb_bad = yon_arena_orbit(a, bad);
 
-    /* --- brick 4: M24 equivariance + same_orbit_exact (filter decides, transport certifies) --- */
+    /* --- M24 equivariance + same_orbit_exact (filter decides, transport certifies) --- */
     extern uint32_t gen_leech2_op_atom(uint32_t q0, uint32_t g);
     long eq_total = 0, eq_same = 0, eq_inv = 0, moved = 0, cert_moved = 0;
     uint32_t m24nums[6] = { 1u, 2u, 7u, 1000u, 123456u, 7654321u };

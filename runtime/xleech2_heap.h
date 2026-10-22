@@ -24,14 +24,14 @@
  *     occupy different slots in the arena
  *
  * BACKING:
- *   The struct is still a contiguous, mmap-relocatable block. Same pluggable
- *   backing as before (PRIVATE/SHM).
+ *   The struct is a contiguous, mmap-relocatable block, with pluggable
+ *   backing (PRIVATE/SHM).
  *
  * SIZING:
  *   N_SLOTS         = 196,560 (the rational maximum = #type-2 vectors)
  *   N_INDEX         = 294,913 (~1.5x N_SLOTS, load factor ~2/3 when full)
  *   ARENA_BYTES     = 64 MB
- *   Total           ~70.5 MB per heap (~same as the previous design)
+ *   Total           ~70.5 MB per heap
  */
 
 #ifndef YON_XLEECH2_HEAP_H
@@ -46,15 +46,15 @@
 #define YON_HEAP_N_INDEX      294913u    /* ~1.5x 196560, load factor ~2/3 */
 #define YON_HEAP_ARENA_BYTES  (64u * 1024u * 1024u)
 #define YON_HEAP_MAGIC        0x594F4E48u  /* "YONH" */
-#define YON_HEAP_VERSION      2u           /* bumped for the hybrid design */
+#define YON_HEAP_VERSION      2u           /* layout version of the hybrid design */
 
 /* Slot invalid sentinel. */
 #define YON_HEAP_SLOT_INVALID 0xFFFFFFFFu
 
 /* Possible tags. FREE = never used; in_use = 0 is implicit from the tag.
  * In the hybrid design there are no tombstones: slots are never moved, and
- * clear merely marks the slot as free (releasable to a free-list, a future
- * phase). */
+ * clear merely marks the slot as FREE; its arena bytes are not reclaimed and
+ * put does not reuse the slot (only yon_xheap_reset does). */
 typedef enum {
     YON_TAG_FREE = 0,   /* slot never used (or freed) */
     YON_TAG_FACT,
