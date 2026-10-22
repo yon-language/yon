@@ -262,6 +262,15 @@ place Entry {
 }
 ```
 
+Every value is made in the heaps of the Space whose code runs. A call into a
+function of another Space of the same binary enters that Space for the call:
+its arguments are copied into the callee's heaps by the codec of the wire,
+in memory and with no socket, and its result is copied back the same way. No
+handle of one Space is ever read in another. An `XRelMap` handle even carries
+its Space, and read elsewhere it stops the program with a declared error. A
+channel does not cross either: it names a stream of the Space that made it, and
+two Spaces are connected by a flow through a subscription (`awaits`).
+
 Inside one Space the same call is an ordinary call: the closure never leaves
 the Space that made it. The judgment is the one chapter 5 uses for a closure
 leaving its call (Harper ch. 34): only a mobile type crosses between worlds.

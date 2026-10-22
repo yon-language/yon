@@ -47,6 +47,22 @@ _BUILD = """place Q {
   fun apply(f: Number -> Number, x: Number): Number { return f(x) }
   fun adder(n: Number): Number -> Number { return fun(x: Number) => x + n }
   fun peek(c: Space): Number { return Space.get(c) }
+  fun points(n: Number): XRelMap<Number, Number> {
+    be m := XRelMap.empty()
+    be k := 0
+    iter n do {
+      m = XRelMap.set(m, k, k + 40)
+      k = k + 1
+    }
+    return m
+  }
+  fun len(s: String): Number { return String.length(s) }
+  fun flow(): Wire<Number> {
+    be s := produce {
+      emit 1
+    }
+    return s
+  }
 }
 """
 
@@ -92,6 +108,38 @@ def test_a_map_built_in_another_space_reaches_main(tmp_path):
     assert rc == 0, out
     r = subprocess.run([str(exe)], capture_output=True, timeout=60)
     assert r.returncode == 54   # 10 entries + the value at 3, 300; mod 256
+
+
+def test_an_xrelmap_made_in_another_space_is_copied_to_main(tmp_path):
+    rc, out, exe = _in_binary(tmp_path, """place Entry {
+  fun main(): Number {
+    be m := Q.points(6)
+    return XRelMap.size(m) + (match XRelMap.get(m, 5) { Found(v) => v, Absent => 0 })
+  }
+}
+""")
+    assert rc == 0, out
+    assert subprocess.run([str(exe)], capture_output=True, timeout=60).returncode == 51
+
+
+def test_a_text_crosses_into_another_space(tmp_path):
+    rc, out, exe = _in_binary(tmp_path, """place Entry {
+  fun main(): Number { return Q.len("seven c") }
+}
+""")
+    assert rc == 0, out
+    assert subprocess.run([str(exe)], capture_output=True, timeout=60).returncode == 7
+
+
+def test_a_channel_does_not_cross_and_the_error_says_subscribe(tmp_path):
+    rc, out, _ = _in_binary(tmp_path, """place Entry {
+  fun main(): Number {
+    be s := Q.flow()
+    return 0
+  }
+}
+""")
+    assert _refused(rc, out, "the result of Q__flow", "subscribe"), out
 
 
 def test_a_closure_does_not_cross_into_another_space(tmp_path):

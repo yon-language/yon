@@ -56,6 +56,12 @@ let wire_types : (int64, int * int64 list) Hashtbl.t = Hashtbl.create 16
    program's operations, by function name. *)
 let rpc_sigs : (string * int, int64 list) Hashtbl.t = Hashtbl.create 8
 let op_sigs : (string, int64 list) Hashtbl.t = Hashtbl.create 16
+(* The calls from a function of one Space into a function of another Space of
+   the same program: (caller, callee) -> the callee's Space, then the root and
+   the framing (1 = copied by the codec, 0 = a scalar, passed as is) of the
+   result and of each argument. *)
+let cross_calls : (string * string, string * (int64 * bool) * (int64 * bool) list) Hashtbl.t =
+  Hashtbl.create 8
 
 (* Method resolution: a call `s.area()` parses to `area(s)`; when `area` is an
    overloaded method the tycheck resolves it to the receiver-qualified name

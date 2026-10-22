@@ -112,6 +112,10 @@ static struct {
      * WHOLE-Space heap is reaped. This is one counter per REGION, decremented
      * once per named arc EOF — never a per-object refcount, never a trace. */
     int32_t       deathwatch_pending;
+    /* The Space's FNV heap for values: the head of its chain (Text, lists,
+     * HashMap / HashSet nodes, closures). Made on the Space's first entry;
+     * the entry/default Space's is g_yon_heap at startup. */
+    yon_xheap_t  *ds;
 } g_spaces[YON_MAX_SPACES];
 
 static uint32_t g_n_spaces = 0;
@@ -332,6 +336,7 @@ void yon_rt_init(void) {
     } else {
         g_spaces[0].heap = NULL;
     }
+    g_spaces[0].ds = g_yon_heap;
     g_n_spaces = 1;
     g_initialized = 1;
 
@@ -2217,7 +2222,7 @@ double Wire__subscription_stream_dto(double chan_id, double root_hi, double root
         if (rc == -2) break;   /* EOF: the producer closed after its last value */
         double v;
         if (rc != 0
-            || yon_rt_wire_decode(msg.p, msg.len, YON_HEAP_ID_DEFAULT, expected, &v) != 0) {
+            || yon_rt_wire_decode(msg.p, msg.len, (uint32_t)yon_rt_space_current(), expected, &v) != 0) {
             /* a frame of another type, one that does not parse, or a channel
                cut short: a declared error, never a stream that silently ends */
             fprintf(stderr, "error: wire: a value could not be rebuilt as the "
@@ -3339,6 +3344,8 @@ double yon_rt_rpc2_invoke_named4(const char *sp, double sel, double x, double y,
     return yon_rt_rpc2_invoke_named_n(sp, sel, 4.0, a);
 }
 
+int32_t yon_rt_space_current(void);
+
 /* ---- Typed calls: arguments and result by their type ----
  *
  * The signature of an operation, as each side declares it, is an array of
@@ -3432,7 +3439,7 @@ double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *s
     int ch = yon_rt_shm_slot_of(rpc2_ring(s, 1));
     double v;
     if (ch < 0 || yon_rt_stream_shm_recv_message(g_shm_stream_handles[ch], &msg) != 0
-        || yon_rt_wire_decode(msg.p, msg.len, YON_HEAP_ID_DEFAULT, sig[2], &v) != 0) {
+        || yon_rt_wire_decode(msg.p, msg.len, (uint32_t)yon_rt_space_current(), sig[2], &v) != 0) {
         fprintf(stderr, "error: cross-Space call — the result of operation %.0f "
                         "could not be rebuilt as the declared type\n", sel);
         exit(3);
@@ -3496,7 +3503,7 @@ static void rpc2_serve_typed(const yon_rpc2_req_t *req) {
     for (uint64_t i = 0; i < sig[1] && i < 4; i++) {
         if (!sig[5 + 2 * i]) continue;
         if (yon_rt_stream_shm_recv_message(g_shm_stream_handles[cha], &msg) != 0
-            || yon_rt_wire_decode(msg.p, msg.len, YON_HEAP_ID_DEFAULT, sig[4 + 2 * i], &a[i]) != 0) {
+            || yon_rt_wire_decode(msg.p, msg.len, (uint32_t)yon_rt_space_current(), sig[4 + 2 * i], &a[i]) != 0) {
             yon_rt_wire_buf_free(&msg);
             yon_rt_rpc2_reply(req, YON_WIRE_TYPE_REFUSED);
             return;
@@ -3858,16 +3865,10 @@ static uint32_t fnv_empty(void) {
 static const yon_trie_store_t g_fnv_store = { fnv_put, fnv_at, fnv_empty };
 
 /* The Leech heap's node store: no index by content, so the empty node is
- * made once. */
-static uint32_t g_leech_empty = YON_TRIE_NONE;
-static pthread_once_t g_leech_empty_once = PTHREAD_ONCE_INIT;
-static void leech_make_empty(void) {
-    uint32_t e[4] = { 0, 0, 0, 0 };
-    g_leech_empty = yon_leech_put(e, sizeof e);
-}
+ * made once, in each Space's store. */
 static uint32_t leech_empty(void) {
-    pthread_once(&g_leech_empty_once, leech_make_empty);
-    return g_leech_empty;
+    uint32_t e[4] = { 0, 0, 0, 0 };   /* kind EMPTY */
+    return yon_leech_empty(e, sizeof e);
 }
 static const yon_trie_store_t g_leech_store = { yon_leech_put, yon_leech_at, leech_empty };
 
@@ -4777,16 +4778,35 @@ int64_t yon_rt_xframe_canon(int64_t f, int64_t p) {
 /* bits. A handle is the name of the root plus one; 0.0 is the empty */
 /* collection. A set is a map whose values are not read.            */
 /* ============================================================== */
+/* A handle names a node of one Space's store: (Space << 37 | name) + 1, an
+ * exact integer below 2^53 inside the f64 (never a pattern of bits, so no
+ * NaN and == compares names). Read in another Space it is a declared error,
+ * never a node of that Space read by mistake. */
+#define XREL_NAME_BITS 37u
 static uint32_t xrel_root(double handle) {
     if (handle == 0.0) return leech_empty();
-    if (!(handle >= 1.0 && handle <= 4294967296.0 && handle == (double)(uint64_t)handle)
-        || yon_leech_at((uint32_t)(handle - 1.0)) == NULL) {
+    if (!(handle >= 1.0 && handle <= 9007199254740992.0 && handle == (double)(uint64_t)handle)) {
         fprintf(stderr, "[YON-RT] xrel: %.17g is not a collection\n", handle);
         abort();
     }
-    return (uint32_t)(handle - 1.0);
+    uint64_t h = (uint64_t)handle - 1u;
+    uint32_t space = (uint32_t)(h >> XREL_NAME_BITS);
+    uint64_t k = h & ((1ull << XREL_NAME_BITS) - 1u);
+    if (space != yon_leech_current()) {
+        fprintf(stderr, "error: a collection of Space %u was read in Space %u: a value "
+                        "of another Space crosses only by copy, on a call or a wire\n",
+                space, yon_leech_current());
+        exit(3);
+    }
+    if (k > 0xFFFFFFFFull || yon_leech_at((uint32_t)k) == NULL) {
+        fprintf(stderr, "[YON-RT] xrel: %.17g is not a collection\n", handle);
+        abort();
+    }
+    return (uint32_t)k;
 }
-static double xrel_handle(uint32_t root) { return (double)root + 1.0; }
+static double xrel_handle(uint32_t root) {
+    return (double)((((uint64_t)yon_leech_current()) << XREL_NAME_BITS) | root) + 1.0;
+}
 
 double yon_rt_xrelmap_empty(void) { return xrel_handle(leech_empty()); }
 double yon_rt_xrelmap_set(double m, double key, double value) {
@@ -7726,8 +7746,7 @@ static int wire_enc_section(yon_wire_buf_t *b, const yon_wire_type_t *t,
         if (ft->kind == YON_WIRE_KIND_PLACE) {
             int64_t raw;
             memcpy(&raw, slot, 8u);
-            if (wire_enc_section(b, ft, yon_section_pack(YON_HEAP_ID_DEFAULT,
-                                                         (uint32_t)raw)) != 0)
+            if (wire_enc_section(b, ft, (yon_section_t)raw) != 0)
                 return -1;
         } else if (wire_field_is_handle(ft)) {
             int64_t raw;   /* a collection in a field is its handle as an i64 */
@@ -7960,3 +7979,59 @@ int yon_rt_wire_decode(const void *msg, size_t len, uint32_t heap_id,
  * time). No manual concatenation: the Makefile compiles yon_rt.c.
  * ============================================================================ */
 #include "yon_rt_hsh.c"
+
+/* ============================================================== */
+/* The current Space                                               */
+/* ============================================================== */
+/* Every value is made in the heaps of the Space whose code runs: its FNV
+ * heap (sections, Text, lists, HashMap / HashSet) and its Leech store
+ * (XRelMap / XRelSet nodes). A call into a function of another Space of the
+ * same binary enters that Space for the call and leaves it after; what it is
+ * given and what it gives back cross by copy, through the codec of the wire
+ * (yon_rt_cross_value), so no handle of one Space is ever read in another. */
+static uint32_t g_cur_space = 0;
+
+int32_t yon_rt_space_current(void) { return (int32_t)g_cur_space; }
+
+double yon_rt_space_enter(double id_d) {
+    ensure_init();
+    uint32_t id = (uint32_t)id_d;
+    uint32_t prev = g_cur_space;
+    if (id >= g_n_spaces) {
+        fprintf(stderr, "[YON-RT] space_enter: no Space %u\n", id);
+        abort();
+    }
+    if (!g_spaces[id].ds) g_spaces[id].ds = yon_xheap_create();
+    if (!g_spaces[id].ds) {
+        fprintf(stderr, "[YON-RT] space_enter: no heap for Space %u\n", id);
+        abort();
+    }
+    g_cur_space = id;
+    g_yon_heap = g_spaces[id].ds;
+    g_ds_heap = g_yon_heap;
+    yon_leech_select(id);
+    return (double)prev;
+}
+
+/* The value v of type root, made in the current Space's heaps, rebuilt in
+ * Space `to`'s heaps; the current Space stays what it was. */
+double yon_rt_cross_value(double v, double root_hi, double root_lo, double to) {
+    uint64_t root = yon_root_of_halves(root_hi, root_lo);
+    yon_wire_buf_t msg = { 0 };
+    if (yon_rt_wire_encode(&msg, root, v) != 0) {
+        fprintf(stderr, "error: a value of type root %016llx could not be copied "
+                        "to another Space\n", (unsigned long long)root);
+        exit(3);
+    }
+    double here = yon_rt_space_enter(to);
+    double out;
+    int rc = yon_rt_wire_decode(msg.p, msg.len, (uint32_t)to, root, &out);
+    yon_rt_space_enter(here);
+    yon_rt_wire_buf_free(&msg);
+    if (rc != 0) {
+        fprintf(stderr, "error: a value of type root %016llx could not be rebuilt "
+                        "in another Space\n", (unsigned long long)root);
+        exit(3);
+    }
+    return out;
+}

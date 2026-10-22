@@ -218,6 +218,15 @@ double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *s
 /* The server's operations, a signature word at a time (word as two halves). */
 void   yon_rt_register_op_word(double sel, double i, double hi, double lo);
 
+/* The current Space: its heaps receive every value made. A call into a
+ * function of another Space of the binary enters it for the call
+ * (yon_rt_space_enter returns the Space it left) and crosses its arguments
+ * and result by copy (yon_rt_cross_value: the value of type root, made here,
+ * rebuilt in Space `to`). */
+int32_t yon_rt_space_current(void);
+double  yon_rt_space_enter(double id);
+double  yon_rt_cross_value(double v, double root_hi, double root_lo, double to);
+
 /* A message: a growable buffer on the floor (mmap). */
 typedef struct { uint8_t *p; size_t len, cap; } yon_wire_buf_t;
 void yon_rt_wire_buf_free(yon_wire_buf_t *b);
