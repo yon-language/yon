@@ -181,7 +181,8 @@ python3 -m venv .venv && .venv/bin/pip install -r regression/requirements.txt
 regression/gate.sh 0   # build + smoke                              ~10 s
 regression/gate.sh 1   # + tests targeted at the files you changed  ~1-3 min
 regression/gate.sh 2   # + acceptance: examples and cross-Space      ~3-5 min
-regression/gate.sh 3   # + the full suite                           ~13 min
+regression/gate.sh 3   # + the full suite (benchmarks checked on a small run) ~11 min
+regression/gate.sh bench  # the benchmark measurements, on a quiet machine     ~6-8 min
 ```
 
 Beyond unit tests, the suite includes kernel oracles, a surface fuzzer, a

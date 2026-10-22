@@ -1,4 +1,11 @@
 place Entry {
+  // The size of the work: as written, or divided by YON_BENCH_DIV, so the gate
+  // checks the values on a small run and the measurement runs the full one.
+  fun scaled(n: Number): Number {
+    return if Env.has("YON_BENCH_DIV")
+           then Number.floor(n / String.parse_number(Env.get("YON_BENCH_DIV")))
+           else n
+  }
   fun build_xset(lo: Number, n: Number): Number {
     be s := Space.make(XSet.empty())
     be i := Space.make(0)
@@ -50,10 +57,10 @@ place Entry {
     return 0
   }
   fun main(): Number visits Output {
-    be _a := one(100)
-    be _b := one(1000)
-    be _c := one(10000)
-    be _d := one(100000)
+    be _a := one(scaled(100))
+    be _b := one(scaled(1000))
+    be _c := one(scaled(10000))
+    be _d := one(scaled(100000))
     return 0
   }
 }

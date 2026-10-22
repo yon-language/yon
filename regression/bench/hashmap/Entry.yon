@@ -1,4 +1,11 @@
 place Entry {
+  // The size of the work: as written, or divided by YON_BENCH_DIV, so the gate
+  // checks the values on a small run and the measurement runs the full one.
+  fun scaled(n: Number): Number {
+    return if Env.has("YON_BENCH_DIV")
+           then Number.floor(n / String.parse_number(Env.get("YON_BENCH_DIV")))
+           else n
+  }
   fun timed_insert(n: Number): Number visits Output {
     be mapc := Space.make(HashMap.empty())
     be i := Space.make(0)
@@ -44,7 +51,7 @@ place Entry {
   }
   fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
   fun main(): Number visits Output {
-    be n := 100000
+    be n := scaled(100000)
     // insert throughput: min over a few reps, net of baseline
     be ins := Space.make(timed_insert(n))
     iter 4 do { be _ := Space.set(ins, min2(Space.get(ins), timed_insert(n))) }
@@ -52,7 +59,7 @@ place Entry {
     iter 4 do { be _ := Space.set(insb, min2(Space.get(insb), timed_insert_base(n))) }
     be mp := build_map(n)
     be sz := HashMap.size(mp)
-    be m := 1000000
+    be m := scaled(1000000)
     be gk := Space.make(timed_get(mp, m))
     iter 11 do { be _ := Space.set(gk, min2(Space.get(gk), timed_get(mp, m))) }
     be gkb := Space.make(timed_get_base(m))
