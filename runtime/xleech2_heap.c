@@ -59,6 +59,16 @@ static uint32_t index_bucket(uint64_t hash, uint32_t probe) {
     return (uint32_t)((x + probe) % (uint64_t)YON_HEAP_N_INDEX);
 }
 
+/* A heap a reset left as zero pages is set up on its first write, so a
+ * region that ended costs no resident memory until it is used again. */
+static void init_header(yon_xheap_t *h);
+static void heap_ready(yon_xheap_t *h) {
+    if (h->magic == YON_HEAP_MAGIC) return;
+    uint32_t id = h->heap_id;
+    init_header(h);
+    h->heap_id = id;
+}
+
 /* ============================================================== */
 /* Backing metadata side-table                                     */
 /* ============================================================== */
@@ -294,6 +304,7 @@ static uint32_t arena_alloc(yon_xheap_t *h, uint32_t n_bytes) {
 
 uint32_t yon_xheap_strip_alloc(yon_xheap_t *h, uint32_t n_bytes) {
     if (!h) return 0;
+    heap_ready(h);
     return arena_alloc(h, n_bytes);
 }
 
@@ -347,6 +358,42 @@ void yon_xheap_drop(yon_xheap_t *h) {
     if (a_end > a_start)
         madvise((void *)a_start, (size_t)(a_end - a_start), MADV_DONTNEED);
     g_xheap_drops++;
+}
+
+/* Make a heap empty again and give its pages back: the region of a Space
+ * that ended. Everything past the header is replaced by fresh zero pages
+ * (MAP_FIXED over the private mapping: the RAM returns to the system at once,
+ * unlike a madvise hint); the heap keeps its id, so the Space reuses it, and
+ * its header is set up as at creation on the first write after. A shared-memory heap is cleared
+ * in place. A name of the old content is not valid afterwards: the region
+ * discipline guarantees that none survives (every value that left the Space
+ * was copied out). */
+int yon_xheap_reset(yon_xheap_t *h) {
+    if (!h) return -1;
+    long pg = sysconf(_SC_PAGESIZE);
+    if (pg <= 0) return -1;
+    uintptr_t page  = (uintptr_t)pg;
+    uintptr_t base  = (uintptr_t)h;
+    uintptr_t first = (base + page) & ~(page - 1u);          /* past the header's page */
+    uintptr_t end   = (base + sizeof(yon_xheap_t)) & ~(page - 1u);
+    heap_meta_t *m = meta_for(h);
+    int shared = m && m->kind != YON_HEAP_BACKING_PRIVATE;
+    uint32_t id = h->heap_id;
+    if (!shared && end > first) {
+        void *r = mmap((void *)first, (size_t)(end - first), PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        if (r == MAP_FAILED) { perror("[YON-XHEAP] reset"); abort(); }
+        memset(h, 0, (size_t)(first - base));                 /* the header's page */
+        uintptr_t tail = base + sizeof(yon_xheap_t);
+        if (tail > end) memset((void *)end, 0, (size_t)(tail - end));
+    } else {
+        memset(h->slots, 0, sizeof h->slots);
+        memset(h->arena, 0, h->arena_used);
+    }
+    if (shared) init_header(h);   /* a shared heap is set up at once */
+    h->heap_id = id;              /* a private one on its first write (heap_ready) */
+    g_xheap_drops++;
+    return 0;
 }
 
 /* ============================================================== */
@@ -441,6 +488,7 @@ uint32_t yon_xheap_put_v(yon_xheap_t *h,
                           const void *payload, uint32_t n_bytes,
                           yon_xtag_t tag, uint32_t schema_version) {
     if (!h) return YON_HEAP_SLOT_INVALID;
+    heap_ready(h);
     if (tag == YON_TAG_FREE) return YON_HEAP_SLOT_INVALID;
     if (n_bytes > 0 && !payload) return YON_HEAP_SLOT_INVALID;
 
@@ -569,32 +617,13 @@ size_t yon_xheap_occupancy(const yon_xheap_t *h) {    if (!h) return 0;
     return count;
 }
 
-int yon_xheap_reset(yon_xheap_t *h) {
-    if (!h) return -1;
-    /* Slots: tag -> FREE, payload metadata zeroed (an explicit loop, not a
-     * memset of all of slots[], to preserve any future fields). */
-    for (uint32_t i = 0; i < h->n_occupied; i++) {
-        h->slots[i].tag = YON_TAG_FREE;
-        h->slots[i].payload_offset = 0;
-        h->slots[i].payload_size = 0;
-        h->slots[i].schema_version = 0;
-    }
-    /* content_index: all entries -> INVALID. */
-    for (uint32_t i = 0; i < YON_HEAP_N_INDEX; i++) {
-        h->content_index[i].hash = 0;
-        h->content_index[i].slot_index = YON_HEAP_SLOT_INVALID;
-        h->content_index[i].reserved = 0;
-    }
-    h->n_occupied = 0;
-    h->arena_used = 1;  /* offset 0 = the "no payload" sentinel, as in init_header */
-    return 0;
-}
 
 /* "anonymous" allocation — no dedup via the content_index. For data structures
  * (HashSet, HashMap, XSet) that must stay distinct even when empty. The payload
  * is zeroed. The caller writes via yon_xheap_slot_payload_mut. */
 uint32_t yon_xheap_alloc(yon_xheap_t *h, uint32_t n_bytes, yon_xtag_t tag) {
     if (!h || tag == YON_TAG_FREE) return YON_HEAP_SLOT_INVALID;
+    heap_ready(h);
     if (h->n_occupied >= YON_HEAP_N_SLOTS) return YON_HEAP_SLOT_INVALID;
     uint32_t slot_idx = h->n_occupied;
     yon_xheap_slot_t *s = &h->slots[slot_idx];
@@ -781,6 +810,36 @@ static void cidx_insert(uint32_t root, uint64_t hash, uint32_t ref) {
         if (g_cidx[idx].hash == hash && g_cidx[idx].root == root
             && g_cidx[idx].ref == ref) return;   /* idempotent */
     }
+}
+
+/* Forget every content-index entry of the chain headed by root. */
+static void cidx_purge(uint32_t root) {
+    if (!g_cidx) return;
+    uint32_t cap = g_cidx_cap;
+    yon_cidx_entry_t *old = g_cidx;
+    g_cidx = NULL; g_cidx_cap = 0; g_cidx_n = 0;
+    cidx_ensure();   /* the smallest table; it grows as the entries kept need */
+    if (!g_cidx) return;
+    for (uint32_t i = 0; i < cap; i++)
+        if (old[i].ref != YON_HEAPREF_INVALID && old[i].root != root)
+            cidx_insert(old[i].root, old[i].hash, old[i].ref);
+    munmap(old, (size_t)cap * sizeof(yon_cidx_entry_t));
+}
+
+/* The arena bytes a chain holds. */
+uint64_t yon_xheap_chain_bytes(const yon_xheap_t *head) {
+    uint64_t t = 0;
+    for (const yon_xheap_t *h = head; h; h = g_heap_next[h->heap_id]) t += h->arena_used;
+    return t;
+}
+
+/* Make a whole chain empty: every heap of it reset, its index entries gone,
+ * the chain kept (its heaps stay its own, reused in order). */
+void yon_xheap_reset_chain(yon_xheap_t *head) {
+    if (!head) return;
+    for (yon_xheap_t *h = head; h; h = g_heap_next[h->heap_id]) yon_xheap_reset(h);
+    g_chain_hint[head->heap_id] = NULL;
+    cidx_purge(head->heap_id);
 }
 
 uint32_t yon_xheap_put_chain(yon_xheap_t *h_first,

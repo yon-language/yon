@@ -14,9 +14,9 @@
  *   - the reap is DETERMINISTIC: it fires EXACTLY when the last arc closes
  *     (pending reaches 0), never earlier (no early reclaim) and never twice
  *     (idempotent under over-signalling);
- *   - the reap is at REGION granularity: the WHOLE Space heap via yon_xheap_drop
- *     (the same primitive `drop X` uses), handing RAM back to the OS while
- *     leaving arena_used intact — a RAM reclaim, not a logical reset;
+ *   - the reap is at REGION granularity: the WHOLE Space, both its heaps, by the
+ *     same release `drop X` uses: every page goes back to the OS and the region
+ *     is empty again (nothing past the first byte), ready to be reused;
  *   - an UNWATCHED Space (never armed, or armed with n <= 0) never reaps: an
  *     isolated / pure-producer Space is left to the OS at process exit.
  *
@@ -65,10 +65,10 @@ int main(void) {
         printf("no reap when the last arc closed (expected exactly one drop)\n"); return 1;
     }
 
-    /* REGION granularity: the reap hands RAM back but does NOT rewind arena_used
-     * (a RAM reclaim of the whole region, not a logical reset). */
-    if (h->arena_used != used_before) {
-        printf("reap rewound arena_used (not a region RAM reclaim)\n"); return 1;
+    /* REGION granularity: the reap empties the whole region (its pages back to
+     * the OS, the arena rewound to its first byte), so the Space reuses it. */
+    if (!(used_before > 1u) || h->arena_used > 1u) {
+        printf("reap did not empty the region\n"); return 1;
     }
 
     /* A 4th close is idempotent: already reaped (pending disarmed to -1) -> no

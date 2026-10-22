@@ -54,6 +54,9 @@
    as a theorem of the heap — guaranteed modulo a 64-bit root collision. */
 #define YON_ROOT_HEAD_BYTES 8u
 #include <sys/file.h>
+#ifdef __APPLE__
+#include <mach/mach.h>
+#endif
 #include <pthread.h>   /* PROCESS_SHARED mutex for the cross-process shm wire */
 #include <errno.h>     /* EBUSY: bounded lock acquisition */
 #include <sys/stat.h>
@@ -116,6 +119,9 @@ static struct {
      * HashMap / HashSet nodes, closures). Made on the Space's first entry;
      * the entry/default Space's is g_yon_heap at startup. */
     yon_xheap_t  *ds;
+    /* Calls into this Space running now (a call can come back into a Space
+     * already on the stack); a region ends only when none is left. */
+    uint32_t      active;
 } g_spaces[YON_MAX_SPACES];
 
 static uint32_t g_n_spaces = 0;
@@ -435,27 +441,69 @@ uint32_t yon_rt_space_count(void) {
 
 /* Live arena bytes summed over the named per-Space heaps (heap 0 = __Default is
  * excluded). The real footprint the drop/reclaim frees. */
-uint64_t yon_rt_live_bytes(void) {
-    uint64_t t = 0;
-    for (uint32_t i = 1; i < g_n_spaces; i++)
-        if (g_spaces[i].heap) t += g_spaces[i].heap->arena_used;
+/* The value bytes a Space holds: its sections, its FNV chain, its Leech
+ * nodes. */
+static uint64_t space_bytes(uint32_t i) {
+    uint64_t t = yon_leech_bytes(i);
+    if (g_spaces[i].heap) t += g_spaces[i].heap->arena_used;
+    if (g_spaces[i].ds && g_spaces[i].ds != g_spaces[i].heap)
+        t += yon_xheap_chain_bytes(g_spaces[i].ds);
     return t;
 }
 
-/* Heap trace for the memory visualizer: at each allocation and each drop, dump
- * every named Space's arena_used and the total. Gated behind YON_DEBUG_HEAP so it
- * costs nothing in a normal run. seq is a monotonic tick counter. */
+/* Live value bytes summed over the named Spaces (heap 0 = __Default is
+ * excluded): the real footprint a drop or a region's end frees. */
+uint64_t yon_rt_live_bytes(void) {
+    uint64_t t = 0;
+    for (uint32_t i = 1; i < g_n_spaces; i++) t += space_bytes(i);
+    return t;
+}
+
+/* The resident memory of the process, in bytes (0 where it cannot be read). */
+static uint64_t process_rss(void) {
+#ifdef __APPLE__
+    struct mach_task_basic_info info;
+    mach_msg_type_number_t n = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &n) == KERN_SUCCESS)
+        return (uint64_t)info.resident_size;
+    return 0;
+#else
+    FILE *f = fopen("/proc/self/statm", "r");
+    unsigned long pages = 0, res = 0;
+    if (f) { if (fscanf(f, "%lu %lu", &pages, &res) != 2) res = 0; fclose(f); }
+    return (uint64_t)res * (uint64_t)sysconf(_SC_PAGESIZE);
+#endif
+}
+
+/* Heap trace for the memory visualizer and the reclaim probes: at each drop,
+ * each region's end and each crossing, every Space's value bytes (both heaps),
+ * the named Spaces' total and the resident memory of the process. Gated behind
+ * YON_DEBUG_HEAP so it costs nothing in a normal run. seq is a monotonic tick
+ * counter. */
 static uint64_t g_heap_seq = 0;
 static void yon_rt__heap_tick(const char *ev) {
     static int on = -1;                    /* cache: getenv once, not per allocation */
     if (on < 0) on = getenv("YON_DEBUG_HEAP") ? 1 : 0;
     if (!on) return;
     fprintf(stderr, "[HEAP] seq=%llu ev=%s", (unsigned long long)g_heap_seq++, ev);
-    for (uint32_t i = 1; i < g_n_spaces; i++) {
-        uint32_t used = g_spaces[i].heap ? g_spaces[i].heap->arena_used : 0;
-        fprintf(stderr, " %s=%u", g_spaces[i].name, used);
-    }
-    fprintf(stderr, " total=%llu\n", (unsigned long long)yon_rt_live_bytes());
+    for (uint32_t i = 0; i < g_n_spaces; i++)
+        fprintf(stderr, " %s=%llu", g_spaces[i].name, (unsigned long long)space_bytes(i));
+    fprintf(stderr, " total=%llu rss=%llu\n", (unsigned long long)yon_rt_live_bytes(),
+            (unsigned long long)process_rss());
+}
+
+/* The end of a Space's region: both its heaps made empty and their pages
+ * given back (sections, FNV chain, Leech store). Every value that left the
+ * Space was copied out, so no name into it survives. */
+static void space_release(uint32_t id, const char *why) {
+    if (id == 0 || id >= g_n_spaces) return;
+    if (g_spaces[id].heap) yon_xheap_reset(g_spaces[id].heap);
+    if (g_spaces[id].ds && g_spaces[id].ds != g_spaces[id].heap)
+        yon_xheap_reset_chain(g_spaces[id].ds);
+    yon_leech_reset(id);
+    char ev[300];
+    snprintf(ev, sizeof ev, "%s:%s", why, g_spaces[id].name);
+    yon_rt__heap_tick(ev);
 }
 
 /* The runtime bridge for `drop X`: reclaim the Space's heap. heap_id arrives as
@@ -472,13 +520,7 @@ double yon_rt_drop_space(double heap_id) {
     ensure_init();
     uint32_t id = (uint32_t)heap_id;
     if (id == YON_HEAP_ID_INVALID || id >= g_n_spaces) return heap_id;
-    yon_xheap_t *h = g_spaces[id].heap;           /* NULL under L1_SHARED */
-    yon_xheap_drop(h);                            /* no-op if NULL */
-    {   /* trace names the dropped Space, so a heap trace can attribute it */
-        char ev[280];
-        snprintf(ev, sizeof ev, "drop:%s", g_spaces[id].name);
-        yon_rt__heap_tick(ev);
-    }
+    space_release(id, "drop");
     return heap_id;
 }
 
@@ -522,12 +564,7 @@ void yon_rt_space_input_closed(uint32_t id) {
     p -= 1;
     g_spaces[id].deathwatch_pending = p;
     if (p == 0) {
-        yon_xheap_drop(g_spaces[id].heap);     /* region reap; no-op if NULL (L1_SHARED) */
-        {   /* trace names the reaped Space, mirroring the `drop:` event */
-            char ev[280];
-            snprintf(ev, sizeof ev, "deathwatch:%s", g_spaces[id].name);
-            yon_rt__heap_tick(ev);
-        }
+        space_release(id, "deathwatch");       /* region reap: both heaps */
         g_spaces[id].deathwatch_pending = -1;  /* disarm: reaped once, idempotent after */
     }
 }
@@ -8011,6 +8048,33 @@ double yon_rt_space_enter(double id_d) {
     g_ds_heap = g_yon_heap;
     yon_leech_select(id);
     return (double)prev;
+}
+
+/* A call into Space `target`: entered for the call; the Space it left is the
+ * answer. yon_rt_space_return leaves it again; when `region` is set (a
+ * stateless Space) and no other call into it is running, its region ends:
+ * both its heaps are emptied (whatever the call returned was copied out). */
+static void space_tick(const char *what, uint32_t id) {
+    char ev[300];
+    snprintf(ev, sizeof ev, "%s:%s", what, id < g_n_spaces ? g_spaces[id].name : "?");
+    yon_rt__heap_tick(ev);
+}
+
+double yon_rt_space_call(double target) {
+    uint32_t id = (uint32_t)target;
+    space_tick("call", id);
+    double prev = yon_rt_space_enter(target);
+    g_spaces[id].active++;
+    return prev;
+}
+double yon_rt_space_return(double target, double prev, double region) {
+    uint32_t id = (uint32_t)target;
+    yon_rt_space_enter(prev);
+    space_tick("return", id);
+    if (id < g_n_spaces && g_spaces[id].active > 0) g_spaces[id].active--;
+    if (region != 0.0 && id < g_n_spaces && g_spaces[id].active == 0)
+        space_release(id, "region");
+    return prev;
 }
 
 /* The value v of type root, made in the current Space's heaps, rebuilt in

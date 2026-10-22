@@ -225,6 +225,11 @@ void   yon_rt_register_op_word(double sel, double i, double hi, double lo);
  * rebuilt in Space `to`). */
 int32_t yon_rt_space_current(void);
 double  yon_rt_space_enter(double id);
+/* A call into another Space: entered for the call (the Space left is the
+ * answer), left on return; with region set (a stateless Space) and no other
+ * call into it running, its region ends there. */
+double  yon_rt_space_call(double target);
+double  yon_rt_space_return(double target, double prev, double region);
 double  yon_rt_cross_value(double v, double root_hi, double root_lo, double to);
 
 /* A message: a growable buffer on the floor (mmap). */

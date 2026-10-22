@@ -4561,19 +4561,27 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
                    (List.combine coerced_ssas param_tys) args in
                  let prev = fresh_ssa e in
                  emit_line e (Printf.sprintf
-                   "%s = func.call @yon_rt_space_enter(%s) : (f64) -> f64" prev target);
-                 (crossed, Some prev)
+                   "%s = func.call @yon_rt_space_call(%s) : (f64) -> f64" prev target);
+                 (crossed, Some (prev, target, sp))
              | _ -> (coerced_ssas, None) in
            let arg_str = String.concat ", " coerced_ssas in
            let arg_ty_str = String.concat ", " param_tys in
            emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                           v call_name arg_str arg_ty_str ret_ty);
            let v = match crossing, enter with
-             | Some (_, (root, framed), _), Some prev ->
+             | Some (_, (root, framed), _), Some (prev, target, sp) ->
                  let back = if framed then emit_cross e v ret_ty root prev coerce_to_param else v in
+                 (* a Space without state: each call into it is a region *)
+                 let stateless =
+                   not (Hashtbl.mem Surface_ast.stateful_spaces sp)
+                   && not (List.mem_assoc sp e.space_fold_name) in
+                 let region = fresh_ssa e in
+                 emit_line e (Printf.sprintf "%s = arith.constant %s : f64" region
+                                (if stateless then "1.0" else "0.0"));
                  let left = fresh_ssa e in
                  emit_line e (Printf.sprintf
-                   "%s = func.call @yon_rt_space_enter(%s) : (f64) -> f64" left prev);
+                   "%s = func.call @yon_rt_space_return(%s, %s, %s) : (f64, f64, f64) -> f64"
+                   left target prev region);
                  back
              | _ -> v in
            (* An inductive result comes back as its section handle; unpack to f64 so
@@ -6904,6 +6912,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_register_producer(f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_space_current() -> i32";
   emit_line e "func.func private @yon_rt_space_enter(f64) -> f64";
+  emit_line e "func.func private @yon_rt_space_call(f64) -> f64";
+  emit_line e "func.func private @yon_rt_space_return(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_cross_value(f64, f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_wire_type(f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_wire_type_part(f64, f64, f64, f64, f64) -> ()";
