@@ -9,6 +9,11 @@
 #   gate.sh bench   the measurements alone: the benchmarks at full size, serial,
 #                on a quiet machine (before publishing numbers)
 #
+# While working, the content cache of yonc makes a re-run of tier 1 fast (a
+# compilation already made with this toolchain is answered from the cache):
+#   YONC_CACHE_DIR="$PWD/.yonc-cache" regression/gate.sh 1
+# Gate 3, the proof before a commit, runs without it.
+#
 # Each level runs only if the previous one is green. No silent skip:
 # tier 1 says which targeted tests it picked, and why.
 set -u
@@ -38,6 +43,10 @@ say() { echo "── $*"; }
 die() { echo "GATE RED ($1) after $(( $(date +%s) - t0 ))s"; exit 1; }
 
 # --- tier 0: build + smoke ---------------------------------------------
+# The suite writes only in its own temp dirs: a file the repo does not track
+# that appears during the run is a test writing by a relative path (it would
+# end up in a commit one day).
+UNTRACKED_BEFORE=$(cd "$ROOT" && git status --porcelain --untracked-files=all | grep '^??' | sort)
 say "tier 0: build"
 # The verdict is dune's exit code, never its output: what dune prints depends
 # on what the cache let it skip, and one tree must give one verdict.
@@ -156,6 +165,9 @@ for _ in $(seq 50); do       # reapers wake on their launcher's exit: allow 10 s
   sleep 0.2
 done
 [ -z "$leaked" ] || die "worlds not released after the suite: $leaked"
+UNTRACKED_NEW=$(comm -13 <(echo "$UNTRACKED_BEFORE") \
+  <(cd "$ROOT" && git status --porcelain --untracked-files=all | grep '^??' | sort))
+[ -z "$UNTRACKED_NEW" ] || die "the suite wrote into the repo: $UNTRACKED_NEW"
 # the cache keeps one toolchain: the entries of any other can never hit again
 if [ -n "$YONC_CACHE_DIR" ] && [ -f "$YONC_CACHE_DIR/.toolchain" ]; then
   python3 "$ROOT/toolchain/yonc_cache_key.py" prune "$YONC_CACHE_DIR" "$(cat "$YONC_CACHE_DIR/.toolchain")"
