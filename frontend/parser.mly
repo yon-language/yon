@@ -1040,6 +1040,15 @@ fun_decl:
         fn_visits = visits; fn_internal = internal; fn_given = true;
         fn_home = None;
         fn_body = []; fn_loc = mk_loc $startpos $endpos } }
+  (* `is given` and a body exclude each other: `is given` says the body is
+     the compiler's (a primitive), a body says it is this one. *)
+  | boption(INTERNAL) FUN name = IDENT type_params_opt
+    LPAREN param_list RPAREN option(on_error_clause) option(return_type_decl)
+    visits_clause IS GIVEN LBRACE list(stmt) RBRACE
+    { failwith (Printf.sprintf
+        "fun %s is given and has a body: `is given` declares that the body is \
+         the compiler's primitive, a body declares it is this one; write one \
+         of the two" name) }
   | internal = boption(INTERNAL) FUN name = IDENT
     tparams = type_params_opt
     LPAREN params = param_list RPAREN

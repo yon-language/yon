@@ -73,6 +73,12 @@ let fusion_of_prim : (string, string) Hashtbl.t = Hashtbl.create 8
    consulted by the lowering (TyUser P -> its carrier) and the lattice-slot
    rule, never by type equality. *)
 let internal_carrier_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 4
+
+(* The `is given` declarations, by provenance: qualified name -> the site
+   (file, line, column) of the declaration the checker verified. A primitive
+   binds to such a declaration, never to a name alone: a name with a body in
+   its declaration is not here, so no rewrite aimed at a primitive reaches it. *)
+let given_decls : (string, string * int * int) Hashtbl.t = Hashtbl.create 64
 let internal_faces : (string, string) Hashtbl.t = Hashtbl.create 4
 
 (* The faces the language fuses to their primitive codes: a capitalized face

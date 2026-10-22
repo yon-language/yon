@@ -3244,8 +3244,6 @@ def test_a_collection_offers_get_and_keeps_value_to_itself(tmp_path, call):
 # A function with a body is never replaced by a primitive: a primitive binds
 # to its `is given` declaration in the prelude, not to the string of its name.
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a function with a body is never replaced by a primitive of the same name")
 def test_a_body_is_never_replaced_by_a_primitive_of_its_name(tmp_path):
     prelude = tmp_path / "prelude"
     shutil.copytree(ROOT / "prelude", prelude)
@@ -3266,6 +3264,35 @@ def test_a_body_is_never_replaced_by_a_primitive_of_its_name(tmp_path):
     code, _ = _run(tmp_path / "out")
     _verdict(code == 9, f"Number.floor(2.5) with `+ 7` in its body gave {code}, expected 9 "
                         "(the body) or a refusal")
+
+
+def test_a_body_named_like_a_lowered_primitive_runs_its_body(tmp_path):
+    """String.length has its own lowering in the emitter; a String.length with
+    a body is the body."""
+    prelude = tmp_path / "prelude"
+    shutil.copytree(ROOT / "prelude", prelude)
+    text = prelude / "text" / "String.yon"
+    src = text.read_text()
+    given = "  fun length(s: String): Number is given\n"
+    assert given in src, "the prelude no longer declares String.length as given"
+    text.write_text(src.replace(given, "  fun length(s: String): Number { return 40 + 2 }\n"))
+    proj = _project(tmp_path, 'place Entry {}\nfun main(): Number { return String.length("abc") }\n')
+    r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "out")],
+                       capture_output=True, text=True, timeout=120,
+                       env={**os.environ, "YON_PRELUDE": str(prelude)})
+    out = r.stdout + r.stderr
+    if r.returncode != 0:
+        _verdict(_clean_rejection(r.returncode, out), f"not a clean rejection: {out[-300:]}")
+        return
+    code, _ = _run(tmp_path / "out")
+    _verdict(code == 42, f"String.length with the body 40 + 2 gave {code}, expected 42 or a refusal")
+
+
+def test_is_given_and_a_body_exclude_each_other(tmp_path):
+    rc, out = _compile(_project(tmp_path, "place Entry {}\nfun f(): Number is given { return 1 }\n"
+                                          "fun main(): Number { return f() }\n"), tmp_path / "out")
+    _verdict(_clean_rejection(rc, out) and "is given and has a body" in out,
+             f"is given with a body was not refused as such: rc={rc} {out[-200:]}")
 
 
 def test_merkle_node3_children_are_its_leaves(tmp_path):

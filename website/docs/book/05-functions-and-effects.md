@@ -89,6 +89,12 @@ place Math { unit Number
 
 (The full project is `examples/kw_given`, and the keyword chapter runs it.)
 
+A primitive binds to its `is given` declaration, not to its name. A function
+with a body is never replaced by a primitive that answers to the same name:
+if `Number.floor` were written `{ return Math.floor(n) + 7 }`, a call would
+run that body. And `is given` with a body in the same declaration is refused
+(E1001): one says the body is the compiler's, the other that it is this one.
+
 ## Effects: `visits`
 
 I/O is an effect. The principled printing path is `Output.print`, and a

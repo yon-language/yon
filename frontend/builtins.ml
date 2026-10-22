@@ -843,11 +843,20 @@ let try_cubical (t : term) : term option =
        with _ -> None)
   | _ -> None
 
+(* A function with a body is never replaced by a primitive of its name: when
+   the head of an application is a function whose body the context holds (a
+   delta), the body is what reduces, so the builtin rules are not tried. *)
+let head_has_body (ctx : Reduce.ctx) (t : term) : bool =
+  let rec head = function App (f, _) -> head f | Var n -> Some n | _ -> None in
+  match t with
+  | App _ -> (match head t with Some n -> List.mem_assoc n ctx.Reduce.deltas | None -> false)
+  | _ -> false
+
 let rec reduce_with_builtins ?(fuel = 1000) (ctx : Reduce.ctx) (t : term) : term =
   if fuel <= 0 then t
   else
     (* Try builtin reductions first (arithmetic, conditionals, Output). *)
-    match try_reduce_builtin t with
+    match (if head_has_body ctx t then None else try_reduce_builtin t) with
     | Some t' -> reduce_with_builtins ~fuel:(fuel - 1) ctx t'
     | None ->
         (* Try standard reduction (R_Yon kernel). *)
