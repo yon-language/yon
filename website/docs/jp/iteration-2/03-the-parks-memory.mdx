@@ -13,7 +13,7 @@ import MerklePedigree from '@site/src/components/MerklePedigree';
 import DescentChain from '@site/src/components/DescentChain';
 import HerdCount from '@site/src/components/HerdCount';
 import VoyagerListCorrect from '@site/src/components/VoyagerListCorrect';
-import ArenaOrbit from '@site/src/components/ArenaOrbit';
+import PointKeyOrbit from '@site/src/components/PointKeyOrbit';
 import OrbitClass from '@site/src/components/OrbitClass';
 
 The control room remembers things, and the way it remembers decides what it can answer.
@@ -34,9 +34,9 @@ Every number below is a real Yon run (the `regression/book/jp/uc_*` projects, co
 | `List` | plain | an ordered **descent chain** (prepend) | "the lineage newest→founder: hatchling 1445, parent 1280, founder 1207" |
 | `Vec` | plain | **count** the individuals, indexed | "the herd head-count, every animal, duplicates kept" |
 | `VoyagerList` | Golay | keep a **gene whole** through damage | "read #1445's gene back after three corrupted bits" |
-| `Arena` | Leech | store at a lattice address, know its **kind**, **fuse** lineages | "two raptors of the same kind; certify a bred fusion" |
+| `XRelMap` by point | Leech | store at a lattice address, know its **kind** | "two raptors of the same kind" |
 | `XSet` | Leech bitmap | what do two **paddocks** share? | "which animals are in **both** paddock A and B" |
-| `XRelSet`, `XRelMap` | Leech orbit | one of this **kind**? / tag a kind | "a specimen and its mirror count as the same animal" |
+| `XRelSet`, `XRelMap` by class | Leech, a frame | one of this **kind**? / tag a kind | "a specimen and its mirror count as the same animal" |
 | `XSimplex` | Leech | which **characters** distinguish two? orientation of three? | "what trait separates *Velociraptor* from *Tyrannosaurus*" |
 | `XTower` | Leech | at what **grain** are these the same? | "turn the dial: same genus? species? individual?" |
 
@@ -141,27 +141,25 @@ inside it.)
 
 <VoyagerListCorrect />
 
-## Storing on the lattice: the arena
+## Storing on the lattice: a map keyed by points
 
-The `Arena` is the type-2 arena itself: it stores a value at a lattice address and can record a
-certified fusion of two lineages. An address is a `LatticePoint`, made only where it is one, and
-the point knows its own *kind* (its M24 orbit).
+An `XRelMap` keyed by `LatticePoint` stores a value at a lattice address. An address is a
+`LatticePoint`, made only where it is one, and the point knows its own *kind* (its M24 orbit). The
+map is a persistent trie whose nodes live in the Leech heap, and a point key finds its way by its
+index on the shell: 18 bits, so a lookup walks at most 18 levels and two points never share a path.
 
 ```yon
 // p, q, r: LatticePoint.of_coordinate(1536), (1280), (16778752)
-be a := Arena.put(Arena.empty(), p, 42)
-be _v := Arena.get(a, p)                                 // -> Found(42)
+be a := XRelMap.set(XRelMap.empty(), p, 42)
+be _v := XRelMap.get(a, p)                               // -> Found(42)
 be _k := LatticePoint.orbit(p) == LatticePoint.orbit(q)  // -> true  (same kind)
 be _d := LatticePoint.orbit(p) == LatticePoint.orbit(r)  // -> false (different)
-a = Arena.fuse(a, p, 99, 7)                              // record a certified fusion
-be _f := Arena.fusion_count(a, p)                        // -> 1
 ```
 
-`1536` and `1280` are different individuals of the same kind; `Arena.fuse` records, with a
-Conway-group certificate, that two lineages have been merged, a thing no hash can do, because a
-hash has no notion of kind, only of equal-or-not.
+`1536` and `1280` are different individuals of the same kind: the kind belongs to the point, not to
+the map, so a hash-keyed map would say the same; what the lattice adds here is the address.
 
-<ArenaOrbit />
+<PointKeyOrbit />
 
 ## What two paddocks share: the bitmap
 
@@ -191,22 +189,23 @@ re-derives.
 
 ## One of this kind: the orbit
 
-`XRelSet` and `XRelMap` do not key on the exact point but on its **orbit class**, its form up to
-a symmetry of the lattice. Two points in the same class count as one; a map keyed by class is
-retrieved by any of its representatives.
+To key on a **class** rather than on the exact point, compose the map with a frame. An
+`XRelFrame` is a partition of the shell, and `XRelFrame.canon(f, p)` is the representative of p's
+class: key the map by it, and two points of one class are one key.
 
 ```yon
-be m  := XRelMap.empty()
-be _r := XRelMap.add_ref(m, 1536)              // register the reference point
-m = XRelMap.insert(m, 1536, 100)          // key = the class of 1536
-be v1 := XRelMap.get(m, 16778752)              // -> 100  (same class, the antipode)
-be v2 := XRelMap.get(m, 1280)                  // -> miss (a different class)
+// p, q, r: LatticePoint.of_coordinate(1536), (1280), (16778752)
+be f  := XRelFrame.refine(XRelFrame.whole(), p)   // the frame by 1536
+be m  := XRelMap.set(XRelMap.empty(), XRelFrame.canon(f, p), 100)
+be v1 := XRelMap.get(m, XRelFrame.canon(f, r))     // -> 100  (same class, the antipode)
+be v2 := XRelMap.get(m, XRelFrame.canon(f, q))     // -> miss (a different class)
 ```
 
-The `add_ref` comes first for a reason: it fixes the frame the orbit class is computed against.
-`XRelMap` is **Co2**, relative to that reference, the same gauge-dependence the next section's `omega`
-escapes by closing the loop. Change the reference and the classes can rename; the partition into kinds
-is what the reference pins down.
+The frame comes first for a reason: the classes are relative to it, here to the reference 1536,
+the same gauge-dependence the next section's `omega` escapes by closing the loop. Change the
+reference and the classes can rename; the partition into kinds is what the reference pins down. No
+frame made from references ever parts a point from its antipode: the sign never changes the type
+against a reference.
 
 This is a genuine quotient: insert with one representative, recall with another. But read it
 honestly, the *class* is the lattice's symmetry class, not a meaning you put there. It groups

@@ -58,8 +58,9 @@ per-operation cost**: an operation that touches a lazily-initialized structure (
 the heap built on first use) pays that init once per process, and divided by a small N it masquerades
 as a huge per-op number while divided by a large N it vanishes. Anything timed at small N or in a
 fresh subprocess must warm the init away, or it reports a constant in disguise. The operations that
-hit either fault, the three arena ops and the two heap builders, are measured in-process with exact
-twins (`regression/bench/arena_ops`, `regression/bench/ds_ops`) rather than in the subprocess harness.
+hit either fault, the three lattice-point ops and the two heap builders, are measured in-process with
+exact twins (`regression/bench/xrel_ops`, `regression/bench/ds_ops`) rather than in the subprocess
+harness.
 
 :::note A different category from the rest of the book
 The book's pact is that every number is a Yon run re-derived on every build (the kissing
@@ -85,10 +86,10 @@ exact nanoseconds are this machine's, and yours will differ in the constants, no
 | `HashMap.get` | ~7 ns |
 | `List.head` | ~8 ns |
 | `VoyagerList.open` (Golay decode + correct) | ~10 ns |
-| `Arena.get` (lattice address) | ~41 ns |
+| `Arena.get` (lattice address; the in-place store, removed in 1.1) | ~41 ns |
 | `HashSet.add` | ~69 ns |
 | `List.cons` (hash-cons, flat in N) | ~70 ns |
-| `Arena.put` (certified insert, O(1) in fill) | ~80 ns |
+| `Arena.put` (in place, O(1) in fill; removed in 1.1) | ~80 ns |
 | `MerkleTree.node2` (repeated build) | ~138 ns |
 | `HashMap.set` (grows with the map) | ~130 to ~340 ns |
 
@@ -102,8 +103,10 @@ sub-nanosecond. The in-process gate (`regression/bench/eq_constant`) is finer an
 `String.equal`, at about 1 ns, and the same 1 ns at 1 and at 32,768 characters. Equality is flat in
 the size of the value; it is just faster than this harness can see from outside.
 
-The heavier numbers tell their own truth, and the gaps between them are the proof. `Arena.get` is
-about 41 ns, the cost of finding a value at a lattice address. `List.cons` (~70 ns, flat) and `HashMap.set`
+The heavier numbers tell their own truth, and the gaps between them are the proof. `Arena.get`
+was about 41 ns, the cost of finding a value at a lattice address in a store written in place
+(`Arena` was removed in 1.1: the Leech heap now holds persistent tries, `XRelMap`/`XRelSet`, and
+nothing is written in place there). `List.cons` (~70 ns, flat) and `HashMap.set`
 (~130 to ~340 ns, growing with the map) each content-address their payload on the FNV heap, the
 hash-cons price that buys structural sharing, where `Vec.push` and, at that commit, `HashSet.add`
 stored inline and skipped it. (The arena ops are measured in-process net of an exact twin that makes the same lattice point,
@@ -125,7 +128,7 @@ entry on the chaining heap and the probe resolves heaprefs across generations; `
 at that commit stored inline, stayed flat at ~70 ns, which supported the cause. One corrected down to a clean number, one
 corrected into a curve. (`regression/bench/ds_ops`.)
 
-### Arena.put is O(1), and the number that said otherwise
+### Arena.put was O(1), and the number that said otherwise
 
 An earlier run put `Arena.put` at about 31 µs and made it look super-linear, 1 µs at N=2,000 against
 31 µs at N=10,000, and it was kept out of the book until it was understood. Two methodological faults
@@ -145,7 +148,9 @@ in-process net of an exact twin, with min-over-reps to drop the one-time init, i
 <ArenaPutO1 />
 
 About 80 ns, O(1), the same order as `Arena.get`. The 31 µs was a measurement artifact, named and
-removed, not a property of the store. (`regression/bench/arena_ops`.)
+removed, not a property of the store. These numbers belong to the in-place `Arena` as it was
+measured then; the program, `regression/bench/xrel_ops`, now measures `XRelMap` on the same
+points.
 
 ## Equality is flat in the size of the value
 

@@ -35,7 +35,6 @@
 #include "leech_theta.h"
 #include "yon_mmap.h"
 #include "yon_arena.h"
-#include "yon_curtis_frame.h"
 #include "yon_curtis_canon.h"
 #include <stdlib.h>
 #include <unistd.h>
@@ -3614,9 +3613,9 @@ static const yon_trie_router_t g_hash_router = { hash_route, 32, 32 };
  * decides where a key is looked for, never whether two keys are equal: that
  * is their bits. */
 static yon_trie_route_t lattice_route(uint64_t key) {
-    if (key < (1ull << 25) && yon_xcoord_is_type2((yon_xcoord_t)key)) {
-        yon_trie_route_t r = { yon_mphf_index((uint32_t)key), 0 };
-        return r;
+    if (key < (1ull << 25)) {
+        uint32_t idx = yon_mphf_index((uint32_t)key);   /* INVALID off the shell */
+        if (idx != YON_MPHF_INVALID) { yon_trie_route_t r = { idx, 0 }; return r; }
     }
     uint64_t h = 14695981039346656037ull;
     for (int i = 0; i < 8; i++) { h ^= (key >> (i * 8)) & 0xFFu; h *= 1099511628211ull; }
@@ -4431,127 +4430,6 @@ double yon_rt_pq_size(double id) {
 }
 
 /* ============================================================== */
-/* XRel: relational equivariant class of a type-2 vector over a     */
-/* frame of type-2 references. The class of v is the base-4 packed  */
-/* tuple ( type(v ^ ref_i) ) over the frame; each coordinate is     */
-/* gen_leech2_type in {0,2,3,4} mapped to 2 bits. Invariant under   */
-/* the common stabilizer of the frame, and equivariant under all of */
-/* Co0: class(g.v ; g.frame) == class(v ; frame), because           */
-/* type((g.v)^(g.ref)) = type(g.(v^ref)) = type(v^ref). A one-ref   */
-/* frame gives the 4 Co2 shells |<v,ref>| in {4,2,1,0}; adding refs  */
-/* refines continuously toward the 196560 points. The frame is small */
-/* and lives inline in the pool slot (no arena strips).             */
-/* ============================================================== */
-#define YON_XREL_MAX        256u
-#define YON_XREL_MAX_REFS    26u   /* 26 * 2 bits = 52 <= the 53-bit mantissa */
-
-typedef struct {
-    uint32_t refs[YON_XREL_MAX_REFS];
-    uint32_t n_refs;
-    uint32_t is_used;
-} yon_xrel_t;
-
-static yon_xrel_t g_xrels[YON_XREL_MAX];
-static uint32_t g_n_xrels = 0;
-
-static yon_xrel_t *xrel_lookup(double id) {
-    if (id < 0.5) return NULL;
-    uint32_t s = (uint32_t)id;
-    if (s == 0 || s > g_n_xrels) return NULL;
-    yon_xrel_t *x = &g_xrels[s - 1];
-    return x->is_used ? x : NULL;
-}
-
-double yon_rt_xrel_empty(void) {
-    ds_ensure_init();
-    if (g_n_xrels >= YON_XREL_MAX) {
-        fprintf(stderr, "[YON-RT] xrel_empty: pool exhausted\n");
-        return 0.0;
-    }
-    uint32_t id = g_n_xrels++;
-    yon_xrel_t *x = &g_xrels[id];
-    x->n_refs = 0;
-    x->is_used = 1;
-    return (double)(id + 1);
-}
-
-/* Add a type-2 reference to the frame. Returns the new frame size, or -1 on a
- * full frame, a bad id, or a non-type-2 reference. */
-double yon_rt_xrel_add_ref(double id, double v) {
-    yon_xrel_t *x = xrel_lookup(id);
-    if (!x || x->n_refs >= YON_XREL_MAX_REFS) return -1.0;
-    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
-    if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
-    x->refs[x->n_refs++] = vv;
-    return (double)x->n_refs;
-}
-
-double yon_rt_xrel_frame_size(double id) {
-    yon_xrel_t *x = xrel_lookup(id);
-    return x ? (double)x->n_refs : -1.0;
-}
-
-/* The relational class of a type-2 vector v: the base-4 packed tuple of
- * type(v ^ ref_i) over the frame. Returns -1 for a non-type-2 v (the bad-id
- * check lives in the yon_rt_xrel_class wrapper below, which takes the id). */
-static double xrel_class_of(const yon_xrel_t *x, double v) {
-    extern uint32_t gen_leech2_type(uint64_t);
-    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
-    if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
-    uint64_t key = 0;
-    for (uint32_t i = 0; i < x->n_refs; i++) {
-        uint32_t s = (vv ^ x->refs[i]) & 0x1FFFFFFu;
-        uint32_t t = gen_leech2_type((uint64_t)s) & 0x7u;
-        uint32_t c = (t == 0) ? 0u : (t == 2) ? 1u : (t == 3) ? 2u : 3u;
-        key = key * 4u + c;
-    }
-    return (double)key;
-}
-
-double yon_rt_xrel_class(double id, double v) {
-    yon_xrel_t *x = xrel_lookup(id);
-    if (!x) return -1.0;
-    return xrel_class_of(x, v);
-}
-
-/* Build an XRel pre-loaded with the first n_refs octads of the Curtis frame
- * (see yon_curtis_frame.h). n_refs is clamped to [1, YON_CURTIS_FRAME_N].
- * Additive: uses only the existing XRel API, changes no existing behaviour.
- * Returns the new XRel id, or -1.0 on failure. */
-double yon_rt_xrel_curtis(double n_refs) {
-    uint32_t k;
-    if (n_refs < 1.0) k = 1u;
-    else if (n_refs > (double)YON_CURTIS_FRAME_N) k = YON_CURTIS_FRAME_N;
-    else k = (uint32_t)n_refs;
-    double id = yon_rt_xrel_empty();
-    if (id < 0.0) return -1.0;
-    for (uint32_t i = 0; i < k; i++) {
-        if (yon_rt_xrel_add_ref(id, (double)YON_CURTIS_FRAME[i]) < 0.0) return -1.0;
-    }
-    return id;
-}
-
-/* Fill an empty frame with the default Curtis frame (all 26 octads). No-op if
- * the frame already carries references. Used by XRelMap/XRelSet freeze so that
- * a map/set built without an explicit frame keys on the canonical Curtis
- * classes. */
-static void xrel_default_curtis(yon_xrel_t *f) {
-    if (f->n_refs != 0) return;
-    for (uint32_t i = 0; i < YON_CURTIS_FRAME_N; i++) f->refs[i] = YON_CURTIS_FRAME[i];
-    f->n_refs = YON_CURTIS_FRAME_N;
-}
-
-/* True iff the frame is exactly the full 26-octad Curtis frame, in which case
- * the precomputed canon LUTs (yon_curtis_canon.c) apply and no runtime qsort
- * is needed. A partial or custom frame returns 0 and builds canon at runtime. */
-static int xrel_is_curtis(const yon_xrel_t *f) {
-    if (f->n_refs != YON_CURTIS_FRAME_N) return 0;
-    for (uint32_t i = 0; i < YON_CURTIS_FRAME_N; i++)
-        if (f->refs[i] != YON_CURTIS_FRAME[i]) return 0;
-    return 1;
-}
-
-/* ============================================================== */
 /* XRelFrame: a partition of the type-2 shell, represented by its   */
 /* canonical projection c, which sends a point to the representative */
 /* of its class: the member with the smallest MPHF index. So         */
@@ -4617,317 +4495,60 @@ int64_t yon_rt_xframe_canon(int64_t f, int64_t p) {
 }
 
 /* ============================================================== */
-/* XRelMap: equivariant map keyed by relational class, stored on    */
-/* the Leech arena (MPHF-indexed), not a generic hash. At freeze, a  */
-/* canon_map LUT sends every type-2 (by MPHF index) to the canonical */
-/* representative of its relational class -- the class member with   */
-/* the smallest MPHF index, found by sorting (no hashing). insert(v) */
-/* writes the value inline into the arena slot of that rep; v and    */
-/* v' in the same class collapse onto one slot because they share a  */
-/* representative. Both index and value live on the lattice: the     */
-/* slot is MPHF-addressed and the value sits inline in it (repr),    */
-/* like yon_rt_arena_put. No content-addressed heap, no malloc.      */
+/* XRelMap / XRelSet: the collections of the Leech heap. The same   */
+/* semantics as HashMap / HashSet (a map from keys to values, a set */
+/* without duplicates; values: set and add return a new collection) */
+/* on the one trie of yon_trie.c, with the Leech node store and the */
+/* lattice route: a LatticePoint key by its index on the shell, any */
+/* other key by the hash of its bits. A key is identified by its    */
+/* bits. A handle is the name of the root plus one; 0.0 is the empty */
+/* collection. A set is a map whose values are not read.            */
 /* ============================================================== */
-#define YON_XRELMAP_MAX  256u
-
-
-typedef struct {
-    yon_xrel_t  frame;      /* the reference frame, inline */
-    ds_arena_t *arena;      /* MPHF-indexed slot store (built at freeze) */
-    uint32_t   *canon;      /* [196560] MPHF idx -> representative xcoord (freeze) */
-    uint32_t    n_classes;  /* distinct populated classes */
-    uint32_t    frozen;     /* 1 once canon + arena are built */
-    uint32_t    canon_static; /* 1 if canon points at a precomputed const LUT */
-    uint32_t    is_used;
-} yon_xrelmap_t;
-
-static yon_xrelmap_t g_xrelmaps[YON_XRELMAP_MAX];
-static uint32_t g_n_xrelmaps = 0;
-
-static yon_xrelmap_t *xrelmap_lookup(double id) {
-    if (id < 0.5) return NULL;
-    uint32_t s = (uint32_t)id;
-    if (s == 0 || s > g_n_xrelmaps) return NULL;
-    yon_xrelmap_t *m = &g_xrelmaps[s - 1];
-    return m->is_used ? m : NULL;
-}
-
-typedef struct { uint64_t cls; uint32_t idx; } xrelmap_ci_t;
-static int xrelmap_ci_cmp(const void *a, const void *b) {
-    const xrelmap_ci_t *x = (const xrelmap_ci_t *)a;
-    const xrelmap_ci_t *y = (const xrelmap_ci_t *)b;
-    if (x->cls != y->cls) return (x->cls > y->cls) - (x->cls < y->cls);
-    return (x->idx > y->idx) - (x->idx < y->idx);
-}
-
-/* Build canon_map: each type-2 (by MPHF index) maps to the xcoord of the
- * smallest-MPHF representative of its relational class. Sort by class then idx,
- * the first element of each class group is the representative. */
-static int xrelmap_freeze(yon_xrelmap_t *m) {
-    if (m->frozen) return 1;
-    xrel_default_curtis(&m->frame);
-    if (xrel_is_curtis(&m->frame)) {
-        m->canon = (uint32_t *)YON_CURTIS_CANON_XC;  /* precomputed, read-only */
-        m->canon_static = 1;
-        m->arena = yon_arena_create(g_ds_heap);
-        m->frozen = 1;
-        return 1;
-    }
-    uint32_t N = YON_LEECH_TYPE2_COUNT;
-    xrelmap_ci_t *ci = (xrelmap_ci_t *)yon_map((size_t)N * sizeof(xrelmap_ci_t));
-    for (uint32_t i = 0; i < N; i++) {
-        uint32_t v = (uint32_t)yon_mphf_unindex(i);
-        double cls = xrel_class_of(&m->frame, (double)v);
-        ci[i].cls = (cls < 0.0) ? 0xFFFFFFFFFFFFFFFFULL : (uint64_t)cls;
-        ci[i].idx = i;
-    }
-    qsort(ci, N, sizeof(xrelmap_ci_t), xrelmap_ci_cmp);
-    m->canon = (uint32_t *)yon_map((size_t)N * sizeof(uint32_t));
-    uint32_t gi = 0;
-    while (gi < N) {
-        uint64_t c = ci[gi].cls;
-        uint32_t rep_xc = (uint32_t)yon_mphf_unindex(ci[gi].idx);  /* smallest idx */
-        uint32_t gj = gi;
-        while (gj < N && ci[gj].cls == c) { m->canon[ci[gj].idx] = rep_xc; gj++; }
-        gi = gj;
-    }
-    yon_unmap(ci, (size_t)N * sizeof(xrelmap_ci_t));
-    m->arena = yon_arena_create(g_ds_heap);
-    m->frozen = 1;
-    return 1;
-}
-
-double yon_rt_xrelmap_empty(void) {
-    ds_ensure_init();
-    if (g_n_xrelmaps >= YON_XRELMAP_MAX) {
-        fprintf(stderr, "[YON-RT] xrelmap_empty: pool exhausted\n");
-        return 0.0;
-    }
-    uint32_t id = g_n_xrelmaps++;
-    yon_xrelmap_t *m = &g_xrelmaps[id];
-    m->frame.n_refs = 0;
-    m->arena = NULL;
-    m->canon = NULL;
-    m->n_classes = 0;
-    m->frozen = 0;
-    m->canon_static = 0;
-    m->is_used = 1;
-    return (double)(id + 1);
-}
-
-/* Add a type-2 reference to the frame; only before freeze. Returns size or -1. */
-double yon_rt_xrelmap_add_ref(double id, double v) {
-    yon_xrelmap_t *m = xrelmap_lookup(id);
-    if (!m || m->frozen || m->frame.n_refs >= YON_XREL_MAX_REFS) return -1.0;
-    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
-    if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
-    m->frame.refs[m->frame.n_refs++] = vv;
-    return (double)m->frame.n_refs;
-}
-
-double yon_rt_xrelmap_insert(double id, double v, double value) {
-    yon_xrelmap_t *m = xrelmap_lookup(id);
-    if (!m) return 0.0;
-    if (!m->frozen && !xrelmap_freeze(m)) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
-    if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
-    uint32_t rep = m->canon[idx];
-    if (!yon_arena_occupied(m->arena, (yon_xcoord_t)rep)) m->n_classes++;
-    /* the value lives inline in its class's lattice slot, as its 64 bits */
-    double bits_v = value;
-    uint64_t bits; memcpy(&bits, &bits_v, sizeof bits);
-    yon_arena_put_value(m->arena, (yon_xcoord_t)rep, bits);
-    return id;
-}
-
-/* The value of a class the map holds; for one it does not hold it stops the
- * program (the place's `get` asks `contains` first and answers Absent). */
-double yon_rt_xrelmap_value(double id, double v) {
-    yon_xrelmap_t *m = xrelmap_lookup(id);
-    uint64_t bits;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
-    if (!m || !m->frozen || idx >= YON_LEECH_TYPE2_COUNT
-        || !yon_arena_get_value(m->arena, (yon_xcoord_t)m->canon[idx], &bits)) {
-        fprintf(stderr, "[YON-RT] xrelmap: no value at point %.17g\n", v);
+static uint32_t xrel_root(double handle) {
+    if (handle == 0.0) return leech_empty();
+    if (!(handle >= 1.0 && handle <= 4294967296.0 && handle == (double)(uint64_t)handle)
+        || yon_leech_at((uint32_t)(handle - 1.0)) == NULL) {
+        fprintf(stderr, "[YON-RT] xrel: %.17g is not a collection\n", handle);
         abort();
     }
-    double out; memcpy(&out, &bits, sizeof out);
-    return out;
+    return (uint32_t)(handle - 1.0);
 }
+static double xrel_handle(uint32_t root) { return (double)root + 1.0; }
 
-double yon_rt_xrelmap_contains(double id, double v) {
-    yon_xrelmap_t *m = xrelmap_lookup(id);
-    if (!m || !m->frozen) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
-    if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
-    uint32_t rep = m->canon[idx];
-    return yon_arena_occupied(m->arena, (yon_xcoord_t)rep) ? 1.0 : 0.0;
+double yon_rt_xrelmap_empty(void) { return xrel_handle(leech_empty()); }
+double yon_rt_xrelmap_set(double m, double key, double value) {
+    return xrel_handle(yon_trie_put(&g_leech_store, &g_lattice_router, xrel_root(m),
+                                    key_bits(key), key_bits(value)));
 }
-
-double yon_rt_xrelmap_size(double id) {
-    yon_xrelmap_t *m = xrelmap_lookup(id);
-    return m ? (double)m->n_classes : 0.0;
+double yon_rt_xrelmap_has(double m, double key) {
+    return yon_trie_find(&g_leech_store, &g_lattice_router, xrel_root(m), key_bits(key), NULL)
+           ? 1.0 : 0.0;
 }
-
-/* ============================================================== */
-/* XRelSet: equivariant set of relational classes, a bitmap indexed */
-/* by representative MPHF index -- on the lattice, not a hash set.   */
-/* At freeze a canon_map sends every type-2 (by MPHF index) to the   */
-/* MPHF index of its class representative (smallest in the class).   */
-/* add(v)/contains(v) touch the bit of that representative, so all   */
-/* vectors in a class share one bit. union/intersect operate         */
-/* bitmap-wise and require the same frame (same canon, comparable     */
-/* bits). size is the number of present classes (set bits). The      */
-/* bitmap and canon_map are mmap-backed; no malloc.                  */
-/* ============================================================== */
-#define YON_XRELSET_MAX  256u
-
-typedef struct {
-    yon_xrel_t frame;       /* the reference frame, inline */
-    uint32_t  *canon;       /* [196560] MPHF idx -> representative MPHF idx (freeze) */
-    uint32_t  *bits;        /* bitmap over representative idx (freeze) */
-    uint32_t   n_classes;   /* present classes (set bits) */
-    uint32_t   frozen;
-    uint32_t   canon_static; /* 1 if canon points at a precomputed const LUT */
-    uint32_t   is_used;
-} yon_xrelset_t;
-
-static yon_xrelset_t g_xrelsets[YON_XRELSET_MAX];
-static uint32_t g_n_xrelsets = 0;
-
-#define YON_XRELSET_WORDS (((YON_LEECH_TYPE2_COUNT) + 31u) / 32u)
-
-static yon_xrelset_t *xrelset_lookup(double id) {
-    if (id < 0.5) return NULL;
-    uint32_t s = (uint32_t)id;
-    if (s == 0 || s > g_n_xrelsets) return NULL;
-    yon_xrelset_t *x = &g_xrelsets[s - 1];
-    return x->is_used ? x : NULL;
-}
-
-/* Build canon_map for a frame: canon[i] = MPHF index of the representative
- * (smallest MPHF index) of the relational class of type-2 vector i. */
-static void xrelset_build_canon(const yon_xrel_t *frame, uint32_t *canon) {
-    uint32_t N = YON_LEECH_TYPE2_COUNT;
-    xrelmap_ci_t *ci = (xrelmap_ci_t *)yon_map((size_t)N * sizeof(xrelmap_ci_t));
-    for (uint32_t i = 0; i < N; i++) {
-        uint32_t v = (uint32_t)yon_mphf_unindex(i);
-        double cls = xrel_class_of(frame, (double)v);
-        ci[i].cls = (cls < 0.0) ? 0xFFFFFFFFFFFFFFFFULL : (uint64_t)cls;
-        ci[i].idx = i;
+/* The value at a key the map holds; for a key it does not hold it stops the
+ * program (the place's `get` asks `has` first and answers Absent). */
+double yon_rt_xrelmap_value(double m, double key) {
+    uint64_t v;
+    if (!yon_trie_find(&g_leech_store, &g_lattice_router, xrel_root(m), key_bits(key), &v)) {
+        fprintf(stderr, "[YON-RT] xrelmap: no value at key %.17g\n", key);
+        abort();
     }
-    qsort(ci, N, sizeof(xrelmap_ci_t), xrelmap_ci_cmp);
-    uint32_t gi = 0;
-    while (gi < N) {
-        uint64_t c = ci[gi].cls;
-        uint32_t rep_idx = ci[gi].idx;            /* smallest idx in the group */
-        uint32_t gj = gi;
-        while (gj < N && ci[gj].cls == c) { canon[ci[gj].idx] = rep_idx; gj++; }
-        gi = gj;
-    }
-    yon_unmap(ci, (size_t)N * sizeof(xrelmap_ci_t));
+    return bits_value(v);
+}
+double yon_rt_xrelmap_size(double m) {
+    return (double)yon_trie_size(&g_leech_store, xrel_root(m));
 }
 
-static int xrelset_freeze(yon_xrelset_t *x) {
-    if (x->frozen) return 1;
-    xrel_default_curtis(&x->frame);
-    x->bits  = (uint32_t *)yon_map((size_t)YON_XRELSET_WORDS * sizeof(uint32_t));
-    if (xrel_is_curtis(&x->frame)) {
-        x->canon = (uint32_t *)YON_CURTIS_CANON_IDX;  /* precomputed, read-only */
-        x->canon_static = 1;
-        x->frozen = 1;
-        return 1;
-    }
-    x->canon = (uint32_t *)yon_map((size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
-    xrelset_build_canon(&x->frame, x->canon);
-    x->frozen = 1;
-    return 1;
+double yon_rt_xrelset_empty(void) { return yon_rt_xrelmap_empty(); }
+double yon_rt_xrelset_add(double s, double x) { return yon_rt_xrelmap_set(s, x, 1.0); }
+double yon_rt_xrelset_contains(double s, double x) { return yon_rt_xrelmap_has(s, x); }
+double yon_rt_xrelset_size(double s) { return yon_rt_xrelmap_size(s); }
+/* union and intersection merge the two tries, reusing what they share */
+double yon_rt_xrelset_union(double a, double b) {
+    return xrel_handle(yon_trie_union(&g_leech_store, &g_lattice_router, xrel_root(a), xrel_root(b)));
 }
-
-static int xrel_frame_eq(const yon_xrel_t *a, const yon_xrel_t *b) {
-    if (a->n_refs != b->n_refs) return 0;
-    for (uint32_t i = 0; i < a->n_refs; i++) if (a->refs[i] != b->refs[i]) return 0;
-    return 1;
+double yon_rt_xrelset_intersect(double a, double b) {
+    return xrel_handle(yon_trie_intersect(&g_leech_store, &g_lattice_router, xrel_root(a), xrel_root(b)));
 }
-
-double yon_rt_xrelset_empty(void) {
-    ds_ensure_init();
-    if (g_n_xrelsets >= YON_XRELSET_MAX) {
-        fprintf(stderr, "[YON-RT] xrelset_empty: pool exhausted\n");
-        return 0.0;
-    }
-    uint32_t id = g_n_xrelsets++;
-    yon_xrelset_t *x = &g_xrelsets[id];
-    x->frame.n_refs = 0;
-    x->canon = NULL; x->bits = NULL;
-    x->n_classes = 0; x->frozen = 0; x->canon_static = 0; x->is_used = 1;
-    return (double)(id + 1);
-}
-
-double yon_rt_xrelset_add_ref(double id, double v) {
-    yon_xrelset_t *x = xrelset_lookup(id);
-    if (!x || x->frozen || x->frame.n_refs >= YON_XREL_MAX_REFS) return -1.0;
-    uint32_t vv = yon_u32(v) & YON_XCOORD_VALID_MASK;
-    if (!yon_xcoord_is_type2((yon_xcoord_t)vv)) return -1.0;
-    x->frame.refs[x->frame.n_refs++] = vv;
-    return (double)x->frame.n_refs;
-}
-
-double yon_rt_xrelset_add(double id, double v) {
-    yon_xrelset_t *x = xrelset_lookup(id);
-    if (!x) return 0.0;
-    if (!x->frozen && !xrelset_freeze(x)) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
-    if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
-    uint32_t ri = x->canon[idx];
-    uint32_t w = ri >> 5, b = ri & 31u;
-    if (!((x->bits[w] >> b) & 1u)) { x->bits[w] |= (1u << b); x->n_classes++; }
-    return id;
-}
-
-double yon_rt_xrelset_contains(double id, double v) {
-    yon_xrelset_t *x = xrelset_lookup(id);
-    if (!x || !x->frozen) return 0.0;
-    uint32_t idx = yon_mphf_index((yon_xcoord_t)(yon_u32(v) & YON_XCOORD_VALID_MASK));
-    if (idx >= YON_LEECH_TYPE2_COUNT) return 0.0;
-    uint32_t ri = x->canon[idx];
-    return ((x->bits[ri >> 5] >> (ri & 31u)) & 1u) ? 1.0 : 0.0;
-}
-
-double yon_rt_xrelset_size(double id) {
-    yon_xrelset_t *x = xrelset_lookup(id);
-    return x ? (double)x->n_classes : 0.0;
-}
-
-/* union/intersect: both operands must share the frame. The result reuses a's
- * canon (same frame), so no resort. Returns a new set id, or 0 on a mismatch. */
-static double xrelset_combine(double ida, double idb, int is_union) {
-    yon_xrelset_t *a = xrelset_lookup(ida);
-    yon_xrelset_t *b = xrelset_lookup(idb);
-    if (!a || !b) return 0.0;
-    if (!a->frozen && !xrelset_freeze(a)) return 0.0;
-    if (!b->frozen && !xrelset_freeze(b)) return 0.0;
-    if (!xrel_frame_eq(&a->frame, &b->frame)) return 0.0;
-    double rid = yon_rt_xrelset_empty();
-    yon_xrelset_t *r = xrelset_lookup(rid);
-    if (!r) return 0.0;
-    r->frame = a->frame;
-    r->canon = (uint32_t *)yon_map((size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
-    memcpy(r->canon, a->canon, (size_t)YON_LEECH_TYPE2_COUNT * sizeof(uint32_t));
-    r->bits = (uint32_t *)yon_map((size_t)YON_XRELSET_WORDS * sizeof(uint32_t));
-    r->frozen = 1;
-    uint32_t n = 0;
-    for (uint32_t w = 0; w < YON_XRELSET_WORDS; w++) {
-        uint32_t bw = is_union ? (a->bits[w] | b->bits[w]) : (a->bits[w] & b->bits[w]);
-        r->bits[w] = bw;
-        n += (uint32_t)__builtin_popcount(bw);
-    }
-    r->n_classes = n;
-    return rid;
-}
-
-double yon_rt_xrelset_union(double ida, double idb)     { return xrelset_combine(ida, idb, 1); }
-double yon_rt_xrelset_intersect(double ida, double idb) { return xrelset_combine(ida, idb, 0); }
 
 /* ============================================================== */
 /* XTower: stateless stabilizer-tower classifier for a single      */
@@ -6140,76 +5761,6 @@ double yon_rt_lattice_index(int64_t p) {
 }
 double yon_rt_lattice_orbit(int64_t p) {
     return (double)yon_arena_orbit_of((yon_xcoord_t)(uint32_t)p);
-}
-
-/* ============================================================== */
-/* Arena: the Leech type-2 arena, exposed to the language as a handle-based
- * structure. The handle is an f64 = id+1 into a pool of arena pointers
- * (0 = invalid); each arena is mmap-backed via yon_arena_create, so the pool
- * holds pointers, not inline structs. A slot is addressed by a LatticePoint:
- * a type-2 coordinate, made a point by the language before it gets here. */
-#define YON_ARENA_POOL_MAX 64u
-static ds_arena_t *g_arenas[YON_ARENA_POOL_MAX];
-static uint32_t g_n_arenas = 0;
-
-static ds_arena_t *arena_of(double h) {
-    uint32_t s = (uint32_t)h;
-    if (s == 0 || s > g_n_arenas) return NULL;
-    return g_arenas[s - 1];
-}
-
-double yon_rt_arena_empty(void) {
-    ds_ensure_init();
-    if (g_n_arenas >= YON_ARENA_POOL_MAX) return 0.0;
-    ds_arena_t *a = yon_arena_create(g_ds_heap);
-    if (!a) return 0.0;
-    uint32_t id = g_n_arenas++;
-    g_arenas[id] = a;
-    return (double)(id + 1);   /* handle = id + 1, 0 reserved as invalid */
-}
-
-/* A value enters its slot as its 64 bits and comes back the same bits: the
- * declared type of the arena says how to read them (a Number, an Int64 ...);
- * the slot carries no tag. Identity inside the arena is identity of bits. */
-static uint64_t slot_bits(double v) { uint64_t u; memcpy(&u, &v, sizeof u); return u; }
-static double slot_value(uint64_t u) { double v; memcpy(&v, &u, sizeof v); return v; }
-
-double yon_rt_arena_put(double h, int64_t point, double value) {
-    ds_arena_t *a = arena_of(h);
-    if (!a) return 0.0;
-    yon_arena_put_value(a, (yon_xcoord_t)(uint32_t)point, slot_bits(value));
-    return h;   /* chainable: returns the same handle */
-}
-
-/* The value at an occupied point; at an empty one it stops the program (the
- * place's `get` asks `occupied` first and answers Absent). */
-double yon_rt_arena_value(double h, int64_t point) {
-    ds_arena_t *a = arena_of(h);
-    uint64_t bits;
-    if (!a || !yon_arena_get_value(a, (yon_xcoord_t)(uint32_t)point, &bits)) {
-        fprintf(stderr, "[YON-RT] arena: no value at point %lld\n", (long long)point);
-        abort();
-    }
-    return slot_value(bits);
-}
-
-double yon_rt_arena_occupied(double h, int64_t point) {
-    ds_arena_t *a = arena_of(h);
-    if (!a) return 0.0;
-    return yon_arena_occupied(a, (yon_xcoord_t)(uint32_t)point) ? 1.0 : 0.0;
-}
-
-double yon_rt_arena_fuse(double h, int64_t point, double value, double sigma) {
-    ds_arena_t *a = arena_of(h);
-    if (!a) return 0.0;
-    yon_arena_put_fusion(a, (yon_xcoord_t)(uint32_t)point, slot_bits(value), (uint32_t)sigma);
-    return h;   /* chainable */
-}
-
-double yon_rt_arena_fusion_count(double h, int64_t point) {
-    ds_arena_t *a = arena_of(h);
-    if (!a) return 0.0;
-    return (double)yon_arena_fusions(a, (yon_xcoord_t)(uint32_t)point, NULL, NULL);
 }
 
 /* ============================================================== */

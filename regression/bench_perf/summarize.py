@@ -28,9 +28,9 @@ OPS = {
     "hashset_lookup": ("_read_base", 10_000_000, "HashSet.contains"),
     "list_head": ("_read_base", 10_000_000, "List.head"),
     "hashmap_get": ("_read_base", 10_000_000, "HashMap.get"),
-    # The three Arena ops are omitted here: their loops call Leech.point (not in the shared
-    # baselines) and the first call pays a one-time ~200 ms mmgroup init. Measured in-process
-    # with an exact twin in regression/bench/arena_ops (put ~80 ns O(1), get ~41, same_orbit ~1.1 us).
+    # The lattice-point ops are omitted here: their loops make a LatticePoint (not in the
+    # shared baselines) and the first call pays a one-time ~200 ms mmgroup init. They are
+    # measured in-process with an exact twin in regression/bench/xrel_ops.
     "vec_push": ("_thru_base", 1_000_000, "Vec.push"),
     "hashset_insert": ("_thru_base", 1_000_000, "HashSet.add"),
     # list_cons and hashmap_set omitted: they put on the content-addressed heap (one-time

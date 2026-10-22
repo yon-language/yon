@@ -59,7 +59,7 @@ snapshot, not re-derived each build. The build-time correctness gate that IS re-
 .venv/bin/python -m pytest regression/bench_perf/test_perf.py \
     --benchmark-json=/tmp/perf.json --benchmark-min-rounds=15 -q
 .venv/bin/python regression/bench_perf/summarize.py /tmp/perf.json
-./toolchain/yonc regression/bench/arena_ops   -o /tmp/ao && /tmp/ao   # arena ops, exact twin
+./toolchain/yonc regression/bench/xrel_ops    -o /tmp/xo && /tmp/xo   # lattice-point ops, exact twin
 ./toolchain/yonc regression/bench/xset_scaling -o /tmp/xs && /tmp/xs  # one curve point per run
 ```
 
@@ -69,7 +69,8 @@ snapshot, not re-derived each build. The build-time correctness gate that IS re-
   `equality`, `merkle_equal`, `golay_seal`, `vec_push`, `equality_big`: sub-nanosecond ops below the
   subprocess timing floor, NOT failures. The in-process gate (`regression/bench/eq_constant`)
   resolves `String.equal` at ~1 ns, flat from 1 to 32,768 chars.
-- The three Arena ops (put/get/same_orbit) are measured in-process (`regression/bench/arena_ops`),
+- The three Arena ops (put/get/same_orbit) were measured in-process (`regression/bench/arena_ops`,
+  now `xrel_ops`, which measures XRelMap on the same points; Arena was removed in 1.1),
   NOT by the subprocess harness. Their loops call `Leech.point` to generate the lattice address,
   which the shared baselines do not, and the FIRST `Leech.point`/`Arena.put` pays a one-time ~200 ms
   mmgroup table init (measured: first put 198 ms, every later put 105 ns). At the small N an arena of

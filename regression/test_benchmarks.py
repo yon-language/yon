@@ -55,7 +55,7 @@ GUARDS = {
     "vec": [(0, 100000), (2, 42)],
     "list": [(0, 100000), (2, 99999)],
     "merkle": [(0, 1), (1, 0)],
-    "arena": [(0, 1), (1, 1), (5, 200000)],
+    "xrel_points": [(0, 1), (1, 1), (5, 200000)],
     "xset": [(0, 1000), (1, 3000)],
     "golay": [(0, 1445)],
     "heap_expand": [(0, 1000000)],
@@ -180,15 +180,15 @@ def test_benchmark(name, tmp_path):
         assert xset_inter < hash_inter, (
             f"xset: bit-parallel intersect not faster than hash? xset={xset_inter} hash={hash_inter}"
         )
-    if name == "arena_ops":
+    if name == "xrel_ops":
         put_2k, put_20k = median[0], median[3]
         # the exact-twin nets must all be positive (twin mirrors the op; a <=0 net
         # would mean the baseline does not mirror it, the bug that hid the put cost).
-        assert min(median) > 0, f"arena_ops: a net per-op is <= 0 (baseline not an exact twin)? {median}"
-        # Arena.put is O(1) in the arena's fill (perfect-hash index + slot writes, no
-        # resize/probing): a 10x larger N must not cost meaningfully more per op.
+        assert min(median) > 0, f"xrel_ops: a net per-op is <= 0 (baseline not an exact twin)? {median}"
+        # XRelMap.set on a LatticePoint key copies at most 18 nodes (the route of a
+        # point is its 18-bit index): a 10x larger N must not cost meaningfully more.
         assert put_20k <= max(put_2k, 1) * 3, (
-            f"arena_ops: put not O(1) in N? put@2k={put_2k} put@20k={put_20k}"
+            f"xrel_ops: set not bounded in N? set@2k={put_2k} set@20k={put_20k}"
         )
     if name == "ds_ops":
         cons_10k, cons_100k, set_10k, set_100k, add_100k = (

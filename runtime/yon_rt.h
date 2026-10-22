@@ -612,13 +612,19 @@ double yon_rt_leech_syndrome(double signs_24bit);
 double yon_rt_leech_orbit_id(double signs_24bit);
 double yon_rt_leech_same_orbit(double signs_a, double signs_b);
 
-/* Arena: Leech type-2 arena exposed to the language (handle = id+1 into a pool). */
-double yon_rt_arena_empty(void);
-double yon_rt_arena_put(double h, int64_t point, double value);
-double yon_rt_arena_value(double h, int64_t point);
-double yon_rt_arena_occupied(double h, int64_t point);
-double yon_rt_arena_fuse(double h, int64_t point, double value, double sigma);
-double yon_rt_arena_fusion_count(double h, int64_t point);
+/* XRelMap / XRelSet: the collections of the Leech heap (handle = root + 1,
+ * 0.0 the empty collection); keys and values travel as their 64 bits */
+double yon_rt_xrelmap_empty(void);
+double yon_rt_xrelmap_set(double m, double key, double value);
+double yon_rt_xrelmap_has(double m, double key);
+double yon_rt_xrelmap_value(double m, double key);
+double yon_rt_xrelmap_size(double m);
+double yon_rt_xrelset_empty(void);
+double yon_rt_xrelset_add(double s, double x);
+double yon_rt_xrelset_contains(double s, double x);
+double yon_rt_xrelset_size(double s);
+double yon_rt_xrelset_union(double a, double b);
+double yon_rt_xrelset_intersect(double a, double b);
 
 /* LatticePoint: a type-2 coordinate carried in an int64 */
 double yon_rt_lattice_is_point(double n);

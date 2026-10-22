@@ -1,7 +1,11 @@
-/* XRelMap<K, V> — a map keyed by the Co0/M24 class of a type-2 lattice
- * point (Leech 24D): the key is the class of a point, not the point. Its
- * values live inline in the lattice slots, as their bits; which values fit a
- * slot is derived from their carrier, never listed here.
+/* XRelMap<K, V> — a map from keys to values, a persistent trie whose nodes
+ * live only in the Leech heap: each node a place (generation, point),
+ * written once. The semantics of HashMap; what differs is the store. A
+ * LatticePoint key routes by its index on the shell, exactly; any other key
+ * by the 64-bit hash of its bits, whose first digit is a point. A key is
+ * identified by its bits. Two maps with the same entries have the same
+ * shape, node for node: equality is structural, not one handle. A map on
+ * the classes of a frame keys by XRelFrame.canon(f, p).
  *
  * Markers: [G] given, the runtime primitive · [T] total, written here */
 place XRelMap<K, V> {
@@ -9,18 +13,16 @@ place XRelMap<K, V> {
   /* ─── The primitives ─────────────────────────────────────── [G] ─── */
 
   fun empty<K, V>(): XRelMap<K, V> is given
-  /* a reference point of the frame, before the first insertion */
-  fun add_ref<K, V>(m: XRelMap<K, V>, k: K): Number is given
-  fun insert<K, V>(m: XRelMap<K, V>, k: K, v: V): XRelMap<K, V> is given
-  fun contains<K, V>(m: XRelMap<K, V>, k: K): Boolean is given
+  fun set<K, V>(m: XRelMap<K, V>, k: K, v: V): XRelMap<K, V> is given
+  fun has<K, V>(m: XRelMap<K, V>, k: K): Boolean is given
   fun size<K, V>(m: XRelMap<K, V>): Number is given
-  /* the value of a class the map holds; asked of one it does not hold, it
-     stops the program (call it after `contains`, as `get` does) */
+  /* the value held at a key the map holds; asked of a key it does not hold,
+     it stops the program (call it after `has`, as `get` does) */
   internal fun value<K, V>(m: XRelMap<K, V>, k: K): V is given
 
   /* ─── Reading ────────────────────────────────────────────── [T] ─── */
 
   fun get<K, V>(m: XRelMap<K, V>, k: K): Lookup<V> {
-    return if contains(m, k) then hit(Found, value(m, k)) else Absent
+    return if has(m, k) then hit(Found, value(m, k)) else Absent
   }
 }

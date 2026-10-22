@@ -1,4 +1,5 @@
 [package]
-name = "arena_ops"
+name = "xrel_points"
+
 [runtime]
 backend = "memory"

@@ -65,7 +65,7 @@ RTSET = [str(ROOT / "runtime" / n) for n in _RT_NAMES]
 # Programs with a Heyting / pattern / closure / arena mix, none touching a
 # machine-global name, each well under a second to run.
 PROGRAMS = ["kw_heyting", "heyting_excluded_middle", "kw_patterns",
-            "handle_lambdas", "kw_is_literal", "arena_basic"]
+            "handle_lambdas", "kw_is_literal", "xrel_points"]
 PASSES = {
     "svn": ["--structural-value-numbering"],
     "heyting-short-circuit": ["--heyting-short-circuit"],

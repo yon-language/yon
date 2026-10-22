@@ -645,27 +645,28 @@ let with_home (fn : fun_decl) (k : unit -> 'a) : 'a =
   current_home := fn.fn_home;
   Fun.protect ~finally:(fun () -> current_home := saved) k
 
-(* The lattice collections hold their values inline, in a slot of the type-2
-   lattice: which values fit is derived from their carrier — a scalar of 32
-   or 64 bits (Int32; Int64 and Number), or a content-addressed handle (a
-   Text), whose 64 bits name its content — never listed per type. A key is a
-   lattice point, a 64-bit coordinate: a handle names content but locates
-   nothing, so it is no key here (a key that is not a point belongs to
-   HashMap). The parameters each place puts in a slot, by position. *)
-let lattice_slots = [ ("XRelMap", [ (0, `Point); (1, `Value) ]);
-                      ("Arena",   [ (0, `Value) ]) ]
+(* The collections of the Leech heap hold their keys and values as 64 bits
+   in a node of its trie: which types fit is derived from their carrier — a
+   scalar of 32 or 64 bits (Int32; Int64, Number, a LatticePoint), or a
+   content-addressed handle (a Text), whose 64 bits name its content — never
+   listed per type. The parameters each place puts in a node, by position. *)
+let lattice_slots = [ ("XRelMap", [ (0, `Key); (1, `Value) ]);
+                      ("XRelSet", [ (0, `Element) ]) ]
 
 let slot_carrier (env : Tyenv.env) (t : ty) : Carrier.t option =
   let prim = match t with
     | TyPrim p -> Some p
-    | TyUser n -> Hashtbl.find_opt Surface_ast.fusion_places n
+    | TyUser n ->
+        (match Hashtbl.find_opt Surface_ast.fusion_places n with
+         | Some p -> Some p
+         | None -> Hashtbl.find_opt Surface_ast.internal_faces n)
     | _ -> None in
   ignore env;
   match prim with
   | Some p -> Carrier.prim_carrier p
   | None -> None
 
-(* The first parameter of a lattice collection that does not fit its slot,
+(* The first parameter of a Leech-heap collection that does not fit a node,
    with why; None when every one fits (or is still open). *)
 let slot_misfit (env : Tyenv.env) (t : ty) : string option =
   let found = ref None in
@@ -675,27 +676,18 @@ let slot_misfit (env : Tyenv.env) (t : ty) : string option =
           match List.nth_opt args i with
           | Some (TyPrim "unknown" | TyUser "unknown" | TyVar _ | TyMetaVar _) | None -> ()
           | Some a ->
-              let bits = match slot_carrier env a with
-                | Some (Carrier.Scalar w) -> `Scalar (Carrier.scalar_bits w)
-                | Some (Carrier.Handle _) -> `Handle
-                | _ -> `None in
-              let fits = match role, bits with
-                | `Value, (`Scalar (32 | 64) | `Handle) -> true
-                | `Point, `Scalar 64 -> true
+              let fits = match slot_carrier env a with
+                | Some (Carrier.Scalar w) -> List.mem (Carrier.scalar_bits w) [32; 64]
+                | Some (Carrier.Handle _) -> true
                 | _ -> false in
               if not fits && !found = None then
                 found := Some (Printf.sprintf
-                  "%s<…>: %s does not fit a lattice slot — by its carrier, a %s \
-                   is %s, and %s is not%s"
+                  "%s<…>: %s does not fit a node of the Leech heap — by its \
+                   carrier, a %s is a scalar of 32 or 64 bits or a content \
+                   handle, and %s is not"
                   n (Tyenv.ty_to_string a)
-                  (match role with `Value -> "value" | `Point -> "key")
-                  (match role with
-                   | `Value -> "a scalar of 32 or 64 bits or a content handle"
-                   | `Point -> "a lattice point, a scalar of 64 bits")
-                  (Tyenv.ty_to_string a)
-                  (match role with
-                   | `Value -> ""
-                   | `Point -> "; a key that is not a lattice point belongs to HashMap")))
+                  (match role with `Key -> "key" | `Value -> "value" | `Element -> "element")
+                  (Tyenv.ty_to_string a)))
                 (List.assoc n lattice_slots);
         None
     | _ -> None) t);

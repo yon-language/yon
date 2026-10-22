@@ -40,7 +40,7 @@ place Entry {
 //   width(0..3) = 1 / 3 / 12 / 196560   -- the tower's level widths (theorems)
 //   depth()     = 4                      -- YON_XTOWER_DEPTH
 //   class(1536, 0) = 0                   -- level 0 is the single root class
-//   same_branch(1536, 1280, 2)     = 1   -- same M24 orbit (cf. examples/arena_basic.yon)
+//   same_branch(1536, 1280, 2)     = 1   -- same M24 orbit (cf. examples/xrel_points)
 //   same_branch(1536, 16778752, 2) = 0   -- different orbit (16778752 = -1536)
 // Printed but NOT asserted: class(1536, 2) -- the level-2 M24 LABEL is not
 // build-canonical (the orbit-id table is assigned per build), so we pin the

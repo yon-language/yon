@@ -14,14 +14,17 @@ code.
 
 **One collection, one generic type.** Every collection is one place of the
 prelude, generic in what it holds: `List<T>`, `HashMap<K, V>`, `HashSet<T>`,
-`XRelMap<K, V>`, `Arena<V>`. Its representation (how wide a slot is, how a
+`XRelMap<K, V>`, `XRelSet<T>`. Its representation (how wide a slot is, how a
 value is encoded) is derived from the carrier of its parameters, never
 written per type: there is no collection per precision or per element type,
 and no type of the same name in two worlds. A lookup answers with a
 coproduct, `Lookup<V> { Found(V) :U Absent }`: `match HashMap.get(m, k) {
 Found(v) => …, Absent => … }`, so an absent key is never a value in
 disguise. The runtime primitives are the places' `is given` bodies; `get` is
-written in Yon on top of them.
+written in Yon on top of them. The maps and sets come in two families with
+the same semantics and two stores, as an interface has two implementations:
+`HashMap`/`HashSet` keep their nodes in the FNV heap, `XRelMap`/`XRelSet` in
+the Leech heap (chapter 15).
 
 `List`, `HashMap` and `HashSet` are values over the content-addressed heap:
 `HashMap.set` and `HashSet.add` return a new collection and leave the one they

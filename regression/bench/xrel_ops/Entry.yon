@@ -5,13 +5,13 @@ place Entry {
   fun point_mark(k: Number): Number {
     return match LatticePoint.at_index(k % 196560) { LatticePoint as p => 1, DomainError as d => 0 }
   }
-  fun put_k(a: Arena<Number>, k: Number): Arena<Number> {
+  fun put_k(a: XRelMap<LatticePoint, Number>, k: Number): XRelMap<LatticePoint, Number> {
     return match LatticePoint.at_index(k % 196560) {
-      LatticePoint as p => Arena.put(a, p, 7), DomainError as d => a }
+      LatticePoint as p => XRelMap.set(a, p, 7), DomainError as d => a }
   }
-  fun get_k(a: Arena<Number>, k: Number): Number {
+  fun get_k(a: XRelMap<LatticePoint, Number>, k: Number): Number {
     return match LatticePoint.at_index(k % 196560) {
-      LatticePoint as p => (match Arena.get(a, p) { Found(x) => x, Absent => 0 }),
+      LatticePoint as p => (match XRelMap.get(a, p) { Found(x) => x, Absent => 0 }),
       DomainError as d => 0 }
   }
   fun orbit_k(k: Number): Number {
@@ -37,7 +37,7 @@ place Entry {
     return Time.now_ns(0) - t0
   }
   fun put_loop(n: Number): Number visits Output {
-    be a := Space.make(Arena.empty())
+    be a := Space.make(XRelMap.empty())
     be i := Space.make(0)
     be t0 := Time.now_ns(0)
     iter n do { be k := Space.get(i)
@@ -46,7 +46,7 @@ place Entry {
     return Time.now_ns(0) - t0
   }
   fun get_loop(n: Number): Number visits Output {
-    be a := Space.make(Arena.empty())
+    be a := Space.make(XRelMap.empty())
     be i := Space.make(0)
     iter n do { be k := Space.get(i)
                 be _ := Space.set(a, put_k(Space.get(a), k))
@@ -98,17 +98,19 @@ place Entry {
     return 0
   }
 }
-// BENCHMARK — the Arena (Leech type-2 store) ops, each net of an EXACT-TWIN
+// BENCHMARK — the XRelMap ops on LatticePoint keys (a persistent trie in the
+// Leech heap), each net of an EXACT-TWIN
 // baseline, in-process. The op's loop and its twin both make the lattice point the
 // same way — LatticePoint.at_index(k mod 196560) — and only the op performs the
 // operation. The subtraction removes the cost of making the point, leaving the op
 // alone. min-over-reps excludes the one-time mmgroup table init (~200 ms on the
-// first point / Arena.put), which a subprocess op/base harness at small N cannot
+// first point / first set), which a subprocess op/base harness at small N cannot
 // subtract and which otherwise masquerades as a per-op cost.
 //
-// put is measured at four N to show it is O(1) in the arena's fill: yon_arena_put_repr
-// is a perfect-hash index plus four slot writes (no resize, no probing, orbit sealed
-// per point), so the per-op must be flat in N. get and the orbit comparison are
+// put (XRelMap.set) is measured at four N to show it is bounded in the map's fill:
+// the route of a point is its 18-bit index on the shell, so a set copies at most 18
+// nodes of the path and a get walks at most 18 levels, whatever N. get and the
+// orbit comparison are
 // measured at the largest N. The comparison reads TWO points' orbits (an orbit is a
 // property of the point), so its twin makes two points.
 //

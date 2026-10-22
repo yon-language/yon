@@ -53,9 +53,10 @@ uint32_t yon_leech_put(const void *node, uint32_t size) {
     return k;
 }
 
+/* A name reaches a reader only from a put that made it, so the directory and
+ * the node's generation exist by then; a name never made has no node. */
 const void *yon_leech_at(uint32_t k) {
-    pthread_once(&g_once, store_init);
-    if (k >= __atomic_load_n(&g_next, __ATOMIC_ACQUIRE)) return NULL;
+    if (!g_generations || k >= __atomic_load_n(&g_next, __ATOMIC_ACQUIRE)) return NULL;
     uint8_t *t = __atomic_load_n(&g_generations[k / N], __ATOMIC_ACQUIRE);
     return t ? t + (size_t)(k % N) * YON_LEECH_NODE_BYTES : NULL;
 }

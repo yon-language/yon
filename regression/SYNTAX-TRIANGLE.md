@@ -23,11 +23,11 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `aggregates` | `AGGREGATES` | 1 | yes | exercised |
 | `algebra` | `ALGEBRA` | 1 | yes | exercised |
 | `along` | `ALONG` | 3 | yes | exercised |
-| `and` | `AND` | 1 | yes | exercised |
+| `and` | `AND` | 2 | yes | exercised |
 | `as` | `AS` | 14 | yes | exercised |
 | `at` | `AT` | 2 | yes | exercised |
 | `back` | `BACK` | 3 | yes | exercised |
-| `be` | `LET` | 395 | yes | exercised |
+| `be` | `LET` | 392 | yes | exercised |
 | `by` | `BY` | 7 | yes | exercised |
 | `carry` | `CARRY` | 3 | yes | exercised |
 | `cell` | `CELL` | 1 | yes | exercised |
@@ -39,7 +39,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `drop` | `DROP` | 1 | yes | exercised |
 | `each` | `EACH` | 1 | yes | exercised |
 | `el_match` | `EL_MATCH` | 1 | yes | exercised |
-| `else` | `ELSE_KW` | 33 | yes | exercised |
+| `else` | `ELSE_KW` | 32 | yes | exercised |
 | `emit` | `EMIT` | 26 | yes | exercised |
 | `error` | `ERROR_KW` | 3 | yes | exercised |
 | `every` | `EVERY` | 5 | yes | exercised |
@@ -60,7 +60,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
 | `hit` | `HIT_KW` | 13 | yes | exercised |
 | `hit_elim` | `HIT_ELIM` | 8 | yes | exercised |
-| `if` | `IF_KW` | 33 | yes | exercised |
+| `if` | `IF_KW` | 32 | yes | exercised |
 | `import` | `IMPORT` | 11 | yes | exercised |
 | `in` | `IN` | 8 | yes | exercised |
 | `ind_path` | `IND_PATH` | 2 | yes | exercised |
@@ -77,7 +77,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `move` | `MOVE` | 9 | yes | exercised |
 | `multishot` | `MULTI_SHOT` | 1 | yes | exercised |
 | `nat` | `NAT` | 1 | yes | exercised |
-| `not` | `NOT` | 5 | yes | exercised |
+| `not` | `NOT` | 6 | yes | exercised |
 | `of` | `OF` | 9 | yes | exercised |
 | `operation` | `OPERATION` | 3 | yes | exercised |
 | `or` | `OR` | 1 | yes | exercised |
@@ -108,7 +108,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `space` | `SPACE` | 5 | yes | exercised |
 | `spawn` | `SPAWN` | 1 | yes | exercised |
 | `stream` | `STREAM` | 5 | yes | exercised |
-| `then` | `THEN_KW` | 33 | yes | exercised |
+| `then` | `THEN_KW` | 32 | yes | exercised |
 | `this` | `THIS` | 17 | yes | exercised |
 | `through` | `THROUGH` | 3 | yes | exercised |
 | `times` | `TIMES` | 2 | yes | exercised |

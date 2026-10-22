@@ -189,8 +189,7 @@ def test_a_number_is_not_a_lattice_point(tmp_path):
     rc, out = _compile(_project(tmp_path, """\
 place Entry {}
 fun main(): Number {
-  be a := Arena.put(Arena.empty(), 1536, 42)
-  return 0
+  return LatticePoint.orbit(1536)
 }
 """), tmp_path / "out")
     _verdict(_clean_rejection(rc, out), f"a Number used as a lattice point was accepted: rc={rc}")
@@ -207,17 +206,17 @@ fun main(): Number {
              f"p + 1 on a lattice point was not refused: rc={rc} {out[-200:]}")
 
 
-def test_an_arena_is_addressed_by_lattice_points(tmp_path):
+def test_an_xrelmap_is_keyed_by_lattice_points(tmp_path):
     code, out = _compiles_and_runs(tmp_path, """\
 place Entry {}
 fun main(): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
     DomainError as d => 0
   }
 }
 """)
-    _verdict(code == 42, f"put then get at a lattice point: {code}")
+    _verdict(code == 42, f"set then get at a lattice point: {code}")
 
 
 # --- a name is defined: be x := e ----------------------------------------------
@@ -3065,7 +3064,7 @@ def test_xrelmap_returns_the_stored_number(tmp_path):
     entry = """\
 place Entry {}
 fun held(x: Number): Number {
-  return match XRelMap.get(XRelMap.insert(XRelMap.empty(), 1536, x), 1536) { Found(v) => v, Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found(v) => v, Absent => 0 }
 }
 fun main(): Number {
   be _a := IO.print_num(held(2.5))
@@ -3077,11 +3076,11 @@ fun main(): Number {
     _verdict(_numbers_runtime(out) == [2.5, -3.0], f"read back {out.split()}")
 
 
-def test_arena_returns_the_stored_number(tmp_path):
+def test_xrelmap_at_a_point_returns_the_stored_number(tmp_path):
     entry = """\
 place Entry {}
 fun held(p: LatticePoint, x: Number): Number {
-  return match Arena.get(Arena.put(Arena.empty(), p, x), p) { Found(v) => v, Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found(v) => v, Absent => 0 }
 }
 fun both(p: LatticePoint): Number {
   be _a := IO.print_num(held(p, 2.5))
@@ -3096,12 +3095,12 @@ fun main(): Number {
     _verdict(_numbers_runtime(out) == [2.5, -3.0], f"read back {out.split()}")
 
 
-def test_arena_returns_a_small_integer(tmp_path):
+def test_xrelmap_at_a_point_returns_a_small_integer(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
     DomainError as d => 0 }
 }
 """
@@ -3109,40 +3108,40 @@ fun main(): Number {
     assert rc == 42
 
 
-# A lattice slot holds a value inline, as its bits: whatever goes in comes out
-# bit for bit (identity by bits: -0.0 keeps its sign, NaN is NaN), and an empty
-# slot reads Absent.
+# A node of the Leech heap holds a value as its bits: whatever goes in comes
+# out bit for bit (identity by bits: -0.0 keeps its sign, NaN is NaN), keyed by
+# a point or by a number, and an empty map reads Absent.
 _SLOT_GRID = """\
 place Entry {}
 fun same_n(v: Number, x: Number): Number {
   return if x == x then (if v == x then (if 1 / v == 1 / x then 1 else 0) else 0)
          else (if v == v then 0 else 1)
 }
-fun arena_n(x: Number): Number {
+fun point_n(x: Number): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, x), p) { Found(v) => same_n(v, x), Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found(v) => same_n(v, x), Absent => 0 }),
     DomainError as d => 0 }
 }
 fun xrel_n(x: Number): Number {
-  return match XRelMap.get(XRelMap.insert(XRelMap.empty(), 1536, x), 1536) { Found(v) => same_n(v, x), Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found(v) => same_n(v, x), Absent => 0 }
 }
-fun arena_i(x: Int64): Number {
+fun point_i(x: Int64): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, x), p) { Found(v) => (if v == x then 1 else 0), Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found(v) => (if v == x then 1 else 0), Absent => 0 }),
     DomainError as d => 0 }
 }
 fun xrel_i(x: Int64): Number {
-  return match XRelMap.get(XRelMap.insert(XRelMap.empty(), 1536, x), 1536) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
 }
-fun both_n(x: Number): Number { return arena_n(x) * xrel_n(x) }
-fun both_i(x: Int64): Number { return arena_i(x) * xrel_i(x) }
+fun both_n(x: Number): Number { return point_n(x) * xrel_n(x) }
+fun both_i(x: Int64): Number { return point_i(x) * xrel_i(x) }
 fun main(): Number {
   be inf := 1 / 0.0
   be floats := both_n(2.5) + both_n(0 - 3) + both_n(0.0 * (0 - 1)) + both_n(0.0 / 0.0)
                 + both_n(inf) + both_n(0 - inf)
   be ints := both_i(Int64.max_value()) + both_i(Int64.min_value()) + both_i(9007199254740993)
   be empty := match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match Arena.get(Arena.empty(), p) { Found(v) => 0, Absent => 1 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.empty(), p) { Found(v) => 0, Absent => 1 }),
     DomainError as d => 0 }
   return floats * 100 + ints * 10 + empty
 }
@@ -3158,7 +3157,7 @@ def test_a_value_that_does_not_fit_a_slot_is_refused(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be a := Arena.put(Arena.empty(), 1536, true)
+  be a := XRelMap.set(XRelMap.empty(), 1536, true)
   return 0
 }
 """
@@ -3166,10 +3165,10 @@ fun main(): Number {
     assert _clean_rejection(rc, out), out
 
 
-# A key is where a value is found. A lattice collection is keyed by a lattice
-# point; any other key — a Text among them — goes to HashMap, whose trie
-# identifies a key by its identity: the bits of a scalar, the content-addressed
-# handle of a section. No collection holds a ceiling: every HashMap is a value.
+# A key is identified by its identity: the bits of a scalar, the
+# content-addressed handle of a Text or a section. HashMap and XRelMap take
+# the same keys; they differ in where their nodes live. No collection holds a
+# ceiling: every map is a value.
 
 def test_there_is_no_ceiling_on_the_number_of_maps(tmp_path):
     entry = """\
@@ -3204,34 +3203,36 @@ def test_a_text_value_rides_a_lattice_slot_by_its_handle(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m := XRelMap.insert(XRelMap.empty(), 1536, String.concat("ab", "c"))
+  be m := XRelMap.set(XRelMap.empty(), 1536, String.concat("ab", "c"))
   be x := match XRelMap.get(m, 1536) { Found(v) => (if v == "abc" then 1 else 0), Absent => 0 }
   be y := match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match Arena.get(Arena.put(Arena.empty(), p, String.concat("a", "bc")), p) {
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, String.concat("a", "bc")), p) {
       Found(v) => String.length(v), Absent => 0 }),
     DomainError as d => 0 }
   return x * 10 + y
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
-    _verdict(rc == 13, f"Text through XRelMap and Arena: {rc}, expected 13")
+    _verdict(rc == 13, f"Text through XRelMap, by a number and by a point: {rc}, expected 13")
 
 
-def test_a_text_key_in_a_lattice_collection_is_refused(tmp_path):
+def test_text_keys_equal_by_content_are_one_key_in_xrelmap(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be m := XRelMap.insert(XRelMap.empty(), "abc", 7)
-  return XRelMap.size(m)
+  be m := XRelMap.set(XRelMap.empty(), String.concat("ab", "c"), 7)
+  be m2 := XRelMap.set(m, String.concat("a", "bc"), 9)
+  be got := match XRelMap.get(m2, "abc") { Found(v) => v, Absent => 0 }
+  return XRelMap.size(m2) * 10 + got
 }
 """
-    rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    _verdict(_clean_rejection(rc, out), f"a Text key was accepted: rc={rc} {out[-300:]}")
+    rc, out = _build_run_runtime(tmp_path, entry)
+    _verdict(rc == 19, f"size*10 + value at abc = {rc}, expected 19")
 
 
 @pytest.mark.parametrize("call", ["HashMap.value(HashMap.set(HashMap.empty(), 1, 42), 1)",
-                                  "XRelMap.value(XRelMap.insert(XRelMap.empty(), 1536, 42), 1536)",
-                                  "match LatticePoint.of_coordinate(1536) { LatticePoint as p => Arena.value(Arena.put(Arena.empty(), p, 42), p), DomainError as d => 0 }"])
+                                  "XRelMap.value(XRelMap.set(XRelMap.empty(), 1536, 42), 1536)",
+                                  "match LatticePoint.of_coordinate(1536) { LatticePoint as p => XRelMap.value(XRelMap.set(XRelMap.empty(), p, 42), p), DomainError as d => 0 }"])
 def test_a_collection_offers_get_and_keeps_value_to_itself(tmp_path, call):
     """`value` reads a key the collection holds and stops on any other: it is
     how `get` is built, internal to its house. Outside, the face is `get`."""

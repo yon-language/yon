@@ -1,15 +1,15 @@
 place Entry {
   fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
-  fun put_at(a: Arena<Number>, addr: Number, v: Number): Arena<Number> {
+  fun put_at(a: XRelMap<LatticePoint, Number>, addr: Number, v: Number): XRelMap<LatticePoint, Number> {
     return match LatticePoint.of_coordinate(addr) {
-      LatticePoint as p => Arena.put(a, p, v), DomainError as d => a }
+      LatticePoint as p => XRelMap.set(a, p, v), DomainError as d => a }
   }
   fun point_cost(addr: Number): Number {
     return match LatticePoint.of_coordinate(addr) {
       LatticePoint as p => 1, DomainError as d => 0 }
   }
   fun timed_put(n: Number): Number visits Output {
-    be ac := Space.make(Arena.empty())
+    be ac := Space.make(XRelMap.empty())
     be i := Space.make(0)
     be t0 := Time.now_ns(0)
     iter n do { be k := Space.get(i)
@@ -30,8 +30,8 @@ place Entry {
     be t1 := Time.now_ns(0)
     return (t1 - t0)
   }
-  fun build_arena(n: Number): Arena<Number> {
-    be ac := Space.make(Arena.empty())
+  fun build_map(n: Number): XRelMap<LatticePoint, Number> {
+    be ac := Space.make(XRelMap.empty())
     be i := Space.make(0)
     iter n do { be k := Space.get(i)
                 be addr := Leech.embed(k, 1)
@@ -39,10 +39,10 @@ place Entry {
                 be _2 := Space.set(i, k + 1) }
     return Space.get(ac)
   }
-  fun timed_get(a: Arena<Number>, addr: LatticePoint, m: Number): Number visits Output {
+  fun timed_get(a: XRelMap<LatticePoint, Number>, addr: LatticePoint, m: Number): Number visits Output {
     be acc := Space.make(0)
     be t0 := Time.now_ns(0)
-    iter m do { be _ := Space.set(acc, Space.get(acc) + (match Arena.get(a, addr) { Found(x) => x, Absent => 0 })) }
+    iter m do { be _ := Space.set(acc, Space.get(acc) + (match XRelMap.get(a, addr) { Found(x) => x, Absent => 0 })) }
     be t1 := Time.now_ns(0)
     return (t1 - t0)
   }
@@ -80,7 +80,7 @@ place Entry {
     iter reps do { be _ := Space.set(m, min2(Space.get(m), timed_put_base(n))) }
     return Space.get(m)
   }
-  fun min_get(a: Arena<Number>, addr: LatticePoint, reps: Number, m: Number): Number visits Output {
+  fun min_get(a: XRelMap<LatticePoint, Number>, addr: LatticePoint, reps: Number, m: Number): Number visits Output {
     be mm := Space.make(timed_get(a, addr, m))
     iter reps do { be _ := Space.set(mm, min2(Space.get(mm), timed_get(a, addr, m))) }
     return Space.get(mm)
@@ -102,7 +102,7 @@ place Entry {
     be reps_w := 4          // build-throughput reps
     be reps_r := 11         // read-latency reps
 
-    be a := build_arena(n)
+    be a := build_map(n)
 
     // put throughput, baseline-subtracted
     be put_net := (min_put(reps_w, n) - min_put_base(reps_w, n))
@@ -111,8 +111,8 @@ place Entry {
     // orbit comparison latency, baseline-subtracted (same baseline shape, Mso iters)
     be so_net := (min_so(x, y, reps_r, mso) - min_get_base(reps_r, mso))
 
-    be _1 := Output.print(String.from_int((match Arena.get(a, a0) { Found(v) => v, Absent => 0 })))
-    be _2 := Output.print(String.from_int(if Arena.occupied(a, a0) then 1 else 0))
+    be _1 := Output.print(String.from_int((match XRelMap.get(a, a0) { Found(v) => v, Absent => 0 })))
+    be _2 := Output.print(String.from_int(if XRelMap.has(a, a0) then 1 else 0))
     be _3 := Output.print(String.from_int(put_net))
     be _4 := Output.print(String.from_int(get_net))
     be _5 := Output.print(String.from_int(so_net))
@@ -121,7 +121,7 @@ place Entry {
   }
   fun main(): Number visits Output {
     // a fixed valid address, and two known same-orbit type-2 points (from
-    // uc_arena: 1536 ~ 1280)
+    // uc_xrel: 1536 ~ 1280)
     return match LatticePoint.of_coordinate(Leech.embed(0, 1)) {
       LatticePoint as a0 => (match LatticePoint.of_coordinate(1536) {
         LatticePoint as x => (match LatticePoint.of_coordinate(1280) {
@@ -130,10 +130,11 @@ place Entry {
       DomainError as d => 1 }
   }
 }
-// BENCHMARK — Arena (lattice store on type-2 Leech points): put throughput +
+// BENCHMARK — XRelMap keyed by LatticePoint (a persistent trie in the Leech
+// heap, routed by the point's index on the shell): set throughput +
 // get latency, and the latency of comparing the orbits of two points.
 //
-// ADDRESSES. An Arena is addressed by LatticePoints, made only where they are
+// ADDRESSES. The keys are LatticePoints, made only where they are
 // points: every address is routed through Leech.embed(i, mode) — the quantizer
 // that snaps a bit pattern to the nearest type-2 point — and made a point by
 // LatticePoint.of_coordinate. NOTE: embed is many-to-one; over i in [0..100000)
@@ -144,16 +145,18 @@ place Entry {
 // (of_coordinate) without the put, so the net is the put alone.
 //
 // COSTS. The three measurements get different iteration counts:
-//   Arena.put          : a CERTIFIED insert => N=2000 puts, 4 reps.
-//   Arena.get          : O(1) lookup => Mg=1e6 iters, 11 reps (min-of-K).
+//   XRelMap.set        : a persistent insert (copies the path, at most 18
+//                        nodes) => N=2000 sets, 4 reps.
+//   XRelMap.get        : a walk of at most 18 levels => Mg=1e6 iters, 11 reps
+//                        (min-of-K).
 //   orbit(x) == orbit(y): the orbit is a property of the point, read from its
 //                        precomputed M24 orbit => Mso=2e5 iters, 11 reps.
 // All three are baseline-subtracted (loop+cell-threading overhead removed). DCE
 // guard: get-values and orbit-comparison hits are accumulated and printed.
 //
 // Stdout schema (6 ints):
-//   [1] get_guard     = Arena.get(a, A0)            (a real stored value)
-//   [2] occ_guard     = Arena.occupied(a, A0)       (=1, address is live)
+//   [1] get_guard     = XRelMap.get(a, A0)            (a real stored value)
+//   [2] has_guard     = XRelMap.has(a, A0)            (=1, the key is there)
 //   [3] put_net_ns    = min ns for N=2000 put calls, baseline-subtracted (/2000 = ns/put)
 //   [4] get_net_ns    = min ns for Mg=1e6 get calls, baseline-subtracted (/1e6 = ns/get)
 //   [5] so_net_ns     = min ns for Mso=2e5 orbit comparisons, base-subtracted (/2e5 = ns/op)

@@ -1,23 +1,24 @@
 place Entry {
-  fun main(): Number visits Output {
-    // XRelSet — dedup by orbit class
+  fun cls(f: XRelFrame, p: LatticePoint): LatticePoint { return XRelFrame.canon(f, p) }
+  fun contract(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number visits Output {
+    // the frame by 1536: a class is the type against 1536
+    be f := XRelFrame.refine(XRelFrame.whole(), p)
+
+    // XRelSet — dedup by class: the set holds canon(f, x)
     be r := XRelSet.empty()
-    be _r0 := XRelSet.add_ref(r, 1536)
-    r = XRelSet.add(r, 1536)
-    r = XRelSet.add(r, 1536)
+    r = XRelSet.add(r, cls(f, p))
+    r = XRelSet.add(r, cls(f, p))
     be v1 := XRelSet.size(r)                 // a class, deduped -> 1
-    r = XRelSet.add(r, 1280)
+    r = XRelSet.add(r, cls(f, q))
     be v2 := XRelSet.size(r)                 // 1280 is a different class -> 2
-    r = XRelSet.add(r, 16778752)
+    r = XRelSet.add(r, cls(f, m))
     be v3 := XRelSet.size(r)                 // 16778752 is 1536's class -> still 2
 
-    // XRelMap — key = class, not specimen
-    be m := XRelMap.empty()
-    be _m0 := XRelMap.add_ref(m, 1536)
-    m = XRelMap.insert(m, 1536, 100)
-    be v4 := match XRelMap.get(m, 1536) { Found(v) => v, Absent => 0 }      // exact point -> 100
-    be v5 := match XRelMap.get(m, 1280) { Found(v) => v, Absent => 0 }      // different class -> Absent (0)
-    be v6 := match XRelMap.get(m, 16778752) { Found(v) => v, Absent => 0 }  // same class (antipode) -> 100
+    // XRelMap — key = class, not specimen: the map is keyed by canon(f, x)
+    be mm := XRelMap.set(XRelMap.empty(), cls(f, p), 100)
+    be v4 := match XRelMap.get(mm, cls(f, p)) { Found(v) => v, Absent => 0 }   // exact point -> 100
+    be v5 := match XRelMap.get(mm, cls(f, q)) { Found(v) => v, Absent => 0 }   // different class -> Absent (0)
+    be v6 := match XRelMap.get(mm, cls(f, m)) { Found(v) => v, Absent => 0 }   // same class (antipode) -> 100
 
     // XSimplex — classify relations
     be v7 := XSimplex.of2(1536, 1280)
@@ -41,7 +42,7 @@ place Entry {
     be _10 := Output.print(String.from_int(v10))
     be _11 := Output.print(String.from_int(v11))
 
-    be f := (if v1 == 1 then 0 else 1)
+    be fails := (if v1 == 1 then 0 else 1)
              + (if v2 == 2 then 0 else 1)
              + (if v3 == 2 then 0 else 1)
              + (if v4 == 100 then 0 else 1)
@@ -50,15 +51,25 @@ place Entry {
              + (if v7 == v8 then 0 else 1)          // of2 symmetric
              + (if v9 == 1 then 0 else 1)
              + (if v10 == 2 then 0 else 1)
-    return f
+    return fails
+  }
+  fun main(): Number visits Output {
+    return match LatticePoint.of_coordinate(1536) {
+      LatticePoint as p => (match LatticePoint.of_coordinate(1280) {
+        LatticePoint as q => (match LatticePoint.of_coordinate(16778752) {
+          LatticePoint as m => contract(p, q, m), DomainError as d => 99 }),
+        DomainError as d => 99 }),
+      DomainError as d => 99 }
   }
 }
 
 // XRelSet / XRelMap / XSimplex functional contracts — SELF-CHECKING. Return =
-// number of failed checks; exit 0 means all three contracts hold. Raw type-2
-// points 1536, 1280, 16778752 (=-1536). The class equivalence is the sign-orbit
-// (Leech.same_orbit): 1536 ~ 16778752, 1536 not~ 1280. Gated values (regression
-// run): 1, 2, 2, 100, 0, 100, 1, 1, 1, 2, 1.
+// number of failed checks; exit 0 means all three contracts hold. The points
+// 1536, 1280, 16778752 (=-1536). XRelSet and XRelMap hold classes of the frame
+// refined from whole by 1536 (XRelFrame.canon): a frame made from references
+// never parts a point from its negative, so 1536 ~ 16778752, and 1280 lies in
+// another class. XSimplex still takes raw coordinates. Gated values
+// (regression run): 1, 2, 2, 100, 0, 100, 1, 1, 1, 2, 1.
 //
 // Stdout (the 11 observed values); exit code = failures.
 

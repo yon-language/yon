@@ -1,0 +1,16 @@
+/* XRelSet<T> — a set, a persistent trie in the Leech heap (a map whose
+ * values are not read, on the store of XRelMap). An element is identified
+ * by its bits; a LatticePoint element routes by its index on the shell. The
+ * semantics of HashSet. A set of the classes of a frame holds
+ * XRelFrame.canon(f, p).
+ *
+ * Markers: [G] given, the runtime primitive */
+place XRelSet<T> {
+  fun empty<T>(): XRelSet<T> is given
+  fun add<T>(s: XRelSet<T>, x: T): XRelSet<T> is given
+  fun contains<T>(s: XRelSet<T>, x: T): Boolean is given
+  fun size<T>(s: XRelSet<T>): Number is given
+  /* both merge the two tries, reusing what they share */
+  fun union<T>(a: XRelSet<T>, b: XRelSet<T>): XRelSet<T> is given
+  fun intersect<T>(a: XRelSet<T>, b: XRelSet<T>): XRelSet<T> is given
+}

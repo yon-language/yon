@@ -1,4 +1,4 @@
 [package]
-name = "arena"
+name = "xrel_ops"
 [runtime]
 backend = "memory"

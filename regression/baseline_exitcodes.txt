@@ -2,7 +2,6 @@ EMITFAIL false_coherence
 EMITFAIL union_cross_space_reject
 EMITFAIL union_cross_world_reject
 EMITFAIL union_field_obligation_reject
-RAN arena_basic exit=6
 RAN c_cell exit=0
 RAN c_morph_on_morphism exit=0
 RAN c_place_over exit=0
@@ -99,3 +98,4 @@ RAN v1_control_flow exit=42
 RAN vec_basic exit=62
 RAN while_loop exit=7
 RAN wire_eof exit=7
+RAN xrel_points exit=5

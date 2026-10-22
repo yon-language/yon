@@ -1,11 +1,10 @@
 import React from 'react';
-import useAutoplay, { playLabel } from './_autoplay';
 
 /**
- * Arena — "store at a lattice address, know its kind, fuse lineages." The kind is the
- * M24 orbit; a fusion is recorded with a Conway-group certificate. Real run
- * (regression/book/jp/uc_arena -> get=42, orbit(1536)==orbit(1280) is 1,
- *  orbit(1536)==orbit(16778752) is 0, fusion_count=1).
+ * XRelMap keyed by LatticePoint — "store at a lattice address, know its kind." The
+ * kind is the M24 orbit, a property of the point. Real run
+ * (regression/book/jp/uc_xrel -> get=42, has=1, orbit(1536)==orbit(1280) is 1,
+ *  orbit(1536)==orbit(16778752) is 0).
  */
 
 const C = {
@@ -24,19 +23,14 @@ const C = {
 };
 const mono = 'var(--ifm-font-family-monospace)';
 
-// three lattice addresses; same kind = same M24 orbit (a real fact, uc_arena)
+// three lattice addresses; same kind = same M24 orbit (a real fact, uc_xrel)
 const PTS = [
   { id: 1536, x: 70, y: 60, kind: 'A', val: 42 },
   { id: 1280, x: 180, y: 50, kind: 'A' },
   { id: 16778752, x: 300, y: 78, kind: 'B' },
 ];
 
-export default function ArenaOrbit() {
-  const { i, set, playing, setPlaying } = useAutoplay(2);
-  const fused = i === 1;
-  const a = PTS[0],
-    b = PTS[1];
-
+export default function PointKeyOrbit() {
   return (
     <div
       style={{
@@ -47,10 +41,10 @@ export default function ArenaOrbit() {
       }}
     >
       <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5, marginBottom: 12 }}>
-        <strong style={{ color: C.text }}>A value at a lattice address — and its kind.</strong> Two
-        points in the same M24 orbit are the same kind; <code>fuse</code> records a bred lineage
-        with a Conway-group certificate. Real run (<code>uc_arena</code> →{' '}
-        <strong>42, 1, 0, 1</strong>).
+        <strong style={{ color: C.text }}>A value at a lattice address — and its kind.</strong> An{' '}
+        <code>XRelMap</code> keyed by <code>LatticePoint</code> finds a key by its index on the
+        shell; two points in the same M24 orbit are the same kind. Real run (<code>uc_xrel</code>{' '}
+        → <strong>42, 1, 0, 1, 0</strong>).
       </div>
 
       <svg viewBox="0 0 380 130" style={{ width: '100%', maxWidth: 380 }}>
@@ -77,28 +71,6 @@ export default function ArenaOrbit() {
             strokeOpacity="0.4"
           />
         ))}
-
-        {fused && (
-          <g>
-            <path
-              d={`M${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${Math.min(a.y, b.y) - 28} ${b.x} ${b.y}`}
-              fill="none"
-              stroke={C.gold}
-              strokeWidth="2"
-              strokeDasharray="3 3"
-            />
-            <text
-              x={(a.x + b.x) / 2}
-              y={Math.min(a.y, b.y) - 32}
-              textAnchor="middle"
-              fontSize="9.5"
-              fontFamily={mono}
-              fill={C.goldText}
-            >
-              fuse ✓
-            </text>
-          </g>
-        )}
 
         {PTS.map((p) => {
           const col = p.kind === 'A' ? C.accent : C.red;
@@ -146,32 +118,6 @@ export default function ArenaOrbit() {
           <span style={{ color: C.redText }}>orbit(1536) ≠ orbit(16778752)</span> — different
         </span>
       </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
-        <span style={{ fontFamily: mono, fontSize: 13, color: C.sub }}>
-          fusion_count(1536) = {fused ? 1 : 0}
-        </span>
-        <div style={{ flex: 1 }} />
-        <button onClick={() => setPlaying((p) => !p)} style={btn(C)}>
-          {playLabel(playing)}
-        </button>
-        <button onClick={() => set(fused ? 0 : 1)} style={btn(C)}>
-          {fused ? '↩ undo' : 'fuse(1536, 1280) ▸'}
-        </button>
-      </div>
     </div>
   );
-}
-
-function btn(c) {
-  return {
-    fontFamily: 'var(--ifm-font-family-base)',
-    fontSize: 13,
-    padding: '6px 14px',
-    borderRadius: 8,
-    border: `0.5px solid ${c.line}`,
-    background: 'transparent',
-    color: c.text,
-    cursor: 'pointer',
-  };
 }
