@@ -32,7 +32,7 @@ fi
 YONC_CC="$W" "$PY" -m pytest "$ROOT/regression/test_runtime_units.py" -q >/dev/null 2>&1
 
 cd "$RT" || exit 2
-for f in yon_rt xleech2_heap xleech2_mphf xleech2_coord yon_arena yon_curtis_canon leech_orbits yon_mmap; do
+for f in yon_rt xleech2_heap xleech2_mphf xleech2_coord yon_arena yon_curtis_canon leech_orbits yon_mmap yon_trie yon_leech_store; do
   pct=$($GCOV "$f.c" 2>/dev/null | grep -A1 "File '$f.c'" | grep -oE 'Lines executed:[0-9.]+' | grep -oE '[0-9.]+')
   [ -n "$pct" ] && echo "COV $f.c $pct"
 done

@@ -11,7 +11,7 @@
  * project's benchmark convention, the canonical numbers are the author's M1).
  *
  * Build (from runtime/, against the same RTSET the unit tests link):
- *   RT="yon_rt.o yon_mmap.o leech_orbits.o yon_arena.o yon_curtis_canon.o \
+ *   RT="yon_rt.o yon_mmap.o leech_orbits.o yon_arena.o yon_curtis_canon.o yon_trie.o yon_leech_store.o \
  *       xleech2_coord.o xleech2_heap.o xleech2_mphf.o \
  *       vendor/mmgroup/mat24_tables.o vendor/mmgroup/mat24_functions.o \
  *       vendor/mmgroup/gen_leech.o vendor/mmgroup/gen_leech3.o \

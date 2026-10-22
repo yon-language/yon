@@ -28,6 +28,9 @@
 #define _GNU_SOURCE  /* for strdup */
 #endif
 #include "yon_rt.h"
+#include "yon_trie.h"
+#include "yon_leech_store.h"
+#include "xleech2_mphf.h"
 #include "xleech2_heap.h"
 #include "leech_theta.h"
 #include "yon_mmap.h"
@@ -3557,30 +3560,17 @@ static uint32_t hash_f64(double key) {
     return h;
 }
 
-enum { TRIE_EMPTY = 0, TRIE_LEAF = 1, TRIE_BRANCH = 2 };
-#define TRIE_NONE YON_HEAPREF_INVALID
-
-typedef struct { uint32_t kind; uint32_t size; uint32_t child[2]; } trie_branch_t;
-typedef struct {
-    uint32_t kind;
-    uint32_t hash;
-    double   key;
-    double   value;
-    uint32_t next;    /* the next key with the same hash, or TRIE_NONE */
-    uint32_t size;    /* keys in this chain, from here */
-} trie_leaf_t;
-
 static uint64_t key_bits(double k) { uint64_t u; memcpy(&u, &k, sizeof u); return u; }
+static double bits_value(uint64_t u) { double d; memcpy(&d, &u, sizeof d); return d; }
 
-/* The law of these nodes. A node lives in the content-addressed heap and is
- * deduplicated globally: the same content is the same node, wherever it is
- * built. So two equal collections are the same handle, and a node may be
- * shared by values that know nothing of each other. Hence no write ever
- * happens on a node, not even on one a single collection seems to hold: a
- * reuse in place would change a value somebody else holds, and the identity
- * of equal collections would be lost. A collection that changes in place is
- * not a value: it is a cell, declared in yon_arena. */
-static uint32_t trie_node(const void *n, uint32_t sz) {
+/* The law of the FNV heap's nodes. A node lives in the content-addressed
+ * heap and is deduplicated globally: the same content is the same node,
+ * wherever it is built. So two equal collections are the same handle, and a
+ * node may be shared by values that know nothing of each other. Hence no
+ * write ever happens on a node, not even on one a single collection seems to
+ * hold: a reuse in place would change a value somebody else holds, and the
+ * identity of equal collections would be lost. */
+static uint32_t fnv_put(const void *n, uint32_t sz) {
     uint32_t r = yon_xheap_put_chain(g_ds_heap, n, sz, YON_TAG_USER1);
     if (r == YON_HEAPREF_INVALID) {
         fprintf(stderr, "[YON-RT] map: the heap is exhausted\n");
@@ -3588,150 +3578,108 @@ static uint32_t trie_node(const void *n, uint32_t sz) {
     }
     return r;
 }
-static const uint32_t *trie_at(uint32_t ref) {
-    const uint32_t *p = (const uint32_t *)yon_xheap_payload_chain(ref);
-    if (!p || p[0] > TRIE_BRANCH) {
-        fprintf(stderr, "[YON-RT] map: %u is not a map\n", ref);
-        abort();
+static const void *fnv_at(uint32_t ref) { return yon_xheap_payload_chain(ref); }
+static uint32_t fnv_empty(void) {
+    uint32_t e[4] = { 0, 0, 0, 0 };   /* the empty node: kind EMPTY, size 0 */
+    return fnv_put(e, sizeof e);
+}
+static const yon_trie_store_t g_fnv_store = { fnv_put, fnv_at, fnv_empty };
+
+/* The Leech heap's node store: no index by content, so the empty node is
+ * made once. */
+static uint32_t g_leech_empty = YON_TRIE_NONE;
+static pthread_once_t g_leech_empty_once = PTHREAD_ONCE_INIT;
+static void leech_make_empty(void) {
+    uint32_t e[4] = { 0, 0, 0, 0 };
+    g_leech_empty = yon_leech_put(e, sizeof e);
+}
+static uint32_t leech_empty(void) {
+    pthread_once(&g_leech_empty_once, leech_make_empty);
+    return g_leech_empty;
+}
+static const yon_trie_store_t g_leech_store = { yon_leech_put, yon_leech_at, leech_empty };
+
+/* HashMap's route: the 32-bit FNV-1a hash of the key's bits. */
+static yon_trie_route_t hash_route(uint64_t key) {
+    yon_trie_route_t r = { hash_f64(bits_value(key)), 0 };
+    return r;
+}
+static const yon_trie_router_t g_hash_router = { hash_route, 32, 32 };
+
+/* XRelMap's route. A key whose bits are the coordinate of a type-2 point
+ * (a LatticePoint always is) routes by its MPHF index, exactly: two points
+ * never share a route. Any other key routes by the 64-bit FNV-1a hash of its
+ * bits written in base 196560: the first digit is a point of the shell, the
+ * rest follow; only keys whose whole hash agrees share a chain. Routing
+ * decides where a key is looked for, never whether two keys are equal: that
+ * is their bits. */
+static yon_trie_route_t lattice_route(uint64_t key) {
+    if (key < (1ull << 25) && yon_xcoord_is_type2((yon_xcoord_t)key)) {
+        yon_trie_route_t r = { yon_mphf_index((uint32_t)key), 0 };
+        return r;
     }
-    return p;
+    uint64_t h = 14695981039346656037ull;
+    for (int i = 0; i < 8; i++) { h ^= (key >> (i * 8)) & 0xFFu; h *= 1099511628211ull; }
+    yon_trie_route_t r = { (uint32_t)(h % YON_LEECH_TYPE2_COUNT), h / YON_LEECH_TYPE2_COUNT };
+    return r;
 }
-static uint32_t trie_empty(void) {
-    trie_branch_t e = { TRIE_EMPTY, 0, { 0, 0 } };
-    return trie_node(&e, sizeof e);
-}
-/* the root of a handle: 0.0 is the empty map */
-static uint32_t trie_root(double handle) {
-    if (handle == 0.0) return trie_empty();
+/* 18 bits of shell index, then the 47 bits of the rest of the hash */
+static const yon_trie_router_t g_lattice_router = { lattice_route, 18, 18 + 47 };
+
+const yon_trie_store_t  *yon_collections_fnv_store(void)      { ds_ensure_init(); return &g_fnv_store; }
+const yon_trie_store_t  *yon_collections_leech_store(void)    { return &g_leech_store; }
+const yon_trie_router_t *yon_collections_hash_router(void)    { return &g_hash_router; }
+const yon_trie_router_t *yon_collections_lattice_router(void) { return &g_lattice_router; }
+
+/* the root of a HashMap handle: 0.0 is the empty map, any other a heapref */
+static uint32_t map_root(double handle) {
+    if (handle == 0.0) return fnv_empty();
     if (!(handle > 0.0 && handle < 4294967296.0 && handle == (double)(uint32_t)handle)) {
         fprintf(stderr, "[YON-RT] map: %.17g is not a map\n", handle);
         abort();
     }
-    (void)trie_at((uint32_t)handle);
+    (void)yon_trie_size(&g_fnv_store, (uint32_t)handle);   /* stops on what is not a node */
     return (uint32_t)handle;
-}
-static uint32_t trie_size(uint32_t ref) {
-    if (ref == TRIE_NONE) return 0;
-    const uint32_t *p = trie_at(ref);
-    if (p[0] == TRIE_LEAF) return ((const trie_leaf_t *)p)->size;
-    return ((const trie_branch_t *)p)->size;   /* 0 for the empty map */
-}
-static uint32_t mk_leaf(uint32_t h, double k, double v, uint32_t next) {
-    trie_leaf_t l;
-    memset(&l, 0, sizeof l);
-    l.kind = TRIE_LEAF; l.hash = h; l.key = k; l.value = v; l.next = next;
-    l.size = 1 + trie_size(next);
-    return trie_node(&l, sizeof l);
-}
-static uint32_t mk_branch(uint32_t c0, uint32_t c1) {
-    trie_branch_t b = { TRIE_BRANCH, trie_size(c0) + trie_size(c1), { c0, c1 } };
-    return trie_node(&b, sizeof b);
-}
-/* put into a chain of keys with hash h, kept sorted by the keys' bits */
-static uint32_t chain_put(uint32_t ref, uint32_t h, double k, double v) {
-    if (ref == TRIE_NONE) return mk_leaf(h, k, v, TRIE_NONE);
-    const trie_leaf_t *l = (const trie_leaf_t *)trie_at(ref);
-    double lk = l->key, lv = l->value;
-    uint32_t ln = l->next;
-    uint64_t kb = key_bits(k), lb = key_bits(lk);
-    if (kb == lb) return mk_leaf(h, k, v, ln);
-    if (kb < lb) return mk_leaf(h, k, v, ref);
-    return mk_leaf(h, lk, lv, chain_put(ln, h, k, v));
-}
-static uint32_t trie_put(uint32_t ref, uint32_t h, double k, double v, unsigned depth) {
-    const uint32_t *p = trie_at(ref);
-    if (p[0] == TRIE_EMPTY) return mk_leaf(h, k, v, TRIE_NONE);
-    if (p[0] == TRIE_LEAF) {
-        uint32_t lh = ((const trie_leaf_t *)p)->hash;
-        if (lh == h) return chain_put(ref, h, k, v);
-        uint32_t bn = (h >> depth) & 1u, bo = (lh >> depth) & 1u;
-        if (bn == bo) {
-            uint32_t sub = trie_put(ref, h, k, v, depth + 1);
-            uint32_t e = trie_empty();
-            return bn ? mk_branch(e, sub) : mk_branch(sub, e);
-        }
-        uint32_t nl = mk_leaf(h, k, v, TRIE_NONE);
-        return bn ? mk_branch(ref, nl) : mk_branch(nl, ref);
-    }
-    const trie_branch_t *b = (const trie_branch_t *)p;
-    uint32_t c0 = b->child[0], c1 = b->child[1];
-    if ((h >> depth) & 1u) c1 = trie_put(c1, h, k, v, depth + 1);
-    else                   c0 = trie_put(c0, h, k, v, depth + 1);
-    return mk_branch(c0, c1);
-}
-/* the leaf holding key k, or NULL */
-static const trie_leaf_t *trie_find(uint32_t ref, double k) {
-    uint32_t h = hash_f64(k);
-    uint64_t kb = key_bits(k);
-    for (unsigned depth = 0;; depth++) {
-        const uint32_t *p = trie_at(ref);
-        if (p[0] == TRIE_EMPTY) return NULL;
-        if (p[0] == TRIE_LEAF) {
-            const trie_leaf_t *l = (const trie_leaf_t *)p;
-            if (l->hash != h) return NULL;
-            for (;;) {
-                if (key_bits(l->key) == kb) return l;
-                if (l->next == TRIE_NONE) return NULL;
-                l = (const trie_leaf_t *)trie_at(l->next);
-            }
-        }
-        ref = ((const trie_branch_t *)p)->child[(h >> depth) & 1u];
-    }
-}
-/* visit every entry */
-typedef void (*trie_visit_fn)(double key, double value, void *ctx);
-static void trie_each(uint32_t ref, trie_visit_fn f, void *ctx) {
-    const uint32_t *p = trie_at(ref);
-    if (p[0] == TRIE_EMPTY) return;
-    if (p[0] == TRIE_LEAF) {
-        for (const trie_leaf_t *l = (const trie_leaf_t *)p;;) {
-            f(l->key, l->value, ctx);
-            if (l->next == TRIE_NONE) return;
-            l = (const trie_leaf_t *)trie_at(l->next);
-        }
-    }
-    const trie_branch_t *b = (const trie_branch_t *)p;
-    uint32_t c0 = b->child[0], c1 = b->child[1];
-    trie_each(c0, f, ctx);
-    trie_each(c1, f, ctx);
 }
 
 double yon_rt_map_empty(void) {
     ds_ensure_init();
-    return (double)trie_empty();
+    return (double)fnv_empty();
 }
 double yon_rt_map_put(double map_id, double key, double value) {
     ds_ensure_init();
-    return (double)trie_put(trie_root(map_id), hash_f64(key), key, value, 0);
+    return (double)yon_trie_put(&g_fnv_store, &g_hash_router, map_root(map_id),
+                                key_bits(key), key_bits(value));
 }
 /* The value at a key the map holds. Asked of a key it does not hold, it
  * stops the program: an absent key has no value, not a 0.0 that would read
  * as one (the place's `get` asks `has` first and answers Absent). */
 double yon_rt_map_value(double map_id, double key) {
     ds_ensure_init();
-    const trie_leaf_t *l = trie_find(trie_root(map_id), key);
-    if (!l) {
+    uint64_t v;
+    if (!yon_trie_find(&g_fnv_store, &g_hash_router, map_root(map_id), key_bits(key), &v)) {
         fprintf(stderr, "[YON-RT] map: no value at key %.17g\n", key);
         abort();
     }
-    return l->value;
+    return bits_value(v);
 }
 double yon_rt_map_contains(double map_id, double key) {
     ds_ensure_init();
-    return trie_find(trie_root(map_id), key) ? 1.0 : 0.0;
+    return yon_trie_find(&g_fnv_store, &g_hash_router, map_root(map_id), key_bits(key), NULL)
+           ? 1.0 : 0.0;
 }
 double yon_rt_map_size(double map_id) {
     ds_ensure_init();
-    return (double)trie_size(trie_root(map_id));
+    return (double)yon_trie_size(&g_fnv_store, map_root(map_id));
 }
 
 /* ---- HashMap.to_stream: the values --------------------- */
-static void cons_value(double k, double v, void *ctx) { (void)k; *(double *)ctx = yon_rt_list_cons(v, *(double *)ctx); }
-static void cons_key(double k, double v, void *ctx)   { (void)v; *(double *)ctx = yon_rt_list_cons(k, *(double *)ctx); }
+static void cons_value(uint64_t k, uint64_t v, void *ctx) { (void)k; *(double *)ctx = yon_rt_list_cons(bits_value(v), *(double *)ctx); }
+static void cons_key(uint64_t k, uint64_t v, void *ctx)   { (void)v; *(double *)ctx = yon_rt_list_cons(bits_value(k), *(double *)ctx); }
 double yon_rt_map_to_list(double map_id) {
     ds_ensure_init();
     double list_id = yon_rt_list_empty(0.0);
-    trie_each(trie_root(map_id), cons_value, &list_id);
+    yon_trie_each(&g_fnv_store, map_root(map_id), cons_value, &list_id);
     return list_id;
 }
 
@@ -3743,27 +3691,17 @@ double yon_rt_hashset_size(double set_id) { return yon_rt_map_size(set_id); }
 double yon_rt_hashset_to_list(double set_id) {
     ds_ensure_init();
     double list_id = yon_rt_list_empty(0.0);
-    trie_each(trie_root(set_id), cons_key, &list_id);
+    yon_trie_each(&g_fnv_store, map_root(set_id), cons_key, &list_id);
     return list_id;
 }
-static void union_add(double k, double v, void *ctx) { (void)v; *(double *)ctx = yon_rt_hashset_add(*(double *)ctx, k); }
-typedef struct { double other, out; } inter_ctx_t;
-static void inter_add(double k, double v, void *ctx) {
-    (void)v;
-    inter_ctx_t *c = (inter_ctx_t *)ctx;
-    if (yon_rt_hashset_contains(c->other, k) == 1.0) c->out = yon_rt_hashset_add(c->out, k);
-}
+/* union and intersection merge the two tries, reusing what they share */
 double yon_rt_hashset_union(double a_id, double b_id) {
     ds_ensure_init();
-    double out = (double)trie_root(a_id);
-    trie_each(trie_root(b_id), union_add, &out);
-    return out;
+    return (double)yon_trie_union(&g_fnv_store, &g_hash_router, map_root(a_id), map_root(b_id));
 }
 double yon_rt_hashset_intersect(double a_id, double b_id) {
     ds_ensure_init();
-    inter_ctx_t c = { b_id, yon_rt_hashset_empty() };
-    trie_each(trie_root(a_id), inter_add, &c);
-    return c.out;
+    return (double)yon_trie_intersect(&g_fnv_store, &g_hash_router, map_root(a_id), map_root(b_id));
 }
 
 /* ============================================================== */
@@ -4632,8 +4570,6 @@ static int xrel_is_curtis(const yon_xrel_t *f) {
 /* The sign never changes a type, so a frame made from references    */
 /* holds v and -v in one class: it is at best as fine as +-v.        */
 /* ============================================================== */
-extern uint32_t yon_mphf_index(uint32_t v);
-extern uint32_t yon_mphf_unindex(uint32_t idx);
 
 typedef struct { uint64_t cls; uint32_t idx; } xframe_ci_t;
 static int xframe_ci_cmp(const void *a, const void *b) {
@@ -5501,8 +5437,6 @@ double yon_rt_frozen_size(double id) {
  * Limit: xcoord must be a valid type-2 vector (checked via MPHF). A non-type-2
  * value -> add is ignored (silently). */
 
-extern uint32_t yon_mphf_index(uint32_t v);
-extern uint32_t yon_mphf_unindex(uint32_t idx);
 #define YON_MPHF_INVALID UINT32_MAX
 
 #define YON_XSET_N_BITS    196560u
@@ -6961,8 +6895,6 @@ extern uint32_t gen_leech2_subtype(uint64_t v2);
 extern void mm_group_invert_word(uint32_t *w, uint32_t l);
 
 /* Extern MPHF from our xleech2 library */
-extern uint32_t yon_mphf_index(uint32_t v);
-extern uint32_t yon_mphf_unindex(uint32_t idx);
 
 /* Monster generator tags used for the Co_0 action on Leech.
  * Co_0 is generated by {d, p, x, y, l}. We exclude 't' (specific to the
