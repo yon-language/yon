@@ -85,7 +85,9 @@ the type of a value on a wire (chapter 17) are the same number.
 | **Who lives there** | strings, lists, `HashMap`/`HashSet` tries, `MerkleTree`, sections of places, closures | `LatticePoint`, the nodes of `XRelMap`/`XRelSet`, `XSet`, `XSimplex` |
 | **The test that proves it** | `test_unit_extensionality`: 300,000 distinct contents across two heaps, every one on its own reference, the same content on the same one | `test_mphf.c` and `test_unit_mphf_ext.c`: the bijection, over the whole shell; `test_leech_theta`: the shell has 196,560 points |
 
-The FNV heap is one mapping that chains into the next when it fills. The
+Every Space has its own pair of these heaps, and a value lives in the heaps of
+the Space that made it (chapter 14). The FNV heap is one mapping that chains
+into the next when it fills. The
 Leech heap is a sequence of generations, each a table over the shell: the
 node store of `XRelMap`/`XRelSet` puts its k-th node in the place
 (generation k div 196,560, point `at_index(k mod 196,560)`), written once;
