@@ -922,6 +922,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.Var "XTower__depth" -> "f64"
   | C.Var "VoyagerList__empty" -> "f64"
   | C.Var "Arena__empty" -> "f64"
+  | C.Var ("XRelFrame__discrete" | "XRelFrame__whole" | "XRelFrame__curtis") -> "i64"
   | C.Var "__xheap_used" -> "f64"
   | C.Var "__spawn_index" -> "f64"
   | C.Var x ->
@@ -1074,6 +1075,7 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var ("LatticePoint__is_point" | "LatticePoint__is_index"), _) -> "i1"
   | C.App (C.Var ("LatticePoint__unchecked_coordinate" | "LatticePoint__unchecked_index"), _) -> "i64"
   | C.App (C.Var ("LatticePoint__index" | "LatticePoint__orbit"), _) -> "f64"
+  | C.App (C.App (C.Var ("XRelFrame__refine" | "XRelFrame__canon"), _), _) -> "i64"
   | C.App (C.App (C.App (C.App (C.Var "Arena__fuse", _), _), _), _) -> "f64"
   | C.App (C.App (C.Var "Arena__fusion_count", _), _) -> "f64"
   | C.App (C.Var "VoyagerList__to_stream", _) -> "f64"
@@ -1847,6 +1849,14 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_voyagerlist_empty() : () -> f64" v);
       (v, "f64")
+  | C.Var ("XRelFrame__discrete" | "XRelFrame__whole" | "XRelFrame__curtis" as f) ->
+      let v = fresh_ssa e in
+      let sym = match f with
+        | "XRelFrame__discrete" -> "yon_rt_xframe_discrete"
+        | "XRelFrame__whole" -> "yon_rt_xframe_whole"
+        | _ -> "yon_rt_xframe_curtis" in
+      emit_line e (Printf.sprintf "%s = func.call @%s() : () -> i64" v sym);
+      (v, "i64")
   | C.Var "Arena__empty" ->
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
@@ -3686,6 +3696,14 @@ let rec emit_term (e : emitter)
                 else "yon_rt_lattice_orbit" in
       emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (i64) -> f64" v sym vp);
       (v, "f64")
+  (* XRelFrame: a frame is an i64 handle, a point an i64 coordinate. *)
+  | C.App (C.App (C.Var ("XRelFrame__refine" | "XRelFrame__canon" as f), arg_a), arg_b) ->
+      let vf = emit_i64 e env funcs arg_a in
+      let vp = emit_i64 e env funcs arg_b in
+      let v = fresh_ssa e in
+      let sym = if f = "XRelFrame__refine" then "yon_rt_xframe_refine" else "yon_rt_xframe_canon" in
+      emit_line e (Printf.sprintf "%s = func.call @%s(%s, %s) : (i64, i64) -> i64" v sym vf vp);
+      (v, "i64")
   (* Arena: the Leech type-2 arena, addressed by lattice points (i64). *)
   | C.App (C.App (C.App (C.Var "Arena__put", arg_a), arg_b), arg_c) ->
       let va = emit_f64 e env funcs arg_a in
@@ -6888,6 +6906,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_lattice_unchecked_index(f64) -> i64";
   emit_line e "func.func private @yon_rt_lattice_index(i64) -> f64";
   emit_line e "func.func private @yon_rt_lattice_orbit(i64) -> f64";
+  emit_line e "func.func private @yon_rt_xframe_discrete() -> i64";
+  emit_line e "func.func private @yon_rt_xframe_whole() -> i64";
+  emit_line e "func.func private @yon_rt_xframe_curtis() -> i64";
+  emit_line e "func.func private @yon_rt_xframe_refine(i64, i64) -> i64";
+  emit_line e "func.func private @yon_rt_xframe_canon(i64, i64) -> i64";
   emit_line e "func.func private @yon_rt_voyagerlist_append(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_get(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_voyagerlist_size(f64) -> f64";

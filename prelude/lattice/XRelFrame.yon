@@ -1,0 +1,31 @@
+/* XRelFrame — a partition of the type-2 shell: a quotient of its 196560
+ * points, represented by its canonical projection `canon`, which sends a
+ * point to the representative of its class (the member with the smallest
+ * index), so canon(f, canon(f, p)) is canon(f, p). A frame is a value.
+ *
+ *   discrete  the finest frame: each point is its own class, canon is the
+ *             identity
+ *   whole     the coarsest frame: one class
+ *   curtis    the frame of the 26 Curtis octads
+ *   refine    each class of f split by the type of v ^ r (the meet of f with
+ *             the partition by r); refining discrete leaves it discrete
+ *
+ * The sign never changes a type, so a frame made from references holds a
+ * point and its negative in one class: the finest it reaches is +-v. A map on
+ * the classes is an ordinary map composed with canon.
+ *
+ * Markers: [G] given, the runtime primitive */
+place XRelFrame is internal i64 {
+
+  /* ─── The frames ─────────────────────────────────────────── [G] ─── */
+
+  fun discrete(): XRelFrame is given
+  fun whole(): XRelFrame is given
+  fun curtis(): XRelFrame is given
+  fun refine(f: XRelFrame, r: LatticePoint): XRelFrame is given
+
+  /* ─── The projection ─────────────────────────────────────── [G] ─── */
+
+  /* the representative of p's class */
+  fun canon(f: XRelFrame, p: LatticePoint): LatticePoint is given
+}

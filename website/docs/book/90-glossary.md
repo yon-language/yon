@@ -108,6 +108,13 @@ and whose symmetries drive orbit canonicalization in the Leech heap.
 symmetry group; `LatticePoint.orbit` returns the orbit of a point, and two
 points are equivalent when their orbits are equal.
 
+**frame (`XRelFrame`)**, a partition of the 196,560 points of the shell, a
+quotient, represented by its canonical projection `canon` (a point to the
+least-index representative of its class, so `canon ∘ canon = canon`).
+`discrete` is the finest (the identity), `whole` the coarsest, `refine`
+splits by the type against a reference, `curtis` is the 26-octad frame. A
+frame made from references never parts `v` from `-v` (chapter 15).
+
 **Golay code (24,12,8)**, the error-correcting code sealing every
 `VoyagerList` element: 12 data bits in a 24-bit word, healing up to 3
 flips.
