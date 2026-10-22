@@ -47,22 +47,10 @@ def _digest(path: Path):
 # The site's data as it stood before this module ran: the suite must leave it so.
 _OUT_BEFORE = _digest(OUT)
 
-# bench -> [(output_index, expected_value)] : correctness guards that MUST hold.
-GUARDS = {
-    "eq_constant": [(0, 1), (1, 1024), (2, 32768)],
-    "hashset": [(0, 100000), (2, 1)],
-    "hashmap": [(0, 100000), (2, 43)],
-    "vec": [(0, 100000), (2, 42)],
-    "list": [(0, 100000), (2, 99999)],
-    "merkle": [(0, 1), (1, 0)],
-    "xrel_points": [(0, 1), (1, 1), (5, 200000)],
-    "xset": [(0, 1000), (1, 3000)],
-    # every (family, key kind) at N = 1000: size, hits, misses found, |union|, |intersection|
-    "maps_compare": [(5 * c + j, v) for c in range(6)
-                     for j, v in enumerate([1000, 1000, 0, 1500, 500])],
-    "golay": [(0, 1445)],
-    "heap_expand": [(0, 1000000)],
-}
+# bench -> [(output_index, expected_value)] : correctness guards that MUST hold,
+# at the full size (the gate checks them at a small one: test_bench_correct).
+from _bench_guards import guards  # noqa: E402
+GUARDS = guards(1)
 
 BENCHES = sorted(p.name for p in BENCH.iterdir() if p.is_dir()) if BENCH.exists() else []
 _results = {}

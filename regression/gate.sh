@@ -4,13 +4,25 @@
 #   gate.sh 0    build + smoke           (~10 s)
 #   gate.sh 1    0 + targeted on the dirty files (~1-3 min)
 #   gate.sh 2    1 + acceptance          (~3-5 min)   <- default
-#   gate.sh 3    2 + full pytest         (parallel + serial timing phase)
+#   gate.sh 3    2 + full pytest         (parallel + serial phase; the benchmarks
+#                only checked for their values, on a small run)
+#   gate.sh bench   the measurements alone: the benchmarks at full size, serial,
+#                on a quiet machine (before publishing numbers)
 #
 # Each level runs only if the previous one is green. No silent skip:
 # tier 1 says which targeted tests it picked, and why.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TIER="${1:-2}"
+if [ "$TIER" = "bench" ]; then
+  ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+  t0=$(date +%s)
+  echo "── bench: the measurements (serial, -m bench)"
+  "$ROOT/.venv/bin/pytest" "$ROOT/regression/" -q -m bench --skip-ledger "$ROOT/regression/SKIPS.txt" || {
+    echo "GATE RED (bench) after $(( $(date +%s) - t0 ))s"; exit 1; }
+  echo "bench green ($(( $(date +%s) - t0 ))s)"
+  exit 0
+fi
 PYTEST="$ROOT/.venv/bin/pytest"
 # macOS idle sleep (pmset `sleep 1` on the dev machine) freezes the run midway:
 # the suite stalls for as long as the machine sleeps and pytest's own clock does
@@ -109,10 +121,12 @@ done
 [ "$TIER" = "2" ] && { echo "gate 2 green ($(( $(date +%s) - t0 ))s)"; exit 0; }
 
 # --- tier 3: full pytest ------------------------------------------------
-# Two phases. The parallel one runs everything but the timing tests on every core
-# (xdist groups keep IPC-name and fixed-/tmp users on one worker, see conftest);
-# the timing tests then run alone and serially, because wall clock under load is
-# not a measurement. YON_JOBS overrides the worker count (1 = fully serial).
+# Two phases. The parallel one runs everything but the serial tests on every
+# core (xdist groups keep IPC-name and fixed-/tmp users on one worker, see
+# conftest); the serial tests then run alone. The timing tests (`bench`) are not
+# here: their values are checked on a small run (test_bench_correct), and the
+# measurements are `gate.sh bench`. YON_JOBS overrides the worker count (1 =
+# fully serial).
 # Both phases check the skip ledger: a skip not declared in SKIPS.txt fails.
 JOBS="${YON_JOBS:-auto}"
 LEDGER="$ROOT/regression/SKIPS.txt"
@@ -125,8 +139,8 @@ say "tier 3: full pytest, parallel phase (-n $JOBS)"
 T3=$("$PYTEST" "$ROOT/regression/" -q -n "$JOBS" --dist loadgroup -m "not bench and not serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
 [ $rc -eq 0 ] || die "full pytest (parallel phase)"
-say "tier 3: full pytest, serial phase (timing + no-xdist tests)"
-T3B=$("$PYTEST" "$ROOT/regression/" -q -m "bench or serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
+say "tier 3: full pytest, serial phase (no-xdist tests)"
+T3B=$("$PYTEST" "$ROOT/regression/" -q -m "serial and not bench" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3B" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
 [ $rc -eq 0 ] || die "full pytest (serial phase)"
 leaked=""

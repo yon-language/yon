@@ -1,4 +1,11 @@
 place Entry {
+  // The size of the work: as written, or divided by YON_BENCH_DIV, so the gate
+  // checks the values on a small run and the measurement runs the full one.
+  fun scaled(n: Number): Number {
+    return if Env.has("YON_BENCH_DIV")
+           then Number.floor(n / String.parse_number(Env.get("YON_BENCH_DIV")))
+           else n
+  }
   fun mn(a: Number, b: Number): Number { return if a < b then a else b }
   fun warm(): Number visits Output {
     be l := Space.make(List.empty(0))
@@ -67,11 +74,11 @@ place Entry {
   }
   fun main(): Number visits Output {
     be _w := warm()
-    be _1 := Output.print(String.from_int(min_cons(10000)))
-    be _2 := Output.print(String.from_int(min_cons(100000)))
-    be _3 := Output.print(String.from_int(min_set(10000)))
-    be _4 := Output.print(String.from_int(min_set(100000)))
-    be _5 := Output.print(String.from_int(min_add(100000)))
+    be _1 := Output.print(String.from_int(min_cons(scaled(10000))))
+    be _2 := Output.print(String.from_int(min_cons(scaled(100000))))
+    be _3 := Output.print(String.from_int(min_set(scaled(10000))))
+    be _4 := Output.print(String.from_int(min_set(scaled(100000))))
+    be _5 := Output.print(String.from_int(min_add(scaled(100000))))
     return 0
   }
 }

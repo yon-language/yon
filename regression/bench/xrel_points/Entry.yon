@@ -1,4 +1,11 @@
 place Entry {
+  // The size of the work: as written, or divided by YON_BENCH_DIV, so the gate
+  // checks the values on a small run and the measurement runs the full one.
+  fun scaled(n: Number): Number {
+    return if Env.has("YON_BENCH_DIV")
+           then Number.floor(n / String.parse_number(Env.get("YON_BENCH_DIV")))
+           else n
+  }
   fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
   fun put_at(a: XRelMap<LatticePoint, Number>, addr: Number, v: Number): XRelMap<LatticePoint, Number> {
     return match LatticePoint.of_coordinate(addr) {
@@ -96,9 +103,9 @@ place Entry {
     return Space.get(mm)
   }
   fun run(a0: LatticePoint, x: LatticePoint, y: LatticePoint): Number visits Output {
-    be n := 2000            // put calls (land on ~2000 distinct type-2 points)
-    be mg := 1000000        // get iterations (cheap op)
-    be mso := 200000        // orbit-comparison iterations
+    be n := scaled(2000)           // put calls (land on ~2000 distinct type-2 points)
+    be mg := scaled(1000000)       // get iterations (cheap op)
+    be mso := scaled(200000)       // orbit-comparison iterations
     be reps_w := 4          // build-throughput reps
     be reps_r := 11         // read-latency reps
 
