@@ -174,7 +174,7 @@ say "${B}Install${N} -> $PREFIX"
 case "$PREFIX" in ""|/|"$HOME"|"$HOME"/) die "refusing to wipe '$PREFIX' — pick a dedicated --prefix like ~/.yon";; esac
 rm -rf "$PREFIX"
 mkdir -p "$PREFIX/toolchain" "$PREFIX/pkg" "$PREFIX/frontend/_build/default" "$PREFIX/mlir/build" "$PREFIX/runtime/vendor/mmgroup"
-cp "$SRC"/toolchain/yon "$SRC"/toolchain/yonc "$SRC"/toolchain/yon-lsp "$SRC"/toolchain/yon-fmt "$SRC"/toolchain/yon-lint "$SRC"/toolchain/yon-doc "$PREFIX/toolchain/"
+cp "$SRC"/toolchain/yon "$SRC"/toolchain/yonc "$SRC"/toolchain/yonc_cache_key.py "$SRC"/toolchain/yon-lsp "$SRC"/toolchain/yon-fmt "$SRC"/toolchain/yon-lint "$SRC"/toolchain/yon-doc "$PREFIX/toolchain/"
 # the prelude travels with the compiler: the frontend looks for it at <exe>/../../../prelude
 cp -R "$SRC/prelude" "$PREFIX/prelude"
 cp "$SRC"/pkg/yon-pkg "$PREFIX/pkg/"
