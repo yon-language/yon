@@ -6,8 +6,11 @@ kind) gets its own functions; this script writes them all from one template,
 so the six variants are the same code but for the names. Regenerate with
     python3 regression/bench/maps_compare/gen.py
 
-With no argument the program runs every combination at N = 1000 (the
-suite's smoke run, 30 numbers). For a measurement it runs one combination
+With no argument the program checks every combination at N = 1000 and
+prints, for each, five values the suite knows (regression/test_benchmarks.py):
+the size of the map (N), the keys it holds that `has` finds (N), the absent
+keys it finds (0), the size of the union (3N/2) and of the intersection
+(N/2) of the two sets: 30 numbers, no timing. For a measurement it runs one combination
 per process, chosen on the command line: `maps_compare FAMILY KIND N` with FAMILY 0 = HashMap/HashSet,
 1 = XRelMap/XRelSet, and KIND 0 = LatticePoint, 1 = Number, 2 = Text. It
 prints five integers, ns per operation, each the minimum over REPS runs:
@@ -113,6 +116,37 @@ for fam, Map, Set in FAMILIES:
             w(f"    be u := {Set}.{call}(a, b)")
             w(f"    return Time.now_ns(0) - t0 + 0 * {Set}.size(u)")
             w("  }")
+        # the values the suite checks: what the map and the sets hold
+        w(f"  fun {p}_count_has(m: {M}, n: Number): Number {{")
+        w("    be acc := 0")
+        w("    be k := 0")
+        w("    iter n do {")
+        w(f"      acc = acc + {p}_has(m, k)")
+        w("      k = k + 1")
+        w("    }")
+        w("    return acc")
+        w("  }")
+        if miss:
+            w(f"  fun {p}_count_miss(m: {M}, n: Number): Number {{")
+            w("    be acc := 0")
+            w("    be k := 0")
+            w("    iter n do {")
+            w(f"      acc = acc + {p}_miss(m, k)")
+            w("      k = k + 1")
+            w("    }")
+            w("    return acc")
+            w("  }")
+        w(f"  fun {p}_check(n: Number): Number visits Output {{")
+        w(f"    be m := {p}_build(n)")
+        w(f"    be a := {p}_set(0, n)")
+        w(f"    be b := {p}_set(n / 2, n)")
+        w(f"    be _0 := Output.print(String.from_int({Map}.size(m)))")
+        w(f"    be _1 := Output.print(String.from_int({p}_count_has(m, n)))")
+        w(f"    be _2 := Output.print(String.from_int(" + (f"{p}_count_miss(m, n)" if miss else "0") + "))")
+        w(f"    be _3 := Output.print(String.from_int({Set}.size({Set}.union(a, b))))")
+        w(f"    be _4 := Output.print(String.from_int({Set}.size({Set}.intersect(a, b))))")
+        w("    return 0")
+        w("  }")
         w(f"  fun {p}_row(n: Number): Number visits Output {{")
         w(f"    be m := {p}_build(n)")
         w(f"    be a := {p}_set(0, n)")
@@ -143,7 +177,7 @@ w("  fun arg(i: Number): Number { return String.parse_number(Args.get(i)) }")
 w("  fun smoke(n: Number): Number visits Output {")
 for fam, _, _ in FAMILIES:
     for kind, _, _, _ in KINDS:
-        w(f"    be _{fam}_{kind} := {fam}_{kind}_row(n)")
+        w(f"    be _{fam}_{kind} := {fam}_{kind}_check(n)")
 w("    return 0")
 w("  }")
 w("  fun main(): Number visits Output {")

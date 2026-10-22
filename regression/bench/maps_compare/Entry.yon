@@ -66,6 +66,26 @@ place Entry {
     be u := HashSet.intersect(a, b)
     return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
   }
+  fun hash_point_count_has(m: HashMap<LatticePoint, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + hash_point_has(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun hash_point_check(n: Number): Number visits Output {
+    be m := hash_point_build(n)
+    be a := hash_point_set(0, n)
+    be b := hash_point_set(n / 2, n)
+    be _0 := Output.print(String.from_int(HashMap.size(m)))
+    be _1 := Output.print(String.from_int(hash_point_count_has(m, n)))
+    be _2 := Output.print(String.from_int(0))
+    be _3 := Output.print(String.from_int(HashSet.size(HashSet.union(a, b))))
+    be _4 := Output.print(String.from_int(HashSet.size(HashSet.intersect(a, b))))
+    return 0
+  }
   fun hash_point_row(n: Number): Number visits Output {
     be m := hash_point_build(n)
     be a := hash_point_set(0, n)
@@ -176,6 +196,35 @@ place Entry {
     be t0 := Time.now_ns(0)
     be u := HashSet.intersect(a, b)
     return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
+  }
+  fun hash_number_count_has(m: HashMap<Number, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + hash_number_has(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun hash_number_count_miss(m: HashMap<Number, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + hash_number_miss(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun hash_number_check(n: Number): Number visits Output {
+    be m := hash_number_build(n)
+    be a := hash_number_set(0, n)
+    be b := hash_number_set(n / 2, n)
+    be _0 := Output.print(String.from_int(HashMap.size(m)))
+    be _1 := Output.print(String.from_int(hash_number_count_has(m, n)))
+    be _2 := Output.print(String.from_int(hash_number_count_miss(m, n)))
+    be _3 := Output.print(String.from_int(HashSet.size(HashSet.union(a, b))))
+    be _4 := Output.print(String.from_int(HashSet.size(HashSet.intersect(a, b))))
+    return 0
   }
   fun hash_number_row(n: Number): Number visits Output {
     be m := hash_number_build(n)
@@ -290,6 +339,35 @@ place Entry {
     be u := HashSet.intersect(a, b)
     return Time.now_ns(0) - t0 + 0 * HashSet.size(u)
   }
+  fun hash_text_count_has(m: HashMap<String, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + hash_text_has(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun hash_text_count_miss(m: HashMap<String, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + hash_text_miss(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun hash_text_check(n: Number): Number visits Output {
+    be m := hash_text_build(n)
+    be a := hash_text_set(0, n)
+    be b := hash_text_set(n / 2, n)
+    be _0 := Output.print(String.from_int(HashMap.size(m)))
+    be _1 := Output.print(String.from_int(hash_text_count_has(m, n)))
+    be _2 := Output.print(String.from_int(hash_text_count_miss(m, n)))
+    be _3 := Output.print(String.from_int(HashSet.size(HashSet.union(a, b))))
+    be _4 := Output.print(String.from_int(HashSet.size(HashSet.intersect(a, b))))
+    return 0
+  }
   fun hash_text_row(n: Number): Number visits Output {
     be m := hash_text_build(n)
     be a := hash_text_set(0, n)
@@ -382,6 +460,26 @@ place Entry {
     be t0 := Time.now_ns(0)
     be u := XRelSet.intersect(a, b)
     return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_point_count_has(m: XRelMap<LatticePoint, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + xrel_point_has(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun xrel_point_check(n: Number): Number visits Output {
+    be m := xrel_point_build(n)
+    be a := xrel_point_set(0, n)
+    be b := xrel_point_set(n / 2, n)
+    be _0 := Output.print(String.from_int(XRelMap.size(m)))
+    be _1 := Output.print(String.from_int(xrel_point_count_has(m, n)))
+    be _2 := Output.print(String.from_int(0))
+    be _3 := Output.print(String.from_int(XRelSet.size(XRelSet.union(a, b))))
+    be _4 := Output.print(String.from_int(XRelSet.size(XRelSet.intersect(a, b))))
+    return 0
   }
   fun xrel_point_row(n: Number): Number visits Output {
     be m := xrel_point_build(n)
@@ -493,6 +591,35 @@ place Entry {
     be t0 := Time.now_ns(0)
     be u := XRelSet.intersect(a, b)
     return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
+  }
+  fun xrel_number_count_has(m: XRelMap<Number, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + xrel_number_has(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun xrel_number_count_miss(m: XRelMap<Number, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + xrel_number_miss(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun xrel_number_check(n: Number): Number visits Output {
+    be m := xrel_number_build(n)
+    be a := xrel_number_set(0, n)
+    be b := xrel_number_set(n / 2, n)
+    be _0 := Output.print(String.from_int(XRelMap.size(m)))
+    be _1 := Output.print(String.from_int(xrel_number_count_has(m, n)))
+    be _2 := Output.print(String.from_int(xrel_number_count_miss(m, n)))
+    be _3 := Output.print(String.from_int(XRelSet.size(XRelSet.union(a, b))))
+    be _4 := Output.print(String.from_int(XRelSet.size(XRelSet.intersect(a, b))))
+    return 0
   }
   fun xrel_number_row(n: Number): Number visits Output {
     be m := xrel_number_build(n)
@@ -607,6 +734,35 @@ place Entry {
     be u := XRelSet.intersect(a, b)
     return Time.now_ns(0) - t0 + 0 * XRelSet.size(u)
   }
+  fun xrel_text_count_has(m: XRelMap<String, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + xrel_text_has(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun xrel_text_count_miss(m: XRelMap<String, Number>, n: Number): Number {
+    be acc := 0
+    be k := 0
+    iter n do {
+      acc = acc + xrel_text_miss(m, k)
+      k = k + 1
+    }
+    return acc
+  }
+  fun xrel_text_check(n: Number): Number visits Output {
+    be m := xrel_text_build(n)
+    be a := xrel_text_set(0, n)
+    be b := xrel_text_set(n / 2, n)
+    be _0 := Output.print(String.from_int(XRelMap.size(m)))
+    be _1 := Output.print(String.from_int(xrel_text_count_has(m, n)))
+    be _2 := Output.print(String.from_int(xrel_text_count_miss(m, n)))
+    be _3 := Output.print(String.from_int(XRelSet.size(XRelSet.union(a, b))))
+    be _4 := Output.print(String.from_int(XRelSet.size(XRelSet.intersect(a, b))))
+    return 0
+  }
   fun xrel_text_row(n: Number): Number visits Output {
     be m := xrel_text_build(n)
     be a := xrel_text_set(0, n)
@@ -636,12 +792,12 @@ place Entry {
   }
   fun arg(i: Number): Number { return String.parse_number(Args.get(i)) }
   fun smoke(n: Number): Number visits Output {
-    be _hash_point := hash_point_row(n)
-    be _hash_number := hash_number_row(n)
-    be _hash_text := hash_text_row(n)
-    be _xrel_point := xrel_point_row(n)
-    be _xrel_number := xrel_number_row(n)
-    be _xrel_text := xrel_text_row(n)
+    be _hash_point := hash_point_check(n)
+    be _hash_number := hash_number_check(n)
+    be _hash_text := hash_text_check(n)
+    be _xrel_point := xrel_point_check(n)
+    be _xrel_number := xrel_number_check(n)
+    be _xrel_text := xrel_text_check(n)
     return 0
   }
   fun main(): Number visits Output {
