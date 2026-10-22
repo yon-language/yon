@@ -181,9 +181,14 @@ python3 -m venv .venv && .venv/bin/pip install -r regression/requirements.txt
 regression/gate.sh 0   # build + smoke                              ~10 s
 regression/gate.sh 1   # + tests targeted at the files you changed  ~1-3 min
 regression/gate.sh 2   # + acceptance: examples and cross-Space      ~3-5 min
-regression/gate.sh 3   # + the full suite (benchmarks checked on a small run) ~11 min
+regression/gate.sh 3   # + the full suite (benchmarks checked on a small run) ~8 min
 regression/gate.sh bench  # the benchmark measurements, on a quiet machine     ~6-8 min
 ```
+
+While you work, the compiler's content cache makes a re-run of tier 1 fast:
+`YONC_CACHE_DIR="$PWD/.yonc-cache" regression/gate.sh 1` (a compilation
+already made with the same sources, prelude and toolchain is answered from
+`.yonc-cache/`). Gate 3, the proof before a commit, runs without it.
 
 Beyond unit tests, the suite includes kernel oracles, a surface fuzzer, a
 differential check between the native compiler and the self-hosted one, a
