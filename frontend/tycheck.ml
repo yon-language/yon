@@ -5229,6 +5229,8 @@ and check_given_fun (env : Tyenv.env) (ctx : Reduce.ctx)
            && String.sub fn.fn_name 0 lp = pfx
         then fn.fn_name else pfx ^ fn.fn_name
     | None -> fn.fn_name in
+  Hashtbl.replace Surface_ast.given_decls qname
+    (fn.fn_loc.file, fn.fn_loc.start_line, fn.fn_loc.start_col);
   match Stdlib_runtime.lookup_stdlib_signature qname with
   | None ->
       err fn.fn_loc (Printf.sprintf
@@ -6429,6 +6431,7 @@ let elaborate_id_sugar (p : program) : program =
 let check_program (p : program) : check_result =
   let p = expand_mono_fields p in   (* idempotent: shadow-check on the names *)
   Hashtbl.reset Surface_ast.method_resolutions;
+  Hashtbl.reset Surface_ast.given_decls;
   (* Method-call sugar (`s.add(...)`) is normalized away before any checking.
      Idempotent, so it is also safe to run at the start of desugar_program. *)
   (* Lower Same / bare clear first so every check path (LSP, driver, project) sees

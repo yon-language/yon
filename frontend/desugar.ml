@@ -872,10 +872,12 @@ and desugar_expr (e0 : S.expr) : C.term =
         | None -> name
       in
       (* the given faces of Number are the Math primitives under the name
-         their house gives them: one function *)
+         their house gives them: one function — when, and only when, the
+         declaration the name resolves to is `is given` *)
       let name =
         match name with
-        | "Number__floor" | "Number__exp" | "Number__sin" | "Number__cos" ->
+        | ("Number__floor" | "Number__exp" | "Number__sin" | "Number__cos")
+          when Hashtbl.mem Surface_ast.given_decls name ->
             "Math__" ^ String.sub name 8 (String.length name - 8)
         | _ -> name
       in

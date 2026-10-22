@@ -918,10 +918,24 @@ let xrel_call (t : C.term) : (string * C.term list * bool * string) option =
        | _ -> None)
   | None -> None
 
+(* A function with a body is never replaced by a primitive of its name. A
+   primitive is the realization of an `is given` declaration, which lowers to
+   nothing (desugar drops it); a function that reaches the emitter with a body
+   is a user function, so when its name is also one a primitive answers to,
+   the body is what the call runs, never the primitive. *)
+let primitive_name (n : string) : bool =
+  Stdlib_runtime.lookup_stdlib_signature n <> None || List.mem_assoc n stdlib_registry
+
+let body_over_primitive (funcs : (string * 'a) list) (t : C.term) : bool =
+  match uncurry_app t with
+  | Some (f, _) -> List.mem_assoc f funcs && primitive_name f
+  | None -> false
+
 let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
   match t with
+  | C.App _ as app when body_over_primitive funcs app -> infer_app e env funcs app
   (* inv/concat/ap are surface path-algebra builtins that reach the emitter as
      ordinary applications, not dedicated cubical core nodes. On closed paths
      they REDUCE (builtins.ml groupoid laws: inv(refl)=refl, concat units, ap
@@ -1190,6 +1204,94 @@ let rec infer_mlir_ty (e : emitter)
       (* General case for curried calls: uncurry_app gives the function name
          and argument list, which we then resolve against user functions, the
          stdlib registry, and the __section_X constructors. *)
+      infer_app e env funcs app
+  (* Pair/Fst/Snd type inference *)
+  | C.Pair (a, b) ->
+      let ta = infer_mlir_ty e env funcs a in
+      let tb = infer_mlir_ty e env funcs b in
+      Printf.sprintf "!llvm.struct<(%s, %s)>" ta tb
+  | C.Fst p ->
+      let tp = infer_mlir_ty e env funcs p in
+      let prefix = "!llvm.struct<(" in
+      let plen = String.length prefix in
+      if String.length tp <= plen
+         || String.sub tp 0 plen <> prefix then
+        failwith (Printf.sprintf
+                    "[emit_mlir infer] fst on a non-pair: %s." tp);
+      let rest = String.sub tp plen (String.length tp - plen) in
+      let comma = (try String.index rest ',' with Not_found -> -1) in
+      if comma < 0 then
+        failwith (Printf.sprintf
+                    "[emit_mlir infer] malformed pair: %s." tp);
+      String.sub rest 0 comma |> String.trim
+  | C.Snd p ->
+      let tp = infer_mlir_ty e env funcs p in
+      let prefix = "!llvm.struct<(" in
+      let plen = String.length prefix in
+      if String.length tp <= plen
+         || String.sub tp 0 plen <> prefix then
+        failwith (Printf.sprintf
+                    "[emit_mlir infer] snd on a non-pair: %s." tp);
+      let rest = String.sub tp plen (String.length tp - plen) in
+      let comma = (try String.index rest ',' with Not_found -> -1) in
+      let close = (try String.index rest ')' with Not_found -> -1) in
+      if comma < 0 || close < 0 then
+        failwith (Printf.sprintf
+                    "[emit_mlir infer] malformed pair: %s." tp);
+      String.sub rest (comma + 1) (close - comma - 1) |> String.trim
+  | C.Refl x ->
+      (* refl(x) is inert; its type is the type of x *)
+      infer_mlir_ty e env funcs x
+  | C.J _ as jt ->
+      (* same reduce-then-look discipline as the emission case *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx jt with
+       | C.J _ ->
+           raise (Cubical_stuck "ind_path (path induction) stuck on a non-refl path: no runtime value to lower.")
+       | t' -> infer_mlir_ty e env funcs t')
+  | C.Scope (_, body) ->
+      (* hermetic scope yields its body value; same type *)
+      infer_mlir_ty e env funcs body
+  | C.PLam (_, body) ->
+      (* Paths are proof-erased at runtime and carry the representation of
+         their endpoint carrier. *)
+      infer_mlir_ty e env funcs body
+  | C.PApp (p, i) ->
+      (* A path applied at a dimension may compute to a point: refl-beta
+         (refl(x)@i = x) plus the inv/concat/ap groupoid laws all fire in the
+         reducer. Reduce-then-look, as for J/Transp; a neutral path-app over a
+         free dimension falls back to the path's carrier type. *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx (C.PApp (p, i)) with
+       | C.PApp (p', _) -> infer_mlir_ty e env funcs p'
+       | t' -> infer_mlir_ty e env funcs t')
+  | (C.Transp _ | C.Comp _ | C.HComp _
+    | C.GlueElem _ | C.Unglue _) as ct ->
+      (* A let-bound cubical value needs its normalized carrier type before
+         emit_term is entered.  Use the same kernel reduction discipline as
+         emission; a genuinely stuck cubical term remains a loud error. *)
+      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
+      (match reduced with
+       | C.Transp _ | C.Comp _ | C.HComp _ | C.GlueElem _ | C.Unglue _ ->
+           raise (Cubical_stuck "cubical term (transp/comp/glue) stuck after normalization: no runtime value to lower.")
+       | t' -> infer_mlir_ty e env funcs t')
+  | C.HITElim _ as ht ->
+      (* HIT eliminator: reduce-then-look. hit_elim on a constructor computes
+       * to a branch; stuck only if the scrutinee is not a constructor. *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx ht with
+       | C.HITElim _ -> raise (Cubical_stuck "hit_elim stuck (scrutinee is not a constructor): no runtime value to lower.")
+       | t' -> infer_mlir_ty e env funcs t')
+  | C.HITConstr _ ->
+      raise (Cubical_stuck "a bare HIT constructor has no runtime type (it is a homotopy value); use it through hit_elim.")
+  | C.Unit ->
+      (* the terminal's value: lowered as the f64 0.0 placeholder (see
+         emit_term C.Unit), so that is its inferred carrier too. *)
+      "f64"
+  | _ ->
+      failwith "[emit_mlir infer] term form cannot be analyzed for type inference."
+
+(* The general application, typed: resolved against the user functions, the
+   stdlib registry and the place constructors. *)
+and infer_app (e : emitter) (env : (string * string) Env.t)
+    (funcs : (string * func_sig) list) (app : C.term) : string =
       (match uncurry_app app with
        | Some ("Move__merge", [C.Var move_name; _; _]) ->
            (* Move.merge returns the FIRST source place of the merge move,
@@ -1337,88 +1439,6 @@ let rec infer_mlir_ty (e : emitter)
                                    fname))))
        | None ->
            failwith "[emit_mlir infer] unrecognized App form during type inference.")
-  (* Pair/Fst/Snd type inference *)
-  | C.Pair (a, b) ->
-      let ta = infer_mlir_ty e env funcs a in
-      let tb = infer_mlir_ty e env funcs b in
-      Printf.sprintf "!llvm.struct<(%s, %s)>" ta tb
-  | C.Fst p ->
-      let tp = infer_mlir_ty e env funcs p in
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] fst on a non-pair: %s." tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      if comma < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] malformed pair: %s." tp);
-      String.sub rest 0 comma |> String.trim
-  | C.Snd p ->
-      let tp = infer_mlir_ty e env funcs p in
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] snd on a non-pair: %s." tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      let close = (try String.index rest ')' with Not_found -> -1) in
-      if comma < 0 || close < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] malformed pair: %s." tp);
-      String.sub rest (comma + 1) (close - comma - 1) |> String.trim
-  | C.Refl x ->
-      (* refl(x) is inert; its type is the type of x *)
-      infer_mlir_ty e env funcs x
-  | C.J _ as jt ->
-      (* same reduce-then-look discipline as the emission case *)
-      (match Builtins.reduce_with_builtins Reduce.empty_ctx jt with
-       | C.J _ ->
-           raise (Cubical_stuck "ind_path (path induction) stuck on a non-refl path: no runtime value to lower.")
-       | t' -> infer_mlir_ty e env funcs t')
-  | C.Scope (_, body) ->
-      (* hermetic scope yields its body value; same type *)
-      infer_mlir_ty e env funcs body
-  | C.PLam (_, body) ->
-      (* Paths are proof-erased at runtime and carry the representation of
-         their endpoint carrier. *)
-      infer_mlir_ty e env funcs body
-  | C.PApp (p, i) ->
-      (* A path applied at a dimension may compute to a point: refl-beta
-         (refl(x)@i = x) plus the inv/concat/ap groupoid laws all fire in the
-         reducer. Reduce-then-look, as for J/Transp; a neutral path-app over a
-         free dimension falls back to the path's carrier type. *)
-      (match Builtins.reduce_with_builtins Reduce.empty_ctx (C.PApp (p, i)) with
-       | C.PApp (p', _) -> infer_mlir_ty e env funcs p'
-       | t' -> infer_mlir_ty e env funcs t')
-  | (C.Transp _ | C.Comp _ | C.HComp _
-    | C.GlueElem _ | C.Unglue _) as ct ->
-      (* A let-bound cubical value needs its normalized carrier type before
-         emit_term is entered.  Use the same kernel reduction discipline as
-         emission; a genuinely stuck cubical term remains a loud error. *)
-      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
-      (match reduced with
-       | C.Transp _ | C.Comp _ | C.HComp _ | C.GlueElem _ | C.Unglue _ ->
-           raise (Cubical_stuck "cubical term (transp/comp/glue) stuck after normalization: no runtime value to lower.")
-       | t' -> infer_mlir_ty e env funcs t')
-  | C.HITElim _ as ht ->
-      (* HIT eliminator: reduce-then-look. hit_elim on a constructor computes
-       * to a branch; stuck only if the scrutinee is not a constructor. *)
-      (match Builtins.reduce_with_builtins Reduce.empty_ctx ht with
-       | C.HITElim _ -> raise (Cubical_stuck "hit_elim stuck (scrutinee is not a constructor): no runtime value to lower.")
-       | t' -> infer_mlir_ty e env funcs t')
-  | C.HITConstr _ ->
-      raise (Cubical_stuck "a bare HIT constructor has no runtime type (it is a homotopy value); use it through hit_elim.")
-  | C.Unit ->
-      (* the terminal's value: lowered as the f64 0.0 placeholder (see
-         emit_term C.Unit), so that is its inferred carrier too. *)
-      "f64"
-  | _ ->
-      failwith "[emit_mlir infer] term form cannot be analyzed for type inference."
 
 let rec subst_ty (subst : (string * C.ty) list) (t : C.ty) : C.ty =
   match t with
@@ -1744,6 +1764,7 @@ let rec emit_term (e : emitter)
     (funcs : (string * func_sig) list)
     (t : C.term) : string * string =
   match t with
+  | C.App _ as app when body_over_primitive funcs app -> emit_app e env funcs app
   (* Path-algebra builtins (inv/concat/ap) reach the emitter as ordinary
      applications and reduce on closed paths (groupoid laws); fold before
      emission, else they reach codegen as an unknown function. Same
@@ -4212,6 +4233,175 @@ let rec emit_term (e : emitter)
                 let env' = Env.add x (vv, tv) env in
                 emit_term e env' funcs rest))
   | C.App _ as app ->
+      emit_app e env funcs app
+  | C.Lam _ ->
+      failwith "[emit_mlir] nested Lambda not supported."
+  | C.Place _ ->
+      failwith "[emit_mlir] Place as a term-value not supported."
+  | C.Reduction _ ->
+      failwith "[emit_mlir] Reduction as a term-value not supported."
+  | C.World _ ->
+      failwith "[emit_mlir] World as a term-value not supported."
+  | C.Scope (sname, body) ->
+      (* Hermetic scope, formal layer. `scope S { ... }` becomes a
+       * topos.scope_with_yield region: IsolatedFromAbove makes any implicit
+       * reference to outer SSA values an MLIR VERIFIER ERROR, so every outer
+       * binding used inside is passed as an explicit, typed capture and
+       * rebound as a block argument. The block value is yielded; with the
+       * arena model retired, the pushforward (iota_S)_* is the identity on
+       * the value — the lowering inlines the region at zero runtime cost. *)
+      let fvs = SS.elements (term_free_vars body) in
+      let caps =
+        List.filter_map
+          (fun x ->
+             match Env.find_opt x env with
+             | Some (ssa, ty) -> Some (x, ssa, ty)
+             | None -> None)
+          fvs in
+      let res_ty = infer_mlir_ty e env funcs body in
+      let v = fresh_ssa e in
+      let cap_group =
+        if caps = [] then ""
+        else
+          Printf.sprintf "(%s : %s) "
+            (String.concat ", " (List.map (fun (_, ssa, _) -> ssa) caps))
+            (String.concat ", " (List.map (fun (_, _, ty) -> ty) caps)) in
+      let dbg =
+        if sname = "" then ""
+        else Printf.sprintf "attributes {debug_name = \"%s\"} " sname in
+      emit_line e (Printf.sprintf "%s = topos.scope_with_yield %s-> %s %s{"
+                     v cap_group res_ty dbg);
+      push_indent e;
+      let arg_names = List.map (fun _ -> fresh_ssa e) caps in
+      if caps <> [] then
+        emit_line e (Printf.sprintf "^bb0(%s):"
+                       (String.concat ", "
+                          (List.map2 (fun a (_, _, ty) ->
+                               Printf.sprintf "%s: %s" a ty)
+                             arg_names caps)));
+      let inner_env =
+        List.fold_left2
+          (fun acc a (x, _, ty) -> Env.add x (a, ty) acc)
+          env arg_names caps in
+      let (bv, bty) = emit_term e inner_env funcs body in
+      emit_line e (Printf.sprintf "topos.scope_yield %s : %s" bv bty);
+      pop_indent e;
+      emit_line e "}";
+      (v, res_ty)
+  | C.Emit _ ->
+      failwith "[emit_mlir] Emit not handled."
+  | C.Refl x ->
+      (* refl(x) is an inert witness of equality. Operationally it is the
+         identity: return the original value (the simplified cubical reduction
+         refl(x) -> x). *)
+      emit_term e env funcs x
+  | C.J _ as jt ->
+      (* Path induction. The arbiter of path equality is the REDUCER
+         (Syn(Yon) formalization sec. 16): we normalize the J term, and
+         on a refl path J computes to its diagonal case, which we emit.
+         A J stuck on a non-refl path (a HIT constructor such as the
+         S1 loop) is NOT decided at runtime: identifying it with the
+         diagonal would trivialize S1. Loud error, no equation added. *)
+      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx jt in
+      (match reduced with
+       | C.J _ ->
+           raise (Cubical_stuck "ind_path stuck on a non-refl path: path induction over non-trivial paths is compile-time only; the runtime does not decide path equality.")
+       | t' -> emit_term e env funcs t')
+  | C.PLam (_, body) ->
+      emit_term e env funcs body
+  | C.PApp (p, i) ->
+      (* refl-beta and the inv/concat/ap groupoid laws fire in the reducer;
+         reduce-then-emit, as for J/Transp. A neutral path-app over a free
+         dimension erases to its path's value. *)
+      (match Builtins.reduce_with_builtins Reduce.empty_ctx (C.PApp (p, i)) with
+       | C.PApp (p', _) -> emit_term e env funcs p'
+       | t' -> emit_term e env funcs t')
+  | (C.Transp _ | C.Comp _ | C.HComp _
+    | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _) as ct ->
+      (* comp-in-MLIR. A cubical term in emission position is normalized
+         via the cubical bridge: closed paths/comp/transport compute and their
+         result lowers to MLIR. A term still cubical after normalization is not
+         decided at runtime — loud error, exactly as with a stuck J. *)
+      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
+      (match reduced with
+       | C.Transp _ | C.Comp _ | C.HComp _
+       | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _ ->
+           raise (Cubical_stuck "cubical term stuck after normalization: not decided at runtime.")
+       | t' -> emit_term e env funcs t')
+  (* Sigma pair (Pair, Fst, Snd) --> !llvm.struct *)
+  | C.Pair (a, b) ->
+      let (va, ta) = emit_term e env funcs a in
+      let (vb, tb) = emit_term e env funcs b in
+      let struct_ty = Printf.sprintf "!llvm.struct<(%s, %s)>" ta tb in
+      let v_undef = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = llvm.mlir.undef : %s" v_undef struct_ty);
+      let v_ins1 = fresh_ssa e in
+      emit_line e (Printf.sprintf
+                     "%s = llvm.insertvalue %s, %s[0] : %s"
+                     v_ins1 va v_undef struct_ty);
+      let v_pair = fresh_ssa e in
+      emit_line e (Printf.sprintf
+                     "%s = llvm.insertvalue %s, %s[1] : %s"
+                     v_pair vb v_ins1 struct_ty);
+      (v_pair, struct_ty)
+  | C.Fst p ->
+      let (vp, tp) = emit_term e env funcs p in
+      (* tp should be !llvm.struct<(T_a, T_b)>; extract T_a. *)
+      let prefix = "!llvm.struct<(" in
+      let plen = String.length prefix in
+      if String.length tp <= plen
+         || String.sub tp 0 plen <> prefix then
+        failwith (Printf.sprintf
+                    "[emit_mlir] fst on a non-pair type: %s. fst applies only to a Sigma pair (built with `pair(a, b)`)."
+                    tp);
+      let rest = String.sub tp plen (String.length tp - plen) in
+      let comma = (try String.index rest ',' with Not_found -> -1) in
+      if comma < 0 then
+        failwith (Printf.sprintf
+                    "[emit_mlir] malformed pair type for fst: %s." tp);
+      let ta = String.sub rest 0 comma |> String.trim in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[0] : %s" v vp tp);
+      (v, ta)
+  | C.Snd p ->
+      let (vp, tp) = emit_term e env funcs p in
+      let prefix = "!llvm.struct<(" in
+      let plen = String.length prefix in
+      if String.length tp <= plen
+         || String.sub tp 0 plen <> prefix then
+        failwith (Printf.sprintf
+                    "[emit_mlir] snd on a non-pair type: %s. fix: snd applies only to a Sigma pair."
+                    tp);
+      let rest = String.sub tp plen (String.length tp - plen) in
+      let comma = (try String.index rest ',' with Not_found -> -1) in
+      if comma < 0 then
+        failwith (Printf.sprintf
+                    "[emit_mlir] malformed pair type for snd: %s." tp);
+      let close = (try String.index rest ')' with Not_found -> -1) in
+      if close < 0 || close <= comma then
+        failwith (Printf.sprintf
+                    "[emit_mlir] malformed pair type for snd: %s." tp);
+      let tb = String.sub rest (comma + 1) (close - comma - 1) |> String.trim in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[1] : %s" v vp tp);
+      (v, tb)
+  | C.StreamCons _ ->
+      failwith "[emit_mlir] Stream primitives not handled."
+  | C.Unit ->
+      (* C.Unit appears as the else-branch of `when c { body }` with no
+       * otherwise. We treat it as an f64 0.0 placeholder, matching the type of
+       * the then-branch when that produces a numeric value, and ignored as a
+       * no-op otherwise. *)
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v);
+      (v, "f64")
+
+(* ─── Place / reduction / world ─────────────────────────────────────── *)
+
+(* The general application: a call resolved against the user functions, the
+   stdlib registry and the place constructors. *)
+and emit_app (e : emitter) (env : (string * string) Env.t)
+    (funcs : (string * func_sig) list) (app : C.term) : string * string =
       (match uncurry_app app with
        (* A call to a variable bound to a top-level function via the
           "__hof_ref:<fname>" alias: turn the indirect call into a direct call
@@ -5048,169 +5238,6 @@ let rec emit_term (e : emitter)
                        fname)
        | None ->
            failwith "[emit_mlir] unrecognized App form.")
-  | C.Lam _ ->
-      failwith "[emit_mlir] nested Lambda not supported."
-  | C.Place _ ->
-      failwith "[emit_mlir] Place as a term-value not supported."
-  | C.Reduction _ ->
-      failwith "[emit_mlir] Reduction as a term-value not supported."
-  | C.World _ ->
-      failwith "[emit_mlir] World as a term-value not supported."
-  | C.Scope (sname, body) ->
-      (* Hermetic scope, formal layer. `scope S { ... }` becomes a
-       * topos.scope_with_yield region: IsolatedFromAbove makes any implicit
-       * reference to outer SSA values an MLIR VERIFIER ERROR, so every outer
-       * binding used inside is passed as an explicit, typed capture and
-       * rebound as a block argument. The block value is yielded; with the
-       * arena model retired, the pushforward (iota_S)_* is the identity on
-       * the value — the lowering inlines the region at zero runtime cost. *)
-      let fvs = SS.elements (term_free_vars body) in
-      let caps =
-        List.filter_map
-          (fun x ->
-             match Env.find_opt x env with
-             | Some (ssa, ty) -> Some (x, ssa, ty)
-             | None -> None)
-          fvs in
-      let res_ty = infer_mlir_ty e env funcs body in
-      let v = fresh_ssa e in
-      let cap_group =
-        if caps = [] then ""
-        else
-          Printf.sprintf "(%s : %s) "
-            (String.concat ", " (List.map (fun (_, ssa, _) -> ssa) caps))
-            (String.concat ", " (List.map (fun (_, _, ty) -> ty) caps)) in
-      let dbg =
-        if sname = "" then ""
-        else Printf.sprintf "attributes {debug_name = \"%s\"} " sname in
-      emit_line e (Printf.sprintf "%s = topos.scope_with_yield %s-> %s %s{"
-                     v cap_group res_ty dbg);
-      push_indent e;
-      let arg_names = List.map (fun _ -> fresh_ssa e) caps in
-      if caps <> [] then
-        emit_line e (Printf.sprintf "^bb0(%s):"
-                       (String.concat ", "
-                          (List.map2 (fun a (_, _, ty) ->
-                               Printf.sprintf "%s: %s" a ty)
-                             arg_names caps)));
-      let inner_env =
-        List.fold_left2
-          (fun acc a (x, _, ty) -> Env.add x (a, ty) acc)
-          env arg_names caps in
-      let (bv, bty) = emit_term e inner_env funcs body in
-      emit_line e (Printf.sprintf "topos.scope_yield %s : %s" bv bty);
-      pop_indent e;
-      emit_line e "}";
-      (v, res_ty)
-  | C.Emit _ ->
-      failwith "[emit_mlir] Emit not handled."
-  | C.Refl x ->
-      (* refl(x) is an inert witness of equality. Operationally it is the
-         identity: return the original value (the simplified cubical reduction
-         refl(x) -> x). *)
-      emit_term e env funcs x
-  | C.J _ as jt ->
-      (* Path induction. The arbiter of path equality is the REDUCER
-         (Syn(Yon) formalization sec. 16): we normalize the J term, and
-         on a refl path J computes to its diagonal case, which we emit.
-         A J stuck on a non-refl path (a HIT constructor such as the
-         S1 loop) is NOT decided at runtime: identifying it with the
-         diagonal would trivialize S1. Loud error, no equation added. *)
-      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx jt in
-      (match reduced with
-       | C.J _ ->
-           raise (Cubical_stuck "ind_path stuck on a non-refl path: path induction over non-trivial paths is compile-time only; the runtime does not decide path equality.")
-       | t' -> emit_term e env funcs t')
-  | C.PLam (_, body) ->
-      emit_term e env funcs body
-  | C.PApp (p, i) ->
-      (* refl-beta and the inv/concat/ap groupoid laws fire in the reducer;
-         reduce-then-emit, as for J/Transp. A neutral path-app over a free
-         dimension erases to its path's value. *)
-      (match Builtins.reduce_with_builtins Reduce.empty_ctx (C.PApp (p, i)) with
-       | C.PApp (p', _) -> emit_term e env funcs p'
-       | t' -> emit_term e env funcs t')
-  | (C.Transp _ | C.Comp _ | C.HComp _
-    | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _) as ct ->
-      (* comp-in-MLIR. A cubical term in emission position is normalized
-         via the cubical bridge: closed paths/comp/transport compute and their
-         result lowers to MLIR. A term still cubical after normalization is not
-         decided at runtime — loud error, exactly as with a stuck J. *)
-      let reduced = Builtins.reduce_with_builtins Reduce.empty_ctx ct in
-      (match reduced with
-       | C.Transp _ | C.Comp _ | C.HComp _
-       | C.GlueElem _ | C.Unglue _ | C.HITElim _ | C.HITConstr _ ->
-           raise (Cubical_stuck "cubical term stuck after normalization: not decided at runtime.")
-       | t' -> emit_term e env funcs t')
-  (* Sigma pair (Pair, Fst, Snd) --> !llvm.struct *)
-  | C.Pair (a, b) ->
-      let (va, ta) = emit_term e env funcs a in
-      let (vb, tb) = emit_term e env funcs b in
-      let struct_ty = Printf.sprintf "!llvm.struct<(%s, %s)>" ta tb in
-      let v_undef = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = llvm.mlir.undef : %s" v_undef struct_ty);
-      let v_ins1 = fresh_ssa e in
-      emit_line e (Printf.sprintf
-                     "%s = llvm.insertvalue %s, %s[0] : %s"
-                     v_ins1 va v_undef struct_ty);
-      let v_pair = fresh_ssa e in
-      emit_line e (Printf.sprintf
-                     "%s = llvm.insertvalue %s, %s[1] : %s"
-                     v_pair vb v_ins1 struct_ty);
-      (v_pair, struct_ty)
-  | C.Fst p ->
-      let (vp, tp) = emit_term e env funcs p in
-      (* tp should be !llvm.struct<(T_a, T_b)>; extract T_a. *)
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
-                    "[emit_mlir] fst on a non-pair type: %s. fst applies only to a Sigma pair (built with `pair(a, b)`)."
-                    tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      if comma < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir] malformed pair type for fst: %s." tp);
-      let ta = String.sub rest 0 comma |> String.trim in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[0] : %s" v vp tp);
-      (v, ta)
-  | C.Snd p ->
-      let (vp, tp) = emit_term e env funcs p in
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
-                    "[emit_mlir] snd on a non-pair type: %s. fix: snd applies only to a Sigma pair."
-                    tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      if comma < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir] malformed pair type for snd: %s." tp);
-      let close = (try String.index rest ')' with Not_found -> -1) in
-      if close < 0 || close <= comma then
-        failwith (Printf.sprintf
-                    "[emit_mlir] malformed pair type for snd: %s." tp);
-      let tb = String.sub rest (comma + 1) (close - comma - 1) |> String.trim in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[1] : %s" v vp tp);
-      (v, tb)
-  | C.StreamCons _ ->
-      failwith "[emit_mlir] Stream primitives not handled."
-  | C.Unit ->
-      (* C.Unit appears as the else-branch of `when c { body }` with no
-       * otherwise. We treat it as an f64 0.0 placeholder, matching the type of
-       * the then-branch when that produces a numeric value, and ignored as a
-       * no-op otherwise. *)
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v);
-      (v, "f64")
-
-(* ─── Place / reduction / world ─────────────────────────────────────── *)
 
 (* A value given to a runtime primitive that takes a uniform f64 slot: an
    Int64 enters as its bits, a section as its handle. *)
@@ -6404,8 +6431,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
       pd.p_name ^ "__" ^ op.op_name
     ) pd.p_operations
   ) places in
+  (* ...and the names that are functions with a body: a body is never
+     replaced by a primitive of its name, so no primitive is declared for it *)
+  let bodied = List.map fst dr_functions_shaken in
   let used_list = Hashtbl.fold (fun k () acc ->
-    if List.mem k place_op_names then acc
+    if List.mem k place_op_names || List.mem k bodied then acc
     else k :: acc
   ) used_builtins [] in
   (* The list declarations are needed even when no List operation is used
