@@ -1066,15 +1066,70 @@ let resolve_fused (t : ty) : ty =
        | Some p -> TyPrim p | None -> t)
   | _ -> t
 
-(* The type root of a wire element, as the consumer declares it. *)
-let wire_elem_root (env : Tyenv.env) (t : ty) : int64 =
+(* The types a wire carries, and how: a number as itself, a string by its
+   bytes, a place by its fields, a list, a HashMap, a HashSet, an XRelMap or an
+   XRelSet by its elements. Each type is registered under its root with the
+   roots of its parts; anything else (a coproduct, a Boolean, a closure) is not
+   carried, and None says so. *)
+let wire_kind_scalar = 0
+let wire_kind_string = 1
+let wire_kind_list = 2
+let wire_kind_map = 3
+let wire_kind_place = 4
+let wire_kind_set = 5
+let wire_kind_xmap = 6
+let wire_kind_xset = 7
+
+let rec wire_desc (env : Tyenv.env) (seen : string list) (t : ty) : int64 option =
+  let reg root kind kids =
+    Hashtbl.replace Surface_ast.wire_types root (kind, kids); Some root in
+  let rec all = function
+    | [] -> Some []
+    | x :: rest ->
+        (match wire_desc env seen x, all rest with
+         | Some r, Some rs -> Some (r :: rs)
+         | _ -> None) in
+  let coll kind parts =
+    match all parts, Type_root.type_root env t with
+    | Some kids, Some root -> reg root kind kids
+    | _ -> None in
   match resolve_fused t with
-  | TyPrim p -> Type_root.prim_root p
+  | TyPrim p ->
+      (match Carrier.prim_carrier p with
+       | Some (Carrier.Scalar (Carrier.W_f64 | Carrier.W_i64)) when p <> "unknown" ->
+           reg (Type_root.prim_root p) wire_kind_scalar []
+       | Some (Carrier.Handle "Text") -> reg (Type_root.prim_root p) wire_kind_string []
+       | _ -> None)
   | TyUser p ->
       (match Tyenv.lookup_place env p with
-       | Some pd -> Type_root.root_of_place env pd
-       | None -> Type_root.leaf_root p)
-  | t -> (match Type_root.type_root env t with Some r -> r | None -> 0L)
+       | Some pd when pd.pd_arms = [] && pd.pd_type_params = [] ->
+           let root = Type_root.root_of_place env pd in
+           if List.mem p seen then Some root
+           else
+             let fields = List.filter_map (function
+               | FoField f -> Some f.fd_ty | _ -> None) pd.pd_members in
+             let rec kids = function
+               | [] -> Some []
+               | f :: rest ->
+                   (match wire_desc env (p :: seen) f, kids rest with
+                    | Some r, Some rs -> Some (r :: rs)
+                    | _ -> None) in
+             (match kids fields with
+              | Some ks -> reg root wire_kind_place ks
+              | None -> None)
+       | _ -> None)
+  | TyList e | TyApp ("List", [e]) -> coll wire_kind_list [e]
+  | TyApp ("HashMap", [k; v]) -> coll wire_kind_map [k; v]
+  | TyApp ("HashSet", [e]) -> coll wire_kind_set [e]
+  | TyApp ("XRelMap", [k; v]) -> coll wire_kind_xmap [k; v]
+  | TyApp ("XRelSet", [e]) -> coll wire_kind_xset [e]
+  | _ -> None
+
+(* Whether a wire element travels as frames: anything but a number. *)
+let wire_framed (root : int64) : bool =
+  match Hashtbl.find_opt Surface_ast.wire_types root with
+  | Some (k, _) -> k <> wire_kind_scalar
+  | None -> true
 
 (* What a call between processes carries: a scalar, as one f64. *)
 let rpc_carries (t : ty) : bool =
@@ -1175,29 +1230,22 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
 
 (* A producer's wire carries its elements to another Space. *)
 let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
-  (match fn.fn_return with
-   | Some (TyChannel t) ->
-       let is_place = match t with
-         | TyUser p -> Tyenv.lookup_place env p <> None | _ -> false in
-       Hashtbl.replace Surface_ast.producer_roots fn.fn_name
-         (wire_elem_root env t, is_place)
-   | _ -> ());
   match fn.fn_return with
   | Some (TyChannel t) when not (ty_mobile env t) ->
       [ { err_loc = fn.fn_loc; err_msg = boundary_msg "the element of this wire" t } ]
   | Some (TyChannel t) ->
-      (* a scalar travels as one number, a place as its frame; anything else
-         would travel as a number that means nothing on the other side *)
-      let is_place = match resolve_fused t with
-        | TyUser p -> Tyenv.lookup_place env p <> None
-        | _ -> false in
-      if rpc_carries t || is_place then []
-      else [ { err_loc = fn.fn_loc;
+      (match wire_desc env [] t with
+       | Some root ->
+           Hashtbl.replace Surface_ast.producer_roots fn.fn_name (root, wire_framed root);
+           []
+       | None ->
+           [ { err_loc = fn.fn_loc;
                err_msg = Printf.sprintf
                  "the element of this wire has type %s, and a wire carries \
-                  numbers and places only: a %s would arrive as a meaningless \
-                  number. Wrap it in a place."
-                 (Tyenv.ty_to_string t) (Tyenv.ty_to_string t) } ]
+                  numbers, strings, places of carried fields, lists, HashMap, \
+                  HashSet, XRelMap and XRelSet of carried values: a %s has no \
+                  frame."
+                 (Tyenv.ty_to_string t) (Tyenv.ty_to_string t) } ])
   | _ -> []
 
 (* The verdicts, once the whole body has been seen. *)
@@ -1856,18 +1904,13 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
               | _ -> TyPrim "number")
          | _ -> TyPrim "number")
       in
-      let n_bytes =
-        match elem with
-        | TyUser pname ->
-            (match Tyenv.lookup_place env pname with
-             | Some _pd -> 256  (* wire slot cap for the variable frame;
-                                   the byte ring (seal 2c) removes the cap *)
-             | None -> 0)
-        | _ -> 0
-      in
+      (* a number crosses as itself on the slot ring (0); anything else as
+         frames on the byte ring (any n > 0 selects it) *)
+      let root = match wire_desc env [] elem with Some r -> r | None -> 0L in
+      let n_bytes = if wire_framed root then 256 else 0 in
       Hashtbl.replace substream_site_table (loc.start_line, loc.start_col) n_bytes;
       Hashtbl.replace Surface_ast.wire_elem_roots
-        (loc.file, loc.start_line, loc.start_col) (wire_elem_root env elem);
+        (loc.file, loc.start_line, loc.start_col) root;
       ok (TyChannel elem)
 
   | EField (obj, fld, loc) ->
@@ -1942,23 +1985,20 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                      (match ret with
                       | Some (Some (TyChannel elem)) ->
                           let sel = Module_prefix.op_selector bare in
-                          (* The wire carries a variable-length frame, not the
-                             raw payload, so the channel slot is a generous cap
-                             (the byte ring of seal 2c removes the fixed cap);
-                             0 for a scalar (the unchanged f64 channel). *)
-                          let n_bytes =
-                            match elem with
-                            | TyUser pname ->
-                                (match Tyenv.lookup_place env pname with
-                                 | Some _pd -> 256
-                                 | None -> 0)
-                            | _ -> 0
-                          in
-                          Hashtbl.replace awaits_site_table
-                            (loc.start_line, loc.start_col) (sp, sel, sel, n_bytes);
-                          Hashtbl.replace Surface_ast.wire_elem_roots
-                            (loc.file, loc.start_line, loc.start_col) (wire_elem_root env elem);
-                          ok (TySubscription (sp, elem))
+                          (match wire_desc env [] elem with
+                           | None ->
+                               err floc (Printf.sprintf
+                                 "'%s' produces %s, and a wire does not carry a %s"
+                                 bare (Tyenv.ty_to_string elem) (Tyenv.ty_to_string elem))
+                           | Some root ->
+                               (* a number on the slot ring (0), anything else
+                                  as frames on the byte ring (n > 0) *)
+                               let n_bytes = if wire_framed root then 256 else 0 in
+                               Hashtbl.replace awaits_site_table
+                                 (loc.start_line, loc.start_col) (sp, sel, sel, n_bytes);
+                               Hashtbl.replace Surface_ast.wire_elem_roots
+                                 (loc.file, loc.start_line, loc.start_col) root;
+                               ok (TySubscription (sp, elem)))
                       | Some r ->
                           let shown = (match r with
                             | Some t -> Tyenv.ty_to_string t
@@ -6631,6 +6671,7 @@ let check_program (p : program) : check_result =
   let p = Method_sugar.qualify_overloads p in
   Hashtbl.reset fun_space;
   Hashtbl.reset Surface_ast.producer_roots;
+  Hashtbl.reset Surface_ast.wire_types;
   List.iter (function
     | TopFun fd ->
         (match Hashtbl.find_opt Surface_ast.user_file_space fd.fn_loc.file with

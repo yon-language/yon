@@ -258,8 +258,14 @@ def test_a_wire_of_closures_is_refused(tmp_path):
     assert _refused(rc, out, "the element of this wire"), out
 
 
-def test_a_wire_of_text_is_refused_while_it_carries_numbers_and_places(tmp_path):
+def test_a_wire_of_text_is_accepted(tmp_path):
     rc, out = _producer(tmp_path, "String", "\"a\"")
+    assert rc == 0, out
+
+
+def test_a_wire_of_a_coproduct_is_refused(tmp_path):
+    # Lookup<Number> is Found(v) | Absent: the wire has no frame for an arm
+    rc, out = _producer(tmp_path, "Lookup<Number>", "Found(1)")
     assert _refused(rc, out, "the element of this wire"), out
 
 

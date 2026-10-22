@@ -169,47 +169,11 @@ let prim_to_mlir n =
        | Some c -> Carrier.to_mlir c
        | None -> Printf.sprintf "!topos.section<\"%s\">" n)
 
-(* Wire DTO transport: the per-place field-tag descriptor. number/money ->
-   SCALAR (8 bytes), text -> STRING, a transportable nested place -> NESTED
-   with that place's type root (the consumer checks the nested frame against
-   it). Any other field type, or a nesting cycle / excessive depth, makes the
-   place non-transportable (None): it is not registered, and a wire on it
-   fails loudly with no schema for its root rather than mis-serializing. The
-   frame names its type by the place's type root, the identity head of its
-   sections. *)
-let wire_tag_scalar = 0
-let wire_tag_string = 1
-let wire_tag_nested = 4
-
-let rec wire_field_desc (places : C.place_decl list) (depth : int)
-                        ((_, ty) : string * C.ty) : (int * int64) option =
-  if depth > 8 then None   (* refuse pathological or cyclic nesting *)
-  else match ty with
-  | C.TyPlace n ->
-      (match n with
-       | "text" -> Some (wire_tag_string, 0L)
-       | "number" | "money" -> Some (wire_tag_scalar, 0L)
-       | _ ->
-           (match List.find_opt (fun (p : C.place_decl) -> p.p_name = n) places with
-            | Some sub ->
-                (match wire_place_descs places (depth + 1) sub with
-                 | Some _ -> Some (wire_tag_nested, sub.p_root)
-                 | None -> None)
-            | None -> None))
-  | _ -> None
-
-and wire_place_descs (places : C.place_decl list) (depth : int)
-                     (pd : C.place_decl) : (int * int64) list option =
-  List.fold_right (fun f acc ->
-    match wire_field_desc places depth f, acc with
-    | Some d, Some ds -> Some (d :: ds)
-    | _ -> None
-  ) pd.p_fields (Some [])
-
-(* Emitter-facing wrapper (depth 0). *)
-let wire_descs_of_place (places : C.place_decl list) (pd : C.place_decl)
-    : (int * int64) list option =
-  wire_place_descs places 0 pd
+(* The types the wires of the program carry (filled by the type checker),
+   in a fixed order: each one is registered with the runtime at startup. *)
+let wire_types_sorted () : (int64 * (int * int64 list)) list =
+  List.sort compare
+    (Hashtbl.fold (fun k v acc -> (k, v) :: acc) Surface_ast.wire_types [])
 
 (* The type root of a place, by the declaration of that name in the program. *)
 let place_root_of (places : C.place_decl list) (name : string) : int64 =
@@ -5969,26 +5933,24 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
      registers from its own redeclaration; identical schemas yield the same id,
      so producer and consumer agree without exchanging anything. Runs before
      maybe_serve so a serve-mode producer has its descriptors ready. *)
-  List.iter (fun (pd : C.place_decl) ->
-    match wire_descs_of_place e.places_decls pd with
-    | Some descs when descs <> [] ->
-        let n = List.length descs in
-        let v_tags = fresh_ssa e in
-        emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @yon_wire_tags_%s : !llvm.ptr"
-                       v_tags pd.p_name);
-        let v_subs = fresh_ssa e in
-        emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @yon_wire_subs_%s : !llvm.ptr"
-                       v_subs pd.p_name);
-        let v_nf = fresh_ssa e in
-        emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_nf n);
-        let v_root = fresh_ssa e in
-        emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64"
-                       v_root pd.p_root);
-        emit_line e (Printf.sprintf
-                       "func.call @yon_rt_register_schema(%s, %s, %s, %s) : (i64, i32, !llvm.ptr, !llvm.ptr) -> ()"
-                       v_root v_nf v_tags v_subs)
-    | _ -> ()
-  ) e.places_decls;
+  (* the types the wires carry, each under its root with the roots of its
+     parts, so both ends rebuild a value by its type *)
+  List.iteri (fun i (root, (kind, kids)) ->
+    let v_kids = fresh_ssa e in
+    (if kids = [] then
+       emit_line e (Printf.sprintf "%s = llvm.mlir.zero : !llvm.ptr" v_kids)
+     else
+       emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @yon_wire_kids_%d : !llvm.ptr"
+                      v_kids i));
+    let v_root = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64" v_root root);
+    let v_kind = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_kind kind);
+    let v_n = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.constant %d : i32" v_n (List.length kids));
+    emit_line e (Printf.sprintf
+                   "func.call @yon_rt_register_type(%s, %s, %s, %s) : (i64, i32, i32, !llvm.ptr) -> ()"
+                   v_root v_kind v_n v_kids)) (wire_types_sorted ());
   (* Register the declared geometric morphisms so the later
      begin_cross_space_op finds them and uses the categorical derivation. *)
   emit_geom_morphism_bootstrap e geom_morphisms spaces;
@@ -6837,12 +6799,13 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_blank e;
   (* the producers register at startup in every program (main does it) *)
   emit_line e "func.func private @yon_rt_register_producer(f64, f64, f64, f64) -> ()";
+  if Hashtbl.length Surface_ast.wire_types > 0 then
+    emit_line e "func.func private @yon_rt_register_type(i64, i32, i32, !llvm.ptr) -> ()";
   (* Always emitted, regardless of the stdlib, because the __section_X
      constructors and the field_load pre-walk of the lowering need them. *)
   if places <> [] then begin
     emit_line e "// Runtime external declarations for places";
     emit_line e "func.func private @yon_rt_section(i32, !llvm.ptr, i32) -> i64";
-    emit_line e "func.func private @yon_rt_register_schema(i64, i32, !llvm.ptr, !llvm.ptr) -> ()";
     emit_line e "func.func private @yon_rt_field_load_or_stop(i64, i32, i32, !llvm.ptr) -> i32";
     (* fold_named plus the string constants naming the canonical folds. We
        emit these whenever there are places: the cost is negligible and it
@@ -6915,24 +6878,17 @@ let emit_program (dr : Desugar.desugar_result) : string =
      when a Stream__ operation is used, so there is no duplicate here. *)
   (* For each declared place, emit the constructor __section_<Place>:
      alloca payload, field stores, yon_rt_section call. *)
+  (* the parts of each type a wire carries: one global array of roots per
+     type, addressed at startup by yon_rt_register_type *)
+  List.iteri (fun i (_, (_, kids)) ->
+    if kids <> [] then
+      let n = List.length kids in
+      emit_line e (Printf.sprintf
+                     "llvm.mlir.global internal constant @yon_wire_kids_%d(dense<[%s]> : tensor<%d x i64>) : !llvm.array<%d x i64>"
+                     i (String.concat ", " (List.map Int64.to_string kids)) n n))
+    (wire_types_sorted ());
   if places <> [] then begin
     emit_line e "// Place constructors __section_<X> — alloca payload via yon_rt_section";
-    (* Wire DTO descriptors: one global byte array of field tags per
-       transportable place, addressed at startup by yon_rt_register_schema. *)
-    List.iter (fun (pd : C.place_decl) ->
-      match wire_descs_of_place places pd with
-      | Some descs when descs <> [] ->
-          let n = List.length descs in
-          let bytes = String.concat ", " (List.map (fun (t, _) -> string_of_int t) descs) in
-          let subs = String.concat ", " (List.map (fun (_, r) -> Int64.to_string r) descs) in
-          emit_line e (Printf.sprintf
-                         "llvm.mlir.global internal constant @yon_wire_tags_%s(dense<[%s]> : tensor<%d x i8>) : !llvm.array<%d x i8>"
-                         pd.p_name bytes n n);
-          emit_line e (Printf.sprintf
-                         "llvm.mlir.global internal constant @yon_wire_subs_%s(dense<[%s]> : tensor<%d x i64>) : !llvm.array<%d x i64>"
-                         pd.p_name subs n n)
-      | _ -> ()
-    ) places;
     List.iter (fun (pd : C.place_decl) ->
       let field_tys = List.map (fun (_, fty) -> emit_ty fty) pd.p_fields in
       let param_strs = List.mapi (fun i ty ->

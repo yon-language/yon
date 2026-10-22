@@ -2847,8 +2847,6 @@ place R {
 _TEXT_IFACE_runtime = 'fun feed(): Wire<R> {\n  be s := produce { emit .-> R { id 5 body "x" } }\n  return s\n}\n'
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a Text field crosses a wire whole: 2000 characters arrive as 2000")
 def test_wire_carries_a_long_text_field_whole(tmp_path):
     rc = _wire_runtime(tmp_path, _TEXT_SVC_runtime % ("a" * 2000),
                "fun(a: Number, n: R) => a + n.id + String.length(n.body)",

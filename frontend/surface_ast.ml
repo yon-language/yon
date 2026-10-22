@@ -47,6 +47,9 @@ let wire_elem_roots : (string * int * int, int64) Hashtbl.t = Hashtbl.create 16
 (* The producers of the program: function name -> the type root of its wire's
    element and whether the element is a place (carried as frames). *)
 let producer_roots : (string, int64 * bool) Hashtbl.t = Hashtbl.create 8
+(* The types the wires of the program carry: type root -> its kind (the
+   kinds of the runtime) and the roots of its parts. *)
+let wire_types : (int64, int * int64 list) Hashtbl.t = Hashtbl.create 16
 
 (* Method resolution: a call `s.area()` parses to `area(s)`; when `area` is an
    overloaded method the tycheck resolves it to the receiver-qualified name
