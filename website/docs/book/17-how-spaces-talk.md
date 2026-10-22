@@ -98,26 +98,50 @@ at different levels:
   `yon_rt_serialize` / `yon_rt_deserialize`, and only at the instant a value is
   about to leave or has just arrived. The language never names it.
 
-A frame is **variable length**. The producer serializes the section into a
-dense **64&nbsp;KB byte ring** (`YON_WIRE_RING_BYTES`, fixed in the runtime,
-not a configuration knob); the consumer awaits one whole frame and
-deserializes it. A value that would not fit the ring makes the pump **fail
-loudly** rather than truncate, the same discipline as every other hard limit in
-this language.
+A frame is **variable length**, and has no size limit of its own. It crosses
+a dense **64&nbsp;KB byte ring** (`YON_WIRE_RING_BYTES`, fixed in the runtime,
+not a configuration knob) **in pieces** of 16&nbsp;KB. The consumer assembles
+the pieces of one value and rebuilds it. A map of 10<sup>5</sup> entries, about
+1.6&nbsp;MB of frame, crosses the 64&nbsp;KB ring that way. The producer
+accepts the subscription before the values flow, so the consumer drains while
+a long value is still being sent.
 
 What crosses, recursively:
 
 - **scalars** (`Number`, `money`) as their `f64`;
 - **strings**, length-prefixed, re-interned into the consumer's `String` place
   on arrival, so a string that left as one slot arrives as one slot again;
+- **collections**: a `List`, a `HashMap`, a `HashSet`, an `XRelMap`, an
+  `XRelSet`, by their elements (and a map's values), rebuilt on arrival as a
+  persistent collection of the same family by the same `set` and `add` a
+  program would call. A `HashMap` arrives on the FNV heap, an `XRelMap` on the
+  Leech heap. What arrives answers `size`, `has` and `get` like what left;
 - **nested places**: a field that is itself a transportable place is serialized
   as a **sub-frame** with its own type root, written inline and rebuilt by a
   recursive descent, so a chain like `o.inner.b` survives the crossing intact.
 
-Each place that travels registers a small **schema**, its field tags, under its
-type root, so the consumer can reconstruct the right shape. The registry is
-bounded (256 schemas, 64 fields each), and a missing schema is an error, never
-a silent mis-read.
+Every type that travels is registered at startup on both sides, under its
+type root, with the roots of its parts: the fields of a place, the element of
+a list or a set, the key and the value of a map. The registry is bounded (256
+types, 64 fields to a place), and a missing type is an error, never a silent
+mis-read. What has no frame is refused at compile time: a coproduct, a
+`Boolean`, a closure.
+
+What a crossing costs, for a `HashMap<Number, Number>` of 10<sup>5</sup>
+entries (measured on an Apple M1, 2026-10-22; frame 1.6&nbsp;MB):
+
+| step | time |
+|---|--:|
+| frame written, in memory (`yon_rt_wire_encode`) | 18 ms |
+| rebuilt as a `HashMap`, in memory | 0.38–0.71 s |
+| rebuilt as an `XRelMap`, in memory | 54 ms |
+| between two processes, build + frame + pieces + rebuild | 1.29 s |
+
+The rebuild is the cost: one persistent `set` per entry, and on the FNV heap a
+`set` pays the content index (Appendix D). The frame itself is cheap. The
+in-memory numbers come from `runtime/bench_wire_collection.c`. The
+between-process number is the subscriber's time for 10<sup>5</sup> entries
+minus its time for one, and includes the producer building its map.
 
 ### Two Spaces connect only on the same type
 
@@ -238,8 +262,9 @@ place Entry {
 Inside one Space the same call is an ordinary call: the closure never leaves
 the Space that made it. The judgment is the one chapter 5 uses for a closure
 leaving its call (Harper ch. 34): only a mobile type crosses between worlds.
-Between processes the doors carry less than every mobile type: a call
-carries numbers, a wire numbers and places. Anything else is refused there at
+Between processes the call door carries less than every mobile type:
+numbers only, for now. The wire carries numbers, strings, places and
+collections. Anything else is refused there at
 compile time, never delivered as a meaningless number.
 
 ## What about threads?

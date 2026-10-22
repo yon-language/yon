@@ -1878,84 +1878,90 @@ int yon_rt_stream_shm_unlink(const char *name) {
     return shm_unlink(shm_name);
 }
 
-/* ---- (4) Byte-ring variant for variable-length DTO frames. A DTO channel is
- * opened with slot_size == 0; then `capacity` is the ring size in BYTES and
- * head/tail/count are byte offsets/counts. Frames ([u64 root][u32
- * payload_len][payload]) are written densely, wrapping at the buffer end by
- * splitting the copy in two; the frame's own header carries its length, so the
- * ring is self-delimiting and there is no fixed per-element cap (a frame is
- * bounded only by the ring size). The header mutex + the closed flag give the
- * same back-pressure and EOF discipline as the slot ring. An oversized frame is a
- * loud failure (rc -3), never a silent truncation. ---- */
+/* ---- (4) Byte-ring variant for messages. A message channel is opened with
+ * slot_size == 0; then `capacity` is the ring size in BYTES and
+ * head/tail/count are byte offsets/counts. A message of any length crosses in
+ * pieces: each record is [u32 head][piece], head = the piece's length, with
+ * the top bit set when more pieces of the same message follow. Records are
+ * written densely, wrapping at the buffer end by splitting the copy in two.
+ * The header mutex + the closed flag give the same back-pressure and EOF
+ * discipline as the slot ring. A message is bounded by the memory of the two
+ * processes, not by the ring. ---- */
+static int wbuf_reserve(yon_wire_buf_t *b, size_t extra);
+#define YON_PIECE_MORE  0x80000000u
+#define YON_PIECE_BYTES (16u * 1024u)   /* a quarter of the ring */
 
-/* Emit one variable frame. rc 0 sent, -1 full (back-pressure), -3 frame larger
- * than the whole ring (can never fit). */
-int yon_rt_stream_shm_emit_frame(yon_shm_stream_t *s,
-                                 const void *frame, uint32_t frame_len) {
+static void ring_put(uint8_t *buf, uint32_t cap, uint32_t at,
+                     const void *src, uint32_t n) {
+    uint32_t first = cap - at;
+    if (first >= n) memcpy(buf + at, src, n);
+    else {
+        memcpy(buf + at, src, first);
+        memcpy(buf, (const uint8_t *)src + first, n - first);
+    }
+}
+static void ring_get(const uint8_t *buf, uint32_t cap, uint32_t at,
+                     void *dst, uint32_t n) {
+    uint32_t first = cap - at;
+    if (first >= n) memcpy(dst, buf + at, n);
+    else {
+        memcpy(dst, buf + at, first);
+        memcpy((uint8_t *)dst + first, buf, n - first);
+    }
+}
+
+/* Emit one piece. rc 0 sent, -1 full (back-pressure), -3 a piece that can
+ * never fit. */
+static int shm_emit_piece(yon_shm_stream_t *s, const void *piece, uint32_t n,
+                          int more) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
     uint32_t cap = hdr->capacity;
-    if (frame_len > cap) return -3;          /* cannot ever fit: loud */
+    if (n + 4u > cap) return -3;
     if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     int rc;
-    if (cap - hdr->count < frame_len) {
-        rc = -1;                              /* full: back-pressure */
+    if (cap - hdr->count < n + 4u) {
+        rc = -1;
     } else {
-        uint32_t t = hdr->tail;
-        uint32_t first = cap - t;             /* bytes until the buffer end */
-        if (first >= frame_len) {
-            memcpy(buf + t, frame, frame_len);
-        } else {                              /* straddle: split in two */
-            memcpy(buf + t, frame, first);
-            memcpy(buf, (const uint8_t *)frame + first, frame_len - first);
-        }
-        hdr->tail = (t + frame_len) % cap;
-        hdr->count += frame_len;
+        uint32_t head = n | (more ? YON_PIECE_MORE : 0u);
+        ring_put(buf, cap, hdr->tail, &head, 4u);
+        ring_put(buf, cap, (hdr->tail + 4u) % cap, piece, n);
+        hdr->tail = (hdr->tail + 4u + n) % cap;
+        hdr->count += 4u + n;
         rc = 0;
     }
     pthread_mutex_unlock(&hdr->mu);
     return rc;
 }
 
-/* Await one variable frame into out (out_cap bytes); on success *out_len is the
- * frame length. rc 0 got a frame, -1 empty-but-open (retry), -2 EOF
- * (closed+empty), -3 loud error (frame larger than out_cap, or a closed channel
- * left a partial frame = drift). */
-int yon_rt_stream_shm_await_frame(yon_shm_stream_t *s,
-                                  void *out, uint32_t out_cap,
-                                  uint32_t *out_len) {
+/* Await one piece, appended to b. rc 0 got a piece (*more says whether the
+ * message goes on), -1 empty-but-open (retry), -2 EOF (closed+empty), -3 loud
+ * error (a closed channel left a partial record = drift, or no memory). */
+static int shm_await_piece(yon_shm_stream_t *s, yon_wire_buf_t *b, int *more) {
     if (!s) return -1;
     yon_shm_stream_hdr_t *hdr = (yon_shm_stream_hdr_t *)s->region;
     uint8_t *buf = (uint8_t *)s->region + sizeof(yon_shm_stream_hdr_t);
     uint32_t cap = hdr->capacity;
     if (yon_shm_hdr_lock(&hdr->mu) != 0) return -1;
     int rc;
-    if (hdr->count < YON_WIRE_HDR_BYTES) {
-        if (hdr->count == 0u) rc = hdr->closed ? -2 : -1;  /* EOF or empty */
-        else                  rc = hdr->closed ? -3 : -1;  /* drift or wait */
+    if (hdr->count < 4u) {
+        if (hdr->count == 0u) rc = hdr->closed ? -2 : -1;
+        else                  rc = hdr->closed ? -3 : -1;
     } else {
-        uint32_t h = hdr->head;
-        uint8_t hb[YON_WIRE_HDR_BYTES];
-        for (uint32_t i = 0; i < YON_WIRE_HDR_BYTES; i++) hb[i] = buf[(h + i) % cap];
-        uint32_t payload_len;
-        memcpy(&payload_len, hb + 8, 4u);
-        uint32_t frame_len = YON_WIRE_HDR_BYTES + payload_len;
-        if (hdr->count < frame_len) {
-            rc = hdr->closed ? -3 : -1;       /* partial: drift if closed, else wait */
-        } else if (frame_len > out_cap) {
-            rc = -3;                          /* consumer buffer too small: loud */
+        uint32_t head;
+        ring_get(buf, cap, hdr->head, &head, 4u);
+        uint32_t n = head & ~YON_PIECE_MORE;
+        if (hdr->count < 4u + n) {
+            rc = hdr->closed ? -3 : -1;
+        } else if (wbuf_reserve(b, n) != 0) {
+            rc = -3;
         } else {
-            uint32_t first = cap - h;
-            if (first >= frame_len) {
-                memcpy(out, buf + h, frame_len);
-            } else {
-                memcpy(out, buf + h, first);
-                memcpy((uint8_t *)out + first, buf, frame_len - first);
-            }
-            hdr->head = (h + frame_len) % cap;
-            hdr->count -= frame_len;
-            if (out_len) *out_len = frame_len;
+            ring_get(buf, cap, (hdr->head + 4u) % cap, b->p + b->len, n);
+            b->len += n;
+            hdr->head = (hdr->head + 4u + n) % cap;
+            hdr->count -= 4u + n;
+            *more = (head & YON_PIECE_MORE) != 0;
             rc = 0;
         }
     }
@@ -1963,30 +1969,43 @@ int yon_rt_stream_shm_await_frame(yon_shm_stream_t *s,
     return rc;
 }
 
-int yon_rt_stream_shm_produce_frame_blocking(yon_shm_stream_t *s,
-                                             const void *frame, uint32_t frame_len) {
+/* Send a whole message, piece by piece, waiting for room. 0, or -1. */
+int yon_rt_stream_shm_send_message(yon_shm_stream_t *s, const void *msg, size_t len) {
     if (!s) return -1;
-    for (uint32_t i = 0; i < YON_SHM_MAX_POLLS; i++) {
-        int rc = yon_rt_stream_shm_emit_frame(s, frame, frame_len);
-        if (rc == 0) return 0;
-        if (rc == -3) return -3;              /* frame > ring: loud, do not spin */
-        usleep(YON_SHM_POLL_USEC);            /* full: back-pressure, wait for room */
-    }
-    return -1;
+    const uint8_t *p = (const uint8_t *)msg;
+    size_t off = 0;
+    do {
+        uint32_t n = (uint32_t)(len - off < YON_PIECE_BYTES ? len - off : YON_PIECE_BYTES);
+        int more = off + n < len;
+        uint32_t i = 0;
+        int rc;
+        while ((rc = shm_emit_piece(s, p + off, n, more)) == -1) {
+            if (++i >= YON_SHM_MAX_POLLS) return -1;
+            usleep(YON_SHM_POLL_USEC);            /* full: back-pressure */
+        }
+        if (rc != 0) return -1;
+        off += n;
+    } while (off < len);
+    return 0;
 }
 
-int yon_rt_stream_shm_await_frame_blocking(yon_shm_stream_t *s,
-                                           void *out, uint32_t out_cap,
-                                           uint32_t *out_len) {
+/* Receive a whole message into b (b->len is reset). 0 got one, -2 EOF, -3
+ * loud error, -1 timeout. */
+int yon_rt_stream_shm_recv_message(yon_shm_stream_t *s, yon_wire_buf_t *b) {
     if (!s) return -1;
-    for (uint32_t i = 0; i < YON_SHM_MAX_POLLS; i++) {
-        int rc = yon_rt_stream_shm_await_frame(s, out, out_cap, out_len);
-        if (rc == 0) return 0;
-        if (rc == -2 || rc == -3)             /* EOF or loud error: stop */
-            return yon_shm_consumer_done(s, rc);
-        usleep(YON_SHM_POLL_USEC);            /* empty but open: wait for a frame */
+    b->len = 0;
+    int more = 1;
+    while (more) {
+        uint32_t i = 0;
+        int rc;
+        while ((rc = shm_await_piece(s, b, &more)) == -1) {
+            if (++i >= YON_SHM_MAX_POLLS) return yon_shm_consumer_done(s, -1);
+            usleep(YON_SHM_POLL_USEC);            /* empty but open: wait */
+        }
+        if (rc == -2 && b->len != 0) return yon_shm_consumer_done(s, -3);  /* cut */
+        if (rc != 0) return yon_shm_consumer_done(s, rc);
     }
-    return yon_shm_consumer_done(s, -1);
+    return 0;
 }
 
 
@@ -2146,19 +2165,19 @@ static uint64_t yon_root_of_halves(double hi, double lo) {
 }
 
 /* The producers of this binary: the dispatch selector of each function that
- * returns a Wire<T>, the type root of T, and whether T is a place (carried as
- * frames) or a scalar (carried as numbers). A subscription is answered only
+ * returns a Wire<T>, the type root of T, and whether T is carried as frames
+ * (anything but a number) or as numbers. A subscription is answered only
  * when the root the consumer awaits is the producer's own. */
 #define YON_MAX_PRODUCERS 256u
-static struct { uint32_t sel; uint64_t root; int is_place; } g_producers[YON_MAX_PRODUCERS];
+static struct { uint32_t sel; uint64_t root; int framed; } g_producers[YON_MAX_PRODUCERS];
 static uint32_t g_n_producers = 0;
 
 void yon_rt_register_producer(double sel, double root_hi, double root_lo,
-                              double is_place) {
+                              double framed) {
     if (g_n_producers >= YON_MAX_PRODUCERS) return;
     g_producers[g_n_producers].sel = (uint32_t)sel;
     g_producers[g_n_producers].root = yon_root_of_halves(root_hi, root_lo);
-    g_producers[g_n_producers].is_place = is_place != 0.0;
+    g_producers[g_n_producers].framed = framed != 0.0;
     g_n_producers++;
 }
 
@@ -2192,25 +2211,22 @@ double Wire__subscription_stream_dto(double chan_id, double root_hi, double root
     int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
     if (ch < 0) { yon_rt_stream_close((uint32_t)local); return -1.0; }
     ensure_init();
-    uint32_t buf_off = yon_xheap_strip_alloc(g_yon_heap, YON_WIRE_RING_BYTES);
-    if (buf_off == 0) { yon_rt_stream_close((uint32_t)local); return -1.0; }
-    unsigned char *buf = (unsigned char *)yon_xheap_strip_at(g_yon_heap, buf_off);
+    yon_wire_buf_t msg = { 0 };
     for (;;) {
-        uint32_t flen = 0;
-        int rc = yon_rt_stream_shm_await_frame_blocking(
-                     g_shm_stream_handles[ch], buf, YON_WIRE_RING_BYTES, &flen);
-        if (rc != 0) break;  /* -2 EOF, -3 loud error, -1 timeout: stop draining */
-        yon_section_t sec = yon_rt_deserialize(buf, flen, YON_HEAP_ID_DEFAULT, expected);
-        if (sec == YON_SECTION_INVALID) {
-            /* a frame of another type, or one that does not parse: a declared
-               error, never a stream that silently ends early */
-            fprintf(stderr, "error: wire: a frame could not be rebuilt as the "
+        int rc = yon_rt_stream_shm_recv_message(g_shm_stream_handles[ch], &msg);
+        if (rc == -2) break;   /* EOF: the producer closed after its last value */
+        double v;
+        if (rc != 0
+            || yon_rt_wire_decode(msg.p, msg.len, YON_HEAP_ID_DEFAULT, expected, &v) != 0) {
+            /* a frame of another type, one that does not parse, or a channel
+               cut short: a declared error, never a stream that silently ends */
+            fprintf(stderr, "error: wire: a value could not be rebuilt as the "
                             "awaited type; the stream is refused\n");
             exit(3);
         }
-        yon_rt_stream_emit_f64(local, (double)(int64_t)(uint64_t)sec);
+        yon_rt_stream_emit_f64(local, v);
     }
-    yon_xheap_strip_trim(g_yon_heap, buf_off, 0u, YON_WIRE_RING_BYTES);
+    yon_rt_wire_buf_free(&msg);
     yon_rt_stream_close((uint32_t)local);
     return local;
 }
@@ -3064,56 +3080,45 @@ double yon_rt_rpc2_serve_loop(const char *space_name) {
                 yon_rt_rpc2_reply(&req, YON_WIRE_TYPE_REFUSED);
                 continue;
             }
-            uint32_t elem_bytes = (uint32_t)g_producers[pi].is_place; /* 0 = scalar f64;
-                                                            >0 = place frames (byte-ring) */
-            double attach = (elem_bytes == 0)
+            int framed = g_producers[pi].framed;   /* 0 = numbers on the slot ring;
+                                                        1 = frames on the byte ring */
+            double attach = !framed
                 ? yon_rt_stream_shm_open_f64(chan_id, 0.0)              /* scalar slot ring */
                 : yon_rt_stream_shm_open_sized_f64(chan_id, 0.0, 0.0); /* byte ring attach */
             double local_sid = __yon_dispatch(producer_sel, 0.0, 0.0, 0.0, 0.0);
+            /* the subscription is accepted before the values flow: a message
+               larger than the ring needs the consumer draining while it is
+               sent */
+            yon_rt_rpc2_reply(&req, 0.0);
             if (attach >= 0.0 && local_sid >= 0.0) {
                 int ch = yon_rt_shm_slot_of((uint32_t)chan_id);
-                uint32_t fbuf_off = 0;
-                unsigned char *fbuf = NULL;
-                if (elem_bytes != 0) {
-                    ensure_init();
-                    fbuf_off = yon_xheap_strip_alloc(g_yon_heap, YON_WIRE_RING_BYTES);
-                    fbuf = (fbuf_off != 0)
-                         ? (unsigned char *)yon_xheap_strip_at(g_yon_heap, fbuf_off)
-                         : NULL;
-                }
+                yon_wire_buf_t msg = { 0 };
                 for (;;) {
                     double v = yon_rt_stream_await_f64(local_sid);
                     if (v == (double)0xFFFFFFFFu) break;
                     if (v == -1.0) break;  /* open-but-empty: producer misdeclared */
-                    if (elem_bytes == 0) {
+                    if (!framed) {
                         yon_rt_stream_shm_produce_f64(attach, v); /* scalar: unchanged */
-                    } else if (ch >= 0 && fbuf) {
-                        /* place: serialize the section's content (recursive,
-                         * length prefixed) into a variable frame and push it
-                         * onto the dense byte ring. The frame is bounded only by
-                         * the ring; an oversized one is a loud failure, never a
-                         * silent truncation. */
-                        yon_section_t sec = (yon_section_t)(uint64_t)(int64_t)v;
-                        int32_t fn = yon_rt_serialize(sec, fbuf, YON_WIRE_RING_BYTES);
-                        if (fn < 0) break;
-                        int prc = yon_rt_stream_shm_produce_frame_blocking(
-                                      g_shm_stream_handles[ch], fbuf, (uint32_t)fn);
-                        if (prc == -3) {
-                            fprintf(stderr, "[YON-RT] wire: DTO frame (%d bytes) "
-                                    "exceeds the %u-byte ring; closing the stream "
-                                    "instead of truncating\n", fn, YON_WIRE_RING_BYTES);
-                            break;
-                        }
-                        if (prc != 0) break;
-                    } else {
+                        continue;
+                    }
+                    if (ch < 0) break;
+                    /* the value's frame, sent in pieces; a value that cannot
+                     * be encoded sends a frame of no type, which the consumer
+                     * refuses with a declared error instead of seeing a stream
+                     * that ends early */
+                    if (yon_rt_wire_encode(&msg, g_producers[pi].root, v) != 0) {
+                        uint8_t none[YON_WIRE_HDR_BYTES] = { 0 };
+                        yon_rt_stream_shm_send_message(g_shm_stream_handles[ch],
+                                                       none, sizeof none);
                         break;
                     }
+                    if (yon_rt_stream_shm_send_message(g_shm_stream_handles[ch],
+                                                       msg.p, msg.len) != 0)
+                        break;
                 }
-                if (fbuf_off != 0)
-                    yon_xheap_strip_trim(g_yon_heap, fbuf_off, 0u, YON_WIRE_RING_BYTES);
+                yon_rt_wire_buf_free(&msg);
                 yon_rt_stream_shm_close_write_f64(attach);
             }
-            yon_rt_rpc2_reply(&req, 0.0);
             continue;
         }
         double r = __yon_dispatch((double)req.selector,
@@ -7384,191 +7389,341 @@ double yon_rt_bits_xor_64(double a, double b) {
 /* ============================================================== */
 /* Wire DTO transport, seal 2: recursive length-prefixed frames    */
 /* ============================================================== */
-/* The frame is [u64 root][u32 payload_len][payload]. The root is the type
- * root of the value's place, the 8-byte identity head of every section: the
- * name of the place, then the name and the root of each field in declaration
- * order. Two Spaces that disagree on the type disagree on the root, so the
- * root is the type guard of the wire: the consumer compares each frame with
- * the root it awaited and refuses any other, never rebuilding a value of
- * another shape. The payload concatenates the fields in declaration order,
- * positional, untagged: a scalar is its 8 raw bytes, a string is [u32 len][len
- * bytes], a nested place is its own frame. Lengths are u32 native-endian: the
- * shm wire is one machine, one build, so no swap, and a fixed width keeps
- * every read trivially bounded. */
+/* A value crosses a wire as a frame: [u64 root][u32 body_len][body]. The
+ * root is the type root of the value's type (for a place, the identity head
+ * of its sections: its name, then the name and the root of each field in
+ * declaration order). Two Spaces that disagree on the type disagree on the
+ * root, so the root is the type guard of the wire: the consumer compares each
+ * frame with the root it awaited and refuses any other, never rebuilding a
+ * value of another shape. The body follows the type, positional and untagged:
+ *   scalar   its 8 raw bytes
+ *   string   [u32 len][len bytes]
+ *   place    the fields in declaration order; a field of place type is its
+ *            own frame, so its root is checked too
+ *   list     [u32 count] then the elements, first to last
+ *   map      [u32 count] then key, value, key, value ... (HashMap, XRelMap)
+ *   set      [u32 count] then the elements (HashSet, XRelSet)
+ * A place inside a collection is a frame as well. The receiver rebuilds every
+ * value in its own heaps: a place as a section, a collection as a persistent
+ * collection, by the same set / add a program would call. Lengths are u32
+ * native-endian: the shm wire is one machine, one build. */
 
-#define YON_WIRE_MAX_SCHEMAS 256u
-#define YON_WIRE_MAX_FIELDS  64u
+#define YON_WIRE_MAX_TYPES  256u
+#define YON_WIRE_MAX_FIELDS 64u
 
 typedef struct {
     uint64_t        root;
-    uint32_t        n_fields;
-    const uint8_t  *tags;   /* n_fields bytes, static in the binary */
-    const uint64_t *subs;   /* n_fields roots: the place of a nested field, else 0 */
+    uint32_t        kind;   /* YON_WIRE_KIND_* */
+    uint32_t        n;      /* fields of a place; 1 for a list or set; 2 for a map */
+    const uint64_t *kids;   /* their type roots, static in the binary */
     int             used;
-} yon_wire_schema_t;
+} yon_wire_type_t;
 
-static yon_wire_schema_t g_wire_schemas[YON_WIRE_MAX_SCHEMAS];
-static uint32_t g_wire_n_schemas = 0;
+static yon_wire_type_t g_wire_types[YON_WIRE_MAX_TYPES];
+static uint32_t g_wire_n_types = 0;
 
-void yon_rt_register_schema(uint64_t root, uint32_t n_fields,
-                            const uint8_t *tags, const uint64_t *subs) {
-    for (uint32_t i = 0; i < g_wire_n_schemas; i++) {
-        if (g_wire_schemas[i].used && g_wire_schemas[i].root == root) {
-            g_wire_schemas[i].n_fields = n_fields;  /* idempotent update */
-            g_wire_schemas[i].tags = tags;
-            g_wire_schemas[i].subs = subs;
-            return;
-        }
-    }
-    if (g_wire_n_schemas >= YON_WIRE_MAX_SCHEMAS) {
-        fprintf(stderr, "[YON-RT] register_schema: table full (root=%016llx)\n",
+void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
+                          const uint64_t *kids) {
+    for (uint32_t i = 0; i < g_wire_n_types; i++)
+        if (g_wire_types[i].used && g_wire_types[i].root == root) return;
+    if (g_wire_n_types >= YON_WIRE_MAX_TYPES) {
+        fprintf(stderr, "[YON-RT] register_type: table full (root=%016llx)\n",
                 (unsigned long long)root);
-        return;
+        abort();
     }
-    yon_wire_schema_t *e = &g_wire_schemas[g_wire_n_schemas++];
-    e->root     = root;
-    e->n_fields = n_fields;
-    e->tags     = tags;
-    e->subs     = subs;
-    e->used     = 1;
+    yon_wire_type_t *e = &g_wire_types[g_wire_n_types++];
+    e->root = root; e->kind = kind; e->n = n; e->kids = kids; e->used = 1;
 }
 
-static const yon_wire_schema_t *yon_wire_lookup(uint64_t root) {
-    for (uint32_t i = 0; i < g_wire_n_schemas; i++)
-        if (g_wire_schemas[i].used && g_wire_schemas[i].root == root)
-            return &g_wire_schemas[i];
+static const yon_wire_type_t *wire_type(uint64_t root) {
+    for (uint32_t i = 0; i < g_wire_n_types; i++)
+        if (g_wire_types[i].used && g_wire_types[i].root == root)
+            return &g_wire_types[i];
+    fprintf(stderr, "[YON-RT] wire: no type registered for root %016llx\n",
+            (unsigned long long)root);
     return NULL;
 }
 
-int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap) {
-    ensure_init();
-    uint8_t inst[8u + YON_WIRE_MAX_FIELDS * 8];
-    int32_t pn = yon_rt_flatten(sec, inst, sizeof(inst));
-    if (pn < 8) return -1;
-    uint64_t root = yon_root_read_le(inst);   /* the identity head */
-    const yon_wire_schema_t *sc = yon_wire_lookup(root);
-    if (!sc) {
-        fprintf(stderr, "[YON-RT] serialize: no wire schema for root %016llx\n",
-                (unsigned long long)root);
-        return -1;
-    }
-    if (sc->n_fields > YON_WIRE_MAX_FIELDS) return -1;
-    if ((uint32_t)pn != 8u + sc->n_fields * 8u) return -1;
-
-    uint8_t *out = (uint8_t *)out_buf;
-    const uint32_t hdr = YON_WIRE_HDR_BYTES;
-    if (cap < hdr) return -1;
-    uint32_t w = hdr;            /* payload starts after the header */
-    for (uint32_t i = 0; i < sc->n_fields; i++) {
-        uint32_t off = 8u + i * 8u;   /* skip the identity head */
-        if (sc->tags[i] == YON_WIRE_TAG_SCALAR) {
-            if (w + 8u > cap) return -1;
-            memcpy(out + w, inst + off, 8u);
-            w += 8u;
-        } else if (sc->tags[i] == YON_WIRE_TAG_STRING) {
-            double sid;
-            memcpy(&sid, inst + off, 8u);
-            const char *p = yon_ds_cstr(sid);
-            uint32_t slen = p ? (uint32_t)strlen(p) : 0u;
-            if (w + 4u + slen > cap) return -1;
-            memcpy(out + w, &slen, 4u); w += 4u;
-            if (slen) memcpy(out + w, p, slen);
-            w += slen;
-        } else if (sc->tags[i] == YON_WIRE_TAG_NESTED) {
-            /* nested place: the field slot holds the sub-section's coordinate
-             * (heap is the default in-process heap). Recurse, inlining the
-             * sub-frame, which carries its own root. */
-            int64_t raw;
-            memcpy(&raw, inst + off, 8u);
-            yon_section_t sub = yon_section_pack(YON_HEAP_ID_DEFAULT, (uint32_t)raw);
-            int32_t sn = yon_rt_serialize(sub, out + w, cap - w);
-            if (sn < 0) return -1;
-            w += (uint32_t)sn;
-        } else {
-            fprintf(stderr, "[YON-RT] serialize: field tag %u is not carried\n",
-                    (unsigned)sc->tags[i]);
-            return -1;
-        }
-    }
-    uint32_t payload_len = w - hdr;
-    memcpy(out + 0, &root,        8u);
-    memcpy(out + 8, &payload_len, 4u);
-    return (int32_t)w;
+/* A growable byte buffer on the floor (mmap): a message being written or
+ * being assembled from its pieces. */
+static int wbuf_reserve(yon_wire_buf_t *b, size_t extra) {
+    if (b->len + extra <= b->cap) return 0;
+    size_t cap = b->cap ? b->cap : 65536u;
+    while (cap < b->len + extra) cap *= 2;
+    void *np = mmap(NULL, cap, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (np == MAP_FAILED) return -1;
+    if (b->p) { memcpy(np, b->p, b->len); munmap(b->p, b->cap); }
+    b->p = (uint8_t *)np;
+    b->cap = cap;
+    return 0;
+}
+static int wbuf_put(yon_wire_buf_t *b, const void *src, size_t n) {
+    if (wbuf_reserve(b, n) != 0) return -1;
+    memcpy(b->p + b->len, src, n);
+    b->len += n;
+    return 0;
+}
+void yon_rt_wire_buf_free(yon_wire_buf_t *b) {
+    if (b->p) munmap(b->p, b->cap);
+    b->p = NULL; b->len = b->cap = 0;
 }
 
-yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
-                                 uint32_t heap_id, uint64_t expected_root) {
+static int wire_enc(yon_wire_buf_t *b, uint64_t root, double v);
+
+/* A field of a place holds a number or a string as its f64 bits, and a
+ * collection as its handle converted to an i64. */
+static int wire_field_is_handle(const yon_wire_type_t *t) {
+    return t->kind != YON_WIRE_KIND_SCALAR && t->kind != YON_WIRE_KIND_STRING;
+}
+
+/* a place, by its section: the frame header, the fields, the length */
+static int wire_enc_section(yon_wire_buf_t *b, const yon_wire_type_t *t,
+                            yon_section_t sec) {
+    uint8_t inst[8u + YON_WIRE_MAX_FIELDS * 8];
+    if (t->n > YON_WIRE_MAX_FIELDS) return -1;
+    int32_t pn = yon_rt_flatten(sec, inst, sizeof(inst));
+    if (pn != (int32_t)(8u + t->n * 8u)) return -1;
+    if (yon_root_read_le(inst) != t->root) {
+        fprintf(stderr, "[YON-RT] wire: a section of root %016llx where %016llx "
+                "was declared\n", (unsigned long long)yon_root_read_le(inst),
+                (unsigned long long)t->root);
+        return -1;
+    }
+    uint32_t zero = 0;
+    if (wbuf_put(b, &t->root, 8u) || wbuf_put(b, &zero, 4u)) return -1;
+    size_t body = b->len;
+    for (uint32_t i = 0; i < t->n; i++) {
+        const yon_wire_type_t *ft = wire_type(t->kids[i]);
+        if (!ft) return -1;
+        uint8_t *slot = inst + 8u + i * 8u;
+        if (ft->kind == YON_WIRE_KIND_PLACE) {
+            int64_t raw;
+            memcpy(&raw, slot, 8u);
+            if (wire_enc_section(b, ft, yon_section_pack(YON_HEAP_ID_DEFAULT,
+                                                         (uint32_t)raw)) != 0)
+                return -1;
+        } else if (wire_field_is_handle(ft)) {
+            int64_t raw;   /* a collection in a field is its handle as an i64 */
+            memcpy(&raw, slot, 8u);
+            if (wire_enc(b, ft->root, (double)raw) != 0) return -1;
+        } else {
+            double fv;
+            memcpy(&fv, slot, 8u);
+            if (wire_enc(b, ft->root, fv) != 0) return -1;
+        }
+    }
+    uint32_t len = (uint32_t)(b->len - body);
+    memcpy(b->p + body - 4u, &len, 4u);
+    return 0;
+}
+
+typedef struct { yon_wire_buf_t *b; uint64_t k, v; int map; int err; } wire_each_t;
+static void wire_enc_entry(uint64_t k, uint64_t v, void *ctx) {
+    wire_each_t *c = (wire_each_t *)ctx;
+    if (c->err) return;
+    if (wire_enc(c->b, c->k, bits_value(k)) != 0) { c->err = 1; return; }
+    if (c->map && wire_enc(c->b, c->v, bits_value(v)) != 0) c->err = 1;
+}
+
+/* the body of a value of type root (a place writes its whole frame) */
+static int wire_enc(yon_wire_buf_t *b, uint64_t root, double v) {
+    const yon_wire_type_t *t = wire_type(root);
+    if (!t) return -1;
+    switch (t->kind) {
+    case YON_WIRE_KIND_SCALAR:
+        return wbuf_put(b, &v, 8u);
+    case YON_WIRE_KIND_STRING: {
+        const char *p = yon_ds_cstr(v);
+        uint32_t n = p ? (uint32_t)strlen(p) : 0u;
+        if (wbuf_put(b, &n, 4u)) return -1;
+        return n ? wbuf_put(b, p, n) : 0;
+    }
+    case YON_WIRE_KIND_PLACE:
+        return wire_enc_section(b, t, (yon_section_t)(uint64_t)(int64_t)v);
+    case YON_WIRE_KIND_LIST: {
+        uint32_t n = (uint32_t)yon_rt_list_length(v);
+        if (wbuf_put(b, &n, 4u)) return -1;
+        double cur = v;
+        for (uint32_t i = 0; i < n; i++) {
+            if (wire_enc(b, t->kids[0], yon_rt_list_head(cur)) != 0) return -1;
+            cur = yon_rt_list_tail(cur);
+        }
+        return 0;
+    }
+    case YON_WIRE_KIND_MAP: case YON_WIRE_KIND_SET:
+    case YON_WIRE_KIND_XMAP: case YON_WIRE_KIND_XSET: {
+        int leech = t->kind == YON_WIRE_KIND_XMAP || t->kind == YON_WIRE_KIND_XSET;
+        const yon_trie_store_t *st = leech ? &g_leech_store : &g_fnv_store;
+        uint32_t r = leech ? xrel_root(v) : map_root(v);
+        uint32_t n = yon_trie_size(st, r);
+        if (wbuf_put(b, &n, 4u)) return -1;
+        wire_each_t c = { b, t->kids[0], t->n > 1 ? t->kids[1] : 0,
+                          t->kind == YON_WIRE_KIND_MAP || t->kind == YON_WIRE_KIND_XMAP, 0 };
+        yon_trie_each(st, r, wire_enc_entry, &c);
+        return c.err ? -1 : 0;
+    }
+    default:
+        return -1;
+    }
+}
+
+int yon_rt_wire_encode(yon_wire_buf_t *b, uint64_t root, double v) {
     ensure_init();
-    if (len < YON_WIRE_HDR_BYTES) return YON_SECTION_INVALID;
-    const uint8_t *in = (const uint8_t *)in_buf;
-    uint64_t root;
-    uint32_t payload_len;
-    memcpy(&root,        in + 0, 8u);
-    memcpy(&payload_len, in + 8, 4u);
-    if ((uint64_t)YON_WIRE_HDR_BYTES + payload_len > (uint64_t)len)
-        return YON_SECTION_INVALID;
-    if (root != expected_root) {   /* another type: refused, never rebuilt */
+    ds_ensure_init();
+    b->len = 0;
+    const yon_wire_type_t *t = wire_type(root);
+    if (!t) return -1;
+    if (t->kind == YON_WIRE_KIND_PLACE) return wire_enc(b, root, v);
+    uint32_t zero = 0;
+    if (wbuf_put(b, &root, 8u) || wbuf_put(b, &zero, 4u)) return -1;
+    if (wire_enc(b, root, v) != 0) return -1;
+    uint32_t len = (uint32_t)(b->len - YON_WIRE_HDR_BYTES);
+    memcpy(b->p + 8u, &len, 4u);
+    return 0;
+}
+
+typedef struct { const uint8_t *p; size_t n, cur; uint32_t heap; } wire_rd_t;
+
+static int wire_take(wire_rd_t *r, void *dst, size_t k) {
+    if (r->cur + k > r->n) return -1;
+    memcpy(dst, r->p + r->cur, k);
+    r->cur += k;
+    return 0;
+}
+
+static int wire_dec(wire_rd_t *r, uint64_t root, double *out);
+
+/* a place frame whose root must be root */
+static int wire_dec_section(wire_rd_t *r, const yon_wire_type_t *t,
+                            yon_section_t *out) {
+    uint64_t fr;
+    uint32_t len;
+    if (wire_take(r, &fr, 8u) || wire_take(r, &len, 4u)) return -1;
+    if (fr != t->root) {
         fprintf(stderr,
                 "error: wire: a frame of type root %016llx arrived where %016llx "
                 "was awaited; the two Spaces declare different types\n",
-                (unsigned long long)root, (unsigned long long)expected_root);
-        return YON_SECTION_INVALID;
+                (unsigned long long)fr, (unsigned long long)t->root);
+        return -1;
     }
-    const yon_wire_schema_t *sc = yon_wire_lookup(root);
-    if (!sc) {
-        fprintf(stderr, "[YON-RT] deserialize: no wire schema for root %016llx\n",
-                (unsigned long long)root);
-        return YON_SECTION_INVALID;
-    }
-    if (sc->n_fields > YON_WIRE_MAX_FIELDS) return YON_SECTION_INVALID;
-
+    size_t end = r->cur + len;
+    if (end > r->n || t->n > YON_WIRE_MAX_FIELDS) return -1;
     uint8_t inst[YON_WIRE_MAX_FIELDS * 8];
-    const uint8_t *p = in + YON_WIRE_HDR_BYTES;
-    uint32_t cur = 0u;
-    for (uint32_t i = 0; i < sc->n_fields; i++) {
-        uint32_t off = i * 8u;
-        if (sc->tags[i] == YON_WIRE_TAG_SCALAR) {
-            if (cur + 8u > payload_len) return YON_SECTION_INVALID;
-            memcpy(inst + off, p + cur, 8u);
-            cur += 8u;
-        } else if (sc->tags[i] == YON_WIRE_TAG_STRING) {
-            if (cur + 4u > payload_len) return YON_SECTION_INVALID;
-            uint32_t slen;
-            memcpy(&slen, p + cur, 4u); cur += 4u;
-            if ((uint64_t)cur + slen > (uint64_t)payload_len) return YON_SECTION_INVALID;
-            char tmp[YON_STR_MAX_LEN];
-            uint32_t cpy = slen < (uint32_t)YON_STR_MAX_LEN
-                           ? slen : (uint32_t)(YON_STR_MAX_LEN - 1);
-            if (cpy) memcpy(tmp, p + cur, cpy);
-            tmp[cpy] = 0;
-            double sid = yon_ds_string(tmp);  /* rebuilt in this process's ds */
-            memcpy(inst + off, &sid, 8u);
-            cur += slen;
-        } else if (sc->tags[i] == YON_WIRE_TAG_NESTED) {
-            /* nested place: the inlined sub-frame begins at p+cur, and its
-             * root must be the one this field declares. */
-            if (cur + YON_WIRE_HDR_BYTES > payload_len) return YON_SECTION_INVALID;
-            uint32_t sub_pl;
-            memcpy(&sub_pl, p + cur + 8u, 4u);
-            uint64_t sub_frame_len = (uint64_t)YON_WIRE_HDR_BYTES + (uint64_t)sub_pl;
-            if ((uint64_t)cur + sub_frame_len > (uint64_t)payload_len)
-                return YON_SECTION_INVALID;
-            yon_section_t sub = yon_rt_deserialize(p + cur, (uint32_t)sub_frame_len,
-                                                   heap_id, sc->subs[i]);
-            if (sub == YON_SECTION_INVALID) return YON_SECTION_INVALID;
-            memcpy(inst + off, &sub, 8u);
-            cur += (uint32_t)sub_frame_len;
+    for (uint32_t i = 0; i < t->n; i++) {
+        const yon_wire_type_t *ft = wire_type(t->kids[i]);
+        if (!ft) return -1;
+        if (ft->kind == YON_WIRE_KIND_PLACE) {
+            yon_section_t sub;
+            if (wire_dec_section(r, ft, &sub) != 0) return -1;
+            memcpy(inst + i * 8u, &sub, 8u);
         } else {
-            return YON_SECTION_INVALID;
+            double fv;
+            if (wire_dec(r, ft->root, &fv) != 0) return -1;
+            if (wire_field_is_handle(ft)) {
+                int64_t raw = (int64_t)fv;
+                memcpy(inst + i * 8u, &raw, 8u);
+            } else {
+                memcpy(inst + i * 8u, &fv, 8u);
+            }
         }
     }
-    if (cur != payload_len) {   /* loud on structural drift, never silent */
-        fprintf(stderr,
-                "[YON-RT] deserialize: walk consumed %u of %u payload bytes (schema drift)\n",
-                cur, payload_len);
-        return YON_SECTION_INVALID;
+    if (r->cur != end) {   /* loud on structural drift, never silent */
+        fprintf(stderr, "[YON-RT] wire: a frame's body is not its declared length\n");
+        return -1;
     }
-    return yon_rt_section_r(heap_id, inst, sc->n_fields * 8u, root, 0u);
+    *out = yon_rt_section_r(r->heap, inst, t->n * 8u, t->root, 0u);
+    return *out == YON_SECTION_INVALID ? -1 : 0;
+}
+
+static int wire_dec(wire_rd_t *r, uint64_t root, double *out) {
+    const yon_wire_type_t *t = wire_type(root);
+    if (!t) return -1;
+    switch (t->kind) {
+    case YON_WIRE_KIND_SCALAR:
+        return wire_take(r, out, 8u);
+    case YON_WIRE_KIND_STRING: {
+        uint32_t n;
+        if (wire_take(r, &n, 4u) || r->cur + n > r->n) return -1;
+        yon_wire_buf_t tmp = { 0 };
+        if (wbuf_put(&tmp, r->p + r->cur, n) || wbuf_put(&tmp, "", 1u)) {
+            yon_rt_wire_buf_free(&tmp);
+            return -1;
+        }
+        r->cur += n;
+        *out = yon_ds_string((const char *)tmp.p);   /* rebuilt in this process */
+        yon_rt_wire_buf_free(&tmp);
+        return 0;
+    }
+    case YON_WIRE_KIND_PLACE: {
+        yon_section_t sec;
+        if (wire_dec_section(r, t, &sec) != 0) return -1;
+        *out = (double)(int64_t)(uint64_t)sec;
+        return 0;
+    }
+    case YON_WIRE_KIND_LIST: {
+        uint32_t n;
+        if (wire_take(r, &n, 4u)) return -1;
+        /* the elements first to last, then consed last to first */
+        yon_wire_buf_t xs = { 0 };
+        for (uint32_t i = 0; i < n; i++) {
+            double x;
+            if (wire_dec(r, t->kids[0], &x) != 0 || wbuf_put(&xs, &x, 8u) != 0) {
+                yon_rt_wire_buf_free(&xs);
+                return -1;
+            }
+        }
+        double l = yon_rt_list_empty(0.0);
+        for (uint32_t i = n; i > 0; i--) {
+            double x;
+            memcpy(&x, xs.p + (size_t)(i - 1) * 8u, 8u);
+            l = yon_rt_list_cons(x, l);
+        }
+        yon_rt_wire_buf_free(&xs);
+        *out = l;
+        return 0;
+    }
+    case YON_WIRE_KIND_MAP: case YON_WIRE_KIND_SET:
+    case YON_WIRE_KIND_XMAP: case YON_WIRE_KIND_XSET: {
+        uint32_t n;
+        if (wire_take(r, &n, 4u)) return -1;
+        int leech = t->kind == YON_WIRE_KIND_XMAP || t->kind == YON_WIRE_KIND_XSET;
+        int map = t->kind == YON_WIRE_KIND_MAP || t->kind == YON_WIRE_KIND_XMAP;
+        double c = leech ? yon_rt_xrelmap_empty() : yon_rt_map_empty();
+        for (uint32_t i = 0; i < n; i++) {
+            double k, v = 1.0;
+            if (wire_dec(r, t->kids[0], &k) != 0) return -1;
+            if (map && wire_dec(r, t->kids[1], &v) != 0) return -1;
+            c = leech ? yon_rt_xrelmap_set(c, k, v) : yon_rt_map_put(c, k, v);
+        }
+        *out = c;
+        return 0;
+    }
+    default:
+        return -1;
+    }
+}
+
+int yon_rt_wire_decode(const void *msg, size_t len, uint32_t heap_id,
+                       uint64_t expected_root, double *out) {
+    ensure_init();
+    ds_ensure_init();
+    wire_rd_t r = { (const uint8_t *)msg, len, 0, heap_id };
+    const yon_wire_type_t *t = wire_type(expected_root);
+    if (!t) return -1;
+    if (t->kind == YON_WIRE_KIND_PLACE) return wire_dec(&r, expected_root, out);
+    uint64_t fr;
+    uint32_t blen;
+    if (wire_take(&r, &fr, 8u) || wire_take(&r, &blen, 4u)) return -1;
+    if (fr != expected_root) {
+        fprintf(stderr,
+                "error: wire: a frame of type root %016llx arrived where %016llx "
+                "was awaited; the two Spaces declare different types\n",
+                (unsigned long long)fr, (unsigned long long)expected_root);
+        return -1;
+    }
+    if (YON_WIRE_HDR_BYTES + (size_t)blen != len) return -1;
+    if (wire_dec(&r, expected_root, out) != 0) return -1;
+    return r.cur == len ? 0 : -1;
 }
 
 /* ============================================================================

@@ -373,6 +373,12 @@ let rec type_equal
       n1 = n2 && List.length a1 = List.length a2
       && List.for_all2 (type_equal env ctx) a1 a2
   | TyApp (n1, _), TyUser n2 | TyUser n1, TyApp (n2, _) -> n1 = n2
+  (* The containers are the same type when their elements are, so a fused
+     face and its code agree inside them too: Wire<HashMap<Number, Number>>
+     is Wire<HashMap<number, number>>. *)
+  | TyChannel a, TyChannel b | TyList a, TyList b -> type_equal env ctx a b
+  | TyMap (k1, v1), TyMap (k2, v2) ->
+      type_equal env ctx k1 k2 && type_equal env ctx v1 v2
   (* NB: the one-way PROMOTIONS  number <: heyt_int  and  heyt_int <: proposition
    * are not arms here: symmetric arms would unsoundly also accept the
    * reverse (a heyt_int where a number is expected, a prop where a heyt_int is

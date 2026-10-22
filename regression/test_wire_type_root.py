@@ -49,10 +49,23 @@ def test_the_same_version_connects_as_before(tmp_path):
 @pytest.mark.parametrize("reading", [
     "place Reading {\n  humidity Number\n  temp Number\n}\n",       # fields swapped
     "place Reading {\n  temp Number\n  moisture Number\n}\n",       # a field renamed
-    "place Reading {\n  temp Number\n  humidity Boolean\n}\n",      # Number -> Boolean
-], ids=["swapped", "renamed", "number-to-boolean"])
+    "place Reading {\n  temp Number\n  humidity Int64\n}\n",        # Number -> Int64
+], ids=["swapped", "renamed", "number-to-int64"])
 def test_another_version_is_refused_at_the_connection(tmp_path, reading):
     rc, err = _connect(tmp_path, reading)
     assert rc != 153 and rc != 36, (rc, err)
     assert rc == 3, (rc, err)
     assert "the subscription was refused" in err, err
+
+
+def test_a_type_the_wire_does_not_carry_is_refused_at_compile_time(tmp_path):
+    # Number -> Boolean: a Boolean field has no frame, so the consumer that
+    # declares it does not build; nothing reaches the connection
+    for p in ("meteo_svc", "meteo_sub"):
+        shutil.copytree(SCEN / p, tmp_path / p)
+    (tmp_path / "meteo_sub" / "w" / "Reading.yon").write_text(
+        "place Reading {\n  temp Number\n  humidity Boolean\n}\n")
+    c = subprocess.run([str(YONC), "meteo_sub", "-o", "sub"], cwd=str(tmp_path),
+                       capture_output=True, text=True, timeout=180)
+    out = c.stdout + c.stderr
+    assert c.returncode != 0 and "a wire does not carry a Reading" in out, out

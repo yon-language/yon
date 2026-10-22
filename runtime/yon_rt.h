@@ -179,53 +179,50 @@ int yon_rt_field_load_or_stop(yon_section_t sec, uint32_t offset,
  * handle-valued fields are not yet followed. */
 int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
 
-/* ---- Wire DTO transport: the recursive, length-prefixed frame ----
+/* ---- Wire transport: a value as a frame ----
  *
- * A frame is [u64 root][u32 payload_len][payload]. The root is the type root
- * of the value's place, the identity head every section begins with: the
- * place's name, then the name and the root of each field in declaration
- * order. It is the type guard of the wire: two Spaces that declare the type
+ * A value crosses a wire as [u64 root][u32 body_len][body]. The root is the
+ * type root of the value's type, for a place the identity head of its
+ * sections. It is the type guard of the wire: two Spaces that declare the type
  * differently have different roots, and a frame whose root is not the awaited
- * one is refused, never rebuilt. The payload concatenates the field encodings
- * in declaration order, positional, untagged:
- *   - scalar: 8 raw bytes
- *   - string: [u32 len][len bytes] (NUL excluded on the wire)
- *   - nested place: its own frame
- * Lengths are u32 native-endian: producer and consumer are the same build on
- * one machine for the shm wire, so no byte-swap; a fixed width keeps every
- * read trivially bounded (unlike a varint, which can run off a drifted frame).
- * Both ends recover the descriptor of a root from this registry. */
-#define YON_WIRE_TAG_SCALAR 0u
-#define YON_WIRE_TAG_STRING 1u
-#define YON_WIRE_TAG_NESTED 4u
-#define YON_WIRE_HDR_BYTES  12u   /* u64 root + u32 payload_len */
-/* reserved: 2=LIST, 3=MAP */
+ * one is refused, never rebuilt. The body follows the type (yon_rt.c has the
+ * layout): scalars, strings, places with their fields, lists, HashMap and
+ * HashSet, XRelMap and XRelSet. The receiver rebuilds the value in its own
+ * heaps. Each side registers, at startup, the types its wires carry. */
+#define YON_WIRE_KIND_SCALAR 0u
+#define YON_WIRE_KIND_STRING 1u
+#define YON_WIRE_KIND_LIST   2u
+#define YON_WIRE_KIND_MAP    3u
+#define YON_WIRE_KIND_PLACE  4u
+#define YON_WIRE_KIND_SET    5u
+#define YON_WIRE_KIND_XMAP   6u
+#define YON_WIRE_KIND_XSET   7u
+#define YON_WIRE_HDR_BYTES  12u   /* u64 root + u32 body_len */
 
-/* Register the field-tag descriptor of a transportable place, by its root.
- * tags points to n_fields bytes, one YON_WIRE_TAG_* per field in declaration
- * order; subs to n_fields roots (the place of a nested field, 0 otherwise).
- * Idempotent per root. */
-void yon_rt_register_schema(uint64_t root, uint32_t n_fields,
-                            const uint8_t *tags, const uint64_t *subs);
+/* A type the wire carries, by its root: its kind and the roots of its parts
+ * (the fields of a place in declaration order; the element of a list or a
+ * set; the key and the value of a map). Idempotent per root. */
+void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
+                          const uint64_t *kids);
 
-/* Serialize a place instance into a wire frame, by the root in its identity
- * head. Returns the total frame length, or -1 on error / no schema for the
- * root / cap too small. */
-int32_t yon_rt_serialize(yon_section_t sec, void *out_buf, uint32_t cap);
+/* A message: a growable buffer on the floor (mmap). */
+typedef struct { uint8_t *p; size_t len, cap; } yon_wire_buf_t;
+void yon_rt_wire_buf_free(yon_wire_buf_t *b);
 
-/* Rebuild a place instance from a wire frame into heap_id (the consumer's own
- * heap, the wormhole's copy semantics). The frame's root must be
- * expected_root, and every nested frame the root its field declares; any
- * other is a loud refusal. Strings are reallocated locally. The walk asserts
- * it consumes exactly payload_len. Returns the reconstructed section, or
- * YON_SECTION_INVALID. */
-yon_section_t yon_rt_deserialize(const void *in_buf, uint32_t len,
-                                 uint32_t heap_id, uint64_t expected_root);
+/* The frame of the value v of type root, into b (its previous content is
+ * dropped). 0, or -1 when a part of the type is not registered. */
+int yon_rt_wire_encode(yon_wire_buf_t *b, uint64_t root, double v);
+
+/* Rebuild the value of a frame into heap_id. The frame's root must be
+ * expected_root, and every nested place frame the root its field declares;
+ * any other is a loud refusal. 0 and the value in *out, or -1. */
+int yon_rt_wire_decode(const void *msg, size_t len, uint32_t heap_id,
+                       uint64_t expected_root, double *out);
 
 /* The producers of a binary, registered at startup: selector, the type root of
- * the element (two 32-bit halves), 1 if the element is a place. */
+ * the element (two 32-bit halves), 1 if the element travels as frames. */
 void   yon_rt_register_producer(double sel, double root_hi, double root_lo,
-                                double is_place);
+                                double framed);
 /* The consumer's check of a subscription reply: a refusal (the two Spaces
  * declare the element type differently) is a declared error, exit 3. */
 double Wire__subscribed(double reply);
