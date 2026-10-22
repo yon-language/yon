@@ -32,9 +32,9 @@ runtime refuses out loud rather than degrading in silence.
   streams, 16 RPC sessions. Like a fixed-width address bus, these buy predictable
   memory and rule out runaway allocation. Process isolation by the kernel's MMU
   keeps any local fault inside the one server binary that raised it.
-- **The call door**: at most four arguments per cross-Space call, all `f64`.
-  Strings and sections are process-local handles and do not travel on a call;
-  they cross by copy on a `Wire<T>` (chapter 17).
+- **The call door**: at most four arguments per cross-Space call. A string,
+  a place or a collection travels as a frame and is rebuilt on the far side
+  (chapter 17).
 - **Exit codes**: `main`'s value mod 256, like every Unix process.
 
 ## Absent by design
@@ -62,9 +62,6 @@ date.
   capability is absent is not yet refused, and the static rule (a caller of a
   `requires` move must itself hold the capability) is not yet checked
   (chapter 20).
-- **A call between processes carries numbers only.** A string, a place or a
-  collection in a cross-Space signature is refused at compile time; the call
-  does not carry it yet (chapter 11).
 - **The concurrent drain of a `Wire<T>`** (both processes live, the consumer
   draining while the producer fills, under contention) is not yet verified; the
   verified shape is the producer running to completion first (chapter 17).

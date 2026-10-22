@@ -213,15 +213,18 @@ on first contact rather than inheriting its parent's reply slot.
 
 ## The discipline of the wire
 
-Two doors, two disciplines. The **call** door, `__yon_dispatch`, moves `f64`
-and nothing else: a selector plus at most four numeric arguments, and a fifth is
-rejected at compile time. A string or a bare section cannot ride it: it would be
-a handle into a heap the callee does not have (chapter 13), so only numbers cross
-the call door. The checker reads the remote signature, checks every argument
-against its declared type, and refuses a `String` parameter or result before the
-program builds. The **subscription** door, just above, is the one that carries
-values, and it carries them by **copy**, never by handle: a value is serialized
-on the way out and rebuilt on the far side.
+Two doors, one discipline. The **call** door, `__yon_dispatch`, takes a
+selector and at most four arguments; a fifth is rejected at compile time. A
+number rides the request as itself. A string, a place or a collection would be
+a handle into a heap the callee does not have (chapter 13), so it crosses as a
+**frame**, the same frame a wire carries, on a byte ring of the caller's
+session, in pieces, and the server rebuilds it in its own heap; a result that
+is not a number comes back the same way. The request carries the type root of
+the signature as the caller declares it, and the server compares it with its
+own before it reads an argument: two versions of a signature never exchange a
+call. The **subscription** door, just above, carries a stream of values by the
+same frames. Both carry values by **copy**, never by handle: a value is
+serialized on the way out and rebuilt on the far side.
 
 So the underlying rule is uniform, and it is the rule the whole book keeps
 returning to: no process ever dereferences another process's heap. Either a
@@ -262,10 +265,9 @@ place Entry {
 Inside one Space the same call is an ordinary call: the closure never leaves
 the Space that made it. The judgment is the one chapter 5 uses for a closure
 leaving its call (Harper ch. 34): only a mobile type crosses between worlds.
-Between processes the call door carries less than every mobile type:
-numbers only, for now. The wire carries numbers, strings, places and
-collections. Anything else is refused there at
-compile time, never delivered as a meaningless number.
+Between processes both doors carry what has a frame: numbers, strings,
+places of carried fields and collections of carried values. Anything else is
+refused there at compile time, never delivered as a meaningless number.
 
 ## What about threads?
 

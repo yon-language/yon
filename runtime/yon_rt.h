@@ -205,6 +205,19 @@ int32_t yon_rt_flatten(yon_section_t sec, void *out_buf, uint32_t cap);
 void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
                           const uint64_t *kids);
 
+/* The same registration as the lowered code makes it, numbers only: a root
+ * is two exact 32-bit halves; the type, then each of its parts by index. */
+void yon_rt_wire_type(double hi, double lo, double kind, double n);
+void yon_rt_wire_type_part(double hi, double lo, double i, double khi, double klo);
+
+/* Calls between processes by type. sig: [signature root, n, result root,
+ * result framed, (argument root, argument framed) x n], n <= 4. The server
+ * answers only a call whose signature root is its own. */
+double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *sig,
+                                double a1, double a2, double a3, double a4);
+/* The server's operations, a signature word at a time (word as two halves). */
+void   yon_rt_register_op_word(double sel, double i, double hi, double lo);
+
 /* A message: a growable buffer on the floor (mmap). */
 typedef struct { uint8_t *p; size_t len, cap; } yon_wire_buf_t;
 void yon_rt_wire_buf_free(yon_wire_buf_t *b);

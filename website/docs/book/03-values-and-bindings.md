@@ -33,10 +33,9 @@ literal; `String` is the builtin place whose sections (`concat`, `equal`, `lengt
 values. At runtime a string is a handle into the content-addressed heap, and
 literals are **interned**, the same literal is the same value, which is why
 `String.equal("ciao", greeting)` holds: equality is equality of content.
-A cross-package function call carries numbers only. A string passed to one
-is not yet refused at compile time: it arrives as a wrong value (chapter 19).
-Strings and places cross between processes by copy, on a `Wire<T>`
-(chapter 17).
+A string that crosses to another process, as the argument of a call or on a
+`Wire<T>`, crosses by copy: its bytes travel and the receiver interns them in
+its own heap (chapter 17).
 
 **Durations.** A duration *is* a `Number` of milliseconds, so `2500` (two and
 a half seconds) is ordinary arithmetic. The dedicated literal suffixes (`5s`,

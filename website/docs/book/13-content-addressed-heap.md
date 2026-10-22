@@ -25,10 +25,10 @@ or rehashed under you. Deduplication is not an optimization pass; it is the
 definition of allocation.
 
 A **handle**, what your variables actually hold for strings, sections,
-lists, trees, is that slot index, carried as an `f64`. This is why a *call*
-between packages carries numbers only, and why a string or a place crosses by
-copy on a `Wire<T>` (chapter 17): a handle is meaningless outside the heap that
-minted it.
+lists, trees, is that slot index, carried as an `f64`. This is why a string, a
+place or a collection crosses between processes by copy, on a call or on a
+`Wire<T>` (chapter 17): a handle is meaningless outside the heap that minted
+it.
 
 ## Equality for free
 
