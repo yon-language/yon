@@ -67,15 +67,29 @@ def _run(tmp: Path, values: list, worlds: list | None = None) -> list:
         # own process group: a failed run must not leave its server behind
         procs.append(subprocess.Popen(["./client"], cwd=tmp, env=env, start_new_session=True,
                                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    # Each client is waited for without being reaped, and its group (the
+    # server it may have left) is killed before it is: once a leader is reaped
+    # its pid, and so its group id, can be handed to a process of another test,
+    # and a SIGKILL to that group would kill a stranger.
     try:
-        return [p.wait(timeout=60) for p in procs]
+        for p in procs:
+            _exited_unreaped(p, 60)
     finally:
         for p in procs:
             try:
                 os.killpg(p.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            p.wait()
+            except (ProcessLookupError, PermissionError):
+                pass   # nothing alive in the group (macOS: EPERM for a lone zombie)
+    return [p.wait() for p in procs]
+
+
+def _exited_unreaped(p, timeout):
+    """Wait for p to exit, leaving it a zombie (its pid stays its own)."""
+    deadline = time.monotonic() + timeout
+    while os.waitid(os.P_PID, p.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is None:
+        if time.monotonic() > deadline:
+            raise subprocess.TimeoutExpired(p.args, timeout)
+        time.sleep(0.01)
 
 
 def test_two_instances_of_one_program_in_parallel(tmp_path):
