@@ -109,6 +109,11 @@ C_UNIT_TESTS = [
     # heap the same node), union and intersection by merging, the lattice
     # route of every point, the store's (generation, point) names.
     ("trie",          "test_unit_trie.c",          b"TRIE: PASS",          True),
+    # Every Space has its own two heaps: a HashMap made in a Space lives in
+    # another heap than the entry Space's; an XRelMap handle carries its Space
+    # and is refused, with a declared error, when read in another Space (a
+    # forged name too); a value crosses to another Space by copy.
+    ("space_heaps",   "test_unit_space_heaps.c",   b"SPACE_HEAPS: PASS",   True),
 ]
 
 

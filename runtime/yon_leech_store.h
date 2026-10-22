@@ -9,7 +9,9 @@
  * There is no index by content: two equal nodes are two places, and equality
  * of what they hold is structural. A generation is mapped on its first node.
  * The name k is 32 bits wide: 2^32 - 1 nodes, then the store says it is
- * exhausted. */
+ * exhausted. Every Space has its own store, and a node names its children in
+ * its own store; the handle a collection is known by outside carries the
+ * Space too (yon_rt.c). */
 #ifndef YON_LEECH_STORE_H
 #define YON_LEECH_STORE_H
 
@@ -26,5 +28,10 @@ uint32_t    yon_leech_generation(uint32_t k);
 uint32_t    yon_leech_index(uint32_t k);
 /* nodes made so far */
 uint32_t    yon_leech_count(void);
+/* The empty node of the current store, made on the first call. */
+uint32_t    yon_leech_empty(const void *node, uint32_t size);
+/* Every Space has its own store; puts and reads go to the current one. */
+void        yon_leech_select(uint32_t space);
+uint32_t    yon_leech_current(void);
 
 #endif /* YON_LEECH_STORE_H */

@@ -57,6 +57,7 @@ let register_remote_params (name : string) (ps : ty list) : unit =
    checked. Filled by check_program. *)
 let fun_space : (string, string) Hashtbl.t = Hashtbl.create 64
 let current_space : string option ref = ref None
+let current_fun : string ref = ref ""
 
 let collect_wire_knowledge (p : program) : unit =
   Hashtbl.reset wire_spaces;
@@ -1001,6 +1002,7 @@ let mob_close (binds : (string * bool * expr) list) (seed : string -> bool)
 
 let mob_begin (fn : fun_decl) (non_mobile_params : string list) =
   current_space := Hashtbl.find_opt Surface_ast.user_file_space fn.fn_loc.file;
+  current_fun := fn.fn_name;
   mob_cells := Desugar.v1_targets_stmts Desugar.V1SS.empty fn.fn_body;
   mob_params := non_mobile_params;
   mob_binds := [];
@@ -1253,14 +1255,41 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
   | None ->
       (match callee_space, !current_space with
        | Some there, Some here when there <> here ->
-           let ret = match Hashtbl.find_opt wire_fun_returns name with
-             | Some (Some r) -> [ (not (ty_mobile env r),
-                                   boundary_msg ("the result of " ^ name) r) ]
-             | _ -> [] in
-           first (List.mapi (fun i t ->
-               (not (ty_mobile env t),
-                boundary_msg (Printf.sprintf "argument %d of %s" (i + 1) name) t))
-             arg_tys @ ret)
+           (* the callee's declared types decide how each value crosses *)
+           let (ps, r) = match Tyenv.lookup_fun env name with
+             | Some fs -> (List.map snd fs.fs_params, Some fs.fs_return)
+             | None -> (arg_tys, (match Hashtbl.find_opt wire_fun_returns name with
+                                  | Some r -> r | None -> None)) in
+           (* a number, a Boolean, a Unit: passed as is; any other value is
+              copied by the codec of the wire, so it needs a frame *)
+           let crossing t =
+             let t = resolve_fused t in
+             match t with
+             | TyPrim p when (match Carrier.prim_carrier p with
+                              | Some (Carrier.Scalar _) -> p <> "unknown" | _ -> false) ->
+                 Some (Type_root.prim_root p, false)
+             | _ -> (match wire_desc env [] t with
+                     | Some root -> Some (root, true) | None -> None) in
+           let channel_msg what =
+             Printf.sprintf "%s is a channel, and a channel crosses no Space: it \
+               names a stream of the Space that made it. To connect two Spaces \
+               with a flow, subscribe: `be sub := (wire to space S).awaits(producer)`." what in
+           let checks what t =
+             match resolve_fused t with
+             | TyChannel _ -> [ (true, channel_msg what) ]
+             | t -> [ (not (ty_mobile env t), boundary_msg what t);
+                      (ty_mobile env t && crossing t = None, rpc_msg what t) ] in
+           let what_arg i = Printf.sprintf "argument %d of %s" (i + 1) name in
+           let what_res = "the result of " ^ name in
+           let* () = first (List.concat (List.mapi (fun i t -> checks (what_arg i) t) ps)
+                            @ (match r with Some r -> checks what_res r | None -> [])) in
+           (match (match r with Some r -> crossing r | None -> Some (0L, false)),
+                  List.map crossing ps with
+            | Some res, args when List.for_all Option.is_some args ->
+                Hashtbl.replace Surface_ast.cross_calls (!current_fun, name)
+                  (there, res, List.map Option.get args)
+            | _ -> ());
+           ok ()
        | _ -> ok ())
 
 (* A producer's wire carries its elements to another Space. *)
@@ -6728,6 +6757,7 @@ let check_program (p : program) : check_result =
   Hashtbl.reset Surface_ast.wire_types;
   Hashtbl.reset Surface_ast.rpc_sigs;
   Hashtbl.reset Surface_ast.op_sigs;
+  Hashtbl.reset Surface_ast.cross_calls;
   List.iter (function
     | TopFun fd ->
         (match Hashtbl.find_opt Surface_ast.user_file_space fd.fn_loc.file with

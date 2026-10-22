@@ -1701,6 +1701,39 @@ let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
       arg_ty param_ty))
   else arg_ssa  (* unhandled non-section mismatch: let it through, MLIR rejects it *)
 
+(* The function whose body is being emitted (a call from it into another
+   Space crosses by copy, Surface_ast.cross_calls). *)
+let emit_cur_fun : string ref = ref ""
+
+(* The id of a Space at runtime, as an f64: the root Space is the entry's. *)
+let emit_space_id (e : emitter) (sp : string) : string =
+  let v = fresh_ssa e in
+  if sp = "" then
+    emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v)
+  else begin
+    let v_ptr = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = llvm.mlir.addressof @yon_space_str_%s : !llvm.ptr" v_ptr sp);
+    let v_i = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = func.call @yon_rt_lookup_space(%s) : (!llvm.ptr) -> i32" v_i v_ptr);
+    emit_line e (Printf.sprintf "%s = arith.uitofp %s : i32 to f64" v v_i)
+  end;
+  v
+
+(* A value of type root carried from the current Space to Space [to]. *)
+let emit_cross (e : emitter) (v : string) (ty : string) (root : int64) (to_ : string)
+    (coerce : emitter -> string -> string -> string -> string) : string =
+  let f = coerce e v ty "f64" in
+  let hi = fresh_ssa e and lo = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = arith.constant %.1f : f64" hi
+                 (Int64.to_float (Int64.shift_right_logical root 32)));
+  emit_line e (Printf.sprintf "%s = arith.constant %.1f : f64" lo
+                 (Int64.to_float (Int64.logand root 0xffffffffL)));
+  let r = fresh_ssa e in
+  emit_line e (Printf.sprintf
+                 "%s = func.call @yon_rt_cross_value(%s, %s, %s, %s) : (f64, f64, f64, f64) -> f64"
+                 r f hi lo to_);
+  coerce e r "f64" ty
+
 let rec emit_term (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list)
@@ -4517,10 +4550,32 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
            let coerced_ssas = List.map2 (fun (ssa, ty) param_ty ->
              coerce_to_param e ssa ty param_ty
            ) arg_vals param_tys in
+           let crossing = Hashtbl.find_opt Surface_ast.cross_calls (!emit_cur_fun, fname) in
+           (* a call into another Space: the framed arguments are copied into
+              its heaps, the call runs there, the framed result is copied back *)
+           let (coerced_ssas, enter) = match crossing with
+             | Some (sp, _, args) when List.length args = List.length coerced_ssas ->
+                 let target = emit_space_id e sp in
+                 let crossed = List.map2 (fun (ssa, ty) (root, framed) ->
+                   if framed then emit_cross e ssa ty root target coerce_to_param else ssa)
+                   (List.combine coerced_ssas param_tys) args in
+                 let prev = fresh_ssa e in
+                 emit_line e (Printf.sprintf
+                   "%s = func.call @yon_rt_space_enter(%s) : (f64) -> f64" prev target);
+                 (crossed, Some prev)
+             | _ -> (coerced_ssas, None) in
            let arg_str = String.concat ", " coerced_ssas in
            let arg_ty_str = String.concat ", " param_tys in
            emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
                           v call_name arg_str arg_ty_str ret_ty);
+           let v = match crossing, enter with
+             | Some (_, (root, framed), _), Some prev ->
+                 let back = if framed then emit_cross e v ret_ty root prev coerce_to_param else v in
+                 let left = fresh_ssa e in
+                 emit_line e (Printf.sprintf
+                   "%s = func.call @yon_rt_space_enter(%s) : (f64) -> f64" left prev);
+                 back
+             | _ -> v in
            (* An inductive result comes back as its section handle; unpack to f64 so
               the body stays f64 (section only at signatures). *)
            if is_ind_section ret_ty then (coerce_to_param e v ret_ty "f64", "f64")
@@ -5482,6 +5537,7 @@ let coerce_return (e : emitter) (v : string) (v_ty : string)
 let emit_function (e : emitter) (funcs : (string * func_sig) list)
     (fs : func_sig) : unit =
   Hashtbl.reset g_cell_elem;
+  emit_cur_fun := fs.fn_name;
   let param_strs = List.map (fun (n, t) ->
     Printf.sprintf "%%arg_%s: %s" n (core_ty_to_mlir_simple t)
   ) fs.fn_params in
@@ -5905,6 +5961,7 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     (space_imports : string list)
     (internal_funs : string list)
     (main_body : C.term) : unit =
+  emit_cur_fun := "main";
   emit_line e "func.func private @yon_rt_maybe_serve() -> ()";
   if space_imports <> [] then
     emit_line e "func.func private @yon_rt_rpc2_register_space_binary(!llvm.ptr, !llvm.ptr) -> ()";
@@ -6845,6 +6902,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_blank e;
   (* the producers register at startup in every program (main does it) *)
   emit_line e "func.func private @yon_rt_register_producer(f64, f64, f64, f64) -> ()";
+  emit_line e "func.func private @yon_rt_space_current() -> i32";
+  emit_line e "func.func private @yon_rt_space_enter(f64) -> f64";
+  emit_line e "func.func private @yon_rt_cross_value(f64, f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_wire_type(f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_wire_type_part(f64, f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_register_op_word(f64, f64, f64, f64) -> ()";
@@ -7001,8 +7061,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
           let v_heap =
             match heap_kind with
             | `Default ->
+                (* a section lives in the heap of the Space that makes it *)
                 let v = fresh_ssa e in
-                emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v);
+                emit_line e (Printf.sprintf "%s = func.call @yon_rt_space_current() : () -> i32" v);
                 v
             | `Lookup sname ->
                 let v_ptr = fresh_ssa e in
@@ -7063,8 +7124,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
           let v_heap =
             match heap_kind with
             | `Default ->
+                (* a section lives in the heap of the Space that makes it *)
                 let v = fresh_ssa e in
-                emit_line e (Printf.sprintf "%s = arith.constant 0 : i32" v);
+                emit_line e (Printf.sprintf "%s = func.call @yon_rt_space_current() : () -> i32" v);
                 v
             | `Lookup sname ->
                 let v_ptr = fresh_ssa e in

@@ -15,52 +15,89 @@
 /* every name a 32-bit k can take has a generation */
 #define N_GENERATIONS ((uint32_t)((0xFFFFFFFFull + N - 1) / N))
 
-static uint8_t *volatile *g_generations;   /* the directory, mapped once */
-static uint32_t g_next;                    /* the next name */
+/* One store per Space: its generation directory, its next name, its empty
+ * node. The store the puts and reads go to is the current Space's. */
+typedef struct {
+    uint8_t *volatile *gens;   /* the directory, mapped on the first put */
+    uint32_t next;             /* the next name */
+    uint32_t empty;            /* the empty node, made once */
+} leech_store_t;
+
+#define N_STORES 65536u          /* a Space is 16 bits of a marked name */
+static leech_store_t *volatile *g_stores;   /* the stores, mapped once */
+static uint32_t g_cur;                      /* the current Space */
 static pthread_once_t g_once = PTHREAD_ONCE_INIT;
 static pthread_mutex_t g_gen_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static void store_init(void) {
-    g_generations = (uint8_t *volatile *)yon_map((size_t)N_GENERATIONS * sizeof(uint8_t *));
+static void stores_init(void) {
+    g_stores = (leech_store_t *volatile *)yon_map((size_t)N_STORES * sizeof(leech_store_t *));
 }
 
-static uint8_t *generation(uint32_t g) {
-    uint8_t *t = g_generations[g];
+static leech_store_t *store_of(uint32_t space) {
+    pthread_once(&g_once, stores_init);
+    leech_store_t *st = g_stores[space];
+    if (st) return st;
+    pthread_mutex_lock(&g_gen_lock);
+    st = g_stores[space];
+    if (!st) {
+        st = (leech_store_t *)yon_map(sizeof *st);
+        st->gens = (uint8_t *volatile *)yon_map((size_t)N_GENERATIONS * sizeof(uint8_t *));
+        st->empty = 0xFFFFFFFFu;
+        __atomic_store_n(&g_stores[space], st, __ATOMIC_RELEASE);
+    }
+    pthread_mutex_unlock(&g_gen_lock);
+    return st;
+}
+
+void yon_leech_select(uint32_t space) { g_cur = space % N_STORES; }
+uint32_t yon_leech_current(void) { return g_cur; }
+
+static uint8_t *generation(leech_store_t *st, uint32_t g) {
+    uint8_t *t = st->gens[g];
     if (t) return t;
     pthread_mutex_lock(&g_gen_lock);
-    t = g_generations[g];
+    t = st->gens[g];
     if (!t) {
         t = (uint8_t *)yon_map(GEN_BYTES);
-        __atomic_store_n(&g_generations[g], t, __ATOMIC_RELEASE);
+        __atomic_store_n(&st->gens[g], t, __ATOMIC_RELEASE);
     }
     pthread_mutex_unlock(&g_gen_lock);
     return t;
 }
 
 uint32_t yon_leech_put(const void *node, uint32_t size) {
-    pthread_once(&g_once, store_init);
+    leech_store_t *st = store_of(g_cur);
     if (size > YON_LEECH_NODE_BYTES) {
         fprintf(stderr, "[YON-RT] Leech store: a node of %u bytes does not fit a place\n", size);
         abort();
     }
-    uint32_t k = __atomic_fetch_add(&g_next, 1u, __ATOMIC_RELAXED);
+    uint32_t k = __atomic_fetch_add(&st->next, 1u, __ATOMIC_RELAXED);
     if (k == 0xFFFFFFFFu) {
         fprintf(stderr, "[YON-RT] Leech store: every 32-bit name is taken\n");
         abort();
     }
-    uint8_t *slot = generation(k / N) + (size_t)(k % N) * YON_LEECH_NODE_BYTES;
+    uint8_t *slot = generation(st, k / N) + (size_t)(k % N) * YON_LEECH_NODE_BYTES;
     memcpy(slot, node, size);
     return k;
+}
+
+uint32_t yon_leech_empty(const void *node, uint32_t size) {
+    leech_store_t *st = store_of(g_cur);
+    if (st->empty == 0xFFFFFFFFu) st->empty = yon_leech_put(node, size);
+    return st->empty;
 }
 
 /* A name reaches a reader only from a put that made it, so the directory and
  * the node's generation exist by then; a name never made has no node. */
 const void *yon_leech_at(uint32_t k) {
-    if (!g_generations || k >= __atomic_load_n(&g_next, __ATOMIC_ACQUIRE)) return NULL;
-    uint8_t *t = __atomic_load_n(&g_generations[k / N], __ATOMIC_ACQUIRE);
+    leech_store_t *st = store_of(g_cur);
+    if (k >= __atomic_load_n(&st->next, __ATOMIC_ACQUIRE)) return NULL;
+    uint8_t *t = __atomic_load_n(&st->gens[k / N], __ATOMIC_ACQUIRE);
     return t ? t + (size_t)(k % N) * YON_LEECH_NODE_BYTES : NULL;
 }
 
 uint32_t yon_leech_generation(uint32_t k) { return k / N; }
 uint32_t yon_leech_index(uint32_t k)      { return k % N; }
-uint32_t yon_leech_count(void)            { return __atomic_load_n(&g_next, __ATOMIC_ACQUIRE); }
+uint32_t yon_leech_count(void) {
+    return __atomic_load_n(&store_of(g_cur)->next, __ATOMIC_ACQUIRE);
+}
