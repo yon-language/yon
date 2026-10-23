@@ -6175,6 +6175,8 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
    * (skip runtime externs and the synthetic ones). *)
   (* candidate functions: 0-4 f64 parameters, f64 return, user-defined
    * (skip runtime externs and the synthetic ones). *)
+  let is_section t = String.length t > 15 && String.sub t 0 15 = "!topos.section<" in
+  let scalar_ty t = List.mem t ["f64"; "i64"] in
   let dispatchable =
     List.filter (fun (name, fs) ->
       name <> "main"   (* main returns i32 and is not a cross-Space operation *)
@@ -6183,13 +6185,37 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
          (* the wire namespace belongs to user spaces: prelude arrows never
             enter the dispatch table (their bares would collide everywhere) *)
       && List.length fs.fn_params <= 4
-      (* a wire slot holds 64 bits: a Number, or an Int64 as its bits *)
-      && List.for_all (fun (_, pty) ->
-           List.mem (core_ty_to_mlir_simple pty) ["f64"; "i64"]) fs.fn_params
-      && List.mem fs.fn_ret_mlir ["f64"; "i64"]
+      (* a polymorphic function is emitted only as its instances, never
+         under its own name *)
+      && fs.fn_type_params = []
+      (* a wire slot holds 64 bits: a Number, an Int64 as its bits, or the
+         handle of a value the wire rebuilt in this Space's heaps (a string,
+         a collection, a section of a place: the runtime decodes the frame
+         before the call and passes the handle) *)
+      && (let tys = fs.fn_ret_mlir
+                    :: List.map (fun (_, pty) -> core_ty_to_mlir_simple pty) fs.fn_params in
+          List.for_all scalar_ty tys
+          (* a section only where the checker gave the operation a wire
+             signature: every type of it has a frame (Tycheck.call_sig) *)
+          || (List.for_all (fun t -> scalar_ty t || is_section t) tys
+              && Hashtbl.mem Surface_ast.op_sigs name))
       && not (String.length name >= 7 && String.sub name 0 7 = "yon_rt_")
       && not (String.length name >= 8 && String.sub name 0 8 = "Stream__")
       && not (String.length name >= 2 && String.sub name 0 2 = "__")) funcs in
+  (* An operation admitted for its sections (a place, the methods of two
+     homes named alike: Circle.area, Square.area) shares its selector with
+     another: the bare name a client imports names neither, so neither is
+     exported (they were never in the table before sections were admitted).
+     The scalar ones keep the refusal below. *)
+  let has_section (fs : func_sig) =
+    List.exists (fun t -> is_section t)
+      (fs.fn_ret_mlir :: List.map (fun (_, pty) -> core_ty_to_mlir_simple pty) fs.fn_params) in
+  let dispatchable =
+    List.filter (fun (name, fs) ->
+      not (has_section fs)
+      || not (List.exists (fun (other, _) ->
+                other <> name && op_sel other = op_sel name) dispatchable))
+      dispatchable in
   (* Selector collision check: two exported operations hashing to the same
    * selector would silently dispatch the wrong arrow. Refuse to compile. *)
   let seen : (int, string) Hashtbl.t = Hashtbl.create 16 in

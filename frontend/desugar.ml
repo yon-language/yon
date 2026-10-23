@@ -1065,7 +1065,8 @@ and desugar_expr (e0 : S.expr) : C.term =
          with the identity head); a payload ARM lowers to its SPINE — the
          same value hit built — with the field assignments ordered by the
          bridge projections _1.._n. *)
-      (match find_arm place_name with
+      (match (if Hashtbl.mem armless_place_names place_name then None
+              else find_arm place_name) with
        (* a DECLARED field place shadows a homonymous sum arm (the error
           coproduct names its failure arm after the error PLACE): the
           mediatrice builds the SECTION; the arm's spine is the INJECTION's
@@ -3365,12 +3366,16 @@ let desugar_program ?(env : Tyenv.env option = None)
      the fallback for callers with no census (single-file, eval, fuzz): there it
      is empty and the rewrite is a no-op, which is correct because without a
      project there is no Space directory to route to. *)
-  let place_to_space =
-    match place_to_space with
-    | [] -> build_place_to_space_map p
-    | m -> m
-  in
-  let p = List.map (rewrite_top_decl place_to_space) p in
+  (* A section lives in the heaps of the Space whose code makes it (the 1.8
+     decision: two heaps per Space, main is a Space, and the boundary between
+     Spaces is the wire). `.-> P { ... }` is therefore NOT pinned to the Space
+     of P: pinned, a section main made lived in P's Space, and the region
+     that ends a call into that Space emptied it under main (a field read
+     after the call aborted). The code of P's Space runs in P's Space, so its
+     sections land there anyway. The rewrite keeps its other lowerings
+     (pullback); the census is no longer a routing table here. *)
+  ignore place_to_space;
+  let p = List.map (rewrite_top_decl []) p in
   let p = expand_views p in
   (* The first fold collects synth_funs into the global refs (filled by
    * desugar_expr for each EMoveLam/EReductionLam/EMorphLam). We then add them
