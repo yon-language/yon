@@ -596,7 +596,7 @@ let () =
   if cr.Tycheck.cr_errors <> [] then begin
     List.iter (fun e ->
       Printf.eprintf "%s\n" (Error_codes.to_cli
-        (Error_codes.make Error_codes.Type_check (Tycheck.error_to_string e))))
+        (Error_codes.make e.Tycheck.err_code (Tycheck.error_to_string e))))
       cr.Tycheck.cr_errors;
     exit 3
   end;

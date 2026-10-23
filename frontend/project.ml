@@ -594,6 +594,6 @@ let typecheck_diags (l : loaded) : Error_codes.t list =
   let cr = Tycheck.check_program (prepare_for_typecheck l) in
   List.map
     (fun (e : Tycheck.type_error) ->
-       Error_codes.make ~range:e.Tycheck.err_loc Error_codes.Type_check
+       Error_codes.make ~range:e.Tycheck.err_loc e.Tycheck.err_code
          e.Tycheck.err_msg)
     cr.Tycheck.cr_errors

@@ -64,7 +64,7 @@ let type_error_to_diag (e : Tycheck.type_error) : diag =
     d_end_line = eline0; d_end_col = ecol0;
     d_severity = 1;
     d_msg = e.Tycheck.err_msg;
-    d_code = Some (Error_codes.id Error_codes.Type_check) }
+    d_code = Some (Error_codes.id e.Tycheck.err_code) }
 
 (* Source -> list of diagnostics. Empty = valid program.
  * Parse error: one diagnostic, then we stop (we cannot type check).

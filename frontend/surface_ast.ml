@@ -220,6 +220,17 @@ let arrow_written_in : (string * int * int, string) Hashtbl.t = Hashtbl.create 6
    Boolean's tt). *)
 let bare_point_sites : (string * int * int, string * string) Hashtbl.t = Hashtbl.create 32
 
+(* An arm belongs to EVERY coproduct that lists it: the injection is an arrow
+   of the sum, not of the arm (Harper ch. 11), so `Absent` is one name for two
+   arrows, into Decision and into Lookup. The name alone does not say which
+   sum a use builds or takes apart; the tycheck records it site by site:
+   (file, line, col) of a `hit(arm, ..)` or of a `match` -> the coproduct it
+   resolved. A bare point rides bare_point_sites, which already carries it. *)
+let arm_coproduct_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 32
+(* the qualified forms `C.arm` and `C.arm(..)`: site -> (coproduct, arm). The
+   desugar lowers them as the injection of the arm into C. *)
+let qualified_arm_sites : (string * int * int, string * string) Hashtbl.t = Hashtbl.create 16
+
 (* ─── Type expressions ─────────────────────────────────────────────── *)
 
 (* Types in Yon surface — covers first-order schema types plus
