@@ -102,10 +102,7 @@ REFUSED = {
 BOUNDARIES = ["bin_arg", "bin_res", "proc_arg", "proc_res", "wire"]
 
 # the holes the matrix found (2026-10-23), each with the reason it closes
-_OWN_ROOT = "a value is copied with the root of its section, never with the root of its static type"
 _HOLES = {
-    ("sub_object", "proc_res"): _OWN_ROOT, ("sub_object", "wire"): _OWN_ROOT,
-    ("sub_object", "proc_arg"): _OWN_ROOT, ("sub_object", "bin_arg"): _OWN_ROOT,
     ("closure", "proc_res"): "the judgement of mobility applies to an exported signature too: an E code on the server",
 }
 

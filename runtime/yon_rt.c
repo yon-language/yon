@@ -7719,6 +7719,23 @@ void yon_rt_wire_type_part(double hi, double lo, double i, double khi, double kl
     if ((uint32_t)i < YON_WIRE_MAX_FIELDS) e->kids[(uint32_t)i] = yon_root_of_halves(khi, klo);
 }
 
+/* (declared, sub-object): a place under another by `this <`, which crosses
+ * where the other is declared, by its own frame */
+#define YON_WIRE_MAX_SUBS 256
+static uint64_t g_wire_subs[YON_WIRE_MAX_SUBS][2];
+static uint32_t g_wire_n_subs;
+void yon_rt_wire_sub(double shi, double slo, double bhi, double blo) {
+    if (g_wire_n_subs >= YON_WIRE_MAX_SUBS) abort();
+    g_wire_subs[g_wire_n_subs][0] = yon_root_of_halves(shi, slo);
+    g_wire_subs[g_wire_n_subs][1] = yon_root_of_halves(bhi, blo);
+    g_wire_n_subs++;
+}
+static int wire_is_sub(uint64_t declared, uint64_t own) {
+    for (uint32_t i = 0; i < g_wire_n_subs; i++)
+        if (g_wire_subs[i][0] == declared && g_wire_subs[i][1] == own) return 1;
+    return 0;
+}
+
 static const yon_wire_type_t *wire_type(uint64_t root) {
     for (uint32_t i = 0; i < g_wire_n_types; i++)
         if (g_wire_types[i].used && g_wire_types[i].root == root)
@@ -7762,15 +7779,23 @@ static int wire_enc(yon_wire_buf_t *b, uint64_t root, double v);
 static int wire_enc_section(yon_wire_buf_t *b, const yon_wire_type_t *t,
                             yon_section_t sec) {
     uint8_t inst[8u + YON_WIRE_MAX_FIELDS * 8];
-    if (t->n > YON_WIRE_MAX_FIELDS) return -1;
     int32_t pn = yon_rt_flatten(sec, inst, sizeof(inst));
-    if (pn != (int32_t)(8u + t->n * 8u)) return -1;
-    if (yon_root_read_le(inst) != t->root) {
-        fprintf(stderr, "[YON-RT] wire: a section of root %016llx where %016llx "
-                "was declared\n", (unsigned long long)yon_root_read_le(inst),
-                (unsigned long long)t->root);
-        return -1;
+    if (pn < 8) return -1;
+    /* the section says what it is (its head of identity): a sub-object
+     * passed where its super is declared is copied by its own frame, never
+     * by the frame of the declared type, which does not describe it */
+    uint64_t own = yon_root_read_le(inst), declared = t->root;
+    if (own != declared) {
+        const yon_wire_type_t *ot = wire_is_sub(declared, own) ? wire_type(own) : NULL;
+        if (!ot || ot->kind != YON_WIRE_KIND_PLACE) {
+            fprintf(stderr, "[YON-RT] wire: a section of root %016llx where %016llx "
+                    "was declared\n", (unsigned long long)own,
+                    (unsigned long long)declared);
+            return -1;
+        }
+        t = ot;
     }
+    if (t->n > YON_WIRE_MAX_FIELDS || pn != (int32_t)(8u + t->n * 8u)) return -1;
     uint32_t zero = 0;
     if (wbuf_put(b, &t->root, 8u) || wbuf_put(b, &zero, 4u)) return -1;
     size_t body = b->len;
@@ -7876,6 +7901,10 @@ static int wire_dec_section(wire_rd_t *r, const yon_wire_type_t *t,
     uint64_t fr;
     uint32_t len;
     if (wire_take(r, &fr, 8u) || wire_take(r, &len, 4u)) return -1;
+    if (fr != t->root && wire_is_sub(t->root, fr)) {
+        const yon_wire_type_t *own = wire_type(fr);
+        if (own && own->kind == YON_WIRE_KIND_PLACE) t = own;
+    }
     if (fr != t->root) {
         fprintf(stderr,
                 "error: wire: a frame of type root %016llx arrived where %016llx "

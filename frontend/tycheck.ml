@@ -1161,7 +1161,17 @@ let rec wire_desc (env : Tyenv.env) (seen : string list) (t : ty) : int64 option
                     | Some r, Some rs -> Some (r :: rs)
                     | _ -> None) in
              (match kids fields with
-              | Some ks -> reg root wire_kind_place ks
+              | Some ks ->
+                  let r = reg root wire_kind_place ks in
+                  (* a sub-object travels where p is declared, by its own
+                     frame: it gets one, and the runtime learns it is under p *)
+                  List.iter (fun (q, _) ->
+                    if q <> p && not (List.mem q seen)
+                       && Tyenv.place_subcontains env q p then
+                      match wire_desc env (p :: seen) (TyUser q) with
+                      | Some qr -> Hashtbl.replace Surface_ast.wire_subs (root, qr) ()
+                      | None -> ()) env.Tyenv.places;
+                  r
               | None -> None)
        | _ -> None)
   | TyList e | TyApp ("List", [e]) -> coll wire_kind_list [e]
@@ -1339,17 +1349,13 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
            let* () = first (List.concat (List.mapi (fun i t -> checks (what_arg i) t) ps)
                             @ (match r with Some r -> checks what_res r | None -> [])) in
            (* a value crosses as what it is: a sub-object passed where its
-              super is declared is copied by its own frame (the frame of the
-              super does not describe it) and is usable as the super on the
-              other side through the mono *)
-           let arg_crossing i p =
-             match List.nth_opt arg_tys i with
-             | Some (TyUser a as at) when (match resolve_fused p with
-                                           | TyUser b -> a <> b | _ -> false) ->
-                 (match crossing at with Some c -> Some c | None -> crossing p)
-             | _ -> crossing p in
+              super is declared is copied by the root its section carries,
+              never by the declared type (the frame of the super does not
+              describe it); wire_desc registered the sub-objects of every
+              place that gets a frame, and the runtime reads the section's
+              own root *)
            (match (match r with Some r -> crossing r | None -> Some (0L, false)),
-                  List.mapi arg_crossing ps with
+                  List.map crossing ps with
             | Some res, args when List.for_all Option.is_some args ->
                 let entry = (there, res, List.map Option.get args) in
                 (match Hashtbl.find_opt Surface_ast.cross_calls (!current_fun, name) with
@@ -7109,6 +7115,7 @@ let check_program (p : program) : check_result =
   Hashtbl.reset fun_space;
   Hashtbl.reset Surface_ast.producer_roots;
   Hashtbl.reset Surface_ast.wire_types;
+  Hashtbl.reset Surface_ast.wire_subs;
   Hashtbl.reset Surface_ast.rpc_sigs;
   Hashtbl.reset Surface_ast.rpc_returns;
   Hashtbl.reset Surface_ast.op_sigs;
