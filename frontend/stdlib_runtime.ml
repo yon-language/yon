@@ -274,6 +274,19 @@ let try_reduce_stdlib (t : term) : term option =
   | App (App (Var "List__append", a), b) ->
       list_append a b
 
+  (* MerkleTree: the spine of a coproduct value (its arm's tag at the head,
+     its payloads in the children). A leaf and a node are normal forms; the
+     two projections read them, as the runtime's merkle_label/child do. *)
+  | App (Var "MerkleTree__label", App (Var "MerkleTree__leaf", x))
+  | App (Var "MerkleTree__label",
+         App (App (App (Var "MerkleTree__node2", x), _), _)) -> Some x
+  | App (App (Var "MerkleTree__child",
+              App (App (App (Var "MerkleTree__node2", _), a), b)), k) ->
+      (match Builtins.decode_number k with
+       | Some 0.0 -> Some a
+       | Some 1.0 -> Some b
+       | _ -> None)
+
   (* Space operations *)
   | App (Var "Space__new", init) ->
       Some (space_new init)

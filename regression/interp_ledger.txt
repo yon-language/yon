@@ -27,22 +27,22 @@ INCOMPLETE closure_capture punt
 INCOMPLETE cluster_a_ast_commutative punt
 INCOMPLETE collections_ext punt
 AGREE      comprehension_carrier
-INCOMPLETE cx_carry type-error
-INCOMPLETE cx_face_system type-error
+INCOMPLETE cx_carry punt
+AGREE      cx_face_system
 AGREE      cx_hit_suspension
 AGREE      cx_move_law
 INCOMPLETE cx_path_algebra punt
-INCOMPLETE cx_transport_refl type-error
+AGREE      cx_transport_refl
 INCOMPLETE cx_univalence_distinct punt
-INCOMPLETE cx_univalence_named type-error
-INCOMPLETE cx_univalence_succ type-error
-INCOMPLETE decidable_ok type-error
-INCOMPLETE decidable_unknown type-error
+INCOMPLETE cx_univalence_named punt
+INCOMPLETE cx_univalence_succ punt
+AGREE      decidable_ok
+AGREE      decidable_unknown
 AGREE      directed_transport
 AGREE      effect_propagation
-INCOMPLETE error_morphism type-error
-INCOMPLETE extends_subobject type-error
-INCOMPLETE extends_subsumption type-error
+AGREE      error_morphism
+AGREE      extends_subobject
+AGREE      extends_subsumption
 AGREE      forcing_demo
 AGREE      functor_compose_inline
 AGREE      functor_compose_local
@@ -56,19 +56,19 @@ AGREE      geom_morphism_inspect
 AGREE      handle_lambda_capture
 AGREE      handle_lambdas
 AGREE      hermetic_scope
-INCOMPLETE heyting_excluded_middle type-error
+AGREE      heyting_excluded_middle
 INCOMPLETE higher_order_recursive punt
 AGREE      id_endpoint_coherence
-INCOMPLETE inductive_arity3 punt
+AGREE      inductive_arity3
 INCOMPLETE inductive_list punt
 INCOMPLETE inductive_tree punt
-INCOMPLETE inductive_wildcard punt
+AGREE      inductive_wildcard
 INCOMPLETE iter_loop refused
 AGREE      kw_algebra
 INCOMPLETE kw_clear punt
 AGREE      kw_geomorph_full
 INCOMPLETE kw_given punt
-INCOMPLETE kw_heyting type-error
+AGREE      kw_heyting
 AGREE      kw_hott
 AGREE      kw_id_sugar
 AGREE      kw_is_literal
@@ -77,18 +77,18 @@ INCOMPLETE kw_merge_move punt
 AGREE      kw_morph
 AGREE      kw_paths
 AGREE      kw_patterns
-INCOMPLETE kw_prelude type-error
+AGREE      kw_prelude
 INCOMPLETE kw_produce_emit refused
 AGREE      kw_reduction_modifiers
 AGREE      kw_stream_policies
-INCOMPLETE kw_topos_block type-error
+AGREE      kw_topos_block
 AGREE      kw_view_show
 INCOMPLETE land_reach punt
 INCOMPLETE math_ext punt
 INCOMPLETE merkle_noncommutative punt
 AGREE      nat_transform_functor
-INCOMPLETE native_sum_match punt
-INCOMPLETE native_sum_runtime punt
+AGREE      native_sum_match
+AGREE      native_sum_runtime
 INCOMPLETE nested_lambda_capture refused
 AGREE      net_stream
 INCOMPLETE primes_bertrand punt
@@ -111,4 +111,4 @@ INCOMPLETE v1_control_flow refused
 INCOMPLETE vec_basic punt
 INCOMPLETE while_loop refused
 INCOMPLETE wire_eof refused
-INCOMPLETE xrel_points type-error
+INCOMPLETE xrel_points punt
