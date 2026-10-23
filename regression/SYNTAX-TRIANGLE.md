@@ -10,9 +10,9 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `python regression/test_syntax_triangle.py`.
 
 - lexer keywords: **107**
-- corpus files: **357**
+- corpus files: **353**
 - CodeWindows: **23**  (project **11**, single-file **12**)
-- prose `.yon` blocks marked illustrative (exempt, counted): **34**
+- prose `.yon` blocks marked illustrative (exempt, counted): **32**
 - allowlisted reserved/kernel tokens: **5**
 
 ## Keywords (lexer x corpus-count x book anchor)
@@ -41,7 +41,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `el_match` | `EL_MATCH` | 1 | yes | exercised |
 | `else` | `ELSE_KW` | 32 | yes | exercised |
 | `emit` | `EMIT` | 26 | yes | exercised |
-| `error` | `ERROR_KW` | 3 | yes | exercised |
+| `error` | `ERROR_KW` | 2 | yes | exercised |
 | `every` | `EVERY` | 5 | yes | exercised |
 | `exact` | `EXACT_KW` | 1 | yes | exercised |
 | `false` | `BOOL_LIT` | 4 | yes | exercised |
@@ -51,10 +51,10 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `forever` | `FOREVER` | 1 | yes | exercised |
 | `from` | `FROM` | 37 | yes | exercised |
 | `fst` | `FST` | 7 | yes | exercised |
-| `fun` | `FUN` | 369 | yes | exercised |
+| `fun` | `FUN` | 367 | yes | exercised |
 | `functor` | `FUNCTOR` | 9 | yes | exercised |
 | `geomorph` | `GEOM_MORPHISM` | 5 | yes | exercised |
-| `given` | `GIVEN` | 2 | yes | exercised |
+| `given` | `GIVEN` | 0 | yes | **UNCOVERED** |
 | `hcomp` | `HCOMP` | 3 | yes | exercised |
 | `here` | `HERE` | 1 | yes | exercised |
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
@@ -66,7 +66,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `ind_path` | `IND_PATH` | 2 | yes | exercised |
 | `induct` | `INDUCT` | 1 | yes | exercised |
 | `internal` | `INTERNAL` | 2 | yes | exercised |
-| `is` | `IS` | 16 | yes | exercised |
+| `is` | `IS` | 14 | yes | exercised |
 | `iter` | `ITER_KW` | 2 | yes | exercised |
 | `law` | `LAW` | 7 | yes | exercised |
 | `maps` | `MAPS` | 4 | yes | exercised |
@@ -85,7 +85,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `over` | `OVER` | 2 | yes | exercised |
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
-| `place` | `PLACE` | 301 | yes | exercised |
+| `place` | `PLACE` | 298 | yes | exercised |
 | `plam` | `PLAM` | 18 | yes | exercised |
 | `present` | `PRESENT` | 3 | yes | exercised |
 | `produce` | `PRODUCE` | 15 | yes | exercised |

@@ -5080,6 +5080,43 @@ let arm_name_clashes (p : program) : type_error list =
           | None -> None) pd.pd_arms
     | _ -> []) p
 
+(* The library owns its place names: the prelude's (known by their site)
+   and the registry's (List, Math, Time, ...). A user place with one of them
+   would take the library's place for every reader keyed by the name, the
+   library's own code included (HashMap.get returns the prelude's Lookup;
+   Math.gcd is the registry's). Refused, E2006; a place that means to extend
+   the library's declares itself under it with `this <`. *)
+let library_name_collisions (p : program) : type_error list =
+  let prelude =
+    List.filter_map (function
+      | TopPlace pd when in_prelude_file pd.pd_loc -> Some pd.pd_name
+      | _ -> None) p in
+  List.filter_map (function
+    | TopPlace pd when not (in_prelude_file pd.pd_loc)
+                    && (List.mem pd.pd_name prelude
+                        || List.mem pd.pd_name Stdlib_runtime.stdlib_place_names) ->
+        Some { err_loc = pd.pd_loc; err_code = Error_codes.Library_name_taken;
+               err_msg = Printf.sprintf
+                 "place %s takes the name of a place of the library, which \
+                  owns it. Rename yours, or, to extend the library's, declare \
+                  your own place under it: `place My%s { this < %s ... }`."
+                 pd.pd_name pd.pd_name pd.pd_name }
+    | _ -> None) p
+
+(* `is given` declares the face of a primitive of the runtime, which the
+   compiler wires: the library's, so the prelude's only (E2007). A function
+   of a user file has a body written in Yon. *)
+let given_outside_prelude (p : program) : type_error list =
+  List.filter_map (function
+    | TopFun fd when fd.fn_given && not (in_prelude_file fd.fn_loc) ->
+        Some { err_loc = fd.fn_loc; err_code = Error_codes.Given_outside_prelude;
+               err_msg = Printf.sprintf
+                 "fun %s is given: the primitives of the runtime are declared \
+                  in the prelude only. Write its body in Yon, or call the \
+                  library's function."
+                 (Str.global_replace (Str.regexp_string "__") "." fd.fn_name) }
+    | _ -> None) p
+
 let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit tc_result =
   let* () = check_arrow_containment td in
   let* () = check_arrow_level env td in
@@ -7014,7 +7051,8 @@ let check_program (p : program) : check_result =
       { cr_env = Tyenv.with_builtins Tyenv.empty;
         cr_errors = [e] }
   | Ok p ->
-  match arm_name_clashes p with
+  match library_name_collisions p @ given_outside_prelude p
+        @ arm_name_clashes p with
   | _ :: _ as errs ->
       { cr_env = Tyenv.with_builtins Tyenv.empty; cr_errors = errs }
   | [] ->

@@ -40,9 +40,9 @@ INCOMPLETE decidable_ok type-error
 INCOMPLETE decidable_unknown type-error
 AGREE      directed_transport
 AGREE      effect_propagation
-AGREE      error_morphism
-AGREE      extends_subobject
-AGREE      extends_subsumption
+INCOMPLETE error_morphism type-error
+INCOMPLETE extends_subobject type-error
+INCOMPLETE extends_subsumption type-error
 AGREE      forcing_demo
 AGREE      functor_compose_inline
 AGREE      functor_compose_local

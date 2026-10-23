@@ -49,16 +49,12 @@ It is not a mute promise. The checker verifies that an implementation is actuall
 
 A `given` function emits nothing: calls resolve to the builtin exactly as before, and the declaration lives in the checker, not in the lowering.
 
+The primitives of the runtime belong to the library, so `is given` is written in the prelude only (`prelude/num64/Math.yon` declares `fun floor(x: Number): Number is given`, `sqrt`, and the other functions on Number); in any other file it is refused (E2007). A program calls them without declaring anything:
+
 <CodeWindow file="kw_given/"
             run="yonc kw_given/ -o given && ./given; echo $?"
             out={["42"]}>
-{`// w/Math.yon
-place Math { unit Number
-  // is given: the body is wired in the compiler, and the checker verifies it
-  fun floor(x: Number): Number is given
-  fun sqrt(x: Number): Number is given
-}
-// Entry.yon
+{`// Entry.yon
 place Entry {
   fun main(): Number {
     be a := Math.floor(21.9)

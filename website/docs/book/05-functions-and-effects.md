@@ -77,17 +77,22 @@ changes.
 declares an axiomatic body — Java's `native` — and the compiler verifies that
 the wired implementation exists with exactly that signature. It is the brother
 of `is <prim>`: that one says the *carrier* is a leaf of the recursion, this
-one says the *body* is.
+one says the *body* is. The primitives of the runtime are the library's, so
+`is given` is written in the prelude only; in any other file it is refused
+(E2007), and a function of yours has its body in Yon. The prelude's
+`prelude/num64/Math.yon` is the face of the mathematical functions:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place Math { unit Number
+place Math {
   fun floor(x: Number): Number is given
   fun sqrt(x: Number): Number is given
+  // ... the other functions of the runtime on Number
 }
 ```
 
-(The full project is `examples/kw_given`, and the keyword chapter runs it.)
+(A program calls them without declaring anything: `examples/kw_given`, which
+the keyword chapter runs.)
 
 A primitive binds to its `is given` declaration, not to its name. A function
 with a body is never replaced by a primitive that answers to the same name:
@@ -139,22 +144,16 @@ places and arrows and how a type variable anchors to the universe.
 declares a **monomorphism** `A → B`, and the checker verifies it
 structurally, `A` must carry at least all of `B`'s fields (*subsumption*),
 or the mono does not exist and the program is rejected. Where it holds, an
-`A` is usable wherever a `B` is expected. Each place is its own file, so the
-base and the sub-object live side by side. `s/Error.yon`:
+`A` is usable wherever a `B` is expected. The base here is the prelude's
+`place Error { message Text }`, the root of the errors. A library place is
+never redeclared: a place of yours that means to be one declares itself under
+it (a user place that takes a library name is refused, E2006).
+`s/SyntaxError.yon` carries only its extra field; `message` it has from
+`Error`:
 
 <!-- yon-gate: illustrative -->
 ```yon
-place Error { message Number }
-```
-
-`s/SyntaxError.yon` carries the extra field and the function that reads the
-base:
-
-<!-- yon-gate: illustrative -->
-```yon
-place SyntaxError { this < Error message Number  line Number }
-
-fun describe(e: Error): Number { return e.message }   // accepts any sub-object
+place SyntaxError { this < Error  line Number }
 ```
 
 `Entry.yon` builds the sub-object and passes it where an `Error` is expected:
@@ -162,9 +161,10 @@ fun describe(e: Error): Number { return e.message }   // accepts any sub-object
 <!-- yon-gate: illustrative -->
 ```yon
 place Entry { }
+fun describe(e: Error): Number { return String.length(e.message) }   // accepts any sub-object
 fun main(): Number {
-  be s := .-> SyntaxError { message 40 line 17 }
-  return describe(s) + 2          // 42: SyntaxError used as Error
+  be s := .-> SyntaxError { message "unexpected }" line 30 }
+  return describe(s) + s.line     // 12 + 30 = 42: SyntaxError used as Error
 }
 ```
 

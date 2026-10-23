@@ -1,1 +1,1 @@
-error QueryError { this < Error message Number sqlstate Number }
+error QueryError { this < Error  sqlstate Number }

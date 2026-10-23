@@ -1,0 +1,31 @@
+/* Math — the face of the runtime's mathematical functions on Number.
+ *
+ * Every body here is a primitive the compiler wires (`is given`): the
+ * declaration is the face, the checker verifies it against the wired
+ * signature. The primitives of the runtime are declared in the prelude only;
+ * a user place extends the library with arrows of its own, never by
+ * redeclaring a face. (pi and e, wired with a unit argument, keep their
+ * registry entry until 3.1.) */
+place Math {
+  fun sqrt(x: Number): Number is given
+  fun abs(x: Number): Number is given
+  fun floor(x: Number): Number is given
+  fun ceil(x: Number): Number is given
+  fun round(x: Number): Number is given
+  fun min(a: Number, b: Number): Number is given
+  fun max(a: Number, b: Number): Number is given
+  fun pow(a: Number, b: Number): Number is given
+  fun log(x: Number): Number is given
+  fun exp(x: Number): Number is given
+  fun sin(x: Number): Number is given
+  fun cos(x: Number): Number is given
+  fun modulo(a: Number, b: Number): Number is given
+  fun gcd(a: Number, b: Number): Number is given
+  fun lcm(a: Number, b: Number): Number is given
+  fun log2(x: Number): Number is given
+  fun log10(x: Number): Number is given
+  fun atan2(y: Number, x: Number): Number is given
+  fun sinh(x: Number): Number is given
+  fun cosh(x: Number): Number is given
+  fun tanh(x: Number): Number is given
+}

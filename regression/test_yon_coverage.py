@@ -50,6 +50,13 @@ KERNEL_INTERNAL = {
 # numbered universe (Type_0, Type_1, ...). Covered iff a numbered form is used.
 LEXING_PREFIXES = {"Type_"}
 
+# Keywords whose only legal place is the prelude: `is given` declares a
+# primitive of the runtime, and those are declared in the prelude only (E2007
+# anywhere else). The prelude is compiled into every program, so a token of
+# its sources is exercised by every compiling example.
+PRELUDE = ROOT / "prelude"
+PRELUDE_KEYWORDS = {"given"}
+
 
 def _keywords():
     """Keyword set = string literals the lexer maps to tokens."""
@@ -86,6 +93,11 @@ def _built():
 @pytest.mark.parametrize("kw", KEYWORDS)
 def test_keyword_covered(kw):
     if kw in EXERCISED:
+        return
+    if kw in PRELUDE_KEYWORDS:
+        prelude = " ".join(_strip_comments(p.read_text()) for p in PRELUDE.glob("**/*.yon"))
+        assert kw in re.findall(r"[A-Za-z_][A-Za-z0-9_]*", prelude), (
+            f"the prelude-only keyword '{kw}' is used nowhere in the prelude")
         return
     if kw in LEXING_PREFIXES:
         # not a standalone token; the numbered surface form must be exercised

@@ -6402,10 +6402,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
        | _ -> () in
      List.iter (fun (_, body) -> scan body) dr_functions_shaken;
      (match dr.main with Some m -> scan m | None -> ());
-     (* keep is by IDENTITY (the decl's site), never by name: a USER place
-        that shares a prelude name is a different decl, kept unconditionally
-        — and it SHADOWS the prelude copy (tycheck resolves last-wins), so
-        the prelude homonym is dropped even when __section_<name> is used. *)
+     (* keep is by IDENTITY (the decl's site), never by name. A user place
+        cannot take a prelude name (E2006, Tycheck.library_name_collisions):
+        the library's names are extended with `this <`, never redeclared. *)
      let is_prelude_pd pd = List.memq pd !C.prelude_place_decls in
      let user_names =
        List.filter_map (fun (pd : C.place_decl) ->

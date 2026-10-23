@@ -71,8 +71,8 @@ def test_path_constructor_slot_is_reserved(tmp_path):
     twin = tmp_path / "twin"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place List {\n"
-        "  this > Nil :U Cons(Number, List) :U dup(Number) : Cons(0, Nil) = Nil\n"
+        "place NumList {\n"
+        "  this > Nil :U Cons(Number, NumList) :U dup(Number) : Cons(0, Nil) = Nil\n"
         "}\n"
         "place Entry { }\n"
         "fun main(): Number { return 0 }\n")
@@ -118,7 +118,7 @@ def test_mediatrice_on_arm_requires_full_arity(tmp_path):
     twin = tmp_path / "twin"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place List { this > Nil :U Cons(Number, List) }\n"
+        "place NumList { this > Nil :U Cons(Number, NumList) }\n"
         "place Entry { }\n"
         "fun main(): Number {\n"
         "  be c := .-> Cons { _1 1 }\n"
@@ -149,9 +149,9 @@ def test_record_pattern_matches_by_name(tmp_path):
     exit 42."""
     import shutil
     a = tmp_path / "rec"; b = tmp_path / "pos"
-    prog = ("place List { this > Nil :U Cons(Number, List) }\n"
+    prog = ("place NumList { this > Nil :U Cons(Number, NumList) }\n"
             "place Entry { }\n"
-            "fun sum(xs: List): Number {\n"
+            "fun sum(xs: NumList): Number {\n"
             "  return match xs {\n"
             "    Nil => 0,\n"
             "    %s => h + sum(t)\n"
@@ -177,9 +177,9 @@ def test_full_circle_no_constructors(tmp_path):
     twin = tmp_path / "circle"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place List { this > Nil :U Cons(Number, List) }\n"
+        "place NumList { this > Nil :U Cons(Number, NumList) }\n"
         "place Entry { }\n"
-        "fun sum(xs: List): Number {\n"
+        "fun sum(xs: NumList): Number {\n"
         "  return match xs {\n"
         "    Nil => 0,\n"
         "    Cons { _1 as h _2 as t } => h + sum(t)\n"

@@ -483,9 +483,9 @@ fun main(): Number {
 
 # ---------------------------------------------------------------- stdlib
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a stdlib call's arguments must match its declared parameter types")
 def test_stdlib_arguments_match_the_declared_signature(tmp_path):
+    # the prelude's Math is the face of these primitives: the call is checked
+    # against it like any other
     entry = """place Entry {
 fun main(): Number {
   return Math.abs("abc")
@@ -3623,6 +3623,73 @@ def test_a_stream_is_not_a_channel(tmp_path):
     rc, out = _compile(_project(tmp_path, _produce_returning("Stream<Number>")),
                        tmp_path / "out")
     assert _clean_rejection(rc, out), out
+
+
+# ---------------------------------------------------------------- the library's names are extended, never redeclared
+
+def _one_place_project(tmp_path, name, decl, entry):
+    files = {"w/Topos.yon": "topos WTopos where {\n}\n", f"w/{name}.yon": decl}
+    return _project(tmp_path, entry,
+                    extra=f'\n[world.W]\nobjects = ["{name}"]\nspaces  = ["w"]\n',
+                    files=files)
+
+
+def test_a_user_place_named_like_a_prelude_place_is_refused(tmp_path):
+    # it took the place of the prelude's Lookup, which HashMap.get returns:
+    # the MLIR verifier refused the program
+    entry = ("place Entry {}\nfun main(): Number {\n"
+             "  be m := HashMap.set(HashMap.empty(), 1, 10)\n"
+             "  be l := .-> Lookup { hits 32 }\n"
+             "  return l.hits + (match HashMap.get(m, 1) { Found(v) => v, Absent => 0 })\n}\n")
+    proj = _one_place_project(tmp_path, "Lookup", "place Lookup { hits Number }\n", entry)
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert _clean_rejection(rc, out) and "[E2006]" in out, out
+    assert "Rename yours" in out and "`place MyLookup { this < Lookup" in out, out
+
+
+_GCD_DECL = ("place %s {\n  count Number\n"
+             "  operation gcd(a: Number, b: Number): Number\n}\n")
+_GCD_ENTRY = ("place Entry {\n  reduction R of %s {\n"
+              "    on gcd(a: Number, b: Number) { return 99 }\n  }\n"
+              "  fun main(): Number visits %s { return %s.gcd(12, 18) }\n}\n")
+
+
+def test_a_user_place_named_like_a_registry_place_is_refused(tmp_path):
+    # named Math, its operation was answered by the registry's gcd (6), not by
+    # its reduction (99)
+    proj = _one_place_project(tmp_path, "Math", _GCD_DECL % "Math", _GCD_ENTRY % (("Math",) * 3))
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert _clean_rejection(rc, out) and "[E2006]" in out, out
+
+
+def test_the_same_place_under_a_name_of_its_own_runs_its_reduction(tmp_path):
+    proj = _one_place_project(tmp_path, "Counter", _GCD_DECL % "Counter",
+                              _GCD_ENTRY % (("Counter",) * 3))
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert rc == 0, out
+    assert _run(tmp_path / "exe")[0] == 99
+
+
+def test_is_given_outside_the_prelude_is_refused(tmp_path):
+    # a place with a name of its own: `is given` declares a primitive of the
+    # runtime, and those are declared in the prelude only
+    proj = _one_place_project(tmp_path, "Tools",
+                              "place Tools {\n  fun f(): Number is given\n}\n",
+                              "place Entry {}\nfun main(): Number { return 0 }\n")
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert _clean_rejection(rc, out) and "[E2007]" in out, out
+    assert "fun Tools.f is given" in out and "prelude only" in out, out
+
+
+def test_a_library_place_is_extended_with_this_under(tmp_path):
+    entry = ("place Entry {}\nfun handle(e: Error): Number { return String.length(e.message) }\n"
+             "fun main(): Number {\n  be a := .-> AppError { message \"boom\" code 38 }\n"
+             "  return handle(a) + a.code\n}\n")
+    proj = _one_place_project(tmp_path, "AppError",
+                              "place AppError { this < Error  code Number }\n", entry)
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert rc == 0, out
+    assert _run(tmp_path / "exe")[0] == 42
 
 
 # ---------------------------------------------------------------- one primitive, one owner of its face
