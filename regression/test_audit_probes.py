@@ -983,6 +983,28 @@ def _cross_space_call_lowering(tmp_path, offset):
     return r.returncode, r.stdout, r.stderr
 
 
+@pytest.mark.parametrize("order", ["alpha_first", "beta_first"])
+def test_an_imported_function_has_the_signature_of_its_own_module(tmp_path, order):
+    # alpha and beta both declare stats; the client imports alpha's. The
+    # signature of a remote function is keyed by (module, name): the other
+    # module's stats, never imported, does not decide the type of the call
+    (tmp_path / "alpha.yon").write_text(
+        "place Entry {\n  fun stats(x: Number): Number { return x + 1 }\n"
+        "  fun main(): Number { return 0 }\n}\n")
+    (tmp_path / "beta.yon").write_text(
+        "place Entry {\n  fun stats(x: Number): Text { return \"no\" }\n"
+        "  fun other(x: Number): Number { return x * 2 }\n"
+        "  fun main(): Number { return 0 }\n}\n")
+    imports = ["import alpha::stats from A\n", "import beta::other from B\n"]
+    if order == "beta_first":
+        imports.reverse()
+    (tmp_path / "client.yon").write_text(
+        "".join(imports) + "place Entry {\n  fun main(): Number {\n"
+        "    return stats(1) + other(3)\n  }\n}\n")
+    rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
+    assert rc == 0, out
+
+
 @_IPC_lowering
 def test_a_cross_space_call_returns_its_value(tmp_path):
     rc, out, err = _cross_space_call_lowering(tmp_path, 776)
