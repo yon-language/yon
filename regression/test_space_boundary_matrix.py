@@ -102,9 +102,7 @@ REFUSED = {
 BOUNDARIES = ["bin_arg", "bin_res", "proc_arg", "proc_res", "wire"]
 
 # the holes the matrix found (2026-10-23), each with the reason it closes
-_HOLES = {
-    ("closure", "proc_res"): "the judgement of mobility applies to an exported signature too: an E code on the server",
-}
+_HOLES = {}
 
 
 def _cases(table):
