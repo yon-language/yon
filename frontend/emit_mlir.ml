@@ -705,6 +705,11 @@ let is_type_var (e : emitter) (name : string) : bool =
   && not (List.mem_assoc name e.places_table)
   && not (List.mem_assoc name e.toposes_index)
   && not (String.length name >= 4 && String.sub name 0 4 = "ind_")
+  (* a collection (HashMap, List, XRelMap…) is a type, whatever its
+     parameters: a function over it is monomorphic, emitted under its own
+     name, and an operation a server exports even when no local call asks for
+     an instance of it *)
+  && not (Carrier.collection_handle name)
 
 (* Is this MLIR type the section handle of a named inductive `ind_<root>`? These
    are the only sections that carry a MerkleTree f64 value: the section lives at
