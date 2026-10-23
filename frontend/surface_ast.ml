@@ -1064,3 +1064,8 @@ let pat_bound_names (p : match_pat) : string list =
   | PatVars vs -> vs
   | PatWitness w -> [w]
   | PatFields fs -> List.map snd fs
+
+(* The declared result of a call between processes, by (Space, operation
+   selector): the lowering gives the answer the carrier its type gives, as
+   for a local call (a place is a section, an Int64 is i64). *)
+let rpc_returns : (string * int, ty) Hashtbl.t = Hashtbl.create 8

@@ -102,13 +102,10 @@ REFUSED = {
 BOUNDARIES = ["bin_arg", "bin_res", "proc_arg", "proc_res", "wire"]
 
 # the holes the matrix found (2026-10-23), each with the reason it closes
-_REMOTE_PLACE = "the result and the element have the carrier their type gives, as for a local call"
+_OWN_ROOT = "a value is copied with the root of its section, never with the root of its static type"
 _HOLES = {
-    ("place", "proc_res"): _REMOTE_PLACE, ("place_text", "proc_res"): _REMOTE_PLACE,
-    ("nested", "proc_res"): _REMOTE_PLACE, ("place_map", "proc_res"): _REMOTE_PLACE, ("sub_object", "proc_res"): _REMOTE_PLACE,
-    ("sub_object", "wire"): _REMOTE_PLACE,
-    ("sub_object", "proc_arg"): "a prelude place as the parameter of a remote function is exported",
-    ("sub_object", "bin_arg"): "a value is copied with the root of its section, never with the root of its static type",
+    ("sub_object", "proc_res"): _OWN_ROOT, ("sub_object", "wire"): _OWN_ROOT,
+    ("sub_object", "proc_arg"): _OWN_ROOT, ("sub_object", "bin_arg"): _OWN_ROOT,
     ("closure", "proc_res"): "the judgement of mobility applies to an exported signature too: an E code on the server",
 }
 
