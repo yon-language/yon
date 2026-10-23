@@ -3625,6 +3625,25 @@ def test_a_stream_is_not_a_channel(tmp_path):
     assert _clean_rejection(rc, out), out
 
 
+# ---------------------------------------------------------------- one primitive, one owner of its face
+
+def test_a_user_face_of_unit_does_not_take_the_primitive_over(tmp_path):
+    # `place Nada is unit { this > nil }` is one more name of the object unit;
+    # the inverse unit -> face stays the prelude's (Unit), so a match on a Unit
+    # value is checked against star. The old checker asked for a branch `nil`.
+    # Checked at the type checker: a Unit value at runtime still fails in emit
+    # (notes/audit/REGISTERED_FOR_LATER_LOTS.md); when it runs, expect exit 7.
+    entry = ("place Entry {}\nfun main(): Number {\n  be u := star\n"
+             "  return match u { star => 7 }\n}\n")
+    files = {"w/Topos.yon": "topos WTopos where {\n}\n",
+             "w/Nada.yon": "place Nada is unit { this > nil }\n"}
+    proj = _project(tmp_path, entry,
+                    extra='\n[world.W]\nobjects = ["Nada"]\nspaces  = ["w"]\n',
+                    files=files)
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert "missing branch" not in out and "[E" not in out, out
+
+
 # ---------------------------------------------------------------- a coproduct returned by a call with no arguments
 
 def test_a_coproduct_returned_by_a_call_without_arguments_is_matched(tmp_path):
