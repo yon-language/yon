@@ -3563,3 +3563,20 @@ def test_a_stream_is_not_a_channel(tmp_path):
     rc, out = _compile(_project(tmp_path, _produce_returning("Stream<Number>")),
                        tmp_path / "out")
     assert _clean_rejection(rc, out), out
+
+
+# ---------------------------------------------------------------- a coproduct returned by a call with no arguments
+
+def test_a_coproduct_returned_by_a_call_without_arguments_is_matched(tmp_path):
+    # the call with arguments unpacks an inductive result to its f64 handle;
+    # the call with none returned the section, and the match on it was
+    # refused by the MLIR verifier
+    entry = """place Entry {}
+fun d(): Decision { return Unknown }
+fun main(): Number {
+  return match d() { Present => 1, Absent => 2, Unknown => 3 }
+}
+"""
+    rc, out = _compile(_project(tmp_path, entry), tmp_path / "exe")
+    assert rc == 0, out[-400:]
+    assert _run(tmp_path / "exe")[0] == 3
