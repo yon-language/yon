@@ -53,6 +53,9 @@ type env = {
      each coproduct that lists the arm. A relation, not a parent: an arm is
      an object with one injection per sum that lists it (Harper ch. 11). *)
   arm_unions : (string * string) list;
+  (* the names in scope whose binding is a cell (`mut c := e`): the only
+     names a write `c <- e` may target *)
+  cells : string list;
   intervals : interval_var list;
   places : (string * place_decl) list;
   worlds : (string * world_decl) list;
@@ -98,6 +101,7 @@ let empty : env = {
   named_sums = [];
   named_sum_params = [];
   arm_unions = [];
+  cells = [];
   intervals = [];
   places = [];
   worlds = [];
@@ -291,11 +295,20 @@ let lookup_op_unqualified (env : env) (op_name : string) : op_sig list =
        if sig_.os_op_name = op_name then Some sig_ else None)
     env.ops
 
+(* a new binding of x is a value unless declared a cell (add_cell): it
+   shadows a cell of the same name *)
 let add_var (env : env) (x : string) (t : ty) : env =
-  { env with vars = (x, t) :: env.vars }
+  { env with vars = (x, t) :: env.vars;
+             cells = List.filter (fun c -> c <> x) env.cells }
 
 let add_vars (env : env) (bindings : (string * ty) list) : env =
-  { env with vars = bindings @ env.vars }
+  { env with vars = bindings @ env.vars;
+             cells = List.filter (fun c -> not (List.mem_assoc c bindings)) env.cells }
+
+let add_cell (env : env) (x : string) : env =
+  { env with cells = x :: env.cells }
+
+let is_cell (env : env) (x : string) : bool = List.mem x env.cells
 
 let add_sum_type (env : env) (variants : variant list) : env =
   if List.exists (( = ) variants) env.sum_types then env

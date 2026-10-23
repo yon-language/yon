@@ -2,4 +2,4 @@ status: reject_clean
 exit: 1
 match: let
 note: |
-  let is not a Yon keyword; the only binding form is be x := e.
+  let is not a Yon keyword; the only binding form is x := e.

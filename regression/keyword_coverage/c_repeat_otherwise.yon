@@ -1,9 +1,9 @@
 // coverage: `repeat at most N times { } otherwise { }` with the otherwise tail
 place Entry {
   fun main(): Number {
-    be acc := 0
-    repeat at most 3 times { acc = acc + 2 }
-    otherwise { acc = acc + 1 }
+    mut acc := 0
+    repeat at most 3 times { acc <- acc + 2 }
+    otherwise { acc <- acc + 1 }
     return acc
   }
 }

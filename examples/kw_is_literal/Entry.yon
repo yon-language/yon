@@ -6,28 +6,28 @@ place Entry {
 // `is not <literal>` rides the same path through heyt negation.
 fun pick(x: Number): Number visits Output {
   when x is 7 {
-    be _ := String.print("x is seven")
+    _ := String.print("x is seven")
   }
   return 10
 }
 fun name_check(a: Number, b: Number): Number visits Output {
-  be city := "rome"
+  city := "rome"
   when city is "rome" {
-    be _ := String.print("city is rome")
+    _ := String.print("city is rome")
   }
-  be other := "paris"
+  other := "paris"
   when other is not "rome" {
-    be _ := String.print("other is not rome")
+    _ := String.print("other is not rome")
   }
-  be y := (a + b)
+  y := (a + b)
   when y is a {
-    be _ := String.print("NEVER: y equals a")
+    _ := String.print("NEVER: y equals a")
   }
   return 20
 }
 fun main(): Number visits Output {
-  be r1 := pick(7)
-  be r2 := name_check(2, 3)
+  r1 := pick(7)
+  r2 := name_check(2, 3)
   return r1 + r2
 }
 }

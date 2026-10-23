@@ -165,8 +165,8 @@ def test_corpus_units_cover_the_formatter_corpus():
 _DROP_PROBE = """\
 place Entry { }
 fun main(): Number {
-  be x := 1
-  x = x + 41
+  mut x := 1
+  x <- x + 41
   return x
 }
 """
@@ -185,7 +185,7 @@ def test_oracle_catches_a_dropped_statement(tmp_path):
     def drop_reassignment(copy: Path):
         f = copy / "Entry.yon"
         lines = f.read_text().splitlines(True)
-        kept = [ln for ln in lines if not re.match(r"\s*x = x \+ 41\s*$", ln)]
+        kept = [ln for ln in lines if not re.match(r"\s*x <- x \+ 41\s*$", ln)]
         assert len(kept) == len(lines) - 1, f"probe line not found in:\n{''.join(lines)}"
         f.write_text("".join(kept))
 

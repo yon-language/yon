@@ -10,11 +10,11 @@ place Entry {
  * levels = 3; 3 is in H_2 (true), so:
  * return levels*10 + (3 in H_2 ? 1 : 0) = 3*10 + 1 = 31. */
 fun main(): Number {
-  be s0 := Route.empty(0)
-  be s1 := Route.step(s0, 1, 0)
-  be s2 := Route.step(s1, 2, 0)
-  be lv := Route.levels(s2)
-  be c3 := Route.contains(s2, 2, 3)
+  s0 := Route.empty(0)
+  s1 := Route.step(s0, 1, 0)
+  s2 := Route.step(s1, 2, 0)
+  lv := Route.levels(s2)
+  c3 := Route.contains(s2, 2, 3)
   return lv * 10 + (if c3 then 1 else 0)
 }
 }

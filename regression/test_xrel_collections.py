@@ -67,12 +67,12 @@ fun read(m: XRelMap<LatticePoint, Number>, p: LatticePoint): Number {
   return match XRelMap.get(m, p) { Found(v) => v, Absent => 0 }
 }
 fun two(p: LatticePoint): Number {
-  be m1 := XRelMap.set(XRelMap.empty(), p, 1)
-  be m2 := XRelMap.set(m1, p, 2)
-  be _1 := IO.print_num(read(m1, p))
-  be _2 := IO.print_num(read(m2, p))
-  be _3 := IO.print_num(XRelMap.size(m2))
-  be _4 := IO.print_num(XRelMap.size(XRelMap.empty()))
+  m1 := XRelMap.set(XRelMap.empty(), p, 1)
+  m2 := XRelMap.set(m1, p, 2)
+  _1 := IO.print_num(read(m1, p))
+  _2 := IO.print_num(read(m2, p))
+  _3 := IO.print_num(XRelMap.size(m2))
+  _4 := IO.print_num(XRelMap.size(XRelMap.empty()))
   return 0
 }
 """ + _AT.format(n=1536, f="two")
@@ -92,14 +92,14 @@ fun orbit_at(n: Number): Number {
     LatticePoint as q => LatticePoint.orbit(q), DomainError as d => 0 - 1 }
 }
 fun with_q(p: LatticePoint, q: LatticePoint): Number {
-  be a := XRelMap.set(XRelMap.set(XRelMap.empty(), p, 42), q, 7)
-  be _1 := IO.print_num(match XRelMap.get(a, p) { Found(v) => v, Absent => 0 })
-  be _2 := IO.print_num(if XRelMap.has(a, p) then 1 else 0)
-  be _3 := IO.print_num(LatticePoint.orbit(p))
-  be _4 := IO.print_num(if LatticePoint.orbit(p) == LatticePoint.orbit(q) then 1 else 0)
-  be _5 := IO.print_num(if LatticePoint.orbit(p) == orbit_at(16778752) then 1 else 0)
-  be _6 := IO.print_num(match XRelMap.get(XRelMap.empty(), p) { Found(v) => 1, Absent => 0 })
-  be _7 := IO.print_num(match XRelMap.get(a, q) { Found(v) => v, Absent => 0 })
+  a := XRelMap.set(XRelMap.set(XRelMap.empty(), p, 42), q, 7)
+  _1 := IO.print_num(match XRelMap.get(a, p) { Found(v) => v, Absent => 0 })
+  _2 := IO.print_num(if XRelMap.has(a, p) then 1 else 0)
+  _3 := IO.print_num(LatticePoint.orbit(p))
+  _4 := IO.print_num(if LatticePoint.orbit(p) == LatticePoint.orbit(q) then 1 else 0)
+  _5 := IO.print_num(if LatticePoint.orbit(p) == orbit_at(16778752) then 1 else 0)
+  _6 := IO.print_num(match XRelMap.get(XRelMap.empty(), p) { Found(v) => 1, Absent => 0 })
+  _7 := IO.print_num(match XRelMap.get(a, q) { Found(v) => v, Absent => 0 })
   return 0
 }
 fun at_p(p: LatticePoint): Number {
@@ -118,11 +118,11 @@ def test_keys_that_are_not_points(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be t := XRelMap.set(XRelMap.empty(), String.concat("ab", "c"), 7)
-  be _1 := IO.print_num(match XRelMap.get(t, String.concat("a", "bc")) { Found(v) => v, Absent => 0 })
-  be z := XRelMap.set(XRelMap.set(XRelMap.empty(), 0.0, 1), (0 - 1) * 0.0, 2)
-  be _2 := IO.print_num(XRelMap.size(z))
-  be _3 := IO.print_num(match XRelMap.get(z, 2.5) { Found(v) => v, Absent => 0 - 1 })
+  t := XRelMap.set(XRelMap.empty(), String.concat("ab", "c"), 7)
+  _1 := IO.print_num(match XRelMap.get(t, String.concat("a", "bc")) { Found(v) => v, Absent => 0 })
+  z := XRelMap.set(XRelMap.set(XRelMap.empty(), 0.0, 1), (0 - 1) * 0.0, 2)
+  _2 := IO.print_num(XRelMap.size(z))
+  _3 := IO.print_num(match XRelMap.get(z, 2.5) { Found(v) => v, Absent => 0 - 1 })
   return 0
 }
 """
@@ -137,41 +137,41 @@ def test_same_answers_as_hashmap_and_hashset(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  be h := HashMap.empty()
-  be x := XRelMap.empty()
-  be ha := HashSet.empty()
-  be hb := HashSet.empty()
-  be xa := XRelSet.empty()
-  be xb := XRelSet.empty()
-  be i := 0
+  mut h := HashMap.empty()
+  mut x := XRelMap.empty()
+  mut ha := HashSet.empty()
+  mut hb := HashSet.empty()
+  mut xa := XRelSet.empty()
+  mut xb := XRelSet.empty()
+  mut i := 0
   iter 300 do {
-    be key := (i % 200) * 0.5
-    h = HashMap.set(h, key, i)
-    x = XRelMap.set(x, key, i)
-    ha = (if i % 3 == 0 then ha else HashSet.add(ha, key))
-    xa = (if i % 3 == 0 then xa else XRelSet.add(xa, key))
-    hb = (if i % 5 < 2 then HashSet.add(hb, key + 7) else hb)
-    xb = (if i % 5 < 2 then XRelSet.add(xb, key + 7) else xb)
-    i = i + 1
+    key := (i % 200) * 0.5
+    h <- HashMap.set(h, key, i)
+    x <- XRelMap.set(x, key, i)
+    ha <- (if i % 3 == 0 then ha else HashSet.add(ha, key))
+    xa <- (if i % 3 == 0 then xa else XRelSet.add(xa, key))
+    hb <- (if i % 5 < 2 then HashSet.add(hb, key + 7) else hb)
+    xb <- (if i % 5 < 2 then XRelSet.add(xb, key + 7) else xb)
+    i <- i + 1
   }
-  be sh := 0
-  be sx := 0
-  be j := 0
+  mut sh := 0
+  mut sx := 0
+  mut j := 0
   iter 300 do {
-    be key := j * 0.5
-    sh = sh + (match HashMap.get(h, key) { Found(v) => v, Absent => 0 - 1 })
-    sx = sx + (match XRelMap.get(x, key) { Found(v) => v, Absent => 0 - 1 })
-    j = j + 1
+    key := j * 0.5
+    sh <- sh + (match HashMap.get(h, key) { Found(v) => v, Absent => 0 - 1 })
+    sx <- sx + (match XRelMap.get(x, key) { Found(v) => v, Absent => 0 - 1 })
+    j <- j + 1
   }
-  be _1 := IO.print_num(sh)
-  be _2 := IO.print_num(sx)
-  be _3 := IO.print_num(HashMap.size(h))
-  be _4 := IO.print_num(XRelMap.size(x))
-  be _5 := IO.print_num(HashSet.size(HashSet.union(ha, hb)))
-  be _6 := IO.print_num(XRelSet.size(XRelSet.union(xa, xb)))
-  be _7 := IO.print_num(HashSet.size(HashSet.intersect(ha, hb)))
-  be _8 := IO.print_num(XRelSet.size(XRelSet.intersect(xa, xb)))
-  be _9 := IO.print_num(if XRelSet.contains(XRelSet.union(xa, xb), 7.5) then 1 else 0)
+  _1 := IO.print_num(sh)
+  _2 := IO.print_num(sx)
+  _3 := IO.print_num(HashMap.size(h))
+  _4 := IO.print_num(XRelMap.size(x))
+  _5 := IO.print_num(HashSet.size(HashSet.union(ha, hb)))
+  _6 := IO.print_num(XRelSet.size(XRelSet.union(xa, xb)))
+  _7 := IO.print_num(HashSet.size(HashSet.intersect(ha, hb)))
+  _8 := IO.print_num(XRelSet.size(XRelSet.intersect(xa, xb)))
+  _9 := IO.print_num(if XRelSet.contains(XRelSet.union(xa, xb), 7.5) then 1 else 0)
   return 0
 }
 """
@@ -188,11 +188,11 @@ def test_a_map_on_the_classes_keys_by_canon(tmp_path):
 place Entry {}
 fun k(p: LatticePoint): LatticePoint { return XRelFrame.canon(XRelFrame.curtis(), p) }
 fun three(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number {
-  be a := XRelMap.set(XRelMap.empty(), k(p), 100)
-  be _1 := IO.print_num(match XRelMap.get(a, k(m)) { Found(v) => v, Absent => 0 })
-  be _2 := IO.print_num(match XRelMap.get(a, k(q)) { Found(v) => v, Absent => 0 })
-  be s := XRelSet.add(XRelSet.add(XRelSet.add(XRelSet.empty(), k(p)), k(m)), k(q))
-  be _3 := IO.print_num(XRelSet.size(s))
+  a := XRelMap.set(XRelMap.empty(), k(p), 100)
+  _1 := IO.print_num(match XRelMap.get(a, k(m)) { Found(v) => v, Absent => 0 })
+  _2 := IO.print_num(match XRelMap.get(a, k(q)) { Found(v) => v, Absent => 0 })
+  s := XRelSet.add(XRelSet.add(XRelSet.add(XRelSet.empty(), k(p)), k(m)), k(q))
+  _3 := IO.print_num(XRelSet.size(s))
   return 0
 }
 fun with_q(p: LatticePoint, q: LatticePoint): Number {
@@ -215,7 +215,7 @@ fun at_p(p: LatticePoint): Number {
     "XRelSet.add_ref(XRelSet.empty(), 1536)",
 ])
 def test_retired_forms_are_refused(tmp_path, call):
-    entry = f"place Entry {{}}\nfun main(): Number {{\n  be a := {call}\n  return 0\n}}\n"
+    entry = f"place Entry {{}}\nfun main(): Number {{\n  a := {call}\n  return 0\n}}\n"
     rc, out, _ = _compile(tmp_path, entry)
     if not (rc != 0 and _rejected(out)):
         raise ProbeOutcome(f"{call} still compiles: rc={rc}")

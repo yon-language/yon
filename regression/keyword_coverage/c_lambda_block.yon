@@ -1,7 +1,7 @@
 // coverage: an inline lambda with a BLOCK body `fun(x) => { ... }`
 place Entry {
   fun main(): Number {
-    be f := fun(x: Number) => { be y := x + 1 return y }
+    f := fun(x: Number) => { y := x + 1 return y }
     return f(41)
   }
 }

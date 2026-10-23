@@ -1,67 +1,67 @@
 place Entry {
   fun timed_cons(n: Number): Number visits Output {
-    be lc := Space.make(List.empty(0))
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be _ := Space.set(lc, List.cons(k, Space.get(lc)))
-                be _2 := Space.set(i, k + 1) }
-    be t1 := Time.now_ns(0)
+    lc := Space.make(List.empty(0))
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                _ := Space.set(lc, List.cons(k, Space.get(lc)))
+                _2 := Space.set(i, k + 1) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_cons_base(n: Number): Number visits Output {
-    be i := Space.make(0)
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be _ := Space.set(acc, k)
-                be _2 := Space.set(i, k + 1) }
-    be t1 := Time.now_ns(0)
+    i := Space.make(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                _ := Space.set(acc, k)
+                _2 := Space.set(i, k + 1) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun build_list(n: Number): Number {
-    be lc := Space.make(List.empty(0))
-    be i := Space.make(0)
-    iter n do { be k := Space.get(i)
-                be _ := Space.set(lc, List.cons(k, Space.get(lc)))
-                be _2 := Space.set(i, k + 1) }
+    lc := Space.make(List.empty(0))
+    i := Space.make(0)
+    iter n do { k := Space.get(i)
+                _ := Space.set(lc, List.cons(k, Space.get(lc)))
+                _2 := Space.set(i, k + 1) }
     return Space.get(lc)
   }
   fun timed_head(l: Number, m: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter m do { be h := List.head(l)
-                be _ := Space.set(acc, Space.get(acc) + h) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter m do { h := List.head(l)
+                _ := Space.set(acc, Space.get(acc) + h) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_head_base(m: Number, headv: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter m do { be _ := Space.set(acc, Space.get(acc) + headv) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter m do { _ := Space.set(acc, Space.get(acc) + headv) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun min2(f0: Number, f1: Number): Number { return if f0 < f1 then f0 else f1 }
   fun main(): Number visits Output {
-    be n := 100000
+    n := 100000
     // cons throughput: min over a few reps, net of baseline
-    be cns := Space.make(timed_cons(n))
-    iter 4 do { be _ := Space.set(cns, min2(Space.get(cns), timed_cons(n))) }
-    be cnsb := Space.make(timed_cons_base(n))
-    iter 4 do { be _ := Space.set(cnsb, min2(Space.get(cnsb), timed_cons_base(n))) }
-    be l := build_list(n)
-    be len := List.length(l)
-    be hv := List.head(l)
-    be m := 1000000
-    be hd := Space.make(timed_head(l, m))
-    iter 11 do { be _ := Space.set(hd, min2(Space.get(hd), timed_head(l, m))) }
-    be hdb := Space.make(timed_head_base(m, hv))
-    iter 11 do { be _ := Space.set(hdb, min2(Space.get(hdb), timed_head_base(m, hv))) }
-    be _1 := Output.print(String.from_int(len))                                // final_length = N
-    be _2 := Output.print(String.from_int((Space.get(cns) - Space.get(cnsb)))) // cons net ns for N
-    be _3 := Output.print(String.from_int(hv))                                 // head guard (= N-1)
-    be _4 := Output.print(String.from_int((Space.get(hd) - Space.get(hdb))))    // head net ns for M
+    cns := Space.make(timed_cons(n))
+    iter 4 do { _ := Space.set(cns, min2(Space.get(cns), timed_cons(n))) }
+    cnsb := Space.make(timed_cons_base(n))
+    iter 4 do { _ := Space.set(cnsb, min2(Space.get(cnsb), timed_cons_base(n))) }
+    l := build_list(n)
+    len := List.length(l)
+    hv := List.head(l)
+    m := 1000000
+    hd := Space.make(timed_head(l, m))
+    iter 11 do { _ := Space.set(hd, min2(Space.get(hd), timed_head(l, m))) }
+    hdb := Space.make(timed_head_base(m, hv))
+    iter 11 do { _ := Space.set(hdb, min2(Space.get(hdb), timed_head_base(m, hv))) }
+    _1 := Output.print(String.from_int(len))                                // final_length = N
+    _2 := Output.print(String.from_int((Space.get(cns) - Space.get(cnsb)))) // cons net ns for N
+    _3 := Output.print(String.from_int(hv))                                 // head guard (= N-1)
+    _4 := Output.print(String.from_int((Space.get(hd) - Space.get(hdb))))    // head net ns for M
     return 0
   }
 }

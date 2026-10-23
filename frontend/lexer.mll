@@ -102,10 +102,9 @@
          contextual phrase, not a reserved keyword. *)
       "error", ERROR_KW;
 
-      (* `be x := e` is the sole binding form (immutable). It maps to the
-         LET token because the core IR still calls such bindings let-bindings;
-         mutation goes through `=`, not rebinding. *)
-      "be", LET;
+      (* `mut c := e` declares a cell, the one mutable thing; a value is
+         defined with no keyword, `x := e`. The cell is written with `<-`. *)
+      "mut", MUT;
 
       (* Type-level and connective words. Most read as English in declarations:
          `e is pattern`, `move M from A to B`. *)
@@ -289,6 +288,9 @@ rule token = parse
   
   (* Multi-character operators *)
   | "<="             { LEQ }
+  (* `c <- e` writes the cell c. Max-munch: `<=>` and `<=` are tried first;
+     `a < -1` is written with a space. *)
+  | "<-"             { LARROW }
   | ">="             { GEQ }
   | "!="             { NEQ }
   | "=="             { EQEQ }

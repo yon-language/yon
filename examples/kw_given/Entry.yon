@@ -1,7 +1,7 @@
 place Entry {
   fun main(): Number {
-    be a := Math.floor(21.9)
-    be b := Math.sqrt(441)
+    a := Math.floor(21.9)
+    b := Math.sqrt(441)
     return a + b
   }
 }

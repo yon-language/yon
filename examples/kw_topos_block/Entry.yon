@@ -1,7 +1,7 @@
 place Entry {
   fun main(): Number {
-    be s := .-> State { balance 5 }
-    be bad := is_overdrawn(s)
+    s := .-> State { balance 5 }
+    bad := is_overdrawn(s)
     return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
   }
 }

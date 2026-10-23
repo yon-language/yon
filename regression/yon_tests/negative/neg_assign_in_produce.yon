@@ -5,9 +5,9 @@
 // `Space.set` or binding the value with `be` outside the block.
 place Entry {
   fun main(): Number {
-    be s := produce {
-      be i := 0
-      iter 3 do { emit i  i = i + 1 }
+    s := produce {
+      mut i := 0
+      iter 3 do { emit i  i <- i + 1 }
     }
     return 0
   }

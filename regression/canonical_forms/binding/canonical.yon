@@ -1,7 +1,7 @@
-be greeting := 10
+greeting := 10
 place Entry {
   fun main(): Number {
-    be x := 42
+    x := 42
     return x
   }
 }

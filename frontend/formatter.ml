@@ -246,26 +246,31 @@ let rec cond_str (c : condition) : string =
   | CondAnd (a, b) -> cond_str a ^ " and " ^ cond_str b
   | CondOr (a, b) -> cond_str a ^ " or " ^ cond_str b
 
+(* `mut ` before a binding the parser recorded as a cell *)
+let mut_kw (l : location) : string =
+  if Hashtbl.mem Surface_ast.mut_sites (l.file, l.start_line, l.start_col)
+  then "mut " else ""
+
 let rec fmt_stmt (f : fmt) (s : stmt) : unit =
   match s with
-  (* `be x := produce/spawn { ... }`: the rhs carries a statement block, so it
+  (* `x := produce/spawn { ... }`: the rhs carries a statement block, so it
      is rendered multi-line here rather than through the single-line fmt_expr. *)
-  | SLet (name, EProduce (body, _), _) ->
-      line f (Printf.sprintf "be %s := produce {" name);
+  | SLet (name, EProduce (body, _), loc) ->
+      line f (Printf.sprintf "%s%s := produce {" (mut_kw loc) name);
       f.indent <- f.indent + 1; List.iter (fmt_stmt f) body; f.indent <- f.indent - 1;
       line f "}"
-  | SLet (name, ESpawn (n_opt, body, _), _) ->
+  | SLet (name, ESpawn (n_opt, body, _), loc) ->
       let hdr = match n_opt with
-        | None -> Printf.sprintf "be %s := spawn {" name
-        | Some n -> Printf.sprintf "be %s := spawn in %s parallel {" name (fmt_expr n) in
+        | None -> Printf.sprintf "%s%s := spawn {" (mut_kw loc) name
+        | Some n -> Printf.sprintf "%s%s := spawn in %s parallel {" (mut_kw loc) name (fmt_expr n) in
       line f hdr;
       f.indent <- f.indent + 1; List.iter (fmt_stmt f) body; f.indent <- f.indent - 1;
       line f "}"
-  | SLet (name, e, _) -> line f (Printf.sprintf "be %s := %s" name (fmt_expr e))
+  | SLet (name, e, loc) ->
+      line f (Printf.sprintf "%s%s := %s" (mut_kw loc) name (fmt_expr e))
   | SAssignBecomes (lv, e, _) ->
-      (* reassignment (model A): the surface is `x = e`; there is no `becomes`
-         keyword, so emitting one would produce code that never re-parses. *)
-      line f (Printf.sprintf "%s = %s" (lvalue_str lv) (fmt_expr e))
+      (* the write of a cell: `c <- e` *)
+      line f (Printf.sprintf "%s <- %s" (lvalue_str lv) (fmt_expr e))
   | SReturn (e, _) -> line f ("return " ^ fmt_expr e)
   | SEmit (e, _) -> line f ("emit " ^ fmt_expr e)
   | SCall (name, args, _) ->
@@ -609,7 +614,7 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
                  rd.rd_name tps rd.rd_of multi fold);
        f.indent <- f.indent + 1;
        List.iter (function
-         | RcLet (n, e, _) -> line f (Printf.sprintf "be %s := %s" n (fmt_expr e))
+         | RcLet (n, e, _) -> line f (Printf.sprintf "%s := %s" n (fmt_expr e))
          | RcOn (ev, params, body, _) ->
              let ps = String.concat ", "
                (List.map (fun p -> p.param_name ^ ": " ^ fmt_ty p.param_ty) params) in

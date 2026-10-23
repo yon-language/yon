@@ -31,7 +31,7 @@ fun lookup(env: MerkleTree, i: Number): Number {
 
 // eval : AST -> (Env => number), curried here as (AST, Env) -> number
 fun eval(e: MerkleTree, env: MerkleTree): Number {
-  be t := MerkleTree.label(e)
+  t := MerkleTree.label(e)
   return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
          else if t == 2 then eval(MerkleTree.child(e, 0), env) + eval(MerkleTree.child(e, 1), env)
          else if t == 3 then eval(MerkleTree.child(e, 0), env) * eval(MerkleTree.child(e, 1), env)
@@ -41,7 +41,7 @@ fun eval(e: MerkleTree, env: MerkleTree): Number {
 
 fun main(): Number {
   // body = x * (x + 1), with x = de Bruijn 0
-  be body := MerkleTree.node2(3, mk_var(0), MerkleTree.node2(2, mk_var(0), mk_lit(1)))
-  be prog := mk_let(MerkleTree.node2_commutative(2, mk_lit(2), mk_lit(3)), body)
+  body := MerkleTree.node2(3, mk_var(0), MerkleTree.node2(2, mk_var(0), mk_lit(1)))
+  prog := mk_let(MerkleTree.node2_commutative(2, mk_lit(2), mk_lit(3)), body)
   return eval(prog, env_nil())
 }

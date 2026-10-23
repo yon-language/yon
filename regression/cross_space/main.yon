@@ -3,13 +3,13 @@ import bank::deposit_net from Bank
 
 place Entry {
   fun main(): Number {
-    be deposits := List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
-    be total := 0
+    deposits := List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
+    mut total := 0
     for every d in deposits {
-      total = total + deposit_net(d)
+      total <- total + deposit_net(d)
     }
-    be usd := rates::eur_to_usd(total)
-    be _p := IO.print_num(usd)
+    usd := rates::eur_to_usd(total)
+    _p := IO.print_num(usd)
     return usd - 167
   }
 }

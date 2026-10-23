@@ -12,7 +12,7 @@ place Dinosaur in Park {
   heart_rate Number
 }
 
-world PublicPark = Park / cohort
+world PublicPark <- Park / cohort
 
 place PublicDino in PublicPark {
   cohort Number

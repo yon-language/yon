@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be h := compose (functor (x: Number) => x from W to V) with (functor (y: Number) => y from V to U)
+    h := compose (functor (x: Number) => x from W to V) with (functor (y: Number) => y from V to U)
     return 0
   }
 }

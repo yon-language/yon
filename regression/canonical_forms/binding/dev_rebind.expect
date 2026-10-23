@@ -2,4 +2,4 @@ status: reject_clean
 exit: 1
 match: already bound in this scope
 note: |
-  Re-holding a name already bound in scope; the fix is x = e.
+  Defining a name already bound in scope; to change it, declare it `mut` and write it with `<-`.

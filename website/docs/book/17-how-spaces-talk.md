@@ -175,10 +175,10 @@ import weather::forecasts from Weather    // forecasts: fun(): Wire<Reading>
 
 place Entry { }
 fun main(): Number {
-  be w := wire to space Weather
-  be sub := w.awaits(forecasts)
-  be readings := sub.stream          // the drained frames, as a local stream
-  be total := readings.fold(0, sum_reading)
+  w := wire to space Weather
+  sub := w.awaits(forecasts)
+  readings := sub.stream          // the drained frames, as a local stream
+  total := readings.fold(0, sum_reading)
   return total
 }
 ```
@@ -256,7 +256,7 @@ Spaces share one process:
 ```yon
 place Entry {
   fun main(): Number {
-    be k := 5
+    k := 5
     return Q.apply(fun(x: Number) => x + k, 1)   // Q lives in Space w: refused
   }
 }

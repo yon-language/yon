@@ -1,13 +1,13 @@
 place Entry {
   fun main(): Number visits Output {
-    be v := Vec.empty()
-    v = Vec.push(v, 1445)
-    v = Vec.push(v, 1280)
-    v = Vec.push(v, 1445)
-    be _1 := Output.print(String.from_int(Vec.size(v)))
-    be _2 := Output.print(String.from_int(Vec.get(v, 0)))
-    v = Vec.set(v, 1, 9999)
-    be _3 := Output.print(String.from_int(Vec.get(v, 1)))
+    mut v := Vec.empty()
+    v <- Vec.push(v, 1445)
+    v <- Vec.push(v, 1280)
+    v <- Vec.push(v, 1445)
+    _1 := Output.print(String.from_int(Vec.size(v)))
+    _2 := Output.print(String.from_int(Vec.get(v, 0)))
+    v <- Vec.set(v, 1, 9999)
+    _3 := Output.print(String.from_int(Vec.get(v, 1)))
     return 0
   }
 }

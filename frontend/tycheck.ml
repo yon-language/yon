@@ -664,7 +664,7 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
     | EPullback _ | EPushout _) -> e
 
 (* Stop-gap (1.1): `=` (Space-cell assign) inside a produce / spawn body desugars to
-   __space_update_here, which has no lowering — the cells promotion that turns `be x :=`
+   __space_update_here, which has no lowering — the cells promotion that turns `x :=`
    into a Space cell and rewrites `x = e` into `Space.set` does not reach these
    expression-context blocks, so emit_mlir would crash with a Fatal error. A clean
    compile-time error rejects it instead.
@@ -888,7 +888,7 @@ let certify_dependent_cone (hname : string)
 
    The analysis is flow-insensitive and syntax-total, so it never judges "does
    not escape" a value that escapes:
-   - every binding of the function (`be x := e`, `=`, at any depth, loops
+   - every binding of the function (`x := e`, `=`, at any depth, loops
      included) is recorded during checking and closed under a fixpoint at the
      end, so a cell assigned after the `return` that reads it is still seen;
    - the walks below match every expression and statement form with no
@@ -1326,7 +1326,7 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
            let channel_msg what =
              Printf.sprintf "%s is a channel, and a channel crosses no Space: it \
                names a stream of the Space that made it. To connect two Spaces \
-               with a flow, subscribe: `be sub := (wire to space S).awaits(producer)`." what in
+               with a flow, subscribe: `sub := (wire to space S).awaits(producer)`." what in
            let checks what t =
              match resolve_fused t with
              | TyChannel _ -> [ (true, channel_msg what) ]
@@ -2246,7 +2246,7 @@ producer is declared `Wire<T>`" bare shown)
                 err loc "awaits takes the name of a producer function")
        | other ->
            err loc (Printf.sprintf
-             "awaits needs a wire receiver (be w := wire to <Space>), \
+             "awaits needs a wire receiver (w := wire to <Space>), \
 got %s" (Tyenv.ty_to_string other)))
 
   | ECall (name, args, loc) ->
@@ -3913,7 +3913,7 @@ and check_pattern (env : Tyenv.env) (ctx : Reduce.ctx)
  *)
 
 (* Declare-once-per-scope (rule 1 of the `be :=` / `=` split, model A: every
-   `be x := e` binds a fresh mutable local, and `x = e` reassigns it). Re-binding
+   `x := e` binds a fresh mutable local, and `x = e` reassigns it). Re-binding
    the SAME name with `be ... :=` in the SAME block is a mistake, not a reassign;
    the fix is `x = ...`. A stack of frames, one per open block, records the names a
    block bound with `be ... :=`. check_stmts pushes a frame per nested block;
@@ -3936,8 +3936,9 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
   | SLet (name, e, loc) when (not (scope_throwaway name)) && scope_has name ->
       ignore e;
       err loc (Printf.sprintf
-        "'%s' is already bound in this scope; use `%s = ...` to reassign it, \
-         not `be %s := ...` again"
+        "'%s' is already bound in this scope: a value is defined once. To \
+         change it, declare it a cell where it is defined (`mut %s := ...`) and \
+         write it with `%s <- ...`"
         name name name)
   | SLet (name, e, loc) ->
       scope_add name;
@@ -3986,9 +3987,23 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
        | _ ->
            ok (Tyenv.add_var env name t))
       |> (fun r -> mob_bind env name t e; r)      (* the binding may carry a cell *)
+      |> (fun r ->
+            (* `mut c := e`: the binding is a cell *)
+            if Hashtbl.mem Surface_ast.mut_sites
+                 (loc.file, loc.start_line, loc.start_col)
+            then Result.map (fun env -> Tyenv.add_cell env name) r else r)
 
   | SAssignHolds (lv, e, loc) | SAssignBecomes (lv, e, loc) ->
       let* expected = type_of_lvalue env ctx lv loc in
+      let* () =
+        match lv with
+        | LVar x when not (Tyenv.is_cell env x) ->
+            err_coded Error_codes.Write_to_value loc (Printf.sprintf
+              "`%s` is a value, defined with `:=`, and a value does not change. \
+               A cell is declared as one where it is born: write \
+               `mut %s := ...` there, then `%s <- ...`."
+              x x x)
+        | _ -> ok () in
       let* () = check env ctx e expected in
       (* the target takes e; a field write makes its object carry *)
       (match lv with
@@ -4235,9 +4250,9 @@ and check_stmts_accum (env : Tyenv.env) (ctx : Reduce.ctx)
  * LAST statement (desugar_stmt_or_return): for a tail that is NOT a `return`,
  * that value must still inhabit the declared return type. tycheck only checks
  * `return e` statements against expected_ret, so a body ending in e.g.
- * `be y := 3` while declaring a place return type silently produces the
+ * `y := 3` while declaring a place return type silently produces the
  * wrong value. We check the tails whose value is a plain expression we can
- * infer (be x := e / a bare call), evaluated in the post-body env (the
+ * infer (x := e / a bare call), evaluated in the post-body env (the
  * tail's own binding never feeds its own RHS), and ONLY when both the inferred
  * type and the declared type are CONCRETE — never the `unknown` f64-handle
  * placeholder, never a terminal (fieldless) place — so the loose handle

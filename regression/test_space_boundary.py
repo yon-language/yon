@@ -36,11 +36,11 @@ backend = "memory"
 _BUILD = """place Q {
   side Number
   fun build(n: Number): HashMap<Number, Number> {
-    be m := HashMap.empty()
-    be k := 0
+    mut m := HashMap.empty()
+    mut k := 0
     iter n do {
-      m = HashMap.set(m, k, k * 100)
-      k = k + 1
+      m <- HashMap.set(m, k, k * 100)
+      k <- k + 1
     }
     return m
   }
@@ -48,17 +48,17 @@ _BUILD = """place Q {
   fun adder(n: Number): Number -> Number { return fun(x: Number) => x + n }
   fun peek(c: Space): Number { return Space.get(c) }
   fun points(n: Number): XRelMap<Number, Number> {
-    be m := XRelMap.empty()
-    be k := 0
+    mut m := XRelMap.empty()
+    mut k := 0
     iter n do {
-      m = XRelMap.set(m, k, k + 40)
-      k = k + 1
+      m <- XRelMap.set(m, k, k + 40)
+      k <- k + 1
     }
     return m
   }
   fun len(s: String): Number { return String.length(s) }
   fun flow(): Wire<Number> {
-    be s := produce {
+    s := produce {
       emit 1
     }
     return s
@@ -68,7 +68,7 @@ _BUILD = """place Q {
 
 _READ_MAP = """place Entry {
   fun main(): Number {
-    be m := Q.build(10)
+    mut m := Q.build(10)
     return HashMap.size(m) + (match HashMap.get(m, 3) { Found(v) => v, Absent => 0 })
   }
 }
@@ -113,7 +113,7 @@ def test_a_map_built_in_another_space_reaches_main(tmp_path):
 def test_an_xrelmap_made_in_another_space_is_copied_to_main(tmp_path):
     rc, out, exe = _in_binary(tmp_path, """place Entry {
   fun main(): Number {
-    be m := Q.points(6)
+    mut m := Q.points(6)
     return XRelMap.size(m) + (match XRelMap.get(m, 5) { Found(v) => v, Absent => 0 })
   }
 }
@@ -134,7 +134,7 @@ def test_a_text_crosses_into_another_space(tmp_path):
 def test_a_channel_does_not_cross_and_the_error_says_subscribe(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
   fun main(): Number {
-    be s := Q.flow()
+    s := Q.flow()
     return 0
   }
 }
@@ -145,7 +145,7 @@ def test_a_channel_does_not_cross_and_the_error_says_subscribe(tmp_path):
 def test_a_closure_does_not_cross_into_another_space(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
   fun main(): Number {
-    be k := 5
+    mut k := 5
     return Q.apply(fun(x: Number) => x + k, 1)
   }
 }
@@ -156,7 +156,7 @@ def test_a_closure_does_not_cross_into_another_space(tmp_path):
 def test_a_closure_does_not_come_back_from_another_space(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
   fun main(): Number {
-    be f := Q.adder(3)
+    f := Q.adder(3)
     return 0
   }
 }
@@ -167,7 +167,7 @@ def test_a_closure_does_not_come_back_from_another_space(tmp_path):
 def test_a_cell_does_not_cross_into_another_space(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
   fun main(): Number {
-    be c := Space.make(7)
+    c := Space.make(7)
     return Q.peek(c)
   }
 }
@@ -183,7 +183,7 @@ def test_a_call_inside_one_space_is_not_a_crossing(tmp_path):
 """)
     (proj / "w" / "Q.yon").write_text(_BUILD.replace(
         "  fun peek(c: Space)",
-        "  fun inside(x: Number): Number { be k := 1\n"
+        "  fun inside(x: Number): Number { mut k := 1\n"
         "    return Q.apply(fun(y: Number) => y + k, x) }\n"
         "  fun peek(c: Space)"))
     exe = tmp_path / "probe.exe"
@@ -210,8 +210,8 @@ def _note_project(tmp_path: Path, space_file: str, entry: str) -> Path:
 
 _NOTE_ENTRY = """place Entry { }
 fun main(): Number {
-  be s := .-> %s { message "unexpected }" line 30 }
-  be d := describe(s)
+  s := .-> %s { message "unexpected }" line 30 }
+  d := describe(s)
   return d + s.line
 }
 """
@@ -251,11 +251,11 @@ _ECHO = """place Entry {
   fun slen(s: String): Number { return String.length(s) }
   fun twice(x: Number): Number { return x * 2 }
   fun build(n: Number): HashMap<Number, Number> {
-    be m := HashMap.empty()
-    be k := 0
+    mut m := HashMap.empty()
+    mut k := 0
     iter n do {
-      m = HashMap.set(m, k, k * 100)
-      k = k + 1
+      m <- HashMap.set(m, k, k * 100)
+      k <- k + 1
     }
     return m
   }
@@ -302,7 +302,7 @@ def test_a_call_to_another_version_of_the_signature_is_refused(tmp_path):
 
 place Entry {
   fun main(): Number {
-    be r := twice(21)
+    r := twice(21)
     return 0
   }
 }
@@ -343,7 +343,7 @@ def test_a_map_crosses_between_processes(tmp_path):
 
 place Entry {
   fun main(): Number {
-    be m := build(10)
+    mut m := build(10)
     return HashMap.size(m) + (match HashMap.get(m, 3) { Found(v) => v, Absent => 0 })
   }
 }
@@ -419,7 +419,7 @@ def test_a_place_with_a_text_crosses_between_processes(tmp_path):
     (mods / "notes.yon").write_text("fun describe(e: Note): Number { return 0 }\n")
     (tmp_path / "client" / "Entry.yon").write_text(
         "import notes::describe from Notes\n\nplace Entry {\n  fun main(): Number {\n"
-        "    be n := .-> Note { message \"unexpected }\" line 30 }\n"
+        "    n := .-> Note { message \"unexpected }\" line 30 }\n"
         "    return describe(n)\n  }\n}\n")
     rc, out = _yonc(tmp_path / "svc", tmp_path / "Notes_srv")
     assert rc == 0, out

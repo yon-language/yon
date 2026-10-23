@@ -2,14 +2,14 @@
 // prints ns/message: the end-to-end cost of moving one message across the process boundary
 // over shared memory. Run with sensor.yon producing in the background.
 fun main(): Number visits Output {
-  be w := Wire.make_shm(9, 0)
-  be i := 0
-  be t0 := Time.now_ns(0)
+  w := Wire.make_shm(9, 0)
+  mut i := 0
+  t0 := Time.now_ns(0)
   while i < 200000 do {
-    be v := Wire.await_shm(w)
-    i = i + 1
+    v := Wire.await_shm(w)
+    i <- i + 1
   }
-  be t1 := Time.now_ns(0)
-  be _p := Output.print(String.from_int((t1 - t0) / 200000))
+  t1 := Time.now_ns(0)
+  _p := Output.print(String.from_int((t1 - t0) / 200000))
   return 0
 }

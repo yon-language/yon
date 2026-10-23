@@ -9,21 +9,22 @@ sidebar_position: 3
 <!-- yon-gate: exit 62 -->
 ```yon
 fun main(): Number {
-  be answer := 42
-  be greeting := "ciao"
-  be who := String.concat(greeting, " mondo")     // strings are values
-  be same := String.equal("ciao", greeting)       // literals are interned
-  be wait := 2500                                 // a duration is just a number (ms)
-  when same { be _p := String.print(who) }
+  answer := 42
+  greeting := "ciao"
+  who := String.concat(greeting, " mondo")     // strings are values
+  same := String.equal("ciao", greeting)       // literals are interned
+  wait := 2500                                 // a duration is just a number (ms)
+  when same { _p := String.print(who) }
   return String.length(who) + (wait / 250) + answer  // 10 + 10 + 42 = 62
 }
 ```
 
 This program exits with 62 and prints `ciao mondo`. Walking through it:
 
-**Bindings.** `be x := e` defines `x` as `e`. `:=` reads "is defined as", as
-in mathematics: a definition, not an assignment, valid for the whole scope of
-`x`. It is the same symbol that defines a field of a place (`side := Number`).
+**Bindings.** `x := e` defines `x` as `e`, with no keyword. `:=` reads "is
+defined as", as in mathematics: a definition, not an assignment, valid for the
+whole scope of `x`. It is the same symbol that defines a field of a place
+(`side := Number`).
 
 **Numbers.** `Number` is an IEEE double. Arithmetic is the usual
 `+ - * / %`.
@@ -47,6 +48,7 @@ that embeds into Ω by the canonical injection `true` maps to
 `present`, `false` maps to `absent`. `true`/`false` are the two classical
 literals. The chapter on the Heyting core develops this.
 
-**Bindings are immutable.** `be x := e` introduces `x` once. Mutation
-exists, but it is a separate, deliberate construct (`=`, Space-cell assignment)
-tied to the content-addressed space, next chapter.
+**Bindings are immutable.** `x := e` introduces `x` once. Mutation
+exists, but it is declared where it is born: a value is defined with `:=`; a
+cell is declared with `mut` (`mut c := 0`) and written with `<-` (`c <- c + 1`),
+next chapter.

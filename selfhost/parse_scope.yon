@@ -183,7 +183,7 @@ fun src(): String {
 }
 
 fun main(): Number {
-  be tree := parse_lam(lex(src()), hit(NEnvNil))
+  tree := parse_lam(lex(src()), hit(NEnvNil))
   // the Term must be TLam(TAdd(TVar 0, TVar 0)); applied to 21 -> 42
   return as_num(eval(hit(TApp, term_of(tree), hit(TLit, 21)))) - 42
 }

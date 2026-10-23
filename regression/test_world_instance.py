@@ -33,12 +33,12 @@ import who::instance from Who
 
 place Entry {
   fun main(): Number {
-    be k := String.length(Env.get("YON_PROBE_INSTANCE"))
-    be good := 0
-    be i := 0
+    k := String.length(Env.get("YON_PROBE_INSTANCE"))
+    mut good := 0
+    mut i := 0
     while i < 400 do {
-      good = good + (if instance(i) == k then 1 else 0)
-      i = i + 1
+      good <- good + (if instance(i) == k then 1 else 0)
+      i <- i + 1
     }
     return if good == 400 then k else 99
   }
@@ -123,9 +123,9 @@ def test_named_worlds_are_distinct(tmp_path):
 _HOLDER = """\
 place Entry {
   fun main(): Number {
-    be a := Wire.make_shm(5, 1)
-    be b := Wire.make_shm(6, 1)
-    be v := Wire.await_shm(6)
+    a := Wire.make_shm(5, 1)
+    b := Wire.make_shm(6, 1)
+    mut v := Wire.await_shm(6)
     return if v == 7 then 0 else 1
   }
 }
@@ -134,9 +134,9 @@ place Entry {
 _SENDER = """\
 place Entry {
   fun main(): Number {
-    be c := Wire.make_shm(6, 0)
-    be s := Wire.produce_shm(6, 7)
-    be e := Wire.close_shm(6)
+    c := Wire.make_shm(6, 0)
+    s := Wire.produce_shm(6, 7)
+    e := Wire.close_shm(6)
     return 0
   }
 }
@@ -226,10 +226,10 @@ def test_killed_launcher_releases_every_name(tmp_path):
 _PRODUCER = """\
 place Entry {
   fun main(): Number {
-    be c := Wire.make_shm(7, 1)
-    be a := Wire.produce_shm(7, 10)
-    be b := Wire.produce_shm(7, 32)
-    be e := Wire.close_shm(7)
+    c := Wire.make_shm(7, 1)
+    a := Wire.produce_shm(7, 10)
+    b := Wire.produce_shm(7, 32)
+    e := Wire.close_shm(7)
     return 0
   }
 }
@@ -238,12 +238,12 @@ place Entry {
 _CONSUMER = """\
 place Entry {
   fun main(): Number {
-    be c := Wire.make_shm(7, 0)
-    be total := 0
-    be v := Wire.await_shm(7)
+    c := Wire.make_shm(7, 0)
+    mut total := 0
+    mut v := Wire.await_shm(7)
     while v != 4294967295 do {
-      total = total + v
-      v = Wire.await_shm(7)
+      total <- total + v
+      v <- Wire.await_shm(7)
     }
     return total
   }

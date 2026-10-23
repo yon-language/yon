@@ -45,7 +45,7 @@ def _mk_drop(root):
     _base(root)
     (root / "Entry.yon").write_text(
         "import svc::a_op from A\nplace Entry { }\n"
-        "fun main(): Number { drop A  be r := a_op(5)  return r - r }\n")
+        "fun main(): Number { drop A  r := a_op(5)  return r - r }\n")
     return root
 
 
@@ -85,7 +85,7 @@ def _mk_boundary(root):
     (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
     (root / "A" / "AP.yon").write_text(
         "import svc::b_op from Bx\nplace AP { }\n"
-        "fun a_op(x: Number): Number { be r := b_op(x)  return r }\n")
+        "fun a_op(x: Number): Number { r := b_op(x)  return r }\n")
     (root / "Bx" / "Topos.yon").write_text("topos TB where { }\n")
     (root / "Bx" / "BxP.yon").write_text(
         "fun b_op(x: Number): Number { return x + 1 }\nplace BxP { }\n")

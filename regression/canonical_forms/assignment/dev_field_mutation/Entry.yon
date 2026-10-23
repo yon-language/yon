@@ -1,7 +1,7 @@
 place Entry {
   fun main(): Number {
-    be p := .-> Pt { x 40 }
-    p.x = 42
+    p := .-> Pt { x 40 }
+    p.x <- 42
     return p.x
   }
 }

@@ -10,19 +10,19 @@
   "steps": [
     {
       "op": "bind",
-      "src": "be x := 3",
+      "src": "mut x := 3",
       "cell": 3,
       "y": null
     },
     {
       "op": "snapshot",
-      "src": "be y := x",
+      "src": "y := x",
       "cell": 3,
       "y": 3
     },
     {
       "op": "store",
-      "src": "x = 5",
+      "src": "x <- 5",
       "cell": 5,
       "y": 3
     }

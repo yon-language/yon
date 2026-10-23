@@ -1,12 +1,12 @@
 place Entry {
 fun producer(): Number {
-  be sid := Wire.make_shm(1, 1)
-  be ok := Wire.send_shm(sid, 42)
+  sid := Wire.make_shm(1, 1)
+  ok := Wire.send_shm(sid, 42)
   return 0
 }
 fun consumer(): Number {
-  be sid := Wire.make_shm(1, 0)
-  be v := Wire.recv_shm(sid)
+  sid := Wire.make_shm(1, 0)
+  v := Wire.recv_shm(sid)
   return 0
 }
 fun main(): Number { return 0 }

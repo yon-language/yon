@@ -70,8 +70,8 @@ The entry place applies it:
 // Entry.yon
 place Entry { }
 fun main(): Number {
-  be table4 := .-> Order { total 40 }
-  be fired := apply_move(ToKitchen, table4)
+  table4 := .-> Order { total 40 }
+  fired := apply_move(ToKitchen, table4)
   return fired.total          // 44: read on the transported instance
 }
 ```
@@ -120,8 +120,8 @@ fun main(): Number { return 0 }
 // pass.yon, the entry binary
 import kitchen::plate_price from Kitchen
 fun main(): Number {
-  be three_plates := plate_price(13)
-  be _p := IO.print_num(three_plates)
+  three_plates := plate_price(13)
+  _p := IO.print_num(three_plates)
   return three_plates - 1        // prints 39, across two processes
 }
 ```
@@ -172,9 +172,9 @@ verifier error:
 // Entry.yon
 place Entry { }
 fun main(): Number {
-  be base := 40
+  base := 40
   scope Hermetic {
-    be sealed := base + 2    // `base` enters as an explicit capture
+    sealed := base + 2    // `base` enters as an explicit capture
   }
   return base + 2               // 42
 }

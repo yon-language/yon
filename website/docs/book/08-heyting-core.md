@@ -20,13 +20,13 @@ values that do not mean unknown.
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be u := unknown
-  be p := present
-  be both := p &&? u            // unknown: conjunction with the undecided
-  be imp := u =>? p             // present: anything implies the present
-  be h1 := heyting(5)          // trits 101, all certain
-  be h2 := heyting(5, 2)       // middle trit unknown
-  be hand := h1 &? h2           // trit-wise, unknown propagates
+  u := unknown
+  p := present
+  both := p &&? u            // unknown: conjunction with the undecided
+  imp := u =>? p             // present: anything implies the present
+  h1 := heyting(5)          // trits 101, all certain
+  h2 := heyting(5, 2)       // middle trit unknown
+  hand := h1 &? h2           // trit-wise, unknown propagates
   return match decide(imp) { Present => 42, Absent => 0, Unknown => 1 }
 }
 ```
@@ -68,8 +68,8 @@ topos Bank where {
 // Entry.yon
 place Entry { }
 fun main(): Number {
-  be s := .-> State { balance 5 }
-  be bad := is_overdrawn(s)
+  s := .-> State { balance 5 }
+  bad := is_overdrawn(s)
   return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
 }
 ```
@@ -95,9 +95,9 @@ place NodeA { value Number }
 // Entry.yon
 place Entry { }
 fun guard(): Number {
-  be r := 0
+  mut r := 0
   forces NodeA value is Number {
-    r = 1
+    r <- 1
   }
   return r
 }

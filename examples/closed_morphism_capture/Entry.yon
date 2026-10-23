@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number {
-    be base := 7
-    be m := move(s: P) => .-> Q { v base } from P to Q
-    be sp := .-> P { v 0 }
-    be sq := m(sp)
+    base := 7
+    m := move(s: P) => .-> Q { v base } from P to Q
+    sp := .-> P { v 0 }
+    sq := m(sp)
     return sq.v
   }
 }

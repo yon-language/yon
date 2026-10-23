@@ -16,114 +16,114 @@ place Entry {
       LatticePoint as p => 1, DomainError as d => 0 }
   }
   fun timed_put(n: Number): Number visits Output {
-    be ac := Space.make(XRelMap.empty())
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be addr := Leech.embed(k, 1)
-                be _ := Space.set(ac, put_at(Space.get(ac), addr, k + 1))
-                be _2 := Space.set(i, k + 1) }
-    be t1 := Time.now_ns(0)
+    ac := Space.make(XRelMap.empty())
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                addr := Leech.embed(k, 1)
+                _ := Space.set(ac, put_at(Space.get(ac), addr, k + 1))
+                _2 := Space.set(i, k + 1) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_put_base(n: Number): Number visits Output {
-    be acc := Space.make(0)
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be addr := Leech.embed(k, 1)
-                be _ := Space.set(acc, point_cost(addr))
-                be _2 := Space.set(i, k + 1) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                addr := Leech.embed(k, 1)
+                _ := Space.set(acc, point_cost(addr))
+                _2 := Space.set(i, k + 1) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun build_map(n: Number): XRelMap<LatticePoint, Number> {
-    be ac := Space.make(XRelMap.empty())
-    be i := Space.make(0)
-    iter n do { be k := Space.get(i)
-                be addr := Leech.embed(k, 1)
-                be _ := Space.set(ac, put_at(Space.get(ac), addr, k + 1))
-                be _2 := Space.set(i, k + 1) }
+    ac := Space.make(XRelMap.empty())
+    i := Space.make(0)
+    iter n do { k := Space.get(i)
+                addr := Leech.embed(k, 1)
+                _ := Space.set(ac, put_at(Space.get(ac), addr, k + 1))
+                _2 := Space.set(i, k + 1) }
     return Space.get(ac)
   }
   fun timed_get(a: XRelMap<LatticePoint, Number>, addr: LatticePoint, m: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter m do { be _ := Space.set(acc, Space.get(acc) + (match XRelMap.get(a, addr) { Found(x) => x, Absent => 0 })) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter m do { _ := Space.set(acc, Space.get(acc) + (match XRelMap.get(a, addr) { Found(x) => x, Absent => 0 })) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_get_base(m: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter m do { be _ := Space.set(acc, Space.get(acc) + 1) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter m do { _ := Space.set(acc, Space.get(acc) + 1) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun same_kind(x: LatticePoint, y: LatticePoint): Number {
     return if LatticePoint.orbit(x) == LatticePoint.orbit(y) then 1 else 0
   }
   fun timed_so(x: LatticePoint, y: LatticePoint, m: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter m do { be _ := Space.set(acc, Space.get(acc) + same_kind(x, y)) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter m do { _ := Space.set(acc, Space.get(acc) + same_kind(x, y)) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun so_hits(x: LatticePoint, y: LatticePoint, m: Number): Number {
-    be acc := Space.make(0)
-    be i := Space.make(0)
-    iter m do { be _ := Space.set(acc, Space.get(acc) + same_kind(x, y))
-                be _2 := Space.set(i, Space.get(i) + 1) }
+    acc := Space.make(0)
+    i := Space.make(0)
+    iter m do { _ := Space.set(acc, Space.get(acc) + same_kind(x, y))
+                _2 := Space.set(i, Space.get(i) + 1) }
     return Space.get(acc)
   }
   fun min_put(reps: Number, n: Number): Number visits Output {
-    be m := Space.make(timed_put(n))
-    iter reps do { be _ := Space.set(m, min2(Space.get(m), timed_put(n))) }
+    m := Space.make(timed_put(n))
+    iter reps do { _ := Space.set(m, min2(Space.get(m), timed_put(n))) }
     return Space.get(m)
   }
   fun min_put_base(reps: Number, n: Number): Number visits Output {
-    be m := Space.make(timed_put_base(n))
-    iter reps do { be _ := Space.set(m, min2(Space.get(m), timed_put_base(n))) }
+    m := Space.make(timed_put_base(n))
+    iter reps do { _ := Space.set(m, min2(Space.get(m), timed_put_base(n))) }
     return Space.get(m)
   }
   fun min_get(a: XRelMap<LatticePoint, Number>, addr: LatticePoint, reps: Number, m: Number): Number visits Output {
-    be mm := Space.make(timed_get(a, addr, m))
-    iter reps do { be _ := Space.set(mm, min2(Space.get(mm), timed_get(a, addr, m))) }
+    mm := Space.make(timed_get(a, addr, m))
+    iter reps do { _ := Space.set(mm, min2(Space.get(mm), timed_get(a, addr, m))) }
     return Space.get(mm)
   }
   fun min_get_base(reps: Number, m: Number): Number visits Output {
-    be mm := Space.make(timed_get_base(m))
-    iter reps do { be _ := Space.set(mm, min2(Space.get(mm), timed_get_base(m))) }
+    mm := Space.make(timed_get_base(m))
+    iter reps do { _ := Space.set(mm, min2(Space.get(mm), timed_get_base(m))) }
     return Space.get(mm)
   }
   fun min_so(x: LatticePoint, y: LatticePoint, reps: Number, m: Number): Number visits Output {
-    be mm := Space.make(timed_so(x, y, m))
-    iter reps do { be _ := Space.set(mm, min2(Space.get(mm), timed_so(x, y, m))) }
+    mm := Space.make(timed_so(x, y, m))
+    iter reps do { _ := Space.set(mm, min2(Space.get(mm), timed_so(x, y, m))) }
     return Space.get(mm)
   }
   fun run(a0: LatticePoint, x: LatticePoint, y: LatticePoint): Number visits Output {
-    be n := scaled(2000)           // put calls (land on ~2000 distinct type-2 points)
-    be mg := scaled(1000000)       // get iterations (cheap op)
-    be mso := scaled(200000)       // orbit-comparison iterations
-    be reps_w := 4          // build-throughput reps
-    be reps_r := 11         // read-latency reps
+    n := scaled(2000)           // put calls (land on ~2000 distinct type-2 points)
+    mg := scaled(1000000)       // get iterations (cheap op)
+    mso := scaled(200000)       // orbit-comparison iterations
+    reps_w := 4          // build-throughput reps
+    reps_r := 11         // read-latency reps
 
-    be a := build_map(n)
+    a := build_map(n)
 
     // put throughput, baseline-subtracted
-    be put_net := (min_put(reps_w, n) - min_put_base(reps_w, n))
+    put_net := (min_put(reps_w, n) - min_put_base(reps_w, n))
     // get latency, baseline-subtracted
-    be get_net := (min_get(a, a0, reps_r, mg) - min_get_base(reps_r, mg))
+    get_net := (min_get(a, a0, reps_r, mg) - min_get_base(reps_r, mg))
     // orbit comparison latency, baseline-subtracted (same baseline shape, Mso iters)
-    be so_net := (min_so(x, y, reps_r, mso) - min_get_base(reps_r, mso))
+    so_net := (min_so(x, y, reps_r, mso) - min_get_base(reps_r, mso))
 
-    be _1 := Output.print(String.from_int((match XRelMap.get(a, a0) { Found(v) => v, Absent => 0 })))
-    be _2 := Output.print(String.from_int(if XRelMap.has(a, a0) then 1 else 0))
-    be _3 := Output.print(String.from_int(put_net))
-    be _4 := Output.print(String.from_int(get_net))
-    be _5 := Output.print(String.from_int(so_net))
-    be _6 := Output.print(String.from_int(so_hits(x, y, mso)))
+    _1 := Output.print(String.from_int((match XRelMap.get(a, a0) { Found(v) => v, Absent => 0 })))
+    _2 := Output.print(String.from_int(if XRelMap.has(a, a0) then 1 else 0))
+    _3 := Output.print(String.from_int(put_net))
+    _4 := Output.print(String.from_int(get_net))
+    _5 := Output.print(String.from_int(so_net))
+    _6 := Output.print(String.from_int(so_hits(x, y, mso)))
     return 0
   }
   fun main(): Number visits Output {

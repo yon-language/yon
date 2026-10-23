@@ -3,6 +3,6 @@ exit: 1
 match: place sections are immutable
 note: |
   Form `x.f = e`: mutating a place field. Place sections are immutable;
-  mutation goes through Space cells (`x = e` on a `be`-bound local) or a fresh
+  mutation goes through Space cells (`c <- e` on a `mut` cell) or a fresh
   `new`. The checker rejects it cleanly at type-check, before emit_mlir (where
   `__space_update_here` has no lowering): a clean rejection, never a crash.

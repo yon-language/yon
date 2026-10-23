@@ -19,6 +19,6 @@ fun eval(t: Term): Term {
 }
 
 fun main(): Number {
-  be r := eval(hit(TFst, hit(TPair, hit(TLit, 20), hit(TLit, 22))))
+  r := eval(hit(TFst, hit(TPair, hit(TLit, 20), hit(TLit, 22))))
   return as_num(r) - 20
 }

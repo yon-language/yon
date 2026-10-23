@@ -75,7 +75,7 @@ place Number is number {
   }
 
   fun ceil(n: Number): Number {
-    be t := truncate(n)
+    t := truncate(n)
     return if n > 0 and t != n then t + 1 else t
   }
 
@@ -94,13 +94,13 @@ place Number is number {
   /* ─── Integer arithmetic (Euclid) ────────────────────────── [T] ─── */
 
   fun gcd(a: Number, b: Number): Number {
-    be x := abs(a)
-    be y := abs(b)
+    x := abs(a)
+    y := abs(b)
     return if y == 0 then x else gcd(y, x % y)
   }
 
   fun lcm(a: Number, b: Number): Number {
-    be g := gcd(a, b)
+    g := gcd(a, b)
     return if g == 0 then 0 else abs(a * b) / g
   }
 
@@ -150,7 +150,7 @@ place Number is number {
   fun cos(x: Number): Number is given
 
   fun tan(x: Number) on error DomainError: Number {
-    be c := cos(x)
+    c := cos(x)
     return if c == 0 then .-> DomainError { message "tan at a pole of cos" }
            else sin(x) / c
   }

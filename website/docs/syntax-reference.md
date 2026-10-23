@@ -29,7 +29,6 @@ Every keyword, alphabetically:
 [`as`](/book/keywords#as) ·
 [`at`](/book/keywords#at) ·
 [`back`](/book/keywords#back) ·
-[`be`](/book/keywords#be) ·
 [`by`](/book/keywords#by) ·
 [`carry`](/book/keywords#carry) ·
 [`cell`](/book/keywords#cell) ·
@@ -82,6 +81,7 @@ Every keyword, alphabetically:
 [`most`](/book/keywords#most) ·
 [`move`](/book/keywords#move) ·
 [`multishot`](/book/keywords#multishot) ·
+[`mut`](/book/keywords#mut) ·
 [`nat`](/book/keywords#nat) ·
 [`not`](/book/keywords#not) ·
 [`of`](/book/keywords#of) ·
@@ -180,8 +180,8 @@ fun greet(who: String): String {
 }
 
 fun main(): Number {
-  be msg := greet("mondo")
-  be _w := File.write_text("/tmp/out.txt", msg)
+  msg := greet("mondo")
+  _w := File.write_text("/tmp/out.txt", msg)
   return String.length(msg)        // 10
 }
 ```
@@ -195,10 +195,11 @@ refused: it compiles, and the call returns a wrong value (0). This is a defect.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `be x := e` | ✓ | Immutable binding, the only declaration form, at top level and inside functions alike (there is no `let` keyword). Declares once per scope: a second `be x := ...` of a name already bound in the same scope is a compile error (use `x = e` to reassign); nested-scope shadowing is allowed, `_`-prefixed names are exempt |
-| `x = e` | ✓ | **Space-cell assign** (the content-addressed mutation mechanism). The target binding is promoted to a Space cell: its `be` allocates the cell, reads go through it, `x = e` updates it. Works on locals and parameters. Snapshot semantics, no aliasing (`be y := x` does not alias `x`'s cell) |
+| `x := e` | ✓ | Definition of a value, with no keyword, at top level and inside functions alike (no `let`, no `be`). Defines once per scope: a second `x := ...` of a name already bound in the same scope is a compile error; nested-scope shadowing is allowed, `_`-prefixed names are exempt |
+| `mut c := e` | ✓ | Declares a **cell** (a Space cell, the one mutable thing): mutability shows where it is born |
+| `c <- e` | ✓ | Writes the cell `c`. A write to a name not declared `mut` is refused (E2008), with the message proposing `mut`. Snapshot semantics, no aliasing (`y := c` does not alias `c`'s cell). `x = e` does not exist |
 | `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
-| `x.f = e` | ✗ rejected | Field mutation: place sections are immutable; the type checker rejects it ("place sections are immutable"). Mutate through cells |
+| `x.f <- e` | ✗ rejected | Field mutation: place sections are immutable; the type checker rejects it ("place sections are immutable"). Mutate through cells |
 
 `=` is the assignment operator. The same `=` token also appears in top-level
 categorical definitions, in `prop name(...) = e` inside a topos, and in
@@ -294,9 +295,9 @@ reference is a *compiler error*, verified on the real IR.
 
 ```yon
 fun main(): Number {
-  be base := 40
+  base := 40
   scope Hermetic {
-    be sealed := base + 2    // `base` enters as an explicit capture
+    sealed := base + 2    // `base` enters as an explicit capture
   }
   return base + 2               // 42
 }
@@ -362,7 +363,7 @@ Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 | `nat transform t from F to G { for each X by fnX }` | ✓ | Natural transformation: one component per object |
 | `geomorph g from P to Q { pull(...) { } push(...) { } }` | ✓ | Geometric morphism, the adjoint pair f* ⊣ f∗: [`pull`](/book/keywords#pull) is the inverse image, [`push`](/book/keywords#push) the direct image; the clause `exact push` declares that f∗ preserves finite limits. (`adjunction` and `exact pull` are retired: they declared what holds by definition) |
 | `view V of P { show f  show f = e  show f as "label" }` | ✓ | Derived projection of a place, lowered to a record place plus a constructor: `V(x)` builds the projection, fields read normally |
-| `reduction R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } be x := e }` | ✓ | A reduction; clauses are contextual `on` handlers and [`be`](/book/keywords#be) bindings. (The `forward`/`backward`/`bi` directions and the `lawful`/`invertible` modifiers are retired: they were obligations nobody verified) |
+| `reduction R[<T>] of P [with multishot] [fold "sum_f64"] { on op(params) { } x := e }` | ✓ | A reduction; clauses are contextual `on` handlers and `x := e` definitions. (The `forward`/`backward`/`bi` directions and the `lawful`/`invertible` modifiers are retired: they were obligations nobody verified) |
 
 ## Topos declarations
 

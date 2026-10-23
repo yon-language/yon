@@ -54,11 +54,11 @@ place Entry {
 
   fun main(): Number {
     // Equal subtrees share one address: the heap is content-addressed.
-    be t := .-> Node { _1 .-> Leaf { _1 20 } _2 .-> Leaf { _1 20 } }
+    t := .-> Node { _1 .-> Leaf { _1 20 } _2 .-> Leaf { _1 20 } }
 
     // `unknown` is a truth value, not an error: deciding it has three outcomes.
-    be p := unknown
-    be bonus := match decide(p ||? (!? p)) { Present => 0, Absent => 0, Unknown => 2 }
+    p := unknown
+    bonus := match decide(p ||? (!? p)) { Present => 0, Absent => 0, Unknown => 2 }
 
     return total(t) + bonus   // 42
   }
@@ -93,8 +93,8 @@ toolchain/yonc examples/inductive_tree -o tree && ./tree; echo $?
   the implementation exists with exactly that signature.
 - **Collections are values.** `HashMap`, `HashSet` and friends are persistent:
   an insertion returns a new collection backed by the same content-addressed
-  heap. Mutation exists, but only as an explicit local cell (`be x := e`,
-  then `x = e`).
+  heap. Mutation exists, but only as an explicit local cell (`mut c := e`,
+  then `c <- e`).
 - **Spaces.** A program can be split into Spaces, separate processes that talk
   over shared memory and a typed wire protocol. Values cross by content, and a
   closure that captures a mutable cell is rejected if it tries to leave the

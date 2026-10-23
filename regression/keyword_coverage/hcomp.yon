@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be p := plam i => hcomp Number [ i = I0 => plam j => 9 ] 5
+    p := plam i => hcomp Number [ i = I0 => plam j => 9 ] 5
     return (p @ I0) - 9
   }
 }

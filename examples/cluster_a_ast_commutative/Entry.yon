@@ -16,35 +16,35 @@ place Entry {
  * Misura: total slot allocati. */
 
 fun main(): Number {
-  be n0 := __xheap_used()
+  n0 := __xheap_used()
 
   /* Variables (leaves) */
-  be x := MerkleTree.leaf(1)
-  be y := MerkleTree.leaf(2)
-  be z := MerkleTree.leaf(3)
+  x := MerkleTree.leaf(1)
+  y := MerkleTree.leaf(2)
+  z := MerkleTree.leaf(3)
 
   /* t1 = and(or(x, y), z) */
-  be or_xy := MerkleTree.node2_commutative(100, x, y)     /* label 100 = "or" */
-  be t1 := MerkleTree.node2_commutative(200, or_xy, z)     /* label 200 = "and" */
+  or_xy := MerkleTree.node2_commutative(100, x, y)     /* label 100 = "or" */
+  t1 := MerkleTree.node2_commutative(200, or_xy, z)     /* label 200 = "and" */
 
   /* t2 = and(z, or(y, x)) — swap arg ordering everywhere */
-  be or_yx := MerkleTree.node2_commutative(100, y, x)     /* canonical sort: same slot as or_xy */
-  be t2 := MerkleTree.node2_commutative(200, z, or_yx)     /* canonical: same slot as t1 */
+  or_yx := MerkleTree.node2_commutative(100, y, x)     /* canonical sort: same slot as or_xy */
+  t2 := MerkleTree.node2_commutative(200, z, or_yx)     /* canonical: same slot as t1 */
 
   /* t3 = and(or(y, x), z) — alternative ordering */
-  be t3 := MerkleTree.node2_commutative(200, or_yx, z)     /* canonical: same as t1 */
+  t3 := MerkleTree.node2_commutative(200, or_yx, z)     /* canonical: same as t1 */
 
-  be n1 := __xheap_used()
-  be delta := n1 - n0   /* expected: 3 leaf + 1 or + 1 and = 5 slot */
+  n1 := __xheap_used()
+  delta := n1 - n0   /* expected: 3 leaf + 1 or + 1 and = 5 slot */
 
   /* Verifica iniettività: t1 == t2 == t3 (stesso slot) */
-  be eq12 := if t1 == t2 then 1 else 0
-  be eq13 := if t1 == t3 then 1 else 0
+  eq12 := if t1 == t2 then 1 else 0
+  eq13 := if t1 == t3 then 1 else 0
 
-  be _io1 := IO.print_num(delta)
-  be _io2 := IO.print_num(t1)
-  be _io3 := IO.print_num(t2)
-  be _io4 := IO.print_num(t3)
+  _io1 := IO.print_num(delta)
+  _io2 := IO.print_num(t1)
+  _io3 := IO.print_num(t2)
+  _io4 := IO.print_num(t3)
 
   /* Output: delta * 10 + eq12 * 100 + eq13 * 1000 */
   return delta + eq12 * 100 + eq13 * 1000

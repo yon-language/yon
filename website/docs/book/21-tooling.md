@@ -80,7 +80,7 @@ editor as you type. The rules are syntactic:
   are its interface, called across Spaces (a subscriber calls a producer, a morph
   maps an object), not from a single entry point, so "reachable from `main`" would
   wrongly call a live producer dead.
-- `W1002` a `be` binding never read afterwards; `W1003` a parameter never used. A
+- `W1002` a `:=` binding never read afterwards; `W1003` a parameter never used. A
   leading underscore (`_x`) marks a deliberate discard and is exempt from both.
 - `W3001` an `import ... from S` whose symbol is never used: a dead dependency on
   Space `S`, a communication arc with no traffic. This is the linter's one

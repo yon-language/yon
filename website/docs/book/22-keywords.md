@@ -57,8 +57,8 @@ The primitives of the runtime belong to the library, so `is given` is written in
 {`// Entry.yon
 place Entry {
   fun main(): Number {
-    be a := Math.floor(21.9)
-    be b := Math.sqrt(441)
+    a := Math.floor(21.9)
+    b := Math.sqrt(441)
     return a + b
   }
 }`}
@@ -66,17 +66,17 @@ place Entry {
 
 ## Bindings and mutation
 
-#### `be`
-
-The only binding form, and it is immutable: `be x := e`. There is no `let` and no rebinding. Writing `be x := e` a second time for a name already bound in the same scope is a compile error ("`x` is already bound in this scope; use `x = ...` to reassign it"); the fix is `x = e`. Shadowing in a nested scope (a loop or `when` body) is allowed, and names that begin with `_` are exempt as throwaways.
-
 #### `:=` (definition)
 
-The symbol of the binding: `be x := e` reads "x is defined as e". It is the `:=` of mathematics, a definition and not an assignment: x equals e by definition for its whole scope. It is the same symbol that defines a field (`side := Number`). A later `x = e` is a separate act (promotion to a Space cell), not a redefinition of the `be` name.
+The binding: `x := e` reads "x is defined as e", with no keyword. It is the `:=` of mathematics, a definition and not an assignment: x equals e by definition for its whole scope, and a value never changes. It is the same symbol that defines a field (`side := Number`). Defining `x` a second time in the same scope is a compile error ("'x' is already bound in this scope: a value is defined once"); shadowing in a nested scope (a loop or `when` body) is allowed, and names that begin with `_` are exempt as throwaways. There is no `let`, and `be` is retired.
 
-#### `=` (assignment)
+#### `mut`
 
-Mutation, reserved to Space cells: `x = e`. Where `be` is a promise, `=` is an update; the surface has no `becomes` word (the older `becomes` keyword is retired, it survives only as an internal AST node). Rebinding a `be` name does not exist.
+Declares a cell, the one mutable thing: `mut c := e`. A cell is a Space cell holding a reference to a value (the values themselves stay immutable). Mutability shows where it is born: reading `x := 5` you know `x` is a value; only `mut` makes a cell.
+
+#### `<-` (write)
+
+Writes a cell: `c <- e`. Writing a name that is not declared `mut` is refused (E2008), and the message proposes `mut` where the name is defined. `=` is not an operator of the language (`==` is the comparison), so a write never reads like a definition or a test.
 
 #### `when`
 
@@ -126,14 +126,14 @@ The companion of `for`; see above.
             run="yonc kw_list_here.yon -o list_here && ./list_here; echo $?"
             out={["21"]}>
 {`fun total(xs: List<Number>): Number {
-  be acc := 0
+  mut acc := 0
   for every x in xs when here {
-    acc = acc + x
+    acc <- acc + x
   }
   return acc
 }
 fun main(): Number {
-  be lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
   return total(lst)
 }`}
 </CodeWindow>
@@ -166,21 +166,21 @@ The infinite loop, typically wrapped around effects: a server, a producer, a hea
             run="yonc v1_control_flow.yon -o v1_control_flow && ./v1_control_flow; echo $?"
             out={["42"]}>
 {`fun main(): Number {
-  be acc := 0
-  be lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  mut acc := 0
+  lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
 
-  for every x in lst { acc = acc + x }            // 21
-  in sequence over y in lst { acc = acc + 1 }     // 24
-  repeat at most 3 times { acc = acc + 2 }        // 30
-  otherwise { acc = acc + 1 }                     // 31
+  for every x in lst { acc <- acc + x }            // 21
+  in sequence over y in lst { acc <- acc + 1 }     // 24
+  repeat at most 3 times { acc <- acc + 2 }        // 30
+  otherwise { acc <- acc + 1 }                     // 31
 
-  be d := 2000 + 500                           // 2500
-  when d == 2500 { acc = acc + 10 }               // 41
+  d := 2000 + 500                           // 2500
+  when d == 2500 { acc <- acc + 10 }               // 41
 
-  be i := 0
+  mut i := 0
   while i < 1 do {
-    acc = acc + 1                                 // 42
-    i = i + 1
+    acc <- acc + 1                                 // 42
+    i <- i + 1
   }
   return acc
 }`}
@@ -194,9 +194,9 @@ The formally hermetic block: `scope { }` lowers to an MLIR `IsolatedFromAbove` r
             run="yonc hermetic_scope.yon -o hermetic_scope && ./hermetic_scope; echo $?"
             out={["42"]}>
 {`fun main(): Number {
-  be base := 40
+  base := 40
   scope Hermetic {
-    be sealed := base + 2
+    sealed := base + 2
   }
   return base + 2
 }`}
@@ -214,9 +214,9 @@ place NodeA { value Number }
 // Entry.yon
 place Entry {
   fun guard(): Number {
-    be r := 0
+    mut r := 0
     forces NodeA value is Number {
-      r = 1
+      r <- 1
     }
     return r
   }
@@ -236,11 +236,11 @@ Emits a value: into the channel of a `produce` block, or into the active handler
 
 ```yon
 fun main(): Number {
-  be s := produce {
+  s := produce {
     emit 41
     emit 1
   }
-  be total := s.fold(0, fun(a: Number, v: Number) => a + v)
+  total := s.fold(0, fun(a: Number, v: Number) => a + v)
   return total        // 41 + 1 = 42
 }
 ```
@@ -299,7 +299,7 @@ A representable functor on a place: the declaration `view V of P { show ... }` (
 
 #### `reduction`
 
-Folds a structure to a value. Declared `reduction ... of P { on op { } be seed := e }` against a place that declares operations, or inline `reduction(acc, x) => e of P`.
+Folds a structure to a value. Declared `reduction ... of P { on op { } seed := e }` against a place that declares operations, or inline `reduction(acc, x) => e of P`.
 
 #### `operation`
 
@@ -321,13 +321,13 @@ place R { v Number }
 // Entry.yon
 place Entry {
   fun main(): Number {
-    be m1 := move(s: P) => .-> Q { v 1 } from P to Q
-    be m2 := move(s: Q) => .-> R { v 2 } from Q to R
-    be mm := compose m1 with m2
-    be sp := .-> P { v 0 }
-    be sr := mm(sp)
-    be vw := view(s: P) => 40 of P
-    be forty := vw(sp)
+    m1 := move(s: P) => .-> Q { v 1 } from P to Q
+    m2 := move(s: Q) => .-> R { v 2 } from Q to R
+    mm := compose m1 with m2
+    sp := .-> P { v 0 }
+    sr := mm(sp)
+    vw := view(s: P) => 40 of P
+    forty := vw(sp)
     return forty + 4
   }
 }`}
@@ -358,9 +358,9 @@ place Account { balance Number
 // Entry.yon
 place Entry {
   fun main(): Number {
-    be acc := .-> Account { balance 50
+    acc := .-> Account { balance 50
       fee 8 }
-    be snap := Snapshot(acc)
+    snap := Snapshot(acc)
     return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
   }
 }`}
@@ -421,14 +421,14 @@ place Entry {
     y aggregates to total by double
   }
   fun main(): Number {
-    be a := .-> A { v 7
+    a := .-> A { v 7
       w 1 }
-    be b := .-> B { v 7
+    b := .-> B { v 7
       w 9 }
-    be m := Move.merge(Merge, a, b)
-    be wide := .-> Wide { x 4
+    m := Move.merge(Merge, a, b)
+    wide := .-> Wide { x 4
       y 5 }
-    be narrow := apply_move(Squeeze, wide)
+    narrow := apply_move(Squeeze, wide)
     return m.v + m.w + narrow.x + narrow.total   // 7 + 1 + 4 + 10 = 22
   }
 }`}
@@ -512,8 +512,8 @@ topos Bank where {
 // Entry.yon
 place Entry {
   fun main(): Number {
-    be s := .-> State { balance 5 }
-    be bad := is_overdrawn(s)
+    s := .-> State { balance 5 }
+    bad := is_overdrawn(s)
     return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
   }
 }`}
@@ -605,11 +605,11 @@ place Entry {
   geomorph Lift from Account to AccountEU {
     exact push
     pull(a: AccountEU): Account {
-      be tmp := a
+      tmp := a
       return tmp
     }
     push(a: Account): AccountEU {
-      be tmp := a
+      tmp := a
       return tmp
     }
   }
@@ -656,28 +656,28 @@ The pattern condition `e is pattern` (a variable, a literal, `present`, `absent`
             out={["x is seven", "city is rome", "other is not rome", "30"]}>
 {`fun pick(x: Number): Number visits Output {
   when x is 7 {
-    be _ := String.print("x is seven")
+    _ := String.print("x is seven")
   }
   return 10
 }
 fun name_check(a: Number, b: Number): Number visits Output {
-  be city := "rome"
+  city := "rome"
   when city is "rome" {
-    be _ := String.print("city is rome")
+    _ := String.print("city is rome")
   }
-  be other := "paris"
+  other := "paris"
   when other is not "rome" {
-    be _ := String.print("other is not rome")
+    _ := String.print("other is not rome")
   }
-  be y := (a + b)
+  y := (a + b)
   when y is a {
-    be _ := String.print("NEVER: y equals a")
+    _ := String.print("NEVER: y equals a")
   }
   return 20
 }
 fun main(): Number visits Output {
-  be r1 := pick(7)
-  be r2 := name_check(2, 3)
+  r1 := pick(7)
+  r2 := name_check(2, 3)
   return r1 + r2
 }`}
 </CodeWindow>
@@ -710,7 +710,7 @@ In member position (`subscription.stream`): the subscription's channel, of type 
 ```yon
 // sensors.yon, the producer package -> ./Sensors_srv
 fun readings(): Wire<Number> {
-  be s := produce {
+  s := produce {
     emit 10
     emit 11
     emit 15
@@ -723,10 +723,10 @@ fun main(): Number { return 0 }
 import sensors::readings from Sensors
 
 fun main(): Number {
-  be w := wire to space Sensors
-  be sub := w.awaits(readings)
-  be s := sub.stream
-  be total := s.fold(0, fun(a: Number, v: Number) => a + v)
+  w := wire to space Sensors
+  sub := w.awaits(readings)
+  s := sub.stream
+  total := s.fold(0, fun(a: Number, v: Number) => a + v)
   return total      // 10+11+15 = 36, from another process
 }
 ```
@@ -761,10 +761,10 @@ The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in t
 
 ```yon
 fun main(): Number {
-  be results := spawn in 4 parallel {
+  results := spawn in 4 parallel {
     promote spawn_index + 1
   }
-  be total := results.fold(0, fun(a: Number, v: Number) => a + v)
+  total := results.fold(0, fun(a: Number, v: Number) => a + v)
   return total      // (0+1)+(1+1)+(2+1)+(3+1) = 1+2+3+4 = 10
 }
 ```
@@ -795,30 +795,30 @@ Pattern negation, `e is not pattern`: the Heyting negation of the positive test,
             run="yonc kw_patterns.yon -o patterns && ./patterns; echo $?"
             out={["p is not absent", "u is unknown", "6"]}>
 {`fun chain_one(a: Number, b: Number): Number visits Output {
-  be p := (a < b)
+  p := (a < b)
   when p is not absent {
-    be _ := String.print("p is not absent")
+    _ := String.print("p is not absent")
   }
   return 1
 }
 fun chain_two(d: Number): Number visits Output {
-  be u := unknown
+  u := unknown
   when u is unknown {
-    be _ := String.print("u is unknown")
+    _ := String.print("u is unknown")
   }
   return d
 }
 fun chain_three(a: Number, b: Number): Number visits Output {
-  be p := (a < b)
+  p := (a < b)
   when p is absent {
-    be _ := String.print("NEVER printed: p is a known truth")
+    _ := String.print("NEVER printed: p is a known truth")
   }
   return 3
 }
 fun main(): Number visits Output {
-  be x := chain_one(3, 5)
-  be y := chain_two(2)
-  be z := chain_three(3, 5)
+  x := chain_one(3, 5)
+  y := chain_two(2)
+  z := chain_three(3, 5)
   return x + y + z
 }`}
 </CodeWindow>
@@ -831,13 +831,13 @@ fun main(): Number visits Output {
             run="yonc kw_heyting.yon -o heyting && ./heyting; echo $?"
             out={["42"]}>
 {`fun main(): Number {
-  be u := unknown
-  be p := present
-  be both := p &&? u            // unknown: conjunction with the undecided
-  be imp := u =>? p             // present: anything implies the present
-  be h1 := heyting(5)           // trits 101, all certain
-  be h2 := heyting(5, 2)        // middle trit unknown
-  be hand := h1 &? h2           // trit-wise, the unknown propagates
+  u := unknown
+  p := present
+  both := p &&? u            // unknown: conjunction with the undecided
+  imp := u =>? p             // present: anything implies the present
+  h1 := heyting(5)           // trits 101, all certain
+  h2 := heyting(5, 2)        // middle trit unknown
+  hand := h1 &? h2           // trit-wise, the unknown propagates
   return match decide(imp) { Present => 42, Absent => 0, Unknown => 1 }
 }`}
 </CodeWindow>
@@ -887,13 +887,13 @@ Second projection of the pair.
   return fst(p) + snd(p)
 }
 fun proj_sum(a: Number, b: Number): Number {
-  be p := pair(a, b)
-  be x := fst(p)
-  be y := snd(p)
+  p := pair(a, b)
+  x := fst(p)
+  y := snd(p)
   return x + y
 }
 fun main(): Number {
-  be direct := takes(pair(20, 10))
+  direct := takes(pair(20, 10))
   return direct + proj_sum(7, 5)        // 30 + 12 = 42
 }`}
 </CodeWindow>
@@ -944,8 +944,8 @@ The universe of types (`Type_1`, `Type_2`, ... for the levels). A universe-typed
 {`fun diag(a: Number): Number { return a * 6 }
 fun universe_taker(t: Type): Number { return 7 }
 fun main(): Number {
-  be r := clear 7                          // a path value, let-bound
-  be moved := ind_path(0, diag, clear 7)   // J computes diag(7) = 42
+  r := clear 7                          // a path value, let-bound
+  moved := ind_path(0, diag, clear 7)   // J computes diag(7) = 42
   return moved
 }`}
 </CodeWindow>

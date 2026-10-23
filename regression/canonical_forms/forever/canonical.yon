@@ -1,6 +1,6 @@
 place Entry {
   fun spin(): Number visits Output {
-    forever { be _ := String.print("tick") }
+    forever { _ := String.print("tick") }
   }
   fun main(): Number { return 42 }
 }

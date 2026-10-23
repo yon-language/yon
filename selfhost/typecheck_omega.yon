@@ -29,7 +29,7 @@ fun mk_var(i: Number): MerkleTree { return MerkleTree.node2(3, MerkleTree.leaf(i
 
 // is_closed: no Var anywhere (decidable, Boolean: 1 = closed, 0 = open)
 fun is_closed(e: MerkleTree): Number {
-  be t := MerkleTree.label(e)
+  t := MerkleTree.label(e)
   return if t == 1 then 1
     else if t == 3 then 0
     else (if is_closed(MerkleTree.child(e, 0)) == 1 then is_closed(MerkleTree.child(e, 1)) else 0)
@@ -37,7 +37,7 @@ fun is_closed(e: MerkleTree): Number {
 
 // eval a closed term to its number (Var unreachable when closed)
 fun eval_c(e: MerkleTree): Number {
-  be t := MerkleTree.label(e)
+  t := MerkleTree.label(e)
   return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
     else if t == 2 then eval_c(MerkleTree.child(e, 0)) + eval_c(MerkleTree.child(e, 1))
     else 0
@@ -54,9 +54,9 @@ fun check_eq(a: MerkleTree, b: MerkleTree): Number {
 }
 
 fun main(): Number {
-  be v_refl := check_eq(mk_var(0), mk_var(0))                     // x = x  -> PRESENT (0)
-  be v_conv := check_eq(mk_add(mk_lit(2), mk_lit(3)), mk_lit(5))  // 2+3 = 5 -> PRESENT (0)
-  be v_neq  := check_eq(mk_lit(2), mk_lit(3))                     // 2 = 3  -> ABSENT (1)
-  be v_open := check_eq(mk_var(0), mk_lit(5))                     // x = 5  -> UNKNOWN (2), stuck
+  v_refl := check_eq(mk_var(0), mk_var(0))                     // x = x  -> PRESENT (0)
+  v_conv := check_eq(mk_add(mk_lit(2), mk_lit(3)), mk_lit(5))  // 2+3 = 5 -> PRESENT (0)
+  v_neq  := check_eq(mk_lit(2), mk_lit(3))                     // 2 = 3  -> ABSENT (1)
+  v_open := check_eq(mk_var(0), mk_lit(5))                     // x = 5  -> UNKNOWN (2), stuck
   return v_refl * 27 + v_conv * 9 + v_neq * 3 + v_open              // base 3 = 5
 }

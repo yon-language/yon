@@ -11,7 +11,7 @@
 
    One .yon file: prints the edges edges_of_file collects (both families).
    A project directory: prints the graph dump plus the per-function transitive
-   arc-set and any `be drop_<Space> := ...` probe verdicts. *)
+   arc-set and any `drop_<Space> := ...` probe verdicts. *)
 
 module S = Surface_ast
 
@@ -36,7 +36,7 @@ let ends_with (s : string) (suf : string) : bool =
   let ls = String.length s and lf = String.length suf in
   ls >= lf && String.sub s (ls - lf) lf = suf
 
-(* Every `be drop_<Space> := ...` marker in a statement tree: a probe point
+(* Every `drop_<Space> := ...` marker in a statement tree: a probe point
    where we would drop <Space>. Recurses into every nested block. *)
 let rec markers (stmts : S.stmt list) : (string * S.location) list =
   List.concat_map (fun s -> match s with
@@ -142,37 +142,37 @@ let graph_selftest () : string list =
    miss a live use. *)
 let downstream_src = "\
 import svc::a_op from A\n\
-fun helper(): Number { be w := wire to space A  return 0 }\n\
+fun helper(): Number { w := wire to space A  return 0 }\n\
 fun loop_illegal(): Number {\n\
-  be i := 0\n\
-  while i < 3 do { be w := wire to space A  be drop_A := 0  i = i + 1 }\n\
+  mut i := 0\n\
+  while i < 3 do { w := wire to space A  drop_A := 0  i <- i + 1 }\n\
   return 0\n\
 }\n\
 fun loop_legal(): Number {\n\
-  be i := 0\n\
-  while i < 3 do { be w := wire to space A  i = i + 1 }\n\
-  be drop_A := 0\n\
+  mut i := 0\n\
+  while i < 3 do { w := wire to space A  i <- i + 1 }\n\
+  drop_A := 0\n\
   return 0\n\
 }\n\
-fun seq_illegal(): Number { be drop_A := 0  be w := wire to space A  return 0 }\n\
-fun seq_legal(): Number { be w := wire to space A  be drop_A := 0  return 0 }\n\
-fun trans_illegal(): Number { be drop_A := 0  be r := helper()  return r }\n\
-fun trans_legal(): Number { be r := helper()  be drop_A := 0  return r }\n\
-fun scope_illegal(): Number { be drop_A := 0  scope S { be w := wire to space A }  return 0 }\n\
-fun scope_legal(): Number { scope S { be w := wire to space A }  be drop_A := 0  return 0 }\n\
-fun import_illegal(): Number { be drop_A := 0  be r := a_op(5)  return r }\n\
-fun import_legal(): Number { be r := a_op(5)  be drop_A := 0  return r }\n\
-fun move_illegal(): Number { be drop_A := 0  be r := apply_move(0) in A  return r }\n\
-fun move_legal(): Number { be r := apply_move(0) in A  be drop_A := 0  return r }\n\
-fun morph_illegal(): Number { be drop_A := 0  be r := tr(0) in A  return r }\n\
-fun morph_legal(): Number { be r := tr(0) in A  be drop_A := 0  return r }\n\
-fun place_illegal(): Number { be drop_A := 0  be r := .-> P { v 0 }  return r }\n\
-fun place_legal(): Number { be r := .-> P { v 0 }  be y := r.v  be drop_A := 0  return y }\n\
-fun awaits_illegal(): Number { be drop_A := 0  be sub := w.awaits(prod)  return 0 }\n\
-fun awaits_legal(): Number { be sub := w.awaits(prod)  be drop_A := 0  return 0 }\n\
-fun handle_illegal(): Number { be p := .-> P { v 0 }  be drop_A := 0  be y := p.v  return y }\n\
-fun handle_legal(): Number { be p := .-> P { v 0 }  be y := p.v  be drop_A := 0  return y }\n\
-fun alias_illegal(): Number { be p := .-> P { v 0 }  be q := p  be drop_A := 0  be y := q.v  return y }\n"
+fun seq_illegal(): Number { drop_A := 0  w := wire to space A  return 0 }\n\
+fun seq_legal(): Number { w := wire to space A  drop_A := 0  return 0 }\n\
+fun trans_illegal(): Number { drop_A := 0  r := helper()  return r }\n\
+fun trans_legal(): Number { r := helper()  drop_A := 0  return r }\n\
+fun scope_illegal(): Number { drop_A := 0  scope S { w := wire to space A }  return 0 }\n\
+fun scope_legal(): Number { scope S { w := wire to space A }  drop_A := 0  return 0 }\n\
+fun import_illegal(): Number { drop_A := 0  r := a_op(5)  return r }\n\
+fun import_legal(): Number { r := a_op(5)  drop_A := 0  return r }\n\
+fun move_illegal(): Number { drop_A := 0  r := apply_move(0) in A  return r }\n\
+fun move_legal(): Number { r := apply_move(0) in A  drop_A := 0  return r }\n\
+fun morph_illegal(): Number { drop_A := 0  r := tr(0) in A  return r }\n\
+fun morph_legal(): Number { r := tr(0) in A  drop_A := 0  return r }\n\
+fun place_illegal(): Number { drop_A := 0  r := .-> P { v 0 }  return r }\n\
+fun place_legal(): Number { r := .-> P { v 0 }  y := r.v  drop_A := 0  return y }\n\
+fun awaits_illegal(): Number { drop_A := 0  sub := w.awaits(prod)  return 0 }\n\
+fun awaits_legal(): Number { sub := w.awaits(prod)  drop_A := 0  return 0 }\n\
+fun handle_illegal(): Number { p := .-> P { v 0 }  drop_A := 0  y := p.v  return y }\n\
+fun handle_legal(): Number { p := .-> P { v 0 }  y := p.v  drop_A := 0  return y }\n\
+fun alias_illegal(): Number { p := .-> P { v 0 }  q := p  drop_A := 0  y := q.v  return y }\n"
 
 let downstream_selftest () : string list =
   let prog = parse_src downstream_src in
@@ -215,10 +215,10 @@ let downstream_selftest () : string list =
    This pins parser -> check; the loop / scope / transitive predicate is pinned
    separately by downstream_selftest, and is not re-verified here. *)
 let drop_construct_src = "\
-fun drop_ok(): Number { be w := wire to space A  drop A  return 0 }\n\
+fun drop_ok(): Number { w := wire to space A  drop A  return 0 }\n\
 fun drop_early(): Number {\n\
   drop A\n\
-  be w := wire to space A\n\
+  w := wire to space A\n\
   return 0\n\
 }\n"
 
@@ -270,7 +270,7 @@ let drop_existence_selftest () : string list =
    so A dies before the end and a reclaim must be inserted. This pins the analysis
    (the insertion point) independently of the runtime counter. *)
 let auto_reclaim_src = "\
-fun main(): Number { be w := wire to space A  be x := 1  return x }\n"
+fun main(): Number { w := wire to space A  x := 1  return x }\n"
 
 let auto_reclaim_selftest () : string list =
   let prog = parse_src auto_reclaim_src in

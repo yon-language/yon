@@ -3,7 +3,7 @@ place Reading {
   humidity Number
 
   fun samples(): Wire<Reading> {
-    be s := produce {
+    s := produce {
       emit .-> Reading { temp 10 humidity 50 }
       emit .-> Reading { temp 11 humidity 51 }
       emit .-> Reading { temp 15 humidity 52 }

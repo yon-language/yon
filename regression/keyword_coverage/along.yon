@@ -3,7 +3,7 @@ place Entry {
   fun succ(n: Int64): Int64 { return n + 1 }
   fun pred(n: Int64): Int64 { return n - 1 }
   fun main(): Number {
-    be bridge := succ <=> pred
-    be y := carry 10 along bridge
+    bridge := succ <=> pred
+    y := carry 10 along bridge
     return if y == 11 then 11 else 0 }
 }

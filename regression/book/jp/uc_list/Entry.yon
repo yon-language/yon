@@ -1,14 +1,14 @@
 place Entry {
   fun main(): Number visits Output {
-    be l := List.empty(0)
-    l = List.cons(1207, l)
-    l = List.cons(1280, l)
-    l = List.cons(1445, l)
-    be _1 := Output.print(String.from_int(List.length(l)))
-    be _2 := Output.print(String.from_int(List.head(l)))
-    be _3 := Output.print(String.from_int(List.head(List.tail(l))))
-    be _4 := Output.print(String.from_int(List.head(List.reverse(l))))
-    be _5 := Output.print(String.from_int(List.length(List.tail(l))))
+    mut l := List.empty(0)
+    l <- List.cons(1207, l)
+    l <- List.cons(1280, l)
+    l <- List.cons(1445, l)
+    _1 := Output.print(String.from_int(List.length(l)))
+    _2 := Output.print(String.from_int(List.head(l)))
+    _3 := Output.print(String.from_int(List.head(List.tail(l))))
+    _4 := Output.print(String.from_int(List.head(List.reverse(l))))
+    _5 := Output.print(String.from_int(List.length(List.tail(l))))
     return 0
   }
 }

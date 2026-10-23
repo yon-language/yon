@@ -2,10 +2,10 @@ import weather_big::bulletins from WeatherBig
 
 place Entry {
   fun main(): Number {
-    be w := wire to space WeatherBig
-    be sub := w.awaits(bulletins)
-    be s := sub.stream
-    be total := s.fold(0, fun(a: Number, n: Note) => a + n.id + String.length(n.body))
+    w := wire to space WeatherBig
+    sub := w.awaits(bulletins)
+    s := sub.stream
+    total := s.fold(0, fun(a: Number, n: Note) => a + n.id + String.length(n.body))
     return total
   }
 }

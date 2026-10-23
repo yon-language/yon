@@ -32,8 +32,8 @@ fun value(): {elem} {{
 {build}
 }}
 fun items(): Wire<{elem}> {{
-  be v := value()
-  be s := produce {{
+  v := value()
+  s := produce {{
     emit v
   }}
   return s
@@ -43,9 +43,9 @@ fun main(): Number {{ return 0 }}
     (tmp_path / "cons.yon").write_text(f"""import prod::items from P
 {decls}
 fun main(): Number {{
-  be w := wire to space P
-  be sub := w.awaits(items)
-  be s := sub.stream
+  w := wire to space P
+  sub := w.awaits(items)
+  s := sub.stream
   return s.fold(0, fun(a: Number, x: {elem}) => a + {read})
 }}
 """)
@@ -71,8 +71,8 @@ def _cross_project(tmp_path: Path, place: str, fields: str, elem: str, build: st
 {build}
   }}
   fun items(): Wire<{elem}> {{
-    be v := value()
-    be s := produce {{
+    v := value()
+    s := produce {{
       emit v
     }}
     return s
@@ -87,14 +87,14 @@ def _cross_project(tmp_path: Path, place: str, fields: str, elem: str, build: st
     (sub / "w" / f"{place}.yon").write_text(f"place {place} {{\n{fields}}}\n")
     (sub / "yon_modules" / "prod").mkdir(parents=True)
     (sub / "yon_modules" / "prod" / "prod.yon").write_text(
-        f"fun items(): Wire<{elem}> {{\n  be s := produce {{ emit value() }}\n  return s\n}}\n")
+        f"fun items(): Wire<{elem}> {{\n  s := produce {{ emit value() }}\n  return s\n}}\n")
     (sub / "Entry.yon").write_text(f"""import prod::items from P
 
 place Entry {{
   fun main(): Number {{
-    be w := wire to space P
-    be sub := w.awaits(items)
-    be s := sub.stream
+    w := wire to space P
+    sub := w.awaits(items)
+    s := sub.stream
     return s.fold(0, fun(a: Number, x: {elem}) => a + {read})
   }}
 }}
@@ -110,11 +110,11 @@ place Entry {{
     return r.returncode
 
 
-_FILL_MAP = """  be m := {empty}
-  be k := 0
+_FILL_MAP = """  mut m := {empty}
+  mut k := 0
   iter {n} do {{
-    m = {set}
-    k = k + 1
+    m <- {set}
+    k <- k + 1
   }}
   return m"""
 

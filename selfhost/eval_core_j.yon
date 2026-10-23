@@ -57,6 +57,6 @@ fun as_num(t: Term): Number {
 }
 
 fun main(): Number {
-  be r := eval(hit(TJ, hit(TLit, 0), hit(TLam, hit(TVar, 0)), hit(TRefl, hit(TLit, 7))))
+  r := eval(hit(TJ, hit(TLit, 0), hit(TLam, hit(TVar, 0)), hit(TRefl, hit(TLit, 7))))
   return as_num(r) - 7
 }

@@ -122,10 +122,10 @@ fun gen(t: Term, n: Number): EmitR {
   ], t)
 }
 fun gen_bin(op: String, a: Term, b: Term, n: Number): EmitR {
-  be ea := gen(a, n)
-  be eb := gen(b, er_ctr(ea))
-  be m  := er_ctr(eb)
-  be rhs := String.concat(String.concat(op, " "),
+  ea := gen(a, n)
+  eb := gen(b, er_ctr(ea))
+  m  := er_ctr(eb)
+  rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
   return hit(ER, ssa_name(m),
             String.concat(String.concat(er_code(ea), er_code(eb)),
@@ -141,7 +141,7 @@ fun stubs(): String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun mod_suffix(result_ssa: String, ctr: Number): String {
-  be rss := ssa_name(ctr)
+  rss := ssa_name(ctr)
   return String.concat(
     String.concat("    ", String.concat(rss,
       String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
@@ -151,12 +151,12 @@ fun mod_suffix(result_ssa: String, ctr: Number): String {
 
 fun main(): Number {
   /* the whole pipeline: source text -> tokens -> Term -> MLIR module -> file. */
-  be prog := term_of(parse_expr(lex("2+3*4")))     /* 2 + (3*4) = 14 */
-  be r := gen(prog, 0)
-  be full := String.concat(mod_prefix(),
+  prog := term_of(parse_expr(lex("2+3*4")))     /* 2 + (3*4) = 14 */
+  r := gen(prog, 0)
+  full := String.concat(mod_prefix(),
                   String.concat(er_code(r),
                     mod_suffix(er_ssa(r), er_ctr(r))))
-  be _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
-  be _p := String.print(full)
+  _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
+  _p := String.print(full)
   return String.length(full)
 }

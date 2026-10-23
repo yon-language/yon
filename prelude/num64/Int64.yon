@@ -70,13 +70,13 @@ place Int64 is i64 {
    * and every function from here down (the whole bit family) rests on it. */
 
   fun gcd(a: Int64, b: Int64): Int64 {
-    be x := abs(a)
-    be y := abs(b)
+    x := abs(a)
+    y := abs(b)
     return if y == 0 then x else gcd(y, x % y)
   }
 
   fun lcm(a: Int64, b: Int64): Int64 {
-    be g := gcd(a, b)
+    g := gcd(a, b)
     return if g == 0 then 0 else abs(a * b) / g
   }
 
@@ -107,22 +107,22 @@ place Int64 is i64 {
   /* ─── The bit family: all of it via / 2, % 2, * 2 ────────── [T] ─── */
 
   fun bit_count(n: Int64): Int64 {
-    be x := abs(n)
+    x := abs(n)
     return if x == 0 then 0 else x % 2 + bit_count(x / 2)
   }
 
   fun bit_length(n: Int64): Int64 {
-    be x := abs(n)
+    x := abs(n)
     return if x == 0 then 0 else 1 + bit_length(x / 2)
   }
 
   fun highest_one_bit(n: Int64): Int64 {
-    be l := bit_length(n)
+    l := bit_length(n)
     return if l == 0 then 0 else ipow_ok(2, l - 1)
   }
 
   fun lowest_one_bit(n: Int64): Int64 {
-    be x := abs(n)
+    x := abs(n)
     return if x == 0 then 0
            else if x % 2 == 1 then 1
            else 2 * lowest_one_bit(x / 2)
@@ -131,7 +131,7 @@ place Int64 is i64 {
   fun leading_zeros(n: Int64): Int64 { return 64 - bit_length(n) }
 
   fun trailing_zeros(n: Int64): Int64 {
-    be x := abs(n)
+    x := abs(n)
     return if x == 0 then 64
            else if x % 2 == 1 then 0
            else 1 + trailing_zeros(x / 2)
@@ -147,7 +147,7 @@ place Int64 is i64 {
   fun reverse_bits(n: Int64): Int64 { return reverse_step(n, 0, 64) }
 
   fun rotate_left(n: Int64, k: Int64): Int64 {
-    be s := k % 64
+    s := k % 64
     return shift_left(n, s) % ipow_ok(2, 64) + shift_right(n, 64 - s)
   }
   fun rotate_right(n: Int64, k: Int64): Int64 {

@@ -6,13 +6,13 @@ place Entry {
 // (`&&?`, `=>?`) follow the intuitionistic rules, and `decide` gives the
 // three values of a proposition as three arms, each answered.
 fun main(): Number {
-  be u := unknown
-  be p := present
-  be both := p &&? u            // unknown: conjunction with the undecided
-  be imp := u =>? p             // present: anything implies the present
-  be h1 := heyting(5)           // trits 101, all certain
-  be h2 := heyting(5, 2)        // middle trit unknown
-  be hand := h1 &? h2           // trit-wise, the unknown propagates
+  u := unknown
+  p := present
+  both := p &&? u            // unknown: conjunction with the undecided
+  imp := u =>? p             // present: anything implies the present
+  h1 := heyting(5)           // trits 101, all certain
+  h2 := heyting(5, 2)        // middle trit unknown
+  hand := h1 &? h2           // trit-wise, the unknown propagates
   return match decide(imp) { Present => 42, Absent => 0, Unknown => 1 }
 }
 }

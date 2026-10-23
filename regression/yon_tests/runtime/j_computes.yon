@@ -1,4 +1,4 @@
 place Entry {
   fun diag(a: Number): Number { return a * 6 }
-  fun main(): Number { be got := ind_path(0, diag, refl(7)) return got - 42 }
+  fun main(): Number { got := ind_path(0, diag, refl(7)) return got - 42 }
 }

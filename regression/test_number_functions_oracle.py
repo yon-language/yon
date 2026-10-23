@@ -214,19 +214,19 @@ def _program(form: str, fn: str, exps) -> str:
         else:
             body = f"report({i}, {c}, {_lit(e[2]) if e[0] == 'ball' else '0'}, " \
                    f"{_lit(e[3]) if e[0] == 'ball' else '1'}, {1 if e[0] == 'ball' else 0})"
-        lines.append(f"  be _v{i} := {body}")
+        lines.append(f"  _v{i} := {body}")
     return ("place Entry {}\n"
             "fun negz(): Number { return 0 * (0 - 1) }\n"
             "fun recip(x: Number): Number { return 1 / x }\n"
             "fun raw(i: Number, y: Number): Number {\n"
-            "  be _i := IO.print_num(i)\n  be _k := IO.print_num(0)\n"
-            "  be _y := IO.print_num(y)\n  return 0\n}\n"
+            "  _i := IO.print_num(i)\n  _k := IO.print_num(0)\n"
+            "  _y := IO.print_num(y)\n  return 0\n}\n"
             "fun near(i: Number, y: Number, a: Number, u: Number): Number {\n"
-            "  be _i := IO.print_num(i)\n  be _k := IO.print_num(0)\n"
-            "  be _y := IO.print_num((y - a) / u)\n  return 0\n}\n"
+            "  _i := IO.print_num(i)\n  _k := IO.print_num(0)\n"
+            "  _y := IO.print_num((y - a) / u)\n  return 0\n}\n"
             "fun dom(i: Number): Number {\n"
-            "  be _i := IO.print_num(i)\n  be _k := IO.print_num(1)\n"
-            "  be _y := IO.print_num(0)\n  return 0\n}\n"
+            "  _i := IO.print_num(i)\n  _k := IO.print_num(1)\n"
+            "  _y := IO.print_num(0)\n  return 0\n}\n"
             "fun report(i: Number, y: Number, a: Number, u: Number, scaled: Number): Number {\n"
             "  return if scaled == 1 then near(i, y, a, u) else raw(i, y)\n}\n"
             "fun main(): Number {\n" + "\n".join(lines) + "\n  return 0\n}\n")

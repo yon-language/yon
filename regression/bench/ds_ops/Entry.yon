@@ -8,77 +8,77 @@ place Entry {
   }
   fun mn(a: Number, b: Number): Number { return if a < b then a else b }
   fun warm(): Number visits Output {
-    be l := Space.make(List.empty(0))
-    be _a := Space.set(l, List.cons(Space.get(l), 1))
-    be m := Space.make(HashMap.empty())
-    be _b := Space.set(m, HashMap.set(Space.get(m), 1, 1))
-    be s := Space.make(HashSet.empty())
-    be _c := Space.set(s, HashSet.add(Space.get(s), 1))
+    l := Space.make(List.empty(0))
+    _a := Space.set(l, List.cons(Space.get(l), 1))
+    m := Space.make(HashMap.empty())
+    _b := Space.set(m, HashMap.set(Space.get(m), 1, 1))
+    s := Space.make(HashSet.empty())
+    _c := Space.set(s, HashSet.add(Space.get(s), 1))
     return 0
   }
   fun twin(n: Number): Number visits Output {
-    be acc := Space.make(0)
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be _ := Space.set(acc, Space.get(acc) + k)
-                be _2 := Space.set(i, k + 1) }
+    acc := Space.make(0)
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                _ := Space.set(acc, Space.get(acc) + k)
+                _2 := Space.set(i, k + 1) }
     return Time.now_ns(0) - t0
   }
   fun cons_loop(n: Number): Number visits Output {
-    be l := Space.make(List.empty(0))
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be _ := Space.set(l, List.cons(Space.get(l), k))
-                be _2 := Space.set(i, k + 1) }
+    l := Space.make(List.empty(0))
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                _ := Space.set(l, List.cons(Space.get(l), k))
+                _2 := Space.set(i, k + 1) }
     return Time.now_ns(0) - t0
   }
   fun set_loop(n: Number): Number visits Output {
-    be m := Space.make(HashMap.empty())
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be _ := Space.set(m, HashMap.set(Space.get(m), k, k))
-                be _2 := Space.set(i, k + 1) }
+    m := Space.make(HashMap.empty())
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                _ := Space.set(m, HashMap.set(Space.get(m), k, k))
+                _2 := Space.set(i, k + 1) }
     return Time.now_ns(0) - t0
   }
   fun add_loop(n: Number): Number visits Output {
-    be s := Space.make(HashSet.empty())
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be _ := Space.set(s, HashSet.add(Space.get(s), k))
-                be _2 := Space.set(i, k + 1) }
+    s := Space.make(HashSet.empty())
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                _ := Space.set(s, HashSet.add(Space.get(s), k))
+                _2 := Space.set(i, k + 1) }
     return Time.now_ns(0) - t0
   }
   fun mtwin(n: Number): Number visits Output {
-    be x := Space.make(twin(n))
-    iter 2 do { be _ := Space.set(x, mn(Space.get(x), twin(n))) }
+    x := Space.make(twin(n))
+    iter 2 do { _ := Space.set(x, mn(Space.get(x), twin(n))) }
     return Space.get(x)
   }
   fun min_cons(n: Number): Number visits Output {
-    be x := Space.make(cons_loop(n))
-    iter 2 do { be _ := Space.set(x, mn(Space.get(x), cons_loop(n))) }
+    x := Space.make(cons_loop(n))
+    iter 2 do { _ := Space.set(x, mn(Space.get(x), cons_loop(n))) }
     return (Space.get(x) - mtwin(n)) / n
   }
   fun min_set(n: Number): Number visits Output {
-    be x := Space.make(set_loop(n))
-    iter 2 do { be _ := Space.set(x, mn(Space.get(x), set_loop(n))) }
+    x := Space.make(set_loop(n))
+    iter 2 do { _ := Space.set(x, mn(Space.get(x), set_loop(n))) }
     return (Space.get(x) - mtwin(n)) / n
   }
   fun min_add(n: Number): Number visits Output {
-    be x := Space.make(add_loop(n))
-    iter 2 do { be _ := Space.set(x, mn(Space.get(x), add_loop(n))) }
+    x := Space.make(add_loop(n))
+    iter 2 do { _ := Space.set(x, mn(Space.get(x), add_loop(n))) }
     return (Space.get(x) - mtwin(n)) / n
   }
   fun main(): Number visits Output {
-    be _w := warm()
-    be _1 := Output.print(String.from_int(min_cons(scaled(10000))))
-    be _2 := Output.print(String.from_int(min_cons(scaled(100000))))
-    be _3 := Output.print(String.from_int(min_set(scaled(10000))))
-    be _4 := Output.print(String.from_int(min_set(scaled(100000))))
-    be _5 := Output.print(String.from_int(min_add(scaled(100000))))
+    _w := warm()
+    _1 := Output.print(String.from_int(min_cons(scaled(10000))))
+    _2 := Output.print(String.from_int(min_cons(scaled(100000))))
+    _3 := Output.print(String.from_int(min_set(scaled(10000))))
+    _4 := Output.print(String.from_int(min_set(scaled(100000))))
+    _5 := Output.print(String.from_int(min_add(scaled(100000))))
     return 0
   }
 }

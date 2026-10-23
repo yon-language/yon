@@ -20,17 +20,17 @@ fun orbit_at(n: Number): Number {
 }
 
 fun checks(p: LatticePoint): Number {
-  be a0 := XRelMap.empty()
-  be a1 := XRelMap.set(a0, p, 42)
-  be v := match XRelMap.get(a1, p) { Found(x) => x, Absent => 0 }
-  be has := XRelMap.has(a1, p) and not XRelMap.has(a0, p)
-  be o0 := LatticePoint.orbit(p)
+  a0 := XRelMap.empty()
+  a1 := XRelMap.set(a0, p, 42)
+  v := match XRelMap.get(a1, p) { Found(x) => x, Absent => 0 }
+  has := XRelMap.has(a1, p) and not XRelMap.has(a0, p)
+  o0 := LatticePoint.orbit(p)
 
-  be c_v := if v == 42 then 1 else 0
-  be c_has := if has then 1 else 0
-  be c_o0 := if o0 == 0 then 1 else 0
-  be c_same := if o0 == orbit_at(1280) then 1 else 0
-  be c_diff := if o0 != orbit_at(16778752) then 1 else 0
+  c_v := if v == 42 then 1 else 0
+  c_has := if has then 1 else 0
+  c_o0 := if o0 == 0 then 1 else 0
+  c_same := if o0 == orbit_at(1280) then 1 else 0
+  c_diff := if o0 != orbit_at(16778752) then 1 else 0
   return c_v + c_has + c_o0 + c_same + c_diff
 }
 

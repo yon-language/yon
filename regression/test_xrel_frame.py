@@ -56,11 +56,11 @@ fun idem(f: XRelFrame, p: LatticePoint): Number {
   return if ix(f, XRelFrame.canon(f, p)) == ix(f, p) then 1 else 0
 }
 fun all_frames(p: LatticePoint): Number {
-  be fb := XRelFrame.refine(XRelFrame.whole(), p)
-  be _1 := IO.print_num(idem(XRelFrame.discrete(), p))
-  be _2 := IO.print_num(idem(XRelFrame.whole(), p))
-  be _3 := IO.print_num(idem(XRelFrame.curtis(), p))
-  be _4 := IO.print_num(idem(fb, p))
+  fb := XRelFrame.refine(XRelFrame.whole(), p)
+  _1 := IO.print_num(idem(XRelFrame.discrete(), p))
+  _2 := IO.print_num(idem(XRelFrame.whole(), p))
+  _3 := IO.print_num(idem(XRelFrame.curtis(), p))
+  _4 := IO.print_num(idem(fb, p))
   return 0
 }
 fun main(): Number {
@@ -82,15 +82,15 @@ fun same(f: XRelFrame, p: LatticePoint, q: LatticePoint): Number {
   return if ix(f, p) == ix(f, q) then 1 else 0
 }
 fun three(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number {
-  be fb := XRelFrame.refine(XRelFrame.whole(), p)
-  be d2 := XRelFrame.refine(XRelFrame.discrete(), p)
-  be _1 := IO.print_num(same(XRelFrame.discrete(), p, m))
-  be _2 := IO.print_num(same(XRelFrame.curtis(), p, m))
-  be _3 := IO.print_num(same(fb, p, m))
-  be _4 := IO.print_num(same(fb, p, q))
-  be _5 := IO.print_num(same(XRelFrame.whole(), p, q))
-  be _6 := IO.print_num(same(d2, p, m))
-  be _7 := IO.print_num(if ix(XRelFrame.discrete(), q) == LatticePoint.index(q) then 1 else 0)
+  fb := XRelFrame.refine(XRelFrame.whole(), p)
+  d2 := XRelFrame.refine(XRelFrame.discrete(), p)
+  _1 := IO.print_num(same(XRelFrame.discrete(), p, m))
+  _2 := IO.print_num(same(XRelFrame.curtis(), p, m))
+  _3 := IO.print_num(same(fb, p, m))
+  _4 := IO.print_num(same(fb, p, q))
+  _5 := IO.print_num(same(XRelFrame.whole(), p, q))
+  _6 := IO.print_num(same(d2, p, m))
+  _7 := IO.print_num(if ix(XRelFrame.discrete(), q) == LatticePoint.index(q) then 1 else 0)
   return 0
 }
 fun with_m(p: LatticePoint, q: LatticePoint): Number {

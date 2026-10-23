@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number visits Output {
-    be a := Leech.syndrome(255)
-    be b := Leech.syndrome(1)
-    be _1 := Output.print(String.from_int(a))
-    be _2 := Output.print(String.from_int(b))
+    a := Leech.syndrome(255)
+    b := Leech.syndrome(1)
+    _1 := Output.print(String.from_int(a))
+    _2 := Output.print(String.from_int(b))
     return 0
   }
 }

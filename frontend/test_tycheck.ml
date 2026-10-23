@@ -91,7 +91,7 @@ let () =
 
   (* E. return-tail (the check we just added): a body ending in a let whose
      value clearly differs from the concrete declared return type is rejected.
-     `fun h(): Number { be y := "text" }` — tail value is text, declared
+     `fun h(): Number { y := "text" }` — tail value is text, declared
      number → rejected via check_implicit_tail_return (tycheck.ml:2337). *)
   let bad_tail =
     mkfun "h"

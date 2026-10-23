@@ -1,9 +1,9 @@
 // coverage: anonymous `scope { ... }` (no name) — the unnamed hermetic block
 place Entry {
   fun main(): Number {
-    be base := 40
+    base := 40
     scope {
-      be sealed := base + 2
+      sealed := base + 2
     }
     return base + 2
   }

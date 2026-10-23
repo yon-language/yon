@@ -2,47 +2,47 @@ place Entry {
   fun cls(f: XRelFrame, p: LatticePoint): LatticePoint { return XRelFrame.canon(f, p) }
   fun contract(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number visits Output {
     // the frame by 1536: a class is the type against 1536
-    be f := XRelFrame.refine(XRelFrame.whole(), p)
+    f := XRelFrame.refine(XRelFrame.whole(), p)
 
     // XRelSet — dedup by class: the set holds canon(f, x)
-    be r := XRelSet.empty()
-    r = XRelSet.add(r, cls(f, p))
-    r = XRelSet.add(r, cls(f, p))
-    be v1 := XRelSet.size(r)                 // a class, deduped -> 1
-    r = XRelSet.add(r, cls(f, q))
-    be v2 := XRelSet.size(r)                 // 1280 is a different class -> 2
-    r = XRelSet.add(r, cls(f, m))
-    be v3 := XRelSet.size(r)                 // 16778752 is 1536's class -> still 2
+    mut r := XRelSet.empty()
+    r <- XRelSet.add(r, cls(f, p))
+    r <- XRelSet.add(r, cls(f, p))
+    v1 := XRelSet.size(r)                 // a class, deduped -> 1
+    r <- XRelSet.add(r, cls(f, q))
+    v2 := XRelSet.size(r)                 // 1280 is a different class -> 2
+    r <- XRelSet.add(r, cls(f, m))
+    v3 := XRelSet.size(r)                 // 16778752 is 1536's class -> still 2
 
     // XRelMap — key = class, not specimen: the map is keyed by canon(f, x)
-    be mm := XRelMap.set(XRelMap.empty(), cls(f, p), 100)
-    be v4 := match XRelMap.get(mm, cls(f, p)) { Found(v) => v, Absent => 0 }   // exact point -> 100
-    be v5 := match XRelMap.get(mm, cls(f, q)) { Found(v) => v, Absent => 0 }   // different class -> Absent (0)
-    be v6 := match XRelMap.get(mm, cls(f, m)) { Found(v) => v, Absent => 0 }   // same class (antipode) -> 100
+    mm := XRelMap.set(XRelMap.empty(), cls(f, p), 100)
+    v4 := match XRelMap.get(mm, cls(f, p)) { Found(v) => v, Absent => 0 }   // exact point -> 100
+    v5 := match XRelMap.get(mm, cls(f, q)) { Found(v) => v, Absent => 0 }   // different class -> Absent (0)
+    v6 := match XRelMap.get(mm, cls(f, m)) { Found(v) => v, Absent => 0 }   // same class (antipode) -> 100
 
     // XSimplex — classify relations
-    be v7 := XSimplex.of2(1536, 1280)
-    be v8 := XSimplex.of2(1280, 1536)        // symmetric -> v8 == v7
-    be v9 := XSimplex.omega(1536, 1280, 16778752)   // -1/0/+1
-    be acc := XSimplex.empty()
-    acc = XSimplex.add(acc, 1536, 1280)
-    acc = XSimplex.add(acc, 1280, 16778752)
-    be v10 := XSimplex.size(acc)             // 2 edges
-    be v11 := XSimplex.dominant(acc)
+    v7 := XSimplex.of2(1536, 1280)
+    v8 := XSimplex.of2(1280, 1536)        // symmetric -> v8 == v7
+    v9 := XSimplex.omega(1536, 1280, 16778752)   // -1/0/+1
+    mut acc := XSimplex.empty()
+    acc <- XSimplex.add(acc, 1536, 1280)
+    acc <- XSimplex.add(acc, 1280, 16778752)
+    v10 := XSimplex.size(acc)             // 2 edges
+    v11 := XSimplex.dominant(acc)
 
-    be _1 := Output.print(String.from_int(v1))
-    be _2 := Output.print(String.from_int(v2))
-    be _3 := Output.print(String.from_int(v3))
-    be _4 := Output.print(String.from_int(v4))
-    be _5 := Output.print(String.from_int(v5))
-    be _6 := Output.print(String.from_int(v6))
-    be _7 := Output.print(String.from_int(v7))
-    be _8 := Output.print(String.from_int(v8))
-    be _9 := Output.print(String.from_int(v9))
-    be _10 := Output.print(String.from_int(v10))
-    be _11 := Output.print(String.from_int(v11))
+    _1 := Output.print(String.from_int(v1))
+    _2 := Output.print(String.from_int(v2))
+    _3 := Output.print(String.from_int(v3))
+    _4 := Output.print(String.from_int(v4))
+    _5 := Output.print(String.from_int(v5))
+    _6 := Output.print(String.from_int(v6))
+    _7 := Output.print(String.from_int(v7))
+    _8 := Output.print(String.from_int(v8))
+    _9 := Output.print(String.from_int(v9))
+    _10 := Output.print(String.from_int(v10))
+    _11 := Output.print(String.from_int(v11))
 
-    be fails := (if v1 == 1 then 0 else 1)
+    fails := (if v1 == 1 then 0 else 1)
              + (if v2 == 2 then 0 else 1)
              + (if v3 == 2 then 0 else 1)
              + (if v4 == 100 then 0 else 1)

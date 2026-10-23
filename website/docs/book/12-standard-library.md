@@ -45,8 +45,8 @@ and pure, an unfold (`Stream.iterate`, read with `take`):
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be l := List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
-  be s := Sequence.from_list(l).map(fun(x) => x * 2).fold(0, fun(a, b) => a + b)
+  l := List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
+  s := Sequence.from_list(l).map(fun(x) => x * 2).fold(0, fun(a, b) => a + b)
   return s + 30                    // 12 + 30 = 42
 }
 ```
@@ -55,10 +55,10 @@ fun main(): Number {
 
 <!-- yon-gate: illustrative -->
 ```yon
-be _w := File.write_text("/tmp/out.txt", "ciao")
-be readback := File.read_text("/tmp/out.txt")
-be home := Env.get("HOME")
-be n := Args.count(0)
+_w := File.write_text("/tmp/out.txt", "ciao")
+readback := File.read_text("/tmp/out.txt")
+home := Env.get("HOME")
+n := Args.count(0)
 ```
 
 Failure is a value: string-producing operations return the `0.0` handle when
@@ -80,14 +80,14 @@ hashes).
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be m := HashMap.empty()
-  be m2 := HashMap.set(m, 1, 10)
-  be ten := match HashMap.get(m2, 1) { Found(v) => v, Absent => 0 }
-  be g := Math.gcd(12, 18)                    // 6
-  be b := Bits.band(12, 10)                    // 8
-  be vl := VoyagerList.empty()
-  be vl2 := VoyagerList.append(vl, 18)        // Golay-sealed storage
-  be readback := VoyagerList.get(vl2, 0)
+  m := HashMap.empty()
+  m2 := HashMap.set(m, 1, 10)
+  ten := match HashMap.get(m2, 1) { Found(v) => v, Absent => 0 }
+  g := Math.gcd(12, 18)                    // 6
+  b := Bits.band(12, 10)                    // 8
+  vl := VoyagerList.empty()
+  vl2 := VoyagerList.append(vl, 18)        // Golay-sealed storage
+  readback := VoyagerList.get(vl2, 0)
   return ten + g + b + readback                  // 10+6+8+18 = 42
 }
 ```
@@ -101,9 +101,9 @@ in place.
 <!-- yon-gate: exit 62 -->
 ```yon
 fun main(): Number {
-  be a := Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
-  be b := Vec.push(Vec.push(a, 40), 50)       // grows past the initial cap of 4
-  be c := Vec.set(b, 0, 7)                     // in-place; c is b
+  a := Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30)
+  b := Vec.push(Vec.push(a, 40), 50)       // grows past the initial cap of 4
+  c := Vec.set(b, 0, 7)                     // in-place; c is b
   return Vec.size(c) + Vec.get(c, 0) + Vec.get(c, 4)   // 5 + 7 + 50 = 62
 }
 ```
@@ -144,9 +144,9 @@ names, and `Number.sqrt`, `Number.ln` are libm's on their domain, with a
 ```yon
 place Entry {
   fun main(): Number {
-    be g := Number.gcd(12, 8)      // 4
-    be m := Number.max(3, 7)       // 7
-    be f := Number.floor(21.9)     // 21
+    g := Number.gcd(12, 8)      // 4
+    m := Number.max(3, 7)       // 7
+    f := Number.floor(21.9)     // 21
     return g + m + f
   }
 }
@@ -174,9 +174,9 @@ and the caller handles the failure by matching on the arms of the coproduct.
 ```yon
 place Entry {
   fun main(): Number {
-    be g := Int64.gcd(12, 8)                   // 4
-    be d := Int64.div(7, 2)                    // 3, or a DomainError
-    be bc := Int64.bit_count(7)                // 3
+    g := Int64.gcd(12, 8)                   // 4
+    d := Int64.div(7, 2)                    // 3, or a DomainError
+    bc := Int64.bit_count(7)                // 3
     return (if g == 4 then 4 else 0)
          + (if bc == 3 then 30 else 0)
          + (match d { Int64 as v => (if v == 3 then 3 else 0),

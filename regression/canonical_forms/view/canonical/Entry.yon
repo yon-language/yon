@@ -1,8 +1,8 @@
 place Entry {
   fun main(): Number {
-    be acc := .-> Account { balance 50
+    acc := .-> Account { balance 50
       fee 8 }
-    be snap := Snapshot(acc)
+    snap := Snapshot(acc)
     return snap.net + snap.fee - snap.balance + 8    // 42 + 8 - 50 + 8 = 8
   }
 }

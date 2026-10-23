@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be p := .-> Plain { count 33 }
+    p := .-> Plain { count 33 }
     return p.count
   }
 }

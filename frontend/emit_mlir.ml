@@ -5238,7 +5238,7 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
                                && String.sub ssa 0 10 = "__hof_ref:"
             | None -> false) ->
            (* fname is a local alias of a named function (the binding
-              `be f := <lifted lambda>` pattern): dereference the
+              `f := <lifted lambda>` pattern): dereference the
               alias and call the real function directly. *)
            let real = (match Env.find_opt fname env with
              | Some (ssa, _) -> String.sub ssa 10 (String.length ssa - 10)
@@ -7314,7 +7314,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
    | Some body ->
        e.ssa_counter <- 0;
        (* A let-inline pass to preserve fusion when the user uses an
-        * intermediate `be a := Sequence.X`. Transforms
+        * intermediate `a := Sequence.X`. Transforms
         * `App (Lam (x, _, body), Sequence.X)` -> `body[Sequence.X/x]` if x appears at
         * most once. *)
        let body = Inline_seq.inline_seq_lets body in

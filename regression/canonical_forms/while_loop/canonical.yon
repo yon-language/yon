@@ -1,7 +1,7 @@
 place Entry {
   fun main(): Number {
-    be i := 0
-    while i < 42 do { i = i + 1 }
+    mut i := 0
+    while i < 42 do { i <- i + 1 }
     return i
   }
 }

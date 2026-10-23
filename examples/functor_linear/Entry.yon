@@ -1,7 +1,7 @@
 place Entry {
   fun double(n: Number): Number { return n }
   fun main(): Number {
-    be f := functor (x: Number) => double(x) from W to V law composition
+    f := functor (x: Number) => double(x) from W to V law composition
     return 0
   }
 }

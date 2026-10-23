@@ -8,13 +8,13 @@ fun takes(p: Sigma(x: Number). Number): Number {
   return fst(p) + snd(p)
 }
 fun proj_sum(a: Number, b: Number): Number {
-  be p := pair(a, b)
-  be x := fst(p)
-  be y := snd(p)
+  p := pair(a, b)
+  x := fst(p)
+  y := snd(p)
   return x + y
 }
 fun main(): Number {
-  be direct := takes(pair(20, 10))
+  direct := takes(pair(20, 10))
   return direct + proj_sum(7, 5)        // 30 + 12 = 42
 }
 }

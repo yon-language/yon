@@ -114,7 +114,7 @@ let list_append (a : term) (b : term) : term option =
  * Space is genuinely mutable: set/get modify the cell in place.
  *
  * This is the kernel-level primitive for state in Yon. The functional
- * surface (`be x := e` init, `x = e` assign) compiles to Space operations.
+ * surface (`x := e` init, `x = e` assign) compiles to Space operations.
  *
  * World-indexed Space (Yoneda multi-tenancy realization):
  * 

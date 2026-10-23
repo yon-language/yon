@@ -63,8 +63,8 @@ def test_m2_compile_arith(tmp_path):
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m3_compile_fun(tmp_path):
     # the Yon0 SURFACE. Lexes a real function with keywords, multi-digit
-    # numbers and identifiers, parses `fun main(): Number { be x := 20
-    # be y := 22  return x + y }` into nested TLet with de Bruijn variables,
+    # numbers and identifiers, parses `fun main(): Number { x := 20
+    # y := 22  return x + y }` into nested TLet with de Bruijn variables,
     # and the emitted program exits 42 = (20 + 22) mod 256.
     _end_to_end(tmp_path, ROOT / "selfhost" / "compile_fun.yon", 42)
 
