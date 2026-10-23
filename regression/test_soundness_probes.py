@@ -11,6 +11,7 @@ test XPASSes, the suite turns red, and the marker is removed on purpose. The
 reason of each xfail states the property, not the defect's history.
 """
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -54,11 +55,14 @@ def _compile_and_run(tmp: Path, entry: str, extra: str = "", files=None) -> int:
     return _run(tmp / "out")
 
 
-def _clean_rejection(rc: int, out: str) -> bool:
-    """Rejected by the frontend with a stable diagnostic code - not by an
-    uncaught OCaml exception, and not by the MLIR verifier downstream."""
-    return (rc != 0 and "[E" in out and "Fatal error: exception" not in out
-            and "stage0.topos.mlir" not in out)
+def _clean_rejection(rc: int, out: str, code: str, *words: str) -> bool:
+    """Refused by the frontend with the stable code `code` and for the reason
+    the words name - not by an uncaught OCaml exception, not by the MLIR
+    verifier downstream, and not for another reason: a refusal for the wrong
+    reason is no evidence."""
+    assert words, "name the reason of the refusal, not only its code"
+    return (rc != 0 and f"[{code}]" in out and "Fatal error: exception" not in out
+            and "stage0.topos.mlir" not in out and all(w in out for w in words))
 
 
 class ProbeOutcome(AssertionError):
@@ -97,7 +101,7 @@ def test_checker_terminates_on_negative_place(tmp_path):
     proj = _project(tmp_path, _BAD, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out", timeout=60)
     assert "Fatal error" not in out, f"the checker crashed instead of deciding:\n{out}"
-    assert _clean_rejection(rc, out), (
+    assert _clean_rejection(rc, out, 'E2001', 'expected Id_number(boom(n), _code), got Id_number(boom(n), boom(n))'), (
         f"Same(boom(n), 0) is false, so `clear` must be rejected with a diagnostic "
         f"code (rc={rc}):\n{out}")
 
@@ -108,7 +112,7 @@ def test_negative_place_rejected(tmp_path):
     entry = "place Bad { f Bad -> Number }\nplace Entry { fun main(): Number { return 0 } }\n"
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'Bad'), out
 
 
 # --- parametricity of generics ------------------------------------------------
@@ -121,11 +125,14 @@ place Entry {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'the abstract type T admits no operation'), out
 
 
-@pytest.mark.parametrize("body", ["7", "x + 1", '"hello"'])
-def test_t_to_t_is_the_identity(tmp_path, body):
+@pytest.mark.parametrize("body,reason", [
+    ("7", "expected T, got number"),
+    ("x + 1", "got T and number"),
+    ('"hello"', "expected T, got text")])
+def test_t_to_t_is_the_identity(tmp_path, body, reason):
     entry = f"""\
 place Entry {{
   fun notid<T>(x: T): T {{ return {body} }}
@@ -133,10 +140,15 @@ place Entry {{
 }}
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, "E2001", reason), out
 
 
-@pytest.mark.parametrize("body", ["x(1)", "x.foo", "fst(x)"])
+@pytest.mark.parametrize("body", [
+    # refused today as "unknown function or operation: x": a parameter is not
+    # looked up as a callee, so the refusal names the wrong reason
+    pytest.param("x(1)", marks=pytest.mark.xfail(strict=True,
+        reason="calling a value of the abstract type T is refused because T admits no operation")),
+    "x.foo", "fst(x)"])
 def test_an_abstract_t_admits_no_operation(tmp_path, body):
     """Inside a generic function a T can only be passed on."""
     entry = f"""\
@@ -146,7 +158,7 @@ place Entry {{
 }}
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, "E2001", "the abstract type T admits no operation"), out
 
 
 def test_an_abstract_t_admits_no_literal_test(tmp_path):
@@ -162,7 +174,7 @@ place Entry {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'pattern literal of type number', 'scrutinee type T'), out
 
 
 def test_a_generic_call_is_typed_at_its_instance(tmp_path):
@@ -190,7 +202,7 @@ place Entry {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'String__length: parameter s expects String, got number'), out
 
 
 # --- Int64 precision -----------------------------------------------------------
@@ -292,7 +304,7 @@ place Entry {
 
 def test_an_integer_literal_past_2_53_is_exact(tmp_path):
     """9007199254740993 at Int64 is that integer (odd), and the largest
-    literal is Int64.MAX; one past it is refused."""
+    literal is Int64.MAX."""
     entry = """\
 place Entry {
   fun odd(): Int64 { return 9007199254740993 }
@@ -304,10 +316,15 @@ place Entry {
 }
 """
     assert _compile_and_run(tmp_path, entry) == 11
+
+
+@pytest.mark.xfail(strict=True, reason="a literal past Int64.MAX is refused because it "
+                   "does not fit an Int64, and the refusal names it (today it falls back "
+                   "to a Number and the refusal is a type mismatch)")
+def test_an_integer_literal_past_int64_max_is_refused_by_its_range(tmp_path):
     over = "place Entry {\n  fun m(): Int64 { return 9223372036854775808 }\n  fun main(): Number { return 0 }\n}\n"
-    (tmp_path / "over").mkdir()
-    rc, out = _compile(_project(tmp_path / "over", over), tmp_path / "out2")
-    assert _clean_rejection(rc, out), out
+    rc, out = _compile(_project(tmp_path, over), tmp_path / "out")
+    assert _clean_rejection(rc, out, "E2001", "9223372036854775808", "Int64"), out
 
 
 def test_int64_to_text_writes_its_exact_digits(tmp_path):
@@ -412,7 +429,12 @@ def test_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
     sentinel-producing program is rejected, or it no longer yields the sentinel."""
     proj = _project(tmp_path, f"place Entry {{ fun main(): Number {{ return {expr} }} }}\n")
     rc, out = _compile(proj, tmp_path / "out")
-    assert rc != 0 or _run(tmp_path / "out") != sentinel_exit
+    if rc != 0:
+        # refused: by its own reason, the operation that can fail
+        op = re.search(r"\.(\w+)\(", expr).group(1)
+        assert _clean_rejection(rc, out, "E2001", op), out
+    else:
+        assert _run(tmp_path / "out") != sentinel_exit
 
 
 # --- internal places -----------------------------------------------------------
@@ -425,7 +447,7 @@ def test_internal_place_match_from_outside_rejected(tmp_path):
              "w/Secret.yon": "internal place Secret { this > A :U B }\n"}
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Secret"]\nspaces  = ["w"]\n', files)
     rc, out = _compile(proj, tmp_path / "out")
-    assert _clean_rejection(rc, out) and "PARSE ERROR" not in out, out
+    assert _clean_rejection(rc, out, 'E2001', 'internal') and "PARSE ERROR" not in out, out
 
 
 # --- subobjects: `this <` -------------------------------------------------------
@@ -444,7 +466,7 @@ place Entry {
              "w/A.yon": "place A { this < B\n  value Text\n}\n"}
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["X"]\nspaces  = ["w"]\n', files)
     rc, out = _compile(proj, tmp_path / "out")
-    assert _clean_rejection(rc, out) and "subcontains" in out, out
+    assert _clean_rejection(rc, out, 'E2001', 'does not have all the fields of') and "subcontains" in out, out
 
 
 # --- a cell handle must not outlive its activation --------------------------
@@ -462,7 +484,7 @@ place Entry {
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "out")
     # rejected at compile time, or the closure sees its own cell (20 + 1)
-    assert _clean_rejection(rc, out) or (rc == 0 and _run(tmp_path / "out") == 21)
+    assert _clean_rejection(rc, out, 'E2001', 'would outlive the call') or (rc == 0 and _run(tmp_path / "out") == 21)
 
 
 # Every route out of the activation that owns a cell. The judgment must
@@ -539,9 +561,10 @@ def test_every_escape_route_of_a_cell_is_rejected(tmp_path, form):
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Box", "P", "Q", "Bit"]\n')
     rc, out = _compile(proj, tmp_path / "out")
     if form in _CLOSED_BY_STRUCTURE:
-        assert _clean_rejection(rc, out) and "[E2002]" in out, out
+        assert _clean_rejection(rc, out, "E2002", "is not at the end of its body"), out
     else:
-        assert _clean_rejection(rc, out) and ("outlive" in out or "crosses" in out), out
+        assert (_clean_rejection(rc, out, "E2001", "outlive")
+                or _clean_rejection(rc, out, "E2001", "crosses")), out
 
 
 def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
@@ -553,7 +576,7 @@ def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
         "import echo::use_remote from Echo\n\nplace Entry {\n  fun main(): Number {\n"
         "    mut k := 10\n    k <- 20\n    return use_remote(fun(y: Number) => y + k)\n  }\n}\n")
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
-    assert _clean_rejection(rc, out) and "crosses" in out, out
+    assert _clean_rejection(rc, out, 'E2001', 'crosses into another Space') and "crosses" in out, out
 
 
 @pytest.mark.parametrize("body,expected", [
@@ -599,7 +622,7 @@ def test_bare_value_never_inhabits_a_subobject(tmp_path, arg, extra):
     entry = (f"place Entry {{\n  fun five(x: {{ n : Number where Same(n, 5) }}): Number {{ return 0 }}\n"
              f"{extra}  fun main(): Number {{ return five({arg}) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out) and "five: parameter x expects" in out, out
+    assert _clean_rejection(rc, out, 'E2001', 'five: parameter x expects') and "five: parameter x expects" in out, out
 
 
 # --- DomainError survives lowering ---------------------------------------------
@@ -640,7 +663,7 @@ place Entry {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out) and "visits" in out, out
+    assert _clean_rejection(rc, out, 'E2001', 'visits') and "visits" in out, out
 
 
 # --- static deadlock analysis --------------------------------------------------
@@ -687,4 +710,4 @@ place Entry {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out) and "concat" in out, out
+    assert _clean_rejection(rc, out, 'E2001', 'concat') and "concat" in out, out

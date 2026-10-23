@@ -54,11 +54,14 @@ def _run(exe: Path, cwd: Path | None = None, timeout: int = 30, env=None):
     return r.returncode, r.stdout
 
 
-def _clean_rejection(rc: int, out: str) -> bool:
-    """Refused by the frontend with a stable diagnostic code - not by an
-    uncaught OCaml exception, and not by the MLIR verifier downstream."""
-    return (rc != 0 and "[E" in out and "Fatal error: exception" not in out
-            and "stage0.topos.mlir" not in out)
+def _clean_rejection(rc: int, out: str, code: str, *words: str) -> bool:
+    """Refused by the frontend with the stable code `code` and for the reason
+    the words name - not by an uncaught OCaml exception, not by the MLIR
+    verifier downstream, and not for another reason: a refusal for the wrong
+    reason is no evidence."""
+    assert words, "name the reason of the refusal, not only its code"
+    return (rc != 0 and f"[{code}]" in out and "Fatal error: exception" not in out
+            and "stage0.topos.mlir" not in out and all(w in out for w in words))
 
 
 class ProbeOutcome(AssertionError):
@@ -78,7 +81,7 @@ def test_reflexivity_does_not_inhabit_a_false_identity(tmp_path):
     entry = ("place Entry {\n  fun bad(): Id(Number, 0, 1) { return refl(0) }\n"
              "  fun main(): Number { return 0 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_number'), out
 
 
 # A path is an identity between two given endpoints; a path whose endpoints the
@@ -98,7 +101,7 @@ def test_a_path_does_not_prove_every_identity(tmp_path, voice):
     entry = (f"place Entry {{\n  {launder}\n"
              f"  fun main(): Number {{ q := {call}  return (q @ I0) * 10 + (q @ I1) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    if _clean_rejection(rc, out):
+    if _clean_rejection(rc, out, 'E2001', 'expected Id_number', 'got Path'):
         return
     assert rc == 0, f"neither refused cleanly nor compiled:\n{out}"
     ends, _ = _run(tmp_path / "out")
@@ -192,7 +195,7 @@ fun main(): Number {
   return LatticePoint.orbit(1536)
 }
 """), tmp_path / "out")
-    _verdict(_clean_rejection(rc, out), f"a Number used as a lattice point was accepted: rc={rc}")
+    _verdict(_clean_rejection(rc, out, 'E2001', 'parameter p expects LatticePoint, got number'), f"a Number used as a lattice point was accepted: rc={rc}")
 
 
 def test_a_lattice_point_has_no_arithmetic(tmp_path):
@@ -202,7 +205,7 @@ fun main(): Number {
   return match LatticePoint.at_index(0) { LatticePoint as p => LatticePoint.index(p + 1), DomainError as d => 0 }
 }
 """), tmp_path / "out")
-    _verdict(_clean_rejection(rc, out) and "LatticePoint" in out,
+    _verdict(_clean_rejection(rc, out, 'E2001', 'got LatticePoint and number') and "LatticePoint" in out,
              f"p + 1 on a lattice point was not refused: rc={rc} {out[-200:]}")
 
 
@@ -240,10 +243,10 @@ def test_a_name_is_defined_with_colon_eq(tmp_path):
 
 
 def test_holds_is_no_binder(tmp_path):
-    old_form = "be x " + "holds 3"     # the binder this probe refuses
+    old_form = "x " + "holds 3"     # the binder this probe refuses
     rc, out, _ = _run_entry_names(tmp_path,
         "fun main(): Number {\n  " + old_form + "\n  return x\n}\n")
-    _verdict(_clean_rejection(rc, out) and "E1001" in out,
+    _verdict(_clean_rejection(rc, out, "E1001", "Entry.yon:3:"),
              f"{old_form} was not a clean syntax error: rc={rc} {out[-200:]}")
 
 
@@ -258,7 +261,7 @@ def test_a_name_is_defined_once_in_its_scope(tmp_path):
     (tmp_path / "twice").mkdir()
     rc, out, _ = _run_entry_names(tmp_path / "twice",
         "fun main(): Number {\n  mut x := 1\n  mut x := x + 1\n  return x\n}\n")
-    _verdict(_clean_rejection(rc, out) and "already bound" in out,
+    _verdict(_clean_rejection(rc, out, 'E2001', 'is already bound in this scope') and "already bound" in out,
              f"a second definition of x was not refused as such: rc={rc} {out[-200:]}")
     (tmp_path / "again").mkdir()
     rc, out, code = _run_entry_names(tmp_path / "again",
@@ -287,7 +290,7 @@ def test_a_return_outside_the_tail_is_refused(tmp_path, form):
     entry = ("place Entry {}\nfun f(c: Number): Number {\n" + _MISPLACED_RETURNS[form] +
              "}\nfun main(): Number { return f(1) }\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out) and "[E2002]" in out, out
+    assert _clean_rejection(rc, out, 'E2002', 'is not at the end of its body') and "[E2002]" in out, out
     assert "[line 3," in out, f"the diagnostic does not point at the return:\n{out}"
 
 
@@ -333,8 +336,9 @@ def _value_checker(tmp_path, entry, world=False):
     return code
 
 
-def _must_reject_checker(tmp_path, entry, what, world=False):
-    """The program is ill-typed: the frontend must refuse it with an E-code."""
+def _must_reject_checker(tmp_path, entry, what, code, *words, world=False):
+    """The program is ill-typed: the frontend must refuse it with the E code
+    `code`, for the reason the words name."""
     if world:
         proj = _project(tmp_path, entry, extra=_WORLD_checker, files=_WORLD_FILES_checker)
     else:
@@ -344,7 +348,7 @@ def _must_reject_checker(tmp_path, entry, what, world=False):
     if rc == 0:
         code, _ = _run(exe)
         _verdict(False, f"{what}: accepted, main computed {code}")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, code, *words), out
 
 
 # ---------------------------------------------------------------- compose
@@ -372,7 +376,8 @@ def test_compose_requires_the_output_of_the_first_to_be_the_input_of_the_second(
   }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text-valued f composed into Number-taking g")
+    _must_reject_checker(tmp_path, entry, "Text-valued f composed into Number-taking g",
+                         'E2001', 'compose with: the first function returns text, but the second takes number')
 
 
 def test_compose_of_two_function_parameters_computes_their_composite(tmp_path):
@@ -419,7 +424,7 @@ def test_a_unit_body_still_rejects_an_unbound_name(tmp_path):
   fun main(): Number { return 7 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "unbound name under Unit")
+    _must_reject_checker(tmp_path, entry, "unbound name under Unit", 'E2001', 'unknown identifier')
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -431,7 +436,8 @@ def test_a_unit_body_still_rejects_a_wrong_arity_call(tmp_path):
   fun main(): Number { return 7 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "four arguments to a unary function under Unit")
+    _must_reject_checker(tmp_path, entry, "four arguments to a unary function under Unit",
+                         'E2001', 'k expects 1 arguments, got 4')
 
 
 def test_an_unbound_name_is_rejected_at_a_non_terminal_type(tmp_path):
@@ -442,7 +448,7 @@ def test_an_unbound_name_is_rejected_at_a_non_terminal_type(tmp_path):
 """
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'unknown identifier: no_such_name'), out
 
 
 # ---------------------------------------------------------------- produce / spawn
@@ -461,7 +467,7 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text emitted on a Number stream")
+    _must_reject_checker(tmp_path, entry, "Text emitted on a Number stream", 'E2001', 'expected number, got text')
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -478,7 +484,7 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text promoted on a Number stream")
+    _must_reject_checker(tmp_path, entry, "Text promoted on a Number stream", 'E2001', 'expected number, got text')
 
 
 # ---------------------------------------------------------------- stdlib
@@ -492,7 +498,8 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text passed to Math.abs(Number)")
+    _must_reject_checker(tmp_path, entry, "Text passed to Math.abs(Number)",
+                         'E2001', 'Math__abs: parameter x expects number, got text')
 
 
 def test_a_prelude_string_function_rejects_a_number(tmp_path):
@@ -504,7 +511,7 @@ fun main(): Number {
 """
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'String__length: parameter s expects String, got number'), out
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -521,7 +528,8 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Number + Text inside the fold function")
+    _must_reject_checker(tmp_path, entry, "Number + Text inside the fold function",
+                         'E2001', 'operator requires matching')
 
 
 def test_a_user_function_with_an_ordinary_name_is_called(tmp_path):
@@ -568,7 +576,8 @@ def test_a_view_lambda_body_is_type_checked(tmp_path):
   }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Number + Text in a view body", world=True)
+    _must_reject_checker(tmp_path, entry, "Number + Text in a view body",
+                         'E2001', 'operator requires matching', world=True)
 
 
 # ---------------------------------------------------------------- move handlers
@@ -604,7 +613,8 @@ def test_a_move_naming_an_unknown_handler_is_rejected(tmp_path):
   }
 }
 """
-    _must_reject_checker(tmp_path, entry, "unknown handler double_itt", world=True)
+    _must_reject_checker(tmp_path, entry, "unknown handler double_itt",
+                         'E2001', 'double_itt', world=True)
 
 
 # ---------------------------------------------------------------- let-polymorphism scope
@@ -752,7 +762,7 @@ def test_sum_take_of_a_named_stream_sums_the_prefix(tmp_path):
              "fun main(): Number { return f() }\n}\n")
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "out")
-    if _clean_rejection(rc, out):
+    if _clean_rejection(rc, out, 'E2001', 'is not consumed where its stream is built'):
         return
     assert rc == 0, out
     code, _ = _run(tmp_path / "out", cwd=tmp_path)
@@ -786,7 +796,7 @@ def test_a_stream_passed_to_a_function_is_refused_not_zero(tmp_path):
         code, _ = _run(tmp_path / "out", cwd=tmp_path)
         assert code == 10, f"a stream across a call computed {code}"
     else:
-        assert _clean_rejection(rc, out), out
+        assert _clean_rejection(rc, out, 'E2001', 'is not consumed where its stream is built'), out
 
 
 def test_a_user_function_named_iterate_is_called(tmp_path):
@@ -834,7 +844,7 @@ def test_an_operation_without_a_handler_is_refused(tmp_path):
              "  fun main(): Number visits Counter { return Counter.tick(5) }\n}\n")
     proj = _project(tmp_path, entry, _WORLD_lowering, _COUNTER_lowering)
     rc, out = _compile(proj, tmp_path / "out")
-    if _clean_rejection(rc, out):
+    if _clean_rejection(rc, out, 'E2003', 'no reduction of Counter handles it'):
         assert "[E2003]" in out, out
         return
     assert rc == 0, out
@@ -848,7 +858,7 @@ def test_an_operation_called_in_a_condition_without_a_handler_is_refused(tmp_pat
              "    when Counter.tick(5) > 0 { r <- 1 }\n    return r\n  }\n}\n")
     proj = _project(tmp_path, entry, _WORLD_lowering, _COUNTER_lowering)
     rc, out = _compile(proj, tmp_path / "out")
-    assert _clean_rejection(rc, out) and "[E2003]" in out, out
+    assert _clean_rejection(rc, out, 'E2003', 'no reduction of Counter handles it') and "[E2003]" in out, out
 
 
 # --- integer division ------------------------------------------------------------
@@ -865,7 +875,7 @@ def test_integer_division_by_zero_is_not_an_ordinary_number(tmp_path):
              "  return if q + r == 0 then 5 else 6\n}\n}\n")
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "out")
-    if _clean_rejection(rc, out):
+    if _clean_rejection(rc, out, 'E2001', 'division by zero'):
         return
     assert rc == 0, out
     code, _ = _run(tmp_path / "out", cwd=tmp_path)
@@ -957,7 +967,7 @@ def test_a_move_handler_must_name_a_function(tmp_path):
     entry = _MOVE_lowering.format(local="", by="nosuch_fn", bias=0)
     proj = _project(tmp_path, entry, _WORLD_lowering, _TEMPS_lowering)
     rc, out = _compile(proj, tmp_path / "out")
-    if _clean_rejection(rc, out):
+    if _clean_rejection(rc, out, 'E2001', 'nosuch_fn'):
         return
     assert rc == 0, out
     code, _ = _run(tmp_path / "out", cwd=tmp_path)
@@ -1025,7 +1035,7 @@ def test_a_name_imported_from_two_modules_is_refused_bare(tmp_path):
         _TWO_STATS_IMPORTS + "place Entry {\n  fun main(): Number {\n"
         "    return stats(1)\n  }\n}\n")
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'is imported from alpha and beta'), out
     assert "`alpha::stats` or `beta::stats`" in out, out
 
 
@@ -1096,8 +1106,8 @@ def _wire_lowering(tmp_path, consumer_reading):
     rc, log = _compile(svc, tmp_path / "Meteo_srv", cwd=tmp_path)
     assert rc == 0, log
     rc, log = _compile(sub, tmp_path / "sub", cwd=tmp_path)
-    if _clean_rejection(rc, log):
-        return None
+    # client and server compile apart: a layout that differs is the run's to
+    # refuse (the roots of the frames), never the compiler's
     assert rc == 0, log
     r = subprocess.run([str(tmp_path / "sub")], cwd=tmp_path, capture_output=True,
                        text=True, timeout=60, env=_world_env_lowering(tmp_path))
@@ -1386,7 +1396,7 @@ def test_forces_rejects_an_ill_typed_condition(tmp_path):
            "}\n")
     proj = _project(tmp_path, src)
     rc, out = _compile(proj, tmp_path / "exe")
-    _verdict(_clean_rejection(rc, out), f"an undefined name in the condition is accepted (rc={rc})")
+    _verdict(_clean_rejection(rc, out, 'E2001', 'nowhere_defined'), f"an undefined name in the condition is accepted (rc={rc})")
 
 
 def test_when_does_not_run_its_body_under_a_false_condition(tmp_path):
@@ -1428,7 +1438,7 @@ def test_a_naturality_counterexample_refuses_the_program(tmp_path):
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=120, env=env)
     out = r.stdout + r.stderr
-    assert _clean_rejection(r.returncode, out), out
+    assert _clean_rejection(r.returncode, out, 'E2101', 'is refuted; counterexample'), out
     assert "[E2101]" in out and "counterexample" in out, out
 
 
@@ -1586,7 +1596,7 @@ def test_codes_applied_to_different_arguments_are_different_types(tmp_path):
              "  fun cast(e: El(Fam(7))): El(Fam(8)) { return e }\n"
              "  fun main(): Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
-    _verdict(_clean_rejection(rc, out),
+    _verdict(_clean_rejection(rc, out, 'E2001', 'type mismatch: expected El(Fam('),
              f"El(Fam(7)) was accepted as El(Fam(8)) (rc={rc})")
 
 
@@ -1597,7 +1607,7 @@ def test_codes_of_different_families_are_different_types(tmp_path):
              "  fun cast(e: El(Fam(7))): El(Gam(7)) { return e }\n"
              "  fun main(): Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'expected El(Gam(_code)), got El(Fam(_code))'), out
 
 
 # --- transport along a univalence path lands in the target -------------------
@@ -1630,7 +1640,7 @@ def test_transport_along_a_named_univalence_path_leaves_the_source(tmp_path):
         "  y := transport(u, tt)\n"
         "  return match y { tt => 1, ff => 2 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
-    if _clean_rejection(rc, out):
+    if _clean_rejection(rc, out, 'E2001', 'missing branch(es) for one, zero'):
         return
     assert rc == 0, out
     got, _ = _run(tmp_path / "out")
@@ -1670,14 +1680,14 @@ def test_refl_proves_exactly_the_ring_laws_of_the_carrier(tmp_path, law):
         assert rc == 0, out
         assert _run(tmp_path / "out")[0] == 42
     else:
-        assert _clean_rejection(rc, out), out
+        assert _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_'), out
 
 
 # --- an identity on numbers holds for floating-point numbers -----------------
 
 def _accepted_identity_is_false_kernel(tmp_path, entry):
     rc, out = _build_kernel(tmp_path, entry)
-    if _clean_rejection(rc, out):
+    if _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_number'):
         return
     assert rc == 0, out
     differs, _ = _run(tmp_path / "out")
@@ -1709,7 +1719,7 @@ def test_a_shifted_value_is_not_identical_to_itself(tmp_path):
              "  fun off(x: Number): Id(Number, x + 1, x) { return clear x }\n"
              "  fun main(): Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'expected Id_number(_code, x), got Id_number(x, x)'), out
 
 
 # --- naturality ----------------------------------------------------------------
@@ -1729,8 +1739,7 @@ def test_naturality_is_not_proven_for_a_square_that_does_not_commute(tmp_path):
     # the square is not proven (its components carry `clear input`, outside the
     # modelled fragment), so it is not certified: the program is refused
     assert "proven" not in fe.stderr.lower(), fe.stderr
-    assert _clean_rejection(fe.returncode, fe.stderr) and (
-        "[E2101]" in fe.stderr or "[E2102]" in fe.stderr), fe.stderr
+    assert _clean_rejection(fe.returncode, fe.stderr, "E2102", "is not certified"), fe.stderr
 
 
 # --- conditions: `is` binds tighter than `and` -------------------------------
@@ -1776,15 +1785,18 @@ def test_a_decision_is_left_only_by_answering_unknown(tmp_path):
     entry = ("place Entry {}\nfun main(): Number {\n  p := unknown\n"
              "  return match decide(p) { Present => 1, Absent => 2 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out) and "Unknown" in out, out
+    assert _clean_rejection(rc, out, 'E2001', 'missing branch(es) for Unknown') and "Unknown" in out, out
 
 
-@pytest.mark.parametrize("form", ["to_bool(p)", "to_bool_dec(decide(p))", "p"])
-def test_there_is_no_arrow_from_proposition_to_boolean(tmp_path, form):
+@pytest.mark.parametrize("form,reason", [
+    ("to_bool(p)", "unknown function or operation: to_bool"),
+    ("to_bool_dec(decide(p))", "unknown function or operation: to_bool_dec"),
+    ("p", "expected boolean, got proposition")])
+def test_there_is_no_arrow_from_proposition_to_boolean(tmp_path, form, reason):
     entry = ("place Entry {}\nfun main(): Number {\n  p := unknown\n"
              f"  return if {form} then 1 else 2\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, "E2001", reason), out
 
 
 def test_a_boolean_flows_into_a_proposition(tmp_path):
@@ -1803,7 +1815,7 @@ def test_a_proposition_is_not_a_boolean(tmp_path):
              "  fun g(p: proposition): Number { return f(p) }\n"
              "  fun main(): Number { return g(unknown) }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
-    _verdict(_clean_rejection(rc, out),
+    _verdict(_clean_rejection(rc, out, 'E2001', 'expects boolean, got proposition'),
              f"the checker accepted a proposition as a boolean (rc={rc}, "
              f"refused downstream: {'stage0.topos.mlir' in out})")
 
@@ -1876,7 +1888,7 @@ def test_an_inferred_section_is_not_a_number(tmp_path):
              "  fun mk() { return .-> Box { v 1 } }\n"
              "  fun main(): Number { mut n := mk() + 1  return n }\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _BOX_kernel)
-    _verdict(_clean_rejection(rc, out),
+    _verdict(_clean_rejection(rc, out, 'E2001', 'Box'),
              f"the checker accepted a section plus a number (rc={rc}, "
              f"refused downstream: {'stage0.topos.mlir' in out})")
 
@@ -2098,7 +2110,7 @@ def test_a_runtime_rpc_name_in_user_source_is_refused(tmp_path):
     entry = ("import svc::d_op from D\nplace Entry { }\n"
              "fun main(): Number {\n  return __yon_rpc2_invoke1__D(7, 3)\n}\n")
     rc, out = _compile(_d_project_frontend(tmp_path, entry), tmp_path / "out")
-    _verdict(_clean_rejection(rc, out),
+    _verdict(_clean_rejection(rc, out, 'E2001', '__yon_rpc2_invoke1__D'),
              f"forged call to Space D with selector 7 compiled: rc={rc}")
 
 
@@ -2211,7 +2223,7 @@ def test_a_refuted_naturality_law_is_refused(tmp_path):
     r = subprocess.run([str(ROOT / "toolchain" / "yonc"), str(proj), "-o", str(tmp_path / "out")],
                        capture_output=True, text=True, timeout=120)
     out = r.stdout + r.stderr
-    assert _clean_rejection(r.returncode, out) and "[E2101]" in out, out
+    assert _clean_rejection(r.returncode, out, 'E2101', 'is refuted') and "[E2101]" in out, out
 
 
 # A square is decided on the values the program computes with: Number is an
@@ -2251,7 +2263,7 @@ def test_a_square_is_decided_on_the_values_of_its_carrier(tmp_path, square):
     if verdict == "proven":
         assert r.returncode == 0 and "proven" in out, out
     else:
-        assert _clean_rejection(r.returncode, out) and "[E2101]" in out, out
+        assert _clean_rejection(r.returncode, out, 'E2101', 'is refuted') and "[E2101]" in out, out
 
 
 def test_an_uncertified_square_is_refused_unless_given(tmp_path):
@@ -2262,7 +2274,7 @@ def test_an_uncertified_square_is_refused_unless_given(tmp_path):
     d1.mkdir(); d2.mkdir()
     r1 = subprocess.run([str(ROOT / "toolchain" / "yonc"), str(_square_project(d1, "Number", fa, ga)),
                          "-o", str(d1 / "out")], capture_output=True, text=True, timeout=120)
-    assert _clean_rejection(r1.returncode, r1.stdout + r1.stderr) and "[E2102]" in r1.stderr, r1.stderr
+    assert _clean_rejection(r1.returncode, r1.stdout + r1.stderr, 'E2102', 'is not certified') and "[E2102]" in r1.stderr, r1.stderr
     r2 = subprocess.run([str(ROOT / "toolchain" / "yonc"),
                          str(_square_project(d2, "Number", fa, ga, given=True)),
                          "-o", str(d2 / "out")], capture_output=True, text=True, timeout=120)
@@ -3037,16 +3049,18 @@ fun main(): Number {
 def test_one_collection_is_not_another(tmp_path):
     """A HashMap is not a HashSet, and a HashMap<Number, Int64> is not a
     HashMap<Number, Number>."""
-    for i, body in enumerate([
-            "fun f(s: HashSet<Number>): Number { return HashSet.size(s) }\n"
-            "fun main(): Number { return f(HashMap.set(HashMap.empty(), 1, 2)) }\n",
-            "fun f(m: HashMap<Number, Number>): Number { return HashMap.size(m) }\n"
-            "fun big(): Int64 { return 5 }\n"
-            "fun main(): Number { return f(HashMap.set(HashMap.empty(), 1, big())) }\n"]):
+    for i, (body, reason) in enumerate([
+            ("fun f(s: HashSet<Number>): Number { return HashSet.size(s) }\n"
+             "fun main(): Number { return f(HashMap.set(HashMap.empty(), 1, 2)) }\n",
+             "parameter s expects HashSet<number>, got HashMap<number, number>"),
+            ("fun f(m: HashMap<Number, Number>): Number { return HashMap.size(m) }\n"
+             "fun big(): Int64 { return 5 }\n"
+             "fun main(): Number { return f(HashMap.set(HashMap.empty(), 1, big())) }\n",
+             "parameter m expects HashMap<number, number>, got HashMap<number, Int64>")]):
         d = tmp_path / str(i)
         d.mkdir()
         rc, out = _compile(_project(d, "place Entry {}\n" + body), d / "out")
-        assert _clean_rejection(rc, out), out
+        assert _clean_rejection(rc, out, "E2001", reason), out
 
 
 def test_every_version_of_a_map_stays_what_it_was(tmp_path):
@@ -3217,7 +3231,7 @@ fun main(): Number {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'does not fit a node of the Leech heap'), out
 
 
 # A key is identified by its identity: the bits of a scalar, the
@@ -3293,7 +3307,7 @@ def test_a_collection_offers_get_and_keeps_value_to_itself(tmp_path, call):
     how `get` is built, internal to its house. Outside, the face is `get`."""
     entry = f"place Entry {{}}\nfun main(): Number {{\n  return {call}\n}}\n"
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out) and "is internal to" in out, out[-400:]
+    assert _clean_rejection(rc, out, 'E2001', 'is internal to') and "is internal to" in out, out[-400:]
 
 
 # A function with a body is never replaced by a primitive: a primitive binds
@@ -3314,7 +3328,7 @@ def test_a_body_is_never_replaced_by_a_primitive_of_its_name(tmp_path):
                        env={**os.environ, "YON_PRELUDE": str(prelude)})
     out = r.stdout + r.stderr
     if r.returncode != 0:
-        _verdict(_clean_rejection(r.returncode, out), f"not a clean rejection: {out[-300:]}")
+        _verdict(_clean_rejection(r.returncode, out, 'E2001', 'floor'), f"not a clean rejection: {out[-300:]}")
         return
     code, _ = _run(tmp_path / "out")
     _verdict(code == 9, f"Number.floor(2.5) with `+ 7` in its body gave {code}, expected 9 "
@@ -3337,7 +3351,7 @@ def test_a_body_named_like_a_lowered_primitive_runs_its_body(tmp_path):
                        env={**os.environ, "YON_PRELUDE": str(prelude)})
     out = r.stdout + r.stderr
     if r.returncode != 0:
-        _verdict(_clean_rejection(r.returncode, out), f"not a clean rejection: {out[-300:]}")
+        _verdict(_clean_rejection(r.returncode, out, 'E2001', 'length'), f"not a clean rejection: {out[-300:]}")
         return
     code, _ = _run(tmp_path / "out")
     _verdict(code == 42, f"String.length with the body 40 + 2 gave {code}, expected 42 or a refusal")
@@ -3346,7 +3360,7 @@ def test_a_body_named_like_a_lowered_primitive_runs_its_body(tmp_path):
 def test_is_given_and_a_body_exclude_each_other(tmp_path):
     rc, out = _compile(_project(tmp_path, "place Entry {}\nfun f(): Number is given { return 1 }\n"
                                           "fun main(): Number { return f() }\n"), tmp_path / "out")
-    _verdict(_clean_rejection(rc, out) and "is given and has a body" in out,
+    _verdict(_clean_rejection(rc, out, 'E1001', 'is given and has a body') and "is given and has a body" in out,
              f"is given with a body was not refused as such: rc={rc} {out[-200:]}")
 
 
@@ -3622,7 +3636,7 @@ def test_a_produce_block_is_a_wire(tmp_path):
 def test_a_stream_is_not_a_channel(tmp_path):
     rc, out = _compile(_project(tmp_path, _produce_returning("Stream<Number>")),
                        tmp_path / "out")
-    assert _clean_rejection(rc, out), out
+    assert _clean_rejection(rc, out, 'E2001', 'expected Stream<number>, got Wire<number>'), out
 
 
 # ---------------------------------------------------------------- the library's names are extended, never redeclared
@@ -3643,7 +3657,7 @@ def test_a_user_place_named_like_a_prelude_place_is_refused(tmp_path):
              "  return l.hits + (match HashMap.get(m, 1) { Found(v) => v, Absent => 0 })\n}\n")
     proj = _one_place_project(tmp_path, "Lookup", "place Lookup { hits Number }\n", entry)
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out) and "[E2006]" in out, out
+    assert _clean_rejection(rc, out, 'E2006', 'takes the name of a place of the library') and "[E2006]" in out, out
     assert "Rename yours" in out and "`place MyLookup { this < Lookup" in out, out
 
 
@@ -3659,7 +3673,7 @@ def test_a_user_place_named_like_a_registry_place_is_refused(tmp_path):
     # its reduction (99)
     proj = _one_place_project(tmp_path, "Math", _GCD_DECL % "Math", _GCD_ENTRY % (("Math",) * 3))
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out) and "[E2006]" in out, out
+    assert _clean_rejection(rc, out, 'E2006', 'place Math takes the name of a place of the library') and "[E2006]" in out, out
 
 
 def test_the_same_place_under_a_name_of_its_own_runs_its_reduction(tmp_path):
@@ -3677,7 +3691,7 @@ def test_is_given_outside_the_prelude_is_refused(tmp_path):
                               "place Tools {\n  fun f(): Number is given\n}\n",
                               "place Entry {}\nfun main(): Number { return 0 }\n")
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out) and "[E2007]" in out, out
+    assert _clean_rejection(rc, out, 'E2007', 'prelude only') and "[E2007]" in out, out
     assert "fun Tools.f is given" in out and "prelude only" in out, out
 
 
@@ -3818,7 +3832,7 @@ fun main(): Number {
 """
     proj = _project(tmp_path, entry, extra=_ARMS_WORLD, files=_arms_files("No :U Yes"))
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out) and "[E2004]" in out, out
+    assert _clean_rejection(rc, out, 'E2004', 'nothing here says which coproduct it injects into') and "[E2004]" in out, out
     assert "`Ask.Yes`" in out and "`Flip.Yes`" in out, out
 
 
@@ -3834,7 +3848,7 @@ fun main(): Number {
                         "  fun Yes(n: Number): Number { return n + 1 }")
     proj = _project(tmp_path, entry, extra=_ARMS_WORLD, files=files)
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out) and "[E2005]" in out, out
+    assert _clean_rejection(rc, out, 'E2005', 'names two arrows') and "[E2005]" in out, out
     assert "rename one" in out, out
 
 
