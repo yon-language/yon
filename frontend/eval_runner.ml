@@ -87,63 +87,26 @@ let read_file (fn : string) : string =
   close_in ic; s
 
 (* Assemble a project DIRECTORY into a surface program the pure interpreter can
- * run, together with the place->space census the desugar needs and the merged
- * source text (for the imperative/effectful refusal check below).
- *
- * This mirrors the driver's project assembly (yoner_emit_mlir.ml) but keeps only
- * the transforms the evaluator needs -- no codegen (no cross-space lowering, no
- * space graph, no auto-reclaim). Every transform is the SAME library function the
- * driver calls (Manifest / Package_layout / Desugar / Tycheck), so each step stays
- * single-sourced; this is a subset of the driver, not a reimplementation of it. *)
+ * run, with the source text of the user files (for the imperative/effectful
+ * refusal check below). No codegen: no cross-space lowering, no space graph,
+ * no auto-reclaim. *)
 let assemble_project (root : string)
     : Surface_ast.program * (string * string) list * string =
-  let wm = Manifest.parse_file (Filename.concat root Package_layout.manifest_name) in
-  let units = Package_layout.layout ~root in
-  let place_to_space = ref [] in
-  let pw_pairs = ref [] in       (* (place name, world of its space) *)
-  let sources = ref [] in
-  let merged =
-    List.concat_map (fun (u : Package_layout.unit_loc) ->
-      let src = read_file u.Package_layout.ul_path in
-      sources := src :: !sources;
-      let lexbuf = Lexing.from_string src in
-      Lexing.set_filename lexbuf u.Package_layout.ul_path;
-      Parser_state.reset ();
-      let p = Parser.program Lexer.token lexbuf in
-      (* place-member funs live inside `place Entry { ... }`; the parser stages
-         them into Parser_state, drained here into top-level decls -- the same
-         lift the driver performs. *)
-      let decls = Parser_state.drain () @ p in
-      let sp = u.Package_layout.ul_space in
-      List.iter (function
-        | Surface_ast.TopPlace pd ->
-            if sp <> "" then
-              place_to_space := (pd.Surface_ast.pd_name, sp) :: !place_to_space;
-            (match Manifest.world_of_space wm sp with
-             | Some w -> pw_pairs := (pd.Surface_ast.pd_name, w) :: !pw_pairs
-             | None -> ())
-        | _ -> ()) decls;
-      decls
-    ) units
-  in
-  (* Prepend the toml worlds and the filesystem spaces (neither lives in a .yon
-     file), then drop the Entry package container: it is a validated marker, not a
-     runnable place, and keeping it would demand a world it has none of. *)
-  let entry_name =
-    match wm.Manifest.pkg_entry with Some e -> e | None -> "Entry" in
-  let prog = Manifest.world_decls wm @ Package_layout.space_decls ~root @ merged in
-  let prog = Manifest.remove_entrypoint_container ~entry_name prog in
-  (* Bind each place to the world of its directory (filesystem -> toml), so a
-     place resolves structurally instead of via the single-world heuristic. *)
-  let pw : (string, string) Hashtbl.t = Hashtbl.create 16 in
-  List.iter (fun (n, w) -> Hashtbl.replace pw n w) !pw_pairs;
-  let prog =
-    Manifest.assign_place_worlds
-      ~world_of_space:(Manifest.world_of_space wm)
-      (fun n -> Hashtbl.find_opt pw n) prog in
-  let prog = Desugar.expand_views prog in
+  (* The SAME assembly the language server and the checker run (Project.load,
+     Project.prepare_for_typecheck): the prelude rides in, so the oracle sees
+     the language the compiler sees, the library included. *)
+  let l = Project.load ~root () in
+  Project.record_file_spaces l;
+  let prog = Project.prepare_for_typecheck l in
   let prog = Tycheck.elaborate_id_sugar prog in
-  (prog, List.rev !place_to_space, String.concat "\n" (List.rev !sources))
+  (* the refusal check below reads the USER sources only: the prelude's own
+     loops are the library's, run by the compiler, not by this program *)
+  let prelude = List.map fst (Project.prelude_sources ()) in
+  let user =
+    List.filter (fun (f : Project.file_info) -> not (List.mem f.Project.fi_path prelude))
+      l.Project.files in
+  (prog, [], String.concat "\n" (List.map (fun (f : Project.file_info) ->
+                                    read_file f.Project.fi_path) user))
 
 let () =
   let args = Array.to_list Sys.argv in

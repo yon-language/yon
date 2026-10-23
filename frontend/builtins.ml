@@ -358,7 +358,9 @@ let rec try_reduce_builtin (t : term) : term option =
                 | _ -> try_eval_binop op a' b')
        | _ ->
            try_eval_binop op a' b')
-  | App (App (App (Var "__if", cond), tbr), ebr) ->
+  | App (App (App (Var ("__if" | "__if_expr"), cond), tbr), ebr) ->
+      (* `__if_expr` is the expression `if c then a else b` and the match on
+         a fused Boolean, lowered as the emitter's scf.if: one rule *)
       let cond' = match try_reduce_builtin cond with Some v -> v | None -> cond in
       try_eval_if cond' tbr ebr
   | App (App (Var "Output__print", s), _unit) ->
@@ -441,7 +443,12 @@ let rec try_reduce_builtin (t : term) : term option =
        | Some Heyting.HPresent -> Some (encode_number 0.0)
        | Some Heyting.HAbsent -> Some (encode_number 1.0)
        | Some Heyting.HUnknown -> Some (encode_number 2.0)
-       | None -> None)
+       | None ->
+           (* a Boolean, injected as `to_prop` does: true present, false absent *)
+           match decode_bool arg' with
+           | Some true -> Some (encode_number 0.0)
+           | Some false -> Some (encode_number 1.0)
+           | None -> None)
   | App (Var "to_bool_dec", arg) ->
       (* a condition the compiler decides itself, on a proposition that is
        * never unknown; an unknown here is a broken invariant, never false *)
