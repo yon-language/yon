@@ -86,9 +86,43 @@ let root_halves (site : string * int * int) : float * float =
    are not surface `T | U` annotations, so they stay off this table and keep the
    cubical path untouched.
 
-   ctor name -> (tag index in its type, argument types). Rebuilt per program by
-   [build_sum_registry] from every sum-type annotation in scope. *)
-let sum_ctor_registry : (string, int * S.ty list) Hashtbl.t = Hashtbl.create 32
+   (coproduct, arm) -> (tag index in that coproduct, argument types): an arm
+   belongs to every coproduct that lists it, at ITS position there. The
+   coproduct is its name, or S.anon_sum_key for an anonymous sum. Rebuilt
+   per program by [build_sum_registry] from every sum-type annotation in
+   scope. *)
+let sum_ctor_registry : (string * string, int * S.ty list) Hashtbl.t = Hashtbl.create 32
+
+(* the coproduct the tycheck resolved at a site (a hit, a match) *)
+let site_coproduct (l : S.location) : string option =
+  Hashtbl.find_opt Surface_ast.arm_coproduct_sites
+    (l.S.file, l.S.start_line, l.S.start_col)
+
+let arm_registered (arm : string) : bool =
+  Hashtbl.fold (fun (_, a) _ acc -> acc || a = arm) sum_ctor_registry false
+
+(* The tag and payload of [arm] in [coproduct]. A site that names no
+   coproduct (a tycheck-free path) is answered by the arm's name only when
+   every coproduct listing the arm puts it at the same position with the same
+   arity; otherwise the name says nothing, and that is a compiler fault. *)
+let find_arm ?coproduct (arm : string) : (int * S.ty list) option =
+  let by_name () =
+    match Hashtbl.fold (fun (_, a) r acc -> if a = arm then r :: acc else acc)
+            sum_ctor_registry [] with
+    | [] -> None
+    | ((t, tys) :: rest) as all ->
+        if List.for_all (fun (t', tys') ->
+               t' = t && List.length tys' = List.length tys) rest
+        then Some (t, tys)
+        else failwith (Printf.sprintf
+          "internal: the arm %s has %d positions in its coproducts, and this \
+           site names none" arm (List.length all)) in
+  match coproduct with
+  | Some c ->
+      (match Hashtbl.find_opt sum_ctor_registry (c, arm) with
+       | Some r -> Some r
+       | None -> by_name ())
+  | None -> by_name ()
 (* The NAMES of the named inductive types (`inductive Tree = ...`). Their runtime
    carrier is a MerkleTree handle, so desugar_ty lowers `TyUser Tree` to the
    concrete MerkleTree carrier rather than a `Section "Tree"` that emit's
@@ -100,17 +134,15 @@ let sum_scrut_counter = ref 0
 let fresh_sum_scrut () =
   incr sum_scrut_counter; Printf.sprintf "__sum_scrut_%d" !sum_scrut_counter
 
-let rec collect_sums_in_ty (t : S.ty) : unit =
+let rec collect_sums_in_ty ?key (t : S.ty) : unit =
   match t with
   | S.TySum variants | S.TySumIn (variants, _) ->
-      (* Debt (fourth occurrence of the bare-name pattern):
-         this registry is GLOBAL name->(tag,tys) with replace — homonymous
-         arms across DIFFERENT sums overwrite each other (last wins). Error
-         coproducts are safe among themselves (error_sum_of fixes positions:
-         face=0, E=1), but a user sum reordering a shared name would clash.
-         Fix path: key by (type_tag of the sum, arm). *)
+      (* keyed by (coproduct, arm): homonymous arms of DIFFERENT sums keep
+         each its own position *)
+      let key = match key with Some k -> k | None -> S.anon_sum_key variants in
       List.iteri (fun i (v : S.variant) ->
-        Hashtbl.replace sum_ctor_registry v.S.v_name (i, v.S.v_args)) variants;
+        Hashtbl.replace sum_ctor_registry (key, v.S.v_name) (i, v.S.v_args))
+        variants;
       List.iter (fun (v : S.variant) ->
         List.iter collect_sums_in_ty v.S.v_args) variants
   | S.TyList inner | S.TyChannel inner | S.TySubscription (_, inner) ->
@@ -162,7 +194,7 @@ let build_sum_registry (p : S.program) : unit =
            name + constructors exactly as an inline sum. *)
         if pd.S.pd_arms <> [] then begin
           Hashtbl.replace inductive_type_names pd.S.pd_name ();
-          collect_sums_in_ty (S.TySum pd.S.pd_arms)
+          collect_sums_in_ty ~key:pd.S.pd_name (S.TySum pd.S.pd_arms)
         end
         else Hashtbl.replace armless_place_names pd.S.pd_name ();
         List.iter (function
@@ -610,11 +642,11 @@ and desugar_expr (e0 : S.expr) : C.term =
     match loc_of e0 with
     | Some l when Hashtbl.mem Surface_ast.return_inject_sites
                     (l.S.file, l.S.start_line, l.S.start_col) ->
-        let arm = Hashtbl.find Surface_ast.return_inject_sites
+        let (coproduct, arm) = Hashtbl.find Surface_ast.return_inject_sites
                     (l.S.file, l.S.start_line, l.S.start_col) in
         Hashtbl.remove Surface_ast.return_inject_sites
           (l.S.file, l.S.start_line, l.S.start_col);
-        (match Hashtbl.find_opt sum_ctor_registry arm with
+        (match find_arm ~coproduct arm with
          | Some (tag, arg_tys) -> Some (tag, arg_tys, l)
          | None -> None)
     | _ -> None in
@@ -679,7 +711,7 @@ and desugar_expr (e0 : S.expr) : C.term =
          | Some `Unit -> C.Unit
          | None -> C.Var x
        else
-       match Hashtbl.find_opt sum_ctor_registry x with
+       match find_arm ?coproduct:owning_sum x with
        | Some (tag, []) -> lower_sum_constr tag [] [] loc
        | _ -> C.HITConstr (x, []))
   | S.EVar (x, _) when Hashtbl.mem Surface_ast.fusion_places x ->
@@ -703,7 +735,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         | S.PatVars vs -> vs
         | S.PatWitness w -> [w]
         | S.PatFields fs ->
-            (match Hashtbl.find_opt sum_ctor_registry ctor with
+            (match find_arm ?coproduct:(site_coproduct loc) ctor with
              | Some (_, arg_tys) ->
                  let fields =
                    List.init (List.length arg_tys)
@@ -745,7 +777,7 @@ and desugar_expr (e0 : S.expr) : C.term =
            ignore c2;
            curry_apply (C.Var "__if_expr")
              [desugar_expr x; desugar_expr et; desugar_expr ef]
-       | (ctor, _, _) :: _ when Hashtbl.mem sum_ctor_registry ctor ->
+       | (ctor, _, _) :: _ when arm_registered ctor ->
            lower_sum_elim branches x loc
        | _ ->
            C.HITElim
@@ -766,6 +798,9 @@ and desugar_expr (e0 : S.expr) : C.term =
       let code = S.EVar (v, loc) in
       let is_code n = S.EBinop (S.OpEq, code, S.ELit (S.LitNumber n, loc), loc) in
       let arm a = S.EHITConstr (a, [], loc) in
+      (* the three arms are Decision's: the site says so *)
+      Hashtbl.replace Surface_ast.arm_coproduct_sites
+        (loc.S.file, loc.S.start_line, loc.S.start_col) "Decision";
       let body = S.EIfThenElse (is_code 0.0, arm "Present",
                    S.EIfThenElse (is_code 1.0, arm "Absent", arm "Unknown", loc), loc) in
       C.App (C.Lam (v, C.TyPlace "number", desugar_expr body),
@@ -773,7 +808,7 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.EHITConstr (ctor, args, loc) ->
       (* A custom sum constructor builds a MerkleTree node (tag + payload
          children); a built-in HIT constructor stays a homotopy value. *)
-      (match Hashtbl.find_opt sum_ctor_registry ctor with
+      (match find_arm ?coproduct:(site_coproduct loc) ctor with
        | Some (tag, arg_tys) when List.length arg_tys = List.length args ->
            lower_sum_constr tag arg_tys args loc
        | _ -> C.HITConstr (ctor, List.map desugar_expr args))
@@ -1030,7 +1065,7 @@ and desugar_expr (e0 : S.expr) : C.term =
          with the identity head); a payload ARM lowers to its SPINE — the
          same value hit built — with the field assignments ordered by the
          bridge projections _1.._n. *)
-      (match Hashtbl.find_opt sum_ctor_registry place_name with
+      (match find_arm place_name with
        (* a DECLARED field place shadows a homonymous sum arm (the error
           coproduct names its failure arm after the error PLACE): the
           mediatrice builds the SECTION; the arm's spine is the INJECTION's
@@ -1441,7 +1476,7 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
   let payload_node j = child (tail j) 0 in
   let branch_body (ctor, vars, body) =
     let arg_tys =
-      match Hashtbl.find_opt sum_ctor_registry ctor with
+      match find_arm ?coproduct:(site_coproduct loc) ctor with
       | Some (_, tys) -> tys
       | None -> []
     in
@@ -1483,7 +1518,7 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
     | [last] when wildcard = None -> branch_body last
     | (ctor, _, _ as b) :: rest ->
         let tag =
-          match Hashtbl.find_opt sum_ctor_registry ctor with
+          match find_arm ?coproduct:(site_coproduct loc) ctor with
           | Some (t, _) -> t
           | None -> 0
         in
@@ -2806,8 +2841,11 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
            List.iter (fun (v : S.variant) ->
              if v.S.v_args = []
                 && Hashtbl.mem armless_place_names v.S.v_name then
-               Hashtbl.replace Surface_ast.union_arm_upcasts
-                 v.S.v_name union_sec)
+               if not (List.mem union_sec
+                         (Hashtbl.find_all Surface_ast.union_arm_upcasts
+                            v.S.v_name))
+               then Hashtbl.add Surface_ast.union_arm_upcasts
+                      v.S.v_name union_sec)
              pd.S.pd_arms
        | _ -> ());
       res
