@@ -222,10 +222,18 @@ let rpc_ops : (string * int, string) Hashtbl.t = Hashtbl.create 16
 let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
   (* map: local-callable-name -> (Space, op-name). The local name is the bare
    * operation name `n` (e.g. "rotate") or its qualified "mod::n". *)
+  (* a bare name imported from two modules names neither: only its
+     qualified forms are rewritten, and the type checker refuses the bare
+     call (Tycheck.ambiguous_imports) *)
+  let modules_of n =
+    List.sort_uniq compare (List.filter_map (function
+      | S.TopImportFrom (m, n', _, _) when n' = n -> Some m
+      | _ -> None) decls) in
   let remote =
     List.concat_map (function
       | S.TopImportFrom (m, n, sp, _) ->
-          [ (n, (sp, n)); (qualify m n, (sp, n)) ]
+          (if List.length (modules_of n) > 1 then [] else [ (n, (sp, n)) ])
+          @ [ (qualify m n, (sp, n)) ]
       | _ -> []) decls
   in
   if remote = [] then decls

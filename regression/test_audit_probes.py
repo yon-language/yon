@@ -1005,6 +1005,45 @@ def test_an_imported_function_has_the_signature_of_its_own_module(tmp_path, orde
     assert rc == 0, out
 
 
+def _two_stats_modules(tmp_path):
+    (tmp_path / "alpha.yon").write_text(
+        "place Entry {\n  fun stats(x: Number): Number { return x + 1 }\n"
+        "  fun main(): Number { return 0 }\n}\n")
+    (tmp_path / "beta.yon").write_text(
+        "place Entry {\n  fun stats(x: Number): Number { return x * 100 }\n"
+        "  fun main(): Number { return 0 }\n}\n")
+
+
+_TWO_STATS_IMPORTS = "import alpha::stats from A\nimport beta::stats from B\n"
+
+
+def test_a_name_imported_from_two_modules_is_refused_bare(tmp_path):
+    # the bare name names neither import (the lowering took the first module,
+    # the checker the signature of the last)
+    _two_stats_modules(tmp_path)
+    (tmp_path / "client.yon").write_text(
+        _TWO_STATS_IMPORTS + "place Entry {\n  fun main(): Number {\n"
+        "    return stats(1)\n  }\n}\n")
+    rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
+    assert _clean_rejection(rc, out), out
+    assert "`alpha::stats` or `beta::stats`" in out, out
+
+
+@_IPC_lowering
+def test_a_name_imported_from_two_modules_is_called_qualified(tmp_path):
+    _two_stats_modules(tmp_path)
+    (tmp_path / "client.yon").write_text(
+        _TWO_STATS_IMPORTS + "place Entry {\n  fun main(): Number {\n"
+        "    return alpha::stats(1) + beta::stats(1)\n  }\n}\n")
+    for src, out in (("alpha.yon", "A_srv"), ("beta.yon", "B_srv"),
+                     ("client.yon", "client")):
+        rc, log = _compile(tmp_path / src, tmp_path / out, cwd=tmp_path)
+        assert rc == 0, log
+    r = subprocess.run([str(tmp_path / "client")], cwd=tmp_path, capture_output=True,
+                       text=True, timeout=60, env=_world_env_lowering(tmp_path))
+    assert r.returncode == 102, r.stderr
+
+
 @_IPC_lowering
 def test_a_cross_space_call_returns_its_value(tmp_path):
     rc, out, err = _cross_space_call_lowering(tmp_path, 776)
