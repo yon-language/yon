@@ -4580,7 +4580,13 @@ let register_fusion (pd : place_decl) : unit =
        then ()
        else begin
          Hashtbl.replace Surface_ast.fusion_places pd.pd_name prim;
-         Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name
+         (* the inverse, prim -> face, belongs to the declaration that owns
+            the primitive: the prelude's face. A user face (`place Meter is
+            number`) is one more name of the same object; it never takes the
+            primitive over (it would answer a match on `unit` with its own
+            arms). *)
+         if in_prelude || not (Hashtbl.mem Surface_ast.fusion_of_prim prim)
+         then Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name
        end);
       (match prim, pd.pd_arms with
        | "boolean", arms ->
