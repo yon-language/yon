@@ -175,6 +175,27 @@ def test_a_cell_does_not_cross_into_another_space(tmp_path):
     assert _refused(rc, out, "Q__peek", "another Space"), out
 
 
+@pytest.mark.parametrize("params,args", [("", ""), ("k: Number", "0")])
+def test_a_closure_returned_inside_one_space_is_a_value(tmp_path, params, args):
+    # the control of the refusals above: what may not cross a Space is an
+    # ordinary value inside one
+    exe = tmp_path / "probe.exe"
+    src = tmp_path / "one"
+    src.mkdir()
+    (src / "yon.toml").write_text('[package]\nname = "one"\n[runtime]\nbackend = "memory"\n')
+    (src / "Entry.yon").write_text(f"""place Entry {{
+  fun build({params}): Number -> Number {{ return fun(y: Number) => y + 41 }}
+  fun main(): Number {{
+    f := build({args})
+    return f(1)
+  }}
+}}
+""")
+    rc, out = _yonc(src, exe)
+    assert rc == 0, out
+    assert subprocess.run([str(exe)], timeout=60).returncode == 42
+
+
 def test_a_call_inside_one_space_is_not_a_crossing(tmp_path):
     # the same closure handed within Q's own Space is an ordinary call
     proj = _project(tmp_path, """place Entry {

@@ -5490,6 +5490,10 @@ let extract_func_sig (e : emitter)
       match hint with
       | C.TyPlace n ->
           not (is_prim_name n) && not (is_type_var e n)
+      (* a function value is its closure's handle: the carrier its type
+         gives (f64), never the MLIR type of a function, which no value of
+         the body has *)
+      | C.TyArrow _ | C.TyPi _ -> true
       | _ -> false
     in
     if is_hof then begin
