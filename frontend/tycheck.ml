@@ -74,6 +74,8 @@ let collect_wire_knowledge (p : program) : unit =
 let reset_scheme_env () =
   scheme_env := [];
   Hashtbl.clear Surface_ast.bare_point_sites;
+  Hashtbl.clear Surface_ast.arm_coproduct_sites;
+  Hashtbl.clear Surface_ast.qualified_arm_sites;
   Hashtbl.clear Surface_ast.fused_elim_sites
 
 let add_scheme (name : string) (s : Ty_subst.scheme) =
@@ -87,6 +89,8 @@ let lookup_scheme (name : string) : Ty_subst.scheme option =
 type type_error = {
   err_loc : location;
   err_msg : string;
+  err_code : Error_codes.code;   (* the stable code; Type_check unless a rule
+                                    names a finer one *)
 }
 
 type 'a tc_result = ('a, type_error) Stdlib.result
@@ -94,7 +98,11 @@ type 'a tc_result = ('a, type_error) Stdlib.result
 let ok (x : 'a) : 'a tc_result = Ok x
 
 let err (loc : location) (msg : string) : 'a tc_result =
-  Error { err_loc = loc; err_msg = msg }
+  Error { err_loc = loc; err_msg = msg; err_code = Error_codes.Type_check }
+
+let err_coded (code : Error_codes.code) (loc : location) (msg : string)
+    : 'a tc_result =
+  Error { err_loc = loc; err_msg = msg; err_code = code }
 
 let (let*) (r : 'a tc_result) (f : 'a -> 'b tc_result) : 'b tc_result =
   match r with
@@ -1314,7 +1322,7 @@ let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
    | _ -> ());
   match fn.fn_return with
   | Some (TyChannel t) when not (ty_mobile env t) ->
-      [ { err_loc = fn.fn_loc; err_msg = boundary_msg "the element of this wire" t } ]
+      [ { err_loc = fn.fn_loc; err_code = Error_codes.Type_check; err_msg = boundary_msg "the element of this wire" t } ]
   | Some (TyChannel t) ->
       (match wire_desc env [] t with
        | Some root ->
@@ -1322,7 +1330,7 @@ let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
            []
        | None ->
            [ { err_loc = fn.fn_loc;
-               err_msg = Printf.sprintf
+               err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                  "the element of this wire has type %s, and a wire carries \
                   numbers, strings, places of carried fields, lists, HashMap, \
                   HashSet, XRelMap and XRelSet of carried values: a %s has no \
@@ -1352,9 +1360,9 @@ let mob_finish () : type_error list =
   List.filter_map (fun (crossing, mobile, e, loc) ->
     if mobile then None
     else if crossing && mob_carries tainted e then
-      Some { err_loc = loc; err_msg = mob_cross_msg }
+      Some { err_loc = loc; err_code = Error_codes.Type_check; err_msg = mob_cross_msg }
     else if (not crossing) && mob_carries local e then
-      Some { err_loc = loc; err_msg = mob_escape_msg }
+      Some { err_loc = loc; err_code = Error_codes.Type_check; err_msg = mob_escape_msg }
     else None) (List.rev (foreign @ !mob_sites))
 
 (* The values a body yields when it falls off its end (the implicit tail):
@@ -1423,9 +1431,91 @@ let omega_hint (expected : ty) (actual : ty) : string =
        `match decide(p) { Present => ..., Absent => ..., Unknown => ... }`"
   | _ -> ""
 
+(* ─── Arms and their coproducts ──────────────────────────────────────
+   An arm belongs to every coproduct that lists it (the injection is an arrow
+   of the sum: Harper ch. 11). A use of an arm names its coproduct by the
+   expected type (checking mode), by a qualifier (`Decision.Absent`), or, when
+   only one coproduct lists it, by its name; a shared arm with none of these
+   is refused (E2004), never guessed. *)
+let site_of (l : location) = (l.file, l.start_line, l.start_col)
+
+(* the named coproducts listing the arm [x], in registration order, once *)
+let coproducts_of_arm ?(nullary = false) (env : Tyenv.env) (x : string)
+    : string list =
+  List.fold_left
+    (fun acc (n, vs) ->
+       if List.exists (fun v -> v.v_name = x && (not nullary || v.v_args = [])) vs
+          && not (List.mem n acc)
+       then acc @ [n] else acc)
+    [] env.Tyenv.named_sums
+
+let coproduct_arm (env : Tyenv.env) (c : string) (x : string) : variant option =
+  match Tyenv.lookup_named_sum env c with
+  | Some vs -> List.find_opt (fun v -> v.v_name = x) vs
+  | None -> None
+
+(* the named coproduct a type names, if any *)
+let named_coproduct_of_ty (env : Tyenv.env) (t : ty) : string option =
+  match t with
+  | TyUser n | TyApp (n, _) when Tyenv.lookup_named_sum env n <> None -> Some n
+  | _ -> None
+
+let is_builtin_hit_ctor (ctor : string) : bool =
+  List.exists (fun (_, sig_) ->
+      List.exists (fun (p : Hit_env.point_constructor) -> p.Hit_env.pc_name = ctor)
+        sig_.Hit_env.hit_points
+      || List.exists (fun (p : Hit_env.path_constructor) -> p.Hit_env.hpc_name = ctor)
+           sig_.Hit_env.hit_paths)
+    Hit_env.builtin_env
+
+(* `C__arm`, the parsed form of `C.arm(..)`, when C is a coproduct listing arm *)
+let qualified_arm_of (env : Tyenv.env) (name : string) : (string * string) option =
+  match Method_sugar.split_method_name name with
+  | Some (c, arm) when coproduct_arm env c arm <> None -> Some (c, arm)
+  | _ -> None
+
+let unnamed_coproduct_err (loc : location) (x : string) (cs : string list) =
+  err_coded Error_codes.Arm_coproduct_unnamed loc (Printf.sprintf
+    "`%s` is an arm of %s, and nothing here says which coproduct it injects \
+     into: write %s, or use it where one of them is expected."
+    x (String.concat " and " cs)
+    (String.concat " or " (List.map (fun c -> Printf.sprintf "`%s.%s`" c x) cs)))
+
+(* the coproduct of a match, recorded at its site for the desugar's tag switch *)
+let record_match_coproduct (env : Tyenv.env) (loc : location) (x_ty : ty) : unit =
+  match named_coproduct_of_ty env x_ty with
+  | Some c -> Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc) c
+  | None -> ()
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
+
+  | EField (EVar (c, _), arm, loc)
+    when Tyenv.lookup_var env c = None
+         && (match coproduct_arm env c arm with
+             | Some v -> v.v_args = [] | None -> false) ->
+      (* `C.arm`: the point of a nullary arm, injected into the coproduct the
+         qualifier names. Lowered as the bare point at this site. *)
+      Hashtbl.replace bare_point_sites (site_of loc) (arm, c);
+      Hashtbl.replace Surface_ast.qualified_arm_sites (site_of loc) (c, arm);
+      (match Hashtbl.find_opt Surface_ast.fusion_places c with
+       | Some prim -> ok (TyPrim prim)
+       | None -> ok (TyUser c))
+
+  | ECall (name, args, loc)
+    when Tyenv.lookup_fun env name = None
+         && (match qualified_arm_of env name with
+             | Some (c, arm) ->
+                 (match coproduct_arm env c arm with
+                  | Some v -> v.v_args <> [] | None -> false)
+             | None -> false) ->
+      (* `C.arm(..)`: the injection of a payload arm into C. A payload arm is
+         listed by one coproduct only (check_decl), so the constructor rule
+         below types it; the site keeps the qualifier for the desugar. *)
+      let (c, arm) = Option.get (qualified_arm_of env name) in
+      Hashtbl.replace Surface_ast.qualified_arm_sites (site_of loc) (c, arm);
+      infer env ctx (EHITConstr (arm, args, loc))
 
   | EApp (f, args, loc) ->
       let* f_ty = infer env ctx f in
@@ -1460,6 +1550,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
            Hashtbl.replace Surface_ast.fused_elim_sites
              (loc.file, loc.start_line, loc.start_col) ()
        | _ -> ());
+      record_match_coproduct env loc x_ty;
       let point_body =
         List.fold_left
           (fun acc (_ctor, pat, body) ->
@@ -1557,6 +1648,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
             ok domain
         | _ -> err loc "hit_elim: motive must be a function from the HIT"
       in
+      record_match_coproduct env loc x_ty;
       let sig_of_variants name variants =
         let points =
           List.map
@@ -1798,7 +1890,13 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
               else None)
           None Hit_env.builtin_env in
       (match found with
+       | None when List.length (coproducts_of_arm env ctor) > 1 ->
+           unnamed_coproduct_err loc ctor (coproducts_of_arm env ctor)
        | None ->
+           (match Tyenv.named_sum_of_ctor env ctor with
+            | Some (c, _) ->
+                Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc) c
+            | None -> ());
            (match Tyenv.lookup_sum_constructor env ctor with
             | [] -> err loc (Printf.sprintf "hit: unknown HIT constructor %s" ctor)
             | [(variants, variant)] ->
@@ -1897,13 +1995,9 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
            (* the bare point: `tt` names the unique point of its terminal arm
               (locals shadow — lookup_var already failed). Record the site for
               the desugar's spine lowering. *)
-           match
-             List.find_opt
-               (fun (_, variants) ->
-                  List.exists (fun v -> v.v_name = x && v.v_args = []) variants)
-               env.Tyenv.named_sums
-           with
-           | Some (sum_name, _) ->
+           match coproducts_of_arm ~nullary:true env x with
+           | _ :: _ :: _ as cs -> unnamed_coproduct_err loc x cs
+           | [sum_name] ->
                Hashtbl.replace bare_point_sites
                  (loc.file, loc.start_line, loc.start_col) (x, sum_name);
                (match Hashtbl.find_opt Surface_ast.fusion_places sum_name with
@@ -1911,7 +2005,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                     (* fused coproduct: the point IS a literal of the carrier *)
                     ok (TyPrim prim)
                 | None -> ok (TyUser sum_name))
-           | None ->
+           | [] ->
            match Tyenv.lookup_morph_decl env x with
            | Some mp -> ok (TyMorphHandle (Some mp.mp_source, Some mp.mp_target))
            | None ->
@@ -2864,6 +2958,46 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                | _ -> assert false
              in
              check_args args variant.v_args)
+  | EVar (x, loc), _
+    when lookup_scheme x = None && Tyenv.lookup_var env x = None
+         && not (Carrier.is_prim_name x)
+         && not (Hashtbl.mem Surface_ast.fusion_places x)
+         && (match named_coproduct_of_ty env expected with
+             | Some c ->
+                 (match coproduct_arm env c x with
+                  | Some v -> v.v_args = [] | None -> false)
+             | None -> false) ->
+      (* checking side of the injection: the expected coproduct names the
+         arrow a bare point takes, whichever other coproducts list it too *)
+      let c = Option.get (named_coproduct_of_ty env expected) in
+      Hashtbl.replace bare_point_sites (site_of loc) (x, c);
+      ok ()
+  | EHITConstr (ctor, args, loc), _
+    when not (is_builtin_hit_ctor ctor)
+         && (match named_coproduct_of_ty env expected with
+             | Some c -> coproduct_arm env c ctor <> None
+             | None -> false) ->
+      (* hit(arm, ..) against a named coproduct: the injection of THAT sum.
+         A generic coproduct takes its arguments from the expected type; with
+         none to read, the constructor rule instantiates it. *)
+      let c = Option.get (named_coproduct_of_ty env expected) in
+      let v = Option.get (coproduct_arm env c ctor) in
+      let ps = Tyenv.named_sum_params env c in
+      let targs = match expected with TyApp (_, ts) -> ts | _ -> [] in
+      if ps <> [] && List.length ps <> List.length targs then
+        fallback env e expected
+      else if List.length args <> List.length v.v_args then
+        err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+          ctor (List.length v.v_args) (List.length args))
+      else begin
+        let inst = Ty_subst.subst_type_vars (List.combine ps targs) in
+        let* () =
+          List.fold_left2 (fun acc a t ->
+              let* () = acc in check env ctx a (inst t))
+            (ok ()) args v.v_args in
+        Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc) c;
+        ok ()
+      end
   | ELam (params, body, _), (TyPi _ | TyArrow _) ->
       (* Bidirectional lambda checking.  A dependent expected type carries the
          information needed to type an unannotated surface lambda and to align
@@ -2955,6 +3089,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
            Hashtbl.replace Surface_ast.fused_elim_sites
              (loc.file, loc.start_line, loc.start_col) ()
        | _ -> ());
+      record_match_coproduct env loc x_ty;
       (match hit_signature_of env x_ty with
        | None -> fallback env e expected
        | Some (_, sig_) when sig_.Hit_env.hit_paths <> [] ->
@@ -3024,6 +3159,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
          same tag switch). *)
       let xv = (match x with EVar (xv, _) -> xv | _ -> assert false) in
       let* x_ty = infer env ctx x in
+      record_match_coproduct env loc x_ty;
       (match hit_signature_of env x_ty with
        | None -> fallback env e expected
        | Some (hname, sig_) ->
@@ -4036,7 +4172,7 @@ and check_implicit_tail_return (env_after : Tyenv.env) (ctx : Reduce.ctx)
             | Ok t ->
                 if t = TyPrim "unknown" then []
                 else if Dispatcher.subtype env_after ctx ~sub:t ~super:rt then []
-                else [{ err_loc = loc; err_msg = Printf.sprintf
+                else [{ err_loc = loc; err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                           "function declares return type %s but its body ends with \
                            a value of type %s (add an explicit `return`)"
                           (Tyenv.ty_to_string rt) (Tyenv.ty_to_string t) }]))
@@ -4265,12 +4401,11 @@ let register_named_sum (env : Tyenv.env) (name : string)
 (* Place refactor stage 3, second pass: resolve the arm -> union injections
    AFTER every declaration is registered, so resolution does not depend on
    declaration order. An arm that resolves to a declared place IS that place,
-   and its injection rides the SAME machinery `this <` rides: the
-   pd_subcontains chain Tyenv.place_subcontains walks; re-adding the arm's
-   decl with pd_subcontains = Some union (add_place shadows) IS the
-   registration — no parallel registry. An arm already inside a declared
-   subcontains chain keeps its chain (first wins; overwriting would break
-   declared subsumption). *)
+   and it has one injection into EACH coproduct listing it: a pair of the
+   arm_unions relation, which Tyenv.place_subcontains walks beside the
+   declared monos (`this <`, kept as declared). A payload arm resolves to its
+   SYNTHETIC place, which belongs to one union only (check_decl refuses a
+   second): its injection stays the subcontains link of that place. *)
 let resolve_arm_injections (env : Tyenv.env) (p : program) : Tyenv.env =
   List.fold_left
     (fun env td ->
@@ -4281,6 +4416,8 @@ let resolve_arm_injections (env : Tyenv.env) (p : program) : Tyenv.env =
                 match arm_resolves_with
                         (fun n -> Tyenv.lookup_place acc n)
                         ~union:pd v with
+                | Some apd when v.v_args = [] && apd.pd_name <> pd.pd_name ->
+                    Tyenv.add_arm_union acc apd.pd_name pd.pd_name
                 | Some apd when apd.pd_subcontains = None
                              && apd.pd_name <> pd.pd_name ->
                     let acc =
@@ -4815,6 +4952,54 @@ let check_arrow_level (env : Tyenv.env) (td : top_decl) : unit tc_result =
           mp.mp_name a b a b)
       else ok ()
   | _ -> ok ()
+
+(* ─── One name, one arrow, in a home ───────────────────────────────
+   The injections of a coproduct's arms and the arrows declared in its braces
+   share one namespace: `Ask.Yes` names one arrow of the home Ask. An arm and
+   an arrow of the same home with one name would make `Ask.Yes(..)` mean two
+   things; it is refused (E2005), and the message asks to rename one. *)
+let arm_name_clashes (p : program) : type_error list =
+  let home (loc : location) =
+    Hashtbl.find_opt Surface_ast.arrow_home_sites
+      (loc.file, loc.start_line, loc.start_col) in
+  let base h n =
+    let pfx = h ^ "__" in
+    let lp = String.length pfx in
+    if String.length n > lp && String.sub n 0 lp = pfx
+    then String.sub n lp (String.length n - lp) else n in
+  let sited n l = match home l with Some h -> [(h, n, l)] | None -> [] in
+  let homed =
+    List.concat_map (function
+      | TopFun fd ->
+          (match fd.fn_home with
+           | Some h -> [(h, base h fd.fn_name, fd.fn_loc)]
+           | None -> [])
+      | TopPlace pd ->
+          List.filter_map (function
+            | FoOp o -> Some (pd.pd_name, o.op_name, o.op_loc)
+            | _ -> None) pd.pd_members
+      | TopMorph mp -> sited mp.mp_name mp.mp_loc
+      | TopView vd -> sited vd.vw_name vd.vw_loc
+      | TopMove mv -> sited mv.mv_name mv.mv_loc
+      | TopFunctor ft -> sited ft.ft_name ft.ft_loc
+      | TopGeomMorphism gm -> sited gm.gm_name gm.gm_loc
+      | TopNatTransform nt -> sited nt.nt_name nt.nt_loc
+      | TopReduction rd -> sited rd.rd_name rd.rd_loc
+      | _ -> []) p in
+  List.concat_map (function
+    | TopPlace pd when pd.pd_arms <> [] ->
+        List.filter_map (fun v ->
+          match List.find_opt (fun (h, n, _) -> h = pd.pd_name && n = v.v_name)
+                  homed with
+          | Some (_, _, l) ->
+              Some { err_loc = l; err_code = Error_codes.Arm_name_clash;
+                     err_msg = Printf.sprintf
+                       "`%s.%s` names two arrows: the injection of the arm %s \
+                        of %s and an arrow declared in its braces. In the home \
+                        of a place one name names one arrow; rename one of them."
+                       pd.pd_name v.v_name v.v_name pd.pd_name }
+          | None -> None) pd.pd_arms
+    | _ -> []) p
 
 let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit tc_result =
   let* () = check_arrow_containment td in
@@ -5733,13 +5918,13 @@ and check_fun_decl_accum_at_home (env : Tyenv.env) (ctx : Reduce.ctx)
        match Tyenv.lookup_place env eff with
        | None ->
            errs := { err_loc = fn.fn_loc;
-                     err_msg = Printf.sprintf
+                     err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                        "function %s visits unknown place %s" fn.fn_name eff }
                    :: !errs
        | Some pd ->
            if not (place_has_effects pd) then
              errs := { err_loc = fn.fn_loc;
-                       err_msg = Printf.sprintf
+                       err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                          "function %s visits %s but %s has no operations"
                          fn.fn_name eff eff }
                      :: !errs)
@@ -6221,13 +6406,13 @@ let infer_place_worlds (p : program) : (program, type_error) result =
     match unique with
     | [] ->
         Error { err_loc = pd.pd_loc;
-                err_msg = Printf.sprintf
+                err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                   "cannot infer world for place %s: no contextual rule applies"
                   pd.pd_name }
     | [w] -> Ok w
     | ws ->
         Error { err_loc = pd.pd_loc;
-                err_msg = Printf.sprintf
+                err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                   "place %s has conflicting world candidates: %s"
                   pd.pd_name (String.concat ", " ws) }
   in
@@ -6290,7 +6475,7 @@ let infer_place_worlds (p : program) : (program, type_error) result =
                       | Constant -> Ok (td :: out)
                       | Incoherent (w1, w2) ->
                           Error { err_loc = pd.pd_loc;
-                                  err_msg = Printf.sprintf
+                                  err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                                     "place %s: a union of places from \
                                      different worlds (%s, %s) needs a \
                                      geometric morphism, not a coproduct"
@@ -6750,6 +6935,10 @@ let check_program (p : program) : check_result =
       { cr_env = Tyenv.with_builtins Tyenv.empty;
         cr_errors = [e] }
   | Ok p ->
+  match arm_name_clashes p with
+  | _ :: _ as errs ->
+      { cr_env = Tyenv.with_builtins Tyenv.empty; cr_errors = errs }
+  | [] ->
   (* Qualify overloaded method names by their receiver place, so same-named
      methods on distinct places (`Square.area`, `Circle.area`) become distinct
      top-level names and the passes below stay on unique names. A no-op when no
@@ -6796,7 +6985,7 @@ let check_program (p : program) : check_result =
   | Some fd ->
       { cr_env = Tyenv.with_builtins Tyenv.empty;
         cr_errors = [ { err_loc = fd.fn_loc;
-                        err_msg = Printf.sprintf
+                        err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                           "duplicate top-level function '%s' (same name and \
                            receiver type; methods on distinct places are fine, \
                            but these two cannot be distinguished)" fd.fn_name } ] }

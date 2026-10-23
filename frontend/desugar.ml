@@ -623,6 +623,22 @@ and desugar_expr (e0 : S.expr) : C.term =
   | None ->
   let e = strip_parens e0 in
   match e with
+  | S.EField (S.EVar (c, _), arm, loc)
+    when Hashtbl.find_opt Surface_ast.qualified_arm_sites
+           (loc.S.file, loc.S.start_line, loc.S.start_col) = Some (c, arm) ->
+      (* `C.arm`: the tycheck resolved the qualifier to a coproduct listing
+         the arm; lowered as the bare point, whose site is in bare_point_sites *)
+      desugar_expr (S.EVar (arm, loc))
+  | S.ECall (n, args, loc)
+    when (match Hashtbl.find_opt Surface_ast.qualified_arm_sites
+                  (loc.S.file, loc.S.start_line, loc.S.start_col) with
+          | Some (c, arm) -> n = c ^ "__" ^ arm
+          | None -> false) ->
+      (* `C.arm(..)`: hit(arm, ..) at the same site (the name is matched too:
+         the spine lowering builds its own calls at this site) *)
+      let (_, arm) = Hashtbl.find Surface_ast.qualified_arm_sites
+          (loc.S.file, loc.S.start_line, loc.S.start_col) in
+      desugar_expr (S.EHITConstr (arm, args, loc))
   | S.ELit (S.LitNumber v, loc)
     when Hashtbl.mem Surface_ast.int64_literal_sites
            (loc.S.file, loc.S.start_line, loc.S.start_col, loc.S.end_line, loc.S.end_col) ->

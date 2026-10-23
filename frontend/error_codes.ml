@@ -34,6 +34,8 @@ type code =
   | Type_check
   | Return_not_in_tail
   | Effect_unhandled
+  | Arm_coproduct_unnamed
+  | Arm_name_clash
   | Law_refuted
   | Law_uncertified
   (* E3xxx Space semantics *)
@@ -58,6 +60,8 @@ let id : code -> string = function
   | Type_check          -> "E2001"
   | Return_not_in_tail  -> "E2002"
   | Effect_unhandled    -> "E2003"
+  | Arm_coproduct_unnamed -> "E2004"
+  | Arm_name_clash      -> "E2005"
   | Law_refuted         -> "E2101"
   | Law_uncertified     -> "E2102"
   | Union_arms_cross_space -> "E3003"
@@ -75,6 +79,7 @@ let id : code -> string = function
 
 let severity : code -> severity = function
   | Parse_syntax | Lex_bad_token | Type_check | Return_not_in_tail | Effect_unhandled
+  | Arm_coproduct_unnamed | Arm_name_clash
   | Law_refuted
   | Law_uncertified
   | Union_arms_cross_space
@@ -90,6 +95,7 @@ let cli_prefix : code -> string = function
   | Type_check                   -> "TYPE ERROR"
   | Return_not_in_tail           -> "TYPE ERROR"
   | Effect_unhandled             -> "TYPE ERROR"
+  | Arm_coproduct_unnamed | Arm_name_clash -> "TYPE ERROR"
   | Law_refuted | Law_uncertified -> "LAW ERROR"
   | Union_arms_cross_space -> "TYPE ERROR"
   | Drop_still_live | Drop_unknown_space -> "DROP ERROR"
@@ -107,6 +113,8 @@ let title : code -> string = function
   | Type_check          -> "type error"
   | Return_not_in_tail  -> "a return stands at the end of its body"
   | Effect_unhandled    -> "an operation is called that no reduction handles"
+  | Arm_coproduct_unnamed -> "an arm of several coproducts used where no type names one"
+  | Arm_name_clash      -> "an arm and an arrow of the same home share a name"
   | Law_refuted         -> "a declared law is refuted by a counterexample"
   | Law_uncertified     -> "a declared law is neither proven nor declared an axiom"
   | Union_arms_cross_space -> "the arms of a union must be places of one Space"

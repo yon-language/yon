@@ -49,6 +49,10 @@ type env = {
   (* the type parameters of a generic named sum (`place Lookup<V> { … }`):
      its arms mention them as rigid variables, instantiated at each use *)
   named_sum_params : (string * string list) list;
+  (* the injections of declared-place arms: (arm, coproduct), one pair for
+     each coproduct that lists the arm. A relation, not a parent: an arm is
+     an object with one injection per sum that lists it (Harper ch. 11). *)
+  arm_unions : (string * string) list;
   intervals : interval_var list;
   places : (string * place_decl) list;
   worlds : (string * world_decl) list;
@@ -93,6 +97,7 @@ let empty : env = {
   sum_types = [];
   named_sums = [];
   named_sum_params = [];
+  arm_unions = [];
   intervals = [];
   places = [];
   worlds = [];
@@ -186,20 +191,28 @@ let simple_ty_compatible (t1 : ty) (t2 : ty) : bool =
     | TyPrimIn (n1, _), TyPrimIn (n2, _) -> n1 = n2
     | _ -> t1 = t2
 
+let add_arm_union (env : env) (arm : string) (union : string) : env =
+  if List.mem (arm, union) env.arm_unions then env
+  else { env with arm_unions = (arm, union) :: env.arm_unions }
+
 (* Declared place substitution. A value of [p_sub] is usable where [p_super]
- * is expected exactly when the reflexive-transitive [subcontains] chain says
- * so. The visited set makes malformed declaration cycles fail closed. *)
+ * is expected exactly when the reflexive-transitive closure of the declared
+ * monos (`this <`) and of the arm injections (every coproduct listing the
+ * arm) says so. The visited set makes malformed declaration cycles fail
+ * closed. *)
 let place_subcontains (env : env) (p_sub : string) (p_super : string) : bool =
   let rec walk visited current =
     if current = p_super then true
     else if List.mem current visited then false
     else
-      match lookup_place env current with
-      | Some pd ->
-          (match pd.pd_subcontains with
-           | Some parent -> walk (current :: visited) parent
-           | None -> false)
-      | None -> false
+      let declared =
+        match lookup_place env current with
+        | Some { pd_subcontains = Some parent; _ } -> [parent]
+        | _ -> [] in
+      let injected =
+        List.filter_map (fun (a, u) -> if a = current then Some u else None)
+          env.arm_unions in
+      List.exists (walk (current :: visited)) (declared @ injected)
   in
   walk [] p_sub
 

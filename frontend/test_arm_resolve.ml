@@ -6,9 +6,9 @@
    declared in this same program IS that place; payload or unknown head
    stays a positional constructor.
 
-   1c: registering `place U { this > P :U Q }` records the injection P -> U
-   on the SAME machinery `this <` rides: Tyenv.place_subcontains (the
-   pd_subcontains chain walk) reports it, with no new api. *)
+   1c: registering `place U { this > P :U Q }` records the injection P -> U;
+   Tyenv.place_subcontains reports it beside the declared monos (`this <`).
+   An arm has one injection into each coproduct listing it (0.2 row 5). *)
 
 open Surface_ast
 
@@ -74,16 +74,29 @@ let () =
   check "union declared before its arm place still resolves (second pass)"
     (Tyenv.place_subcontains reversed "P" "U");
 
-  (* a declared chain is NOT overwritten (first wins) *)
+  (* a declared mono is kept, and the arm is injected into U as well *)
   let chained =
     register
       [ TopPlace (mk_place ~subc:(Some "Base") "P");
         TopPlace (mk_place "Base");
         TopPlace (mk_place "U" ~arms:[ { v_name = "P"; v_args = [] } ]) ]
   in
-  check "an arm already in a declared subcontains chain keeps its chain"
+  check "an arm with a declared mono keeps it and is injected into its union"
     (Tyenv.place_subcontains chained "P" "Base"
-     && not (Tyenv.place_subcontains chained "P" "U"));
+     && Tyenv.place_subcontains chained "P" "U");
+
+  (* one arm, two coproducts: one injection into each *)
+  let shared =
+    register
+      [ TopPlace (mk_place "P");
+        TopPlace (mk_place "U" ~arms:[ { v_name = "P"; v_args = [] } ]);
+        TopPlace (mk_place "V" ~arms:[ { v_name = "Q"; v_args = [] };
+                                       { v_name = "P"; v_args = [] } ]) ]
+  in
+  check "an arm listed by two coproducts injects into each"
+    (Tyenv.place_subcontains shared "P" "U"
+     && Tyenv.place_subcontains shared "P" "V"
+     && not (Tyenv.place_subcontains shared "U" "V"));
 
   Printf.printf "\n%d passed, %d failed\n" !pass !fail;
   exit (if !fail = 0 then 0 else 1)

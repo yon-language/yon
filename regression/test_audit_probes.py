@@ -3580,3 +3580,144 @@ fun main(): Number {
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "exe")
     assert rc == 0, out[-400:]
     assert _run(tmp_path / "exe")[0] == 3
+
+
+# ---------------------------------------------------------------- an arm belongs to its coproduct
+
+_ARMS_WORLD = '\n[world.W]\nobjects = ["Ask", "Flip"]\nspaces  = ["w"]\n'
+
+
+def _arms_files(flip_arms, ask_body="this > Yes :U No"):
+    return {"w/Topos.yon": "topos WTopos where {\n}\n",
+            "w/Ask.yon": "place Ask {\n  %s\n}\n" % ask_body,
+            "w/Flip.yon": "place Flip { this > %s }\n" % flip_arms}
+
+
+def _value_or_outcome(tmp_path, entry, what, extra="", files=None):
+    """Compile and run; a refusal of a right program is the law broken."""
+    proj = _project(tmp_path, entry, extra=extra, files=files)
+    exe = tmp_path / "exe"
+    rc, out = _compile(proj, exe)
+    _verdict(rc == 0, f"{what}: a right program is refused: {out[-400:]}")
+    return _run(exe)[0]
+
+
+def test_absent_is_an_arm_of_decision_and_of_lookup(tmp_path):
+    # an arm without payload listed by two coproducts injects into each: the
+    # expected type names the arrow
+    entry = """place Entry {}
+fun d(): Decision { return Absent }
+fun l(): Lookup<Number> { return Absent }
+fun main(): Number {
+  be x := match d() { Present => 1, Absent => 2, Unknown => 3 }
+  be y := match l() { Found(v) => 10, Absent => 20 }
+  return x * 100 + y
+}
+"""
+    v = _value_or_outcome(tmp_path, entry, "Absent into Decision and Lookup")
+    _verdict(v == 220 % 256, f"exit {v}, expected {220 % 256}")
+
+
+def test_the_qualified_arm_names_its_coproduct(tmp_path):
+    entry = """place Entry {}
+fun main(): Number {
+  be x := match Decision.Absent { Present => 1, Absent => 2, Unknown => 3 }
+  be y := match Lookup.Found(5) { Found(v) => v, Absent => 20 }
+  return x * 100 + y
+}
+"""
+    v = _value_or_outcome(tmp_path, entry, "Decision.Absent and Lookup.Found(5)")
+    _verdict(v == 205, f"exit {v}, expected 205")
+
+
+# Ask = Yes :U No and Flip = Nay :U Yes: if the tag of Yes is read from the
+# other coproduct, it collides with No in Ask or with Nay in Flip, so the
+# program computes 220 only when each arm has the position of ITS coproduct.
+_ASK_FLIP = """place Entry {}
+fun ask(): Ask { return No }
+fun flip(): Flip { return Nay }
+fun score(a: Ask): Number {
+  return match a { Yes => 1, No => 2 }
+}
+fun turn(f: Flip): Number {
+  return match f { %s => 10, Nay => 20 }
+}
+fun main(): Number {
+  return score(ask()) * 100 + turn(flip())
+}
+"""
+
+
+def test_two_coproducts_with_distinct_arms_compute(tmp_path):
+    # the control of the next probe: the same program, the arm Yes of Flip
+    # renamed Yea
+    v = _value_or_outcome(tmp_path, _ASK_FLIP % "Yea", "Ask and Flip, distinct arms",
+                          extra=_ARMS_WORLD, files=_arms_files("Nay :U Yea"))
+    assert v == 220
+
+
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="the tag of an arm is its position in ITS coproduct (5b)")
+def test_one_arm_name_in_two_coproducts_in_other_positions(tmp_path):
+    v = _value_or_outcome(tmp_path, _ASK_FLIP % "Yes", "Yes in Ask and in Flip",
+                          extra=_ARMS_WORLD, files=_arms_files("Nay :U Yes"))
+    _verdict(v == 220, f"exit {v}, expected 220")
+
+
+def test_a_shared_arm_without_an_expected_type_is_refused(tmp_path):
+    entry = """place Entry {}
+fun main(): Number {
+  be y := Yes
+  return 7
+}
+"""
+    proj = _project(tmp_path, entry, extra=_ARMS_WORLD, files=_arms_files("No :U Yes"))
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert _clean_rejection(rc, out) and "[E2004]" in out, out
+    assert "`Ask.Yes`" in out and "`Flip.Yes`" in out, out
+
+
+def test_an_arm_and_an_arrow_of_its_home_with_one_name_are_refused(tmp_path):
+    # in the home of a place one name names one arrow: `Ask.Yes(4)` cannot be
+    # both the injection of the arm Yes and the fun Yes of the braces
+    entry = """place Entry {}
+fun main(): Number {
+  return Ask.Yes(4)
+}
+"""
+    files = _arms_files("Nay :U Yea", ask_body="this > Yes :U No\n"
+                        "  fun Yes(n: Number): Number { return n + 1 }")
+    proj = _project(tmp_path, entry, extra=_ARMS_WORLD, files=files)
+    rc, out = _compile(proj, tmp_path / "exe")
+    assert _clean_rejection(rc, out) and "[E2005]" in out, out
+    assert "rename one" in out, out
+
+
+_ACCOUNTS_WORLD = '\n[world.W]\nobjects = ["Opened", "Closed", "Frozen"]\nspaces  = ["w"]\n'
+
+
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="the upcast of a place arm is keyed by the arm name, one union only (5b)")
+def test_a_place_arm_of_two_unions_is_usable_as_each(tmp_path):
+    entry = """place Entry {
+  fun accept(a: Account): Number { return 7 }
+  fun log(l: Ledger): Number { return 8 }
+  fun main(): Number {
+    be o := .-> Opened { initial 42 }
+    return accept(o) * 10 + log(o)
+  }
+}
+place Account {
+  this > Opened :U Closed
+}
+place Ledger {
+  this > Frozen :U Opened
+}
+"""
+    files = {"w/Topos.yon": "topos WTopos where {\n}\n",
+             "w/Opened.yon": "place Opened { initial Number }\n",
+             "w/Closed.yon": "place Closed { moment Number }\n",
+             "w/Frozen.yon": "place Frozen { since Number }\n"}
+    v = _value_or_outcome(tmp_path, entry, "Opened into Account and Ledger",
+                          extra=_ACCOUNTS_WORLD, files=files)
+    _verdict(v == 78, f"exit {v}, expected 78")

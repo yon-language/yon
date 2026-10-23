@@ -95,6 +95,42 @@ declared a lifting along world morphisms, is retired: it was an obligation
 nobody verified. The lifting itself is the job of a `functor`, which goes
 between categories and says so in its clause.)
 
+## Coproducts: the injection is an arrow of the sum
+
+A place can also be the sum of its arms, with `this >`. The prelude's
+`Decision` is `place Decision { this > Present :U Absent :U Unknown }`, and its
+`Lookup<V>` is `place Lookup<V> { this > Found(V) :U Absent }`. Each arm comes
+with an injection, the arrow that takes the arm into the sum, and that arrow
+belongs to the sum, not to the arm. So `Absent` is one name for two arrows:
+one into `Decision`, one into `Lookup`. A value of each is built and taken
+apart by its own sum:
+
+<!-- yon-gate: exit 42 -->
+```yon
+fun ruling(): Decision { return Absent }
+fun lookup(): Lookup<Number> { return Absent }
+fun main(): Number {
+  be d := match ruling() { Present => 1, Absent => 2, Unknown => 3 }
+  be l := match lookup() { Found(v) => v, Absent => 20 }
+  be q := match Lookup.Found(20) { Found(v) => v, Absent => 0 }
+  return d + l + q                 // 2 + 20 + 20 = 42
+}
+```
+
+The compiler picks the arrow from the type the value is expected to have:
+`return Absent` in `ruling` goes into `Decision`, in `lookup` into `Lookup`.
+Where nothing is expected (`be a := Absent`) an arm listed by two sums names
+no arrow, and the program is refused (E2004). The compiler does not guess;
+the message proposes the qualified form, `Decision.Absent` or `Lookup.Absent`,
+which names the sum. A payload arm is qualified the same way:
+`Lookup.Found(20)`.
+
+The qualified form reads like a call to a function of the place, and it is
+one: the injection is an arrow of the home of the sum. So in the home of a
+place **one name names one arrow**. An arm and a function declared in the same
+braces with the same name would make `Ask.Yes(4)` mean two things, and the
+place is refused (E2005) until one of them is renamed.
+
 ## Sub-objects
 
 A place can carve out a sub-object of another with `this <` — the mirror of the coproduct's `this >`: `>` reads "I contain" (⊃), `<` reads "I am contained" (⊂). A VIP order is
