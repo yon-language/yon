@@ -143,8 +143,11 @@ A cross-Space **call** takes at most **4 arguments**, over a channel named
 after the Space (see chapter 17). Ask for a fifth and the compiler stops you
 before it builds.
 
-The checker reads the signature of the imported function and checks every
-argument against its declared type. Arguments and the result cross **by their
+The checker reads the signature of the imported function, the one of the
+module the import names, and checks every argument against its declared type.
+Two modules may declare the same name: with `import alpha::stats from A` and
+`import beta::stats from B` the bare `stats(1)` names neither and is refused;
+`alpha::stats(1)` and `beta::stats(1)` each call their own Space. Arguments and the result cross **by their
 type**, like the values of a wire: a number as itself, a string, a place or a
 collection as a frame, rebuilt in the receiving process's heap. A parameter
 that has no frame, a closure for instance, is refused before the program

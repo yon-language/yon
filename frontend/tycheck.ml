@@ -78,13 +78,24 @@ let fun_space : (string, string) Hashtbl.t = Hashtbl.create 64
 let current_space : string option ref = ref None
 let current_fun : string ref = ref ""
 
+(* a bare name imported from more than one module -> those modules: the
+   bare name names none of them, only `module::name` does *)
+let ambiguous_imports : (string, string list) Hashtbl.t = Hashtbl.create 8
+
 let collect_wire_knowledge (p : program) : unit =
   Hashtbl.reset wire_spaces;
   Hashtbl.reset wire_imports;
+  Hashtbl.reset ambiguous_imports;
+  let modules_of n =
+    List.sort_uniq compare (List.filter_map (function
+      | TopImportFrom (m, n', _, _) when n' = n -> Some m
+      | _ -> None) p) in
   List.iter (function
     | TopImportFrom (m, n, sp, _) ->
         Hashtbl.replace wire_spaces sp ();
-        Hashtbl.replace wire_imports n (sp, m);
+        (match modules_of n with
+         | _ :: _ :: _ as ms -> Hashtbl.replace ambiguous_imports n ms
+         | _ -> Hashtbl.replace wire_imports n (sp, m));
         Hashtbl.replace wire_imports (m ^ "::" ^ n) (sp, m)
     | _ -> ()) p
 
@@ -3316,6 +3327,14 @@ and location_of_expr (e : expr) : location =
 
 and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                (name : string) (args : expr list) (arg_tys : ty list) (loc : location) : ty tc_result =
+  match Hashtbl.find_opt ambiguous_imports name with
+  | Some ms when Tyenv.lookup_fun env name = None ->
+      err loc (Printf.sprintf
+        "`%s` is imported from %s, and the bare name names neither: write %s."
+        name (String.concat " and " ms)
+        (String.concat " or "
+           (List.map (fun m -> Printf.sprintf "`%s::%s`" m name) ms)))
+  | _ ->
   mob_note_call env name args arg_tys
     (fun v -> if loc.start_line = 0 then location_of_expr v else loc);
   let* () = check_boundary env name args arg_tys loc in
