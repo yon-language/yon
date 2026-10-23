@@ -50,6 +50,12 @@ let producer_roots : (string, int64 * bool) Hashtbl.t = Hashtbl.create 8
 (* The types the wires of the program carry: type root -> its kind (the
    kinds of the runtime) and the roots of its parts. *)
 let wire_types : (int64, int * int64 list) Hashtbl.t = Hashtbl.create 16
+(* The places a wire may carry where another is declared: (root of the
+   declared place, root of a sub-object of it, `this <`). A value crosses
+   with the root its section carries, and the receiver accepts it where the
+   declared one was awaited only when this table says the one is under the
+   other. *)
+let wire_subs : (int64 * int64, unit) Hashtbl.t = Hashtbl.create 8
 (* The signatures of calls between processes, as the runtime reads them:
    [signature root; n; result root; result framed; (arg root; arg framed)...].
    rpc_sigs: the caller's, by (Space, operation selector); op_sigs: this

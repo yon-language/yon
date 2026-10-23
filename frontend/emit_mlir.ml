@@ -5559,6 +5559,10 @@ let coerce_return (e : emitter) (v : string) (v_ty : string)
             "%s = func.call @__section_%s() : () -> %s" v_unit place ret_ty);
           v_unit
       | None -> v
+  else if v_ty <> ret_ty && is_section_subtype e v_ty ret_ty then
+    (* a sub-object returned where its super is declared: the mono, as for
+       an argument (the section keeps its own root, the copy reads it) *)
+    coerce_to_param e v v_ty ret_ty
   else v
 
 let emit_function (e : emitter) (funcs : (string * func_sig) list)
@@ -6076,6 +6080,8 @@ let emit_main (e : emitter) (funcs : (string * func_sig) list)
     List.iteri (fun i k ->
       call "yon_rt_wire_type_part" (halves root @ [float_of_int i] @ halves k)) kids)
     (wire_types_sorted ());
+  List.iter (fun (sup, sb) -> call "yon_rt_wire_sub" (halves sup @ halves sb))
+    (List.sort compare (Hashtbl.fold (fun k () acc -> k :: acc) Surface_ast.wire_subs []));
   List.iter (fun (name, words) ->
     List.iteri (fun i w ->
       call "yon_rt_register_op_word" ([float_of_int (op_sel name); float_of_int i] @ halves w))
@@ -6972,6 +6978,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_cross_value(f64, f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_wire_type(f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_wire_type_part(f64, f64, f64, f64, f64) -> ()";
+  emit_line e "func.func private @yon_rt_wire_sub(f64, f64, f64, f64) -> ()";
   emit_line e "func.func private @yon_rt_register_op_word(f64, f64, f64, f64) -> ()";
   (* Always emitted, regardless of the stdlib, because the __section_X
      constructors and the field_load pre-walk of the lowering need them. *)

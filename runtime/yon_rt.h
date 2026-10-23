@@ -209,6 +209,7 @@ void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
  * is two exact 32-bit halves; the type, then each of its parts by index. */
 void yon_rt_wire_type(double hi, double lo, double kind, double n);
 void yon_rt_wire_type_part(double hi, double lo, double i, double khi, double klo);
+void yon_rt_wire_sub(double shi, double slo, double bhi, double blo);
 
 /* Calls between processes by type. sig: [signature root, n, result root,
  * result framed, (argument root, argument framed) x n], n <= 4. The server
