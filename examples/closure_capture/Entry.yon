@@ -15,7 +15,7 @@ fun adder(x: Number): Number -> Number {
 
 fun main(): Number {
   // adder(40) returns a closure that remembers 40; applying it to 2 gives 42.
-  be add40 := adder(40)
+  add40 := adder(40)
   return add40(2)
 }
 }

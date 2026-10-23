@@ -1,51 +1,51 @@
 place Entry {
   fun timed_base(iters: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter iters do { be _ := Space.set(acc, Space.get(acc) + 1) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter iters do { _ := Space.set(acc, Space.get(acc) + 1) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_eq(a: MerkleTree, b: MerkleTree, iters: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter iters do { be e := (if MerkleTree.equal(a, b) then 1 else 0)
-                    be _ := Space.set(acc, Space.get(acc) + e) }
-    be t1 := Time.now_ns(0)
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter iters do { e := (if MerkleTree.equal(a, b) then 1 else 0)
+                    _ := Space.set(acc, Space.get(acc) + e) }
+    t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun min_base(reps: Number, iters: Number): Number visits Output {
-    be m := Space.make(timed_base(iters))
-    iter reps do { be t := timed_base(iters)
-                   be _ := Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
+    m := Space.make(timed_base(iters))
+    iter reps do { t := timed_base(iters)
+                   _ := Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
     return Space.get(m)
   }
   fun min_eq(a: MerkleTree, b: MerkleTree, reps: Number, iters: Number): Number visits Output {
-    be m := Space.make(timed_eq(a, b, iters))
-    iter reps do { be t := timed_eq(a, b, iters)
-                   be _ := Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
+    m := Space.make(timed_eq(a, b, iters))
+    iter reps do { t := timed_eq(a, b, iters)
+                   _ := Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
     return Space.get(m)
   }
   fun build_tree(x: Number): MerkleTree {
-    be l1 := MerkleTree.leaf(1445)
-    be l2 := MerkleTree.leaf(1280)
-    be l3 := MerkleTree.leaf(9999)
-    be l4 := MerkleTree.leaf(x)
-    be a := MerkleTree.node2(0, l1, l2)
-    be b := MerkleTree.node2(0, l3, l4)
+    l1 := MerkleTree.leaf(1445)
+    l2 := MerkleTree.leaf(1280)
+    l3 := MerkleTree.leaf(9999)
+    l4 := MerkleTree.leaf(x)
+    a := MerkleTree.node2(0, l1, l2)
+    b := MerkleTree.node2(0, l3, l4)
     return MerkleTree.node2(7, a, b)
   }
   fun main(): Number visits Output {
-    be t1 := build_tree(555)
-    be t2 := build_tree(555)         // same parts => content-equal to t1
-    be t3 := build_tree(556)         // one leaf differs => not equal
-    be reps := 11
-    be n := 1000000
-    be base := min_base(reps, n)
-    be _1 := Output.print(String.from_int(if MerkleTree.equal(t1, t2) then 1 else 0))
-    be _2 := Output.print(String.from_int(if MerkleTree.equal(t1, t3) then 1 else 0))
-    be _3 := Output.print(String.from_int(MerkleTree.label(t1)))
-    be _4 := Output.print(String.from_int(min_eq(t1, t2, reps, n) - base))
+    t1 := build_tree(555)
+    t2 := build_tree(555)         // same parts => content-equal to t1
+    t3 := build_tree(556)         // one leaf differs => not equal
+    reps := 11
+    n := 1000000
+    base := min_base(reps, n)
+    _1 := Output.print(String.from_int(if MerkleTree.equal(t1, t2) then 1 else 0))
+    _2 := Output.print(String.from_int(if MerkleTree.equal(t1, t3) then 1 else 0))
+    _3 := Output.print(String.from_int(MerkleTree.label(t1)))
+    _4 := Output.print(String.from_int(min_eq(t1, t2, reps, n) - base))
     return 0
   }
 }

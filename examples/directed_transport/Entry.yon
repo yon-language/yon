@@ -1,7 +1,7 @@
 place Entry {
   fun proofId(a: Account): Account { return a }
   fun transport_demo(a: Account): Account {
-    be c := coerce_incl(a, proofId)
+    c := coerce_incl(a, proofId)
     return c
   }
   fun main(): Number { return 0 }

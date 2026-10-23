@@ -162,8 +162,8 @@ number, not the place where the number lives.
 
 <!-- yon-gate: illustrative -->
 ```yon
-be base := 7
-be m := move(s: Order) => .-> Ticket { total base + s.qty } from Order to Ticket
+base := 7
+m := move(s: Order) => .-> Ticket { total base + s.qty } from Order to Ticket
 ```
 
 What an arrow cannot carry is a **cell**: a local reassigned with `=`, or a cell
@@ -172,7 +172,7 @@ that call returns, so an arrow that mentions one holds a place, not a value. It
 can be applied inside that call, or passed down to a callee, but it cannot leave:
 returning it, storing it in a cell, or sending it to another Space is a
 compile-time error, which says the value "would outlive the call". The fix is to
-read the cell into a `be` binding first and capture that.
+read the cell into a plain `:=` binding first and capture that.
 
 The reason is structural, and the restaurant makes it concrete. An instruction
 carried out in the kitchen cannot say "the slate on the floor where I keep the
@@ -194,8 +194,8 @@ other. `cucina/Line.yon`:
 <!-- yon-gate: illustrative -->
 ```yon
 geomorph Line from Order to Ticket {
-  pull(t: Ticket): Order { be o := t  return o }
-  push(o: Order): Ticket { be t := o  return t }
+  pull(t: Ticket): Order { o := t  return o }
+  push(o: Order): Ticket { t := o  return t }
 }
 ```
 

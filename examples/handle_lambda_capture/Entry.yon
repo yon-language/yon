@@ -5,10 +5,10 @@
 // dispatcher which coerces the section-typed argument across the f64 boundary.
 place Entry {
   fun main(): Number {
-    be base := 40
-    be sp := .-> P { v 0 }
-    be vw := view(s: P) => base of P
-    be forty := vw(sp)
+    base := 40
+    sp := .-> P { v 0 }
+    vw := view(s: P) => base of P
+    forty := vw(sp)
     return forty + 4
   }
 }

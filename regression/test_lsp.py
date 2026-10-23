@@ -26,7 +26,7 @@ import svc::d_op from D
 place Entry { }
 fun main(): Number {
   drop D
-  be r := d_op(5)
+  r := d_op(5)
   return r - r
 }
 """
@@ -35,7 +35,7 @@ _LEGAL = """\
 import svc::d_op from D
 place Entry { }
 fun main(): Number {
-  be r := d_op(5)
+  r := d_op(5)
   drop D
   return r - r
 }
@@ -88,7 +88,7 @@ def _two_world_project(root: Path) -> Path:
     a = root / "A" / "AP.yon"
     a.write_text(
         "import svc::b_op from B\nplace AP { }\n"
-        "fun a_op(x: Number): Number { be r := b_op(x)  return r }\n")
+        "fun a_op(x: Number): Number { r := b_op(x)  return r }\n")
     return a
 
 

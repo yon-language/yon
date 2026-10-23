@@ -60,7 +60,7 @@ fun as_num(t: Term): Number {
 
 // ORACLE: (lam. var0 + var0) 21  ->  21 + 21  ->  42
 fun main(): Number {
-  be r := eval(hit(TApp,
+  r := eval(hit(TApp,
                       hit(TLam, hit(TAdd, hit(TVar, 0), hit(TVar, 0))),
                       hit(TLit, 21)))
   return as_num(r) - 42

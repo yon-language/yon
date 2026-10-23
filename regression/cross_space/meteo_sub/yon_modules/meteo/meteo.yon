@@ -2,6 +2,6 @@
  * the code lives in the Meteo Space (a separate process); the consumer needs
  * only the declared return type to typecheck awaits. */
 fun samples(): Wire<Reading> {
-  be s := produce { emit .-> Reading { temp 10 humidity 50 } }
+  s := produce { emit .-> Reading { temp 10 humidity 50 } }
   return s
 }

@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be x := transport(refl(Number), 5)
+    x := transport(refl(Number), 5)
     return x - 5
   }
 }

@@ -31,9 +31,10 @@ into one. Location holds them apart as many. An individual is content placed som
 **In the language.** Yon keeps the two axes separate by construction, and makes you say
 which one you mean. Content lives in the content-addressed heap: the genome, hashed,
 deduplicated, immutable, the single fossil of the last chapter. Location lives in a Space
-cell: a small mutable cell that holds where something is now, and that you change with `=`.
-`be x := e` binds a value, which is content, and it never changes. `x = e` updates a
-Space cell, which is a position, and it can. Two raptors are one genome and two location
+cell: a small mutable cell that holds where something is now, and that you change with `<-`.
+`x := e` binds a value, which is content, and it never changes. `mut c := e` declares a
+Space cell and `c <- e` updates it:
+a position, and it can. Two raptors are one genome and two location
 cells.
 
 **On the silicon.** The genome is one slot in the content-addressed heap, found by FNV and
@@ -51,19 +52,19 @@ clipboard. Move the raptor, and watch the clipboard.
 ```yon
 // regression/book/jp/probe_no_alias  (native run prints: 3, 3, 5, 3)
 fun main(): number visits Output {
-  be x := 3
-  be y := x
-  be _1 := Output.print(String.from_int(x))   // 3
-  be _2 := Output.print(String.from_int(y))   // 3
-  x = 5                                           // the raptor moves
-  be _3 := Output.print(String.from_int(x))   // 5
-  be _4 := Output.print(String.from_int(y))   // 3, the clipboard did not follow
+  mut x := 3
+  y := x
+  _1 := Output.print(String.from_int(x))   // 3
+  _2 := Output.print(String.from_int(y))   // 3
+  x <- 5                                           // the raptor moves
+  _3 := Output.print(String.from_int(x))   // 5
+  _4 := Output.print(String.from_int(y))   // 3, the clipboard did not follow
   return 0
 }
 ```
 
-`x` is a Space cell, a live position: `be x := 3` opens it, `x = 5` stores into it. `y`
-is not a cell. `be y := x` reads `x` once and keeps the value: a snapshot, a copy of a
+`x` is a Space cell, a live position: `mut x := 3` opens it, `x <- 5` stores into it. `y`
+is not a cell. `y := x` reads `x` once and keeps the value: a snapshot, a copy of a
 moment. When the raptor moves and the cell goes from 3 to 5, `y` stays 3, because `y` was
 never wired to the cell. It held a number, not the pen. The last printed line, the second
 `3`, is the whole point made small: the clipboard and the pen have come apart.

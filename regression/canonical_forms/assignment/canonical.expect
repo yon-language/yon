@@ -2,4 +2,4 @@ status: accept
 exit: 42
 covers: assign_stmt lvalue
 note: |
-  x = e promotes the binding to a Space cell and updates it; reserved to cells.
+  c <- e writes a cell declared with `mut c := e`; a write is reserved to cells.

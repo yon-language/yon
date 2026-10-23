@@ -1,7 +1,7 @@
 place Entry {
   fun main(): Number {
-    be acc := 0
-    iter 42 do { acc = acc + 1 }
+    mut acc := 0
+    iter 42 do { acc <- acc + 1 }
     return acc
   }
 }

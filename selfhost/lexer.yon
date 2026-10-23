@@ -12,7 +12,7 @@
 // --- AST + eval (the catamorphism) ---
 fun mk_lit(n: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n), MerkleTree.leaf(0)) }
 fun eval(e: MerkleTree): Number {
-  be t := MerkleTree.label(e)
+  t := MerkleTree.label(e)
   return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
     else if t == 2 then eval(MerkleTree.child(e, 0)) + eval(MerkleTree.child(e, 1))
     else eval(MerkleTree.child(e, 0)) * eval(MerkleTree.child(e, 1))
@@ -53,6 +53,6 @@ fun parse(toks: MerkleTree): MerkleTree {
 }
 
 fun main(): Number {
-  be src := "2+3*4"
+  src := "2+3*4"
   return eval(parse(lex(src)))
 }

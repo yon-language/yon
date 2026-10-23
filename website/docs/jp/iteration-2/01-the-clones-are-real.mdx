@@ -72,19 +72,19 @@ We can ask the space its own size, name a point's class, and watch two genomes t
 place Entry { }
 
 fun main(): Number visits Output {
-  be kn   := XTower.width(3)         // 196560, the whole address space
-  be m24n := XTower.width(2)         // 12, the M24 symmetry classes
-  be cls  := Leech.m24_orbit(1536)   // 1, this point's class, one of the twelve
+  kn   := XTower.width(3)         // 196560, the whole address space
+  m24n := XTower.width(2)         // 12, the M24 symmetry classes
+  cls  := Leech.m24_orbit(1536)   // 1, this point's class, one of the twelve
 
-  be a := Leech.embed(100247, 0)     // a genome, placed at its nearest point
-  be b := Leech.embed(100247, 0)     // the same genome → the same point
-  be c := Leech.embed(555, 0)        // a different genome → a different point
-  be s := XSet.add(XSet.add(XSet.add(XSet.empty(), a), b), c)
+  a := Leech.embed(100247, 0)     // a genome, placed at its nearest point
+  b := Leech.embed(100247, 0)     // the same genome → the same point
+  c := Leech.embed(555, 0)        // a different genome → a different point
+  s := XSet.add(XSet.add(XSet.add(XSet.empty(), a), b), c)
 
-  be _1 := Output.print(String.from_int(kn))
-  be _2 := Output.print(String.from_int(m24n))
-  be _3 := Output.print(String.from_int(cls))
-  be _4 := Output.print(String.from_int(XSet.size(s)))   // 2, the dup is gone
+  _1 := Output.print(String.from_int(kn))
+  _2 := Output.print(String.from_int(m24n))
+  _3 := Output.print(String.from_int(cls))
+  _4 := Output.print(String.from_int(XSet.size(s)))   // 2, the dup is gone
   return 0
 }
 ```

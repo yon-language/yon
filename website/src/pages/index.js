@@ -92,13 +92,13 @@ function Heap() {
                 <span className={styles.ty}>Number</span> {'{'}
                 {'\n'}
                 {'  '}
-                <span className={styles.kw}>be</span> greeting{' '}
+                greeting{' '}
                 :={' '}
                 <span className={styles.st}>"ciao, mondo"</span>{' '}
                 <span className={styles.cm}>// interned on the heap</span>
                 {'\n'}
                 {'  '}
-                <span className={styles.kw}>be</span> _ :={' '}
+                _ :={' '}
                 <span className={styles.ty}>String</span>.<span className={styles.fn}>print</span>
                 (greeting){'\n'}
                 {'  '}

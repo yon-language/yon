@@ -66,7 +66,7 @@ contamination; a child's drawing says *dinosaur*.
 | Ch | JP scene | Yon concept(s) [D] | Verdict (source) | `.yon` | Hook |
 |----|----------|--------------------|------------------|--------|------|
 | 1.1 | The unreadable fragment | the machine: mmap sole primitive, two allocators, no GC, `exit()` [D-runtime #23]; `Carrier`=printer [#26]; single normalizer [#27] | ✓ (`test_unit_xheap_bounds.c`, `carrier.ml:143`, `reduce.ml:~548`) | a minimal program: bind, compute, `exit 0` | framing (substrate present, unread) |
-| 1.2 | "Counted by computer every few minutes" | the mechanics to read code: `be x := e`, `fun`, control flow, expressions [D0a–e] | ✓ (T3 corpus; `examples/*`) | `be x := …`, a `fun main`, an `if/for` | framing |
+| 1.2 | "Counted by computer every few minutes" | the mechanics to read code: `x := e`, `fun`, control flow, expressions [D0a–e] | ✓ (T3 corpus; `examples/*`) | `x := …`, a `fun main`, an `if/for` | framing |
 | 1.3 | A drawing names what the data couldn't | output is stdout-only via `Output` [#26 note]; the honesty discipline: compile-time reject, exit 3, "no fake green" [#19] | ✓ (`run_example.ml:54`, the `negative/` corpus, `gate.sh`) | a program that prints; a sibling that is rejected (exit 3) | framing → seeds the book's contract |
 
 ### Iteration 2 — Lattice & silicon · *"sudden changes may appear"*

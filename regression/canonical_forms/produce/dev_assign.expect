@@ -2,4 +2,4 @@ status: reject_clean
 exit: 1
 match: is not supported inside
 note: |
-  = (Space-cell assign) inside a produce body is refused: it has no lowering there.
+  <- (a cell write) inside a produce body is refused: it has no lowering there.

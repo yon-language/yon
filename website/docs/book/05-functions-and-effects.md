@@ -13,9 +13,9 @@ fun id<A>(x: A): A { return x }                     // type parameter
 internal fun helper(x: Number): Number { return x + 1 }
 
 fun main(): Number {
-  be twice := fun(n: Number) => n * 2            // inline lambda
-  be a := 10 |> double()                         // pipe: 20
-  be b := twice(a) + helper(1)                   // 40 + 2 = 42
+  twice := fun(n: Number) => n * 2            // inline lambda
+  a := 10 |> double()                         // pipe: 20
+  b := twice(a) + helper(1)                   // 40 + 2 = 42
   return id(b)
 }
 ```
@@ -60,7 +60,7 @@ place Entry {
            else n / 2
   }
   fun main(): Number {
-    be a := half(0 - 4)
+    a := half(0 - 4)
     return match a { Number as v => 1, DomainError as e => 30 }
   }
 }
@@ -114,7 +114,7 @@ fun run(): Unit visits Output {                     // the effect propagates
   return announce("fatto")
 }
 fun main(): Number visits Output {
-  be _u := run()
+  _u := run()
   return 0
 }
 ```
@@ -163,7 +163,7 @@ place SyntaxError { this < Error  line Number }
 place Entry { }
 fun describe(e: Error): Number { return String.length(e.message) }   // accepts any sub-object
 fun main(): Number {
-  be s := .-> SyntaxError { message "unexpected }" line 30 }
+  s := .-> SyntaxError { message "unexpected }" line 30 }
   return describe(s) + s.line     // 12 + 30 = 42: SyntaxError used as Error
 }
 ```

@@ -27,8 +27,8 @@ it lives in (an object of the category).
 slot index of its content in the content-addressed heap.
 
 **cell**, the one thing in Yon with identity instead of content: a mutable
-register whose current value is a handle; the assignment `x = e` is sugar
-over cells.
+register whose current value is a handle; `mut c := e` declares one and
+`c <- e` writes it.
 
 **arrow**, anything that maps; every arrow has a kind, and the kinds live
 at different levels (see chapter 6's ladder).

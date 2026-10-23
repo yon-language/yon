@@ -12,7 +12,7 @@
  * compiler-in-Yon, and asserts the two native programs exit with the SAME code.
  *
  * Yon0 covered: coproduct places `place X { this > A :U B(..) }`, functions
- * `fun name(p, ..): T { (be x := e)* return e }` with 0..N parameters, arithmetic
+ * `fun name(p, ..): T { (x := e)* return e }` with 0..N parameters, arithmetic
  * (+ - *, * over +), calls `name(..)` and qualified calls `Module.op(..)`,
  * `if e CMP e then e else e` with CMP one of == != < > <= >=, recursion, string
  * literals, hit/hit_elim. The subset is the one this file is written in:
@@ -42,6 +42,8 @@ place BindRes { this > BR(SsaEnv, String, Number) }
  * Comma20 Lt21 Gt22 Le23 Ge24 Ne25 LBracket27 RBracket28 Bar29 Arrow30
  * Place31 This32 ColonU33 Dot34 Str35; tag 26 is unused: it belonged to the retired
  * 'inductive' keyword). */
+/* TKwBe is retired (a definition is `x := e`, with no keyword); it keeps
+   its tag so every other token keeps its own. */
 place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus :U TComma :U TLt :U TGt :U TLe :U TGe :U TNe :U TLBracket :U TRBracket :U TBar :U TArrow :U TKwPlace :U TKwThis :U TColonU :U TDot :U TStr(String) }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 place Parse { this > POk(Term, TokList) :U PErr }
@@ -66,7 +68,6 @@ fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
 }
 fun hash_of(s: String): Number { return word_hash(s, 0, String.length(s), 0) }
 fun kw_fun(): Number    { return hash_of("fun") }
-fun kw_be(): Number     { return hash_of("be") }
 fun kw_return(): Number { return hash_of("return") }
 fun kw_number(): Number { return hash_of("number") }
 fun kw_if(): Number     { return hash_of("if") }
@@ -105,7 +106,6 @@ fun num_val(s: String, i: Number, j: Number, acc: Number): Number {
 }
 fun classify(h: Number): Token {
   return if h == kw_fun() then hit(TKwFun)
-    else if h == kw_be() then hit(TKwBe)
     else if h == kw_return() then hit(TKwReturn)
     else if h == kw_number() then hit(TKwNumber)
     else if h == kw_if() then hit(TKwIf)
@@ -116,11 +116,11 @@ fun classify(h: Number): Token {
     else hit(TIdent, h)
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
-  be j := word_end(s, i, len)
+  j := word_end(s, i, len)
   return hit(TkCons, classify(word_hash(s, i, j, 0)), lex_from(s, j, len))
 }
 fun lex_num(s: String, i: Number, len: Number): TokList {
-  be j := num_end(s, i, len)
+  j := num_end(s, i, len)
   return hit(TkCons, hit(TNum, num_val(s, i, j, 0)), lex_from(s, j, len))
 }
 /* string literal: scan to the closing '"' (code 34). Backslash (92) escapes the
@@ -151,7 +151,7 @@ fun str_content(s: String, i: Number, j: Number, acc: String): String {
 }
 /* i is at the char AFTER the opening quote. */
 fun lex_str(s: String, i: Number, len: Number): TokList {
-  be j := str_end(s, i, len)
+  j := str_end(s, i, len)
   return hit(TkCons, hit(TStr, str_content(s, i, j, "")), lex_from(s, j + 1, len))
 }
 fun lex_eq(s: String, i: Number, len: Number): TokList {
@@ -381,8 +381,8 @@ fun mk_binop(op: Number, left: Term, right: Term): Term {
 
 /* hit(Ctor) / hit(Ctor, args..) -- construction (l is positioned at '('). */
 fun parse_hit(l: TokList, env: NameEnv): Parse {
-  be ctor := head_num(tail(l))            /* the constructor identifier after '(' */
-  be rest := tail(tail(l))                /* after the constructor name: ')' or ',' */
+  ctor := head_num(tail(l))            /* the constructor identifier after '(' */
+  rest := tail(tail(l))                /* after the constructor name: ')' or ',' */
   return if head_tag(rest) == 14             /* ')' -> nullary */
     then hit(POk, hit(THit, ctor, hit(TNoArg)), tail(rest))
     else if head_tag(rest) == 20             /* ',' -> arguments follow */
@@ -437,7 +437,7 @@ fun parse_branches(l: TokList, env: NameEnv): Parse {
     else parse_one_branch(l, env)
 }
 fun parse_one_branch(l: TokList, env: NameEnv): Parse {
-  be ctor := head_num(l)                              /* the constructor pattern */
+  ctor := head_num(l)                              /* the constructor pattern */
   return if head_tag(tail(l)) == 13                      /* '(' -> payload binders */
     then branch_with_binders(ctor, parse_params(tail(tail(l)), env, 0), env)
     else if head_tag(tail(l)) == 30                      /* '=>' -> nullary pattern */
@@ -512,17 +512,21 @@ fun if_after_else(cond: Term, thenE: Term, p: Parse): Parse {
       POk(elseE, rest) => hit(POk, hit(TIf, cond, thenE, elseE), rest) ], p)
 }
 
-/* ---- body parser: ('be' IDENT ':=' expr)* 'return' expr ---- */
+/* ---- body parser: (IDENT ':=' expr)* 'return' expr ---- */
 fun parse_body(l: TokList, env: NameEnv): Parse {
-  return if head_tag(l) == 3
-    then parse_let(l, env)
+  return if head_tag(l) == 1
+    then parse_ident_stmt(l, env)
     else if head_tag(l) == 5
     then parse_expr(tail(l), env)
     else hit(PErr)
 }
+/* an IDENT starts a body item only as `IDENT ':='`, a definition */
+fun parse_ident_stmt(l: TokList, env: NameEnv): Parse {
+  return if head_tag(tail(l)) == 4 then parse_let(l, env) else hit(PErr)
+}
 fun parse_let(l: TokList, env: NameEnv): Parse {
-  be name := head_num(tail(l))
-  be after_def := tail(tail(tail(l)))
+  name := head_num(l)
+  after_def := tail(tail(l))
   return build_let(parse_expr(after_def, env), name, env)
 }
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
@@ -566,8 +570,8 @@ fun skip_after_params(l: TokList): TokList {
   return tail(tail(tail(l)))
 }
 fun parse_fundef(l: TokList): FunParse {
-  be name := head_num(tail(l))            /* IDENT after 'fun' */
-  be after_lparen := tail(tail(tail(l)))  /* skip fun, IDENT, '(' -> at params or ')' */
+  name := head_num(tail(l))            /* IDENT after 'fun' */
+  after_lparen := tail(tail(tail(l)))  /* skip fun, IDENT, '(' -> at params or ')' */
   return fundef_with_params(name, parse_params(after_lparen, hit(NEnvNil), 0))
 }
 fun fundef_with_params(name: Number, pr: ParamRes): FunParse {
@@ -717,17 +721,17 @@ fun gen(t: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   ], t)
 }
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ea := gen(e1, env, n, reg)
-  be eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea), reg)
+  ea := gen(e1, env, n, reg)
+  eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea), reg)
   return hit(ER, er_ssa(eb),
             String.concat(er_code(ea), er_code(eb)),
             er_ctr(eb))
 }
 fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ea := gen(a, env, n, reg)
-  be eb := gen(b, env, er_ctr(ea), reg)
-  be m  := er_ctr(eb)
-  be rhs := String.concat(String.concat(op, " "),
+  ea := gen(a, env, n, reg)
+  eb := gen(b, env, er_ctr(ea), reg)
+  m  := er_ctr(eb)
+  rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
   return hit(ER, ssa_name(m),
             String.concat(String.concat(er_code(ea), er_code(eb)),
@@ -755,18 +759,18 @@ fun gen_args(spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
       _ => hit(ER, "", "", n) ], spine)
 }
 fun gen_args_cons(a: Term, rest: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ea := gen(a, env, n, reg)
-  be er := gen_args(rest, env, er_ctr(ea), reg)
-  be joined := if String.length(er_ssa(er)) == 0 then er_ssa(ea)
+  ea := gen(a, env, n, reg)
+  er := gen_args(rest, env, er_ctr(ea), reg)
+  joined := if String.length(er_ssa(er)) == 0 then er_ssa(ea)
                   else String.concat(String.concat(er_ssa(ea), ", "), er_ssa(er))
   return hit(ER, joined, String.concat(er_code(ea), er_code(er)), er_ctr(er))
 }
 /* call: emit the arguments, then "<ssa> = func.call @fn_<callee>(<args>) : (<sig>) -> f64". */
 fun gen_call(callee: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ea  := gen_args(spine, env, n, reg)
-  be m   := er_ctr(ea)
-  be cnt := spine_count(spine)
-  be rhs := String.concat("func.call @",
+  ea  := gen_args(spine, env, n, reg)
+  m   := er_ctr(ea)
+  cnt := spine_count(spine)
+  rhs := String.concat("func.call @",
                  String.concat(fn_symbol(callee),
                    String.concat("(", String.concat(er_ssa(ea),
                      String.concat(") : (",
@@ -776,17 +780,17 @@ fun gen_call(callee: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg):
             m + 1)
 }
 fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ec := gen(c, env, n, reg)
-  be et := gen(thenT, env, er_ctr(ec), reg)
-  be ee := gen(elseT, env, er_ctr(et), reg)
-  be m  := er_ctr(ee)
-  be head := String.concat(String.concat("  ", ssa_name(m)),
+  ec := gen(c, env, n, reg)
+  et := gen(thenT, env, er_ctr(ec), reg)
+  ee := gen(elseT, env, er_ctr(et), reg)
+  m  := er_ctr(ee)
+  head := String.concat(String.concat("  ", ssa_name(m)),
                   String.concat(" = scf.if ", String.concat(er_ssa(ec), " -> (f64) {\n")))
-  be then_part := String.concat(er_code(et),
+  then_part := String.concat(er_code(et),
                        String.concat("    scf.yield ", String.concat(er_ssa(et), " : f64\n")))
-  be else_part := String.concat(er_code(ee),
+  else_part := String.concat(er_code(ee),
                        String.concat("    scf.yield ", String.concat(er_ssa(ee), " : f64\n")))
-  be code := String.concat(er_code(ec),
+  code := String.concat(er_code(ec),
                   String.concat(head,
                     String.concat(then_part,
                       String.concat("  } else {\n",
@@ -815,15 +819,15 @@ fun is_noarg(t: Term): Number {
 }
 /* leaf(k) for a constant tag k: emits the constant and the leaf call. */
 fun gen_leaf_const(k: Number, n: Number): EmitR {
-  be tc := ssa_name(n)
-  be lf := ssa_name(n + 1)
-  be code := String.concat(line(tc, String.concat("arith.constant ", num_lit(k))),
+  tc := ssa_name(n)
+  lf := ssa_name(n + 1)
+  code := String.concat(line(tc, String.concat("arith.constant ", num_lit(k))),
                               line_raw(lf, leaf_call(tc)))
   return hit(ER, lf, code, n + 2)
 }
 /* leaf(val_ssa): wrap an already-computed value ssa. */
 fun gen_leaf_of(val_ssa: String, n: Number): EmitR {
-  be lf := ssa_name(n)
+  lf := ssa_name(n)
   return hit(ER, lf, line_raw(lf, leaf_call(val_ssa)), n + 1)
 }
 /* the inner spine: leaf(0) if empty, else node2(0, leaf(head), spine(rest)). */
@@ -838,12 +842,12 @@ fun gen_inner_spine(spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
  * handle: Yon0 does not tell them apart) enters as a leaf whose label is its
  * exact f64, and is read back with label(). */
 fun gen_spine_cons(node_tag: Number, a: Term, rest: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ea  := gen(a, env, n, reg)                         /* the value/handle */
-  be lv  := ssa_name(er_ctr(ea))                        /* leaf(value) */
-  be inner := gen_inner_spine(rest, env, er_ctr(ea) + 1, reg)
-  be tc := ssa_name(er_ctr(inner))                      /* node tag constant */
-  be nd := ssa_name(er_ctr(inner) + 1)                  /* the node2 handle */
-  be code := String.concat(er_code(ea),
+  ea  := gen(a, env, n, reg)                         /* the value/handle */
+  lv  := ssa_name(er_ctr(ea))                        /* leaf(value) */
+  inner := gen_inner_spine(rest, env, er_ctr(ea) + 1, reg)
+  tc := ssa_name(er_ctr(inner))                      /* node tag constant */
+  nd := ssa_name(er_ctr(inner) + 1)                  /* the node2 handle */
+  code := String.concat(er_code(ea),
     String.concat(line_raw(lv, leaf_call(er_ssa(ea))),
       String.concat(er_code(inner),
         String.concat(line(tc, String.concat("arith.constant ", num_lit(node_tag))),
@@ -852,7 +856,7 @@ fun gen_spine_cons(node_tag: Number, a: Term, rest: Term, env: SsaEnv, n: Number
 }
 /* hit(Ctor, args): nullary -> leaf(tag); with args -> node2(tag, leaf(a0), spine(rest)). */
 fun gen_hit(ctor: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be tag := tag_of(ctor, reg)
+  tag := tag_of(ctor, reg)
   return if is_noarg(spine) == 1
     then gen_leaf_const(tag, n)
     else gen_hit_payload(tag, spine, env, n, reg)
@@ -877,32 +881,32 @@ fun gen_bind(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): Bi
     else gen_bind_one(tail_ssa, j, k, env, n)
 }
 fun gen_bind_one(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): BindRes {
-  be idx0 := ssa_name(n)          /* constant 0 (child index) */
-  be pl := ssa_name(n + 1)        /* the payload's leaf = child(tail, 0) */
-  be idx1 := ssa_name(n + 2)      /* constant 1 (child index) */
-  be nt := ssa_name(n + 3)        /* next tail = child(tail, 1) */
-  be pn := ssa_name(n + 4)        /* payload = label(leaf) */
-  be code0 := String.concat(
+  idx0 := ssa_name(n)          /* constant 0 (child index) */
+  pl := ssa_name(n + 1)        /* the payload's leaf = child(tail, 0) */
+  idx1 := ssa_name(n + 2)      /* constant 1 (child index) */
+  nt := ssa_name(n + 3)        /* next tail = child(tail, 1) */
+  pn := ssa_name(n + 4)        /* payload = label(leaf) */
+  code0 := String.concat(
     line(idx0, "arith.constant 0.0"),
     String.concat(line_raw(pl, child_call(tail_ssa, idx0)),
       String.concat(line(idx1, "arith.constant 1.0"),
         String.concat(line_raw(nt, child_call(tail_ssa, idx1)),
           line_raw(pn, label_call(pl))))))
-  be rest := gen_bind(nt, j + 1, k, hit(SeCons, pn, env), n + 5)
+  rest := gen_bind(nt, j + 1, k, hit(SeCons, pn, env), n + 5)
   return hit(BR, br_env(rest), String.concat(code0, br_code(rest)), br_n(rest))
 }
 /* bind the branch payloads, then emit the body (the unconditional last branch). */
 fun gen_branch_body(arity: Number, body: Term, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be bind := gen_bind(scrut_ssa, 0, arity, env, n)
-  be eb   := gen(body, br_env(bind), br_n(bind), reg)
+  bind := gen_bind(scrut_ssa, 0, arity, env, n)
+  eb   := gen(body, br_env(bind), br_n(bind), reg)
   return hit(ER, er_ssa(eb), String.concat(br_code(bind), er_code(eb)), er_ctr(eb))
 }
 fun gen_hitelim(brs: Term, scrut: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be es := gen(scrut, env, n, reg)
-  be sc := er_ssa(es)                               /* the scrutinee handle */
-  be tl := ssa_name(er_ctr(es))                     /* tag = label(scrut) */
-  be lcode := line_raw(tl, label_call(sc))
-  be chain := gen_br_chain(brs, tl, sc, env, er_ctr(es) + 1, reg)
+  es := gen(scrut, env, n, reg)
+  sc := er_ssa(es)                               /* the scrutinee handle */
+  tl := ssa_name(er_ctr(es))                     /* tag = label(scrut) */
+  lcode := line_raw(tl, label_call(sc))
+  chain := gen_br_chain(brs, tl, sc, env, er_ctr(es) + 1, reg)
   return hit(ER, er_ssa(chain),
     String.concat(er_code(es), String.concat(lcode, er_code(chain))),
     er_ctr(chain))
@@ -919,23 +923,23 @@ fun gen_br_one(ctor: Number, arity: Number, body: Term, rest: Term, t_ssa: Strin
     else gen_br_if(ctor, arity, body, rest, t_ssa, scrut_ssa, env, n, reg)
 }
 fun gen_br_if(ctor: Number, arity: Number, body: Term, rest: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be tag := tag_of(ctor, reg)
-  be tc  := ssa_name(n)
-  be cc  := ssa_name(n + 1)
-  be cmpcode := String.concat(
+  tag := tag_of(ctor, reg)
+  tc  := ssa_name(n)
+  cc  := ssa_name(n + 1)
+  cmpcode := String.concat(
     line(tc, String.concat("arith.constant ", num_lit(tag))),
     line(cc, String.concat("arith.cmpf oeq, ",
       String.concat(t_ssa, String.concat(", ", tc)))))
-  be eb := gen_branch_body(arity, body, scrut_ssa, env, n + 2, reg)
-  be er := gen_br_chain(rest, t_ssa, scrut_ssa, env, er_ctr(eb), reg)
-  be m  := er_ctr(er)
-  be head := String.concat(String.concat("  ", ssa_name(m)),
+  eb := gen_branch_body(arity, body, scrut_ssa, env, n + 2, reg)
+  er := gen_br_chain(rest, t_ssa, scrut_ssa, env, er_ctr(eb), reg)
+  m  := er_ctr(er)
+  head := String.concat(String.concat("  ", ssa_name(m)),
                   String.concat(" = scf.if ", String.concat(cc, " -> (f64) {\n")))
-  be then_part := String.concat(er_code(eb),
+  then_part := String.concat(er_code(eb),
                        String.concat("    scf.yield ", String.concat(er_ssa(eb), " : f64\n")))
-  be else_part := String.concat(er_code(er),
+  else_part := String.concat(er_code(er),
                        String.concat("    scf.yield ", String.concat(er_ssa(er), " : f64\n")))
-  be ifcode := String.concat(head,
+  ifcode := String.concat(head,
                     String.concat(then_part,
                       String.concat("  } else {\n",
                         String.concat(else_part, "  }\n"))))
@@ -959,9 +963,9 @@ fun arg_sig(k: Number, i: Number): String {
 /* a non-main function: func.func @fn_<name>(%arg0: f64, ...) -> f64 { body ; return }.
  * the k parameters are TVar 0..k-1 in the body (%arg0..%arg(k-1)). */
 fun gen_fundef_text(name: Number, arity: Number, body: Term, reg: CtorReg): String {
-  be env := arg_env(arity, 0, hit(SeNil))
-  be eb  := gen(body, env, 0, reg)
-  be sig := String.concat(String.concat("(", arg_sig(arity, 0)), ") -> f64 {\n")
+  env := arg_env(arity, 0, hit(SeNil))
+  eb  := gen(body, env, 0, reg)
+  sig := String.concat(String.concat("(", arg_sig(arity, 0)), ") -> f64 {\n")
   return String.concat(
     String.concat(String.concat("  func.func @", fn_symbol(name)), sig),
     String.concat(er_code(eb),
@@ -1064,9 +1068,9 @@ fun drop_dummy_spine(p: Parse): Parse {
     POk(spine, rest) => hit(POk, hit(TNoArg), rest) ], p)
 }
 fun parse_qcall(modh: Number, l: TokList, env: NameEnv): Parse {
-  be oph := head_num(tail(tail(l)))                           /* op ident hash */
-  be sym := rt_symbol(modh, oph)
-  be args := parse_args(tail(tail(tail(tail(l)))), env)       /* skip MODULE . OP ( */
+  oph := head_num(tail(tail(l)))                           /* op ident hash */
+  sym := rt_symbol(modh, oph)
+  args := parse_args(tail(tail(tail(tail(l)))), env)       /* skip MODULE . OP ( */
   /* Buffer.make(0): the surface takes a dummy arg (nullary-call convention),
    * but the runtime symbol is 0-ary — drop the parsed dummy so the call
    * emits as @yon_rt_buffer_new(). */
@@ -1080,8 +1084,8 @@ fun parse_qcall(modh: Number, l: TokList, env: NameEnv): Parse {
  * this interns to the SAME handle as yonc's global+string_lit: the differential
  * oracle (exit codes) stays green without a module-level global. */
 fun gen_char(code: Number, n: Number): EmitR {
-  be c1 := ssa_name(n)
-  be c2 := ssa_name(n + 1)
+  c1 := ssa_name(n)
+  c2 := ssa_name(n + 1)
   return hit(ER, c2,
     String.concat(
       line_raw(c1, String.concat("arith.constant ", num_lit(code))),
@@ -1090,8 +1094,8 @@ fun gen_char(code: Number, n: Number): EmitR {
     n + 2)
 }
 fun gen_str_step(s: String, i: Number, len: Number, acc_ssa: String, acc_code: String, ec: EmitR): EmitR {
-  be cat := ssa_name(er_ctr(ec))
-  be code2 := String.concat(acc_code, String.concat(er_code(ec),
+  cat := ssa_name(er_ctr(ec))
+  code2 := String.concat(acc_code, String.concat(er_code(ec),
     line_raw(cat, String.concat("func.call @yon_rt_string_concat(",
       String.concat(acc_ssa, String.concat(", ",
         String.concat(er_ssa(ec), ") : (f64, f64) -> f64")))))))
@@ -1105,17 +1109,17 @@ fun gen_strlit_ne(s: String, len: Number, ec: EmitR): EmitR {
   return gen_str_from(s, 1, len, er_ssa(ec), er_code(ec), er_ctr(ec))
 }
 fun gen_strlit(s: String, n: Number): EmitR {
-  be len := String.length(s)
+  len := String.length(s)
   return if len == 0 then gen_char(0, n)
     else gen_strlit_ne(s, len, gen_char(String.char_at(s, 0), n))
 }
 /* a runtime/qualified call by symbol name (like gen_call, but the callee is a
  * literal symbol string, not @fn_<hash>). */
 fun gen_rtcall(sym: String, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  be ea  := gen_args(spine, env, n, reg)
-  be m   := er_ctr(ea)
-  be cnt := spine_count(spine)
-  be rhs := String.concat("func.call @",
+  ea  := gen_args(spine, env, n, reg)
+  m   := er_ctr(ea)
+  cnt := spine_count(spine)
+  rhs := String.concat("func.call @",
                  String.concat(sym,
                    String.concat("(", String.concat(er_ssa(ea),
                      String.concat(") : (",
@@ -1150,7 +1154,7 @@ fun stubs(): String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun main_tail(result_ssa: String, ctr: Number): String {
-  be rss := ssa_name(ctr)
+  rss := ssa_name(ctr)
   return String.concat(
     String.concat("    ", String.concat(rss,
       String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
@@ -1174,15 +1178,15 @@ fun main(): Number {
    * both in the directory given as the first argument. The differential oracle
    * writes the input there and feeds the output back to the backend, so this
    * same tool compiles any Yon0 program (not a fixed one). */
-  be dir    := Args.get(1)
-  be source := File.read_text(String.concat(dir, "/in.yon"))
-  be prog   := parse_items(lex(source), hit(CrNil))
-  be funs   := prog_funs(prog)
-  be reg    := prog_reg(prog)
-  be mh     := hash_of("main")
-  be helpers := gen_funs(funs, mh, reg)
-  be rmain  := gen(main_body(funs, mh), hit(SeNil), 0, reg)
-  be full   := String.concat(mod_head(),
+  dir    := Args.get(1)
+  source := File.read_text(String.concat(dir, "/in.yon"))
+  prog   := parse_items(lex(source), hit(CrNil))
+  funs   := prog_funs(prog)
+  reg    := prog_reg(prog)
+  mh     := hash_of("main")
+  helpers := gen_funs(funs, mh, reg)
+  rmain  := gen(main_body(funs, mh), hit(SeNil), 0, reg)
+  full   := String.concat(mod_head(),
                     String.concat(merkle_stubs(),
                     String.concat(string_stubs(),
                     String.concat(buffer_stubs(),
@@ -1191,7 +1195,7 @@ fun main(): Number {
                           String.concat(er_code(rmain),
                             String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
                               stubs()))))))))
-  be _w := File.write_text(String.concat(dir, "/out.mlir"), full)
+  _w := File.write_text(String.concat(dir, "/out.mlir"), full)
   return String.length(full)
 }
 /* accessors on the parsed Program. */

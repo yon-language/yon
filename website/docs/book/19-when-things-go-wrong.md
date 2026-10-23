@@ -44,7 +44,7 @@ fun on_query_fail(q: QueryError): Number {
 }
 
 fun main(): Number {
-  be q := .-> QueryError { message "duplicate key"  sqlstate 29 }
+  q := .-> QueryError { message "duplicate key"  sqlstate 29 }
   return on_query_fail(q) + q.sqlstate    // 13 + 29 = 42
 }
 ```

@@ -8,7 +8,7 @@
 // Expected: type error / non-zero exit.
 world Park { Dino is Species }
 
-world PublicPark = Park / cohort
+world PublicPark <- Park / cohort
 
 place PublicDino in PublicPark {
   cohort Number

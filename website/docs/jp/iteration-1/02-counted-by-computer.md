@@ -57,10 +57,10 @@ the set contains.
 place Entry { }
 
 fun main(): Number visits Output {
-  be herd0 := HashSet.empty()
-  be herd1 := HashSet.add(herd0, 100247)
-  be herd2 := HashSet.add(herd1, 100247)
-  be _printed := Output.print(String.from_int(HashSet.size(herd2)))
+  herd0 := HashSet.empty()
+  herd1 := HashSet.add(herd0, 100247)
+  herd2 := HashSet.add(herd1, 100247)
+  _printed := Output.print(String.from_int(HashSet.size(herd2)))
   return 0
 }
 ```

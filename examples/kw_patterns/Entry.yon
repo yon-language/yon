@@ -8,30 +8,30 @@ place Entry {
 // stays unknown and an unknown condition decides to false; values
 // flow through parameters to defeat constant folding.
 fun chain_one(a: Number, b: Number): Number visits Output {
-  be p := (a < b)
+  p := (a < b)
   when p is not absent {
-    be _ := String.print("p is not absent")
+    _ := String.print("p is not absent")
   }
   return 1
 }
 fun chain_two(d: Number): Number visits Output {
-  be u := unknown
+  u := unknown
   when u is unknown {
-    be _ := String.print("u is unknown")
+    _ := String.print("u is unknown")
   }
   return d
 }
 fun chain_three(a: Number, b: Number): Number visits Output {
-  be p := (a < b)
+  p := (a < b)
   when p is absent {
-    be _ := String.print("NEVER printed: p is a known truth")
+    _ := String.print("NEVER printed: p is a known truth")
   }
   return 3
 }
 fun main(): Number visits Output {
-  be x := chain_one(3, 5)
-  be y := chain_two(2)
-  be z := chain_three(3, 5)
+  x := chain_one(3, 5)
+  y := chain_two(2)
+  z := chain_three(3, 5)
   return x + y + z
 }
 }

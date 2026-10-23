@@ -2,7 +2,7 @@ place Entry {
 /* decide porta una proposizione nei tre bracci di Decision, e il match
  * risponde a ciascuno. Su una proposizione presente: il braccio Present. */
 fun main(): Number {
-  be p := present
+  p := present
   return match decide(p) { Present => 42, Absent => 0, Unknown => 1 }
 }
 }

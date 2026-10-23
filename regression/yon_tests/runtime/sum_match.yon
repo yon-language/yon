@@ -2,11 +2,11 @@ place Entry {
   fun quotient_motive(q: Quotient): Number { return 0 }
   fun suspension_motive(s: Suspension): Number { return 0 }
   fun main(): Number {
-    be payload := hit_elim(
+    payload := hit_elim(
       quotient_motive,
       [inj(x) => x, quot(a, b, r) => plam i => 0],
       hit(inj, 7))
-    be side := hit_elim(
+    side := hit_elim(
       suspension_motive,
       [north => 3, south => 4, merid(a) => plam i => 3],
       hit(south))

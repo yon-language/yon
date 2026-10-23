@@ -48,7 +48,7 @@ Docusaurus site. The JP epub is supplied alongside this prompt; read it.
 3. **Exact vocabulary.** Use only the names that actually exist in Yon. In
    particular: there is NO `section` keyword — it is only the internal name of the
    MLIR type `!topos.section<"P">`. At the surface, an inhabitant of a place is
-   built with the mediating arrow `.-> P { ... }` and a name is bound with `be x := e`. Verify
+   built with the mediating arrow `.-> P { ... }` and a name is bound with `x := e`. Verify
    every keyword against `frontend/lexer.mll` before using it in an example.
 
 4. **Language:** the book's prose is in **English** (technical register, warm in
@@ -273,7 +273,7 @@ untouched; these are the corrections to apply when executing.
 Confirmed TRUE in the spec:
 - **No `section` keyword** — 0 matches. It is the MLIR type name only. ✓
 - `.-> P { ... }` builds an inhabitant — `DOTARROW` token (`new` is not a keyword). ✓
-- `be x := e` is the binding form — `LET`/`HOLDS`, `lexer.mll:121,186`. ✓
+- `x := e` is the binding form — `LET`/`HOLDS`, `lexer.mll:121,186`. ✓
 - `place` / `space` / `wire` / `morphism` are real keywords. ✓
 - The four arrows `move` / `view` / `reduction` / `operation` are real. ✓
 

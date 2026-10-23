@@ -57,7 +57,7 @@
         },
         {
           "name": "keyword.other.binding.yon",
-          "match": "\\b(be)\\b"
+          "match": "\\b(mut)\\b"
         },
         {
           "name": "keyword.operator.word.yon",

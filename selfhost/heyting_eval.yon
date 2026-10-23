@@ -38,7 +38,7 @@ fun mk_or(a: MerkleTree, b: MerkleTree): MerkleTree { return MerkleTree.node2(4,
 
 // heval : Prop -> Omega  (the catamorphism into the Heyting algebra)
 fun heval(p: MerkleTree): Number {
-  be t := MerkleTree.label(p)
+  t := MerkleTree.label(p)
   return if t == 1 then MerkleTree.label(MerkleTree.child(p, 0))
     else if t == 2 then h_not(heval(MerkleTree.child(p, 0)))
     else if t == 3 then h_and(heval(MerkleTree.child(p, 0)), heval(MerkleTree.child(p, 1)))
@@ -48,10 +48,10 @@ fun heval(p: MerkleTree): Number {
 
 fun main(): Number {
   // NOT unknown = absent (1)
-  be not_u := heval(mk_not(mk_p(2)))
+  not_u := heval(mk_not(mk_p(2)))
   // excluded middle at unknown: U or NOT U = unknown (2), NOT present
-  be em_u := heval(mk_or(mk_p(2), mk_not(mk_p(2))))
+  em_u := heval(mk_or(mk_p(2), mk_not(mk_p(2))))
   // excluded middle at present: P or NOT P = present (0)
-  be em_p := heval(mk_or(mk_p(0), mk_not(mk_p(0))))
+  em_p := heval(mk_or(mk_p(0), mk_not(mk_p(0))))
   return not_u * 100 + em_u * 10 + em_p
 }

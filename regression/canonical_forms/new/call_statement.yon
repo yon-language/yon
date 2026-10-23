@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be x := 42
+    x := 42
     Space.make(1)
     return x
   }

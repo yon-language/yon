@@ -21,17 +21,17 @@ fun lit(n: Number): MerkleTree {
 }
 
 fun eval(e: MerkleTree): Number {
-  be t := MerkleTree.label(e)
+  t := MerkleTree.label(e)
   return if t == 1 then MerkleTree.label(MerkleTree.child(e, 0))
          else if t == 2 then eval(MerkleTree.child(e, 0)) + eval(MerkleTree.child(e, 1))
          else eval(MerkleTree.child(e, 0)) * eval(MerkleTree.child(e, 1))
 }
 
 fun main(): Number {
-  be add23 := MerkleTree.node2_commutative(2, lit(2), lit(3))
-  be add32 := MerkleTree.node2_commutative(2, lit(3), lit(2))
-  be add41 := MerkleTree.node2_commutative(2, lit(4), lit(1))
-  be prod  := MerkleTree.node2(3, add23, add41)
-  be collapse := if MerkleTree.equal(add23, add32) then 100 else 0
+  add23 := MerkleTree.node2_commutative(2, lit(2), lit(3))
+  add32 := MerkleTree.node2_commutative(2, lit(3), lit(2))
+  add41 := MerkleTree.node2_commutative(2, lit(4), lit(1))
+  prod  := MerkleTree.node2(3, add23, add41)
+  collapse := if MerkleTree.equal(add23, add32) then 100 else 0
   return eval(prod) + collapse
 }

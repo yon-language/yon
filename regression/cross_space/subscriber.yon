@@ -2,10 +2,10 @@ import sensors::readings from Sensors
 
 place Entry {
   fun main(): Number {
-    be w := wire to space Sensors
-    be sub := w.awaits(readings)
-    be s := sub.stream
-    be total := s.fold(0, fun(a: Number, v: Number) => a + v)
+    w := wire to space Sensors
+    sub := w.awaits(readings)
+    s := sub.stream
+    total := s.fold(0, fun(a: Number, v: Number) => a + v)
     return total      // 10+11+15 = 36
   }
 }

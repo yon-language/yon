@@ -38,6 +38,7 @@ type code =
   | Arm_name_clash
   | Library_name_taken
   | Given_outside_prelude
+  | Write_to_value
   | Law_refuted
   | Law_uncertified
   (* E3xxx Space semantics *)
@@ -66,6 +67,7 @@ let id : code -> string = function
   | Arm_name_clash      -> "E2005"
   | Library_name_taken  -> "E2006"
   | Given_outside_prelude -> "E2007"
+  | Write_to_value      -> "E2008"
   | Law_refuted         -> "E2101"
   | Law_uncertified     -> "E2102"
   | Union_arms_cross_space -> "E3003"
@@ -84,7 +86,7 @@ let id : code -> string = function
 let severity : code -> severity = function
   | Parse_syntax | Lex_bad_token | Type_check | Return_not_in_tail | Effect_unhandled
   | Arm_coproduct_unnamed | Arm_name_clash | Library_name_taken
-  | Given_outside_prelude
+  | Given_outside_prelude | Write_to_value
   | Law_refuted
   | Law_uncertified
   | Union_arms_cross_space
@@ -101,7 +103,7 @@ let cli_prefix : code -> string = function
   | Return_not_in_tail           -> "TYPE ERROR"
   | Effect_unhandled             -> "TYPE ERROR"
   | Arm_coproduct_unnamed | Arm_name_clash | Library_name_taken
-  | Given_outside_prelude -> "TYPE ERROR"
+  | Given_outside_prelude | Write_to_value -> "TYPE ERROR"
   | Law_refuted | Law_uncertified -> "LAW ERROR"
   | Union_arms_cross_space -> "TYPE ERROR"
   | Drop_still_live | Drop_unknown_space -> "DROP ERROR"
@@ -123,6 +125,7 @@ let title : code -> string = function
   | Arm_name_clash      -> "an arm and an arrow of the same home share a name"
   | Library_name_taken  -> "a user place takes the name of a library place"
   | Given_outside_prelude -> "a runtime primitive declared outside the prelude"
+  | Write_to_value      -> "a write to a name that is not a cell"
   | Law_refuted         -> "a declared law is refuted by a counterexample"
   | Law_uncertified     -> "a declared law is neither proven nor declared an axiom"
   | Union_arms_cross_space -> "the arms of a union must be places of one Space"

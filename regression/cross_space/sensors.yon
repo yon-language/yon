@@ -1,7 +1,7 @@
 /* The Sensors service: declares the producer (chapter 16 + wire design). */
 place Entry {
   fun readings(): Wire<Number> {
-    be s := produce {
+    s := produce {
       emit 10
       emit 11
       emit 15

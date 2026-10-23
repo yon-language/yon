@@ -7,60 +7,60 @@ place Entry {
            else n
   }
   fun build_xset(lo: Number, n: Number): Number {
-    be s := Space.make(XSet.empty())
-    be i := Space.make(0)
-    iter n do { be _ := Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
-                be _2 := Space.set(i, Space.get(i) + 1) }
+    s := Space.make(XSet.empty())
+    i := Space.make(0)
+    iter n do { _ := Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
+                _2 := Space.set(i, Space.get(i) + 1) }
     return Space.get(s)
   }
   fun build_hset(lo: Number, n: Number): HashSet<Number> {
-    be s := Space.make(HashSet.empty())
-    be i := Space.make(0)
-    iter n do { be _ := Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
-                be _2 := Space.set(i, Space.get(i) + 1) }
+    s := Space.make(HashSet.empty())
+    i := Space.make(0)
+    iter n do { _ := Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
+                _2 := Space.set(i, Space.get(i) + 1) }
     return Space.get(s)
   }
   fun b_xi(a: Number, b: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter 30 do { be _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter 30 do { _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
     return (Time.now_ns(0) - t0) / 30
   }
   fun b_xu(a: Number, b: Number): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter 30 do { be _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter 30 do { _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
     return (Time.now_ns(0) - t0) / 30
   }
   fun b_hi(a: HashSet<Number>, b: HashSet<Number>): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter 30 do { be _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter 30 do { _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
     return (Time.now_ns(0) - t0) / 30
   }
   fun b_hu(a: HashSet<Number>, b: HashSet<Number>): Number visits Output {
-    be acc := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter 30 do { be _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
+    acc := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter 30 do { _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
     return (Time.now_ns(0) - t0) / 30
   }
   fun one(n: Number): Number visits Output {
-    be half := n / 2
-    be xa := build_xset(0, n)
-    be xb := build_xset(half, n)
-    be ha := build_hset(0, n)
-    be hb := build_hset(half, n)
-    be _1 := Output.print(String.from_int(b_xi(xa, xb)))
-    be _2 := Output.print(String.from_int(b_hi(ha, hb)))
-    be _3 := Output.print(String.from_int(b_xu(xa, xb)))
-    be _4 := Output.print(String.from_int(b_hu(ha, hb)))
+    half := n / 2
+    xa := build_xset(0, n)
+    xb := build_xset(half, n)
+    ha := build_hset(0, n)
+    hb := build_hset(half, n)
+    _1 := Output.print(String.from_int(b_xi(xa, xb)))
+    _2 := Output.print(String.from_int(b_hi(ha, hb)))
+    _3 := Output.print(String.from_int(b_xu(xa, xb)))
+    _4 := Output.print(String.from_int(b_hu(ha, hb)))
     return 0
   }
   fun main(): Number visits Output {
-    be _a := one(scaled(100))
-    be _b := one(scaled(1000))
-    be _c := one(scaled(10000))
-    be _d := one(scaled(100000))
+    _a := one(scaled(100))
+    _b := one(scaled(1000))
+    _c := one(scaled(10000))
+    _d := one(scaled(100000))
     return 0
   }
 }

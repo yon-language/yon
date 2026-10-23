@@ -4,18 +4,18 @@
  *
  * Lets a tracked collection handle be updated method-style:
  *
- *     be s := XSimplex.empty()
- *     s.add(p1, p2)            -- sugar for: be s := XSimplex.add(s, p1, p2)
+ *     s := XSimplex.empty()
+ *     s.add(p1, p2)            -- sugar for: s := XSimplex.add(s, p1, p2)
  *     s.add(p1, p3)
  *
  * `s.method(args)` as a statement, when `s` is a binding whose place is known,
- * rewrites to an immutable shadowing re-binding `be s := Place.method(s, args)`.
+ * rewrites to an immutable shadowing re-binding `s := Place.method(s, args)`.
  * No types, no storage, no mutation: `s` is not mutated, only re-bound. Both the
  * typechecker and the desugar then see only the explicit form.
  *
  * The owning place P is read from the head of the binding expression:
- *     be s := XSimplex.empty()  ->  ECall("XSimplex__empty", _)  ->  "XSimplex"
- * An alias `be t := s` inherits s's place. Provenance is SCOPED, not global:
+ *     s := XSimplex.empty()  ->  ECall("XSimplex__empty", _)  ->  "XSimplex"
+ * An alias `t := s` inherits s's place. Provenance is SCOPED, not global:
  * it rides by value through the statement list and into nested bodies as the
  * lexical environment, so two `s` in two isolated Spaces never interfere. A
  * binding with no known place leaves `s.method(...)` untouched -- it fails
@@ -68,7 +68,7 @@ let rec norm_stmts (prov : prov) (stmts : S.stmt list) : S.stmt list =
       let (obj, fld) = match split_method_name name with
         | Some pair -> pair | None -> assert false in
       let place = List.assoc obj prov in
-      (* s.method(args)  ->  be s := Place.method(s, args)  [shadowing] *)
+      (* s.method(args)  ->  s := Place.method(s, args)  [shadowing] *)
       let call = S.ECall (place ^ "__" ^ fld, S.EVar (obj, loc) :: args, loc) in
       (* shadowing keeps the same place, so prov is unchanged for the rest *)
       S.SLet (obj, call, loc) :: norm_stmts prov rest

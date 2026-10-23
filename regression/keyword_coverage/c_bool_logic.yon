@@ -4,10 +4,10 @@
 // audit. VERIFIED: emits MLIR (exit 0).
 place Entry {
   fun main(): Number {
-    be t := true
-    be f := false
-    be conj := (t and f)
-    be disj := (t or f)
+    t := true
+    f := false
+    conj := (t and f)
+    disj := (t or f)
     return 0
   }
 }

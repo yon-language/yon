@@ -203,7 +203,7 @@ let rec has_side_effect t =
        * mutating state, so they don't need strict ordering.
        * Stream__ has side effects (a mutable queue) and must be reduced before
        * the beta step, otherwise the lazy substitution of
-       * `be _ := Stream.send(...)` loses the call. *)
+       * `_ := Stream.send(...)` loses the call. *)
   | App (f, _) -> has_side_effect f
   | _ -> false
 

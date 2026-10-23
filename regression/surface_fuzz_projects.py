@@ -79,7 +79,7 @@ def rand_arrow(rng, pinfo):
         return f"  functor F{rng.randint(0,9)}(x: Number) from W to V {{ return x }}\n", "Entry"
     if kind == "geomorph":
         return (f"  geomorph G{rng.randint(0,9)} from {p} to {q} "
-                f"{{ pull(a: {q}): {p} {{ be t := a  return t }} }}\n"), p
+                f"{{ pull(a: {q}): {p} {{ t := a  return t }} }}\n"), p
     return f"  fun top{rng.randint(0,99)}(x: Number): Number {{ return x * {rng.randint(1,9)} }}\n", p
 
 

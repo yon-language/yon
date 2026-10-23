@@ -146,6 +146,9 @@ let prelude_place_names () : string list =
        with _ -> [])
 
 let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded =
+  (* the cells of a previous compilation are not this one's (the LSP
+     compiles many times in one process) *)
+  Hashtbl.reset Surface_ast.mut_sites;
   let wm =
     let mpath = Filename.concat root Package_layout.manifest_name in
     if Sys.file_exists mpath then

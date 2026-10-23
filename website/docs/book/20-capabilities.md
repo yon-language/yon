@@ -21,9 +21,9 @@ move EurToUsd from EUR to USD requires MoneyTransfer {
 fun scale(x: Number): Number { return x * 110 / 100 }
 
 fun main(): Number {
-  be _g := Cap.grant(169281588)       // register the capability token
-  be a := .-> EUR { balance 40 }
-  be b := apply_move(EurToUsd, a)     // the move that names the token
+  _g := Cap.grant(169281588)       // register the capability token
+  a := .-> EUR { balance 40 }
+  b := apply_move(EurToUsd, a)     // the move that names the token
   return b.balance - 2                    // 42
 }
 ```
@@ -44,9 +44,9 @@ token is granted and `1` after:
 <!-- yon-gate: exit 1 -->
 ```yon
 fun main(): Number {
-  be before := Cap.check(169281588)   // 0, not yet granted
-  be _g := Cap.grant(169281588)
-  be after := Cap.check(169281588)    // 1, now present
+  before := Cap.check(169281588)   // 0, not yet granted
+  _g := Cap.grant(169281588)
+  after := Cap.check(169281588)    // 1, now present
   return before * 10 + after              // 1
 }
 ```

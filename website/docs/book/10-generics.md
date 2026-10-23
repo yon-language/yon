@@ -51,8 +51,8 @@ fun first<A, B>(x: A, y: B): A {
   return x
 }
 fun main(): Number {
-  be n := first(7, 99)         // A and B both Number
-  be t := first("hi", 5)       // A is Text, B is Number
+  n := first(7, 99)         // A and B both Number
+  t := first("hi", 5)       // A is Text, B is Number
   return n + String.length(t)     // 7 + 2 = 9
 }
 ```
@@ -128,7 +128,7 @@ its object:
 ```yon
 // a fold generic in the type it carries.
 reduction Sum<T> of Tally {
-  be seed := 0
+  seed := 0
 }
 ```
 

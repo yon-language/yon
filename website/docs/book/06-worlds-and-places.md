@@ -62,8 +62,8 @@ read its sections with a dot. `Entry.yon`:
 ```yon
 place Entry { }
 fun main(): Number {
-  be o := .-> Order { table 5 total 40 }
-  be _p := IO.print_num(o.table)
+  o := .-> Order { table 5 total 40 }
+  _p := IO.print_num(o.table)
   return o.total + 2                     // 42
 }
 ```
@@ -110,16 +110,16 @@ apart by its own sum:
 fun ruling(): Decision { return Absent }
 fun lookup(): Lookup<Number> { return Absent }
 fun main(): Number {
-  be d := match ruling() { Present => 1, Absent => 2, Unknown => 3 }
-  be l := match lookup() { Found(v) => v, Absent => 20 }
-  be q := match Lookup.Found(20) { Found(v) => v, Absent => 0 }
+  d := match ruling() { Present => 1, Absent => 2, Unknown => 3 }
+  l := match lookup() { Found(v) => v, Absent => 20 }
+  q := match Lookup.Found(20) { Found(v) => v, Absent => 0 }
   return d + l + q                 // 2 + 20 + 20 = 42
 }
 ```
 
 The compiler picks the arrow from the type the value is expected to have:
 `return Absent` in `ruling` goes into `Decision`, in `lookup` into `Lookup`.
-Where nothing is expected (`be a := Absent`) an arm listed by two sums names
+Where nothing is expected (`a := Absent`) an arm listed by two sums names
 no arrow, and the program is refused (E2004). The compiler does not guess;
 the message proposes the qualified form, `Decision.Absent` or `Lookup.Absent`,
 which names the sum. A payload arm is qualified the same way:

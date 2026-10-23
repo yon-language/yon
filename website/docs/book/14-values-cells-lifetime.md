@@ -29,20 +29,20 @@ it holds is still immutable content.
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be v := 7
-  be c1 := Space.make(v)            // a cell holding 7
-  be c2 := Space.make(v)            // ANOTHER cell holding 7
-  be _s := Space.set(c1, 40)
-  be x := Space.get(c1)             // 40
-  be y := Space.get(c2)             // still 7: cells have identity
+  v := 7
+  c1 := Space.make(v)            // a cell holding 7
+  c2 := Space.make(v)            // ANOTHER cell holding 7
+  _s := Space.set(c1, 40)
+  x := Space.get(c1)             // 40
+  y := Space.get(c2)             // still 7: cells have identity
   return x + y - 5                     // 42
 }
 ```
 
 Two cells with the same content are *different cells*, exactly the opposite
-of values, where same content is the same thing. Assignment with `=` (chapter
-3) is surface sugar over precisely this: a variable you reassign with `x = e`
-**is** a cell.
+of values, where same content is the same thing. A `mut` binding (chapter 3)
+is surface sugar over precisely this: `mut c := e` **is** a cell, and `c <- e`
+writes it.
 
 A cell belongs to the call that made it: when that call returns, its cells are
 freed and their slots reused. So a cell, and a lambda that mentions one, never
@@ -79,7 +79,7 @@ result back, by the codec of the wire, in memory. A call between processes
 and a `Wire<T>` copy the same way. So no name of one Space is ever held by
 another, and a region can end without asking anyone (chapter 17).
 
-The cells (`x = e`, `Space.make`) are not in the heaps: they belong to the
+The cells (`mut c := e`, `Space.make`) are not in the heaps: they belong to the
 call that made them and end with it (above).
 
 Across packages, a Space is a process: the first cross-Space call spawns the

@@ -3,9 +3,9 @@
 (* inline_seq.ml — a let-inline pass for stream fusion preservation
  *
  * Problem solved: when the user writes
- *   be a := Sequence.from_list(l)
- *   be b := a.map(fun(x) => x * x)
- *   be r := b.fold(0, fun(a, b) => a + b)
+ *   a := Sequence.from_list(l)
+ *   b := a.map(fun(x) => x * x)
+ *   r := b.fold(0, fun(a, b) => a + b)
  * the emit fusion pattern does NOT recognize the pipeline because `a` and `b`
  * are opaque bindings, not a tree `Sequence.from_list(l).map(...)`.
  *

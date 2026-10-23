@@ -10,22 +10,22 @@
 // place (wrong value, wrong order, or an await that timed out with -1); 4 the sum
 // is wrong; 5 no end-of-stream after the n-th message.
 fun main(): Number visits Output {
-  be n := String.parse_number(Args.get(1))
-  be ch := String.parse_number(Args.get(2))
-  be w := Wire.make_shm(ch, 0)
-  be bad := 0
-  be sum := 0
-  be i := 0
-  be t0 := Time.now_ns(0)
+  n := String.parse_number(Args.get(1))
+  ch := String.parse_number(Args.get(2))
+  w := Wire.make_shm(ch, 0)
+  mut bad := 0
+  mut sum := 0
+  mut i := 0
+  t0 := Time.now_ns(0)
   while i < n do {
-    be v := Wire.await_shm(w)
-    bad = bad + (if v == 3 * i + 1 then 0 else 1)
-    sum = sum + v
-    i = i + 1
+    v := Wire.await_shm(w)
+    bad <- bad + (if v == 3 * i + 1 then 0 else 1)
+    sum <- sum + v
+    i <- i + 1
   }
-  be t1 := Time.now_ns(0)
-  be _p := Output.print(String.from_int((t1 - t0) / n))
-  be eof := Wire.await_shm(w)
+  t1 := Time.now_ns(0)
+  _p := Output.print(String.from_int((t1 - t0) / n))
+  eof := Wire.await_shm(w)
   return if w < 0 then 2
          else if bad > 0 then 3
          else if sum != 3 * (n * (n - 1) / 2) + n then 4

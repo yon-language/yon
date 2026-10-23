@@ -64,7 +64,7 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
       /* a variable is already an ssa in env: no new line. */
       hit(ER, lookup(i, env), "", n),
     TLet(e1, body) =>
-      /* be x := e1 ; body   (x is de Bruijn 0 in body) */
+      /* x := e1 ; body   (x is de Bruijn 0 in body) */
       gen_let(e1, body, env, n),
     TCall(name, arg) =>
       /* %vn = func.call @name(<arg>) : (f64) -> f64 */
@@ -75,17 +75,17 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
 }
 /* let: emit e1, push its ssa onto env, emit body in that env. */
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
-  be ea := gen(e1, env, n)
-  be eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
+  ea := gen(e1, env, n)
+  eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
   return hit(ER, er_ssa(eb),
             String.concat(er_code(ea), er_code(eb)),
             er_ctr(eb))
 }
 /* call: emit the argument, then "<ssa> = func.call @name(<arg>) : (f64) -> f64". */
 fun gen_call(name: String, arg: Term, env: SsaEnv, n: Number): EmitR {
-  be ea := gen(arg, env, n)
-  be m  := er_ctr(ea)
-  be rhs := String.concat("func.call @",
+  ea := gen(arg, env, n)
+  m  := er_ctr(ea)
+  rhs := String.concat("func.call @",
                  String.concat(name,
                    String.concat("(", String.concat(er_ssa(ea), ") : (f64) -> f64"))))
   return hit(ER, ssa_name(m),
@@ -94,10 +94,10 @@ fun gen_call(name: String, arg: Term, env: SsaEnv, n: Number): EmitR {
 }
 /* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64". */
 fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
-  be ea := gen(a, env, n)
-  be eb := gen(b, env, er_ctr(ea))
-  be m  := er_ctr(eb)
-  be rhs := String.concat(String.concat(op, " "),
+  ea := gen(a, env, n)
+  eb := gen(b, env, er_ctr(ea))
+  m  := er_ctr(eb)
+  rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
   return hit(ER, ssa_name(m),
             String.concat(String.concat(er_code(ea), er_code(eb)),
@@ -114,7 +114,7 @@ fun gen_fun(f: Fun): String {
 }
 fun gen_fundef(name: String, body: Term): String {
   /* the parameter is %arg0 = de Bruijn 0 of the body. */
-  be eb := gen(body, hit(SeCons, "%arg0", hit(SeNil)), 0)
+  eb := gen(body, hit(SeCons, "%arg0", hit(SeNil)), 0)
   return String.concat(
     String.concat(String.concat("  func.func @", name), "(%arg0: f64) -> f64 {\n"),
     String.concat(er_code(eb),
@@ -141,7 +141,7 @@ fun stubs(): String {
 }
 /* fptosi(result) -> i32 + return + close main. */
 fun main_tail(result_ssa: String, ctr: Number): String {
-  be rss := ssa_name(ctr)
+  rss := ssa_name(ctr)
   return String.concat(
     String.concat("    ", String.concat(rss,
       String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
@@ -160,18 +160,18 @@ fun main(): Number {
    *   fun double(x): number { return x + x }
    *   fun main(): number { return double(21) }
    * core: FnDef("double", TAdd(TVar 0, TVar 0)) ; main = TCall("double", TLit 21) */
-  be funs := hit(FlCons,
+  funs := hit(FlCons,
                     hit(FnDef, "double", hit(TAdd, hit(TVar, 0), hit(TVar, 0))),
                     hit(FlNil))
-  be mainT := hit(TCall, "double", hit(TLit, 21))
-  be rmain := gen(mainT, hit(SeNil), 0)
-  be full := String.concat(mod_head(),
+  mainT := hit(TCall, "double", hit(TLit, 21))
+  rmain := gen(mainT, hit(SeNil), 0)
+  full := String.concat(mod_head(),
                   String.concat(gen_funs(funs),
                     String.concat(main_head(),
                       String.concat(er_code(rmain),
                         String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
                           stubs())))))
-  be _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)   /* write the emitted MLIR */
-  be _p := String.print(full)
+  _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)   /* write the emitted MLIR */
+  _p := String.print(full)
   return checksum(full)
 }

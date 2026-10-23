@@ -5,8 +5,8 @@
 // in a NESTED scope is allowed; this is a flat same-scope redeclaration.
 place Entry {
   fun main(): Number {
-    be x := 1
-    be x := 2
+    x := 1
+    x := 2
     return x
   }
 }

@@ -24,13 +24,13 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 MB = 1 << 20
 
 _WORK = """  fun {name}(n: Number): Number {{
-    be m := HashMap.empty()
-    be x := XRelMap.empty()
-    be k := 0
+    mut m := HashMap.empty()
+    mut x := XRelMap.empty()
+    mut k := 0
     iter n do {{
-      m = HashMap.set(m, k, k * 3)
-      x = XRelMap.set(x, k, k + 1)
-      k = k + 1
+      m <- HashMap.set(m, k, k * 3)
+      x <- XRelMap.set(x, k, k + 1)
+      k <- k + 1
     }}
     return HashMap.size(m) + XRelMap.size(x){keep}
   }}
@@ -80,7 +80,7 @@ def _at(ticks, ev):
 def test_a_stateless_space_gives_its_heaps_back_when_the_call_returns(tmp_path):
     proj = _project(tmp_path, {"w": ("Q", _WORK.format(name="work", keep=""))},
                     "place Entry {\n  fun main(): Number {\n"
-                    "    be r := Q.work(100000)\n    return r - 200000 + 7\n  }\n}\n")
+                    "    r := Q.work(100000)\n    return r - 200000 + 7\n  }\n}\n")
     rc, ticks = _trace(tmp_path, proj)
     assert rc == 7
     (before,), (peak,), (after,) = _at(ticks, "call:w"), _at(ticks, "return:w"), _at(ticks, "region:w")
@@ -93,18 +93,18 @@ def test_a_stateless_space_gives_its_heaps_back_when_the_call_returns(tmp_path):
 
 def test_a_map_made_in_a_space_is_read_after_the_space_is_dropped(tmp_path):
     body = """  fun build(n: Number): HashMap<Number, Number> {
-    be m := HashMap.empty()
-    be k := 0
+    mut m := HashMap.empty()
+    mut k := 0
     iter n do {
-      m = HashMap.set(m, k, k * 100)
-      k = k + 1
+      m <- HashMap.set(m, k, k * 100)
+      k <- k + 1
     }
     return m
   }
 """
     proj = _project(tmp_path, {"w": ("Q", body)}, """place Entry {
   fun main(): Number {
-    be m := Q.build(10)
+    mut m := Q.build(10)
     drop w
     return HashMap.size(m) + (match HashMap.get(m, 3) { Found(v) => v, Absent => 0 })
   }
@@ -118,7 +118,7 @@ def test_a_map_made_in_a_space_is_read_after_the_space_is_dropped(tmp_path):
 def test_drop_frees_the_collections_of_a_space_with_state(tmp_path):
     proj = _project(tmp_path, {"w": ("Q", _WORK.format(name="work", keep=_KEEP))},
                     "place Entry {\n  fun main(): Number {\n"
-                    "    be r := Q.work(100000)\n    drop w\n    return r - 200000 + 9\n  }\n}\n")
+                    "    r := Q.work(100000)\n    drop w\n    return r - 200000 + 9\n  }\n}\n")
     rc, ticks = _trace(tmp_path, proj)
     assert rc == 9
     assert not _at(ticks, "region:w")             # with state: no region per call
@@ -131,8 +131,8 @@ def test_drop_frees_the_collections_of_a_space_with_state(tmp_path):
 
 def test_a_stateless_space_called_eight_times_stays_flat(tmp_path):
     proj = _project(tmp_path, {"w": ("Q", _WORK.format(name="work", keep=""))},
-                    "place Entry {\n  fun main(): Number {\n    be t := 0\n"
-                    "    iter 8 do {\n      t = t + Q.work(20000)\n    }\n"
+                    "place Entry {\n  fun main(): Number {\n    mut t := 0\n"
+                    "    iter 8 do {\n      t <- t + Q.work(20000)\n    }\n"
                     "    return t / 40000\n  }\n}\n")
     rc, ticks = _trace(tmp_path, proj)
     assert rc == 8
@@ -145,8 +145,8 @@ def test_a_stateless_space_called_eight_times_stays_flat(tmp_path):
 
 def test_a_space_with_state_grows_while_it_lives(tmp_path):
     proj = _project(tmp_path, {"w": ("Q", _WORK.format(name="work", keep=_KEEP))},
-                    "place Entry {\n  fun main(): Number {\n    be t := 0\n"
-                    "    iter 8 do {\n      t = t + Q.work(20000)\n    }\n"
+                    "place Entry {\n  fun main(): Number {\n    mut t := 0\n"
+                    "    iter 8 do {\n      t <- t + Q.work(20000)\n    }\n"
                     "    return t / 40000\n  }\n}\n")
     rc, ticks = _trace(tmp_path, proj)
     assert rc == 8
@@ -161,9 +161,9 @@ def test_the_growth_benchmark_with_one_space_per_round_is_flat(tmp_path):
     rounds = 8
     spaces = {f"r{i}": (f"R{i}", _WORK.format(name=f"work{i}", keep=""))
               for i in range(1, rounds + 1)}
-    calls = "\n".join(f"    t = t + R{i}.work{i}(20000)" for i in range(1, rounds + 1))
+    calls = "\n".join(f"    t <- t + R{i}.work{i}(20000)" for i in range(1, rounds + 1))
     proj = _project(tmp_path, spaces,
-                    "place Entry {\n  fun main(): Number {\n    be t := 0\n"
+                    "place Entry {\n  fun main(): Number {\n    mut t := 0\n"
                     f"{calls}\n    return t / 40000\n  }}\n}}\n")
     rc, ticks = _trace(tmp_path, proj)
     assert rc == rounds

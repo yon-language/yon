@@ -27,8 +27,8 @@ PROGRAMS = [
     ("single_sub", "fun main(): Number { return 10 - 3 }", 7),
     ("chain_sub",  "fun main(): Number { return 10 - 3 - 2 }", 5),
     ("mixed_prec", "fun main(): Number { return 100 - 2 * 3 - 4 }", 90),
-    ("let42",      "fun main(): Number { be x := 20  be y := 22  return x + y }", 42),
-    ("if_false",   "fun main(): Number { be x := 20  be y := 22  "
+    ("let42",      "fun main(): Number { x := 20  y := 22  return x + y }", 42),
+    ("if_false",   "fun main(): Number { x := 20  y := 22  "
                    "return if x == y then 99 else x + y }", 42),
     ("call",       "fun dbl(x): Number { return x + x }\n"
                    "fun main(): Number { return dbl(21) }", 42),

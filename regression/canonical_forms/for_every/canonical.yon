@@ -1,8 +1,8 @@
 place Entry {
   fun main(): Number {
-    be acc := 0
-    be xs := List.cons(20, List.cons(22, List.empty(0)))
-    for every x in xs { acc = acc + x }
+    mut acc := 0
+    xs := List.cons(20, List.cons(22, List.empty(0)))
+    for every x in xs { acc <- acc + x }
     return acc
   }
 }

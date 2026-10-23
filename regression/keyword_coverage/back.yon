@@ -1,5 +1,5 @@
 /* back p = inv(p): the path travelled in reverse. */
 place Entry {
-  fun main(): Number { be p := back clear 5
+  fun main(): Number { p := back clear 5
     return p @ I0 }
 }

@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number visits Output {
-    be cw := VoyagerList.seal(1445)
-    be acc := Space.make(0)
-    iter 10000000 do { be _ := Space.set(acc, Space.get(acc) + (VoyagerList.open(VoyagerList.corrupt(cw, 2)))) }
-    be _p := Output.print(String.from_int(Space.get(acc)))
+    cw := VoyagerList.seal(1445)
+    acc := Space.make(0)
+    iter 10000000 do { _ := Space.set(acc, Space.get(acc) + (VoyagerList.open(VoyagerList.corrupt(cw, 2)))) }
+    _p := Output.print(String.from_int(Space.get(acc)))
     return 0
   }
 }

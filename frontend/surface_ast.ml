@@ -223,6 +223,11 @@ let arrow_written_in : (string * int * int, string) Hashtbl.t = Hashtbl.create 6
    Boolean's tt). *)
 let bare_point_sites : (string * int * int, string * string) Hashtbl.t = Hashtbl.create 32
 
+(* `mut c := e`: the sites (file, line, column of the statement) of the
+   bindings declared as cells. A write `c <- e` is legal only to a name whose
+   binding in scope is one of them. Filled by the parser. *)
+let mut_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 32
+
 (* An arm belongs to EVERY coproduct that lists it: the injection is an arrow
    of the sum, not of the arm (Harper ch. 11), so `Absent` is one name for two
    arrows, into Decision and into Lookup. The name alone does not say which
@@ -467,9 +472,9 @@ and pattern =
 (* ─── Statements ───────────────────────────────────────────────────── *)
 
 and stmt =
-  | SLet of string * expr * location                  (* "be x := e" *)
+  | SLet of string * expr * location                  (* "x := e", or "mut x := e" (its site in mut_sites) *)
   | SAssignHolds of lvalue * expr * location          (* internal: no surface form *)
-  | SAssignBecomes of lvalue * expr * location        (* "x = e" or "x.f = e" (the `becomes` surface token is retired; this node is internal-only) *)
+  | SAssignBecomes of lvalue * expr * location        (* "c <- e" (c a cell), or "x.f <- e" (refused: sections are immutable) *)
   | SReturn of expr * location
   | SCall of string * expr list * location            (* function call as statement *)
   | SNew of string * field_assignment list * location (* "new P { ... }" *)

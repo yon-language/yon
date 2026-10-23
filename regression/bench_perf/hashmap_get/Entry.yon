@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number visits Output {
-    be m := HashMap.set(HashMap.set(HashMap.empty(), 42, 1445), 7, 1)
-    be acc := Space.make(0)
-    iter 10000000 do { be _ := Space.set(acc, Space.get(acc) + ((match HashMap.get(m, 42) { Found(x) => x, Absent => 0 }))) }
-    be _p := Output.print(String.from_int(Space.get(acc)))
+    m := HashMap.set(HashMap.set(HashMap.empty(), 42, 1445), 7, 1)
+    acc := Space.make(0)
+    iter 10000000 do { _ := Space.set(acc, Space.get(acc) + ((match HashMap.get(m, 42) { Found(x) => x, Absent => 0 }))) }
+    _p := Output.print(String.from_int(Space.get(acc)))
     return 0
   }
 }

@@ -1,32 +1,32 @@
 place Entry {
   fun intern_distinct(n: Number): Number visits Output {
-    be acc := Space.make(0)
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be s := String.from_int(k)
-                be _ := Space.set(acc, Space.get(acc) + String.length(s))
-                be _2 := Space.set(i, k + 1) }
+    acc := Space.make(0)
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                s := String.from_int(k)
+                _ := Space.set(acc, Space.get(acc) + String.length(s))
+                _2 := Space.set(i, k + 1) }
     return Time.now_ns(0) - t0
   }
   fun intern_same(n: Number): Number visits Output {
-    be acc := Space.make(0)
-    be i := Space.make(0)
-    be t0 := Time.now_ns(0)
-    iter n do { be k := Space.get(i)
-                be s := String.from_int(7)
-                be _ := Space.set(acc, Space.get(acc) + String.length(s))
-                be _2 := Space.set(i, k + 1) }
+    acc := Space.make(0)
+    i := Space.make(0)
+    t0 := Time.now_ns(0)
+    iter n do { k := Space.get(i)
+                s := String.from_int(7)
+                _ := Space.set(acc, Space.get(acc) + String.length(s))
+                _2 := Space.set(i, k + 1) }
     return Time.now_ns(0) - t0
   }
   fun main(): Number visits Output {
-    be _g := Output.print(String.from_int(1000000))
-    be d100k := intern_distinct(100000)
-    be d1m := intern_distinct(1000000)
-    be s1m := intern_same(1000000)
-    be _1 := Output.print(String.from_int(d100k / 100000))
-    be _2 := Output.print(String.from_int(d1m / 1000000))
-    be _3 := Output.print(String.from_int(s1m / 1000000))
+    _g := Output.print(String.from_int(1000000))
+    d100k := intern_distinct(100000)
+    d1m := intern_distinct(1000000)
+    s1m := intern_same(1000000)
+    _1 := Output.print(String.from_int(d100k / 100000))
+    _2 := Output.print(String.from_int(d1m / 1000000))
+    _3 := Output.print(String.from_int(s1m / 1000000))
     return 0
   }
 }

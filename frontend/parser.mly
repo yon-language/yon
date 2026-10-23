@@ -115,7 +115,7 @@
 %token <string> QIDENT
 
 /* Top-level keywords */
-%token PLACE FUN MOVE VIEW REDUCTION OPERATION LET
+%token PLACE FUN MOVE VIEW REDUCTION OPERATION MUT LARROW
 %token SPACE
 /* A space is not declared in the surface: it is a directory. */
 %token CELL
@@ -563,11 +563,11 @@ geom_morphism_item:
      real: the exactness of f_* is never automatic. *)
   | EXACT_KW PUSH                                   { GmItemExactFLowerStar }
 
-/* `be x := e` defines x as e: `:=` reads "is defined as", the same symbol
+/* `x := e` defines x as e: `:=` reads "is defined as", the same symbol
    that defines a field (`side := Number`). x equals e by definition for its
-   whole scope; a later `x = e'` is the assignment. */
+   whole scope. */
 top_let:
-  | LET name = IDENT COLONEQ e = expr
+  | name = IDENT COLONEQ e = expr
     { TopLet (name, e, mk_loc $startpos $endpos) }
 
 /* ─── Place declaration ─────────────────────────────────────────────── */
@@ -1204,7 +1204,7 @@ reduction_type_params:
 
 reduction_clause:
   | rc = on_clause                        { rc }
-  | LET name = IDENT COLONEQ e = expr
+  | name = IDENT COLONEQ e = expr
     { RcLet (name, e, mk_loc $startpos $endpos) }
 
 on_clause:
@@ -1247,17 +1247,23 @@ while_stmt:
        * Lowered to scf.while + scf.condition + scf.yield. *)
       SWhile (c, body, mk_loc $startpos $endpos) }
 
+/* `x := e` defines a value; `mut c := e` declares a cell. The site of a
+   `mut` is recorded (Surface_ast.mut_sites): the checker refuses a write to
+   a name that is not a cell. */
 let_stmt:
-  | LET name = IDENT COLONEQ e = expr
+  | name = IDENT COLONEQ e = expr
     { SLet (name, e, mk_loc $startpos $endpos) }
+  | MUT name = IDENT COLONEQ e = expr
+    { let loc = mk_loc $startpos $endpos in
+      Hashtbl.replace Surface_ast.mut_sites
+        (loc.file, loc.start_line, loc.start_col) ();
+      SLet (name, e, loc) }
 
 assign_stmt:
-  | lv = lvalue EQ e = expr
-    { (* Reassignment (model A). `be x := e` declares a mutable local once;
-         `x = e` reassigns it (a second `be x := ...` in the same scope is a
-         compile error, the declare-once rule). The cell is promoted lazily: the first `=` on a
-         name makes its `be` allocate a Space cell, reads go through it, `x = e`
-         updates it. Snapshot semantics, no aliasing. *)
+  | lv = lvalue LARROW e = expr
+    { (* `c <- e` writes the cell c (declared `mut`). Snapshot semantics, no
+         aliasing; the cell is a Space cell (the desugar's promotion of the
+         names written). *)
       SAssignBecomes (lv, e, mk_loc $startpos $endpos) }
 
 lvalue:

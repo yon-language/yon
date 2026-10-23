@@ -1,7 +1,7 @@
 place Entry {
   fun main(): Number {
-    be acc := 0
-    repeat at most 42 times { acc = acc + 1 } otherwise { acc = 0 }
+    mut acc := 0
+    repeat at most 42 times { acc <- acc + 1 } otherwise { acc <- 0 }
     return acc
   }
 }

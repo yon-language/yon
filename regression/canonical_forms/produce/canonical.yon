@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number {
-    be s := produce { emit 41
+    s := produce { emit 41
       emit 1 }
     return s.fold(0, fun(a: Number, v: Number) => a + v)
   }

@@ -4,7 +4,7 @@
 place Entry {
   fun accept(a: Account): Number { return 7 }
   fun main(): Number {
-    be o := .-> Opened { initial 42 }
+    o := .-> Opened { initial 42 }
     return accept(o)
   }
 }

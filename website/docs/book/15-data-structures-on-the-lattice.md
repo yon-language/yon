@@ -152,11 +152,11 @@ is addressed by the content of its children:
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be l1 := MerkleTree.leaf(7)
-  be l2 := MerkleTree.leaf(9)
-  be t := MerkleTree.node2(1, l1, l2)
-  be t2 := MerkleTree.node2(1, MerkleTree.leaf(7), MerkleTree.leaf(9))
-  be same := MerkleTree.equal(t, t2)    // same content, same tree, same slot
+  l1 := MerkleTree.leaf(7)
+  l2 := MerkleTree.leaf(9)
+  t := MerkleTree.node2(1, l1, l2)
+  t2 := MerkleTree.node2(1, MerkleTree.leaf(7), MerkleTree.leaf(9))
+  same := MerkleTree.equal(t, t2)    // same content, same tree, same slot
   return if same then 42 else 0
 }
 ```
@@ -174,10 +174,10 @@ The module ships a fault injector so you can watch it work:
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  be vl := VoyagerList.empty()
-  be vl2 := VoyagerList.append(vl, 42)
-  be damaged := VoyagerList.corrupt_at(vl2, 0, 3)  // flip 3 bits in storage
-  be healed := VoyagerList.get(damaged, 0)         // Golay (24,12,8) corrects
+  vl := VoyagerList.empty()
+  vl2 := VoyagerList.append(vl, 42)
+  damaged := VoyagerList.corrupt_at(vl2, 0, 3)  // flip 3 bits in storage
+  healed := VoyagerList.get(damaged, 0)         // Golay (24,12,8) corrects
   return healed                                       // 42, healed
 }
 ```

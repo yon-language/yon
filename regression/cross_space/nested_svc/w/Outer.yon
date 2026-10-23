@@ -3,7 +3,7 @@ place Outer {
   inner Inner
 
   fun pairs(): Wire<Outer> {
-    be s := produce {
+    s := produce {
       emit .-> Outer { tag 7 inner .-> Inner { a 3 b "hi" } }
       emit .-> Outer { tag 8 inner .-> Inner { a 4 b "yo" } }
     }

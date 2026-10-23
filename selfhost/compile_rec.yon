@@ -29,6 +29,8 @@ place FunList { this > FlNil :U FlCons(Fun, FunList) }
 place FunParse { this > FPOk(Fun, TokList) :U FPErr }
 /* tokens (tags: Num0 Ident1 Fun2 Be3 ColonEq4 Return5 Number6 If7 Then8 Else9
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18 Minus19). */
+/* TKwBe is retired (a definition is `x := e`, with no keyword); it keeps
+   its tag so every other token keeps its own. */
 place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
 place Parse { this > POk(Term, TokList) :U PErr }
@@ -46,7 +48,6 @@ fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
 }
 fun hash_of(s: String): Number { return word_hash(s, 0, String.length(s), 0) }
 fun kw_fun(): Number    { return hash_of("fun") }
-fun kw_be(): Number     { return hash_of("be") }
 fun kw_return(): Number { return hash_of("return") }
 fun kw_number(): Number { return hash_of("number") }
 fun kw_if(): Number     { return hash_of("if") }
@@ -72,7 +73,6 @@ fun num_val(s: String, i: Number, j: Number, acc: Number): Number {
 }
 fun classify(h: Number): Token {
   return if h == kw_fun() then hit(TKwFun)
-    else if h == kw_be() then hit(TKwBe)
     else if h == kw_return() then hit(TKwReturn)
     else if h == kw_number() then hit(TKwNumber)
     else if h == kw_if() then hit(TKwIf)
@@ -81,7 +81,7 @@ fun classify(h: Number): Token {
     else hit(TIdent, h)
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
-  be j := word_end(s, i, len)
+  j := word_end(s, i, len)
   return hit(TkCons, classify(word_hash(s, i, j, 0)), lex_from(s, j, len))
 }
 /* ':=' (a definition: "is defined as") or a lone ':' (peek the next char
@@ -93,7 +93,7 @@ fun lex_colon(s: String, i: Number, len: Number): TokList {
     else hit(TkCons, hit(TColon), lex_from(s, i + 1, len))
 }
 fun lex_num(s: String, i: Number, len: Number): TokList {
-  be j := num_end(s, i, len)
+  j := num_end(s, i, len)
   return hit(TkCons, hit(TNum, num_val(s, i, j, 0)), lex_from(s, j, len))
 }
 fun lex_eq(s: String, i: Number, len: Number): TokList {
@@ -256,17 +256,21 @@ fun if_after_else(cond: Term, thenE: Term, p: Parse): Parse {
       POk(elseE, rest) => hit(POk, hit(TIf, cond, thenE, elseE), rest) ], p)
 }
 
-/* ---- body parser: ('be' IDENT ':=' expr)* 'return' expr ---- */
+/* ---- body parser: (IDENT ':=' expr)* 'return' expr ---- */
 fun parse_body(l: TokList, env: NameEnv): Parse {
-  return if head_tag(l) == 3
-    then parse_let(l, env)
+  return if head_tag(l) == 1
+    then parse_ident_stmt(l, env)
     else if head_tag(l) == 5
     then parse_expr(tail(l), env)
     else hit(PErr)
 }
+/* an IDENT starts a body item only as `IDENT ':='`, a definition */
+fun parse_ident_stmt(l: TokList, env: NameEnv): Parse {
+  return if head_tag(tail(l)) == 4 then parse_let(l, env) else hit(PErr)
+}
 fun parse_let(l: TokList, env: NameEnv): Parse {
-  be name := head_num(tail(l))
-  be after_def := tail(tail(tail(l)))
+  name := head_num(l)
+  after_def := tail(tail(l))
   return build_let(parse_expr(after_def, env), name, env)
 }
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
@@ -287,8 +291,8 @@ fun skip_fun_header(l: TokList): TokList {
   return tail(tail(tail(tail(l))))
 }
 fun parse_fundef(l: TokList): FunParse {
-  be name := head_num(tail(l))            /* IDENT after 'fun' */
-  be l3 := tail(tail(tail(l)))            /* skip fun, IDENT, '(' -> at param or ')' */
+  name := head_num(tail(l))            /* IDENT after 'fun' */
+  l3 := tail(tail(tail(l)))            /* skip fun, IDENT, '(' -> at param or ')' */
   return if head_tag(l3) == 1                /* a parameter is present */
     then fundef_body(name, 1, hit(NEnvCons, head_num(l3), hit(NEnvNil)),
                      skip_fun_header(tail(l3)))
@@ -360,17 +364,17 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
   ], t)
 }
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
-  be ea := gen(e1, env, n)
-  be eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
+  ea := gen(e1, env, n)
+  eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
   return hit(ER, er_ssa(eb),
             String.concat(er_code(ea), er_code(eb)),
             er_ctr(eb))
 }
 fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
-  be ea := gen(a, env, n)
-  be eb := gen(b, env, er_ctr(ea))
-  be m  := er_ctr(eb)
-  be rhs := String.concat(String.concat(op, " "),
+  ea := gen(a, env, n)
+  eb := gen(b, env, er_ctr(ea))
+  m  := er_ctr(eb)
+  rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
   return hit(ER, ssa_name(m),
             String.concat(String.concat(er_code(ea), er_code(eb)),
@@ -379,9 +383,9 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
 }
 /* call: emit the argument, then "<ssa> = func.call @fn_<callee>(<arg>) : (f64) -> f64". */
 fun gen_call(callee: Number, arg: Term, env: SsaEnv, n: Number): EmitR {
-  be ea := gen(arg, env, n)
-  be m  := er_ctr(ea)
-  be rhs := String.concat("func.call @",
+  ea := gen(arg, env, n)
+  m  := er_ctr(ea)
+  rhs := String.concat("func.call @",
                  String.concat(fn_symbol(callee),
                    String.concat("(", String.concat(er_ssa(ea), ") : (f64) -> f64"))))
   return hit(ER, ssa_name(m),
@@ -389,17 +393,17 @@ fun gen_call(callee: Number, arg: Term, env: SsaEnv, n: Number): EmitR {
             m + 1)
 }
 fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: Number): EmitR {
-  be ec := gen(c, env, n)
-  be et := gen(thenT, env, er_ctr(ec))
-  be ee := gen(elseT, env, er_ctr(et))
-  be m  := er_ctr(ee)
-  be head := String.concat(String.concat("  ", ssa_name(m)),
+  ec := gen(c, env, n)
+  et := gen(thenT, env, er_ctr(ec))
+  ee := gen(elseT, env, er_ctr(et))
+  m  := er_ctr(ee)
+  head := String.concat(String.concat("  ", ssa_name(m)),
                   String.concat(" = scf.if ", String.concat(er_ssa(ec), " -> (f64) {\n")))
-  be then_part := String.concat(er_code(et),
+  then_part := String.concat(er_code(et),
                        String.concat("    scf.yield ", String.concat(er_ssa(et), " : f64\n")))
-  be else_part := String.concat(er_code(ee),
+  else_part := String.concat(er_code(ee),
                        String.concat("    scf.yield ", String.concat(er_ssa(ee), " : f64\n")))
-  be code := String.concat(er_code(ec),
+  code := String.concat(er_code(ec),
                   String.concat(head,
                     String.concat(then_part,
                       String.concat("  } else {\n",
@@ -411,9 +415,9 @@ fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: Number): EmitR {
 /* a non-main function: func.func @fn_<name>(%arg0: f64) -> f64 { body ; return }.
  * arity 1 -> the parameter is %arg0 (de Bruijn 0); arity 0 -> empty env. */
 fun gen_fundef_text(name: Number, arity: Number, body: Term): String {
-  be env := if arity == 1 then hit(SeCons, "%arg0", hit(SeNil)) else hit(SeNil)
-  be eb  := gen(body, env, 0)
-  be sig := if arity == 1 then "(%arg0: f64) -> f64 {\n" else "() -> f64 {\n"
+  env := if arity == 1 then hit(SeCons, "%arg0", hit(SeNil)) else hit(SeNil)
+  eb  := gen(body, env, 0)
+  sig := if arity == 1 then "(%arg0: f64) -> f64 {\n" else "() -> f64 {\n"
   return String.concat(
     String.concat(String.concat("  func.func @", fn_symbol(name)), sig),
     String.concat(er_code(eb),
@@ -457,7 +461,7 @@ fun stubs(): String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun main_tail(result_ssa: String, ctr: Number): String {
-  be rss := ssa_name(ctr)
+  rss := ssa_name(ctr)
   return String.concat(
     String.concat("    ", String.concat(rss,
       String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
@@ -472,17 +476,17 @@ fun src(): String {
 fun main(): Number {
   /* full pipeline: source -> tokens -> FunList -> MLIR module -> file.
    * main = fact(5) = 120 -> emitted exit 120. */
-  be funs  := parse_funs(lex(src()))
-  be mh    := hash_of("main")
-  be helpers := gen_funs(funs, mh)
-  be rmain := gen(main_body(funs, mh), hit(SeNil), 0)
-  be full  := String.concat(mod_head(),
+  funs  := parse_funs(lex(src()))
+  mh    := hash_of("main")
+  helpers := gen_funs(funs, mh)
+  rmain := gen(main_body(funs, mh), hit(SeNil), 0)
+  full  := String.concat(mod_head(),
                    String.concat(helpers,
                      String.concat(main_head(),
                        String.concat(er_code(rmain),
                          String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
                            stubs())))))
-  be _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
-  be _p := String.print(full)
+  _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
+  _p := String.print(full)
   return String.length(full)
 }

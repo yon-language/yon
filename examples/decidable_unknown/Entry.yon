@@ -2,7 +2,7 @@ place Entry {
 /* decide su unknown non e' un errore e non e' false: e' il braccio Unknown,
  * e il programma risponde anche a quello. */
 fun main(): Number {
-  be p := unknown
+  p := unknown
   return match decide(p) { Present => 1, Absent => 0, Unknown => 2 }
 }
 }

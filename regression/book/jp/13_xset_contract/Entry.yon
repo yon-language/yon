@@ -1,36 +1,36 @@
 place Entry {
   fun main(): Number visits Output {
-    be s := XSet.empty()
-    s = XSet.add(s, Leech.embed(7, 0))
-    s = XSet.add(s, Leech.embed(7, 0))
-    be v1 := XSet.size(s)                       // dedup by exact point -> 1
-    s = XSet.add(s, Leech.embed(11, 0))
-    be v2 := XSet.size(s)                       // a distinct point counts -> 2
-    s = XSet.add(s, 1445)
-    be v3 := XSet.size(s)                       // raw 1445 not type-2, dropped -> 2
+    mut s := XSet.empty()
+    s <- XSet.add(s, Leech.embed(7, 0))
+    s <- XSet.add(s, Leech.embed(7, 0))
+    v1 := XSet.size(s)                       // dedup by exact point -> 1
+    s <- XSet.add(s, Leech.embed(11, 0))
+    v2 := XSet.size(s)                       // a distinct point counts -> 2
+    s <- XSet.add(s, 1445)
+    v3 := XSet.size(s)                       // raw 1445 not type-2, dropped -> 2
 
-    be s3 := XSet.empty()
-    s3 = XSet.add(s3, Leech.embed(7, 3))
-    be v4 := XSet.size(s3)                       // one mode-3 point accepted -> 1
+    mut s3 := XSet.empty()
+    s3 <- XSet.add(s3, Leech.embed(7, 3))
+    v4 := XSet.size(s3)                       // one mode-3 point accepted -> 1
 
-    be a := XSet.empty()
-    a = XSet.add(a, Leech.embed(7, 0))
-    a = XSet.add(a, Leech.embed(11, 0))
-    be b := XSet.empty()
-    b = XSet.add(b, Leech.embed(11, 0))
-    be v5 := XSet.size(XSet.intersect(a, b))     // {7,11} ^ {11} -> 1
-    be c := XSet.empty()
-    c = XSet.add(c, Leech.embed(99, 0))
-    be v6 := XSet.size(XSet.union(a, c))         // {7,11} u {99} -> 3
+    mut a := XSet.empty()
+    a <- XSet.add(a, Leech.embed(7, 0))
+    a <- XSet.add(a, Leech.embed(11, 0))
+    mut b := XSet.empty()
+    b <- XSet.add(b, Leech.embed(11, 0))
+    v5 := XSet.size(XSet.intersect(a, b))     // {7,11} ^ {11} -> 1
+    mut c := XSet.empty()
+    c <- XSet.add(c, Leech.embed(99, 0))
+    v6 := XSet.size(XSet.union(a, c))         // {7,11} u {99} -> 3
 
-    be _1 := Output.print(String.from_int(v1))
-    be _2 := Output.print(String.from_int(v2))
-    be _3 := Output.print(String.from_int(v3))
-    be _4 := Output.print(String.from_int(v4))
-    be _5 := Output.print(String.from_int(v5))
-    be _6 := Output.print(String.from_int(v6))
+    _1 := Output.print(String.from_int(v1))
+    _2 := Output.print(String.from_int(v2))
+    _3 := Output.print(String.from_int(v3))
+    _4 := Output.print(String.from_int(v4))
+    _5 := Output.print(String.from_int(v5))
+    _6 := Output.print(String.from_int(v6))
 
-    be f := (if v1 == 1 then 0 else 1)
+    f := (if v1 == 1 then 0 else 1)
              + (if v2 == 2 then 0 else 1)
              + (if v3 == 2 then 0 else 1)
              + (if v4 == 1 then 0 else 1)

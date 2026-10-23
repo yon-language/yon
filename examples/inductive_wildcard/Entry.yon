@@ -28,9 +28,9 @@ fun is_blue(c: Color): Number { return match c { Blue { } => 1, _ => 0 } }
 
 fun main(): Number {
   // le due forme coincidono su ogni costruttore -> ciascuna differenza e' 0
-  be d1 := weight_exhaustive(.-> Blue { _1 7 })  - weight_wild(.-> Blue { _1 7 })
-  be d2 := weight_exhaustive(Red)      - weight_wild(Red)
-  be d3 := weight_exhaustive(.-> Gray { _1 9 })  - weight_wild(.-> Gray { _1 9 })
+  d1 := weight_exhaustive(.-> Blue { _1 7 })  - weight_wild(.-> Blue { _1 7 })
+  d2 := weight_exhaustive(Red)      - weight_wild(Red)
+  d3 := weight_exhaustive(.-> Gray { _1 9 })  - weight_wild(.-> Gray { _1 9 })
   // (0 + 0 + 0) + 41 + 1 (is_blue su Blue) + 0 (is_blue su Green) = 42
   return d1 + d2 + d3 + weight_wild(.-> Blue { _1 41 }) + is_blue(.-> Blue { _1 0 }) + is_blue(Green)
 }

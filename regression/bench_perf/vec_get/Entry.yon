@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number visits Output {
-    be v := Vec.push(Vec.push(Vec.empty(), 1445), 1280)
-    be acc := Space.make(0)
-    iter 10000000 do { be _ := Space.set(acc, Space.get(acc) + (Vec.get(v, 0))) }
-    be _p := Output.print(String.from_int(Space.get(acc)))
+    v := Vec.push(Vec.push(Vec.empty(), 1445), 1280)
+    acc := Space.make(0)
+    iter 10000000 do { _ := Space.set(acc, Space.get(acc) + (Vec.get(v, 0))) }
+    _p := Output.print(String.from_int(Space.get(acc)))
     return 0
   }
 }

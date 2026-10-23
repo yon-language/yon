@@ -5,8 +5,8 @@
 //
 place Entry {
   fun main(): Number {
-    be x := 1
-    be x := 2
+    x := 1
+    x := 2
     return x
   }
 }

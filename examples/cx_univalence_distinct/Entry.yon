@@ -30,8 +30,8 @@ fun eps(b: Bit): Id(Bit, b2bit(bit2b(b)), b) {
 }
 
 fun main(): Number {
-  be bridge := equiv(b2bit, bit2b, eta, eps)   // Bool ~= Bit, non l'identita'
-  be y := transport(ua(bridge), tt)       // porta tt lungo ua(Bool~=Bit)
+  bridge := equiv(b2bit, bit2b, eta, eps)   // Bool ~= Bit, non l'identita'
+  y := transport(ua(bridge), tt)       // porta tt lungo ua(Bool~=Bit)
   return match y { one => 1, zero => 0 }           // tt |-> one |-> 1
 }
 }
