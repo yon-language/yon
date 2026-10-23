@@ -1301,7 +1301,9 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
                 (match Hashtbl.find_opt wire_imports op, call_sig env ps r with
                  | Some (sp, _), Some sg ->
                      Hashtbl.replace Surface_ast.rpc_sigs
-                       (sp, Module_prefix.op_selector bare) sg
+                       (sp, Module_prefix.op_selector bare) sg;
+                     Hashtbl.replace Surface_ast.rpc_returns
+                       (sp, Module_prefix.op_selector bare) r
                  | _ -> ());
                 ok ()
             | _ -> ok ()))
@@ -7108,6 +7110,7 @@ let check_program (p : program) : check_result =
   Hashtbl.reset Surface_ast.producer_roots;
   Hashtbl.reset Surface_ast.wire_types;
   Hashtbl.reset Surface_ast.rpc_sigs;
+  Hashtbl.reset Surface_ast.rpc_returns;
   Hashtbl.reset Surface_ast.op_sigs;
   Hashtbl.reset Surface_ast.cross_calls;
   Hashtbl.reset Surface_ast.stateful_spaces;

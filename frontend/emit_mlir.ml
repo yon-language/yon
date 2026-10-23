@@ -508,6 +508,20 @@ let rpc2_parse_synth (name : string) : (int * string) option =
 
 let is_stdlib_builtin name = List.mem_assoc name stdlib_registry
 
+(* The carrier of the answer of a call between processes: the one its
+   declared type gives (Tycheck records it with the call's signature), f64
+   for an untyped call. *)
+let rpc_ret_carrier (sp : string) (args : C.term list) : string =
+  match args with
+  | a0 :: _ ->
+      (match Builtins.decode_number a0 with
+       | Some f ->
+           (match Hashtbl.find_opt Surface_ast.rpc_returns (sp, int_of_float f) with
+            | Some t -> ty_to_mlir (Desugar.desugar_ty t)
+            | None -> "f64")
+       | None -> "f64")
+  | [] -> "f64"
+
 (* Walk the AST to collect the names of stdlib builtins actually called. This
    avoids symbol clashes when the program already defines an operation with the
    same mangled name (for example Ord__compare): we only emit an extern for a
@@ -1376,8 +1390,11 @@ and infer_app (e : emitter) (env : (string * string) Env.t)
                        (* integer division/remainder: f64 transport *)
                        "f64"
                      else if rpc2_parse_synth fname <> None then
-                       (* Idraulica v2 cross-Space invoke: numbers only *)
-                       "f64"
+                       (* a call between processes: the carrier of its
+                          declared result *)
+                       (match rpc2_parse_synth fname with
+                        | Some (_, sp) -> rpc_ret_carrier sp _args
+                        | None -> "f64")
                      else
                        failwith (Printf.sprintf
                                    "[emit_mlir infer] unknown function '%s'."
@@ -5027,7 +5044,10 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
                   "%s = func.call @yon_rt_rpc2_invoke_typed(%s, %s, %s, %s) : \
                    (!llvm.ptr, f64, !llvm.ptr, f64, f64, f64, f64) -> f64"
                   v v_sp (List.hd arg_vals) v_sig (String.concat ", " (user @ pad)));
-                (v, "f64")
+                (* the answer is a 64-bit slot: it takes the carrier of the
+                   declared result, as the result of a local call has it *)
+                let ret = rpc_ret_carrier sp args in
+                (coerce_to_param e v "f64" ret, ret)
             | None ->
            let v = fresh_ssa e in
            let f64s =
@@ -6420,6 +6440,15 @@ let emit_program (dr : Desugar.desugar_result) : string =
     if Hashtbl.length Surface_ast.prelude_place_names = 0 then places
     else begin
      let used : (string, unit) Hashtbl.t = Hashtbl.create 8 in
+     (* a place a type names is used too: the declared result of a call
+        between processes, a parameter (the element a wire delivers) is read
+        as that place, even when this program never constructs it *)
+     let rec named (ty : C.ty) : unit =
+       match ty with
+       | C.TyPlace n when not (Carrier.collection_handle n) -> Hashtbl.replace used n ()
+       | C.TyArrow (a, b) | C.TyPi (_, a, b) | C.TySigma (_, a, b) -> named a; named b
+       | C.TyChannel a -> named a
+       | _ -> () in
      let rec scan (t : C.term) : unit =
        (match t with
         | C.Var v when String.length v > 10 && String.sub v 0 10 = "__section_" ->
@@ -6427,12 +6456,14 @@ let emit_program (dr : Desugar.desugar_result) : string =
         | _ -> ());
        match t with
        | C.App (a, b) -> scan a; scan b
-       | C.Lam (_, _, b) | C.PLam (_, b) | C.PApp (b, _) -> scan b
+       | C.Lam (_, ty, b) -> named ty; scan b
+       | C.PLam (_, b) | C.PApp (b, _) -> scan b
        | C.HITConstr (_, args) -> List.iter scan args
        | C.HITElim (brs, x) -> scan x; List.iter (fun (_, _, b) -> scan b) brs
        | _ -> () in
      List.iter (fun (_, body) -> scan body) dr_functions_shaken;
      (match dr.main with Some m -> scan m | None -> ());
+     Hashtbl.iter (fun _ t -> named (Desugar.desugar_ty t)) Surface_ast.rpc_returns;
      (* keep is by IDENTITY (the decl's site), never by name. A user place
         cannot take a prelude name (E2006, Tycheck.library_name_collisions):
         the library's names are extended with `this <`, never redeclared. *)
