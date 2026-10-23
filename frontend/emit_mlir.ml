@@ -1734,6 +1734,14 @@ let emit_cross (e : emitter) (v : string) (ty : string) (root : int64) (to_ : st
                  r f hi lo to_);
   coerce e r "f64" ty
 
+(* A zero-argument call to a user function. An inductive result comes back as
+   its section handle and is unpacked to f64, as the call with arguments does:
+   the body works in f64, the section lives only at signatures. *)
+let emit_zero_arg_call (e : emitter) (f : string) (ret : string) : string * string =
+  let v = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s" v f ret);
+  if is_ind_section ret then (coerce_to_param e v ret "f64", "f64") else (v, ret)
+
 let rec emit_term (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list)
@@ -1891,10 +1899,7 @@ let rec emit_term (e : emitter)
            let real_fname = String.sub ssa 10 (String.length ssa - 10) in
            (match List.assoc_opt real_fname funcs with
             | Some fs when fs.fn_params = [] ->
-                let v = fresh_ssa e in
-                emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s"
-                               v real_fname fs.fn_ret_mlir);
-                (v, fs.fn_ret_mlir)
+                emit_zero_arg_call e real_fname fs.fn_ret_mlir
             | Some _ ->
                 failwith (Printf.sprintf
                   "[emit_mlir HOF Var] '%s' needs arguments; use it as f(args), not bare."
@@ -1908,10 +1913,7 @@ let rec emit_term (e : emitter)
            (* The name of a 0-argument user function: emit a direct call. *)
            (match List.assoc_opt x funcs with
             | Some fs when fs.fn_params = [] ->
-                let v = fresh_ssa e in
-                emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s"
-                               v x fs.fn_ret_mlir);
-                (v, fs.fn_ret_mlir)
+                emit_zero_arg_call e x fs.fn_ret_mlir
             | Some fs ->
                 (match closure_target_index funcs x with
                  | Some _ ->
@@ -4092,10 +4094,7 @@ let rec emit_term (e : emitter)
        | C.Var f when List.mem_assoc f funcs ->
            (match List.assoc f funcs with
             | fs when fs.fn_params = [] ->
-                let v = fresh_ssa e in
-                emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s"
-                               v f fs.fn_ret_mlir);
-                (v, fs.fn_ret_mlir)
+                emit_zero_arg_call e f fs.fn_ret_mlir
             | _ ->
                 failwith (Printf.sprintf
                   "[emit_mlir] %s() called with no arguments but the function has parameters." f))
@@ -4106,10 +4105,7 @@ let rec emit_term (e : emitter)
                 let real_fname = String.sub ssa 10 (String.length ssa - 10) in
                 (match List.assoc_opt real_fname funcs with
                  | Some fs when fs.fn_params = [] ->
-                     let v = fresh_ssa e in
-                     emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s"
-                                    v real_fname fs.fn_ret_mlir);
-                     (v, fs.fn_ret_mlir)
+                     emit_zero_arg_call e real_fname fs.fn_ret_mlir
                  | _ ->
                      failwith (Printf.sprintf
                        "[emit_mlir] alias %s does not name a zero-argument function." x))
