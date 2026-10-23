@@ -192,6 +192,59 @@ def test_a_call_inside_one_space_is_not_a_crossing(tmp_path):
     assert subprocess.run([str(exe)], timeout=60).returncode == 5
 
 
+# ---- a place made by the caller crosses into another Space of the binary ----
+
+_NOTE_TOML = _TOML.replace('objects = ["Q"]', 'objects = ["Note"]')
+
+
+def _note_project(tmp_path: Path, space_file: str, entry: str) -> Path:
+    proj = tmp_path / "proj"
+    (proj / "w").mkdir(parents=True)
+    (proj / "yon.toml").write_text(_NOTE_TOML)
+    (proj / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+    name, text = space_file
+    (proj / "w" / name).write_text(text)
+    (proj / "Entry.yon").write_text(entry)
+    return proj
+
+
+_NOTE_ENTRY = """place Entry { }
+fun main(): Number {
+  be s := .-> %s { message "unexpected }" line 30 }
+  be d := describe(s)
+  return d + s.line
+}
+"""
+
+
+def test_a_place_with_a_text_crosses_into_another_space_and_stays_the_callers(tmp_path):
+    # the section main makes lives in main's heaps: before, `.-> Note` was
+    # pinned to the Space of Note, and the region ending the call into that
+    # Space emptied it under main (the read of s.line aborted)
+    proj = _note_project(tmp_path, ("Note.yon",
+        "place Note { message Text  line Number }\n\n"
+        "fun describe(e: Note): Number { return String.length(e.message) }\n"),
+        _NOTE_ENTRY % "Note")
+    exe = tmp_path / "probe.exe"
+    rc, out = _yonc(proj, exe)
+    assert rc == 0, out
+    assert subprocess.run([str(exe)], timeout=60).returncode == 42   # 12 + 30
+
+
+def test_a_sub_object_crosses_by_its_own_frame(tmp_path):
+    # describe takes the prelude's Error; the value is a SyntaxError, copied
+    # by its own frame (the frame of Error does not describe it)
+    proj = _note_project(tmp_path, ("SyntaxError.yon",
+        "place SyntaxError { this < Error  line Number }\n\n"
+        "fun describe(e: Error): Number { return String.length(e.message) }\n"),
+        _NOTE_ENTRY % "SyntaxError")
+    (proj / "yon.toml").write_text(_TOML.replace('objects = ["Q"]', 'objects = ["SyntaxError"]'))
+    exe = tmp_path / "probe.exe"
+    rc, out = _yonc(proj, exe)
+    assert rc == 0, out
+    assert subprocess.run([str(exe)], timeout=60).returncode == 42
+
+
 # ---- two processes ----
 
 _ECHO = """place Entry {
@@ -334,3 +387,45 @@ def test_a_wire_of_a_coproduct_is_refused(tmp_path):
 def test_a_wire_of_numbers_is_accepted(tmp_path):
     rc, out = _producer(tmp_path, "Number", "1")
     assert rc == 0, out
+
+
+# ---- a place with a Text between processes ----
+
+_NOTES_TOML = """[package]
+name = "%s"
+
+[runtime]
+backend = "memory"
+
+[world.W]
+objects = ["X"]
+spaces  = %s
+"""
+
+
+def test_a_place_with_a_text_crosses_between_processes(tmp_path):
+    # the server's dispatch table admits an operation whose parameter is a
+    # place: the frame is rebuilt in its heaps and the handle is passed
+    for p, spaces in (("svc", '["w"]'), ("client", '["w", "Notes"]')):
+        (tmp_path / p / "w").mkdir(parents=True)
+        (tmp_path / p / "yon.toml").write_text(_NOTES_TOML % (p, spaces))
+        (tmp_path / p / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+        (tmp_path / p / "w" / "Note.yon").write_text("place Note { message Text  line Number }\n")
+    (tmp_path / "svc" / "Entry.yon").write_text(
+        "place Entry {\n  fun describe(e: Note): Number { return String.length(e.message) + e.line }\n"
+        "  fun main(): Number { return 0 }\n}\n")
+    mods = tmp_path / "client" / "yon_modules" / "notes"
+    mods.mkdir(parents=True)
+    (mods / "notes.yon").write_text("fun describe(e: Note): Number { return 0 }\n")
+    (tmp_path / "client" / "Entry.yon").write_text(
+        "import notes::describe from Notes\n\nplace Entry {\n  fun main(): Number {\n"
+        "    be n := .-> Note { message \"unexpected }\" line 30 }\n"
+        "    return describe(n)\n  }\n}\n")
+    rc, out = _yonc(tmp_path / "svc", tmp_path / "Notes_srv")
+    assert rc == 0, out
+    rc, out = _yonc(tmp_path / "client", tmp_path / "client.exe")
+    assert rc == 0, out
+    env = dict(os.environ, YON_WORLD="n%03x" % (os.getpid() % 4096))
+    r = subprocess.run([str(tmp_path / "client.exe")], capture_output=True, timeout=60,
+                       cwd=str(tmp_path), env=env)
+    assert r.returncode == 42, r.stderr

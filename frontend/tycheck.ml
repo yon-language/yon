@@ -1336,13 +1336,31 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
            let what_res = "the result of " ^ name in
            let* () = first (List.concat (List.mapi (fun i t -> checks (what_arg i) t) ps)
                             @ (match r with Some r -> checks what_res r | None -> [])) in
+           (* a value crosses as what it is: a sub-object passed where its
+              super is declared is copied by its own frame (the frame of the
+              super does not describe it) and is usable as the super on the
+              other side through the mono *)
+           let arg_crossing i p =
+             match List.nth_opt arg_tys i with
+             | Some (TyUser a as at) when (match resolve_fused p with
+                                           | TyUser b -> a <> b | _ -> false) ->
+                 (match crossing at with Some c -> Some c | None -> crossing p)
+             | _ -> crossing p in
            (match (match r with Some r -> crossing r | None -> Some (0L, false)),
-                  List.map crossing ps with
+                  List.mapi arg_crossing ps with
             | Some res, args when List.for_all Option.is_some args ->
-                Hashtbl.replace Surface_ast.cross_calls (!current_fun, name)
-                  (there, res, List.map Option.get args)
-            | _ -> ());
-           ok ()
+                let entry = (there, res, List.map Option.get args) in
+                (match Hashtbl.find_opt Surface_ast.cross_calls (!current_fun, name) with
+                 | Some prev when prev <> entry ->
+                     err loc (Printf.sprintf
+                       "%s calls %s twice with values of different types across \
+                        the Space boundary; the copy of a call is decided once \
+                        per caller. Pass values of one type, or call it from two \
+                        functions." !current_fun name)
+                 | _ ->
+                     Hashtbl.replace Surface_ast.cross_calls (!current_fun, name) entry;
+                     ok ())
+            | _ -> ok ())
        | _ -> ok ())
 
 (* A producer's wire carries its elements to another Space. *)
