@@ -104,6 +104,17 @@ let prim_carrier (name : string) : t option =
    source of truth for the primitive set; emit aliases this. *)
 let is_prim_name (name : string) : bool = prim_carrier name <> None
 
+(* A collection of the registry is a value of the heap, whatever its
+   parameters: a handle, as Text is. Its Core name is the registry place
+   (HashMap<K, V> is HashMap) or the content-addressed tag of the surface
+   former (List<T> is list_of_T, Map<K, V> is map_K_V); a user place has a
+   capital initial, so the lower-case tags name no place of the user's. *)
+let collection_handle (name : string) : bool =
+  let starts p = String.length name >= String.length p
+                 && String.sub name 0 (String.length p) = p in
+  List.mem name ["List"; "Vec"; "HashMap"; "HashSet"; "XRelMap"; "XRelSet"]
+  || starts "list_of_" || starts "map_"
+
 (* Bit width of a scalar carrier — the fusion width-check compares the
    declared <w> against THIS, not against a hardcoded pair. *)
 let scalar_bits (w : width) : int =
@@ -139,7 +150,10 @@ let rec of_core_ty (ty : C.ty) : t =
   | C.TyPlace name ->
       (* a primitive place gets its fixed carrier; any other named place is a
          section handle. *)
-      (match prim_carrier name with Some c -> c | None -> Section name)
+      (match prim_carrier name with
+       | Some c -> c
+       | None when collection_handle name -> Handle name
+       | None -> Section name)
   | (C.TyArrow (_, _) | C.TyPi (_, _, _)) ->
       (* A function VALUE is a first-class content-addressed closure: an f64 handle
          to a node carrying the target's dense index (its tag/postmark) and the

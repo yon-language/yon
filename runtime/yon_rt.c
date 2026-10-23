@@ -7754,11 +7754,9 @@ void yon_rt_wire_buf_free(yon_wire_buf_t *b) {
 
 static int wire_enc(yon_wire_buf_t *b, uint64_t root, double v);
 
-/* A field of a place holds a number or a string as its f64 bits, and a
- * collection as its handle converted to an i64. */
-static int wire_field_is_handle(const yon_wire_type_t *t) {
-    return t->kind != YON_WIRE_KIND_SCALAR && t->kind != YON_WIRE_KIND_STRING;
-}
+/* A field of a place holds a number, a string or a collection as its f64
+ * bits (the carrier its type gives, the same in a field and in a body), and
+ * a place as its section. */
 
 /* a place, by its section: the frame header, the fields, the length */
 static int wire_enc_section(yon_wire_buf_t *b, const yon_wire_type_t *t,
@@ -7785,10 +7783,6 @@ static int wire_enc_section(yon_wire_buf_t *b, const yon_wire_type_t *t,
             memcpy(&raw, slot, 8u);
             if (wire_enc_section(b, ft, (yon_section_t)raw) != 0)
                 return -1;
-        } else if (wire_field_is_handle(ft)) {
-            int64_t raw;   /* a collection in a field is its handle as an i64 */
-            memcpy(&raw, slot, 8u);
-            if (wire_enc(b, ft->root, (double)raw) != 0) return -1;
         } else {
             double fv;
             memcpy(&fv, slot, 8u);
@@ -7902,12 +7896,7 @@ static int wire_dec_section(wire_rd_t *r, const yon_wire_type_t *t,
         } else {
             double fv;
             if (wire_dec(r, ft->root, &fv) != 0) return -1;
-            if (wire_field_is_handle(ft)) {
-                int64_t raw = (int64_t)fv;
-                memcpy(inst + i * 8u, &raw, 8u);
-            } else {
-                memcpy(inst + i * 8u, &fv, 8u);
-            }
+            memcpy(inst + i * 8u, &fv, 8u);
         }
     }
     if (r->cur != end) {   /* loud on structural drift, never silent */
