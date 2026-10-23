@@ -1258,16 +1258,15 @@ def _ab_program_desugar(b_arms, main_body):
             f"fun main(): Number {{ return {main_body} }}\n")
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a match on a sum dispatches on that sum's own tags, whatever other sums name their arms")
 def test_homonymous_arms_across_sums_keep_their_own_tags(tmp_path):
+    # a match on a sum dispatches on that sum's own tags, whatever other sums
+    # name their arms
     v = _value_desugar(tmp_path, _ab_program_desugar("Z :U X", "code(Y)"), _AB_TOML_desugar)
     _verdict(v == 2, f"code(Y) is 2, got {v}")
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a bare point is resolved by the expected sum, so X is an A where an A is expected")
 def test_a_bare_point_is_resolved_by_the_expected_sum(tmp_path):
+    # the parameter of code is the expected type: X is an A there
     v = _value_desugar(tmp_path, _ab_program_desugar("Z :U X", "code(X)"), _AB_TOML_desugar)
     _verdict(v == 1, f"code(X) is 1, got {v}")
 
@@ -3656,9 +3655,8 @@ def test_two_coproducts_with_distinct_arms_compute(tmp_path):
     assert v == 220
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="the tag of an arm is its position in ITS coproduct (5b)")
 def test_one_arm_name_in_two_coproducts_in_other_positions(tmp_path):
+    # the tag of an arm is its position in ITS coproduct
     v = _value_or_outcome(tmp_path, _ASK_FLIP % "Yes", "Yes in Ask and in Flip",
                           extra=_ARMS_WORLD, files=_arms_files("Nay :U Yes"))
     _verdict(v == 220, f"exit {v}, expected 220")
@@ -3696,9 +3694,8 @@ fun main(): Number {
 _ACCOUNTS_WORLD = '\n[world.W]\nobjects = ["Opened", "Closed", "Frozen"]\nspaces  = ["w"]\n'
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="the upcast of a place arm is keyed by the arm name, one union only (5b)")
 def test_a_place_arm_of_two_unions_is_usable_as_each(tmp_path):
+    # the upcast of a place arm is a relation: one injection per union
     entry = """place Entry {
   fun accept(a: Account): Number { return 7 }
   fun log(l: Ledger): Number { return 8 }

@@ -780,9 +780,7 @@ let rec is_section_subtype (e : emitter) (sub_ty : string) (super_ty : string)
   let arm_upcast =
     match extract_place_name sub_ty with
     | Some arm ->
-        (match Hashtbl.find_opt Surface_ast.union_arm_upcasts arm with
-         | Some union_sec -> union_sec = super_ty
-         | None -> false)
+        List.mem super_ty (Hashtbl.find_all Surface_ast.union_arm_upcasts arm)
     | None -> false
   in
   if arm_upcast then true

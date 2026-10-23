@@ -1483,9 +1483,12 @@ let unnamed_coproduct_err (loc : location) (x : string) (cs : string list) =
 
 (* the coproduct of a match, recorded at its site for the desugar's tag switch *)
 let record_match_coproduct (env : Tyenv.env) (loc : location) (x_ty : ty) : unit =
-  match named_coproduct_of_ty env x_ty with
-  | Some c -> Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc) c
-  | None -> ()
+  match named_coproduct_of_ty env x_ty, x_ty with
+  | Some c, _ -> Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc) c
+  | None, (TySum vs | TySumIn (vs, _)) ->
+      Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc)
+        (Surface_ast.anon_sum_key vs)
+  | None, _ -> ()
 
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
@@ -1947,7 +1950,10 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                   (match result, Tyenv.named_sum_of_ctor env ctor with
                    | Some t, _ -> ok t
                    | None, Some (name, _) -> ok (TyUser name)
-                   | None, None -> ok (TySum variants))
+                   | None, None ->
+                       Hashtbl.replace Surface_ast.arm_coproduct_sites
+                         (site_of loc) (Surface_ast.anon_sum_key variants);
+                       ok (TySum variants))
             | candidates ->
                 let signatures =
                   List.map
@@ -2416,11 +2422,33 @@ got %s" (Tyenv.ty_to_string other)))
        * chapter 10.)
        * A call can be a user function, a qualified operation
        * (Place__op via the desugarer's mangling), or a built-in. *)
+      (* an arm several coproducts list, passed where the parameter of a user
+         function names one of them, is checked against it: the parameter is
+         its expected type *)
+      let param_ty i =
+        match Tyenv.lookup_fun env name with
+        | Some fs when i < List.length fs.fs_params ->
+            Some (snd (List.nth fs.fs_params i))
+        | _ -> None in
+      let shared_arm_for pty arg =
+        let arm = match arg with
+          | EVar (x, _) when Tyenv.lookup_var env x = None -> Some x
+          | EHITConstr (c, _, _) -> Some c
+          | _ -> None in
+        match arm, named_coproduct_of_ty env pty with
+        | Some x, Some c ->
+            List.length (coproducts_of_arm env x) > 1
+            && coproduct_arm env c x <> None
+        | _ -> false in
       let arg_tys_result =
         List.fold_left
           (fun acc arg ->
              let* tys = acc in
-             let* t = infer env ctx arg in
+             let* t =
+               match param_ty (List.length tys) with
+               | Some pty when shared_arm_for pty arg ->
+                   let* () = check env ctx arg pty in ok pty
+               | _ -> infer env ctx arg in
              ok (tys @ [t]))
           (ok []) args
       in
@@ -2957,7 +2985,10 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                    check_args actual expected
                | _ -> assert false
              in
-             check_args args variant.v_args)
+             let* () = check_args args variant.v_args in
+             Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc)
+               (Surface_ast.anon_sum_key variants);
+             ok ())
   | EVar (x, loc), _
     when lookup_scheme x = None && Tyenv.lookup_var env x = None
          && not (Carrier.is_prim_name x)
@@ -3060,7 +3091,8 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
            (match hits with
             | [v] ->
                 Hashtbl.replace Surface_ast.return_inject_sites
-                  (loc_e.file, loc_e.start_line, loc_e.start_col) v.v_name;
+                  (loc_e.file, loc_e.start_line, loc_e.start_col)
+                  (Surface_ast.anon_sum_key variants, v.v_name);
                 ok ()
             | [] ->
                 err loc_e (Printf.sprintf

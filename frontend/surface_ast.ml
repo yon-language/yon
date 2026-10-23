@@ -81,7 +81,9 @@ let method_resolutions : (int * int, string) Hashtbl.t = Hashtbl.create 64
    the handle (topos.subtype_cast lowers to identity). Filled by the desugar
    (arm place name -> the union's ind-section MLIR type); consulted by emit's
    is_section_subtype. Bare-constructor arms and synthetic payload arms never
-   enter (no sections of theirs exist). *)
+   enter (no sections of theirs exist). A relation: an arm place listed by
+   several unions has one binding per union (Hashtbl.add, read with
+   find_all). *)
 let union_arm_upcasts : (string, string) Hashtbl.t = Hashtbl.create 16
 
 (* Fusion places (prelude): place name -> primitive code it IS the face of
@@ -153,8 +155,9 @@ let fused_elim_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 8
 (* `on error E`: return sites where the checker proved the
    expression inhabits ONE ARM of the coproduct T + E and desugar must wrap
    it in that arm's injection. Site-keyed (the ledger rule), value = arm
-   index (0 = success, 1 = error). *)
-let return_inject_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 16
+   index (0 = success, 1 = error). Value: (the key of the coproduct, as
+   sum_key names it, the arm). *)
+let return_inject_sites : (string * int * int, string * string) Hashtbl.t = Hashtbl.create 16
 
 (* arrows DECLARED IN THE PRELUDE (qualified names, post-qualify_homes).
    Two consumers: emit TREE-SHAKES them (a program carries only what it
@@ -519,6 +522,12 @@ let face_name_of_ty (t : ty) : string =
   | TyUser n -> n
   | TyPrim p -> p
   | _ -> "Value"
+
+(* The key of a coproduct in the tables keyed by (coproduct, arm): its name
+   for a named coproduct, the sequence of its arm names for an anonymous sum
+   (an inline `A | B`, the error coproduct T + E), which has no name. *)
+let anon_sum_key (vs : variant list) : string =
+  "(" ^ String.concat " :U " (List.map (fun v -> v.v_name) vs) ^ ")"
 
 (* `on error E` with declared return T: the coproduct T + E. ONE builder,
    shared by tycheck (registration, checking) and desugar (registry, spine):
