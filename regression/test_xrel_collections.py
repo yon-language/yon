@@ -46,8 +46,11 @@ def _run(tmp_path: Path, entry: str):
     return r.returncode, [float(t) for t in r.stdout.split()]
 
 
-def _rejected(out: str) -> bool:
-    return "[E" in out and "Fatal error: exception" not in out
+def _rejected(out: str, code: str, *words: str) -> bool:
+    """Refused with the code `code`, for the reason the words name."""
+    assert words, "name the reason of the refusal, not only its code"
+    return (f"[{code}]" in out and "Fatal error: exception" not in out
+            and all(w in out for w in words))
 
 
 _AT = """\
@@ -217,5 +220,5 @@ fun at_p(p: LatticePoint): Number {
 def test_retired_forms_are_refused(tmp_path, call):
     entry = f"place Entry {{}}\nfun main(): Number {{\n  a := {call}\n  return 0\n}}\n"
     rc, out, _ = _compile(tmp_path, entry)
-    if not (rc != 0 and _rejected(out)):
+    if not (rc != 0 and _rejected(out, "E2001", "unknown function or operation")):
         raise ProbeOutcome(f"{call} still compiles: rc={rc}")
