@@ -1,12 +1,12 @@
-place List { this > Nil :U Cons(Number, List) }
+place NumList { this > Nil :U Cons(Number, NumList) }
 
 place Entry {
 // COSA: una lista RICORSIVA con nome, ripiegata con lo zucchero `match`. E' la
 // forma piu' idiomatica del place-oggetto: un caso base (Nil) e un caso
-// ricorsivo (Cons porta la testa number e la coda List), esattamente come in ML.
+// ricorsivo (Cons porta la testa number e la coda NumList), esattamente come in ML.
 //
 // PERCHE': compone le tre parti dell'unificazione in un solo programma.
-// La clausola `this >` da' il nome che permette a Cons di riferirsi a List
+// La clausola `this >` da' il nome che permette a Cons di riferirsi a NumList
 // (ricorsione, G2). Il `match` sintetizza il suo motive costante dal ramo base Nil (il cui
 // corpo non legge un payload), poi ogni ramo e' ricontrollato nel suo binding. E
 // il valore vive a runtime come nodo MerkleTree content-addressed: `sum` dispaccia
@@ -15,7 +15,7 @@ place Entry {
 // ci si aspetta da un linguaggio con i dati algebrici.
 
 
-fun sum(l: List): Number {
+fun sum(l: NumList): Number {
   return match l {
     Nil => 0,
     Cons(h, t) => h + sum(t)

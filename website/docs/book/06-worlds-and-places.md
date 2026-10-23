@@ -148,6 +148,13 @@ place VipOrder {
 `this <` is the sub-object relation of the category: every `VipOrder` is an
 `Order`, and the compiler treats it as one where an `Order` is expected.
 
+The names of the library are not redeclared: they are extended with `this <`.
+A place of yours named `Error`, `Lookup` or `Math` would take the library's
+place for every reader of the name, the library's own code included, so it is
+refused (E2006); the message proposes to rename it, or to declare your own
+place under the library's, `place AppError { this < Error  code Number }`,
+which has the `message` of every `Error` and passes wherever one is expected.
+
 ## Worlds compose, but you act on them with arrows
 
 A world is a category, and categories compose the way categories do: products,

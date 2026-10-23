@@ -1,5 +1,0 @@
-place Math { unit Number
-  // is given: the body is wired in the compiler, and the checker verifies it
-  fun floor(x: Number): Number is given
-  fun sqrt(x: Number): Number is given
-}

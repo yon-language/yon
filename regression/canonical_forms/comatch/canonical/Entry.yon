@@ -2,16 +2,16 @@
 // NAME — the mirror of the mediatrice literal `.-> P { field v }`. Bridge
 // projections are _1.._n until the no-parens migration supplies real names.
 // Exercises pat_field (both spellings: bare field and `field as name`).
-place List { this > Nil :U Cons(Number, List) }
+place NumList { this > Nil :U Cons(Number, NumList) }
 
 place Entry {
-  fun sum(l: List): Number {
+  fun sum(l: NumList): Number {
     return match l {
       Nil => 0,
       Cons { _1 as h _2 as t } => h + sum(t)
     }
   }
-  fun head_or_zero(l: List): Number {
+  fun head_or_zero(l: NumList): Number {
     return match l {
       Nil => 0,
       Cons { _1 } => _1

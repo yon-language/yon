@@ -768,3 +768,7 @@ let lookup_stdlib_signature (qname : string) : (Surface_ast.ty list * Surface_as
                (match List.find_opt (fun (n, _, _) -> n = op_name) ops with
                 | Some (_, ptys, rty) -> Some (ptys, rty)
                 | None -> None))
+
+(* the places the registry declares (List, Math, Time, ...): library names,
+   like the prelude's *)
+let stdlib_place_names : string list = List.map fst stdlib_signatures

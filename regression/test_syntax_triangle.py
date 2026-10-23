@@ -72,6 +72,13 @@ KEYWORD_ALLOWLIST = {
     "Type_",   # lexing prefix, not a standalone token; the numbered form Type_0 is exercised
 }
 
+# Keywords whose only legal place is the prelude: `is given` declares a
+# primitive of the runtime, and those are declared in the prelude only (E2007
+# anywhere else). The prelude is compiled into every program of every gate,
+# so a token there is exercised by every compiling example.
+PRELUDE = ROOT / "prelude"
+PRELUDE_KEYWORDS = {"given"}
+
 
 # --------------------------------------------------------------------------- #
 # Extractors (structural, no compilation)
@@ -248,9 +255,12 @@ def compiling_corpus_files() -> list[Path]:
 @pytest.mark.skipif(not LEXER.exists(), reason="lexer missing")
 def test_leg2_every_keyword_exercised():
     counts = corpus_token_counts(compiling_corpus_files())
+    prelude_counts = corpus_token_counts(list(PRELUDE.glob("**/*.yon")))
     uncovered = []
     for kw in lexer_keyword_tokens():
         if counts.get(kw, 0) > 0:
+            continue
+        if kw in PRELUDE_KEYWORDS and prelude_counts.get(kw, 0) > 0:
             continue
         if kw in KEYWORD_ALLOWLIST or any(a.rstrip("_") == kw for a in KEYWORD_ALLOWLIST):
             continue

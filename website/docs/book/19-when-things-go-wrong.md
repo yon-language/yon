@@ -15,18 +15,15 @@ them *values or declarations*.
 
 An `error` declaration is a place whose meaning is failure. Errors form
 their own sub-object hierarchy with `this <` (chapter 5's monomorphisms),
-and a place can declare its error morphism with `on error`. Each error and
+and a place can declare its error morphism with `on error`. The root is the
+prelude's `place Error { message Text }`: it never lists its sub-errors and
+never changes, and a new error declares itself from below. Each error and
 each place is its own file, so the declarations sit side by side in the space.
-`s/Error.yon` and `s/QueryError.yon`:
+`s/QueryError.yon` has `message` from `Error` and adds its own field:
 
 <!-- yon-gate: illustrative -->
 ```yon
-error Error { message Number }
-```
-
-<!-- yon-gate: illustrative -->
-```yon
-error QueryError { this < Error message Number  sqlstate Number }
+error QueryError { this < Error  sqlstate Number }
 ```
 
 A place names the error it can raise. `s/QueryInsert.yon`:
@@ -41,14 +38,14 @@ place QueryInsert on error QueryError { sql Number }
 <!-- yon-gate: illustrative -->
 ```yon
 place Entry { }
-fun handle(e: Error): Number { return e.message }
+fun handle(e: Error): Number { return String.length(e.message) }
 fun on_query_fail(q: QueryError): Number {
   return handle(q)               // sub-error used where Error is expected
 }
 
 fun main(): Number {
-  be q := .-> QueryError { message 40  sqlstate 23505 }
-  return on_query_fail(q) + 2    // 42
+  be q := .-> QueryError { message "duplicate key"  sqlstate 29 }
+  return on_query_fail(q) + q.sqlstate    // 13 + 29 = 42
 }
 ```
 
