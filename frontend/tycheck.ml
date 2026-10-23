@@ -34,23 +34,42 @@ let scheme_env : (string * Ty_subst.scheme) list ref = ref []
 (* ─── Wire subscriptions: compile-time knowledge ────────────────────
    Filled at check_program start from the (already loaded and prefixed)
    program: which Spaces are importable targets, which names are
-   imported from which Space, and every function's declared return type
-   (qualified names included), so awaits can verify the producer. *)
+   imported from which Space, and every function's declared return type,
+   so awaits can verify the producer. *)
 let wire_spaces : (string, unit) Hashtbl.t = Hashtbl.create 8
 let wire_imports : (string, string * string) Hashtbl.t = Hashtbl.create 16
+(* the functions of THIS program: name -> declared return type *)
 let wire_fun_returns : (string, ty option) Hashtbl.t = Hashtbl.create 64
 
 (* Remote signatures, loaded by the driver from the Space's source
-   (sibling <module>.yon or yon_modules/<module>): name -> return ty.
-   The cross-Space import is nominal (the code lives in the other
-   process); the producer check needs the declared signature only. *)
-let register_remote_signature (name : string) (ret : ty option) : unit =
-  Hashtbl.replace wire_fun_returns name ret
+   (sibling <module>.yon or yon_modules/<module>): `module::name` -> return
+   ty. The cross-Space import is nominal (the code lives in the other
+   process); the producer check needs the declared signature only. Keyed by
+   (module, name): two modules may declare one name, and only the import
+   says which one a bare call means (remote_key). *)
+let remote_fun_returns : (string, ty option) Hashtbl.t = Hashtbl.create 64
+let register_remote_signature (qname : string) (ret : ty option) : unit =
+  Hashtbl.replace remote_fun_returns qname ret
 
-(* The declared parameter types of a remote function, by the same names. *)
+(* The declared parameter types of a remote function, by the same keys. *)
 let remote_params : (string, ty list) Hashtbl.t = Hashtbl.create 64
-let register_remote_params (name : string) (ps : ty list) : unit =
-  Hashtbl.replace remote_params name ps
+let register_remote_params (qname : string) (ps : ty list) : unit =
+  Hashtbl.replace remote_params qname ps
+
+(* called by the drivers before they load the remote signatures of a
+   compilation: nothing of a previous one survives (the LSP compiles many
+   programs in one process) *)
+let reset_remote_signatures () : unit =
+  Hashtbl.reset remote_fun_returns;
+  Hashtbl.reset remote_params
+
+(* the key of an imported operation: `module::name` as written, or the bare
+   name through the import that brought it *)
+let remote_key (op : string) : string =
+  if String.contains op ':' then op
+  else match Hashtbl.find_opt wire_imports op with
+    | Some (_, m) -> m ^ "::" ^ op
+    | None -> op
 
 (* The Space of every function of the program (qualified name -> Space), for
    the functions declared in user files; and the Space of the function being
@@ -67,8 +86,14 @@ let collect_wire_knowledge (p : program) : unit =
         Hashtbl.replace wire_spaces sp ();
         Hashtbl.replace wire_imports n (sp, m);
         Hashtbl.replace wire_imports (m ^ "::" ^ n) (sp, m)
-    | TopFun fd ->
-        Hashtbl.replace wire_fun_returns fd.fn_name fd.fn_return
+    | _ -> ()) p
+
+(* the return types of the program's functions, by their QUALIFIED names:
+   run after qualify_homes, so `Square.area` and `Circle.area` are two keys *)
+let collect_local_returns (p : program) : unit =
+  Hashtbl.reset wire_fun_returns;
+  List.iter (function
+    | TopFun fd -> Hashtbl.replace wire_fun_returns fd.fn_name fd.fn_return
     | _ -> ()) p
 
 let reset_scheme_env () =
@@ -1227,9 +1252,9 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
   match remote_call name args with
   | Some (op, skip) ->
       let vals = List.filteri (fun i _ -> i >= skip) arg_tys in
-      let ret = match Hashtbl.find_opt wire_fun_returns op with
+      let ret = match Hashtbl.find_opt remote_fun_returns (remote_key op) with
         | Some r -> r | None -> None in
-      (match Hashtbl.find_opt remote_params op with
+      (match Hashtbl.find_opt remote_params (remote_key op) with
        | None -> ok ()
        | Some ps ->
            let ps = List.map resolve_fused ps in
@@ -2159,10 +2184,7 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                        | None -> fname
                      in
                      let ret =
-                       match Hashtbl.find_opt wire_fun_returns
-                               (m ^ "::" ^ bare) with
-                       | Some r -> Some r
-                       | None -> Hashtbl.find_opt wire_fun_returns bare
+                       Hashtbl.find_opt remote_fun_returns (m ^ "::" ^ bare)
                      in
                      (match ret with
                       | Some (Some (TyChannel elem)) ->
@@ -3303,7 +3325,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
   (* a call to an imported function has the type its remote signature declares *)
   let remote_ret = match remote_call name args with
     | Some (op, _) ->
-        (match Hashtbl.find_opt wire_fun_returns op with
+        (match Hashtbl.find_opt remote_fun_returns (remote_key op) with
          | Some (Some (TyChannel _)) | Some None | None -> None
          | Some (Some r) -> Some r)
     | None -> None in
@@ -6976,6 +6998,7 @@ let check_program (p : program) : check_result =
      top-level names and the passes below stay on unique names. A no-op when no
      name is shared. *)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
+  collect_local_returns p;
   Hashtbl.reset internal_homes;
   current_home := None;
   List.iter (function

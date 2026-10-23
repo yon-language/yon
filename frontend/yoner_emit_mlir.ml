@@ -458,6 +458,7 @@ let () =
      cross-Space import (the import is nominal, the code lives in the
      other process; the producer check needs the declared return type).
      Resolution: sibling <module>.yon, then yon_modules/<module>/. *)
+  Tycheck.reset_remote_signatures ();
   List.iter (function
     | Surface_ast.TopImportFrom (m, _, _, _) ->
         let base = Filename.dirname (List.hd yon_files) in
@@ -487,13 +488,10 @@ let () =
               | Surface_ast.TopFun fd ->
                   Tycheck.register_remote_signature
                     (m ^ "::" ^ fd.Surface_ast.fn_name) fd.Surface_ast.fn_return;
-                  Tycheck.register_remote_signature
-                    fd.Surface_ast.fn_name fd.Surface_ast.fn_return;
                   let ps = List.map (fun p -> p.Surface_ast.param_ty)
                              fd.Surface_ast.fn_params in
                   Tycheck.register_remote_params
-                    (m ^ "::" ^ fd.Surface_ast.fn_name) ps;
-                  Tycheck.register_remote_params fd.Surface_ast.fn_name ps
+                    (m ^ "::" ^ fd.Surface_ast.fn_name) ps
               | _ -> ()) p
           with _ -> ()) candidates
     | _ -> ()) prog;

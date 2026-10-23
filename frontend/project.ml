@@ -472,6 +472,7 @@ let check_all (l : loaded) : Error_codes.t list =
  * sibling <module>.yon, else yon_modules/<module>/*.yon, relative to the root. The
  * subscriber's reference to a remote producer then type-checks. *)
 let load_remote_signatures (l : loaded) : unit =
+  Tycheck.reset_remote_signatures ();
   List.iter
     (function
       | S.TopImportFrom (m, _, _, _) ->
@@ -495,10 +496,7 @@ let load_remote_signatures (l : loaded) : unit =
                          let ps = List.map (fun p -> p.S.param_ty) fd.S.fn_params in
                          Tycheck.register_remote_signature
                            (m ^ "::" ^ fd.S.fn_name) fd.S.fn_return;
-                         Tycheck.register_remote_signature
-                           fd.S.fn_name fd.S.fn_return;
-                         Tycheck.register_remote_params (m ^ "::" ^ fd.S.fn_name) ps;
-                         Tycheck.register_remote_params fd.S.fn_name ps
+                         Tycheck.register_remote_params (m ^ "::" ^ fd.S.fn_name) ps
                      | _ -> ())
                    (parse_text ~file:fn (read_file fn))
                with _ -> ())
