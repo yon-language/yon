@@ -88,6 +88,11 @@ type emitter = {
   (* name -> place for each declared view, so a let-binding whose value is a
    * view name can be recognized as a __view_ref alias. *)
   mutable views_list : (string * string) list;
+  (* The runtime symbols the module refers to, each with the declaration it
+     needs, newest first. Filled by refer_symbol where a reference is
+     written; the declarations are written from it, so the module declares
+     the symbols it refers to and no others. *)
+  mutable referenced : (string * string) list;
 }
 
 let make_emitter () : emitter = {
@@ -102,7 +107,14 @@ let make_emitter () : emitter = {
   toposes_index = [];
   declared_spaces = [];
   views_list = [];
+  referenced = [];
 }
+
+(* Every reference to a runtime symbol goes through here, at the point where
+   it is written: the symbol is recorded with its declaration, once. *)
+let refer_symbol (e : emitter) (sym : string) (decl : string) : unit =
+  if not (List.mem_assoc sym e.referenced) then
+    e.referenced <- (sym, decl) :: e.referenced
 
 let emit_indent e = Buffer.add_string e.buf (String.make (e.indent * 2) ' ')
 
@@ -850,6 +862,48 @@ let rec uncurry_app (t : C.term) : (string * C.term list) option =
             | _ -> None))
   | _ -> None
 
+(* The primitives of the operating system (SystemOs, prelude/sys) and of the
+   words of a region (FnvHeap, LeechHeap, prelude/heap): qualified name,
+   runtime symbol, the MLIR types of the parameters, the MLIR type of the
+   answer. A Boolean answer comes back from the runtime as f64 (0.0 or 1.0)
+   and is read as i1 at the call; a Unit answer is an f64, as every Unit is
+   at a call. *)
+let system_primitives : (string * string * string list * string) list = [
+  "SystemOs__unchecked_map",        "yon_rt_sys_map",          ["i64"], "i64";
+  "SystemOs__words",                "yon_rt_sys_words",        ["i64"], "i64";
+  "SystemOs__unmap",                "yon_rt_sys_unmap",        ["i64"], "f64";
+  "SystemOs__is_shm_name",          "yon_rt_sys_is_shm_name",  ["f64"], "i1";
+  "SystemOs__unchecked_shm_map",    "yon_rt_sys_shm_map",      ["f64"; "i64"], "i64";
+  "SystemOs__unchecked_shm_unlink", "yon_rt_sys_shm_unlink",   ["f64"], "i1";
+  "SystemOs__unchecked_wait",       "yon_rt_sys_wait",         ["i64"; "i64"; "i64"], "f64";
+  "SystemOs__unchecked_wait_for",   "yon_rt_sys_wait_for",     ["i64"; "i64"; "i64"; "i64"], "f64";
+  "SystemOs__unchecked_wake",       "yon_rt_sys_wake",         ["i64"; "i64"], "f64";
+  "SystemOs__monotonic_ns",         "yon_rt_sys_monotonic_ns", [], "i64";
+  "SystemOs__wall_ns",              "yon_rt_sys_wall_ns",      [], "i64";
+  "SystemOs__arg_count",            "yon_rt_sys_arg_count",    [], "f64";
+  "SystemOs__unchecked_arg",        "yon_rt_sys_arg",          ["f64"], "f64";
+  "SystemOs__unchecked_write",      "yon_rt_sys_write",        ["f64"; "f64"], "f64";
+  "SystemOs__process_id",           "yon_rt_sys_process_id",   [], "f64";
+  "SystemOs__unchecked_signal",     "yon_rt_sys_signal",       ["f64"; "f64"], "i1";
+  "FnvHeap__read_word",             "yon_rt_region_read",      ["i64"; "i64"], "i64";
+  "FnvHeap__write_word",            "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
+  "LeechHeap__read_word",           "yon_rt_region_read",      ["i64"; "i64"], "i64";
+  "LeechHeap__write_word",          "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
+]
+
+(* A call of one of them, with its arguments: a nullary one reaches the
+   emitter as its bare name. *)
+let system_call (t : C.term) : ((string * string * string list * string) * C.term list) option =
+  let find f n =
+    List.find_opt (fun (q, _, ps, _) -> q = f && List.length ps = n) system_primitives in
+  match t with
+  | C.Var f -> Option.map (fun p -> (p, [])) (find f 0)
+  | C.App _ ->
+      (match uncurry_app t with
+       | Some (f, args) -> Option.map (fun p -> (p, args)) (find f (List.length args))
+       | None -> None)
+  | _ -> None
+
 (* The primitives of XRelMap / XRelSet (prelude/coll): name -> (runtime
    symbol, arity, whether the answer is a Boolean). *)
 let xrel_ops = [
@@ -894,6 +948,8 @@ let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
   match t with
+  | t when system_call t <> None ->
+      (match system_call t with Some ((_, _, _, ret), _) -> ret | None -> "f64")
   | C.App _ as app when body_over_primitive funcs app -> infer_app e env funcs app
   (* inv/concat/ap are surface path-algebra builtins that reach the emitter as
      ordinary applications, not dedicated cubical core nodes. On closed paths
@@ -1767,6 +1823,24 @@ let rec emit_term (e : emitter)
     (funcs : (string * func_sig) list)
     (t : C.term) : string * string =
   match t with
+  | t when system_call t <> None ->
+      let ((_, sym, ps, ret), args) = Option.get (system_call t) in
+      let vs = List.map2 (fun p a ->
+        if p = "i64" then emit_i64 e env funcs a else emit_f64 e env funcs a) ps args in
+      let cret = if ret = "i1" then "f64" else ret in
+      let sig_ps = String.concat ", " ps in
+      refer_symbol e sym
+        (Printf.sprintf "func.func private @%s(%s) -> %s" sym sig_ps cret);
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @%s(%s) : (%s) -> %s"
+                     v sym (String.concat ", " vs) sig_ps cret);
+      if ret = "i1" then begin
+        let z = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" z);
+        let b = fresh_ssa e in
+        emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" b v z);
+        (b, "i1")
+      end else (v, ret)
   | C.App _ as app when body_over_primitive funcs app -> emit_app e env funcs app
   (* Path-algebra builtins (inv/concat/ap) reach the emitter as ordinary
      applications and reduce on closed paths (groupoid laws); fold before
@@ -7385,6 +7459,11 @@ let emit_program (dr : Desugar.desugar_result) : string =
     end
   in
   emit_specs ();
+  (* the declarations of the symbols the bodies referred to *)
+  if e.referenced <> [] then begin
+    emit_blank e;
+    List.iter (fun (_, decl) -> emit_line e decl) (List.rev e.referenced)
+  end;
   pop_indent e;
   emit_line e "}";
   Buffer.contents e.buf

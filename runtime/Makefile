@@ -21,7 +21,7 @@ VENDOR_SRCS = vendor/mmgroup/mat24_tables.c vendor/mmgroup/mat24_functions.c \
 VENDOR_OBJS = $(VENDOR_SRCS:.c=.o)
 OBJS = xleech2_coord.o xleech2_heap.o xleech2_mphf.o yon_mmap.o leech_orbits.o yon_arena.o yon_curtis_canon.o yon_trie.o yon_leech_store.o yon_rt.o $(VENDOR_OBJS)
 all: $(OBJS)
-yon_rt.o: yon_rt.c yon_rt_hsh.c
+yon_rt.o: yon_rt.c yon_rt_hsh.c yon_sys.c
 # vendored generated code: compiled relaxed (no -Werror promises on
 # generated output we must not edit)
 vendor/mmgroup/%.o: vendor/mmgroup/%.c

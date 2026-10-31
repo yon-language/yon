@@ -21,3 +21,9 @@ spaces = ["coll"]
 
 [world.Lattice]
 spaces = ["lattice"]
+
+[world.Sys]
+spaces = ["sys"]
+
+[world.Heap]
+spaces = ["heap"]

@@ -972,6 +972,7 @@ let ty_mobile (env : Tyenv.env) (t : ty) : bool =
     | TyApp (p, args) -> go seen (TyUser p) && List.for_all (go seen) args
     | TySum vs | TySumIn (vs, _) -> List.for_all (fun v -> List.for_all (go seen) v.v_args) vs
     | TyUser p when List.mem p seen -> true
+    | TyUser p when List.mem p Stdlib_runtime.process_local_places -> false
     | TyUser p ->
         (match Tyenv.lookup_place env p with
          | None -> false
@@ -1146,6 +1147,7 @@ let rec wire_desc (env : Tyenv.env) (seen : string list) (t : ty) : int64 option
            reg (Type_root.prim_root p) wire_kind_scalar []
        | Some (Carrier.Handle "Text") -> reg (Type_root.prim_root p) wire_kind_string []
        | _ -> None)
+  | TyUser p when List.mem p Stdlib_runtime.process_local_places -> None
   | TyUser p ->
       (match Tyenv.lookup_place env p with
        | Some pd when pd.pd_arms = [] && pd.pd_type_params = [] ->
@@ -1376,6 +1378,9 @@ let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
   (* an operation a call from another process can reach, with its signature *)
   (match fn.fn_return with
    | Some r when fn.fn_name <> "main" && not fn.fn_internal
+                 && (match fn.fn_home with
+                     | Some h -> not (List.mem h Stdlib_runtime.process_local_places)
+                     | None -> true)
                  && (match r with TyChannel _ -> false | _ -> true) ->
        (match call_sig env (List.map (fun p -> resolve_fused p.param_ty) fn.fn_params)
                 (resolve_fused r) with
@@ -6768,6 +6773,119 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
   List.iter walk_stmt stmts;
   !calls
 
+(* ─── Heap code allocates nothing ──────────────────────────────────── *)
+
+(* A heap is the handler of allocation: the values of the language are put
+ * in it. Its own code therefore puts no value anywhere; it reads and writes
+ * the words of its region and computes with numbers.
+ *
+ * Heap code is the code of the houses that own a primitive writing the raw
+ * memory of a region (Stdlib_runtime.raw_memory_writers): a house is heap
+ * code because of what it holds, not because of its name.
+ *
+ * A fun allocates when its body builds a section (`.->`, a coproduct value,
+ * a pair), creates a closure, writes a Text literal, makes a producer or a
+ * spawn, or calls a fun that allocates. A primitive (`is given`) allocates
+ * unless the registry declares it does not (Stdlib_runtime.
+ * non_allocating_primitives: the read and the write of a word); a call of a
+ * function value allocates, its body not being known here. Arithmetic and
+ * comparison are not calls. The relation is closed along the calls, by the
+ * same fixpoint as `visits`.
+ *
+ * Masking. Allocation is an effect whose handler is the heap. The effect of a
+ * fun is masked, unobservable from outside, when the region it allocates in
+ * does not appear in the type of its result: by parametricity on the region
+ * nothing outside can tell (the criterion of runST). A heap's put allocates
+ * in its own region and answers a slot, never the region: from outside it is
+ * pure. *)
+let heap_alloc_errors (p : program) : type_error list =
+  let shown n = Str.global_replace (Str.regexp_string "__") "." n in
+  let given = Hashtbl.create 64 and bodies = Hashtbl.create 256 in
+  List.iter (function
+    | TopFun fd when fd.fn_given -> Hashtbl.replace given fd.fn_name fd
+    | TopFun fd -> Hashtbl.replace bodies fd.fn_name fd
+    | _ -> ()) p;
+  let houses = List.sort_uniq compare (List.filter_map (fun w ->
+    match Hashtbl.find_opt given w with
+    | Some fd -> fd.fn_home
+    | None -> None) Stdlib_runtime.raw_memory_writers) in
+  if houses = [] then [] else
+  let arms = Hashtbl.create 64 in
+  List.iter (function
+    | TopPlace pd -> List.iter (fun v -> Hashtbl.replace arms v.v_name ()) pd.pd_arms
+    | _ -> ()) p;
+  (* the first thing the body builds itself, if any *)
+  let rec in_expr e =
+    let own = match e with
+      | ENew (q, _, _) | ENewIn (q, _, _, _) -> Some (Printf.sprintf "builds a section of %s (.->)" q)
+      | EHITConstr (c, _, _) -> Some (Printf.sprintf "builds the coproduct value %s" c)
+      | EVar (x, _) when Hashtbl.mem arms x -> Some (Printf.sprintf "builds the coproduct value %s" x)
+      | EPair _ -> Some "builds a pair"
+      | ELit (LitString _, _) -> Some "writes a Text literal"
+      | ELam _ | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _
+      | EViewLam _ | EComposeWith _ -> Some "creates a closure"
+      | EProduce _ -> Some "makes a producer"
+      | ESpawn _ -> Some "spawns processes"
+      | _ -> None in
+    match own with
+    | Some _ -> own
+    | None ->
+        let (es, bs) = Surface_ast.sub_exprs e in
+        (match List.find_map in_expr es with
+         | Some r -> Some r
+         | None -> List.find_map in_stmts bs)
+  and in_stmts ss = List.find_map in_stmt ss
+  and in_stmt s =
+    let own = match s with
+      | SNew (q, _, _) | SNewIn (q, _, _, _) -> Some (Printf.sprintf "builds a section of %s (.->)" q)
+      | _ -> None in
+    match own with
+    | Some _ -> own
+    | None ->
+        (match List.find_map in_expr (Surface_ast.stmt_exprs s) with
+         | Some r -> Some r
+         | None -> List.find_map in_stmts (Surface_ast.sub_stmts s)) in
+  let reason : (string, string) Hashtbl.t = Hashtbl.create 64 in
+  Hashtbl.iter (fun n fd ->
+    match in_stmts fd.fn_body with
+    | Some r -> Hashtbl.replace reason n r
+    | None -> ()) bodies;
+  let calls = Hashtbl.create 256 in
+  Hashtbl.iter (fun n fd -> Hashtbl.replace calls n (collect_calls_in_stmts fd.fn_body)) bodies;
+  let callee_allocates g =
+    match Hashtbl.find_opt reason g with
+    | Some r -> Some (Printf.sprintf "calls %s, which %s" (shown g) r)
+    | None ->
+        if Hashtbl.mem bodies g then None
+        else if Hashtbl.mem given g || Stdlib_runtime.lookup_stdlib_signature g <> None then
+          (if List.mem g Stdlib_runtime.non_allocating_primitives then None
+           else Some (Printf.sprintf "calls %s, a primitive that allocates" (shown g)))
+        else Some (Printf.sprintf "calls %s, a function value whose body is not known here" (shown g)) in
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    Hashtbl.iter (fun n cs ->
+      if not (Hashtbl.mem reason n) then
+        match List.find_map callee_allocates cs with
+        | Some r -> Hashtbl.replace reason n r; changed := true
+        | None -> ()) calls
+  done;
+  Hashtbl.fold (fun n fd acc ->
+    match fd.fn_home with
+    | Some h when List.mem h houses ->
+        (match Hashtbl.find_opt reason n with
+         | Some r ->
+             { err_loc = fd.fn_loc; err_code = Error_codes.Heap_allocates;
+               err_msg = Printf.sprintf
+                 "%s is the code of a heap (%s owns a primitive that writes the \
+                  raw memory of its region), and a heap allocates nothing: it is \
+                  where the values are put. %s %s. Read and write the words of \
+                  the region, and compute with numbers."
+                 (shown n) h (shown n) r } :: acc
+         | None -> acc)
+    | _ -> acc) bodies []
+  |> List.sort (fun a b -> compare a.err_loc b.err_loc)
+
 (* ─── HM type inference opt-in ──────────── *)
 (*
  * Pre-pass: for each fun_decl with a parameter marker TyUser "_" or with
@@ -7593,6 +7711,7 @@ let check_program (p : program) : check_result =
   in
   (* Pass 1.5: transitive closure of effects. *)
   let env_with_sigs = infer_effects env_with_sigs p in
+  let heap_errors = heap_alloc_errors p in
   (* Multi-error accumulation: for TopFun use the accumulating variant
    * to collect ALL body errors. For other decls, the single-error
    * variant is fine (their checks are smaller). *)
@@ -7609,4 +7728,4 @@ let check_program (p : program) : check_result =
     [] p
   in
   { cr_env = env_with_sigs;
-    cr_errors = List.rev errors; }
+    cr_errors = List.rev errors @ heap_errors; }

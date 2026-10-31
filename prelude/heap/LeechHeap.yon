@@ -1,0 +1,12 @@
+/* LeechHeap — identity by point: a slot is written once, and its name is the
+ * pair (generation, point of the shell). It lives in a Region, whose words
+ * only this house reads and writes.
+ *
+ * Markers: [G] given, the runtime primitive */
+place LeechHeap is internal i64 {
+
+  /* ─── The words of its region ────────────────────────────── [G] ─── */
+
+  internal fun read_word(r: Region, index: Int64): Int64 is given
+  internal fun write_word(r: Region, index: Int64, w: Int64): Unit is given
+}

@@ -1,0 +1,8 @@
+/* heap.yon — the package file of `heap`, under prelude/.
+ *
+ * The two heaps every Space owns, the handlers of allocation. FnvHeap gives a
+ * value its identity by content, LeechHeap by point. Each lives in a Region
+ * and is the only code that reads and writes its words: that is what makes
+ * the code here heap code, which allocates nothing. */
+topos where {
+}

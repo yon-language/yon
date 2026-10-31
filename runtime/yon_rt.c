@@ -8117,3 +8117,6 @@ double yon_rt_cross_value(double v, double root_hi, double root_lo, double to) {
     }
     return out;
 }
+
+/* The face of the operating system (SystemOs) and the words of a region. */
+#include "yon_sys.c"

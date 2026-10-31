@@ -542,6 +542,46 @@ let sub_stmts (s : stmt) : stmt list list =
   | SLet _ | SAssignHolds _ | SAssignBecomes _ | SReturn _ | SCall _
   | SNew _ | SNewIn _ | SEmit _ | SPromote _ | SDrop _ -> []
 
+let rec cond_exprs (c : condition) : expr list =
+  match c with
+  | CondExpr e | CondIs (e, _) | CondIsNot (e, _) -> [e]
+  | CondAnd (a, b) | CondOr (a, b) -> cond_exprs a @ cond_exprs b
+
+(* The expressions a statement holds directly, every form at once (its
+   blocks are sub_stmts). *)
+let stmt_exprs (s : stmt) : expr list =
+  match s with
+  | SLet (_, e, _) | SAssignHolds (_, e, _) | SAssignBecomes (_, e, _)
+  | SReturn (e, _) | SEmit (e, _) | SPromote (e, _) -> [e]
+  | SCall (_, args, _) -> args
+  | SNew (_, fas, _) | SNewIn (_, _, fas, _) -> List.map (fun fa -> fa.fa_value) fas
+  | SWhen (c, _, alts, _, _) -> cond_exprs c @ List.concat_map (fun (ac, _) -> cond_exprs ac) alts
+  | SForEvery (_, _, e, _, _) | SInSequence (_, e, _, _) | SIter (e, _, _)
+  | SWhile (e, _, _) | SScope (_, _, e, _) -> [e]
+  | SForces (_, c, _, _) -> cond_exprs c
+  | SRepeat _ | SForever _ | SProduce _ | SDrop _ -> []
+
+(* The expressions an expression holds, and the blocks of statements it holds
+   (a producer, a spawn), every form at once. *)
+let sub_exprs (e : expr) : expr list * stmt list list =
+  match e with
+  | ELit _ | EVar _ | EWireTo _ | EPullback _ | EPushout _ -> ([], [])
+  | EField (a, _, _) | EPathApp (a, _, _) | EPathAbs (_, a, _) | EParen (a, _)
+  | EIn (a, _, _) | ERefl (a, _) | EFst (a, _) | ESnd (a, _) | EQuote (_, a, _)
+  | ENot (a, _) | ELam (_, a, _) | EMoveLam (_, a, _, _, _)
+  | EReductionLam (_, a, _, _) | EMorphLam (_, a, _, _, _)
+  | EFunctorLam (_, a, _, _, _, _) | EViewLam (_, a, _, _) -> ([a], [])
+  | ECall (_, args, _) | EHITConstr (_, args, _) -> (args, [])
+  | EApp (f, args, _) -> (f :: args, [])
+  | EHITElim (c, bs, x, _) -> (c :: x :: List.map (fun (_, _, b) -> b) bs, [])
+  | EProduce (b, _) -> ([], [b])
+  | ESpawn (n, b, _) -> ((match n with Some n -> [n] | None -> []), [b])
+  | ENew (_, fas, _) | ENewIn (_, _, fas, _) -> (List.map (fun fa -> fa.fa_value) fas, [])
+  | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _)
+  | EPullbackVal (_, _, a, b, _) -> ([a; b], [])
+  | EAll (_, c, _) -> (cond_exprs c, [])
+  | EJ (a, b, c, _) | EElMatch (a, b, c, _) | EIfThenElse (a, b, c, _) -> ([a; b; c], [])
+
 (* The FACE name of a type (prelude spelling) — used to name the success arm
    of an error coproduct. *)
 let face_name_of_ty (t : ty) : string =

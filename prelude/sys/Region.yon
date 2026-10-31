@@ -1,0 +1,7 @@
+/* Region — a run of 64-bit words the operating system gave, owned by whoever
+ * asked SystemOs for it. The handle is opaque: no fun here reads or writes its
+ * words, and no literal is a region. A heap that lives in a region reads and
+ * writes its words through faces of its own house; everyone else holds the
+ * handle and gives it back with SystemOs.unmap. */
+place Region is internal i64 {
+}

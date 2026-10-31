@@ -1,0 +1,119 @@
+/* SystemOs — the operating system, the only place whose primitives reach the
+ * kernel. What the language can see is wrong before asking (a size, an index,
+ * a name, a descriptor) is a DomainError, decided here; what the kernel itself
+ * refuses (memory it will not map, a write that fails) stops the program with
+ * a sentence and exit code 3, as every refusal of the runtime does.
+ *
+ * Markers: [G] given, the kernel's primitive · [E] partial, `on error` */
+place SystemOs {
+
+  /* ─── Memory ─────────────────────────────────────────────── [G] ─── */
+
+  internal fun unchecked_map(words: Int64): Region is given
+  /* how many words the region holds */
+  fun words(r: Region): Int64 is given
+  /* gives the region back to the kernel; the handle names nothing after it */
+  fun unmap(r: Region): Unit is given
+
+  /* ─── Shared memory ──────────────────────────────────────── [G] ─── */
+
+  /* a name the kernel accepts for shared memory: one leading '/', no other,
+     2 to 31 characters */
+  internal fun is_shm_name(name: Text): Boolean is given
+  internal fun unchecked_shm_map(name: Text, words: Int64): Region is given
+  internal fun unchecked_shm_unlink(name: Text): Boolean is given
+
+  /* ─── The wait on a word ─────────────────────────────────── [G] ─── */
+
+  /* the kernel compares the low 32 bits of the word: the expected value is
+     kept inside them */
+  internal fun unchecked_wait(r: Region, index: Int64, expected: Int64): Number is given
+  internal fun unchecked_wait_for(r: Region, index: Int64, expected: Int64, timeout_ns: Int64): Number is given
+  internal fun unchecked_wake(r: Region, index: Int64): Number is given
+
+  /* ─── Clocks, arguments, writing, processes ──────────────── [G] ─── */
+
+  /* nanoseconds on a clock that never goes back */
+  fun monotonic_ns(): Int64 is given
+  /* nanoseconds since 1970-01-01 UTC, on the clock of the wall */
+  fun wall_ns(): Int64 is given
+  fun arg_count(): Number is given
+  internal fun unchecked_arg(i: Number): Text is given
+  internal fun unchecked_write(fd: Number, t: Text): Number is given
+  fun process_id(): Number is given
+  internal fun unchecked_signal(pid: Number, sig: Number): Boolean is given
+
+  /* ─── Making and naming ──────────────────────────────────── [E] ─── */
+
+  fun map(words: Int64) on error DomainError: Region {
+    return if words > 0 then unchecked_map(words)
+           else .-> DomainError { message "a region holds at least one word" }
+  }
+
+  fun shm_map(name: Text, words: Int64) on error DomainError: Region {
+    return if not is_shm_name(name)
+           then .-> DomainError { message "a shared-memory name is one leading '/' and 1 to 30 more characters, none of them '/'" }
+           else if words > 0 then unchecked_shm_map(name, words)
+           else .-> DomainError { message "a region holds at least one word" }
+  }
+
+  /* whether the name was there to remove */
+  fun shm_unlink(name: Text) on error DomainError: Boolean {
+    return if is_shm_name(name) then unchecked_shm_unlink(name)
+           else .-> DomainError { message "a shared-memory name is one leading '/' and 1 to 30 more characters, none of them '/'" }
+  }
+
+  /* ─── Waiting ────────────────────────────────────────────── [E] ─── */
+
+  fun wait(r: Region, index: Int64, expected: Int64) on error DomainError: Wait {
+    return if index < 0 or index >= words(r)
+           then .-> DomainError { message "not a word of the region" }
+           else if expected < 0 or expected > 4294967295
+           then .-> DomainError { message "the kernel compares 32 bits: the expected value is in [0, 2^32)" }
+           else ended(unchecked_wait(r, index, expected))
+  }
+
+  fun wait_for(r: Region, index: Int64, expected: Int64, timeout_ns: Int64) on error DomainError: Wait {
+    return if index < 0 or index >= words(r)
+           then .-> DomainError { message "not a word of the region" }
+           else if expected < 0 or expected > 4294967295
+           then .-> DomainError { message "the kernel compares 32 bits: the expected value is in [0, 2^32)" }
+           else if timeout_ns <= 0 or timeout_ns > 4294967295000
+           then .-> DomainError { message "a timeout is in (0, 4294967295000] nanoseconds" }
+           else ended(unchecked_wait_for(r, index, expected, timeout_ns))
+  }
+
+  /* how many waiters the kernel woke (macOS reports only whether one was
+     there: 1 or 0) */
+  fun wake(r: Region, index: Int64) on error DomainError: Number {
+    return if index < 0 or index >= words(r)
+           then .-> DomainError { message "not a word of the region" }
+           else unchecked_wake(r, index)
+  }
+
+  internal fun ended(code: Number): Wait {
+    return if code == 0 then Woken else if code == 1 then NotExpected else TimedOut
+  }
+
+  /* ─── Arguments, writing, signals ────────────────────────── [E] ─── */
+
+  fun arg(i: Number) on error DomainError: Text {
+    return if Number.is_integer(i) and i >= 0 and i < arg_count() then unchecked_arg(i)
+           else .-> DomainError { message "not the index of an argument" }
+  }
+
+  /* writes the text to the descriptor, whole; the answer is the bytes written */
+  fun write(fd: Number, t: Text) on error DomainError: Number {
+    return if Number.is_integer(fd) and fd >= 0 then unchecked_write(fd, t)
+           else .-> DomainError { message "a descriptor is an integer >= 0" }
+  }
+
+  /* whether the kernel delivered the signal (0 asks only whether the process
+     is there) */
+  fun signal(pid: Number, sig: Number) on error DomainError: Boolean {
+    return if not (Number.is_integer(pid) and pid > 0)
+           then .-> DomainError { message "a process id is an integer > 0" }
+           else if Number.is_integer(sig) and sig >= 0 and sig < 32 then unchecked_signal(pid, sig)
+           else .-> DomainError { message "a signal is an integer in [0, 32)" }
+  }
+}

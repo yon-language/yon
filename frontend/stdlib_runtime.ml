@@ -328,6 +328,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   let tbool = TyPrim "boolean" in
   let tunit = TyPrim "unit" in
   let tunk = TyPrim "unknown" in
+  let ti64 = TyUser "Int64" and tregion = TyUser "Region" in
+  let ttext = TyUser "String" in
   let tlist t = TyList t in
   (* the generic collections' own parameters, as their places declare them *)
   let tk = TyVar "K" and tv = TyVar "V" and tt = TyVar "T" in
@@ -659,6 +661,37 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "now_ms", [tunit], tnum;
       "now_ns", [tunit], tnum;
     ];
+    (* The primitives SystemOs (prelude/sys) declares `is given`: the face of
+       the operating system. A Region is the handle of memory the kernel
+       gave, carried as an i64. *)
+    "SystemOs", [
+      "unchecked_map", [ti64], tregion;
+      "words", [tregion], ti64;
+      "unmap", [tregion], tunit;
+      "is_shm_name", [ttext], tbool;
+      "unchecked_shm_map", [ttext; ti64], tregion;
+      "unchecked_shm_unlink", [ttext], tbool;
+      "unchecked_wait", [tregion; ti64; ti64], tnum;
+      "unchecked_wait_for", [tregion; ti64; ti64; ti64], tnum;
+      "unchecked_wake", [tregion; ti64], tnum;
+      "monotonic_ns", [], ti64;
+      "wall_ns", [], ti64;
+      "arg_count", [], tnum;
+      "unchecked_arg", [tnum], ttext;
+      "unchecked_write", [tnum; ttext], tnum;
+      "process_id", [], tnum;
+      "unchecked_signal", [tnum; tnum], tbool;
+    ];
+    (* The words of a region, read and written by the heap that lives in it:
+       the same primitive, a face in the house of each heap. *)
+    "FnvHeap", [
+      "read_word", [tregion; ti64], ti64;
+      "write_word", [tregion; ti64; ti64], tunit;
+    ];
+    "LeechHeap", [
+      "read_word", [tregion; ti64], ti64;
+      "write_word", [tregion; ti64; ti64], tunit;
+    ];
     "Random", [
       "seed",  [tnum], tnum;
       "int",   [tunit], tnum;
@@ -785,3 +818,23 @@ let lookup_stdlib_signature (qname : string) : (Surface_ast.ty list * Surface_as
 (* the places the registry declares (List, Math, Time, ...): library names,
    like the prelude's *)
 let stdlib_place_names : string list = List.map fst stdlib_signatures
+
+(* The primitives that write the raw memory of a region. The houses that own
+   one are heap code (Tycheck: heap code does not allocate). *)
+let raw_memory_writers : string list =
+  [ "FnvHeap__write_word"; "LeechHeap__write_word" ]
+
+(* The primitives that allocate nothing: a primitive allocates unless it is
+   here. Reading and writing a word of a region touch only the region. *)
+let non_allocating_primitives : string list =
+  [ "FnvHeap__read_word"; "FnvHeap__write_word";
+    "LeechHeap__read_word"; "LeechHeap__write_word" ]
+
+(* The places that belong to this process: a Region is memory the kernel
+   gave it, SystemOs acts on it (its memory, its arguments, its id), each heap
+   lives in a region of one Space. A value of such a place means nothing in
+   another process, so it does not cross a Space boundary and has no frame on
+   a wire; the funs of their houses are not operations another process can
+   reach. *)
+let process_local_places : string list =
+  [ "Region"; "SystemOs"; "FnvHeap"; "LeechHeap" ]

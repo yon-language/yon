@@ -1,0 +1,9 @@
+/* sys.yon — the package file of `sys`, under prelude/.
+ *
+ * The face of the operating system. SystemOs is the one place whose
+ * primitives reach the kernel: memory, shared memory, the wait on a word,
+ * the clocks, the arguments, writing, processes. A Region is memory the
+ * kernel gave: an opaque handle, owned by whoever asked for it. The rest of
+ * the prelude is Yon written on top of this. */
+topos where {
+}
