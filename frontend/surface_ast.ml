@@ -120,6 +120,16 @@ let given_decls : (string, string * int * int) Hashtbl.t = Hashtbl.create 64
    Space into a function of another crosses the boundary between them. *)
 let user_file_space : (string, string) Hashtbl.t = Hashtbl.create 16
 let internal_faces : (string, string) Hashtbl.t = Hashtbl.create 4
+(* The house whose funs are being checked. Inside the house of a place
+   `is internal <carrier>` the place is its carrier, in both directions;
+   outside it the place is abstract (the rule of the abstract type). *)
+let open_house : string option ref = ref None
+
+(* Whether t, inside the open house, is the carrier p of that house's place. *)
+let in_house_carrier (u : string) : string option =
+  match !open_house with
+  | Some h when h = u -> Hashtbl.find_opt internal_faces u
+  | _ -> None
 
 (* The faces the language fuses to their primitive codes: a capitalized face
    and its code are one object, as a type (the parser) and as a code (a type

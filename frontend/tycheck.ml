@@ -354,8 +354,14 @@ let record_int_arith_site ?(i64 = false) (op : binop) (loc : location) : unit =
     | OpGt -> Some "__i64_gt" | OpLeq -> Some "__i64_leq"
     | OpGeq -> Some "__i64_geq" | OpEq -> Some "__i64_eq"
     | OpNeq -> Some "__i64_neq" | _ -> None in
+  (* inside the house of a place `is internal` the arithmetic is the
+     carrier's, the machine's, which wraps: the ring Z/2^64 for i64 *)
+  let machine = match !Surface_ast.open_house with
+    | Some h -> Hashtbl.mem Surface_ast.internal_faces h | None -> false in
   if i64 then
     (match i64_name op with
+     | Some n when machine && List.mem n ["__i64_add"; "__i64_sub"; "__i64_mul"] ->
+         Hashtbl.replace Surface_ast.int_arith_sites key ("__w64_" ^ String.sub n 6 (String.length n - 6))
      | Some n -> Hashtbl.replace Surface_ast.int_arith_sites key n
      | None -> ())
   else
@@ -697,9 +703,11 @@ let internal_homes : (string, string) Hashtbl.t = Hashtbl.create 16
 let current_home : string option ref = ref None
 
 let with_home (fn : fun_decl) (k : unit -> 'a) : 'a =
-  let saved = !current_home in
+  let saved = !current_home and saved_house = !Surface_ast.open_house in
   current_home := fn.fn_home;
-  Fun.protect ~finally:(fun () -> current_home := saved) k
+  Surface_ast.open_house := fn.fn_home;
+  Fun.protect ~finally:(fun () ->
+    current_home := saved; Surface_ast.open_house := saved_house) k
 
 (* The collections of the Leech heap hold their keys and values as 64 bits
    in a node of its trie: which types fit is derived from their carrier — a
@@ -2262,6 +2270,25 @@ producer is declared `Wire<T>`" bare shown)
              "awaits needs a wire receiver (w := wire to <Space>), \
 got %s" (Tyenv.ty_to_string other)))
 
+  | ECall (("__band" | "__bor" | "__bxor" | "__bnot") as name, args, loc)
+    when List.exists (fun a -> match infer env ctx a with
+           | Ok t -> is_int64_ty env ctx t | Error _ -> false) args ->
+      (* the operators on the bits of a 64-bit integer: and, or, xor, not on
+         its two's complement, never through a double; an integral literal
+         beside a 64-bit operand is a 64-bit literal, as in arithmetic *)
+      let tys = List.map (fun a -> match infer env ctx a with
+        | Ok t -> t | Error _ -> TyPrim "unknown") args in
+      let t0 = List.find (fun t -> is_int64_ty env ctx t) tys in
+      let tys = List.map2 (fun a t -> admit_int_literal env ctx a t t0) args tys in
+      if not (List.for_all (fun t -> Dispatcher.type_equal env ctx t t0) tys) then
+        err loc (Printf.sprintf "%s needs operands of one type, got %s" name
+          (String.concat " and " (List.map Tyenv.ty_to_string tys)))
+      else begin
+        Hashtbl.replace Surface_ast.int_arith_sites
+          (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col)
+          ("__i64_" ^ String.sub name 2 (String.length name - 2));
+        ok t0
+      end
   | ECall (name, args, loc) ->
       (* B.2: directed-transport builtin. `coerce_incl(v, proof)` transports a
          value v along the directed inclusion cell m_f : c_P -> c_Q whose witness

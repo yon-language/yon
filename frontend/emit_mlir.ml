@@ -1157,10 +1157,14 @@ let rec infer_mlir_ty (e : emitter)
          failwith (Printf.sprintf
                      "[emit_mlir infer] malformed section type: %s."
                      obj_ty))
+  | C.App (C.Var "__i64_bnot", _) -> "i64"
+  | C.App (C.App (C.Var op, _), _)
+    when String.length op > 6 && String.sub op 0 6 = "__w64_" -> "i64"
   | C.App (C.App (C.Var op, _), _)
     when String.length op > 6 && String.sub op 0 6 = "__i64_" ->
       (match op with
-       | "__i64_add" | "__i64_sub" | "__i64_mul" | "__i64_div" | "__i64_mod" -> "i64"
+       | "__i64_add" | "__i64_sub" | "__i64_mul" | "__i64_div" | "__i64_mod"
+       | "__i64_band" | "__i64_bor" | "__i64_bxor" -> "i64"
        | _ -> "i1")
   | C.App (C.App (C.Var op, a), b) when
       (op = "__add" || op = "__sub" || op = "__mul" || op = "__div"
@@ -2778,14 +2782,29 @@ let rec emit_term (e : emitter)
       pop_indent e;
       emit_line e "}";
       (r, "i64")
+  (* the not of the bits of a 64-bit integer: xor with all ones *)
+  | C.App (C.Var "__i64_bnot", a) ->
+      let (va, ta) = emit_term e env funcs a in
+      let va = coerce_to_param e va ta "i64" in
+      let ones = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant -1 : i64" ones);
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.xori %s, %s : i64" v va ones);
+      (v, "i64")
   | C.App (C.App (C.Var op, a), b)
-    when String.length op > 6 && String.sub op 0 6 = "__i64_" ->
+    when String.length op > 6
+         && (String.sub op 0 6 = "__i64_" || String.sub op 0 6 = "__w64_") ->
       let (va, ta) = emit_term e env funcs a in
       let (vb, tb) = emit_term e env funcs b in
       let va = coerce_to_param e va ta "i64" in
       let vb = coerce_to_param e vb tb "i64" in
       let v = fresh_ssa e in
       let (instr, rty) = match op with
+        (* the carrier's arithmetic: the ring Z/2^64, which wraps *)
+        | "__w64_add" -> ("arith.addi", "i64") | "__w64_sub" -> ("arith.subi", "i64")
+        | "__w64_mul" -> ("arith.muli", "i64")
+        | "__i64_band" -> ("arith.andi", "i64") | "__i64_bor" -> ("arith.ori", "i64")
+        | "__i64_bxor" -> ("arith.xori", "i64")
         | "__i64_add" -> ("arith.addi", "i64") | "__i64_sub" -> ("arith.subi", "i64")
         | "__i64_mul" -> ("arith.muli", "i64") | "__i64_div" -> ("arith.divsi", "i64")
         | "__i64_mod" -> ("arith.remsi", "i64")

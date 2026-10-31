@@ -930,6 +930,17 @@ and desugar_expr (e0 : S.expr) : C.term =
         | Some resolved -> resolved
         | None -> name
       in
+      (* an operator on the bits of a 64-bit integer, recorded by the tycheck *)
+      let name =
+        match name with
+        | "__band" | "__bor" | "__bxor" | "__bnot" ->
+            (match Hashtbl.find_opt Surface_ast.int_arith_sites
+                     (loc.S.file, loc.S.start_line, loc.S.start_col,
+                      loc.S.end_line, loc.S.end_col) with
+             | Some b when b = "__i64_" ^ String.sub name 2 (String.length name - 2) -> b
+             | _ -> name)
+        | _ -> name
+      in
       (* the given faces of Number are the Math primitives under the name
          their house gives them: one function — when, and only when, the
          declaration the name resolves to is `is given` *)
@@ -1112,7 +1123,7 @@ and desugar_expr (e0 : S.expr) : C.term =
             (match Hashtbl.find_opt Surface_ast.int_arith_sites
                      (loc.S.file, loc.S.start_line, loc.S.start_col,
                       loc.S.end_line, loc.S.end_col) with
-             | Some b when b = int64_op_name op -> b
+             | Some b when b = int64_op_name op || b = machine_op_name op -> b
              | _ -> binop_name op) in
       curry_apply (C.Var op_name) [desugar_expr e1; desugar_expr e2]
   | S.EParen (e, _) -> desugar_expr e
@@ -1530,6 +1541,13 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
   C.App (C.Lam (sv, C.TyPlace "number", chain explicit), desugar_expr scrut)
 
 (* The i64 instruction of an operator on Int64, as the tycheck records it. *)
+(* the carrier's arithmetic, inside the house of a place `is internal`:
+   the machine's, which wraps *)
+and machine_op_name (op : S.binop) : string =
+  match op with
+  | S.OpAdd -> "__w64_add" | S.OpSub -> "__w64_sub" | S.OpMul -> "__w64_mul"
+  | _ -> ""
+
 and int64_op_name (op : S.binop) : string =
   match op with
   | S.OpAdd -> "__i64_add" | S.OpSub -> "__i64_sub" | S.OpMul -> "__i64_mul"

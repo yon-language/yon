@@ -349,8 +349,19 @@ let rec type_equal
     (t1 : ty) (t2 : ty) : bool =
   (* Direct equality on TyHeytInt. Neither Cubical nor CATT_R_Yon knows this
    * type, so the equality is handled here before the dispatch. *)
+  let carrier_is p t = match t with
+    | TyPrim q -> q = p
+    | TyUser f -> Hashtbl.find_opt Surface_ast.fusion_places f = Some p
+    | _ -> false in
   match t1, t2 with
   | TyHeytInt n1, TyHeytInt n2 -> n1 = n2
+  (* inside its house a place `is internal` is its carrier *)
+  | TyUser u, other
+    when (match Surface_ast.in_house_carrier u with
+          | Some p -> carrier_is p other | None -> false) -> true
+  | other, TyUser u
+    when (match Surface_ast.in_house_carrier u with
+          | Some p -> carrier_is p other | None -> false) -> true
   (* String fusion: "text" and "String" are the SAME semantic
    * object — sections of the builtin String place (runtime: xheap handle).
    * Bidirectional, like boolean/proposition. *)
