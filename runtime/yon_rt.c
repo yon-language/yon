@@ -6561,6 +6561,24 @@ double yon_rt_list_tail(double list_id) {
     return (double)cell->tail_slot;
 }
 
+/* whether the list holds no cell: one look at the handle */
+double yon_rt_list_is_empty(double list_id) {
+    ensure_init();
+    return list_cell_at(list_id) ? 0.0 : 1.0;
+}
+
+double yon_rt_list_reverse(double list_id);
+
+/* the cells of a, then b: a is walked twice (reversed, then consed back onto
+   b), b is shared as it is */
+double yon_rt_list_append(double a, double b) {
+    ensure_init();
+    double out = b;
+    for (double r = yon_rt_list_reverse(a); list_cell_at(r); r = yon_rt_list_tail(r))
+        out = yon_rt_list_cons(yon_rt_list_head(r), out);
+    return out;
+}
+
 double yon_rt_list_length(double list_id) {
     ensure_init();
     double cur = list_id;

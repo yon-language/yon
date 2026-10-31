@@ -2500,9 +2500,10 @@ and v1_lower_foreach x e b loc =
   let cur = v1_fresh "cur" in
   let getcur () = v1_call "Space__get" [S.EVar (cur, S.dummy_loc)] in
   [ S.SLet (cur, v1_call "Space__make" [e], loc);
+    (* each turn looks whether the list is empty, takes its head and moves
+       to its tail: one look per cell *)
     S.SWhile (
-      S.EBinop (S.OpGt, v1_call "List__length" [getcur ()], v1_num 0.0,
-                S.dummy_loc),
+      S.ENot (v1_call "List__is_empty" [getcur ()], S.dummy_loc),
       S.SLet (x, v1_call "List__head" [getcur ()], loc)
       :: b
       @ [ S.SLet (v1_fresh "adv",

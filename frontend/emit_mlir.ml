@@ -862,13 +862,14 @@ let rec uncurry_app (t : C.term) : (string * C.term list) option =
             | _ -> None))
   | _ -> None
 
-(* The primitives of the operating system (SystemOs, prelude/sys) and of the
-   words of a region (FnvHeap, LeechHeap, prelude/heap): qualified name,
+(* Primitives wired by one table: the operating system (SystemOs,
+   prelude/sys), the words of a region (FnvHeap, LeechHeap, prelude/heap),
+   and the List operations that had no lowering: qualified name,
    runtime symbol, the MLIR types of the parameters, the MLIR type of the
    answer. A Boolean answer comes back from the runtime as f64 (0.0 or 1.0)
    and is read as i1 at the call; a Unit answer is an f64, as every Unit is
    at a call. *)
-let system_primitives : (string * string * string list * string) list = [
+let wired_primitives : (string * string * string list * string) list = [
   "SystemOs__unchecked_map",        "yon_rt_sys_map",          ["i64"], "i64";
   "SystemOs__words",                "yon_rt_sys_words",        ["i64"], "i64";
   "SystemOs__unmap",                "yon_rt_sys_unmap",        ["i64"], "f64";
@@ -891,13 +892,15 @@ let system_primitives : (string * string * string list * string) list = [
   "FnvHeap__write_word",            "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
   "LeechHeap__read_word",           "yon_rt_region_read",      ["i64"; "i64"], "i64";
   "LeechHeap__write_word",          "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
+  "List__is_empty",                 "yon_rt_list_is_empty",    ["f64"], "i1";
+  "List__append",                   "yon_rt_list_append",      ["f64"; "f64"], "f64";
 ]
 
 (* A call of one of them, with its arguments: a nullary one reaches the
    emitter as its bare name. *)
-let system_call (t : C.term) : ((string * string * string list * string) * C.term list) option =
+let wired_call (t : C.term) : ((string * string * string list * string) * C.term list) option =
   let find f n =
-    List.find_opt (fun (q, _, ps, _) -> q = f && List.length ps = n) system_primitives in
+    List.find_opt (fun (q, _, ps, _) -> q = f && List.length ps = n) wired_primitives in
   match t with
   | C.Var f -> Option.map (fun p -> (p, [])) (find f 0)
   | C.App _ ->
@@ -950,8 +953,8 @@ let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
   match t with
-  | t when system_call t <> None ->
-      (match system_call t with Some ((_, _, _, ret), _) -> ret | None -> "f64")
+  | t when wired_call t <> None ->
+      (match wired_call t with Some ((_, _, _, ret), _) -> ret | None -> "f64")
   | C.App _ as app when body_over_primitive funcs app -> infer_app e env funcs app
   (* inv/concat/ap are surface path-algebra builtins that reach the emitter as
      ordinary applications, not dedicated cubical core nodes. On closed paths
@@ -1830,8 +1833,8 @@ let rec emit_term (e : emitter)
     (funcs : (string * func_sig) list)
     (t : C.term) : string * string =
   match t with
-  | t when system_call t <> None ->
-      let ((_, sym, ps, ret), args) = Option.get (system_call t) in
+  | t when wired_call t <> None ->
+      let ((_, sym, ps, ret), args) = Option.get (wired_call t) in
       let vs = List.map2 (fun p a ->
         if p = "i64" then emit_i64 e env funcs a else emit_f64 e env funcs a) ps args in
       let cret = if ret = "i1" then "f64" else ret in
