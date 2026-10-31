@@ -2738,9 +2738,46 @@ let rec emit_term (e : emitter)
                      v_loaded v_buf field_ty);
       (v_loaded, field_ty)
       end
-  (* Int64: the ring Z/2^64. Each operand is an i64 (an f64 slot carrying an
-     Int64 is its bits, reinterpreted); the instruction is the integer one:
-     addi/subi/muli wrap modulo 2^64, divsi/remsi truncate, cmpi compares. *)
+  (* Int64: the integers in [-2^63, 2^63). Each operand is an i64 (an f64
+     slot carrying an Int64 is its bits, reinterpreted). A sum, a difference
+     or a product outside the range is no integer the program asked for: it
+     stops the program (exit 3), never wraps. divsi/remsi truncate, cmpi
+     compares. The ring Z/2^64, whose operations wrap, is Word64. *)
+  | C.App (C.App (C.Var ("__i64_add" | "__i64_sub" | "__i64_mul" as op), a), b) ->
+      let (va, ta) = emit_term e env funcs a in
+      let (vb, tb) = emit_term e env funcs b in
+      let va = coerce_to_param e va ta "i64" in
+      let vb = coerce_to_param e vb tb "i64" in
+      let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
+      let zero = def "arith.constant 0 : i64" in
+      let (r, ovf) = match op with
+        | "__i64_mul" ->
+            (* the product exceeds the range when its high half is not the
+               sign of its low half *)
+            let lo = fresh_ssa e and hi = fresh_ssa e in
+            emit_line e (Printf.sprintf "%s, %s = arith.mulsi_extended %s, %s : i64" lo hi va vb);
+            let c63 = def "arith.constant 63 : i64" in
+            let sign = def (Printf.sprintf "arith.shrsi %s, %s : i64" lo c63) in
+            (lo, def (Printf.sprintf "arith.cmpi ne, %s, %s : i64" hi sign))
+        | _ ->
+            (* a sum (a difference) leaves the range when its sign is the
+               opposite of the sign both operands share (of a's, when they
+               differ) *)
+            let instr = if op = "__i64_add" then "arith.addi" else "arith.subi" in
+            let r = def (Printf.sprintf "%s %s, %s : i64" instr va vb) in
+            let x1 = def (Printf.sprintf "arith.xori %s, %s : i64" va r) in
+            let x2 = if op = "__i64_add"
+              then def (Printf.sprintf "arith.xori %s, %s : i64" vb r)
+              else def (Printf.sprintf "arith.xori %s, %s : i64" va vb) in
+            let both = def (Printf.sprintf "arith.andi %s, %s : i64" x1 x2) in
+            (r, def (Printf.sprintf "arith.cmpi slt, %s, %s : i64" both zero)) in
+      refer_symbol e "yon_rt_int64_overflow" "func.func private @yon_rt_int64_overflow() -> ()";
+      emit_line e (Printf.sprintf "scf.if %s {" ovf);
+      push_indent e;
+      emit_line e "func.call @yon_rt_int64_overflow() : () -> ()";
+      pop_indent e;
+      emit_line e "}";
+      (r, "i64")
   | C.App (C.App (C.Var op, a), b)
     when String.length op > 6 && String.sub op 0 6 = "__i64_" ->
       let (va, ta) = emit_term e env funcs a in

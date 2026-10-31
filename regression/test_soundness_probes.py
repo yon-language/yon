@@ -263,13 +263,33 @@ place Entry {
     assert _compile_and_run(tmp_path, entry) == 1
 
 
-def test_int64_wraps_modulo_2_64(tmp_path):
+def test_int64_overflow_is_a_declared_refusal(tmp_path):
+    """Int64 is the integers in [-2^63, 2^63): MAX + 1 and MIN - 1 are no
+    Int64, so the program stops with the reason (exit 3), never wraps."""
+    msg = ("error: arithmetic: an Int64 operation leaves [-2^63, 2^63); "
+           "its result is no Int64 (the ring that wraps is Word64)")
+    for expr in ("Int64.max_value() + 1", "Int64.min_value() - 1",
+                 "Int64.two_to_62() * 2"):
+        d = tmp_path / str(abs(hash(expr)))
+        d.mkdir()
+        entry = ("place Entry {\n  fun main(): Number {\n"
+                 f"    n := {expr}\n"
+                 "    return if n > 0 then 1 else 2\n  }\n}\n")
+        src = d / "Entry.yon"
+        src.write_text(entry)
+        rc, out = _compile(src, d / "p", cwd=d)
+        assert rc == 0, out
+        r = subprocess.run([str(d / "p")], capture_output=True, text=True, timeout=30)
+        assert r.returncode == 3 and msg in r.stderr, (expr, r.returncode, r.stderr)
+
+
+def test_int64_in_range_is_exact(tmp_path):
     entry = """\
 place Entry {
   fun main(): Number {
-    a := if Int64.max_value() + 1 == Int64.min_value() then 1 else 0
-    b := if Int64.min_value() - 1 == Int64.max_value() then 10 else 0
-    mut c := if Int64.max_value() > 0 then 100 else 0
+    a := if Int64.max_value() - 1 + 1 == Int64.max_value() then 1 else 0
+    b := if Int64.min_value() + 1 - 1 == Int64.min_value() then 10 else 0
+    mut c := if Int64.ipow_ok(2, 62) - 1 + Int64.ipow_ok(2, 62) == Int64.max_value() then 100 else 0
     return a + b + c
   }
 }

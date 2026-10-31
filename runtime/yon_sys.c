@@ -243,6 +243,15 @@ double yon_rt_sys_terminate(double pid_d) {
     return kill((pid_t)pid_d, SIGKILL) == 0 ? 1.0 : 0.0;
 }
 
+/* ─── Arithmetic out of its range ────────────────────────────────────── */
+
+/* an Int64 sum, difference or product outside [-2^63, 2^63) */
+void yon_rt_int64_overflow(void) {
+    fprintf(stderr, "error: arithmetic: an Int64 operation leaves [-2^63, 2^63); "
+            "its result is no Int64 (the ring that wraps is Word64)\n");
+    exit(3);
+}
+
 /* ─── The words of a region, for the heaps that live in it ───────────── */
 
 static int64_t *yon_sys_word(int64_t r, int64_t at) {

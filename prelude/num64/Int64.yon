@@ -81,9 +81,11 @@ place Int64 is i64 {
     return if g == 0 then 0 else abs(a * b) / g
   }
 
-  /* exact power by squaring — the total core */
+  /* exact power by squaring — the total core; a square is taken only when a
+     further power needs it, so no intermediate exceeds the result */
   fun ipow_ok(base: Int64, e: Int64): Int64 {
     return if e == 0 then 1
+           else if e == 1 then base
            else if e % 2 == 0 then ipow_ok(base * base, e / 2)
            else base * ipow_ok(base * base, (e - 1) / 2)
   }
