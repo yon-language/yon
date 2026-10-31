@@ -161,6 +161,33 @@ let () =
        * source uses one of these constructs, exit with a distinct EVAL-INCOMPLETE code
        * instead of a value the evaluator cannot vouch for. (Line comments stripped first;
        * a keyword left in a block comment only over-refuses, which is safe.) *)
+      (* A cell written inside a `scope` is a write through a captured handle at
+       * runtime, and it is seen after the block. In the kernel a cell write is a
+       * new binding of its name, and a binding made inside the block does not
+       * leave it: the reducer would read the value from before the block.
+       * Refuse rather than return it. Every block of every statement is
+       * visited (Surface_ast.sub_stmts), at any depth. *)
+      let open Surface_ast in
+      let rec writes_cell (ss : stmt list) =
+        List.exists (fun s ->
+          (match s with SAssignHolds _ | SAssignBecomes _ -> true | _ -> false)
+          || List.exists writes_cell (sub_stmts s)) ss in
+      let rec scope_writes_cell (ss : stmt list) =
+        List.exists (fun s ->
+          (match s with SScope (_, b, _, _) -> writes_cell b | _ -> false)
+          || List.exists scope_writes_cell (sub_stmts s)) ss in
+      if List.exists (function
+           | TopFun fd -> scope_writes_cell fd.fn_body
+           | _ -> false) prog
+      then begin
+        Printf.eprintf
+          "EVAL INCOMPLETE: a cell is written inside a `scope`; the pure \
+           interpreter binds the new value inside the block only, so it would \
+           read the old value after it; refusing to emit a value rather than \
+           return a wrong one.\n";
+        print_string "EVAL INCOMPLETE\n";
+        exit 6
+      end;
       let no_line_comments = Str.global_replace (Str.regexp "//[^\n]*") "" source in
       let unfaithful =
         Str.regexp "\\b\\(iter\\|while\\|every\\|sequence\\|repeat\\|forever\\|produce\\|emit\\|spawn\\|promote\\|wire\\)\\b" in

@@ -524,6 +524,24 @@ and for_kind =
   | ForParallel       (* "for every x in xs" *)
   | ForWhenHere       (* "for every x in xs when here" — stream consumption *)
 
+(* The blocks of statements a statement holds, every form at once: a pass
+   that has to look inside every block walks this, and a new form of
+   statement fails to compile here until it says what it holds, so no pass
+   forgets it. *)
+let sub_stmts (s : stmt) : stmt list list =
+  match s with
+  | SWhen (_, body, alts, otherwise, _) ->
+      body :: List.map snd alts
+      @ (match otherwise with Some o -> [o] | None -> [])
+  | SForEvery (_, _, _, body, _) | SInSequence (_, _, body, _)
+  | SForever (body, _) | SScope (_, body, _, _) | SProduce (body, _)
+  | SForces (_, _, body, _) | SIter (_, body, _) | SWhile (_, body, _) ->
+      [body]
+  | SRepeat (_, body, otherwise, _) ->
+      body :: (match otherwise with Some o -> [o] | None -> [])
+  | SLet _ | SAssignHolds _ | SAssignBecomes _ | SReturn _ | SCall _
+  | SNew _ | SNewIn _ | SEmit _ | SPromote _ | SDrop _ -> []
+
 (* The FACE name of a type (prelude spelling) — used to name the success arm
    of an error coproduct. *)
 let face_name_of_ty (t : ty) : string =

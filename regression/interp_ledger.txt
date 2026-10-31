@@ -55,7 +55,7 @@ AGREE      geom_morphism_cell
 AGREE      geom_morphism_inspect
 AGREE      handle_lambda_capture
 AGREE      handle_lambdas
-AGREE      hermetic_scope
+INCOMPLETE hermetic_scope refused
 AGREE      heyting_excluded_middle
 INCOMPLETE higher_order_recursive punt
 AGREE      id_endpoint_coherence
