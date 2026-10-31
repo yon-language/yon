@@ -91,6 +91,7 @@ Equality between values is `==`. There is no `becomes` keyword.
 | Form | Status | Meaning |
 |---|---|---|
 | `Number`, `Text`, `Boolean`, `Unit` | ✓ | Primitives, the prelude places. `Text` ≡ `String`. The lowercase spellings `number`, `text`, `boolean`, `unit` are the kernel codes and are rejected at the surface (E1001) |
+| `Int64` | ✓ | The exact 64-bit integer, a prelude place carried as `i64`: no rounding. A literal is an `Int64` where the context asks for one |
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
 | `place P { this > A :U B(T) }` | ✓ | Coproduct (sum): the arms are places, an arm may carry arguments; see [`this`](/book/keywords#this) |
 | `List<T>`, `HashMap<K, V>`, `HashSet<T>` | ✓ | Collections |
@@ -159,9 +160,28 @@ post-composed with a `fun`.
 | `&? \|? ^? ~?` | ✓ | Heyting **trit-wise** on [`heyting`](/book/keywords#heyting) (Unknown-mask propagation) |
 | `:` `.` `->` `\|>` | ✓ | Annotation, access, function type, pipe |
 
-Precedence, loosest first: `|>`, then `=>` (right-associative), then `or`,
-then `and`, then the comparisons, then the bitwise operators, then `+ -`, then
-`* / %`, then the unary operators.
+Precedence, loosest first. Each Heyting operator shares the level of its
+classical twin:
+
+| Level | Operators | Associativity |
+|---|---|---|
+| 1 | `\|>` | left |
+| 2 | `=>` `=>?` | right |
+| 3 | `or` `\|\|` `\|\|?` | left |
+| 4 | `and` `&&` `&&?` | left |
+| 5 | `==` `!=` `<` `>` `<=` `>=` | left |
+| 6 | `\|` | left |
+| 7 | `\|?` | left |
+| 8 | `^` `^?` | left |
+| 9 | `&` `&?` | left |
+| 10 | `+` `-` | left |
+| 11 | `*` `/` `%` | left |
+| 12 | unary `-` | |
+| 13 | `not` `!` `!?` | |
+| 14 | `~` `~?` | |
+
+So `a &&? b == c` groups as `a &&? (b == c)`, and `x & y + 1` as
+`x & (y + 1)`.
 
 **The four readings of `=>`.** The arrow `=>` is read by what stands before it,
 never by its operands, so the reading is never ambiguous:
@@ -236,11 +256,11 @@ fun f(x: Number, y: Number): Number { return x + y }
 fun g<A, B>(x: A): B { ... }                      // type parameters
 fun h(x: Number): Number visits Output { ... }    // declared effect
 internal fun secret(x: Number): Number { ... }    // only its house calls it; not exported cross-Space
-place LatticePoint is internal i64 { ... }         // carried as i64, abstract outside its house
 fun p(x: Number) on error E: Number { ... }       // partial: it declares how it fails
 ```
 
-All four modifiers are ✓ verified. **Effect discipline (`visits`)**: calling a
+The four modifiers above, type parameters, `visits`, `internal` and
+`on error`, are ✓ verified. **Effect discipline (`visits`)**: calling a
 function that `visits E` requires the caller to cover `E`, by declaring
 `visits E` itself or having a handler active; the effect propagates up to
 `main`. I/O is an effect (`visits Output`).
@@ -273,6 +293,12 @@ A `place` then takes its world by inference from the project's toml, not from an
 | `operation op(...) uses algebra Additive` | ✓ | Bind to a catalog algebra; laws certified by the compiler |
 | `law commutative` etc. | ✓ | Declared law, verified (AlgebraVerifier) |
 | `cell c from e1 to e2` | ✓ | Higher cell between lower cells (CaTT witness) |
+| `place P is internal <carrier> { ... }` | ✓ | **Declared representation**: `P` is carried at runtime as `<carrier>`, but outside its own house it is abstract. No literal is one of its points, no arithmetic applies, and its values come only from its own functions. Example: `place LatticePoint is internal i64` |
+| `place P is <carrier> { ... }` | ✓ | The same representation, not hidden: the form of the prelude's primitives (`place Int64 is i64`) |
+
+The carrier after `is` names how the bits are laid out, not a type: `f64`,
+`f32`, `i64`, `i32`, `i16`, `i8`, `i1`. These lowercase names are valid only
+in this clause; in a type position they are refused (E1001), like `number`.
 
 Catalog algebras: `Additive`, `Multiplicative`, `TropicalMax`, `TropicalMin`,
 `BooleanOr`, `BooleanAnd`, `Gcd`.
@@ -303,7 +329,7 @@ topos where {
 Status: ✓ (regression examples). Under *topos-per-space* there is no `in W` or
 `at SPACE` annotation and no inline `objects { }` block: the world, the
 residence space, and the objects are all **inferred from the filesystem**. The
-name is not written either — it comes from the file, so it lives in one place
+name is not written either: it comes from the file, so it lives in one place
 and cannot diverge (the named form `topos Name where` is also accepted). A `prop` is a subobject classifier, a map into Ω, and it carries no
 return type, since a `prop` always lands in Ω; the abstract form (no
 `= body`) declares the signature only.
@@ -351,12 +377,15 @@ a move's `requires` check is emitted but not yet enforced, chapter 20) with opt-
 | `Math` | `sqrt, abs, floor, ceil, round, min, max, pow, log, log2, log10, exp, sin, cos, sinh, cosh, tanh, atan2, modulo, gcd, lcm, pi, e` |
 | `Bits` | `and, or, xor, not, shl, shr, popcount, fold, *_64` |
 | `Crypto` | `fnv1a, hash_int` |
-| `List` / `HashMap` / `HashSet` / `XSet` | Immutable collections over the content-addressed heap |
+| `List` | `empty, cons, head, tail, length, is_empty, append, reverse`, an immutable list over the content-addressed heap |
+| `HashMap` | `empty, set, has, get, value, size, to_stream`, an immutable map (a trie over the content-addressed heap) |
+| `HashSet` | `empty, add, contains, size, union, intersect, to_stream`, an immutable set |
+| `XSet` | `empty, add, contains, size, union, intersect, to_stream`, a set of lattice points: one table indexed by the shell, on the Leech heap, changed in place |
 | `Sequence` | `from_list, range, map, filter, fold`: a finite, pure sequence over a list, fused into one loop (not the `sequence` keyword) |
 | `Stream` | `iterate, take`: an infinite, pure unfold |
 | `Vec` | `empty, push, get, set, size`, a dynamic array on an arena strip (in-place mutable, no malloc) |
-| `MerkleTree` | Content-addressed Merkle trees |
-| `VoyagerList` | Golay-sealed list (error-correcting) |
+| `MerkleTree` | `leaf, node2, node2_commutative, node3, node4, label, child, equal, to_stream`, a Merkle tree on the FNV heap. The label is the node's datum, given by whoever builds the node; the identity of the node is the content address of the pair of its label and its children, so two identical subtrees are the same node and `equal` is a comparison of handles, exact. `node2` keeps the order of the children; `node2_commutative`, `node3` and `node4` sort them, for commutative operators |
+| `VoyagerList` | `empty, append, get, size, seal, open, corrupt, corrupt_at, to_stream`, a Golay-sealed list: `append` seals each entry into a codeword, `get` decodes it and corrects up to 3 flipped bits. `seal` and `open` do the same on one word (12 bits to a 24-bit codeword and back); `corrupt` and `corrupt_at` flip bits, for tests |
 | `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog` |
 | `Space` | `make, set, get`, mutable cells (the mutation mechanism) |
 

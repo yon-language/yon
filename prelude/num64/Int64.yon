@@ -8,9 +8,10 @@
  * Int64 is what Number cannot be: `number` is f64, so Integer's whole
  * bit family has its home here.
  *
- * The bit family uses no bitwise operators. Yon has no & | << >>, and they
- * are not needed here: on an integer carrier `/ 2` is a right shift, `* 2`
- * a left shift, `% 2` is the low bit. Everything below is three arithmetic
+ * The bit family uses no bitwise operators. Yon has & | ^ ~, but on Number
+ * only: an Int64 operand is refused. It has no shift operators << >>. Neither
+ * is needed here: on an integer carrier `/ 2` is a right shift, `* 2` a left
+ * shift, `% 2` is the low bit. Everything below is three arithmetic
  * operators, recursively. It is not a workaround: shifting is halving, and
  * saying it this way is more honest than a glyph.
  *
