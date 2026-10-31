@@ -75,7 +75,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `most` | `MOST` | 2 | yes | exercised |
 | `move` | `MOVE` | 9 | yes | exercised |
 | `multishot` | `MULTI_SHOT` | 1 | yes | exercised |
-| `mut` | `MUT` | 12 | yes | exercised |
+| `mut` | `MUT` | 13 | yes | exercised |
 | `nat` | `NAT` | 1 | yes | exercised |
 | `not` | `NOT` | 6 | yes | exercised |
 | `of` | `OF` | 9 | yes | exercised |

@@ -188,17 +188,19 @@ The infinite loop, typically wrapped around effects: a server, a producer, a hea
 
 #### `scope`
 
-The formally hermetic block: `scope { }` lowers to an MLIR `IsolatedFromAbove` region and the verifier enforces that nothing leaks in or out.
+The formally hermetic block: `scope { }` lowers to an MLIR `IsolatedFromAbove` region, and every outer binding it uses must enter as an explicit capture. A scope gives no value of its own; a result leaves through a cell declared outside it, which the body writes with `<-`.
 
 <CodeWindow file="hermetic_scope.yon"
             run="yonc hermetic_scope.yon -o hermetic_scope && ./hermetic_scope; echo $?"
             out={["42"]}>
 {`fun main(): Number {
   base := 40
+  mut result := 0
   scope Hermetic {
     sealed := base + 2
+    result <- sealed
   }
-  return base + 2
+  return result
 }`}
 </CodeWindow>
 
