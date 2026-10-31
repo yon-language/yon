@@ -329,6 +329,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   let tunit = TyPrim "unit" in
   let tunk = TyPrim "unknown" in
   let ti64 = TyUser "Int64" and tregion = TyUser "Region" in
+  let tword = TyUser "Word64" in
   let ttext = TyUser "String" in
   let tlist t = TyList t in
   (* the generic collections' own parameters, as their places declare them *)
@@ -687,12 +688,12 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     (* The words of a region, read and written by the heap that lives in it:
        the same primitive, a face in the house of each heap. *)
     "FnvHeap", [
-      "read_word", [tregion; ti64], ti64;
-      "write_word", [tregion; ti64; ti64], tunit;
+      "read_word", [tregion; ti64], tword;
+      "write_word", [tregion; ti64; tword], tunit;
     ];
     "LeechHeap", [
-      "read_word", [tregion; ti64], ti64;
-      "write_word", [tregion; ti64; ti64], tunit;
+      "read_word", [tregion; ti64], tword;
+      "write_word", [tregion; ti64; tword], tunit;
     ];
     "Random", [
       "seed",  [tnum], tnum;

@@ -7,6 +7,6 @@ place FnvHeap is internal i64 {
 
   /* ─── The words of its region ────────────────────────────── [G] ─── */
 
-  internal fun read_word(r: Region, index: Int64): Int64 is given
-  internal fun write_word(r: Region, index: Int64, w: Int64): Unit is given
+  internal fun read_word(r: Region, index: Int64): Word64 is given
+  internal fun write_word(r: Region, index: Int64, w: Word64): Unit is given
 }

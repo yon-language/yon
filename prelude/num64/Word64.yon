@@ -1,0 +1,76 @@
+/* Word64 — the ring Z/2^64: 64 bits, whose sum and product wrap. It is not
+ * the integers: Int64 is exact, and its overflow stops the program; a Word64
+ * has no overflow, every sum and product is a word. On the same 64 bits the
+ * second structure is the bits themselves: and, or, xor, not, the shifts.
+ *
+ * The representation is internal: inside this house a Word64 is its carrier
+ * (a 64-bit integer, in both directions), so the funs below are written with
+ * the carrier's arithmetic, the machine's, which wraps; outside it a word is
+ * abstract and is reached only through these funs.
+ *
+ * Markers: [T] total · [E] partial, `on error` */
+place Word64 is internal i64 {
+
+  /* ─── From and to the integers ───────────────────────────── [T] ─── */
+
+  /* the word of an integer: its residue modulo 2^64, as two's complement */
+  fun from_int64(n: Int64): Word64 { return n }
+
+  /* the word as an integer of [-2^63, 2^63): every word has one, so the
+     error arm is never taken; it is declared with its unsigned sibling */
+  fun to_signed(w: Word64) on error DomainError: Int64 { return as_signed(w) }
+
+  /* the word as an integer of [0, 2^64): it is an Int64 only below 2^63 */
+  fun to_unsigned(w: Word64) on error DomainError: Int64 {
+    return if as_signed(w) >= 0 then as_signed(w)
+           else .-> DomainError { message "the word is 2^63 or more: no Int64 holds it" }
+  }
+
+  internal fun as_signed(w: Word64): Int64 { return w }
+
+  /* ─── The ring ───────────────────────────────────────────── [T] ─── */
+
+  fun zero(): Word64 { return from_int64(0) }
+  fun one(): Word64 { return from_int64(1) }
+  fun add(a: Word64, b: Word64): Word64 { return a + b }
+  fun sub(a: Word64, b: Word64): Word64 { return a - b }
+  fun mul(a: Word64, b: Word64): Word64 { return a * b }
+
+  /* ─── The bits ───────────────────────────────────────────── [T] ─── */
+
+  fun bit_and(a: Word64, b: Word64): Word64 { return a & b }
+  fun bit_or(a: Word64, b: Word64): Word64 { return a | b }
+  fun bit_xor(a: Word64, b: Word64): Word64 { return a ^ b }
+  fun bit_not(a: Word64): Word64 { return ~a }
+
+  /* 2^k, for k in [0, 64) */
+  internal fun power_of_two(k: Int64): Word64 {
+    return if k == 0 then one() else mul(power_of_two(k - 1), from_int64(2))
+  }
+
+  /* ─── The shifts ─────────────────────────────────────────── [E] ─── */
+
+  /* the bits moved k places up; the k top bits leave, k zeros enter */
+  fun shift_left(w: Word64, k: Int64) on error DomainError: Word64 {
+    return if k < 0 or k > 63
+           then .-> DomainError { message "a shift moves the bits by 0 to 63 places" }
+           else mul(w, power_of_two(k))
+  }
+
+  /* the bits moved k places down, zeros entering at the top (logical) */
+  fun shift_right(w: Word64, k: Int64) on error DomainError: Word64 {
+    return if k < 0 or k > 63
+           then .-> DomainError { message "a shift moves the bits by 0 to 63 places" }
+           else down(w, k)
+  }
+
+  /* below the top bit the division by 2^k is exact on a non-negative carrier;
+     the top bit, when set, lands at place 63 - k */
+  internal fun down(w: Word64, k: Int64): Word64 {
+    return if k == 0 then w
+           else if as_signed(w) >= 0 then from_int64(as_signed(w) / as_signed(power_of_two(k)))
+           else bit_or(from_int64(as_signed(bit_and(w, from_int64(Int64.max_value())))
+                                  / as_signed(power_of_two(k))),
+                       power_of_two(63 - k))
+  }
+}
