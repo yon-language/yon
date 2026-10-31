@@ -1820,6 +1820,11 @@ let emit_zero_arg_call (e : emitter) (f : string) (ret : string) : string * stri
   emit_line e (Printf.sprintf "%s = func.call @%s() : () -> %s" v f ret);
   if is_ind_section ret then (coerce_to_param e v ret "f64", "f64") else (v, ret)
 
+(* A block makes a cell when its body names the cell constructor. *)
+let block_makes_cell (body : C.term) : bool =
+  let fv = term_free_vars body in
+  SS.mem "Space__make" fv || SS.mem "Space__new" fv
+
 let rec emit_term (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list)
@@ -2861,13 +2866,13 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = scf.if %s -> (%s) {" v vc ty);
       push_indent e;
-      let (vt0, vt_ty) = emit_term e env funcs then_t in
+      let (vt0, vt_ty) = emit_block e env funcs then_t in
       let vt = coerce_to_param e vt0 vt_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" vt ty);
       pop_indent e;
       emit_line e "} else {";
       push_indent e;
-      let (ve0, ve_ty) = emit_term e env funcs else_t in
+      let (ve0, ve_ty) = emit_block e env funcs else_t in
       let ve = coerce_to_param e ve0 ve_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" ve ty);
       pop_indent e;
@@ -2891,13 +2896,13 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = scf.if %s -> (%s) {" v vc ty);
       push_indent e;
-      let (vt0, vt_ty) = emit_term e env funcs then_t in
+      let (vt0, vt_ty) = emit_block e env funcs then_t in
       let vt = coerce_to_param e vt0 vt_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" vt ty);
       pop_indent e;
       emit_line e "} else {";
       push_indent e;
-      let (ve0, ve_ty) = emit_term e env funcs else_t in
+      let (ve0, ve_ty) = emit_block e env funcs else_t in
       let ve = coerce_to_param e ve0 ve_ty ty in
       emit_line e (Printf.sprintf "scf.yield %s : %s" ve ty);
       pop_indent e;
@@ -4153,7 +4158,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = arith.sitofp %s : i64 to f64" v_iv_f64 v_iv_i64);
       (* Bind idx_name to v_iv_f64 in env for body emission *)
       let env_body = Env.add idx_name (v_iv_f64, "f64") env in
-      let _ = emit_term e env_body funcs body_term in
+      let _ = emit_block e env_body funcs body_term in
       pop_indent e;
       emit_line e "}";
       (* the iter loop has no value (Unit); return a placeholder f64 0. *)
@@ -4172,7 +4177,7 @@ let rec emit_term (e : emitter)
       pop_indent e;
       emit_line e "} do {";
       push_indent e;
-      let _ = emit_term e env funcs body_term in
+      let _ = emit_block e env funcs body_term in
       emit_line e "scf.yield";
       pop_indent e;
       emit_line e "}";
@@ -5377,6 +5382,23 @@ and emit_i64 (e : emitter) (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
   let (v, ty) = emit_term e env funcs t in
   coerce_to_param e v ty "i64"
+
+(* A cell lives as long as the block that declares it: a block that makes a
+   cell takes the mark of the cell table on entry and gives the cells made
+   since back on exit, after its value is computed (a value, never a cell,
+   leaves a block). A block that makes no cell has none to give back. *)
+and emit_block (e : emitter) (env : (string * string) Env.t)
+    (funcs : (string * func_sig) list) (body : C.term) : string * string =
+  if not (block_makes_cell body) then emit_term e env funcs body
+  else begin
+    let mark = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = func.call @yon_rt_space_mark() : () -> f64" mark);
+    let r = emit_term e env funcs body in
+    let back = fresh_ssa e in
+    emit_line e (Printf.sprintf
+      "%s = func.call @yon_rt_space_reset(%s) : (f64) -> f64" back mark);
+    r
+  end
 
 let emit_place (e : emitter) (world : string) (pd : C.place_decl) : unit =
   emit_indent e;

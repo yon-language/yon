@@ -6710,9 +6710,10 @@ static uint32_t g_n_space_cells = 0;
 
 double yon_rt_space_make(double initial) {
     if (g_n_space_cells >= YON_RT_MAX_SPACE_CELLS) {
-        fprintf(stderr, "[YON-RT] space_make: registry pieno (max %u)\n",
+        fprintf(stderr, "error: cell: %u cells are live, the most the cell table "
+                "holds; a cell lives as long as the block that declares it\n",
                 (unsigned)YON_RT_MAX_SPACE_CELLS);
-        return -1.0;
+        exit(3);
     }
     uint32_t id = g_n_space_cells++;
     g_space_cells[id].value  = initial;
@@ -6720,25 +6721,26 @@ double yon_rt_space_make(double initial) {
     return (double)id;
 }
 
-double yon_rt_space_set(double space_id, double new_value) {
-    uint32_t id = (uint32_t)space_id;
-    if (id >= g_n_space_cells || !g_space_cells[id].in_use) {
-        fprintf(stderr, "[YON-RT] space_set: id=%u invalido (n=%u)\n",
-                id, g_n_space_cells);
-        return -1.0;
+/* a cell is read or written only while its block lives: a handle past it, or
+   one that never named a cell, stops the program rather than reach another
+   cell */
+static uint32_t space_cell_live(double space_id, const char *what) {
+    if (!(space_id >= 0.0) || space_id >= (double)g_n_space_cells
+        || !g_space_cells[(uint32_t)space_id].in_use) {
+        fprintf(stderr, "error: cell: %s of a cell that is not live (handle %.17g, "
+                "%u cells live)\n", what, space_id, g_n_space_cells);
+        exit(3);
     }
-    g_space_cells[id].value = new_value;
+    return (uint32_t)space_id;
+}
+
+double yon_rt_space_set(double space_id, double new_value) {
+    g_space_cells[space_cell_live(space_id, "a write")].value = new_value;
     return space_id;
 }
 
 double yon_rt_space_get(double space_id) {
-    uint32_t id = (uint32_t)space_id;
-    if (id >= g_n_space_cells || !g_space_cells[id].in_use) {
-        fprintf(stderr, "[YON-RT] space_get: id=%u invalido (n=%u)\n",
-                id, g_n_space_cells);
-        return 0.0;
-    }
-    return g_space_cells[id].value;
+    return g_space_cells[space_cell_live(space_id, "a read")].value;
 }
 
 /* Mutable-cell reclaim by stack discipline. A function's mutable-local cells do
@@ -6750,7 +6752,10 @@ double yon_rt_space_get(double space_id) {
  * frees every cell allocated during the call by resetting the counter to the mark
  * (yon_rt_space_reset). Freed slots are then reused by yon_rt_space_make, so a
  * reassigning helper called N times no longer leaks N cells. This is the same
- * drop-then-reuse the named-Space regions get, applied to the cell registry. */
+ * drop-then-reuse the named-Space regions get, applied to the cell registry.
+ * The same holds for every block: a block that declares a cell takes the
+ * mark on entry and gives its cells back on exit, so a cell declared in the
+ * body of a loop lives one turn. */
 double yon_rt_space_mark(void) {
     return (double)g_n_space_cells;
 }
