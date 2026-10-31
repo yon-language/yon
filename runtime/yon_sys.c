@@ -26,14 +26,29 @@
 #include <signal.h>
 #include <time.h>
 #if defined(__APPLE__)
-/* the wait on a word: the kernel's compare-and-wait, shared between
- * processes (the primitive libc++ uses for atomic wait) */
+/* The wait on a word on macOS is os_sync_wait_on_address, the system's
+ * public primitive, from macOS 14.4 on: it is used when the build's minimum
+ * target is at least 14.4. Below that the fallback is __ulock_wait /
+ * __ulock_wake, the kernel's compare-and-wait under it, which libc++ uses for
+ * atomic wait: not a public interface, declared here by hand. Both wait on
+ * the word shared between processes and compare its low 32 bits. */
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) \
+    && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 140400 \
+    && defined(__has_include)
+#if __has_include(<os/os_sync_wait_on_address.h>)
+#define YON_OS_SYNC 1
+#include <os/os_sync_wait_on_address.h>
+#include <os/clock.h>
+#endif
+#endif
+#ifndef YON_OS_SYNC
 extern int __ulock_wait(uint32_t operation, void *addr, uint64_t value,
                         uint32_t timeout_us);
 extern int __ulock_wake(uint32_t operation, void *addr, uint64_t wake_value);
 #define YON_UL_COMPARE_AND_WAIT_SHARED 3u
 #define YON_ULF_WAKE_ALL               0x00000100u
 #define YON_ULF_NO_ERRNO               0x01000000u
+#endif
 #elif defined(__linux__)
 #include <linux/futex.h>
 #include <sys/syscall.h>
@@ -126,7 +141,16 @@ static double yon_sys_wait(int64_t r, int64_t at, int64_t expected,
                            int timed, int64_t timeout_ns) {
     int64_t *w = yon_sys_header(r) + 1 + at;
     if (__atomic_load_n(w, __ATOMIC_SEQ_CST) != expected) return 1.0;
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(YON_OS_SYNC)
+    int rc = timed
+        ? os_sync_wait_on_address_with_timeout(w, (uint64_t)(uint32_t)expected, 4,
+              OS_SYNC_WAIT_ON_ADDRESS_SHARED, OS_CLOCK_MACH_ABSOLUTE_TIME,
+              (uint64_t)timeout_ns)
+        : os_sync_wait_on_address(w, (uint64_t)(uint32_t)expected, 4,
+              OS_SYNC_WAIT_ON_ADDRESS_SHARED);
+    if (rc < 0 && errno == ETIMEDOUT) return 2.0;
+    return 0.0;
+#elif defined(__APPLE__)
     uint32_t us = 0;
     if (timed) {
         int64_t q = timeout_ns / 1000;
@@ -159,7 +183,9 @@ double yon_rt_sys_wait_for(int64_t r, int64_t at, int64_t expected, int64_t time
  * (macOS says only whether one was there: 1 or 0) */
 double yon_rt_sys_wake(int64_t r, int64_t at) {
     int64_t *w = yon_sys_header(r) + 1 + at;
-#if defined(__APPLE__)
+#if defined(__APPLE__) && defined(YON_OS_SYNC)
+    return os_sync_wake_by_address_all(w, 4, OS_SYNC_WAKE_BY_ADDRESS_SHARED) == 0 ? 1.0 : 0.0;
+#elif defined(__APPLE__)
     int rc = __ulock_wake(YON_UL_COMPARE_AND_WAIT_SHARED | YON_ULF_WAKE_ALL | YON_ULF_NO_ERRNO, w, 0);
     return rc == 0 ? 1.0 : 0.0;
 #elif defined(__linux__)
