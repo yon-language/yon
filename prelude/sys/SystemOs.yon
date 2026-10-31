@@ -65,7 +65,7 @@ place SystemOs {
 
   /* ─── Waiting ────────────────────────────────────────────── [E] ─── */
 
-  fun wait(r: Region, index: Int64, expected: Int64) on error DomainError: Wait {
+  fun wait(r: Region, index: Int64, expected: Int64) on error DomainError: WaitResult {
     return if index < 0 or index >= words(r)
            then .-> DomainError { message "not a word of the region" }
            else if expected < 0 or expected > 4294967295
@@ -73,7 +73,7 @@ place SystemOs {
            else ended(unchecked_wait(r, index, expected))
   }
 
-  fun wait_for(r: Region, index: Int64, expected: Int64, timeout_ns: Int64) on error DomainError: Wait {
+  fun wait_for(r: Region, index: Int64, expected: Int64, timeout_ns: Int64) on error DomainError: WaitResult {
     return if index < 0 or index >= words(r)
            then .-> DomainError { message "not a word of the region" }
            else if expected < 0 or expected > 4294967295
@@ -91,7 +91,7 @@ place SystemOs {
            else unchecked_wake(r, index)
   }
 
-  internal fun ended(code: Number): Wait {
+  internal fun ended(code: Number): WaitResult {
     return if code == 0 then Woken else if code == 1 then NotExpected else TimedOut
   }
 

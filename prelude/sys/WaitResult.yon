@@ -1,0 +1,3 @@
+/* WaitResult — how a wait on a word ended: a wake came or the word changed, the word
+ * did not hold the expected value to begin with, or the time ran out. */
+place WaitResult { this > Woken :U NotExpected :U TimedOut }

@@ -119,7 +119,7 @@ def _wait(call: str, arm: str) -> str:
         domain = "42"
     inner = ", ".join(f"{a} => {v}" for a, v in ends.items())
     return _region("SystemOs.map(4)",
-                   f"match {call} {{ Wait as w => (match w {{ {inner} }}), "
+                   f"match {call} {{ WaitResult as w => (match w {{ {inner} }}), "
                    f"DomainError as d => {domain} }}")
 
 
