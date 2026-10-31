@@ -2,7 +2,7 @@
  *
  * The prelude reaches the kernel through one place, SystemOs, and its
  * `is given` faces land here: memory, shared memory, the wait on a word,
- * the clocks, the arguments, writing, processes. Nothing here allocates a
+ * the clocks, the arguments, the standard streams, processes. Nothing here allocates a
  * value of the language except what the language asked for (a Text read
  * from the arguments); everything else is a scalar or a region.
  *
@@ -66,18 +66,29 @@ double yon_rt_sys_unmap(int64_t r) {
     return 0.0;
 }
 
-/* a shared-memory name the kernel accepts: one leading '/', no other, and
- * short enough for every kernel (macOS keeps 31 characters) */
-double yon_rt_sys_is_shm_name(double name_d) {
+/* A shared-memory name is 1 to 30 letters, digits, '_' or '-'. The kernel
+ * of this system wants it with a leading '/'; the runtime gives it that form,
+ * so the name the language sees says nothing of any kernel. */
+double yon_rt_sys_is_shared_name(double name_d) {
     const char *n = yon_ds_cstr(name_d);
-    if (!n || n[0] != '/') return 0.0;
+    if (!n) return 0.0;
     size_t len = strlen(n);
-    if (len < 2 || len > 31) return 0.0;
-    return strchr(n + 1, '/') ? 0.0 : 1.0;
+    if (len < 1 || len > 30) return 0.0;
+    for (size_t i = 0; i < len; i++) {
+        char c = n[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || c == '_' || c == '-')) return 0.0;
+    }
+    return 1.0;
 }
 
-int64_t yon_rt_sys_shm_map(double name_d, int64_t words) {
-    const char *n = yon_ds_cstr(name_d);
+static void yon_sys_shared_kernel_name(double name_d, char out[40]) {
+    snprintf(out, 40, "/%s", yon_ds_cstr(name_d));
+}
+
+int64_t yon_rt_sys_shared_map(double name_d, int64_t words) {
+    char n[40];
+    yon_sys_shared_kernel_name(name_d, n);
     size_t bytes = ((size_t)words + 1u) * sizeof(int64_t);
     int fd = shm_open(n, O_CREAT | O_RDWR, 0600);
     if (fd < 0) yon_sys_refuse("the kernel did not open the shared region");
@@ -93,14 +104,16 @@ int64_t yon_rt_sys_shm_map(double name_d, int64_t words) {
     if (h[0] == 0) h[0] = words;          /* the first to map it sizes it */
     else if (h[0] != words) {
         fprintf(stderr, "error: system: the shared region %s holds %lld words, "
-                "%lld were asked\n", n, (long long)h[0], (long long)words);
+                "%lld were asked\n", n + 1, (long long)h[0], (long long)words);
         exit(3);
     }
     return (int64_t)(intptr_t)p;
 }
 
-double yon_rt_sys_shm_unlink(double name_d) {
-    return shm_unlink(yon_ds_cstr(name_d)) == 0 ? 1.0 : 0.0;
+double yon_rt_sys_shared_remove(double name_d) {
+    char n[40];
+    yon_sys_shared_kernel_name(name_d, n);
+    return shm_unlink(n) == 0 ? 1.0 : 0.0;
 }
 
 /* ─── The wait on a word ─────────────────────────────────────────────── */
@@ -166,21 +179,24 @@ static int64_t yon_sys_clock(clockid_t c) {
 int64_t yon_rt_sys_monotonic_ns(void) { return yon_sys_clock(CLOCK_MONOTONIC); }
 int64_t yon_rt_sys_wall_ns(void) { return yon_sys_clock(CLOCK_REALTIME); }
 
-/* ─── Writing ────────────────────────────────────────────────────────── */
+/* ─── The standard streams ───────────────────────────────────────────── */
 
-double yon_rt_sys_write(double fd_d, double text_d) {
+static double yon_sys_write_all(int fd, double text_d) {
     const char *s = yon_ds_cstr(text_d);
     size_t len = s ? strlen(s) : 0, done = 0;
     while (done < len) {
-        ssize_t w = write((int)fd_d, s + done, len - done);
+        ssize_t w = write(fd, s + done, len - done);
         if (w < 0) {
             if (errno == EINTR) continue;
-            yon_sys_refuse("the kernel did not write to the descriptor");
+            yon_sys_refuse("the kernel did not write the text");
         }
         done += (size_t)w;
     }
     return (double)done;
 }
+
+double yon_rt_sys_write_output(double text_d) { return yon_sys_write_all(1, text_d); }
+double yon_rt_sys_write_error(double text_d) { return yon_sys_write_all(2, text_d); }
 
 /* ─── Arguments ──────────────────────────────────────────────────────── */
 /* the prelude has checked the index */
@@ -192,8 +208,13 @@ double yon_rt_sys_arg(double i_d) { return yon_ds_string(g_argv[(int)i_d]); }
 
 double yon_rt_sys_process_id(void) { return (double)getpid(); }
 
-double yon_rt_sys_signal(double pid_d, double sig_d) {
-    return kill((pid_t)pid_d, (int)sig_d) == 0 ? 1.0 : 0.0;
+/* a process is there when the kernel knows it, even one we may not touch */
+double yon_rt_sys_process_exists(double pid_d) {
+    return (kill((pid_t)pid_d, 0) == 0 || errno == EPERM) ? 1.0 : 0.0;
+}
+
+double yon_rt_sys_terminate(double pid_d) {
+    return kill((pid_t)pid_d, SIGKILL) == 0 ? 1.0 : 0.0;
 }
 
 /* ─── The words of a region, for the heaps that live in it ───────────── */

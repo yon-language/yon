@@ -668,9 +668,9 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "unchecked_map", [ti64], tregion;
       "words", [tregion], ti64;
       "unmap", [tregion], tunit;
-      "is_shm_name", [ttext], tbool;
-      "unchecked_shm_map", [ttext; ti64], tregion;
-      "unchecked_shm_unlink", [ttext], tbool;
+      "is_shared_name", [ttext], tbool;
+      "unchecked_shared_map", [ttext; ti64], tregion;
+      "unchecked_shared_remove", [ttext], tbool;
       "unchecked_wait", [tregion; ti64; ti64], tnum;
       "unchecked_wait_for", [tregion; ti64; ti64; ti64], tnum;
       "unchecked_wake", [tregion; ti64], tnum;
@@ -678,9 +678,11 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "wall_ns", [], ti64;
       "arg_count", [], tnum;
       "unchecked_arg", [tnum], ttext;
-      "unchecked_write", [tnum; ttext], tnum;
+      "write_output", [ttext], tnum;
+      "write_error", [ttext], tnum;
       "process_id", [], tnum;
-      "unchecked_signal", [tnum; tnum], tbool;
+      "unchecked_process_exists", [tnum], tbool;
+      "unchecked_terminate", [tnum], tbool;
     ];
     (* The words of a region, read and written by the heap that lives in it:
        the same primitive, a face in the house of each heap. *)

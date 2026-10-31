@@ -3,7 +3,7 @@ allocates nothing.
 
 SystemOs (prelude/sys) is the one place whose primitives reach the kernel:
 memory, shared memory, the wait on a word, the clocks, the arguments,
-writing, processes. A Region is memory the kernel gave, an opaque handle. What
+the standard streams, processes. A Region is memory the kernel gave, an opaque handle. What
 the language can see is wrong before asking is a DomainError. Each public
 face has a probe here.
 
@@ -79,14 +79,14 @@ def test_a_region_of_no_word_is_a_domain_error(tmp_path):
 # ─── Shared memory ──────────────────────────────────────────────────────
 
 
-def test_shm_map_twice_under_one_name_is_one_region_of_the_same_words(tmp_path):
-    name = f"/yon_t{os.getpid() % 100000}"
-    body = (f"  a := SystemOs.shm_map(\"{name}\", 8)\n"
-            f"  b := SystemOs.shm_map(\"{name}\", 8)\n"
+def test_shared_map_twice_under_one_name_is_one_region_of_the_same_words(tmp_path):
+    name = f"yon_t{os.getpid() % 100000}"
+    body = (f"  a := SystemOs.shared_map(\"{name}\", 8)\n"
+            f"  b := SystemOs.shared_map(\"{name}\", 8)\n"
             "  return match a {\n"
             "    Region as ra => (match b {\n"
             "      Region as rb => (if SystemOs.words(ra) == 8 and SystemOs.words(rb) == 8\n"
-            f"                       then (match SystemOs.shm_unlink(\"{name}\") {{\n"
+            f"                       then (match SystemOs.shared_remove(\"{name}\") {{\n"
             "                         Boolean as gone => (if gone then 42 else 3),\n"
             "                         DomainError as d => 4 })\n"
             "                       else 2),\n"
@@ -95,15 +95,16 @@ def test_shm_map_twice_under_one_name_is_one_region_of_the_same_words(tmp_path):
     assert _value(tmp_path, body) == 42
 
 
-def test_shm_unlink_of_an_absent_name_answers_false(tmp_path):
-    body = ("  return match SystemOs.shm_unlink(\"/yon_never_made_x\") {\n"
+def test_shared_remove_of_an_absent_name_answers_false(tmp_path):
+    body = ("  return match SystemOs.shared_remove(\"yon_never_made_x\") {\n"
             "    Boolean as gone => (if gone then 1 else 42),\n"
             "    DomainError as d => 2 }\n")
     assert _value(tmp_path, body) == 42
 
 
-def test_a_shared_memory_name_without_its_slash_is_a_domain_error(tmp_path):
-    assert _value(tmp_path, _region("SystemOs.shm_map(\"noslash\", 8)", "1")) == 200
+def test_a_shared_memory_name_with_a_slash_is_a_domain_error(tmp_path):
+    # the name says nothing of a kernel: a '/' is not one of its characters
+    assert _value(tmp_path, _region("SystemOs.shared_map(\"/x\", 8)", "1")) == 200
 
 
 # ─── The wait on a word ─────────────────────────────────────────────────
@@ -185,22 +186,17 @@ def test_an_argument_past_the_last_is_a_domain_error(tmp_path):
     assert _value(tmp_path, body) == 200
 
 
-# ─── Writing ────────────────────────────────────────────────────────────
+# ─── The standard streams ──────────────────────────────────────────────
 
 
-def test_write_puts_the_text_on_the_descriptor(tmp_path):
-    body = ("  return match SystemOs.write(1, \"ciao\") {\n"
-            "    Number as n => n,\n"
-            "    DomainError as d => 200 }\n")
-    r = _run(tmp_path, body)
-    assert r.returncode == 4 and r.stdout == "ciao", (r.returncode, r.stdout)
+def test_write_output_puts_the_text_on_the_standard_output(tmp_path):
+    r = _run(tmp_path, "  return SystemOs.write_output(\"ciao\")\n")
+    assert r.returncode == 4 and r.stdout == "ciao" and r.stderr == "", (r.returncode, r.stdout, r.stderr)
 
 
-def test_a_negative_descriptor_is_a_domain_error(tmp_path):
-    body = ("  return match SystemOs.write(0 - 1, \"x\") {\n"
-            "    Number as n => 1,\n"
-            "    DomainError as d => 200 }\n")
-    assert _value(tmp_path, body) == 200
+def test_write_error_puts_the_text_on_the_standard_error(tmp_path):
+    r = _run(tmp_path, "  return SystemOs.write_error(\"guai\")\n")
+    assert r.returncode == 4 and r.stderr == "guai" and r.stdout == "", (r.returncode, r.stdout, r.stderr)
 
 
 # ─── Processes ──────────────────────────────────────────────────────────
@@ -213,18 +209,37 @@ def test_process_id_is_the_id_the_kernel_gave(tmp_path):
     assert p.wait(timeout=30) == p.pid % 256
 
 
-def test_signal_zero_to_itself_finds_the_process(tmp_path):
-    body = ("  return match SystemOs.signal(SystemOs.process_id(), 0) {\n"
-            "    Boolean as found => (if found then 42 else 1),\n"
+def _exists(pid_expr: str) -> str:
+    return (f"  return match SystemOs.process_exists({pid_expr}) {{\n"
+            "    Boolean as there => (if there then 42 else 7),\n"
             "    DomainError as d => 200 }\n")
-    assert _value(tmp_path, body) == 42
 
 
-def test_a_signal_past_31_is_a_domain_error(tmp_path):
-    body = ("  return match SystemOs.signal(SystemOs.process_id(), 99) {\n"
-            "    Boolean as found => 1,\n"
-            "    DomainError as d => 200 }\n")
-    assert _value(tmp_path, body) == 200
+def test_the_running_process_exists(tmp_path):
+    assert _value(tmp_path, _exists("SystemOs.process_id()")) == 42
+
+
+def test_a_process_that_ended_does_not_exist(tmp_path):
+    child = subprocess.Popen(["true"])
+    child.wait(timeout=30)
+    assert _value(tmp_path, _exists(str(child.pid))) == 7
+
+
+def test_a_process_id_of_zero_is_a_domain_error(tmp_path):
+    assert _value(tmp_path, _exists("0")) == 200
+
+
+def test_terminate_ends_the_process(tmp_path):
+    child = subprocess.Popen(["sleep", "30"])
+    try:
+        body = (f"  return match SystemOs.terminate({child.pid}) {{\n"
+                "    Boolean as ended => (if ended then 42 else 7),\n"
+                "    DomainError as d => 200 }\n")
+        assert _value(tmp_path, body) == 42
+        assert child.wait(timeout=10) != 0
+    finally:
+        if child.poll() is None:
+            child.kill()
 
 
 # ─── Heap code allocates nothing ────────────────────────────────────────

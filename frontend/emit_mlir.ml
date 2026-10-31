@@ -872,9 +872,9 @@ let system_primitives : (string * string * string list * string) list = [
   "SystemOs__unchecked_map",        "yon_rt_sys_map",          ["i64"], "i64";
   "SystemOs__words",                "yon_rt_sys_words",        ["i64"], "i64";
   "SystemOs__unmap",                "yon_rt_sys_unmap",        ["i64"], "f64";
-  "SystemOs__is_shm_name",          "yon_rt_sys_is_shm_name",  ["f64"], "i1";
-  "SystemOs__unchecked_shm_map",    "yon_rt_sys_shm_map",      ["f64"; "i64"], "i64";
-  "SystemOs__unchecked_shm_unlink", "yon_rt_sys_shm_unlink",   ["f64"], "i1";
+  "SystemOs__is_shared_name",          "yon_rt_sys_is_shared_name",   ["f64"], "i1";
+  "SystemOs__unchecked_shared_map",    "yon_rt_sys_shared_map",       ["f64"; "i64"], "i64";
+  "SystemOs__unchecked_shared_remove", "yon_rt_sys_shared_remove",    ["f64"], "i1";
   "SystemOs__unchecked_wait",       "yon_rt_sys_wait",         ["i64"; "i64"; "i64"], "f64";
   "SystemOs__unchecked_wait_for",   "yon_rt_sys_wait_for",     ["i64"; "i64"; "i64"; "i64"], "f64";
   "SystemOs__unchecked_wake",       "yon_rt_sys_wake",         ["i64"; "i64"], "f64";
@@ -882,9 +882,11 @@ let system_primitives : (string * string * string list * string) list = [
   "SystemOs__wall_ns",              "yon_rt_sys_wall_ns",      [], "i64";
   "SystemOs__arg_count",            "yon_rt_sys_arg_count",    [], "f64";
   "SystemOs__unchecked_arg",        "yon_rt_sys_arg",          ["f64"], "f64";
-  "SystemOs__unchecked_write",      "yon_rt_sys_write",        ["f64"; "f64"], "f64";
+  "SystemOs__write_output",         "yon_rt_sys_write_output", ["f64"], "f64";
+  "SystemOs__write_error",          "yon_rt_sys_write_error",  ["f64"], "f64";
   "SystemOs__process_id",           "yon_rt_sys_process_id",   [], "f64";
-  "SystemOs__unchecked_signal",     "yon_rt_sys_signal",       ["f64"; "f64"], "i1";
+  "SystemOs__unchecked_process_exists", "yon_rt_sys_process_exists", ["f64"], "i1";
+  "SystemOs__unchecked_terminate",  "yon_rt_sys_terminate",    ["f64"], "i1";
   "FnvHeap__read_word",             "yon_rt_region_read",      ["i64"; "i64"], "i64";
   "FnvHeap__write_word",            "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
   "LeechHeap__read_word",           "yon_rt_region_read",      ["i64"; "i64"], "i64";
