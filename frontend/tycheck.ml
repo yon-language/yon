@@ -1381,11 +1381,22 @@ let check_boundary (env : Tyenv.env) (name : string) (args : expr list)
             | _ -> ok ())
        | _ -> ok ())
 
+(* a declaration whose source lives under prelude/ — the compiler's own
+   source, prepended to every compilation: site-free by construction. *)
+let in_prelude_file (loc : location) : bool =
+  let f = loc.file and sub = "prelude/" in
+  let ls = String.length sub and lf = String.length f in
+  let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
+  go 0
+
 (* A producer's wire carries its elements to another Space. *)
 let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
   (* an operation a call from another process can reach, with its signature *)
   (match fn.fn_return with
    | Some r when fn.fn_name <> "main" && not fn.fn_internal
+                 (* the prelude is linked into every process and no Space
+                    serves it: its funs are never called from another one *)
+                 && not (in_prelude_file fn.fn_loc)
                  && (match fn.fn_home with
                      | Some h -> not (List.mem h Stdlib_runtime.process_local_places)
                      | None -> true)
@@ -4594,14 +4605,6 @@ let register_deltas (env : Tyenv.env) (p : program) : Tyenv.env =
             | None -> env)
        | _ -> env)
     env p
-
-(* a declaration whose source lives under prelude/ — the compiler's own
-   source, prepended to every compilation: site-free by construction. *)
-let in_prelude_file (loc : location) : bool =
-  let f = loc.file and sub = "prelude/" in
-  let ls = String.length sub and lf = String.length f in
-  let rec go i = i + ls <= lf && (String.sub f i ls = sub || go (i + 1)) in
-  go 0
 
 let register_fusion (pd : place_decl) : unit =
   (* collision fence: the prelude owns its names — a user place redeclaring
