@@ -966,7 +966,7 @@ type topos_decl = {
 and prop_decl = {
   pr_name : string;
   pr_params : (string * ty) list;
-  pr_quants : (quantifier * string * ty) list;  (* `∀x : T` / `∀x ∈ T` before its body *)
+  pr_quants : (quantifier * string * ty) list;  (* `∀x : T` before its body *)
   pr_body_opt : expr option;               (* None = abstract, Some = with body *)
   pr_loc : location;
 }

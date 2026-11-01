@@ -346,7 +346,7 @@ accepted in silence.
 topos where {
   morphism plus(a: Int64, b: Int64): Int64       // the site's generators
   prop is_overdrawn(s: State) = s.balance < 0
-  prop some_other(x: Coin) = ∃y : Coin (x ≠ y)      // `∃y ∈ Coin` is the same
+  prop some_other(x: Coin) = ∃y : Coin (x ≠ y)
 }
 ```
 
@@ -358,7 +358,7 @@ and cannot diverge (the named form `topos Name where` is also accepted). A `prop
 return type, since a `prop` always lands in Ω; the abstract form (no
 `= body`) declares the signature only.
 
-A quantifier of a prop carries its type, `∀x : T` or `∀x ∈ T`, followed by
+A quantifier of a prop carries its type, `∀x : T`, followed by
 the statement in parentheses, written with the symbols of a law. The type is
 a place, named. A prop is a proposition the program computes, so a
 quantifier has a value only over a place of nullary arms: there `∀` is the

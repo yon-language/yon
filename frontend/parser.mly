@@ -180,7 +180,7 @@
  * Lowering: dispatch su algebra Heyt (h_and/h_or/h_not/h_imp). */
 %token AMPAMPQ PIPEPIPEQ BANGQ FATARROWQ
 /* the quantifiers of a statement, and ↔ (the two implications) */
-%token FORALL EXISTS IFFQ ELEM
+%token FORALL EXISTS IFFQ
 /* Intuitionistic bitwise ops with the `?` tag. They lower to topos.heyt_int_*
  * ops on !topos.heyt_int<64> carrying a (value, mask) pair (see emit_mlir). */
 %token AMPQ PIPEQ CARETQ TILDEQ
@@ -382,7 +382,7 @@ quantifier:
   | FORALL x = IDENT   { (Forall, x) }
   | EXISTS x = IDENT   { (Exists, x) }
 
-(* in a prop the quantifier carries its type: `∀x : T`, `∀x ∈ T`. The type
+(* in a prop the quantifier carries its type: `∀x : T`. The type
    is a place, named: a written type could go on with `(`, which opens the
    statement. *)
 typed_quantifiers:
@@ -391,7 +391,6 @@ typed_quantifiers:
 
 typed_quantifier:
   | k = quantifier_kw x = IDENT COLON t = IDENT   { (k, x, TyUser t) }
-  | k = quantifier_kw x = IDENT ELEM t = IDENT    { (k, x, TyUser t) }
 
 quantifier_kw:
   | FORALL   { Forall }
@@ -408,7 +407,7 @@ topos_prop_decl:
         pr_quants = [];
         pr_body_opt = Some body;
         pr_loc = mk_loc $startpos $endpos } }
-  (* with quantifiers, each carrying its type: `∀y : T` or `∀y ∈ T` *)
+  (* with quantifiers, each carrying its type: `∀y : T` *)
   | PROP_KW name = IDENT
     LPAREN params = param_list RPAREN
     EQ q = typed_quantifiers LPAREN body = expr RPAREN

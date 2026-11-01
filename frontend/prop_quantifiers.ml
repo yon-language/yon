@@ -3,7 +3,7 @@
 (* prop_quantifiers.ml — the quantifiers of a prop, over a finite place.
  *
  * A prop is a proposition the program computes: its value is an element of
- * Omega. A quantifier of a prop carries its type, `∀x : T` (or `∀x ∈ T`).
+ * Omega. A quantifier of a prop carries its type, `∀x : T`.
  * Over a place of nullary arms the quantifier is the finite meet (∀) or join
  * (∃) in Omega of the statement at each arm, so the prop is that conjunction
  * or disjunction, exactly. Over any other type there is no finite meet the

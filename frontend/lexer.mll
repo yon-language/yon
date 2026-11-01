@@ -404,7 +404,7 @@ rule token = parse
   | "\xe2\x86\x92"  { FATARROWQ }                       (* → *)
   | "\xc2\xac"      { BANGQ }                           (* ¬ *)
   | "\xe2\x86\x94"  { IFFQ }                            (* ↔ *)
-  | "\xe2\x88\x88"  { ELEM }                            (* ∈ *)
+  | "\xe2\x88\x88"  { raise (Lexer_error "∈ is not a symbol of Yon: the type of a quantifier follows a colon, `∀x : T`") }
 
   | eof              { reset_statement (); EOF }
   | _ as c           { raise (Lexer_error (Printf.sprintf "unexpected character %c" c)) }

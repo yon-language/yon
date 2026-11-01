@@ -1,4 +1,4 @@
 topos where {
   prop some_other(x: Coin) = ∃y : Coin (x ≠ y)
-  prop all_same(x: Coin) = ∀y ∈ Coin (x = y)
+  prop all_same(x: Coin) = ∀y : Coin (x = y)
 }

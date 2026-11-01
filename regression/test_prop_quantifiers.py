@@ -1,4 +1,4 @@
-"""A quantifier of a prop carries its type: `∀x : T` or `∀x ∈ T`.
+"""A quantifier of a prop carries its type: `∀x : T`.
 
 A prop is a proposition the program computes. Over a place of nullary arms a
 quantifier is the finite meet (∀) or join (∃) of the statement at each arm,
@@ -37,11 +37,10 @@ def _build(tmp_path: Path, props: str):
     return r.returncode, r.stdout + r.stderr, exe
 
 
-@pytest.mark.parametrize("colon, elem", [(":", ":"), ("∈", "∈"), (":", "∈")])
-def test_a_quantifier_over_a_finite_place_decides(tmp_path, colon, elem):
+def test_a_quantifier_over_a_finite_place_decides(tmp_path):
     rc, out, exe = _build(tmp_path,
-                          f"  prop some_other(x: Coin) = ∃y {colon} Coin (x ≠ y)\n"
-                          f"  prop all_same(x: Coin) = ∀y {elem} Coin (x = y)\n")
+                          "  prop some_other(x: Coin) = ∃y : Coin (x ≠ y)\n"
+                          "  prop all_same(x: Coin) = ∀y : Coin (x = y)\n")
     assert rc == 0, out
     assert subprocess.run([str(exe)], capture_output=True, timeout=30).returncode == 42
 
@@ -49,6 +48,12 @@ def test_a_quantifier_over_a_finite_place_decides(tmp_path, colon, elem):
 def test_a_quantifier_over_an_infinite_type_is_refused(tmp_path):
     rc, out, _ = _build(tmp_path,
                         "  prop some_other(x: Coin) = ∃y : Coin (x ≠ y)\n"
-                        "  prop all_same(x: Coin) = ∀n ∈ Int64 (n = n)\n")
+                        "  prop all_same(x: Coin) = ∀n : Int64 (n = n)\n")
     assert rc != 0 and "E2001" in out, out
     assert "prop all_same quantifies n over Int64, which is not a place of nullary arms" in out, out
+
+
+def test_the_element_symbol_is_not_a_quantifier_form(tmp_path):
+    rc, out, _ = _build(tmp_path, "  prop all_same(x: Coin) = ∀y ∈ Coin (x = y)\n")
+    assert rc != 0, out
+    assert "∈ is not a symbol of Yon: the type of a quantifier follows a colon" in out, out
