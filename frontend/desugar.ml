@@ -1435,7 +1435,10 @@ and by_layout (place_name : string) (fas : S.field_assignment list) : S.expr lis
    stored directly; any other value (a number, a text or place handle, a
    boolean) enters as a leaf whose label is its exact f64. *)
 and encode_sum_arg (arg : S.expr) (arg_ty : S.ty) (loc : S.location) : S.expr =
-  if is_node_ty arg_ty then arg
+  if is_node_ty arg_ty then
+    (* a coproduct value is a node, or the constant of a nullary arm, which a
+       child holds in a leaf *)
+    S.ECall ("__sum_box", [arg], loc)
   else S.ECall ("MerkleTree__leaf", [arg], loc)
 
 (* A payload type whose values are themselves Merkle nodes: a coproduct. *)
@@ -1445,11 +1448,14 @@ and is_node_ty (t : S.ty) : bool =
   | S.TyUser n -> Hashtbl.mem inductive_type_names n
   | _ -> false
 
-(* hit(Ctor, args) for a custom sum -> a right-nested spine of node2/leaf.
-   Using ONLY node2/leaf (never node3/node4, whose runtime child access is
-   unreliable) both fixes arity >= 3 and lifts the arity cap entirely:
-     k = 0 -> leaf(tag)
+(* hit(Ctor, args) for a custom sum. A nullary arm is a constant, its value
+   the number -(tag + 1): never a node of the heap, so building it allocates
+   nothing. An arm with a payload is a right-nested spine of node2/leaf
+   (never node3/node4, whose runtime child access is unreliable), which lifts
+   the arity cap:
+     k = 0 -> -(tag + 1)
      k >= 1 -> node2(tag, e0, node2(0, e1, .. node2(0, e_{k-1}, leaf(0)) ..))
+   A node handle is never negative, so the sign tells the two apart.
    The tag is the outer node's label; payload j sits at `child((child _ 1)^j, 0)`
    (see lower_sum_elim). Built as surface MerkleTree calls, then desugared. *)
 and lower_sum_constr (tag : int) (arg_tys : S.ty list)
@@ -1464,7 +1470,7 @@ and lower_sum_constr (tag : int) (arg_tys : S.ty list)
   in
   let node =
     match cs with
-    | [] -> leaf (num tag)
+    | [] -> S.ELit (S.LitNumber (-. float_of_int (tag + 1)), loc)
     | e0 :: rest -> node2 (num tag) e0 (spine rest)
   in
   desugar_expr node
@@ -1480,12 +1486,15 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
   let num n = S.ELit (S.LitNumber (float_of_int n), loc) in
   let sv = fresh_sum_scrut () in
   let sref = S.EVar (sv, loc) in
+  let tv = sv ^ "_tag" in
   let label e = S.ECall ("MerkleTree__label", [e], loc) in
   let child e j = S.ECall ("MerkleTree__child", [e; num j], loc) in
   (* Payload j lives at the head of the j-th spine cell: descend `child(_,1)` j
      times from the scrutinee, then take `child(_,0)`. Matches lower_sum_constr. *)
   let rec tail j = if j <= 0 then sref else child (tail (j - 1)) 1 in
-  let payload_node j = child (tail j) 0 in
+  (* a coproduct payload is its node, or the constant a leaf holds *)
+  let payload_node j = S.ECall ("__sum_unbox", [child (tail j) 0], loc) in
+  let payload_leaf j = child (tail j) 0 in
   let branch_body (ctor, vars, body) =
     let arg_tys =
       match find_arm ?coproduct:(site_coproduct loc) ctor with
@@ -1501,8 +1510,8 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
           else match vty with
             | S.TyPrim "boolean" ->
                 (* a Boolean entered as 0 or 1 *)
-                S.EBinop (S.OpEq, label (payload_node j), num 1, loc)
-            | _ -> label (payload_node j)
+                S.EBinop (S.OpEq, label (payload_leaf j), num 1, loc)
+            | _ -> label (payload_leaf j)
         in
         let lam_ty = match vty with
           | S.TyUser n when Hashtbl.mem armless_place_names n ->
@@ -1534,13 +1543,17 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
           | Some (t, _) -> t
           | None -> 0
         in
-        let cond = S.EBinop (S.OpEq, label sref, num tag, loc) in
+        let cond = S.EBinop (S.OpEq, S.EVar (tv, loc), num tag, loc) in
         curry_apply (C.Var "__if_expr")
           [desugar_expr cond; branch_body b; chain rest]
   in
-  C.App (C.Lam (sv, C.TyPlace "number", chain explicit), desugar_expr scrut)
+  (* the tag of the scrutinee, read once: a constant of a nullary arm is
+     -(tag + 1), a node carries its tag as its label *)
+  let tag_of = S.ECall ("__sum_tag", [sref], loc) in
+  C.App (C.Lam (sv, C.TyPlace "number",
+                C.App (C.Lam (tv, C.TyPlace "number", chain explicit), desugar_expr tag_of)),
+         desugar_expr scrut)
 
-(* The i64 instruction of an operator on Int64, as the tycheck records it. *)
 (* the carrier's arithmetic, inside the house of a place `is internal`:
    the machine's, which wraps *)
 and machine_op_name (op : S.binop) : string =
@@ -1548,6 +1561,7 @@ and machine_op_name (op : S.binop) : string =
   | S.OpAdd -> "__w64_add" | S.OpSub -> "__w64_sub" | S.OpMul -> "__w64_mul"
   | _ -> ""
 
+(* The i64 instruction of an operator on Int64, as the tycheck records it. *)
 and int64_op_name (op : S.binop) : string =
   match op with
   | S.OpAdd -> "__i64_add" | S.OpSub -> "__i64_sub" | S.OpMul -> "__i64_mul"

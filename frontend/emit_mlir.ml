@@ -1158,6 +1158,7 @@ let rec infer_mlir_ty (e : emitter)
                      "[emit_mlir infer] malformed section type: %s."
                      obj_ty))
   | C.App (C.Var "__i64_bnot", _) -> "i64"
+  | C.App (C.Var ("__sum_tag" | "__sum_box" | "__sum_unbox"), _) -> "f64"
   | C.App (C.App (C.Var op, _), _)
     when String.length op > 6 && String.sub op 0 6 = "__w64_" -> "i64"
   | C.App (C.App (C.Var op, _), _)
@@ -3033,6 +3034,38 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_merkle_label(%s) : (f64) -> f64" v va);
+      (v, "f64")
+  (* A coproduct value: the constant -(tag + 1) of a nullary arm, or a node
+     whose label is its tag; the sign tells which. Each takes its operand
+     once. *)
+  | C.App (C.Var ("__sum_tag" | "__sum_box" | "__sum_unbox" as f), arg) ->
+      let va = emit_f64 e env funcs arg in
+      let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
+      let zero = def "arith.constant 0.0 : f64" in
+      let probe = if f = "__sum_unbox"
+        then def (Printf.sprintf "func.call @yon_rt_merkle_label(%s) : (f64) -> f64" va)
+        else va in
+      let neg = def (Printf.sprintf "arith.cmpf olt, %s, %s : f64" probe zero) in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = scf.if %s -> (f64) {" v neg);
+      push_indent e;
+      let yes = match f with
+        | "__sum_tag" ->
+            let m = def (Printf.sprintf "arith.negf %s : f64" va) in
+            let one = def "arith.constant 1.0 : f64" in
+            def (Printf.sprintf "arith.subf %s, %s : f64" m one)
+        | "__sum_box" -> def (Printf.sprintf "func.call @yon_rt_merkle_leaf(%s) : (f64) -> f64" va)
+        | _ -> probe in
+      emit_line e (Printf.sprintf "scf.yield %s : f64" yes);
+      pop_indent e;
+      emit_line e "} else {";
+      push_indent e;
+      let no = if f = "__sum_tag"
+        then def (Printf.sprintf "func.call @yon_rt_merkle_label(%s) : (f64) -> f64" va)
+        else va in
+      emit_line e (Printf.sprintf "scf.yield %s : f64" no);
+      pop_indent e;
+      emit_line e "}";
       (v, "f64")
   | C.App (C.App (C.Var "MerkleTree__child", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in

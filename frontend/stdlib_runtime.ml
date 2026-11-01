@@ -287,6 +287,29 @@ let try_reduce_stdlib (t : term) : term option =
        | Some 1.0 -> Some b
        | _ -> None)
 
+  (* A coproduct value: the constant -(tag + 1) of a nullary arm, or a node
+     whose label is its tag. Its tag; a child holding it (a constant boxed in
+     a leaf); and the value back from such a child. *)
+  | App (Var "__sum_tag", v) ->
+      (match Builtins.decode_number v with
+       | Some n when n < 0.0 -> Some (Builtins.encode_number (-. n -. 1.0))
+       | Some _ -> None
+       | None ->
+           (match v with
+            | App (App (App (Var "MerkleTree__node2", x), _), _) -> Some x
+            | _ -> None))
+  | App (Var "__sum_box", v) ->
+      (match Builtins.decode_number v with
+       | Some n when n < 0.0 -> Some (App (Var "MerkleTree__leaf", v))
+       | Some _ -> None
+       | None ->
+           (match v with
+            | App (App (App (Var "MerkleTree__node2", _), _), _) -> Some v
+            | _ -> None))
+  | App (Var "__sum_unbox", App (Var "MerkleTree__leaf", x))
+    when (match Builtins.decode_number x with Some n -> n < 0.0 | None -> false) -> Some x
+  | App (Var "__sum_unbox", (App (App (App (Var "MerkleTree__node2", _), _), _) as v)) -> Some v
+
   (* Space operations *)
   | App (Var "Space__new", init) ->
       Some (space_new init)
