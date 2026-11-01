@@ -13,6 +13,8 @@
 - The calls of a house's own funs inside `c <- e` and inside `iter` were
   not addressed to the house.
 - An Int64 a fun answers from a cell came back as the cell's double.
+- A local of a fun named as a fun of the program was dropped, and its uses
+  reached the fun.
 
 Layer/kind: native / end-to-end.
 """
@@ -111,3 +113,17 @@ def test_the_house_names_its_funs_inside_a_write_and_an_iteration(tmp_path):
             "}\n")},
         objects=("Counter",))
     assert r.returncode == 42, r.stderr
+
+
+def test_a_local_named_as_a_fun_of_the_program_is_the_local(tmp_path):
+    r = _run(tmp_path, (
+        "place Entry {\n"
+        "fun main(): Number { return twice(21) }\n"
+        "fun twice(n: Number): Number {\n"
+        "  w := n * 2\n"
+        "  return w\n"
+        "}\n"
+        "fun w(): Number { return 1 }\n"
+        "}\n"))
+    assert r.returncode == 42, r.stderr
+

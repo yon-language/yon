@@ -4441,7 +4441,12 @@ let rec emit_term (e : emitter)
                          "[emit_mlir] let-binding '%s' to a Lambda value matches no top-level function. Known functions: [%s]."
                          x
                          (String.concat "; " (List.map fst funcs)))
-       | _ when List.mem_assoc x funcs ->
+       | _ when (match List.assoc_opt x funcs with
+                 (* the binding is the function's own definition only when
+                    it binds that function's body; a local of the same name
+                    is a value of its own, and shadows the function *)
+                 | Some fs -> fs.fn_params = [] && (fs.fn_body == value || fs.fn_body = value)
+                 | None -> false) ->
            (* Same drained self-binding, zero-parameter case: with no
               parameters the function body is a let-chain (an App), not a
               Lam, so the case above misses. Emitting the value here would

@@ -674,8 +674,6 @@ def _world_env_lowering(tmp_path):
 
 # --- local names and global functions ------------------------------------------
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a local binding shadows a top-level function of the same name")
 def test_a_local_binding_shadows_a_function_of_the_same_name(tmp_path):
     """`total := 42` inside main makes `total` mean 42 there, even when a
     top-level function is called `total`."""
