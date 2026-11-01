@@ -1,0 +1,11 @@
+/* alg.yon — the package file of `alg`, under prelude/.
+ *
+ * The algebras: theories whose models are places. An algebra declares its
+ * operations (the operator that writes each, `as "+"`), its neutral element
+ * (a nullary operation) and its laws, stated in the symbols of mathematical
+ * logic over its carrier. Inside an algebra its own name stands for the
+ * carrier, the generic model; a place that `uses algebra A` is a model of A:
+ * it stays itself, it provides A's operations as its own funs of the same
+ * names, its laws are certified on it, and A's operators write them. */
+topos where {
+}

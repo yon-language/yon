@@ -417,6 +417,24 @@ let law_diags (l : loaded) : Error_codes.t list =
        | Law_check.Unknown _ -> None)
     (Law_check.check l.merged)
 
+(* The laws of each algebra, on each place that uses it: a refuted one
+   rejects the program with its counterexample, one not decided is not
+   certified and rejects it too. *)
+let algebra_law_diags (l : loaded) : Error_codes.t list =
+  List.filter_map
+    (fun (r : Algebra_check.law_result) ->
+       let what = Printf.sprintf "law %s of algebra %s on place %s"
+           r.Algebra_check.lr_law r.Algebra_check.lr_algebra r.Algebra_check.lr_place in
+       match r.Algebra_check.lr_verdict with
+       | Law_check.Proven _ -> None
+       | Law_check.Refuted model ->
+           Some (Error_codes.make ~range:r.Algebra_check.lr_loc Error_codes.Law_refuted
+                   (Printf.sprintf "%s is refuted; counterexample: %s" what model))
+       | Law_check.Unknown why ->
+           Some (Error_codes.make ~range:r.Algebra_check.lr_loc Error_codes.Law_uncertified
+                   (Printf.sprintf "%s is not certified: %s" what why)))
+    (Algebra_check.check l.merged)
+
 (* An operation is an effect: the program reaches a value only if every
    operation it calls is handled by a reduction of its place (in the Kleisli
    category of the effect, main must arrive at a value). A call to an
@@ -465,7 +483,7 @@ let record_file_spaces (l : loaded) : unit =
 let check_all (l : loaded) : Error_codes.t list =
   record_file_spaces l;
   drop_diags l @ boundary_diags l @ union_arm_space_diags l @ topos_layout_diags l
-  @ file_layout_diags l @ entrypoint_diags l @ tail_diags l @ law_diags l
+  @ file_layout_diags l @ entrypoint_diags l @ tail_diags l @ law_diags l @ algebra_law_diags l
   @ unhandled_op_diags l
 
 (* ---- whole-program type check ---- *)

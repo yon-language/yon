@@ -1,0 +1,8 @@
+status: accept
+exit: 42
+covers: op_symbol is_clause place_uses_clause quantifiers quantifier law_decl
+note: |
+  An algebra is a place declared `is algebra`: its operations and its laws,
+  stated with the symbols of logic over its own name. A place that `uses
+  algebra` is a model: it gives each operation as its own fun, and every law
+  is certified on it (here exhaustively, on the two arms of Coin).

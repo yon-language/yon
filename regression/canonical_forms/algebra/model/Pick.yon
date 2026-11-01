@@ -1,0 +1,5 @@
+place Pick is algebra {
+  operation pick(a: Pick, b: Pick): Pick as "*"
+  law idempotent ∀a (a * a = a)
+  law commutative ∀a ∀b (a * b = b * a)
+}

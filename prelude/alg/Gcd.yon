@@ -1,0 +1,6 @@
+/* Gcd — the greatest common divisor of two: associative and commutative. */
+place Gcd is algebra {
+  operation gcd(a: Gcd, b: Gcd): Gcd
+  law associative ∀a ∀b ∀c (gcd(gcd(a, b), c) = gcd(a, gcd(b, c)))
+  law commutative ∀a ∀b (gcd(a, b) = gcd(b, a))
+}

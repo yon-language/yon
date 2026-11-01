@@ -1,0 +1,9 @@
+/* Additive — a commutative monoid written with +: an associative and
+ * commutative sum, with zero as its neutral element. */
+place Additive is algebra {
+  operation add(a: Additive, b: Additive): Additive as "+"
+  operation zero(): Additive
+  law associative ∀a ∀b ∀c ((a + b) + c = a + (b + c))
+  law commutative ∀a ∀b (a + b = b + a)
+  law neutral ∀a (a + zero() = a)
+}

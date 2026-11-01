@@ -27,3 +27,6 @@ spaces = ["sys"]
 
 [world.Heap]
 spaces = ["heap"]
+
+[world.Alg]
+spaces = ["alg"]

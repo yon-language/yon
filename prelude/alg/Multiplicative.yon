@@ -1,0 +1,9 @@
+/* Multiplicative — a commutative monoid written with *: an associative and
+ * commutative product, with one as its neutral element. */
+place Multiplicative is algebra {
+  operation mul(a: Multiplicative, b: Multiplicative): Multiplicative as "*"
+  operation one(): Multiplicative
+  law associative ∀a ∀b ∀c ((a * b) * c = a * (b * c))
+  law commutative ∀a ∀b (a * b = b * a)
+  law neutral ∀a (a * one() = a)
+}

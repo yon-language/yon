@@ -120,6 +120,14 @@ let given_decls : (string, string * int * int) Hashtbl.t = Hashtbl.create 64
    Space into a function of another crosses the boundary between them. *)
 let user_file_space : (string, string) Hashtbl.t = Hashtbl.create 16
 let internal_faces : (string, string) Hashtbl.t = Hashtbl.create 4
+(* The places declared `is algebra`, and the algebras each place uses
+   (`uses algebra A, B`), by the name of the place. *)
+let algebra_places : (string, unit) Hashtbl.t = Hashtbl.create 8
+let place_algebras : (string, string list) Hashtbl.t = Hashtbl.create 8
+(* An operator written on a value of a place that an algebra gives it
+   (`a + b` on a Word64, by Additive's `as "+"`): the site, by its full span,
+   and the fun it calls. *)
+let algebra_op_sites : (string * int * int * int * int, string) Hashtbl.t = Hashtbl.create 16
 (* The house whose funs are being checked. Inside the house of a place
    `internal place P carried by <carrier>` the place is its carrier, in both directions;
    outside it the place is abstract (the rule of the abstract type). *)
@@ -657,8 +665,18 @@ type world_place = {
   wp_loc : location;
 }
 
+(* The statement of a law (or a prop) in the symbols of mathematical logic:
+   its quantifiers, in order, each binding a variable over the carrier, and
+   the proposition they reach. *)
+type quantifier = Forall | Exists
+type law_statement = {
+  ls_quants : (quantifier * string) list;
+  ls_body : expr;
+}
+
 type operation_decl = {
   op_name : string;
+  op_symbol : string option;   (* `as "+"`: the operator that writes it *)
   op_params : param list;
   op_return : ty option;
   op_on_error : string option;      (* as fn_on_error, on a mediated arrow *)
@@ -678,9 +696,9 @@ type field_or_op =
   | FoField of field_decl
   | FoOp of operation_decl
   | FoCell of cell_decl                               (* cell custom *)
-  | FoLaw of string             (* `law <name>`: a declared algebraic law
-                                   (commutative/associative/monotone), checked
-                                   statically against the certified catalog. *)
+  | FoLaw of string * law_statement option
+                                (* `law <name>`, and its statement when it has
+                                   one: `law commutative ∀a ∀b (a + b = b + a)` *)
 
 (* An explicit cell declaration inside a place.
  *

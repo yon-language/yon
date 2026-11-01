@@ -440,15 +440,15 @@ place Entry {
 
 #### `algebra`
 
-Names an algebra from the certified catalog: `uses algebra Additive`.
+`place A is algebra { ... }` declares an algebra: its operations and its laws, over its own name as the carrier. `uses algebra A, B` after a place's name makes the place a model of each. The algebras of the prelude are in `prelude/alg/`.
 
 #### `uses`
 
-Binds an operation to its algebra; the compiler checks the claim against the catalog.
+`place P uses algebra A, B`: `P` gives the operations of `A` and `B` as its own funs, their operators write them on `P`, and their laws are certified on `P`.
 
 #### `law`
 
-Declares an algebraic law on a place; a false claim is rejected at compile time.
+States a law of an algebra over its carrier, with the symbols of logic: `law commutative ∀a ∀b (a + b = b + a)`. It is certified on each model: refuted is E2101, not decided is E2102.
 
 #### `fold`
 

@@ -394,6 +394,27 @@ let fmt_arm (v : variant) : string =
 
 (* ?close=false leaves the house open (brace unclosed, indent raised):
    the caller prints the hosted arrows inside it and closes it. *)
+(* The statement of a law, in the symbols it is written with: = ≠ ∧ ∨ → ¬,
+   and ↔ for the conjunction of the two implications. *)
+let rec fmt_statement (e : expr) : string =
+  let sub e = match e with
+    | ECall (("__heyt_and" | "__heyt_or" | "__heyt_imp"), _, _) | EParen _ ->
+        "(" ^ fmt_statement e ^ ")"
+    | EBinop ((OpEq | OpNeq), _, _, _) | EVar _ | ECall _ | ELit _ -> fmt_statement e
+    | _ -> "(" ^ fmt_statement e ^ ")" in
+  match e with
+  | EParen (a, _) -> fmt_statement a
+  | EBinop (OpEq, a, b, _) -> fmt_expr a ^ " = " ^ fmt_expr b
+  | EBinop (OpNeq, a, b, _) -> fmt_expr a ^ " \xe2\x89\xa0 " ^ fmt_expr b
+  | ECall ("__heyt_and", [ECall ("__heyt_imp", [p; q], _); ECall ("__heyt_imp", [q'; p'], _)], _)
+    when p = p' && q = q' ->
+      sub p ^ " \xe2\x86\x94 " ^ sub q
+  | ECall ("__heyt_and", [a; b], _) -> sub a ^ " \xe2\x88\xa7 " ^ sub b
+  | ECall ("__heyt_or", [a; b], _) -> sub a ^ " \xe2\x88\xa8 " ^ sub b
+  | ECall ("__heyt_imp", [a; b], _) -> sub a ^ " \xe2\x86\x92 " ^ sub b
+  | ECall ("__heyt_not", [a], _) -> "\xc2\xac" ^ sub a
+  | _ -> fmt_expr e
+
 let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
   (* `internal place P carried by C` / `place P carried by C` *)
   let internal = pd.pd_fusion <> None
@@ -431,8 +452,11 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
     if pd.pd_world = "__INFER" || pd.pd_world = "" then "" else " in " ^ pd.pd_world in
   let over = match pd.pd_over with Some b -> " over " ^ b | None -> "" in
   let on_error = match pd.pd_on_error with Some e -> " on error " ^ e | None -> "" in
-  line f (Printf.sprintf "%s%s%s%s {"
-            (head kw) world over on_error);
+  let algebra = if Hashtbl.mem Surface_ast.algebra_places pd.pd_name then " is algebra" else "" in
+  let uses = match Hashtbl.find_opt Surface_ast.place_algebras pd.pd_name with
+    | Some names -> " uses algebra " ^ String.concat ", " names | None -> "" in
+  line f (Printf.sprintf "%s%s%s%s%s%s {"
+            (head kw) algebra uses world over on_error);
   f.indent <- f.indent + 1;
   (match pd.pd_subcontains with
    | Some b -> line f ("this < " ^ b)
@@ -446,8 +470,14 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
         let ret = match op.op_return with Some t -> ": " ^ fmt_ty t | None -> "" in
         let alg = match op.op_algebra with
           | Some a -> " uses algebra " ^ a | None -> "" in
-        line f (Printf.sprintf "operation %s(%s)%s%s" op.op_name params ret alg)
-    | FoLaw l -> line f ("law " ^ l)
+        let sym = match op.op_symbol with
+          | Some s -> Printf.sprintf " as %S" s | None -> "" in
+        line f (Printf.sprintf "operation %s(%s)%s%s%s" op.op_name params ret sym alg)
+    | FoLaw (l, None) -> line f ("law " ^ l)
+    | FoLaw (l, Some st) ->
+        let q = String.concat " " (List.map (fun (k, x) ->
+          (match k with Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83") ^ x) st.ls_quants) in
+        line f (Printf.sprintf "law %s %s (%s)" l q (fmt_statement st.ls_body))
     | FoCell c ->
         line f (Printf.sprintf "cell %s from %s to %s"
                   c.cell_name (fmt_expr c.cell_src) (fmt_expr c.cell_tgt))

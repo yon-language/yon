@@ -1,0 +1,8 @@
+[package]
+name = "algebra_model"
+
+[world.W]
+objects = ["Coin", "Turn", "Pick"]
+
+[runtime]
+backend = "memory"

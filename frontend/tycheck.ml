@@ -395,9 +395,45 @@ let admit_int_literal (env : Tyenv.env) (ctx : Reduce.ctx)
       expected
   | _ -> inferred
 
+(* The operation an algebra gives an operator on a place: the place is the
+   algebra itself (in the statements of its laws), or uses it (`uses algebra
+   A`), and the algebra declares an operation `as "<symbol>"`. The answer is
+   the fun the operator calls (the place's own fun of the operation's name)
+   and the type it returns. *)
+let algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) option =
+  let symbol = match op with
+    | OpAdd -> "+" | OpSub -> "-" | OpMul -> "*" | OpDiv -> "/" | OpMod -> "%"
+    | _ -> "" in
+  match t with
+  | TyUser p when symbol <> "" ->
+      let algebras =
+        (if Hashtbl.mem Surface_ast.algebra_places p then [p] else [])
+        @ (match Hashtbl.find_opt Surface_ast.place_algebras p with
+           | Some l -> l | None -> []) in
+      List.find_map (fun a ->
+        match Tyenv.lookup_place env a with
+        | None -> None
+        | Some pd ->
+            List.find_map (function
+              | FoOp o when o.op_symbol = Some symbol ->
+                  (* the carrier of the algebra, in its operation, is the place *)
+                  let ret = match o.op_return with
+                    | Some (TyUser r) when r = a -> TyUser p
+                    | Some r -> r
+                    | None -> TyUser p in
+                  Some (p ^ "__" ^ o.op_name, ret)
+              | _ -> None) pd.pd_members) algebras
+  | _ -> None
+
 (* Type of a binop result, given operand types. *)
 let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
     (env : Tyenv.env) (ctx : Reduce.ctx) (loc : location) : ty tc_result =
+  match algebra_operator env op lhs with
+  | Some (target, ret) when Dispatcher.type_equal env ctx lhs rhs ->
+      Hashtbl.replace Surface_ast.algebra_op_sites
+        (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col) target;
+      ok ret
+  | _ ->
   let num = TyPrim "number" in
   let bool_t = TyPrim "boolean" in
   let txt = TyPrim "text" in
@@ -3738,7 +3774,15 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
            ok op.os_return
        | None ->
            (* Try as an unqualified operation name. *)
-           match Tyenv.lookup_op_unqualified env name with
+           (* inside a house, a bare name is first the house's own operation *)
+           let candidates = Tyenv.lookup_op_unqualified env name in
+           let candidates =
+             match !Surface_ast.open_house, candidates with
+             | Some h, _ :: _ :: _ ->
+                 (match List.filter (fun o -> o.E.os_place = h) candidates with
+                  | [] -> candidates | own -> own)
+             | _ -> candidates in
+           match candidates with
            | [op] ->
                let* () = check_op_call env ctx op arg_tys loc in
                ok op.os_return
@@ -4957,7 +5001,7 @@ let check_union_members (env : Tyenv.env) (ctx : Reduce.ctx)
         let what = match fo with
           | FoOp o -> Printf.sprintf "operation %s" o.op_name
           | FoCell c -> Printf.sprintf "cell %s" c.cell_name
-          | FoLaw l -> Printf.sprintf "law %s" l
+          | FoLaw (l, _) -> Printf.sprintf "law %s" l
           | FoField _ -> assert false in
         err pd.pd_loc (Printf.sprintf
           "place %s: %s on a union is not yet enabled -- only fields are \
@@ -5236,6 +5280,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                     pd.pd_name v.v_name))
           (ok ()) pd.pd_arms
       in
+      let* () = check_algebra_models env ctx pd in
       check_union_members env ctx pd
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn
@@ -5578,6 +5623,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
        | _ -> ok ())
 
 and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
+  let* () = check_algebra_models env ctx pd in
   (* Check that the world is declared. There is no Constant world:
      a fused or prelude place is NOT exempt — it lives in its
      package's world (Num, Txt, Logic, Err), stamped from its space by the
@@ -5700,13 +5746,83 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
             * to CATT_R_Yon kernel. At this layer we accept the
             * declaration as syntactically well-formed. *)
            ok ()
-       | FoLaw _ ->
-           (* Declared algebraic laws. The real verification (against the
-            * certified catalog) happens in the MLIR AlgebraVerifier pass, not here.
-            * At this layer the law is only known to be syntactically
-            * well-formed. *)
-           ok ())
+       | FoLaw (_, None) ->
+           (* a law named only: its certification is the algebra's *)
+           ok ()
+       | FoLaw (name, Some st) ->
+           (* the statement of a law: its variables range over the carrier,
+              the place itself, and it is a proposition *)
+           (* a statement is certified, never run: the operations of the
+              place are the symbols of its theory there, not effects *)
+           let env' = Tyenv.add_vars
+               { env with Tyenv.current_effects = pd.pd_name :: env.Tyenv.current_effects }
+               (List.map (fun (_, x) -> (x, TyUser pd.pd_name)) st.ls_quants) in
+           (* in its statement a name of an operation of the algebra is
+              that operation, before any fun of the same name *)
+           let own = List.filter_map (function FoOp o -> Some o.op_name | _ -> None)
+               pd.pd_members in
+           let rec qualify e = match e with
+             | ECall (f, args, l) ->
+                 let f' = if List.mem f own then pd.pd_name ^ "__" ^ f else f in
+                 ECall (f', List.map qualify args, l)
+             | EBinop (o, a, b, l) -> EBinop (o, qualify a, qualify b, l)
+             | EParen (a, l) -> EParen (qualify a, l)
+             | ENot (a, l) -> ENot (qualify a, l)
+             | EIfThenElse (c, a, b, l) -> EIfThenElse (qualify c, qualify a, qualify b, l)
+             | e -> e in
+           let saved_house = !Surface_ast.open_house in
+           Surface_ast.open_house := Some pd.pd_name;
+           let r = infer env' ctx (qualify st.ls_body) in
+           Surface_ast.open_house := saved_house;
+           let* t = r in
+           if Dispatcher.type_equal env ctx t (TyPrim "boolean")
+              || Dispatcher.type_equal env ctx t (TyPrim "proposition") then ok ()
+           else err pd.pd_loc (Printf.sprintf
+             "the statement of law %s of %s is a %s; a law states a proposition"
+             name pd.pd_name (Tyenv.ty_to_string t)))
     (ok ()) pd.pd_members
+
+(* A place that uses an algebra is a model of it: the algebra is the theory
+   (its operations and its laws, over its own name as the carrier), the place
+   gives the interpretation. Each operation of the algebra is a fun of the
+   place of the same name, with the algebra's name read as the place: the
+   model provides it, the algebra never does, since an algebra has no carrier
+   of its own to compute on. An algebra not declared `is algebra` is unknown. *)
+and check_algebra_models (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
+  let algebras = match Hashtbl.find_opt Surface_ast.place_algebras pd.pd_name with
+    | Some l -> l | None -> [] in
+  let subst a t = match t with TyUser x when x = a -> TyUser pd.pd_name | t -> t in
+  List.fold_left (fun acc a ->
+    let* () = acc in
+    match Tyenv.lookup_place env a with
+    | Some apd when Hashtbl.mem Surface_ast.algebra_places a ->
+        List.fold_left (fun acc m ->
+          let* () = acc in
+          match m with
+          | FoOp o ->
+              let want_params = List.map (fun p -> subst a p.param_ty) o.op_params in
+              let want_ret = match o.op_return with Some r -> subst a r | None -> TyUser pd.pd_name in
+              let shown = Printf.sprintf "fun %s(%s): %s" o.op_name
+                  (String.concat ", " (List.map (fun p ->
+                     p.param_name ^ ": " ^ Tyenv.ty_to_string (subst a p.param_ty)) o.op_params))
+                  (Tyenv.ty_to_string want_ret) in
+              (match Tyenv.lookup_fun env (pd.pd_name ^ "__" ^ o.op_name) with
+               | None -> err pd.pd_loc (Printf.sprintf
+                   "place %s uses algebra %s but does not give its operation %s: a model gives each operation of the algebra as its own fun, %s"
+                   pd.pd_name a o.op_name shown)
+               | Some fs ->
+                   let same_params =
+                     List.length fs.fs_params = List.length want_params
+                     && List.for_all2 (fun (_, t) w -> Dispatcher.type_equal env ctx t w)
+                          fs.fs_params want_params in
+                   if same_params && Dispatcher.type_equal env ctx fs.fs_return want_ret then ok ()
+                   else err pd.pd_loc (Printf.sprintf
+                     "place %s uses algebra %s: its fun %s does not have the operation's type, %s"
+                     pd.pd_name a o.op_name shown))
+          | _ -> ok ()) (ok ()) apd.pd_members
+    | _ -> err pd.pd_loc (Printf.sprintf
+        "place %s uses algebra %s, which is no algebra: an algebra is a place declared `is algebra`"
+        pd.pd_name a)) (ok ()) algebras
 
 and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc_result =
   match slot_misfit env t with

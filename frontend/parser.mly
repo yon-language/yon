@@ -179,6 +179,8 @@
 /* intuitionistic logic symbols with a `?` tag.
  * Lowering: dispatch su algebra Heyt (h_and/h_or/h_not/h_imp). */
 %token AMPAMPQ PIPEPIPEQ BANGQ FATARROWQ
+/* the quantifiers of a statement, and ↔ (the two implications) */
+%token FORALL EXISTS IFFQ
 /* Intuitionistic bitwise ops with the `?` tag. They lower to topos.heyt_int_*
  * ops on !topos.heyt_int<64> carrying a (value, mask) pair (see emit_mlir). */
 %token AMPQ PIPEQ CARETQ TILDEQ
@@ -252,7 +254,7 @@
 %nonassoc ON_ERROR LAW IN COMMA ARROW DOT IDENT QIDENT VIEW REDUCTION PRODUCE
           MOVE MORPH_KW FUNCTOR FUN DOTARROW
 %left PIPEGT             (* pipe forward, left-assoc, prio bassa *)
-%right FATARROW FATARROWQ
+%right FATARROW FATARROWQ IFFQ
 %left OR PIPEPIPE PIPEPIPEQ
 %left AND AMPAMP AMPAMPQ
 %left LT GT LEQ GEQ EQEQ NEQ
@@ -371,6 +373,15 @@ topos_decl:
  * Its type is proposition, implied by `prop`; no return type is
  * written. EXPR is a proposition in the tri-value Heyting algebra
  * (present/absent/unknown). *)
+(* ∀x ∃y ...: each binds a variable; the statement follows in parentheses *)
+quantifiers:
+  | q = quantifier rest = quantifiers   { q :: rest }
+  | q = quantifier                      { [q] }
+
+quantifier:
+  | FORALL x = IDENT   { (Forall, x) }
+  | EXISTS x = IDENT   { (Exists, x) }
+
 topos_prop_decl:
   (* no return type: `prop` already implies proposition, so writing it
      would only repeat it. *)
@@ -600,25 +611,35 @@ place_params:
 carried_clause:
   | CARRIED BY c = IDENT  { c }
 
-(* The carrier is no longer written with `is`: `is C` and `is internal C` are
+(* `is algebra`: the place is an algebra, a theory its users are models of.
+   The carrier is no longer written with `is`: `is C` and `is internal C` are
    refused with the form that replaced them. *)
-old_is_clause:
+is_clause:
+  | IS ALGEBRA             { `Algebra }
   | IS c = IDENT
-    { (failwith (Printf.sprintf
-        "`is %s` after a place name is no longer the carrier: write `place P carried by %s`" c c) : unit) }
+    { failwith (Printf.sprintf
+        "`is %s` after a place name is no longer the carrier: write `place P carried by %s`" c c) }
   | IS INTERNAL c = IDENT
-    { (failwith (Printf.sprintf
-        "`is internal %s` after a place name is no longer the carrier: write `internal place P carried by %s`" c c) : unit) }
+    { failwith (Printf.sprintf
+        "`is internal %s` after a place name is no longer the carrier: write `internal place P carried by %s`" c c) }
+
+(* `uses algebra A, B`: the place is a model of each, on the one carrier *)
+place_uses_clause:
+  | USES ALGEBRA names = separated_nonempty_list(COMMA, IDENT)   { names }
 
 place_decl:
   | internal = boption(INTERNAL) is_err = place_kw name = IDENT
     wp = place_params
     carried = option(carried_clause)
-    _old = option(old_is_clause)
+    is_c = option(is_clause)
+    uses = option(place_uses_clause)
     over = option(over_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
-    { if internal && carried = None then
+    { (match is_c with
+       | Some `Algebra -> Hashtbl.replace Surface_ast.algebra_places name ()
+       | None -> ());
+      if internal && carried = None then
         failwith (Printf.sprintf
           "internal place %s has no carrier: `internal` hides how a place is carried, write `internal place %s carried by C`" name name);
       let fusion = Option.map (fun c -> (c, internal)) carried in
@@ -670,6 +691,9 @@ place_decl:
              ($startpos.Lexing.pos_fname, $startpos.Lexing.pos_lnum,
               $startpos.Lexing.pos_cnum - $startpos.Lexing.pos_bol) ()
        | _ -> ());
+      (match uses with
+       | Some names -> Hashtbl.replace Surface_ast.place_algebras name names
+       | None -> ());
       let fusion = Option.map fst fusion in
       TopPlace { pd_name = name;
                  pd_type_params = tparams;
@@ -680,7 +704,7 @@ place_decl:
                  pd_members = members;
                  pd_over = over;
                  pd_laws = List.filter_map
-                   (function FoLaw l -> Some l | _ -> None) members;
+                   (function FoLaw (l, _) -> Some l | _ -> None) members;
                  pd_subcontains = ext;
                  pd_is_error = is_err;
                  pd_on_error = oerr;
@@ -735,7 +759,9 @@ place_member:
      an algebraic obligation on the list. There is no `with effects` block —
      effectfulness is a theorem of the list. */
   | od = operation_decl                   { PbiMember (FoOp od) }
-  | LAW l = IDENT                         { PbiMember (FoLaw l) }
+  | LAW l = IDENT                         { PbiMember (FoLaw (l, None)) }
+  | LAW l = IDENT q = quantifiers LPAREN body = expr RPAREN
+    { PbiMember (FoLaw (l, Some { ls_quants = q; ls_body = body })) }
   /* the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
   | OVER base = IDENT                     { PbiClause (PcOver base) }
@@ -782,12 +808,13 @@ operation_decl:
   | OPERATION name = IDENT LPAREN params = param_list RPAREN
     oerr = op_on_error
     ret = option(return_type_decl)
+    sym = option(op_symbol)
     alg = option(uses_algebra_clause)
     { (if oerr <> None && ret = None then
          failwith (Printf.sprintf
            "operation %s: `on error` requires an explicit return type \
             (`) on error E : T`)" name));
-      { op_name = name; op_params = params; op_return = ret;
+      { op_name = name; op_symbol = sym; op_params = params; op_return = ret;
         op_on_error = oerr;
 
         op_algebra = alg;
@@ -801,10 +828,14 @@ operation_decl:
 morphism_decl:
   | MORPHISM_KW name = IDENT LPAREN params = param_list RPAREN
     ret = option(return_type_decl)
-    { { op_name = name; op_params = params; op_return = ret; op_on_error = None;
+    { { op_name = name; op_symbol = None; op_params = params; op_return = ret; op_on_error = None;
 
         op_algebra = None;
         op_loc = mk_loc $startpos $endpos } }
+
+(* `as "+"`: the operator symbol that writes the operation *)
+op_symbol:
+  | AS s = STR_LIT   { s }
 
 (* operation uses algebra <Name> — instantiates a catalog algebra *)
 uses_algebra_clause:
@@ -1461,6 +1492,11 @@ expr:
     { ECall ("__heyt_or", [e1; e2], mk_loc $startpos $endpos) }
   | e1 = expr FATARROWQ e2 = expr
     { ECall ("__heyt_imp", [e1; e2], mk_loc $startpos $endpos) }
+  (* p ↔ q is (p → q) ∧ (q → p) *)
+  | e1 = expr IFFQ e2 = expr
+    { let l = mk_loc $startpos $endpos in
+      ECall ("__heyt_and", [ECall ("__heyt_imp", [e1; e2], l);
+                            ECall ("__heyt_imp", [e2; e1], l)], l) }
   | BANGQ e = expr %prec UNOT
     { ECall ("__heyt_not", [e], mk_loc $startpos $endpos) }
   | e1 = expr AMPQ e2 = expr

@@ -258,6 +258,14 @@
   let ident_or_keyword s =
     try Hashtbl.find keyword_table s
     with Not_found -> IDENT s
+
+  (* The statement of a law, in the symbols of mathematical logic:
+     after a quantifier (`∀x`, `∃x`) comes its variable, and the parenthesis
+     that opens the statement; inside it a single `=` is equality (`==`),
+     until the parenthesis closes. Everywhere else `=` keeps its meaning. *)
+  type statement = Outside | Variable | Bound | Inside of int
+  let statement = ref Outside
+  let reset_statement () = statement := Outside
 }
 
 let digit = ['0'-'9']
@@ -345,7 +353,7 @@ rule token = parse
   | '%'              { PERCENT }
   | '<'              { LT }
   | '>'              { GT }
-  | '='              { EQ }
+  | '='              { (match !statement with Inside _ -> EQEQ | _ -> EQ) }
   | '|'              { PIPE }
   | '.'              { DOT }
   | ','              { COMMA }
@@ -357,8 +365,16 @@ rule token = parse
   | ":U"             { COLON_U }
   | ":="             { COLONEQ }
   | ':'              { COLON }
-  | '('              { LPAREN }
-  | ')'              { RPAREN }
+  | '('              { (match !statement with
+                        | Bound -> statement := Inside 1
+                        | Inside k -> statement := Inside (k + 1)
+                        | _ -> ());
+                       LPAREN }
+  | ')'              { (match !statement with
+                        | Inside 1 -> statement := Outside
+                        | Inside k -> statement := Inside (k - 1)
+                        | _ -> ());
+                       RPAREN }
   | '{'              { LBRACE }
   | '}'              { RBRACE }
   (* Square brackets (LBRACKET/RBRACKET, lexed above) carry the cubical face
@@ -373,9 +389,23 @@ rule token = parse
      A keyword is recognized by lookup in keyword_table. *)
   | (alpha alnum_id* "::" alpha alnum_id* ("::" alpha alnum_id*)*) as s
       { QIDENT s }   (* qualified name mod::fun (namespaces) *)
-  | (alpha alnum_id*) as s   { ident_or_keyword s }
-  
-  | eof              { EOF }
+  | (alpha alnum_id*) as s   { (if !statement = Variable then statement := Bound);
+                               ident_or_keyword s }
+
+  (* The symbols of mathematical logic (Velleman, How to Prove It). Each of
+     ≠ ∧ ∨ → ¬ is the Yon operator of the same meaning; a statement is a
+     proposition, in Omega, so ∧ ∨ → ¬ are the Heyting connectives. ↔ is the
+     conjunction of the two implications; ∀ ∃ open a statement. *)
+  | "\xe2\x88\x80"  { statement := Variable; FORALL }   (* ∀ *)
+  | "\xe2\x88\x83"  { statement := Variable; EXISTS }   (* ∃ *)
+  | "\xe2\x89\xa0"  { NEQ }                             (* ≠ *)
+  | "\xe2\x88\xa7"  { AMPAMPQ }                         (* ∧ *)
+  | "\xe2\x88\xa8"  { PIPEPIPEQ }                       (* ∨ *)
+  | "\xe2\x86\x92"  { FATARROWQ }                       (* → *)
+  | "\xc2\xac"      { BANGQ }                           (* ¬ *)
+  | "\xe2\x86\x94"  { IFFQ }                            (* ↔ *)
+
+  | eof              { reset_statement (); EOF }
   | _ as c           { raise (Lexer_error (Printf.sprintf "unexpected character %c" c)) }
 
 and block_comment = parse

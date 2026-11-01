@@ -290,9 +290,15 @@ let is_interval_var (env : env) (i : string) : bool =
   List.mem i env.intervals
 
 let lookup_op_unqualified (env : env) (op_name : string) : op_sig list =
+  (* the operations of an algebra are the symbols of its theory: a bare name
+     reaches them only inside the algebra's own statements; a model calls
+     its own funs *)
   List.filter_map
     (fun (_key, sig_) ->
-       if sig_.os_op_name = op_name then Some sig_ else None)
+       if sig_.os_op_name = op_name
+          && (not (Hashtbl.mem Surface_ast.algebra_places sig_.os_place)
+              || !Surface_ast.open_house = Some sig_.os_place)
+       then Some sig_ else None)
     env.ops
 
 (* a new binding of x is a value unless declared a cell (add_cell): it
@@ -529,6 +535,7 @@ let activate_handler (env : env) (reduction_name : string) : env =
 let with_builtins (env : env) : env =
   let output_op_decl = {
     op_name = "print";
+    op_symbol = None;
     op_params = [{ param_name = "s"; param_ty = TyUser "String" }];
     op_return = Some (TyPrim "unit"); op_on_error = None;
 

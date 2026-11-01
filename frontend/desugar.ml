@@ -1105,6 +1105,13 @@ and desugar_expr (e0 : S.expr) : C.term =
        * yon_rt_section call with the heap id resolved from the space registry. *)
       let arg_terms = List.map desugar_expr (by_layout place_name fas) in
       curry_apply (C.Var ("__section_in_" ^ space_name ^ "_" ^ place_name)) arg_terms
+  | S.EBinop (_, e1, e2, loc)
+    when Hashtbl.mem Surface_ast.algebra_op_sites
+           (loc.S.file, loc.S.start_line, loc.S.start_col, loc.S.end_line, loc.S.end_col) ->
+      (* an operator an algebra gives the place: the call of its operation *)
+      let target = Hashtbl.find Surface_ast.algebra_op_sites
+          (loc.S.file, loc.S.start_line, loc.S.start_col, loc.S.end_line, loc.S.end_col) in
+      curry_apply (C.Var target) [desugar_expr e1; desugar_expr e2]
   | S.EBinop (op, e1, e2, loc) ->
       (* integer-carrier / and % diverge from the f64 ops: the tycheck
          recorded the FULL-SPAN site, desugar routes it — and only for the
@@ -2248,6 +2255,10 @@ let desugar_place_decl (pd : S.place_decl) : C.place_decl =
     (fun fo (fs, os) ->
        match fo with
        | S.FoField f -> ((f.S.fd_name, lower_ty f.S.fd_ty) :: fs, os)
+       | S.FoOp _ when Hashtbl.mem Surface_ast.algebra_places pd.S.pd_name ->
+           (* an algebra is a theory: its operations are given by its models,
+              and the algebra itself lowers to nothing that runs *)
+           (fs, os)
        | S.FoOp o ->
            let op_sig = {
              C.op_name = o.S.op_name;
@@ -2267,7 +2278,7 @@ let desugar_place_decl (pd : S.place_decl) : C.place_decl =
     pd.S.pd_members ([], [])
   in
   { C.p_name = pd.S.pd_name;
-    C.p_laws = pd.S.pd_laws;
+    C.p_laws = (if Hashtbl.mem Surface_ast.algebra_places pd.S.pd_name then [] else pd.S.pd_laws);
     C.p_site = C.TyPlace pd.S.pd_world;
     C.p_fields = fields;
     C.p_operations = ops;

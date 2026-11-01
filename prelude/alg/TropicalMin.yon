@@ -1,0 +1,11 @@
+/* TropicalMin — the min-plus semiring's sum: the smaller of two, associative,
+ * commutative and idempotent, with top (above everything) as its neutral
+ * element. */
+place TropicalMin is algebra {
+  operation min(a: TropicalMin, b: TropicalMin): TropicalMin
+  operation top(): TropicalMin
+  law associative ∀a ∀b ∀c (min(min(a, b), c) = min(a, min(b, c)))
+  law commutative ∀a ∀b (min(a, b) = min(b, a))
+  law idempotent ∀a (min(a, a) = a)
+  law neutral ∀a (min(a, top()) = a)
+}

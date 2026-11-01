@@ -1569,7 +1569,7 @@ let test_place_visibility () =
   let mk_op n = FoOp {
 
     op_algebra = None;
-    op_name = n; op_params = []; op_return = None; op_on_error = None;
+    op_name = n; op_symbol = None; op_params = []; op_return = None; op_on_error = None;
     op_loc = dummy_loc
   } in
   let pd = {

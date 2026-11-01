@@ -1,0 +1,10 @@
+/* BooleanAnd — a meet semilattice with a top: the meet of two is
+ * associative, commutative and idempotent, and top is its neutral element. */
+place BooleanAnd is algebra {
+  operation meet(a: BooleanAnd, b: BooleanAnd): BooleanAnd
+  operation top(): BooleanAnd
+  law associative ∀a ∀b ∀c (meet(meet(a, b), c) = meet(a, meet(b, c)))
+  law commutative ∀a ∀b (meet(a, b) = meet(b, a))
+  law idempotent ∀a (meet(a, a) = a)
+  law neutral ∀a (meet(a, top()) = a)
+}
