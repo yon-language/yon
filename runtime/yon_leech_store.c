@@ -2,6 +2,7 @@
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* yon_leech_store.c — the node store of the Leech heap (see the header). */
 #include "yon_leech_store.h"
+#include "yon_refusals.h"
 #include "leech_theta.h"   /* YON_LEECH_TYPE2_COUNT */
 #include "yon_mmap.h"      /* yon_map / yon_unmap */
 
@@ -68,13 +69,11 @@ static uint8_t *generation(leech_store_t *st, uint32_t g) {
 uint32_t yon_leech_put(const void *node, uint32_t size) {
     leech_store_t *st = store_of(g_cur);
     if (size > YON_LEECH_NODE_BYTES) {
-        fprintf(stderr, "[YON-RT] Leech store: a node of %u bytes does not fit a place\n", size);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_LeechNodeTooBig, size, 0, 0);
     }
     uint32_t k = __atomic_fetch_add(&st->next, 1u, __ATOMIC_RELAXED);
     if (k == 0xFFFFFFFFu) {
-        fprintf(stderr, "[YON-RT] Leech store: every 32-bit name is taken\n");
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_LeechNamesTaken, 0, 0, 0);
     }
     uint8_t *slot = generation(st, k / N) + (size_t)(k % N) * YON_LEECH_NODE_BYTES;
     memcpy(slot, node, size);

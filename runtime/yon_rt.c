@@ -28,6 +28,7 @@
 #define _GNU_SOURCE  /* for strdup */
 #endif
 #include "yon_rt.h"
+#include "yon_refusals.h"
 #include "yon_trie.h"
 #include "yon_leech_store.h"
 #include "xleech2_mphf.h"
@@ -329,8 +330,7 @@ void yon_rt_init(void) {
     }
     g_yon_heap = yon_xheap_create();
     if (!g_yon_heap) {
-        fprintf(stderr, "[YON-RT] FATAL: yon_xheap_create failed\n");
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_HeapNotMade, 0, 0, 0);
     }
     /* heap_id 0 = __Default, always present. */
     snprintf(g_spaces[0].name, sizeof(g_spaces[0].name), "%s", "__Default");
@@ -695,9 +695,7 @@ int yon_rt_field_load(yon_section_t sec, uint32_t offset,
 int yon_rt_field_load_or_stop(yon_section_t sec, uint32_t offset,
                               uint32_t size, void *out) {
     if (yon_rt_field_load(sec, offset, size, out) != 0) {
-        fprintf(stderr, "[YON-RT] field read failed: section %llu, offset %u, size %u\n",
-                (unsigned long long)sec, offset, size);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_FieldNotRead, (int64_t)sec, offset, size);
     }
     return 0;
 }
@@ -2251,10 +2249,7 @@ static int yon_producer_find(uint32_t sel) {
  * error, before any frame, never a stream of values of another type. */
 double Wire__subscribed(double reply) {
     if (reply == YON_WIRE_TYPE_REFUSED) {
-        fprintf(stderr,
-                "error: wire: the subscription was refused: the producer's Space "
-                "declares the element type differently (their type roots differ)\n");
-        exit(3);
+        yon_rt_refuse_with(YON_REFUSAL_SubscriptionRootsDiffer, 0, 0, 0);
     }
     return reply;
 }
@@ -2277,9 +2272,7 @@ double Wire__subscription_stream_dto(double chan_id, double root_hi, double root
             || yon_rt_wire_decode(msg.p, msg.len, (uint32_t)yon_rt_space_current(), expected, &v) != 0) {
             /* a frame of another type, one that does not parse, or a channel
                cut short: a declared error, never a stream that silently ends */
-            fprintf(stderr, "error: wire: a value could not be rebuilt as the "
-                            "awaited type; the stream is refused\n");
-            exit(3);
+            yon_rt_refuse_with(YON_REFUSAL_StreamValueNotRebuilt, 0, 0, 0);
         }
         yon_rt_stream_emit_f64(local, v);
     }
@@ -3438,10 +3431,7 @@ static void rpc2_send_args(void *p) {
 }
 
 static void rpc2_refused(const char *space, double sel) {
-    fprintf(stderr,
-            "error: cross-Space call refused — Space '%s' declares the types of "
-            "operation %.0f differently (their signature roots differ)\n", space, sel);
-    exit(3);
+    yon_rt_refuse_with(YON_REFUSAL_CallSignaturesDiffer, yon_refusal_name(space), (int64_t)sel, 0);
 }
 
 double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *sig,
@@ -3492,9 +3482,7 @@ double yon_rt_rpc2_invoke_typed(const char *space, double sel, const uint64_t *s
     double v;
     if (ch < 0 || yon_rt_stream_shm_recv_message(g_shm_stream_handles[ch], &msg) != 0
         || yon_rt_wire_decode(msg.p, msg.len, (uint32_t)yon_rt_space_current(), sig[2], &v) != 0) {
-        fprintf(stderr, "error: cross-Space call — the result of operation %.0f "
-                        "could not be rebuilt as the declared type\n", sel);
-        exit(3);
+        yon_rt_refuse_with(YON_REFUSAL_CallResultNotRebuilt, (int64_t)sel, 0, 0);
     }
     yon_rt_wire_buf_free(&msg);
     return v;
@@ -3904,8 +3892,7 @@ static double bits_value(uint64_t u) { double d; memcpy(&d, &u, sizeof d); retur
 static uint32_t fnv_put(const void *n, uint32_t sz) {
     uint32_t r = yon_xheap_put_chain(g_ds_heap, n, sz, YON_TAG_USER1);
     if (r == YON_HEAPREF_INVALID) {
-        fprintf(stderr, "[YON-RT] map: the heap is exhausted\n");
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_HeapExhausted, 0, 0, 0);
     }
     return r;
 }
@@ -3960,8 +3947,7 @@ const yon_trie_router_t *yon_collections_lattice_router(void) { return &g_lattic
 static uint32_t map_root(double handle) {
     if (handle == 0.0) return fnv_empty();
     if (!(handle > 0.0 && handle < 4294967296.0 && handle == (double)(uint32_t)handle)) {
-        fprintf(stderr, "[YON-RT] map: %.17g is not a map\n", handle);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_NotAMap, yon_refusal_real(handle), 0, 0);
     }
     (void)yon_trie_size(&g_fnv_store, (uint32_t)handle);   /* stops on what is not a node */
     return (uint32_t)handle;
@@ -3983,8 +3969,7 @@ double yon_rt_map_value(double map_id, double key) {
     ds_ensure_init();
     uint64_t v;
     if (!yon_trie_find(&g_fnv_store, &g_hash_router, map_root(map_id), key_bits(key), &v)) {
-        fprintf(stderr, "[YON-RT] map: no value at key %.17g\n", key);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_NoValueAtKey, yon_refusal_real(key), 0, 0);
     }
     return bits_value(v);
 }
@@ -4838,21 +4823,16 @@ int64_t yon_rt_xframe_canon(int64_t f, int64_t p) {
 static uint32_t xrel_root(double handle) {
     if (handle == 0.0) return leech_empty();
     if (!(handle >= 1.0 && handle <= 9007199254740992.0 && handle == (double)(uint64_t)handle)) {
-        fprintf(stderr, "[YON-RT] xrel: %.17g is not a collection\n", handle);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_NotACollection, yon_refusal_real(handle), 0, 0);
     }
     uint64_t h = (uint64_t)handle - 1u;
     uint32_t space = (uint32_t)(h >> XREL_NAME_BITS);
     uint64_t k = h & ((1ull << XREL_NAME_BITS) - 1u);
     if (space != yon_leech_current()) {
-        fprintf(stderr, "error: a collection of Space %u was read in Space %u: a value "
-                        "of another Space crosses only by copy, on a call or a wire\n",
-                space, yon_leech_current());
-        exit(3);
+        yon_rt_refuse_with(YON_REFUSAL_CollectionOfAnotherSpace, space, yon_leech_current(), 0);
     }
     if (k > 0xFFFFFFFFull || yon_leech_at((uint32_t)k) == NULL) {
-        fprintf(stderr, "[YON-RT] xrel: %.17g is not a collection\n", handle);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_NotACollection, yon_refusal_real(handle), 0, 0);
     }
     return (uint32_t)k;
 }
@@ -4874,8 +4854,7 @@ double yon_rt_xrelmap_has(double m, double key) {
 double yon_rt_xrelmap_value(double m, double key) {
     uint64_t v;
     if (!yon_trie_find(&g_leech_store, &g_lattice_router, xrel_root(m), key_bits(key), &v)) {
-        fprintf(stderr, "[YON-RT] xrelmap: no value at key %.17g\n", key);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_NoValueAtKey, yon_refusal_real(key), 0, 0);
     }
     return bits_value(v);
 }
@@ -5599,9 +5578,7 @@ static uint32_t merkle_child_handle(double child) {
         if (s && (s->tag == YON_TAG_USER2 || s->tag == YON_TAG_USER3))
             return (uint32_t)child;
     }
-    fprintf(stderr, "[YON-RT] merkle: a child is not a node handle (%.17g); "
-                    "a value enters a node as a leaf\n", child);
-    abort();
+    yon_rt_refuse_with(YON_REFUSAL_ChildNotANode, yon_refusal_real(child), 0, 0);
 }
 
 /* The one reading of a node's layout. A leaf and a binary node share
@@ -5744,9 +5721,7 @@ double yon_rt_merkle_child(double node_id, double child_idx) {
     int arity = merkle_view(merkle_child_handle(node_id), &label, ch);
     if (!(child_idx >= 0.0 && child_idx < (double)arity
           && child_idx == (double)(int)child_idx)) {
-        fprintf(stderr, "[YON-RT] merkle: child %.17g of a node with %d children\n",
-                child_idx, arity < 0 ? 0 : arity);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_ChildOutOfRange, yon_refusal_real(child_idx), arity < 0 ? 0 : arity, 0);
     }
     return (double)ch[(int)child_idx];
 }
@@ -6743,10 +6718,7 @@ static uint32_t g_n_space_cells = 0;
 
 double yon_rt_space_make(double initial) {
     if (g_n_space_cells >= YON_RT_MAX_SPACE_CELLS) {
-        fprintf(stderr, "error: cell: %u cells are live, the most the cell table "
-                "holds; a cell lives as long as the block that declares it\n",
-                (unsigned)YON_RT_MAX_SPACE_CELLS);
-        exit(3);
+        yon_rt_refuse_with(YON_REFUSAL_CellTableFull, YON_RT_MAX_SPACE_CELLS, 0, 0);
     }
     uint32_t id = g_n_space_cells++;
     g_space_cells[id].value  = initial;
@@ -6757,23 +6729,20 @@ double yon_rt_space_make(double initial) {
 /* a cell is read or written only while its block lives: a handle past it, or
    one that never named a cell, stops the program rather than reach another
    cell */
-static uint32_t space_cell_live(double space_id, const char *what) {
+static uint32_t space_cell_live(double space_id, enum yon_refusal why) {
     if (!(space_id >= 0.0) || space_id >= (double)g_n_space_cells
-        || !g_space_cells[(uint32_t)space_id].in_use) {
-        fprintf(stderr, "error: cell: %s of a cell that is not live (handle %.17g, "
-                "%u cells live)\n", what, space_id, g_n_space_cells);
-        exit(3);
-    }
+        || !g_space_cells[(uint32_t)space_id].in_use)
+        yon_rt_refuse_with(why, yon_refusal_real(space_id), g_n_space_cells, 0);
     return (uint32_t)space_id;
 }
 
 double yon_rt_space_set(double space_id, double new_value) {
-    g_space_cells[space_cell_live(space_id, "a write")].value = new_value;
+    g_space_cells[space_cell_live(space_id, YON_REFUSAL_CellWriteNotLive)].value = new_value;
     return space_id;
 }
 
 double yon_rt_space_get(double space_id) {
-    return g_space_cells[space_cell_live(space_id, "a read")].value;
+    return g_space_cells[space_cell_live(space_id, YON_REFUSAL_CellReadNotLive)].value;
 }
 
 /* Mutable-cell reclaim by stack discipline. A function's mutable-local cells do
@@ -7441,8 +7410,7 @@ static void yon_buffer_grow(yon_buffer_t *b, size_t need) {
     }
     char *nb = mmap(NULL, newcap, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (nb == MAP_FAILED) {
-        fprintf(stderr, "[YON-RT] FATAL: Buffer grow to %zu bytes failed (out of memory)\n", newcap);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_BufferNotGrown, (int64_t)newcap, 0, 0);
     }
     memcpy(nb, b->base, b->off);
     munmap(b->base, b->cap);
@@ -7492,8 +7460,7 @@ double yon_rt_buffer_finish(double buf_id_d) {
     if (!b->in_use) return 0.0;
     ds_ensure_init();
     if (b->off + 1u > (size_t)UINT32_MAX) {   /* the content heap interns 32-bit lengths */
-        fprintf(stderr, "[YON-RT] FATAL: Buffer of %zu bytes exceeds the 4GB intern limit\n", b->off);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_BufferTooLarge, (int64_t)b->off, 0, 0);
     }
     b->base[b->off] = 0;   /* in bounds: append/grow always keep off + 1 <= cap */
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, b->base, (uint32_t)(b->off + 1), YON_TAG_USER1);
@@ -7725,9 +7692,7 @@ static yon_wire_type_t *wire_type_slot(uint64_t root) {
     for (uint32_t i = 0; i < g_wire_n_types; i++)
         if (g_wire_types[i].used && g_wire_types[i].root == root) return &g_wire_types[i];
     if (g_wire_n_types >= YON_WIRE_MAX_TYPES) {
-        fprintf(stderr, "[YON-RT] register_type: table full (root=%016llx)\n",
-                (unsigned long long)root);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_TypeTableFull, (int64_t)root, 0, 0);
     }
     yon_wire_type_t *e = &g_wire_types[g_wire_n_types++];
     memset(e, 0, sizeof *e);
@@ -7738,7 +7703,8 @@ static yon_wire_type_t *wire_type_slot(uint64_t root) {
 
 void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
                           const uint64_t *kids) {
-    if (n > YON_WIRE_MAX_FIELDS) abort();
+    if (n > YON_WIRE_MAX_FIELDS)
+        yon_rt_refuse_with(YON_REFUSAL_TypeHasTooManyFields, n, YON_WIRE_MAX_FIELDS, 0);
     yon_wire_type_t *e = wire_type_slot(root);
     e->kind = kind;
     e->n = n;
@@ -7750,11 +7716,15 @@ void yon_rt_register_type(uint64_t root, uint32_t kind, uint32_t n,
 void yon_rt_wire_type(double hi, double lo, double kind, double n) {
     yon_wire_type_t *e = wire_type_slot(yon_root_of_halves(hi, lo));
     e->kind = (uint32_t)kind;
-    e->n = (uint32_t)n <= YON_WIRE_MAX_FIELDS ? (uint32_t)n : 0u;
+    if ((uint32_t)n > YON_WIRE_MAX_FIELDS)
+        yon_rt_refuse_with(YON_REFUSAL_TypeHasTooManyFields, (int64_t)n, YON_WIRE_MAX_FIELDS, 0);
+    e->n = (uint32_t)n;
 }
 void yon_rt_wire_type_part(double hi, double lo, double i, double khi, double klo) {
     yon_wire_type_t *e = wire_type_slot(yon_root_of_halves(hi, lo));
-    if ((uint32_t)i < YON_WIRE_MAX_FIELDS) e->kids[(uint32_t)i] = yon_root_of_halves(khi, klo);
+    if ((uint32_t)i >= YON_WIRE_MAX_FIELDS)
+        yon_rt_refuse_with(YON_REFUSAL_TypeHasTooManyFields, (int64_t)i + 1, YON_WIRE_MAX_FIELDS, 0);
+    e->kids[(uint32_t)i] = yon_root_of_halves(khi, klo);
 }
 
 /* (declared, sub-object): a place under another by `this <`, which crosses
@@ -7763,7 +7733,8 @@ void yon_rt_wire_type_part(double hi, double lo, double i, double khi, double kl
 static uint64_t g_wire_subs[YON_WIRE_MAX_SUBS][2];
 static uint32_t g_wire_n_subs;
 void yon_rt_wire_sub(double shi, double slo, double bhi, double blo) {
-    if (g_wire_n_subs >= YON_WIRE_MAX_SUBS) abort();
+    if (g_wire_n_subs >= YON_WIRE_MAX_SUBS)
+        yon_rt_refuse_with(YON_REFUSAL_SubTableFull, YON_WIRE_MAX_SUBS, 0, 0);
     g_wire_subs[g_wire_n_subs][0] = yon_root_of_halves(shi, slo);
     g_wire_subs[g_wire_n_subs][1] = yon_root_of_halves(bhi, blo);
     g_wire_n_subs++;
@@ -8091,13 +8062,11 @@ double yon_rt_space_enter(double id_d) {
     uint32_t id = (uint32_t)id_d;
     uint32_t prev = g_cur_space;
     if (id >= g_n_spaces) {
-        fprintf(stderr, "[YON-RT] space_enter: no Space %u\n", id);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_SpaceUnknown, id, 0, 0);
     }
     if (!g_spaces[id].ds) g_spaces[id].ds = yon_xheap_create();
     if (!g_spaces[id].ds) {
-        fprintf(stderr, "[YON-RT] space_enter: no heap for Space %u\n", id);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_SpaceHasNoHeap, id, 0, 0);
     }
     g_cur_space = id;
     g_yon_heap = g_spaces[id].ds;
@@ -8139,9 +8108,7 @@ double yon_rt_cross_value(double v, double root_hi, double root_lo, double to) {
     uint64_t root = yon_root_of_halves(root_hi, root_lo);
     yon_wire_buf_t msg = { 0 };
     if (yon_rt_wire_encode(&msg, root, v) != 0) {
-        fprintf(stderr, "error: a value of type root %016llx could not be copied "
-                        "to another Space\n", (unsigned long long)root);
-        exit(3);
+        yon_rt_refuse_with(YON_REFUSAL_ValueNotCopied, (int64_t)root, 0, 0);
     }
     double here = yon_rt_space_enter(to);
     double out;
@@ -8149,9 +8116,7 @@ double yon_rt_cross_value(double v, double root_hi, double root_lo, double to) {
     yon_rt_space_enter(here);
     yon_rt_wire_buf_free(&msg);
     if (rc != 0) {
-        fprintf(stderr, "error: a value of type root %016llx could not be rebuilt "
-                        "in another Space\n", (unsigned long long)root);
-        exit(3);
+        yon_rt_refuse_with(YON_REFUSAL_ValueNotRebuilt, (int64_t)root, 0, 0);
     }
     return out;
 }

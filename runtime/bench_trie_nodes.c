@@ -12,7 +12,7 @@
  * nothing new is made, on the Leech store everything is.
  *
  * Build it in runtime/ against the runtime objects (yon_rt.o yon_mmap.o
- * leech_orbits.o yon_arena.o yon_curtis_canon.o yon_trie.o yon_leech_store.o
+ * leech_orbits.o yon_arena.o yon_curtis_canon.o yon_trie.o yon_leech_store.o yon_refuse.o
  * xleech2_coord.o xleech2_heap.o xleech2_mphf.o, every vendor/mmgroup object)
  * and ../regression/_dispatch_stub.c, with -lpthread -lm, as bench_ds.c is.
  *

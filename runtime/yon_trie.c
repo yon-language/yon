@@ -6,6 +6,7 @@
  * the path from the root to the key and shares everything else, and union and
  * intersection reuse every subtree that comes out unchanged. */
 #include "yon_trie.h"
+#include "yon_refusals.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,8 +24,7 @@ typedef struct {
 static const uint32_t *node(const yon_trie_store_t *s, uint32_t ref) {
     const uint32_t *p = (const uint32_t *)s->at(ref);
     if (!p || p[0] > T_BRANCH) {
-        fprintf(stderr, "[YON-RT] trie: %u is not a node\n", ref);
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_TrieNotANode, ref, 0, 0);
     }
     return p;
 }

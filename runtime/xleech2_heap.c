@@ -10,6 +10,8 @@
 #define _DEFAULT_SOURCE
 
 #include "xleech2_heap.h"
+#include <errno.h>
+#include "yon_refusals.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -382,7 +384,7 @@ int yon_xheap_reset(yon_xheap_t *h) {
     if (!shared && end > first) {
         void *r = mmap((void *)first, (size_t)(end - first), PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-        if (r == MAP_FAILED) { perror("[YON-XHEAP] reset"); abort(); }
+        if (r == MAP_FAILED) yon_rt_refuse_with(YON_REFUSAL_HeapNotReset, errno, 0, 0);
         memset(h, 0, (size_t)(first - base));                 /* the header's page */
         uintptr_t tail = base + sizeof(yon_xheap_t);
         if (tail > end) memset((void *)end, 0, (size_t)(tail - end));

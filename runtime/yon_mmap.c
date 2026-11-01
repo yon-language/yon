@@ -7,6 +7,8 @@
 #define _GNU_SOURCE  /* ftruncate on glibc; harmless under _DARWIN_C_SOURCE */
 #endif
 #include "yon_mmap.h"
+#include <errno.h>
+#include "yon_refusals.h"
 
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -24,8 +26,7 @@ void *yon_map(size_t size) {
     void *p = mmap(NULL, size, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (p == MAP_FAILED) {
-        perror("[YON-RT] yon_map");
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_KernelDidNotMap, errno, 0, 0);
     }
     return p;  /* kernel-zeroed: callers rely on a clean region */
 }

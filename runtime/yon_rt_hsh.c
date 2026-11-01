@@ -185,8 +185,7 @@ double yon_rt_hsh_levels(double store_id) {
  * ============================================================================ */
 int8_t yon_rt_to_bool_dec(int8_t decided) {
     if (decided == 2) {
-        fprintf(stderr, "[YON-RT] to_bool_dec: unknown reached a decided condition\n");
-        abort();
+        yon_rt_refuse_with(YON_REFUSAL_UnknownDecided, 0, 0, 0);
     }
     return (decided == 0) ? 1 : 0;   /* present->true, absent->false */
 }

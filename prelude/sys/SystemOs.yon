@@ -22,6 +22,11 @@ place SystemOs {
   fun fnv_heap_region(): Region is given
   fun leech_heap_region(): Region is given
 
+  /* stops the program: writes "error: " and the sentence of the refusal,
+     the three words of the occasion in their places, and exits with code 3.
+     It never returns, so its result is of any type. */
+  fun refuse<T>(r: Refusal, a: Word64, b: Word64, c: Word64): T is given
+
   /* ─── Shared memory ──────────────────────────────────────── [G] ─── */
 
   /* a name for shared memory: 1 to 30 letters, digits, '_' or '-'; the

@@ -1,0 +1,85 @@
+/* Refusal — every reason the runtime stops a program it cannot carry on: the
+ * world refused something the program could not foresee. One arm per reason;
+ * an arm is a constant (a nullary arm), so naming a refusal allocates
+ * nothing, and heap code can name one. SystemOs.refuse takes it, writes
+ * "error: " and its sentence, and ends the program with exit code 3.
+ *
+ * The sentence of each arm is given by `sentence`, below. Up to three words
+ * of the occasion come with the refusal; a sentence places them with
+ * {a}, {b}, {c}, read as an integer, or {a:f} a real, {a:x} a type root in
+ * hexadecimal, {a:s} the name the runtime gives, {a:e} the reason the kernel
+ * gives. The runtime's table of sentences is generated from this file. */
+place Refusal {
+  this >
+    /* the heaps */
+    HeapNotMade :U HeapNotReset :U HeapExhausted :U FieldNotRead
+    :U NotAMap :U NoValueAtKey :U NotACollection :U CollectionOfAnotherSpace
+    :U ChildNotANode :U ChildOutOfRange :U TrieNotANode
+    :U LeechNodeTooBig :U LeechNamesTaken :U OrbitsDrifted
+    :U BufferNotGrown :U BufferTooLarge
+    /* the cells */
+    :U CellTableFull :U CellReadNotLive :U CellWriteNotLive
+    /* arithmetic */
+    :U Int64Overflow
+    /* the regions */
+    :U WordOutsideRegion
+    /* the kernel */
+    :U KernelDidNotMap :U KernelDidNotUnmap :U KernelDidNotOpenShared
+    :U SharedNotMeasured :U KernelDidNotSizeShared :U KernelDidNotMapShared
+    :U SharedSizeMismatch :U KernelDidNotReadClock :U KernelDidNotWrite
+    /* the wires and the boundaries of Spaces */
+    :U SubscriptionRootsDiffer :U StreamValueNotRebuilt
+    :U CallSignaturesDiffer :U CallResultNotRebuilt
+    :U ValueNotCopied :U ValueNotRebuilt
+    :U TypeTableFull :U TypeHasTooManyFields :U SubTableFull
+    :U SpaceUnknown :U SpaceHasNoHeap
+    /* logic */
+    :U UnknownDecided
+
+  fun sentence(r: Refusal): Text {
+    return match r {
+      HeapNotMade => "heap: the runtime could not make the heap of the Space",
+      HeapNotReset => "heap: the heap could not be reset: {a:e}",
+      HeapExhausted => "heap: the heap is exhausted",
+      FieldNotRead => "heap: a field of a section could not be read (section {a}, offset {b}, size {c})",
+      NotAMap => "map: {a:f} is not a map",
+      NoValueAtKey => "collection: no value at key {a:f}",
+      NotACollection => "xrel: {a:f} is not a collection",
+      CollectionOfAnotherSpace => "a collection of Space {a} was read in Space {b}: a value of another Space crosses only by copy, on a call or a wire",
+      ChildNotANode => "merkle: a child is not a node handle ({a:f}); a value enters a node as a leaf",
+      ChildOutOfRange => "merkle: child {a:f} of a node with {b} children",
+      TrieNotANode => "trie: {a} is not a node",
+      LeechNodeTooBig => "leech: a node of {a} bytes does not fit a place",
+      LeechNamesTaken => "leech: every 32-bit name is taken",
+      OrbitsDrifted => "leech: the orbits of the shell under M24 make {a} classes, more than the {b} they are",
+      BufferNotGrown => "buffer: the buffer could not grow to {a} bytes",
+      BufferTooLarge => "buffer: a buffer of {a} bytes exceeds the 4 GB a text can hold",
+      CellTableFull => "cell: {a} cells are live, the most the cell table holds; a cell lives as long as the block that declares it",
+      CellReadNotLive => "cell: a read of a cell that is not live (handle {a:f}, {b} cells live)",
+      CellWriteNotLive => "cell: a write of a cell that is not live (handle {a:f}, {b} cells live)",
+      Int64Overflow => "arithmetic: an Int64 operation leaves [-2^63, 2^63); its result is no Int64 (the ring that wraps is Word64)",
+      WordOutsideRegion => "region: word {a} is outside a region of {b} words",
+      KernelDidNotMap => "system: the kernel did not map the region: {a:e}",
+      KernelDidNotUnmap => "system: the kernel did not unmap the region: {a:e}",
+      KernelDidNotOpenShared => "system: the kernel did not open the shared region: {a:e}",
+      SharedNotMeasured => "system: the shared region could not be measured: {a:e}",
+      KernelDidNotSizeShared => "system: the kernel did not size the shared region: {a:e}",
+      KernelDidNotMapShared => "system: the kernel did not map the shared region: {a:e}",
+      SharedSizeMismatch => "system: the shared region {a:s} holds {b} words, {c} were asked",
+      KernelDidNotReadClock => "system: the kernel did not read the clock: {a:e}",
+      KernelDidNotWrite => "system: the kernel did not write the text: {a:e}",
+      SubscriptionRootsDiffer => "wire: the subscription was refused: the producer's Space declares the element type differently (their type roots differ)",
+      StreamValueNotRebuilt => "wire: a value could not be rebuilt as the awaited type; the stream is refused",
+      CallSignaturesDiffer => "cross-Space call refused: Space '{a:s}' declares the types of operation {b} differently (their signature roots differ)",
+      CallResultNotRebuilt => "cross-Space call: the result of operation {a} could not be rebuilt as the declared type",
+      ValueNotCopied => "a value of type root {a:x} could not be copied to another Space",
+      ValueNotRebuilt => "a value of type root {a:x} could not be rebuilt in another Space",
+      TypeTableFull => "wire: the table of wire types is full (root {a:x})",
+      TypeHasTooManyFields => "wire: a type of {a} parts has more than the {b} a wire type holds",
+      SubTableFull => "wire: the table of sub-objects is full ({a} entries)",
+      SpaceUnknown => "space: there is no Space {a}",
+      SpaceHasNoHeap => "space: there is no heap for Space {a}",
+      UnknownDecided => "logic: unknown reached a decided condition"
+    }
+  }
+}

@@ -54,9 +54,38 @@ extern int __ulock_wake(uint32_t operation, void *addr, uint64_t wake_value);
 #include <sys/syscall.h>
 #endif
 
-static _Noreturn void yon_sys_refuse(const char *what) {
-    fprintf(stderr, "error: system: %s: %s\n", what, strerror(errno));
-    exit(3);
+/* ─── Refusals ───────────────────────────────────────────────────────── */
+/* The refusal itself is runtime/yon_refuse.c; what needs the heap stays here:
+ * a name given as the handle of its text, and the text a word names. */
+
+#include "yon_refusals.h"
+
+/* a name the runtime gives, as the handle of its text */
+int64_t yon_refusal_name(const char *s) {
+    return yon_refusal_real(s ? yon_ds_string(s) : 0.0);
+}
+
+/* the text a word names, if it names one: a heap value whose bytes end with
+   the one zero of a text; any other word names no text */
+const char *yon_refusal_text(int64_t w) {
+    double h;
+    memcpy(&h, &w, 8);
+    if (!(h >= 1.0 && h < 4294967296.0 && h == (double)(uint32_t)h)) return "";
+    const yon_xheap_slot_t *s = yon_xheap_get_chain((uint32_t)h);
+    if (!s || s->payload_size == 0) return "";
+    const char *p = (const char *)yon_xheap_slot_payload_any(s);
+    if (!p || p[s->payload_size - 1] != '\0' || strlen(p) != s->payload_size - 1) return "";
+    return p;
+}
+
+/* the face of the prelude: the refusal is the constant of its arm,
+   -(tag + 1); the three words come with it */
+double yon_rt_refuse(double r, int64_t a, int64_t b, int64_t c) {
+    yon_rt_refuse_with((enum yon_refusal)(-(int64_t)r - 1), a, b, c);
+}
+
+static _Noreturn void yon_sys_refuse(enum yon_refusal r) {
+    yon_rt_refuse_with(r, errno, 0, 0);
 }
 
 static int64_t *yon_sys_header(int64_t r) { return (int64_t *)(intptr_t)r; }
@@ -67,7 +96,7 @@ int64_t yon_rt_sys_map(int64_t words) {
     size_t bytes = ((size_t)words + 1u) * sizeof(int64_t);
     void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE,
                    MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (p == MAP_FAILED) yon_sys_refuse("the kernel did not map the region");
+    if (p == MAP_FAILED) yon_sys_refuse(YON_REFUSAL_KernelDidNotMap);
     ((int64_t *)p)[0] = words;            /* the kernel zeroes the rest */
     return (int64_t)(intptr_t)p;
 }
@@ -77,7 +106,7 @@ int64_t yon_rt_sys_words(int64_t r) { return yon_sys_header(r)[0]; }
 double yon_rt_sys_unmap(int64_t r) {
     int64_t *h = yon_sys_header(r);
     size_t bytes = ((size_t)h[0] + 1u) * sizeof(int64_t);
-    if (munmap(h, bytes) != 0) yon_sys_refuse("the kernel did not unmap the region");
+    if (munmap(h, bytes) != 0) yon_sys_refuse(YON_REFUSAL_KernelDidNotUnmap);
     return 0.0;
 }
 
@@ -106,22 +135,19 @@ int64_t yon_rt_sys_shared_map(double name_d, int64_t words) {
     yon_sys_shared_kernel_name(name_d, n);
     size_t bytes = ((size_t)words + 1u) * sizeof(int64_t);
     int fd = shm_open(n, O_CREAT | O_RDWR, 0600);
-    if (fd < 0) yon_sys_refuse("the kernel did not open the shared region");
+    if (fd < 0) yon_sys_refuse(YON_REFUSAL_KernelDidNotOpenShared);
     struct stat st;
-    if (fstat(fd, &st) != 0) { close(fd); yon_sys_refuse("the shared region could not be measured"); }
+    if (fstat(fd, &st) != 0) { close(fd); yon_sys_refuse(YON_REFUSAL_SharedNotMeasured); }
     if ((size_t)st.st_size < bytes && ftruncate(fd, (off_t)bytes) != 0) {
-        close(fd); yon_sys_refuse("the kernel did not size the shared region");
+        close(fd); yon_sys_refuse(YON_REFUSAL_KernelDidNotSizeShared);
     }
     void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     close(fd);
-    if (p == MAP_FAILED) yon_sys_refuse("the kernel did not map the shared region");
+    if (p == MAP_FAILED) yon_sys_refuse(YON_REFUSAL_KernelDidNotMapShared);
     int64_t *h = (int64_t *)p;
     if (h[0] == 0) h[0] = words;          /* the first to map it sizes it */
-    else if (h[0] != words) {
-        fprintf(stderr, "error: system: the shared region %s holds %lld words, "
-                "%lld were asked\n", n + 1, (long long)h[0], (long long)words);
-        exit(3);
-    }
+    else if (h[0] != words)
+        yon_rt_refuse_with(YON_REFUSAL_SharedSizeMismatch, yon_refusal_name(n + 1), h[0], words);
     return (int64_t)(intptr_t)p;
 }
 
@@ -198,7 +224,7 @@ double yon_rt_sys_wake(int64_t r, int64_t at) {
 
 static int64_t yon_sys_clock(clockid_t c) {
     struct timespec ts;
-    if (clock_gettime(c, &ts) != 0) yon_sys_refuse("the kernel did not read the clock");
+    if (clock_gettime(c, &ts) != 0) yon_sys_refuse(YON_REFUSAL_KernelDidNotReadClock);
     return (int64_t)ts.tv_sec * 1000000000 + (int64_t)ts.tv_nsec;
 }
 
@@ -214,7 +240,7 @@ static double yon_sys_write_all(int fd, double text_d) {
         ssize_t w = write(fd, s + done, len - done);
         if (w < 0) {
             if (errno == EINTR) continue;
-            yon_sys_refuse("the kernel did not write the text");
+            yon_sys_refuse(YON_REFUSAL_KernelDidNotWrite);
         }
         done += (size_t)w;
     }
@@ -247,20 +273,15 @@ double yon_rt_sys_terminate(double pid_d) {
 
 /* an Int64 sum, difference or product outside [-2^63, 2^63) */
 void yon_rt_int64_overflow(void) {
-    fprintf(stderr, "error: arithmetic: an Int64 operation leaves [-2^63, 2^63); "
-            "its result is no Int64 (the ring that wraps is Word64)\n");
-    exit(3);
+    yon_rt_refuse_with(YON_REFUSAL_Int64Overflow, 0, 0, 0);
 }
 
 /* ─── The words of a region, for the heaps that live in it ───────────── */
 
 static int64_t *yon_sys_word(int64_t r, int64_t at) {
     int64_t *h = yon_sys_header(r);
-    if (at < 0 || at >= h[0]) {
-        fprintf(stderr, "error: region: word %lld is outside a region of %lld words\n",
-                (long long)at, (long long)h[0]);
-        exit(3);
-    }
+    if (at < 0 || at >= h[0])
+        yon_rt_refuse_with(YON_REFUSAL_WordOutsideRegion, at, h[0], 0);
     return h + 1 + at;
 }
 

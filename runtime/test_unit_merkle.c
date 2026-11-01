@@ -53,7 +53,7 @@ static void check(int ok, const char *what) {
     if (!ok) fails++;
 }
 
-/* 1 iff running `f(arg)` in a child process stops it with SIGABRT. */
+/* 1 iff running `f(arg)` in a child process stops it with a declared refusal (exit code 3). */
 static double g_node;
 static int stops(void (*f)(void)) {
     fflush(stdout);
@@ -65,7 +65,7 @@ static int stops(void (*f)(void)) {
     }
     int st = 0;
     waitpid(pid, &st, 0);
-    return WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT;
+    return WIFEXITED(st) && WEXITSTATUS(st) == 3;
 }
 static void label_of_a_non_node(void) { (void)yon_rt_merkle_label(0.0); }
 static void child_of_a_non_node(void) { (void)yon_rt_merkle_child(0.0, 0.0); }

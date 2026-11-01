@@ -30,7 +30,7 @@
 #include <unistd.h>
 
 /* The read compiled code performs never yields a zeroed value for a broken
-   handle: run it in a child, which must stop with SIGABRT. */
+   handle: run it in a child, which must stop with a declared refusal (exit code 3). */
 static int read_stops(yon_section_t sec, uint32_t off, uint32_t size) {
     fflush(stdout);
     pid_t pid = fork();
@@ -42,7 +42,7 @@ static int read_stops(yon_section_t sec, uint32_t off, uint32_t size) {
     }
     int st = 0;
     waitpid(pid, &st, 0);
-    return WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT;
+    return WIFEXITED(st) && WEXITSTATUS(st) == 3;
 }
 
 int main(void) {

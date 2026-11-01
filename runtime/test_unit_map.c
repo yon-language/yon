@@ -40,7 +40,7 @@ static int stops_on_a_bogus_map(void) {
     }
     int st = 0;
     waitpid(pid, &st, 0);
-    return WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT;
+    return WIFEXITED(st) && WEXITSTATUS(st) == 3;
 }
 
 /* 1 iff asking a map for the value at a key it does not hold stops the
@@ -55,7 +55,7 @@ static int stops_on_an_absent_key(double map, double key) {
     }
     int st = 0;
     waitpid(pid, &st, 0);
-    return WIFSIGNALED(st) && WTERMSIG(st) == SIGABRT;
+    return WIFEXITED(st) && WEXITSTATUS(st) == 3;
 }
 
 static int fails = 0;

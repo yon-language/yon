@@ -2,6 +2,7 @@
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
 /* leech_orbits.c — see leech_orbits.h. */
 #include "leech_orbits.h"
+#include "yon_refusals.h"
 #include "xleech2_mphf.h"    /* yon_mphf_index / unindex, YON_MPHF_INVALID */
 #include "leech_theta.h"     /* YON_LEECH_TYPE2_COUNT */
 #include "yon_mmap.h"        /* yon_map / yon_unmap */
@@ -44,9 +45,7 @@ static void build_pure_orbits(void) {
         for (uint32_t k = 0; k < nroots; k++) if (roots[k] == r) { id = k; break; }
         if (id == YON_LEECH_PURE_ORBITS) {
             if (nroots >= YON_LEECH_PURE_ORBITS) {   /* generators drifted: refuse silent error */
-                fprintf(stderr, "[leech_orbits] pure-orbit drift: more than %u classes\n",
-                        YON_LEECH_PURE_ORBITS);
-                abort();
+                yon_rt_refuse_with(YON_REFUSAL_OrbitsDrifted, nroots + 1, YON_LEECH_PURE_ORBITS, 0);
             }
             id = nroots; roots[nroots++] = r;
         }

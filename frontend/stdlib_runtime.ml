@@ -692,6 +692,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "unchecked_map", [ti64], tregion;
       "words", [tregion], ti64;
       "unmap", [tregion], tunit;
+      "refuse", [TyUser "Refusal"; tword; tword; tword], TyVar "T";
       "fnv_heap_region", [], tregion;
       "leech_heap_region", [], tregion;
       "is_shared_name", [ttext], tbool;
@@ -858,7 +859,9 @@ let non_allocating_primitives : string list =
   [ "FnvHeap__read_word"; "FnvHeap__write_word";
     "LeechHeap__read_word"; "LeechHeap__write_word";
     (* the regions of the Space's heaps and their size: they exist already *)
-    "SystemOs__fnv_heap_region"; "SystemOs__leech_heap_region"; "SystemOs__words" ]
+    "SystemOs__fnv_heap_region"; "SystemOs__leech_heap_region"; "SystemOs__words";
+    (* a refusal names a constant and never returns *)
+    "SystemOs__refuse" ]
 
 (* The places that belong to this process: a Region is memory the kernel
    gave it, SystemOs acts on it (its memory, its arguments, its id), each heap

@@ -23,8 +23,8 @@
  *   - a large mapping is writable across many demand-paged pages.
  *   - yon_unmap(NULL, n) is a safe no-op.
  *   - EDGE: yon_map(0) — mmap(len=0) fails with EINVAL, so the documented
- *     "abort on failure" contract fires. Verified in a forked child: the child
- *     must terminate abnormally (SIGABRT), never exit(0). This documents that a
+ *     refusal fires. Verified in a forked child: the child stops with the
+ *     declared refusal (exit code 3), never exit(0). This documents that a
  *     zero-size request is NOT silently satisfied.
  *   - yon_map_shared: create -> write -> reopen (create=0) -> the second mapping
  *     observes the first mapping's writes (proves a genuinely shared object);
@@ -151,19 +151,17 @@ int main(void) {
         fflush(NULL);                     /* don't let the child duplicate buffers */
         pid_t pid = fork();
         if (pid == 0) {
-            /* child: expected to abort inside yon_map(0). */
+            /* child: expected to be refused inside yon_map(0). */
             volatile void *q = yon_map(0);
             (void)q;
             _exit(0);                     /* only reached if map(0) unexpectedly succeeds */
         }
         int status = 0;
         (void)waitpid(pid, &status, 0);
-        int aborted = WIFSIGNALED(status);
-        int sig = aborted ? WTERMSIG(status) : 0;
         int clean_exit0 = WIFEXITED(status) && WEXITSTATUS(status) == 0;
-        check(!clean_exit0, "map(0) does NOT silently succeed (child aborts)");
-        check(aborted && sig == SIGABRT, "map(0) triggers abort() -> child killed by SIGABRT");
-        if (aborted) printf("    (child terminated by signal %d)\n", sig);
+        int refused = WIFEXITED(status) && WEXITSTATUS(status) == 3;
+        check(!clean_exit0, "map(0) does NOT silently succeed (the child is refused)");
+        check(refused, "map(0) is a declared refusal -> the child exits with code 3");
     }
 
     /* Shared mapping: create -> write -> reopen -> observe; plus missing-name. */
