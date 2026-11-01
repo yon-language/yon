@@ -3098,9 +3098,11 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
      it fires only when the expected type is the terminal (a fieldless place),
      leaving every other checking judgement unchanged. *)
   if is_terminal_ty env expected then
-    (* a bare point is still read, so its site is the point's: the unique
-       inhabitant `star` is a point of 1, not a name of nothing *)
-    (match e with EVar _ -> ignore (infer env ctx e) | _ -> ()) |> fun () -> ok ()
+    (* the term is still read: the map to 1 starts from a term of some
+       type A, so the term is typed as such (its arguments checked against
+       their parameters, its literals given their sites), and only its value
+       is forgotten; a bare point read so is the point of 1 *)
+    let* _ = infer env ctx e in ok ()
   else
   let fallback env e expected =
     let* actual = infer env ctx e in

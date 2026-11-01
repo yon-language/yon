@@ -15,6 +15,9 @@
 - An Int64 a fun answers from a cell came back as the cell's double.
 - A local of a fun named as a fun of the program was dropped, and its uses
   reached the fun.
+- A term checked against 1 was never typed: the arguments of `return f(..)`
+  in a fun answering 1 were neither checked against the parameters nor given
+  their literals' sites.
 
 Layer/kind: native / end-to-end.
 """
@@ -127,3 +130,19 @@ def test_a_local_named_as_a_fun_of_the_program_is_the_local(tmp_path):
         "}\n"))
     assert r.returncode == 42, r.stderr
 
+
+def test_the_arguments_of_a_call_answering_one_are_checked(tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "yon.toml").write_text('[package]\nname = "probe"\n\n[runtime]\nbackend = "memory"\n')
+    (proj / "Entry.yon").write_text(
+        "place Entry {\n"
+        "fun main(): Number { return 1 }\n"
+        "fun outer(): Unit { return say(\"text\") }\n"
+        "fun say(n: Int64): Unit { return star }\n"
+        "}\n")
+    r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
+                       capture_output=True, text=True, timeout=300)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out, out
+    assert "parameter n expects Int64" in out, out

@@ -416,8 +416,6 @@ def test_compose_of_two_bound_lambdas_computes_their_composite(tmp_path):
 
 # ---------------------------------------------------------------- terminal types
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a body returned at a terminal type must still be well-typed")
 def test_a_unit_body_still_rejects_an_unbound_name(tmp_path):
     entry = """place Entry {
   fun f(): Unit { return no_such_name + "x" }
@@ -427,8 +425,6 @@ def test_a_unit_body_still_rejects_an_unbound_name(tmp_path):
     _must_reject_checker(tmp_path, entry, "unbound name under Unit", 'E2001', 'unknown identifier')
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a call returned at a terminal type must still respect the callee's arity")
 def test_a_unit_body_still_rejects_a_wrong_arity_call(tmp_path):
     entry = """place Entry {
   fun k(a: Number): Number { return a }
@@ -437,7 +433,7 @@ def test_a_unit_body_still_rejects_a_wrong_arity_call(tmp_path):
 }
 """
     _must_reject_checker(tmp_path, entry, "four arguments to a unary function under Unit",
-                         'E2001', 'k expects 1 arguments, got 4')
+                         'E2001', 'k: expected 1 arguments, got 4')
 
 
 def test_an_unbound_name_is_rejected_at_a_non_terminal_type(tmp_path):
