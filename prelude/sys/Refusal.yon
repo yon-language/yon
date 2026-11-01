@@ -22,7 +22,7 @@ place Refusal {
     /* the cells */
     :U CellTableFull :U CellReadNotLive :U CellWriteNotLive
     /* arithmetic */
-    :U Int64Overflow
+    :U Int64Overflow :U DivisionByZero
     /* the regions */
     :U WordOutsideRegion
     /* the kernel */
@@ -68,6 +68,7 @@ place Refusal {
       CellReadNotLive => "cell: a read of a cell that is not live (handle {a:f}, {b} cells live)",
       CellWriteNotLive => "cell: a write of a cell that is not live (handle {a:f}, {b} cells live)",
       Int64Overflow => "arithmetic: an Int64 operation leaves [-2^63, 2^63); its result is no Int64 (the ring that wraps is Word64)",
+      DivisionByZero => "arithmetic: an integer divided by zero, or its remainder by zero, is no integer",
       WordOutsideRegion => "region: word {a} is outside a region of {b} words",
       KernelDidNotMap => "system: the kernel did not map the region: {a:e}",
       KernelDidNotUnmap => "system: the kernel did not unmap the region: {a:e}",

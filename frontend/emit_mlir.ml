@@ -1847,6 +1847,39 @@ let block_makes_cell (body : C.term) : bool =
   let fv = term_free_vars body in
   SS.mem "Space__make" fv || SS.mem "Space__new" fv
 
+(* An integer quotient or remainder, on i64 operands, with no undefined
+   case: a divisor of zero is the refusal DivisionByZero; the one quotient
+   outside the range, -2^63 / -1, is the refusal Int64Overflow; the divisor
+   the instruction reads is 1 in those cases (and for a remainder by -1,
+   which is 0 as by 1), so divsi/remsi never meet an operand they do not
+   define. *)
+let emit_int_division (e : emitter) (op : [ `Div | `Mod ]) (va : string) (vb : string) : string =
+  let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
+  let refuse_if cond sym =
+    refer_symbol e sym (Printf.sprintf "func.func private @%s() -> ()" sym);
+    emit_line e (Printf.sprintf "scf.if %s {" cond);
+    push_indent e;
+    emit_line e (Printf.sprintf "func.call @%s() : () -> ()" sym);
+    pop_indent e;
+    emit_line e "}" in
+  let zero = def "arith.constant 0 : i64" in
+  let one = def "arith.constant 1 : i64" in
+  let m1 = def "arith.constant -1 : i64" in
+  let is_zero = def (Printf.sprintf "arith.cmpi eq, %s, %s : i64" vb zero) in
+  refuse_if is_zero "yon_rt_int_division_by_zero";
+  let is_m1 = def (Printf.sprintf "arith.cmpi eq, %s, %s : i64" vb m1) in
+  let unsafe = match op with
+    | `Div ->
+        let minv = def "arith.constant -9223372036854775808 : i64" in
+        let is_min = def (Printf.sprintf "arith.cmpi eq, %s, %s : i64" va minv) in
+        let ovf = def (Printf.sprintf "arith.andi %s, %s : i1" is_m1 is_min) in
+        refuse_if ovf "yon_rt_int64_overflow";
+        def (Printf.sprintf "arith.ori %s, %s : i1" is_zero ovf)
+    | `Mod -> def (Printf.sprintf "arith.ori %s, %s : i1" is_zero is_m1) in
+  let d = def (Printf.sprintf "arith.select %s, %s, %s : i64" unsafe one vb) in
+  def (Printf.sprintf "%s %s, %s : i64"
+         (match op with `Div -> "arith.divsi" | `Mod -> "arith.remsi") va d)
+
 let rec emit_term (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list)
@@ -2809,7 +2842,8 @@ let rec emit_term (e : emitter)
      slot carrying an Int64 is its bits, reinterpreted). A sum, a difference
      or a product outside the range is no integer the program asked for: it
      stops the program (exit 3), never wraps. divsi/remsi truncate, cmpi
-     compares. The ring Z/2^64, whose operations wrap, is Word64. *)
+     compares; a divisor of zero is refused (emit_int_division). The ring
+     Z/2^64, whose operations wrap, is Word64. *)
   | C.App (C.App (C.Var ("__i64_add" | "__i64_sub" | "__i64_mul" as op), a), b) ->
       let (va, ta) = emit_term e env funcs a in
       let (vb, tb) = emit_term e env funcs b in
@@ -2854,6 +2888,12 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.xori %s, %s : i64" v va ones);
       (v, "i64")
+  | C.App (C.App (C.Var ("__i64_div" | "__i64_mod" as op), a), b) ->
+      let (va, ta) = emit_term e env funcs a in
+      let (vb, tb) = emit_term e env funcs b in
+      let va = coerce_to_param e va ta "i64" in
+      let vb = coerce_to_param e vb tb "i64" in
+      (emit_int_division e (if op = "__i64_div" then `Div else `Mod) va vb, "i64")
   | C.App (C.App (C.Var op, a), b)
     when String.length op > 6
          && (String.sub op 0 6 = "__i64_" || String.sub op 0 6 = "__w64_") ->
@@ -2887,9 +2927,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i64" via_ va);
       let vib = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i64" vib vb);
-      let vr = fresh_ssa e in
-      let iop = if op = "__idiv" then "arith.divsi" else "arith.remsi" in
-      emit_line e (Printf.sprintf "%s = %s %s, %s : i64" vr iop via_ vib);
+      let vr = emit_int_division e (if op = "__idiv" then `Div else `Mod) via_ vib in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.sitofp %s : i64 to f64" v vr);
       (v, "f64")

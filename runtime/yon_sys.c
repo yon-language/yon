@@ -301,6 +301,11 @@ void yon_rt_int64_overflow(void) {
     yon_rt_refuse_with(YON_REFUSAL_Int64Overflow, 0, 0, 0);
 }
 
+/* An integer divided by zero, or its remainder by zero: no integer. */
+void yon_rt_int_division_by_zero(void) {
+    yon_rt_refuse_with(YON_REFUSAL_DivisionByZero, 0, 0, 0);
+}
+
 /* ─── The words of a region, for the heaps that live in it ───────────── */
 
 static int64_t *yon_sys_word(int64_t r, int64_t at) {

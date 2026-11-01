@@ -863,8 +863,6 @@ def test_an_operation_called_in_a_condition_without_a_handler_is_refused(tmp_pat
 
 # --- integer division ------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="an integer division by zero yields no ordinary quotient")
 def test_integer_division_by_zero_is_not_an_ordinary_number(tmp_path):
     entry = ("place Entry {\n"
              "fun d(a: Int64, b: Int64): Int64 { return a / b }\n"

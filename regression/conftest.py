@@ -212,6 +212,11 @@ _machine_cache: dict = {}
 
 
 def _example_uses_machine(name: str) -> bool:
+    # an example is a name under examples/: a parameter that is not one (an
+    # operator, a path) names no example, and must not send rglob elsewhere
+    if not name or not (_EXAMPLES / name).resolve().is_relative_to(_EXAMPLES) \
+            or (_EXAMPLES / name).resolve() == _EXAMPLES:
+        return False
     if name not in _machine_cache:
         srcs = [_EXAMPLES / f"{name}.yon"] + sorted((_EXAMPLES / name).rglob("*.yon"))
         _machine_cache[name] = any(_MACHINE_SOURCE.search(p.read_text(errors="replace"))
