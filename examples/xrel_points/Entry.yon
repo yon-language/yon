@@ -1,8 +1,9 @@
 place Entry {
 /* XRelMap keyed by lattice points: a map whose nodes live in the Leech heap.
  *
- * A key is a LatticePoint, made only where it is one
- * (LatticePoint.of_coordinate answers a point or a DomainError); it routes
+ * A key is a LatticePoint, a point only where it is one
+ * (LatticePoint.of_coordinate, a partial function of the house, answers a
+ * point or a DomainError); it routes
  * through the trie by its index on the shell. Exercises the map end to end:
  *   set/get  : store a value at a point and read it back (get answers
  *              Found(value) or Absent)

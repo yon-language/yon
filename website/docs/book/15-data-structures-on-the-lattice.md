@@ -93,15 +93,16 @@ heap makes every node again. So: `HashMap`/`HashSet` when collections are
 compared or their contents recur (memory); `XRelMap`/`XRelSet` when they
 are written, merged, or large (time).
 
-**A lattice point is made only where it is one.** `LatticePoint` is an
+**A lattice point is a point only where it is one.** `LatticePoint` is an
 abstract type over its representation, a 25-bit coordinate carried as an
-`i64` (`internal place LatticePoint carried by i64`): outside its house no literal is
-a point, no arithmetic applies (the sum of two points is not a point), and it
-is not an `Int64`. A point is made by `LatticePoint.of_coordinate(n)`, the
-characteristic map of the type-2 shell, which answers a point or a
-`DomainError` (a fraction, a negative, a coordinate off the shell), or by
-`LatticePoint.at_index(i)`, the i-th of the 196,560 points (a `DomainError`
-outside `[0, 196560)`). It is read through `LatticePoint.index(p)`, its place
+`i64` (`internal place LatticePoint carried by i64`): inside its house a point
+is its carrier; outside it no literal is a point, no arithmetic applies (the
+sum of two points is not a point), and it is not an `Int64`. Two partial
+functions of the house lead into the place; they are not constructors:
+`LatticePoint.of_coordinate(n)`, the characteristic map of the type-2 shell,
+answers a point or a `DomainError` (a fraction, a negative, a coordinate off
+the shell), and `LatticePoint.at_index(i)` answers the i-th of the 196,560
+points or a `DomainError` (outside `[0, 196560)`). It is read through `LatticePoint.index(p)`, its place
 on the shell, and `LatticePoint.orbit(p)`, its M₂₄ orbit: an orbit belongs to
 the point, so two points are the same up to symmetry when
 `orbit(p) == orbit(q)`.

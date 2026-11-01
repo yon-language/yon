@@ -1,10 +1,13 @@
 /* LatticePoint — a point of the type-2 shell of the Leech lattice: one of
  * its 196560 minimal vectors, named by its 25-bit coordinate. The
- * representation is internal: a point is made only where it is one — by
- * `of_coordinate`, the characteristic map of the shell (a coordinate is a point, or a
- * DomainError), or by `at_index`, the i-th point of the shell — and read only
- * through `index` and `orbit`. No literal is a point and no arithmetic
- * applies: the sum of two points is not a point.
+ * representation is internal: inside this house a point is its carrier, and
+ * outside it a point is reached only through the funs of the house. Two of
+ * them are partial functions into the place, not constructors: `of_coordinate`,
+ * the characteristic map of the shell (a coordinate is a point, or a
+ * DomainError), and `at_index`, the i-th point of the shell (an index of the
+ * shell, or a DomainError); a point is read through `index` and `orbit`. No
+ * literal is a point and no arithmetic applies: the sum of two points is not
+ * a point.
  *
  * Markers: [G] given, the runtime primitive · [E] partial, `on error` */
 internal place LatticePoint carried by i64 {
@@ -19,7 +22,7 @@ internal place LatticePoint carried by i64 {
   internal fun is_index(i: Number): Boolean is given
   internal fun unchecked_index(i: Number): LatticePoint is given
 
-  /* ─── Making a point ─────────────────────────────────────── [E] ─── */
+  /* ─── Into the place: partial, on error ─────────────────── [E] ─── */
 
   fun of_coordinate(n: Number) on error DomainError: LatticePoint {
     return if is_point(n) then unchecked_coordinate(n)
