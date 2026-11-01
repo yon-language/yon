@@ -27,4 +27,8 @@
  * point is not type-2. The table is built lazily on first use. */
 uint32_t yon_leech_m24_orbit_pure(yon_xcoord_t point);
 
+/* The orbit of the point of raw index `raw` (the mmgroup order), from the
+ * union-find table: what the order of the shell is built from. */
+uint32_t yon_leech_m24_orbit_of_raw(uint32_t raw);
+
 #endif /* YON_LEECH_ORBITS_H */

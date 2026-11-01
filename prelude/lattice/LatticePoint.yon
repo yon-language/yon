@@ -40,4 +40,34 @@ internal place LatticePoint carried by i64 {
   fun index(p: LatticePoint): Number is given
   /* its orbit under M24, in [0, 12) */
   fun orbit(p: LatticePoint): Number is given
+
+  /* ─── The order of the shell: the intervals ─────────────── [E] ─── */
+
+  /* the first index of the orbit o, in [0, 12), and its points */
+  fun orbit_first(o: Number) on error DomainError: Number {
+    return if o == 4 then 0 else if o == 5 then 1518 else if o == 6 then 44022
+           else if o == 7 then 97152 else if o == 8 then 97176 else if o == 9 then 97200
+           else if o == 10 then 109344 else if o == 11 then 133632
+           else if o == 0 then 195456 else if o == 1 then 195732
+           else if o == 2 then 196008 else if o == 3 then 196284
+           else .-> DomainError { message "not an orbit of the shell under M24, an integer in [0, 12)" }
+  }
+  fun orbit_count(o: Number) on error DomainError: Number {
+    return if o == 0 or o == 1 or o == 2 or o == 3 then 276
+           else if o == 4 then 1518 else if o == 5 then 42504 else if o == 6 then 53130
+           else if o == 7 or o == 8 then 24 else if o == 9 then 12144
+           else if o == 10 then 24288 else if o == 11 then 61824
+           else .-> DomainError { message "not an orbit of the shell under M24, an integer in [0, 12)" }
+  }
+
+  /* the first index of the shape s (0 Axial, 1 Golay, 2 Octadic), and its
+     points */
+  fun shape_first(s: Number) on error DomainError: Number {
+    return if s == 2 then 0 else if s == 1 then 97152 else if s == 0 then 195456
+           else .-> DomainError { message "not a shape of the shell under N, an integer in [0, 3)" }
+  }
+  fun shape_count(s: Number) on error DomainError: Number {
+    return if s == 2 then 97152 else if s == 1 then 98304 else if s == 0 then 1104
+           else .-> DomainError { message "not a shape of the shell under N, an integer in [0, 3)" }
+  }
 }

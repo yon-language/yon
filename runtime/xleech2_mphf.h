@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: AGPL-3.0-only */
 /* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> */
-/* xleech2_mphf.h — Minimal Perfect Hash Function xcoord <-> idx.
+/* xleech2_mphf.h — Minimal Perfect Hash Function xcoord <-> idx, ordered by
+ * the structure of the shell (see xleech2_mphf.c).
  *
  * BACKING: libmmgroup_mm_op.so (Martin Seysen, MIT license)
  *   - mm_aux_index_leech2_to_sparse
@@ -44,14 +45,27 @@
 /* Sentinel for a non-type-2 xcoord or invalid input */
 #define YON_MPHF_INVALID UINT32_MAX
 
-/* Forward: xcoord type-2 -> idx in [0, 196560).
- *
- * Returns YON_MPHF_INVALID if v is not a valid type-2 vector. */
+/* The index of a point, in [0, 196560): its rank in the order of the
+ * shell's structure, by shape under N (Octadic, Golay, Axial), then by M24
+ * orbit, then by raw index. YON_MPHF_INVALID if v is not type-2. */
 uint32_t yon_mphf_index(yon_xcoord_t v);
 
-/* Backward: idx in [0, 196560) -> xcoord type-2.
- *
- * Returns YON_XCOORD_INVALID if idx is out of range. */
+/* The point of index idx; YON_XCOORD_INVALID if idx is out of range. */
 yon_xcoord_t yon_mphf_unindex(uint32_t idx);
+
+/* The raw bijection of mmgroup the order is built on. */
+uint32_t yon_mphf_raw_index(yon_xcoord_t v);
+yon_xcoord_t yon_mphf_raw_unindex(uint32_t raw);
+
+/* The intervals of the order: orbit o in [0, 12) (its class at level 2 of
+ * the tower) and shape s in [0, 3) (its class at level 1: 0 Axial, 1 Golay,
+ * 2 Octadic) each hold the indices [first, first + count). */
+uint32_t yon_shell_orbit_first(uint32_t o);
+uint32_t yon_shell_orbit_count(uint32_t o);
+uint32_t yon_shell_orbit_shape(uint32_t o);
+uint32_t yon_shell_shape_first(uint32_t s);
+uint32_t yon_shell_shape_count(uint32_t s);
+uint32_t yon_shell_orbit_of_index(uint32_t i);
+uint32_t yon_shell_shape_of_index(uint32_t i);
 
 #endif /* YON_XLEECH2_MPHF_H */

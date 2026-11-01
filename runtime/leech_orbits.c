@@ -14,7 +14,9 @@
  * yield exactly the 12 pure orbits. */
 static const uint32_t LEECH_M24_GENS[4] = { 1000003u, 50000063u, 150000001u, 200000017u };
 
-static uint32_t *g_pure_orbit = NULL;   /* [196560] -> orbit id in [0,12), mmap-backed */
+/* [196560] raw index -> orbit id in [0,12), mmap-backed: needed only to build
+ * the order of the shell, which then answers the orbit by its interval */
+static uint32_t *g_pure_orbit = NULL;
 
 static uint32_t puf_find(uint32_t *p, uint32_t x) {
     while (p[x] != x) { p[x] = p[p[x]]; x = p[x]; }
@@ -28,10 +30,10 @@ static void build_pure_orbits(void) {
     uint32_t *parent = (uint32_t *)yon_map((size_t)N * sizeof(uint32_t));
     for (uint32_t i = 0; i < N; i++) parent[i] = i;
     for (uint32_t idx = 0; idx < N; idx++) {
-        uint32_t p = yon_mphf_unindex(idx);
+        uint32_t p = yon_mphf_raw_unindex(idx);
         for (int k = 0; k < 4; k++) {
             uint32_t q = gen_leech2_op_atom(p, 0x20000000u | LEECH_M24_GENS[k]);  /* g_k . p */
-            uint32_t j = yon_mphf_index(q);
+            uint32_t j = yon_mphf_raw_index(q);
             if (j == YON_MPHF_INVALID) continue;
             uint32_t a = puf_find(parent, idx), b = puf_find(parent, j);
             if (a != b) parent[a] = b;
@@ -55,9 +57,15 @@ static void build_pure_orbits(void) {
     g_pure_orbit = tab;   /* publish last: a reader sees either NULL or a complete table */
 }
 
+uint32_t yon_leech_m24_orbit_of_raw(uint32_t raw) {
+    if (raw >= YON_LEECH_TYPE2_COUNT) return YON_LEECH_ORBIT_INVALID;
+    if (!g_pure_orbit) build_pure_orbits();
+    return g_pure_orbit[raw];
+}
+
+/* the orbit of a point is the interval its index falls in */
 uint32_t yon_leech_m24_orbit_pure(yon_xcoord_t point) {
     uint32_t idx = yon_mphf_index(point);
     if (idx == YON_MPHF_INVALID) return YON_LEECH_ORBIT_INVALID;
-    if (!g_pure_orbit) build_pure_orbits();
-    return g_pure_orbit[idx];
+    return yon_shell_orbit_of_index(idx);
 }

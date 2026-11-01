@@ -15,7 +15,7 @@ place Refusal {
     HeapNotMade :U HeapNotReset :U HeapExhausted :U FieldNotRead
     :U NotAMap :U NoValueAtKey :U NotACollection :U CollectionOfAnotherSpace
     :U ChildNotANode :U ChildOutOfRange :U TrieNotANode
-    :U LeechNodeTooBig :U LeechNamesTaken :U OrbitsDrifted
+    :U LeechNodeTooBig :U LeechNamesTaken :U OrbitsDrifted :U ShellOrderDrifted
     :U BufferNotGrown :U BufferTooLarge
     :U SegmentsExhausted :U HeapPartUnknown :U GestationExhausted
     :U WordOutsideValue :U ValueNotStaged
@@ -53,6 +53,7 @@ place Refusal {
       TrieNotANode => "trie: {a} is not a node",
       LeechNodeTooBig => "leech: a node of {a} bytes does not fit a place",
       LeechNamesTaken => "leech: every 32-bit name is taken",
+      ShellOrderDrifted => "leech: the order of the shell does not hold: orbit {a}, raw index {b}, shape {c}",
       OrbitsDrifted => "leech: the orbits of the shell under M24 make {a} classes, more than the {b} they are",
       BufferNotGrown => "buffer: the buffer could not grow to {a} bytes",
       BufferTooLarge => "buffer: a buffer of {a} bytes exceeds the 4 GB a text can hold",

@@ -184,3 +184,26 @@ def test_a_list_of_strings_crosses(tmp_path):
                 "List.length(x) * 100 + String.length(List.head(x)) * 10"
                 " + String.length(List.head(List.tail(x)))")
     assert rc == (200 + 30 + 2) % 256
+
+
+_POINTS = """  return match LatticePoint.at_index(195500) {
+    LatticePoint as a => (match LatticePoint.at_index(10) {
+      LatticePoint as b => XRelSet.add(XRelSet.add(XRelSet.empty(), a), b),
+      DomainError as d => XRelSet.empty() }),
+    DomainError as d => XRelSet.empty() }"""
+
+
+def test_an_xrelset_of_points_crosses_by_its_points(tmp_path):
+    # the frame of a point is its carrier, the coordinate: the consumer finds
+    # the points again by their indices, in the intervals of their orbits
+    # (195500 is Axial, orbit 0; 10 is Octadic, orbit 4)
+    rc = _cross(tmp_path, "", "XRelSet<LatticePoint>", _POINTS,
+                "XRelSet.size(x) + (match LatticePoint.at_index(195500) {\n"
+                "    LatticePoint as p => (if XRelSet.contains(x, p) and LatticePoint.orbit(p) == 0\n"
+                "                          then 10 else 0),\n"
+                "    DomainError as d => 0 })\n"
+                "  + (match LatticePoint.at_index(10) {\n"
+                "    LatticePoint as q => (if XRelSet.contains(x, q) and LatticePoint.orbit(q) == 4\n"
+                "                          then 20 else 0),\n"
+                "    DomainError as d => 0 })")
+    assert rc == 32

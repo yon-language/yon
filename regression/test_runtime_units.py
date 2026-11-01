@@ -51,6 +51,9 @@ C_UNIT_TESTS = [
     ("coord_decode",  "test_unit_coord_decode.c", b"COORD_DECODE: PASS",  True),
     ("xheap_bounds",  "test_unit_xheap_bounds.c", b"XHEAP_BOUNDS: PASS",  True),
     ("hsh",           "test_unit_hsh.c",          b"HSH: PASS",           True),
+    # The index of the shell ordered by structure, checked on all 196,560
+    # points: bijection, intervals of shape and orbit, the tower's classes.
+    ("shell_order",   "test_unit_shell_order.c",  b"SHELL_ORDER: PASS",   True),
     # Functional unit tests for untested runtime families (string pool, Golay
     # VoyagerList, open-addressed HashMap). Each links the full RTSET (includes
     # yon_rt.o -> needs the __yon_dispatch stub) and prints a unique marker.
