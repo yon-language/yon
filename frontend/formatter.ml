@@ -482,6 +482,11 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
         line f (Printf.sprintf "cell %s from %s to %s"
                   c.cell_name (fmt_expr c.cell_src) (fmt_expr c.cell_tgt))
   ) pd.pd_members;
+  (match Hashtbl.find_opt Surface_ast.carrier_models pd.pd_name with
+   | Some models ->
+       List.iter (fun (c, given, _) ->
+         line f ("carried by " ^ c ^ (if given then " is given" else ""))) models
+   | None -> ());
   if close then begin f.indent <- f.indent - 1; line f "}" end
   end
 

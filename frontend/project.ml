@@ -184,7 +184,7 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
                      fi_prog = parse_text ~file:p t }
           with _ -> None))
     @ files in
-  let merged = List.concat_map (fun f -> f.fi_prog) files in
+  let merged = Algebra_models.complete (List.concat_map (fun f -> f.fi_prog) files) in
   let place_space : (string, string) Hashtbl.t = Hashtbl.create 32 in
   let place_acc = ref [] and main_files = ref [] in
   List.iter
@@ -423,16 +423,30 @@ let law_diags (l : loaded) : Error_codes.t list =
 let algebra_law_diags (l : loaded) : Error_codes.t list =
   List.filter_map
     (fun (r : Algebra_check.law_result) ->
-       let what = Printf.sprintf "law %s of algebra %s on place %s"
-           r.Algebra_check.lr_law r.Algebra_check.lr_algebra r.Algebra_check.lr_place in
+       let on = r.Algebra_check.lr_place in
+       let what = Printf.sprintf "law %s of algebra %s on %s"
+           r.Algebra_check.lr_law r.Algebra_check.lr_algebra
+           (if String.length on > 12 && String.sub on 0 12 = "the carrier " then on
+            else "place " ^ on) in
        match r.Algebra_check.lr_verdict with
+       | Law_check.Proven by when r.Algebra_check.lr_given ->
+           (* an axiom only where the certification does not decide *)
+           Some (Error_codes.make ~range:r.Algebra_check.lr_loc Error_codes.Type_check
+                   (Printf.sprintf "%s is declared `is given`, but the certification decides it (proven: %s): remove `is given`" what by))
        | Law_check.Proven _ -> None
+       | Law_check.Unknown _ when r.Algebra_check.lr_given -> None
        | Law_check.Refuted model ->
            Some (Error_codes.make ~range:r.Algebra_check.lr_loc Error_codes.Law_refuted
                    (Printf.sprintf "%s is refuted; counterexample: %s" what model))
        | Law_check.Unknown why ->
            Some (Error_codes.make ~range:r.Algebra_check.lr_loc Error_codes.Law_uncertified
-                   (Printf.sprintf "%s is not certified: %s" what why)))
+                   (Printf.sprintf "%s is not certified: %s%s" what why
+                      (if String.length r.Algebra_check.lr_place > 12
+                          && String.sub r.Algebra_check.lr_place 0 12 = "the carrier "
+                       then ". If it holds, declare the model an axiom: `carried by "
+                            ^ String.sub r.Algebra_check.lr_place 12 (String.length r.Algebra_check.lr_place - 12)
+                            ^ " is given`"
+                       else ""))))
     (Algebra_check.check l.merged)
 
 (* An operation is an effect: the program reaches a value only if every

@@ -127,6 +127,9 @@ let place_algebras : (string, string list) Hashtbl.t = Hashtbl.create 8
 (* An operator written on a value of a place that an algebra gives it
    (`a + b` on a Word64, by Additive's `as "+"`): the site, by its full span,
    and the fun it calls. *)
+(* The carriers each algebra declares a model (`carried by C` in its body):
+   algebra -> (carrier, declared an axiom, site). *)
+let carrier_models : (string, (string * bool * location) list) Hashtbl.t = Hashtbl.create 8
 let algebra_op_sites : (string * int * int * int * int, string) Hashtbl.t = Hashtbl.create 16
 (* The house whose funs are being checked. Inside the house of a place
    `internal place P carried by <carrier>` the place is its carrier, in both directions;
@@ -732,6 +735,10 @@ type place_clause =
   | PcOver of string
   | PcSubcontains of string
   | PcOnError of string
+  | PcCarriedBy of string * bool * location
+                         (* in an algebra: `carried by C` — the carrier C is a
+                            model, with the machine's operation for each
+                            symbol; `is given` makes it an axiom *)
 
 type place_body_item =
   | PbiMember of field_or_op

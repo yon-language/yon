@@ -32,9 +32,9 @@ internal place Word64 carried by i64 uses algebra Additive, Multiplicative {
 
   fun zero(): Word64 { return from_int64(0) }
   fun one(): Word64 { return from_int64(1) }
-  fun add(a: Word64, b: Word64): Word64 { return a + b }
+  /* the sum and the product are the machine's, taken from the model of i64
+     that Additive and Multiplicative declare: Word64.add, Word64.mul */
   fun sub(a: Word64, b: Word64): Word64 { return a - b }
-  fun mul(a: Word64, b: Word64): Word64 { return a * b }
 
   /* ─── The bits ───────────────────────────────────────────── [T] ─── */
 

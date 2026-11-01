@@ -1,0 +1,8 @@
+place Plus is algebra {
+  operation plus(a: Plus, b: Plus): Plus as "+"
+  operation nought(): Plus as "0"
+  law commutative ∀a ∀b (a + b = b + a)
+  law neutral ∀a (a + nought() = a)
+  carried by i64
+  carried by i32 is given
+}

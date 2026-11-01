@@ -405,6 +405,10 @@ let algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) opt
     | OpAdd -> "+" | OpSub -> "-" | OpMul -> "*" | OpDiv -> "/" | OpMod -> "%"
     | _ -> "" in
   match t with
+  (* inside its own house a place is its carrier: the operator is the
+     carrier's, never the algebra's (which would call itself) *)
+  | TyUser p when !Surface_ast.open_house = Some p
+                  && not (Hashtbl.mem Surface_ast.algebra_places p) -> None
   | TyUser p when symbol <> "" ->
       let algebras =
         (if Hashtbl.mem Surface_ast.algebra_places p then [p] else [])

@@ -587,6 +587,7 @@ let () =
      __INFER and orphan the view in multi-world projects. *)
   (* qualify BEFORE expanding: the synthetic view fun copies show-exprs
      verbatim (same ordering fix as Project.load; qualify is idempotent). *)
+  let prog = Algebra_models.complete prog in
   let prog = Desugar.expand_views (Method_sugar.qualify_homes prog) in
   (* Lower the Id-proposition sugar (Same / bare clear) before check + desugar. *)
   let prog = Tycheck.elaborate_id_sugar prog in

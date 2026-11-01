@@ -295,7 +295,8 @@ A `place` then takes its world by inference from the project's toml, not from an
 | `place A is algebra { ... }` | ✓ | **An algebra**: a theory, its operations and its laws. Inside it the name `A` stands for the carrier of any model. It lowers to nothing that runs: the models give the operations |
 | `operation add(a: A, b: A): A as "+"` | ✓ | An operation of an algebra and the operator that writes it; a nullary operation (`operation zero(): A`) is a neutral element |
 | `law associative ∀a ∀b ∀c ((a + b) + c = a + (b + c))` | ✓ | A law stated over the carrier: each quantifier binds its variable over the carrier up to the end of the statement, in parentheses |
-| `place P uses algebra A, B { ... }` | ✓ | **A model**: `P` gives each operation of `A` and `B` as its own fun of the same name and type (the algebra's name read as `P`); the operators of the algebras then write those funs on values of `P`, and every law is certified on `P`. An algebra not listed gives `P` nothing |
+| `carried by i64` (in an algebra) | ✓ | **A carrier model**: the carrier is a model of the algebra, with the machine's operation for each symbol (`as "+"` the machine's sum, `as "0"` its zero). Its laws are certified like those of any model; `carried by C is given` declares it an axiom, admitted only where the certification does not decide (E2102) |
+| `place P uses algebra A, B { ... }` | ✓ | **A model**: `P` gives each operation of `A` and `B` as its own fun of the same name and type (the algebra's name read as `P`); the operators of the algebras then write those funs on values of `P`, and every law is certified on `P`. An operation `P` does not give is taken from the carrier model of `A` for the carrier of `P`, when `A` declares one; a fun `P` gives itself is its own, and the laws are certified on it. An algebra not listed gives `P` nothing, whatever its carrier models |
 | `cell c from e1 to e2` | ✓ | Higher cell between lower cells (CaTT witness) |
 | `place P carried by <carrier> { ... }` | ✓ | **Declared representation**: `P` is carried at runtime as `<carrier>`, and the representation is open: the form of the prelude's primitives (`place Int64 carried by i64`) |
 | `internal place P carried by <carrier> { ... }` | ✓ | The same representation, **internal to the house**: inside it `P` is `<carrier>`; outside it `P` is abstract, no literal is one of its points, no arithmetic of the carrier applies, and its values come only from its own functions. The place stays usable everywhere: `internal` before `place` hides how it is carried, not the place, unlike `internal fun`, which hides the fun from every caller outside its house. Example: `internal place LatticePoint carried by i64` |
@@ -307,8 +308,8 @@ The carrier after `carried by` names how the bits are laid out, not a type: `f64
 `f32`, `i64`, `i32`, `i16`, `i8`, `i1`. These lowercase names are valid only
 in this clause; in a type position they are refused (E1001), like `number`.
 
-The algebras of the prelude (`prelude/alg/`): `Additive` (`+`, `zero`),
-`Multiplicative` (`*`, `one`), `TropicalMax`, `TropicalMin`, `BooleanOr`,
+The algebras of the prelude (`prelude/alg/`): `Additive` (`+`, `zero`, carried by i64),
+`Multiplicative` (`*`, `one`, carried by i64), `TropicalMax`, `TropicalMin`, `BooleanOr`,
 `BooleanAnd`, `Gcd`. An algebra named but not declared `is algebra` is an
 error.
 
@@ -317,9 +318,10 @@ error.
 comparison level), `∧` `∨` `→` `¬` (the Heyting connectives `&&?` `||?`
 `=>?` `!?`), and `↔`, which is `(p → q) ∧ (q → p)`. Inside the statement a
 single `=` is equality. **Certification** on each model, with three verdicts:
-on a place of nullary arms, every assignment of arms is evaluated; on a 64-bit
-word carried internally (the ring Z/2^64), z3 decides the statement over
-64-bit bitvectors; a law false on the model is refused (E2101, with a
+on a place of nullary arms, every assignment of arms is evaluated; on i64
+(the ring Z/2^64, whose sum and product wrap) z3 decides the statement over
+64-bit bitvectors, on f64 over IEEE doubles (where the sum is not
+associative); a law false on the model is refused (E2101, with a
 counterexample), one that is not decided is not certified (E2102), never
 accepted in silence.
 

@@ -1,9 +1,12 @@
 /* Additive — a commutative monoid written with +: an associative and
- * commutative sum, with zero as its neutral element. */
+ * commutative sum, with zero as its neutral element. Its carrier model is
+ * i64, with the machine's sum and zero (the ring Z/2^64): a place carried by
+ * i64 that uses Additive takes from it the operations it does not give. */
 place Additive is algebra {
   operation add(a: Additive, b: Additive): Additive as "+"
-  operation zero(): Additive
+  operation zero(): Additive as "0"
   law associative ∀a ∀b ∀c ((a + b) + c = a + (b + c))
   law commutative ∀a ∀b (a + b = b + a)
   law neutral ∀a (a + zero() = a)
+  carried by i64
 }

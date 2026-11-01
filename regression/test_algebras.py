@@ -99,3 +99,67 @@ def test_a_law_not_decided_is_not_certified(tmp_path):
            "}\n")
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
     assert rc != 0 and "E2102" in out and "not certified" in out, out
+
+
+def _sum(carrier: str, extra: str = "", given: str = "") -> str:
+    return ("place Sum is algebra {\n"
+            '  operation add(a: Sum, b: Sum): Sum as "+"\n'
+            '  operation zero(): Sum as "0"\n'
+            "  law associative ∀a ∀b ∀c ((a + b) + c = a + (b + c))\n"
+            "  law commutative ∀a ∀b (a + b = b + a)\n"
+            "  law neutral ∀a (a + zero() = a)\n"
+            + extra +
+            f"  carried by {carrier}{given}\n"
+            "}\n")
+
+
+def test_the_machine_sum_of_i64_is_a_model_certified_by_z3(tmp_path):
+    rc, out, exe = _build(tmp_path, {"Sum": _sum("i64")}, "  return 42", objects=["Sum"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+
+
+def test_a_law_false_on_the_carrier_is_refuted(tmp_path):
+    src = _sum("i64", extra="  law doubles ∀a (a + a = a)\n")
+    rc, out, _ = _build(tmp_path, {"Sum": src}, "  return 42", objects=["Sum"])
+    assert rc != 0 and "E2101" in out, out
+    assert "law doubles of algebra Sum on the carrier i64 is refuted" in out, out
+
+
+def test_the_ieee_sum_is_not_associative(tmp_path):
+    rc, out, _ = _build(tmp_path, {"Sum": _sum("f64")}, "  return 42", objects=["Sum"])
+    assert rc != 0 and "E2101" in out, out
+    assert "law associative of algebra Sum on the carrier f64 is refuted" in out, out
+    assert "IEEE doubles" in out, out
+
+
+def test_a_carrier_the_solver_does_not_model_is_not_certified(tmp_path):
+    rc, out, _ = _build(tmp_path, {"Sum": _sum("i32")}, "  return 42", objects=["Sum"])
+    assert rc != 0 and "E2102" in out and "carried by i32 is given" in out, out
+
+
+def test_an_axiom_is_declared_only_where_the_certification_does_not_decide(tmp_path):
+    rc, out, exe = _build(tmp_path, {"Sum": _sum("i32", given=" is given")}, "  return 42",
+                          objects=["Sum"])
+    assert rc == 0, out
+    rc, out, _ = _build(tmp_path / "decided", {"Sum": _sum("i64", given=" is given")}, "  return 42",
+                        objects=["Sum"]) if (tmp_path / "decided").mkdir() is None else (0, "", None)
+    assert rc != 0 and "E2001" in out and "the certification decides it" in out, out
+
+
+def test_a_place_takes_the_operations_it_does_not_give_from_its_carrier(tmp_path):
+    word = ("internal place W carried by i64 uses algebra Additive, Multiplicative {\n"
+            "  fun make(n: Int64): W { return n }\n"
+            "  fun value(w: W): Int64 { return w }\n"
+            "}\n")
+    rc, out, exe = _build(tmp_path, {"W": word},
+                          "  return if W.value(W.make(40) + W.make(2) * W.one()) == 42 then 42 else 1",
+                          objects=["W"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+
+
+def test_body_carried_by_is_only_for_an_algebra(tmp_path):
+    src = "place Meter {\n  carried by i64\n}\n"
+    rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
+    assert rc != 0 and "E1001" in out and "declares a carrier model of an algebra" in out, out

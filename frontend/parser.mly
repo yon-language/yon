@@ -639,6 +639,15 @@ place_decl:
     { (match is_c with
        | Some `Algebra -> Hashtbl.replace Surface_ast.algebra_places name ()
        | None -> ());
+      (let (_, _, clauses, _) = mv in
+       let models = List.filter_map (function
+           | PcCarriedBy (c, g, l) -> Some (c, g, l) | _ -> None) clauses in
+       if models <> [] then begin
+         if is_c <> Some `Algebra then
+           failwith (Printf.sprintf
+             "place %s: `carried by` in the body declares a carrier model of an algebra; a place that is no algebra writes its carrier in the header, `place %s carried by C`" name name);
+         Hashtbl.replace Surface_ast.carrier_models name models
+       end);
       if internal && carried = None then
         failwith (Printf.sprintf
           "internal place %s has no carrier: `internal` hides how a place is carried, write `internal place %s carried by C`" name name);
@@ -771,6 +780,10 @@ place_member:
   | THIS LT base = IDENT                  { PbiClause (PcSubcontains base) }
   | ON_ERROR e = IDENT
     { PbiClause (PcOnError e) }
+  /* in an algebra: the carrier C is a model, with the machine's operation
+     for each symbol; its laws are certified like those of any model */
+  | CARRIED BY c = IDENT g = boption(preceded(IS, GIVEN))
+    { PbiClause (PcCarriedBy (c, g, mk_loc $startpos $endpos)) }
   | fd = fun_decl                         { Parser_state.push_decl (TopFun fd); PbiArrow }
   | md = move_decl                        { Parser_state.push_decl (TopMove md); PbiArrow }
   | fct = functor_decl                    { Parser_state.push_decl fct; PbiArrow }

@@ -1,9 +1,11 @@
 /* Multiplicative — a commutative monoid written with *: an associative and
- * commutative product, with one as its neutral element. */
+ * commutative product, with one as its neutral element. Its carrier model is
+ * i64, with the machine's product and one (the ring Z/2^64). */
 place Multiplicative is algebra {
   operation mul(a: Multiplicative, b: Multiplicative): Multiplicative as "*"
-  operation one(): Multiplicative
+  operation one(): Multiplicative as "1"
   law associative ∀a ∀b ∀c ((a * b) * c = a * (b * c))
   law commutative ∀a ∀b (a * b = b * a)
   law neutral ∀a (a * one() = a)
+  carried by i64
 }
