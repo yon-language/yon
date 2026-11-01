@@ -5358,6 +5358,13 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
         env td.tp_objects in
       let rec check_props = function
         | [] -> ok ()
+        | (pr : prop_decl) :: rest when pr.pr_quants <> [] ->
+            (* a quantifier left over a type that is not finite *)
+            let (_, x, ty) = List.hd pr.pr_quants in
+            ignore rest;
+            err pr.pr_loc (Printf.sprintf
+              "prop %s quantifies %s over %s, which is not a place of nullary arms: a prop is a proposition the program computes, and a quantifier has a value only over a finite place (the meet or the join of its arms)"
+              pr.pr_name x (Tyenv.ty_to_string ty))
         | (pr : prop_decl) :: rest ->
             (match pr.pr_body_opt with
              | None -> check_props rest

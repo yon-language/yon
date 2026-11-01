@@ -184,7 +184,7 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
                      fi_prog = parse_text ~file:p t }
           with _ -> None))
     @ files in
-  let merged = Algebra_models.complete (List.concat_map (fun f -> f.fi_prog) files) in
+  let merged = Prop_quantifiers.expand (Algebra_models.complete (List.concat_map (fun f -> f.fi_prog) files)) in
   let place_space : (string, string) Hashtbl.t = Hashtbl.create 32 in
   let place_acc = ref [] and main_files = ref [] in
   List.iter

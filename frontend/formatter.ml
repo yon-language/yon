@@ -611,7 +611,13 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
        List.iter (fun pr ->
          let params = String.concat ", "
            (List.map (fun (n, t) -> n ^ ": " ^ fmt_ty t) pr.pr_params) in
-         let body = match pr.pr_body_opt with Some e -> " = " ^ fmt_expr e | None -> "" in
+         let body = match pr.pr_body_opt with
+           | Some e when pr.pr_quants <> [] ->
+               " = " ^ String.concat " " (List.map (fun (k, x, t) ->
+                   (match k with Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83")
+                   ^ x ^ " : " ^ fmt_ty t) pr.pr_quants)
+               ^ " (" ^ fmt_statement e ^ ")"
+           | Some e -> " = " ^ fmt_expr e | None -> "" in
          line f (Printf.sprintf "prop %s(%s)%s" pr.pr_name params body))
          td.tp_props;
        f.indent <- f.indent - 1;

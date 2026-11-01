@@ -1,0 +1,7 @@
+place Entry {
+  fun main(): Number {
+    a := match decide(some_other(Heads)) { Present => 40, Absent => 0, Unknown => 1 }
+    b := match decide(all_same(Heads)) { Present => 0, Absent => 2, Unknown => 1 }
+    return a + b
+  }
+}

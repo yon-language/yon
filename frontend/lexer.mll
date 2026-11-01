@@ -259,7 +259,7 @@
     try Hashtbl.find keyword_table s
     with Not_found -> IDENT s
 
-  (* The statement of a law, in the symbols of mathematical logic:
+  (* The statement of a law or a prop, in the symbols of mathematical logic:
      after a quantifier (`∀x`, `∃x`) comes its variable, and the parenthesis
      that opens the statement; inside it a single `=` is equality (`==`),
      until the parenthesis closes. Everywhere else `=` keeps its meaning. *)
@@ -404,6 +404,7 @@ rule token = parse
   | "\xe2\x86\x92"  { FATARROWQ }                       (* → *)
   | "\xc2\xac"      { BANGQ }                           (* ¬ *)
   | "\xe2\x86\x94"  { IFFQ }                            (* ↔ *)
+  | "\xe2\x88\x88"  { ELEM }                            (* ∈ *)
 
   | eof              { reset_statement (); EOF }
   | _ as c           { raise (Lexer_error (Printf.sprintf "unexpected character %c" c)) }

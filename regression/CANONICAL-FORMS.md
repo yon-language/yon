@@ -8,7 +8,7 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
-- productions REDUCED by a fixture (Menhir-verified): **93 / 93** surface (+3 structural allowlisted)
+- productions REDUCED by a fixture (Menhir-verified): **96 / 96** surface (+3 structural allowlisted)
 - deviations rejected: **21**
 - deviations still accepted (`accepted_deviation`): **1**
 
@@ -74,6 +74,7 @@ from them; the `.yon` files are the specification, not this text.
 | spawn | `canonical` | accept | 42 | — |
 | subcontains | `canonical` | accept | 0 | — |
 | topos | `canonical` | accept | 42 | — |
+| topos | `quantified` | accept | 42 | — |
 | type | `canonical` | accept | 42 | — |
 | variant | `canonical` | accept | 7 | — |
 | variant | `dev_missing_branch` | reject_clean | 1 | `missing branch` |

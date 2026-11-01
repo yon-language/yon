@@ -1,0 +1,6 @@
+status: accept
+exit: 42
+covers: typed_quantifiers typed_quantifier quantifier_kw topos_prop_decl
+note: |
+  A quantifier of a prop carries its type (`∀x : T`, `∀x ∈ T`); over a place
+  of nullary arms it is the meet or the join of its arms, and the prop decides.

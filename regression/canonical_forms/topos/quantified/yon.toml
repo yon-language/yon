@@ -1,0 +1,8 @@
+[package]
+name = "topos_quantified"
+
+[world.W]
+spaces = ["w"]
+
+[runtime]
+backend = "memory"

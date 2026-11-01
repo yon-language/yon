@@ -101,6 +101,7 @@ let tok_name = function
   | Parser.FORALL -> "FORALL"
   | Parser.EXISTS -> "EXISTS"
   | Parser.IFFQ -> "IFFQ"
+  | Parser.ELEM -> "ELEM"
   | Parser.CARRIED -> "CARRIED"
   | Parser.AMPQ -> "AMPQ"
   | Parser.PIPEQ -> "PIPEQ"

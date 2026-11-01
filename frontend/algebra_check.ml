@@ -234,7 +234,75 @@ let model_of (out : string) : string =
   | Some i -> String.sub flat i (String.length flat - i)
   | None -> flat
 
+(* ─── the machine's own arithmetic, on fixed candidates ───────────────── *)
+
+(* A value of the machine: a word, or a double, compared by its bits. *)
+type mvalue = W of int64 | D of float
+
+let candidates = function
+  | Word -> List.map (fun x -> W x)
+              [0L; 1L; -1L; 2L; Int64.max_int; Int64.min_int; 4294967296L; 3L]
+  | Double -> List.map (fun x -> D x)
+                [0.0; -0.0; 1.0; -1.0; 0.1; 0.2; 0.3; 1e16; 1e308; nan; infinity]
+
+let rec mterm (env : (string * mvalue) list) (e : S.expr) : mvalue =
+  let t = mterm env in
+  match e with
+  | S.EVar (x, _) -> (match List.assoc_opt x env with Some v -> v | None -> raise (Not_modelled x))
+  | S.EParen (a, _) -> t a
+  | S.ELit (S.LitNumber n, _) ->
+      (match env with (_, D _) :: _ -> D n | _ -> W (Int64.of_float n))
+  | S.EBinop (o, a, b, _) ->
+      (match o, t a, t b with
+       | S.OpAdd, W x, W y -> W (Int64.add x y)
+       | S.OpSub, W x, W y -> W (Int64.sub x y)
+       | S.OpMul, W x, W y -> W (Int64.mul x y)
+       | S.OpAdd, D x, D y -> D (x +. y)
+       | S.OpSub, D x, D y -> D (x -. y)
+       | S.OpMul, D x, D y -> D (x *. y)
+       | _ -> raise (Not_modelled "a term outside the machine fragment"))
+  | S.EIfThenElse (c, a, b, _) -> if mprop env c then t a else t b
+  | _ -> raise (Not_modelled "a term outside the machine fragment")
+
+and mprop (env : (string * mvalue) list) (e : S.expr) : bool =
+  let same a b = match a, b with
+    | W x, W y -> Int64.equal x y
+    (* the same value iff the same bits; every NaN is the one NaN *)
+    | D x, D y -> (Float.is_nan x && Float.is_nan y) || Int64.equal (Int64.bits_of_float x) (Int64.bits_of_float y)
+    | _ -> false in
+  let p = mprop env in
+  match e with
+  | S.EBinop (S.OpEq, a, b, _) -> same (mterm env a) (mterm env b)
+  | S.EBinop (S.OpNeq, a, b, _) -> not (same (mterm env a) (mterm env b))
+  | S.EBinop (S.OpAnd, a, b, _) | S.ECall ("__heyt_and", [a; b], _) -> p a && p b
+  | S.EBinop (S.OpOr, a, b, _) | S.ECall ("__heyt_or", [a; b], _) -> p a || p b
+  | S.ECall ("__heyt_imp", [a; b], _) -> (not (p a)) || p b
+  | S.ENot (a, _) | S.ECall ("__heyt_not", [a], _) -> not (p a)
+  | S.EParen (a, _) -> p a
+  | _ -> raise (Not_modelled "a proposition outside the machine fragment")
+
+let show = function
+  | W x -> Int64.to_string x
+  | D x -> Printf.sprintf "%h (%g)" x x
+
+(* An assignment of candidates where a statement with only ∀ is false: a
+   counterexample in the machine's own arithmetic. *)
+let search (m : machine) (st : S.law_statement) (body : S.expr) : string option =
+  let rec go vars env =
+    match vars with
+    | [] -> if mprop env body then None
+            else Some (String.concat ", " (List.rev_map (fun (x, v) -> x ^ " = " ^ show v) env))
+    | x :: rest ->
+        List.fold_left (fun acc v -> match acc with Some _ -> acc | None -> go rest ((x, v) :: env))
+          None (candidates m) in
+  go (List.map snd st.S.ls_quants) []
+
 let decide_machine (m : machine) (st : S.law_statement) (body : S.expr) : Law_check.verdict =
+  let all_forall = List.for_all (fun (q, _) -> q = S.Forall) st.S.ls_quants in
+  match (if all_forall then search m st body else None) with
+  | Some cex -> Law_check.Refuted (Printf.sprintf "in the arithmetic of %s, at %s"
+                                     (match m with Word -> "64-bit words" | Double -> "IEEE doubles") cex)
+  | None ->
   let all_forall = List.for_all (fun (q, _) -> q = S.Forall) st.S.ls_quants in
   let program =
     if all_forall then

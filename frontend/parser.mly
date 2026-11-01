@@ -180,7 +180,7 @@
  * Lowering: dispatch su algebra Heyt (h_and/h_or/h_not/h_imp). */
 %token AMPAMPQ PIPEPIPEQ BANGQ FATARROWQ
 /* the quantifiers of a statement, and ↔ (the two implications) */
-%token FORALL EXISTS IFFQ
+%token FORALL EXISTS IFFQ ELEM
 /* Intuitionistic bitwise ops with the `?` tag. They lower to topos.heyt_int_*
  * ops on !topos.heyt_int<64> carrying a (value, mask) pair (see emit_mlir). */
 %token AMPQ PIPEQ CARETQ TILDEQ
@@ -382,6 +382,21 @@ quantifier:
   | FORALL x = IDENT   { (Forall, x) }
   | EXISTS x = IDENT   { (Exists, x) }
 
+(* in a prop the quantifier carries its type: `∀x : T`, `∀x ∈ T`. The type
+   is a place, named: a written type could go on with `(`, which opens the
+   statement. *)
+typed_quantifiers:
+  | q = typed_quantifier rest = typed_quantifiers   { q :: rest }
+  | q = typed_quantifier                            { [q] }
+
+typed_quantifier:
+  | k = quantifier_kw x = IDENT COLON t = IDENT   { (k, x, TyUser t) }
+  | k = quantifier_kw x = IDENT ELEM t = IDENT    { (k, x, TyUser t) }
+
+quantifier_kw:
+  | FORALL   { Forall }
+  | EXISTS   { Exists }
+
 topos_prop_decl:
   (* no return type: `prop` already implies proposition, so writing it
      would only repeat it. *)
@@ -390,6 +405,16 @@ topos_prop_decl:
     EQ body = expr
     { { pr_name = name;
         pr_params = List.map (fun p -> (p.param_name, p.param_ty)) params;
+        pr_quants = [];
+        pr_body_opt = Some body;
+        pr_loc = mk_loc $startpos $endpos } }
+  (* with quantifiers, each carrying its type: `∀y : T` or `∀y ∈ T` *)
+  | PROP_KW name = IDENT
+    LPAREN params = param_list RPAREN
+    EQ q = typed_quantifiers LPAREN body = expr RPAREN
+    { { pr_name = name;
+        pr_params = List.map (fun p -> (p.param_name, p.param_ty)) params;
+        pr_quants = q;
         pr_body_opt = Some body;
         pr_loc = mk_loc $startpos $endpos } }
   (* Abstract variant: signature only, no body. *)
@@ -397,6 +422,7 @@ topos_prop_decl:
     LPAREN params = param_list RPAREN
     { { pr_name = name;
         pr_params = List.map (fun p -> (p.param_name, p.param_ty)) params;
+        pr_quants = [];
         pr_body_opt = None;
         pr_loc = mk_loc $startpos $endpos } }
 
