@@ -40,7 +40,36 @@ PYTEST="$ROOT/.venv/bin/pytest"
 if command -v caffeinate >/dev/null 2>&1; then caffeinate -i -w $$ & fi
 t0=$(date +%s)
 say() { echo "── $*"; }
-die() { echo "GATE RED ($1) after $(( $(date +%s) - t0 ))s"; exit 1; }
+# A red gate keeps what it saw: the whole output of the step that failed and
+# the environment it failed in, in a file of its own that nothing deletes
+# (YON_GATE_FAILURES, by default ~/Projects/yon-wt/gate-failures, outside the
+# repo). A failure that does not come back can be read there afterwards.
+FAILDIR="${YON_GATE_FAILURES:-$HOME/Projects/yon-wt/gate-failures}"
+keep() {  # keep <step> <output>
+  mkdir -p "$FAILDIR" 2>/dev/null || return 0
+  local sha f
+  sha=$(cd "$ROOT" && git rev-parse --short HEAD 2>/dev/null)
+  f="$FAILDIR/$(date -u +%Y%m%dT%H%M%SZ)_${sha:-nocommit}_$(echo "$1" | tr -c 'A-Za-z0-9' '-' | cut -c1-40).log"
+  {
+    echo "gate $TIER red at: $1"
+    echo "date (UTC): $(date -u '+%Y-%m-%d %H:%M:%S')   elapsed: $(( $(date +%s) - t0 ))s"
+    echo "root: $ROOT"
+    echo "commit: $(cd "$ROOT" && git log -1 --format='%H %s' 2>/dev/null)"
+    echo "dirty files:"; (cd "$ROOT" && git status --porcelain 2>/dev/null | sed 's/^/  /')
+    echo "machine: $(uname -a)"
+    echo "cpus: $(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)   memory: $(sysctl -n hw.memsize 2>/dev/null || grep MemTotal /proc/meminfo 2>/dev/null)"
+    echo "load: $(uptime)"
+    echo "fuzz seed of the day (YON_FUZZ_SEED unset): $(date +%Y%m%d)"
+    echo "environment:"; env | grep -E '^(YON|YONC|PYTEST|TMPDIR|PATH=)' | sort | sed 's/^/  /'
+    echo "jobs: ${JOBS:-${YON_JOBS:-auto}}"
+    echo "processes by cpu:"; ps -A -o pcpu,pmem,comm 2>/dev/null | sort -rn | head -12 | sed 's/^/  /'
+    echo "──────── output of the step ────────"
+    printf '%s\n' "$2"
+  } > "$f" 2>/dev/null && echo "   kept: $f"
+}
+die() {  # die <step> [output]
+  [ $# -ge 2 ] && keep "$1" "$2"
+  echo "GATE RED ($1) after $(( $(date +%s) - t0 ))s"; exit 1; }
 
 # --- tier 0: build + smoke ---------------------------------------------
 # The suite writes only in its own temp dirs: a file the repo does not track
@@ -50,12 +79,12 @@ UNTRACKED_BEFORE=$(cd "$ROOT" && git status --porcelain --untracked-files=all | 
 say "tier 0: build"
 # The verdict is dune's exit code, never its output: what dune prints depends
 # on what the cache let it skip, and one tree must give one verdict.
-BOUT=$(dune build --root "$ROOT/frontend" 2>&1) || { echo "$BOUT"; die "build"; }
+BOUT=$(dune build --root "$ROOT/frontend" 2>&1) || { echo "$BOUT"; die "build" "$BOUT"; }
 # The runtime and the MLIR lowering are part of the compiler the suite runs:
 # built from this tree on every run (each tool rebuilds only what changed,
 # headers included), so no verdict rests on a binary built before.
-ROUT=$(make -C "$ROOT/runtime" 2>&1) || { echo "$ROUT"; die "build (runtime)"; }
-MOUT=$(ninja -C "$ROOT/mlir/build" 2>&1) || { echo "$MOUT"; die "build (MLIR lowering)"; }
+ROUT=$(make -C "$ROOT/runtime" 2>&1) || { echo "$ROUT"; die "build (runtime)" "$ROUT"; }
+MOUT=$(ninja -C "$ROOT/mlir/build" 2>&1) || { echo "$MOUT"; die "build (MLIR lowering)" "$MOUT"; }
 say "tier 0: grammar (Menhir on parser.mly, every run, outside the cache)"
 # Declared state of the grammar: no conflict, no useless precedence, no unused
 # token, no unreachable symbol, no production never reduced. Every
@@ -69,10 +98,10 @@ g_unused=$(echo "$GOUT" | grep -cE "never useful|unused|unreachable|never reduce
 g_warn=$(echo "$GOUT" | grep -c "Warning")
 echo "   conflicts $g_conf, useless/unused $g_unused, warnings $g_warn (declared: 0, 0, 0)"
 if [ $grc -ne 0 ] || [ "$g_warn" -ne 0 ] || [ "$g_conf" -ne 0 ] || [ "$g_unused" -ne 0 ]; then
-  echo "$GOUT"; die "grammar"
+  echo "$GOUT"; die "grammar" "$GOUT"
 fi
 say "tier 0: smoke (one example compiles and runs)"
-"$ROOT/toolchain/yonc" "$ROOT/examples/vec_basic" -o /tmp/gate_smoke >/dev/null 2>&1 || die "smoke compile"
+SOUT=$("$ROOT/toolchain/yonc" "$ROOT/examples/vec_basic" -o /tmp/gate_smoke 2>&1) || die "smoke compile" "$SOUT"
 /tmp/gate_smoke >/dev/null 2>&1
 [ $? -eq 62 ] || die "smoke exit (expected 62, vec_basic from the baseline)"
 [ "$TIER" = "0" ] && { echo "gate 0 green ($(( $(date +%s) - t0 ))s)"; exit 0; }
@@ -115,9 +144,9 @@ for f in $DIRTY; do
 done
 if [ -n "$PICK" ]; then
   say "tier 1: targeted:$PICK"
-  T1=$("$PYTEST" $PICK -q -n "${YON_JOBS:-auto}" --dist loadgroup --skip-ledger "$ROOT/regression/SKIPS.txt" 2>&1); rc=$?
+  T1=$("$PYTEST" $PICK -q -rfE -n "${YON_JOBS:-auto}" --dist loadgroup --skip-ledger "$ROOT/regression/SKIPS.txt" 2>&1); rc=$?
   echo "$T1" | tail -2
-  [ $rc -eq 0 ] || die "targeted"
+  [ $rc -eq 0 ] || die "targeted" "$T1"
 else
   say "tier 1: no dirty file mapped - skip declared"
 fi
@@ -125,12 +154,13 @@ fi
 
 # --- tier 2: acceptance (exit codes + conway + quantizer + cross-space) -
 say "tier 2: acceptance"
-OUT=$(bash "$ROOT/regression/run_regression.sh" 2>&1 | tail -6)
+FULL=$(bash "$ROOT/regression/run_regression.sh" 2>&1)
+OUT=$(echo "$FULL" | tail -6)
 echo "$OUT"
 # every acceptance block must report OK: a failed one prints FAIL and the
 # script goes on, so checking only the first line let a red block through
 for ok in "REGRESSION OK" "CONWAY-CHAINS OK" "QUANTIZER OK" "CROSS-SPACE OK"; do
-  echo "$OUT" | grep -q "$ok" || die "acceptance ($ok missing)"
+  echo "$OUT" | grep -q "$ok" || die "acceptance ($ok missing)" "$FULL"
 done
 [ "$TIER" = "2" ] && { echo "gate 2 green ($(( $(date +%s) - t0 ))s)"; exit 0; }
 
@@ -150,13 +180,13 @@ LEDGER="$ROOT/regression/SKIPS.txt"
 WORLDS_DIR="${TMPDIR:-/tmp}"
 WORLDS_BEFORE=$(ls "$WORLDS_DIR" 2>/dev/null | grep '^yon-world-' | sort)
 say "tier 3: full pytest, parallel phase (-n $JOBS)"
-T3=$("$PYTEST" "$ROOT/regression/" -q -n "$JOBS" --dist loadgroup -m "not bench and not serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
+T3=$("$PYTEST" "$ROOT/regression/" -q -rfE -n "$JOBS" --dist loadgroup -m "not bench and not serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
-[ $rc -eq 0 ] || die "full pytest (parallel phase)"
+[ $rc -eq 0 ] || die "full pytest (parallel phase)" "$T3"
 say "tier 3: full pytest, serial phase (no-xdist tests)"
-T3B=$("$PYTEST" "$ROOT/regression/" -q -m "serial and not bench" --skip-ledger "$LEDGER" 2>&1); rc=$?
+T3B=$("$PYTEST" "$ROOT/regression/" -q -rfE -m "serial and not bench" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3B" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
-[ $rc -eq 0 ] || die "full pytest (serial phase)"
+[ $rc -eq 0 ] || die "full pytest (serial phase)" "$T3B"
 leaked=""
 for _ in $(seq 50); do       # reapers wake on their launcher's exit: allow 10 s
   leaked=$(comm -13 <(echo "$WORLDS_BEFORE") \
