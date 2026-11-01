@@ -376,6 +376,11 @@ let path_not_known () =
      where it is built — transport(ua(e), x), or a path named with `be` — or \
      pass the equivalence's function instead.")
 
+(* the funs declared `is given`, and the phantom-typed calls being lowered *)
+let given_names : (string, unit) Hashtbl.t = Hashtbl.create 64
+let phantom_reading : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 4
+let site5 (l : S.location) = (l.S.file, l.S.start_line, l.S.start_col, l.S.end_line, l.S.end_col)
+
 let rec desugar_ty (t : S.ty) : C.ty =
   match t with
   (* String fusion: normalize the nominal face "String" to the
@@ -389,7 +394,7 @@ let rec desugar_ty (t : S.ty) : C.ty =
   | S.TyUser u when Hashtbl.mem S.fusion_places u ->
       desugar_ty (S.TyPrim (Hashtbl.find S.fusion_places u))
   (* an abstract type has no runtime existence: it is its representation *)
-  | S.TyUser u when Hashtbl.mem S.internal_faces u ->
+  | S.TyUser u | S.TyApp (u, _) when Hashtbl.mem S.internal_faces u ->
       desugar_ty (S.TyPrim (Hashtbl.find S.internal_faces u))
   | S.TyPrim n | S.TyPrimIn (n, _) ->
       (match n with
@@ -920,6 +925,21 @@ and desugar_expr (e0 : S.expr) : C.term =
       C.App (C.App (C.Var "__compose", desugar_expr g), desugar_expr f)
   | S.ECall ("psh_id", [], _) ->
       C.Var "__id"
+  | S.ECall (name, _, loc)
+    when not (Hashtbl.mem given_names name)
+         && not (Hashtbl.mem phantom_reading (site5 loc))
+         && Hashtbl.mem Surface_ast.phantom_return_sites (site5 loc) ->
+      (* the result comes back as its word: read it as the carrier of the
+         type the call is instantiated at *)
+      let site = site5 loc in
+      Hashtbl.replace phantom_reading site ();
+      let call = desugar_expr e0 in
+      Hashtbl.remove phantom_reading site;
+      let as_ = match desugar_ty (Hashtbl.find Surface_ast.phantom_return_sites site) with
+        | C.TyPlace ("i64" | "int64") -> "__as_i64"
+        | C.TyPlace "boolean" -> "__as_i1"
+        | _ -> "__as_f64" in
+      C.App (C.Var as_, call)
   | S.ECall (name, args, loc) ->
       (* Type-directed method resolution: the tycheck resolved this call to a
          receiver-qualified method name (`Square__area`) by the receiver's type
@@ -3396,13 +3416,19 @@ let () = spawn_block_ref := desugar_spawn_block
    body of anything but bindings and a return, a loop say, is impure too. *)
 let impure_funs (p : S.program) : unit =
   Hashtbl.reset Tyenv.impure_funs;
+  Hashtbl.reset given_names;
+  List.iter (function
+    | S.TopFun fd when fd.S.fn_given -> Hashtbl.replace given_names fd.S.fn_name ()
+    | _ -> ()) p;
   match !current_env with
   | None -> ()
   | Some env ->
       let seed (fd : S.fun_decl) =
         fd.S.fn_given
         && (fd.S.fn_home = Some "SystemOs"
-            || List.mem fd.S.fn_name Stdlib_runtime.raw_memory_writers) in
+            || List.mem fd.S.fn_name Stdlib_runtime.raw_memory_writers
+            || List.mem fd.S.fn_name
+                 [ "FnvHeap__compare_and_swap_word"; "LeechHeap__compare_and_swap_word" ]) in
       let funs = List.filter_map (function S.TopFun fd -> Some fd | _ -> None) p in
       List.iter (fun fd -> if seed fd then Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ()) funs;
       let body_pure (fd : S.fun_decl) =

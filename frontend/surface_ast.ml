@@ -675,6 +675,7 @@ type quantifier = Forall | Exists
 type law_statement = {
   ls_quants : (quantifier * string) list;
   ls_body : expr;
+  ls_given : bool;   (* `is given`: an axiom, declared and never certified *)
 }
 
 type operation_decl = {
@@ -1169,3 +1170,10 @@ let pat_bound_names (p : match_pat) : string list =
    selector): the lowering gives the answer the carrier its type gives, as
    for a local call (a place is a section, an Int64 is i64). *)
 let rpc_returns : (string * int, ty) Hashtbl.t = Hashtbl.create 8
+
+(* The calls of a generic fun whose result type is a parameter no argument
+   carries (a parameter of a place only, as V in FnvHeap<V>): the type the
+   call is instantiated at, by its full site. The value comes back as its
+   word, and the call site reads it as that type's carrier. *)
+let phantom_return_sites : (string * int * int * int * int, ty) Hashtbl.t = Hashtbl.create 16
+

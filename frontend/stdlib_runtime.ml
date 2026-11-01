@@ -695,6 +695,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "refuse", [TyUser "Refusal"; tword; tword; tword], TyVar "T";
       "fnv_heap_region", [], tregion;
       "leech_heap_region", [], tregion;
+      "fnv_heap_part", [ti64; ti64], tregion;
+      "fnv_heap_scratch", [ti64], tregion;
       "is_shared_name", [ttext], tbool;
       "unchecked_shared_map", [ttext; ti64], tregion;
       "unchecked_shared_remove", [ttext], tbool;
@@ -716,10 +718,16 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
     "FnvHeap", [
       "read_word", [tregion; ti64], tword;
       "write_word", [tregion; ti64; tword], tunit;
+      "compare_and_swap_word", [tregion; ti64; tword; tword], tword;
+      "word_of", [TyVar "T"], tword;
+      "value_of", [tword], TyVar "T";
     ];
     "LeechHeap", [
       "read_word", [tregion; ti64], tword;
       "write_word", [tregion; ti64; tword], tunit;
+      "compare_and_swap_word", [tregion; ti64; tword; tword], tword;
+      "word_of", [TyVar "T"], tword;
+      "value_of", [tword], TyVar "T";
     ];
     "Random", [
       "seed",  [tnum], tnum;
@@ -858,8 +866,14 @@ let raw_memory_writers : string list =
 let non_allocating_primitives : string list =
   [ "FnvHeap__read_word"; "FnvHeap__write_word";
     "LeechHeap__read_word"; "LeechHeap__write_word";
-    (* the regions of the Space's heaps and their size: they exist already *)
+    "FnvHeap__compare_and_swap_word"; "LeechHeap__compare_and_swap_word";
+    (* a value as its word and back: the carrier's own bits *)
+    "FnvHeap__word_of"; "FnvHeap__value_of";
+    "LeechHeap__word_of"; "LeechHeap__value_of";
+    (* the regions of the Space's heaps and their size: they exist already,
+       or are made by the kernel, outside every heap *)
     "SystemOs__fnv_heap_region"; "SystemOs__leech_heap_region"; "SystemOs__words";
+    "SystemOs__fnv_heap_part"; "SystemOs__fnv_heap_scratch";
     (* a refusal names a constant and never returns *)
     "SystemOs__refuse";
     (* the operators on the bits of a word are arithmetic, not calls *)

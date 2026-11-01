@@ -110,6 +110,7 @@ let collect_local_returns (p : program) : unit =
 let reset_scheme_env () =
   scheme_env := [];
   Hashtbl.clear Surface_ast.bare_point_sites;
+  Hashtbl.clear Surface_ast.phantom_return_sites;
   Hashtbl.clear Surface_ast.arm_coproduct_sites;
   Hashtbl.clear Surface_ast.qualified_arm_sites;
   Hashtbl.clear Surface_ast.fused_elim_sites
@@ -3731,6 +3732,8 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
          parameters with the arguments; the call is then checked, and typed,
          at that instance. A parameter the arguments do not determine stays
          open. *)
+      let declared_return = fs.fs_return
+      and declared_params = fs.fs_params in
       let fs =
         let tvs = List.concat_map (fun (_, t) -> Ty_subst.type_vars t)
                     fs.fs_params @ Ty_subst.type_vars fs.fs_return in
@@ -3781,6 +3784,17 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
             name eff eff)
         ) (ok ()) fs.fs_visits
       in
+      (* a result whose type parameter no argument carries as a whole: the
+         instance is known here, at the call, not from the arguments *)
+      (match declared_return with
+       | (TyVar v | TyUser v)
+         when List.mem v (Ty_subst.type_vars declared_return)
+              && not (List.exists (fun (_, t) -> match t with
+                        | TyVar w | TyUser w -> w = v | _ -> false) declared_params) ->
+           Hashtbl.replace Surface_ast.phantom_return_sites
+             (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col)
+             fs.fs_return
+       | _ -> ());
       ok fs.fs_return
   | None ->
       (* Try qualified operation (desugared name: "Place__op"). *)
@@ -5772,6 +5786,42 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
        | FoLaw (_, None) ->
            (* a law named only: its certification is the algebra's *)
            ok ()
+       | FoLaw (name, Some st) when st.ls_given
+                                    && Hashtbl.mem Surface_ast.algebra_places pd.pd_name ->
+           err pd.pd_loc (Printf.sprintf
+             "law %s of the algebra %s is given: a law of an algebra is certified on \
+              each model; `is given` declares an axiom of a place that is not an algebra, \
+              about faces the certification cannot read" name pd.pd_name)
+       | FoLaw (name, Some st) when st.ls_given ->
+           (* an axiom about given faces: it is declared, never certified;
+              its variables range over every type, so each is a type of its
+              own, abstract (the statement is parametric in it) *)
+           let env' = Tyenv.add_vars env
+               (List.map (fun (_, x) -> (x, TyVar ("law_" ^ x))) st.ls_quants) in
+           (* a name in the statement is a fun of the house first *)
+           let rec qualify e = match e with
+             | ECall (f, args, l) ->
+                 let f' = if Tyenv.lookup_fun env (pd.pd_name ^ "__" ^ f) <> None
+                          then pd.pd_name ^ "__" ^ f else f in
+                 ECall (f', List.map qualify args, l)
+             | EBinop (o, a, b, l) -> EBinop (o, qualify a, qualify b, l)
+             | EParen (a, l) -> EParen (qualify a, l)
+             | ENot (a, l) -> ENot (qualify a, l)
+             | EIfThenElse (c, a, b, l) -> EIfThenElse (qualify c, qualify a, qualify b, l)
+             | e -> e in
+           let saved_house = !Surface_ast.open_house in
+           let saved_home = !current_home in
+           Surface_ast.open_house := Some pd.pd_name;
+           current_home := Some pd.pd_name;
+           let r = infer env' ctx (qualify st.ls_body) in
+           Surface_ast.open_house := saved_house;
+           current_home := saved_home;
+           let* t = r in
+           if Dispatcher.type_equal env ctx t (TyPrim "boolean")
+              || Dispatcher.type_equal env ctx t (TyPrim "proposition") then ok ()
+           else err pd.pd_loc (Printf.sprintf
+             "the statement of law %s of %s is a %s; a law states a proposition"
+             name pd.pd_name (Tyenv.ty_to_string t))
        | FoLaw (name, Some st) ->
            (* the statement of a law: its variables range over the carrier,
               the place itself, and it is a proposition *)

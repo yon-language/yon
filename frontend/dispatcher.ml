@@ -362,6 +362,17 @@ let rec type_equal
   | other, TyUser u
     when (match Surface_ast.in_house_carrier u with
           | Some p -> carrier_is p other | None -> false) -> true
+  (* and so is each of its applications, whatever its parameters say: a
+     parameter that no field carries is the type a value of it is about;
+     inside the house two of them are the same carrier *)
+  | (TyApp (u, _) | TyUser u), (TyApp (u', _) | TyUser u')
+    when u = u' && Surface_ast.in_house_carrier u <> None -> true
+  | TyApp (u, _), other
+    when (match Surface_ast.in_house_carrier u with
+          | Some p -> carrier_is p other | None -> false) -> true
+  | other, TyApp (u, _)
+    when (match Surface_ast.in_house_carrier u with
+          | Some p -> carrier_is p other | None -> false) -> true
   (* String fusion: "text" and "String" are the SAME semantic
    * object — sections of the builtin String place (runtime: xheap handle).
    * Bidirectional, like boolean/proposition. *)

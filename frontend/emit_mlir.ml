@@ -876,6 +876,8 @@ let wired_primitives : (string * string * string list * string) list = [
   "SystemOs__refuse",               "yon_rt_refuse",           ["f64"; "i64"; "i64"; "i64"], "f64";
   "SystemOs__fnv_heap_region",      "yon_rt_sys_fnv_heap_region",   [], "i64";
   "SystemOs__leech_heap_region",    "yon_rt_sys_leech_heap_region", [], "i64";
+  "SystemOs__fnv_heap_part",        "yon_rt_sys_fnv_heap_part",     ["i64"; "i64"], "i64";
+  "SystemOs__fnv_heap_scratch",     "yon_rt_sys_fnv_heap_scratch",  ["i64"], "i64";
   "SystemOs__is_shared_name",          "yon_rt_sys_is_shared_name",   ["f64"], "i1";
   "SystemOs__unchecked_shared_map",    "yon_rt_sys_shared_map",       ["f64"; "i64"], "i64";
   "SystemOs__unchecked_shared_remove", "yon_rt_sys_shared_remove",    ["f64"], "i1";
@@ -895,6 +897,8 @@ let wired_primitives : (string * string * string list * string) list = [
   "FnvHeap__write_word",            "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
   "LeechHeap__read_word",           "yon_rt_region_read",      ["i64"; "i64"], "i64";
   "LeechHeap__write_word",          "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
+  "FnvHeap__compare_and_swap_word",   "yon_rt_region_cas",     ["i64"; "i64"; "i64"; "i64"], "i64";
+  "LeechHeap__compare_and_swap_word", "yon_rt_region_cas",     ["i64"; "i64"; "i64"; "i64"], "i64";
   "List__is_empty",                 "yon_rt_list_is_empty",    ["f64"], "i1";
   "List__append",                   "yon_rt_list_append",      ["f64"; "f64"], "f64";
 ]
@@ -956,6 +960,11 @@ let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
   match t with
+  | C.App (C.Var ("FnvHeap__word_of" | "LeechHeap__word_of"
+                 | "FnvHeap__value_of" | "LeechHeap__value_of"), _) -> "i64"
+  | C.App (C.Var "__as_i64", _) -> "i64"
+  | C.App (C.Var "__as_f64", _) -> "f64"
+  | C.App (C.Var "__as_i1", _) -> "i1"
   | t when wired_call t <> None ->
       (match wired_call t with Some ((_, _, _, ret), _) -> ret | None -> "f64")
   | C.App _ as app when body_over_primitive funcs app -> infer_app e env funcs app
@@ -1841,6 +1850,54 @@ let rec emit_term (e : emitter)
     (funcs : (string * func_sig) list)
     (t : C.term) : string * string =
   match t with
+  (* a value as its word: the carrier's own 64 bits, reinterpreted, never
+     converted (a Boolean's bit widened); and back, the word itself, which
+     every place that wants another carrier reinterprets the same way *)
+  | C.App (C.Var ("FnvHeap__word_of" | "LeechHeap__word_of"), a) ->
+      let (v, ty) = emit_term e env funcs a in
+      (match ty with
+       | "i64" -> (v, "i64")
+       | "f64" ->
+           let w = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.bitcast %s : f64 to i64" w v);
+           (w, "i64")
+       | "i1" ->
+           (* a Boolean's word is that of its uniform slot, 1.0 or 0.0 *)
+           let d = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.uitofp %s : i1 to f64" d v);
+           let w = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.bitcast %s : f64 to i64" w d);
+           (w, "i64")
+       | other ->
+           failwith (Printf.sprintf "a value carried by %s has no word of 64 bits" other))
+  (* a result that came back as its word, read as the carrier of the type
+     the call is instantiated at: its bits, reinterpreted *)
+  | C.App (C.Var ("__as_i64" | "__as_f64" | "__as_i1" as k), a) ->
+      let (v, ty) = emit_term e env funcs a in
+      let to_f64 v ty =
+        if ty = "f64" then v
+        else if ty = "i64" then begin
+          let d = fresh_ssa e in
+          emit_line e (Printf.sprintf "%s = arith.bitcast %s : i64 to f64" d v); d
+        end else failwith (Printf.sprintf "a word read back from %s" ty) in
+      (match k with
+       | "__as_i64" ->
+           if ty = "i64" then (v, "i64")
+           else begin
+             let w = fresh_ssa e in
+             emit_line e (Printf.sprintf "%s = arith.bitcast %s : f64 to i64" w (to_f64 v ty));
+             (w, "i64")
+           end
+       | "__as_f64" -> (to_f64 v ty, "f64")
+       | _ ->
+           let d = to_f64 v ty in
+           let z = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" z);
+           let b = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" b d z);
+           (b, "i1"))
+  | C.App (C.Var ("FnvHeap__value_of" | "LeechHeap__value_of"), a) ->
+      (emit_i64 e env funcs a, "i64")
   | t when wired_call t <> None ->
       let ((_, sym, ps, ret), args) = Option.get (wired_call t) in
       let vs = List.map2 (fun p a ->

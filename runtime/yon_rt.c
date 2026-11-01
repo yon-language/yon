@@ -127,6 +127,11 @@ static struct {
      * Space starts: one for its FnvHeap, one for its LeechHeap. */
     int64_t       fnv_region;
     int64_t       leech_region;
+    /* The numbered parts of each heap (its segments, the generations of its
+     * index) mapped in this process, and the pieces of its gestation area,
+     * which belong to this process alone: made on the first ask. */
+    int64_t      *heap_parts[2];
+    int64_t      *heap_scratch[2];
 } g_spaces[YON_MAX_SPACES];
 
 /* A heap starts with one segment of 196,560 slots in a region of its own and
@@ -138,9 +143,30 @@ static struct {
 #define YON_SEGMENT_SLOTS          196560
 #define YON_FNV_SEGMENT_WORDS      ((int64_t)YON_SEGMENT_SLOTS * (2 + 4))
 #define YON_LEECH_SEGMENT_WORDS    ((int64_t)YON_SEGMENT_SLOTS * 5)
+/* The root of the FnvHeap of a Space: 64 words of its state and a directory
+ * of the words of each of its parts (65,536 segments, 64 generations of its
+ * index). The segments themselves are parts, asked for by number. */
+#define YON_HEAP_PARTS             (65536 + 64)
+#define YON_FNV_ROOT_WORDS         ((int64_t)64 + YON_HEAP_PARTS)
+/* A piece of a gestation area: 2^20 words, at most 1,024 pieces. */
+#define YON_SCRATCH_WORDS          ((int64_t)1 << 20)
+#define YON_SCRATCH_PIECES         1024
 int64_t yon_rt_sys_map(int64_t words);
+static int64_t yon_sys_shared_named(const char *name, int64_t words);
+static uint32_t g_n_spaces;
+/* The kernel name of part n of heap k of a Space ('r' its root). */
+static void yon_heap_part_name(char *out, size_t outsz, uint32_t id, int k,
+                               char what, int64_t n);
+static int yon_heaps_shared(void);
 static void space_heap_regions(uint32_t id) {
-    g_spaces[id].fnv_region = yon_rt_sys_map(YON_FNV_SEGMENT_WORDS);
+    if (yon_heaps_shared()) {
+        /* the replicas of a Space share its heaps: the root by name */
+        char n[64];
+        yon_heap_part_name(n, sizeof(n), id, 0, 'r', 0);
+        g_spaces[id].fnv_region = yon_sys_shared_named(n, YON_FNV_ROOT_WORDS);
+    } else {
+        g_spaces[id].fnv_region = yon_rt_sys_map(YON_FNV_ROOT_WORDS);
+    }
     g_spaces[id].leech_region = yon_rt_sys_map(YON_LEECH_SEGMENT_WORDS);
 }
 
@@ -8140,3 +8166,64 @@ int64_t yon_rt_sys_leech_heap_region(void) {
     ensure_init();
     return g_spaces[g_cur_space].leech_region;
 }
+
+static int yon_heaps_shared(void) { return g_backend == YON_BACKEND_L2_SHM; }
+
+static void yon_heap_part_name(char *out, size_t outsz, uint32_t id, int k,
+                               char what, int64_t n) {
+    /* "/y<world><F|L><what><n>_<Space>" */
+    snprintf(out, outsz, "/y%s%c%c%llx_%s", yon_rt_world_tag(), k ? 'L' : 'F',
+             what, (unsigned long long)n, g_spaces[id].name);
+}
+
+/* Part n of heap k (0 the FnvHeap, 1 the LeechHeap) of the Space running
+ * now, of `words` words: made by the first process of the Space that asks,
+ * mapped in this one on its first ask; every later ask answers the same
+ * region. Under shared heaps the parts are shared by name with the replicas
+ * of the Space, else they belong to this process. */
+static int64_t yon_heap_part(int k, int64_t n, int64_t words) {
+    ensure_init();
+    uint32_t id = g_cur_space;
+    if (n < 0 || n >= YON_HEAP_PARTS)
+        yon_rt_refuse_with(YON_REFUSAL_HeapPartUnknown, n, YON_HEAP_PARTS, 0);
+    if (!g_spaces[id].heap_parts[k]) {
+        g_spaces[id].heap_parts[k] = calloc(YON_HEAP_PARTS, sizeof(int64_t));
+        if (!g_spaces[id].heap_parts[k])
+            yon_rt_refuse_with(YON_REFUSAL_KernelDidNotMap, errno, 0, 0);
+    }
+    int64_t *slot = &g_spaces[id].heap_parts[k][n];
+    if (!*slot) {
+        if (yon_heaps_shared()) {
+            char name[64];
+            yon_heap_part_name(name, sizeof(name), id, k, 's', n);
+            *slot = yon_sys_shared_named(name, words);
+        } else {
+            *slot = yon_rt_sys_map(words);
+        }
+    }
+    return *slot;
+}
+
+int64_t yon_rt_sys_fnv_heap_part(int64_t n, int64_t words) {
+    return yon_heap_part(0, n, words);
+}
+
+/* Piece c of the gestation area of heap k of the Space running now: it
+ * belongs to this process, never shared, made on the first ask. */
+static int64_t yon_heap_scratch(int k, int64_t c) {
+    ensure_init();
+    uint32_t id = g_cur_space;
+    if (c < 0 || c >= YON_SCRATCH_PIECES)
+        yon_rt_refuse_with(YON_REFUSAL_GestationExhausted,
+                           YON_SCRATCH_WORDS * YON_SCRATCH_PIECES, 0, 0);
+    if (!g_spaces[id].heap_scratch[k]) {
+        g_spaces[id].heap_scratch[k] = calloc(YON_SCRATCH_PIECES, sizeof(int64_t));
+        if (!g_spaces[id].heap_scratch[k])
+            yon_rt_refuse_with(YON_REFUSAL_KernelDidNotMap, errno, 0, 0);
+    }
+    int64_t *slot = &g_spaces[id].heap_scratch[k][c];
+    if (!*slot) *slot = yon_rt_sys_map(YON_SCRATCH_WORDS);
+    return *slot;
+}
+
+int64_t yon_rt_sys_fnv_heap_scratch(int64_t c) { return yon_heap_scratch(0, c); }

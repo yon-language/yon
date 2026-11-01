@@ -249,9 +249,13 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       end;
       Printf.sprintf "__yon_rpc2_invoke%d__%s" k sp
     in
+    (* inside a house a bare name of one of its own funs is that fun: the
+       house gives the name, an import does not take it *)
+    let own = ref [] in
+    let remote_name name = List.mem_assoc name remote && not (List.mem name !own) in
     let rec rwe (e : S.expr) : S.expr =
       match e with
-      | S.ECall (name, args, ll) when List.mem_assoc name remote ->
+      | S.ECall (name, args, ll) when remote_name name ->
           let (sp, op) = List.assoc name remote in
           Hashtbl.replace rpc_ops (sp, op_selector op) name;
           S.ECall (invoke_name (List.length args) sp,
@@ -301,7 +305,7 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       match s with
       | S.SReturn (e, ll) -> S.SReturn (rwe e, ll)
       | S.SLet (x, e, ll) -> S.SLet (x, rwe e, ll)
-      | S.SCall (name, args, ll) when List.mem_assoc name remote ->
+      | S.SCall (name, args, ll) when remote_name name ->
           let (sp, op) = List.assoc name remote in
           S.SCall (invoke_name (List.length args) sp,
                    mk_num (op_selector op) :: List.map rwe args, ll)
@@ -330,8 +334,13 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
       | S.SForces (stg, c, b, ll) -> S.SForces (stg, rwc c, rb b, ll)
       | S.SDrop (x, ll) -> S.SDrop (x, ll)
     in
+    let siblings h = List.filter_map (function
+      | S.TopFun g when g.S.fn_home = Some h -> Some g.S.fn_name
+      | _ -> None) decls in
     List.map (function
-      | S.TopFun fn -> S.TopFun { fn with fn_body = List.map rws fn.S.fn_body }
+      | S.TopFun fn ->
+          own := (match fn.S.fn_home with Some h -> siblings h | None -> []);
+          S.TopFun { fn with fn_body = List.map rws fn.S.fn_body }
       | other -> other) decls
 
 let prefix_decls (modname : string) (decls : S.top_decl list) : S.top_decl list =

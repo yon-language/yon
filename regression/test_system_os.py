@@ -80,9 +80,10 @@ def test_a_region_of_no_word_is_a_domain_error(tmp_path):
 
 
 def test_the_space_has_a_region_for_each_heap_made_when_it_starts(tmp_path):
-    # one segment each: 196,560 slots of 2 + 4 words (FNV), of 5 words (Leech)
+    # the FnvHeap's root (64 words of state, a directory of 65,600 parts),
+    # the LeechHeap's one segment (196,560 slots of 5 words)
     body = ("  f := SystemOs.fnv_heap_region()\n  l := SystemOs.leech_heap_region()\n"
-            "  return if SystemOs.words(f) == 1179360 and SystemOs.words(l) == 982800"
+            "  return if SystemOs.words(f) == 65664 and SystemOs.words(l) == 982800"
             " and f != l then 42 else 1\n")
     assert _value(tmp_path, body) == 42
 
@@ -97,7 +98,7 @@ def test_the_region_of_the_space_is_the_same_at_every_ask(tmp_path):
 def test_heap_code_asks_for_its_region_without_allocating(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun first(): Word64 { return read_word(SystemOs.fnv_heap_region(), 0) }\n")
+        "  fun probe_first(): Word64 { return read_word(SystemOs.fnv_heap_region(), 0) }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
 
@@ -297,11 +298,11 @@ def test_heap_code_reaching_an_allocation_through_its_calls_is_refused(tmp_path)
     env = _prelude_with_heap_funs(
         tmp_path,
         '  internal fun label(r: Region): Text { return "slot" }\n'
-        "  internal fun tag(r: Region, w: Int64): Int64 { return String.length(label(r)) + w }\n"
-        "  fun put(r: Region, w: Int64): Int64 { return tag(r, w) }\n")
+        "  internal fun probe_tag(r: Region, w: Int64): Int64 { return String.length(label(r)) + w }\n"
+        "  fun probe_put(r: Region, w: Int64): Int64 { return probe_tag(r, w) }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out
-    assert ("FnvHeap.put calls FnvHeap.tag, which calls FnvHeap.label, which writes "
+    assert ("FnvHeap.probe_put calls FnvHeap.probe_tag, which calls FnvHeap.label, which writes "
             "a Text literal.") in out, out
 
 
@@ -340,7 +341,7 @@ def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
         "  fun is_zero(r: Region, i: Int64): Boolean { return read_word(r, i) == Word64.zero() }\n"
-        "  fun first(r: Region): Lookup<Word64> { return Absent }\n")
+        "  fun probe_first(r: Region): Lookup<Word64> { return Absent }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
 
@@ -348,7 +349,7 @@ def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
 def test_heap_code_building_a_payload_arm_is_refused(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun first(r: Region): Lookup<Word64> { return hit(Found, read_word(r, 0)) }\n")
+        "  fun probe_first(r: Region): Lookup<Word64> { return hit(Found, read_word(r, 0)) }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out
-    assert "FnvHeap.first builds the coproduct value Found." in out, out
+    assert "FnvHeap.probe_first builds the coproduct value Found." in out, out

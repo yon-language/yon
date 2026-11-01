@@ -151,6 +151,31 @@ int64_t yon_rt_sys_shared_map(double name_d, int64_t words) {
     return (int64_t)(intptr_t)p;
 }
 
+/* A region shared under a kernel name already in its kernel's form, made by
+   the first to ask; every later ask maps the same region. */
+static int64_t yon_sys_shared_named(const char *n, int64_t words) {
+    size_t bytes = ((size_t)words + 1u) * sizeof(int64_t);
+    int fd = shm_open(n, O_CREAT | O_RDWR, 0600);
+    if (fd < 0) yon_sys_refuse(YON_REFUSAL_KernelDidNotOpenShared);
+    yon_rt_world_register(n);
+    struct stat st;
+    if (fstat(fd, &st) != 0) { close(fd); yon_sys_refuse(YON_REFUSAL_SharedNotMeasured); }
+    if ((size_t)st.st_size < bytes && ftruncate(fd, (off_t)bytes) != 0) {
+        close(fd); yon_sys_refuse(YON_REFUSAL_KernelDidNotSizeShared);
+    }
+    void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    close(fd);
+    if (p == MAP_FAILED) yon_sys_refuse(YON_REFUSAL_KernelDidNotMapShared);
+    int64_t *h = (int64_t *)p;
+    int64_t zero = 0;
+    /* the first to map it sizes it; the size is the region's first word */
+    if (!__atomic_compare_exchange_n(&h[0], &zero, words, 0,
+                                     __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
+        && zero != words)
+        yon_rt_refuse_with(YON_REFUSAL_SharedSizeMismatch, yon_refusal_name(n + 1), zero, words);
+    return (int64_t)(intptr_t)p;
+}
+
 double yon_rt_sys_shared_remove(double name_d) {
     char n[40];
     yon_sys_shared_kernel_name(name_d, n);
@@ -285,9 +310,20 @@ static int64_t *yon_sys_word(int64_t r, int64_t at) {
     return h + 1 + at;
 }
 
-int64_t yon_rt_region_read(int64_t r, int64_t at) { return *yon_sys_word(r, at); }
+int64_t yon_rt_region_read(int64_t r, int64_t at) {
+    return __atomic_load_n(yon_sys_word(r, at), __ATOMIC_ACQUIRE);
+}
 
 double yon_rt_region_write(int64_t r, int64_t at, int64_t w) {
-    *yon_sys_word(r, at) = w;
+    __atomic_store_n(yon_sys_word(r, at), w, __ATOMIC_RELEASE);
     return 0.0;
+}
+
+/* The word becomes `desired` if it is `expected`, in one step that no other
+   process sharing the region can split; the answer is the word it found. */
+int64_t yon_rt_region_cas(int64_t r, int64_t at, int64_t expected, int64_t desired) {
+    int64_t found = expected;
+    __atomic_compare_exchange_n(yon_sys_word(r, at), &found, desired, 0,
+                                __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    return found;
 }

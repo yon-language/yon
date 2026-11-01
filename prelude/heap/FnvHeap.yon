@@ -1,12 +1,358 @@
-/* FnvHeap — identity by content: a value is put once, by its bytes, and the
- * same bytes answer the same slot. It lives in a Region, whose words only
- * this house reads and writes.
+/* FnvHeap — identity by content. The heap of the Space running now: a value
+ * is put once, by its type and its bytes, and the same type with the same
+ * bytes answers the same handle, on the whole chain of segments. A value of
+ * FnvHeap<V> is the handle of a V put in it: the place is the values of V the
+ * heap holds, and reading the handle gives back that V.
  *
- * Markers: [G] given, the runtime primitive */
-internal place FnvHeap carried by i64 {
+ * The heap lives in regions SystemOs gives: its root (the state, a lock, the
+ * directory of its parts), its segments and the generations of its content
+ * index (parts asked for by number, shared by name with the replicas of the
+ * Space), and a gestation area of this process alone. This house is the only
+ * code that reads and writes their words; it allocates nothing.
+ *
+ * A segment is 196,560 slots: a slot table of two words a slot (the offset of
+ * the payload in the segment and its length in bytes; the tag) and a payload
+ * area of 32 bytes a slot. A value larger than that area takes a segment of
+ * its own, sized on it. The handle is (segment, slot) in one word, read
+ * directly: segment * 2^18 + slot. The one limit is the number of segments.
+ *
+ * The content index is open addressing on (hash, handle) in a region that
+ * doubles; the hash is FNV-1a over the tag's eight bytes and the value's
+ * bytes, and two entries are the same value when their tags, lengths and
+ * bytes are. A publication holds the lock of the root, taken by
+ * compare-and-swap, so replicas publishing at once deduplicate together.
+ *
+ * Markers: [G] given, the raw memory · [T] total · [R] refuses, exit 3 */
+internal place FnvHeap<V> carried by i64 {
 
-  /* ─── The words of its region ────────────────────────────── [G] ─── */
+  /* ─── The raw memory ─────────────────────────────────────── [G] ─── */
 
   internal fun read_word(r: Region, index: Int64): Word64 is given
   internal fun write_word(r: Region, index: Int64, w: Word64): Unit is given
+  /* the word becomes `new` if it is `expected`, in one step no replica can
+     split; the answer is the word found */
+  internal fun compare_and_swap_word(r: Region, index: Int64, expected: Word64, new: Word64): Word64 is given
+  /* a value as its 64 bits, and back */
+  internal fun word_of<T>(x: T): Word64 is given
+  internal fun value_of<T>(w: Word64): T is given
+
+  /* the word of a value gives the value back: every type is a retract of
+     the word */
+  law retract ∀x (value_of(word_of(x)) = x) is given
+
+  /* ─── Putting and reading ────────────────────────────────── [T] ─── */
+
+  /* the handle of a V: the same type and bits answer the same handle */
+  fun put<V>(x: V, tag: Word64): FnvHeap<V> {
+    _ := stage(word_of(x))
+    return commit(8, tag)
+  }
+
+  /* the V a handle was put for */
+  fun value<V>(h: FnvHeap<V>): V { return value_of(word(h, 0)) }
+
+  /* a value is born word by word over the values being born before it:
+     stage writes its next word on top of the gestation area */
+  fun stage(w: Word64): Unit {
+    t := as_int(read_word(scratch(0), 0))
+    _ := write_word(scratch((t + 1) / scratch_words()), (t + 1) % scratch_words(), w)
+    return write_word(scratch(0), 0, as_word(t + 1))
+  }
+
+  /* the value of `bytes` bytes and of type `tag` whose words are the last
+     staged: put once, its handle answered, its words taken off the top */
+  fun commit(bytes: Int64, tag: Word64): FnvHeap<Word64> {
+    t := as_int(read_word(scratch(0), 0))
+    n := (bytes + 7) / 8
+    _ := if bytes < 0 or n > t
+         then SystemOs.refuse(ValueNotStaged, as_word(bytes), as_word(t), as_word(0))
+         else made()
+    base := t - n
+    _ := if n == 0 then int64(0) else trim(base + n - 1, bytes - 8 * (n - 1))
+    h := hash_staged(base, n, as_int(tag))
+    _ := lock()
+    found := find(h, base, n, bytes, tag)
+    handle := if found >= 0 then found else publish(h, base, n, bytes, tag)
+    _ := unlock()
+    _ := write_word(scratch(0), 0, as_word(base))
+    return handle
+  }
+
+  /* word i of a value, i below its length in words */
+  fun word<V>(h: FnvHeap<V>, i: Int64): Word64 {
+    s := segment_of(h)
+    a := as_int(read_word(s, 2 * slot_of(h)))
+    len := a % two_40()
+    return if i < 0 or i >= (len + 7) / 8
+           then SystemOs.refuse(WordOutsideValue, as_word(i), as_word(len), as_word(0))
+           else read_word(s, a / two_40() + i)
+  }
+
+  /* the length of a value, in bytes */
+  fun length<V>(h: FnvHeap<V>): Int64 {
+    return as_int(read_word(segment_of(h), 2 * slot_of(h))) % two_40()
+  }
+
+  /* the tag of a value: the root of its type */
+  fun tag<V>(h: FnvHeap<V>): Word64 { return read_word(segment_of(h), 2 * slot_of(h) + 1) }
+
+  /* the handle as a word, and how many segments the heap chains */
+  fun handle_word<V>(h: FnvHeap<V>): Word64 { return as_word(h) }
+  fun segments(): Int64 { return root_get(2) }
+
+  /* ─── The shape ──────────────────────────────────────────── [T] ─── */
+
+  internal fun slots(): Int64 { return 196560 }
+  internal fun payload_words(): Int64 { return 786240 }
+  internal fun segment_words(): Int64 { return 1179360 }
+  internal fun max_segments(): Int64 { return 65536 }
+  /* the generations of the index are the parts after the segments */
+  internal fun index_part(g: Int64): Int64 { return 65536 + g }
+  internal fun first_entries(): Int64 { return 4096 }
+  internal fun scratch_words(): Int64 { return 1048576 }
+  internal fun slot_bits(): Int64 { return 262144 }
+  internal fun two_40(): Int64 { return 1099511627776 }
+
+  internal fun as_int(w: Word64): Int64 { return value_of(w) }
+  /* a literal read as an Int64, for a cell that starts from one */
+  internal fun int64(n: Int64): Int64 { return n }
+  internal fun as_word(n: Int64): Word64 { return word_of(n) }
+
+  /* ─── The root: 0 state (0 untouched, 1 being made, 2 made), 1 lock,
+         2 segments, 3 current segment, 4 its slots used, 5 its payload
+         words used, 6 index generation, 7 index entries, 8 values indexed;
+         64 + n the words of part n ─────────────────────────── [T] ─── */
+
+  internal fun root(): Region { return SystemOs.fnv_heap_region() }
+  internal fun root_get(i: Int64): Int64 { return as_int(read_word(root(), i)) }
+  internal fun root_set(i: Int64, n: Int64): Unit { return write_word(root(), i, as_word(n)) }
+
+  internal fun part(n: Int64): Region { return SystemOs.fnv_heap_part(n, root_get(64 + n)) }
+  internal fun new_part(n: Int64, words: Int64): Region {
+    _ := root_set(64 + n, words)
+    return SystemOs.fnv_heap_part(n, words)
+  }
+
+  internal fun scratch(c: Int64): Region { return SystemOs.fnv_heap_scratch(c) }
+  internal fun staged(i: Int64): Word64 {
+    return read_word(scratch((i + 1) / scratch_words()), (i + 1) % scratch_words())
+  }
+  internal fun staged_put(i: Int64, w: Word64): Unit {
+    return write_word(scratch((i + 1) / scratch_words()), (i + 1) % scratch_words(), w)
+  }
+
+  /* the heap is made by the first who touches it; the others wait for it */
+  internal fun made(): Int64 {
+    return if root_get(0) == 2 then 2
+           else make(as_int(compare_and_swap_word(root(), 0, as_word(0), as_word(1))))
+  }
+  internal fun make(found: Int64): Int64 {
+    return if found == 0 then start() else wait_made()
+  }
+  internal fun start(): Int64 {
+    _ := new_part(0, segment_words())
+    _ := root_set(2, 1)
+    _ := root_set(3, 0)
+    _ := root_set(4, 0)
+    _ := root_set(5, 0)
+    _ := new_part(index_part(0), 2 * first_entries())
+    _ := root_set(6, 0)
+    _ := root_set(7, first_entries())
+    _ := root_set(8, 0)
+    _ := root_set(0, 2)
+    return 2
+  }
+  internal fun wait_made(): Int64 {
+    mut state := root_get(0)
+    while state != 2 do { state <- root_get(0) }
+    return state
+  }
+
+  internal fun lock(): Int64 {
+    _ := made()
+    mut found := as_int(compare_and_swap_word(root(), 1, as_word(0), as_word(1)))
+    while found != 0 do {
+      found <- as_int(compare_and_swap_word(root(), 1, as_word(0), as_word(1)))
+    }
+    return found
+  }
+  internal fun unlock(): Int64 {
+    _ := root_set(1, 0)
+    return 0
+  }
+
+  /* ─── The handle ─────────────────────────────────────────── [T] ─── */
+
+  internal fun segment_of<T>(h: FnvHeap<T>): Region { return part(h / slot_bits()) }
+  internal fun slot_of<T>(h: FnvHeap<T>): Int64 { return h % slot_bits() }
+
+  /* ─── FNV-1a over the bytes ──────────────────────────────── [T] ─── */
+
+  internal fun fnv_offset(): Int64 { return -3750763034362895579 }
+  internal fun fnv_prime(): Int64 { return 1099511628211 }
+
+  /* the word moved one byte down, a zero entering at the top */
+  internal fun down8(n: Int64): Int64 {
+    return if n >= 0 then n / 256 else ((n & 9223372036854775807) / 256) | 36028797018963968
+  }
+
+  /* the word i of the gestation area with its bytes from the k-th on set to
+     zero, k in [1, 8]: the length is exact to the byte */
+  internal fun trim(i: Int64, k: Int64): Int64 {
+    _ := staged_put(i, as_word(as_int(staged(i)) & low_bytes(k)))
+    return k
+  }
+
+  /* the k low bytes of a word, as a mask, k in [1, 8]; at 8, every bit */
+  internal fun low_bytes(k: Int64): Int64 {
+    mut m := int64(1)
+    mut i := int64(0)
+    while i < k do {
+      m <- m * 256
+      i <- i + 1
+    }
+    return m - 1
+  }
+
+  /* the hash after the k low bytes of the word w */
+  internal fun feed(h: Int64, w: Int64, k: Int64): Int64 {
+    mut x := h
+    mut v := w
+    mut i := int64(0)
+    while i < k do {
+      x <- (x ^ (v & 255)) * fnv_prime()
+      v <- down8(v)
+      i <- i + 1
+    }
+    return x
+  }
+
+  internal fun hash_staged(base: Int64, n: Int64, tag: Int64): Int64 {
+    mut x := feed(fnv_offset(), tag, 8)
+    mut i := int64(0)
+    while i < n do {
+      x <- feed(x, as_int(staged(base + i)), 8)
+      i <- i + 1
+    }
+    return x
+  }
+
+  /* ─── The content index: entry e is the words 2e (hash) and 2e + 1
+         (handle + 1; 0 is an entry no value has taken) ───────── [T] ─── */
+
+  internal fun index(): Region { return part(index_part(root_get(6))) }
+
+  /* the handle of the staged value, if the index has it; -1 when not */
+  internal fun find(h: Int64, base: Int64, n: Int64, bytes: Int64, tag: Word64): Int64 {
+    ix := index()
+    mask := root_get(7) - 1
+    mut e := h & mask
+    mut answer := int64(-2)
+    while answer == -2 do {
+      c := as_int(read_word(ix, 2 * e + 1))
+      answer <- if c == 0 then -1
+                else if as_int(read_word(ix, 2 * e)) == h and same(c - 1, base, n, bytes, tag) then c - 1
+                else -2
+      e <- (e + 1) & mask
+    }
+    return answer
+  }
+
+  /* whether the value of handle c is the staged one: tag, length, bytes */
+  internal fun same(c: Int64, base: Int64, n: Int64, bytes: Int64, tag: Word64): Boolean {
+    s := part(c / slot_bits())
+    a := as_int(read_word(s, 2 * (c % slot_bits())))
+    off := a / two_40()
+    /* the words compared one by one: i is the next, n + 1 once one differs
+       (both sides of `and` are read, so the word is read only below n) */
+    mut i := if a % two_40() == bytes
+                and as_int(read_word(s, 2 * (c % slot_bits()) + 1)) == as_int(tag)
+             then int64(0) else n + 1
+    while i < n do {
+      i <- if as_int(read_word(s, off + i)) == as_int(staged(base + i)) then i + 1 else n + 1
+    }
+    return i == n
+  }
+
+  internal fun insert(ix: Region, mask: Int64, h: Int64, handle: Int64): Int64 {
+    mut e := h & mask
+    while as_int(read_word(ix, 2 * e + 1)) != 0 do { e <- (e + 1) & mask }
+    _ := write_word(ix, 2 * e, as_word(h))
+    _ := write_word(ix, 2 * e + 1, as_word(handle + 1))
+    return e
+  }
+
+  /* the index twice as large, every entry moved into it */
+  internal fun grow(): Int64 {
+    old := index()
+    entries := root_get(7)
+    g := root_get(6) + 1
+    ix := new_part(index_part(g), 4 * entries)
+    mut e := int64(0)
+    while e < entries do {
+      c := as_int(read_word(old, 2 * e + 1))
+      _ := if c == 0 then int64(0)
+           else insert(ix, 2 * entries - 1, as_int(read_word(old, 2 * e)), c - 1)
+      e <- e + 1
+    }
+    _ := root_set(7, 2 * entries)
+    _ := root_set(6, g)
+    return g
+  }
+
+  /* ─── Publication, under the lock ────────────────────────── [R] ─── */
+
+  internal fun publish(h: Int64, base: Int64, n: Int64, bytes: Int64, tag: Word64): FnvHeap<Word64> {
+    handle := if n > payload_words() then alone(n) else ordinary(n)
+    s := part(handle / slot_bits())
+    off := as_int(read_word(s, 2 * (handle % slot_bits()))) / two_40()
+    mut i := int64(0)
+    while i < n do {
+      _ := write_word(s, off + i, staged(base + i))
+      i <- i + 1
+    }
+    _ := write_word(s, 2 * (handle % slot_bits()), as_word(off * two_40() + bytes))
+    _ := write_word(s, 2 * (handle % slot_bits()) + 1, tag)
+    _ := if 2 * (root_get(8) + 1) > root_get(7) then grow() else int64(0)
+    _ := insert(index(), root_get(7) - 1, h, handle)
+    _ := root_set(8, root_get(8) + 1)
+    return handle
+  }
+
+  /* a new segment, numbered after the last */
+  internal fun chained(words: Int64): Int64 {
+    s := root_get(2)
+    _ := if s >= max_segments()
+         then SystemOs.refuse(SegmentsExhausted, as_word(s), as_word(0), as_word(0))
+         else new_part(s, words)
+    _ := root_set(2, s + 1)
+    return s
+  }
+
+  /* a value larger than the payload area: a segment of its own, one slot,
+     the payload after it; the handle with its offset written in its slot */
+  internal fun alone(n: Int64): Int64 {
+    s := chained(2 + n)
+    _ := write_word(part(s), 0, as_word(2 * two_40()))
+    return s * slot_bits()
+  }
+
+  /* the next slot of the current segment, or of a new one when it is full */
+  internal fun ordinary(n: Int64): Int64 {
+    _ := if root_get(4) == slots() or root_get(5) + n > payload_words()
+         then fresh(chained(segment_words()))
+         else int64(0)
+    slot := root_get(4)
+    off := 2 * slots() + root_get(5)
+    _ := write_word(part(root_get(3)), 2 * slot, as_word(off * two_40()))
+    _ := root_set(4, slot + 1)
+    _ := root_set(5, root_get(5) + n)
+    return root_get(3) * slot_bits() + slot
+  }
+  internal fun fresh(s: Int64): Int64 {
+    _ := root_set(3, s)
+    _ := root_set(4, 0)
+    _ := root_set(5, 0)
+    return s
+  }
 }

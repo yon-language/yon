@@ -21,6 +21,14 @@ place SystemOs {
      the Space starts: its FnvHeap's, its LeechHeap's */
   fun fnv_heap_region(): Region is given
   fun leech_heap_region(): Region is given
+  /* part n of the FnvHeap of the Space running now, of `words` words: made
+     by the first process of the Space that asks for it, the same region for
+     every later ask; the replicas of a Space that share its heaps share its
+     parts */
+  fun fnv_heap_part(n: Int64, words: Int64): Region is given
+  /* piece c of the gestation area of the FnvHeap in this process: its own,
+     never shared */
+  fun fnv_heap_scratch(c: Int64): Region is given
 
   /* stops the program: writes "error: " and the sentence of the refusal,
      the three words of the occasion in their places, and exits with code 3.

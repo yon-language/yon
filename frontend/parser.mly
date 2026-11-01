@@ -794,8 +794,8 @@ place_member:
      effectfulness is a theorem of the list. */
   | od = operation_decl                   { PbiMember (FoOp od) }
   | LAW l = IDENT                         { PbiMember (FoLaw (l, None)) }
-  | LAW l = IDENT q = quantifiers LPAREN body = expr RPAREN
-    { PbiMember (FoLaw (l, Some { ls_quants = q; ls_body = body })) }
+  | LAW l = IDENT q = quantifiers LPAREN body = expr RPAREN g = boption(preceded(IS, GIVEN))
+    { PbiMember (FoLaw (l, Some { ls_quants = q; ls_body = body; ls_given = g })) }
   /* the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
   | OVER base = IDENT                     { PbiClause (PcOver base) }

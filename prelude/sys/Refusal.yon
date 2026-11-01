@@ -17,6 +17,8 @@ place Refusal {
     :U ChildNotANode :U ChildOutOfRange :U TrieNotANode
     :U LeechNodeTooBig :U LeechNamesTaken :U OrbitsDrifted
     :U BufferNotGrown :U BufferTooLarge
+    :U SegmentsExhausted :U HeapPartUnknown :U GestationExhausted
+    :U WordOutsideValue :U ValueNotStaged
     /* the cells */
     :U CellTableFull :U CellReadNotLive :U CellWriteNotLive
     /* arithmetic */
@@ -54,6 +56,11 @@ place Refusal {
       OrbitsDrifted => "leech: the orbits of the shell under M24 make {a} classes, more than the {b} they are",
       BufferNotGrown => "buffer: the buffer could not grow to {a} bytes",
       BufferTooLarge => "buffer: a buffer of {a} bytes exceeds the 4 GB a text can hold",
+      SegmentsExhausted => "heap: the heap holds {a} segments, the most it chains",
+      HeapPartUnknown => "heap: part {a} of a heap, which has {b} parts",
+      GestationExhausted => "heap: the values being born take more than the {a} words of the gestation area",
+      WordOutsideValue => "heap: word {a} of a value of {b} bytes",
+      ValueNotStaged => "heap: a value of {a} bytes is born from {b} staged words",
       CellTableFull => "cell: {a} cells are live, the most the cell table holds; a cell lives as long as the block that declares it",
       CellReadNotLive => "cell: a read of a cell that is not live (handle {a:f}, {b} cells live)",
       CellWriteNotLive => "cell: a write of a cell that is not live (handle {a:f}, {b} cells live)",
