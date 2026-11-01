@@ -39,7 +39,7 @@ Brings a module or a qualified symbol into scope: `import "x/rates"`, `import q 
 
 #### `internal`
 
-Marks a function as part of how its owner is built, not of what it offers. Inside a place, an `internal fun` is reachable only from the funs of that place: called from anywhere else it is a type error that names its house. The prelude's collections keep `value` this way, so their public face is `get`. An `internal` function never enters the cross-Space dispatch table either. After `is`, it makes a representation internal: `place LatticePoint is internal i64` is carried as an `i64` at runtime and is an abstract type everywhere else, with no literals, no arithmetic and no identity with `Int64`; its values come only from its own funs.
+Marks a function as part of how its owner is built, not of what it offers. Inside a place, an `internal fun` is reachable only from the funs of that place: called from anywhere else it is a type error that names its house. The prelude's collections keep `value` this way, so their public face is `get`. An `internal` function never enters the cross-Space dispatch table either. Before `place`, it makes a representation internal: `internal place LatticePoint carried by i64` is carried as an `i64` at runtime and is an abstract type everywhere else, with no literals, no arithmetic and no identity with `Int64`; its values come only from its own funs.
 
 #### `given`
 
@@ -647,7 +647,11 @@ The source of a move, morph, geomorph or import.
 
 #### `by`
 
-`A maps to B by f`: names the function realizing a clause.
+`A maps to B by f`: names the function realizing a clause. After `carried`, it names the carrier of a place.
+
+#### `carried`
+
+`place P carried by C`: the values of `P` are carried by `C`, the object of the machine they are (`place Int64 carried by i64`). Written `internal place P carried by C`, the representation is internal to the house: inside it `P` is `C`, outside it `P` is abstract.
 
 #### `is`
 

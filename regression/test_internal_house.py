@@ -1,4 +1,4 @@
-"""Inside the house of a place `is internal <carrier>` the place is its
+"""Inside the house of an `internal place P carried by <carrier>` the place is its
 carrier; outside it the place is abstract.
 
 Inside the house a value of the place and a value of its carrier convert in
@@ -27,7 +27,7 @@ def _build(tmp_path: Path, house: str, main_expr: str):
     proj = tmp_path / "proj"
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "Word.yon").write_text("place Word is internal i64 {\n" + house + "}\n")
+    (proj / "Word.yon").write_text("internal place Word carried by i64 {\n" + house + "}\n")
     (proj / "Entry.yon").write_text(
         "place Entry {\nfun main(): Number {\n  return " + main_expr + "\n}\n}\n")
     exe = tmp_path / "exe"
@@ -87,3 +87,33 @@ def test_the_bit_operators_apply_to_64_bit_integers(tmp_path):
 
 def test_the_bit_operators_on_numbers_are_unchanged(tmp_path):
     assert _value(tmp_path, _MAKE, "(12 & 10) + (12 | 3) + (6 ^ 3)") == 8 + 15 + 5
+
+
+def _header(tmp_path, header):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "yon.toml").write_text(_TOML)
+    (proj / "Word.yon").write_text(header + " { }\n")
+    (proj / "Entry.yon").write_text("place Entry {\nfun main(): Number {\n  return 42\n}\n}\n")
+    r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
+                       capture_output=True, text=True, timeout=180)
+    return r.returncode, r.stdout + r.stderr
+
+
+def test_the_carrier_is_written_carried_by(tmp_path):
+    rc, out = _header(tmp_path, "internal place Word carried by i64")
+    assert rc == 0, out
+
+
+@pytest.mark.parametrize("header, new", [
+    ("place Word is internal i64", "write `internal place P carried by i64`"),
+    ("place Word is i64", "write `place P carried by i64`"),
+])
+def test_the_old_carrier_form_is_refused_with_the_new_one(tmp_path, header, new):
+    rc, out = _header(tmp_path, header)
+    assert rc != 0 and "E1001" in out and "is no longer the carrier" in out and new in out, out
+
+
+def test_an_internal_place_without_a_carrier_is_refused(tmp_path):
+    rc, out = _header(tmp_path, "internal place Word")
+    assert rc != 0 and "E1001" in out and "internal place Word has no carrier" in out, out

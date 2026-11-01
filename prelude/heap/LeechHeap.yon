@@ -3,7 +3,7 @@
  * only this house reads and writes.
  *
  * Markers: [G] given, the runtime primitive */
-place LeechHeap is internal i64 {
+internal place LeechHeap carried by i64 {
 
   /* ─── The words of its region ────────────────────────────── [G] ─── */
 

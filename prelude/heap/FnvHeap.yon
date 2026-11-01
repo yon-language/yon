@@ -3,7 +3,7 @@
  * this house reads and writes.
  *
  * Markers: [G] given, the runtime primitive */
-place FnvHeap is internal i64 {
+internal place FnvHeap carried by i64 {
 
   /* ─── The words of its region ────────────────────────────── [G] ─── */
 

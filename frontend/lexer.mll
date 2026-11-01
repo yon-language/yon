@@ -124,6 +124,9 @@
       "given", GIVEN;
       "not", NOT;
       "by", BY;
+      (* `place P carried by C`: the carrier of the place, the object of the
+         machine its values are *)
+      "carried", CARRIED;
       "from", FROM;
       "with", WITH;
       "compose", COMPOSE;

@@ -3,5 +3,5 @@
  * words, and no literal is a region. A heap that lives in a region reads and
  * writes its words through faces of its own house; everyone else holds the
  * handle and gives it back with SystemOs.unmap. */
-place Region is internal i64 {
+internal place Region carried by i64 {
 }

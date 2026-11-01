@@ -2,4 +2,4 @@
    The prelude speaks it for Number/Text/Boolean/Unit; a user face of a
    non-reserved name is the same production. Constant is dead: the face
    lives in a world like every other place — the space gives it. */
-place Meter is number { }
+place Meter carried by number { }

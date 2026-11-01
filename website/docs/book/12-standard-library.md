@@ -130,7 +130,7 @@ prelude/
   text/   String.yon  logic/  Boolean.yon  Unit.yon   err/  Error.yon  DomainError.yon
 ```
 
-`place Number is number` is a **fusion**: the place is the declared face of a
+`place Number carried by number` is a **fusion**: the place is the declared face of a
 primitive code, and `is <prim>` says the carrier is axiomatic — the leaf of the
 carrier functor's recursion, not a way around it. Most of the rest is ordinary
 Yon: `Number.gcd` is written with Euclid's algorithm, `String.reverse`

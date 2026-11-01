@@ -9,7 +9,7 @@
  * abstract and is reached only through these funs.
  *
  * Markers: [T] total · [E] partial, `on error` */
-place Word64 is internal i64 {
+internal place Word64 carried by i64 {
 
   /* ─── From and to the integers ───────────────────────────── [T] ─── */
 

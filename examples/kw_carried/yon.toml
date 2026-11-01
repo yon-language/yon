@@ -1,0 +1,8 @@
+[package]
+name = "kw_carried"
+
+[world.W]
+objects = ["Tag", "Meter"]
+
+[runtime]
+backend = "memory"

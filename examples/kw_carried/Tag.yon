@@ -1,0 +1,7 @@
+/* A tag is carried by i64, and the representation is internal: inside this
+ * house a Tag is its carrier, outside it a tag is reached only through these
+ * funs. */
+internal place Tag carried by i64 {
+  fun make(n: Int64): Tag { return n }
+  fun value(t: Tag): Int64 { return t }
+}

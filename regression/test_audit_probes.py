@@ -3709,7 +3709,7 @@ def test_a_library_place_is_extended_with_this_under(tmp_path):
 # ---------------------------------------------------------------- one primitive, one owner of its face
 
 def test_a_user_face_of_unit_does_not_take_the_primitive_over(tmp_path):
-    # `place Nada is unit { this > nil }` is one more name of the object unit;
+    # `place Nada carried by unit { this > nil }` is one more name of the object unit;
     # the inverse unit -> face stays the prelude's (Unit), so a match on a Unit
     # value is checked against star. The old checker asked for a branch `nil`.
     # Checked at the type checker: a Unit value at runtime still fails in emit
@@ -3717,7 +3717,7 @@ def test_a_user_face_of_unit_does_not_take_the_primitive_over(tmp_path):
     entry = ("place Entry {}\nfun main(): Number {\n  mut u := star\n"
              "  return match u { star => 7 }\n}\n")
     files = {"w/Topos.yon": "topos WTopos where {\n}\n",
-             "w/Nada.yon": "place Nada is unit { this > nil }\n"}
+             "w/Nada.yon": "place Nada carried by unit { this > nil }\n"}
     proj = _project(tmp_path, entry,
                     extra='\n[world.W]\nobjects = ["Nada"]\nspaces  = ["w"]\n',
                     files=files)

@@ -95,7 +95,7 @@ are written, merged, or large (time).
 
 **A lattice point is made only where it is one.** `LatticePoint` is an
 abstract type over its representation, a 25-bit coordinate carried as an
-`i64` (`place LatticePoint is internal i64`): outside its house no literal is
+`i64` (`internal place LatticePoint carried by i64`): outside its house no literal is
 a point, no arithmetic applies (the sum of two points is not a point), and it
 is not an `Int64`. A point is made by `LatticePoint.of_coordinate(n)`, the
 characteristic map of the type-2 shell, which answers a point or a

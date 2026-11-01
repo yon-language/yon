@@ -52,6 +52,7 @@ RAN inductive_tree exit=42
 RAN inductive_wildcard exit=42
 RAN iter_loop exit=5
 RAN kw_algebra exit=0
+RAN kw_carried exit=42
 RAN kw_clear exit=26
 RAN kw_geomorph_full exit=0
 RAN kw_given exit=42

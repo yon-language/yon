@@ -19,7 +19,7 @@
  *
  * The width is the site's own fact: 32 here, 64 in num64.
  *
- * No Number (f32) here: a `place Number is f32` would compute in disguised
+ * No Number (f32) here: a `place Number carried by f32` would compute in disguised
  * f64 (the transport is uniform) — the same rounding that keeps floats out
  * of integer widening.
  */

@@ -12,7 +12,7 @@
  *
  * Markers: [T] total, written here
  */
-place Int32 is i32 {
+place Int32 carried by i32 {
 
   /* ─── Widening without intrinsics ────────────────────────── [T] ───
    *

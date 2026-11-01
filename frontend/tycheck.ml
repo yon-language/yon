@@ -354,7 +354,7 @@ let record_int_arith_site ?(i64 = false) (op : binop) (loc : location) : unit =
     | OpGt -> Some "__i64_gt" | OpLeq -> Some "__i64_leq"
     | OpGeq -> Some "__i64_geq" | OpEq -> Some "__i64_eq"
     | OpNeq -> Some "__i64_neq" | _ -> None in
-  (* inside the house of a place `is internal` the arithmetic is the
+  (* inside the house of an `internal place` the arithmetic is the
      carrier's, the machine's, which wraps: the ring Z/2^64 for i64 *)
   let machine = match !Surface_ast.open_house with
     | Some h -> Hashtbl.mem Surface_ast.internal_faces h | None -> false in

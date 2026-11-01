@@ -15,7 +15,7 @@
  * the classes is an ordinary map composed with canon.
  *
  * Markers: [G] given, the runtime primitive */
-place XRelFrame is internal i64 {
+internal place XRelFrame carried by i64 {
 
   /* ─── The frames ─────────────────────────────────────────── [G] ─── */
 

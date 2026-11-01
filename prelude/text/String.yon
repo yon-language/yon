@@ -15,7 +15,7 @@
  * Markers: [G] given, wired body · [T] total, written here ·
  *          [E] partial, dressed with on error
  */
-place String is text {
+place String carried by text {
 
   /* ─── The axiomatic core ─────────────────────────────────────── [G] ───
    *

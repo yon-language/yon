@@ -7,7 +7,7 @@
  * applies: the sum of two points is not a point.
  *
  * Markers: [G] given, the runtime primitive · [E] partial, `on error` */
-place LatticePoint is internal i64 {
+internal place LatticePoint carried by i64 {
 
   /* ─── The shell ─────────────────────────────────────────── [G] ─── */
 

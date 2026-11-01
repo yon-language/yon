@@ -19,7 +19,7 @@
  *   [T] total       written here, no dependency
  *   [E] partial     dressed with `on error`
  */
-place Int64 is i64 {
+place Int64 carried by i64 {
 
   /* ─── Sign and magnitude ─────────────────────────────────── [T] ─── */
 

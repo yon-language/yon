@@ -123,6 +123,7 @@
 %token FUNCTOR
 %token IMPORT
 %token INTERNAL
+%token CARRIED
 %token LAW
 %token USES
 %token ALGEBRA
@@ -585,27 +586,43 @@ place_params:
   | LT n = NUM_LIT GT                                  { (Some (int_of_float n), []) }
   | LT ids = separated_nonempty_list(COMMA, IDENT) GT  { (None, ids) }
 
-(* `place Number is number { }` — the fusion clause: the place is the declared
-   face of that PRIMITIVE CODE (is <prim>, not is <carrier>: carrier names are
+(* `place Number carried by number { }` — the carrier clause: the place is the
+   declared face of that PRIMITIVE CODE (the prim name, not a layout: layout names are
    ambiguous — f64 realizes four codes — while the prim name keys prim_carrier,
    the one source of truth). A primitive is the place whose carrier is
-   axiomatic instead of derived: the leaf of the carrier functor's recursion. *)
-is_fusion_clause:
-  | IS c = IDENT  { (c, false) }
-  (* `is internal <prim>`: the representation is internal to the house. The
-     place is carried as <prim> at runtime, but outside its house it is an
-     abstract type: no literal is one of its points, no arithmetic applies,
-     and it is not the type <prim> — its values come only from its own funs. *)
-  | IS INTERNAL c = IDENT  { (c, true) }
+   axiomatic instead of derived: the leaf of the carrier functor's recursion.
+   Written `internal place P carried by C`, the representation is internal to
+   the house: inside it the place is C; outside it the place is an abstract
+   type, no literal is one of its points, no arithmetic of C applies, and its
+   values come only from its own funs. The place itself stays usable
+   everywhere: `internal` before `place` hides how it is carried, not the
+   place (unlike `internal fun`, which hides the fun). *)
+carried_clause:
+  | CARRIED BY c = IDENT  { c }
+
+(* The carrier is no longer written with `is`: `is C` and `is internal C` are
+   refused with the form that replaced them. *)
+old_is_clause:
+  | IS c = IDENT
+    { (failwith (Printf.sprintf
+        "`is %s` after a place name is no longer the carrier: write `place P carried by %s`" c c) : unit) }
+  | IS INTERNAL c = IDENT
+    { (failwith (Printf.sprintf
+        "`is internal %s` after a place name is no longer the carrier: write `internal place P carried by %s`" c c) : unit) }
 
 place_decl:
-  | is_err = place_kw name = IDENT
+  | internal = boption(INTERNAL) is_err = place_kw name = IDENT
     wp = place_params
-    fusion = option(is_fusion_clause)
+    carried = option(carried_clause)
+    _old = option(old_is_clause)
     over = option(over_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
-    { let (members, variants, clauses, _n_arrows) = mv in
+    { if internal && carried = None then
+        failwith (Printf.sprintf
+          "internal place %s has no carrier: `internal` hides how a place is carried, write `internal place %s carried by C`" name name);
+      let fusion = Option.map (fun c -> (c, internal)) carried in
+      let (members, variants, clauses, _n_arrows) = mv in
       (* ONE production: a place, with or without arms; `error` is the same
          production marked. The canonical clauses may be written in the header
          (deprecated synonym) or as body lines (stage 4); the two merge here

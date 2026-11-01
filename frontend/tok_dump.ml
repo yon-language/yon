@@ -98,6 +98,7 @@ let tok_name = function
   | Parser.PIPEPIPEQ -> "PIPEPIPEQ"
   | Parser.BANGQ -> "BANGQ"
   | Parser.FATARROWQ -> "FATARROWQ"
+  | Parser.CARRIED -> "CARRIED"
   | Parser.AMPQ -> "AMPQ"
   | Parser.PIPEQ -> "PIPEQ"
   | Parser.CARETQ -> "CARETQ"

@@ -355,7 +355,7 @@ let rec type_equal
     | _ -> false in
   match t1, t2 with
   | TyHeytInt n1, TyHeytInt n2 -> n1 = n2
-  (* inside its house a place `is internal` is its carrier *)
+  (* inside its house an `internal place` is its carrier *)
   | TyUser u, other
     when (match Surface_ast.in_house_carrier u with
           | Some p -> carrier_is p other | None -> false) -> true

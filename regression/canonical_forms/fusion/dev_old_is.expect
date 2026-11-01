@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+match: is no longer the carrier
+note: |
+  The old carrier form `place X is <prim>` is refused with the form that
+  replaced it, `place X carried by <prim>`.

@@ -1554,7 +1554,7 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
                 C.App (C.Lam (tv, C.TyPlace "number", chain explicit), desugar_expr tag_of)),
          desugar_expr scrut)
 
-(* the carrier's arithmetic, inside the house of a place `is internal`:
+(* the carrier's arithmetic, inside the house of an `internal place`:
    the machine's, which wraps *)
 and machine_op_name (op : S.binop) : string =
   match op with

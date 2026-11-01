@@ -93,14 +93,14 @@ let method_resolutions : (int * int, string) Hashtbl.t = Hashtbl.create 64
 let union_arm_upcasts : (string, string) Hashtbl.t = Hashtbl.create 16
 
 (* Fusion places (prelude): place name -> primitive code it IS the face of
-   (`place Number is number`). Filled at registration; consulted by
+   (`place Number carried by number`). Filled at registration; consulted by
    type equality (Number = number), desugar (TyUser fused -> prim), and the
    literal/point bridge (Boolean's tt/ff <-> true/false). *)
 let fusion_places : (string, string) Hashtbl.t = Hashtbl.create 8
 (* inverse: prim code -> fusion place name *)
 let fusion_of_prim : (string, string) Hashtbl.t = Hashtbl.create 8
 
-(* Places whose representation is internal (`place P is internal <prim>`):
+(* Places whose representation is internal (`internal place P carried by <prim>`):
    P is carried as <prim> at runtime and is an abstract type everywhere else.
    The sites of their declarations (file, line, column) as the parser saw
    them, and the faces themselves, name -> prim, filled at registration;
@@ -121,7 +121,7 @@ let given_decls : (string, string * int * int) Hashtbl.t = Hashtbl.create 64
 let user_file_space : (string, string) Hashtbl.t = Hashtbl.create 16
 let internal_faces : (string, string) Hashtbl.t = Hashtbl.create 4
 (* The house whose funs are being checked. Inside the house of a place
-   `is internal <carrier>` the place is its carrier, in both directions;
+   `internal place P carried by <carrier>` the place is its carrier, in both directions;
    outside it the place is abstract (the rule of the abstract type). *)
 let open_house : string option ref = ref None
 
@@ -724,7 +724,7 @@ type place_body_item =
 type place_decl = {
   pd_name : string;
   pd_type_params : string list;     (* generic parameters: `place Box<T> { value T }` *)
-  pd_fusion : string option;        (* `is <prim>`: the AXIOMATIC carrier — this place
+  pd_fusion : string option;        (* `carried by <prim>`: the AXIOMATIC carrier — this place
                                        IS the declared face of that primitive code (the
                                        leaf of the carrier functor's recursion, not a
                                        bypass of it). Prelude-only in practice. *)

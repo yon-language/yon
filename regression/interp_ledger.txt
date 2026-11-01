@@ -65,6 +65,7 @@ INCOMPLETE inductive_tree punt
 AGREE      inductive_wildcard
 INCOMPLETE iter_loop refused
 AGREE      kw_algebra
+INCOMPLETE kw_carried punt
 INCOMPLETE kw_clear punt
 AGREE      kw_geomorph_full
 INCOMPLETE kw_given punt

@@ -8,8 +8,8 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
-- productions REDUCED by a fixture (Menhir-verified): **88 / 88** surface (+3 structural allowlisted)
-- deviations rejected: **20**
+- productions REDUCED by a fixture (Menhir-verified): **89 / 89** surface (+3 structural allowlisted)
+- deviations rejected: **21**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -42,6 +42,7 @@ from them; the `.yon` files are the specification, not this text.
 | function | `dev_empty_body` | reject_clean | 1 | `empty body but a return type` |
 | functor | `canonical` | accept | 0 | — |
 | fusion | `canonical` | accept | 42 | — |
+| fusion | `dev_old_is` | reject_clean | 1 | `is no longer the carrier` |
 | generics | `canonical` | accept | 42 | — |
 | geomorph | `canonical` | accept | 0 | — |
 | hott | `canonical` | accept | 42 | — |

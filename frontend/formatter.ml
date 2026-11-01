@@ -395,15 +395,21 @@ let fmt_arm (v : variant) : string =
 (* ?close=false leaves the house open (brace unclosed, indent raised):
    the caller prints the hosted arrows inside it and closes it. *)
 let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
+  (* `internal place P carried by C` / `place P carried by C` *)
+  let internal = pd.pd_fusion <> None
+    && Hashtbl.mem Surface_ast.internal_carrier_sites
+         (pd.pd_loc.file, pd.pd_loc.start_line, pd.pd_loc.start_col) in
+  let head kw = (if internal then "internal " else "") ^ kw ^ " " ^ pd.pd_name
+    ^ (match pd.pd_fusion with Some c -> " carried by " ^ c | None -> "") in
   if close && pd.pd_arms <> [] && pd.pd_members = [] then
     (* a place declared by the arms it is the coproduct of: the canonical
        single-line form. *)
-    line f (Printf.sprintf "place %s { this > %s }" pd.pd_name
+    line f (Printf.sprintf "%s { this > %s }" (head "place")
               (String.concat " :U " (List.map fmt_arm pd.pd_arms)))
   else if pd.pd_arms <> [] then begin
     (* sum-of-products (stage 3): the `this >` clause line, then the union's
        field obligations, multi-line. *)
-    line f (Printf.sprintf "place %s {" pd.pd_name);
+    line f (Printf.sprintf "%s {" (head "place"));
     f.indent <- f.indent + 1;
     line f (Printf.sprintf "this > %s"
               (String.concat " :U " (List.map fmt_arm pd.pd_arms)));
@@ -425,8 +431,8 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
     if pd.pd_world = "__INFER" || pd.pd_world = "" then "" else " in " ^ pd.pd_world in
   let over = match pd.pd_over with Some b -> " over " ^ b | None -> "" in
   let on_error = match pd.pd_on_error with Some e -> " on error " ^ e | None -> "" in
-  line f (Printf.sprintf "%s %s%s%s%s {"
-            kw pd.pd_name world over on_error);
+  line f (Printf.sprintf "%s%s%s%s {"
+            (head kw) world over on_error);
   f.indent <- f.indent + 1;
   (match pd.pd_subcontains with
    | Some b -> line f ("this < " ^ b)

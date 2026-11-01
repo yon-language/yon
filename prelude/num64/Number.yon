@@ -22,7 +22,7 @@
  *   [G] given     — the body is the libm primitive the compiler wires
  *   [E] partial   — carries `on error`, so a failure is a value of its coproduct
  */
-place Number is number {
+place Number carried by number {
 
   /* ─── Sign and magnitude ─────────────────────────────────── [T] ─── */
 
