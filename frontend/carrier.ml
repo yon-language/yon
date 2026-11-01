@@ -89,7 +89,9 @@ let prim_carrier (name : string) : t option =
   match name with
   | "number" | "money" | "f64" | "unknown" -> Some (Scalar W_f64)
   | "text" -> Some (Handle "Text")
-  | "boolean" | "unit" | "i1" -> Some (Scalar W_i1)
+  | "boolean" | "i1" -> Some (Scalar W_i1)
+  (* the one value of 1 rides the uniform slot every value has at a call *)
+  | "unit" -> Some (Scalar W_f64)
   | "i8" -> Some (Scalar W_i8)
   | "i16" -> Some (Scalar W_i16)
   | "i32" -> Some (Scalar W_i32)
