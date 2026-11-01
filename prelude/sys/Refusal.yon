@@ -18,7 +18,7 @@ place Refusal {
     :U LeechNodeTooBig :U LeechNamesTaken :U OrbitsDrifted :U ShellOrderDrifted
     :U BufferNotGrown :U BufferTooLarge
     :U SegmentsExhausted :U HeapPartUnknown :U GestationExhausted
-    :U WordOutsideValue :U ValueNotStaged
+    :U WordOutsideValue :U ValueNotStaged :U LeechNodeUnknown :U NodeOutsideSlot
     /* the cells */
     :U CellTableFull :U CellReadNotLive :U CellWriteNotLive
     /* arithmetic */
@@ -62,6 +62,8 @@ place Refusal {
       GestationExhausted => "heap: the values being born take more than the {a} words of the gestation area",
       WordOutsideValue => "heap: word {a} of a value of {b} bytes",
       ValueNotStaged => "heap: a value of {a} bytes is born from {b} staged words",
+      LeechNodeUnknown => "leech: the tree over the shell has no node at level {a} over index {b}",
+      NodeOutsideSlot => "leech: a node of {a} bytes does not fit a slot of {b} bytes",
       CellTableFull => "cell: {a} cells are live, the most the cell table holds; a cell lives as long as the block that declares it",
       CellReadNotLive => "cell: a read of a cell that is not live (handle {a:f}, {b} cells live)",
       CellWriteNotLive => "cell: a write of a cell that is not live (handle {a:f}, {b} cells live)",

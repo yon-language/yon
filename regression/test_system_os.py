@@ -81,9 +81,10 @@ def test_a_region_of_no_word_is_a_domain_error(tmp_path):
 
 def test_the_space_has_a_region_for_each_heap_made_when_it_starts(tmp_path):
     # the FnvHeap's root (64 words of state, a directory of 65,600 parts),
-    # the LeechHeap's one segment (196,560 slots of 5 words)
+    # the LeechHeap's root (64 words of state, the next generation of each
+    # of the 202,902 places of the tree over the shell)
     body = ("  f := SystemOs.fnv_heap_region()\n  l := SystemOs.leech_heap_region()\n"
-            "  return if SystemOs.words(f) == 65664 and SystemOs.words(l) == 982800"
+            "  return if SystemOs.words(f) == 65664 and SystemOs.words(l) == 202966"
             " and f != l then 42 else 1\n")
     assert _value(tmp_path, body) == 42
 

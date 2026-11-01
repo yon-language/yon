@@ -138,16 +138,19 @@ static struct {
  * gains one more segment, in a region of the same size, when the first is
  * full. A segment of the FnvHeap holds its slot table (two words a slot) and a
  * payload area of 32 bytes a slot, the measured size of the values the
- * programs put (16 to 34 bytes a slot); a segment of the LeechHeap is one
- * generation of the shell, a 40-byte place for each of its points. */
+ * programs put (16 to 34 bytes a slot). The segments of the LeechHeap are
+ * made by its house in the prelude, level by level. */
 #define YON_SEGMENT_SLOTS          196560
 #define YON_FNV_SEGMENT_WORDS      ((int64_t)YON_SEGMENT_SLOTS * (2 + 4))
-#define YON_LEECH_SEGMENT_WORDS    ((int64_t)YON_SEGMENT_SLOTS * 5)
 /* The root of the FnvHeap of a Space: 64 words of its state and a directory
  * of the words of each of its parts (65,536 segments, 64 generations of its
  * index). The segments themselves are parts, asked for by number. */
 #define YON_HEAP_PARTS             (65536 + 64)
 #define YON_FNV_ROOT_WORDS         ((int64_t)64 + YON_HEAP_PARTS)
+/* The root of the LeechHeap of a Space: 64 words of its state and, for each
+ * node of the 32-way tree over the shell (1 + 6 + 192 + 6,143 + 196,560), the
+ * next generation free at its place. */
+#define YON_LEECH_ROOT_WORDS       ((int64_t)64 + 202902)
 /* A piece of a gestation area: 2^20 words, at most 1,024 pieces. */
 #define YON_SCRATCH_WORDS          ((int64_t)1 << 20)
 #define YON_SCRATCH_PIECES         1024
@@ -164,10 +167,12 @@ static void space_heap_regions(uint32_t id) {
         char n[64];
         yon_heap_part_name(n, sizeof(n), id, 0, 'r', 0);
         g_spaces[id].fnv_region = yon_sys_shared_named(n, YON_FNV_ROOT_WORDS);
+        yon_heap_part_name(n, sizeof(n), id, 1, 'r', 0);
+        g_spaces[id].leech_region = yon_sys_shared_named(n, YON_LEECH_ROOT_WORDS);
     } else {
         g_spaces[id].fnv_region = yon_rt_sys_map(YON_FNV_ROOT_WORDS);
+        g_spaces[id].leech_region = yon_rt_sys_map(YON_LEECH_ROOT_WORDS);
     }
-    g_spaces[id].leech_region = yon_rt_sys_map(YON_LEECH_SEGMENT_WORDS);
 }
 
 static uint32_t g_n_spaces = 0;
@@ -8208,6 +8213,10 @@ int64_t yon_rt_sys_fnv_heap_part(int64_t n, int64_t words) {
     return yon_heap_part(0, n, words);
 }
 
+int64_t yon_rt_sys_leech_heap_part(int64_t n, int64_t words) {
+    return yon_heap_part(1, n, words);
+}
+
 /* Piece c of the gestation area of heap k of the Space running now: it
  * belongs to this process, never shared, made on the first ask. */
 static int64_t yon_heap_scratch(int k, int64_t c) {
@@ -8227,3 +8236,4 @@ static int64_t yon_heap_scratch(int k, int64_t c) {
 }
 
 int64_t yon_rt_sys_fnv_heap_scratch(int64_t c) { return yon_heap_scratch(0, c); }
+int64_t yon_rt_sys_leech_heap_scratch(int64_t c) { return yon_heap_scratch(1, c); }

@@ -697,6 +697,8 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "leech_heap_region", [], tregion;
       "fnv_heap_part", [ti64; ti64], tregion;
       "fnv_heap_scratch", [ti64], tregion;
+      "leech_heap_part", [ti64; ti64], tregion;
+      "leech_heap_scratch", [ti64], tregion;
       "is_shared_name", [ttext], tbool;
       "unchecked_shared_map", [ttext; ti64], tregion;
       "unchecked_shared_remove", [ttext], tbool;
@@ -874,6 +876,9 @@ let non_allocating_primitives : string list =
        or are made by the kernel, outside every heap *)
     "SystemOs__fnv_heap_region"; "SystemOs__leech_heap_region"; "SystemOs__words";
     "SystemOs__fnv_heap_part"; "SystemOs__fnv_heap_scratch";
+    "SystemOs__leech_heap_part"; "SystemOs__leech_heap_scratch";
+    (* the place of a point on the shell: arithmetic on its coordinate *)
+    "LatticePoint__index";
     (* a refusal names a constant and never returns *)
     "SystemOs__refuse";
     (* the operators on the bits of a word are arithmetic, not calls *)

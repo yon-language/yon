@@ -29,6 +29,10 @@ place SystemOs {
   /* piece c of the gestation area of the FnvHeap in this process: its own,
      never shared */
   fun fnv_heap_scratch(c: Int64): Region is given
+  /* part n of the LeechHeap of the Space running now, and piece c of its
+     gestation area in this process, as for the FnvHeap */
+  fun leech_heap_part(n: Int64, words: Int64): Region is given
+  fun leech_heap_scratch(c: Int64): Region is given
 
   /* stops the program: writes "error: " and the sentence of the refusal,
      the three words of the occasion in their places, and exits with code 3.
