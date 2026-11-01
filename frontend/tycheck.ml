@@ -1196,6 +1196,15 @@ let rec wire_desc (env : Tyenv.env) (seen : string list) (t : ty) : int64 option
        | Some (Carrier.Handle "Text") -> reg (Type_root.prim_root p) wire_kind_string []
        | _ -> None)
   | TyUser p when List.mem p Stdlib_runtime.process_local_places -> None
+  (* a place whose representation is internal crosses as its carrier, its
+     eight bytes as they are, under its own root: the other side receives a
+     value of the same place *)
+  | TyUser p when Hashtbl.mem Surface_ast.internal_faces p ->
+      (match Tyenv.lookup_place env p,
+             Carrier.prim_carrier (Hashtbl.find Surface_ast.internal_faces p) with
+       | Some pd, Some (Carrier.Scalar (Carrier.W_f64 | Carrier.W_i64)) ->
+           reg (Type_root.root_of_place env pd) wire_kind_scalar []
+       | _ -> None)
   | TyUser p ->
       (match Tyenv.lookup_place env p with
        | Some pd when pd.pd_arms = [] && pd.pd_type_params = [] ->

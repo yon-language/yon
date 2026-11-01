@@ -868,6 +868,7 @@ let non_allocating_primitives : string list =
    lives in a region of one Space. A value of such a place means nothing in
    another process, so it does not cross a Space boundary and has no frame on
    a wire; the funs of their houses are not operations another process can
-   reach. *)
+   reach. An XRelFrame is carried by the address of its tables in this
+   process. *)
 let process_local_places : string list =
-  [ "Region"; "SystemOs"; "FnvHeap"; "LeechHeap" ]
+  [ "Region"; "SystemOs"; "FnvHeap"; "LeechHeap"; "XRelFrame" ]
