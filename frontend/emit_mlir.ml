@@ -14,7 +14,7 @@
  *   - variables in scope                                -> environment lookup
  *   - arithmetic binops (__add/__sub/__mul/__div)       -> arith.{addf,...}
  *   - comparison binops (__lt/__gt/.../__eq/__neq)      -> arith.cmpf
- *   - logical binops (__and/__or) on i1                 -> arith.{andi,ori}
+ *   - logical binops (__and/__or) on i1                 -> scf.if (right side only when it decides)
  *   - if/else, carried as __if(c,t,e)                   -> scf.if with yield
  *   - let binding, App(Lam(x,_,rest), value)            -> bind x in the env
  *   - function call (an App-chain of a user function)   -> func.call
@@ -2907,6 +2907,16 @@ let rec emit_term (e : emitter)
                      (Int64.of_float (float_of_string (String.sub x 6 (String.length x - 6)))))
         | t -> t in
       emit_term e env funcs (C.App (C.App (C.Var ("__i64_" ^ String.sub op 2 (String.length op - 2)), as_i64 a), as_i64 b))
+  (* `and` and `or` of two Booleans read their right side only when it
+     decides: a and b is `if a then b else false`, a or b is
+     `if a then true else b` *)
+  | C.App (C.App (C.Var ("__and" | "__or" as op), a), b) when
+      (let boolean t = try infer_mlir_ty e env funcs t = "i1" with Failure _ -> false in
+       boolean a && boolean b) ->
+      let t = C.Var "__bool_true" and f = C.Var "__bool_false" in
+      emit_term e env funcs
+        (if op = "__and" then C.App (C.App (C.App (C.Var "__if_expr", a), b), f)
+         else C.App (C.App (C.App (C.Var "__if_expr", a), t), b))
   | C.App (C.App (C.Var op, a), b) when
       (op = "__add" || op = "__sub" || op = "__mul" || op = "__div"
        || op = "__mod"
