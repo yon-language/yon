@@ -6813,8 +6813,8 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
  * memory of a region (Stdlib_runtime.raw_memory_writers): a house is heap
  * code because of what it holds, not because of its name.
  *
- * A fun allocates when its body builds a section (`.->`, a coproduct value,
- * a pair), creates a closure, writes a Text literal, makes a producer or a
+ * A fun allocates when its body builds a section (`.->`, a coproduct value
+ * with a payload, a pair), creates a closure, writes a Text literal, makes a producer or a
  * spawn, or calls a fun that allocates. A primitive (`is given`) allocates
  * unless the registry declares it does not (Stdlib_runtime.
  * non_allocating_primitives: the read and the write of a word); a call of a
@@ -6840,16 +6840,13 @@ let heap_alloc_errors (p : program) : type_error list =
     | Some fd -> fd.fn_home
     | None -> None) Stdlib_runtime.raw_memory_writers) in
   if houses = [] then [] else
-  let arms = Hashtbl.create 64 in
-  List.iter (function
-    | TopPlace pd -> List.iter (fun v -> Hashtbl.replace arms v.v_name ()) pd.pd_arms
-    | _ -> ()) p;
   (* the first thing the body builds itself, if any *)
   let rec in_expr e =
     let own = match e with
       | ENew (q, _, _) | ENewIn (q, _, _, _) -> Some (Printf.sprintf "builds a section of %s (.->)" q)
-      | EHITConstr (c, _, _) -> Some (Printf.sprintf "builds the coproduct value %s" c)
-      | EVar (x, _) when Hashtbl.mem arms x -> Some (Printf.sprintf "builds the coproduct value %s" x)
+      (* an arm with a payload is a node of the heap; a nullary arm is a
+         constant and allocates nothing *)
+      | EHITConstr (c, _ :: _, _) -> Some (Printf.sprintf "builds the coproduct value %s" c)
       | EPair _ -> Some "builds a pair"
       | ELit (LitString _, _) -> Some "writes a Text literal"
       | ELam _ | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _

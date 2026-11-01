@@ -298,3 +298,22 @@ def test_heap_code_that_reads_and_writes_words_and_computes_is_accepted(tmp_path
         "    return w\n  }\n")
     rc, out, exe = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
+
+
+def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
+    # a nullary arm is a constant, not a node: it allocates nothing
+    env = _prelude_with_heap_funs(
+        tmp_path,
+        "  fun is_zero(r: Region, i: Int64): Boolean { return read_word(r, i) == Word64.zero() }\n"
+        "  fun first(r: Region): Lookup<Word64> { return Absent }\n")
+    rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
+    assert rc == 0 and "E2009" not in out, out
+
+
+def test_heap_code_building_a_payload_arm_is_refused(tmp_path):
+    env = _prelude_with_heap_funs(
+        tmp_path,
+        "  fun first(r: Region): Lookup<Word64> { return hit(Found, read_word(r, 0)) }\n")
+    rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
+    assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out
+    assert "FnvHeap.first builds the coproduct value Found." in out, out
