@@ -1556,7 +1556,10 @@ expr:
       let loc = mk_loc $startpos $endpos in
       ECall ("__heyt_int_make", [v; ELit (LitNumber 0.0, loc)], loc) }
   | MINUS e = expr %prec UMINUS
-    { EBinop (OpSub, ELit (LitNumber 0.0, dummy_loc), e, mk_loc $startpos $endpos) }
+    { (* -e is 0 - e; the 0 stands where the sign is, so a site keyed by
+         location names this one and no other *)
+      EBinop (OpSub, ELit (LitNumber 0.0, mk_loc $startpos $endpos($1)), e,
+              mk_loc $startpos $endpos) }
   | e = chained_expr %prec CLAUSE_END           { e }
 
 (* method chaining.

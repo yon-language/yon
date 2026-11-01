@@ -4401,8 +4401,8 @@ let rec emit_term (e : emitter)
                 emit_term e env' funcs rest))
   | C.App _ as app ->
       emit_app e env funcs app
-  | C.Lam _ ->
-      failwith "[emit_mlir] nested Lambda not supported."
+  | C.Lam (x, _, _) ->
+      failwith ("[emit_mlir] nested Lambda not supported (in " ^ !emit_cur_fun ^ ", binding " ^ x ^ ").")
   | C.Place _ ->
       failwith "[emit_mlir] Place as a term-value not supported."
   | C.Reduction _ ->
@@ -5681,6 +5681,9 @@ let extract_func_sig (e : emitter)
      * body knows about. *)
     let use_hint_for hint =
       match hint with
+      (* a 64-bit integer is its declared carrier: a body that ends on a
+         cell reads it from the cell's uniform slot, the same bits *)
+      | C.TyPlace "i64" -> true
       | C.TyPlace n ->
           not (is_prim_name n) && not (is_type_var e n)
       (* a function value is its closure's handle: the carrier its type
@@ -5741,6 +5744,8 @@ let extract_morph_in_space (name : string) : (string * string) option =
 let coerce_return (e : emitter) (v : string) (v_ty : string)
     (ret_ty : string) : string =
   if v_ty = "i1" && ret_ty = "!topos.proposition" then coerce_to_param e v v_ty ret_ty
+  else if (v_ty = "f64" && ret_ty = "i64") || (v_ty = "i64" && ret_ty = "f64") then
+    coerce_to_param e v v_ty ret_ty
   else if v_ty <> ret_ty && v_ty = "f64" then
     (* An inductive returns its MerkleTree f64 handle; pack it back into the
        section handle via the wire coercion, NOT the terminal constructor

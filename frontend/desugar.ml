@@ -2959,6 +2959,9 @@ let rec process_top_decl (res : desugar_result) (td : S.top_decl) : desugar_resu
       (* Save the declared return type for emit_mlir. *)
       let ret_hint_pair =
         match fn.S.fn_return with
+        (* a partial fun answers its union, not the 64-bit integer it gives
+           on success *)
+        | Some t when fn.S.fn_on_error <> None && desugar_ty t = C.TyPlace "i64" -> []
         | Some t -> [(name, desugar_ty t)]
         | None -> []
       in
@@ -3387,6 +3390,36 @@ let place_info = List.filter_map (function
 let () = produce_block_ref := desugar_produce_block
 let () = spawn_block_ref := desugar_spawn_block
 
+(* A fun is impure when its body writes the memory of a region, reaches the
+   operating system, or calls a fun that does: the faces of the raw memory and
+   of SystemOs are the seeds, and the relation is closed along the calls. A
+   body of anything but bindings and a return, a loop say, is impure too. *)
+let impure_funs (p : S.program) : unit =
+  Hashtbl.reset Tyenv.impure_funs;
+  match !current_env with
+  | None -> ()
+  | Some env ->
+      let seed (fd : S.fun_decl) =
+        fd.S.fn_given
+        && (fd.S.fn_home = Some "SystemOs"
+            || List.mem fd.S.fn_name Stdlib_runtime.raw_memory_writers) in
+      let funs = List.filter_map (function S.TopFun fd -> Some fd | _ -> None) p in
+      List.iter (fun fd -> if seed fd then Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ()) funs;
+      let body_pure (fd : S.fun_decl) =
+        List.for_all (function
+          | S.SLet (_, e, _) | S.SReturn (e, _) -> Tyenv.is_pure_expr env e
+          | _ -> false) fd.S.fn_body in
+      let changed = ref true in
+      while !changed do
+        changed := false;
+        List.iter (fun (fd : S.fun_decl) ->
+          if not fd.S.fn_given && not (Hashtbl.mem Tyenv.impure_funs fd.S.fn_name)
+             && not (body_pure fd) then begin
+            Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ();
+            changed := true
+          end) funs
+      done
+
 let desugar_program ?(env : Tyenv.env option = None)
     ?(place_to_space : (string * string) list = []) (p : S.program) : desugar_result =
   (* The optional [env] is the typed environment from Tycheck (cr_env). The
@@ -3398,6 +3431,7 @@ let desugar_program ?(env : Tyenv.env option = None)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
   let p = Method_sugar.qualify_overloads p in  (* overloaded method decls -> Place__name (same as tycheck) *)
   current_env := env;
+  impure_funs p;
   build_sum_registry p;  (* ctor -> (tag, arg types) for the MerkleTree lowering *)
   (* Pre-rewriting that propagates a place's Space to the `.-> P { ... }`
    * sections inside functions. *)

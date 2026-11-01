@@ -3096,7 +3096,10 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
      maps to the unique inhabitant `()`). This is the constant functor toward 1;
      it fires only when the expected type is the terminal (a fieldless place),
      leaving every other checking judgement unchanged. *)
-  if is_terminal_ty env expected then ok ()
+  if is_terminal_ty env expected then
+    (* a bare point is still read, so its site is the point's: the unique
+       inhabitant `star` is a point of 1, not a name of nothing *)
+    (match e with EVar _ -> ignore (infer env ctx e) | _ -> ()) |> fun () -> ok ()
   else
   let fallback env e expected =
     let* actual = infer env ctx e in
@@ -7020,6 +7023,7 @@ let heap_alloc_errors (p : program) : type_error list =
     | Some r -> Some (Printf.sprintf "calls %s, which %s" (shown g) r)
     | None ->
         if Hashtbl.mem bodies g then None
+        else if List.mem g Stdlib_runtime.non_allocating_primitives then None
         else if Hashtbl.mem given g || Stdlib_runtime.lookup_stdlib_signature g <> None then
           (if List.mem g Stdlib_runtime.non_allocating_primitives then None
            else Some (Printf.sprintf "calls %s, a primitive that allocates" (shown g)))

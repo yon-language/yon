@@ -861,7 +861,9 @@ let non_allocating_primitives : string list =
     (* the regions of the Space's heaps and their size: they exist already *)
     "SystemOs__fnv_heap_region"; "SystemOs__leech_heap_region"; "SystemOs__words";
     (* a refusal names a constant and never returns *)
-    "SystemOs__refuse" ]
+    "SystemOs__refuse";
+    (* the operators on the bits of a word are arithmetic, not calls *)
+    "__band"; "__bor"; "__bxor"; "__bnot" ]
 
 (* The places that belong to this process: a Region is memory the kernel
    gave it, SystemOs acts on it (its memory, its arguments, its id), each heap

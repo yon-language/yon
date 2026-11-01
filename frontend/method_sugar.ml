@@ -187,6 +187,8 @@ let qualify_homes (p : S.program) : S.program =
         S.SCall (h ^ "__" ^ n, List.map (rw_expr sibs h) args, l)
     | S.SCall (n, args, l) -> S.SCall (n, List.map (rw_expr sibs h) args, l)
     | S.SAssignHolds (lv, e, l) -> S.SAssignHolds (lv, rw_expr sibs h e, l)
+    | S.SAssignBecomes (lv, e, l) -> S.SAssignBecomes (lv, rw_expr sibs h e, l)
+    | S.SIter (n, body, l) -> S.SIter (rw_expr sibs h n, List.map (rw_stmt sibs h) body, l)
     | S.SWhile (c, body, l) ->
         S.SWhile (rw_expr sibs h c, List.map (rw_stmt sibs h) body, l)
     | S.SForever (body, l) -> S.SForever (List.map (rw_stmt sibs h) body, l)

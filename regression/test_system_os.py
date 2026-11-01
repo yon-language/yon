@@ -326,6 +326,15 @@ def test_heap_code_that_reads_and_writes_words_and_computes_is_accepted(tmp_path
     assert rc == 0 and "E2009" not in out, out
 
 
+def test_heap_code_computing_on_the_bits_of_a_word_is_accepted(tmp_path):
+    # the operators on the bits of a 64-bit integer are arithmetic, not calls
+    env = _prelude_with_heap_funs(
+        tmp_path,
+        "  fun low_byte(r: Region, i: Int64): Int64 { return (i & 255) | (i ^ i) }\n")
+    rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
+    assert rc == 0 and "E2009" not in out, out
+
+
 def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
     # a nullary arm is a constant, not a node: it allocates nothing
     env = _prelude_with_heap_funs(

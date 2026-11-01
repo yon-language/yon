@@ -243,6 +243,11 @@ let lookup_fun (env : env) (name : string) : fun_sig option =
  * effectful. Lives here (not in Tycheck) because it needs only the env and
  * surface types — keeping it low lets Desugar consult it without a module
  * cycle through Tycheck. *)
+(* The funs whose body has an effect the types do not show: it writes the
+   memory of a region, or reaches the operating system, or calls such a fun.
+   Filled by the desugar, closed along the calls. *)
+let impure_funs : (string, unit) Hashtbl.t = Hashtbl.create 64
+
 let rec is_pure_expr (env : env) (e : expr) : bool =
   match e with
   | ELit _ | EVar _ -> true
@@ -258,7 +263,8 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
       is_pure_expr env c && is_pure_expr env t && is_pure_expr env el
   | ECall (name, args, _) ->
       (match lookup_fun env name with
-       | Some fs -> fs.fs_visits = [] && List.for_all (is_pure_expr env) args
+       | Some fs -> fs.fs_visits = [] && not (Hashtbl.mem impure_funs name)
+                    && List.for_all (is_pure_expr env) args
        | None -> false)
   (* A data constructor and its eliminator are effect-free: `hit(ctor, args)` is
      pure iff its arguments are, and `match`/`hit_elim` is pure iff its scrutinee
