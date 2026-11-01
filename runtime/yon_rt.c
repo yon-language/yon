@@ -129,13 +129,19 @@ static struct {
     int64_t       leech_region;
 } g_spaces[YON_MAX_SPACES];
 
-/* The words of the region of each heap of a Space: reserved, not touched; a
- * page costs only when a heap writes it. */
-#define YON_HEAP_REGION_WORDS ((int64_t)1 << 33)
+/* A heap starts with one segment of 196,560 slots in a region of its own and
+ * gains one more segment, in a region of the same size, when the first is
+ * full. A segment of the FnvHeap holds its slot table (two words a slot) and a
+ * payload area of 32 bytes a slot, the measured size of the values the
+ * programs put (16 to 34 bytes a slot); a segment of the LeechHeap is one
+ * generation of the shell, a 40-byte place for each of its points. */
+#define YON_SEGMENT_SLOTS          196560
+#define YON_FNV_SEGMENT_WORDS      ((int64_t)YON_SEGMENT_SLOTS * (2 + 4))
+#define YON_LEECH_SEGMENT_WORDS    ((int64_t)YON_SEGMENT_SLOTS * 5)
 int64_t yon_rt_sys_map(int64_t words);
 static void space_heap_regions(uint32_t id) {
-    g_spaces[id].fnv_region = yon_rt_sys_map(YON_HEAP_REGION_WORDS);
-    g_spaces[id].leech_region = yon_rt_sys_map(YON_HEAP_REGION_WORDS);
+    g_spaces[id].fnv_region = yon_rt_sys_map(YON_FNV_SEGMENT_WORDS);
+    g_spaces[id].leech_region = yon_rt_sys_map(YON_LEECH_SEGMENT_WORDS);
 }
 
 static uint32_t g_n_spaces = 0;
