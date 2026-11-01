@@ -163,3 +163,53 @@ def test_body_carried_by_is_only_for_an_algebra(tmp_path):
     src = "place Meter {\n  carried by i64\n}\n"
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
     assert rc != 0 and "E1001" in out and "declares a carrier model of an algebra" in out, out
+
+
+_DERIVED = ("place Sum is algebra {\n"
+            '  operation add(a: Sum, b: Sum): Sum as "+"\n'
+            '  operation zero(): Sum as "0"\n'
+            "  law commutative ∀a ∀b (a + b = b + a)\n"
+            "  law neutral ∀a (a + zero() = a)\n"
+            "  carried by i64\n"
+            "  fun double(a: Sum): Sum { return a + a }\n"
+            "  fun triple(a: Sum): Sum { return double(a) + a + zero() }\n"
+            "}\n")
+
+_W = ("internal place W carried by i64 uses algebra Sum {\n"
+      "  fun make(n: Int64): W { return n }\n"
+      "  fun value(w: W): Int64 { return w }\n"
+      "EXTRA}\n")
+
+
+def test_a_derived_operation_has_an_instance_in_each_model(tmp_path):
+    rc, out, exe = _build(tmp_path, {"Sum": _DERIVED, "W": _W.replace("EXTRA", "")},
+                          "  return if W.value(W.triple(W.make(14))) == 42 then 42 else 1",
+                          objects=["Sum", "W"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+
+
+def test_a_model_that_gives_a_derived_operation_keeps_its_own(tmp_path):
+    own = "  fun double(a: W): W { return a }\n"
+    rc, out, exe = _build(tmp_path, {"Sum": _DERIVED, "W": _W.replace("EXTRA", own)},
+                          "  return if W.value(W.triple(W.make(21))) == 42 then 42 else 1",
+                          objects=["Sum", "W"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+
+
+def test_a_derived_operation_on_a_finite_model(tmp_path):
+    alg = ("place Lub is algebra {\n"
+           "  operation join(a: Lub, b: Lub): Lub\n"
+           "  law idempotent ∀a (join(a, a) = a)\n"
+           "  fun join3(a: Lub, b: Lub, c: Lub): Lub { return join(join(a, b), c) }\n"
+           "}\n")
+    coin = ("place Coin uses algebra Lub {\n"
+            "  this > Heads :U Tails\n"
+            "  fun join(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }\n"
+            "}\n")
+    rc, out, exe = _build(tmp_path, {"Lub": alg, "Coin": coin},
+                          "  return match Coin.join3(Tails, Tails, Heads) { Heads => 42, Tails => 1 }",
+                          objects=["Lub", "Coin"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
