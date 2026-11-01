@@ -76,6 +76,31 @@ def test_a_region_of_no_word_is_a_domain_error(tmp_path):
     assert _value(tmp_path, _region("SystemOs.map(0)", "1")) == 200
 
 
+# ─── The regions of the heaps of the Space ─────────────────────────────
+
+
+def test_the_space_has_a_region_for_each_heap_made_when_it_starts(tmp_path):
+    body = ("  f := SystemOs.fnv_heap_region()\n  l := SystemOs.leech_heap_region()\n"
+            "  return if SystemOs.words(f) == 8589934592 and SystemOs.words(l) == 8589934592"
+            " and f != l then 42 else 1\n")
+    assert _value(tmp_path, body) == 42
+
+
+def test_the_region_of_the_space_is_the_same_at_every_ask(tmp_path):
+    body = ("  return if SystemOs.fnv_heap_region() == SystemOs.fnv_heap_region()"
+            " and SystemOs.leech_heap_region() == SystemOs.leech_heap_region()"
+            " then 42 else 1\n")
+    assert _value(tmp_path, body) == 42
+
+
+def test_heap_code_asks_for_its_region_without_allocating(tmp_path):
+    env = _prelude_with_heap_funs(
+        tmp_path,
+        "  fun first(): Word64 { return read_word(SystemOs.fnv_heap_region(), 0) }\n")
+    rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
+    assert rc == 0 and "E2009" not in out, out
+
+
 # ─── Shared memory ──────────────────────────────────────────────────────
 
 

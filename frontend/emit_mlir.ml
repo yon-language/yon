@@ -873,6 +873,8 @@ let wired_primitives : (string * string * string list * string) list = [
   "SystemOs__unchecked_map",        "yon_rt_sys_map",          ["i64"], "i64";
   "SystemOs__words",                "yon_rt_sys_words",        ["i64"], "i64";
   "SystemOs__unmap",                "yon_rt_sys_unmap",        ["i64"], "f64";
+  "SystemOs__fnv_heap_region",      "yon_rt_sys_fnv_heap_region",   [], "i64";
+  "SystemOs__leech_heap_region",    "yon_rt_sys_leech_heap_region", [], "i64";
   "SystemOs__is_shared_name",          "yon_rt_sys_is_shared_name",   ["f64"], "i1";
   "SystemOs__unchecked_shared_map",    "yon_rt_sys_shared_map",       ["f64"; "i64"], "i64";
   "SystemOs__unchecked_shared_remove", "yon_rt_sys_shared_remove",    ["f64"], "i1";

@@ -17,6 +17,11 @@ place SystemOs {
   /* gives the region back to the kernel; the handle names nothing after it */
   fun unmap(r: Region): Unit is given
 
+  /* the regions the two heaps of the Space running now live in, made when
+     the Space starts: its FnvHeap's, its LeechHeap's */
+  fun fnv_heap_region(): Region is given
+  fun leech_heap_region(): Region is given
+
   /* ─── Shared memory ──────────────────────────────────────── [G] ─── */
 
   /* a name for shared memory: 1 to 30 letters, digits, '_' or '-'; the

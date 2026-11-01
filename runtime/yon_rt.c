@@ -122,7 +122,20 @@ static struct {
     /* Calls into this Space running now (a call can come back into a Space
      * already on the stack); a region ends only when none is left. */
     uint32_t      active;
+    /* The regions the Space's two heaps live in (SystemOs), made when the
+     * Space starts: one for its FnvHeap, one for its LeechHeap. */
+    int64_t       fnv_region;
+    int64_t       leech_region;
 } g_spaces[YON_MAX_SPACES];
+
+/* The words of the region of each heap of a Space: reserved, not touched; a
+ * page costs only when a heap writes it. */
+#define YON_HEAP_REGION_WORDS ((int64_t)1 << 33)
+int64_t yon_rt_sys_map(int64_t words);
+static void space_heap_regions(uint32_t id) {
+    g_spaces[id].fnv_region = yon_rt_sys_map(YON_HEAP_REGION_WORDS);
+    g_spaces[id].leech_region = yon_rt_sys_map(YON_HEAP_REGION_WORDS);
+}
 
 static uint32_t g_n_spaces = 0;
 
@@ -343,6 +356,7 @@ void yon_rt_init(void) {
         g_spaces[0].heap = NULL;
     }
     g_spaces[0].ds = g_yon_heap;
+    space_heap_regions(0);
     g_n_spaces = 1;
     g_initialized = 1;
 
@@ -406,6 +420,7 @@ uint32_t yon_rt_register_space(const char *name) {
     } else {
         g_spaces[id].heap = NULL;
     }
+    space_heap_regions(id);
     return id;
 }
 
@@ -8143,3 +8158,14 @@ double yon_rt_cross_value(double v, double root_hi, double root_lo, double to) {
 
 /* The face of the operating system (SystemOs) and the words of a region. */
 #include "yon_sys.c"
+
+/* The regions of the heaps of the Space running now (SystemOs). */
+int64_t yon_rt_sys_fnv_heap_region(void) {
+    ensure_init();
+    return g_spaces[g_cur_space].fnv_region;
+}
+
+int64_t yon_rt_sys_leech_heap_region(void) {
+    ensure_init();
+    return g_spaces[g_cur_space].leech_region;
+}
