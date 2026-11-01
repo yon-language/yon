@@ -1140,8 +1140,8 @@ let rec infer_mlir_ty (e : emitter)
   | C.App (C.Var "__stream_from_list", _) -> "f64"
   | C.App (C.App (C.Var "__stream_map", _), _) -> "f64"
   | C.App (C.App (C.Var "__stream_filter", _), _) -> "f64"
-  (* A read of a place-typed promoted cell: the section handle, typed as the
-     cell's element section (recorded at its Space__make binding). *)
+  (* A read of a place-typed or Boolean promoted cell: typed as the cell's
+     element (recorded at its Space__make binding). *)
   | C.App (C.Var "Space__get", C.Var p) when Hashtbl.mem g_cell_elem p ->
       Hashtbl.find g_cell_elem p
   (* Field projection, carried as App(Var "__field_X", obj). *)
@@ -1235,7 +1235,8 @@ let rec infer_mlir_ty (e : emitter)
            (match value with
             | C.App (C.Var "Space__make", e0) ->
                 let ety = infer_mlir_ty e env funcs e0 in
-                if is_section_ty_str ety then Hashtbl.replace g_cell_elem x ety
+                if is_section_ty_str ety || ety = "i1" then Hashtbl.replace g_cell_elem x ety
+                else Hashtbl.remove g_cell_elem x
             | _ -> ());
            let env' = Env.add x ("(unused)", tv) env in
            infer_mlir_ty e env' funcs rest)
@@ -1734,6 +1735,21 @@ let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
        in comes out bit for bit *)
     let v = fresh_ssa e in
     emit_line e (Printf.sprintf "%s = arith.bitcast %s : %s to %s" v arg_ssa arg_ty param_ty);
+    v
+  end
+  else if arg_ty = "i1" && param_ty = "f64" then begin
+    (* a Boolean in a uniform f64 slot (a cell, a generic, the runtime's
+       answer) is 0.0 or 1.0 *)
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.uitofp %s : i1 to f64" v arg_ssa);
+    v
+  end
+  else if arg_ty = "f64" && param_ty = "i1" then begin
+    (* and back: any slot that is not 0.0 is true *)
+    let z = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" z);
+    let v = fresh_ssa e in
+    emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v arg_ssa z);
     v
   end
   else if arg_ty = "i1" && param_ty = "!topos.proposition" then begin
@@ -2758,7 +2774,8 @@ let rec emit_term (e : emitter)
       (v, "f64")
   | C.App (C.Var "Space__get", (C.Var p as cellvar)) when Hashtbl.mem g_cell_elem p ->
       (* Reading a place-typed promoted cell: load the f64 handle, then rebuild the
-         section from it so a downstream `p.x` projects a real place, not an f64. *)
+         section from it so a downstream `p.x` projects a real place, not an f64;
+         a Boolean cell reads its slot back as an i1. *)
       let sec_ty = Hashtbl.find g_cell_elem p in
       let (v_cell, _) = emit_term e env funcs cellvar in
       let vf = fresh_ssa e in
@@ -4507,7 +4524,8 @@ let rec emit_term (e : emitter)
                 (match value with
                  | C.App (C.Var "Space__make", e0) ->
                      let ety = infer_mlir_ty e env funcs e0 in
-                     if is_section_ty_str ety then Hashtbl.replace g_cell_elem x ety
+                     if is_section_ty_str ety || ety = "i1" then Hashtbl.replace g_cell_elem x ety
+                else Hashtbl.remove g_cell_elem x
                  | _ -> ());
                 let env' = Env.add x (vv, tv) env in
                 emit_term e env' funcs rest))

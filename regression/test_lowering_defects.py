@@ -18,6 +18,8 @@
 - A term checked against 1 was never typed: the arguments of `return f(..)`
   in a fun answering 1 were neither checked against the parameters nor given
   their literals' sites.
+- A cell holding a Boolean gave invalid MLIR: its i1 went into the f64 slot
+  of the cell unconverted, and came back from it as an f64.
 
 Layer/kind: native / end-to-end.
 """
@@ -146,3 +148,31 @@ def test_the_arguments_of_a_call_answering_one_are_checked(tmp_path):
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out, out
     assert "parameter n expects Int64" in out, out
+
+
+def test_a_boolean_cell_holds_its_boolean(tmp_path):
+    # written, negated in a loop, read in a condition; a cell of the same name
+    # holding a number, later in the same fun, is read as its number
+    r = _run(tmp_path, (
+        "place Entry {\n"
+        "fun main(): Number {\n"
+        "  mut b := true\n"
+        "  mut n := 0\n"
+        "  while n < 3 do {\n"
+        "    b <- not b\n"
+        "    n <- n + 1\n"
+        "  }\n"
+        "  return if b then 1 else other() + flag(false)\n"
+        "}\n"
+        "fun flag(x: Boolean): Number {\n"
+        "  mut c := x\n"
+        "  c <- c or true\n"
+        "  return if c then 2 else 0\n"
+        "}\n"
+        "fun other(): Number {\n"
+        "  mut b := 40\n"
+        "  b <- b + 0\n"
+        "  return b\n"
+        "}\n"
+        "}\n"))
+    assert r.returncode == 42, r.stderr

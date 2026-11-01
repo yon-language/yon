@@ -889,8 +889,6 @@ _P_lowering = dict(_TOPOS_lowering, **{"w/P.yon": "place P {\n  x Number\n}\n"})
 _H_lowering = ("fun h(): Number {\n  mut c := .-> P { x 1 }\n  c <- .-> P { x 2 }\n  return c.x\n}\n")
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a mutable number cell in main reads back the number stored in it")
 def test_a_cell_reads_its_own_type_beside_a_namesake_place_cell(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
              "fun main(): Number {\n  mut k := IO.print_num(h())\n"
@@ -900,8 +898,6 @@ def test_a_cell_reads_its_own_type_beside_a_namesake_place_cell(tmp_path):
     _verdict(rc == 7, f"main's cell c holds 7, main returned {rc}")
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a mutable number cell is a number in arithmetic, whatever another function names its cells")
 def test_a_number_cell_beside_a_namesake_place_cell_compiles(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
              "fun main(): Number {\n  mut k := h()\n"
