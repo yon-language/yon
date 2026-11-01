@@ -20,6 +20,9 @@
   their literals' sites.
 - A cell holding a Boolean gave invalid MLIR: its i1 went into the f64 slot
   of the cell unconverted, and came back from it as an f64.
+- A let of a pure fun answering 1 with no parameters (`_ := f()`) failed in
+  the emitter: the fun's body is absorbed to the point of 1, and the let
+  that binds it in the program's chain was taken for a call of a lambda.
 
 Layer/kind: native / end-to-end.
 """
@@ -174,5 +177,20 @@ def test_a_boolean_cell_holds_its_boolean(tmp_path):
         "  b <- b + 0\n"
         "  return b\n"
         "}\n"
+        "}\n"))
+    assert r.returncode == 42, r.stderr
+
+
+def test_a_pure_fun_answering_one_with_no_parameters_is_called(tmp_path):
+    # its body is absorbed to the point of 1; the let that binds it in the
+    # program's chain is no call of it
+    r = _run(tmp_path, (
+        "place Entry {\n"
+        "fun main(): Number {\n"
+        "  _ := nothing()\n"
+        "  x := nothing()\n"
+        "  return 42\n"
+        "}\n"
+        "fun nothing(): Unit { return star }\n"
         "}\n"))
     assert r.returncode == 42, r.stderr

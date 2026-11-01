@@ -4403,6 +4403,14 @@ let rec emit_term (e : emitter)
       let v_unit = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_unit);
       (v_unit, "f64")
+  (* a let whose value is the point of 1 (a fun answering 1 whose body was
+     absorbed to it, bound in the program's chain) is no call: its body is
+     what runs, with the name bound to that point *)
+  | C.App (C.Lam (x, _, rest), C.Unit) ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v);
+      let env' = if List.mem_assoc x funcs then env else Env.add x (v, "f64") env in
+      emit_term e env' funcs rest
   | C.App (g, C.Unit) ->
       (* Zero-argument call marker from the desugar: f() compiled as
          App(f, Unit). For a user function (direct name or a bound
