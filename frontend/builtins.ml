@@ -857,7 +857,7 @@ let try_cubical (t : term) : term option =
 let head_has_body (ctx : Reduce.ctx) (t : term) : bool =
   let rec head = function App (f, _) -> head f | Var n -> Some n | _ -> None in
   match t with
-  | App _ -> (match head t with Some n -> List.mem_assoc n ctx.Reduce.deltas | None -> false)
+  | App _ -> (match head t with Some n -> Reduce.find_delta ctx.Reduce.deltas n <> None | None -> false)
   | _ -> false
 
 let rec reduce_with_builtins ?(fuel = 1000) (ctx : Reduce.ctx) (t : term) : term =

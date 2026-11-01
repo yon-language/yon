@@ -48,6 +48,25 @@ type ctx = {
   deltas : (string * term) list;
 }
 
+(* The body of delta f, read in constant time: the deltas are a list, the
+ * first binding of a name is its body (as List.assoc reads it), and the index
+ * is built once for each list the reducer is handed. *)
+let delta_index : ((string * term) list * (string, term) Hashtbl.t) option ref = ref None
+let find_delta (deltas : (string * term) list) (f : string) : term option =
+  match deltas with
+  | [] -> None
+  | _ ->
+      let tbl =
+        match !delta_index with
+        | Some (l, t) when l == deltas -> t
+        | _ ->
+            let t = Hashtbl.create (2 * List.length deltas) in
+            List.iter (fun (n, b) -> if not (Hashtbl.mem t n) then Hashtbl.add t n b) deltas;
+            delta_index := Some (deltas, t);
+            t
+      in
+      Hashtbl.find_opt tbl f
+
 let empty_ctx = {
   places = [];
   reductions = [];
@@ -602,11 +621,11 @@ let rec step ctx t =
             | Some scrut' -> Some (HITElim (branches, scrut'))
             | None -> None))
   | HITConstr _ -> None        (* value: no head reduction *)
-  | Var f when List.mem_assoc f ctx.deltas ->
+  | Var f when find_delta ctx.deltas f <> None ->
       (* delta-step: unfold a function to its Core body. Beta then
        * drives any application; it terminates when the deltas are
        * SCT-certified (the conversion path). *)
-      Some (List.assoc f ctx.deltas)
+      find_delta ctx.deltas f
   | Var _ | Place _ | Reduction _ | World _ | Unit -> None
 
 (* ─── Multi-step reduction ─────────────────────────────────────────── *)
