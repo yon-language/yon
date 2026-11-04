@@ -1,6 +1,6 @@
 place Entry {
   fun twice(x: Number): Number { return x * 2 }
   fun main(): Number {
-    return 21 |> twice()
+    return 21 ↦ twice
   }
 }

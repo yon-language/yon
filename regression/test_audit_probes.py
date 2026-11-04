@@ -1260,7 +1260,7 @@ def test_a_let_bound_lambda_wins_over_a_top_level_homonym_in_a_match_arm(tmp_pat
            "fun sq(x: Number): Number { return 1000 }\n"
            "fun main(): Number {\n"
            "  sq := fun(x: Number) => x * x\n"
-           "  return match (3 |> Box) { Box as v => sq(v), Empty => 0 }\n"
+           "  return match (3 ↪ Box) { Box as v => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
     _verdict(v == 9, f"sq(3) with the local sq is 9, got {v} (1000 mod 256 = 232 is the top-level sq)")
@@ -1272,7 +1272,7 @@ def test_a_let_bound_lambda_is_callable_from_a_match_arm(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
            "  sq := fun(x: Number) => x * x\n"
-           "  return match (3 |> Box) { Box as v => sq(v), Empty => 0 }\n"
+           "  return match (3 ↪ Box) { Box as v => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
     _verdict(v == 9, f"sq(3) is 9, got {v}")
@@ -1517,7 +1517,7 @@ def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
            "place Entry {}\n"
            "fun code(b: Box): Number { return match b { Full as n => n, Empty => 0 } }\n"
            "fun main(): Number {\n"
-           "  v := 5 |> Full\n"
+           "  v := 5 ↪ Full\n"
            "  mut acc := 0\n"
            "  acc <- code(v)\n"
            "  return acc\n"
@@ -2658,7 +2658,7 @@ fun get(e: Expr): Number {
   return match e { Lit as n => n, Nil => 0 }
 }
 fun main(): Number {
-  _a := IO.print_num(get(%s |> Lit))
+  _a := IO.print_num(get(%s ↪ Lit))
   return 0
 }
 """
@@ -2683,7 +2683,7 @@ fun get(e: Expr): Number {
   return match e { Lit as n => n, Nil => 0 }
 }
 fun main(): Number {
-  mut n := get(%s |> Lit)
+  mut n := get(%s ↪ Lit)
   return if %s then 1 else 0
 }
 """
@@ -2717,8 +2717,8 @@ fun inner(e: Wrapped): Number {
   return match e { Wrap as x => (match x { Lit as n => n, Nil => 0 }), None => 0 }
 }
 fun main(): Number {
-  return flag((3 > 2) |> Flag) * 100 + name("abcde" |> Named) * 10
-       + inner(0.5 |> Lit |> Wrap) * 2
+  return flag((3 > 2) ↪ Flag) * 100 + name("abcde" ↪ Named) * 10
+       + inner(0.5 ↪ Lit ↪ Wrap) * 2
 }
 """
     rc, _ = _build_run_runtime(tmp_path, entry, extra='\n[world.W]\nobjects = ["Switch", "Tag", "Expr", "Wrapped"]\n')

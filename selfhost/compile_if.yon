@@ -72,49 +72,49 @@ fun classify(h: Number): Token {
     else if h == kw_if() then TKwIf
     else if h == kw_then() then TKwThen
     else if h == kw_else() then TKwElse
-    else h |> TIdent
+    else h ↪ TIdent
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
   j := word_end(s, i, len)
-  return (classify(word_hash(s, i, j, 0)), lex_from(s, j, len)) |> TkCons
+  return (classify(word_hash(s, i, j, 0)), lex_from(s, j, len)) ↪ TkCons
 }
 /* ':=' (a definition: "is defined as") or a lone ':' (peek the next char
    for '=' = 61). */
 fun lex_colon(s: String, i: Number, len: Number): TokList {
-  return if i + 1 >= len then (TColon, lex_from(s, i + 1, len)) |> TkCons
+  return if i + 1 >= len then (TColon, lex_from(s, i + 1, len)) ↪ TkCons
     else if String.char_at(s, i + 1) == 61
-    then (TColonEq, lex_from(s, i + 2, len)) |> TkCons
-    else (TColon, lex_from(s, i + 1, len)) |> TkCons
+    then (TColonEq, lex_from(s, i + 2, len)) ↪ TkCons
+    else (TColon, lex_from(s, i + 1, len)) ↪ TkCons
 }
 fun lex_num(s: String, i: Number, len: Number): TokList {
   j := num_end(s, i, len)
-  return (num_val(s, i, j, 0) |> TNum, lex_from(s, j, len)) |> TkCons
+  return (num_val(s, i, j, 0) ↪ TNum, lex_from(s, j, len)) ↪ TkCons
 }
 /* '=' is only valid as '==' in Yon0 (a definition is `:=`, lexed at ':'); a stray '=' is skipped. */
 fun lex_eq(s: String, i: Number, len: Number): TokList {
-  return if i + 1 >= len then (TEnd, TkNil) |> TkCons
+  return if i + 1 >= len then (TEnd, TkNil) ↪ TkCons
     else if String.char_at(s, i + 1) == 61
-    then (TEqEq, lex_from(s, i + 2, len)) |> TkCons
+    then (TEqEq, lex_from(s, i + 2, len)) ↪ TkCons
     else lex_from(s, i + 1, len)
 }
 fun lex_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)             /* space */
     else if c == 10 then lex_from(s, i + 1, len)             /* newline */
     else if c == 9  then lex_from(s, i + 1, len)             /* tab */
-    else if c == 43 then (TPlus, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 42 then (TStar, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 43 then (TPlus, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 42 then (TStar, lex_from(s, i + 1, len)) ↪ TkCons
     else if c == 61 then lex_eq(s, i, len)                   /* '=' -> '==' */
-    else if c == 40 then (TLParen, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 41 then (TRParen, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 123 then (TLBrace, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 125 then (TRBrace, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 40 then (TLParen, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 41 then (TRParen, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 123 then (TLBrace, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 125 then (TRBrace, lex_from(s, i + 1, len)) ↪ TkCons
     else if c == 58 then lex_colon(s, i, len)               /* ':' or ':=' */
     else if c >= 97 then lex_word(s, i, len)                 /* a-z: keyword or ident */
     else if c >= 48 then lex_num(s, i, len)                  /* 0-9: number */
     else lex_from(s, i + 1, len)                             /* skip anything else */
 }
 fun lex_from(s: String, i: Number, len: Number): TokList {
-  return if i >= len then (TEnd, TkNil) |> TkCons
+  return if i >= len then (TEnd, TkNil) ↪ TkCons
     else lex_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
@@ -154,15 +154,15 @@ fun lookup_name(name: Number, env: NameEnv): Number {
 /* ---- recursive-descent expression parser (threads the name environment) ---- */
 /* factor := NUM | IDENT | '(' expr ')' | 'if' expr '==' expr 'then' expr 'else' expr */
 fun parse_factor(l: TokList, env: NameEnv): Parse {
-  return if head_tag(l) == 0 then (head_num(l) |> TLit, tail(l)) |> POk
-    else if head_tag(l) == 1 then (lookup_name(head_num(l), env) |> TVar, tail(l)) |> POk
+  return if head_tag(l) == 0 then (head_num(l) ↪ TLit, tail(l)) ↪ POk
+    else if head_tag(l) == 1 then (lookup_name(head_num(l), env) ↪ TVar, tail(l)) ↪ POk
     else if head_tag(l) == 13 then close_paren(parse_expr(tail(l), env))   /* '(' */
     else if head_tag(l) == 7 then parse_if(tail(l), env)                   /* 'if' */
     else PErr
 }
 fun close_paren(p: Parse): Parse {
   return match p { PErr => PErr,
-      POk as (e, rest) => if head_tag(rest) == 14 then (e, tail(rest)) |> POk else PErr }
+      POk as (e, rest) => if head_tag(rest) == 14 then (e, tail(rest)) ↪ POk else PErr }
 }
 /* term := factor ('*' term)? */
 fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
@@ -170,7 +170,7 @@ fun term_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
       POk as (left, rest) => if head_tag(rest) == 11
                            then combine(11, left, parse_term(tail(rest), env))
-                           else (left, rest) |> POk }
+                           else (left, rest) ↪ POk }
 }
 /* expr := term ('+' expr)? */
 fun parse_expr(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, env), env) }
@@ -178,12 +178,12 @@ fun expr_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
       POk as (left, rest) => if head_tag(rest) == 10
                            then combine(10, left, parse_expr(tail(rest), env))
-                           else (left, rest) |> POk }
+                           else (left, rest) ↪ POk }
 }
 fun combine(op: Number, left: Term, p: Parse): Parse {
   return match p { PErr => PErr,
       POk as (right, rest) =>
-        (if op == 10 then (left, right) |> TAdd else (left, right) |> TMul, rest) |> POk }
+        (if op == 10 then (left, right) ↪ TAdd else (left, right) ↪ TMul, rest) ↪ POk }
 }
 
 /* if := 'if' expr '==' expr 'then' expr 'else' expr  (after the 'if' is consumed).
@@ -201,7 +201,7 @@ fun if_after_lhs(p: Parse, env: NameEnv): Parse {
 fun if_after_eq(a: Term, p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
       POk as (b, rest) => if head_tag(rest) == 8           /* 'then' */
-                        then if_after_then((a, b) |> TEq, parse_expr(tail(rest), env), env)
+                        then if_after_then((a, b) ↪ TEq, parse_expr(tail(rest), env), env)
                         else PErr }
 }
 fun if_after_then(cond: Term, p: Parse, env: NameEnv): Parse {
@@ -212,7 +212,7 @@ fun if_after_then(cond: Term, p: Parse, env: NameEnv): Parse {
 }
 fun if_after_else(cond: Term, thenE: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk as (elseE, rest) => ((cond, thenE, elseE) |> TIf, rest) |> POk }
+      POk as (elseE, rest) => ((cond, thenE, elseE) ↪ TIf, rest) ↪ POk }
 }
 
 /* ---- body parser: (IDENT ':=' expr)* 'return' expr ---- */
@@ -235,11 +235,11 @@ fun parse_let(l: TokList, env: NameEnv): Parse {
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
   return match pv { PErr => PErr,
       POk as (val, rest) =>
-        wrap_let(val, parse_body(rest, (name, env) |> NEnvCons)) }
+        wrap_let(val, parse_body(rest, (name, env) ↪ NEnvCons)) }
 }
 fun wrap_let(val: Term, pb: Parse): Parse {
   return match pb { PErr => PErr,
-      POk as (body, rest) => ((val, body) |> TLet, rest) |> POk }
+      POk as (body, rest) => ((val, body) ↪ TLet, rest) ↪ POk }
 }
 
 /* ---- program parser: 'fun' IDENT '(' ')' ':' 'number' '{' body '}' ---- */
@@ -252,7 +252,7 @@ fun parse_program(l: TokList): Parse {
     else PErr
 }
 fun term_of(p: Parse): Term {
-  return match p { PErr => 0 |> TLit, POk as (e, rest) => e }
+  return match p { PErr => 0 ↪ TLit, POk as (e, rest) => e }
 }
 
 /* ---- back end: gen (Term -> MLIR text) with an SSA environment ---- */
@@ -275,8 +275,8 @@ fun line(ssa: String, rhs: String): String {
 fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
   return match t {
     TLit as k =>
-      (ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) |> ER,
-    TVar as i => (lookup_ssa(i, env), "", n) |> ER,   /* already an ssa: no new line */
+      (ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) ↪ ER,
+    TVar as i => (lookup_ssa(i, env), "", n) ↪ ER,   /* already an ssa: no new line */
     TLet as (e1, body) => gen_let(e1, body, env, n),
     TAdd as (a, b) => gen_bin("arith.addf", a, b, env, n),
     TMul as (a, b) => gen_bin("arith.mulf", a, b, env, n),
@@ -289,8 +289,8 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
 /* let: emit e1, push its ssa onto env, emit body in that env. */
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
   ea := gen(e1, env, n)
-  eb := gen(body, (er_ssa(ea), env) |> SeCons, er_ctr(ea))
-  return (er_ssa(eb), String.concat(er_code(ea), er_code(eb)), er_ctr(eb)) |> ER
+  eb := gen(body, (er_ssa(ea), env) ↪ SeCons, er_ctr(ea))
+  return (er_ssa(eb), String.concat(er_code(ea), er_code(eb)), er_ctr(eb)) ↪ ER
 }
 /* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64".
  * for TEq the op carries its own comma ("arith.cmpf oeq,"). */
@@ -301,7 +301,7 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
   rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
   return (ssa_name(m), String.concat(String.concat(er_code(ea), er_code(eb)),
-                          line(ssa_name(m), rhs)), m + 1) |> ER
+                          line(ssa_name(m), rhs)), m + 1) ↪ ER
 }
 /* if: emit the condition (an i1), then a scf.if whose two regions emit the
  * branches and yield their results. The branch code sits inside the { } blocks;
@@ -322,7 +322,7 @@ fun gen_if(c: Term, thenT: Term, elseT: Term, env: SsaEnv, n: Number): EmitR {
                     String.concat(then_part,
                       String.concat("  } else {\n",
                         String.concat(else_part, "  }\n")))))
-  return (ssa_name(m), code, m + 1) |> ER
+  return (ssa_name(m), code, m + 1) ↪ ER
 }
 
 /* ---- module boilerplate ---- */

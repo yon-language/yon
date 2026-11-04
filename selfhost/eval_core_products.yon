@@ -9,13 +9,13 @@ fun as_num(t: Term): Number {
 }
 
 fun eval(t: Term): Term {
-  return match t { TLit as n      => n |> TLit,
-      TPair as (a, b)  => (eval(a), eval(b)) |> TPair,
-      TFst as p      => match eval(p) { TPair as (a, b) => eval(a), _ => eval(p) |> TFst },
-      TSnd as p      => match eval(p) { TPair as (a, b) => eval(b), _ => eval(p) |> TSnd } }
+  return match t { TLit as n      => n ↪ TLit,
+      TPair as (a, b)  => (eval(a), eval(b)) ↪ TPair,
+      TFst as p      => match eval(p) { TPair as (a, b) => eval(a), _ => eval(p) ↪ TFst },
+      TSnd as p      => match eval(p) { TPair as (a, b) => eval(b), _ => eval(p) ↪ TSnd } }
 }
 
 fun main(): Number {
-  r := eval((20 |> TLit, 22 |> TLit) |> TPair |> TFst)
+  r := eval((20 ↪ TLit, 22 ↪ TLit) ↪ TPair ↪ TFst)
   return as_num(r) - 20
 }

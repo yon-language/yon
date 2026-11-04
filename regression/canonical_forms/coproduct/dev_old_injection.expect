@@ -1,5 +1,5 @@
 status: reject_clean
 exit: 1
-match: written x |> Full
+match: written x ↪ Full
 note: |
-  An injection into a payload arm is x |> Arm: the mediatrice is for a place with fields.
+  An injection into a payload arm is x ↪ Arm: the mediatrice is for a place with fields.

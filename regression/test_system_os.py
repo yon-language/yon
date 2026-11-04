@@ -350,7 +350,7 @@ def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
 def test_heap_code_building_a_payload_arm_is_refused(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun probe_first(r: Region): Lookup<Word64> { return read_word(r, 0) |> Found }\n")
+        "  fun probe_first(r: Region): Lookup<Word64> { return read_word(r, 0) ↪ Found }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out
     assert "FnvHeap.probe_first builds the coproduct value Found." in out, out

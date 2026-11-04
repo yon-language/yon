@@ -107,12 +107,18 @@ and fmt_expr (e : expr) : string =
   | EVar (x, _) -> x
   | EField (o, f, _) -> fmt_expr o ^ "." ^ f
   | ECall (name, args, l)
-    when Hashtbl.mem Surface_ast.pipe_sites (l.file, l.start_line, l.start_col, name) ->
-      (* a pipe into a bare name: a fun, or an injection into an arm *)
+    when Hashtbl.mem Surface_ast.arrow_sites (l.file, l.start_line, l.start_col, name) ->
+      (* an arrow: application, or injection into an arm *)
+      let sym = match Hashtbl.find Surface_ast.arrow_sites (l.file, l.start_line, l.start_col, name) with
+        | Surface_ast.Apply -> "\xe2\x86\xa6"
+        | Surface_ast.Inject -> "\xe2\x86\xaa"
+        | Surface_ast.Old_pipe -> "|>" in
+      let target = Str.global_replace (Str.regexp_string "__") "." name in
       (match args with
-       | [(ELit _ | EVar _ | ECall _ | EField _ | EParen _) as a] -> fmt_expr a ^ " |> " ^ name
-       | [a] -> "(" ^ fmt_expr a ^ ") |> " ^ name
-       | _ -> "(" ^ String.concat ", " (List.map fmt_expr args) ^ ") |> " ^ name)
+       | [(ELit _ | EVar _ | ECall _ | EField _ | EParen _) as a] ->
+           fmt_expr a ^ " " ^ sym ^ " " ^ target
+       | [a] -> "(" ^ fmt_expr a ^ ") " ^ sym ^ " " ^ target
+       | _ -> "(" ^ String.concat ", " (List.map fmt_expr args) ^ ") " ^ sym ^ " " ^ target)
   | ECall (name, args, _) ->
       (* Undo the parser's normalization, to reprint the surface syntax the
        * user wrote:

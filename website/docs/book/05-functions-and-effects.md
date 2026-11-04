@@ -14,7 +14,7 @@ internal fun helper(x: Number): Number { return x + 1 }
 
 fun main(): Number {
   twice := fun(n: Number) => n * 2            // inline lambda
-  a := 10 |> double()                         // pipe: 20
+  a := 10 ↦ double()                         // pipe: 20
   b := twice(a) + helper(1)                   // 40 + 2 = 42
   return id(b)
 }
@@ -25,7 +25,7 @@ resolves it from the call sites. Type parameters use angle brackets
 (`fun id<A>(x: A): A`).
 
 **Lambdas and pipes.** `fun(x) => e` is the inline lambda. The pipe
-`a |> f(args)` passes `a` as the *first* argument of the call. Method
+`a ↦ f(args)` passes `a` as the *first* argument of the call. Method
 chaining also reads naturally: `recv.m(args)` is `m(recv, args)`. An inline
 lambda captures the locals in scope around it, at any nesting depth: a lambda
 written inside another sees both the enclosing lambda's parameters and the

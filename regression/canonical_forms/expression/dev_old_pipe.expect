@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+match: the pipe |> is gone: write x ↦ twice
+note: |
+  The pipe is two arrows now: application ↦ and injection ↪. The diagnostic shows the
+  arrow its target takes.

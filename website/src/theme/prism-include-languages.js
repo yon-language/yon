@@ -49,7 +49,7 @@ export default function prismIncludeLanguages(PrismObject) {
     boolean: /\b(?:true|false)\b/,
     function: /\b[a-z_][A-Za-z0-9_]*(?=\s*\()/,
     number: /\b\d[\d_]*(?:\.\d+)?(?:ms|s|min|h|d|y)?\b/,
-    operator: /\|>|->|=>|⊣|∗|⇔|[-+*/%=<>!|&.]+/,
+    operator: /↦|↪|\|->|>->|->|=>|⊣|∗|⇔|[-+*/%=<>!|&.]+/,
     punctuation: /[{}()[\];:,]/,
   };
   delete globalThis.Prism;

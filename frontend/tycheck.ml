@@ -1645,19 +1645,39 @@ let arm_mediatrice_err (env : Tyenv.env) (place_name : string) loc =
     | Some pd -> List.length (Tyenv.place_fields pd)
     | None -> 1 in
   err loc (Printf.sprintf
-    "an injection into the arm %s is written %s |> %s" place_name
+    "an injection into the arm %s is written %s \xe2\x86\xaa %s" place_name
     (if n = 1 then "x"
      else "(" ^ String.concat ", " (List.init n (fun i -> Printf.sprintf "x%d" (i + 1))) ^ ")")
     place_name)
 
-(* `x |> Found`: an injection, when the name is no fun and no variable. Its type is
-   the coproduct, whose parameters are instantiated by unification, from the expected
-   type and from the payload. *)
-let is_arm_pipe (env : Tyenv.env) (name : string) (loc : location) : bool =
-  Hashtbl.mem Surface_ast.pipe_sites (loc.file, loc.start_line, loc.start_col, name)
+(* `x ↪ Found`: an injection. Its type is the coproduct, whose parameters are instantiated
+   by unification, from the expected type and from the payload. *)
+let arrow_kind (name : string) (loc : location) =
+  Hashtbl.find_opt Surface_ast.arrow_sites (loc.file, loc.start_line, loc.start_col, name)
+
+let is_arm_injection (env : Tyenv.env) (name : string) (loc : location) : bool =
+  arrow_kind name loc = Some Surface_ast.Inject
   && Tyenv.lookup_fun env name = None
-  && Tyenv.lookup_var env name = None
   && Tyenv.lookup_sum_constructor env name <> []
+
+(* Each arrow goes to its own kind of target: ↦ to a fun, ↪ to an arm. *)
+let arrow_refusal (env : Tyenv.env) (name : string) (loc : location) : string option =
+  let shown = Str.global_replace (Str.regexp_string "__") "." name in
+  let is_arm =
+    Tyenv.lookup_fun env name = None && Tyenv.lookup_var env name = None
+    && (Tyenv.lookup_sum_constructor env name <> [] || qualified_arm_of env name <> None) in
+  let is_fun = Tyenv.lookup_fun env name <> None || Tyenv.lookup_var env name <> None in
+  match arrow_kind name loc with
+  | Some Surface_ast.Old_pipe ->
+      Some (Printf.sprintf "the pipe |> is gone: write x %s %s"
+              (if is_arm then "\xe2\x86\xaa" else "\xe2\x86\xa6") shown)
+  | Some Surface_ast.Apply when is_arm ->
+      Some (Printf.sprintf "%s is an arm: an injection is written x \xe2\x86\xaa %s" shown shown)
+  | Some Surface_ast.Inject when is_fun ->
+      Some (Printf.sprintf "%s is a fun: it is applied with x \xe2\x86\xa6 %s" shown shown)
+  | Some Surface_ast.Inject when not is_arm ->
+      Some (Printf.sprintf "%s is no arm of a coproduct" shown)
+  | _ -> None
 
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
@@ -1666,7 +1686,10 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   | ENew (place_name, _, loc) when Tyenv.is_synthetic_place env place_name ->
       arm_mediatrice_err env place_name loc
 
-  | ECall (name, args, loc) when is_arm_pipe env name loc ->
+  | ECall (name, _, loc) when arrow_refusal env name loc <> None ->
+      err loc (Option.get (arrow_refusal env name loc))
+
+  | ECall (name, args, loc) when is_arm_injection env name loc ->
       Hashtbl.replace Surface_ast.arm_call_sites (loc.file, loc.start_line, loc.start_col, name) ();
       infer env ctx (EHITConstr (name, args, loc))
 
@@ -3386,7 +3409,9 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                   (Tyenv.ty_to_string sum_ty))))
   | ENew (place_name, _, loc), _ when Tyenv.is_synthetic_place env place_name ->
       arm_mediatrice_err env place_name loc
-  | ECall (name, args, loc), _ when is_arm_pipe env name loc ->
+  | ECall (name, _, loc), _ when arrow_refusal env name loc <> None ->
+      err loc (Option.get (arrow_refusal env name loc))
+  | ECall (name, args, loc), _ when is_arm_injection env name loc ->
       Hashtbl.replace Surface_ast.arm_call_sites (loc.file, loc.start_line, loc.start_col, name) ();
       check env ctx (EHITConstr (name, args, loc)) expected
   | EHITElim (EVar ("__match", _), branches, x, loc), _
@@ -7177,10 +7202,8 @@ let heap_alloc_errors (p : program) : type_error list =
     let own = match e with
       | ENew (q, _, _) | ENewIn (q, _, _, _) -> Some (Printf.sprintf "builds a section of %s (.->)" q)
       | ECall (c, _, l)
-        when Hashtbl.mem Surface_ast.pipe_sites (l.file, l.start_line, l.start_col, c)
-             && not (Hashtbl.mem given c) && not (Hashtbl.mem bodies c)
-             && not (List.exists (fun h ->
-                       Hashtbl.mem bodies (h ^ "__" ^ c) || Hashtbl.mem given (h ^ "__" ^ c)) houses) ->
+        when Hashtbl.find_opt Surface_ast.arrow_sites (l.file, l.start_line, l.start_col, c)
+             = Some Surface_ast.Inject ->
           Some (Printf.sprintf "builds the coproduct value %s" c)
       (* an arm with a payload is a section on the heap; a nullary arm is a
          constant and allocates nothing *)

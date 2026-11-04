@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
 - productions REDUCED by a fixture (Menhir-verified): **99 / 99** surface (+3 structural allowlisted)
-- deviations rejected: **26**
+- deviations rejected: **29**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -30,7 +30,7 @@ from them; the `.yon` files are the specification, not this text.
 | comprehension | `canonical` | accept | 0 | — |
 | coproduct | `canonical` | accept | 42 | — |
 | coproduct | `dev_old_arm` | reject_clean | 1 | `this > Node Tree Tree` |
-| coproduct | `dev_old_injection` | reject_clean | 1 | `written x |> Full` |
+| coproduct | `dev_old_injection` | reject_clean | 1 | `written x ↪ Full` |
 | coproduct | `dev_old_pattern` | reject_clean | 1 | `Cons as (h, t)` |
 | coproduct | `dev_old_projection` | reject_clean | 1 | `Full as x` |
 | coproduct | `inline_sum` | accept | 42 | — |
@@ -39,7 +39,10 @@ from them; the `.yon` files are the specification, not this text.
 | entrypoint | `dev_c` | accepted_deviation | 0 | — |
 | error | `canonical` | accept | 0 | — |
 | expression | `canonical` | accept | 42 | — |
+| expression | `dev_apply_to_arm` | reject_clean | 1 | `Full is an arm: an injection is written x ↪ Full` |
 | expression | `dev_arity` | reject_clean | 1 | `expected 1 arguments, got 2` |
+| expression | `dev_inject_to_fun` | reject_clean | 1 | `twice is a fun: it is applied with x ↦ twice` |
+| expression | `dev_old_pipe` | reject_clean | 1 | `the pipe |> is gone: write x ↦ twice` |
 | expression | `dev_unknown` | reject_clean | 1 | `unknown identifier` |
 | for_every | `canonical` | accept | 42 | — |
 | forces | `canonical` | accept | 0 | — |

@@ -10,15 +10,15 @@ place TokList { this > TkNil :U TkCons Token TokList }
 
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
-    else if c == 43 then (TPlus, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 42 then (TStar, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 40 then (TLParen, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 41 then (TRParen, lex_from(s, i + 1, len)) |> TkCons
-    else if c >= 48 then (c - 48 |> TNum, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 43 then (TPlus, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 42 then (TStar, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 40 then (TLParen, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 41 then (TRParen, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c >= 48 then (c - 48 ↪ TNum, lex_from(s, i + 1, len)) ↪ TkCons
     else lex_from(s, i + 1, len)
 }
 fun lex_from(s: String, i: Number, len: Number): TokList {
-  return if i >= len then (TEnd, TkNil) |> TkCons
+  return if i >= len then (TEnd, TkNil) ↪ TkCons
     else emit_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
@@ -49,7 +49,7 @@ fun tail(l: TokList): TokList {
 // factor := NUM
 fun parse_factor(l: TokList): Parse {
   return if head_tag(l) == 0
-    then (head_num(l) |> ENum, tail(l)) |> POk
+    then (head_num(l) ↪ ENum, tail(l)) ↪ POk
     else PErr
 }
 
@@ -60,11 +60,11 @@ fun term_more(p: Parse): Parse {
       POk as (left, rest) =>
         if head_tag(rest) == 2
         then combine_mul(left, parse_term(tail(rest)))
-        else (left, rest) |> POk }
+        else (left, rest) ↪ POk }
 }
 fun combine_mul(left: Expr, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk as (right, rest) => ((left, right) |> EMul, rest) |> POk }
+      POk as (right, rest) => ((left, right) ↪ EMul, rest) ↪ POk }
 }
 
 // expr := term ('+' expr)?
@@ -74,11 +74,11 @@ fun expr_more(p: Parse): Parse {
       POk as (left, rest) =>
         if head_tag(rest) == 1
         then combine_add(left, parse_expr(tail(rest)))
-        else (left, rest) |> POk }
+        else (left, rest) ↪ POk }
 }
 fun combine_add(left: Expr, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk as (right, rest) => ((left, right) |> EAdd, rest) |> POk }
+      POk as (right, rest) => ((left, right) ↪ EAdd, rest) ↪ POk }
 }
 
 // arithmetic eval: catamorphism Expr -> number

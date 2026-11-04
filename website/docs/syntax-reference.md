@@ -121,7 +121,7 @@ from the call sites.
 | `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty()`, `XSet.empty()`, `Vec.empty()`, `XRelMap.empty()`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
 | `obj.field`, `x.f1.f2` | ✓ | Field access (chains left-associatively) |
 | `e.method(args).map(f).fold(0, g)` | ✓ | Method chaining: `recv.m(args)` ≡ `m(recv, args)` |
-| `a \|> f`, `a \|> f(args)`, `(a, b) \|> f` | ✓ | Pipe: passes `a` as the **first** argument of the call; a tuple spreads into the arguments. The call `f(a, b)` stays |
+| `a ↦ f`, `a ↦ f(args)`, `(a, b) ↦ f` | ✓ | Pipe: passes `a` as the **first** argument of the call; a tuple spreads into the arguments. The call `f(a, b)` stays |
 | `if c then a else b` | ✓ | Conditional expression |
 | `fun(x: T, y) => e` | ✓ | Inline lambda (unannotated params are inferred) |
 | `move(s: P) => .-> Q {...} from P to Q` | ✓ | Inline move lambda (see the note below the table) |
@@ -158,7 +158,7 @@ post-composed with a `fun`.
 | `& \| ^ ~` | ✓ | **Bitwise on numbers** |
 | `&&? \|\|? =>? !?` | ✓ | Heyting (scalar Ω): and, or, implication, negation |
 | `&? \|? ^? ~?` | ✓ | Heyting **trit-wise** on [`heyting`](/book/keywords#heyting) (Unknown-mask propagation) |
-| `:` `.` `->` `\|>` | ✓ | Annotation, access, function type, pipe |
+| `:` `.` `->` `↦` | ✓ | Annotation, access, function type, pipe |
 
 Precedence, loosest first. Each Heyting operator shares the level of its
 classical twin:
@@ -171,7 +171,7 @@ classical twin:
 | 4 | `and` `&&` `&&?` `∧` | left |
 | 5 | `==` `!=` `≠` `<` `>` `<=` `>=` | left |
 | 6 | `@` | left |
-| 7 | `\|>` | left |
+| 7 | `↦` | left |
 | 8 | `\|` | left |
 | 9 | `\|?` | left |
 | 10 | `^` `^?` | left |
@@ -183,7 +183,7 @@ classical twin:
 | 16 | `~` `~?` | |
 
 So `a &&? b == c` groups as `a &&? (b == c)`, `x & y + 1` as `x & (y + 1)`,
-`x + 1 \|> f` as `(x + 1) \|> f`, and `true \|> merid @ i` as `(true \|> merid) @ i`.
+`x + 1 ↦ f` as `(x + 1) ↦ f`, and `true ↪ merid @ i` as `(true ↪ merid) @ i`.
 
 **The four readings of `=>`.** The arrow `=>` is read by what stands before it,
 never by its operands, so the reading is never ambiguous:

@@ -14,6 +14,6 @@ fun sum3(t: Triple): Number {
 }
 
 fun main(): Number {
-  return sum3((12, 13, 17) |> T3)   // 12 + 13 + 17 = 42, incluso il terzo (indice 2)
+  return sum3((12, 13, 17) ↪ T3)   // 12 + 13 + 17 = 42, incluso il terzo (indice 2)
 }
 }

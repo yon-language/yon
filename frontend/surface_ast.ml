@@ -263,9 +263,9 @@ let mut_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 32
    resolved. A bare point rides bare_point_sites, which already carries it. *)
 let arm_coproduct_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 32
 
-(* A pipe into a bare name, written `x |> f`, by site and name: when no fun has that
-   name it is an injection into the arm. *)
-let pipe_sites : (string * int * int * string, unit) Hashtbl.t = Hashtbl.create 32
+(* The arrows, by site and name: application ↦, injection ↪, the old pipe refused. *)
+type arrow_kind = Apply | Inject | Old_pipe
+let arrow_sites : (string * int * int * string, arrow_kind) Hashtbl.t = Hashtbl.create 32
 let arm_call_sites : (string * int * int * string, unit) Hashtbl.t = Hashtbl.create 32
 
 (* The field read on a coproduct at a site, with the arms that give it: the

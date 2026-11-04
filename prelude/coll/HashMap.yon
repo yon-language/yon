@@ -18,6 +18,6 @@ place HashMap<K, V> {
   /* ─── Reading ────────────────────────────────────────────── [T] ─── */
 
   fun get<K, V>(m: HashMap<K, V>, k: K): Lookup<V> {
-    return if has(m, k) then value(m, k) |> Found else Absent
+    return if has(m, k) then value(m, k) ↪ Found else Absent
   }
 }

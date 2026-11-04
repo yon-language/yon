@@ -54,7 +54,7 @@ place Entry {
 
   fun main(): Number {
     // Equal subtrees share one address: the heap is content-addressed.
-    t := (20 |> Leaf, 20 |> Leaf) |> Node
+    t := (20 ↪ Leaf, 20 ↪ Leaf) ↪ Node
 
     // `unknown` is a truth value, not an error: deciding it has three outcomes.
     p := unknown

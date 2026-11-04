@@ -9,18 +9,18 @@ place TokList { this > TkNil :U TkCons Token TokList }
 // decide the token for the character c at position i, then continue from i+1
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
-    else if c == 43 then (TPlus, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 42 then (TStar, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 40 then (TLParen, lex_from(s, i + 1, len)) |> TkCons
-    else if c == 41 then (TRParen, lex_from(s, i + 1, len)) |> TkCons
-    else if c >= 48 then (c - 48 |> TNum, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 43 then (TPlus, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 42 then (TStar, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 40 then (TLParen, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c == 41 then (TRParen, lex_from(s, i + 1, len)) ↪ TkCons
+    else if c >= 48 then (c - 48 ↪ TNum, lex_from(s, i + 1, len)) ↪ TkCons
     else lex_from(s, i + 1, len)
 }
 
 // scan from i: at the end of the string close with TEnd, otherwise read and dispatch
 fun lex_from(s: String, i: Number, len: Number): TokList {
   return if i >= len
-    then (TEnd, TkNil) |> TkCons
+    then (TEnd, TkNil) ↪ TkCons
     else emit_at(s, i, len, String.char_at(s, i))
 }
 

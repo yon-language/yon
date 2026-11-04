@@ -64,6 +64,22 @@
     if dot_is_module obj then ECall (obj ^ "__" ^ fld, args, loc)
     else ECall (fld, EVar (obj, loc) :: args, loc)
 
+  (* a ↦ f, a ↪ Arm: the left side enters as the first argument, a tuple spreads. The
+     checker knows whether the name is a fun or an arm, and holds each arrow to its own. *)
+  let arrow kind a b (loc : location) =
+    let lhs = tuple_components a in
+    let call =
+      match b with
+      | ECall (name, args, _) -> ECall (name, lhs @ args, loc)
+      | EVar (name, _) -> ECall (name, lhs, loc)
+      | EField (EVar (obj, _), fld, _) when dot_is_module obj -> dot_call_expr obj fld lhs loc
+      | _ -> failwith "[parser] the right of an arrow must be a function call or a name" in
+    (match call with
+     | ECall (n, _, _) ->
+         Hashtbl.replace Surface_ast.arrow_sites (loc.file, loc.start_line, loc.start_col, n) kind
+     | _ -> ());
+    call
+
   let dot_call_stmt obj fld args loc =
     if dot_is_module obj then SCall (obj ^ "__" ^ fld, args, loc)
     else SCall (fld, EVar (obj, loc) :: args, loc)
@@ -240,7 +256,8 @@
 %token PLUS MINUS STAR SLASH PERCENT
 %token LT GT LEQ GEQ EQ EQEQ NEQ
 %token PIPE DOT COMMA COLON
-%token PIPEGT                          (* pipe forward `|>` *)
+%token PIPEGT                          (* the old pipe, refused *)
+%token MAPSTO INJ                      (* application ↦, injection into an arm ↪ *)
 %token LPAREN RPAREN LBRACE RBRACE
 
 %token EOF
@@ -271,14 +288,14 @@
 %nonassoc ON_ERROR LAW IN COMMA ARROW DOT IDENT QIDENT VIEW REDUCTION PRODUCE
           MOVE MORPH_KW FUNCTOR FUN DOTARROW
 /* From the weakest: <-> , -> , or, and, = and !=, @, |> , then the arithmetic. So
-   x + 1 |> f is (x + 1) |> f, and true |> merid @ i is (true |> merid) @ i. */
+   x + 1 ↦ f is (x + 1) ↦ f, and true ↦ merid @ i is (true ↦ merid) @ i. */
 %right IFFQ
 %right FATARROW FATARROWQ
 %left OR PIPEPIPE PIPEPIPEQ
 %left AND AMPAMP AMPAMPQ
 %left LT GT LEQ GEQ EQEQ NEQ
 %left ATSIGN              /* path application p @ i */
-%left PIPEGT             /* pipe forward */
+%left PIPEGT MAPSTO INJ   /* application and injection */
 %nonassoc LRARROW        /* f <=> g = equivalence, non-associative */
 %left PIPE
 %left PIPEQ
@@ -1550,20 +1567,9 @@ expr:
     { EPathApp (e, DI1, mk_loc $startpos $endpos) }
   | e = expr ATSIGN id = IDENT
     { EPathApp (e, DIVar id, mk_loc $startpos $endpos) }
-  | a = expr PIPEGT b = expr
-    { let lhs = tuple_components a in
-      match b with
-      | ECall (name, args, _) ->
-          ECall (name, lhs @ args, mk_loc $startpos $endpos)
-      | EVar (name, _) ->
-          (* the name may be a fun or an arm: the checker knows *)
-          let loc = mk_loc $startpos $endpos in
-          Hashtbl.replace Surface_ast.pipe_sites (loc.file, loc.start_line, loc.start_col, name) ();
-          ECall (name, lhs, loc)
-      | EField (EVar (obj, _), fld, _) when dot_is_module obj ->
-          dot_call_expr obj fld lhs (mk_loc $startpos $endpos)
-      | _ -> failwith "[parser] pipe RHS must be a function call or a name"
-    }
+  | a = expr MAPSTO b = expr   { arrow Surface_ast.Apply a b (mk_loc $startpos $endpos) }
+  | a = expr INJ b = expr      { arrow Surface_ast.Inject a b (mk_loc $startpos $endpos) }
+  | a = expr PIPEGT b = expr   { arrow Surface_ast.Old_pipe a b (mk_loc $startpos $endpos) }
   | NOT e = expr %prec UNOT
     { ENot (e, mk_loc $startpos $endpos) }
   | BANG e = expr %prec UNOT

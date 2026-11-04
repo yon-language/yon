@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: twice is a fun: it is applied with x ↦ twice
+note: |
+  Injection goes to an arm; the diagnostic shows application.

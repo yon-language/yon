@@ -329,6 +329,8 @@ rule raw_token = parse
    * The multi-char tokens MUST come before the single-char ones for max-munch. *)
   | "&&"             { AMPAMP }
   | "||"             { PIPEPIPE }
+  | "|->" | "\xe2\x86\xa6"  { MAPSTO }   (* ↦ : application *)
+  | ">->" | "\xe2\x86\xaa"  { INJ }      (* ↪ : injection into an arm *)
   | "|>"             { PIPEGT }   (* pipe-forward: x |> f means f(x) *)
   | "=>"             { FATARROW }
   | "on" [' ' '\t']+ "error"

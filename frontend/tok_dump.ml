@@ -156,6 +156,8 @@ let tok_name = function
   | Parser.COMMA -> "COMMA"
   | Parser.COLON -> "COLON"
   | Parser.PIPEGT -> "PIPEGT"
+  | Parser.MAPSTO -> "MAPSTO"
+  | Parser.INJ -> "INJ"
   | Parser.LPAREN -> "LPAREN"
   | Parser.RPAREN -> "RPAREN"
   | Parser.LBRACE -> "LBRACE"

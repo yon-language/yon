@@ -6,23 +6,23 @@ place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U
 
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return match t { TLit as n     => n |> TLit,
-      TVar as i     => if i >= c then i + d |> TVar else i |> TVar,
-      TLam as b     => shift(d, c + 1, b) |> TLam,
-      TApp as (f, x)  => (shift(d, c, f), shift(d, c, x)) |> TApp,
-      TPair as (a, b) => (shift(d, c, a), shift(d, c, b)) |> TPair,
-      TFst as p     => shift(d, c, p) |> TFst,
-      TSnd as p     => shift(d, c, p) |> TSnd }
+  return match t { TLit as n     => n ↪ TLit,
+      TVar as i     => if i >= c then i + d ↪ TVar else i ↪ TVar,
+      TLam as b     => shift(d, c + 1, b) ↪ TLam,
+      TApp as (f, x)  => (shift(d, c, f), shift(d, c, x)) ↪ TApp,
+      TPair as (a, b) => (shift(d, c, a), shift(d, c, b)) ↪ TPair,
+      TFst as p     => shift(d, c, p) ↪ TFst,
+      TSnd as p     => shift(d, c, p) ↪ TSnd }
 }
 
 fun subst(j: Number, s: Term, t: Term): Term {
-  return match t { TLit as n     => n |> TLit,
-      TVar as i     => if i == j then s else i |> TVar,
-      TLam as b     => subst(j + 1, shift(1, 0, s), b) |> TLam,
-      TApp as (f, x)  => (subst(j, s, f), subst(j, s, x)) |> TApp,
-      TPair as (a, b) => (subst(j, s, a), subst(j, s, b)) |> TPair,
-      TFst as p     => subst(j, s, p) |> TFst,
-      TSnd as p     => subst(j, s, p) |> TSnd }
+  return match t { TLit as n     => n ↪ TLit,
+      TVar as i     => if i == j then s else i ↪ TVar,
+      TLam as b     => subst(j + 1, shift(1, 0, s), b) ↪ TLam,
+      TApp as (f, x)  => (subst(j, s, f), subst(j, s, x)) ↪ TApp,
+      TPair as (a, b) => (subst(j, s, a), subst(j, s, b)) ↪ TPair,
+      TFst as p     => subst(j, s, p) ↪ TFst,
+      TSnd as p     => subst(j, s, p) ↪ TSnd }
 }
 
 fun beta(body: Term, arg: Term): Term {
@@ -30,14 +30,14 @@ fun beta(body: Term, arg: Term): Term {
 }
 
 fun eval(t: Term): Term {
-  return match t { TLit as n     => n |> TLit,
-      TVar as i     => i |> TVar,
-      TLam as b     => b |> TLam,
+  return match t { TLit as n     => n ↪ TLit,
+      TVar as i     => i ↪ TVar,
+      TLam as b     => b ↪ TLam,
       TApp as (f, x)  => match eval(f) { TLam as b => eval(beta(b, eval(x))),
-                         _       => (eval(f), eval(x)) |> TApp },
-      TPair as (a, b) => (eval(a), eval(b)) |> TPair,
-      TFst as p     => match eval(p) { TPair as (a, b) => eval(a), _ => eval(p) |> TFst },
-      TSnd as p     => match eval(p) { TPair as (a, b) => eval(b), _ => eval(p) |> TSnd } }
+                         _       => (eval(f), eval(x)) ↪ TApp },
+      TPair as (a, b) => (eval(a), eval(b)) ↪ TPair,
+      TFst as p     => match eval(p) { TPair as (a, b) => eval(a), _ => eval(p) ↪ TFst },
+      TSnd as p     => match eval(p) { TPair as (a, b) => eval(b), _ => eval(p) ↪ TSnd } }
 }
 
 fun as_num(t: Term): Number {
@@ -45,7 +45,7 @@ fun as_num(t: Term): Number {
 }
 
 fun main(): Number {
-  id_lit   := eval((0 |> TVar |> TLam, 42 |> TLit) |> TApp)
-  fst_beta := eval((0 |> TVar |> TLam, (20 |> TLit, 22 |> TLit) |> TPair) |> TApp |> TFst)
+  id_lit   := eval((0 ↪ TVar ↪ TLam, 42 ↪ TLit) ↪ TApp)
+  fst_beta := eval((0 ↪ TVar ↪ TLam, (20 ↪ TLit, 22 ↪ TLit) ↪ TPair) ↪ TApp ↪ TFst)
   return (as_num(id_lit) - 42) + (as_num(fst_beta) - 20)
 }
