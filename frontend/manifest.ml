@@ -150,6 +150,13 @@ let parse_string (text : string) : world_map =
           else if !in_package then begin
             (* inside [package]: pick up `entry = "<Space>"` *)
             match String.index_opt line '=' with
+            | Some i when trim (String.sub line 0 i) = "kind" ->
+                let rhs = String.sub line (i + 1) (String.length line - i - 1) in
+                (match parse_spaces_value rhs with
+                 | ["proof"] -> Surface_ast.proof_project := true
+                 | _ ->
+                     raise (Manifest_error
+                       "yon.toml: [package] kind is \"proof\", the only kind a project declares"))
             | Some i when trim (String.sub line 0 i) = "entry" ->
                 let rhs =
                   String.sub line (i + 1) (String.length line - i - 1) in

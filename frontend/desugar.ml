@@ -3564,6 +3564,9 @@ let desugar_program ?(env : Tyenv.env option = None)
   C.prelude_place_decls := [];  (* per-run identity registry (LSP re-runs) *)
   let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
+  (* a proof is checked and has no run time: only main is lowered *)
+  let p = if not !Surface_ast.proof_project then p else
+      List.filter (function S.TopFun fd -> fd.S.fn_name = "main" | _ -> true) p in
   let p = Method_sugar.qualify_overloads p in  (* overloaded method decls -> Place__name (same as tycheck) *)
   current_env := env;
   impure_funs p;

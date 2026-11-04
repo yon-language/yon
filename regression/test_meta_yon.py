@@ -54,13 +54,76 @@ def test_the_two_cases_do_not_prove_a_false_statement(tmp_path):
                        "    return match b { true => clear, false => clear }\n  }\n")
 
 
-@pytest.mark.xfail(strict=True, reason="the kernel does not reduce a fun on an arm with a payload")
-def test_a_step_computes_on_the_term_it_is_given(tmp_path):
-    r = _compile(_with_proofs(tmp_path,
-                 "  fun step(t: Term): Term {\n"
-                 "    return match t { yes => t, no => t, var as n => t,\n"
-                 "      ite as (c, u, v) => match c { yes => u, no => v, var as n => t, ite as (x, y, z) => t } }\n"
-                 "  }\n"
-                 "  fun if_true(u: Term, v: Term): step((Term.yes, u, v) ↪ ite) = u { return clear }\n"),
-                 tmp_path)
+def _nat(tmp_path, proofs):
+    proj = tmp_path / "nat"
+    proj.mkdir()
+    (proj / "yon.toml").write_text('[package]\nname = "nat"\nkind = "proof"\n\n'
+                                   '[world.W]\nobjects = ["Nat"]\nspaces = ["w"]\n\n'
+                                   '[runtime]\nbackend = "memory"\n')
+    (proj / "w").mkdir()
+    (proj / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+    (proj / "w" / "Nat.yon").write_text("place Nat { this > zero :U succ Nat }\n")
+    (proj / "Entry.yon").write_text(
+        "place Entry {\n"
+        "  fun plus(a: Nat, b: Nat): Nat {\n"
+        "    return match a { zero => b, succ as n => (n, b) ↦ plus ↪ succ }\n  }\n"
+        "  fun s_(n: Nat): Nat { return n ↪ succ }\n" + proofs +
+        "  fun main: Number { return 0 }\n}\n")
+    return subprocess.run([str(YONC), "--emit=mlir", str(proj), "-o", str(tmp_path / "o.mlir")],
+                          capture_output=True, text=True, timeout=300)
+
+
+STEP = ("  fun step(t: Term): Term {\n"
+        "    return match t { yes => t, no => t, var as n => t,\n"
+        "      ite as (c, u, v) => match c { yes => u, no => v, var as n => t, ite as (x, y, z) => t } }\n"
+        "  }\n")
+
+
+def _rule(tmp_path, body, *words):
+    r = _nat(tmp_path, body)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2010" in out, out
+    for w in words:
+        assert w in out, out
+
+
+def test_a_proof_project_refuses_a_fun_that_does_not_terminate(tmp_path):
+    _rule(tmp_path, "  fun giro(n: Nat): Nat { return giro(n) }\n", "termination check")
+
+
+def test_a_proof_project_refuses_is_given(tmp_path):
+    proj = _with_proofs(tmp_path, "")
+    (proj / "kernel" / "Term.yon").write_text(
+        "place Term { this > yes :U no :U var Number :U ite Term Term Term\n"
+        "  law assioma ∀t : Term, t = t is given\n}\n")
+    r = _compile(proj, tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2010" in out and "is given" in out, out
+
+
+def test_a_proof_project_refuses_forever(tmp_path):
+    _rule(tmp_path, "  fun gira: Number {\n    forever { x := 1 }\n    return 0\n  }\n", "forever")
+
+
+def test_a_proof_project_refuses_while(tmp_path):
+    _rule(tmp_path, "  fun gira: Number {\n    while true do { x := 1 }\n    return 0\n  }\n", "while")
+
+
+def test_a_project_declares_no_other_kind(tmp_path):
+    proj = META
+    copy = tmp_path / "meta"
+    shutil.copytree(proj, copy)
+    (copy / "yon.toml").write_text((proj / "yon.toml").read_text().replace('"proof"', '"altro"'))
+    r = _compile(copy, tmp_path)
+    assert r.returncode != 0 and 'the only kind' in r.stdout + r.stderr, r.stdout + r.stderr
+
+
+def test_a_normal_project_keeps_what_a_proof_refuses(tmp_path):
+    # the rule is the project's: a recursive fun without a certificate compiles elsewhere
+    proj = tmp_path / "free"
+    proj.mkdir()
+    (proj / "Entry.yon").write_text(
+        "place Entry {\n  fun giro(n: Number): Number { return giro(n) }\n"
+        "  fun main: Number { return 0 }\n}\n")
+    r = _compile(proj, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr

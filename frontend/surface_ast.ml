@@ -1196,3 +1196,7 @@ let phantom_return_sites : (string * int * int * int * int, ty) Hashtbl.t = Hash
 (* The places whose parameters stand for terms: all the parameters in order, and those that
    stand for a term with its type. *)
 let place_term_params : (string, string list * (string * ty) list) Hashtbl.t = Hashtbl.create 8
+
+(* The project declares kind = "proof" in [package]: its funs are proofs, every one terminates and
+   none is given or loops, and only main reaches the run time. *)
+let proof_project = ref false

@@ -1,5 +1,6 @@
 [package]
 name = "meta"
+kind = "proof"
 
 [world.Kernel]
 objects = ["Term", "Proofs"]

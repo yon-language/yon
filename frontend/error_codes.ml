@@ -40,6 +40,7 @@ type code =
   | Given_outside_prelude
   | Write_to_value
   | Heap_allocates
+  | Proof_rule
   | Law_refuted
   | Law_uncertified
   (* E3xxx Space semantics *)
@@ -70,6 +71,7 @@ let id : code -> string = function
   | Given_outside_prelude -> "E2007"
   | Write_to_value      -> "E2008"
   | Heap_allocates      -> "E2009"
+  | Proof_rule          -> "E2010"
   | Law_refuted         -> "E2101"
   | Law_uncertified     -> "E2102"
   | Union_arms_cross_space -> "E3003"
@@ -88,7 +90,7 @@ let id : code -> string = function
 let severity : code -> severity = function
   | Parse_syntax | Lex_bad_token | Type_check | Return_not_in_tail | Effect_unhandled
   | Arm_coproduct_unnamed | Arm_name_clash | Library_name_taken
-  | Given_outside_prelude | Write_to_value | Heap_allocates
+  | Given_outside_prelude | Write_to_value | Heap_allocates | Proof_rule
   | Law_refuted
   | Law_uncertified
   | Union_arms_cross_space
@@ -105,7 +107,7 @@ let cli_prefix : code -> string = function
   | Return_not_in_tail           -> "TYPE ERROR"
   | Effect_unhandled             -> "TYPE ERROR"
   | Arm_coproduct_unnamed | Arm_name_clash | Library_name_taken
-  | Given_outside_prelude | Write_to_value | Heap_allocates -> "TYPE ERROR"
+  | Given_outside_prelude | Write_to_value | Heap_allocates | Proof_rule -> "TYPE ERROR"
   | Law_refuted | Law_uncertified -> "LAW ERROR"
   | Union_arms_cross_space -> "TYPE ERROR"
   | Drop_still_live | Drop_unknown_space -> "DROP ERROR"
@@ -127,6 +129,7 @@ let title : code -> string = function
   | Arm_name_clash      -> "an arm and an arrow of the same home share a name"
   | Library_name_taken  -> "a user place takes the name of a library place"
   | Given_outside_prelude -> "a runtime primitive declared outside the prelude"
+  | Proof_rule -> "what a project of kind proof refuses: no termination certificate, is given, forever, while"
   | Write_to_value      -> "a write to a name that is not a cell"
   | Heap_allocates      -> "the code of a heap allocates a value"
   | Law_refuted         -> "a declared law is refuted by a counterexample"

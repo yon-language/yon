@@ -7602,6 +7602,37 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
  * nothing outside can tell (the criterion of runST). A heap's put allocates
  * in its own region and answers a slot, never the region: from outside it is
  * pure. *)
+(* What a project of kind proof refuses. *)
+let proof_rule_errors (env : Tyenv.env) (p : program) : type_error list =
+  if not !Surface_ast.proof_project then [] else begin
+    let certified = List.map fst (Dispatcher.certified_deltas env) in
+    let refuse fd msg =
+      { err_loc = fd.fn_loc; err_code = Error_codes.Proof_rule;
+        err_msg = Printf.sprintf "fun %s, in a project of kind proof: %s"
+            (Str.global_replace (Str.regexp_string "__") "." fd.fn_name) msg } in
+    let rec loops = function
+      | SForever _ -> Some "forever"
+      | SWhile _ -> Some "while"
+      | s -> List.find_map (List.find_map loops) (sub_stmts s) in
+    List.concat_map (function
+        | TopPlace pd when not (in_prelude_file pd.pd_loc) ->
+            List.filter_map (function
+                | FoLaw (n, Some st) when st.ls_given ->
+                    Some { err_loc = pd.pd_loc; err_code = Error_codes.Proof_rule;
+                           err_msg = Printf.sprintf
+                               "law %s of %s, in a project of kind proof: is given is refused: a proof states no axiom"
+                               n pd.pd_name }
+                | _ -> None) pd.pd_members
+        | TopFun fd when not (in_prelude_file fd.fn_loc) ->
+            if fd.fn_given then [refuse fd "is given is refused: a proof states no axiom"]
+            else (match List.find_map loops fd.fn_body with
+                | Some kw -> [refuse fd (kw ^ " is refused: a proof terminates")]
+                | None ->
+                    if List.mem fd.fn_name certified then []
+                    else [refuse fd "it does not pass the termination check (SCT)"])
+        | _ -> []) p
+  end
+
 let heap_alloc_errors (p : program) : type_error list =
   let shown n = Str.global_replace (Str.regexp_string "__") "." n in
   let given = Hashtbl.create 64 and bodies = Hashtbl.create 256 in
@@ -8556,7 +8587,7 @@ let check_program (p : program) : check_result =
   in
   (* Pass 1.5: transitive closure of effects. *)
   let env_with_sigs = infer_effects env_with_sigs p in
-  let heap_errors = heap_alloc_errors p in
+  let heap_errors = heap_alloc_errors p @ proof_rule_errors env_with_sigs p in
   (* Multi-error accumulation: for TopFun use the accumulating variant
    * to collect ALL body errors. For other decls, the single-error
    * variant is fine (their checks are smaller). *)

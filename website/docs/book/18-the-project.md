@@ -120,3 +120,9 @@ went down with it.
 
 Three packages, two kinds of boundary, git for code, the kernel for
 processes, and the type checker policing both ends.
+
+## A project of proofs
+
+`kind = "proof"` in `[package]` makes every `fun` of the project a proof. The compiler refuses what
+does not pass the termination check, `is given`, `forever` and `while`, with code `E2010`, and only
+`main` reaches the run time: the theorems are checked and have no code. `meta/` is such a project.
