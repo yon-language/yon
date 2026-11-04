@@ -1626,9 +1626,26 @@ let record_match_coproduct (env : Tyenv.env) (loc : location) (x_ty : ty) : unit
         (Surface_ast.anon_sum_key vs)
   | None, _ -> ()
 
+(* The fields of an arm that is a place, read by their names. *)
+let place_arm_fields (env : Tyenv.env) (ctor : string) : field_decl list option =
+  match Tyenv.lookup_place env ctor with
+  | Some pd when pd.pd_arms = [] && not (Tyenv.is_synthetic_place env ctor) ->
+      (match Tyenv.place_fields pd with [] -> None | fs -> Some fs)
+  | _ -> None
+
+let reads_place_arm_fields (env : Tyenv.env) branches : bool =
+  List.exists (fun (c, pat, _) ->
+      match pat with
+      | PatFields _ -> place_arm_fields env c <> None
+      | _ -> false) branches
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
+
+  | EHITElim (EVar ("__match", _), branches, x, loc)
+    when reads_place_arm_fields env branches ->
+      place_arm_match env ctx branches x loc None
 
   | EField (EVar (c, _), arm, loc)
     when Tyenv.lookup_var env c = None
@@ -2247,6 +2264,32 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        | (TyUser place_name | TyApp (place_name, _)) as pt ->
            let targs = (match pt with TyApp (_, a) -> a | _ -> []) in
            (match Tyenv.lookup_place env place_name with
+            | None when Tyenv.lookup_named_sum env place_name <> None ->
+                (* a field on every arm: the read is the copairing of the
+                   projections of the arms *)
+                let arms = Option.get (Tyenv.lookup_named_sum env place_name) in
+                let rec field_of_arms acc = function
+                  | [] -> ok acc
+                  | (v : variant) :: rest ->
+                      (match place_arm_fields env v.v_name with
+                       | None -> err loc (Printf.sprintf
+                           "place %s has no field %s: arm %s is not a place \
+                            with fields" place_name fld v.v_name)
+                       | Some fs ->
+                           (match List.find_opt (fun (f : field_decl) -> f.fd_name = fld) fs, acc with
+                            | None, _ -> err loc (Printf.sprintf
+                                "place %s has no field %s: arm %s does not expose it"
+                                place_name fld v.v_name)
+                            | Some f, Some t when t <> f.fd_ty -> err loc (Printf.sprintf
+                                "place %s: field %s has different types on its arms"
+                                place_name fld)
+                            | Some f, _ -> field_of_arms (Some f.fd_ty) rest))
+                in
+                let* fty = field_of_arms None arms in
+                record_match_coproduct env loc (TyUser place_name);
+                Hashtbl.replace Surface_ast.union_field_sites (site_of loc)
+                  (List.map (fun (v : variant) -> v.v_name) arms);
+                ok (Option.get fty)
             | None -> err loc
                 (Printf.sprintf "place %s not found while looking up field %s" place_name fld)
             | Some pd ->
@@ -3091,6 +3134,52 @@ got %s" (Tyenv.ty_to_string other)))
 
 (* ─── Expression: check (delegate to infer when possible) ──────────── *)
 
+(* A match that reads an arm that is a place by the names of its fields. *)
+and place_arm_match env ctx branches x loc (expected : ty option) : ty tc_result =
+  let* x_ty = infer env ctx x in
+  record_match_coproduct env loc x_ty;
+  match hit_signature_of env x_ty with
+  | None -> err loc "match: the scrutinee is not a coproduct"
+  | Some (hname, sig_) ->
+      let handled = List.map (fun (n, _, _) -> n) branches in
+      let missing =
+        if List.mem "_" handled then []
+        else Hit_env.missing_constructors sig_ handled in
+      let* () =
+        match missing with
+        | [] -> ok ()
+        | ns -> err loc (Printf.sprintf
+            "match: missing branch(es) for %s" (String.concat ", " ns)) in
+      let branch_env ctor pat =
+        match place_arm_fields env ctor, pat with
+        | Some fs, PatFields bound ->
+            let* typed =
+              List.fold_left (fun acc (f, b) ->
+                let* acc = acc in
+                match List.find_opt (fun (d : field_decl) -> d.fd_name = f) fs with
+                | Some d -> ok (if b = "_" then acc else (b, d.fd_ty) :: acc)
+                | None -> err loc (Printf.sprintf
+                    "match %s { ... }: no field named '%s'" ctor f))
+                (ok []) bound in
+            ok (Tyenv.add_vars env typed)
+        | Some _, PatVars [] -> ok env
+        | Some _, _ -> err loc (Printf.sprintf
+            "match: arm %s is a place: it is read by the names of its fields, \
+             %s { field as x }" ctor ctor)
+        | None, PatVars [] -> ok env
+        | None, _ when ctor = "_" -> ok env
+        | None, _ -> err loc (Printf.sprintf
+            "match: arm %s does not belong to %s as a place" ctor hname) in
+      List.fold_left (fun acc (ctor, pat, body) ->
+        let* acc = acc in
+        let* benv = branch_env ctor pat in
+        match acc with
+        | Some t -> let* () = check benv ctx body t in ok (Some t)
+        | None -> let* t = infer benv ctx body in ok (Some t))
+        (ok expected) branches
+      |> fun r -> let* t = r in
+         (match t with Some t -> ok t | None -> err loc "match: no branches")
+
 and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit tc_result =
   (* Universal property of the terminal object 1: for every object A there is
      a unique map `!_A : A -> 1`. So a term of any type checks against 1 (it
@@ -3260,6 +3349,10 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                   "ambiguous injection into %s: the value inhabits more than \
                    one arm; annotate the intended side"
                   (Tyenv.ty_to_string sum_ty))))
+  | EHITElim (EVar ("__match", _), branches, x, loc), _
+      when reads_place_arm_fields env branches ->
+      let* _ = place_arm_match env ctx branches x loc (Some expected) in
+      ok ()
   | EHITElim (EVar ("__match", _), branches, x, loc), _
       when (match x with
             | EVar (xv, _) -> not (ty_mentions_evar xv expected)
@@ -5313,6 +5406,15 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
           (ok ()) pd.pd_arms
       in
       let* () = check_algebra_models env ctx pd in
+      let* () =
+        (* a place arm is known at run time by the root of its section, a
+           payload arm by the label of its node: one value cannot be asked both *)
+        match List.find_opt (fun (v : variant) -> v.v_args = [] && place_arm_fields env v.v_name <> None) pd.pd_arms,
+              List.find_opt (fun (v : variant) -> v.v_args <> []) pd.pd_arms with
+        | Some a, Some b -> err pd.pd_loc (Printf.sprintf
+            "place %s: arm %s is a place with fields and arm %s carries a payload: \
+             a coproduct has arms of one kind or the other" pd.pd_name a.v_name b.v_name)
+        | _ -> ok () in
       check_union_members env ctx pd
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn

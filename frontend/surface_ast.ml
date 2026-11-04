@@ -262,6 +262,10 @@ let mut_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 32
    (file, line, col) of a `hit(arm, ..)` or of a `match` -> the coproduct it
    resolved. A bare point rides bare_point_sites, which already carries it. *)
 let arm_coproduct_sites : (string * int * int, string) Hashtbl.t = Hashtbl.create 32
+
+(* The field read on a coproduct at a site, with the arms that give it: the
+   read is the copairing of the projections of the arms. *)
+let union_field_sites : (string * int * int, string list) Hashtbl.t = Hashtbl.create 16
 (* the qualified forms `C.arm` and `C.arm(..)`: site -> (coproduct, arm). The
    desugar lowers them as the injection of the arm into C. *)
 let qualified_arm_sites : (string * int * int, string * string) Hashtbl.t = Hashtbl.create 16

@@ -1173,6 +1173,10 @@ let rec infer_mlir_ty (e : emitter)
                      obj_ty))
   | C.App (C.Var "__i64_bnot", _) -> "i64"
   | C.App (C.Var ("__sum_tag" | "__sum_box" | "__sum_unbox"), _) -> "f64"
+  | C.App (C.Var f, _)
+    when String.starts_with ~prefix:"__section_is_place_" f -> "i1"
+  | C.App (C.Var f, _) when String.starts_with ~prefix:"__section_as_" f ->
+      Printf.sprintf "!topos.section<\"%s\">" (String.sub f 13 (String.length f - 13))
   | C.App (C.App (C.Var op, _), _)
     when String.length op > 6 && String.sub op 0 6 = "__w64_" -> "i64"
   | C.App (C.App (C.Var op, _), _)
@@ -3165,6 +3169,38 @@ let rec emit_term (e : emitter)
   (* A coproduct value: the constant -(tag + 1) of a nullary arm, or a node
      whose label is its tag; the sign tells which. Each takes its operand
      once. *)
+  | C.App (C.Var f, arg) when String.starts_with ~prefix:"__section_as_" f ->
+      (* the branch of a place arm: the handle is the arm's section *)
+      let target = Printf.sprintf "!topos.section<\"%s\">"
+          (String.sub f 13 (String.length f - 13)) in
+      let (va, ty) = emit_term e env funcs arg in
+      let vf = coerce_to_param e va ty "f64" in
+      (coerce_to_param e vf "f64" target, target)
+  | C.App (C.Var f, arg) when String.starts_with ~prefix:"__section_is_place_" f ->
+      (* the arm of a coproduct of places: the value is the arm's section, and a
+         section starts with the type root of its place; a nullary arm is a
+         negative constant, and no section *)
+      let place = String.sub f 19 (String.length f - 19) in
+      let va = emit_f64 e env funcs arg in
+      let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
+      let zero = def "arith.constant 0.0 : f64" in
+      let neg = def (Printf.sprintf "arith.cmpf olt, %s, %s : f64" va zero) in
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = scf.if %s -> (i1) {" v neg);
+      push_indent e;
+      let no = def "arith.constant false" in
+      emit_line e (Printf.sprintf "scf.yield %s : i1" no);
+      pop_indent e;
+      emit_line e "} else {";
+      push_indent e;
+      let h = def (Printf.sprintf "arith.fptosi %s : f64 to i64" va) in
+      let r = def (Printf.sprintf "func.call @yon_rt_section_root(%s) : (i64) -> i64" h) in
+      let want = def (Printf.sprintf "arith.constant %Ld : i64" (place_root_of e.places_decls place)) in
+      let eq = def (Printf.sprintf "arith.cmpi eq, %s, %s : i64" r want) in
+      emit_line e (Printf.sprintf "scf.yield %s : i1" eq);
+      pop_indent e;
+      emit_line e "}";
+      (v, "i1")
   | C.App (C.Var ("__sum_tag" | "__sum_box" | "__sum_unbox" as f), arg) ->
       let va = emit_f64 e env funcs arg in
       let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
@@ -7153,6 +7189,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_merkle_node2(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_merkle_node2_commutative(f64, f64, f64) -> f64";
   emit_line e ("func.func private @yon_rt_merkle_label(f64) -> f64" ^ no_effects);
+  if Hashtbl.fold (fun arm _ acc -> acc || Desugar.is_place_arm arm)
+       Surface_ast.union_arm_upcasts false
+  then emit_line e "func.func private @yon_rt_section_root(i64) -> i64";
   emit_line e ("func.func private @yon_rt_merkle_child(f64, f64) -> f64" ^ no_effects);
   emit_line e ("func.func private @yon_rt_merkle_equal(f64, f64) -> f64" ^ no_effects);
   emit_line e "func.func private @yon_rt_merkle_to_list(f64) -> f64";

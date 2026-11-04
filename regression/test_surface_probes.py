@@ -95,13 +95,11 @@ def _uso(tmp_path, funs, account=ACCOUNT):
     return _exit(tmp_path, _main("  return Uso.run()"), extra)
 
 
-@pytest.mark.xfail(strict=True, reason="a field read on a coproduct")
 def test_a_field_guaranteed_on_every_arm_reads_on_the_coproduct(tmp_path):
     assert _uso(tmp_path, "fun leggi(a: Account): Number { return a.balance }\n"
                           "fun run(): Number { return leggi(Account.prova()) }\n") == 2
 
 
-@pytest.mark.xfail(strict=True, reason="a pattern with fields on an arm that is a place")
 def test_an_arm_that_is_a_place_is_read_by_the_names_of_its_fields(tmp_path):
     assert _uso(tmp_path,
                 "fun leggi(a: Account): Number {\n"
@@ -110,7 +108,6 @@ def test_an_arm_that_is_a_place_is_read_by_the_names_of_its_fields(tmp_path):
                 "fun run(): Number { return leggi(Account.prova()) }\n") == 1
 
 
-@pytest.mark.xfail(strict=True, reason="a pipe into a qualified name")
 def test_a_pipe_accepts_the_qualified_name_of_a_fun(tmp_path):
     assert _uso(tmp_path, "fun run(): Number {\n  o := Account.prova()\n"
                           "  return o |> Account.saldo\n}\n") == 2
@@ -119,6 +116,56 @@ def test_a_pipe_accepts_the_qualified_name_of_a_fun(tmp_path):
 def test_a_qualified_fun_in_the_house_of_a_coproduct_is_called(tmp_path):
     assert _uso(tmp_path, "fun run(): Number {\n  o := Account.prova()\n"
                           "  return Account.stato(o)\n}\n") == 5
+
+
+BOTH_ARMS = ("fun apri(): Account { return .-> Opened { initial 1 balance 2 } }\n"
+             "fun chiudi(): Account { return .-> Closed { moment 3 balance 4 } }\n")
+
+
+def test_a_field_on_a_coproduct_reads_the_arm_the_value_is_in(tmp_path):
+    assert _uso(tmp_path, BOTH_ARMS + "fun b(a: Account): Number { return a.balance }\n"
+                "fun run(): Number { return b(apri()) * 10 + b(chiudi()) }\n") == 24
+
+
+def test_a_match_on_arms_that_are_places_takes_the_arm_of_the_value(tmp_path):
+    assert _uso(tmp_path, BOTH_ARMS +
+                "fun leggi(a: Account): Number {\n"
+                "  return match a { Opened { initial as i } => i, Closed { moment as m } => m }\n"
+                "}\n"
+                "fun tag(a: Account): Number { return match a { Opened => 5, Closed => 6 } }\n"
+                "fun run(): Number {\n"
+                "  return leggi(apri()) * 100 + leggi(chiudi()) * 10 + tag(chiudi())\n}\n") == 136
+
+
+def _uso_refused(tmp_path, funs, *words, account=ACCOUNT):
+    extra = dict(account)
+    extra["w/Uso.yon"] = "place Uso {\n" + funs + "}\n"
+    r, _ = _compile(tmp_path, _main("  return Uso.run()"), extra)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out, out
+    for w in words:
+        assert w in out, out
+
+
+def test_a_field_missing_from_an_arm_does_not_read_on_the_coproduct(tmp_path):
+    _uso_refused(tmp_path, "fun run(): Number { return 0 }\n"
+                 "fun b(a: Account): Number { return a.initial }\n",
+                 "no field initial", "arm Closed")
+
+
+def test_a_pattern_naming_no_field_of_the_arm_is_refused(tmp_path):
+    _uso_refused(tmp_path, "fun run(): Number { return 0 }\n"
+                 "fun b(a: Account): Number {\n"
+                 "  return match a { Opened { nope as i } => i, Closed { moment as m } => m }\n}\n",
+                 "no field named 'nope'")
+
+
+def test_a_coproduct_mixing_place_arms_and_payload_arms_is_refused(tmp_path):
+    extra = dict(ACCOUNT)
+    extra["w/Account.yon"] = "place Account { this > Opened :U Other(Number) }\n"
+    r, _ = _compile(tmp_path, _main("  return 0"), extra)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "arms of one kind" in out, out
 
 
 @pytest.mark.xfail(strict=True, reason="a nullary fun is a point")

@@ -1502,6 +1502,8 @@ expr:
           ECall (name, a :: args, mk_loc $startpos $endpos)
       | EVar (name, _) ->
           ECall (name, [a], mk_loc $startpos $endpos)
+      | EField (EVar (obj, _), fld, _) when dot_is_module obj ->
+          dot_call_expr obj fld [a] (mk_loc $startpos $endpos)
       | _ -> failwith "[parser] pipe RHS must be a function call or a name"
     }
   | NOT e = expr %prec UNOT

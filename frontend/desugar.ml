@@ -167,12 +167,18 @@ let place_fields (pd : S.place_decl) : S.field_decl list =
   List.filter_map (function S.FoField f -> Some f | _ -> None) pd.S.pd_members
 
 let place_layouts : (string, string list) Hashtbl.t = Hashtbl.create 32
+let place_field_tys : (string, (string * S.ty) list) Hashtbl.t = Hashtbl.create 32
+(* an arm that is a declared place with fields: its value is the place's section *)
+let is_place_arm (ctor : string) : bool =
+  Hashtbl.mem armless_place_names ctor
+  && (match Hashtbl.find_opt place_layouts ctor with Some (_ :: _) -> true | _ -> false)
 
 let build_sum_registry (p : S.program) : unit =
   Hashtbl.clear sum_ctor_registry;
   Hashtbl.clear inductive_type_names;
   Hashtbl.clear armless_place_names;
   Hashtbl.clear place_layouts;
+  Hashtbl.clear place_field_tys;
   Hashtbl.clear Surface_ast.union_arm_upcasts;
   sum_scrut_counter := 0;
   let scan_param (pm : S.param) = collect_sums_in_ty pm.S.param_ty in
@@ -190,6 +196,8 @@ let build_sum_registry (p : S.program) : unit =
     | S.TopPlace pd ->
         Hashtbl.replace place_layouts pd.S.pd_name
           (List.map (fun (f : S.field_decl) -> f.S.fd_name) (place_fields pd));
+        Hashtbl.replace place_field_tys pd.S.pd_name
+          (List.map (fun (f : S.field_decl) -> (f.S.fd_name, f.S.fd_ty)) (place_fields pd));
         (* a place with arms IS the named sum (one production): register its
            name + constructors exactly as an inline sum. *)
         if pd.S.pd_arms <> [] then begin
@@ -743,6 +751,8 @@ and desugar_expr (e0 : S.expr) : C.term =
             (match find_arm ?coproduct:(site_coproduct loc) ctor with
              | Some (_, arg_tys) ->
                  let fields =
+                   if arg_tys = [] && is_place_arm ctor then Hashtbl.find place_layouts ctor
+                   else
                    List.init (List.length arg_tys)
                      (fun i -> Printf.sprintf "_%d" (i + 1)) in
                  (match S.pat_to_binders ~fields pat with
@@ -817,6 +827,15 @@ and desugar_expr (e0 : S.expr) : C.term =
        | Some (tag, arg_tys) when List.length arg_tys = List.length args ->
            lower_sum_constr tag arg_tys args loc
        | _ -> C.HITConstr (ctor, List.map desugar_expr args))
+  | S.EField (obj, fld, loc)
+    when Hashtbl.mem S.union_field_sites (loc.S.file, loc.S.start_line, loc.S.start_col) ->
+      (* a field on a coproduct: the copairing of the projections of the arms *)
+      let arms = Hashtbl.find S.union_field_sites (loc.S.file, loc.S.start_line, loc.S.start_col) in
+      let x = fresh_synth_name "copaired" in
+      desugar_expr
+        (S.EHITElim (S.EVar ("__match", loc),
+                     List.map (fun a -> (a, S.PatFields [(fld, x)], S.EVar (x, loc))) arms,
+                     obj, loc))
   | S.EField (obj, fld, _) ->
       (* "obj.field" translates to a projection function applied to obj.
          In Core we model this as application of a named projection. *)
@@ -1522,7 +1541,29 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
   (* a coproduct payload is its node, or the constant a leaf holds *)
   let payload_node j = S.ECall ("__sum_unbox", [child (tail j) 0], loc) in
   let payload_leaf j = child (tail j) 0 in
+  (* an arm of this coproduct that is itself a place: an `on error E` arm is not
+     one, it carries E as its payload *)
+  let is_place_arm ctor =
+    is_place_arm ctor
+    && (match find_arm ?coproduct:(site_coproduct loc) ctor with
+        | Some (_, []) -> true
+        | _ -> false) in
+  let place_arm_body (ctor, vars, body) =
+    (* the value of a place arm is the arm's section: read by its fields *)
+    let sec = fresh_synth_name "arm" in
+    let tys = Hashtbl.find place_field_tys ctor in
+    let bound =
+      List.fold_left2 (fun acc (f, ty) v ->
+          if v = "_" then acc
+          else C.App (C.Lam (v, desugar_ty ty, acc),
+                      C.App (C.Var ("__field_" ^ f), C.Var sec)))
+        (desugar_expr body) tys
+        (if vars = [] then List.map (fun _ -> "_") tys else vars) in
+    C.App (C.Lam (sec, desugar_ty (S.TyUser ctor), bound),
+           C.App (C.Var ("__section_as_" ^ ctor), C.Var sv))
+  in
   let branch_body (ctor, vars, body) =
+    if is_place_arm ctor then place_arm_body (ctor, vars, body) else
     let arg_tys =
       match find_arm ?coproduct:(site_coproduct loc) ctor with
       | Some (_, tys) -> tys
@@ -1551,6 +1592,7 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
         (j + 1, C.App (C.Lam (v, lam_ty, acc), desugar_expr proj)))
       (0, body_c) vars)
   in
+  let place_mode = List.exists (fun (c, _, _) -> is_place_arm c) branches in
   (* A `_` branch is the catch-all: it becomes the final else, and EVERY explicit
      constructor gets its own tag test. Without a wildcard the match is exhaustive,
      so the last explicit branch is taken unconditionally (as before). *)
@@ -1570,13 +1612,21 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
           | Some (t, _) -> t
           | None -> 0
         in
-        let cond = S.EBinop (S.OpEq, S.EVar (tv, loc), num tag, loc) in
+        let cond =
+          if is_place_arm ctor then
+            C.App (C.Var ("__section_is_place_" ^ ctor), C.Var sv)
+          else if place_mode then
+            desugar_expr (S.EBinop (S.OpEq, sref, num (- (tag + 1)), loc))
+          else desugar_expr (S.EBinop (S.OpEq, S.EVar (tv, loc), num tag, loc)) in
         curry_apply (C.Var "__if_expr")
-          [desugar_expr cond; branch_body b; chain rest]
+          [cond; branch_body b; chain rest]
   in
   (* the tag of the scrutinee, read once: a constant of a nullary arm is
      -(tag + 1), a node carries its tag as its label *)
   let tag_of = S.ECall ("__sum_tag", [sref], loc) in
+  if place_mode then
+    C.App (C.Lam (sv, C.TyPlace "number", chain explicit), desugar_expr scrut)
+  else
   C.App (C.Lam (sv, C.TyPlace "number",
                 C.App (C.Lam (tv, C.TyPlace "number", chain explicit), desugar_expr tag_of)),
          desugar_expr scrut)
