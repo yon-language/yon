@@ -85,13 +85,13 @@ def test_a_truncation_is_built_and_read(tmp_path):
     assert _exit(tmp_path, src) == 42
 
 
-def _email(lowered):
-    return {"Email": "place Email { this > inj String\n"
+def _up_to_case(lowered):
+    return {"TextUpToCase": "place TextUpToCase { this > inj String\n"
             "  law quot ∀a : String ∀b : String, a ↦ lower = b ↦ lower → a ↪ inj = b ↪ inj\n"
             "  fun lower(s: String): String { return String.concat(s, \"\") }\n}\n",
             "Uso": "place Uso {\n"
             "  fun domain_of(s: String): Number { return String.length(s) }\n"
-            "  fun domain(e: Email): Number {\n"
+            "  fun domain(e: TextUpToCase): Number {\n"
             f"    return match e {{ inj as s => {lowered} ↦ domain_of,\n"
             "                     quot as (a, b, prova) => (domain_of, prova) ↦ ap }\n"
             "  }\n"
@@ -100,13 +100,13 @@ def _email(lowered):
 
 def test_a_map_out_of_a_quotient_respects_the_relation(tmp_path):
     assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n",
-                 _email("s ↦ Email.lower")) == 3
+                 _up_to_case("s ↦ TextUpToCase.lower")) == 3
 
 
 def test_a_map_that_does_not_factor_through_the_relation_is_refused(tmp_path):
     # without lower the two ends differ: the relation says nothing about a and b themselves
     _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n",
-             _email("s"), "mismatch")
+             _up_to_case("s"), "mismatch")
 
 
 PERSONA = {"Cliente": "place Cliente { nome Number }\n",
