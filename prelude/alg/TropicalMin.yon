@@ -4,8 +4,8 @@
 place TropicalMin is algebra {
   operation min(a: TropicalMin, b: TropicalMin): TropicalMin
   operation top(): TropicalMin
-  law associative ∀a ∀b ∀c (min(min(a, b), c) = min(a, min(b, c)))
-  law commutative ∀a ∀b (min(a, b) = min(b, a))
-  law idempotent ∀a (min(a, a) = a)
-  law neutral ∀a (min(a, top()) = a)
+  law associative ∀a : TropicalMin ∀b : TropicalMin ∀c : TropicalMin, min(min(a, b), c) = min(a, min(b, c))
+  law commutative ∀a : TropicalMin ∀b : TropicalMin, min(a, b) = min(b, a)
+  law idempotent ∀a : TropicalMin, min(a, a) = a
+  law neutral ∀a : TropicalMin, min(a, top()) = a
 }

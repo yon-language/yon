@@ -38,7 +38,7 @@ internal place FnvHeap<V> carried by i64 {
 
   /* the word of a value gives the value back: every type is a retract of
      the word */
-  law retract ∀x (value_of(word_of(x)) = x) is given
+  law retract ∀x : V, value_of(word_of(x)) = x is given
 
   /* ─── Putting and reading ────────────────────────────────── [T] ─── */
 

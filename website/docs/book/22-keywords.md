@@ -448,7 +448,7 @@ place Entry {
 
 #### `law`
 
-States a law of an algebra over its carrier, with the symbols of logic: `law commutative ∀a ∀b (a + b = b + a)`. It is certified on each model: refuted is E2101, not decided is E2102.
+States a law of an algebra over its carrier, with the symbols of logic: `law commutative ∀a : P ∀b : P, a + b = b + a`. It is certified on each model: refuted is E2101, not decided is E2102.
 
 #### `fold`
 

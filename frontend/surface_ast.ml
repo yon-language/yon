@@ -677,7 +677,7 @@ type world_place = {
    the proposition they reach. *)
 type quantifier = Forall | Exists
 type law_statement = {
-  ls_quants : (quantifier * string) list;
+  ls_quants : (quantifier * string * ty) list;
   ls_body : expr;
   ls_given : bool;   (* `is given`: an axiom, declared and never certified *)
 }

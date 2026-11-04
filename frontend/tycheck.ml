@@ -5930,7 +5930,7 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
               its variables range over every type, so each is a type of its
               own, abstract (the statement is parametric in it) *)
            let env' = Tyenv.add_vars env
-               (List.map (fun (_, x) -> (x, TyVar ("law_" ^ x))) st.ls_quants) in
+               (List.map (fun (_, x, t) -> (x, resolve_tparams pd.pd_type_params t)) st.ls_quants) in
            (* a name in the statement is a fun of the house first *)
            let rec qualify e = match e with
              | ECall (f, args, l) ->
@@ -5960,9 +5960,17 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
               the place itself, and it is a proposition *)
            (* a statement is certified, never run: the operations of the
               place are the symbols of its theory there, not effects *)
+           let* () =
+             List.fold_left (fun acc (_, x, t) ->
+                 let* () = acc in
+                 if t = TyUser pd.pd_name then ok ()
+                 else err pd.pd_loc (Printf.sprintf
+                     "law %s of the algebra %s: the variable %s ranges over the carrier: \
+                      write %s : %s" name pd.pd_name x x pd.pd_name))
+               (ok ()) st.ls_quants in
            let env' = Tyenv.add_vars
                { env with Tyenv.current_effects = pd.pd_name :: env.Tyenv.current_effects }
-               (List.map (fun (_, x) -> (x, TyUser pd.pd_name)) st.ls_quants) in
+               (List.map (fun (_, x, _) -> (x, TyUser pd.pd_name)) st.ls_quants) in
            (* in its statement a name of an operation of the algebra is
               that operation, before any fun of the same name *)
            let own = List.filter_map (function FoOp o -> Some o.op_name | _ -> None)

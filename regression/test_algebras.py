@@ -105,9 +105,9 @@ def _sum(carrier: str, extra: str = "", given: str = "") -> str:
     return ("place Sum is algebra {\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
             '  operation zero(): Sum as "0"\n'
-            "  law associative ∀a ∀b ∀c ((a + b) + c = a + (b + c))\n"
-            "  law commutative ∀a ∀b (a + b = b + a)\n"
-            "  law neutral ∀a (a + zero() = a)\n"
+            "  law associative ∀a : Sum ∀b : Sum ∀c : Sum, (a + b) + c = a + (b + c)\n"
+            "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
+            "  law neutral ∀a : Sum, a + zero() = a\n"
             + extra +
             f"  carried by {carrier}{given}\n"
             "}\n")
@@ -120,7 +120,7 @@ def test_the_machine_sum_of_i64_is_a_model_certified_by_z3(tmp_path):
 
 
 def test_a_law_false_on_the_carrier_is_refuted(tmp_path):
-    src = _sum("i64", extra="  law doubles ∀a (a + a = a)\n")
+    src = _sum("i64", extra="  law doubles ∀a : Sum, a + a = a\n")
     rc, out, _ = _build(tmp_path, {"Sum": src}, "  return 42", objects=["Sum"])
     assert rc != 0 and "E2101" in out, out
     assert "law doubles of algebra Sum on the carrier i64 is refuted" in out, out
@@ -168,8 +168,8 @@ def test_body_carried_by_is_only_for_an_algebra(tmp_path):
 _DERIVED = ("place Sum is algebra {\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
             '  operation zero(): Sum as "0"\n'
-            "  law commutative ∀a ∀b (a + b = b + a)\n"
-            "  law neutral ∀a (a + zero() = a)\n"
+            "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
+            "  law neutral ∀a : Sum, a + zero() = a\n"
             "  carried by i64\n"
             "  fun double(a: Sum): Sum { return a + a }\n"
             "  fun triple(a: Sum): Sum { return double(a) + a + zero() }\n"
@@ -201,7 +201,7 @@ def test_a_model_that_gives_a_derived_operation_keeps_its_own(tmp_path):
 def test_a_derived_operation_on_a_finite_model(tmp_path):
     alg = ("place Lub is algebra {\n"
            "  operation join(a: Lub, b: Lub): Lub\n"
-           "  law idempotent ∀a (join(a, a) = a)\n"
+           "  law idempotent ∀a : Lub, join(a, a) = a\n"
            "  fun join3(a: Lub, b: Lub, c: Lub): Lub { return join(join(a, b), c) }\n"
            "}\n")
     coin = ("place Coin uses algebra Lub {\n"

@@ -4,8 +4,8 @@
 place TropicalMax is algebra {
   operation max(a: TropicalMax, b: TropicalMax): TropicalMax
   operation bottom(): TropicalMax
-  law associative ∀a ∀b ∀c (max(max(a, b), c) = max(a, max(b, c)))
-  law commutative ∀a ∀b (max(a, b) = max(b, a))
-  law idempotent ∀a (max(a, a) = a)
-  law neutral ∀a (max(a, bottom()) = a)
+  law associative ∀a : TropicalMax ∀b : TropicalMax ∀c : TropicalMax, max(max(a, b), c) = max(a, max(b, c))
+  law commutative ∀a : TropicalMax ∀b : TropicalMax, max(a, b) = max(b, a)
+  law idempotent ∀a : TropicalMax, max(a, a) = a
+  law neutral ∀a : TropicalMax, max(a, bottom()) = a
 }

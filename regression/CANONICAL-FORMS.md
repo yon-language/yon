@@ -8,13 +8,14 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
-- productions REDUCED by a fixture (Menhir-verified): **96 / 96** surface (+3 structural allowlisted)
-- deviations rejected: **21**
+- productions REDUCED by a fixture (Menhir-verified): **98 / 98** surface (+3 structural allowlisted)
+- deviations rejected: **22**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
 |---|---|---|---|---|
 | algebra | `canonical` | accept | 0 | — |
+| algebra | `dev_untyped_quantifier` | reject_clean | 1 | `a quantifier carries its type` |
 | algebra | `model` | accept | 42 | — |
 | algebra | `standalone_op` | accept | 42 | — |
 | assignment | `canonical` | accept | 42 | — |

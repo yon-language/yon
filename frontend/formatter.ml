@@ -475,9 +475,9 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
         line f (Printf.sprintf "operation %s(%s)%s%s%s" op.op_name params ret sym alg)
     | FoLaw (l, None) -> line f ("law " ^ l)
     | FoLaw (l, Some st) ->
-        let q = String.concat " " (List.map (fun (k, x) ->
-          (match k with Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83") ^ x) st.ls_quants) in
-        line f (Printf.sprintf "law %s %s (%s)%s" l q (fmt_statement st.ls_body)
+        let q = String.concat " " (List.map (fun (k, x, t) ->
+          (match k with Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83") ^ x ^ " : " ^ fmt_ty t) st.ls_quants) in
+        line f (Printf.sprintf "law %s %s, %s%s" l q (fmt_statement st.ls_body)
                   (if st.ls_given then " is given" else ""))
     | FoCell c ->
         line f (Printf.sprintf "cell %s from %s to %s"

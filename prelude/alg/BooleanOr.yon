@@ -3,8 +3,8 @@
 place BooleanOr is algebra {
   operation join(a: BooleanOr, b: BooleanOr): BooleanOr
   operation bottom(): BooleanOr
-  law associative ∀a ∀b ∀c (join(join(a, b), c) = join(a, join(b, c)))
-  law commutative ∀a ∀b (join(a, b) = join(b, a))
-  law idempotent ∀a (join(a, a) = a)
-  law neutral ∀a (join(a, bottom()) = a)
+  law associative ∀a : BooleanOr ∀b : BooleanOr ∀c : BooleanOr, join(join(a, b), c) = join(a, join(b, c))
+  law commutative ∀a : BooleanOr ∀b : BooleanOr, join(a, b) = join(b, a)
+  law idempotent ∀a : BooleanOr, join(a, a) = a
+  law neutral ∀a : BooleanOr, join(a, bottom()) = a
 }

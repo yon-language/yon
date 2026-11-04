@@ -4,8 +4,8 @@
 place Multiplicative is algebra {
   operation mul(a: Multiplicative, b: Multiplicative): Multiplicative as "*"
   operation one(): Multiplicative as "1"
-  law associative ∀a ∀b ∀c ((a * b) * c = a * (b * c))
-  law commutative ∀a ∀b (a * b = b * a)
-  law neutral ∀a (a * one() = a)
+  law associative ∀a : Multiplicative ∀b : Multiplicative ∀c : Multiplicative, (a * b) * c = a * (b * c)
+  law commutative ∀a : Multiplicative ∀b : Multiplicative, a * b = b * a
+  law neutral ∀a : Multiplicative, a * one() = a
   carried by i64
 }

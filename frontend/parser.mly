@@ -45,6 +45,13 @@
   let dot_is_module (obj : string) : bool =
     String.length obj > 0 && obj.[0] >= 'A' && obj.[0] <= 'Z'
 
+  (* `law l ∀a (..)`: a quantifier carries its type. *)
+  let untyped_quantifier l q =
+    let sym = function Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83" in
+    failwith (Printf.sprintf
+      "law %s: a quantifier carries its type: write %s, then the statement"
+      l (String.concat " " (List.map (fun (k, x) -> sym k ^ x ^ " : T") q) ^ ","))
+
   let dot_call_expr obj fld args loc =
     if dot_is_module obj then ECall (obj ^ "__" ^ fld, args, loc)
     else ECall (fld, EVar (obj, loc) :: args, loc)
@@ -381,6 +388,14 @@ quantifiers:
 quantifier:
   | FORALL x = IDENT   { (Forall, x) }
   | EXISTS x = IDENT   { (Exists, x) }
+
+law_quantifiers:
+  | q = law_quantifier rest = law_quantifiers   { q :: rest }
+  | q = law_quantifier                          { [q] }
+
+law_quantifier:
+  | FORALL x = IDENT COLON t = type_expr   { (Forall, x, t) }
+  | EXISTS x = IDENT COLON t = type_expr   { (Exists, x, t) }
 
 (* in a prop the quantifier carries its type: `∀x : T`. The type
    is a place, named: a written type could go on with `(`, which opens the
@@ -794,8 +809,13 @@ place_member:
      effectfulness is a theorem of the list. */
   | od = operation_decl                   { PbiMember (FoOp od) }
   | LAW l = IDENT                         { PbiMember (FoLaw (l, None)) }
-  | LAW l = IDENT q = quantifiers LPAREN body = expr RPAREN g = boption(preceded(IS, GIVEN))
+  | LAW l = IDENT q = law_quantifiers COMMA body = expr g = boption(preceded(IS, GIVEN))
     { PbiMember (FoLaw (l, Some { ls_quants = q; ls_body = body; ls_given = g })) }
+  /* the quantifier without its type is the old form: refused, the new one shown */
+  | LAW l = IDENT q = quantifiers LPAREN expr RPAREN boption(preceded(IS, GIVEN))
+    { untyped_quantifier l q }
+  | LAW l = IDENT q = quantifiers COMMA expr boption(preceded(IS, GIVEN))
+    { untyped_quantifier l q }
   /* the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
   | OVER base = IDENT                     { PbiClause (PcOver base) }

@@ -1,8 +1,8 @@
 place Turn is algebra {
   operation flip(a: Turn): Turn
-  law involutive ∀a (flip(flip(a)) = a)
-  law moves ∀a (flip(a) ≠ a)
-  law reached ∀a ∃b (flip(b) = a)
-  law paired ∀a ∀b ((flip(a) = b) ↔ (flip(b) = a))
-  law either ∀a ∀b (¬(a = b) → (flip(a) = b ∨ a = b) ∧ a = a)
+  law involutive ∀a : Turn, flip(flip(a)) = a
+  law moves ∀a : Turn, flip(a) ≠ a
+  law reached ∀a : Turn ∃b : Turn, flip(b) = a
+  law paired ∀a : Turn ∀b : Turn, (flip(a) = b) ↔ (flip(b) = a)
+  law either ∀a : Turn ∀b : Turn, ¬(a = b) → (flip(a) = b ∨ a = b) ∧ a = a
 }

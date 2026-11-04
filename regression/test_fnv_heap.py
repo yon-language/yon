@@ -254,7 +254,7 @@ def test_a_law_of_an_algebra_is_not_given(tmp_path):
     (proj / "Plus.yon").write_text(
         "place Plus is algebra {\n"
         "  operation plus(a: Plus, b: Plus): Plus as \"+\"\n"
-        "  law commutative ∀a ∀b (a + b = b + a) is given\n}\n")
+        "  law commutative ∀a : Plus ∀b : Plus, a + b = b + a is given\n}\n")
     (proj / "Entry.yon").write_text("place Entry {\n  fun main(): Number { return 42 }\n}\n")
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=300)

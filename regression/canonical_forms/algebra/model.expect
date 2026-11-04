@@ -1,6 +1,6 @@
 status: accept
 exit: 42
-covers: op_symbol is_clause place_uses_clause quantifiers quantifier law_decl
+covers: op_symbol is_clause place_uses_clause law_quantifiers law_quantifier law_decl
 note: |
   An algebra is a place declared `is algebra`: its operations and its laws,
   stated with the symbols of logic over its own name. A place that `uses

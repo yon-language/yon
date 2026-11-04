@@ -348,20 +348,32 @@ ALGEBRA = {
 }
 
 
-@pytest.mark.xfail(strict=True, reason="typed quantifiers")
 def test_a_typed_quantifier_in_an_algebra(tmp_path):
     extra = dict(ALGEBRA)
     extra["w/Somma.yon"] %= "law commutativa ∀a : Somma ∀b : Somma, a + b = b + a"
     assert _exit(tmp_path, _main("  return 42"), extra) == 42
 
 
-@pytest.mark.xfail(strict=True, reason="typed quantifiers")
+def test_a_quantifier_over_another_type_in_an_algebra_is_refused(tmp_path):
+    extra = dict(ALGEBRA)
+    extra["w/Somma.yon"] %= "law strana ∀a : Number, a = a"
+    r, _ = _compile(tmp_path, _main("  return 42"), extra)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "ranges over the carrier" in out, out
+
+
+def test_a_statement_stops_at_the_end_of_the_line(tmp_path):
+    extra = dict(ALGEBRA)
+    extra["w/Somma.yon"] %= "law uno ∀a : Somma ∀b : Somma, a + b = b + a\n  law due ∀a : Somma, a = a"
+    assert _exit(tmp_path, _main("  return 42"), extra) == 42
+
+
 def test_an_untyped_quantifier_is_refused_and_the_typed_form_proposed(tmp_path):
     extra = dict(ALGEBRA)
     extra["w/Somma.yon"] %= "law commutativa ∀a ∀b (a + b = b + a)"
     r, _ = _compile(tmp_path, _main("  return 42"), extra)
     out = r.stdout + r.stderr
-    assert r.returncode != 0 and "E1001" in out and "∀a : " in out, out
+    assert r.returncode != 0 and "E1001" in out and "∀a : T ∀b : T," in out, out
 
 
 S1 = {"w/Topos.yon": "topos WTopos where {\n}\n",

@@ -168,7 +168,7 @@ let decide_finite (arms : string list) (st : S.law_statement) (body : S.expr) : 
              if List.exists (fun (_, r) -> r = Ok true) results then Ok true
              else Error (Printf.sprintf "no %s makes it true" x))
   in
-  match all st.S.ls_quants [] with
+  match all (List.map (fun (q, x, _) -> (q, x)) st.S.ls_quants) [] with
   | Ok true -> Law_check.Proven (Printf.sprintf "every assignment of the %d arms" (List.length arms))
   | Ok false -> Law_check.Refuted "the statement is false"
   | Error w -> Law_check.Refuted w
@@ -295,22 +295,22 @@ let search (m : machine) (st : S.law_statement) (body : S.expr) : string option 
     | x :: rest ->
         List.fold_left (fun acc v -> match acc with Some _ -> acc | None -> go rest ((x, v) :: env))
           None (candidates m) in
-  go (List.map snd st.S.ls_quants) []
+  go (List.map (fun (_, x, _) -> x) st.S.ls_quants) []
 
 let decide_machine (m : machine) (st : S.law_statement) (body : S.expr) : Law_check.verdict =
-  let all_forall = List.for_all (fun (q, _) -> q = S.Forall) st.S.ls_quants in
+  let all_forall = List.for_all (fun (q, _, _) -> q = S.Forall) st.S.ls_quants in
   match (if all_forall then search m st body else None) with
   | Some cex -> Law_check.Refuted (Printf.sprintf "in the arithmetic of %s, at %s"
                                      (match m with Word -> "64-bit words" | Double -> "IEEE doubles") cex)
   | None ->
-  let all_forall = List.for_all (fun (q, _) -> q = S.Forall) st.S.ls_quants in
+  let all_forall = List.for_all (fun (q, _, _) -> q = S.Forall) st.S.ls_quants in
   let program =
     if all_forall then
-      String.concat "" (List.map (fun (_, x) ->
+      String.concat "" (List.map (fun (_, x, _) ->
           Printf.sprintf "(declare-const |%s| %s)\n" x (sort m)) st.S.ls_quants)
       ^ Printf.sprintf "(assert (not %s))\n(check-sat)\n(get-model)\n" (to_prop m body)
     else
-      let formula = List.fold_right (fun (q, x) acc ->
+      let formula = List.fold_right (fun (q, x, _) acc ->
           Printf.sprintf "(%s ((|%s| %s)) %s)"
             (match q with S.Forall -> "forall" | S.Exists -> "exists") x (sort m) acc)
           st.S.ls_quants (to_prop m body) in

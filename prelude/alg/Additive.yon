@@ -5,8 +5,8 @@
 place Additive is algebra {
   operation add(a: Additive, b: Additive): Additive as "+"
   operation zero(): Additive as "0"
-  law associative ∀a ∀b ∀c ((a + b) + c = a + (b + c))
-  law commutative ∀a ∀b (a + b = b + a)
-  law neutral ∀a (a + zero() = a)
+  law associative ∀a : Additive ∀b : Additive ∀c : Additive, (a + b) + c = a + (b + c)
+  law commutative ∀a : Additive ∀b : Additive, a + b = b + a
+  law neutral ∀a : Additive, a + zero() = a
   carried by i64
 }

@@ -260,10 +260,11 @@
     with Not_found -> IDENT s
 
   (* The statement of a law or a prop, in the symbols of mathematical logic:
-     after a quantifier (`∀x`, `∃x`) comes its variable, and the parenthesis
-     that opens the statement; inside it a single `=` is equality (`==`),
-     until the parenthesis closes. Everywhere else `=` keeps its meaning. *)
-  type statement = Outside | Variable | Bound | Inside of int
+     after a quantifier (`∀x : T`, `∃x : T`) comes its variable and its type. In
+     a prop a parenthesis opens the statement; in a law a comma does, and the
+     statement reaches the end of the line. Inside it a single `=` is equality
+     (`==`). Everywhere else `=` keeps its meaning. *)
+  type statement = Outside | Variable | Bound | Inside of int | Line of int
   let statement = ref Outside
   let reset_statement () = statement := Outside
 }
@@ -278,7 +279,9 @@ let ws = [' ' '\t' '\r']
 
 rule token = parse
   | ws+              { token lexbuf }
-  | '\n'             { Lexing.new_line lexbuf; token lexbuf }
+  | '\n'             { Lexing.new_line lexbuf;
+                       (if !statement = Line 0 then statement := Outside);
+                       token lexbuf }
   | "//" [^ '\n']*   { token lexbuf }   (* line comment *)
   | "/*"             { block_comment lexbuf; token lexbuf }
   
@@ -353,10 +356,12 @@ rule token = parse
   | '%'              { PERCENT }
   | '<'              { LT }
   | '>'              { GT }
-  | '='              { (match !statement with Inside _ -> EQEQ | _ -> EQ) }
+  | '='              { (match !statement with
+                        | Inside _ | Line _ -> EQEQ
+                        | _ -> EQ) }
   | '|'              { PIPE }
   | '.'              { DOT }
-  | ','              { COMMA }
+  | ','              { (if !statement = Bound then statement := Line 0); COMMA }
   (* `:U` is the union (coproduct) operator between place arms: `A :U B`.
      The `:` prefix keeps `U` usable as an ordinary identifier. Written with
      no space (`:U`); a type annotation keeps its space (`x: T`), so `: U...`
@@ -368,11 +373,13 @@ rule token = parse
   | '('              { (match !statement with
                         | Bound -> statement := Inside 1
                         | Inside k -> statement := Inside (k + 1)
+                        | Line k -> statement := Line (k + 1)
                         | _ -> ());
                        LPAREN }
   | ')'              { (match !statement with
                         | Inside 1 -> statement := Outside
                         | Inside k -> statement := Inside (k - 1)
+                        | Line k when k > 0 -> statement := Line (k - 1)
                         | _ -> ());
                        RPAREN }
   | '{'              { LBRACE }

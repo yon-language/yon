@@ -3,8 +3,8 @@
 place BooleanAnd is algebra {
   operation meet(a: BooleanAnd, b: BooleanAnd): BooleanAnd
   operation top(): BooleanAnd
-  law associative ∀a ∀b ∀c (meet(meet(a, b), c) = meet(a, meet(b, c)))
-  law commutative ∀a ∀b (meet(a, b) = meet(b, a))
-  law idempotent ∀a (meet(a, a) = a)
-  law neutral ∀a (meet(a, top()) = a)
+  law associative ∀a : BooleanAnd ∀b : BooleanAnd ∀c : BooleanAnd, meet(meet(a, b), c) = meet(a, meet(b, c))
+  law commutative ∀a : BooleanAnd ∀b : BooleanAnd, meet(a, b) = meet(b, a)
+  law idempotent ∀a : BooleanAnd, meet(a, a) = a
+  law neutral ∀a : BooleanAnd, meet(a, top()) = a
 }

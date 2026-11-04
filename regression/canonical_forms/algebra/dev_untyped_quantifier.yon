@@ -1,0 +1,7 @@
+place Plus is algebra {
+  operation plus(a: Plus, b: Plus): Plus as "+"
+  law commutative ∀a ∀b (a + b = b + a)
+}
+place Entry {
+  fun main(): Number { return 0 }
+}

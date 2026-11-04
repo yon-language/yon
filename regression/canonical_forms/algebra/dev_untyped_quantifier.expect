@@ -1,0 +1,7 @@
+status: reject_clean
+exit: 1
+match: a quantifier carries its type
+covers: quantifiers quantifier
+note: |
+  A quantifier without its type is the old form of a law: refused, and the
+  diagnostic shows the form with the type.
