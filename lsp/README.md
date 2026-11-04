@@ -34,3 +34,9 @@ yon_lsp.exe --check dir/       # whole project (Project.check_all, the check the
 ## Not yet implemented
 - Go-to-definition.
 - Rename.
+
+## Typing the symbols
+
+Completion offers the abbreviations of the symbols of Yon, as in Lean: `\mapsto` ↦, `\inj` ↪,
+`\forall` ∀, `\exists` ∃, `\and` ∧, `\or` ∨, `\to` →, `\not` ¬, `\iff` ↔. `yonfmt` writes the ASCII
+forms in Unicode.

@@ -457,7 +457,7 @@ let write_message (oc : out_channel) (body : string) : unit =
  * Also announces hover, document symbols, completion, and document formatting. *)
 let initialize_response (id : string) : string =
   Printf.sprintf
-    {|{"jsonrpc":"2.0","id":%s,"result":{"capabilities":{"textDocumentSync":1,"hoverProvider":true,"documentSymbolProvider":true,"completionProvider":{"triggerCharacters":["."]},"documentFormattingProvider":true}}}|}
+    {|{"jsonrpc":"2.0","id":%s,"result":{"capabilities":{"textDocumentSync":1,"hoverProvider":true,"documentSymbolProvider":true,"completionProvider":{"triggerCharacters":[".","\\"]},"documentFormattingProvider":true}}}|}
     id
 
 (* JSON for the documentSymbol response. *)
@@ -474,6 +474,51 @@ let symbols_to_json (syms : symbol list) : string =
       sl sc el ec sl sc el ec
   in
   "[" ^ String.concat "," (List.map one syms) ^ "]"
+
+(* The abbreviations of the symbols of Yon, after a backslash, as in Lean. *)
+let abbreviations =
+  [ ("mapsto", "\xe2\x86\xa6"); ("inj", "\xe2\x86\xaa");
+    ("forall", "\xe2\x88\x80"); ("exists", "\xe2\x88\x83");
+    ("and", "\xe2\x88\xa7"); ("or", "\xe2\x88\xa8");
+    ("to", "\xe2\x86\x92"); ("not", "\xc2\xac"); ("iff", "\xe2\x86\x94") ]
+
+(* The byte of a line at an LSP character: LSP counts UTF-16 units. *)
+let byte_of_character (line : string) (character : int) : int =
+  let n = String.length line in
+  let rec go i units =
+    if i >= n || units >= character then i
+    else
+      let c = Char.code line.[i] in
+      let len, u =
+        if c < 0x80 then 1, 1 else if c < 0xE0 then 2, 1
+        else if c < 0xF0 then 3, 1 else 4, 2 in
+      go (i + len) (units + u) in
+  go 0 0
+
+(* The completions of the abbreviation being typed before the cursor, if one is:
+   each replaces the backslash and what follows it. *)
+let abbreviation_items (text : string) (line_no : int) (character : int) : string list =
+  match List.nth_opt (String.split_on_char '\n' text) line_no with
+  | None -> []
+  | Some line ->
+      let upto = byte_of_character line character in
+      let rec back i =
+        if i <= 0 then None
+        else if line.[i - 1] = '\\' then Some (i - 1)
+        else match line.[i - 1] with
+          | 'a'..'z' | 'A'..'Z' -> back (i - 1)
+          | _ -> None in
+      match back upto with
+      | None -> []
+      | Some start ->
+          let typed = String.sub line (start + 1) (upto - start - 1) in
+          let start_char = character - (upto - start) in
+          List.filter_map (fun (name, sym) ->
+              if String.starts_with ~prefix:typed name then
+                Some (Printf.sprintf
+                  {|{"label":"\\%s","kind":15,"detail":"%s","filterText":"\\%s","textEdit":{"range":{"start":{"line":%d,"character":%d},"end":{"line":%d,"character":%d}},"newText":"%s"}}|}
+                  name sym name line_no start_char line_no character sym)
+              else None) abbreviations
 
 let completions_to_json (items : (string * int) list) : string =
   let one (label, kind) =
@@ -593,6 +638,12 @@ let run_server () : unit =
              let id = extract_id body in
              (match extract_string_field body "uri" with
               | Some uri ->
+                  let abbrevs =
+                    match Hashtbl.find_opt docs uri,
+                          extract_int_field body "line", extract_int_field body "character" with
+                    | Some text, Some line, Some character -> abbreviation_items text line character
+                    | _ -> [] in
+                  if abbrevs <> [] then respond id ("[" ^ String.concat "," abbrevs ^ "]") else
                   let items = match parse_doc uri with
                     | Some prog -> completions_of_program prog
                     | None -> List.map (fun k -> (k, 14)) keywords in
