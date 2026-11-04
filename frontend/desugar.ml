@@ -660,11 +660,11 @@ and desugar_expr (e0 : S.expr) : C.term =
         Hashtbl.remove Surface_ast.return_inject_sites
           (l.S.file, l.S.start_line, l.S.start_col);
         (match find_arm ~coproduct arm with
-         | Some (tag, arg_tys) -> Some (tag, arg_tys, l)
+         | Some (tag, arg_tys) -> Some (arm, tag, arg_tys, l)
          | None -> None)
     | _ -> None in
   match inject_site with
-  | Some (tag, arg_tys, l) -> lower_sum_constr tag arg_tys [e0] l
+  | Some (arm, tag, _, l) -> lower_sum_constr arm tag [e0] l
   | None ->
   let e = strip_parens e0 in
   match e with
@@ -680,7 +680,7 @@ and desugar_expr (e0 : S.expr) : C.term =
           | Some (c, arm) -> n = c ^ "__" ^ arm
           | None -> false) ->
       (* `C.arm(..)`: hit(arm, ..) at the same site (the name is matched too:
-         the spine lowering builds its own calls at this site) *)
+         the injection builds its own call at this site) *)
       let (_, arm) = Hashtbl.find Surface_ast.qualified_arm_sites
           (loc.S.file, loc.S.start_line, loc.S.start_col) in
       desugar_expr (S.EHITConstr (arm, args, loc))
@@ -703,7 +703,7 @@ and desugar_expr (e0 : S.expr) : C.term =
       Hashtbl.mem Surface_ast.bare_point_sites
         (loc.S.file, loc.S.start_line, loc.S.start_col) ->
       (* the bare point: the tycheck resolved `tt` to its terminal arm
-         (scope-aware); lower to the arm's spine leaf, same value as hit(tt).
+         (scope-aware); lower to the arm's constant, same value as hit(tt).
          On the PURE paths (delta_rule_of_fun / endpoint comparison) the
          registry is not built yet: fall back to the kernel constructor, the
          form the core reducer dispatches on — a C.Var here would leave the
@@ -725,7 +725,7 @@ and desugar_expr (e0 : S.expr) : C.term =
          | None -> C.Var x
        else
        match find_arm ?coproduct:owning_sum x with
-       | Some (tag, []) -> lower_sum_constr tag [] [] loc
+       | Some (tag, []) -> lower_sum_constr x tag [] loc
        | _ -> C.HITConstr (x, []))
   | S.EVar (x, _) when Hashtbl.mem Surface_ast.fusion_places x ->
       (* the fused face in TERM position is its prim's Tarski code *)
@@ -734,8 +734,8 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.EApp (f, args, _) ->
       curry_apply (desugar_expr f) (List.map desugar_expr args)
   | S.EHITElim (_motive, branches, x, loc) ->
-      (* A custom sum eliminates at RUNTIME via a tag switch on the MerkleTree
-         carrier; a built-in HIT keeps the cubical eliminator (kernel β-rule). *)
+      (* A custom sum eliminates at RUNTIME by what its arm is: the root of its
+         section; a built-in HIT keeps the cubical eliminator (kernel β-rule). *)
       let resolve_pat ctor pat =
         (* bridge: a registry ctor's fields are `_1.._n` (the synthesis
            convention); declared arm places will supply real names here.
@@ -825,7 +825,7 @@ and desugar_expr (e0 : S.expr) : C.term =
          children); a built-in HIT constructor stays a homotopy value. *)
       (match find_arm ?coproduct:(site_coproduct loc) ctor with
        | Some (tag, arg_tys) when List.length arg_tys = List.length args ->
-           lower_sum_constr tag arg_tys args loc
+           ignore arg_tys; lower_sum_constr ctor tag args loc
        | _ -> C.HITConstr (ctor, List.map desugar_expr args))
   | S.EField (obj, fld, loc)
     when Hashtbl.mem S.union_field_sites (loc.S.file, loc.S.start_line, loc.S.start_col) ->
@@ -1112,14 +1112,14 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.ENew (place_name, fas, loc) ->
       (* `.-> P { f1 e1, f2 e2 }`: the mediatrice. Two value regimes, one
          surface: a field place lowers to its constructor call (a SECTION
-         with the identity head); a payload ARM lowers to its SPINE — the
-         same value hit built — with the field assignments ordered by the
+         with the identity head); a payload ARM lowers to the section of its
+         synthetic place, with the field assignments ordered by the
          bridge projections _1.._n. *)
       (match (if Hashtbl.mem armless_place_names place_name then None
               else find_arm place_name) with
        (* a DECLARED field place shadows a homonymous sum arm (the error
           coproduct names its failure arm after the error PLACE): the
-          mediatrice builds the SECTION; the arm's spine is the INJECTION's
+          mediatrice builds the SECTION; the arm's own section is the INJECTION's
           job, recorded by site — never by name (the ledger rule). *)
        | Some (tag, arg_tys)
          when not (Hashtbl.mem armless_place_names place_name) ->
@@ -1131,9 +1131,9 @@ and desugar_expr (e0 : S.expr) : C.term =
                | Some fa -> fa.S.fa_value
                | None ->
                    failwith (Printf.sprintf
-                     ".-> %s { ... }: missing projection %s (a spine has \
-                      full arity)" place_name f)) in
-           lower_sum_constr tag arg_tys ordered loc
+                     ".-> %s { ... }: missing projection %s (a payload arm \
+                      has full arity)" place_name f)) in
+           ignore arg_tys; lower_sum_constr place_name tag ordered loc
        | _ ->
            let arg_terms = List.map desugar_expr (by_layout place_name fas) in
            curry_apply (C.Var ("__section_" ^ place_name)) arg_terms)
@@ -1480,67 +1480,27 @@ and by_layout (place_name : string) (fas : S.field_assignment list) : S.expr lis
    always a node handle: a value of a coproduct type already is one and is
    stored directly; any other value (a number, a text or place handle, a
    boolean) enters as a leaf whose label is its exact f64. *)
-and encode_sum_arg (arg : S.expr) (arg_ty : S.ty) (loc : S.location) : S.expr =
-  if is_node_ty arg_ty then
-    (* a coproduct value is a node, or the constant of a nullary arm, which a
-       child holds in a leaf *)
-    S.ECall ("__sum_box", [arg], loc)
-  else S.ECall ("MerkleTree__leaf", [arg], loc)
-
-(* A payload type whose values are themselves Merkle nodes: a coproduct. *)
-and is_node_ty (t : S.ty) : bool =
-  match t with
-  | S.TySum _ | S.TySumIn _ -> true
-  | S.TyUser n -> Hashtbl.mem inductive_type_names n
-  | _ -> false
-
-(* hit(Ctor, args) for a custom sum. A nullary arm is a constant, its value
-   the number -(tag + 1): never a node of the heap, so building it allocates
-   nothing. An arm with a payload is a right-nested spine of node2/leaf
-   (never node3/node4, whose runtime child access is unreliable), which lifts
-   the arity cap:
-     k = 0 -> -(tag + 1)
-     k >= 1 -> node2(tag, e0, node2(0, e1, .. node2(0, e_{k-1}, leaf(0)) ..))
-   A node handle is never negative, so the sign tells the two apart.
-   The tag is the outer node's label; payload j sits at `child((child _ 1)^j, 0)`
-   (see lower_sum_elim). Built as surface MerkleTree calls, then desugared. *)
-and lower_sum_constr (tag : int) (arg_tys : S.ty list)
+(* The injection into an arm. A nullary arm is a constant, its value the number
+   -(tag + 1): never a value of the heap, so building it allocates nothing. An arm
+   with a payload is the section of its synthetic place: the root of the arm, then
+   the projections _1 .. _n, each in a uniform slot. A section handle is never
+   negative, so the sign tells the two apart. *)
+and lower_sum_constr (arm : string) (tag : int)
     (args : S.expr list) (loc : S.location) : C.term =
-  let num n = S.ELit (S.LitNumber (float_of_int n), loc) in
-  let leaf e = S.ECall ("MerkleTree__leaf", [e], loc) in
-  let node2 t a b = S.ECall ("MerkleTree__node2", [t; a; b], loc) in
-  let cs = List.map2 (fun a t -> encode_sum_arg a t loc) args arg_tys in
-  let rec spine = function
-    | [] -> leaf (num 0)
-    | e :: rest -> node2 (num 0) e (spine rest)
-  in
-  let node =
-    match cs with
-    | [] -> S.ELit (S.LitNumber (-. float_of_int (tag + 1)), loc)
-    | e0 :: rest -> node2 (num tag) e0 (spine rest)
-  in
-  desugar_expr node
+  match args with
+  | [] -> desugar_expr (S.ELit (S.LitNumber (-. float_of_int (tag + 1)), loc))
+  | _ -> curry_apply (C.Var ("__arm_new_" ^ arm)) (List.map desugar_expr args)
 
-(* match/hit_elim on a runtime custom-sum value -> a tag switch. The scrutinee
-   is bound once (a Core let, inlined by emit), its tag read with `label`, and
-   each branch guarded by `label(scrut) == tag_i`; the last branch is the
-   remaining constructor, taken unconditionally (the match is exhaustive). A
-   branch's payload binders are bound by Core lets to their projections
-   (`label(child(scrut,j))` for a number, `child(scrut,j)` for a nested sum). *)
+(* match on a runtime value of a coproduct: the scrutinee is bound once, and each
+   branch guarded by what its arm is: a nullary arm by its constant, any other by
+   the root of its section. The last branch is the remaining arm, taken
+   unconditionally (the match is exhaustive). A branch's binders are bound by Core
+   lets to the projections of the section. *)
 and lower_sum_elim (branches : (string * string list * S.expr) list)
     (scrut : S.expr) (loc : S.location) : C.term =
   let num n = S.ELit (S.LitNumber (float_of_int n), loc) in
   let sv = fresh_sum_scrut () in
   let sref = S.EVar (sv, loc) in
-  let tv = sv ^ "_tag" in
-  let label e = S.ECall ("MerkleTree__label", [e], loc) in
-  let child e j = S.ECall ("MerkleTree__child", [e; num j], loc) in
-  (* Payload j lives at the head of the j-th spine cell: descend `child(_,1)` j
-     times from the scrutinee, then take `child(_,0)`. Matches lower_sum_constr. *)
-  let rec tail j = if j <= 0 then sref else child (tail (j - 1)) 1 in
-  (* a coproduct payload is its node, or the constant a leaf holds *)
-  let payload_node j = S.ECall ("__sum_unbox", [child (tail j) 0], loc) in
-  let payload_leaf j = child (tail j) 0 in
   (* an arm of this coproduct that is itself a place: an `on error E` arm is not
      one, it carries E as its payload *)
   let is_place_arm ctor =
@@ -1573,13 +1533,13 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
     snd (List.fold_left
       (fun (j, acc) v ->
         let vty = try List.nth arg_tys j with _ -> S.TyPrim "number" in
+        let slot = S.ECall (Printf.sprintf "__arm_field_%d" j, [sref], loc) in
         let proj =
-          if is_node_ty vty then payload_node j
-          else match vty with
-            | S.TyPrim "boolean" ->
-                (* a Boolean entered as 0 or 1 *)
-                S.EBinop (S.OpEq, label (payload_leaf j), num 1, loc)
-            | _ -> label (payload_leaf j)
+          match vty with
+          | S.TyPrim "boolean" ->
+              (* a Boolean entered as 0 or 1 *)
+              S.EBinop (S.OpEq, slot, num 1, loc)
+          | _ -> slot
         in
         let lam_ty = match vty with
           | S.TyUser n when Hashtbl.mem armless_place_names n ->
@@ -1592,10 +1552,9 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
         (j + 1, C.App (C.Lam (v, lam_ty, acc), desugar_expr proj)))
       (0, body_c) vars)
   in
-  let place_mode = List.exists (fun (c, _, _) -> is_place_arm c) branches in
   (* A `_` branch is the catch-all: it becomes the final else, and EVERY explicit
-     constructor gets its own tag test. Without a wildcard the match is exhaustive,
-     so the last explicit branch is taken unconditionally (as before). *)
+     arm gets its own test. Without a wildcard the match is exhaustive, so the last
+     explicit branch is taken unconditionally. *)
   let explicit = List.filter (fun (c, _, _) -> c <> "_") branches in
   let wildcard = List.find_opt (fun (c, _, _) -> c = "_") branches in
   let default_body =
@@ -1607,29 +1566,18 @@ and lower_sum_elim (branches : (string * string list * S.expr) list)
     | [] -> default_body
     | [last] when wildcard = None -> branch_body last
     | (ctor, _, _ as b) :: rest ->
-        let tag =
-          match find_arm ?coproduct:(site_coproduct loc) ctor with
-          | Some (t, _) -> t
-          | None -> 0
-        in
         let cond =
           if is_place_arm ctor then
             C.App (C.Var ("__section_is_place_" ^ ctor), C.Var sv)
-          else if place_mode then
-            desugar_expr (S.EBinop (S.OpEq, sref, num (- (tag + 1)), loc))
-          else desugar_expr (S.EBinop (S.OpEq, S.EVar (tv, loc), num tag, loc)) in
+          else
+            match find_arm ?coproduct:(site_coproduct loc) ctor with
+            | Some (tag, []) ->
+                desugar_expr (S.EBinop (S.OpEq, sref, num (- (tag + 1)), loc))
+            | _ -> C.App (C.Var ("__arm_is_" ^ ctor), C.Var sv) in
         curry_apply (C.Var "__if_expr")
           [cond; branch_body b; chain rest]
   in
-  (* the tag of the scrutinee, read once: a constant of a nullary arm is
-     -(tag + 1), a node carries its tag as its label *)
-  let tag_of = S.ECall ("__sum_tag", [sref], loc) in
-  if place_mode then
-    C.App (C.Lam (sv, C.TyPlace "number", chain explicit), desugar_expr scrut)
-  else
-  C.App (C.Lam (sv, C.TyPlace "number",
-                C.App (C.Lam (tv, C.TyPlace "number", chain explicit), desugar_expr tag_of)),
-         desugar_expr scrut)
+  C.App (C.Lam (sv, C.TyPlace "number", chain explicit), desugar_expr scrut)
 
 (* the carrier's arithmetic, inside the house of an `internal place`:
    the machine's, which wraps *)

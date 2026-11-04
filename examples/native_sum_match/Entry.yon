@@ -11,12 +11,6 @@ place Entry {
 // con n : number in scope. Prima di questo fix il sugar prendeva il PRIMO ramo come
 // testimone e falliva quando quel ramo usava il suo payload (`unknown identifier n`).
 //
-// CONFINE (onesto): questo eliminatore e' l'eliminatore TYPE-THEORETIC, calcolato a
-// compile-time (regola beta) quando lo scrutinee e' un costruttore noto. Un match su
-// un valore somma a RUNTIME (una variabile) non ha ancora dispatch sul tag ed e'
-// stuck: per il calcolo su dati costruiti a runtime i seed self-host usano MerkleTree
-// (l'algebra iniziale content-addressed, che il tag lo dispaccia a runtime).
-
 fun run(m: Maybe): Number {
   return match m { Box(n) => n * 2, Empty => 0 }   // 21 * 2 = 42
 }

@@ -1213,10 +1213,29 @@ yon_section_t yon_rt_section_r(uint32_t heap_id,
 }
 
 /* The head is recoverable from the handle alone: O(1), no side table. */
+double yon_rt_arm_field(double handle, uint32_t j) {
+    yon_section_t sec = (yon_section_t)(int64_t)handle;
+    const yon_xheap_slot_t *slot = yon_section_heap(sec) == YON_SECTION_FNV_CHAIN
+        ? yon_xheap_get_chain(yon_section_slot(sec)) : NULL;
+    if (!slot || slot->payload_size < YON_ROOT_HEAD_BYTES + (j + 1u) * 8u) {
+        yon_rt_refuse_with(YON_REFUSAL_FieldNotRead, (int64_t)sec, j * 8u, 8u);
+    }
+    const uint8_t *p = (const uint8_t *)yon_xheap_payload_chain(yon_section_slot(sec));
+    double v;
+    memcpy(&v, p + YON_ROOT_HEAD_BYTES + j * 8u, sizeof v);
+    return v;
+}
+
 uint64_t yon_rt_section_root(yon_section_t sec) {
-    ensure_init();
     uint32_t heap_id = yon_section_heap(sec);
     uint32_t slot_idx = yon_section_slot(sec);
+    if (heap_id == YON_SECTION_FNV_CHAIN) {
+        const uint8_t *q = (const uint8_t *)yon_xheap_payload_chain(slot_idx);
+        uint64_t rr = 0;
+        if (q) memcpy(&rr, q, sizeof rr);
+        return rr;
+    }
+    ensure_init();
     yon_xheap_t *h = heap_for(heap_id);
     const yon_xheap_slot_t *slot = yon_xheap_get(h, slot_idx);
     if (!slot || slot->payload_offset == 0
@@ -5655,6 +5674,15 @@ double yon_rt_merkle_leaf(double label) {
     uint32_t slot = yon_xheap_put_chain(g_ds_heap, &node, sizeof(node), YON_TAG_USER2);
     if (slot == YON_HEAP_SLOT_INVALID) return 0.0;
     return (double)slot;
+}
+
+yon_section_t yon_rt_arm_section(const void *bytes, uint32_t n_bytes) {
+    ds_ensure_init();
+    uint32_t ref = yon_xheap_put_chain(g_ds_heap, bytes, n_bytes, YON_TAG_USER1);
+    if (ref == YON_HEAP_SLOT_INVALID) {
+        yon_rt_refuse_with(YON_REFUSAL_HeapExhausted, 0, 0, 0);
+    }
+    return yon_section_pack(YON_SECTION_FNV_CHAIN, ref);
 }
 
 double yon_rt_merkle_node2(double label, double child1, double child2) {

@@ -401,6 +401,12 @@ yon_section_t yon_rt_section_r(uint32_t heap_id,
                             uint64_t type_root, uint32_t schema_version);
 /* The type root recovered from the handle alone (0 if unavailable). */
 uint64_t yon_rt_section_root(yon_section_t sec);
+/* The section of a coproduct arm lives on the FNV chain of the current Space: its
+ * handle names the chain in place of a Space's section heap. */
+#define YON_SECTION_FNV_CHAIN 0xFFFFu
+yon_section_t yon_rt_arm_section(const void *bytes, uint32_t n_bytes);
+/* Projection j of the section of a coproduct arm, in its uniform slot. */
+double yon_rt_arm_field(double handle, uint32_t j);
 yon_section_t yon_rt_section_v(uint32_t heap_id,
                             const void *payload_bytes, uint32_t n_bytes,
                             const char *place_name, uint32_t schema_version);

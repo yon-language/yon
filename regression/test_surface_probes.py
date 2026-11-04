@@ -21,7 +21,7 @@ TOML = '''[package]
 name = "probe"
 
 [world.W]
-objects = ["X"]
+objects = ["X", "Chain", "Box"]
 spaces  = ["w"]
 
 [runtime]
@@ -160,12 +160,68 @@ def test_a_pattern_naming_no_field_of_the_arm_is_refused(tmp_path):
                  "no field named 'nope'")
 
 
-def test_a_coproduct_mixing_place_arms_and_payload_arms_is_refused(tmp_path):
-    extra = dict(ACCOUNT)
-    extra["w/Account.yon"] = "place Account { this > Opened :U Other(Number) }\n"
+MIXED = {
+    "w/Topos.yon": "topos WTopos where {\n}\n",
+    "w/Opened.yon": "place Opened { initial Number balance Number }\n",
+    "w/Stato.yon": "place Stato { this > Opened :U Pending(Number) :U Spento }\n",
+}
+
+
+def test_a_mixed_coproduct_is_read_arm_by_arm(tmp_path):
+    assert _uso(tmp_path,
+                "fun a(): Stato { return .-> Opened { initial 1 balance 2 } }\n"
+                "fun b(): Stato { return .-> Pending { _1 3 } }\n"
+                "fun c(): Stato { return Spento }\n"
+                "fun leggi(s: Stato): Number {\n"
+                "  return match s { Opened { initial as i } => i, Pending as n => n, Spento => 4 }\n}\n"
+                "fun run(): Number { return leggi(a()) * 100 + leggi(b()) * 10 + leggi(c()) }\n",
+                MIXED) == 134
+
+
+def test_a_field_declared_on_a_coproduct_names_the_payload_arm_that_lacks_it(tmp_path):
+    extra = dict(MIXED)
+    extra["w/Stato.yon"] = "place Stato {\n  this > Opened :U Pending(Number)\n  balance Number\n}\n"
     r, _ = _compile(tmp_path, _main("  return 0"), extra)
     out = r.stdout + r.stderr
-    assert r.returncode != 0 and "E2001" in out and "arms of one kind" in out, out
+    assert r.returncode != 0 and "E2001" in out and "arm Pending" in out and "obligation" in out, out
+
+
+def test_a_field_declared_on_a_coproduct_names_the_nullary_arm_that_lacks_it(tmp_path):
+    extra = dict(MIXED)
+    extra["w/Stato.yon"] = "place Stato {\n  this > Opened :U Spento\n  balance Number\n}\n"
+    r, _ = _compile(tmp_path, _main("  return 0"), extra)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "arm Spento" in out and "obligation" in out, out
+
+
+def test_a_field_does_not_read_on_a_coproduct_with_a_payload_arm(tmp_path):
+    _uso_refused(tmp_path, "fun run(): Number { return 0 }\n"
+                 "fun b(s: Stato): Number { return s.balance }\n",
+                 "no field balance", "arm Pending", account=MIXED)
+
+
+def test_payload_arms_go_past_the_slots_of_one_heap(tmp_path):
+    # the arms live on the FNV chain, and the chain has no limit of one heap
+    src = ("place Chain { this > End :U Link(Number, Chain) }\n"
+           "place Entry {\n"
+           "fun build(i: Number, acc: Chain): Chain {\n"
+           "  return if i == 0 then acc else build(i - 1, .-> Link { _1 i _2 acc })\n}\n"
+           "fun len(c: Chain, n: Number): Number {\n"
+           "  return match c { End => n, Link(h, t) => len(t, n + 1) }\n}\n"
+           "fun main(): Number { return if len(build(200000, End), 0) == 200000 then 42 else 1 }\n}\n")
+    extra = {"w/Topos.yon": "topos WTopos where {\n}\n"}
+    r, exe = _compile(tmp_path, src, extra)
+    assert r.returncode == 0, r.stdout + r.stderr
+    p = subprocess.run(f"ulimit -s 65520; {exe}", shell=True, capture_output=True, timeout=60)
+    assert p.returncode == 42, p.stderr
+
+
+def test_two_arms_with_the_same_content_are_one_value(tmp_path):
+    src = ("place Box { this > Full(Number, Number) :U Empty }\n"
+           "place Entry {\n"
+           "fun mk(a: Number): Box { return .-> Full { _1 a _2 2 } }\n"
+           "fun main(): Number { return if mk(1) == mk(1) then 42 else 1 }\n}\n")
+    assert _exit(tmp_path, src) == 42
 
 
 @pytest.mark.xfail(strict=True, reason="a nullary fun is a point")

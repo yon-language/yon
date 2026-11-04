@@ -126,7 +126,7 @@ def test_mediatrice_on_arm_requires_full_arity(tmp_path):
     r = _emit(twin)
     assert r.returncode != 0
     msg = (r.stderr + r.stdout).decode(errors="replace")
-    assert "a spine has no zero-fill" in msg and "_2" in msg, msg[-300:]
+    assert "there is no zero-fill" in msg and "_2" in msg, msg[-300:]
 
 
 def test_cross_space_union_rejected_same_world():

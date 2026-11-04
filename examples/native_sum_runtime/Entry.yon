@@ -7,10 +7,9 @@ place Entry {
 //
 // PERCHE': questo unifica le due facce dell'algebra iniziale. L'eliminatore
 // dipendente type-theoretic (match su un costruttore statico) resta la regola
-// beta del kernel; qui invece il valore somma ha un CARRIER a runtime — un nodo
-// MerkleTree, content-addressed — e l'eliminazione e' uno switch sul tag via
-// `label`, con i payload proiettati via `child`. E' la stessa codifica che i
-// seed self-host scrivono a mano, ora generata dal desugar per ogni somma custom.
+// beta del kernel; qui invece il valore somma ha un CARRIER a runtime: la sezione
+// del place sintetico del braccio, sulla catena FNV, e l'eliminazione legge la
+// radice della sezione e le proiezioni _1 .. _n.
 // Prima di questo, un match su un valore somma a runtime era "stuck":
 // nessun valore a runtime da lowerare.
 //

@@ -958,10 +958,24 @@ let body_over_primitive (funcs : (string * 'a) list) (t : C.term) : bool =
   | Some (f, _) -> List.mem_assoc f funcs && primitive_name f
   | None -> false
 
+(* The injection into an arm with a payload, with its projections. *)
+let arm_new_of (t : C.term) : (string * C.term list) option =
+  match t with
+  | C.App _ ->
+      (match uncurry_app t with
+       | Some (f, args) when String.starts_with ~prefix:"__arm_new_" f ->
+           Some (String.sub f 10 (String.length f - 10), args)
+       | _ -> None)
+  | _ -> None
+
+(* The root an arm's section starts with. *)
+let arm_root (arm : string) : int64 = Type_root.leaf_root ("arm:" ^ arm)
+
 let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
     (funcs : (string * func_sig) list) (t : C.term) : string =
   match t with
+  | C.App _ when arm_new_of t <> None -> "f64"
   | C.App (C.Var ("FnvHeap__word_of" | "LeechHeap__word_of"
                  | "FnvHeap__value_of" | "LeechHeap__value_of"), _) -> "i64"
   | C.App (C.Var "__as_i64", _) -> "i64"
@@ -1172,9 +1186,10 @@ let rec infer_mlir_ty (e : emitter)
                      "[emit_mlir infer] malformed section type: %s."
                      obj_ty))
   | C.App (C.Var "__i64_bnot", _) -> "i64"
-  | C.App (C.Var ("__sum_tag" | "__sum_box" | "__sum_unbox"), _) -> "f64"
+  | C.App (C.Var f, _) when String.starts_with ~prefix:"__arm_field_" f -> "f64"
   | C.App (C.Var f, _)
-    when String.starts_with ~prefix:"__section_is_place_" f -> "i1"
+    when String.starts_with ~prefix:"__section_is_place_" f
+         || String.starts_with ~prefix:"__arm_is_" f -> "i1"
   | C.App (C.Var f, _) when String.starts_with ~prefix:"__section_as_" f ->
       Printf.sprintf "!topos.section<\"%s\">" (String.sub f 13 (String.length f - 13))
   | C.App (C.App (C.Var op, _), _)
@@ -1905,6 +1920,19 @@ let rec emit_term (e : emitter)
     (funcs : (string * func_sig) list)
     (t : C.term) : string * string =
   match t with
+  | C.App _ when arm_new_of t <> None ->
+      let (arm, args) = Option.get (arm_new_of t) in
+      let vals = List.map (fun a ->
+          let (v, ty) = emit_term e env funcs a in
+          coerce_to_param e v ty "f64") args in
+      let root = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant %Ld : i64" root (arm_root arm));
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = func.call @__arm_new_%d(%s) : (%s) -> f64"
+                     v (List.length vals)
+                     (String.concat ", " (root :: vals))
+                     (String.concat ", " ("i64" :: List.map (fun _ -> "f64") vals)));
+      (v, "f64")
   (* a value as its word: the carrier's own 64 bits, reinterpreted, never
      converted (a Boolean's bit widened); and back, the word itself, which
      every place that wants another carrier reinterprets the same way *)
@@ -3176,11 +3204,15 @@ let rec emit_term (e : emitter)
       let (va, ty) = emit_term e env funcs arg in
       let vf = coerce_to_param e va ty "f64" in
       (coerce_to_param e vf "f64" target, target)
-  | C.App (C.Var f, arg) when String.starts_with ~prefix:"__section_is_place_" f ->
-      (* the arm of a coproduct of places: the value is the arm's section, and a
-         section starts with the type root of its place; a nullary arm is a
-         negative constant, and no section *)
-      let place = String.sub f 19 (String.length f - 19) in
+  | C.App (C.Var f, arg)
+    when String.starts_with ~prefix:"__section_is_place_" f
+         || String.starts_with ~prefix:"__arm_is_" f ->
+      (* the arm of a coproduct: the value is the arm's section, and a section
+         starts with its root; a nullary arm is a negative constant, and no section *)
+      let root =
+        if String.starts_with ~prefix:"__arm_is_" f
+        then arm_root (String.sub f 9 (String.length f - 9))
+        else place_root_of e.places_decls (String.sub f 19 (String.length f - 19)) in
       let va = emit_f64 e env funcs arg in
       let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
       let zero = def "arith.constant 0.0 : f64" in
@@ -3195,40 +3227,19 @@ let rec emit_term (e : emitter)
       push_indent e;
       let h = def (Printf.sprintf "arith.fptosi %s : f64 to i64" va) in
       let r = def (Printf.sprintf "func.call @yon_rt_section_root(%s) : (i64) -> i64" h) in
-      let want = def (Printf.sprintf "arith.constant %Ld : i64" (place_root_of e.places_decls place)) in
+      let want = def (Printf.sprintf "arith.constant %Ld : i64" root) in
       let eq = def (Printf.sprintf "arith.cmpi eq, %s, %s : i64" r want) in
       emit_line e (Printf.sprintf "scf.yield %s : i1" eq);
       pop_indent e;
       emit_line e "}";
       (v, "i1")
-  | C.App (C.Var ("__sum_tag" | "__sum_box" | "__sum_unbox" as f), arg) ->
+  | C.App (C.Var f, arg) when String.starts_with ~prefix:"__arm_field_" f ->
       let va = emit_f64 e env funcs arg in
-      let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
-      let zero = def "arith.constant 0.0 : f64" in
-      let probe = if f = "__sum_unbox"
-        then def (Printf.sprintf "func.call @yon_rt_merkle_label(%s) : (f64) -> f64" va)
-        else va in
-      let neg = def (Printf.sprintf "arith.cmpf olt, %s, %s : f64" probe zero) in
+      let j = String.sub f 12 (String.length f - 12) in
+      let vj = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant %s : i32" vj j);
       let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = scf.if %s -> (f64) {" v neg);
-      push_indent e;
-      let yes = match f with
-        | "__sum_tag" ->
-            let m = def (Printf.sprintf "arith.negf %s : f64" va) in
-            let one = def "arith.constant 1.0 : f64" in
-            def (Printf.sprintf "arith.subf %s, %s : f64" m one)
-        | "__sum_box" -> def (Printf.sprintf "func.call @yon_rt_merkle_leaf(%s) : (f64) -> f64" va)
-        | _ -> probe in
-      emit_line e (Printf.sprintf "scf.yield %s : f64" yes);
-      pop_indent e;
-      emit_line e "} else {";
-      push_indent e;
-      let no = if f = "__sum_tag"
-        then def (Printf.sprintf "func.call @yon_rt_merkle_label(%s) : (f64) -> f64" va)
-        else va in
-      emit_line e (Printf.sprintf "scf.yield %s : f64" no);
-      pop_indent e;
-      emit_line e "}";
+      emit_line e (Printf.sprintf "%s = func.call @yon_rt_arm_field(%s, %s) : (f64, i32) -> f64" v va vj);
       (v, "f64")
   | C.App (C.App (C.Var "MerkleTree__child", arg_a), arg_b) ->
       let (va, _) = emit_term e env funcs arg_a in
@@ -6814,6 +6825,22 @@ let emit_program (dr : Desugar.desugar_result) : string =
       List.filter (fun (n, _) ->
         not (is_prelude n) || Hashtbl.mem reached n) dr.functions
     end in
+  (* The arities of the payload arms the shaken program builds. *)
+  let built_arm_arities =
+    let found = Hashtbl.create 8 in
+    let rec walk (t : C.term) =
+      (match arm_new_of t with
+       | Some (_, args) -> Hashtbl.replace found (List.length args) ()
+       | None -> ());
+      match t with
+      | C.App (a, b) -> walk a; walk b
+      | C.Lam (_, _, b) | C.PLam (_, b) | C.PApp (b, _) -> walk b
+      | C.HITConstr (_, args) -> List.iter walk args
+      | C.HITElim (brs, x) -> walk x; List.iter (fun (_, _, b) -> walk b) brs
+      | _ -> () in
+    List.iter (fun (_, b) -> walk b) dr_functions_shaken;
+    Option.iter walk dr.main;
+    Hashtbl.fold (fun n () acc -> n :: acc) found [] |> List.sort compare in
   (* prelude PLACES on use: a program constructs P through __section_P — collect
      those references from the SHAKEN bodies (+ main) and drop unused prelude
      places from the LOCAL list every downstream pass consumes (topos.world,
@@ -7189,9 +7216,10 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_merkle_node2(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_merkle_node2_commutative(f64, f64, f64) -> f64";
   emit_line e ("func.func private @yon_rt_merkle_label(f64) -> f64" ^ no_effects);
-  if Hashtbl.fold (fun arm _ acc -> acc || Desugar.is_place_arm arm)
-       Surface_ast.union_arm_upcasts false
-  then emit_line e "func.func private @yon_rt_section_root(i64) -> i64";
+  emit_line e ("func.func private @yon_rt_section_root(i64) -> i64" ^ no_effects);
+  emit_line e ("func.func private @yon_rt_arm_field(f64, i32) -> f64" ^ no_effects);
+  if built_arm_arities <> [] then
+    emit_line e "func.func private @yon_rt_arm_section(!llvm.ptr, i32) -> i64";
   emit_line e ("func.func private @yon_rt_merkle_child(f64, f64) -> f64" ^ no_effects);
   emit_line e ("func.func private @yon_rt_merkle_equal(f64, f64) -> f64" ^ no_effects);
   emit_line e "func.func private @yon_rt_merkle_to_list(f64) -> f64";
@@ -7436,6 +7464,30 @@ let emit_program (dr : Desugar.desugar_result) : string =
      when a Stream__ operation is used, so there is no duplicate here. *)
   (* For each declared place, emit the constructor __section_<Place>:
      alloca payload, field stores, yon_rt_section call. *)
+  (* The section of an arm with a payload, one builder per arity: the root, then
+     the projections, each in a uniform slot. *)
+  (List.iter (fun n ->
+     let ps = List.init n (fun i -> Printf.sprintf "%%arg%d: f64" i) in
+     emit_line e (Printf.sprintf "func.func @__arm_new_%d(%%root: i64, %s) -> f64 {"
+                    n (String.concat ", " ps));
+     push_indent e;
+     let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
+     let one = def "arith.constant 1 : i64" in
+     let bytes = 8 * (n + 1) in
+     let buf = def (Printf.sprintf "llvm.alloca %s x !llvm.array<%d x i8> : (i64) -> !llvm.ptr" one bytes) in
+     let store v ty off =
+       let o = def (Printf.sprintf "arith.constant %d : i32" off) in
+       let p = def (Printf.sprintf "llvm.getelementptr %s[%s] : (!llvm.ptr, i32) -> !llvm.ptr, i8" buf o) in
+       emit_line e (Printf.sprintf "llvm.store %s, %s : %s, !llvm.ptr" v p ty) in
+     store "%root" "i64" 0;
+     List.iter (fun i -> store (Printf.sprintf "%%arg%d" i) "f64" (8 * (i + 1))) (List.init n Fun.id);
+     let len = def (Printf.sprintf "arith.constant %d : i32" bytes) in
+     let h = def (Printf.sprintf "func.call @yon_rt_arm_section(%s, %s) : (!llvm.ptr, i32) -> i64" buf len) in
+     let f = def (Printf.sprintf "arith.sitofp %s : i64 to f64" h) in
+     emit_line e (Printf.sprintf "return %s : f64" f);
+     pop_indent e;
+     emit_line e "}")
+     built_arm_arities);
   if places <> [] then begin
     emit_line e "// Place constructors __section_<X> — alloca payload via yon_rt_section";
     List.iter (fun (pd : C.place_decl) ->

@@ -287,28 +287,32 @@ let try_reduce_stdlib (t : term) : term option =
        | Some 1.0 -> Some b
        | _ -> None)
 
-  (* A coproduct value: the constant -(tag + 1) of a nullary arm, or a node
-     whose label is its tag. Its tag; a child holding it (a constant boxed in
-     a leaf); and the value back from such a child. *)
-  | App (Var "__sum_tag", v) ->
+  (* A coproduct value: the constant -(tag + 1) of a nullary arm, or the section
+     of an arm: its builder applied to its projections. *)
+  | App (Var f, v) when String.starts_with ~prefix:"__arm_is_" f ->
+      let arm = String.sub f 9 (String.length f - 9) in
       (match Builtins.decode_number v with
-       | Some n when n < 0.0 -> Some (Builtins.encode_number (-. n -. 1.0))
+       | Some n when n < 0.0 -> Some (Builtins.encode_bool false)
        | Some _ -> None
        | None ->
-           (match v with
-            | App (App (App (Var "MerkleTree__node2", x), _), _) -> Some x
+           let rec head = function App (h, _) -> head h | t -> t in
+           (match head v with
+            | Var b when String.starts_with ~prefix:"__arm_new_" b ->
+                Some (Builtins.encode_bool (b = "__arm_new_" ^ arm))
             | _ -> None))
-  | App (Var "__sum_box", v) ->
-      (match Builtins.decode_number v with
-       | Some n when n < 0.0 -> Some (App (Var "MerkleTree__leaf", v))
-       | Some _ -> None
-       | None ->
-           (match v with
-            | App (App (App (Var "MerkleTree__node2", _), _), _) -> Some v
-            | _ -> None))
-  | App (Var "__sum_unbox", App (Var "MerkleTree__leaf", x))
-    when (match Builtins.decode_number x with Some n -> n < 0.0 | None -> false) -> Some x
-  | App (Var "__sum_unbox", (App (App (App (Var "MerkleTree__node2", _), _), _) as v)) -> Some v
+  | App (App (Var "__eq", v), k)
+    when (let rec head = function App (h, _) -> head h | t -> t in
+          match head v, Builtins.decode_number k with
+          | Var b, Some n -> String.starts_with ~prefix:"__arm_new_" b && n < 0.0
+          | _ -> false) ->
+      (* a section is no nullary arm's constant *)
+      Some (Builtins.encode_bool false)
+  | App (Var f, v) when String.starts_with ~prefix:"__arm_field_" f ->
+      let j = int_of_string (String.sub f 12 (String.length f - 12)) in
+      let rec args acc = function App (h, a) -> args (a :: acc) h | _ -> acc in
+      (match v with
+       | App _ -> List.nth_opt (args [] v) j
+       | _ -> None)
 
   (* Space operations *)
   | App (Var "Space__new", init) ->

@@ -2724,9 +2724,8 @@ got %s" (Tyenv.ty_to_string other)))
            err loc "spawn block has no promote: it must promote at least one value")
   | ENew (place_name, fas, loc) ->
       let* () =
-        (* a payload arm's mediatrice lowers to the arm's SPINE (the same
-           value hit built): every projection must be given — a spine has
-           full arity, there is no zero-fill. *)
+        (* a payload arm's mediatrice lowers to the section of its synthetic
+           place: every projection must be given, there is no zero-fill. *)
         if Tyenv.is_synthetic_place env place_name then
           match Tyenv.lookup_place env place_name with
           | Some pd ->
@@ -2739,7 +2738,7 @@ got %s" (Tyenv.ty_to_string other)))
                | Some missing ->
                    err loc (Printf.sprintf
                      "place %s is a payload arm: its mediatrice needs every \
-                      projection (missing %s) — a spine has no zero-fill"
+                      projection (missing %s), there is no zero-fill"
                      place_name missing)
                | None -> ok ())
           | None -> ok ()
@@ -3166,10 +3165,34 @@ and place_arm_match env ctx branches x loc (expected : ty option) : ty tc_result
         | Some _, _ -> err loc (Printf.sprintf
             "match: arm %s is a place: it is read by the names of its fields, \
              %s { field as x }" ctor ctor)
-        | None, PatVars [] -> ok env
         | None, _ when ctor = "_" -> ok env
-        | None, _ -> err loc (Printf.sprintf
-            "match: arm %s does not belong to %s as a place" ctor hname) in
+        | None, _ ->
+            (match Hit_env.find_constructor [hname, sig_] ctor with
+             | None -> err loc (Printf.sprintf
+                 "match: constructor %s does not belong to %s" ctor hname)
+             | Some (_, kind) ->
+                 let params = Hit_env.constructor_params kind in
+                 let* vars =
+                   match pat with
+                   | PatVars vs when List.length vs = List.length params -> ok vs
+                   | PatVars vs -> err loc (Printf.sprintf
+                       "match: branch %s expects %d payload binder(s), got %d"
+                       ctor (List.length params) (List.length vs))
+                   | PatWitness w when List.length params = 1 -> ok [w]
+                   | PatWitness w -> err loc (Printf.sprintf
+                       "match %s as %s: the witness binds a SINGLE payload \
+                        (this arm has %d)" ctor w (List.length params))
+                   | PatFields _ ->
+                       let fields =
+                         List.init (List.length params)
+                           (fun i -> Printf.sprintf "_%d" (i + 1)) in
+                       (match pat_to_binders ~fields pat with
+                        | Ok vs -> ok vs
+                        | Error bad -> err loc (Printf.sprintf
+                            "match %s { ... }: no projection named '%s'" ctor bad)) in
+                 ok (Tyenv.add_vars env
+                       (List.filter (fun (n, _) -> n <> "_")
+                          (List.combine vars (List.map snd params))))) in
       List.fold_left (fun acc (ctor, pat, body) ->
         let* acc = acc in
         let* benv = branch_env ctor pat in
@@ -5160,8 +5183,8 @@ let check_union_members (env : Tyenv.env) (ctx : Reduce.ctx)
               apd.pd_name)
       | None ->
           err pd.pd_loc (Printf.sprintf
-            "place %s: arm %s is a bare constructor, but the union declares \
-             field%s -- a field on a union is an obligation on every arm, so \
+            "place %s: arm %s does not expose the field%s declared on the \
+             union -- a field on a union is an obligation on every arm, so \
              every arm must be a declared place exposing it."
             pd.pd_name v.v_name
             (if List.length fields = 1 then " " ^ (List.hd fields).fd_name
@@ -5406,15 +5429,6 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
           (ok ()) pd.pd_arms
       in
       let* () = check_algebra_models env ctx pd in
-      let* () =
-        (* a place arm is known at run time by the root of its section, a
-           payload arm by the label of its node: one value cannot be asked both *)
-        match List.find_opt (fun (v : variant) -> v.v_args = [] && place_arm_fields env v.v_name <> None) pd.pd_arms,
-              List.find_opt (fun (v : variant) -> v.v_args <> []) pd.pd_arms with
-        | Some a, Some b -> err pd.pd_loc (Printf.sprintf
-            "place %s: arm %s is a place with fields and arm %s carries a payload: \
-             a coproduct has arms of one kind or the other" pd.pd_name a.v_name b.v_name)
-        | _ -> ok () in
       check_union_members env ctx pd
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn
