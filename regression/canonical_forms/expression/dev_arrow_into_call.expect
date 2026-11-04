@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: write (a, y) ↦ add
+note: |
+  The right of an arrow is a name; the arguments are the tuple on its left.

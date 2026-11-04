@@ -124,7 +124,7 @@ from the call sites.
 | `fun answer: Number { return 42 }`, used as `answer` | ✓ | **A point** `1 → X`: a pure nullary is declared and named without `()`; a value fixed for the life of the Space is pure |
 | `fun tick(): Int64 { .. }`, used as `tick()` | ✓ | **A nullary that acts**: an effect, a wait, shared memory, a cell that leaves, or a call of one that acts; `()` is the empty product |
 | `operation zero: Additive as "0"`, used as `zero` | ✓ | A constant of an algebra |
-| `a ↦ f`, `a ↦ f(args)`, `(a, b) ↦ f` | ✓ | Pipe: passes `a` as the **first** argument of the call; a tuple spreads into the arguments. The call `f(a, b)` stays |
+| `a ↦ f`, `(a, b) ↦ f` | ✓ | Application: a tuple spreads into the arguments. The call `f(a, b)` stays |
 | `if c then a else b` | ✓ | Conditional expression |
 | `fun(x: T, y) => e` | ✓ | Inline lambda (unannotated params are inferred) |
 | `move(s: P) => .-> Q {...} from P to Q` | ✓ | Inline move lambda (see the note below the table) |

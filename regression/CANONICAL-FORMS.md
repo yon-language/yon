@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
 - productions REDUCED by a fixture (Menhir-verified): **99 / 99** surface (+3 structural allowlisted)
-- deviations rejected: **35**
+- deviations rejected: **36**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -41,6 +41,7 @@ from them; the `.yon` files are the specification, not this text.
 | expression | `canonical` | accept | 42 | — |
 | expression | `dev_apply_to_arm` | reject_clean | 1 | `Full is an arm: an injection is written x ↪ Full` |
 | expression | `dev_arity` | reject_clean | 1 | `expected 1 arguments, got 2` |
+| expression | `dev_arrow_into_call` | reject_clean | 1 | `write (a, y) ↦ add` |
 | expression | `dev_inject_to_fun` | reject_clean | 1 | `twice is a fun: it is applied with x ↦ twice` |
 | expression | `dev_old_pipe` | reject_clean | 1 | `the pipe |> is gone: write x ↦ twice` |
 | expression | `dev_unknown` | reject_clean | 1 | `unknown identifier` |

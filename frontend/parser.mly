@@ -72,10 +72,17 @@
       match b with
       (* x ↦ clear: the trivial path at x *)
       | ERefl (EVar ("__plainly__", _), _) -> ERefl (a, loc)
-      | ECall (name, args, _) -> ECall (name, lhs @ args, loc)
+      | ECall (name, _, _) ->
+          (* the right of an arrow is a name: its arguments are the tuple on the left *)
+          let shown = Str.global_replace (Str.regexp_string "__") "." name in
+          let sym = match kind with
+            | Surface_ast.Inject -> "\xe2\x86\xaa"
+            | _ -> "\xe2\x86\xa6" in
+          failwith (Printf.sprintf
+            "the right of an arrow is a name: write (a, y) %s %s, not a %s %s(y)" sym shown sym shown)
       | EVar (name, _) -> ECall (name, lhs, loc)
       | EField (EVar (obj, _), fld, _) when dot_is_module obj -> dot_call_expr obj fld lhs loc
-      | _ -> failwith "[parser] the right of an arrow must be a function call or a name" in
+      | _ -> failwith "[parser] the right of an arrow must be a name" in
     (match call with
      | ECall (n, _, _) ->
          Hashtbl.replace Surface_ast.arrow_sites (loc.file, loc.start_line, loc.start_col, n) kind

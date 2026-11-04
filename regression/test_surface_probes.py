@@ -541,6 +541,12 @@ def test_hit_elim_on_the_surface_is_refused_and_match_shown(tmp_path):
              "fun main: Number { return 0 }\n}\n", "E1001", "written match x")
 
 
+def test_an_arrow_into_a_call_is_refused_and_the_tuple_shown(tmp_path):
+    src = ("place Entry {\nfun add(a: Number, b: Number): Number { return a + b }\n"
+           "fun main: Number { return 40 ↦ add(2) }\n}\n")
+    _refused(tmp_path, src, "E1001", "(a, y) ↦ add")
+
+
 FUNS = ("fun inc(x: Number): Number { return x + 1 }\n"
         "fun add(a: Number, b: Number): Number { return a + b }\n"
         "fun add3(a: Number, b: Number, c: Number): Number { return a + b + c }\n")
