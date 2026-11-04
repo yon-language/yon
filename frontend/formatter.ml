@@ -385,12 +385,12 @@ let fmt_world (f : fmt) (wd : world_decl) : unit =
   f.indent <- f.indent - 1;
   line f "}"
 
-(* A coproduct arm as written in `this > A :U B(t, u)`. One printer for the one
+(* A coproduct arm as written in `this > A :U B t u`. One printer for the one
    production (fmt_place). *)
 let fmt_arm (v : variant) : string =
   if v.v_args = [] then v.v_name
-  else Printf.sprintf "%s(%s)" v.v_name
-         (String.concat ", " (List.map fmt_ty v.v_args))
+  else Printf.sprintf "%s %s" v.v_name
+         (String.concat " " (List.map fmt_ty v.v_args))
 
 (* ?close=false leaves the house open (brace unclosed, indent raised):
    the caller prints the hosted arrows inside it and closes it. *)

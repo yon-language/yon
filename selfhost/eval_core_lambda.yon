@@ -2,7 +2,7 @@
 // Wildcard form: shift/subst stay exhaustive (each constructor recurses in its own
 // way), but the stuck branches of eval and the zero branches of as_num are a single
 // `_ =>`. Oracle: (lam.0) 42 = 42, Fst((lam.0) Pair(20,22)) = 20.
-place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
+place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U TPair Term Term :U TFst Term :U TSnd Term }
 
 
 fun shift(d: Number, c: Number, t: Term): Term {

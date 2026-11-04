@@ -99,7 +99,7 @@ between categories and says so in its clause.)
 
 A place can also be the sum of its arms, with `this >`. The prelude's
 `Decision` is `place Decision { this > Present :U Absent :U Unknown }`, and its
-`Lookup<V>` is `place Lookup<V> { this > Found(V) :U Absent }`. Each arm comes
+`Lookup<V>` is `place Lookup<V> { this > Found V :U Absent }`. Each arm comes
 with an injection, the arrow that takes the arm into the sum, and that arrow
 belongs to the sum, not to the arm. So `Absent` is one name for two arrows:
 one into `Decision`, one into `Lookup`. A value of each is built and taken

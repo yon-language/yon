@@ -8,8 +8,8 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
-- productions REDUCED by a fixture (Menhir-verified): **98 / 98** surface (+3 structural allowlisted)
-- deviations rejected: **22**
+- productions REDUCED by a fixture (Menhir-verified): **99 / 99** surface (+3 structural allowlisted)
+- deviations rejected: **23**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -29,6 +29,8 @@ from them; the `.yon` files are the specification, not this text.
 | comatch | `canonical` | accept | 42 | — |
 | comprehension | `canonical` | accept | 0 | — |
 | coproduct | `canonical` | accept | 42 | — |
+| coproduct | `dev_old_arm` | reject_clean | 1 | `this > Node Tree Tree` |
+| coproduct | `inline_sum` | accept | 42 | — |
 | entrypoint | `canonical` | accept | 0 | — |
 | entrypoint | `dev_b` | reject_clean | 1 | `ENTRYPOINT ERROR` |
 | entrypoint | `dev_c` | accepted_deviation | 0 | — |

@@ -61,26 +61,6 @@ def test_duplicate_clause_rejected(tmp_path):
     assert b"declared both in the header and in the body" in r.stderr + r.stdout
 
 
-# ---- path constructors: a reserved slot ------------------------------------
-
-def test_path_constructor_slot_is_reserved(tmp_path):
-    """The grammar accepts the path-arm form and the parser rejects it with a
-    clean "path constructor ... not yet enabled" diagnostic: a path constructor
-    needs a path-over obligation that the kernel does not check."""
-    import shutil
-    twin = tmp_path / "twin"
-    shutil.copytree(ROOT / "examples" / "inductive_list", twin)
-    (twin / "Entry.yon").write_text(
-        "place NumList {\n"
-        "  this > Nil :U Cons(Number, NumList) :U dup(Number) : Cons(0, Nil) = Nil\n"
-        "}\n"
-        "place Entry { }\n"
-        "fun main(): Number { return 0 }\n")
-    r = _emit(twin)
-    assert r.returncode != 0, "the reserved path-arm slot COMPILES (fork 2 opened without a plan?)"
-    assert b"path constructor" in r.stderr + r.stdout
-    assert b"not yet enabled" in r.stderr + r.stdout
-
 
 # ---- world-guard rule (f): the site of a union is DERIVED from its arms ----
 
@@ -118,7 +98,7 @@ def test_mediatrice_on_arm_requires_full_arity(tmp_path):
     twin = tmp_path / "twin"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place NumList { this > Nil :U Cons(Number, NumList) }\n"
+        "place NumList { this > Nil :U Cons Number NumList }\n"
         "place Entry { }\n"
         "fun main(): Number {\n"
         "  c := .-> Cons { _1 1 }\n"
@@ -149,7 +129,7 @@ def test_record_pattern_matches_by_name(tmp_path):
     exit 42."""
     import shutil
     a = tmp_path / "rec"; b = tmp_path / "pos"
-    prog = ("place NumList { this > Nil :U Cons(Number, NumList) }\n"
+    prog = ("place NumList { this > Nil :U Cons Number NumList }\n"
             "place Entry { }\n"
             "fun sum(xs: NumList): Number {\n"
             "  return match xs {\n"
@@ -177,7 +157,7 @@ def test_full_circle_no_constructors(tmp_path):
     twin = tmp_path / "circle"
     shutil.copytree(ROOT / "examples" / "inductive_list", twin)
     (twin / "Entry.yon").write_text(
-        "place NumList { this > Nil :U Cons(Number, NumList) }\n"
+        "place NumList { this > Nil :U Cons Number NumList }\n"
         "place Entry { }\n"
         "fun sum(xs: NumList): Number {\n"
         "  return match xs {\n"

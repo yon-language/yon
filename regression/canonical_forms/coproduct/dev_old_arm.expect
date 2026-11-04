@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+match: this > Node Tree Tree
+note: |
+  The payload of an arm follows its name, like a field: the old form with parentheses is
+  refused, and the diagnostic shows the new one.

@@ -1,0 +1,6 @@
+status: accept
+exit: 42
+covers: variant
+note: |
+  An inline sum, in a signature: its arms keep their parentheses. A value of it has no
+  surface form yet.

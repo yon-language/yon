@@ -277,13 +277,13 @@ let upper_start = ['A'-'Z']
 let alnum_id = ['a'-'z' 'A'-'Z' '0'-'9' '_']
 let ws = [' ' '\t' '\r']
 
-rule token = parse
-  | ws+              { token lexbuf }
+rule raw_token = parse
+  | ws+              { raw_token lexbuf }
   | '\n'             { Lexing.new_line lexbuf;
                        (if !statement = Line 0 then statement := Outside);
-                       token lexbuf }
-  | "//" [^ '\n']*   { token lexbuf }   (* line comment *)
-  | "/*"             { block_comment lexbuf; token lexbuf }
+                       raw_token lexbuf }
+  | "//" [^ '\n']*   { raw_token lexbuf }   (* line comment *)
+  | "/*"             { block_comment lexbuf; raw_token lexbuf }
   
   (* No duration literals (100ms / 5s / 3min) and no currency codes: a
      duration is just a number (milliseconds). `2s` lexes as NUM_LIT 2 +
@@ -433,3 +433,46 @@ and string_lit buf = parse
                        string_lit buf lexbuf }
   | eof              { raise (Lexer_error "unterminated string") }
   | _ as c           { Buffer.add_char buf c; string_lit buf lexbuf }
+
+{
+  (* The clause `this > arms`: it ends at the end of its line, unless the next line
+     goes on with `:U` or the line itself ends with `:U` or `>`. The parser cannot see
+     lines, so its end is a token of its own. *)
+  let clause_owner = ref None
+  let in_clause = ref false
+  let previous = ref EOF
+  let previous_line = ref 0
+  let held = ref None
+
+  let token (lexbuf : Lexing.lexbuf) : Parser.token =
+    (match !clause_owner with
+     | Some l when l == lexbuf -> ()
+     | _ ->
+         clause_owner := Some lexbuf;
+         in_clause := false; previous := EOF; held := None);
+    let tok =
+      match !held with
+      | Some t -> held := None; t
+      | None -> raw_token lexbuf in
+    let line = lexbuf.Lexing.lex_start_p.Lexing.pos_lnum in
+    let finish t =
+      previous := t; previous_line := line; t in
+    if not !in_clause then begin
+      if tok = GT && !previous = THIS then in_clause := true;
+      finish tok
+    end else
+      match tok with
+      | COLON_U -> finish tok
+      | _ when !previous = COLON_U || !previous = GT && line > !previous_line -> finish tok
+      | _ when line > !previous_line ->
+          in_clause := false;
+          held := Some tok;
+          previous := ARMS_END;
+          ARMS_END
+      | IDENT _ | BOOL_LIT _ | LT | GT | COMMA | LPAREN | RPAREN | ARROW | IN -> finish tok
+      | _ ->
+          in_clause := false;
+          held := Some tok;
+          previous := ARMS_END;
+          ARMS_END
+}

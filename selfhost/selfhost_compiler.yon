@@ -11,7 +11,7 @@
  * Yon0 program, compiles it BOTH with the OCaml reference `yonc` and with this
  * compiler-in-Yon, and asserts the two native programs exit with the SAME code.
  *
- * Yon0 covered: coproduct places `place X { this > A :U B(..) }`, functions
+ * Yon0 covered: coproduct places `place X { this > A :U B .. }`, functions
  * `fun name(p, ..): T { (x := e)* return e }` with 0..N parameters, arithmetic
  * (+ - *, * over +), calls `name(..)` and qualified calls `Module.op(..)`,
  * `if e CMP e then e else e` with CMP one of == != < > <= >=, recursion, string
@@ -23,20 +23,20 @@
 
 /* one shared AST: arithmetic (+ - *), de Bruijn variables, let, comparison, if, call,
  * and algebraic data: THit builds a constructor, THitElim eliminates one. */
-place Term { this > TLit(Number) :U TAdd(Term, Term) :U TSub(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) :U TCmp(Number, Term, Term) :U TIf(Term, Term, Term) :U TCall(Number, Term) :U TArgs(Term, Term) :U TNoArg :U THit(Number, Term) :U THitElim(Term, Term) :U TBranch(Number, Number, Term, Term) :U TBrNil :U TStrLit(String) :U TRtCall(String, Term) }
+place Term { this > TLit Number :U TAdd Term Term :U TSub Term Term :U TMul Term Term :U TVar Number :U TLet Term Term :U TCmp Number Term Term :U TIf Term Term Term :U TCall Number Term :U TArgs Term Term :U TNoArg :U THit Number Term :U THitElim Term Term :U TBranch Number Number Term Term :U TBrNil :U TStrLit String :U TRtCall String Term }
 /* TCall's second field and THit's are an argument spine: TArgs(head, rest) ... TNoArg.
  * THitElim's first field is a branch spine: TBranch(ctor-hash, body, rest) ... TBrNil.
  * Keeping these inside Term avoids mutually recursive place declarations. */
 /* a top-level function: name hash, arity (0..N), body (params are TVar 0..N-1). */
-place Fun { this > FnDef(Number, Number, Term) }
-place FunList { this > FlNil :U FlCons(Fun, FunList) }
-place FunParse { this > FPOk(Fun, TokList) :U FPErr }
+place Fun { this > FnDef Number Number Term }
+place FunList { this > FlNil :U FlCons Fun FunList }
+place FunParse { this > FPOk Fun TokList :U FPErr }
 /* constructor registry: constructor-name hash -> tag (its index in its place). */
-place CtorReg { this > CrNil :U CrCons(Number, Number, CtorReg) }
-place Program { this > Prog(FunList, CtorReg) }
-place IndRes { this > IR(CtorReg, TokList) }
+place CtorReg { this > CrNil :U CrCons Number Number CtorReg }
+place Program { this > Prog FunList CtorReg }
+place IndRes { this > IR CtorReg TokList }
 /* result of binding a branch's payloads: extended SSA env, emitted code, next counter. */
-place BindRes { this > BR(SsaEnv, String, Number) }
+place BindRes { this > BR SsaEnv String Number }
 /* tokens (tags: Num0 Ident1 Fun2 Be3 ColonEq4 Return5 Number6 If7 Then8 Else9
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18 Minus19
  * Comma20 Lt21 Gt22 Le23 Ge24 Ne25 LBracket27 RBracket28 Bar29 Arrow30
@@ -44,15 +44,15 @@ place BindRes { this > BR(SsaEnv, String, Number) }
  * 'inductive' keyword). */
 /* TKwBe is retired (a definition is `x := e`, with no keyword); it keeps
    its tag so every other token keeps its own. */
-place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus :U TComma :U TLt :U TGt :U TLe :U TGe :U TNe :U TLBracket :U TRBracket :U TBar :U TArrow :U TKwPlace :U TKwThis :U TColonU :U TDot :U TStr(String) }
-place TokList { this > TkNil :U TkCons(Token, TokList) }
-place Parse { this > POk(Term, TokList) :U PErr }
+place Token { this > TNum Number :U TIdent Number :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus :U TComma :U TLt :U TGt :U TLe :U TGe :U TNe :U TLBracket :U TRBracket :U TBar :U TArrow :U TKwPlace :U TKwThis :U TColonU :U TDot :U TStr String }
+place TokList { this > TkNil :U TkCons Token TokList }
+place Parse { this > POk Term TokList :U PErr }
 /* SSA environment for the emitter: de Bruijn index -> ssa name. */
-place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
+place SsaEnv { this > SeNil :U SeCons String SsaEnv }
 /* de Bruijn name environment for the parser: identifier hash, innermost first. */
-place NameEnv { this > NEnvNil :U NEnvCons(Number, NameEnv) }
+place NameEnv { this > NEnvNil :U NEnvCons Number NameEnv }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER(String, String, Number) }
+place EmitR { this > ER String String Number }
 
 /* ---- hashing: keyword recognition and identifier identity share one hash ---- */
 /* keep a value below m by repeated subtraction (Yon0 has no '%' operator). */
@@ -517,7 +517,7 @@ fun wrap_let(val: Term, pb: Parse): Parse {
 /* ---- function parser: 'fun' IDENT '(' (IDENT (',' IDENT)*)? ')' ':' 'number' '{' body '}' ---- */
 /* a parsed parameter list: the de Bruijn env (params pushed in order), the arity,
  * and the token list positioned right after the ')'. */
-place ParamRes { this > PR(NameEnv, Number, TokList) }
+place ParamRes { this > PR NameEnv Number TokList }
 /* skip an optional ': Type' annotation after a parameter name (one type token). */
 fun skip_param_type(l: TokList): TokList {
   return if head_tag(l) == 17 then tail(tail(l)) else l   /* ':' Type */
@@ -565,8 +565,9 @@ fun skip_to_rparen(l: TokList): TokList {
     else if head_tag(l) == 18 then l                    /* TEnd -> stop */
     else skip_to_rparen(tail(l))
 }
+/* the payload of an arm: its types, up to ':U' or '}'. */
 fun skip_ctor_types(l: TokList): TokList {
-  return if head_tag(l) == 13 then skip_to_rparen(tail(l)) else l   /* '(' -> skip to ')' */
+  return if head_tag(l) == 1 then skip_ctor_types(tail(l)) else l
 }
 /* ---- coproduct place declarations: 'place' NAME '{' 'this' '>' Arm (':U' Arm)* '}' ---- */
 /* The canonical named coproduct. Registry builder for the arms (arm tag =

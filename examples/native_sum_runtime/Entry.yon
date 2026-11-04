@@ -1,4 +1,4 @@
-place Expr { this > Lit(Number) :U Neg(Number) :U Add(Number) }
+place Expr { this > Lit Number :U Neg Number :U Add Number }
 place Entry {
 // COSA: un tipo somma NATIVO eliminato su un valore a RUNTIME (un parametro),
 // non su un costruttore noto staticamente. `eval` vede solo il parametro `e`:

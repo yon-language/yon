@@ -1,4 +1,4 @@
-place Sum { this > A :U B(Number) }
+place Sum { this > A :U B Number }
 place Entry {
   fun seven(): Sum { return .-> B { _1 7 } }
   fun main(): Number {

@@ -21,7 +21,7 @@ TOML = '''[package]
 name = "probe"
 
 [world.W]
-objects = ["X", "Chain", "Box", "Sum"]
+objects = ["X", "Chain", "Box", "Sum", "Tree"]
 spaces  = ["w"]
 
 [runtime]
@@ -163,7 +163,7 @@ def test_a_pattern_naming_no_field_of_the_arm_is_refused(tmp_path):
 MIXED = {
     "w/Topos.yon": "topos WTopos where {\n}\n",
     "w/Opened.yon": "place Opened { initial Number balance Number }\n",
-    "w/Stato.yon": "place Stato { this > Opened :U Pending(Number) :U Spento }\n",
+    "w/Stato.yon": "place Stato { this > Opened :U Pending Number :U Spento }\n",
 }
 
 
@@ -180,7 +180,7 @@ def test_a_mixed_coproduct_is_read_arm_by_arm(tmp_path):
 
 def test_a_field_declared_on_a_coproduct_names_the_payload_arm_that_lacks_it(tmp_path):
     extra = dict(MIXED)
-    extra["w/Stato.yon"] = "place Stato {\n  this > Opened :U Pending(Number)\n  balance Number\n}\n"
+    extra["w/Stato.yon"] = "place Stato {\n  this > Opened :U Pending Number\n  balance Number\n}\n"
     r, _ = _compile(tmp_path, _main("  return 0"), extra)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "arm Pending" in out and "obligation" in out, out
@@ -202,7 +202,7 @@ def test_a_field_does_not_read_on_a_coproduct_with_a_payload_arm(tmp_path):
 
 def test_payload_arms_go_past_the_slots_of_one_heap(tmp_path):
     # the arms live on the FNV chain, and the chain has no limit of one heap
-    src = ("place Chain { this > End :U Link(Number, Chain) }\n"
+    src = ("place Chain { this > End :U Link Number Chain }\n"
            "place Entry {\n"
            "fun build(i: Number, acc: Chain): Chain {\n"
            "  return if i == 0 then acc else build(i - 1, .-> Link { _1 i _2 acc })\n}\n"
@@ -217,7 +217,7 @@ def test_payload_arms_go_past_the_slots_of_one_heap(tmp_path):
 
 
 def test_two_arms_with_the_same_content_are_one_value(tmp_path):
-    src = ("place Box { this > Full(Number, Number) :U Empty }\n"
+    src = ("place Box { this > Full Number Number :U Empty }\n"
            "place Entry {\n"
            "fun mk(a: Number): Box { return .-> Full { _1 a _2 2 } }\n"
            "fun main(): Number { return if mk(1) == mk(1) then 42 else 1 }\n}\n")
@@ -233,7 +233,7 @@ def test_a_nullary_fun_is_a_point(tmp_path):
 
 
 GENERIC = {"w/Topos.yon": "topos WTopos where {\n}\n",
-           "w/Box.yon": "place Box<V> { this > Full(V) :U Empty }\n"}
+           "w/Box.yon": "place Box<V> { this > Full V :U Empty }\n"}
 
 
 def test_a_generic_arm_is_built_from_a_context_that_is_not_generic(tmp_path):
@@ -272,7 +272,7 @@ def test_a_payload_of_the_wrong_type_for_the_expected_parameter_is_refused(tmp_p
 
 def test_a_parameter_nothing_fixes_is_refused(tmp_path):
     extra = dict(GENERIC)
-    extra["w/Box.yon"] = "place Box<V> { this > Full(Number) :U Empty }\n"
+    extra["w/Box.yon"] = "place Box<V> { this > Full Number :U Empty }\n"
     src = ("place Entry {\n"
            "fun main(): Number {\n"
            "  x := .-> Full { _1 1 }\n"
@@ -283,7 +283,7 @@ def test_a_parameter_nothing_fixes_is_refused(tmp_path):
 
 
 def test_an_injection_has_the_type_of_its_coproduct(tmp_path):
-    src = ("place Sum { this > A :U B(Number) :U C(Number) }\n"
+    src = ("place Sum { this > A :U B Number :U C Number }\n"
            "place Entry {\n"
            "fun pick(n: Number): Sum { return if n > 0 then .-> B { _1 n } else .-> C { _1 n } }\n"
            "fun main(): Number {\n"
@@ -338,6 +338,29 @@ def test_a_pipe_into_a_name(tmp_path):
     src = ("place Entry {\n"
            "fun inc(x: Number): Number { return x + 1 }\n"
            "fun main(): Number { return 41 |> inc }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_an_arm_with_parentheses_is_refused_and_the_form_shown(tmp_path):
+    _refused(tmp_path, "place Tree { this > Leaf :U Node(Tree, Tree) }\n" + _main("  return 0"),
+             "E1001", "this > Node Tree Tree")
+
+
+def test_a_field_on_the_next_line_is_not_a_payload(tmp_path):
+    extra = dict(ACCOUNT)
+    extra["w/Account.yon"] = ("place Account {\n  this > Opened :U Closed\n  balance Number\n"
+                              "  fun saldo(a: Opened): Number { return a.balance }\n"
+                              "  fun prova(): Opened { return .-> Opened { initial 1 balance 2 } }\n}\n")
+    assert _exit(tmp_path, _main("  return 42"), extra) == 42
+
+
+def test_a_clause_goes_on_across_lines_at_its_separators(tmp_path):
+    src = ("place Tree {\n  this > Leaf Number\n    :U Node Tree Tree :U\n    Nil\n}\n"
+           "place Entry {\n"
+           "fun count(t: Tree): Number {\n"
+           "  return match t { Leaf(x) => x, Node(a, b) => count(a) + count(b), Nil => 0 }\n}\n"
+           "fun main(): Number {\n"
+           "  return count(.-> Node { _1 .-> Leaf { _1 40 } _2 .-> Leaf { _1 2 } })\n}\n}\n")
     assert _exit(tmp_path, src) == 42
 
 

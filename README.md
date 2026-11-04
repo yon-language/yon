@@ -41,7 +41,7 @@ Yon compiles to native code: OCaml frontend → a custom MLIR dialect (`topos`)
 ## A taste
 
 ```yon
-place Tree { this > Leaf(Number) :U Node(Tree, Tree) }
+place Tree { this > Leaf Number :U Node Tree Tree }
 
 place Entry {
   // A function out of a coproduct answers every arm.

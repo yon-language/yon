@@ -35,10 +35,10 @@ BLOCK_FORMS = [
     ("nullary", "place Bit { this > one :U zero }\n"
                 "fun v(b: Bit): Number { return match b { one => 1, zero => 0 } }\n"
                 "fun main(): Number { return v(one) }", 1),
-    ("payload", "place Val { this > Lit(Number) }\n"
+    ("payload", "place Val { this > Lit Number }\n"
                 "fun get(v: Val): Number { return match v { Lit(n) => n } }\n"
                 "fun main(): Number { return get(.-> Lit { _1 42 }) }", 42),
-    ("recursive", "place Term { this > Leaf(Number) :U Node(Term) }\n"
+    ("recursive", "place Term { this > Leaf Number :U Node Term }\n"
                   "fun d(t: Term): Number { return match t { Leaf(n) => n, Node(m) => d(m) } }\n"
                   "fun main(): Number { return d(.-> Node { _1 .-> Node { _1 .-> Leaf { _1 7 } } }) }", 7),
 ]

@@ -5,8 +5,8 @@
 // factor. Oracle: "2+3*4" = 2 + (3*4) = 14 (precedence is the point, NOT 20).
 
 // ── lexer ───────────────────────────────────────────────────────────────────
-place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
-place TokList { this > TkNil :U TkCons(Token, TokList) }
+place Token { this > TNum Number :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place TokList { this > TkNil :U TkCons Token TokList }
 
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
@@ -24,8 +24,8 @@ fun lex_from(s: String, i: Number, len: Number): TokList {
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 // ── AST + parse result ───────────────────────────────────────────────────────
-place Expr { this > ENum(Number) :U EAdd(Expr, Expr) :U EMul(Expr, Expr) }
-place Parse { this > POk(Expr, TokList) :U PErr }   // (tree, rest) or error
+place Expr { this > ENum Number :U EAdd Expr Expr :U EMul Expr Expr }
+place Parse { this > POk Expr TokList :U PErr }   // (tree, rest) or error
 
 // ── tag-based peek on the TokList ───────────────────────────────────────────
 fun tok_tag(t: Token): Number {

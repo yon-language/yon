@@ -3,8 +3,8 @@
 // recursive functions (lex_from looks at the char, emit_at dispatches and recurs);
 // dispatch on String.char_at (a number) via an if/else-if chain, not match.
 // Oracle: structural checksum of "2+3*4" = 309.
-place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
-place TokList { this > TkNil :U TkCons(Token, TokList) }
+place Token { this > TNum Number :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place TokList { this > TkNil :U TkCons Token TokList }
 
 // decide the token for the character c at position i, then continue from i+1
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {

@@ -1,7 +1,7 @@
 // One Term, one eval (de Bruijn lambda + arithmetic).
 // Wildcard form: add_vals/mul_vals compute only on two TLit, everything else is a
 // single `_ => stuck`; shift/subst stay exhaustive. Oracle: (lam. x+x) 21 = 42.
-place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
+place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U TAdd Term Term :U TMul Term Term }
 
 
 fun shift(d: Number, c: Number, t: Term): Term {

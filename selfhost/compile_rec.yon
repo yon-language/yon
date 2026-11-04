@@ -22,24 +22,24 @@
  */
 
 /* one shared AST: arithmetic (+ - *), de Bruijn variables, let, equality, if, call. */
-place Term { this > TLit(Number) :U TAdd(Term, Term) :U TSub(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) :U TEq(Term, Term) :U TIf(Term, Term, Term) :U TCall(Number, Term) }
+place Term { this > TLit Number :U TAdd Term Term :U TSub Term Term :U TMul Term Term :U TVar Number :U TLet Term Term :U TEq Term Term :U TIf Term Term Term :U TCall Number Term }
 /* a top-level function: name hash, arity (0 or 1), body (uses TVar 0 for the param). */
-place Fun { this > FnDef(Number, Number, Term) }
-place FunList { this > FlNil :U FlCons(Fun, FunList) }
-place FunParse { this > FPOk(Fun, TokList) :U FPErr }
+place Fun { this > FnDef Number Number Term }
+place FunList { this > FlNil :U FlCons Fun FunList }
+place FunParse { this > FPOk Fun TokList :U FPErr }
 /* tokens (tags: Num0 Ident1 Fun2 Be3 ColonEq4 Return5 Number6 If7 Then8 Else9
  * Plus10 Star11 EqEq12 LParen13 RParen14 LBrace15 RBrace16 Colon17 End18 Minus19). */
 /* TKwBe is retired (a definition is `x := e`, with no keyword); it keeps
    its tag so every other token keeps its own. */
-place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus }
-place TokList { this > TkNil :U TkCons(Token, TokList) }
-place Parse { this > POk(Term, TokList) :U PErr }
+place Token { this > TNum Number :U TIdent Number :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TKwIf :U TKwThen :U TKwElse :U TPlus :U TStar :U TEqEq :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd :U TMinus }
+place TokList { this > TkNil :U TkCons Token TokList }
+place Parse { this > POk Term TokList :U PErr }
 /* SSA environment for the emitter: de Bruijn index -> ssa name. */
-place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
+place SsaEnv { this > SeNil :U SeCons String SsaEnv }
 /* de Bruijn name environment for the parser: identifier hash, innermost first. */
-place NameEnv { this > NEnvNil :U NEnvCons(Number, NameEnv) }
+place NameEnv { this > NEnvNil :U NEnvCons Number NameEnv }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER(String, String, Number) }
+place EmitR { this > ER String String Number }
 
 /* ---- hashing: keyword recognition and identifier identity share one hash ---- */
 fun word_hash(s: String, i: Number, j: Number, h: Number): Number {

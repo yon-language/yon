@@ -25,7 +25,7 @@ def _build(tmp_path: Path, entry: str):
     proj = tmp_path / "proj"
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "Chain.yon").write_text("place Chain<V> { this > Nil :U Link(V, Chain<V>) }\n")
+    (proj / "Chain.yon").write_text("place Chain<V> { this > Nil :U Link V Chain<V> }\n")
     (proj / "Entry.yon").write_text(entry)
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
@@ -42,7 +42,7 @@ def _emit(tmp_path, entry):
     proj = tmp_path / "mproj"
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
-    (proj / "Chain.yon").write_text("place Chain<V> { this > Nil :U Link(V, Chain<V>) }\n")
+    (proj / "Chain.yon").write_text("place Chain<V> { this > Nil :U Link V Chain<V> }\n")
     (proj / "Entry.yon").write_text(entry)
     out = tmp_path / "m"
     out.mkdir()

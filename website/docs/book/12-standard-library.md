@@ -18,7 +18,7 @@ prelude, generic in what it holds: `List<T>`, `HashMap<K, V>`, `HashSet<T>`,
 value is encoded) is derived from the carrier of its parameters, never
 written per type: there is no collection per precision or per element type,
 and no type of the same name in two worlds. A lookup answers with a
-coproduct, `Lookup<V> { Found(V) :U Absent }`: `match HashMap.get(m, k) {
+coproduct, `Lookup<V> { Found V :U Absent }`: `match HashMap.get(m, k) {
 Found(v) => …, Absent => … }`, so an absent key is never a value in
 disguise. The runtime primitives are the places' `is given` bodies; `get` is
 written in Yon on top of them. The maps and sets come in two families with

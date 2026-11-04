@@ -1513,7 +1513,7 @@ def test_a_named_path_is_in_scope_in_a_reassignment(tmp_path):
 
 
 def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
-    src = ("place Box { this > Full(Number) :U Empty }\n"
+    src = ("place Box { this > Full Number :U Empty }\n"
            "place Entry {}\n"
            "fun code(b: Box): Number { return match b { Full(n) => n, Empty => 0 } }\n"
            "fun main(): Number {\n"
@@ -2652,7 +2652,7 @@ def _lit_runtime(x):
 _EXPR_WORLD = '\n[world.W]\nobjects = ["Expr"]\n'
 
 _PAYLOAD_runtime = """\
-place Expr { this > Lit(Number) :U Nil }
+place Expr { this > Lit Number :U Nil }
 place Entry {}
 fun get(e: Expr): Number {
   return match e { Lit(n) => n, Nil => 0 }
@@ -2677,7 +2677,7 @@ def test_coproduct_payload_keeps_a_negative(tmp_path):
 # A child of a node is always a node handle; a value enters as a leaf whose
 # label is its exact f64, so whatever goes in comes out bit for bit.
 _PAYLOAD_EXACT_runtime = """\
-place Expr { this > Lit(Number) :U Nil }
+place Expr { this > Lit Number :U Nil }
 place Entry {}
 fun get(e: Expr): Number {
   return match e { Lit(n) => n, Nil => 0 }
@@ -2706,10 +2706,10 @@ def test_coproduct_payload_reads_back_bit_for_bit(tmp_path, value):
 def test_coproduct_payloads_of_every_carrier_read_back(tmp_path):
     """A Boolean, a String and a nested coproduct payload come back as they went in."""
     entry = """\
-place Switch { this > Flag(Boolean) :U Off }
-place Tag { this > Named(String) :U Anon }
-place Expr { this > Lit(Number) :U Nil }
-place Wrapped { this > Wrap(Expr) :U None }
+place Switch { this > Flag Boolean :U Off }
+place Tag { this > Named String :U Anon }
+place Expr { this > Lit Number :U Nil }
+place Wrapped { this > Wrap Expr :U None }
 place Entry {}
 fun flag(e: Switch): Number { return match e { Flag(b) => if b then 1 else 0, Off => 7 } }
 fun name(e: Tag): Number { return match e { Named(s) => String.length(s), Anon => 0 } }

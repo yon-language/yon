@@ -301,7 +301,7 @@ def test_int64_crosses_every_uniform_slot_bit_for_bit(tmp_path):
     """Int64.MAX, Int64.MIN and 2^53+1 come back equal through a List, a
     coproduct payload and a closure capture."""
     entry = """\
-place IntExpr { this > Lit(Int64) :U Nil }
+place IntExpr { this > Lit Int64 :U Nil }
 place Entry {
   fun via_list(x: Int64): Int64 { return List.head(List.cons(x, List.empty(0))) }
   fun wrap(x: Int64): IntExpr { return .-> Lit { _1 x } }

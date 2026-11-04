@@ -1,4 +1,4 @@
-place Tree { this > Leaf(Number) :U Node(Tree, Tree) }
+place Tree { this > Leaf Number :U Node Tree Tree }
 
 place Entry {
 // COSA: un place-oggetto algebrico RICORSIVO. La clausola `this >` lo dichiara

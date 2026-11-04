@@ -11,12 +11,12 @@
  */
 
 /* one shared AST for both parser and emitter. */
-place Term { this > TLit(Number) :U TAdd(Term, Term) :U TMul(Term, Term) }
-place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
-place TokList { this > TkNil :U TkCons(Token, TokList) }
-place Parse { this > POk(Term, TokList) :U PErr }
+place Term { this > TLit Number :U TAdd Term Term :U TMul Term Term }
+place Token { this > TNum Number :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
+place TokList { this > TkNil :U TkCons Token TokList }
+place Parse { this > POk Term TokList :U PErr }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER(String, String, Number) }
+place EmitR { this > ER String String Number }
 
 /* ---- lexer: String -> TokList ---- */
 fun lex_at(s: String, i: Number, len: Number, c: Number): TokList {

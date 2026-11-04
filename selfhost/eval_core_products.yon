@@ -1,7 +1,7 @@
 // eval of the fragment WITHOUT binders (literals and products), written in Yon.
 // Wildcard form: the stuck branches (one intention, "stays stuck") are a single
 // `_ =>`. Oracle: Fst(Pair(20, 22)) -> 20.
-place Term { this > TLit(Number) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
+place Term { this > TLit Number :U TPair Term Term :U TFst Term :U TSnd Term }
 
 
 fun as_num(t: Term): Number {

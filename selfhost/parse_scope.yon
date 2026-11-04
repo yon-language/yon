@@ -5,8 +5,8 @@
 // Oracle: the text "\aa+a" -> TLam(TAdd(TVar 0, TVar 0)), applied to 21 -> 42.
 
 // ── extended lexer: + names (a..z), '=' and the lambda token ───────────────────
-place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd :U TName(Number) :U TEq :U TLamTok }
-place TokList { this > TkNil :U TkCons(Token, TokList) }
+place Token { this > TNum Number :U TPlus :U TStar :U TLParen :U TRParen :U TEnd :U TName Number :U TEq :U TLamTok }
+place TokList { this > TkNil :U TkCons Token TokList }
 
 // exact checks, and c>=97 (names) BEFORE c>=48 (digits), or '='/letters would lex as digits
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
@@ -28,7 +28,7 @@ fun lex_from(s: String, i: Number, len: Number): TokList {
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 // ── unified Term + eval ─────────────────────────────────────────────────────
-place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
+place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U TAdd Term Term :U TMul Term Term }
 
 fun shift(d: Number, c: Number, t: Term): Term {
   return match t { TLit(n)     => .-> TLit { _1 n },
@@ -87,7 +87,7 @@ fun tail(l: TokList): TokList {
 }
 
 // ── name environment -> de Bruijn index ─────────────────────────────────────
-place NameEnv { this > NEnvNil :U NEnvCons(Number, NameEnv) }
+place NameEnv { this > NEnvNil :U NEnvCons Number NameEnv }
 fun bump(k: Number): Number { return if k >= 0 then k + 1 else 0 - 1 }
 fun lookup(name: Number, env: NameEnv): Number {
   return match env { NEnvNil => 0 - 1,
@@ -95,7 +95,7 @@ fun lookup(name: Number, env: NameEnv): Number {
 }
 
 // ── parser with environment, yields Term ────────────────────────────────────
-place Parse { this > POk(Term, TokList) :U PErr }
+place Parse { this > POk Term TokList :U PErr }
 
 // factor := NUM | NAME | '(' expr ')'
 fun parse_factor(l: TokList, env: NameEnv): Parse {

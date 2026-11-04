@@ -1,4 +1,4 @@
-place IntList { this > Nil :U Cons(Number, IntList) }
+place IntList { this > Nil :U Cons Number IntList }
 
 place Entry {
 // A recursive higher-order function over a native place-object. map_list takes a

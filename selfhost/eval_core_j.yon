@@ -2,7 +2,7 @@
 // Wildcard form: the diagonal beta J(c, d, TRefl a) ~> d a is the only live branch of
 // TJ; everything else stays stuck via `_ =>`. shift/subst stay exhaustive.
 // Oracle: J(_, lam.0, TRefl 7) = 7  (as the OCaml kernel, j_computes.yon).
-place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) :U TRefl(Term) :U TJ(Term, Term, Term) }
+place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U TPair Term Term :U TFst Term :U TSnd Term :U TRefl Term :U TJ Term Term Term }
 
 
 fun shift(d: Number, c: Number, t: Term): Term {

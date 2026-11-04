@@ -1,4 +1,4 @@
-place NumList { this > Nil :U Cons(Number, NumList) }
+place NumList { this > Nil :U Cons Number NumList }
 
 place Entry {
 // COSA: una lista RICORSIVA con nome, ripiegata con lo zucchero `match`. E' la

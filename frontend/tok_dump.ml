@@ -172,6 +172,7 @@ let tok_name = function
   | Parser.INDUCT -> "INDUCT"
   | Parser.DOTARROW -> "DOTARROW"
   | Parser.THIS -> "THIS"
+  | Parser.ARMS_END -> "ARMS_END"
   | Parser.COLON_U -> "COLON_U"
   | Parser.COLONEQ -> "COLONEQ"
   | Parser.EOF -> "EOF"

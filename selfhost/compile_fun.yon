@@ -21,19 +21,19 @@
  */
 
 /* one shared AST: arithmetic + de Bruijn variables + let. */
-place Term { this > TLit(Number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) }
+place Term { this > TLit Number :U TAdd Term Term :U TMul Term Term :U TVar Number :U TLet Term Term }
 /* tokens: literals, identifiers, the four keywords, `:=`, operators, punctuation. */
 /* TKwBe is retired (a definition is `x := e`, with no keyword); it keeps
    its tag so every other token keeps its own. */
-place Token { this > TNum(Number) :U TIdent(Number) :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TPlus :U TStar :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd }
-place TokList { this > TkNil :U TkCons(Token, TokList) }
-place Parse { this > POk(Term, TokList) :U PErr }
+place Token { this > TNum Number :U TIdent Number :U TKwFun :U TKwBe :U TColonEq :U TKwReturn :U TKwNumber :U TPlus :U TStar :U TLParen :U TRParen :U TLBrace :U TRBrace :U TColon :U TEnd }
+place TokList { this > TkNil :U TkCons Token TokList }
+place Parse { this > POk Term TokList :U PErr }
 /* SSA environment for the emitter: de Bruijn index -> ssa name. */
-place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
+place SsaEnv { this > SeNil :U SeCons String SsaEnv }
 /* de Bruijn name environment for the parser: identifier hash, innermost first. */
-place NameEnv { this > NEnvNil :U NEnvCons(Number, NameEnv) }
+place NameEnv { this > NEnvNil :U NEnvCons Number NameEnv }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER(String, String, Number) }
+place EmitR { this > ER String String Number }
 
 /* ---- hashing: keyword recognition and identifier identity share one hash ---- */
 /* rolling hash over s[i..j): h' = h*31 + code. A keyword literal and the same word

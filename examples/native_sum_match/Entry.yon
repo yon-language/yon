@@ -1,4 +1,4 @@
-place Maybe { this > Box(Number) :U Empty }
+place Maybe { this > Box Number :U Empty }
 place Entry {
 // COSA: un tipo somma NATIVO (Box porta un number, Empty e' il caso base)
 // eliminato con lo zucchero `match`, con un ramo che LEGA il payload.

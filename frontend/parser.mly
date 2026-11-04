@@ -196,6 +196,8 @@
 %token AMPAMPQ PIPEPIPEQ BANGQ FATARROWQ
 /* the quantifiers of a statement, and ↔ (the two implications) */
 %token FORALL EXISTS IFFQ
+/* the end of a `this >` clause, from the lexer: see its trailer */
+%token ARMS_END
 /* Intuitionistic bitwise ops with the `?` tag. They lower to topos.heyt_int_*
  * ops on !topos.heyt_int<64> carrying a (value, mask) pair (see emit_mlir). */
 %token AMPQ PIPEQ CARETQ TILDEQ
@@ -807,7 +809,7 @@ place_member_list:
    is the sum of; each arm is a variant (an existing place, optionally with a
    payload). Reuses the `variant` grammar shared with `inductive`. *)
 variant_clause:
-  | THIS GT vs = separated_nonempty_list(COLON_U, arm)   { vs }
+  | THIS GT vs = separated_nonempty_list(COLON_U, arm) ARMS_END   { vs }
 
 place_member:
   | fc = field_or_cell                    { PbiMember fc }
@@ -969,28 +971,7 @@ type_expr:
   | a = type_atom %prec CLAUSE_END
     { a }
 
-type_atom:
-  | TYPE_KW
-    { TyUniverse 0 }
-  | n = TYPE_LEVEL
-    { TyUniverse n }
-  | PI LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
-    { TyPi (x, a, b) }
-  | SIGMA LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
-    { TySigma (x, a, b) }
-  | ID LPAREN a = type_expr COMMA x = expr COMMA y = expr RPAREN
-    { TyId (a, TyTermExpr x, TyTermExpr y) }
-  (* `Same(X, Y)` = Id(A, X, Y), A inferred from the endpoints. Keyword-first
-     (see header design note): the leading SAME + parens commit the parser, so
-     no expr/type_expr clash. The carrier is a sentinel metavar resolved by
-     Tycheck.elaborate_id_sugar. Pure sugar: same kernel Id, same rejection on
-     a false equation. *)
-  | SAME LPAREN x = expr COMMA y = expr RPAREN
-    { TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y) }
-  | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
-    { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
-  | EL LPAREN c = expr RPAREN
-    { TyEl (TyTermExpr c) }   (* c may be an APPLIED code El(Fam(x)), not just a bare name *)
+named_type:
   (* Type application at use: `Box<number>`, `HashMap<text, number>`.
      List/Map/Wire map to their own nodes; any other name applied to
      arguments is a TyApp. Wrong arity on List/Map/Wire fails at parse
@@ -1029,6 +1010,30 @@ type_atom:
             "type `%s` is the kernel code: write `%s` (the prelude place)"
             name (String.capitalize_ascii name))
       | None, _ -> TyUser name }
+
+type_atom:
+  | TYPE_KW
+    { TyUniverse 0 }
+  | n = TYPE_LEVEL
+    { TyUniverse n }
+  | PI LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
+    { TyPi (x, a, b) }
+  | SIGMA LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
+    { TySigma (x, a, b) }
+  | ID LPAREN a = type_expr COMMA x = expr COMMA y = expr RPAREN
+    { TyId (a, TyTermExpr x, TyTermExpr y) }
+  (* `Same(X, Y)` = Id(A, X, Y), A inferred from the endpoints. Keyword-first
+     (see header design note): the leading SAME + parens commit the parser, so
+     no expr/type_expr clash. The carrier is a sentinel metavar resolved by
+     Tycheck.elaborate_id_sugar. Pure sugar: same kernel Id, same rejection on
+     a false equation. *)
+  | SAME LPAREN x = expr COMMA y = expr RPAREN
+    { TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y) }
+  | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
+    { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
+  | EL LPAREN c = expr RPAREN
+    { TyEl (TyTermExpr c) }   (* c may be an APPLIED code El(Fam(x)), not just a bare name *)
+  | t = named_type { t }
   | name = IDENT IN ids = ident_list
     { TyPrimIn (name, ids) }
   | first = IDENT PIPE rest = separated_nonempty_list(PIPE, variant)
@@ -1096,22 +1101,22 @@ variant:
   | name = IDENT LPAREN args = separated_list(COMMA, type_expr) RPAREN
     { { v_name = name; v_args = args } }
 
-/* An arm of a `this >` clause. Same shape as a type-position variant, PLUS
-   the fork-2 RESERVED SLOT: a path constructor puts an EQUALITY into the
-   place, as data (`this > shift(nat, nat) : mk(a, b) = mk(a+1, b+1)`).
-   The slot lives ONLY here (not in type-position sums, where the `:` tail
-   would be ambiguous); enabling it requires the pinned path-over obligation
-   in the kernel (the branch checked against PathP (i. P(loop@i))). Without
-   it: a clean reject. */
 arm:
-  | v = variant  { v }
-  | name = IDENT LPAREN separated_list(COMMA, type_expr) RPAREN
-    COLON expr EQ expr
-    { failwith ("path constructor '" ^ name ^ "' not yet enabled: a path "
-                ^ "arm needs the pinned path-over obligation in the kernel") }
-  | name = IDENT COLON expr EQ expr
-    { failwith ("path constructor '" ^ name ^ "' not yet enabled: a path "
-                ^ "arm needs the pinned path-over obligation in the kernel") }
+  (* an arm is a name and its payload, as a field is a name and a type *)
+  | name = IDENT args = list(named_type)
+    { { v_name = name; v_args = args } }
+  | b = BOOL_LIT
+    { { v_name = (if b then "true" else "false"); v_args = [] } }
+  (* the old form: the parentheses are for products *)
+  | name = IDENT LPAREN first = separated_list(COMMA, type_expr) RPAREN
+    { let show = function
+        | TyUser n -> n
+        | TyPrim p -> String.capitalize_ascii p
+        | TyApp (n, _) -> n ^ "<..>"
+        | _ -> "T" in
+      failwith (Printf.sprintf
+        "the payload of arm %s is written after its name, without parentheses: this > %s %s"
+        name name (String.concat " " (List.map show first))) }
 
 (* A named sum type is a coproduct place: `place Tree { this > Leaf :U Node(Tree, Tree) }`
    (see place_decl, whose pd_arms carry the `this >` clause). The

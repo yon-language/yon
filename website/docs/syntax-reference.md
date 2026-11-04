@@ -93,7 +93,7 @@ Equality between values is `==`. There is no `becomes` keyword.
 | `Number`, `Text`, `Boolean`, `Unit` | ✓ | Primitives, the prelude places. `Text` ≡ `String`. The lowercase spellings `number`, `text`, `boolean`, `unit` are the kernel codes and are rejected at the surface (E1001) |
 | `Int64` | ✓ | The exact 64-bit integer, a prelude place carried as `i64`: no rounding. A literal is an `Int64` where the context asks for one |
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
-| `place P { this > A :U B(T) }` | ✓ | Coproduct (sum): the arms are places, an arm may carry arguments; see [`this`](/book/keywords#this) |
+| `place P { this > A :U B T }` | ✓ | Coproduct (sum): the arms are places, an arm may carry arguments; see [`this`](/book/keywords#this) |
 | `List<T>`, `HashMap<K, V>`, `HashSet<T>` | ✓ | Collections |
 | `Wire<T>` | ✓ | Channel type: what `produce`, `spawn` and a subscription give. (The `buffer N` / `drop oldest` / `drop newest` modifiers were parsed but never consumed and were removed) |
 | `T -> U` | ✓ | Function type, right-associative |

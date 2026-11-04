@@ -12,14 +12,14 @@
  * -> exit 42.
  */
 
-place Term { this > TLit(Number) :U TAdd(Term, Term) :U TMul(Term, Term) :U TVar(Number) :U TLet(Term, Term) :U TCall(String, Term) }
+place Term { this > TLit Number :U TAdd Term Term :U TMul Term Term :U TVar Number :U TLet Term Term :U TCall String Term }
 /* a top-level function: name + body; the body uses TVar 0 for the parameter. */
-place Fun { this > FnDef(String, Term) }
-place FunList { this > FlNil :U FlCons(Fun, FunList) }
+place Fun { this > FnDef String Term }
+place FunList { this > FlNil :U FlCons Fun FunList }
 /* SSA environment: the list of bound ssa-names, indexed by de Bruijn. */
-place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
+place SsaEnv { this > SeNil :U SeCons String SsaEnv }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER(String, String, Number) }
+place EmitR { this > ER String String Number }
 
 /* accessors on EmitR (single constructor -> match with one branch). */
 fun er_ssa(e: EmitR):  String { return match e { ER(s, c, n) => s } }
