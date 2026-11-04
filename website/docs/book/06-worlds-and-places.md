@@ -112,7 +112,7 @@ fun lookup(): Lookup<Number> { return Absent }
 fun main(): Number {
   d := match ruling() { Present => 1, Absent => 2, Unknown => 3 }
   l := match lookup() { Found as v => v, Absent => 20 }
-  q := match Lookup.Found(20) { Found as v => v, Absent => 0 }
+  q := match (20 ↪ Lookup.Found) { Found as v => v, Absent => 0 }
   return d + l + q                 // 2 + 20 + 20 = 42
 }
 ```
@@ -123,12 +123,12 @@ Where nothing is expected (`a := Absent`) an arm listed by two sums names
 no arrow, and the program is refused (E2004). The compiler does not guess;
 the message proposes the qualified form, `Decision.Absent` or `Lookup.Absent`,
 which names the sum. A payload arm is qualified the same way:
-`Lookup.Found(20)`.
+`20 ↪ Lookup.Found`.
 
-The qualified form reads like a call to a function of the place, and it is
-one: the injection is an arrow of the home of the sum. So in the home of a
+The qualified name is a name of the place: the injection is an arrow of the
+home of the sum. So in the home of a
 place **one name names one arrow**. An arm and a function declared in the same
-braces with the same name would make `Ask.Yes(4)` mean two things, and the
+braces with the same name would make `4 ↪ Ask.Yes` mean two things, and the
 place is refused (E2005) until one of them is renamed.
 
 ## Sub-objects

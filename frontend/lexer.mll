@@ -471,7 +471,7 @@ and string_lit buf = parse
           held := Some tok;
           previous := ARMS_END;
           ARMS_END
-      | IDENT _ | BOOL_LIT _ | LT | GT | COMMA | LPAREN | RPAREN | ARROW | IN -> finish tok
+      | IDENT _ | BOOL_LIT _ | LT | GT | COMMA | LPAREN | RPAREN | ARROW | IN | COLON | EQ -> finish tok
       | _ ->
           in_clause := false;
           held := Some tok;

@@ -1689,6 +1689,12 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   | ECall (name, _, loc) when arrow_refusal env name loc <> None ->
       err loc (Option.get (arrow_refusal env name loc))
 
+  | ECall (name, _ :: _, loc)
+    when qualified_arm_of env name <> None && Tyenv.lookup_fun env name = None
+         && arrow_kind name loc <> Some Surface_ast.Inject ->
+      err loc (Printf.sprintf "an injection into a qualified arm is written x \xe2\x86\xaa %s"
+                 (Str.global_replace (Str.regexp_string "__") "." name))
+
   | ECall (name, args, loc) when is_arm_injection env name loc ->
       Hashtbl.replace Surface_ast.arm_call_sites (loc.file, loc.start_line, loc.start_col, name) ();
       infer env ctx (EHITConstr (name, args, loc))

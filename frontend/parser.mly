@@ -1139,6 +1139,10 @@ arm:
     { { v_name = name; v_args = args } }
   | b = BOOL_LIT
     { { v_name = (if b then "true" else "false"); v_args = [] } }
+  (* a path is no arm: it is a cell, a law of the place *)
+  | name = IDENT list(named_type) COLON expr EQ expr
+    { failwith (Printf.sprintf
+        "a path is not an arm: it is a cell of the place: write law %s source = target" name) }
   (* the old form: the parentheses are for products *)
   | name = IDENT LPAREN first = separated_list(COMMA, type_expr) RPAREN
     { let show = function

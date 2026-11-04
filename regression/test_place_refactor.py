@@ -89,6 +89,42 @@ def test_arm_section_at_union_boundary_upcasts_as_identity():
 
 # ---- a payload arm IS a place ---------------------------------------------
 
+def _twin(tmp_path, entry):
+    import shutil
+    twin = tmp_path / "twin"
+    shutil.copytree(ROOT / "examples" / "inductive_list", twin)
+    (twin / "Entry.yon").write_text(entry)
+    return _emit(twin)
+
+
+def test_path_constructor_slot_is_refused_and_the_law_shown(tmp_path):
+    """A path is not an arm of the clause: it is a cell, a law of the place. Comes back in
+    the form with laws when they are constitutive."""
+    r = _twin(tmp_path, "place NumList {\n  this > Nil :U dup : Nil = Nil\n}\n"
+                        "place Entry { }\nfun main(): Number { return 0 }\n")
+    out = r.stderr + r.stdout
+    assert r.returncode != 0 and b"E1001" in out and b"law dup" in out, out
+
+
+def test_record_pattern_on_a_payload_is_refused_and_the_tuple_shown(tmp_path):
+    prog = ("place NumList { this > Nil :U Cons Number NumList }\n"
+            "place Entry { }\n"
+            "fun sum(xs: NumList): Number {\n"
+            "  return match xs { Nil => 0, %s => h + sum(t) }\n}\n"
+            "fun main(): Number { return sum((5, (37, Nil) ↪ Cons) ↪ Cons) }\n")
+    r = _twin(tmp_path, prog % "Cons { _1 as h _2 as t }")
+    out = r.stderr + r.stdout
+    assert r.returncode != 0 and b"E1001" in out and b"Cons as (x, y)" in out, out
+
+
+def test_mediatrice_on_arm_is_refused_and_the_injection_shown(tmp_path):
+    r = _twin(tmp_path, "place NumList { this > Nil :U Cons Number NumList }\n"
+                        "place Entry { }\nfun main(): Number {\n"
+                        "  c := .-> Cons { _1 1 }\n  return 0\n}\n")
+    out = (r.stderr + r.stdout).decode()
+    assert r.returncode != 0 and "E2001" in out and "(x1, x2) ↪ Cons" in out, out
+
+
 def test_injection_needs_the_whole_payload(tmp_path):
     """A payload arm has full arity: a missing projection is a clean, positioned refusal."""
     import shutil

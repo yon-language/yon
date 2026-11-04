@@ -3772,11 +3772,11 @@ def test_the_qualified_arm_names_its_coproduct(tmp_path):
     entry = """place Entry {}
 fun main(): Number {
   mut x := match Decision.Absent { Present => 1, Absent => 2, Unknown => 3 }
-  y := match Lookup.Found(5) { Found as v => v, Absent => 20 }
+  y := match (5 ↪ Lookup.Found) { Found as v => v, Absent => 20 }
   return x * 100 + y
 }
 """
-    v = _value_or_outcome(tmp_path, entry, "Decision.Absent and Lookup.Found(5)")
+    v = _value_or_outcome(tmp_path, entry, "Decision.Absent and 5 ↪ Lookup.Found")
     _verdict(v == 205, f"exit {v}, expected 205")
 
 
@@ -3827,11 +3827,11 @@ fun main(): Number {
 
 
 def test_an_arm_and_an_arrow_of_its_home_with_one_name_are_refused(tmp_path):
-    # in the home of a place one name names one arrow: `Ask.Yes(4)` cannot be
+    # in the home of a place one name names one arrow: `4 ↪ Ask.Yes` cannot be
     # both the injection of the arm Yes and the fun Yes of the braces
     entry = """place Entry {}
 fun main(): Number {
-  return Ask.Yes(4)
+  return 4 ↪ Ask.Yes
 }
 """
     files = _arms_files("Nay :U Yea", ask_body="this > Yes :U No\n"

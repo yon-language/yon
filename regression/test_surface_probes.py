@@ -440,6 +440,24 @@ def test_an_injection_to_a_fun_proposes_the_application(tmp_path):
     _refused(tmp_path, src, "E2001", "x ↦ inc")
 
 
+def test_a_qualified_arm_is_injected_with_the_arrow(tmp_path):
+    src = ("place Entry {\n"
+           "fun main(): Number { return match (42 ↪ Lookup.Found) { Found as v => v, Absent => 0 } }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_qualified_call_of_an_arm_is_refused_and_the_form_shown(tmp_path):
+    src = ("place Entry {\n"
+           "fun main(): Number { return match Lookup.Found(42) { Found as v => v, Absent => 0 } }\n}\n")
+    _refused(tmp_path, src, "E2001", "x ↪ Lookup.Found")
+
+
+def test_a_qualified_nullary_arm_stays_bare(tmp_path):
+    src = ("place Entry {\n"
+           "fun main(): Number { return match Decision.Absent { Present => 1, Absent => 42, Unknown => 3 } }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
 FUNS = ("fun inc(x: Number): Number { return x + 1 }\n"
         "fun add(a: Number, b: Number): Number { return a + b }\n"
         "fun add3(a: Number, b: Number, c: Number): Number { return a + b + c }\n")
