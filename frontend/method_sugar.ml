@@ -414,7 +414,14 @@ let qualify_homes (p : S.program) : S.program =
           && String.sub fd.S.fn_name 0 (String.length pfx) = pfx in
         let fd = if already then fd
           else { fd with S.fn_name = qual h fd.S.fn_name } in
-        S.TopFun { fd with S.fn_body = List.map (rw_stmt sibs h) fd.S.fn_body }
+        (* a sibling named as a value: the name of the arrow in the house *)
+        let names = bound_names fd in
+        let by_name = function
+          | S.EVar (n, l) when List.mem n sibs && not (Hashtbl.mem names n) ->
+              Some (S.EVar (qual h n, l))
+          | _ -> None in
+        S.TopFun { fd with S.fn_body =
+            List.map (map_stmt by_name) (List.map (rw_stmt sibs h) fd.S.fn_body) }
     | S.TopView vd ->
         in_house vd.S.vw_loc (fun sibs h ->
           S.TopView { vd with S.vw_items =

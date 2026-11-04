@@ -319,6 +319,35 @@ let is_ring_carrier (t : ty) : bool =
   | TyUser "Int64" | TyPrim "i64" -> true
   | _ -> false
 
+(* What conversion adds to the normal form, up to which two paths are one: a path along
+   which nothing varies is the trivial path, and an `if` whose branches agree is either. *)
+let rec conversion_form (t : Ast.term) : Ast.term =
+  let open Ast in
+  let rec mentions i t =
+    match t with
+    | PApp (b, IVar j) -> j = i || mentions i b
+    | PApp (b, _) | PLam (_, b) | Refl b | Lam (_, _, b) -> mentions i b
+    | App (a, b) -> mentions i a || mentions i b
+    | HITConstr (_, args) -> List.exists (mentions i) args
+    | HITElim (brs, x) -> mentions i x || List.exists (fun (_, _, b) -> mentions i b) brs
+    | _ -> false in
+  match t with
+  | App (App (App (Var ("__if" | "__if_expr"), c), a), b) ->
+      let a' = conversion_form a and b' = conversion_form b in
+      if term_equal a' b' then a'
+      else App (App (App (Var "__if_expr", conversion_form c), a'), b')
+  | App (a, b) -> App (conversion_form a, conversion_form b)
+  | PLam (i, b) ->
+      let b' = conversion_form b in
+      if mentions i b' then PLam (i, b') else Refl b'
+  | Refl b -> Refl (conversion_form b)
+  | PApp (b, d) -> PApp (conversion_form b, d)
+  | Lam (x, ty, b) -> Lam (x, ty, conversion_form b)
+  | HITConstr (c, args) -> HITConstr (c, List.map conversion_form args)
+  | HITElim (brs, x) ->
+      HITElim (List.map (fun (c, vs, b) -> (c, vs, conversion_form b)) brs, conversion_form x)
+  | t -> t
+
 let ty_term_equal ?(carrier : ty option)
     (env : Tyenv.env) (ctx : Reduce.ctx) (t1 : ty_term) (t2 : ty_term) : bool =
   match t1, t2 with
@@ -333,6 +362,7 @@ let ty_term_equal ?(carrier : ty option)
              let nf1 = Reduce.normalize dctx c1 in
              let nf2 = Reduce.normalize dctx c2 in
              if Ast.term_equal nf1 nf2 then true
+             else if Ast.term_equal (conversion_form nf1) (conversion_form nf2) then true
              else
                (match carrier with
                 | Some c when is_ring_carrier c ->

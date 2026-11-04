@@ -1,10 +1,7 @@
+place Classi { this > inj Number  law quot ∀a : Number ∀b : Number, a = b → a ↪ inj = b ↪ inj }
 place Entry {
-  fun motive(q: Quotient): Number { return 0 }
+  fun seven: Classi { return 7 ↪ inj }
   fun main: Number {
-    return hit_elim(
-      motive,
-      [inj as (x, y) => x, quot as (a, b, r) => plam i => 0],
-      hit(inj, 7))
+    return match seven { inj as (x, y) => x, quot as (a, b, r) => clear 0 }
   }
 }
-

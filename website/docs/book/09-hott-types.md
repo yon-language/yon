@@ -107,19 +107,23 @@ constructor, the result type read off the branches.
 
 <!-- yon-gate: exit 5 -->
 ```yon
-fun main: Number {
-  return match hit(north) {
+fun quota(p: Suspension<Number>): Number {
+  return match p {
     north => 5,
     south => 5,
     merid as a => plam i => 5
   }
 }
+fun main: Number {
+  return quota(north)
+}
 ```
 
-`hit(north)` is a point of the suspension (poles `north` and `south`, with
-`merid` the meridian path between them); the `merid` branch returns a path, built
-with `plam`, a path-lambda over the interval. The eliminator needs no explicit
-motive: the branches give it away.
+`north` is a point of the suspension (poles `north` and `south`, with `merid` the
+meridian path between them); the `merid` branch is a path between what the match gives
+at the two poles, built with `plam`, a path-lambda over the interval, and the kernel's
+conversion checks its ends. Giving the poles two values with no path between them is
+refused.
 
 ## Comprehension types
 

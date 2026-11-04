@@ -1,0 +1,2 @@
+/* Suspension — two poles, and a meridian from one to the other for each point of A. */
+place Suspension<A> { this > north :U south  law merid ∀a : A, north = south }

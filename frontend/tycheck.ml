@@ -2165,7 +2165,8 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
           match acc with
           | Some _ -> acc
           | None ->
-              if Tyenv.lookup_named_sum env sig_.Hit_env.hit_name <> None then None
+              if Tyenv.lookup_named_sum env sig_.Hit_env.hit_name <> None
+                 || Tyenv.lookup_sum_constructor env ctor <> [] then None
               else if List.exists (fun (p : Hit_env.point_constructor) ->
                                 p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points
               then Some (sig_, `Point)
@@ -2175,14 +2176,29 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
               else None)
           None !Hit_env.registry in
       (match found with
-       | None when List.length (coproducts_of_arm env ctor) > 1 ->
+       | None when List.length (coproducts_of_arm env ctor) > 1
+                   && not (Hashtbl.mem Surface_ast.qualified_arm_sites (site_of loc)) ->
            unnamed_coproduct_err loc ctor (coproducts_of_arm env ctor)
        | None ->
-           (match Tyenv.named_sum_of_ctor env ctor with
+           (* a qualifier names the coproduct of an arm that several list *)
+           let qualifier = Option.map fst
+               (Hashtbl.find_opt Surface_ast.qualified_arm_sites (site_of loc)) in
+           let named_of_ctor env ctor = match qualifier with
+             | Some c ->
+                 Option.map (fun vs -> (c, vs)) (Tyenv.lookup_named_sum env c)
+             | None -> Tyenv.named_sum_of_ctor env ctor in
+           (match named_of_ctor env ctor with
             | Some (c, _) ->
                 Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc) c
             | None -> ());
-           (match Tyenv.lookup_sum_constructor env ctor with
+           (match (match qualifier with
+                   | Some c ->
+                       (match Tyenv.lookup_named_sum env c with
+                        | Some vs ->
+                            List.filter_map (fun (v : variant) ->
+                                if v.v_name = ctor then Some (vs, v) else None) vs
+                        | None -> [])
+                   | None -> Tyenv.lookup_sum_constructor env ctor) with
             | [] -> err loc (Printf.sprintf "hit: unknown HIT constructor %s" ctor)
             | [(variants, variant)] ->
                 if List.length args <> List.length variant.v_args then
@@ -2201,12 +2217,12 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                      like a generic call: its parameters become fresh unknowns
                      solved by the arguments. *)
                   let generic =
-                    match Tyenv.named_sum_of_ctor env ctor with
+                    match named_of_ctor env ctor with
                     | Some (name, _) -> Tyenv.named_sum_params env name <> []
                     | None -> false in
                   let* (arg_tys, result) =
                     if not generic then ok (variant.v_args, None) else
-                    let name = match Tyenv.named_sum_of_ctor env ctor with
+                    let name = match named_of_ctor env ctor with
                       | Some (n, _) -> n | None -> assert false in
                     let ps = Tyenv.named_sum_params env name in
                     let fresh = List.map (fun v -> (v, Ty_subst.fresh_metavar ())) ps in
@@ -2235,7 +2251,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                      the expanded sum, so it unifies with `Tree`-typed positions
                      (including a constructor's own recursive arguments). An
                      anonymous inline sum keeps its structural type. *)
-                  (match result, Tyenv.named_sum_of_ctor env ctor with
+                  (match result, named_of_ctor env ctor with
                    | Some t, _ -> ok t
                    | None, Some (name, _) -> ok (TyUser name)
                    | None, None ->
@@ -3329,6 +3345,11 @@ and check_cells env ctx (pd : place_decl) : unit tc_result =
                "law %s of %s: a law of a place with arms is a cell: its statement is \
                 source = target" name pd.pd_name)
            | Some (premise, left, right) ->
+               let vars = List.map (fun (_, x, _) -> x) st.ls_quants in
+               let house_fun n = Tyenv.lookup_fun env (pd.pd_name ^ "__" ^ n) <> None in
+               let own = Hit_env.qualify_arms ~house_fun pd vars in
+               let left = own left and right = own right in
+               let premise = Option.map own premise in
                let ps = pd.pd_type_params in
                let benv = Tyenv.add_vars env
                    (List.map (fun (_, x, t) -> (x, resolve_tparams ps t)) st.ls_quants) in
@@ -3447,6 +3468,8 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
     | ERefl (a, l) -> ERefl (at a, l)
     | EVar (c, _) | ECall (c, [], _) when is_point c && branch_of c <> None ->
         let (_, _, b) = Option.get (branch_of c) in b
+    | EField (EVar (h, _), c, _) when h = hname && is_point c && branch_of c <> None ->
+        let (_, _, b) = Option.get (branch_of c) in b
     | ECall (c, args, _) | EHITConstr (c, args, _) when is_point c && branch_of c <> None ->
         let (_, pat, b) = Option.get (branch_of c) in
         let vs = match pat with
@@ -3479,7 +3502,13 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
                      | Error _ -> TyId (TyMetaVar (-424242), TyTermExpr l', TyTermExpr (rename r)))
                 | t -> inst t in
               if b = "_" then e else Tyenv.add_var e b t) env params vs in
-          let want = TyId (result, TyTermExpr (at (rename cell.Hit_env.hpc_left)),
+          (* a cell between paths lives one dimension up *)
+          let rec dim_ty (e : expr) = match e with
+            | EParen (x, _) -> dim_ty x
+            | ERefl (x, _) -> TyId (dim_ty x, TyTermExpr (at x), TyTermExpr (at x))
+            | _ -> result in
+          let left = rename cell.Hit_env.hpc_left in
+          let want = TyId (dim_ty left, TyTermExpr (at left),
                            TyTermExpr (at (rename cell.Hit_env.hpc_right))) in
           check benv ctx body want)
     (ok ()) branches in
@@ -5723,13 +5752,9 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
                      second pass) is fine; another union's synthetic is not. *)
                   (match other.pd_subcontains with
                    | Some parent when parent = pd.pd_name -> ok ()
-                   | _ ->
-                       err pd.pd_loc (Printf.sprintf
-                         "place %s: arm %s carries a payload but another \
-                          union already declares an arm with this name — \
-                          rename one; synthetic-arm identity is name-nominal \
-                          and the injection is single-parent"
-                         pd.pd_name v.v_name))
+                   (* an arm with a payload may be listed by more than one coproduct:
+                      the expected type or a qualifier says which injection it is *)
+                   | _ -> ok ())
                 else
                   err pd.pd_loc (Printf.sprintf
                     "place %s: arm %s carries a payload but also names a \

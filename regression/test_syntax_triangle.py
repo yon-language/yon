@@ -66,6 +66,8 @@ CORPUS_ROOTS = [
 # enforced by test_leg2_generic_declaration_compiles_and_runs.
 KEYWORD_ALLOWLIST = {
     "El",      # kernel decode type; no surface syntax, exercised by the test_el oracle
+    "hit",     # a form of the kernel, refused on the surface: canonical_forms/variant/dev_old_hit
+    "hit_elim",  # a form of the kernel, refused on the surface: variant/dev_old_hit_elim
     "PathP",   # cubical dependent path; kernel form, test_path_core
     "I0",      # cubical interval endpoint 0; kernel form
     "I1",      # cubical interval endpoint 1; kernel form

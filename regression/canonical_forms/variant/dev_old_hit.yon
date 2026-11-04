@@ -1,0 +1,7 @@
+place Coin { this > Heads :U Tails }
+place Entry {
+  fun main: Number {
+    z := hit(Heads)
+    return 0
+  }
+}

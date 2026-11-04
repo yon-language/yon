@@ -852,11 +852,26 @@ let test_stdlib_space () =
   else
     (Printf.printf "Status: FAIL\n"; false)
 
+(* The HITs of the prelude: the kernel reads them from there. *)
+let hit_prelude_env () : Hit_env.hit_env =
+  let dir = Filename.concat (Filename.dirname Sys.executable_name) "../../../prelude/hit" in
+  let places = List.concat_map (fun name ->
+      let ic = open_in_bin (Filename.concat dir (name ^ ".yon")) in
+      let text = really_input_string ic (in_channel_length ic) in
+      close_in ic;
+      Parser_state.reset ();
+      Lexer.reset_statement ();
+      Parser.program Lexer.token (Lexing.from_string text) @ Parser_state.drain ())
+      ["S1"; "S2"; "Suspension"; "PropTrunc"; "SetTrunc"] in
+  Hit_env.register_places places;
+  !Hit_env.registry
+
 (* Test 51: HIT lookup — S1 base constructor. *)
 let test_hit_s1_base () =
   let src = {|
+    place S1 { this > base  law loop base = base }
     fun get_base: S1 {
-      return hit(base)
+      return base
     }
   |} in
   Printf.printf "\n=== Test 51: HIT — S1 base point constructor ===\n";
@@ -894,7 +909,7 @@ let test_hit_arity () =
 (* Test 55: HIT signature lookup direct API. *)
 let test_hit_signature_lookup () =
   Printf.printf "\n=== Test 55: HIT — direct signature lookup ===\n";
-  let env = Hit_env.builtin_env in
+  let env = hit_prelude_env () in
   let s1_ok = match Hit_env.lookup env "S1" with
     | Some s -> List.length s.hit_points = 1 && List.length s.hit_paths = 1
     | None -> false in
@@ -2154,6 +2169,7 @@ let test_heyt_surface_branch_unknown () =
  * S¹.base, the composition is the point itself. *)
 let test_hit_reduce_comp () =
   Printf.printf "\n=== Test 99: reduce_comp dispatches on HIT constructors ===\n";
+  ignore (hit_prelude_env ());
   let open Cubical in
   (* The S¹ HIT has point `base` (zero-arity). *)
   let s1_type = CTHIT ("S1", []) in
@@ -2938,7 +2954,7 @@ let test_hit_all_registered () =
   let expected = ["S1"; "S2"; "Suspension"; "PropTrunc";
                   "SetTrunc"; "Pushout"; "Quotient"] in
   let all_present = List.for_all
-    (fun name -> Hit_env.lookup Hit_env.builtin_env name <> None)
+    (fun name -> Hit_env.lookup (hit_prelude_env ()) name <> None)
     expected in
   if all_present then
     (Printf.printf "  %s all registered\n" (String.concat ", " expected);
@@ -2947,14 +2963,14 @@ let test_hit_all_registered () =
   else
     (List.iter
        (fun n ->
-          if Hit_env.lookup Hit_env.builtin_env n = None then
+          if Hit_env.lookup (hit_prelude_env ()) n = None then
             Printf.printf "  MISSING: %s\n" n)
        expected;
      false)
 
 let test_s1_loop_constructor () =
   Printf.printf "\n=== Test 159: S1 has point `base` and path `loop` ===\n";
-  match Hit_env.lookup Hit_env.builtin_env "S1" with
+  match Hit_env.lookup (hit_prelude_env ()) "S1" with
   | None -> Printf.printf "FAIL — S1 not found\n"; false
   | Some sig_ ->
       let has_base = List.exists

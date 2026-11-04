@@ -13,7 +13,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 - corpus files: **356**
 - CodeWindows: **23**  (project **11**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **32**
-- allowlisted reserved/kernel tokens: **5**
+- allowlisted reserved/kernel tokens: **7**
 
 ## Keywords (lexer x corpus-count x book anchor)
 
@@ -31,7 +31,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `carried` | `CARRIED` | 2 | yes | exercised |
 | `carry` | `CARRY` | 3 | yes | exercised |
 | `cell` | `CELL` | 1 | yes | exercised |
-| `clear` | `CLEAR` | 28 | yes | exercised |
+| `clear` | `CLEAR` | 29 | yes | exercised |
 | `comp` | `COMP` | 4 | yes | exercised |
 | `compose` | `COMPOSE` | 3 | yes | exercised |
 | `converts` | `CONVERTS` | 1 | yes | exercised |
@@ -58,8 +58,8 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `hcomp` | `HCOMP` | 3 | yes | exercised |
 | `here` | `HERE` | 1 | yes | exercised |
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
-| `hit` | `HIT_KW` | 6 | yes | exercised |
-| `hit_elim` | `HIT_ELIM` | 4 | yes | exercised |
+| `hit` | `HIT_KW` | 0 | yes | allowlisted |
+| `hit_elim` | `HIT_ELIM` | 0 | yes | allowlisted |
 | `if` | `IF_KW` | 33 | yes | exercised |
 | `import` | `IMPORT` | 11 | yes | exercised |
 | `in` | `IN` | 8 | yes | exercised |
@@ -68,9 +68,9 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `internal` | `INTERNAL` | 3 | yes | exercised |
 | `is` | `IS` | 14 | yes | exercised |
 | `iter` | `ITER_KW` | 2 | yes | exercised |
-| `law` | `LAW` | 7 | yes | exercised |
+| `law` | `LAW` | 9 | yes | exercised |
 | `maps` | `MAPS` | 4 | yes | exercised |
-| `match` | `MATCH_KW` | 31 | yes | exercised |
+| `match` | `MATCH_KW` | 35 | yes | exercised |
 | `morph` | `MORPH_KW` | 5 | yes | exercised |
 | `morphism` | `MORPHISM_KW` | 5 | yes | exercised |
 | `most` | `MOST` | 2 | yes | exercised |
@@ -86,8 +86,8 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `over` | `OVER` | 2 | yes | exercised |
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
-| `place` | `PLACE` | 306 | yes | exercised |
-| `plam` | `PLAM` | 18 | yes | exercised |
+| `place` | `PLACE` | 308 | yes | exercised |
+| `plam` | `PLAM` | 16 | yes | exercised |
 | `present` | `PRESENT` | 3 | yes | exercised |
 | `produce` | `PRODUCE` | 15 | yes | exercised |
 | `promote` | `PROMOTE` | 1 | yes | exercised |
@@ -110,7 +110,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `spawn` | `SPAWN` | 1 | yes | exercised |
 | `stream` | `STREAM` | 5 | yes | exercised |
 | `then` | `THEN_KW` | 33 | yes | exercised |
-| `this` | `THIS` | 22 | yes | exercised |
+| `this` | `THIS` | 24 | yes | exercised |
 | `through` | `THROUGH` | 3 | yes | exercised |
 | `times` | `TIMES` | 2 | yes | exercised |
 | `to` | `TO` | 41 | yes | exercised |

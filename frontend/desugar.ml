@@ -803,9 +803,21 @@ and desugar_expr (e0 : S.expr) : C.term =
            C.HITElim
              (List.map (fun (n, vars, e) -> (n, vars, desugar_expr e)) branches,
               desugar_expr x))
+  (* the ends of a composite of paths are those of its parts *)
+  | S.EPathApp (S.EParen (p, _), d, l) when (d = S.DI0 || d = S.DI1) ->
+      desugar_expr (S.EPathApp (p, d, l))
+  | S.EPathApp (S.ECall ("inv", [p], _), S.DI0, l) -> desugar_expr (S.EPathApp (p, S.DI1, l))
+  | S.EPathApp (S.ECall ("inv", [p], _), S.DI1, l) -> desugar_expr (S.EPathApp (p, S.DI0, l))
+  | S.EPathApp (S.ECall ("concat", [p; _], _), S.DI0, l) -> desugar_expr (S.EPathApp (p, S.DI0, l))
+  | S.EPathApp (S.ECall ("concat", [_; q], _), S.DI1, l) -> desugar_expr (S.EPathApp (q, S.DI1, l))
   (* a cell at an end of the interval is that end *)
+  | S.EPathApp (S.EHITConstr (name, args, l), ((S.DI0 | S.DI1) as d), l2)
+    when Hit_env.cell_of_place name <> None ->
+      desugar_expr (S.EPathApp (S.ECall (name, args, l), d, l2))
   | S.EPathApp ((S.EVar (name, l) | S.ECall (name, _, l)) as p, ((S.DI0 | S.DI1) as d), _)
-    when Hashtbl.mem S.cell_sites (l.S.file, l.S.start_line, l.S.start_col, name) ->
+    when Hit_env.cell_of_place name <> None
+         && (Hashtbl.mem S.cell_sites (l.S.file, l.S.start_line, l.S.start_col, name)
+             || (match p with S.ECall _ -> true | _ -> false)) ->
       (match Hit_env.cell_of_place name with
        | Some (_, c) ->
            let args = match p with S.ECall (_, a, _) -> a | _ -> [] in
@@ -853,6 +865,13 @@ and desugar_expr (e0 : S.expr) : C.term =
        | Some (tag, arg_tys) when List.length arg_tys = List.length args ->
            ignore arg_tys; lower_sum_constr ctor tag args loc
        | _ -> C.HITConstr (ctor, List.map desugar_expr args))
+  (* before the registry of arms exists, a point of a place with cells is the kernel's *)
+  | S.EField (S.EVar (c, _), arm, _)
+    when not (arm_registered arm)
+         && (match Hit_env.lookup !Hit_env.registry c with
+             | Some sig_ -> List.exists (fun p -> p.Hit_env.pc_name = arm) sig_.Hit_env.hit_points
+             | None -> false) ->
+      C.HITConstr (arm, [])
   | S.EField (obj, fld, loc)
     when Hashtbl.mem S.union_field_sites (loc.S.file, loc.S.start_line, loc.S.start_col) ->
       (* a field on a coproduct: the copairing of the projections of the arms *)
@@ -3456,7 +3475,8 @@ let primitive_acts (n : string) : bool =
     List.exists starts
       [ "__yon_rpc"; "__morph_in_"; "__stream"; "__space"; "__spawn"; "__wire"; "__observe" ]
   else
-    not (List.mem n [ "XTower__depth"; "Args__count"; "Args__get" ]
+    not (List.mem n [ "XTower__depth"; "Args__count"; "Args__get";
+                      "ap"; "inv"; "concat"; "transport"; "ua"; "equiv" ]
          || List.exists starts
               [ "Math__"; "Bits__"; "String__"; "List__"; "MerkleTree__"; "Crypto__";
                 "Number__"; "Leech__"; "HashSet__"; "HashMap__"; "XRelMap__"; "XRelSet__";

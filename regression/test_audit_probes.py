@@ -1810,35 +1810,37 @@ def test_a_proposition_is_not_a_boolean(tmp_path):
 # --- cubical composition -------------------------------------------------------
 
 _SUSP_kernel = ("place Entry {{\n"
-         "fun main: Number {{\n"
-         "  mut n := hit(north)\n"
-         "  m := hit(merid, 0)\n"
-         "{body}"
-         "  return match e {{ north => 5, south => 7, merid as a => plam i => 9 }}\n"
-         "}}\n}}\n")
+         "fun proof(m: Number): {claim} {{ return clear }}\n"
+         "fun main: Number {{ return 42 }}\n}}\n")
 
 
-def _ends_at_kernel(tmp_path, body, expected, what):
-    rc, out = _build_kernel(tmp_path, _SUSP_kernel.format(body=body))
-    if rc != 0:
-        _verdict("Fatal error: exception" not in out, f"{what}: the compiler crashed:\n{out[-300:]}")
-        raise AssertionError(out)
-    got, _ = _run(tmp_path / "out")
-    _verdict(got == expected, f"{what}: computed {got}, expected {expected}")
+def _ends_at_kernel(tmp_path, claim, what):
+    rc, out = _build_kernel(tmp_path, _SUSP_kernel.format(claim=claim))
+    _verdict("Fatal error: exception" not in out, f"{what}: the compiler crashed:\n{out[-300:]}")
+    _verdict(rc == 0, f"{what}: the kernel does not see it: {out[-300:]}")
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a composition on an active face is the side at its far end: here merid(0) at I1, the south pole")
-def test_a_composition_on_an_active_face_is_the_side_at_its_end(tmp_path):
-    body = ("  p := plam i => hcomp Suspension [ i = I0 => plam j => m @ j ] n\n"
-            "  e := p @ I0\n")
-    _ends_at_kernel(tmp_path, body, 7, "hcomp at i = I0")
-
-
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a meridian is a path from the north pole to the south pole: merid(0) at I1 is south")
 def test_a_meridian_ends_at_the_south_pole(tmp_path):
-    _ends_at_kernel(tmp_path, "  e := m @ I1\n", 7, "merid(0) @ I1")
+    _ends_at_kernel(tmp_path, "(m ↦ merid) @ I1 = Suspension.south", "merid(0) @ I1")
+
+
+def test_a_meridian_starts_at_the_north_pole(tmp_path):
+    _ends_at_kernel(tmp_path, "(m ↦ merid) @ I0 = Suspension.north", "merid(0) @ I0")
+
+
+def test_a_meridian_does_not_end_at_the_north_pole(tmp_path):
+    rc, out = _build_kernel(tmp_path, _SUSP_kernel.format(
+        claim="(m ↦ merid) @ I1 = Suspension.north"))
+    assert rc != 0 and "E2001" in out, out
+
+
+@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
+                   reason="a composition on an active face is the side at its far end: the kernel "
+                          "does not reduce hcomp over a cell yet")
+def test_a_composition_on_an_active_face_is_the_side_at_its_end(tmp_path):
+    claim = ("(plam i => hcomp Suspension [ i = I0 => plam j => (m ↦ merid) @ j ] Suspension.north) @ I0"
+             " = Suspension.south")
+    _ends_at_kernel(tmp_path, claim, "hcomp at i = I0")
 
 
 # --- type erasure respects local binders ---------------------------------------
@@ -2280,21 +2282,19 @@ def test_a_naturality_verdict_reaches_whoever_compiles(tmp_path):
 
 def test_the_circle_base_point_eliminates(tmp_path):
     proj = _project(tmp_path,
-        "place Entry {\nfun motive(x: S1): Number { return 0 }\n"
+        "place Entry {\n"
         "fun main: Number {\n"
-        "  return hit_elim(motive, [base => 42, loop => plam i => 42], hit(base))\n}\n}\n")
+        "  return match S1.base { base => 42, loop => plam i => 42 }\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     assert rc == 0, out
     assert _run(tmp_path / "out")[0] == 42
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="the sphere's base point has type S2 and eliminates over S2")
 def test_the_sphere_base_point_eliminates(tmp_path):
     proj = _project(tmp_path,
-        "place Entry {\nfun motive(x: S2): Number { return 0 }\n"
+        "place Entry {\n"
         "fun main: Number {\n"
-        "  return hit_elim(motive, [base => 42, surf => plam i => 42], hit(base))\n}\n}\n")
+        "  return match S2.base { base => 42, surf => plam i => plam j => 42 }\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     _verdict(rc == 0, f"S2 elimination refused: {out.strip()[-160:]}")
     assert _run(tmp_path / "out")[0] == 42

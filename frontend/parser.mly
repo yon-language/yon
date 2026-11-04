@@ -1810,8 +1810,9 @@ expr_atom:
     { EQuote (TyTermExpr (EVar (c, mk_loc $startpos $endpos)), a, mk_loc $startpos $endpos) }
   | EL_MATCH LPAREN t = expr COMMA r = expr COMMA b = expr RPAREN
     { EElMatch (t, r, b, mk_loc $startpos $endpos) }
-  | HIT_ELIM LPAREN c = expr COMMA LBRACKET branches = separated_list(COMMA, hit_branch) RBRACKET COMMA x = expr RPAREN
-    { EHITElim (c, branches, x, mk_loc $startpos $endpos) }
+  (* the kernel's forms, refused on the surface *)
+  | HIT_ELIM LPAREN expr COMMA LBRACKET separated_list(COMMA, hit_branch) RBRACKET COMMA expr RPAREN
+    { failwith "hit_elim is a form of the kernel: the eliminator is written match x { arm => .. }" }
   (* Metonymic: `match x { ctor => .., loop => plam i => .. }` = hit_elim with a
      SYNTHESIZED motive (non-dependent). The sentinel motive __match tells the
      type checker to infer the result type from the branches. *)
@@ -1821,9 +1822,11 @@ expr_atom:
   | PLAM i = IDENT FATARROW body = expr
     { EPathAbs (i, body, mk_loc $startpos $endpos) }
   | HIT_KW LPAREN ctor = IDENT RPAREN
-    { EHITConstr (ctor, [], mk_loc $startpos $endpos) }
-  | HIT_KW LPAREN ctor = IDENT COMMA args = separated_nonempty_list(COMMA, expr) RPAREN
-    { EHITConstr (ctor, args, mk_loc $startpos $endpos) }
+    { failwith (Printf.sprintf "hit is a form of the kernel: a nullary arm is its name: %s" ctor) }
+  | HIT_KW LPAREN ctor = IDENT COMMA separated_nonempty_list(COMMA, expr) RPAREN
+    { failwith (Printf.sprintf
+        "hit is a form of the kernel: an injection is written x \xe2\x86\xaa %s, a cell is applied with x \xe2\x86\xa6 %s"
+        ctor ctor) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
     { dot_call_expr obj fld args (mk_loc $startpos $endpos) }
   (* FOLD is a keyword token (the reduction's `fold "..."` clause), so it

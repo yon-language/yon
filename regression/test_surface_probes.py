@@ -534,6 +534,13 @@ def test_same_is_refused_and_the_endpoints_shown(tmp_path):
     _refused(tmp_path, src, "E1001", "written x = y")
 
 
+def test_hit_elim_on_the_surface_is_refused_and_match_shown(tmp_path):
+    _refused(tmp_path, "place Coin { this > Heads :U Tails }\n"
+             "place Entry {\nfun mot(c: Coin): Number { return 0 }\n"
+             "fun f(c: Coin): Number { return hit_elim(mot, [Heads => 1, Tails => 0], c) }\n"
+             "fun main: Number { return 0 }\n}\n", "E1001", "written match x")
+
+
 FUNS = ("fun inc(x: Number): Number { return x + 1 }\n"
         "fun add(a: Number, b: Number): Number { return a + b }\n"
         "fun add3(a: Number, b: Number, c: Number): Number { return a + b + c }\n")
@@ -627,17 +634,13 @@ def test_an_untyped_quantifier_is_refused_and_the_typed_form_proposed(tmp_path):
     assert r.returncode != 0 and "E1001" in out and "∀a : T ∀b : T," in out, out
 
 
-S1 = {"w/Topos.yon": "topos WTopos where {\n}\n",
-      "w/S1.yon": "place S1 { this > base  law loop base = base }\n"}
-
-
 def test_a_law_in_a_coproduct_generates_a_cell(tmp_path):
     src = ("place Entry {\n"
            "fun f(s: S1): Number {\n"
            "  return match s { base => 42, loop => plam i => 42 }\n"
            "}\n"
-           "fun main: Number { return f(base) }\n}\n")
-    assert _exit(tmp_path, src, S1) == 42
+           "fun main: Number { return f(S1.base) }\n}\n")
+    assert _exit(tmp_path, src) == 42
 
 
 def test_a_match_on_a_hit_without_the_branch_of_a_cell_is_refused(tmp_path):
@@ -645,14 +648,13 @@ def test_a_match_on_a_hit_without_the_branch_of_a_cell_is_refused(tmp_path):
            "fun f(s: S1): Number {\n"
            "  return match s { base => 42 }\n"
            "}\n"
-           "fun main: Number { return f(base) }\n}\n")
-    r, _ = _compile(tmp_path, src, S1)
+           "fun main: Number { return f(S1.base) }\n}\n")
+    r, _ = _compile(tmp_path, src)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "loop" in out, out
     assert "not yet enabled" not in out, out
 
 
-@pytest.mark.xfail(strict=True, reason="hit leaves the surface")
 def test_hit_on_the_surface_is_refused(tmp_path):
     _refused(tmp_path, "place Coin { this > Heads :U Tails }\n"
-             + _main("  z := hit(Heads)\n  return 0"), "E1001", "hit")
+             + _main("  z := hit(Heads)\n  return 0"), "E1001", "hit is a form of the kernel")

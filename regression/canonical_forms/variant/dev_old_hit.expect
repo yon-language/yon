@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: hit is a form of the kernel: a nullary arm is its name: Heads
+note: |
+  hit stays in the kernel: on the surface a nullary arm is its name, an injection x ↪ Arm.

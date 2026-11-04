@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: the eliminator is written match x
+note: |
+  hit_elim stays in the kernel: the eliminator on the surface is match.

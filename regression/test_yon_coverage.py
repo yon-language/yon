@@ -50,6 +50,8 @@ KERNEL_INTERNAL = {
 REFUSED = {
     "Id": ("hott/dev_old_id.yon", "written x = y"),
     "Same": ("hott/dev_old_same.yon", "written x = y"),
+    "hit": ("variant/dev_old_hit.yon", "hit is a form of the kernel"),
+    "hit_elim": ("variant/dev_old_hit_elim.yon", "hit_elim is a form of the kernel"),
 }
 
 # Lexing prefixes that are not standalone tokens: the real surface form is the

@@ -25,8 +25,8 @@
  * We expose:
  *
  *   - The hit_signature type (extending what's in cubical.ml).
- *   - A built-in registry of stdlib HITs: S¹, S², Suspension, Pushout,
- *     PropTrunc, SetTrunc.
+ *   - The registry: the places of the prelude and of the program whose laws are cells
+ *     (prelude/hit/), and Pushout and Quotient, which wait for term parameters on places.
  *   - Lookup and registration functions.
  *)
 
@@ -74,123 +74,6 @@ let lookup (env : hit_env) (name : string) : hit_signature option =
 
 (* ─── Built-in HITs ────────────────────────────────────────────────── *)
 
-(* S¹: the circle, with one point and one loop.
- *
- *   data S¹ where
- *     base : S¹
- *     loop : base = base
- *)
-let s1_signature : hit_signature = {
-  hit_name = "S1";
-  hit_type_params = [];
-  hit_points = [
-    { pc_name = "base";
-      pc_params = [];
-      pc_result = TyUser "S1"; };
-  ];
-  hit_paths = [
-    { hpc_name = "loop";
-      hpc_params = [];
-      hpc_left = EVar ("base", dummy_loc);
-      hpc_right = EVar ("base", dummy_loc); };
-  ];
-}
-
-(* S²: the 2-sphere, with one point and one 2-path.
- *
- *   data S² where
- *     base : S²
- *     surf : Square (refl base) (refl base) (refl base) (refl base)
- *
- * We model surf as a single path, not as a square
- * (a 2-dimensional path constructor).
- *)
-let s2_signature : hit_signature = {
-  hit_name = "S2";
-  hit_type_params = [];
-  hit_points = [
-    { pc_name = "base";
-      pc_params = [];
-      pc_result = TyUser "S2"; };
-  ];
-  hit_paths = [
-    { hpc_name = "surf";
-      hpc_params = [];
-      hpc_left = EVar ("base", dummy_loc);
-      hpc_right = EVar ("base", dummy_loc); };
-  ];
-}
-
-(* Suspension A: two points (north, south) and a path for every a in A
- * connecting them.
- *
- *   data Suspension (A : Type) where
- *     north : Suspension A
- *     south : Suspension A
- *     merid : A -> north = south
- *)
-let suspension_signature : hit_signature = {
-  hit_name = "Suspension";
-  hit_type_params = ["A"];
-  hit_points = [
-    { pc_name = "north";
-      pc_params = [];
-      pc_result = TyUser "Suspension"; };
-    { pc_name = "south";
-      pc_params = [];
-      pc_result = TyUser "Suspension"; };
-  ];
-  hit_paths = [
-    { hpc_name = "merid";
-      hpc_params = [("a", TyUser "A")];
-      hpc_left = EVar ("north", dummy_loc);
-      hpc_right = EVar ("south", dummy_loc); };
-  ];
-}
-
-(* PropTrunc A: the propositional truncation, with inclusion and a
- * path-constructor identifying any two elements.
- *
- *   data || A || where
- *     incl : A -> || A ||
- *     squash : (x y : || A ||) -> x = y
- *)
-let prop_trunc_signature : hit_signature = {
-  hit_name = "PropTrunc";
-  hit_type_params = ["A"];
-  hit_points = [
-    { pc_name = "incl";
-      pc_params = [("a", TyUser "A")];
-      pc_result = TyUser "PropTrunc"; };
-  ];
-  hit_paths = [
-    { hpc_name = "squash";
-      hpc_params = [("x", TyUser "PropTrunc"); ("y", TyUser "PropTrunc")];
-      hpc_left = EVar ("x", dummy_loc);
-      hpc_right = EVar ("y", dummy_loc); };
-  ];
-}
-
-(* SetTrunc A: the set truncation, with inclusion and a 2-path
- * identifying any two parallel paths.
- *)
-let set_trunc_signature : hit_signature = {
-  hit_name = "SetTrunc";
-  hit_type_params = ["A"];
-  hit_points = [
-    { pc_name = "incl";
-      pc_params = [("a", TyUser "A")];
-      pc_result = TyUser "SetTrunc"; };
-  ];
-  hit_paths = [
-    { hpc_name = "set_id";
-      hpc_params = [("x", TyUser "SetTrunc"); ("y", TyUser "SetTrunc");
-                    ("p", TyUser "Path"); ("q", TyUser "Path")];
-      hpc_left = EVar ("p", dummy_loc);
-      hpc_right = EVar ("q", dummy_loc); };
-  ];
-}
-
 (* Pushout: the standard pushout HIT. *)
 let pushout_signature : hit_signature = {
   hit_name = "Pushout";
@@ -235,11 +118,6 @@ let quotient_signature : hit_signature = {
 (* ─── Built-in environment ─────────────────────────────────────────── *)
 
 let builtin_env : hit_env = [
-  ("S1", s1_signature);
-  ("S2", s2_signature);
-  ("Suspension", suspension_signature);
-  ("PropTrunc", prop_trunc_signature);
-  ("SetTrunc", set_trunc_signature);
   ("Pushout", pushout_signature);
   ("Quotient", quotient_signature);
 ]
@@ -267,12 +145,36 @@ let cell_ends (body : expr) : (expr option * expr * expr) option =
       Option.map (fun (l, r) -> (Some p, l, r)) (ends c)
   | e -> Option.map (fun (l, r) -> (None, l, r)) (ends e)
 
+(* Inside its place, the name of a nullary arm is that arm, whichever other coproduct lists it. *)
+let qualify_arms ?(house_fun = fun (_ : string) -> false)
+    (pd : place_decl) (bound : string list) (e : expr) : expr =
+  let nullary = List.filter_map (fun (v : variant) ->
+      if v.v_args = [] && not (List.mem v.v_name bound) then Some v.v_name else None) pd.pd_arms in
+  let rec q (e : expr) : expr =
+    match e with
+    | EVar (x, l) when List.mem x nullary -> EField (EVar (pd.pd_name, l), x, l)
+    | EParen (a, l) -> EParen (q a, l)
+    | ERefl (a, l) -> ERefl (q a, l)
+    | EBinop (o, a, b, l) -> EBinop (o, q a, q b, l)
+    | ECall (n, a, l) when not (List.mem n bound) && house_fun n ->
+        let qualified = pd.pd_name ^ "__" ^ n in
+        (match Hashtbl.find_opt arrow_sites (l.file, l.start_line, l.start_col, n) with
+         | Some k -> Hashtbl.replace arrow_sites (l.file, l.start_line, l.start_col, qualified) k
+         | None -> ());
+        ECall (qualified, List.map q a, l)
+    | ECall (n, a, l) -> ECall (n, List.map q a, l)
+    | e -> e in
+  q e
+
 (* A place with arms and laws is a computad: the arms are its 0-cells, a law a cell. *)
-let signature_of_place (pd : place_decl) : hit_signature option =
+let signature_of_place ?house_fun (pd : place_decl) : hit_signature option =
   let cells = List.filter_map (function
       | FoLaw (name, Some st) when not st.ls_given ->
           (match cell_ends st.ls_body with
            | Some (premise, left, right) ->
+               let own = qualify_arms ?house_fun pd (List.map (fun (_, x, _) -> x) st.ls_quants) in
+               let left = own left and right = own right in
+               let premise = Option.map own premise in
                let quantified = List.map (fun (_, x, t) -> (x, t)) st.ls_quants in
                let witness = match premise with
                  | Some p ->
@@ -299,7 +201,12 @@ let register_places (p : program) : unit =
   registry := List.fold_left (fun env d ->
       match d with
       | TopPlace pd ->
-          (match signature_of_place pd with
+          let house_fun n =
+            List.exists (function
+                | TopFun fd -> fd.fn_home = Some pd.pd_name
+                               && (fd.fn_name = n || fd.fn_name = pd.pd_name ^ "__" ^ n)
+                | _ -> false) p in
+          (match signature_of_place ~house_fun pd with
            | Some sig_ -> (pd.pd_name, sig_) :: List.remove_assoc pd.pd_name env
            | None -> env)
       | _ -> env) builtin_env p

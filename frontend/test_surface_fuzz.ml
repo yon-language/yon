@@ -134,7 +134,7 @@ and gen_cubical d =
     | 5 -> Printf.sprintf "(%s @ I0)" (gen_cubical (d-1))
     | 6 -> Printf.sprintf "carry %s along (%s <=> %s)" (num ())
              cubfn_pool.(Random.int 3) cubfn_pool.(Random.int 3)
-    | _ -> Printf.sprintf "match hit(base) { base => %s, loop => plam i => %s }"
+    | _ -> Printf.sprintf "match S1.base { base => %s, loop => plam i => %s }"
              (num ()) (num ())
 
 let rec gen_stmt d =
@@ -172,7 +172,7 @@ let seeds = [|
   "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main: Number {\n  b := succ <=> pred\n  return carry 10 along b\n}";
   "fun main: Number {\n  p := back (clear 5)\n  return p @ I0\n}";
   "fun dbl(n: Number): Number { return n + n }\nfun main: Number {\n  mut s := clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
-  "fun main: Number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
+  "fun main: Number {\n  return match S1.base { base => 42, loop => plam i => 42 }\n}";
   "fun identity<T>(x: T): T { return x }\nfun main: Number { return identity(7) }";
   "fun unwrap(b: Box<number>): Number { return b.value }\nfun main: Number { return 0 }";
 |]

@@ -1,0 +1,5 @@
+/* hit — the higher inductive types: places with arms and laws. A place of this kind is a
+ * computad: its arms are the 0-cells, each law a cell, of the order its ends say. The
+ * kernel reads them from here. */
+topos Hit where {
+}

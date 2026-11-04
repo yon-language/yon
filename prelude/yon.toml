@@ -13,6 +13,9 @@ spaces = ["text"]
 [world.Logic]
 spaces = ["logic"]
 
+[world.Hit]
+spaces = ["hit"]
+
 [world.Err]
 spaces = ["err"]
 

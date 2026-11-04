@@ -64,6 +64,7 @@ let rec fmt_ty (t : ty) : string =
   | TyChannel t -> "Wire<" ^ fmt_ty t ^ ">"
   | TyArrow (a, b) -> fmt_ty a ^ " -> " ^ fmt_ty b
   | TyUser s -> s
+  | TyApp (n, args) -> n ^ "<" ^ String.concat ", " (List.map fmt_ty args) ^ ">"
   | TyVar s -> s
   | TyUniverse 0 -> "Type"
   | TyUniverse n -> Printf.sprintf "Type_%d" n
@@ -197,8 +198,10 @@ and fmt_expr (e : expr) : string =
       Printf.sprintf "%s @ %s" (fmt_expr e)
         (match d with DI0 -> "I0" | DI1 -> "I1" | DIVar v -> v)
   | EHITConstr (name, args, _) ->
-      if args = [] then Printf.sprintf "hit(%s)" name
-      else Printf.sprintf "hit(%s, %s)" name (String.concat ", " (List.map fmt_expr args))
+      (match args with
+       | [] -> name
+       | [a] -> fmt_expr a ^ " \xe2\x86\xaa " ^ name
+       | _ -> "(" ^ String.concat ", " (List.map fmt_expr args) ^ ") \xe2\x86\xaa " ^ name)
   | EHITElim (motive, branches, target, _) ->
       let br (name, pat, body) =
         let hd = match pat with
@@ -212,8 +215,11 @@ and fmt_expr (e : expr) : string =
                    (List.map (fun (f, b) ->
                       if f = b then f else Printf.sprintf "%s as %s" f b) fs)) in
         Printf.sprintf "%s => %s" hd (fmt_expr body) in
-      Printf.sprintf "hit_elim(%s, [%s], %s)"
-        (fmt_expr motive) (String.concat ", " (List.map br branches)) (fmt_expr target)
+      ignore motive;
+      let scrutinee = match target with
+        | EVar _ | ELit _ | EParen _ | ECall _ | EField _ -> fmt_expr target
+        | _ -> "(" ^ fmt_expr target ^ ")" in
+      Printf.sprintf "match %s { %s }" scrutinee (String.concat ", " (List.map br branches))
   | EJ (ELit (LitNumber n, _), d, p, _) when n = 0.0 ->
       (* `induct(d, p)` sugar: J with the placeholder motive 0 (parser.mly). *)
       Printf.sprintf "induct(%s, %s)" (fmt_expr d) (fmt_expr p)
@@ -427,12 +433,22 @@ let rec fmt_statement (e : expr) : string =
   | ECall ("__heyt_not", [a], _) -> "\xc2\xac" ^ sub a
   | _ -> fmt_expr e
 
+let fmt_law (l : string) (st : law_statement) : string =
+  let q = String.concat " " (List.map (fun (k, x, t) ->
+      (match k with Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83") ^ x ^ " : " ^ fmt_ty t)
+      st.ls_quants) in
+  Printf.sprintf "law %s %s%s%s" l q
+    ((if st.ls_quants = [] then "" else ", ") ^ fmt_statement st.ls_body)
+    (if st.ls_given then " is given" else "")
+
 let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
   (* `internal place P carried by C` / `place P carried by C` *)
   let internal = pd.pd_fusion <> None
     && Hashtbl.mem Surface_ast.internal_carrier_sites
          (pd.pd_loc.file, pd.pd_loc.start_line, pd.pd_loc.start_col) in
-  let head kw = (if internal then "internal " else "") ^ kw ^ " " ^ pd.pd_name
+  let params = match pd.pd_type_params with
+    | [] -> "" | ps -> "<" ^ String.concat ", " ps ^ ">" in
+  let head kw = (if internal then "internal " else "") ^ kw ^ " " ^ pd.pd_name ^ params
     ^ (match pd.pd_fusion with Some c -> " carried by " ^ c | None -> "") in
   if close && pd.pd_arms <> [] && pd.pd_members = [] then
     (* a place declared by the arms it is the coproduct of: the canonical
@@ -449,7 +465,9 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
     List.iter (fun m ->
       match m with
       | FoField fd -> line f (fd.fd_name ^ " " ^ fmt_ty fd.fd_ty)
-      | FoOp _ | FoCell _ | FoLaw _ -> raise Exit  (* not enabled on unions *)
+      | FoLaw (l, None) -> line f ("law " ^ l)
+      | FoLaw (l, Some st) -> line f (fmt_law l st)
+      | FoOp _ | FoCell _ -> raise Exit  (* not enabled on unions *)
     ) pd.pd_members;
     if close then begin f.indent <- f.indent - 1; line f "}" end
   end
@@ -487,12 +505,7 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
         let dom = if op.op_params = [] then "" else "(" ^ params ^ ")" in
         line f (Printf.sprintf "operation %s%s%s%s%s" op.op_name dom ret sym alg)
     | FoLaw (l, None) -> line f ("law " ^ l)
-    | FoLaw (l, Some st) ->
-        let q = String.concat " " (List.map (fun (k, x, t) ->
-          (match k with Forall -> "\xe2\x88\x80" | Exists -> "\xe2\x88\x83") ^ x ^ " : " ^ fmt_ty t) st.ls_quants) in
-        line f (Printf.sprintf "law %s %s%s%s" l q
-                  ((if st.ls_quants = [] then "" else ", ") ^ fmt_statement st.ls_body)
-                  (if st.ls_given then " is given" else ""))
+    | FoLaw (l, Some st) -> line f (fmt_law l st)
     | FoCell c ->
         line f (Printf.sprintf "cell %s from %s to %s"
                   c.cell_name (fmt_expr c.cell_src) (fmt_expr c.cell_tgt))

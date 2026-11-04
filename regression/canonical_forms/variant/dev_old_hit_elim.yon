@@ -1,0 +1,6 @@
+place Coin { this > Heads :U Tails }
+place Entry {
+  fun mot(c: Coin): Number { return 0 }
+  fun f(c: Coin): Number { return hit_elim(mot, [Heads => 1, Tails => 0], c) }
+  fun main: Number { return 0 }
+}

@@ -1000,17 +1000,18 @@ selects it (`hcomp_face_active`). The Kan operation that makes the cubical struc
 
 #### `hit`
 
-KERNEL FORM. Higher inductive type constructor: `hit(base)`, `hit(loop)`, `hit(merid, a)` build the points and
-paths of a HIT (the circle's `base` and `loop`, a suspension's meridian).
+A form of the kernel, refused on the surface: a nullary arm is its name, an injection `x ↪ Arm`, a cell
+`giro` or `x ↦ meridiano`.
 
 #### `hit_elim`
 
-Higher inductive type eliminator: one branch per constructor, the path branches required to respect
-the points. The reducer never identifies `loop` with `refl`, so the circle stays a circle.
+A form of the kernel, refused on the surface: the eliminator is `match`, with a branch for each arm and
+each cell. The branch of a cell is a path between what the match gives at its two ends, which the
+kernel's conversion checks. The reducer never identifies `loop` with `refl`, so the circle stays a circle.
 
 #### `match`
 
-KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): Number { return match t { Leaf as v => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
+KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is the kernel's `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): Number { return match t { Leaf as v => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
 
 #### `El`
 
@@ -1031,9 +1032,8 @@ Universe-code elimination: `el_match(target, ret, body)` eliminates an `El(_)` b
 inhabitant to `body`. Lowers to the body application and runs.
 
 <CodeWindow file="circle_hit.yon" run="yonc circle_hit.yon -o circle_hit && ./circle_hit; echo $?" out={["42"]}>
-{`fun motive(x: S1): Number { return 0 }
-fun circle_elim: Number {
-  return hit_elim(motive, [base => 42, loop => plam i => 42], hit(base))
+{`fun circle_elim: Number {
+  return match S1.base { base => 42, loop => plam i => 42 }
 }
 fun main: Number {
   return circle_elim

@@ -252,7 +252,8 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
   match e with
   | ELit _ | EVar _ -> true
   | EField (e1, _, _) | EParen (e1, _) | EFst (e1, _) | ESnd (e1, _)
-  | ENot (e1, _) | ERefl (e1, _) -> is_pure_expr env e1
+  | ENot (e1, _) | ERefl (e1, _) | EPathAbs (_, e1, _) | EPathApp (e1, _, _) ->
+      is_pure_expr env e1
   | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) ->
       is_pure_expr env a && is_pure_expr env b
   | EApp (head, args, _) ->
@@ -265,7 +266,10 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
       (match lookup_fun env name with
        | Some fs -> fs.fs_visits = [] && not (Hashtbl.mem impure_funs name)
                     && List.for_all (is_pure_expr env) args
-       | None -> false)
+       | None ->
+           (* a cell, and the algebra of paths, have no effect *)
+           (Hit_env.cell_of_place name <> None || List.mem name ["concat"; "inv"; "ap"])
+           && List.for_all (is_pure_expr env) args)
   (* A data constructor and its eliminator are effect-free: `hit(ctor, args)` is
      pure iff its arguments are, and `match`/`hit_elim` is pure iff its scrutinee
      and every branch body are. Recognizing them as pure lets the definitional-

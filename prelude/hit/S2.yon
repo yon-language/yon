@@ -1,0 +1,2 @@
+/* S2 — the sphere: one point, and a 2-cell on its trivial path. */
+place S2 { this > base  law surf base ↦ clear = base ↦ clear }

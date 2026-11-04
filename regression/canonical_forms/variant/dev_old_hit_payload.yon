@@ -1,0 +1,7 @@
+place Box { this > Full Number :U Empty }
+place Entry {
+  fun main: Number {
+    z := hit(Full, 1)
+    return 0
+  }
+}

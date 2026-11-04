@@ -1,0 +1,2 @@
+/* PropTrunc — A with any two points identified: a proposition. */
+place PropTrunc<A> { this > incl A  law squash ∀x : PropTrunc<A> ∀y : PropTrunc<A>, x = y }

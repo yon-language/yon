@@ -1,0 +1,2 @@
+/* SetTrunc — A with any two parallel paths identified: a set. */
+place SetTrunc<A> { this > incl A  law set_id ∀x : SetTrunc<A> ∀y : SetTrunc<A> ∀p : x = y ∀q : x = y, p = q }

@@ -20,6 +20,14 @@ let check name cond =
 
 let () =
   Printf.printf "=== Tarski HIT eliminator oracle (dependent path branches) ===\n\n";
+  (* the kernel's form, on the circle of the prelude *)
+  Hit_env.registry :=
+    ("S1", { Hit_env.hit_name = "S1"; hit_type_params = [];
+             hit_points = [ { Hit_env.pc_name = "base"; pc_params = []; pc_result = TyUser "S1" } ];
+             hit_paths = [ { Hit_env.hpc_name = "loop"; hpc_params = [];
+                             hpc_left = EVar ("base", dummy_loc);
+                             hpc_right = EVar ("base", dummy_loc) } ] })
+    :: !Hit_env.registry;
   let dl = dummy_loc in
   let ctx = Reduce.empty_ctx in
   let s1 = TyPrim "S1" in

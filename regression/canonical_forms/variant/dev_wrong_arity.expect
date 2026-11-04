@@ -1,5 +1,5 @@
 status: reject_clean
 exit: 1
-match: payload
+match: branch inj expects 1 binder(s), got 2
 note: |
-  A hit_elim branch with the wrong payload arity.
+  A match branch with the wrong payload arity.

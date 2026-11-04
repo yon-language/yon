@@ -479,7 +479,7 @@ and string_lit buf = parse
         | LPAREN -> scan (i + 1) (depth + 1)
         | RPAREN -> depth > 0 && scan (i + 1) (depth - 1)
         | EOF -> false
-        | LBRACE | RBRACE | COMMA | COLONEQ | WHERE when depth = 0 -> false
+        | LBRACE | RBRACE | COMMA | COLONEQ | WHERE | FORALL | EXISTS when depth = 0 -> false
         | _ -> scan (i + 1) depth in
     scan 0 0
 

@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
 - productions REDUCED by a fixture (Menhir-verified): **99 / 99** surface (+3 structural allowlisted)
-- deviations rejected: **32**
+- deviations rejected: **35**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -90,8 +90,11 @@ from them; the `.yon` files are the specification, not this text.
 | type | `canonical` | accept | 42 | — |
 | variant | `canonical` | accept | 7 | — |
 | variant | `dev_missing_branch` | reject_clean | 1 | `missing branch` |
+| variant | `dev_old_hit` | reject_clean | 1 | `hit is a form of the kernel: a nullary arm is its name: Heads` |
+| variant | `dev_old_hit_elim` | reject_clean | 1 | `the eliminator is written match x` |
+| variant | `dev_old_hit_payload` | reject_clean | 1 | `an injection is written x ↪ Full` |
 | variant | `dev_payload_type` | reject_clean | 1 | `expected number, got text` |
-| variant | `dev_wrong_arity` | reject_clean | 1 | `payload` |
+| variant | `dev_wrong_arity` | reject_clean | 1 | `branch inj expects 1 binder(s), got 2` |
 | view | `canonical` | accept | 8 | — |
 | when | `canonical` | accept | 42 | — |
 | while_loop | `canonical` | accept | 42 | — |

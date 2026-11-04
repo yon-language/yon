@@ -1,0 +1,2 @@
+/* S1 — the circle: one point and one loop on it. */
+place S1 { this > base  law loop base = base }
