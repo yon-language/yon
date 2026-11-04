@@ -1,0 +1,224 @@
+"""Probes of the surface of coproducts, laws and paths, written in the forms decided.
+
+Each probe states the outcome the language owes. Until the work that gives it is
+done, the probe stands as xfail(strict=True): the day it passes, the test XPASSes
+and the marker comes off. A refusal is checked by its code and by the words of its
+reason, never by the failure alone.
+
+Layer/kind: frontend + native / end-to-end.
+"""
+import subprocess
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+YONC = ROOT / "toolchain" / "yonc"
+
+pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
+
+TOML = '''[package]
+name = "probe"
+
+[world.W]
+objects = ["X"]
+spaces  = ["w"]
+
+[runtime]
+backend = "memory"
+'''
+
+ACCOUNT = {
+    "w/Topos.yon": "topos WTopos where {\n}\n",
+    "w/Asset.yon": "place Asset { balance Number }\n",
+    "w/Opened.yon": "place Opened { initial Number balance Number }\n",
+    "w/Closed.yon": "place Closed { moment Number balance Number }\n",
+    "w/Account.yon": "place Account {\n  this < Asset\n  this > Opened :U Closed\n"
+                     "  fun stato(a: Account): Number { return 5 }\n"
+                     "  fun saldo(a: Opened): Number { return a.balance }\n"
+                     "  fun prova(): Opened { return .-> Opened { initial 1 balance 2 } }\n}\n",
+}
+
+
+def _compile(tmp_path, entry, extra=None):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "yon.toml").write_text(TOML)
+    (proj / "w").mkdir()
+    for name, text in (extra or {"w/Topos.yon": "topos WTopos where {\n}\n"}).items():
+        (proj / name).write_text(text)
+    (proj / "Entry.yon").write_text(entry)
+    exe = tmp_path / "exe"
+    r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True,
+                       text=True, timeout=300)
+    return r, exe
+
+
+def _exit(tmp_path, entry, extra=None):
+    r, exe = _compile(tmp_path, entry, extra)
+    assert r.returncode == 0, r.stdout + r.stderr
+    return subprocess.run([str(exe)], capture_output=True, timeout=60).returncode
+
+
+def _refused(tmp_path, entry, code, *words):
+    r, _ = _compile(tmp_path, entry)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0, out
+    assert code in out, out
+    for w in words:
+        assert w in out, out
+
+
+def _main(body, before=""):
+    return before + "place Entry {\nfun main(): Number {\n" + body + "\n}\n}\n"
+
+
+OPENED = ".-> Opened { initial 7 balance 42 }"
+
+
+def test_a_coproduct_inherits_its_fields_as_an_obligation_on_the_arms(tmp_path):
+    assert _exit(tmp_path, _main("  return 42"), ACCOUNT) == 42
+
+
+def test_an_inherited_field_missing_from_an_arm_is_refused(tmp_path):
+    bad = dict(ACCOUNT)
+    bad["w/Closed.yon"] = "place Closed { moment Number }\n"
+    r, _ = _compile(tmp_path, _main("  return 0"), bad)
+    assert r.returncode != 0
+    assert "balance" in r.stdout + r.stderr and "obligation" in r.stdout + r.stderr
+
+
+def _uso(tmp_path, funs, account=ACCOUNT):
+    # a place outside the house of Account, in the same Space
+    extra = dict(account)
+    extra["w/Uso.yon"] = "place Uso {\n" + funs + "}\n"
+    return _exit(tmp_path, _main("  return Uso.run()"), extra)
+
+
+@pytest.mark.xfail(strict=True, reason="a field read on a coproduct")
+def test_a_field_guaranteed_on_every_arm_reads_on_the_coproduct(tmp_path):
+    assert _uso(tmp_path, "fun leggi(a: Account): Number { return a.balance }\n"
+                          "fun run(): Number { return leggi(Account.prova()) }\n") == 2
+
+
+@pytest.mark.xfail(strict=True, reason="a pattern with fields on an arm that is a place")
+def test_an_arm_that_is_a_place_is_read_by_the_names_of_its_fields(tmp_path):
+    assert _uso(tmp_path,
+                "fun leggi(a: Account): Number {\n"
+                "  return match a { Opened { initial as i } => i, Closed { moment as m } => m }\n"
+                "}\n"
+                "fun run(): Number { return leggi(Account.prova()) }\n") == 1
+
+
+@pytest.mark.xfail(strict=True, reason="a pipe into a qualified name")
+def test_a_pipe_accepts_the_qualified_name_of_a_fun(tmp_path):
+    assert _uso(tmp_path, "fun run(): Number {\n  o := Account.prova()\n"
+                          "  return o |> Account.saldo\n}\n") == 2
+
+
+def test_a_qualified_fun_in_the_house_of_a_coproduct_is_called(tmp_path):
+    assert _uso(tmp_path, "fun run(): Number {\n  o := Account.prova()\n"
+                          "  return Account.stato(o)\n}\n") == 5
+
+
+@pytest.mark.xfail(strict=True, reason="a nullary fun is a point")
+def test_a_nullary_fun_is_a_point(tmp_path):
+    extra = dict(ACCOUNT)
+    extra["w/Account.yon"] = extra["w/Account.yon"].replace("fun prova()", "fun prova")
+    assert _uso(tmp_path, "fun run(): Number {\n  o := Account.prova\n"
+                          "  return Account.saldo(o)\n}\n", extra) == 2
+
+
+@pytest.mark.xfail(strict=True, reason="injection by pipe, generic arms")
+def test_injection_by_pipe_into_a_generic_arm(tmp_path):
+    src = ("place Entry {\n"
+           "fun concreto(x: Number): Lookup<Number> { return x |> Found }\n"
+           "fun generico<V>(x: V): Lookup<V> { return x |> Found }\n"
+           "fun leggi(l: Lookup<Number>): Number {\n"
+           "  return match l { Found as p => p, Absent => 0 }\n"
+           "}\n"
+           "fun main(): Number { return leggi(concreto(40)) + leggi(generico(2)) }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+@pytest.mark.xfail(strict=True, reason="a user's generic coproduct with a payload")
+def test_a_users_generic_coproduct_is_built_and_read(tmp_path):
+    extra = {"w/Topos.yon": "topos WTopos where {\n}\n",
+             "w/Box.yon": "place Box<V> { this > Full V :U Empty }\n"}
+    src = ("place Entry {\n"
+           "fun leggi(b: Box<Number>): Number {\n"
+           "  return match b { Full as p => p, Empty => 0 }\n"
+           "}\n"
+           "fun main(): Number { return leggi(42 |> Full) }\n}\n")
+    assert _exit(tmp_path, src, extra) == 42
+
+
+def test_a_generic_fun_takes_a_fun(tmp_path):
+    src = ("place Entry {\n"
+           "fun inc(x: Number): Number { return x + 1 }\n"
+           "fun apply<V>(g: V -> V, x: V): V { return g(x) }\n"
+           "fun main(): Number { return apply(inc, 41) }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_pipe_into_a_name(tmp_path):
+    src = ("place Entry {\n"
+           "fun inc(x: Number): Number { return x + 1 }\n"
+           "fun main(): Number { return 41 |> inc }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+ALGEBRA = {
+    "w/Topos.yon": "topos WTopos where {\n}\n",
+    "w/Somma.yon": "place Somma is algebra {\n  operation add(a: Somma, b: Somma): Somma as \"+\"\n"
+                   "  %s\n  carried by i64\n}\n",
+}
+
+
+@pytest.mark.xfail(strict=True, reason="typed quantifiers")
+def test_a_typed_quantifier_in_an_algebra(tmp_path):
+    extra = dict(ALGEBRA)
+    extra["w/Somma.yon"] %= "law commutativa ∀a : Somma ∀b : Somma, a + b = b + a"
+    assert _exit(tmp_path, _main("  return 42"), extra) == 42
+
+
+@pytest.mark.xfail(strict=True, reason="typed quantifiers")
+def test_an_untyped_quantifier_is_refused_and_the_typed_form_proposed(tmp_path):
+    extra = dict(ALGEBRA)
+    extra["w/Somma.yon"] %= "law commutativa ∀a ∀b (a + b = b + a)"
+    r, _ = _compile(tmp_path, _main("  return 42"), extra)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E1001" in out and "∀a : " in out, out
+
+
+S1 = {"w/Topos.yon": "topos WTopos where {\n}\n",
+      "w/S1.yon": "place S1 { this > base  law loop base = base }\n"}
+
+
+@pytest.mark.xfail(strict=True, reason="constitutive laws")
+def test_a_law_in_a_coproduct_generates_a_cell(tmp_path):
+    src = ("place Entry {\n"
+           "fun f(s: S1): Number {\n"
+           "  return match s { base => 42, loop => plam i => 42 }\n"
+           "}\n"
+           "fun main(): Number { return f(base) }\n}\n")
+    assert _exit(tmp_path, src, S1) == 42
+
+
+@pytest.mark.xfail(strict=True, reason="constitutive laws")
+def test_a_match_on_a_hit_without_the_branch_of_a_cell_is_refused(tmp_path):
+    src = ("place Entry {\n"
+           "fun f(s: S1): Number {\n"
+           "  return match s { base => 42 }\n"
+           "}\n"
+           "fun main(): Number { return f(base) }\n}\n")
+    r, _ = _compile(tmp_path, src, S1)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "loop" in out, out
+    assert "not yet enabled" not in out, out
+
+
+@pytest.mark.xfail(strict=True, reason="hit leaves the surface")
+def test_hit_on_the_surface_is_refused(tmp_path):
+    _refused(tmp_path, "place Coin { this > Heads :U Tails }\n"
+             + _main("  z := hit(Heads)\n  return 0"), "E1001", "hit")
