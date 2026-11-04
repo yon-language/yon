@@ -15,7 +15,7 @@ place Entry {
 fun map_list(f: Number -> Number, xs: IntList): IntList {
   return match xs {
     Nil => Nil,
-    Cons(h, t) => .-> Cons { _1 (f(h)) _2 (map_list(f, t)) }
+    Cons(h, t) => ((f(h)), (map_list(f, t))) |> Cons
   }
 }
 
@@ -28,7 +28,7 @@ fun sum(xs: IntList): Number {
 
 fun main(): Number {
   // [20, 20] -- map (y => y + 1) --> [21, 21] -- sum --> 42
-  xs := .-> Cons { _1 20 _2 .-> Cons { _1 20 _2 Nil } }
+  xs := (20, (20, Nil) |> Cons) |> Cons
   return sum(map_list(fun(y: Number) => y + 1, xs))
 }
 }

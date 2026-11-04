@@ -802,6 +802,9 @@ and desugar_expr (e0 : S.expr) : C.term =
       let i = (match d with S.DI0 -> C.I0 | S.DI1 -> C.I1 | S.DIVar s -> C.IVar s) in
       C.PApp (desugar_expr p, i)
   | S.EPathAbs (i, e, _) -> C.PLam (i, desugar_expr e)
+  | S.ECall (name, args, loc)
+    when Hashtbl.mem S.arm_call_sites (loc.S.file, loc.S.start_line, loc.S.start_col, name) ->
+      desugar_expr (S.EHITConstr (name, args, loc))
   | S.ECall ("floor", [x], loc) ->
       (* the bare name of Number's floor: one function, the libm floor *)
       desugar_expr (S.ECall ("Number__floor", [x], loc))

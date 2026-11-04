@@ -72,23 +72,23 @@ fun classify(h: Number): Token {
   return if h == kw_fun() then TKwFun
     else if h == kw_return() then TKwReturn
     else if h == kw_number() then TKwNumber
-    else .-> TIdent { _1 h }
+    else h |> TIdent
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
   j := word_end(s, i, len)
-  return .-> TkCons { _1 classify(word_hash(s, i, j, 0)) _2 lex_from(s, j, len) }
+  return (classify(word_hash(s, i, j, 0)), lex_from(s, j, len)) |> TkCons
 }
 /* ':=' (a definition: "is defined as") or a lone ':' (peek the next char
    for '=' = 61). */
 fun lex_colon(s: String, i: Number, len: Number): TokList {
-  return if i + 1 >= len then .-> TkCons { _1 TColon _2 lex_from(s, i + 1, len) }
+  return if i + 1 >= len then (TColon, lex_from(s, i + 1, len)) |> TkCons
     else if String.char_at(s, i + 1) == 61
-    then .-> TkCons { _1 TColonEq _2 lex_from(s, i + 2, len) }
-    else .-> TkCons { _1 TColon _2 lex_from(s, i + 1, len) }
+    then (TColonEq, lex_from(s, i + 2, len)) |> TkCons
+    else (TColon, lex_from(s, i + 1, len)) |> TkCons
 }
 fun lex_num(s: String, i: Number, len: Number): TokList {
   j := num_end(s, i, len)
-  return .-> TkCons { _1 .-> TNum { _1 num_val(s, i, j, 0) } _2 lex_from(s, j, len) }
+  return (num_val(s, i, j, 0) |> TNum, lex_from(s, j, len)) |> TkCons
 }
 /* punctuation and whitespace handled first; letters and digits delegate to the
  * multi-char scanners. '{' (123) '}' (125) ':' (58) are matched before the a-z
@@ -97,19 +97,19 @@ fun lex_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)             /* space */
     else if c == 10 then lex_from(s, i + 1, len)             /* newline */
     else if c == 9  then lex_from(s, i + 1, len)             /* tab */
-    else if c == 43 then .-> TkCons { _1 TPlus _2 lex_from(s, i + 1, len) }
-    else if c == 42 then .-> TkCons { _1 TStar _2 lex_from(s, i + 1, len) }
-    else if c == 40 then .-> TkCons { _1 TLParen _2 lex_from(s, i + 1, len) }
-    else if c == 41 then .-> TkCons { _1 TRParen _2 lex_from(s, i + 1, len) }
-    else if c == 123 then .-> TkCons { _1 TLBrace _2 lex_from(s, i + 1, len) }
-    else if c == 125 then .-> TkCons { _1 TRBrace _2 lex_from(s, i + 1, len) }
+    else if c == 43 then (TPlus, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 42 then (TStar, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 40 then (TLParen, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 41 then (TRParen, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 123 then (TLBrace, lex_from(s, i + 1, len)) |> TkCons
+    else if c == 125 then (TRBrace, lex_from(s, i + 1, len)) |> TkCons
     else if c == 58 then lex_colon(s, i, len)               /* ':' or ':=' */
     else if c >= 97 then lex_word(s, i, len)                 /* a-z: keyword or ident */
     else if c >= 48 then lex_num(s, i, len)                  /* 0-9: number */
     else lex_from(s, i + 1, len)                             /* skip anything else */
 }
 fun lex_from(s: String, i: Number, len: Number): TokList {
-  return if i >= len then .-> TkCons { _1 TEnd _2 TkNil }
+  return if i >= len then (TEnd, TkNil) |> TkCons
     else lex_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
@@ -148,14 +148,14 @@ fun lookup_name(name: Number, env: NameEnv): Number {
 /* ---- recursive-descent expression parser (threads the name environment) ---- */
 /* factor := NUM | IDENT | '(' expr ')' */
 fun parse_factor(l: TokList, env: NameEnv): Parse {
-  return if head_tag(l) == 0 then .-> POk { _1 .-> TLit { _1 head_num(l) } _2 tail(l) }
-    else if head_tag(l) == 1 then .-> POk { _1 .-> TVar { _1 lookup_name(head_num(l), env) } _2 tail(l) }
+  return if head_tag(l) == 0 then (head_num(l) |> TLit, tail(l)) |> POk
+    else if head_tag(l) == 1 then (lookup_name(head_num(l), env) |> TVar, tail(l)) |> POk
     else if head_tag(l) == 9 then close_paren(parse_expr(tail(l), env))
     else PErr
 }
 fun close_paren(p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(e, rest) => if head_tag(rest) == 10 then .-> POk { _1 e _2 tail(rest) } else PErr }
+      POk(e, rest) => if head_tag(rest) == 10 then (e, tail(rest)) |> POk else PErr }
 }
 /* term := factor ('*' term)? */
 fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
@@ -163,7 +163,7 @@ fun term_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
       POk(left, rest) => if head_tag(rest) == 8
                            then combine(8, left, parse_term(tail(rest), env))
-                           else .-> POk { _1 left _2 rest } }
+                           else (left, rest) |> POk }
 }
 /* expr := term ('+' expr)? */
 fun parse_expr(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, env), env) }
@@ -171,12 +171,12 @@ fun expr_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
       POk(left, rest) => if head_tag(rest) == 7
                            then combine(7, left, parse_expr(tail(rest), env))
-                           else .-> POk { _1 left _2 rest } }
+                           else (left, rest) |> POk }
 }
 fun combine(op: Number, left: Term, p: Parse): Parse {
   return match p { PErr => PErr,
       POk(right, rest) =>
-        .-> POk { _1 if op == 7 then .-> TAdd { _1 left _2 right } else .-> TMul { _1 left _2 right } _2 rest } }
+        (if op == 7 then (left, right) |> TAdd else (left, right) |> TMul, rest) |> POk }
 }
 
 /* ---- body parser: (IDENT ':=' expr)* 'return' expr ---- */
@@ -200,11 +200,11 @@ fun parse_let(l: TokList, env: NameEnv): Parse {
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
   return match pv { PErr => PErr,
       POk(val, rest) =>
-        wrap_let(val, parse_body(rest, .-> NEnvCons { _1 name _2 env })) }
+        wrap_let(val, parse_body(rest, (name, env) |> NEnvCons)) }
 }
 fun wrap_let(val: Term, pb: Parse): Parse {
   return match pb { PErr => PErr,
-      POk(body, rest) => .-> POk { _1 .-> TLet { _1 val _2 body } _2 rest } }
+      POk(body, rest) => ((val, body) |> TLet, rest) |> POk }
 }
 
 /* ---- program parser: 'fun' IDENT '(' ')' ':' 'number' '{' body '}' ---- */
@@ -218,7 +218,7 @@ fun parse_program(l: TokList): Parse {
     else PErr
 }
 fun term_of(p: Parse): Term {
-  return match p { PErr => .-> TLit { _1 0 }, POk(e, rest) => e }
+  return match p { PErr => 0 |> TLit, POk(e, rest) => e }
 }
 
 /* ---- back end: gen (Term -> MLIR text) with an SSA environment ---- */
@@ -241,8 +241,8 @@ fun line(ssa: String, rhs: String): String {
 fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
   return match t {
     TLit(k) =>
-      .-> ER { _1 ssa_name(n) _2 line(ssa_name(n), String.concat("arith.constant ", num_lit(k))) _3 n + 1 },
-    TVar(i) => .-> ER { _1 lookup_ssa(i, env) _2 "" _3 n },   /* already an ssa: no new line */
+      (ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) |> ER,
+    TVar(i) => (lookup_ssa(i, env), "", n) |> ER,   /* already an ssa: no new line */
     TLet(e1, body) => gen_let(e1, body, env, n),
     TAdd(a, b) => gen_bin("arith.addf", a, b, env, n),
     TMul(a, b) => gen_bin("arith.mulf", a, b, env, n)
@@ -251,8 +251,8 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
 /* let: emit e1, push its ssa onto env, emit body in that env. */
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
   ea := gen(e1, env, n)
-  eb := gen(body, .-> SeCons { _1 er_ssa(ea) _2 env }, er_ctr(ea))
-  return .-> ER { _1 er_ssa(eb) _2 String.concat(er_code(ea), er_code(eb)) _3 er_ctr(eb) }
+  eb := gen(body, (er_ssa(ea), env) |> SeCons, er_ctr(ea))
+  return (er_ssa(eb), String.concat(er_code(ea), er_code(eb)), er_ctr(eb)) |> ER
 }
 /* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64". */
 fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
@@ -261,8 +261,8 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
   m  := er_ctr(eb)
   rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
-  return .-> ER { _1 ssa_name(m) _2 String.concat(String.concat(er_code(ea), er_code(eb)),
-                          line(ssa_name(m), rhs)) _3 m + 1 }
+  return (ssa_name(m), String.concat(String.concat(er_code(ea), er_code(eb)),
+                          line(ssa_name(m), rhs)), m + 1) |> ER
 }
 
 /* ---- module boilerplate ---- */

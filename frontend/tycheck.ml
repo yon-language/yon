@@ -1639,36 +1639,36 @@ let reads_place_arm_fields (env : Tyenv.env) branches : bool =
       | PatFields _ -> place_arm_fields env c <> None
       | _ -> false) branches
 
-(* The injection into a payload arm, its projections in order: every one given,
-   none other. Its type is the coproduct, the arm's parameters are the coproduct's,
-   instantiated by unification from the expected type and the payload. *)
-let arm_injection (env : Tyenv.env) (place_name : string) fas loc : expr tc_result =
-  match Tyenv.lookup_place env place_name with
-  | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
-  | Some pd ->
-      let need = List.filter_map
-          (function FoField f -> Some f.fd_name | _ -> None) pd.pd_members in
-      (match List.find_opt (fun (fa : field_assignment) -> not (List.mem fa.fa_name need)) fas,
-             List.find_opt (fun f ->
-               not (List.exists (fun (fa : field_assignment) -> fa.fa_name = f) fas)) need with
-       | Some fa, _ -> err loc (Printf.sprintf
-           "place %s is a payload arm: it has no projection %s" place_name fa.fa_name)
-       | None, Some missing -> err loc (Printf.sprintf
-           "place %s is a payload arm: its mediatrice needs every projection \
-            (missing %s), there is no zero-fill" place_name missing)
-       | None, None ->
-           ok (EHITConstr (place_name,
-                 List.map (fun f ->
-                     (List.find (fun (fa : field_assignment) -> fa.fa_name = f) fas).fa_value)
-                   need, loc)))
+(* `.-> Found { _1 x }`: the mediatrice is for a place with fields. *)
+let arm_mediatrice_err (env : Tyenv.env) (place_name : string) loc =
+  let n = match Tyenv.lookup_place env place_name with
+    | Some pd -> List.length (Tyenv.place_fields pd)
+    | None -> 1 in
+  err loc (Printf.sprintf
+    "an injection into the arm %s is written %s |> %s" place_name
+    (if n = 1 then "x"
+     else "(" ^ String.concat ", " (List.init n (fun i -> Printf.sprintf "x%d" (i + 1))) ^ ")")
+    place_name)
+
+(* `x |> Found`: an injection, when the name is no fun and no variable. Its type is
+   the coproduct, whose parameters are instantiated by unification, from the expected
+   type and from the payload. *)
+let is_arm_pipe (env : Tyenv.env) (name : string) (loc : location) : bool =
+  Hashtbl.mem Surface_ast.pipe_sites (loc.file, loc.start_line, loc.start_col, name)
+  && Tyenv.lookup_fun env name = None
+  && Tyenv.lookup_var env name = None
+  && Tyenv.lookup_sum_constructor env name <> []
 
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
 
-  | ENew (place_name, fas, loc) when Tyenv.is_synthetic_place env place_name ->
-      let* inj = arm_injection env place_name fas loc in
-      infer env ctx inj
+  | ENew (place_name, _, loc) when Tyenv.is_synthetic_place env place_name ->
+      arm_mediatrice_err env place_name loc
+
+  | ECall (name, args, loc) when is_arm_pipe env name loc ->
+      Hashtbl.replace Surface_ast.arm_call_sites (loc.file, loc.start_line, loc.start_col, name) ();
+      infer env ctx (EHITConstr (name, args, loc))
 
   | EHITElim (EVar ("__match", _), branches, x, loc)
     when reads_place_arm_fields env branches ->
@@ -2084,7 +2084,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
             | [] -> err loc (Printf.sprintf "hit: unknown HIT constructor %s" ctor)
             | [(variants, variant)] ->
                 if List.length args <> List.length variant.v_args then
-                  err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+                  err loc (Printf.sprintf "arm %s: expected %d payload(s), got %d"
                     ctor (List.length variant.v_args) (List.length args))
                 else
                   let rec check_args actual expected =
@@ -2153,7 +2153,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
            let p = List.find (fun (p : Hit_env.point_constructor) ->
                                 p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points in
            if List.length args <> List.length p.Hit_env.pc_params then
-             err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+             err loc (Printf.sprintf "arm %s: expected %d payload(s), got %d"
                         ctor (List.length p.Hit_env.pc_params) (List.length args))
            else ok (TyUser sig_.Hit_env.hit_name)
        | Some (sig_, `Path) ->
@@ -3251,11 +3251,11 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
   | EHITConstr (ctor, args, loc), (TySum variants | TySumIn (variants, _)) ->
       (match List.find_opt (fun variant -> variant.v_name = ctor) variants with
        | None -> err loc (Printf.sprintf
-           "hit(%s): constructor does not belong to expected sum %s"
+           "arm %s does not belong to the expected sum %s"
            ctor (Tyenv.ty_to_string expected))
        | Some variant ->
            if List.length args <> List.length variant.v_args then
-             err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+             err loc (Printf.sprintf "arm %s: expected %d payload(s), got %d"
                ctor (List.length variant.v_args) (List.length args))
            else
              let rec check_args actual expected =
@@ -3299,7 +3299,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       if ps <> [] && List.length ps <> List.length targs then
         fallback env e expected
       else if List.length args <> List.length v.v_args then
-        err loc (Printf.sprintf "hit(%s): expected %d argument(s), got %d"
+        err loc (Printf.sprintf "arm %s: expected %d payload(s), got %d"
           ctor (List.length v.v_args) (List.length args))
       else begin
         let inst = Ty_subst.subst_type_vars (List.combine ps targs) in
@@ -3384,9 +3384,11 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                   "ambiguous injection into %s: the value inhabits more than \
                    one arm; annotate the intended side"
                   (Tyenv.ty_to_string sum_ty))))
-  | ENew (place_name, fas, loc), _ when Tyenv.is_synthetic_place env place_name ->
-      let* inj = arm_injection env place_name fas loc in
-      check env ctx inj expected
+  | ENew (place_name, _, loc), _ when Tyenv.is_synthetic_place env place_name ->
+      arm_mediatrice_err env place_name loc
+  | ECall (name, args, loc), _ when is_arm_pipe env name loc ->
+      Hashtbl.replace Surface_ast.arm_call_sites (loc.file, loc.start_line, loc.start_col, name) ();
+      check env ctx (EHITConstr (name, args, loc)) expected
   | EHITElim (EVar ("__match", _), branches, x, loc), _
       when reads_place_arm_fields env branches ->
       let* _ = place_arm_match env ctx branches x loc (Some expected) in
@@ -7174,6 +7176,12 @@ let heap_alloc_errors (p : program) : type_error list =
   let rec in_expr e =
     let own = match e with
       | ENew (q, _, _) | ENewIn (q, _, _, _) -> Some (Printf.sprintf "builds a section of %s (.->)" q)
+      | ECall (c, _, l)
+        when Hashtbl.mem Surface_ast.pipe_sites (l.file, l.start_line, l.start_col, c)
+             && not (Hashtbl.mem given c) && not (Hashtbl.mem bodies c)
+             && not (List.exists (fun h ->
+                       Hashtbl.mem bodies (h ^ "__" ^ c) || Hashtbl.mem given (h ^ "__" ^ c)) houses) ->
+          Some (Printf.sprintf "builds the coproduct value %s" c)
       (* an arm with a payload is a section on the heap; a nullary arm is a
          constant and allocates nothing *)
       | EHITConstr (c, _ :: _, _) -> Some (Printf.sprintf "builds the coproduct value %s" c)

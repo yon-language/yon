@@ -18,9 +18,9 @@ fun eval(e: Expr): Number {
 }
 
 fun main(): Number {
-  a := eval(.-> Lit { _1 5 })     // 5
-  b := eval(.-> Neg { _1 3 })     // 0 - 3 = -3
-  c := eval(.-> Add { _1 20 })    // 20 + 20 = 40
+  a := eval(5 |> Lit)     // 5
+  b := eval(3 |> Neg)     // 0 - 3 = -3
+  c := eval(20 |> Add)    // 20 + 20 = 40
   return a + b + c                  // 5 + (0-3) + 40 = 42
 }
 }

@@ -52,10 +52,10 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
   return match t {
     TLit(k) =>
       /* %vn = arith.constant k.0 : f64 */
-      .-> ER { _1 ssa_name(n) _2 line(ssa_name(n), String.concat("arith.constant ", num_lit(k))) _3 n + 1 },
+      ((ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) |> ER),
     TVar(i) =>
       /* a variable is already an ssa in env: no new line. */
-      .-> ER { _1 lookup(i, env) _2 "" _3 n },
+      ((lookup(i, env), "", n) |> ER),
     TLet(e1, body) =>
       /* x := e1 ; body   (x is de Bruijn 0 in body) */
       gen_let(e1, body, env, n),
@@ -69,8 +69,8 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
 /* let: emit e1, push its ssa onto env, emit body in that env. */
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
   ea := gen(e1, env, n)
-  eb := gen(body, .-> SeCons { _1 er_ssa(ea) _2 env }, er_ctr(ea))
-  return .-> ER { _1 er_ssa(eb) _2 String.concat(er_code(ea), er_code(eb)) _3 er_ctr(eb) }
+  eb := gen(body, (er_ssa(ea), env) |> SeCons, er_ctr(ea))
+  return (er_ssa(eb), String.concat(er_code(ea), er_code(eb)), er_ctr(eb)) |> ER
 }
 /* call: emit the argument, then "<ssa> = func.call @name(<arg>) : (f64) -> f64". */
 fun gen_call(name: String, arg: Term, env: SsaEnv, n: Number): EmitR {
@@ -79,7 +79,7 @@ fun gen_call(name: String, arg: Term, env: SsaEnv, n: Number): EmitR {
   rhs := String.concat("func.call @",
                  String.concat(name,
                    String.concat("(", String.concat(er_ssa(ea), ") : (f64) -> f64"))))
-  return .-> ER { _1 ssa_name(m) _2 String.concat(er_code(ea), line_raw(ssa_name(m), rhs)) _3 m + 1 }
+  return (ssa_name(m), String.concat(er_code(ea), line_raw(ssa_name(m), rhs)), m + 1) |> ER
 }
 /* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64". */
 fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
@@ -88,8 +88,8 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
   m  := er_ctr(eb)
   rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
-  return .-> ER { _1 ssa_name(m) _2 String.concat(String.concat(er_code(ea), er_code(eb)),
-                          line(ssa_name(m), rhs)) _3 m + 1 }
+  return (ssa_name(m), String.concat(String.concat(er_code(ea), er_code(eb)),
+                          line(ssa_name(m), rhs)), m + 1) |> ER
 }
 
 /* a top-level function definition: func.func @name(%arg0: f64) -> f64 { body }. */
@@ -100,7 +100,7 @@ fun gen_fun(f: Fun): String {
 }
 fun gen_fundef(name: String, body: Term): String {
   /* the parameter is %arg0 = de Bruijn 0 of the body. */
-  eb := gen(body, .-> SeCons { _1 "%arg0" _2 SeNil }, 0)
+  eb := gen(body, ("%arg0", SeNil) |> SeCons, 0)
   return String.concat(
     String.concat(String.concat("  func.func @", name), "(%arg0: f64) -> f64 {\n"),
     String.concat(er_code(eb),
@@ -145,8 +145,8 @@ fun main(): Number {
    *   fun double(x): number { return x + x }
    *   fun main(): number { return double(21) }
    * core: FnDef("double", TAdd(TVar 0, TVar 0)) ; main = TCall("double", TLit 21) */
-  funs := .-> FlCons { _1 .-> FnDef { _1 "double" _2 .-> TAdd { _1 .-> TVar { _1 0 } _2 .-> TVar { _1 0 } } } _2 FlNil }
-  mainT := .-> TCall { _1 "double" _2 .-> TLit { _1 21 } }
+  funs := (("double", (0 |> TVar, 0 |> TVar) |> TAdd) |> FnDef, FlNil) |> FlCons
+  mainT := ("double", 21 |> TLit) |> TCall
   rmain := gen(mainT, SeNil, 0)
   full := String.concat(mod_head(),
                   String.concat(gen_funs(funs),

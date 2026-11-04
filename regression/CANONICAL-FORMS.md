@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
 - productions REDUCED by a fixture (Menhir-verified): **99 / 99** surface (+3 structural allowlisted)
-- deviations rejected: **23**
+- deviations rejected: **24**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -30,6 +30,7 @@ from them; the `.yon` files are the specification, not this text.
 | comprehension | `canonical` | accept | 0 | — |
 | coproduct | `canonical` | accept | 42 | — |
 | coproduct | `dev_old_arm` | reject_clean | 1 | `this > Node Tree Tree` |
+| coproduct | `dev_old_injection` | reject_clean | 1 | `written x |> Full` |
 | coproduct | `inline_sum` | accept | 42 | — |
 | entrypoint | `canonical` | accept | 0 | — |
 | entrypoint | `dev_b` | reject_clean | 1 | `ENTRYPOINT ERROR` |

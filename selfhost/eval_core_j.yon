@@ -6,27 +6,27 @@ place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U
 
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return match t { TLit(n)     => .-> TLit { _1 n },
-      TVar(i)     => if i >= c then .-> TVar { _1 i + d } else .-> TVar { _1 i },
-      TLam(b)     => .-> TLam { _1 shift(d, c + 1, b) },
-      TApp(f, x)  => .-> TApp { _1 shift(d, c, f) _2 shift(d, c, x) },
-      TPair(a, b) => .-> TPair { _1 shift(d, c, a) _2 shift(d, c, b) },
-      TFst(p)     => .-> TFst { _1 shift(d, c, p) },
-      TSnd(p)     => .-> TSnd { _1 shift(d, c, p) },
-      TRefl(a)    => .-> TRefl { _1 shift(d, c, a) },
-      TJ(mo, ba, pa) => .-> TJ { _1 shift(d, c, mo) _2 shift(d, c, ba) _3 shift(d, c, pa) } }
+  return match t { TLit(n)     => n |> TLit,
+      TVar(i)     => if i >= c then i + d |> TVar else i |> TVar,
+      TLam(b)     => shift(d, c + 1, b) |> TLam,
+      TApp(f, x)  => (shift(d, c, f), shift(d, c, x)) |> TApp,
+      TPair(a, b) => (shift(d, c, a), shift(d, c, b)) |> TPair,
+      TFst(p)     => shift(d, c, p) |> TFst,
+      TSnd(p)     => shift(d, c, p) |> TSnd,
+      TRefl(a)    => shift(d, c, a) |> TRefl,
+      TJ(mo, ba, pa) => (shift(d, c, mo), shift(d, c, ba), shift(d, c, pa)) |> TJ }
 }
 
 fun subst(j: Number, s: Term, t: Term): Term {
-  return match t { TLit(n)     => .-> TLit { _1 n },
-      TVar(i)     => if i == j then s else .-> TVar { _1 i },
-      TLam(b)     => .-> TLam { _1 subst(j + 1, shift(1, 0, s), b) },
-      TApp(f, x)  => .-> TApp { _1 subst(j, s, f) _2 subst(j, s, x) },
-      TPair(a, b) => .-> TPair { _1 subst(j, s, a) _2 subst(j, s, b) },
-      TFst(p)     => .-> TFst { _1 subst(j, s, p) },
-      TSnd(p)     => .-> TSnd { _1 subst(j, s, p) },
-      TRefl(a)    => .-> TRefl { _1 subst(j, s, a) },
-      TJ(mo, ba, pa) => .-> TJ { _1 subst(j, s, mo) _2 subst(j, s, ba) _3 subst(j, s, pa) } }
+  return match t { TLit(n)     => n |> TLit,
+      TVar(i)     => if i == j then s else i |> TVar,
+      TLam(b)     => subst(j + 1, shift(1, 0, s), b) |> TLam,
+      TApp(f, x)  => (subst(j, s, f), subst(j, s, x)) |> TApp,
+      TPair(a, b) => (subst(j, s, a), subst(j, s, b)) |> TPair,
+      TFst(p)     => subst(j, s, p) |> TFst,
+      TSnd(p)     => subst(j, s, p) |> TSnd,
+      TRefl(a)    => subst(j, s, a) |> TRefl,
+      TJ(mo, ba, pa) => (subst(j, s, mo), subst(j, s, ba), subst(j, s, pa)) |> TJ }
 }
 
 fun beta(body: Term, arg: Term): Term {
@@ -34,16 +34,16 @@ fun beta(body: Term, arg: Term): Term {
 }
 
 fun eval(t: Term): Term {
-  return match t { TLit(n)     => .-> TLit { _1 n },
-      TVar(i)     => .-> TVar { _1 i },
-      TLam(b)     => .-> TLam { _1 b },
-      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))), _ => .-> TApp { _1 eval(f) _2 eval(x) } },
-      TPair(a, b) => .-> TPair { _1 eval(a) _2 eval(b) },
-      TFst(p)     => match eval(p) { TPair(a, b) => eval(a), _ => .-> TFst { _1 eval(p) } },
-      TSnd(p)     => match eval(p) { TPair(a, b) => eval(b), _ => .-> TSnd { _1 eval(p) } },
-      TRefl(a)    => .-> TRefl { _1 eval(a) },
-      TJ(mo, ba, pa) => match eval(pa) { TRefl(a) => eval(.-> TApp { _1 ba _2 a }),
-                         _        => .-> TJ { _1 mo _2 ba _3 eval(pa) } } }
+  return match t { TLit(n)     => n |> TLit,
+      TVar(i)     => i |> TVar,
+      TLam(b)     => b |> TLam,
+      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))), _ => (eval(f), eval(x)) |> TApp },
+      TPair(a, b) => (eval(a), eval(b)) |> TPair,
+      TFst(p)     => match eval(p) { TPair(a, b) => eval(a), _ => eval(p) |> TFst },
+      TSnd(p)     => match eval(p) { TPair(a, b) => eval(b), _ => eval(p) |> TSnd },
+      TRefl(a)    => eval(a) |> TRefl,
+      TJ(mo, ba, pa) => match eval(pa) { TRefl(a) => eval((ba, a) |> TApp),
+                         _        => (mo, ba, eval(pa)) |> TJ } }
 }
 
 fun as_num(t: Term): Number {
@@ -51,6 +51,6 @@ fun as_num(t: Term): Number {
 }
 
 fun main(): Number {
-  r := eval(.-> TJ { _1 .-> TLit { _1 0 } _2 .-> TLam { _1 .-> TVar { _1 0 } } _3 .-> TRefl { _1 .-> TLit { _1 7 } } })
+  r := eval((0 |> TLit, 0 |> TVar |> TLam, 7 |> TLit |> TRefl) |> TJ)
   return as_num(r) - 7
 }

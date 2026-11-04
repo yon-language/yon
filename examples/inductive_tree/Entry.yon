@@ -24,6 +24,6 @@ fun total(t: Tree): Number {
 
 fun main(): Number {
   // Node(Leaf(10), Node(Leaf(15), Leaf(17)))  ->  10 + 15 + 17 = 42
-  return total(.-> Node { _1 .-> Leaf { _1 10 } _2 .-> Node { _1 .-> Leaf { _1 15 } _2 .-> Leaf { _1 17 } } })
+  return total((10 |> Leaf, (15 |> Leaf, 17 |> Leaf) |> Node) |> Node)
 }
 }

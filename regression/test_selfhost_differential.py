@@ -64,27 +64,27 @@ PROGRAMS = [
     # a pattern binder projects it back with child().
     ("payload_lit", "place Val { this > Lit Number }\n"
                     "fun get(v: Val): Number { return match v { Lit(n) => n } }\n"
-                    "fun main(): Number { return get(.-> Lit { _1 42 }) }", 42),
+                    "fun main(): Number { return get(42 |> Lit) }", 42),
     # a mix of a nullary and a payload arm (the names are arbitrary user
     # constructors -- Yon has no built-in option type).
     ("payload_mix", "place Box { this > Empty :U Full Number }\n"
                     "fun un(o: Box): Number { return match o { Empty => 99, Full(x) => x } }\n"
-                    "fun main(): Number { return un(.-> Full { _1 7 }) }", 7),
+                    "fun main(): Number { return un(7 |> Full) }", 7),
     # a two-field arm: both payloads projected.
     ("payload_duo", "place Duo { this > Both Number Number }\n"
                     "fun a(d: Duo): Number { return match d { Both(x, y) => x } }\n"
                     "fun b(d: Duo): Number { return match d { Both(x, y) => y } }\n"
-                    "fun main(): Number { return a(.-> Both { _1 5 _2 9 }) + b(.-> Both { _1 5 _2 9 }) }", 14),
+                    "fun main(): Number { return a((5, 9) |> Both) + b((5, 9) |> Both) }", 14),
     # Stage 3: nested / recursive payloads (a sum handle stored raw as a child).
     # ev(build(3)) = -(-(-7)) = -7 = 249 mod 256.
     ("rec_neg",    "place Term { this > Lit Number :U Neg Term }\n"
                    "fun ev(t: Term): Number { return match t { Lit(n) => n, Neg(m) => 0 - ev(m) } }\n"
-                   "fun build(k: Number): Term { return if k == 0 then .-> Lit { _1 7 } else .-> Neg { _1 build(k - 1) } }\n"
+                   "fun build(k: Number): Term { return if k == 0 then 7 |> Lit else build(k - 1) |> Neg }\n"
                    "fun main(): Number { return ev(build(3)) }", 249),
     # a recursive list with a number + a nested-list payload; sum = 42.
     ("rec_list",   "place Lst { this > Nil :U Cons Number Lst }\n"
                    "fun sum(l: Lst): Number { return match l { Nil => 0, Cons(h, t) => h + sum(t) } }\n"
-                   "fun main(): Number { return sum(.-> Cons { _1 10 _2 .-> Cons { _1 20 _2 .-> Cons { _1 12 _2 Nil } } }) }", 42),
+                   "fun main(): Number { return sum((10, (20, (12, Nil) |> Cons) |> Cons) |> Cons) }", 42),
     # String literals and qualified runtime calls (String.op). A literal lexes
     # to a content handle (substring), lowers to a from_char/concat chain that
     # interns to the same content-address as yonc's global+string_lit, so the

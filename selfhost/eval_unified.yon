@@ -5,20 +5,20 @@ place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U
 
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return match t { TLit(n)     => .-> TLit { _1 n },
-      TVar(i)     => if i >= c then .-> TVar { _1 i + d } else .-> TVar { _1 i },
-      TLam(b)     => .-> TLam { _1 shift(d, c + 1, b) },
-      TApp(f, x)  => .-> TApp { _1 shift(d, c, f) _2 shift(d, c, x) },
-      TAdd(a, b)  => .-> TAdd { _1 shift(d, c, a) _2 shift(d, c, b) },
-      TMul(a, b)  => .-> TMul { _1 shift(d, c, a) _2 shift(d, c, b) } }
+  return match t { TLit(n)     => n |> TLit,
+      TVar(i)     => if i >= c then i + d |> TVar else i |> TVar,
+      TLam(b)     => shift(d, c + 1, b) |> TLam,
+      TApp(f, x)  => (shift(d, c, f), shift(d, c, x)) |> TApp,
+      TAdd(a, b)  => (shift(d, c, a), shift(d, c, b)) |> TAdd,
+      TMul(a, b)  => (shift(d, c, a), shift(d, c, b)) |> TMul }
 }
 fun subst(j: Number, s: Term, t: Term): Term {
-  return match t { TLit(n)     => .-> TLit { _1 n },
-      TVar(i)     => if i == j then s else .-> TVar { _1 i },
-      TLam(b)     => .-> TLam { _1 subst(j + 1, shift(1, 0, s), b) },
-      TApp(f, x)  => .-> TApp { _1 subst(j, s, f) _2 subst(j, s, x) },
-      TAdd(a, b)  => .-> TAdd { _1 subst(j, s, a) _2 subst(j, s, b) },
-      TMul(a, b)  => .-> TMul { _1 subst(j, s, a) _2 subst(j, s, b) } }
+  return match t { TLit(n)     => n |> TLit,
+      TVar(i)     => if i == j then s else i |> TVar,
+      TLam(b)     => subst(j + 1, shift(1, 0, s), b) |> TLam,
+      TApp(f, x)  => (subst(j, s, f), subst(j, s, x)) |> TApp,
+      TAdd(a, b)  => (subst(j, s, a), subst(j, s, b)) |> TAdd,
+      TMul(a, b)  => (subst(j, s, a), subst(j, s, b)) |> TMul }
 }
 fun beta(body: Term, arg: Term): Term {
   return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
@@ -26,20 +26,20 @@ fun beta(body: Term, arg: Term): Term {
 
 // sum of two ALREADY evaluated values: computes on two TLit, otherwise stuck
 fun add_vals(x: Term, y: Term): Term {
-  return match x { TLit(nx) => match y { TLit(ny) => .-> TLit { _1 nx + ny }, _ => .-> TAdd { _1 .-> TLit { _1 nx } _2 y } },
-      _ => .-> TAdd { _1 x _2 y } }
+  return match x { TLit(nx) => match y { TLit(ny) => nx + ny |> TLit, _ => (nx |> TLit, y) |> TAdd },
+      _ => (x, y) |> TAdd }
 }
 fun mul_vals(x: Term, y: Term): Term {
-  return match x { TLit(nx) => match y { TLit(ny) => .-> TLit { _1 nx * ny }, _ => .-> TMul { _1 .-> TLit { _1 nx } _2 y } },
-      _ => .-> TMul { _1 x _2 y } }
+  return match x { TLit(nx) => match y { TLit(ny) => nx * ny |> TLit, _ => (nx |> TLit, y) |> TMul },
+      _ => (x, y) |> TMul }
 }
 
 fun eval(t: Term): Term {
-  return match t { TLit(n)     => .-> TLit { _1 n },
-      TVar(i)     => .-> TVar { _1 i },
-      TLam(b)     => .-> TLam { _1 b },
+  return match t { TLit(n)     => n |> TLit,
+      TVar(i)     => i |> TVar,
+      TLam(b)     => b |> TLam,
       TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))),
-                         _       => .-> TApp { _1 eval(f) _2 eval(x) } },
+                         _       => (eval(f), eval(x)) |> TApp },
       TAdd(a, b)  => add_vals(eval(a), eval(b)),
       TMul(a, b)  => mul_vals(eval(a), eval(b)) }
 }
@@ -50,6 +50,6 @@ fun as_num(t: Term): Number {
 
 // ORACLE: (lam. var0 + var0) 21  ->  21 + 21  ->  42
 fun main(): Number {
-  r := eval(.-> TApp { _1 .-> TLam { _1 .-> TAdd { _1 .-> TVar { _1 0 } _2 .-> TVar { _1 0 } } } _2 .-> TLit { _1 21 } })
+  r := eval(((0 |> TVar, 0 |> TVar) |> TAdd |> TLam, 21 |> TLit) |> TApp)
   return as_num(r) - 42
 }

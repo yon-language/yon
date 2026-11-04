@@ -11,7 +11,7 @@ place Entry {
     }
   }
   fun main(): Number {
-    return sum(.-> Cons { _1 10 _2 .-> Cons { _1 15 _2 .-> Cons { _1 17 _2 Nil } } })
+    return sum((10, (15, (17, Nil) |> Cons) |> Cons) |> Cons)
   }
 }
 

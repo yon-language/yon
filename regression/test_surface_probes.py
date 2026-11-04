@@ -170,7 +170,7 @@ MIXED = {
 def test_a_mixed_coproduct_is_read_arm_by_arm(tmp_path):
     assert _uso(tmp_path,
                 "fun a(): Stato { return .-> Opened { initial 1 balance 2 } }\n"
-                "fun b(): Stato { return .-> Pending { _1 3 } }\n"
+                "fun b(): Stato { return 3 |> Pending }\n"
                 "fun c(): Stato { return Spento }\n"
                 "fun leggi(s: Stato): Number {\n"
                 "  return match s { Opened { initial as i } => i, Pending as n => n, Spento => 4 }\n}\n"
@@ -205,7 +205,7 @@ def test_payload_arms_go_past_the_slots_of_one_heap(tmp_path):
     src = ("place Chain { this > End :U Link Number Chain }\n"
            "place Entry {\n"
            "fun build(i: Number, acc: Chain): Chain {\n"
-           "  return if i == 0 then acc else build(i - 1, .-> Link { _1 i _2 acc })\n}\n"
+           "  return if i == 0 then acc else build(i - 1, (i, acc) |> Link)\n}\n"
            "fun len(c: Chain, n: Number): Number {\n"
            "  return match c { End => n, Link(h, t) => len(t, n + 1) }\n}\n"
            "fun main(): Number { return if len(build(200000, End), 0) == 200000 then 42 else 1 }\n}\n")
@@ -219,7 +219,7 @@ def test_payload_arms_go_past_the_slots_of_one_heap(tmp_path):
 def test_two_arms_with_the_same_content_are_one_value(tmp_path):
     src = ("place Box { this > Full Number Number :U Empty }\n"
            "place Entry {\n"
-           "fun mk(a: Number): Box { return .-> Full { _1 a _2 2 } }\n"
+           "fun mk(a: Number): Box { return (a, 2) |> Full }\n"
            "fun main(): Number { return if mk(1) == mk(1) then 42 else 1 }\n}\n")
     assert _exit(tmp_path, src) == 42
 
@@ -238,7 +238,7 @@ GENERIC = {"w/Topos.yon": "topos WTopos where {\n}\n",
 
 def test_a_generic_arm_is_built_from_a_context_that_is_not_generic(tmp_path):
     src = ("place Entry {\n"
-           "fun some(x: Number): Lookup<Number> { return .-> Found { _1 x } }\n"
+           "fun some(x: Number): Lookup<Number> { return x |> Found }\n"
            "fun leggi(l: Lookup<Number>): Number {\n"
            "  return match l { Found as p => p, Absent => 0 }\n}\n"
            "fun main(): Number { return leggi(some(42)) }\n}\n")
@@ -247,7 +247,7 @@ def test_a_generic_arm_is_built_from_a_context_that_is_not_generic(tmp_path):
 
 def test_a_generic_arm_is_built_inside_a_generic(tmp_path):
     src = ("place Entry {\n"
-           "fun some<V>(x: V): Lookup<V> { return .-> Found { _1 x } }\n"
+           "fun some<V>(x: V): Lookup<V> { return x |> Found }\n"
            "fun leggi(l: Lookup<Number>): Number {\n"
            "  return match l { Found as p => p, Absent => 0 }\n}\n"
            "fun main(): Number { return leggi(some(42)) }\n}\n")
@@ -256,16 +256,16 @@ def test_a_generic_arm_is_built_inside_a_generic(tmp_path):
 
 def test_a_users_generic_arm_takes_its_parameter_from_the_payload(tmp_path):
     src = ("place Entry {\n"
-           "fun wrap<T>(x: T): Box<T> { return .-> Full { _1 x } }\n"
+           "fun wrap<T>(x: T): Box<T> { return x |> Full }\n"
            "fun leggi(b: Box<Number>): Number {\n"
            "  return match b { Full as p => p, Empty => 0 }\n}\n"
-           "fun main(): Number { return leggi(.-> Full { _1 40 }) + leggi(wrap(2)) }\n}\n")
+           "fun main(): Number { return leggi(40 |> Full) + leggi(wrap(2)) }\n}\n")
     assert _exit(tmp_path, src, GENERIC) == 42
 
 
 def test_a_payload_of_the_wrong_type_for_the_expected_parameter_is_refused(tmp_path):
     src = ("place Entry {\n"
-           "fun some(x: Number): Lookup<Text> { return .-> Found { _1 x } }\n"
+           "fun some(x: Number): Lookup<Text> { return x |> Found }\n"
            "fun main(): Number { return 0 }\n}\n")
     _refused(tmp_path, src, "E2001", "expected")
 
@@ -275,7 +275,7 @@ def test_a_parameter_nothing_fixes_is_refused(tmp_path):
     extra["w/Box.yon"] = "place Box<V> { this > Full Number :U Empty }\n"
     src = ("place Entry {\n"
            "fun main(): Number {\n"
-           "  x := .-> Full { _1 1 }\n"
+           "  x := 1 |> Full\n"
            "  return 0\n}\n}\n")
     r, _ = _compile(tmp_path, src, extra)
     out = r.stdout + r.stderr
@@ -285,9 +285,9 @@ def test_a_parameter_nothing_fixes_is_refused(tmp_path):
 def test_an_injection_has_the_type_of_its_coproduct(tmp_path):
     src = ("place Sum { this > A :U B Number :U C Number }\n"
            "place Entry {\n"
-           "fun pick(n: Number): Sum { return if n > 0 then .-> B { _1 n } else .-> C { _1 n } }\n"
+           "fun pick(n: Number): Sum { return if n > 0 then n |> B else n |> C }\n"
            "fun main(): Number {\n"
-           "  x := match .-> B { _1 40 } { A => 0, B as p => p, C as q => q }\n"
+           "  x := match (40 |> B) { A => 0, B as p => p, C as q => q }\n"
            "  return x + (match pick(2) { A => 0, B as p => p, C as q => 0 })\n}\n}\n")
     assert _exit(tmp_path, src) == 42
 
@@ -302,7 +302,6 @@ def test_get_of_a_hashmap_answers_found_and_absent(tmp_path):
     assert _exit(tmp_path, src) == 42
 
 
-@pytest.mark.xfail(strict=True, reason="injection by pipe, generic arms")
 def test_injection_by_pipe_into_a_generic_arm(tmp_path):
     src = ("place Entry {\n"
            "fun concreto(x: Number): Lookup<Number> { return x |> Found }\n"
@@ -314,7 +313,6 @@ def test_injection_by_pipe_into_a_generic_arm(tmp_path):
     assert _exit(tmp_path, src) == 42
 
 
-@pytest.mark.xfail(strict=True, reason="a user's generic coproduct with a payload")
 def test_a_users_generic_coproduct_is_built_and_read(tmp_path):
     extra = {"w/Topos.yon": "topos WTopos where {\n}\n",
              "w/Box.yon": "place Box<V> { this > Full V :U Empty }\n"}
@@ -360,8 +358,34 @@ def test_a_clause_goes_on_across_lines_at_its_separators(tmp_path):
            "fun count(t: Tree): Number {\n"
            "  return match t { Leaf(x) => x, Node(a, b) => count(a) + count(b), Nil => 0 }\n}\n"
            "fun main(): Number {\n"
-           "  return count(.-> Node { _1 .-> Leaf { _1 40 } _2 .-> Leaf { _1 2 } })\n}\n}\n")
+           "  return count((40 |> Leaf, 2 |> Leaf) |> Node)\n}\n}\n")
     assert _exit(tmp_path, src) == 42
+
+
+def test_the_old_injection_is_refused_and_the_new_one_shown(tmp_path):
+    _refused(tmp_path, "place Box { this > Full Number :U Empty }\n"
+             "place Entry {\nfun mk(): Box { return .-> Full { _1 1 } }\n"
+             "fun main(): Number { return 0 }\n}\n", "E2001", "written x |> Full")
+
+
+def test_the_old_injection_with_two_payloads_shows_the_tuple(tmp_path):
+    _refused(tmp_path, "place Box { this > Pair Number Number :U Empty }\n"
+             "place Entry {\nfun mk(): Box { return .-> Pair { _1 1 _2 2 } }\n"
+             "fun main(): Number { return 0 }\n}\n", "E2001", "written (x1, x2) |> Pair")
+
+
+def test_a_fun_with_the_name_of_an_arm_is_the_fun(tmp_path):
+    src = ("place Box { this > Full Number :U Empty }\n"
+           "place Entry {\n"
+           "fun main(): Number { return 2 |> dbl }\n"
+           "fun dbl(x: Number): Number { return x * 21 }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_name_that_is_no_fun_and_no_arm_is_refused(tmp_path):
+    src = "place Entry {\nfun main(): Number { return 2 |> nessuno }\n}\n"
+    r, _ = _compile(tmp_path, src)
+    assert r.returncode != 0 and "nessuno" in r.stdout + r.stderr
 
 
 FUNS = ("fun inc(x: Number): Number { return x + 1 }\n"

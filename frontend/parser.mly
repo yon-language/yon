@@ -1541,7 +1541,10 @@ expr:
       | ECall (name, args, _) ->
           ECall (name, lhs @ args, mk_loc $startpos $endpos)
       | EVar (name, _) ->
-          ECall (name, lhs, mk_loc $startpos $endpos)
+          (* the name may be a fun or an arm: the checker knows *)
+          let loc = mk_loc $startpos $endpos in
+          Hashtbl.replace Surface_ast.pipe_sites (loc.file, loc.start_line, loc.start_col, name) ();
+          ECall (name, lhs, loc)
       | EField (EVar (obj, _), fld, _) when dot_is_module obj ->
           dot_call_expr obj fld lhs (mk_loc $startpos $endpos)
       | _ -> failwith "[parser] pipe RHS must be a function call or a name"

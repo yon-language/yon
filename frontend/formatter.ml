@@ -106,6 +106,13 @@ and fmt_expr (e : expr) : string =
   | ELit (l, _) -> lit_str l
   | EVar (x, _) -> x
   | EField (o, f, _) -> fmt_expr o ^ "." ^ f
+  | ECall (name, args, l)
+    when Hashtbl.mem Surface_ast.pipe_sites (l.file, l.start_line, l.start_col, name) ->
+      (* a pipe into a bare name: a fun, or an injection into an arm *)
+      (match args with
+       | [(ELit _ | EVar _ | ECall _ | EField _ | EParen _) as a] -> fmt_expr a ^ " |> " ^ name
+       | [a] -> "(" ^ fmt_expr a ^ ") |> " ^ name
+       | _ -> "(" ^ String.concat ", " (List.map fmt_expr args) ^ ") |> " ^ name)
   | ECall (name, args, _) ->
       (* Undo the parser's normalization, to reprint the surface syntax the
        * user wrote:

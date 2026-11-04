@@ -18,7 +18,7 @@ place Entry {
     }
   }
   fun main(): Number {
-    xs := .-> Cons { _1 10 _2 .-> Cons { _1 15 _2 .-> Cons { _1 17 _2 Nil } } }
+    xs := (10, (15, (17, Nil) |> Cons) |> Cons) |> Cons
     return sum(xs) + head_or_zero(Nil)
   }
 }
