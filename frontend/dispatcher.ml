@@ -298,7 +298,7 @@ let resolve_points (env : Tyenv.env) (e : expr) : expr =
     && ((match Tyenv.named_sum_of_ctor env x with
          | Some (_, vs) -> List.exists (fun v -> v.v_name = x && v.v_args = []) vs
          | None -> false)
-        || (match Hit_env.find_constructor Hit_env.builtin_env x with
+        || (match Hit_env.find_constructor !Hit_env.registry x with
             | Some (_, kind) -> Hit_env.constructor_params kind = []
             | None -> false)) in
   List.fold_left

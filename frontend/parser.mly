@@ -70,6 +70,8 @@
     let lhs = tuple_components a in
     let call =
       match b with
+      (* x ↦ clear: the trivial path at x *)
+      | ERefl (EVar ("__plainly__", _), _) -> ERefl (a, loc)
       | ECall (name, args, _) -> ECall (name, lhs @ args, loc)
       | EVar (name, _) -> ECall (name, lhs, loc)
       | EField (EVar (obj, _), fld, _) when dot_is_module obj -> dot_call_expr obj fld lhs loc

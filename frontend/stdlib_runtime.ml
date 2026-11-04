@@ -287,6 +287,9 @@ let try_reduce_stdlib (t : term) : term option =
        | Some 1.0 -> Some b
        | _ -> None)
 
+  (* the two branches agree: the condition has no say *)
+  | App (App (App (Var "__if_expr", _), a), b) when a = b -> Some a
+
   (* A coproduct value: the constant -(tag + 1) of a nullary arm, or the section
      of an arm: its builder applied to its projections. *)
   | App (Var f, v) when String.starts_with ~prefix:"__arm_is_" f ->

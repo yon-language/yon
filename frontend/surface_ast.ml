@@ -267,6 +267,8 @@ let arm_coproduct_sites : (string * int * int, string) Hashtbl.t = Hashtbl.creat
 type arrow_kind = Apply | Inject | Old_pipe
 let arrow_sites : (string * int * int * string, arrow_kind) Hashtbl.t = Hashtbl.create 32
 let arm_call_sites : (string * int * int * string, unit) Hashtbl.t = Hashtbl.create 32
+(* a name, or an application, that is a cell of a place, by site *)
+let cell_sites : (string * int * int * string, unit) Hashtbl.t = Hashtbl.create 16
 
 (* A nullary fun or operation, named without (), by site and name; the funs declared
    without (), by the site of the declaration; the operations with no parameters. *)

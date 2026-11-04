@@ -449,7 +449,7 @@ let rec reduce_comp (ty : ctype) (phi : face_formula)
            *   - If signature not found or base shape unrecognized:
            *     fall back to canonical CComp.
            *)
-          (match Hit_env.lookup Hit_env.builtin_env hit_name with
+          (match Hit_env.lookup !Hit_env.registry hit_name with
            | None -> CComp (ty, phi, sides, base)
            | Some sig_ ->
                match base with

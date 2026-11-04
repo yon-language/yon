@@ -825,7 +825,7 @@ let named_sum_ty (env : Tyenv.env) (n : string) (args : ty list) : ty =
    type: a declared sum (`TySum`/`TySumIn`), a named `inductive T = ...` (via
    lookup_named_sum), or a builtin HIT. `pc_result` is the scrutinee type itself.
    Shared by the hit_elim inference arm and the dependent-elimination check. *)
-let hit_signature_of (env : Tyenv.env) (x_ty : ty)
+let arms_signature_of (env : Tyenv.env) (x_ty : ty)
     : (string * Hit_env.hit_signature) option =
   let sig_of_variants name variants =
     let points =
@@ -856,8 +856,17 @@ let hit_signature_of (env : Tyenv.env) (x_ty : ty)
        | Some (_, variants) -> Some (sig_of_variants n variants)
        | None ->
            Option.map (fun sig_ -> (n, sig_))
-             (Hit_env.lookup Hit_env.builtin_env n))
+             (Hit_env.lookup !Hit_env.registry n))
   | _ -> None
+
+(* The signature of a scrutinee, with the cells of a place whose laws are cells. *)
+let hit_signature_of (env : Tyenv.env) (x_ty : ty) : (string * Hit_env.hit_signature) option =
+  Option.map (fun ((name, sig_) as whole) ->
+      match Hit_env.lookup !Hit_env.registry name with
+      | Some d when Tyenv.lookup_named_sum env name <> None ->
+          (name, { sig_ with Hit_env.hit_paths = d.Hit_env.hit_paths;
+                             hit_type_params = d.Hit_env.hit_type_params })
+      | _ -> whole) (arms_signature_of env x_ty)
 
 (* Substitute the surface variable [xv] by the expression [repl] inside a type,
    reaching the term endpoints a dependent type carries (`TyTermExpr`). This is
@@ -1602,7 +1611,7 @@ let is_builtin_hit_ctor (ctor : string) : bool =
         sig_.Hit_env.hit_points
       || List.exists (fun (p : Hit_env.path_constructor) -> p.Hit_env.hpc_name = ctor)
            sig_.Hit_env.hit_paths)
-    Hit_env.builtin_env
+    !Hit_env.registry
 
 (* `C__arm`, the parsed form of `C.arm(..)`, when C is a coproduct listing arm *)
 let qualified_arm_of (env : Tyenv.env) (name : string) : (string * string) option =
@@ -1726,6 +1735,25 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
 
   | ENew (place_name, _, loc) when Tyenv.is_synthetic_place env place_name ->
       arm_mediatrice_err env place_name loc
+
+  | EVar (name, loc)
+    when Tyenv.lookup_var env name = None
+         && (match Hit_env.cell_of_place name with
+             | Some (_, c) -> c.Hit_env.hpc_params = []
+             | None -> false) ->
+      Hashtbl.replace Surface_ast.cell_sites (loc.file, loc.start_line, loc.start_col, name) ();
+      infer_cell env ctx name [] loc
+
+  | ECall (name, args, loc)
+    when Tyenv.lookup_fun env name = None && Tyenv.lookup_var env name = None
+         && arrow_kind name loc = Some Surface_ast.Apply
+         && Hit_env.cell_of_place name <> None ->
+      Hashtbl.replace Surface_ast.cell_sites (loc.file, loc.start_line, loc.start_col, name) ();
+      infer_cell env ctx name args loc
+
+  | EHITElim (EVar ("__match", _), branches, x, loc)
+    when scrutinee_has_cells env ctx x ->
+      cell_match env ctx branches x loc None
 
   | ECall (name, args, loc) when nullary_refusal env name args loc <> None ->
       err loc (Option.get (nullary_refusal env name args loc))
@@ -1936,7 +1964,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
              | Some (_, variants) -> Some (sig_of_variants n variants)
              | None ->
                  Option.map (fun sig_ -> (n, sig_))
-                   (Hit_env.lookup Hit_env.builtin_env n))
+                   (Hit_env.lookup !Hit_env.registry n))
         | _ -> None in
       (match hit_signature with
        | None ->
@@ -2137,14 +2165,15 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
           match acc with
           | Some _ -> acc
           | None ->
-              if List.exists (fun (p : Hit_env.point_constructor) ->
+              if Tyenv.lookup_named_sum env sig_.Hit_env.hit_name <> None then None
+              else if List.exists (fun (p : Hit_env.point_constructor) ->
                                 p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points
               then Some (sig_, `Point)
               else if List.exists (fun (p : Hit_env.path_constructor) ->
                                      p.Hit_env.hpc_name = ctor) sig_.Hit_env.hit_paths
               then Some (sig_, `Path)
               else None)
-          None Hit_env.builtin_env in
+          None !Hit_env.registry in
       (match found with
        | None when List.length (coproducts_of_arm env ctor) > 1 ->
            unnamed_coproduct_err loc ctor (coproducts_of_arm env ctor)
@@ -3288,6 +3317,174 @@ and place_arm_match env ctx branches x loc (expected : ty option) : ty tc_result
       |> fun r -> let* t = r in
          (match t with Some t -> ok t | None -> err loc "match: no branches")
 
+(* A law in the body of a place with `this >` is a cell: its statement has two ends of
+   one type. *)
+and check_cells env ctx (pd : place_decl) : unit tc_result =
+  List.fold_left (fun acc m ->
+      let* () = acc in
+      match m with
+      | FoLaw (name, Some st) when not st.ls_given ->
+          (match Hit_env.cell_ends st.ls_body with
+           | None -> err pd.pd_loc (Printf.sprintf
+               "law %s of %s: a law of a place with arms is a cell: its statement is \
+                source = target" name pd.pd_name)
+           | Some (premise, left, right) ->
+               let ps = pd.pd_type_params in
+               let benv = Tyenv.add_vars env
+                   (List.map (fun (_, x, t) -> (x, resolve_tparams ps t)) st.ls_quants) in
+               let benv =
+                 List.fold_left (fun e (x, t) ->
+                     match t with
+                     | TyId (TyMetaVar _, TyTermExpr l, r) ->
+                         (match infer e ctx l with
+                          | Ok c -> Tyenv.add_var e x (TyId (c, TyTermExpr l, r))
+                          | Error _ -> e)
+                     | _ -> e)
+                   benv (List.map (fun (_, x, t) -> (x, t)) st.ls_quants) in
+               let* () = match premise with
+                 | Some p -> let* _ = infer benv ctx p in ok ()
+                 | None -> ok () in
+               let* lt = infer benv ctx left in
+               let* rt = infer benv ctx right in
+               if Dispatcher.type_equal benv ctx lt rt then ok ()
+               else err pd.pd_loc (Printf.sprintf
+                   "law %s of %s: source and target have different types: %s and %s"
+                   name pd.pd_name (Tyenv.ty_to_string lt) (Tyenv.ty_to_string rt)))
+      | _ -> ok ()) (ok ()) pd.pd_members
+
+(* The scrutinee of a place whose laws are cells. *)
+and scrutinee_has_cells env ctx x : bool =
+  match infer env ctx x with
+  | Ok t ->
+      (match hit_signature_of env t with
+       | Some (name, sig_) ->
+           sig_.Hit_env.hit_paths <> [] && Tyenv.lookup_named_sum env name <> None
+       | None -> false)
+  | Error _ -> false
+
+(* A cell is an arrow: applied, it is a path between its ends. *)
+and infer_cell env ctx name args loc : ty tc_result =
+  let (sig_, cell) = Option.get (Hit_env.cell_of_place name) in
+  let params = cell.Hit_env.hpc_params in
+  if List.length args <> List.length params then
+    err loc (Printf.sprintf "cell %s: expected %d argument(s), got %d"
+               name (List.length params) (List.length args))
+  else
+    let ps = sig_.Hit_env.hit_type_params in
+    let fresh = List.map (fun v -> (v, Ty_subst.fresh_metavar ())) ps in
+    let inst t = Ty_subst.subst_type_vars fresh (resolve_tparams ps t) in
+    let* got = List.fold_right (fun a acc ->
+        let* acc = acc in let* t = infer env ctx a in ok (t :: acc)) args (ok []) in
+    let sigma = List.fold_left2 (fun sg (_, want) g ->
+        match Ty_subst.try_unify (Ty_subst.apply_subst sg (inst want)) (Ty_subst.apply_subst sg g) with
+        | Ok s -> Ty_subst.compose_subst s sg
+        | Error _ -> sg) Ty_subst.empty_subst params got in
+    let subst e = List.fold_left2 (fun acc (v, _) a ->
+        Desugar.subst_evar_in_expr v a acc) e params args in
+    let carrier =
+      if ps = [] then TyUser sig_.Hit_env.hit_name
+      else TyApp (sig_.Hit_env.hit_name,
+                  List.map (fun (_, m) -> Ty_subst.apply_subst sigma m) fresh) in
+    ok (TyId (carrier, TyTermExpr (subst cell.Hit_env.hpc_left),
+              TyTermExpr (subst cell.Hit_env.hpc_right)))
+
+(* The eliminator of a computad: a branch for each arm and for each cell. A branch of a
+   cell is a path between what the match gives at the two ends of the cell, so the kernel's
+   conversion decides whether the map respects it. *)
+and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
+  let* x_ty = infer env ctx x in
+  record_match_coproduct env loc x_ty;
+  let (hname, sig_) = Option.get (hit_signature_of env x_ty) in
+  let handled = List.map (fun (n, _, _) -> n) branches in
+  let missing =
+    let cells = List.map (fun c -> c.Hit_env.hpc_name) sig_.Hit_env.hit_paths in
+    List.filter (fun c -> not (List.mem c handled)) cells
+    @ (if List.mem "_" handled then []
+       else List.filter (fun a -> not (List.mem a handled))
+           (List.map (fun p -> p.Hit_env.pc_name) sig_.Hit_env.hit_points)) in
+  let* () =
+    match missing with
+    | [] -> ok ()
+    | ns -> err loc (Printf.sprintf "match: missing branch(es) for %s" (String.concat ", " ns)) in
+  let targs = match x_ty with TyApp (_, ts) -> ts | _ -> [] in
+  let ps = sig_.Hit_env.hit_type_params in
+  let inst t =
+    let t = resolve_tparams ps t in
+    if List.length ps = List.length targs
+    then Ty_subst.subst_type_vars (List.combine ps targs) t else t in
+  let binders ctor pat n =
+    match pat with
+    | PatVars vs when List.length vs = n -> ok vs
+    | PatVars [] when n > 0 -> err loc (Printf.sprintf
+        "match: branch %s binds its %d argument(s): %s as (..) =>" ctor n ctor)
+    | PatVars vs -> err loc (Printf.sprintf
+        "match: branch %s expects %d binder(s), got %d" ctor n (List.length vs))
+    | PatWitness w when n = 1 -> ok [w]
+    | _ -> err loc (Printf.sprintf "match: branch %s expects %d binder(s)" ctor n) in
+  let point_env ctor pat =
+    match List.find_opt (fun p -> p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points with
+    | Some p ->
+        let* vs = binders ctor pat (List.length p.Hit_env.pc_params) in
+        ok (Tyenv.add_vars env
+              (List.combine vs (List.map snd p.Hit_env.pc_params)
+               |> List.filter (fun (n, _) -> n <> "_")))
+    | None -> err loc (Printf.sprintf "match: %s does not belong to %s" ctor hname) in
+  (* the type of the eliminator: the expected one, or that of the first point *)
+  let* result =
+    match expected with
+    | Some t -> ok t
+    | None ->
+        (match List.find_opt (fun (c, _, _) ->
+             List.exists (fun p -> p.Hit_env.pc_name = c) sig_.Hit_env.hit_points) branches with
+         | Some (c, pat, body) -> let* benv = point_env c pat in infer benv ctx body
+         | None -> err loc "match: no branch for a point") in
+  let is_point c = List.exists (fun p -> p.Hit_env.pc_name = c) sig_.Hit_env.hit_points in
+  let branch_of c = List.find_opt (fun (n, _, _) -> n = c) branches in
+  (* what the match gives at a term of the place *)
+  let rec at (e : expr) : expr =
+    match e with
+    | EParen (a, _) -> at a
+    | ERefl (a, l) -> ERefl (at a, l)
+    | EVar (c, _) | ECall (c, [], _) when is_point c && branch_of c <> None ->
+        let (_, _, b) = Option.get (branch_of c) in b
+    | ECall (c, args, _) | EHITConstr (c, args, _) when is_point c && branch_of c <> None ->
+        let (_, pat, b) = Option.get (branch_of c) in
+        let vs = match pat with
+          | PatVars vs -> vs | PatWitness w -> [w] | PatFields _ -> [] in
+        if List.length vs = List.length args then
+          List.fold_left2 (fun acc v a -> Desugar.subst_evar_in_expr v a acc) b vs args
+        else b
+    | _ -> EHITElim (EVar ("__match", loc), branches, e, loc) in
+  let* () =
+    List.fold_left (fun acc (ctor, pat, body) ->
+      let* () = acc in
+      if ctor = "_" then check env ctx body result else
+      match List.find_opt (fun c -> c.Hit_env.hpc_name = ctor) sig_.Hit_env.hit_paths with
+      | None ->
+          let* benv = point_env ctor pat in
+          check benv ctx body result
+      | Some cell ->
+          let params = cell.Hit_env.hpc_params in
+          let* vs = binders ctor pat (List.length params) in
+          let rename e = List.fold_left2 (fun acc (v, _) b ->
+              if b = "_" then acc
+              else Desugar.subst_evar_in_expr v (EVar (b, loc)) acc) e params vs in
+          (* the binders in order: a premise's carrier is read off its left end *)
+          let benv = List.fold_left2 (fun e (_, t) b ->
+              let t = match t with
+                | TyId (TyMetaVar _, TyTermExpr l, TyTermExpr r) ->
+                    let l' = rename l in
+                    (match infer e ctx l' with
+                     | Ok c -> TyId (c, TyTermExpr l', TyTermExpr (rename r))
+                     | Error _ -> TyId (TyMetaVar (-424242), TyTermExpr l', TyTermExpr (rename r)))
+                | t -> inst t in
+              if b = "_" then e else Tyenv.add_var e b t) env params vs in
+          let want = TyId (result, TyTermExpr (at (rename cell.Hit_env.hpc_left)),
+                           TyTermExpr (at (rename cell.Hit_env.hpc_right))) in
+          check benv ctx body want)
+    (ok ()) branches in
+  ok result
+
 and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit tc_result =
   (* Universal property of the terminal object 1: for every object A there is
      a unique map `!_A : A -> 1`. So a term of any type checks against 1 (it
@@ -3457,6 +3654,10 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                   "ambiguous injection into %s: the value inhabits more than \
                    one arm; annotate the intended side"
                   (Tyenv.ty_to_string sum_ty))))
+  | EHITElim (EVar ("__match", _), branches, x, loc), _
+    when scrutinee_has_cells env ctx x ->
+      let* _ = cell_match env ctx branches x loc (Some expected) in
+      ok ()
   | ENew (place_name, _, loc), _ when Tyenv.is_synthetic_place env place_name ->
       arm_mediatrice_err env place_name loc
   | ECall (name, args, loc), _ when nullary_refusal env name args loc <> None ->
@@ -4030,7 +4231,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                ok op.os_return
            | [] ->
                (* Try as a HIT constructor (point or path). *)
-               (match Hit_env.find_constructor Hit_env.builtin_env name with
+               (match Hit_env.find_constructor !Hit_env.registry name with
                 | Some (sig_, kind) ->
                     let params = Hit_env.constructor_params kind in
                     let result = Hit_env.constructor_result kind in
@@ -5234,8 +5435,10 @@ let check_union_members (env : Tyenv.env) (ctx : Reduce.ctx)
     (pd : place_decl) : unit tc_result =
   let fields =
     List.filter_map (function FoField f -> Some f | _ -> None) pd.pd_members in
-  let non_fields = List.filter (function FoField _ -> false | _ -> true)
-                     pd.pd_members in
+  let non_fields = List.filter (function
+      | FoField _ -> false
+      | FoLaw (_, Some _) -> false
+      | _ -> true) pd.pd_members in
   let* () =
     match non_fields with
     | [] -> ok ()
@@ -5418,6 +5621,8 @@ let arm_name_clashes (p : program) : type_error list =
       | TopPlace pd ->
           List.filter_map (function
             | FoOp o -> Some (pd.pd_name, o.op_name, o.op_loc)
+            | FoLaw (l, Some st) when pd.pd_arms <> [] && not st.ls_given ->
+                Some (pd.pd_name, l, pd.pd_loc)
             | _ -> None) pd.pd_members
       | TopMorph mp -> sited mp.mp_name mp.mp_loc
       | TopView vd -> sited vd.vw_name vd.vw_loc
@@ -5440,6 +5645,17 @@ let arm_name_clashes (p : program) : type_error list =
                         of a place one name names one arrow; rename one of them."
                        pd.pd_name v.v_name v.v_name pd.pd_name }
           | None -> None) pd.pd_arms
+        @ List.filter_map (function
+            | FoLaw (l, Some st) when not st.ls_given ->
+                (match List.filter (fun (h, n, _) -> h = pd.pd_name && n = l) homed with
+                 | _ :: _ :: _ ->
+                     Some { err_loc = pd.pd_loc; err_code = Error_codes.Arm_name_clash;
+                            err_msg = Printf.sprintf
+                              "`%s.%s` names two arrows: the cell of the law %s and an arrow \
+                               declared in its braces. In the home of a place one name names \
+                               one arrow; rename one of them." pd.pd_name l l }
+                 | _ -> None)
+            | _ -> None) pd.pd_members
     | _ -> []) p
 
 (* The library owns its place names: the prelude's (known by their site)
@@ -5523,6 +5739,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
           (ok ()) pd.pd_arms
       in
       let* () = check_algebra_models env ctx pd in
+      let* () = check_cells env ctx pd in
       check_union_members env ctx pd
   | TopPlace pd -> check_place_decl env ctx pd
   | TopFun fn -> check_fun_decl env ctx fn
@@ -7583,6 +7800,7 @@ let infer_effects (env : Tyenv.env) (p : program) : Tyenv.env =
 let same_sentinel = -424242
 
 let elaborate_id_sugar (p : program) : program =
+  Hit_env.register_places p;
   (* mono = composition: expand inherited fields FIRST, so every path below
      (and everything downstream of this chokepoint) sees the composed place *)
   let p = expand_mono_fields p in

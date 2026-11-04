@@ -253,6 +253,64 @@ type constructor_kind =
   | KPoint of point_constructor
   | KPath of path_constructor
 
+(* The HITs the kernel knows: the built-in ones, and the places whose laws are cells. *)
+let registry : hit_env ref = ref builtin_env
+
+(* A statement read as a cell: its premise, if any, and its two ends. *)
+let cell_ends (body : expr) : (expr option * expr * expr) option =
+  let rec strip = function EParen (e, _) -> strip e | e -> e in
+  let ends e = match strip e with
+    | EBinop (OpEq, l, r, _) -> Some (l, r)
+    | _ -> None in
+  match strip body with
+  | ECall ("__heyt_imp", [p; c], _) ->
+      Option.map (fun (l, r) -> (Some p, l, r)) (ends c)
+  | e -> Option.map (fun (l, r) -> (None, l, r)) (ends e)
+
+(* A place with arms and laws is a computad: the arms are its 0-cells, a law a cell. *)
+let signature_of_place (pd : place_decl) : hit_signature option =
+  let cells = List.filter_map (function
+      | FoLaw (name, Some st) when not st.ls_given ->
+          (match cell_ends st.ls_body with
+           | Some (premise, left, right) ->
+               let quantified = List.map (fun (_, x, t) -> (x, t)) st.ls_quants in
+               let witness = match premise with
+                 | Some p ->
+                     (match cell_ends p with
+                      | Some (_, a, b) ->
+                          [("__premise", TyId (TyMetaVar (-424242), TyTermExpr a, TyTermExpr b))]
+                      | None -> [("__premise", TyPrim "proposition")])
+                 | None -> [] in
+               Some { hpc_name = name; hpc_params = quantified @ witness;
+                      hpc_left = left; hpc_right = right }
+           | None -> None)
+      | _ -> None) pd.pd_members in
+  if pd.pd_arms = [] || cells = [] then None
+  else Some {
+    hit_name = pd.pd_name;
+    hit_type_params = pd.pd_type_params;
+    hit_points = List.map (fun (v : variant) ->
+        { pc_name = v.v_name;
+          pc_params = List.mapi (fun i t -> (Printf.sprintf "arg%d" i, t)) v.v_args;
+          pc_result = TyUser pd.pd_name }) pd.pd_arms;
+    hit_paths = cells }
+
+let register_places (p : program) : unit =
+  registry := List.fold_left (fun env d ->
+      match d with
+      | TopPlace pd ->
+          (match signature_of_place pd with
+           | Some sig_ -> (pd.pd_name, sig_) :: List.remove_assoc pd.pd_name env
+           | None -> env)
+      | _ -> env) builtin_env p
+
+(* A cell of a place, by name. *)
+let cell_of_place (name : string) : (hit_signature * path_constructor) option =
+  List.find_map (fun (_, sig_) ->
+      if List.mem_assoc sig_.hit_name builtin_env then None
+      else Option.map (fun c -> (sig_, c))
+          (List.find_opt (fun c -> c.hpc_name = name) sig_.hit_paths)) !registry
+
 let find_constructor (env : hit_env) (cname : string)
     : (hit_signature * constructor_kind) option =
   let rec search = function

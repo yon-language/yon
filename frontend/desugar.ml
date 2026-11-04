@@ -699,6 +699,9 @@ and desugar_expr (e0 : S.expr) : C.term =
    * lower it to the reserved kernel marker `__id` so (F-id) fires. The call
    * form psh_id() is handled in the S.ECall arm. *)
   | S.EVar ("psh_id", _) -> C.Var "__id"
+  | S.EVar (name, loc)
+    when Hashtbl.mem S.cell_sites (loc.S.file, loc.S.start_line, loc.S.start_col, name) ->
+      C.HITConstr (name, [])
   | S.EVar (x, loc) when
       Hashtbl.mem Surface_ast.bare_point_sites
         (loc.S.file, loc.S.start_line, loc.S.start_col) ->
@@ -792,12 +795,29 @@ and desugar_expr (e0 : S.expr) : C.term =
            ignore c2;
            curry_apply (C.Var "__if_expr")
              [desugar_expr x; desugar_expr et; desugar_expr ef]
-       | (ctor, _, _) :: _ when arm_registered ctor ->
-           lower_sum_elim branches x loc
+       | _ when List.exists (fun (c, _, _) -> arm_registered c) branches ->
+           (* at run time a value is a point: the branch of a cell has no value to meet *)
+           lower_sum_elim
+             (List.filter (fun (c, _, _) -> c = "_" || arm_registered c) branches) x loc
        | _ ->
            C.HITElim
              (List.map (fun (n, vars, e) -> (n, vars, desugar_expr e)) branches,
               desugar_expr x))
+  (* a cell at an end of the interval is that end *)
+  | S.EPathApp ((S.EVar (name, l) | S.ECall (name, _, l)) as p, ((S.DI0 | S.DI1) as d), _)
+    when Hashtbl.mem S.cell_sites (l.S.file, l.S.start_line, l.S.start_col, name) ->
+      (match Hit_env.cell_of_place name with
+       | Some (_, c) ->
+           let args = match p with S.ECall (_, a, _) -> a | _ -> [] in
+           let vars = List.map fst c.Hit_env.hpc_params in
+           let e = if d = S.DI0 then c.Hit_env.hpc_left else c.Hit_env.hpc_right in
+           let e = List.fold_left2 (fun acc v a ->
+               Method_sugar.map_expr (function
+                   | S.EVar (x, _) when x = v -> Some a
+                   | _ -> None) acc) e
+               (List.filteri (fun i _ -> i < List.length args) vars) args in
+           desugar_expr e
+       | None -> C.PApp (desugar_expr p, if d = S.DI0 then C.I0 else C.I1))
   | S.EPathApp (p, d, _) ->
       let i = (match d with S.DI0 -> C.I0 | S.DI1 -> C.I1 | S.DIVar s -> C.IVar s) in
       C.PApp (desugar_expr p, i)
@@ -805,6 +825,9 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.ECall (name, args, loc)
     when Hashtbl.mem S.arm_call_sites (loc.S.file, loc.S.start_line, loc.S.start_col, name) ->
       desugar_expr (S.EHITConstr (name, args, loc))
+  | S.ECall (name, args, loc)
+    when Hashtbl.mem S.cell_sites (loc.S.file, loc.S.start_line, loc.S.start_col, name) ->
+      C.HITConstr (name, List.map desugar_expr args)
   | S.ECall ("floor", [x], loc) ->
       (* the bare name of Number's floor: one function, the libm floor *)
       desugar_expr (S.ECall ("Number__floor", [x], loc))

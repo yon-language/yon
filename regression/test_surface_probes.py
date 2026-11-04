@@ -631,7 +631,6 @@ S1 = {"w/Topos.yon": "topos WTopos where {\n}\n",
       "w/S1.yon": "place S1 { this > base  law loop base = base }\n"}
 
 
-@pytest.mark.xfail(strict=True, reason="constitutive laws")
 def test_a_law_in_a_coproduct_generates_a_cell(tmp_path):
     src = ("place Entry {\n"
            "fun f(s: S1): Number {\n"
@@ -641,7 +640,6 @@ def test_a_law_in_a_coproduct_generates_a_cell(tmp_path):
     assert _exit(tmp_path, src, S1) == 42
 
 
-@pytest.mark.xfail(strict=True, reason="constitutive laws")
 def test_a_match_on_a_hit_without_the_branch_of_a_cell_is_refused(tmp_path):
     src = ("place Entry {\n"
            "fun f(s: S1): Number {\n"

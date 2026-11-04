@@ -1338,6 +1338,8 @@ let rec infer_mlir_ty (e : emitter)
       (match Builtins.reduce_with_builtins Reduce.empty_ctx ht with
        | C.HITElim _ -> raise (Cubical_stuck "hit_elim stuck (scrutinee is not a constructor): no runtime value to lower.")
        | t' -> infer_mlir_ty e env funcs t')
+  (* a cell is a path: it has no content at run time *)
+  | C.HITConstr (n, _) when Hit_env.cell_of_place n <> None -> "f64"
   | C.HITConstr _ ->
       raise (Cubical_stuck "a bare HIT constructor has no runtime type (it is a homotopy value); use it through hit_elim.")
   | C.Unit ->
@@ -1920,6 +1922,10 @@ let rec emit_term (e : emitter)
     (funcs : (string * func_sig) list)
     (t : C.term) : string * string =
   match t with
+  | C.HITConstr (n, _) when Hit_env.cell_of_place n <> None ->
+      let v = fresh_ssa e in
+      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v);
+      (v, "f64")
   | C.App _ when arm_new_of t <> None ->
       let (arm, args) = Option.get (arm_new_of t) in
       let vals = List.map (fun a ->
