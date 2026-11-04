@@ -14,7 +14,7 @@
  *     reset_metavars / fresh_metavar                           (ty_subst test:26-31)
  *   surface_ast.ml:
  *     ty:        TyMetaVar of int (70), TyPrim of string (59),
- *                TyList of ty (63), TyUser of string (68), TyArrow (85)
+ *                TyApp ("List", [of]) ty (63), TyUser of string (68), TyArrow (85)
  *     expr:      ELit of literal*location (137), EVar (138),
  *                EBinop of binop*expr*expr*location (151)
  *     literal:   LitNumber of float (122) ;  binop: OpAdd (132)
@@ -65,12 +65,12 @@ let () =
 
   (* ── occur-check / infinite type rejection ──────────────────────────────── *)
   check "occur_check 0 in (list alpha0) -> true (would be infinite)"
-    (occur_check 0 (TyList (TyMetaVar 0)));
+    (occur_check 0 (TyApp ("List", [TyMetaVar 0])));
   check "occur_check 0 in number -> false"
     (not (occur_check 0 num));
   (* unify driving the occur-check: alpha0 = list alpha0 is the infinite type. *)
   check "unify alpha0 (list alpha0) -> occurs-check error (no infinite type)"
-    (match try_unify (TyMetaVar 0) (TyList (TyMetaVar 0)) with
+    (match try_unify (TyMetaVar 0) (TyApp ("List", [TyMetaVar 0])) with
      | Error (UOccurCheck (0, _)) -> true | _ -> false);
 
   (* ── program-level inference (known answer) ─────────────────────────────── *)

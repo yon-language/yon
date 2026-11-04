@@ -50,7 +50,7 @@ let check desc cond =
 let anon = TySum [v "A" [num]; v "B" []]
 let cases = [
   "number",           num;
-  "List number",      TyList num;
+  "List number",      TyApp ("List", [num]);
   "number -> number", TyArrow (num, num);
   "TySum [A|B]",       anon;
   "TyUniverse 0",      TyUniverse 0;                 (* the shared frontier point *)

@@ -35,17 +35,16 @@ its content-addressed handle, so two texts with the same characters are one
 key however they were built. `Vec` (its own section below) and
 `XSet` change in place.
 
-A `Sequence<T>` is finite and pure: built from a list (`Sequence.from_list`,
-`Sequence.range`), it chains `map`, `filter` and `fold`, fused into one loop
-when emitted, so their combinators **require inline lambdas** (the body must
-be visible). It is a place, `Sequence` with a capital: the lowercase
-`sequence` is the keyword of `in sequence over`. A `Stream<T>` is infinite
+A sequence is finite and pure, and it is a list: `Sequence.from_list` and `Sequence.range` give
+one, and `map`, `filter` and `fold` are funs of the prelude, written in Yon, that take any function
+value. `Sequence` is a place with a capital: the lowercase `sequence` is the keyword of `in sequence
+over`. A `Stream<T>` is infinite
 and pure, an unfold (`Stream.iterate`, read with `take`):
 
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  l := List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
+  l := List.cons(1, List.cons(2, List.cons(3, List.empty)))
   s := Sequence.from_list(l).map(fun(x) => x * 2).fold(0, fun(a, b) => a + b)
   return s + 30                    // 12 + 30 = 42
 }

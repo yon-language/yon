@@ -504,7 +504,6 @@ let rec type_tag (t : ty) : string =
   | TyVar n -> n
   | TyMetaVar n -> Printf.sprintf "alpha%d" n
   | TyUniverse n -> Printf.sprintf "Type_%d" n
-  | TyList inner -> "list_" ^ type_tag inner
   | TyMap (k, v) -> "map_" ^ type_tag k ^ "_" ^ type_tag v
   | TyChannel inner -> "stream_" ^ type_tag inner
   | TyPi (_, _, _) -> "Pi"
@@ -624,7 +623,6 @@ let rec ty_to_string (t : ty) : string =
       let ts = function TyTermExpr e -> ty_term_to_name e in
       Printf.sprintf "PathP(<%s> %s, %s, %s)" i (ty_to_string a) (ts x) (ts y)
   | TyEl (TyTermExpr e) -> Printf.sprintf "El(%s)" (ty_term_to_name e)
-  | TyList inner -> "list of " ^ ty_to_string inner
   | TyMap (k, v) -> "map of " ^ ty_to_string k ^ " to " ^ ty_to_string v
   | TyChannel inner -> "Wire<" ^ ty_to_string inner ^ ">"
   | TySum variants ->

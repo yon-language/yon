@@ -56,7 +56,7 @@ let rec apply_subst (sigma : subst) (t : ty) : ty =
       (match List.assoc_opt n sigma with
        | Some t' -> apply_subst sigma t'  (* segui catene transitive *)
        | None -> t)
-  | TyList inner -> TyList (apply_subst sigma inner)
+  | TyApp ("List", [inner]) -> TyApp ("List", [apply_subst sigma inner])
   | TyMap (k, v) -> TyMap (apply_subst sigma k, apply_subst sigma v)
   | TyChannel inner -> TyChannel (apply_subst sigma inner)
   | TyPi (x, a, b) -> TyPi (x, apply_subst sigma a, apply_subst sigma b)
@@ -89,7 +89,7 @@ let rec map_leaves (f : ty -> ty option) (t : ty) : ty =
   | None ->
       let go = map_leaves f in
       match t with
-      | TyList inner -> TyList (go inner)
+      | TyApp ("List", [inner]) -> TyApp ("List", [go inner])
       | TyMap (k, v) -> TyMap (go k, go v)
       | TyChannel inner -> TyChannel (go inner)
       | TyPi (x, a, b) -> TyPi (x, go a, go b)
@@ -150,7 +150,7 @@ let compose_subst (sigma1 : subst) (sigma2 : subst) : subst =
 let rec free_metavars (t : ty) : int list =
   match t with
   | TyMetaVar n -> [n]
-  | TyList inner -> free_metavars inner
+  | TyApp ("List", [inner]) -> free_metavars inner
   | TyMap (k, v) -> free_metavars k @ free_metavars v
   | TyChannel inner -> free_metavars inner
   | TyPi (_, a, b) | TySigma (_, a, b) -> free_metavars a @ free_metavars b
@@ -227,7 +227,7 @@ let rec unify (a : ty) (b : ty) : subst =
   | TyPrimIn (n1, ws1), TyPrimIn (n2, ws2)
       when n1 = n2 && ws1 = ws2 -> empty_subst
   | TyUser n1, TyUser n2 when n1 = n2 -> empty_subst
-  | TyList a1, TyList a2 -> unify a1 a2
+  | TyApp ("List", [a1]), TyApp ("List", [a2]) -> unify a1 a2
   | TyMap (k1, v1), TyMap (k2, v2) ->
       let s1 = unify k1 k2 in
       let s2 = unify (apply_subst s1 v1) (apply_subst s1 v2) in

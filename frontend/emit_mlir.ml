@@ -264,11 +264,6 @@ let stdlib_registry : (string * (string list * string)) list = [
    * Empty list = the sentinel YON_HEAP_SLOT_INVALID = (double)0xFFFFFFFF.
    * Note: List__empty takes a dummy arg for surface uniformity (the user writes
    * `List.empty(0)`), likewise Space__make. *)
-  "List__empty",  (["f64"], "f64");
-  "List__cons",   (["f64"; "f64"], "f64");
-  "List__head",   (["f64"], "f64");
-  "List__tail",   (["f64"], "f64");
-  "List__length", (["f64"], "f64");
 
   (* Vec: persistent dynamic array (v1 copy-on-write); the handle is an f64. *)
   "Vec__empty", ([], "f64");
@@ -351,7 +346,6 @@ let stdlib_registry : (string * (string list * string)) list = [
      aliases are kept for backward compatibility. *)
   "Stream__iterate",  (["f64"; "f64"], "f64");
   "Stream__take",     (["f64"; "f64"], "f64");
-  "Stream__sum_take", (["f64"; "f64"], "f64");
   (* Explicit conversions of the data structures to streams, recognized at
      compile time. *)
   "HashMap__to_stream", (["f64"], "f64");
@@ -462,8 +456,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Args__count", ([], "f64");
   "Args__get",  (["f64"], "f64");
   "File__exists",     (["f64"], "i1");
-  "Sequence__range",        (["f64"], "f64");
-  "Sequence__range_to_list", (["f64"], "f64");
   "Bits__fold",       (["f64"; "f64"; "f64"], "f64");
   "Bits__bor_64",     (["f64"; "f64"], "f64");
   "Bits__band_64",    (["f64"; "f64"], "f64");
@@ -477,7 +469,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Crypto__hash_int", (["f64"], "f64");
   "HashSet__union", (["f64"; "f64"], "f64");
   "HashSet__intersect", (["f64"; "f64"], "f64");
-  "List__reverse", (["f64"], "f64");
   (* Route — versioned history store. *)
   "Route__empty", (["f64"], "f64");
   "Route__empty_mod", (["f64"; "f64"], "f64");
@@ -901,8 +892,6 @@ let wired_primitives : (string * string * string list * string) list = [
   "LeechHeap__write_word",          "yon_rt_region_write",     ["i64"; "i64"; "i64"], "f64";
   "FnvHeap__compare_and_swap_word",   "yon_rt_region_cas",     ["i64"; "i64"; "i64"; "i64"], "i64";
   "LeechHeap__compare_and_swap_word", "yon_rt_region_cas",     ["i64"; "i64"; "i64"; "i64"], "i64";
-  "List__is_empty",                 "yon_rt_list_is_empty",    ["f64"], "i1";
-  "List__append",                   "yon_rt_list_append",      ["f64"; "f64"], "f64";
 ]
 
 (* A call of one of them, with its arguments: a nullary one reaches the
@@ -970,6 +959,16 @@ let arm_new_of (t : C.term) : (string * C.term list) option =
 
 (* The root an arm's section starts with. *)
 let arm_root (arm : string) : int64 = Type_root.leaf_root ("arm:" ^ arm)
+
+
+(* The result of a call to a generic fun, as a body that returns it sees it: a parameter of the fun
+   is a uniform slot, until the specialization says more. *)
+let closed_ret (fs : func_sig) : string =
+  if List.exists (fun tv ->
+      let needle = Printf.sprintf "section<\"%s\">" tv in
+      try ignore (Str.search_forward (Str.regexp_string needle) fs.fn_ret_mlir 0); true
+      with Not_found -> false) fs.fn_type_params
+  then "f64" else fs.fn_ret_mlir
 
 let rec infer_mlir_ty (e : emitter)
     (env : (string * string) Env.t)
@@ -1118,13 +1117,9 @@ let rec infer_mlir_ty (e : emitter)
        || op = "__conway_seal_slot" || op = "__conway_unseal_slot"
        || op = "__conway_key_equal") -> "f64"
   | C.App (C.App (C.App (C.Var op, _), _), _) when
-      (op = "__observe_via_gm" || op = "__stream_fold"
-       || op = "Stream__sum_take" || op = "__stream_sum_take") -> "f64"
+      op = "__observe_via_gm" -> "f64"
   | C.App (C.App (C.Var "Stream__iterate", _), _) -> "f64"
   | C.App (C.App (C.Var "Stream__take", _), _) -> "f64"
-  | C.App (C.App (C.Var "__stream_iterate", _), _) -> "f64"
-  | C.App (C.App (C.Var "__stream_take", _), _) -> "f64"
-  | C.App (C.App (C.Var "__stream_sum_take", _), _) -> "f64"
   | C.App (C.Var "__stream_to_stream", _) -> "f64"
   | C.App (C.Var "HashMap__to_stream", _) -> "f64"
   | C.App (C.Var "HashSet__to_stream", _) -> "f64"
@@ -1151,9 +1146,6 @@ let rec infer_mlir_ty (e : emitter)
   (* Sequence.from_list/map/filter appear bare (after inline_seq they should
    * disappear, but if the inlining fails, e.g. a variable used more than once,
    * the inference must know the type). All f64 as a stub (Sequence id). *)
-  | C.App (C.Var "__stream_from_list", _) -> "f64"
-  | C.App (C.App (C.Var "__stream_map", _), _) -> "f64"
-  | C.App (C.App (C.Var "__stream_filter", _), _) -> "f64"
   (* A read of a place-typed or Boolean promoted cell: typed as the cell's
      element (recorded at its Space__make binding). *)
   | C.App (C.Var "Space__get", C.Var p) when Hashtbl.mem g_cell_elem p ->
@@ -1416,7 +1408,7 @@ and infer_app (e : emitter) (env : (string * string) Env.t)
                 let real_fname = String.sub alias 10
                   (String.length alias - 10) in
                 (match List.assoc_opt real_fname funcs with
-                 | Some fs -> fs.fn_ret_mlir
+                 | Some fs -> closed_ret fs
                  | None ->
                      failwith (Printf.sprintf
                        "[emit_mlir HOF infer] alias points to unknown function '%s'."
@@ -1429,7 +1421,7 @@ and infer_app (e : emitter) (env : (string * string) Env.t)
                 let real_fname = String.sub alias 12
                   (String.length alias - 12) in
                 (match List.assoc_opt real_fname funcs with
-                 | Some fs -> fs.fn_ret_mlir
+                 | Some fs -> closed_ret fs
                  | None ->
                      failwith (Printf.sprintf
                        "[emit_mlir morph infer] morph ref '%s' cannot be resolved."
@@ -1440,25 +1432,25 @@ and infer_app (e : emitter) (env : (string * string) Env.t)
                 let real_fname = String.sub alias 11
                   (String.length alias - 11) in
                 (match List.assoc_opt real_fname funcs with
-                 | Some fs -> fs.fn_ret_mlir
+                 | Some fs -> closed_ret fs
                  | None -> "f64")
             | Some (alias, _) when String.length alias > 11
                                    && String.sub alias 0 11 = "__view_ref:" ->
                 let real_fname = String.sub alias 11
                   (String.length alias - 11) in
                 (match List.assoc_opt real_fname funcs with
-                 | Some fs -> fs.fn_ret_mlir
+                 | Some fs -> closed_ret fs
                  | None -> "f64")
             | Some (alias, _) when String.length alias > 16
                                    && String.sub alias 0 16 = "__reduction_ref:" ->
                 let real_fname = String.sub alias 16
                   (String.length alias - 16) in
                 (match List.assoc_opt real_fname funcs with
-                 | Some fs -> fs.fn_ret_mlir
+                 | Some fs -> closed_ret fs
                  | None -> "f64")
             | _ ->
            (match List.assoc_opt fname funcs with
-            | Some fs -> fs.fn_ret_mlir
+            | Some fs -> closed_ret fs
             | None ->
                 (* A place operation takes precedence over stdlib *)
                 (match lookup_place_op e.places_decls fname with
@@ -3083,6 +3075,13 @@ let rec emit_term (e : emitter)
           emit_line e (Printf.sprintf
             "%s = func.call @to_bool_dec(%s) : (!topos.proposition) -> i1" v' vc_raw);
           v'
+        end else if tc = "f64" then begin
+          (* a Boolean out of a uniform slot: a generic, a closure *)
+          let z = fresh_ssa e in
+          emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" z);
+          let v' = fresh_ssa e in
+          emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v' vc_raw z);
+          v'
         end else vc_raw
       in
       let ty0 = infer_mlir_ty e env funcs then_t in
@@ -3112,6 +3111,13 @@ let rec emit_term (e : emitter)
           let v' = fresh_ssa e in
           emit_line e (Printf.sprintf
             "%s = func.call @to_bool_dec(%s) : (!topos.proposition) -> i1" v' vc_raw);
+          v'
+        end else if tc = "f64" then begin
+          (* a Boolean out of a uniform slot: a generic, a closure *)
+          let z = fresh_ssa e in
+          emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" z);
+          let v' = fresh_ssa e in
+          emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" v' vc_raw z);
           v'
         end else vc_raw
       in
@@ -3776,24 +3782,6 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_file_exists(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "__stream_from_list", l) ->
-      (* A stream built from a list and used as a value (return/bind): the
-       * runtime has no separate stream constructor — the stream IS the
-       * list's handle. In Sequence pipelines (fold/filter/map) this node is
-       * unpacked earlier by `collect source`; here we cover the standalone
-       * use, which otherwise fell into the "unknown function" throw. *)
-      let (vl, _) = emit_term e env funcs l in
-      (vl, "f64")
-  | C.App (C.Var "Sequence__range", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_seq_range(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  | C.App (C.Var "Sequence__range_to_list", a) ->
-      let (va, _) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_seq_range(%s) : (f64) -> f64" v va);
-      (v, "f64")
   | C.App (C.App (C.App (C.Var "Bits__fold", a), b), c) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
@@ -3917,12 +3905,6 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_hashset_intersect(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  | C.App (C.Var "List__reverse", a) ->
-      let (va,_) = emit_term e env funcs a in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_list_reverse(%s) : (f64) -> f64" v va);
-      (v, "f64")
-  (* Vec: persistent dynamic array. push/set return a fresh handle. *)
   | C.App (C.App (C.Var "Vec__push", a), b) ->
       let va = emit_f64 e env funcs a in
       let vb = emit_f64 e env funcs b in
@@ -4061,352 +4043,6 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_voyagerlist_to_list(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.Var "__stream_take",
-            C.App (C.App (C.Var "__stream_iterate", C.Lam (px, _, body_f)), x0)),
-           n) ->
-      (* Materialize the first n into a list of T (concretely a list_id via
-       * yon_rt_list_cons). Built tail-to-head: the scf.for accumulates by
-       * prepending. *)
-      let (v_x0, _) = emit_term e env funcs x0 in
-      let (v_n, _) = emit_term e env funcs n in
-      let v_n_i32 = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i32" v_n_i32 v_n);
-      let v_n_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.index_cast %s : i32 to index" v_n_idx v_n_i32);
-      let v_zero_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0 : index" v_zero_idx);
-      let v_one_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 1 : index" v_one_idx);
-      (* Build a buffer of values by iterating n times. Approach: an scf.for
-       * accumulates `lst` by cons-ing from the back. To
-       * preserve order, we compute the values first (scf.for in forward
-       * order) and accumulate them in reverse, then reverse-iterate. We use a
-       * fold-style cons directly; the order is reversed (last element at the
-       * head), which is acceptable for the common unfold uses such as a
-       * symmetric reduce. *)
-      let v_dummy_f = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_dummy_f);
-      let v_empty_id = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_list_empty(%s) : (f64) -> f64"
-        v_empty_id v_dummy_f);
-      let _ = v_empty_id in
-      let v_result = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s:2 = scf.for %%i = %s to %s step %s iter_args(%%lst = %s, %%cur = %s) -> (f64, f64) {"
-        v_result v_zero_idx v_n_idx v_one_idx v_empty_id v_x0);
-      push_indent e;
-      let v_new_lst = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_list_cons(%%cur, %%lst) : (f64, f64) -> f64"
-        v_new_lst);
-      let env_f = Env.add px ("%cur", "f64") env in
-      let (v_new_cur, _) = emit_term e env_f funcs body_f in
-      emit_line e (Printf.sprintf "scf.yield %s, %s : f64, f64" v_new_lst v_new_cur);
-      pop_indent e;
-      emit_line e "}";
-      (Printf.sprintf "%s#0" v_result, "f64")
-  | C.App (C.App (C.Var "__stream_sum_take",
-            C.App (C.App (C.Var "__stream_iterate", C.Lam (px, _, body_f)), x0)),
-           n) ->
-      let (v_x0, _) = emit_term e env funcs x0 in
-      let (v_n, _) = emit_term e env funcs n in
-      let v_n_i32 = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i32"
-                     v_n_i32 v_n);
-      let v_n_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.index_cast %s : i32 to index"
-                     v_n_idx v_n_i32);
-      let v_zero_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0 : index" v_zero_idx);
-      let v_one_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 1 : index" v_one_idx);
-      let v_init_acc = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_init_acc);
-      let v_result = fresh_ssa e in
-      (* scf.for with two iter_args: acc (the running sum) and cur (the current stream value). *)
-      emit_line e (Printf.sprintf
-        "%s:2 = scf.for %%i = %s to %s step %s iter_args(%%acc = %s, %%cur = %s) -> (f64, f64) {"
-        v_result v_zero_idx v_n_idx v_one_idx v_init_acc v_x0);
-      push_indent e;
-      (* Inside loop: acc' = acc + cur; cur' = f(cur) *)
-      let v_new_acc = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.addf %%acc, %%cur : f64" v_new_acc);
-      (* Emit body_f with px bound to %cur. *)
-      let env_f = Env.add px ("%cur", "f64") env in
-      let (v_new_cur, _) = emit_term e env_f funcs body_f in
-      emit_line e (Printf.sprintf "scf.yield %s, %s : f64, f64"
-                     v_new_acc v_new_cur);
-      pop_indent e;
-      emit_line e "}";
-      (Printf.sprintf "%s#0" v_result, "f64")
-  (* fusion fallback per __stream_iterate
-   * with a lifted function pointer (an S.ELam lifted to __arg_lam_inline_N).
-   * Uses a direct func.call instead of an inline body. *)
-  | C.App (C.App (C.Var "__stream_sum_take",
-            C.App (C.App (C.Var "__stream_iterate", C.Var fname), x0)),
-           n) when List.mem_assoc fname funcs ->
-      let (v_x0, _) = emit_term e env funcs x0 in
-      let (v_n, _) = emit_term e env funcs n in
-      let v_n_i32 = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i32" v_n_i32 v_n);
-      let v_n_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.index_cast %s : i32 to index"
-                     v_n_idx v_n_i32);
-      let v_zero_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0 : index" v_zero_idx);
-      let v_one_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 1 : index" v_one_idx);
-      let v_init_acc = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_init_acc);
-      let v_result = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s:2 = scf.for %%i = %s to %s step %s iter_args(%%acc = %s, %%cur = %s) -> (f64, f64) {"
-        v_result v_zero_idx v_n_idx v_one_idx v_init_acc v_x0);
-      push_indent e;
-      let v_new_acc = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.addf %%acc, %%cur : f64" v_new_acc);
-      let v_new_cur = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @%s(%%cur) : (f64) -> f64"
-                     v_new_cur fname);
-      emit_line e (Printf.sprintf "scf.yield %s, %s : f64, f64" v_new_acc v_new_cur);
-      pop_indent e;
-      emit_line e "}";
-      (Printf.sprintf "%s#0" v_result, "f64")
-  | C.App (C.App (C.Var "__stream_take",
-            C.App (C.App (C.Var "__stream_iterate", C.Var fname), x0)),
-           n) when List.mem_assoc fname funcs ->
-      let (v_x0, _) = emit_term e env funcs x0 in
-      let (v_n, _) = emit_term e env funcs n in
-      let v_n_i32 = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.fptosi %s : f64 to i32" v_n_i32 v_n);
-      let v_n_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.index_cast %s : i32 to index"
-                     v_n_idx v_n_i32);
-      let v_zero_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0 : index" v_zero_idx);
-      let v_one_idx = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 1 : index" v_one_idx);
-      let v_dummy_f = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" v_dummy_f);
-      let v_empty_id = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_list_empty(%s) : (f64) -> f64" v_empty_id v_dummy_f);
-      let _ = v_empty_id in
-      let v_result = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s:2 = scf.for %%i = %s to %s step %s iter_args(%%lst = %s, %%cur = %s) -> (f64, f64) {"
-        v_result v_zero_idx v_n_idx v_one_idx v_empty_id v_x0);
-      push_indent e;
-      let v_new_lst = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_list_cons(%%cur, %%lst) : (f64, f64) -> f64"
-        v_new_lst);
-      let v_new_cur = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @%s(%%cur) : (f64) -> f64"
-                     v_new_cur fname);
-      emit_line e (Printf.sprintf "scf.yield %s, %s : f64, f64" v_new_lst v_new_cur);
-      pop_indent e;
-      emit_line e "}";
-      (Printf.sprintf "%s#0" v_result, "f64")
-  (* every other form of an iterate, a take or a sum_take: the stream is not
-     consumed where it is built *)
-  | C.App (C.App (C.Var ("__stream_iterate" | "__stream_take" | "__stream_sum_take" as op), _), _) ->
-      raise (Stream_not_fused (Printf.sprintf
-        "%s here is not consumed where its stream is built: an iterate is \
-         read by take or sum_take in the function that builds it (directly or \
-         through a name bound there); a stream passed to or returned from a \
-         function has no lowering."
-        (String.sub op 9 (String.length op - 9))))
-  | C.App (C.App (C.App (C.Var "__stream_fold", source), init), g_expr) ->
-      (* Sequence.* accepts only an inline lambda as its higher-order argument.
-       * Top-level function names are not allowed; to use one, wrap it in a
-       * lambda: `Sequence.map(s, fun(x) => f(x))`.
-       *
-       * Except __arg_lam_inline_N (a lifted bare lambda), which is handled
-       * via a direct func.call. *)
-      let is_lifted_lam n =
-        String.length n >= 16 && String.sub n 0 16 = "__arg_lam_inline"
-      in
-      (* Peel the chain of captured args from a lifted lambda.
-       * C.App (... C.App (C.Var fn, c1), c2) is unfolded to
-       * (fn_name, [c1; c2; ...]). Returns None if it does not match the
-       * pattern. *)
-      let rec peel_lifted_with_captures expr acc_captures =
-        match expr with
-        | C.Var n when is_lifted_lam n -> Some (n, acc_captures)
-        | C.App (f, arg) -> peel_lifted_with_captures f (arg :: acc_captures)
-        | _ -> None
-      in
-      let g_arg = (match g_expr with
-        | C.Lam (p, _, C.Lam (q, _, body)) -> `Inline2 (p, q, body)
-        | C.Var n when is_lifted_lam n -> `LiftedFn (n, [])
-        | C.App _ ->
-            (match peel_lifted_with_captures g_expr [] with
-             | Some (n, caps) -> `LiftedFn (n, caps)
-             | None -> failwith "[emit_mlir Sequence.fold] third arg must be an inline lambda (a, b) => body")
-        | C.Var n ->
-            failwith (Printf.sprintf
-              "[emit_mlir Sequence.fold] third arg must be an inline lambda \
-               (a, b) => body; top-level function name '%s' is not allowed. \
-               Use: Sequence.fold(s, init, fun(a, b) => %s(a, b))" n n)
-        | _ -> failwith "[emit_mlir Sequence.fold] third arg must be an inline lambda (a, b) => body") in
-      let rec collect s =
-        match s with
-        | C.App (C.App (C.Var "__stream_map", inner), C.Lam (p, _, body)) ->
-            let (lst, ops) = collect inner in
-            (lst, ops @ [`Map (`Inline1 (p, body))])
-        | C.App (C.App (C.Var "__stream_map", inner), C.Var n) when is_lifted_lam n ->
-            let (lst, ops) = collect inner in
-            (lst, ops @ [`Map (`LiftedFn1 n)])
-        | C.App (C.App (C.Var "__stream_map", _), C.Var fn) ->
-            failwith (Printf.sprintf
-              "[emit_mlir Sequence.map] second arg must be an inline lambda \
-               (x) => body; top-level function name '%s' is not allowed. \
-               Use: Sequence.map(s, fun(x) => %s(x))" fn fn)
-        | C.App (C.App (C.Var "__stream_filter", inner), C.Lam (p, _, body)) ->
-            let (lst, ops) = collect inner in
-            (lst, ops @ [`Filter (`Inline1 (p, body))])
-        | C.App (C.App (C.Var "__stream_filter", inner), C.Var n) when is_lifted_lam n ->
-            let (lst, ops) = collect inner in
-            (lst, ops @ [`Filter (`LiftedFn1 n)])
-        | C.App (C.App (C.Var "__stream_filter", _), C.Var pn) ->
-            failwith (Printf.sprintf
-              "[emit_mlir Sequence.filter] second arg must be an inline lambda \
-               (x) => body; top-level function name '%s' is not allowed. \
-               Use: Sequence.filter(s, fun(x) => %s(x))" pn pn)
-        | C.App (C.Var "__stream_from_list", l) -> (l, [])
-        | other -> (other, [])
-      in
-      let (list_term, ops) = collect source in
-      let (v_list, _) = emit_term e env funcs list_term in
-      let (v_init, _) = emit_term e env funcs init in
-      (* The empty-list sentinel in the runtime is (double)0xFFFFFFFF.
-       * Compared with f64 equality. *)
-      let v_empty = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = arith.constant 0xFFFFFFFF : i32" v_empty);
-      let v_empty_f64 = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = arith.uitofp %s : i32 to f64" v_empty_f64 v_empty);
-      let v_result = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s:2 = scf.while (%%cur = %s, %%acc = %s) : (f64, f64) -> (f64, f64) {"
-        v_result v_list v_init);
-      push_indent e;
-      let v_is_empty = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = arith.cmpf oeq, %%cur, %s : f64" v_is_empty v_empty_f64);
-      let v_true = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant true" v_true);
-      let v_not_empty = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = arith.xori %s, %s : i1" v_not_empty v_is_empty v_true);
-      emit_line e (Printf.sprintf
-        "scf.condition(%s) %%cur, %%acc : f64, f64" v_not_empty);
-      pop_indent e;
-      emit_line e "} do {";
-      push_indent e;
-      emit_line e "^bb0(%cur: f64, %acc: f64):";
-      let v_head = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_list_head(%%cur) : (f64) -> f64" v_head);
-      let v_tail = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = func.call @yon_rt_list_tail(%%cur) : (f64) -> f64" v_tail);
-      (* Apply the ops in order. The state is v_val (the current value, f64)
-         and v_keep (i1: true if this element should be accumulated). It starts
-         at v_val = v_head, v_keep = true. *)
-      let v_keep_init = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = arith.constant true" v_keep_init);
-      (* Apply one map/filter argument to the current value. For an inline
-         lambda we bind its parameter to v_val and emit the body inline (no
-         func.call); for a lifted function we emit a direct call. *)
-      let emit_arg_call arg_kind v_val =
-        match arg_kind with
-        | `Inline1 (pname, body) ->
-            let env' = Env.add pname (v_val, "f64") env in
-            let (v_b, _) = emit_term e env' funcs body in
-            v_b
-        | `LiftedFn1 fname ->
-            (* lifted function pointer: a direct call *)
-            let v_b = fresh_ssa e in
-            emit_line e (Printf.sprintf
-              "%s = func.call @%s(%s) : (f64) -> f64" v_b fname v_val);
-            v_b
-      in
-      let (v_val_final, v_keep_final) =
-        List.fold_left (fun (v_val, v_keep) op ->
-          match op with
-          | `Map arg ->
-              let v_new = emit_arg_call arg v_val in
-              (v_new, v_keep)
-          | `Filter arg ->
-              (* the predicate returns a number (0.0/1.0); convert to i1 *)
-              let v_pred_f64 = emit_arg_call arg v_val in
-              let v_zero = fresh_ssa e in
-              emit_line e (Printf.sprintf
-                "%s = arith.constant 0.0 : f64" v_zero);
-              let v_pred_i1 = fresh_ssa e in
-              emit_line e (Printf.sprintf
-                "%s = arith.cmpf one, %s, %s : f64"
-                v_pred_i1 v_pred_f64 v_zero);
-              let v_keep_new = fresh_ssa e in
-              emit_line e (Printf.sprintf
-                "%s = arith.andi %s, %s : i1" v_keep_new v_keep v_pred_i1);
-              (v_val, v_keep_new)
-        ) (v_head, v_keep_init) ops
-      in
-      (* Accumulate when v_keep_final is true, otherwise leave acc unchanged. *)
-      let v_new_acc = fresh_ssa e in
-      emit_line e (Printf.sprintf
-        "%s = scf.if %s -> (f64) {" v_new_acc v_keep_final);
-      push_indent e;
-      let v_g_res = (match g_arg with
-        | `Inline2 (acc_name, x_name, body) ->
-            let env' = Env.add acc_name ("%acc", "f64") env in
-            let env' = Env.add x_name (v_val_final, "f64") env' in
-            let (v, _) = emit_term e env' funcs body in
-            v
-        | `LiftedFn (fname, caps) ->
-            (* The fold combiner as a lifted function pointer, with support
-               for captured arguments: caps is a list of terms emitted first
-               and then passed as the leading N arguments of the func.call. *)
-            let cap_vs = List.map (fun cap_term ->
-              let (v, _) = emit_term e env funcs cap_term in v
-            ) caps in
-            let v_b = fresh_ssa e in
-            let n_caps = List.length cap_vs in
-            let arg_str =
-              if n_caps = 0 then
-                Printf.sprintf "%%acc, %s" v_val_final
-              else
-                String.concat ", " (cap_vs @ ["%acc"; v_val_final])
-            in
-            let f64s_sig =
-              String.concat ", " (List.init (n_caps + 2) (fun _ -> "f64"))
-            in
-            emit_line e (Printf.sprintf
-              "%s = func.call @%s(%s) : (%s) -> f64"
-              v_b fname arg_str f64s_sig);
-            v_b) in
-      emit_line e (Printf.sprintf "scf.yield %s : f64" v_g_res);
-      pop_indent e;
-      emit_line e "} else {";
-      push_indent e;
-      emit_line e "scf.yield %acc : f64";
-      pop_indent e;
-      emit_line e "}";
-      emit_line e (Printf.sprintf
-        "scf.yield %s, %s : f64, f64" v_tail v_new_acc);
-      pop_indent e;
-      emit_line e "}";
-      (* The final accumulator value is v_result#1. *)
-      let v_final = Printf.sprintf "%s#1" v_result in
-      (v_final, "f64")
-  (* iter N do { body }: a bounded loop. Desugars to __iter_n(N, Lam("_idx",
-     body)). Lowered to an scf.for with lb=0, ub=N (cast f64->index), step=1.
-     The body is inlined; the loop yields nothing (a void loop). *)
   | C.App (C.App (C.Var "__iter_n", n_expr), C.Lam (idx_name, _, body_term)) ->
       let (vn_f64, _) = emit_term e env funcs n_expr in
       (* Convert N from f64 to index type *)
@@ -4881,7 +4517,8 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
            let cap_ssas = List.map (fun a ->
              let (v, t) = emit_term e env funcs a in coerce_to_param e v t "f64") args in
            emit_closure_node e funcs fname cap_ssas
-       | Some (fname, args) when List.mem_assoc fname funcs ->
+       (* a local that holds a function shadows a fun of the same name *)
+       | Some (fname, args) when List.mem_assoc fname funcs && not (Env.mem fname env) ->
            let fs = List.assoc fname funcs in
            let n_expected = List.length fs.fn_params in
            let n_given = List.length args in
@@ -6987,11 +6624,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
       "to_bool_dec",  `RT ("yon_rt_to_bool_dec",  `PropToBool);
       "text_to_prop", `RT ("yon_rt_text_to_prop", `PtrToProp);
       (* Immutable list over the content-addressed xheap *)
-      "List__empty",  `RT ("yon_rt_list_empty",   `F64ToF64);
-      "List__cons",   `RT ("yon_rt_list_cons",    `F64F64ToF64);
-      "List__head",   `RT ("yon_rt_list_head",    `F64ToF64);
-      "List__tail",   `RT ("yon_rt_list_tail",    `F64ToF64);
-      "List__length", `RT ("yon_rt_list_length",  `F64ToF64);
       (* Mutable space cell (a static BSS registry) *)
       "Space__make",  `RT ("yon_rt_space_make",   `F64ToF64);
       "Space__set",   `RT ("yon_rt_space_set",    `F64F64ToF64);
@@ -7136,11 +6768,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
     emit_line e "func.func private @yon_rt_to_prop(i8) -> i8";
     emit_line e "func.func private @yon_rt_to_bool_dec(i8) -> i8";
     emit_line e "func.func private @yon_rt_text_to_prop(f64) -> i8";
-    emit_line e "func.func private @yon_rt_list_empty(f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_cons(f64, f64) -> f64";
-    emit_line e ("func.func private @yon_rt_list_head(f64) -> f64" ^ no_effects);
-    emit_line e ("func.func private @yon_rt_list_tail(f64) -> f64" ^ no_effects);
-    emit_line e ("func.func private @yon_rt_list_length(f64) -> f64" ^ no_effects);
     emit_line e "func.func private @yon_rt_space_make(f64) -> f64";
     emit_line e "func.func private @yon_rt_space_set(f64, f64) -> f64";
     emit_line e "func.func private @yon_rt_space_get(f64) -> f64";
@@ -7170,10 +6797,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_vec_set(f64, f64, f64) -> f64";
   (* fallback list_* declarations when used_list was empty *)
   if not list_decls_emitted_in_conditional then begin
-    emit_line e "func.func private @yon_rt_list_empty(f64) -> f64";
-    emit_line e "func.func private @yon_rt_list_cons(f64, f64) -> f64";
-    emit_line e ("func.func private @yon_rt_list_head(f64) -> f64" ^ no_effects);
-    emit_line e ("func.func private @yon_rt_list_tail(f64) -> f64" ^ no_effects);
     emit_line e ("func.func private @yon_rt_list_length(f64) -> f64" ^ no_effects)
   end;
   (* dedicated HashSet *)
@@ -7296,7 +6919,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_math_tanh(f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_union(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_hashset_intersect(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_list_reverse(f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_and(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_or(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_xor(f64, f64) -> f64";
@@ -7327,7 +6949,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_args_count() -> f64";
   emit_line e "func.func private @yon_rt_args_get(f64) -> f64";
   emit_line e "func.func private @yon_rt_file_exists(f64) -> f64";
-  emit_line e "func.func private @yon_rt_seq_range(f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_fold(f64, f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_or_64(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_bits_and_64(f64, f64) -> f64";

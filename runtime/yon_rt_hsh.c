@@ -12,7 +12,7 @@
  *   VOYAGER view (delta + prev)   -> historical navigation for the backward
  *
  * Design note: we do NOT use yon_rt_hashset_to_list to iterate the levels. The
- * value 0.0 (the monoid identity) collides with YON_RT_LIST_EMPTY in the
+ * value 0.0 (the monoid identity) collides with the empty list in the
  * content-addressed cons-list representation, and was lost — making the
  * identity disappear from every H_i. The source of truth is therefore an
  * explicit array of values per level; hashset and merkle remain as views. Same
@@ -207,32 +207,6 @@ double yon_rt_math_sinh(double x)  { return sinh(x); }
 double yon_rt_math_cosh(double x)  { return cosh(x); }
 double yon_rt_math_tanh(double x)  { return tanh(x); }
 
-/* ============================================================================
- * Collections: List.reverse (Set.union / Set.intersect live with the
- * persistent sets in yon_rt.c).
- * Built on the existing primitives. Iteration via an explicit array to avoid
- * the slot-0/sentinel collision of cons lists (the HSH/XSet lesson).
- * ============================================================================ */
-double yon_rt_list_reverse(double list_id) {
-    /* materialize into an array, rebuild in reverse via cons.
-     * End guard: node == YON_RT_LIST_EMPTY (0xFFFFFFFF). With slot 0 reserved, a
-     * valid node is never 0.0; the empty list is 0xFFFFFFFF. Termination:
-     * guaranteed by construction, not by an arbitrary cap. Cons lists are
-     * acyclic: each cons allocates a new slot whose tail points to a slot
-     * allocated earlier (a strictly smaller index), so the chain of tails is
-     * strictly decreasing and ends at EMPTY. No free parameter: the only bound
-     * is the physical capacity of the heap. */
-    static double buf[YON_HEAP_N_SLOTS]; uint32_t n = 0;
-    double node = list_id;
-    while (node != YON_RT_LIST_EMPTY) {
-        buf[n++] = yon_rt_list_head(node);
-        node = yon_rt_list_tail(node);
-    }
-    double out = yon_rt_list_empty(0.0);
-    /* cons in forward order reconstructs the reversed list */
-    for (uint32_t i = 0; i < n; i++) out = yon_rt_list_cons(buf[i], out);
-    return out;
-}
 
 /* ============================================================================
  * Exact Co_0 canonicalization — replaces the partial co0_step (<xi>.M_24) with

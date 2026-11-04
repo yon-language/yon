@@ -1,0 +1,52 @@
+/* List<V> — the cons list of Okasaki: each cell is a section of the FNV heap, so two lists with the
+ * same elements are one value. */
+place List<V> {
+  this > Nil :U Cons V List<V>
+
+  fun empty<V>: List<V> { return Nil }
+  fun cons<V>(x: V, l: List<V>): List<V> { return (x, l) ↪ Cons }
+  fun head<V>(l: List<V>): Lookup<V> {
+    return match l { Nil => Lookup.Absent, Cons as (h, t) => h ↪ Found }
+  }
+  fun tail<V>(l: List<V>): Lookup<List<V>> {
+    return match l { Nil => Lookup.Absent, Cons as (h, t) => t ↪ Found }
+  }
+  fun is_empty<V>(l: List<V>): Boolean {
+    return match l { Nil => true, Cons as (h, t) => false }
+  }
+  fun length<V>(l: List<V>): Number {
+    mut n := 0
+    for every x in l { n <- n + 1 }
+    return n
+  }
+  fun reverse_onto<V>(l: List<V>, onto: List<V>): List<V> {
+    mut r := onto
+    for every x in l { r <- (x, r) ↪ Cons }
+    return r
+  }
+  fun reverse<V>(l: List<V>): List<V> { return reverse_onto(l, Nil) }
+  fun append<V>(a: List<V>, b: List<V>): List<V> { return reverse_onto(reverse(a), b) }
+  fun fold_left<A, V>(l: List<V>, init: A, f: (A, V) -> A): A {
+    mut acc := init
+    for every x in l { acc <- f(acc, x) }
+    return acc
+  }
+  internal fun map_onto<V, W>(l: List<V>, f: V -> W, onto: List<W>): List<W> {
+    mut r := onto
+    for every x in l { r <- (f(x), r) ↪ Cons }
+    return r
+  }
+  internal fun filter_onto<V>(l: List<V>, f: V -> Boolean, onto: List<V>): List<V> {
+    mut r := onto
+    for every x in l {
+      when f(x) { r <- (x, r) ↪ Cons }
+    }
+    return r
+  }
+  fun map<V, W>(l: List<V>, f: V -> W): List<W> {
+    return reverse(map_onto(l, f, empty))
+  }
+  fun filter<V>(l: List<V>, f: V -> Boolean): List<V> {
+    return reverse(filter_onto(l, f, empty))
+  }
+}

@@ -8,8 +8,8 @@ place Entry {
   }
   fun mn(a: Number, b: Number): Number { return if a < b then a else b }
   fun warm(): Number visits Output {
-    l := Space.make(List.empty(0))
-    _a := Space.set(l, List.cons(Space.get(l), 1))
+    l := Space.make(List.empty)
+    _a := Space.set(l, List.cons(1, Space.get(l)))
     m := Space.make(HashMap.empty)
     _b := Space.set(m, HashMap.set(Space.get(m), 1, 1))
     s := Space.make(HashSet.empty)
@@ -26,7 +26,7 @@ place Entry {
     return Time.now_ns(0) - t0
   }
   fun cons_loop(n: Number): Number visits Output {
-    l := Space.make(List.empty(0))
+    l := Space.make(List.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)

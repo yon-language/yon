@@ -4040,11 +4040,11 @@ double yon_rt_map_size(double map_id) {
 }
 
 /* ---- HashMap.to_stream: the values --------------------- */
-static void cons_value(uint64_t k, uint64_t v, void *ctx) { (void)k; *(double *)ctx = yon_rt_list_cons(bits_value(v), *(double *)ctx); }
-static void cons_key(uint64_t k, uint64_t v, void *ctx)   { (void)v; *(double *)ctx = yon_rt_list_cons(bits_value(k), *(double *)ctx); }
+static void cons_value(uint64_t k, uint64_t v, void *ctx) { (void)k; *(double *)ctx = yon_rt_cons_section(bits_value(v), *(double *)ctx); }
+static void cons_key(uint64_t k, uint64_t v, void *ctx)   { (void)v; *(double *)ctx = yon_rt_cons_section(bits_value(k), *(double *)ctx); }
 double yon_rt_map_to_list(double map_id) {
     ds_ensure_init();
-    double list_id = yon_rt_list_empty(0.0);
+    double list_id = YON_NIL_VALUE;
     yon_trie_each(&g_fnv_store, map_root(map_id), cons_value, &list_id);
     return list_id;
 }
@@ -4056,7 +4056,7 @@ double yon_rt_hashset_contains(double set_id, double elem) { return yon_rt_map_c
 double yon_rt_hashset_size(double set_id) { return yon_rt_map_size(set_id); }
 double yon_rt_hashset_to_list(double set_id) {
     ds_ensure_init();
-    double list_id = yon_rt_list_empty(0.0);
+    double list_id = YON_NIL_VALUE;
     yon_trie_each(&g_fnv_store, map_root(set_id), cons_key, &list_id);
     return list_id;
 }
@@ -5576,13 +5576,13 @@ double yon_rt_xset_intersect(double a_id, double b_id) {
 
 double yon_rt_xset_to_list(double set_id) {
     ds_xset_t *xs = xset_lookup(set_id);
-    if (!xs) return yon_rt_list_empty(0.0);
-    double list_id = yon_rt_list_empty(0.0);
+    if (!xs) return YON_NIL_VALUE;
+    double list_id = YON_NIL_VALUE;
     for (uint32_t idx = 0; idx < YON_XSET_N_BITS; idx++) {
         uint64_t mask = 1ULL << (idx & 63);
         if (xs->bits[idx >> 6] & mask) {
             uint32_t xc = yon_mphf_unindex(idx);
-            list_id = yon_rt_list_cons((double)xc, list_id);
+            list_id = yon_rt_cons_section((double)xc, list_id);
         }
     }
     return list_id;
@@ -5807,7 +5807,7 @@ double yon_rt_merkle_equal(double a, double b) {
 
 double yon_rt_merkle_to_list(double root_id) {
     ds_ensure_init();
-    double list_id = yon_rt_list_empty(0.0);
+    double list_id = YON_NIL_VALUE;
     if (root_id == 0.0) return list_id;
     /* DYNAMIC stack: a fixed bound would silently drop the children past
      * it. The Merkle DAG is acyclic by
@@ -5836,7 +5836,7 @@ double yon_rt_merkle_to_list(double root_id) {
         if (arity < 0) continue;
         if (arity == 0) {
             /* Leaf: emit label */
-            list_id = yon_rt_list_cons(label, list_id);
+            list_id = yon_rt_cons_section(label, list_id);
         } else {
             /* DFS: push the last child first, to visit the first one FIRST
                (LIFO). */
@@ -6523,8 +6523,8 @@ double yon_rt_voyagerlist_corrupt_at(double vl_id, double idx_f64, double n_bits
 /* to_stream: yields the original data12 of each codeword (open each). */
 double yon_rt_voyagerlist_to_list(double vl_id) {
     ds_voyagerlist_t *vl = voyagerlist_lookup(vl_id);
-    if (!vl) return yon_rt_list_empty(0.0);
-    double list_id = yon_rt_list_empty(0.0);
+    if (!vl) return YON_NIL_VALUE;
+    double list_id = YON_NIL_VALUE;
     /* Iterate in reverse to get the list in chronological order (cons
      * accumulates head-first, so reverse iteration = append order). */
     for (int32_t i = (int32_t)vl->n_entries - 1; i >= 0; i--) {
@@ -6532,7 +6532,7 @@ double yon_rt_voyagerlist_to_list(double vl_id) {
         uint32_t syndrome = mat24_syndrome(codeword, 24);
         uint32_t corrected = codeword ^ syndrome;
         uint32_t gcode = mat24_vect_to_gcode(corrected);
-        list_id = yon_rt_list_cons((double)gcode, list_id);
+        list_id = yon_rt_cons_section((double)gcode, list_id);
     }
     return list_id;
 }
@@ -6541,113 +6541,30 @@ double yon_rt_voyagerlist_to_list(double vl_id) {
 /* Immutable list (cons-list) over yon_xheap content-addressed       */
 /* ============================================================== */
 
-/* Cons cell payload: fixed 16 bytes.
- * - value:     the double value of the head (8 bytes)
- * - tail_slot: the slot_index of the tail (4 bytes). YON_HEAP_SLOT_INVALID
- *              indicates an empty list (the chain terminator).
- * - sentinel:  magic 0xC0NSCELL to disambiguate non-list slots that happen to
- *              have the same content layout. */
-#define YON_LIST_SENTINEL 0xC0145CE1u
-
-#pragma pack(push, 1)
-typedef struct {
-    double   value;
-    uint32_t tail_slot;
-    uint32_t sentinel;
-} yon_list_cell_t;
-#pragma pack(pop)
-
-_Static_assert(sizeof(yon_list_cell_t) == 16,
-               "yon_list_cell_t must be exactly 16 bytes");
-
-double yon_rt_list_empty(double dummy) {
-    (void)dummy;
-    return YON_RT_LIST_EMPTY;
-}
-
-double yon_rt_list_cons(double value, double tail_id) {
-    ensure_init();
-    uint32_t tail_slot;
-    if (tail_id == YON_RT_LIST_EMPTY ||
-        (uint32_t)tail_id == YON_HEAP_SLOT_INVALID) {
-        tail_slot = YON_HEAP_SLOT_INVALID;
-    } else {
-        tail_slot = (uint32_t)tail_id;
+/* The list of the prelude, as the runtime builds and reads it where a value comes out of a walk
+ * in C or off the wire: Nil is the constant of its arm, Cons the section of its arm, with the root
+ * the frontend gives it (Type_root.leaf_root "arm:Cons") and two uniform slots. */
+static uint64_t yon_cons_root(void) {
+    static uint64_t root = 0;
+    if (root == 0) {
+        static const char name[] = "\x50rim:arm:Cons";
+        uint64_t h = 0xcbf29ce484222325ULL;
+        for (const char *p = name; *p; p++) {
+            h ^= (uint8_t)*p;
+            h *= 0x100000001b3ULL;
+        }
+        root = h ? h : 1u;
     }
-    yon_list_cell_t cell;
-    cell.value     = value;
-    cell.tail_slot = tail_slot;
-    cell.sentinel  = YON_LIST_SENTINEL;
-    uint32_t slot = yon_xheap_put_chain(g_yon_heap, &cell, sizeof(cell),
-                                   YON_TAG_USER1);
-    if (slot == YON_HEAP_SLOT_INVALID) {
-        fprintf(stderr, "[YON-RT] list_cons: xheap full\n");
-        return YON_RT_LIST_EMPTY;
-    }
-    return (double)slot;
+    return root;
 }
 
-/* Internal read: given a list_id (slot_index), retrieves the cons cell.
- * Returns NULL if: id is empty, slot invalid, or sentinel does not match. */
-static const yon_list_cell_t *list_cell_at(double list_id) {
-    if (list_id == YON_RT_LIST_EMPTY) return NULL;
-    uint32_t slot = (uint32_t)list_id;
-    if (slot == YON_HEAP_SLOT_INVALID) return NULL;
-    const yon_xheap_slot_t *s = yon_xheap_get_chain(slot);
-    if (!s || s->payload_size != sizeof(yon_list_cell_t)) return NULL;
-    const yon_list_cell_t *cell =
-        (const yon_list_cell_t *)yon_xheap_slot_payload_any(s);
-    if (!cell || cell->sentinel != YON_LIST_SENTINEL) return NULL;
-    return cell;
-}
-
-double yon_rt_list_head(double list_id) {
-    ensure_init();
-    const yon_list_cell_t *cell = list_cell_at(list_id);
-    if (!cell) return 0.0;
-    return cell->value;
-}
-
-double yon_rt_list_tail(double list_id) {
-    ensure_init();
-    const yon_list_cell_t *cell = list_cell_at(list_id);
-    if (!cell) return YON_RT_LIST_EMPTY;
-    if (cell->tail_slot == YON_HEAP_SLOT_INVALID) return YON_RT_LIST_EMPTY;
-    return (double)cell->tail_slot;
-}
-
-/* whether the list holds no cell: one look at the handle */
-double yon_rt_list_is_empty(double list_id) {
-    ensure_init();
-    return list_cell_at(list_id) ? 0.0 : 1.0;
-}
-
-double yon_rt_list_reverse(double list_id);
-
-/* the cells of a, then b: a is walked twice (reversed, then consed back onto
-   b), b is shared as it is */
-double yon_rt_list_append(double a, double b) {
-    ensure_init();
-    double out = b;
-    for (double r = yon_rt_list_reverse(a); list_cell_at(r); r = yon_rt_list_tail(r))
-        out = yon_rt_list_cons(yon_rt_list_head(r), out);
-    return out;
-}
-
-double yon_rt_list_length(double list_id) {
-    ensure_init();
-    double cur = list_id;
-    uint32_t n = 0;
-    /* Bound: max 196560 iterations (one cell per slot, no cycles possible
-     * because content-addressing builds a DAG). */
-    for (uint32_t safety = 0; safety < YON_HEAP_N_SLOTS; safety++) {
-        const yon_list_cell_t *cell = list_cell_at(cur);
-        if (!cell) break;
-        n++;
-        if (cell->tail_slot == YON_HEAP_SLOT_INVALID) break;
-        cur = (double)cell->tail_slot;
-    }
-    return (double)n;
+double yon_rt_cons_section(double value, double tail) {
+    uint8_t bytes[24];
+    uint64_t root = yon_cons_root();
+    memcpy(bytes, &root, 8u);
+    memcpy(bytes + 8u, &value, 8u);
+    memcpy(bytes + 16u, &tail, 8u);
+    return (double)(int64_t)yon_rt_arm_section(bytes, sizeof bytes);
 }
 
 /* ============================================================== */
@@ -7696,17 +7613,6 @@ double yon_rt_crypto_hash_int(double n_d) {
 }
 
 
-/* Seq.range(n) -> List [0, 1, ..., n-1] */
-double yon_rt_seq_range(double n_d) {
-    int n = (int)n_d;
-    if (n <= 0) return yon_rt_list_empty(0.0);
-    double lst = yon_rt_list_empty(0.0);
-    /* Build the list in reverse so iteration is 0..n-1 */
-    for (int i = n - 1; i >= 0; i--) {
-        lst = yon_rt_list_cons((double)i, lst);
-    }
-    return lst;
-}
 
 extern uint32_t mat24_syndrome(uint32_t v, uint32_t u);
 
@@ -7922,12 +7828,11 @@ static int wire_enc(yon_wire_buf_t *b, uint64_t root, double v) {
     case YON_WIRE_KIND_PLACE:
         return wire_enc_section(b, t, (yon_section_t)(uint64_t)(int64_t)v);
     case YON_WIRE_KIND_LIST: {
-        uint32_t n = (uint32_t)yon_rt_list_length(v);
+        uint32_t n = 0;
+        for (double c = v; c >= 0.0; c = yon_rt_arm_field(c, 1u)) n++;
         if (wbuf_put(b, &n, 4u)) return -1;
-        double cur = v;
-        for (uint32_t i = 0; i < n; i++) {
-            if (wire_enc(b, t->kids[0], yon_rt_list_head(cur)) != 0) return -1;
-            cur = yon_rt_list_tail(cur);
+        for (double c = v; c >= 0.0; c = yon_rt_arm_field(c, 1u)) {
+            if (wire_enc(b, t->kids[0], yon_rt_arm_field(c, 0u)) != 0) return -1;
         }
         return 0;
     }
@@ -8052,11 +7957,11 @@ static int wire_dec(wire_rd_t *r, uint64_t root, double *out) {
                 return -1;
             }
         }
-        double l = yon_rt_list_empty(0.0);
+        double l = YON_NIL_VALUE;
         for (uint32_t i = n; i > 0; i--) {
             double x;
             memcpy(&x, xs.p + (size_t)(i - 1) * 8u, 8u);
-            l = yon_rt_list_cons(x, l);
+            l = yon_rt_cons_section(x, l);
         }
         yon_rt_wire_buf_free(&xs);
         *out = l;

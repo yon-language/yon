@@ -1,7 +1,7 @@
 place Entry {
   fun main: Number {
     mut acc := 0
-    xs := List.cons(20, List.cons(22, List.empty(0)))
+    xs := List.cons(20, List.cons(22, List.empty))
     for every x in xs { acc <- acc + x }
     return acc
   }

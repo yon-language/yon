@@ -1,0 +1,16 @@
+/* Sequence — a finite and pure sequence is a list; these are its names. */
+place Sequence {
+  fun from_list<V>(l: List<V>): List<V> { return l }
+  fun range(n: Number): List<Number> {
+    mut r := List.empty
+    mut i := n
+    while i > 0 do {
+      i <- i - 1
+      r <- (i, r) ↪ Cons
+    }
+    return r
+  }
+  fun map<V, W>(l: List<V>, f: V -> W): List<W> { return List.map(l, f) }
+  fun filter<V>(l: List<V>, f: V -> Boolean): List<V> { return List.filter(l, f) }
+  fun to_list<V>(l: List<V>): List<V> { return l }
+}

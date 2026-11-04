@@ -266,7 +266,7 @@ and infer_condition (env : env) (cs : constraint_set)
 let rec metavar_to_unknown (t : ty) : ty =
   match t with
   | TyMetaVar _ -> TyPrim "unknown"
-  | TyList inner -> TyList (metavar_to_unknown inner)
+  | TyApp ("List", [inner]) -> TyApp ("List", [metavar_to_unknown inner])
   | TyMap (k, v) -> TyMap (metavar_to_unknown k, metavar_to_unknown v)
   | TyChannel inner -> TyChannel (metavar_to_unknown inner)
   | TyArrow (a, b) -> TyArrow (metavar_to_unknown a, metavar_to_unknown b)

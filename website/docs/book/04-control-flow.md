@@ -23,7 +23,7 @@ fun main: Number {
     acc <- acc + 5                                    // 25
     i <- i + 1
   }
-  for every n in List.cons(8, List.cons(9, List.empty(0))) {
+  for every n in List.cons(8, List.cons(9, List.empty)) {
     acc <- acc + n                                    // 42
   }
   return acc
@@ -60,7 +60,7 @@ the expression form `if c then a else b`, or end the body with a
 ```yon
 fun main(): Number {
   mut acc := 0
-  lst := List.cons(5, List.cons(7, List.empty(0)))
+  lst := List.cons(5, List.cons(7, List.empty))
   in sequence over y in lst { acc <- acc + 1 }     // 2
   repeat at most 3 times { acc <- acc + 2 }        // 8
   otherwise { acc <- acc + 1 }                     // 9

@@ -133,7 +133,7 @@ The companion of `for`; see above.
   return acc
 }
 fun main: Number {
-  lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  lst := List.cons(5, List.cons(7, List.cons(9, List.empty)))
   return total(lst)
 }`}
 </CodeWindow>
@@ -167,7 +167,7 @@ The infinite loop, typically wrapped around effects: a server, a producer, a hea
             out={["42"]}>
 {`fun main(): Number {
   mut acc := 0
-  lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  lst := List.cons(5, List.cons(7, List.cons(9, List.empty)))
 
   for every x in lst { acc <- acc + x }            // 21
   in sequence over y in lst { acc <- acc + 1 }     // 24

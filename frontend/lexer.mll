@@ -548,7 +548,7 @@ and string_lit buf = parse
       end else
         match tok with
         | COLON_U -> finish tok
-        | _ when !previous = COLON_U || (!previous = GT && line > !previous_line) -> finish tok
+        | _ when !previous = COLON_U || (!previous = GT && !previous_previous = THIS && line > !previous_line) -> finish tok
         | _ when line > !previous_line ->
             in_clause := false;
             put_back ();

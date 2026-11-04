@@ -211,9 +211,9 @@ def test_int64_exact_past_2_53_through_list(tmp_path):
     entry = """\
 place Entry {
   fun big: Int64 { return Int64.ipow_ok(2, 53) + 1 }
-  fun first(xs: List<Int64>): Int64 { return List.head(xs) }
+  fun first(xs: List<Int64>): Int64 { return match List.head(xs) { Found as v => v, Absent => 0 } }
   fun main: Number {
-    xs := List.cons(big, List.empty(0))
+    xs := List.cons(big, List.empty)
     return if Int64.is_odd(first(xs)) then 1 else 0
   }
 }
@@ -303,7 +303,7 @@ def test_int64_crosses_every_uniform_slot_bit_for_bit(tmp_path):
     entry = """\
 place IntExpr { this > Lit Int64 :U Nil }
 place Entry {
-  fun via_list(x: Int64): Int64 { return List.head(List.cons(x, List.empty(0))) }
+  fun via_list(x: Int64): Int64 { return match List.head(List.cons(x, List.empty)) { Found as v => v, Absent => 0 } }
   fun wrap(x: Int64): IntExpr { return x ↪ Lit }
   fun unwrap(e: IntExpr): Int64 { return match e { Lit as n => n, Nil => 0 } }
   fun adder(k: Int64): Int64 -> Int64 { return fun(y: Int64) => k + y }

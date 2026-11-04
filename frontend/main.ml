@@ -618,8 +618,8 @@ let test_dispatcher_classification () =
     (TyUser "Identity", Dispatcher.FragCubical, "Identity is Cubical");
     (TyUser "S1", Dispatcher.FragCubical, "S1 is Cubical");
     (TyUser "Quotient", Dispatcher.FragCubical, "Quotient is Cubical");
-    (TyList (TyPrim "number"), Dispatcher.FragCATT, "list of number is CATT");
-    (TyList (TyUser "Path"), Dispatcher.FragCubical,
+    (TyApp ("List", [TyPrim "number"]), Dispatcher.FragCATT, "list of number is CATT");
+    (TyApp ("List", [TyUser "Path"]), Dispatcher.FragCubical,
      "list of Path propagates to Cubical");
     (TyMap (TyPrim "text", TyUser "Identity"), Dispatcher.FragCubical,
      "map with Identity value is Cubical");
@@ -810,24 +810,21 @@ let invoke_stdlib (call : Ast.term) : Ast.term =
 
 (* Test 45: List.empty + cons + head/tail. *)
 let test_stdlib_list_basic () =
-  Printf.printf "\n=== Test 45: stdlib List — empty, cons, head, tail ===\n";
-  let open Ast in
-  let empty = invoke_stdlib (App (Var "List__empty", Unit)) in
-  Printf.printf "  empty list: %s\n" (Pretty.pp_compact empty);
-  let n1 = Builtins.encode_number 10.0 in
-  let n2 = Builtins.encode_number 20.0 in
-  let l1 = invoke_stdlib (App (App (Var "List__cons", n1), empty)) in
-  let l2 = invoke_stdlib (App (App (Var "List__cons", n2), l1)) in
-  Printf.printf "  after two cons: %s\n" (Pretty.pp_compact l2);
-  let h = invoke_stdlib (App (Var "List__head", l2)) in
-  let len = invoke_stdlib (App (Var "List__length", l2)) in
-  let head_ok = Builtins.decode_number h = Some 20.0 in
-  let len_ok = Builtins.decode_number len = Some 2.0 in
-  Printf.printf "  head = %s (expected 20): %b\n"
-    (Pretty.pp_compact h) head_ok;
-  Printf.printf "  length = %s (expected 2): %b\n"
-    (Pretty.pp_compact len) len_ok;
-  if head_ok && len_ok then
+  Printf.printf "\n=== Test 45: List is a place of the prelude ===\n";
+  let path = Filename.concat (Filename.dirname Sys.executable_name)
+      "../../../prelude/coll/List.yon" in
+  let ic = open_in_bin path in
+  let text = really_input_string ic (in_channel_length ic) in
+  close_in ic;
+  Parser_state.reset ();
+  Lexer.reset_statement ();
+  let decls = Parser.program Lexer.token (Lexing.from_string text) in
+  let arms = List.concat_map (function
+      | Surface_ast.TopPlace pd when pd.Surface_ast.pd_name = "List" ->
+          List.map (fun (v : Surface_ast.variant) -> v.Surface_ast.v_name) pd.Surface_ast.pd_arms
+      | _ -> []) decls in
+  Printf.printf "  arms: %s\n" (String.concat ", " arms);
+  if arms = ["Nil"; "Cons"] then
     (Printf.printf "Status: PASS\n"; true)
   else
     (Printf.printf "Status: FAIL\n"; false)

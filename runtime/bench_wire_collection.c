@@ -28,9 +28,8 @@ double yon_rt_xrelmap_empty(void);
 double yon_rt_xrelmap_set(double, double, double);
 double yon_rt_xrelmap_size(double);
 double yon_rt_xrelmap_value(double, double);
-double yon_rt_list_empty(double);
-double yon_rt_list_cons(double, double);
-double yon_rt_list_length(double);
+double yon_rt_cons_section(double, double);
+double yon_rt_arm_field(double, uint32_t);
 
 #define R_NUM  0x1111u
 #define R_MAP  0x2222u
@@ -66,6 +65,12 @@ static void bench(const char *name, uint64_t root, double v, int n,
     yon_rt_wire_buf_free(&b);
 }
 
+static double list_length(double l) {
+    double n = 0.0;
+    for (; l >= 0.0; l = yon_rt_arm_field(l, 1u)) n += 1.0;
+    return n;
+}
+
 int main(int argc, char **argv) {
     int n = argc > 1 ? atoi(argv[1]) : 100000;
     static const uint64_t map_kids[2] = { R_NUM, R_NUM };
@@ -78,10 +83,10 @@ int main(int argc, char **argv) {
     for (int k = 0; k < n; k++) {
         m = yon_rt_map_put(m, k, 3.0 * k);
         x = yon_rt_xrelmap_set(x, k, 3.0 * k);
-        l = yon_rt_list_cons(3.0 * k, l);
+        l = yon_rt_cons_section(3.0 * k, l);
     }
     bench("HashMap", R_MAP, m, n, yon_rt_map_size, yon_rt_map_value);
     bench("XRelMap", R_XMAP, x, n, yon_rt_xrelmap_size, yon_rt_xrelmap_value);
-    bench("List", R_LIST, l, n, yon_rt_list_length, NULL);
+    bench("List", R_LIST, l, n, list_length, NULL);
     return 0;
 }

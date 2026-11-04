@@ -470,7 +470,7 @@ and ty_structural_eq (t1 : ty) (t2 : ty) : bool =
   | TyPrimIn (n1, _), TyPrimIn (n2, _) -> canon n1 = canon n2
   | TyUser n1, TyUser n2 -> canon n1 = canon n2
   | TyUser n, TyPrim m | TyPrim n, TyUser m -> canon n = canon m
-  | TyList a, TyList b -> ty_structural_eq a b
+  | TyApp ("List", [a]), TyApp ("List", [b]) -> ty_structural_eq a b
   | TyMap (k1, v1), TyMap (k2, v2) ->
       ty_structural_eq k1 k2 && ty_structural_eq v1 v2
   | TyChannel a, TyChannel b -> ty_structural_eq a b

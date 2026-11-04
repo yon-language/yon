@@ -1050,7 +1050,7 @@ let ty_mobile (env : Tyenv.env) (t : ty) : bool =
     match t with
     | TyPrim "unknown" | TyUser "unknown" -> false
     | TyPrim _ | TyPrimIn _ | TyHeytInt _ -> true
-    | TyList x | TyChannel x -> go seen x
+    | TyApp ("List", [x]) | TyChannel x -> go seen x
     | TyMap (k, v) -> go seen k && go seen v
     | TyApp (p, args) -> go seen (TyUser p) && List.for_all (go seen) args
     | TySum vs | TySumIn (vs, _) -> List.for_all (fun v -> List.for_all (go seen) v.v_args) vs
@@ -1268,7 +1268,7 @@ let rec wire_desc (env : Tyenv.env) (seen : string list) (t : ty) : int64 option
                   r
               | None -> None)
        | _ -> None)
-  | TyList e | TyApp ("List", [e]) -> coll wire_kind_list [e]
+  | TyApp ("List", [e]) -> coll wire_kind_list [e]
   | TyApp ("HashMap", [k; v]) -> coll wire_kind_map [k; v]
   | TyApp ("HashSet", [e]) -> coll wire_kind_set [e]
   | TyApp ("XRelMap", [k; v]) -> coll wire_kind_xmap [k; v]
@@ -2702,13 +2702,7 @@ got %s" (Tyenv.ty_to_string other)))
         | "take" -> ("__stream_take", args)
         | "sum_take" -> ("__stream_sum_take", args)
         | "to_stream" -> ("__stream_to_stream", args)
-        | "Sequence__map" -> ("__stream_map", args)
-        | "Sequence__filter" -> ("__stream_filter", args)
-        | "Sequence__fold" -> ("__stream_fold", args)
-        | "Sequence__from_list" -> ("__stream_from_list", args)
-        | "Stream__iterate" -> ("__stream_iterate", args)
-        | "Stream__take" -> ("__stream_take", args)
-        | "Stream__sum_take" -> ("__stream_sum_take", args)
+        | "Sequence__fold" -> ("List__fold_left", args)
         | _ -> (name, args)
       in
       (* Special-case: apply_move's first argument is a move name (not
@@ -2751,6 +2745,19 @@ got %s" (Tyenv.ty_to_string other)))
            | _ -> ok ())
         end else ok ()
       in
+      (* a method on a list is a fun of the prelude: the site says so for the desugar *)
+      let (name, args) =
+        match name, args with
+        | ("__stream_map" | "__stream_filter" | "__stream_fold"), recv :: _
+          when (match infer env ctx recv with Ok (TyApp ("List", _)) -> true | _ -> false) ->
+            let p = match name with
+              | "__stream_map" -> "List__map"
+              | "__stream_filter" -> "List__filter"
+              | _ -> "List__fold_left" in
+            Hashtbl.replace Surface_ast.list_method_sites
+              (loc.file, loc.start_line, loc.end_line, loc.end_col) p;
+            (p, args)
+        | _ -> (name, args) in
       (* __stream_map/filter/fold accept a function name as their last
        * argument (the type check on it is skipped). *)
       let is_seq_with_fun_arg =
@@ -2958,7 +2965,7 @@ got %s" (Tyenv.ty_to_string other)))
        | Some _ ->
            let env' = Tyenv.add_var env "_" (TyUser place_name) in
            let* _ = check_condition env' ctx cond in
-           ok (TyList (TyUser place_name)))
+           ok (TyApp ("List", [TyUser place_name])))
 
   | EIn (inner, _ctx_name, _loc) ->
       (* "e in Context" — the contextual type is
@@ -3427,7 +3434,7 @@ and check_term_args env ctx loc (t : ty) : unit tc_result =
       let* () = acc in check_term_args env ctx loc t) (ok ()) ts in
   match t with
   | TyArrow (a, b) -> each [a; b]
-  | TyList a | TyChannel a -> each [a]
+  | TyApp ("List", [a]) | TyChannel a -> each [a]
   | TyApp (n, args) ->
       let* () = each (List.filter (function TyUser _ -> false | _ -> true) args) in
       (match Hashtbl.find_opt Surface_ast.place_term_params n with
@@ -4852,7 +4859,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
   | SForEvery (_kind, x, collection, body, loc) ->
       let* coll_ty = infer env ctx collection in
       let elem_ty = match coll_ty with
-        | TyList inner -> Some inner
+        | TyApp ("List", [inner]) -> Some inner
         | TyChannel inner ->
             (* stream collection: the desugar drains the wire instead of
                walking cons cells; register the site. *)
@@ -4872,7 +4879,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
   | SInSequence (x, collection, body, loc) ->
       let* coll_ty = infer env ctx collection in
       let elem_ty = match coll_ty with
-        | TyList inner -> Some inner
+        | TyApp ("List", [inner]) -> Some inner
         | _ -> None
       in
       (match elem_ty with
@@ -5086,7 +5093,7 @@ let rec level_of_type (t : ty) : int =
       max (level_of_type a) (level_of_type b)
   | TyId (a, _, _) -> level_of_type a
   | TyPathP ((_, a), _, _) -> level_of_type a
-  | TyList inner | TyChannel inner -> level_of_type inner
+  | TyApp ("List", [inner]) | TyChannel inner -> level_of_type inner
   | TyMap (k, v) -> max (level_of_type k) (level_of_type v)
   | TySum vs | TySumIn (vs, _) ->
       List.fold_left
@@ -5160,7 +5167,7 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
         (fun env variant ->
            List.fold_left register_sum_types_in_ty env variant.v_args)
         (Tyenv.add_sum_type env variants) variants
-  | TyList inner | TyChannel inner | TySubscription (_, inner) ->
+  | TyApp ("List", [inner]) | TyChannel inner | TySubscription (_, inner) ->
       register_sum_types_in_ty env inner
   | TyMap (key, value) | TyArrow (key, value) ->
       register_sum_types_in_ty (register_sum_types_in_ty env key) value
@@ -6602,7 +6609,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
        * just verify the carrier type is well-formed. *)
       check_type_well_formed env a loc
   | TyPathP ((_, a), _, _) -> check_type_well_formed env a loc
-  | TyList inner | TyChannel inner ->
+  | TyChannel inner ->
       check_type_well_formed env inner loc
   | TyMap (k, v) ->
       let* () = check_type_well_formed env k loc in

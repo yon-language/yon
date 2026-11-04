@@ -870,30 +870,10 @@ double yon_rt_voyagerlist_corrupt(double codeword24, double n_bits);
 /* ============================================================== */
 /* Immutable list (cons-list) over the content-addressed yon_xheap  */
 /* ============================================================== */
-/*
- * Model: each cons cell is a payload {value: f64, tail_slot: u32,
- * sentinel: u32} = 16 bytes. The cell is placed in g_yon_heap via
- * yon_xheap_put with tag YON_TAG_USER1. The list_id exposed to the frontend is
- * the slot_index of the cons cell (cast to double).
- *
- * Empty list: list_id == YON_RT_LIST_EMPTY ((double)0xFFFFFFFF), a sentinel
- * distinguishable from any valid slot_index (max 196559).
- *
- * Content-addressing: two lists with the same value and the same tail collide
- * in the same slot (automatic dedup). Immutable by construction: head/tail
- * read the payload, no mutation.
- *
- * head/tail on empty: return 0.0 / YON_RT_LIST_EMPTY respectively.
- * length(empty) = 0; length(cons(v,t)) = 1 + length(t).
- */
+/* The Cons of the prelude's List, for a walk in C and the wire: see yon_rt.c. */
+#define YON_NIL_VALUE (-1.0)
+double yon_rt_cons_section(double value, double tail);
 
-#define YON_RT_LIST_EMPTY ((double)0xFFFFFFFFu)
-
-double yon_rt_list_empty(double dummy);
-double yon_rt_list_cons(double value, double tail_id);
-double yon_rt_list_head(double list_id);
-double yon_rt_list_tail(double list_id);
-double yon_rt_list_length(double list_id);
 
 /* Vec: dynamic array on an arena strip (no malloc). In-place mutable: set()
  * writes a slot, push() appends into spare capacity or reallocs a doubled
@@ -1040,7 +1020,6 @@ double yon_rt_file_read_text(double path_id);
 double yon_rt_file_exists(double path_id);
 double yon_rt_bits_fold(double value, double op_id, double init);
 
-double yon_rt_seq_range(double n);
 
 /* 64-bit Bits variants. */
 double yon_rt_bits_or_64(double a, double b);

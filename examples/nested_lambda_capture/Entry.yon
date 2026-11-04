@@ -14,8 +14,8 @@ place Entry {
  * Expected exit: 52. */
 fun main(): Number {
   base := 10
-  xs := List.cons(1, List.cons(2, List.empty(0)))
-  ys := List.cons(1, List.cons(2, List.empty(0)))
+  xs := List.cons(1, List.cons(2, List.empty))
+  ys := List.cons(1, List.cons(2, List.empty))
   total := xs.fold(0, fun(a: Number, v: Number) => a + ys.fold(0, fun(b: Number, w: Number) => b + w + v + base))
   return total
 }

@@ -1,0 +1,31 @@
+/* Stream<V> — an infinite and pure sequence: a seed and the step that unfolds it. */
+place Stream<V> {
+  seed V
+  step V -> V
+
+  fun iterate<V>(f: V -> V, x0: V): Stream<V> { return .-> Stream { seed x0 step f } }
+  fun take<V>(s: Stream<V>, n: Number): List<V> {
+    mut r := List.empty
+    mut x := s.seed
+    f := s.step
+    mut i := n
+    while i > 0 do {
+      r <- (x, r) ↪ Cons
+      x <- f(x)
+      i <- i - 1
+    }
+    return List.reverse(r)
+  }
+  fun sum_take(s: Stream<Number>, n: Number): Number {
+    mut acc := 0
+    mut x := s.seed
+    f := s.step
+    mut i := n
+    while i > 0 do {
+      acc <- acc + x
+      x <- f(x)
+      i <- i - 1
+    }
+    return acc
+  }
+}

@@ -4,7 +4,7 @@ import bank::deposit_net from Bank
 place Entry {
   fun main(): Number {
     mut total := 0
-    for every d in List.cons(100, List.empty(0)) {
+    for every d in List.cons(100, List.empty) {
       total <- total + deposit_net(d)
     }
     return total           // 95

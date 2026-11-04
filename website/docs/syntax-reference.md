@@ -119,7 +119,7 @@ from the call sites.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty`, `XSet.empty()`, `Vec.empty()`, `XRelMap.empty`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
+| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty`, `XSet.empty()`, `Vec.empty()`, `XRelMap.empty`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty`, `Time.now_ms(0)`, `Args.count(0)` |
 | `obj.field`, `x.f1.f2` | ✓ | Field access (chains left-associatively) |
 | `e.method(args).map(f).fold(0, g)` | ✓ | Method chaining: `recv.m(args)` ≡ `m(recv, args)` |
 | `fun answer: Number { return 42 }`, used as `answer` | ✓ | **A point** `1 → X`: a pure nullary is declared and named without `()`; a value fixed for the life of the Space is pure |
@@ -430,7 +430,7 @@ a move's `requires` check is emitted but not yet enforced, chapter 20) with opt-
 | `Math` | `sqrt, abs, floor, ceil, round, min, max, pow, log, log2, log10, exp, sin, cos, sinh, cosh, tanh, atan2, modulo, gcd, lcm, pi, e` |
 | `Bits` | `and, or, xor, not, shl, shr, popcount, fold, *_64` |
 | `Crypto` | `fnv1a, hash_int` |
-| `List` | `empty, cons, head, tail, length, is_empty, append, reverse`, an immutable list over the content-addressed heap |
+| `List` | `place List<V> { this > Nil :U Cons V List<V> }` in the prelude, written in Yon. `empty` is `Nil`; `cons`, `is_empty`, `length`, `append`, `reverse`; `head` and `tail` answer `Lookup`: `Absent` on `Nil` |
 | `HashMap` | `empty, set, has, get, value, size, to_stream`, an immutable map (a trie over the content-addressed heap) |
 | `HashSet` | `empty, add, contains, size, union, intersect, to_stream`, an immutable set |
 | `XSet` | `empty, add, contains, size, union, intersect, to_stream`, a set of lattice points: one table indexed by the shell, on the Leech heap, changed in place |
@@ -449,7 +449,7 @@ failure (missing file, unset variable, out-of-range index).
 
 - Nullary builtins are called with empty parens `()`: `XSet.empty()`,
   `Vec.empty()`. The few with a unit-argument signature take `(0)`:
-  `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)`.
+  `List.empty`, `Time.now_ms(0)`, `Args.count(0)`.
 - `.-> P { field value }` and place fields `name type`, no `=`, no `:`.
 - A program's exit code is `main`'s return value, truncated mod 256.
 - `return` stands where the body ends (or at the end of each branch of a final

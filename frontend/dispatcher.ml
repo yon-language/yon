@@ -55,7 +55,7 @@ let is_cubical_name (n : string) : bool =
 let rec classify_ty (t : ty) : fragment =
   match t with
   | TyUser n when is_cubical_name n -> FragCubical
-  | TyList inner | TyChannel inner -> classify_ty inner
+  | TyApp ("List", [inner]) | TyChannel inner -> classify_ty inner
   | TyMap (k, v) ->
       (match classify_ty k, classify_ty v with
        | FragCubical, _ | _, FragCubical -> FragCubical
@@ -162,7 +162,6 @@ let rec lift_to_cubical (t : ty) : Cubical.ctype =
   | TyPrim _ | TyPrimIn _ | TyUser _ | TyApp _ | TyVar _ | TyMetaVar _
   | TyUniverse _ | TyPi _ | TySigma _ ->
       Cubical.CTBase t
-  | TyList inner -> Cubical.CTBase (TyList inner)
   | TyMap (k, v) -> Cubical.CTBase (TyMap (k, v))
   | TyChannel inner -> Cubical.CTBase (TyChannel inner)
   | TySum _ | TySumIn _ -> Cubical.CTBase t
@@ -514,7 +513,7 @@ let rec type_equal
   (* The containers are the same type when their elements are, so a fused
      face and its code agree inside them too: Wire<HashMap<Number, Number>>
      is Wire<HashMap<number, number>>. *)
-  | TyChannel a, TyChannel b | TyList a, TyList b -> type_equal env ctx a b
+  | TyChannel a, TyChannel b -> type_equal env ctx a b
   | TyMap (k1, v1), TyMap (k2, v2) ->
       type_equal env ctx k1 k2 && type_equal env ctx v1 v2
   (* NB: the one-way PROMOTIONS  number <: heyt_int  and  heyt_int <: proposition

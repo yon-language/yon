@@ -106,7 +106,7 @@ let rec encode_ty (env : TE.env) (ctx : string list) buf (t : ty) : unit =
                 else raise No_root))                               (* type var / unknown *)
   | TySum variants | TySumIn (variants, _) ->
       add_u8 buf 0x04; encode_variants env ctx buf variants        (* anonymous: no type name *)
-  | TyList inner -> add_u8 buf 0x05; encode_ty env ctx buf inner
+  | TyApp ("List", [inner]) -> add_u8 buf 0x05; encode_ty env ctx buf inner
   | TyChannel inner -> add_u8 buf 0x06; encode_ty env ctx buf inner
   | TyMap (k, v) -> add_u8 buf 0x07; encode_ty env ctx buf k; encode_ty env ctx buf v
   | TyApp (n, args) ->

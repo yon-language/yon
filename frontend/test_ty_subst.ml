@@ -40,14 +40,14 @@ let () =
   test "apply on TyMetaVar 0 -> number" (apply_subst sigma v0 = num);
   test "apply on TyMetaVar 1 -> unchanged"
     (apply_subst sigma (TyMetaVar 1) = TyMetaVar 1);
-  test "apply on TyList(TyMetaVar 0) -> TyList number"
-    (apply_subst sigma (TyList v0) = TyList num);
+  test "apply on list of alpha0 -> list of number"
+    (apply_subst sigma (TyApp ("List", [v0])) = TyApp ("List", [num]));
 
   (* Test 3: occur_check *)
   Printf.printf "\nTest 3: occur_check\n";
   test "occur 0 in alpha0 -> true" (occur_check 0 (TyMetaVar 0));
   test "occur 0 in alpha1 -> false" (not (occur_check 0 (TyMetaVar 1)));
-  test "occur 0 in list of alpha0 -> true" (occur_check 0 (TyList (TyMetaVar 0)));
+  test "occur 0 in list of alpha0 -> true" (occur_check 0 (TyApp ("List", [TyMetaVar 0])));
   test "occur 0 in number -> false" (not (occur_check 0 num));
 
   (* Test 4: unify base *)
@@ -68,12 +68,12 @@ let () =
   (* Test 5: unify constructors *)
   Printf.printf "\nTest 5: unify with constructors\n";
   test "unify list of number, list of number -> empty"
-    (try_unify (TyList num) (TyList num) = Ok []);
+    (try_unify (TyApp ("List", [num])) (TyApp ("List", [num])) = Ok []);
   test "unify list of alpha0, list of number -> [0 ↦ number]"
-    (match try_unify (TyList (TyMetaVar 0)) (TyList num) with
+    (match try_unify (TyApp ("List", [TyMetaVar 0])) (TyApp ("List", [num])) with
      | Ok [(0, TyPrim "number")] -> true | _ -> false);
   test "unify list of number, list of text -> error"
-    (match try_unify (TyList num) (TyList txt) with
+    (match try_unify (TyApp ("List", [num])) (TyApp ("List", [txt])) with
      | Error (UMismatch _) -> true | _ -> false);
   test "unify map of alpha0 to alpha1, map of number to text -> both bound"
     (match try_unify (TyMap (TyMetaVar 0, TyMetaVar 1))
@@ -86,7 +86,7 @@ let () =
   (* Test 6: occur check during unify *)
   Printf.printf "\nTest 6: occur check during unify\n";
   test "unify alpha0 with list of alpha0 -> occur check error"
-    (match try_unify (TyMetaVar 0) (TyList (TyMetaVar 0)) with
+    (match try_unify (TyMetaVar 0) (TyApp ("List", [TyMetaVar 0])) with
      | Error (UOccurCheck (0, _)) -> true | _ -> false);
 
   (* Test 7: compose_subst *)

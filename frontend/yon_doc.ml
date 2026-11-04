@@ -32,7 +32,7 @@ let rec fmt_ty (t : S.ty) : string =
             | "boolean" -> "Boolean" | "unit" -> "Unit"
             | _ -> n))
   | S.TyPrimIn (n, opts) -> n ^ " in " ^ String.concat ", " opts
-  | S.TyList t -> "list of " ^ fmt_ty t
+  | S.TyApp ("List", [t]) -> "list of " ^ fmt_ty t
   | S.TyMap (k, v) -> "map of " ^ fmt_ty k ^ " to " ^ fmt_ty v
   | S.TyUser n -> n
   | S.TyArrow (a, b) -> fmt_ty a ^ " -> " ^ fmt_ty b

@@ -304,7 +304,6 @@ type ty =
   | TyPrimIn of string * string list                  (* "money in EUR, USD" *)
   | TySum of variant list                             (* "EUR | USD | JPY" *)
   | TySumIn of variant list * string list             (* "(...) in W" *)
-  | TyList of ty                                      (* "list of T" *)
   | TyMap of ty * ty                                  (* "map of K to V" *)
   | TyChannel of ty                                  (* Wire<T>: a channel of T *)
   | TyWire of string                                  (* the handle of "wire to Space"; carries the Space name *)
@@ -1200,3 +1199,6 @@ let place_term_params : (string, string list * (string * ty) list) Hashtbl.t = H
 (* The project declares kind = "proof" in [package]: its funs are proofs, every one terminates and
    none is given or loops, and only main reaches the run time. *)
 let proof_project = ref false
+
+(* The sites where a method on a list is that fun of the prelude. *)
+let list_method_sites : (string * int * int * int, string) Hashtbl.t = Hashtbl.create 16

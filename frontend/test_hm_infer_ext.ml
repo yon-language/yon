@@ -153,7 +153,7 @@ let () =
           reset_metavars ();
           let z0 = fresh_metavar () in
           let cs3 = Hm_infer.new_constraints () in
-          Hm_infer.add_constraint cs3 z0 (TyList z0) dl "occurs";
+          Hm_infer.add_constraint cs3 z0 (TyApp ("List", [z0])) dl "occurs";
           Hm_infer.solve_constraints cs3));
 
   (* ── application inference ───────────────────────────────────────────── *)

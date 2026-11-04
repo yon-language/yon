@@ -751,9 +751,9 @@ def test_sum_take_of_an_iterate_sums_the_prefix(tmp_path):
 
 def test_sum_take_of_a_named_stream_sums_the_prefix(tmp_path):
     entry = ("place Entry {\n" + _INC_lowering +
-             "fun f(): Number {\n  s := Stream.iterate(inc, 1)\n"
+             "fun f: Number {\n  s := Stream.iterate(inc, 1)\n"
              "  return Stream.sum_take(s, 4)\n}\n"
-             "fun main(): Number { return f() }\n}\n")
+             "fun main(): Number { return f }\n}\n")
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "out")
     if _clean_rejection(rc, out, 'E2001', 'is not consumed where its stream is built'):
@@ -765,9 +765,9 @@ def test_sum_take_of_a_named_stream_sums_the_prefix(tmp_path):
 
 def test_a_named_stream_used_twice_is_read_twice(tmp_path):
     entry = ("place Entry {\n" + _INC_lowering +
-             "fun f(): Number {\n  s := Stream.iterate(inc, 1)\n"
+             "fun f: Number {\n  s := Stream.iterate(inc, 1)\n"
              "  return Stream.sum_take(s, 4) + Stream.sum_take(s, 2)\n}\n"
-             "fun main(): Number { return f() }\n}\n")
+             "fun main(): Number { return f }\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     assert rc == 13, f"10 + 3 expected, got {rc}"
 
@@ -804,17 +804,15 @@ def test_a_user_function_named_iterate_is_called(tmp_path):
 
 def test_head_of_a_list_is_its_first_cons(tmp_path):
     entry = ("place Entry {\nfun main: Number {\n"
-             "  return List.head(List.cons(10, List.cons(11, List.empty(0))))\n}\n}\n")
+             "  return match List.head(List.cons(10, List.cons(11, List.empty))) { Found as v => v, Absent => 0 }\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     assert rc == 10
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="take(iterate(f, x0), n) starts with x0")
 def test_take_of_an_iterate_starts_with_the_seed(tmp_path):
     entry = ("place Entry {\n" + _INC_lowering +
              "fun main(): Number {\n"
-             "  return List.head(Stream.take(Stream.iterate(inc, 10), 3))\n}\n}\n")
+             "  return match List.head(Stream.take(Stream.iterate(inc, 10), 3)) { Found as v => v, Absent => 0 }\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     _verdict(rc == 10, f"head of [10, 11, 12] should be 10, got {rc}")
 
@@ -2788,13 +2786,11 @@ def test_closure_capture_keeps_a_small_integer(tmp_path):
 
 # --- lists longer than one heap -------------------------------------------------
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="List.length of a 200000-element list is 200000")
 def test_list_length_counts_past_one_heap(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  _a := IO.print_num(List.length(Sequence.range_to_list(200000)))
+  _a := IO.print_num(List.length(Sequence.range(200000)))
   return 0
 }
 """
@@ -2809,15 +2805,13 @@ fun main(): Number {
   m1 := Magma.gen(m0, 3)
   m2 := Magma.gen(m1, 5)
   before := Land.witness(m2, 8)
-  mut r := List.reverse(Sequence.range_to_list(%d))
+  mut r := List.reverse(Sequence.range(%d))
   after := Land.witness(m2, 8)
   return if before == after then 1 else 0
 }
 """
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="reversing a long list leaves unrelated values unchanged")
 def test_reversing_a_long_list_does_not_touch_other_values(tmp_path):
     rc, out = _build_run_runtime(tmp_path, _REVERSE_runtime % 400000)
     _verdict(rc == 1, f"a magma's witness changed across List.reverse (exit {rc})")

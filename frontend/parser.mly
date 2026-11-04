@@ -1042,12 +1042,11 @@ named_type:
          dedicated nodes. Wrong arity is an honest parse-time failure, not a
          silent TyApp. *)
       match name, args with
-      | "List", [t] -> TyList t
       | "Map", [k; v] -> TyMap (k, v)
       | "Wire", [t] -> TyChannel t
-      | ("List" | "Map" | "Wire"), _ ->
+      | ("Map" | "Wire"), _ ->
           failwith (Printf.sprintf
-            "%s expects %s type argument(s): List<T> | Map<K, V> | Wire<T>"
+            "%s expects %s type argument(s): Map<K, V> | Wire<T>"
             name (if name = "Map" then "2" else "1"))
       | _ -> TyApp (name, args) }
   | name = IDENT

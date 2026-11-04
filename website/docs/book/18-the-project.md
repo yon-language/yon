@@ -90,7 +90,7 @@ import "yonproj/rates"
 import bank::deposit_net from Bank
 
 fun main(): Number {
-  deposits := List.cons(100, List.cons(60, List.cons(40, List.empty(0))))
+  deposits := List.cons(100, List.cons(60, List.cons(40, List.empty)))
   mut total := 0
   for every d in deposits {
     total <- total + deposit_net(d)           // three calls cross the wire

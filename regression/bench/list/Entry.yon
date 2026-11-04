@@ -1,6 +1,6 @@
 place Entry {
   fun timed_cons(n: Number): Number visits Output {
-    lc := Space.make(List.empty(0))
+    lc := Space.make(List.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)
@@ -19,18 +19,18 @@ place Entry {
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
-  fun build_list(n: Number): Number {
-    lc := Space.make(List.empty(0))
+  fun build_list(n: Number): List<Number> {
+    lc := Space.make(List.empty)
     i := Space.make(0)
     iter n do { k := Space.get(i)
                 _ := Space.set(lc, List.cons(k, Space.get(lc)))
                 _2 := Space.set(i, k + 1) }
     return Space.get(lc)
   }
-  fun timed_head(l: Number, m: Number): Number visits Output {
+  fun timed_head(l: List<Number>, m: Number): Number visits Output {
     acc := Space.make(0)
     t0 := Time.now_ns(0)
-    iter m do { h := List.head(l)
+    iter m do { h := match List.head(l) { Found as v => v, Absent => 0 }
                 _ := Space.set(acc, Space.get(acc) + h) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
@@ -52,7 +52,7 @@ place Entry {
     iter 4 do { _ := Space.set(cnsb, min2(Space.get(cnsb), timed_cons_base(n))) }
     l := build_list(n)
     len := List.length(l)
-    hv := List.head(l)
+    hv := match List.head(l) { Found as v => v, Absent => 0 }
     m := 1000000
     hd := Space.make(timed_head(l, m))
     iter 11 do { _ := Space.set(hd, min2(Space.get(hd), timed_head(l, m))) }

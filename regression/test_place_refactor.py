@@ -127,7 +127,7 @@ def test_record_pattern_on_a_payload_is_refused_and_the_tuple_shown(tmp_path):
             "place Entry { }\n"
             "fun sum(xs: NumList): Number {\n"
             "  return match xs { Nil => 0, %s => h + sum(t) }\n}\n"
-            "fun main: Number { return sum((5, (37, Nil) ↪ Cons) ↪ Cons) }\n")
+            "fun main: Number { return sum((5, (37, NumList.Nil) ↪ NumList.Cons) ↪ NumList.Cons) }\n")
     r = _twin(tmp_path, prog % "Cons { _1 as h _2 as t }")
     out = r.stderr + r.stdout
     assert r.returncode != 0 and b"E1001" in out and b"Cons as (x, y)" in out, out
@@ -150,7 +150,7 @@ def test_injection_needs_the_whole_payload(tmp_path):
         "place NumList { this > Nil :U Cons Number NumList }\n"
         "place Entry { }\n"
         "fun main: Number {\n"
-        "  c := 1 ↪ Cons\n"
+        "  c := 1 ↪ NumList.Cons\n"
         "  return 0\n}\n")
     r = _emit(twin)
     assert r.returncode != 0
@@ -188,7 +188,7 @@ def test_full_circle_no_constructors(tmp_path):
         "    Cons as (h, t) => h + sum(t)\n"
         "  }\n}\n"
         "fun main: Number {\n"
-        "  xs := (5, ((37, Nil) ↪ Cons)) ↪ Cons\n"
+        "  xs := (5, ((37, NumList.Nil) ↪ NumList.Cons)) ↪ NumList.Cons\n"
         "  return sum(xs)\n}\n")
     r = _emit(twin)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-400:]

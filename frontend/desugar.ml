@@ -145,7 +145,7 @@ let rec collect_sums_in_ty ?key (t : S.ty) : unit =
         variants;
       List.iter (fun (v : S.variant) ->
         List.iter collect_sums_in_ty v.S.v_args) variants
-  | S.TyList inner | S.TyChannel inner | S.TySubscription (_, inner) ->
+  | S.TyApp ("List", [inner]) | S.TyChannel inner | S.TySubscription (_, inner) ->
       collect_sums_in_ty inner
   | S.TyMap (a, b) | S.TyArrow (a, b) ->
       collect_sums_in_ty a; collect_sums_in_ty b
@@ -413,10 +413,9 @@ let rec desugar_ty (t : S.ty) : C.ty =
          Its Core carrier is content-addressed by that signature, so two
          distinct sums never share one Core identity. *)
       C.TyPlace (Tyenv.type_tag sum_ty)
-  | S.TyList inner -> C.TyPlace ("list_of_" ^ ty_name inner)
   | S.TyMap (_, _) as map_ty ->
       (* Content-address the map carrier by its key and value, like TySum above
-         and TyList to the left, so Map<number,text> and Map<text,number> have
+         and TyApp ("List", [to]) the left, so Map<number,text> and Map<text,number> have
          distinct Core identities (a single nominal "map" would lose k and v).
          type_tag gives "map_K_V"; the runtime layout is a uniform f64 handle
          (a Section); only the compile-time identity is distinct. *)
@@ -438,6 +437,8 @@ let rec desugar_ty (t : S.ty) : C.ty =
             | None -> C.TyPlace "number")
        | None -> C.TyPlace "number")
   | S.TyUser n -> C.TyPlace n
+  (* a generic coproduct has the carrier of its name: the arguments do not change a handle *)
+  | S.TyApp (n, _) when Hashtbl.mem inductive_type_names n -> desugar_ty (S.TyUser n)
   | S.TyApp (n, _) -> C.TyPlace n   (* type args don't affect the uniform runtime carrier *)
   | S.TyVar n -> C.TyPlace n   (* type vars compile to opaque place at IR level *)
   | S.TyMetaVar n -> C.TyPlace (Printf.sprintf "alpha%d" n)  (* HM meta-var, same lowering *)
@@ -510,7 +511,6 @@ and ty_name (t : S.ty) : string =
   | S.TySigma (x, _, _) -> "Sigma_" ^ x
   | S.TyId _ -> "Id"
   | S.TyPathP _ -> "PathP"
-  | S.TyList _ -> "list"
   | S.TyMap _ -> "map"
   | S.TyChannel _ -> "stream"
   | (S.TySum _ | S.TySumIn _) as sum_ty -> Tyenv.type_tag sum_ty
@@ -1046,6 +1046,9 @@ and desugar_expr (e0 : S.expr) : C.term =
       in
       (* The surface Sequence.X lowers to the internal __stream_X. *)
       let (name', args') =
+        match Hashtbl.find_opt S.list_method_sites (loc.S.file, loc.S.start_line, loc.S.end_line, loc.S.end_col) with
+        | Some p -> (p, args)
+        | None ->
         (* Auto-wrap: a fold/map/filter function passed by bare name
          * (`Sequence.fold(s,0,g)`) is wrapped in an inline lambda
          * `fun(__sf0,..) => g(__sf0,..)` — exactly the suggested form
@@ -1100,14 +1103,7 @@ and desugar_expr (e0 : S.expr) : C.term =
         | "sum_take" -> ("__stream_sum_take", args)
         | "to_stream" -> ("__stream_to_stream", args)
         (* Backward-compat: Sequence.X e Stream.X surface syntax. *)
-        | "Sequence__map" -> ("__stream_map", wrap_fn 1 args)
-        | "Sequence__filter" -> ("__stream_filter", wrap_fn 1 args)
-        | "Sequence__fold" -> ("__stream_fold", wrap_fn 2 args)
-        | "Sequence__from_list" -> ("__stream_from_list", args)
-        (* Sequence.range(n) desugara a stream da list. *)
-        | "Sequence__range" ->
-            let list_call = S.ECall ("Sequence__range_to_list", args, S.dummy_loc) in
-            ("__stream_from_list", [list_call])
+        | "Sequence__fold" -> ("List__fold_left", args)
         (* Wire: the cross-Space channel family. Surface Wire.X maps to
            the runtime Stream__X symbols (the C runtime keeps the Stream__
            names). The Stream.X
@@ -1136,9 +1132,6 @@ and desugar_expr (e0 : S.expr) : C.term =
             let op = String.sub old_name 8 (String.length old_name - 8) in
             failwith (Printf.sprintf
               "[desugar] Stream.%s: a channel is a Wire (use Wire.%s). A Stream is the infinite pure unfold (iterate, take)." op op)
-        | "Stream__iterate" -> ("__stream_iterate", args)
-        | "Stream__take" -> ("__stream_take", args)
-        | "Stream__sum_take" -> ("__stream_sum_take", args)
         | _ ->
             (match try_chain_rewrite () with
              | Some (n, a) -> (n, a)
@@ -2614,17 +2607,18 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
 and v1_lower_foreach x e b loc =
   let cur = v1_fresh "cur" in
   let getcur () = v1_call "Space__get" [S.EVar (cur, S.dummy_loc)] in
+  (* the two projections of a Cons, in the arm's own slots *)
+  let field j = S.ECall ("__arm_field_" ^ string_of_int j, [getcur ()], loc) in
   [ S.SLet (cur, v1_call "Space__make" [e], loc);
     (* each turn looks whether the list is empty, takes its head and moves
        to its tail: one look per cell *)
     S.SWhile (
-      S.ENot (v1_call "List__is_empty" [getcur ()], S.dummy_loc),
-      S.SLet (x, v1_call "List__head" [getcur ()], loc)
+      (* Nil is a negative constant, a Cons a section *)
+      S.EBinop (S.OpGeq, getcur (), S.ELit (S.LitNumber 0.0, loc), loc),
+      S.SLet (x, field 0, loc)
       :: b
       @ [ S.SLet (v1_fresh "adv",
-                  v1_call "Space__set"
-                    [S.EVar (cur, S.dummy_loc);
-                     v1_call "List__tail" [getcur ()]], loc) ],
+                  v1_call "Space__set" [S.EVar (cur, S.dummy_loc); field 1], loc) ],
       loc) ]
 
 and v1_lower_foreach_stream x e b loc =

@@ -1,14 +1,16 @@
 place Entry {
+  fun first(l: List<Number>): Number { return match List.head(l) { Found as v => v, Absent => 0 } }
+  fun rest(l: List<Number>): List<Number> { return match List.tail(l) { Found as t => t, Absent => l } }
   fun main(): Number visits Output {
-    mut l := List.empty(0)
+    mut l := List.empty
     l <- List.cons(1207, l)
     l <- List.cons(1280, l)
     l <- List.cons(1445, l)
     _1 := Output.print(String.from_int(List.length(l)))
-    _2 := Output.print(String.from_int(List.head(l)))
-    _3 := Output.print(String.from_int(List.head(List.tail(l))))
-    _4 := Output.print(String.from_int(List.head(List.reverse(l))))
-    _5 := Output.print(String.from_int(List.length(List.tail(l))))
+    _2 := Output.print(String.from_int(first(l)))
+    _3 := Output.print(String.from_int(first(rest(l))))
+    _4 := Output.print(String.from_int(first(List.reverse(l))))
+    _5 := Output.print(String.from_int(List.length(rest(l))))
     return 0
   }
 }

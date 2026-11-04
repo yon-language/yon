@@ -144,9 +144,9 @@ def test_a_hashset_crosses(tmp_path):
 
 
 def test_a_list_crosses_in_order(tmp_path):
-    build = "  return List.cons(1, List.cons(2, List.cons(3, List.empty(0))))"
+    build = "  return List.cons(1, List.cons(2, List.cons(3, List.empty)))"
     rc = _cross(tmp_path, "", "List<Number>", build,
-                "List.head(x) * 100 + List.head(List.tail(x)) * 10 + List.length(x)")
+                "(match x { Nil => 0, Cons as (a, r) => a * 100 + (match r { Nil => 0, Cons as (b, s) => b * 10 }) }) + List.length(x)")
     assert rc == (100 + 20 + 3) % 256
 
 
@@ -179,10 +179,10 @@ def test_a_place_with_a_map_field_crosses(tmp_path):
 
 
 def test_a_list_of_strings_crosses(tmp_path):
-    build = '  return List.cons("abc", List.cons("de", List.empty(0)))'
+    build = '  return List.cons("abc", List.cons("de", List.empty))'
     rc = _cross(tmp_path, "", "List<String>", build,
-                "List.length(x) * 100 + String.length(List.head(x)) * 10"
-                " + String.length(List.head(List.tail(x)))")
+                "List.length(x) * 100 + (match x { Nil => 0, Cons as (a, r) => String.length(a) * 10"
+                " + (match r { Nil => 0, Cons as (b, s) => String.length(b) }) })")
     assert rc == (200 + 30 + 2) % 256
 
 

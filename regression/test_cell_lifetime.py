@@ -80,7 +80,7 @@ fun main: Number {
 def test_the_hidden_cell_of_a_for_every_lives_one_turn_of_the_outer_loop(tmp_path):
     src = """place Entry {
 fun main: Number {
-  l := List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
+  l := List.cons(1, List.cons(2, List.cons(3, List.empty)))
   mut total := 0
   iter 2000 do {
     for every x in l {

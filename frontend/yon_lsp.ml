@@ -151,7 +151,7 @@ let rec ty_str (t : Surface_ast.ty) : string =
   | Surface_ast.TyPrimIn (s, _) -> s
   | Surface_ast.TySum _ -> "sum"
   | Surface_ast.TySumIn _ -> "sum"
-  | Surface_ast.TyList t -> "list of " ^ ty_str t
+  | Surface_ast.TyApp ("List", [t]) -> "list of " ^ ty_str t
   | Surface_ast.TyMap (k, v) -> "map of " ^ ty_str k ^ " to " ^ ty_str v
   | Surface_ast.TyChannel t -> "Wire<" ^ ty_str t ^ ">"
   | Surface_ast.TyUser s -> s

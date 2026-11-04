@@ -98,7 +98,7 @@ fun total(c: Chain<Number>): Number {
   return match c { Nil => 0, Link as (x, rest) => x + total(rest) }
 }
 fun main: Number {
-  c := (7, (8, (24, Nil) ↪ Link) ↪ Link) ↪ Link
+  c := (7, (8, (24, Chain.Nil) ↪ Link) ↪ Link) ↪ Link
   return len(c) * 0 + total(c) + 3
 }
 }

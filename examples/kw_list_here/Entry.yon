@@ -10,7 +10,7 @@ fun total(xs: List<Number>): Number {
   return acc
 }
 fun main: Number {
-  lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
+  lst := List.cons(5, List.cons(7, List.cons(9, List.empty)))
   return total(lst)
 }
 }

@@ -259,24 +259,6 @@ let decode_int_coords (t : term) : int list option =
 let try_reduce_stdlib (t : term) : term option =
   match t with
   (* List operations *)
-  | App (Var "List__empty", _) ->
-      Some (list_empty ())
-  | App (App (Var "List__cons", h), rest) ->
-      list_cons h rest
-  | App (Var "List__head", lst) ->
-      list_head lst
-  | App (Var "List__tail", lst) ->
-      list_tail lst
-  | App (Var "List__length", lst) ->
-      list_length lst
-  | App (Var "List__is_empty", lst) ->
-      list_is_empty lst
-  | App (App (Var "List__append", a), b) ->
-      list_append a b
-
-  (* MerkleTree: the spine of a coproduct value (its arm's tag at the head,
-     its payloads in the children). A leaf and a node are normal forms; the
-     two projections read them, as the runtime's merkle_label/child do. *)
   | App (Var "MerkleTree__label", App (Var "MerkleTree__leaf", x))
   | App (Var "MerkleTree__label",
          App (App (App (Var "MerkleTree__node2", x), _), _)) -> Some x
@@ -358,7 +340,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   let ti64 = TyUser "Int64" and tregion = TyUser "Region" in
   let tword = TyUser "Word64" in
   let ttext = TyUser "String" in
-  let tlist t = TyList t in
+  let tlist t = TyApp ("List", [t]) in
   (* the generic collections' own parameters, as their places declare them *)
   let tk = TyVar "K" and tv = TyVar "V" and tt = TyVar "T" in
   let hmap = TyApp ("HashMap", [tk; tv]) and hset = TyApp ("HashSet", [tt]) in
@@ -382,16 +364,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "curtis", [], tframe;
       "refine", [tframe; tpoint], tframe;
       "canon", [tframe; tpoint], tpoint;
-    ];
-    "List", [
-      "empty", [tunit], TyList tunk;
-      "cons", [tunk; tlist tunk], tlist tunk;
-      "head", [tlist tunk], tunk;
-      "tail", [tlist tunk], tlist tunk;
-      "length", [tlist tunk], tnum;
-      "is_empty", [tlist tunk], tbool;
-      "append", [tlist tunk; tlist tunk], tlist tunk;
-      "reverse", [tlist tunk], tlist tunk;
     ];
     (* Vec: persistent dynamic array (v1 copy-on-write). push/set return a new
      * handle leaving the source untouched; the building block for FxIndexMap. *)
@@ -799,7 +771,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "fold",      [tnum; tnum; tunk], tnum;
       (* generate [0, 1, ..., n-1] as stream. *)
       "range",     [tnum], tnum;
-      "range_to_list", [tnum], tlist tnum;
     ];
   ]
 
@@ -826,7 +797,7 @@ let lookup_stdlib_signature (qname : string) : (Surface_ast.ty list * Surface_as
   else
   if String.length qname > 9 && String.sub qname 0 9 = "__stream_" then begin
     match String.sub qname 9 (String.length qname - 9) with
-    | "from_list" -> Some ([Surface_ast.TyList tunk], tunk)
+    | "from_list" -> Some ([Surface_ast.TyApp ("List", [tunk])], tunk)
     | "map" -> Some ([tunk; tunk], tunk)
     | "filter" -> Some ([tunk; tunk], tunk)
     | "fold" -> Some ([tunk; tunk; tunk], tunk)

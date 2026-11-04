@@ -59,7 +59,7 @@ let rec fmt_ty (t : ty) : string =
        | "boolean" -> "Boolean" | "unit" -> "Unit"
        | other -> other)
   | TyPrimIn (s, opts) -> s ^ " in " ^ String.concat ", " opts
-  | TyList t -> "List<" ^ fmt_ty t ^ ">"
+  | TyApp ("List", [t]) -> "List<" ^ fmt_ty t ^ ">"
   | TyMap (k, v) -> "Map<" ^ fmt_ty k ^ ", " ^ fmt_ty v ^ ">"
   | TyChannel t -> "Wire<" ^ fmt_ty t ^ ">"
   | TyArrow (a, TyArrow (b, c)) ->

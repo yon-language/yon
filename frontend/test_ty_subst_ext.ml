@@ -50,8 +50,8 @@ let () =
   (* ── structure preservation + dependent codomains ───────────────────── *)
   Printf.printf "-- structure preservation --\n";
   check "apply into Pi: binder kept, domain+codomain substituted"
-    (apply_subst [(0, num)] (TyPi ("x", TyMetaVar 0, TyList (TyMetaVar 0)))
-     = TyPi ("x", num, TyList num));
+    (apply_subst [(0, num)] (TyPi ("x", TyMetaVar 0, TyApp ("List", [TyMetaVar 0])))
+     = TyPi ("x", num, TyApp ("List", [num])));
   check "apply into Sigma: binder kept, both sides substituted"
     (apply_subst [(0, num)] (TySigma ("p", TyMetaVar 0, TyMap (TyMetaVar 0, txt)))
      = TySigma ("p", num, TyMap (num, txt)));
@@ -85,7 +85,7 @@ let () =
   check "fmv(Pi(x, a0, a1)) = [0;1]"
     (fmv (TyPi ("x", TyMetaVar 0, TyMetaVar 1)) = [0; 1]);
   check "fmv(Arrow(a0, list a1)) = [0;1]"
-    (fmv (TyArrow (TyMetaVar 0, TyList (TyMetaVar 1))) = [0; 1]);
+    (fmv (TyArrow (TyMetaVar 0, TyApp ("List", [TyMetaVar 1]))) = [0; 1]);
   check "fmv(TySum[C a0 a2]) = [0;2]"
     (fmv (TySum [ { v_name = "C"; v_args = [ TyMetaVar 0; TyMetaVar 2 ] } ]) = [0; 2]);
 
@@ -127,7 +127,7 @@ let () =
     (match try_unify (TyMap (TyMetaVar 0, TyMetaVar 0)) (TyMap (num, txt)) with
      | Error (UMismatch _) -> true | _ -> false);
   check "unify unknown (list number) -> ok empty (unknown is a wildcard)"
-    (try_unify (TyPrim "unknown") (TyList num) = Ok []);
+    (try_unify (TyPrim "unknown") (TyApp ("List", [num])) = Ok []);
   check "unify TyUser P TyUser P -> ok empty"
     (try_unify (TyUser "P") (TyUser "P") = Ok []);
   check "unify TyUser P TyUser Q -> mismatch"
@@ -174,9 +174,9 @@ let () =
 
   (* ── compose_subst RHS substitution ─────────────────────────────────── *)
   Printf.printf "-- compose_subst --\n";
-  let comp = compose_subst [(1, num)] [(0, TyList (TyMetaVar 1))] in
+  let comp = compose_subst [(1, num)] [(0, TyApp ("List", [TyMetaVar 1]))] in
   check "compose applies sigma1 into sigma2's RHS: a0 -> list number"
-    (apply_subst comp (TyMetaVar 0) = TyList num);
+    (apply_subst comp (TyMetaVar 0) = TyApp ("List", [num]));
   check "compose keeps unshadowed sigma1 binding: a1 -> number"
     (apply_subst comp (TyMetaVar 1) = num);
 
