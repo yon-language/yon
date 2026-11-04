@@ -715,7 +715,7 @@ place_decl:
     carried = option(carried_clause)
     is_c = option(is_clause)
     uses = option(place_uses_clause)
-    over = option(over_clause)
+    option(over_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
     { (match is_c with
@@ -755,15 +755,13 @@ place_decl:
                | Some _ -> failwith ("place '" ^ name ^ "': " ^ what
                                      ^ " declared twice in the body")
                | None -> Some x)) None clauses in
-      let b_over = fold_clause "over" (function PcOver x -> Some x | _ -> None) in
       let b_sub  = fold_clause "subcontains" (function PcSubcontains x -> Some x | _ -> None) in
       let b_oerr = fold_clause "on error" (function PcOnError x -> Some x | _ -> None) in
-      let over = merge "over" over b_over in
       let ext  = b_sub in   (* the mono is a body clause only: this < B *)
       let oerr = merge "on error" oerr b_oerr in
-      if is_err && (over <> None || oerr <> None) then
+      if is_err && oerr <> None then
         failwith ("error '" ^ name ^ "': an error place takes only "
-                  ^ "subcontains (no over / on error)");
+                  ^ "subcontains (no on error)");
       if is_err && variants <> [] then
         failwith ("error '" ^ name ^ "': an error place declares fields, "
                   ^ "not `this >` arms");
@@ -797,7 +795,6 @@ place_decl:
                  pd_arms = variants;
                  pd_world = "__INFER";
                  pd_members = members;
-                 pd_over = over;
                  pd_laws = List.filter_map
                    (function FoLaw (l, _) -> Some l | _ -> None) members;
                  pd_subcontains = ext;
@@ -807,7 +804,8 @@ place_decl:
 (* Slice category: a place over X. The inhabitants of the place carry a
  * canonical reference to an instance of X. *)
 over_clause:
-  | OVER base = IDENT  { base }
+  | OVER IDENT
+    { (failwith "place P over X is gone: a family over X is a place with a projection to X, a field or a fun; its fibres are said in the laws" : unit) }
 
 (* place P ... on error E — an error morphism P -> E. `on` is read as a
  * plain identifier and validated contextually, the same scheme used by
@@ -870,7 +868,8 @@ place_member:
     { untyped_quantifier l q }
   /* the canonical clauses as body lines. `on` stays a bare IDENT
      (the header's contextual-keyword tactic), validated in the action. */
-  | OVER base = IDENT                     { PbiClause (PcOver base) }
+  | OVER IDENT
+    { failwith "place P over X is gone: a family over X is a place with a projection to X, a field or a fun; its fibres are said in the laws"  }
   /* the mono as containment arrow: `this < B` = this ⊂ B, a sub-object of B
      (mirror of the coproduct's `this > arms` = this ⊃ arms). The AST clause
      is PcSubcontains. */

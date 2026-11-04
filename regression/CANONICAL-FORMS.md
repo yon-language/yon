@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
 - productions REDUCED by a fixture (Menhir-verified): **101 / 101** surface (+3 structural allowlisted)
-- deviations rejected: **39**
+- deviations rejected: **40**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -77,6 +77,7 @@ from them; the `.yon` files are the specification, not this text.
 | new | `canonical` | accept | 42 | — |
 | pattern | `canonical` | accept | 42 | — |
 | place | `canonical` | accept | 0 | — |
+| place | `dev_old_over` | reject_clean | 1 | `a place with a projection` |
 | produce | `canonical` | accept | 42 | — |
 | produce | `dev_assign` | reject_clean | 1 | `is not supported inside` |
 | produce | `stmt_form` | accept | 42 | — |

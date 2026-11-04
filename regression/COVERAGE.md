@@ -47,7 +47,7 @@ takes its place.
 
 DONE — project-context constructs POSITIVES, gate-wired example projects
 (test_projects.py globs examples/**/yon.toml, asserts compile-accept):
-`place P over X` (examples/c_place_over), `cell .. from .. to ..`
+a family as a place with a projection (examples/c_place_projection), `cell .. from .. to ..`
 (examples/c_cell), abstract `prop p(..): proposition` (examples/c_prop_abstract),
 topos decl in a space `Topos.yon` (examples/c_prop_abstract, kw_topos_block, +
 every project). There is no `topos T at Space`: residence is

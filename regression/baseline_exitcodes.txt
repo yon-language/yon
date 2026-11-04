@@ -4,7 +4,7 @@ EMITFAIL union_cross_world_reject
 EMITFAIL union_field_obligation_reject
 RAN c_cell exit=0
 RAN c_morph_on_morphism exit=0
-RAN c_place_over exit=0
+RAN c_place_projection exit=0
 RAN c_prop_abstract exit=0
 RAN c_topos_at_space exit=0
 RAN capability_flow_demo exit=110

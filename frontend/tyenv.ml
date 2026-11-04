@@ -558,7 +558,6 @@ let with_builtins (env : env) : env =
     pd_arms = [];
     pd_world = "__Builtin";
     pd_members = [FoOp output_op_decl];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;

@@ -3437,7 +3437,6 @@ let place_info = List.filter_map (function
                pd_world = world;
                pd_members = List.map (fun (f, ty, _) ->
                  S.FoField { S.fd_name = f; fd_ty = ty; fd_loc = loc }) shown;
-               pd_over = None;
                pd_laws = [];
                pd_subcontains = None;
                pd_is_error = false;

@@ -509,7 +509,6 @@ let test_catt_place_equiv () =
     pd_members = List.map (fun (n, t) -> Surface_ast.FoField {
       fd_name = n; fd_ty = t; fd_loc = Surface_ast.dummy_loc;
     }) fields;
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -1597,7 +1596,6 @@ let test_place_visibility () =
       mk_op "deposit";
       mk_op "withdraw";
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -1648,7 +1646,6 @@ let test_place_relative_unknown () =
       FoField { fd_name = "balance"; fd_ty = TyPrim "number";
                 fd_loc = dummy_loc };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -1699,7 +1696,6 @@ let test_place_proposition_propagation () =
     pd_members = [
       FoField { fd_name = "x"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -1711,7 +1707,6 @@ let test_place_proposition_propagation () =
     pd_members = [
       FoField { fd_name = "y"; fd_ty = TyPrim "number"; fd_loc = dummy_loc };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -1778,7 +1773,6 @@ let test_excluded_middle_failure () =
   let pd = {
     pd_name = "Restricted"; pd_type_params = []; pd_term_params = []; pd_fusion = None; pd_width = None; pd_arms = []; pd_world = "W";
     pd_members = [];   (* sees nothing *)
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -2559,7 +2553,6 @@ let test_place_isomorphism () =
       FoField { fd_name = "a"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
       FoField { fd_name = "b"; fd_ty = TyPrim "text"; fd_loc = Surface_ast.dummy_loc };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -2574,7 +2567,6 @@ let test_place_isomorphism () =
       FoField { fd_name = "foo"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
       FoField { fd_name = "bar"; fd_ty = TyPrim "text"; fd_loc = Surface_ast.dummy_loc };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -2607,7 +2599,6 @@ let test_place_isomorphism_negative () =
     pd_members = [
       FoField { fd_name = "a"; fd_ty = TyPrim "number"; fd_loc = Surface_ast.dummy_loc };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -2621,7 +2612,6 @@ let test_place_isomorphism_negative () =
     pd_members = [
       FoField { fd_name = "x"; fd_ty = TyPrim "text"; fd_loc = Surface_ast.dummy_loc };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -3029,7 +3019,6 @@ let test_cell_custom_in_place () =
         cell_loc = loc;
       };
     ];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
@@ -3114,17 +3103,18 @@ let test_slice_place () =
     pd_world = "Shop";
     pd_members = [
       FoField { fd_name = "amount"; fd_ty = TyPrim "number"; fd_loc = loc };
+      FoField { fd_name = "customer"; fd_ty = TyUser "Customer"; fd_loc = loc };
     ];
-    pd_over = Some "Customer";
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;
     pd_on_error = None;
     pd_loc = loc;
   } in
-  if p.pd_over = Some "Customer" then
-    (Printf.printf "  Order over Customer (Order is fibered over Customer)\n";
-     Printf.printf "  Slice category Shop/Customer instantiated\n";
+  let projects_to_customer = List.exists (function
+      | Surface_ast.FoField f -> f.Surface_ast.fd_ty = TyUser "Customer" | _ -> false) p.pd_members in
+  if projects_to_customer then
+    (Printf.printf "  Order has a projection to Customer: a family over Customer\n";
      Printf.printf "Status: PASS\n"; true)
   else
     (Printf.printf "FAIL\n"; false)
@@ -3415,7 +3405,6 @@ let test_default_world_inference () =
     pd_type_params = []; pd_term_params = []; pd_fusion = None; pd_width = None; pd_arms = [];
     pd_world = "__INFER";  (* marker per inferenza *)
     pd_members = [];
-    pd_over = None;
     pd_laws = [];
     pd_subcontains = None;
     pd_is_error = false;

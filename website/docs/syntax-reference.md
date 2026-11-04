@@ -295,7 +295,7 @@ A `place` then takes its world by inference from the project's toml, not from an
 
 | Form | Status | Meaning |
 |---|---|---|
-| `place P [over X] [on error E] { members }` | ✓ | An object (its world is inferred from the toml; there is no `in W` clause). `over X` = slice (fibered over `X`); `on error E` = error morphism `P → E`. The sub-object mono is a **body clause**: `this < B` |
+| `place P [on error E] { members }` | ✓ | An object (its world is inferred from the toml; there is no `in W` clause). `over X` = slice (fibered over `X`); `on error E` = error morphism `P → E`. The sub-object mono is a **body clause**: `this < B` |
 | `error E { fields }` | ✓ | An error place (target of `on error`); world inferred from the toml, no `in W` clause. The mono into a parent error is the body clause `this < B` |
 | `field_name type` | ✓ | Field, **no colon**: `balance Number` |
 | `operation op(a: T): U` | ✓ | Operation (1-cell), written directly among the place's members |

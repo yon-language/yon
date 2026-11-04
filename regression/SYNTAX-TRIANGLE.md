@@ -83,7 +83,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `operation` | `OPERATION` | 3 | yes | exercised |
 | `or` | `OR` | 1 | yes | exercised |
 | `otherwise` | `OTHERWISE` | 2 | yes | exercised |
-| `over` | `OVER` | 2 | yes | exercised |
+| `over` | `OVER` | 1 | yes | exercised |
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
 | `place` | `PLACE` | 310 | yes | exercised |

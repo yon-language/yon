@@ -750,7 +750,6 @@ and cell_decl = {
    PcSubcontains clause), `on error E`. A clause also spelled in the header
    merges with the body line in the parser action; duplicates are rejected. *)
 type place_clause =
-  | PcOver of string
   | PcSubcontains of string
   | PcOnError of string
   | PcCarriedBy of string * bool * location
@@ -780,7 +779,6 @@ type place_decl = {
                                        natures: a place with or without arms. *)
   pd_world : string;
   pd_members : field_or_op list;
-  pd_over : string option;          (* slice category C/X: a place fibered over X *)
   pd_laws : string list;            (* algebraic laws declared on the place *)
   pd_subcontains : string option;       (* `this < B` in the body declares the injection
                                        A -> B (A is a sub-object of B). A is usable

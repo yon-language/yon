@@ -1,0 +1,4 @@
+place Slice {
+  base Base
+  weight Number
+}

@@ -621,7 +621,9 @@ place Entry {
 
 #### `over`
 
-The slice: `place P over X` declares objects equipped with a chosen map down to X.
+Only in `in sequence over x in e`. `place P over X` is refused: a family over X is a place with a
+projection to X, written as a field or a fun, and its fibres are said in the laws (`d ↦ src = t`).
+`this <` is the mono and does not take its place.
 
 ## Worlds of errors
 

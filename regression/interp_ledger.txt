@@ -17,7 +17,7 @@
 
 AGREE      c_cell
 AGREE      c_morph_on_morphism
-AGREE      c_place_over
+AGREE      c_place_projection
 AGREE      c_prop_abstract
 AGREE      c_topos_at_space
 INCOMPLETE capability_flow_demo refused

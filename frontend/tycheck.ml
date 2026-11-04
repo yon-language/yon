@@ -5148,7 +5148,7 @@ let synth_place_of_arm (union_pd : place_decl) (v : variant) : place_decl =
         FoField { fd_name = Printf.sprintf "_%d" (i + 1);
                   fd_ty = ty; fd_loc = union_pd.pd_loc })
         v.v_args;
-    pd_over = None; pd_laws = [];
+ pd_laws = [];
     pd_subcontains = None; pd_is_error = false; pd_on_error = None;
     pd_loc = union_pd.pd_loc }
 

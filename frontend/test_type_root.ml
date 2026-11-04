@@ -32,7 +32,7 @@ let env =
 let fld n t = FoField { fd_name = n; fd_ty = t; fd_loc = dummy_loc }
 let place ?(params = []) name members =
   { pd_name = name; pd_type_params = params; pd_term_params = []; pd_fusion = None; pd_width = None;
-    pd_arms = []; pd_world = ""; pd_members = members; pd_over = None;
+    pd_arms = []; pd_world = ""; pd_members = members;
     pd_laws = []; pd_subcontains = None; pd_is_error = false; pd_on_error = None;
     pd_loc = dummy_loc }
 let reading = place "Reading" [fld "temp" num; fld "humidity" num]

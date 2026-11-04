@@ -12,6 +12,8 @@ Double pin:
 A map out of a coproduct is a tuple of maps: a field declared on the union
 is an obligation on every arm."""
 import subprocess
+
+import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,30 +38,44 @@ def _emit(path):
     return subprocess.run([str(EMIT), str(path)], capture_output=True, timeout=60)
 
 
-def test_body_clause_is_the_header_clause(tmp_path):
-    """`over` written as a body line emits MLIR byte-identical to the header."""
+def _slice_twin(tmp_path, slice_text):
     import shutil
-    src = ROOT / "examples" / "c_place_over"
     twin = tmp_path / "twin"
-    shutil.copytree(src, twin)
-    (twin / "Slice.yon").write_text("place Slice {\n  over Base\n  weight Number\n}\n")
-    header = _emit(src)
-    body = _emit(twin)
+    shutil.copytree(ROOT / "examples" / "c_place_projection", twin)
+    (twin / "Slice.yon").write_text(slice_text)
+    return twin
+
+
+def _insert_twin(tmp_path, text):
+    import shutil
+    twin = tmp_path / "twin"
+    shutil.copytree(ROOT / "examples" / "error_morphism", twin)
+    (twin / "db" / "QueryInsert.yon").write_text(text)
+    return twin
+
+
+def test_body_clause_is_the_header_clause(tmp_path):
+    """`on error` written as a body line emits MLIR byte-identical to the header."""
+    (tmp_path / "h").mkdir()
+    (tmp_path / "b").mkdir()
+    header = _emit(_insert_twin(tmp_path / "h", "place QueryInsert on error QueryError {\n  sql Number\n}\n"))
+    body = _emit(_insert_twin(tmp_path / "b", "place QueryInsert {\n  on error QueryError\n  sql Number\n}\n"))
     assert header.returncode == 0 and body.returncode == 0, body.stderr[-300:]
     assert header.stdout == body.stdout, "body clause emits different MLIR than the header"
 
 
 def test_duplicate_clause_rejected(tmp_path):
-    import shutil
-    src = ROOT / "examples" / "c_place_over"
-    twin = tmp_path / "twin"
-    shutil.copytree(src, twin)
-    (twin / "Slice.yon").write_text(
-        "place Slice over Base {\n  over Base\n  weight Number\n}\n")
-    r = _emit(twin)
+    r = _emit(_insert_twin(tmp_path, "place QueryInsert on error QueryError {\n  on error QueryError\n  sql Number\n}\n"))
     assert r.returncode != 0
     assert b"declared both in the header and in the body" in r.stderr + r.stdout
 
+
+@pytest.mark.parametrize("text", ["place Slice over Base {\n  weight Number\n}\n",
+                                  "place Slice {\n  over Base\n  weight Number\n}\n"])
+def test_a_place_over_a_base_is_refused(tmp_path, text):
+    r = _emit(_slice_twin(tmp_path, text))
+    out = r.stderr + r.stdout
+    assert r.returncode != 0 and b"E1001" in out and b"a place with a projection" in out, out
 
 
 # ---- world-guard rule (f): the site of a union is DERIVED from its arms ----

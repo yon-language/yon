@@ -1,5 +1,5 @@
 [package]
-name = "c_place_over"
+name = "c_place_projection"
 
 [world.Ledger]
 objects = ["X"]

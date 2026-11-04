@@ -484,18 +484,17 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
   (* An `error E { ... }` reuses the place structure with pd_is_error. The surface
      never writes `in W` (the world is filesystem-inferred, pd_world = "__INFER");
      only emit `in W` if a concrete world was actually annotated. Clause order
-     mirrors the parser: <over>? <on error>? in the header; the mono is a BODY
+     mirrors the parser: <on error>? in the header; the mono is a BODY
      clause (`this < B`), emitted as the first body line below. *)
   let kw = if pd.pd_is_error then "error" else "place" in
   let world =
     if pd.pd_world = "__INFER" || pd.pd_world = "" then "" else " in " ^ pd.pd_world in
-  let over = match pd.pd_over with Some b -> " over " ^ b | None -> "" in
   let on_error = match pd.pd_on_error with Some e -> " on error " ^ e | None -> "" in
   let algebra = if Hashtbl.mem Surface_ast.algebra_places pd.pd_name then " is algebra" else "" in
   let uses = match Hashtbl.find_opt Surface_ast.place_algebras pd.pd_name with
     | Some names -> " uses algebra " ^ String.concat ", " names | None -> "" in
-  line f (Printf.sprintf "%s%s%s%s%s%s {"
-            (head kw) algebra uses world over on_error);
+  line f (Printf.sprintf "%s%s%s%s%s {"
+            (head kw) algebra uses world on_error);
   f.indent <- f.indent + 1;
   (match pd.pd_subcontains with
    | Some b -> line f ("this < " ^ b)

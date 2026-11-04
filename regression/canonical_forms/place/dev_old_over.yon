@@ -1,0 +1,5 @@
+place Base { tag Number }
+place Slice over Base { weight Number }
+place Entry {
+  fun main: Number { return 0 }
+}

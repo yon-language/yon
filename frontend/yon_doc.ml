@@ -63,8 +63,6 @@ let doc_place (p : S.place_decl) =
   line (Printf.sprintf "### place `%s` in `%s`" p.S.pd_name p.S.pd_world);
   (match p.S.pd_subcontains with
    | Some b -> line (Printf.sprintf "- sub-object of (`this <`): `%s`" b) | None -> ());
-  (match p.S.pd_over with
-   | Some x -> line (Printf.sprintf "- fibered over: `%s`" x) | None -> ());
   let fields = List.filter_map (function S.FoField f -> Some f | _ -> None) p.S.pd_members in
   let ops = List.filter_map (function S.FoOp o -> Some o | _ -> None) p.S.pd_members in
   if fields <> [] then begin
