@@ -1,0 +1,4 @@
+status: accept
+exit: 0
+note: |
+  A parameter of a place that stands for a term, with its type; the argument is a name.

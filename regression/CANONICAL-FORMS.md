@@ -8,7 +8,7 @@ EXECUTABLE fixtures under `regression/canonical_forms/`. This page is generated
 from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
-- productions REDUCED by a fixture (Menhir-verified): **100 / 100** surface (+3 structural allowlisted)
+- productions REDUCED by a fixture (Menhir-verified): **101 / 101** surface (+3 structural allowlisted)
 - deviations rejected: **37**
 - deviations still accepted (`accepted_deviation`): **1**
 
@@ -96,6 +96,7 @@ from them; the `.yon` files are the specification, not this text.
 | variant | `dev_old_hit_payload` | reject_clean | 1 | `an injection is written x ↪ Full` |
 | variant | `dev_old_plam` | reject_clean | 1 | `written walk i => e` |
 | variant | `dev_payload_type` | reject_clean | 1 | `expected number, got text` |
+| variant | `dev_term_parameter` | accept | 0 | — |
 | variant | `dev_wrong_arity` | reject_clean | 1 | `branch inj expects 1 binder(s), got 2` |
 | view | `canonical` | accept | 8 | — |
 | when | `canonical` | accept | 42 | — |

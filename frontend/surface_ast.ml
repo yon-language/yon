@@ -766,6 +766,7 @@ type place_body_item =
 
 type place_decl = {
   pd_name : string;
+  pd_term_params : (string * ty) list;  (* those of pd_type_params that stand for a term, with its type *)
   pd_type_params : string list;     (* generic parameters: `place Box<T> { value T }` *)
   pd_fusion : string option;        (* `carried by <prim>`: the AXIOMATIC carrier — this place
                                        IS the declared face of that primitive code (the
@@ -1194,3 +1195,6 @@ let rpc_returns : (string * int, ty) Hashtbl.t = Hashtbl.create 8
    word, and the call site reads it as that type's carrier. *)
 let phantom_return_sites : (string * int * int * int * int, ty) Hashtbl.t = Hashtbl.create 16
 
+(* The places whose parameters stand for terms: all the parameters in order, and those that
+   stand for a term with its type. *)
+let place_term_params : (string, string list * (string * ty) list) Hashtbl.t = Hashtbl.create 8

@@ -684,6 +684,15 @@ and desugar_expr (e0 : S.expr) : C.term =
       let (_, arm) = Hashtbl.find Surface_ast.qualified_arm_sites
           (loc.S.file, loc.S.start_line, loc.S.start_col) in
       desugar_expr (S.EHITConstr (arm, args, loc))
+  (* x ↪ arm against an expected coproduct: its site names that coproduct *)
+  | S.ECall (n, args, loc)
+    when (match site_coproduct loc with
+          | Some c ->
+              (match find_arm ~coproduct:c n with
+               | Some (_, tys) -> List.length tys = List.length args
+               | None -> false)
+          | None -> false) ->
+      desugar_expr (S.EHITConstr (n, args, loc))
   | S.ELit (S.LitNumber v, loc)
     when Hashtbl.mem Surface_ast.int64_literal_sites
            (loc.S.file, loc.S.start_line, loc.S.start_col, loc.S.end_line, loc.S.end_col) ->
@@ -3423,7 +3432,7 @@ let place_info = List.filter_map (function
              ) vd.S.vw_items in
              let synth_place : S.place_decl = {
                S.pd_name = vd.S.vw_name;
-               pd_type_params = []; pd_fusion = None; pd_width = None;
+               pd_type_params = []; pd_term_params = []; pd_fusion = None; pd_width = None;
                pd_arms = [];
                pd_world = world;
                pd_members = List.map (fun (f, ty, _) ->

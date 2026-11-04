@@ -62,6 +62,10 @@ let rec fmt_ty (t : ty) : string =
   | TyList t -> "List<" ^ fmt_ty t ^ ">"
   | TyMap (k, v) -> "Map<" ^ fmt_ty k ^ ", " ^ fmt_ty v ^ ">"
   | TyChannel t -> "Wire<" ^ fmt_ty t ^ ">"
+  | TyArrow (a, TyArrow (b, c)) ->
+      let rec doms = function TyArrow (d, r) -> let (ds, e) = doms r in (d :: ds, e) | e -> ([], e) in
+      let (ds, e) = doms c in
+      "(" ^ String.concat ", " (List.map fmt_ty (a :: b :: ds)) ^ ") -> " ^ fmt_ty e
   | TyArrow (a, b) -> fmt_ty a ^ " -> " ^ fmt_ty b
   | TyUser s -> s
   | TyApp (n, args) -> n ^ "<" ^ String.concat ", " (List.map fmt_ty args) ^ ">"
@@ -447,7 +451,12 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
     && Hashtbl.mem Surface_ast.internal_carrier_sites
          (pd.pd_loc.file, pd.pd_loc.start_line, pd.pd_loc.start_col) in
   let params = match pd.pd_type_params with
-    | [] -> "" | ps -> "<" ^ String.concat ", " ps ^ ">" in
+    | [] -> ""
+    | ps ->
+        "<" ^ String.concat ", " (List.map (fun p ->
+            match List.assoc_opt p pd.pd_term_params with
+            | Some t -> p ^ " : " ^ fmt_ty t
+            | None -> p) ps) ^ ">" in
   let head kw = (if internal then "internal " else "") ^ kw ^ " " ^ pd.pd_name ^ params
     ^ (match pd.pd_fusion with Some c -> " carried by " ^ c | None -> "") in
   if close && pd.pd_arms <> [] && pd.pd_members = [] then

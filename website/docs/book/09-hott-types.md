@@ -125,6 +125,21 @@ at the two poles, built with `walk`, a path-lambda over the interval, and the ke
 conversion checks its ends. Giving the poles two values with no path between them is
 refused.
 
+A place's parameters can stand for terms as well as types, written with their type between the
+angle brackets. The quotient and the pushout of the prelude are declared so:
+
+```
+place Quotient<A, r : (A, A) -> Type> { this > inj A
+  law quot ∀a : A ∀b : A, (a, b) ↦ r → a ↪ inj = b ↪ inj }
+
+place Pushout<A, B, C, f : A -> B, g : A -> C> { this > inl B :U inr C
+  law glue ∀a : A, a ↦ f ↪ inl = a ↦ g ↪ inr }
+```
+
+The argument is the name of a fun of that type, as in `Pushout<Number, Number, Number, Frecce.uno,
+Frecce.due>`, and the name is its identity: two funs with the same body make two types. The
+parameter is read in the laws, by the kernel, and does not exist at run time.
+
 ## Comprehension types
 
 The most Yon-flavoured citizen is the **comprehension**:

@@ -1,0 +1,9 @@
+place Scatola<A, r : (A, A) -> Type> { this > piena A
+  law uguali ∀a : A ∀b : A, (a, b) ↦ r → a ↪ piena = b ↪ piena }
+place Entry {
+  fun ogni(a: Number, b: Number): Type { return Number }
+  fun leggi(s: Scatola<Number, ogni>): Number {
+    return match s { piena as x => 42, uguali as (a, b, w) => walk i => 42 }
+  }
+  fun main: Number { return 0 }
+}

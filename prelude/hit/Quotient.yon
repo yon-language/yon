@@ -1,0 +1,3 @@
+/* Quotient<A, r> — A with a path between two points that the relation r relates. */
+place Quotient<A, r : (A, A) -> Type> { this > inj A
+  law quot ∀a : A ∀b : A, (a, b) ↦ r → a ↪ inj = b ↪ inj }

@@ -72,55 +72,8 @@ let register (env : hit_env) (sig_ : hit_signature) : hit_env =
 let lookup (env : hit_env) (name : string) : hit_signature option =
   List.assoc_opt name env
 
-(* ─── Built-in HITs ────────────────────────────────────────────────── *)
-
-(* Pushout: the standard pushout HIT. *)
-let pushout_signature : hit_signature = {
-  hit_name = "Pushout";
-  hit_type_params = ["A"; "B"; "C"];     (* C ←f A ->g B *)
-  hit_points = [
-    { pc_name = "inl";
-      pc_params = [("c", TyUser "C")];
-      pc_result = TyUser "Pushout"; };
-    { pc_name = "inr";
-      pc_params = [("b", TyUser "B")];
-      pc_result = TyUser "Pushout"; };
-  ];
-  hit_paths = [
-    { hpc_name = "glue";
-      hpc_params = [("a", TyUser "A")];
-      hpc_left = ECall ("inl", [ECall ("f", [EVar ("a", dummy_loc)], dummy_loc)], dummy_loc);
-      hpc_right = ECall ("inr", [ECall ("g", [EVar ("a", dummy_loc)], dummy_loc)], dummy_loc); };
-  ];
-}
-
-(* Quotient A R: the quotient of A by an equivalence relation R.
- *   point constructor: inj : A -> A/R
- *   path constructor: quot : forall(a, b: A). R a b -> inj(a) = inj(b)
- *)
-let quotient_signature : hit_signature = {
-  hit_name = "Quotient";
-  hit_type_params = ["A"; "R"];
-  hit_points = [
-    { pc_name = "inj";
-      pc_params = [("a", TyUser "A")];
-      pc_result = TyUser "Quotient"; };
-  ];
-  hit_paths = [
-    { hpc_name = "quot";
-      hpc_params = [("a", TyUser "A"); ("b", TyUser "A");
-                    ("r", TyUser "R")];
-      hpc_left = ECall ("inj", [EVar ("a", dummy_loc)], dummy_loc);
-      hpc_right = ECall ("inj", [EVar ("b", dummy_loc)], dummy_loc); };
-  ];
-}
-
-(* ─── Built-in environment ─────────────────────────────────────────── *)
-
-let builtin_env : hit_env = [
-  ("Pushout", pushout_signature);
-  ("Quotient", quotient_signature);
-]
+(* Every higher inductive type is a place: prelude/hit/. *)
+let builtin_env : hit_env = []
 
 (* ─── Constructor lookup ──────────────────────────────────────────── *)
 
@@ -144,6 +97,23 @@ let cell_ends (body : expr) : (expr option * expr * expr) option =
   | ECall ("__heyt_imp", [p; c], _) ->
       Option.map (fun (l, r) -> (Some p, l, r)) (ends c)
   | e -> Option.map (fun (l, r) -> (None, l, r)) (ends e)
+
+(* A parameter of a place that stands for a term, replaced by the arrow it is instantiated
+   with: the identity of the term is its name. *)
+let rec rename_term (x : string) (n : string) (e : expr) : expr =
+  let go = rename_term x n in
+  match e with
+  | EVar (y, l) when y = x -> EVar (n, l)
+  | EParen (a, l) -> EParen (go a, l)
+  | ERefl (a, l) -> ERefl (go a, l)
+  | EBinop (o, a, b, l) -> EBinop (o, go a, go b, l)
+  | ECall (y, a, l) when y = x ->
+      (match Hashtbl.find_opt arrow_sites (l.file, l.start_line, l.start_col, x) with
+       | Some k -> Hashtbl.replace arrow_sites (l.file, l.start_line, l.start_col, n) k
+       | None -> ());
+      ECall (n, List.map go a, l)
+  | ECall (y, a, l) -> ECall (y, List.map go a, l)
+  | e -> e
 
 (* Inside its place, the name of a nullary arm is that arm, whichever other coproduct lists it. *)
 let qualify_arms ?(house_fun = fun (_ : string) -> false)
@@ -214,8 +184,7 @@ let register_places (p : program) : unit =
 (* A cell of a place, by name. *)
 let cell_of_place (name : string) : (hit_signature * path_constructor) option =
   List.find_map (fun (_, sig_) ->
-      if List.mem_assoc sig_.hit_name builtin_env then None
-      else Option.map (fun c -> (sig_, c))
+      Option.map (fun c -> (sig_, c))
           (List.find_opt (fun c -> c.hpc_name = name) sig_.hit_paths)) !registry
 
 let find_constructor (env : hit_env) (cname : string)

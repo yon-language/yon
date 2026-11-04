@@ -180,3 +180,117 @@ def test_the_suspension_of_boolean_is_the_circle_by_univalence(tmp_path):
                  "fun path: Suspension<Boolean> = S1 {\n"
                  "  return ua(equiv(to_circle, from_circle, eta, eps))\n}\n")
     assert _exit(tmp_path, src) == 42
+
+
+CODICE = {"Cliente": PERSONA["Cliente"], "Utente": PERSONA["Utente"], "Codice": PERSONA["Codice"]}
+GLUED = "Pushout<Codice, Cliente, Utente, Codice.cliente_di, Codice.utente_di>"
+
+
+ARROWS = {"Frecce": "place Frecce {\n"
+          "  fun uno(x: Number): Number { return x + 1 }\n"
+          "  fun ancora_uno(x: Number): Number { return x + 1 }\n"
+          "  fun due(x: Number): Number { return x + 2 }\n}\n"}
+
+
+def _pushout(g):
+    glued = f"Pushout<Number, Number, Number, Frecce.uno, Frecce.{g}>"
+    return {**ARROWS, "Uso": "place Uso {\n"
+            f"  fun piano(p: {glued}): Number {{\n"
+            "    return match p { inl as b => b, inr as c => c,\n"
+            "                     glue as k => walk i => k + 1 }\n  }\n"
+            f"  fun dentro(x: Number): {glued} {{ return x ↪ inl }}\n"
+            "  fun run: Number { return piano(dentro(7)) }\n}\n"}
+
+
+def test_the_generic_pushout_takes_its_two_arrows_as_terms(tmp_path):
+    assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n",
+                 _pushout("ancora_uno")) == 7
+
+
+def test_the_ends_of_the_glue_are_those_of_the_arrows_it_is_given(tmp_path):
+    # the same match, given another arrow: the glue goes from k + 1 to k + 2
+    _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n",
+             _pushout("due"), "mismatch")
+
+
+def _arg_refused(tmp_path, arg, *words):
+    uso = {**CODICE, "Uso": "place Uso {\n"
+           f"  fun f(p: Pushout<Codice, Cliente, Utente, {arg}, Codice.utente_di>): Number "
+           "{ return 0 }\n}\n"}
+    _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, *words)
+
+
+def test_a_term_parameter_names_a_fun(tmp_path):
+    _arg_refused(tmp_path, "Codice.nessuna", "stands for a term", "names no fun")
+
+
+def test_a_term_parameter_has_the_declared_type(tmp_path):
+    _arg_refused(tmp_path, "Codice.utente_di", "stands for a term", "has type")
+
+
+def test_a_term_parameter_is_not_a_type(tmp_path):
+    _arg_refused(tmp_path, "Number", "stands for a term", "not the name of a fun")
+
+
+def test_a_place_with_term_parameters_takes_all_of_them(tmp_path):
+    uso = {**CODICE, "Uso": "place Uso {\n"
+           "  fun f(p: Pushout<Codice, Cliente, Utente>): Number { return 0 }\n}\n"}
+    _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, "takes 5")
+
+
+def test_two_arrows_of_different_names_make_two_types(tmp_path):
+    # the identity of a term parameter is its name
+    uso = {**CODICE, "Altro": "place Altro {\n"
+           "  fun cliente_di(c: Codice): Cliente { return .-> Cliente { nome c.n } }\n}\n",
+           "Uso": "place Uso {\n"
+           f"  fun f(p: {GLUED}): Number {{ return 0 }}\n"
+           "  fun g(p: Pushout<Codice, Cliente, Utente, Altro.cliente_di, Codice.utente_di>): Number "
+           "{ return f(p) }\n}\n"}
+    _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, "expects", "Altro__cliente_di")
+
+
+RELATED = {"Rel": "place Rel {\n"
+           "  fun qualsiasi(a: Number, b: Number): Type { return Number }\n}\n"}
+CLASSES = "Quotient<Number, Rel.qualsiasi>"
+
+
+def test_the_generic_quotient_takes_its_relation_as_a_term(tmp_path):
+    uso = {**RELATED, "Uso": "place Uso {\n"
+           f"  fun costante(q: {CLASSES}): Number {{\n"
+           "    return match q { inj as x => 5, quot as (a, b, w) => walk i => 5 }\n  }\n"
+           f"  fun dentro(x: Number): {CLASSES} {{ return x ↪ inj }}\n"
+           "  fun run: Number { return costante(dentro(3)) }\n}\n"}
+    assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n", uso) == 5
+
+
+def test_a_map_out_of_the_generic_quotient_owes_the_relation_a_path(tmp_path):
+    uso = {**RELATED, "Uso": "place Uso {\n"
+           f"  fun id_(q: {CLASSES}): Number {{\n"
+           "    return match q { inj as x => x, quot as (a, b, w) => walk i => a }\n  }\n}\n"}
+    _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, "mismatch")
+
+
+def test_a_relation_with_a_path_for_a_result_is_not_yet_a_form(tmp_path):
+    uso = {"Rel": "place Rel {\n"
+           "  fun stessa(a: Number, b: Number): Type { return a = b }\n}\n"}
+    r, _ = _compile(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso)
+    assert r.returncode != 0 and "E1001" in r.stdout + r.stderr
+
+
+def test_a_term_parameter_is_read_in_a_law_not_at_run_time(tmp_path):
+    # a fun of the place would need the arrow as a value, which erasure does not carry
+    places = {"Scatola": "place Scatola<r : Number -> Number> { this > piena Number\n"
+              "  fun leggi(x: Number): Number { return x ↦ r }\n}\n"}
+    r, _ = _compile(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", places)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out, out
+    assert "`r`" in out or " r" in out, out
+
+
+def test_a_term_parameter_may_name_a_fun_of_a_place_read_later(tmp_path):
+    # the check waits for every signature: the order of the places does not matter
+    uso = {"Aaa": "place Aaa {\n"
+           "  fun f(p: Quotient<Number, Zeta.ogni>): Number { return 0 }\n}\n",
+           "Zeta": "place Zeta {\n"
+           "  fun ogni(a: Number, b: Number): Type { return Number }\n}\n"}
+    assert _exit(tmp_path, "place Entry {\nfun main: Number { return 42 }\n}\n", uso) == 42

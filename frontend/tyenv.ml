@@ -554,7 +554,7 @@ let with_builtins (env : env) : env =
   } in
   let output_place = {
     pd_name = "Output";
-    pd_type_params = []; pd_fusion = None; pd_width = None;
+    pd_type_params = []; pd_term_params = []; pd_fusion = None; pd_width = None;
     pd_arms = [];
     pd_world = "__Builtin";
     pd_members = [FoOp output_op_decl];

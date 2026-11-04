@@ -2780,10 +2780,12 @@ got %s" (Tyenv.ty_to_string other)))
         let arm = match arg with
           | EVar (x, _) when Tyenv.lookup_var env x = None -> Some x
           | EHITConstr (c, _, _) -> Some c
+          | ECall (c, _, _) when Tyenv.lookup_fun env c = None -> Some c
           | _ -> None in
         match arm, named_coproduct_of_ty env pty with
         | Some x, Some c ->
-            List.length (coproducts_of_arm env x) > 1
+            (List.length (coproducts_of_arm env x) > 1
+             || Hashtbl.mem Surface_ast.place_term_params c)
             && coproduct_arm env c x <> None
         | _ -> false in
       let arg_tys_result =
@@ -3352,7 +3354,8 @@ and check_cells env ctx (pd : place_decl) : unit tc_result =
                let premise = Option.map own premise in
                let ps = pd.pd_type_params in
                let benv = Tyenv.add_vars env
-                   (List.map (fun (_, x, t) -> (x, resolve_tparams ps t)) st.ls_quants) in
+                   (List.map (fun (x, t) -> (x, resolve_tparams ps t)) pd.pd_term_params
+                    @ List.map (fun (_, x, t) -> (x, resolve_tparams ps t)) st.ls_quants) in
                let benv =
                  List.fold_left (fun e (x, t) ->
                      match t with
@@ -3365,13 +3368,71 @@ and check_cells env ctx (pd : place_decl) : unit tc_result =
                let* () = match premise with
                  | Some p -> let* _ = infer benv ctx p in ok ()
                  | None -> ok () in
-               let* lt = infer benv ctx left in
-               let* rt = infer benv ctx right in
+               (* with parameters that stand for terms, no end fixes them all: the end is a
+                  point of the place itself, at its own parameters *)
+               let self = if ps = [] then TyUser pd.pd_name
+                 else TyApp (pd.pd_name, List.map (fun p -> TyVar p) ps) in
+               let rec is_arm_end = function
+                 | EParen (a, _) -> is_arm_end a
+                 | ECall (n, _, l) ->
+                     Hashtbl.find_opt arrow_sites (l.file, l.start_line, l.start_col, n)
+                     = Some Inject
+                 | _ -> false in
+               let end_ty e =
+                 if pd.pd_term_params <> [] || is_arm_end e then
+                   let* () = check benv ctx e self in ok self
+                 else infer benv ctx e in
+               let* lt = end_ty left in
+               let* rt = end_ty right in
                if Dispatcher.type_equal benv ctx lt rt then ok ()
                else err pd.pd_loc (Printf.sprintf
                    "law %s of %s: source and target have different types: %s and %s"
                    name pd.pd_name (Tyenv.ty_to_string lt) (Tyenv.ty_to_string rt)))
       | _ -> ok ()) (ok ()) pd.pd_members
+
+(* A place applied to its arguments: where a parameter stands for a term, the argument is the
+   name of a fun of that type. *)
+and check_term_args env ctx loc (t : ty) : unit tc_result =
+  let each ts = List.fold_left (fun acc t ->
+      let* () = acc in check_term_args env ctx loc t) (ok ()) ts in
+  match t with
+  | TyArrow (a, b) -> each [a; b]
+  | TyList a | TyChannel a -> each [a]
+  | TyApp (n, args) ->
+      let* () = each (List.filter (function TyUser _ -> false | _ -> true) args) in
+      (match Hashtbl.find_opt Surface_ast.place_term_params n with
+       | Some (ps, terms) ->
+           if List.length ps <> List.length args then
+             err loc (Printf.sprintf "place %s takes %d parameter(s), got %d"
+                        n (List.length ps) (List.length args))
+           else
+             let bind = List.combine ps args in
+             List.fold_left (fun acc (p, arg) ->
+                 let* () = acc in
+                 match List.assoc_opt p terms with
+                 | None -> ok ()
+                 | Some declared ->
+                     let want = Ty_subst.subst_type_vars bind (resolve_tparams ps declared) in
+                     let shown = Tyenv.ty_to_string want in
+                     (match arg with
+                      | TyUser f ->
+                          (match Tyenv.lookup_fun env f with
+                           | None -> err loc (Printf.sprintf
+                               "the parameter %s of %s stands for a term of type %s: %s names no fun"
+                               p n shown f)
+                           | Some fs ->
+                               let got = List.fold_right (fun (_, d) c -> TyArrow (d, c))
+                                   fs.fs_params fs.fs_return in
+                               if Dispatcher.type_equal env ctx got want then ok ()
+                               else err loc (Printf.sprintf
+                                   "the parameter %s of %s stands for a term of type %s: %s has type %s"
+                                   p n shown f (Tyenv.ty_to_string got)))
+                      | a -> err loc (Printf.sprintf
+                          "the parameter %s of %s stands for a term of type %s: %s is not the name of a fun"
+                          p n shown (Tyenv.ty_to_string a))))
+               (ok ()) bind
+       | _ -> ok ())
+  | _ -> ok ()
 
 (* The scrutinee of a place whose laws are cells. *)
 and scrutinee_has_cells env ctx x : bool =
@@ -3489,7 +3550,18 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
       | Some cell ->
           let params = cell.Hit_env.hpc_params in
           let* vs = binders ctor pat (List.length params) in
-          let rename e = List.fold_left2 (fun acc (v, _) b ->
+          (* a parameter that stands for a term is the arrow it is instantiated with *)
+          let term_inst =
+            match Hashtbl.find_opt Surface_ast.place_term_params hname with
+            | Some (_, terms) when List.length ps = List.length targs ->
+                List.filter_map (fun (p, t) ->
+                    match t with
+                    | TyUser n when List.mem_assoc p terms -> Some (p, n)
+                    | _ -> None) (List.combine ps targs)
+            | _ -> [] in
+          let rename e =
+            let e = List.fold_left (fun acc (p, n) -> Hit_env.rename_term p n acc) e term_inst in
+            List.fold_left2 (fun acc (v, _) b ->
               if b = "_" then acc
               else Desugar.subst_evar_in_expr v (EVar (b, loc)) acc) e params vs in
           (* the binders in order: a premise's carrier is read off its left end *)
@@ -3583,8 +3655,21 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       let c = Option.get (named_coproduct_of_ty env expected) in
       Hashtbl.replace bare_point_sites (site_of loc) (x, c);
       ok ()
+  (* x ↪ Arm against a coproduct with that arm: the injection of that sum *)
+  | ECall (ctor, args, loc), _
+    when Tyenv.lookup_fun env ctor = None
+         && (match named_coproduct_of_ty env expected with
+             | Some c -> coproduct_arm env c ctor <> None
+                         && (Hashtbl.mem Surface_ast.place_term_params c
+                             || List.length (coproducts_of_arm env ctor) > 1)
+             | None -> false) ->
+      check env ctx (EHITConstr (ctor, args, loc)) expected
   | EHITConstr (ctor, args, loc), _
-    when not (is_builtin_hit_ctor ctor)
+    when (not (is_builtin_hit_ctor ctor)
+          || (match named_coproduct_of_ty env expected with
+              | Some c -> Hashtbl.mem Surface_ast.place_term_params c
+                          || Hit_env.lookup !Hit_env.registry c <> None
+              | None -> false))
          && (match named_coproduct_of_ty env expected with
              | Some c -> coproduct_arm env c ctor <> None
              | None -> false) ->
@@ -5028,7 +5113,7 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
    (a Constant union yields a constant synthetic arm). *)
 let synth_place_of_arm (union_pd : place_decl) (v : variant) : place_decl =
   { pd_name = v.v_name;
-    pd_type_params = union_pd.pd_type_params; pd_fusion = None; pd_width = None;
+    pd_type_params = union_pd.pd_type_params; pd_term_params = union_pd.pd_term_params; pd_fusion = None; pd_width = None;
     pd_arms = [];
     pd_world = union_pd.pd_world;
     pd_members =
@@ -6399,9 +6484,20 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
          argument must be well-formed. Arity against the declared parameters is
          not checked here (the head's type-param count is not threaded here). *)
       let* () = check_type_well_formed env (TyUser n) loc in
+      let* () = check_term_args env Reduce.empty_ctx loc t in
+      (* an argument that stands for a term is not a type: check_term_args reads it *)
+      let is_term i =
+        match Hashtbl.find_opt Surface_ast.place_term_params n with
+        | Some (ps, terms) ->
+            (match List.nth_opt ps i with
+             | Some p -> List.mem_assoc p terms
+             | None -> false)
+        | None -> false in
       List.fold_left
-        (fun acc a -> let* () = acc in check_type_well_formed env a loc)
-        (ok ()) args
+        (fun acc (i, a) ->
+           let* () = acc in
+           if is_term i then ok () else check_type_well_formed env a loc)
+        (ok ()) (List.mapi (fun i a -> (i, a)) args)
   | TyVar _ ->
       (* Type variables are always well-formed in the context of their
        * binder (function signature with <T1, T2>). *)

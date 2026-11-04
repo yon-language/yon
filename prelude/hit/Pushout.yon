@@ -1,0 +1,3 @@
+/* Pushout<A, B, C, f, g> — B and C glued along A: what f and g send a point of A to is one. */
+place Pushout<A, B, C, f : A -> B, g : A -> C> { this > inl B :U inr C
+  law glue ∀a : A, a ↦ f ↪ inl = a ↦ g ↪ inr }

@@ -669,10 +669,15 @@ top_let:
    `place Box<T>` (IDENT generics) share the `<`: ONE nonterminal keeps the
    grammar LR(1)-clean (two consecutive nullable `<`-starting nonterminals
    would conflict). Returns (width, tparams). *)
+place_param:
+  | x = IDENT                     { (x, None) }
+  | x = IDENT COLON t = type_expr { (x, Some t) }
+
 place_params:
   | (* empty *)                                        { (None, []) }
   | LT n = NUM_LIT GT                                  { (Some (int_of_float n), []) }
-  | LT ids = separated_nonempty_list(COMMA, IDENT) GT  { (None, ids) }
+  | LT ps = separated_nonempty_list(COMMA, place_param) GT
+    { (None, ps) }
 
 (* `place Number carried by number { }` — the carrier clause: the place is the
    declared face of that PRIMITIVE CODE (the prim name, not a layout: layout names are
@@ -762,7 +767,11 @@ place_decl:
       if is_err && variants <> [] then
         failwith ("error '" ^ name ^ "': an error place declares fields, "
                   ^ "not `this >` arms");
-      let (width, tparams) = wp in
+      let (width, all_params) = wp in
+      let tparams = List.map fst all_params in
+      let term_params = List.filter_map (fun (x, t) -> Option.map (fun t -> (x, t)) t) all_params in
+      if term_params <> [] then
+        Hashtbl.replace Surface_ast.place_term_params name (tparams, term_params);
       (* the house gives the name: retag this body's hoisted funs *)
       (let (_, _, _, n_arrows) = mv in
        Parser_state.retag_home name n_arrows);
@@ -782,7 +791,7 @@ place_decl:
        | None -> ());
       let fusion = Option.map fst fusion in
       TopPlace { pd_name = name;
-                 pd_type_params = tparams;
+                 pd_type_params = tparams; pd_term_params = term_params;
                  pd_fusion = fusion;
                  pd_width = width;
                  pd_arms = variants;
@@ -1014,10 +1023,16 @@ type_expr:
     { TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y) }
   | a = type_atom ARROW b = type_expr
     { TyArrow (a, b) }
+  (* a product as a domain: the arguments of a fun *)
+  | LPAREN a = type_expr COMMA rest = separated_nonempty_list(COMMA, type_expr) RPAREN ARROW b = type_expr
+    { List.fold_right (fun d c -> TyArrow (d, c)) (a :: rest) b }
   | a = type_atom %prec CLAUSE_END
     { a }
 
 named_type:
+  (* a term parameter's argument: an arrow of another place, by name *)
+  | home = IDENT DOT name = IDENT
+    { TyUser (home ^ "__" ^ name) }
   (* Type application at use: `Box<number>`, `HashMap<text, number>`.
      List/Map/Wire map to their own nodes; any other name applied to
      arguments is a TyApp. Wrong arity on List/Map/Wire fails at parse
