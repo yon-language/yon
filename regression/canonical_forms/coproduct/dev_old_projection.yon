@@ -1,0 +1,5 @@
+place Box { this > Full Number :U Empty }
+place Entry {
+  fun get(b: Box): Number { return match b { Full { _1 as p } => p, Empty => 0 } }
+  fun main(): Number { return 0 }
+}

@@ -14,7 +14,7 @@ place Entry {
 // nessun valore a runtime da lowerare.
 //
 fun eval(e: Expr): Number {
-  return match e { Lit(n) => n, Neg(m) => 0 - m, Add(s) => s + s }
+  return match e { Lit as n => n, Neg as m => 0 - m, Add as s => s + s }
 }
 
 fun main(): Number {

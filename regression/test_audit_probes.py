@@ -214,7 +214,7 @@ def test_an_xrelmap_is_keyed_by_lattice_points(tmp_path):
 place Entry {}
 fun main(): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found as v => v, Absent => 0 }),
     DomainError as d => 0
   }
 }
@@ -1260,7 +1260,7 @@ def test_a_let_bound_lambda_wins_over_a_top_level_homonym_in_a_match_arm(tmp_pat
            "fun sq(x: Number): Number { return 1000 }\n"
            "fun main(): Number {\n"
            "  sq := fun(x: Number) => x * x\n"
-           "  return match (3 |> Box) { Box(v) => sq(v), Empty => 0 }\n"
+           "  return match (3 |> Box) { Box as v => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
     _verdict(v == 9, f"sq(3) with the local sq is 9, got {v} (1000 mod 256 = 232 is the top-level sq)")
@@ -1272,7 +1272,7 @@ def test_a_let_bound_lambda_is_callable_from_a_match_arm(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
            "  sq := fun(x: Number) => x * x\n"
-           "  return match (3 |> Box) { Box(v) => sq(v), Empty => 0 }\n"
+           "  return match (3 |> Box) { Box as v => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
     _verdict(v == 9, f"sq(3) is 9, got {v}")
@@ -1515,7 +1515,7 @@ def test_a_named_path_is_in_scope_in_a_reassignment(tmp_path):
 def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
     src = ("place Box { this > Full Number :U Empty }\n"
            "place Entry {}\n"
-           "fun code(b: Box): Number { return match b { Full(n) => n, Empty => 0 } }\n"
+           "fun code(b: Box): Number { return match b { Full as n => n, Empty => 0 } }\n"
            "fun main(): Number {\n"
            "  v := 5 |> Full\n"
            "  mut acc := 0\n"
@@ -1813,7 +1813,7 @@ _SUSP_kernel = ("place Entry {{\n"
          "  mut n := hit(north)\n"
          "  m := hit(merid, 0)\n"
          "{body}"
-         "  return match e {{ north => 5, south => 7, merid(a) => plam i => 9 }}\n"
+         "  return match e {{ north => 5, south => 7, merid as a => plam i => 9 }}\n"
          "}}\n}}\n")
 
 
@@ -2534,7 +2534,7 @@ def test_setting_a_map_key_leaves_the_original_unchanged(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {}\n"
         "fun at1(m: HashMap<Number, Number>): Number {\n"
-        "  return match HashMap.get(m, 1) { Found(v) => v, Absent => 0 }\n}\n"
+        "  return match HashMap.get(m, 1) { Found as v => v, Absent => 0 }\n}\n"
         "fun look(m: HashMap<Number, Number>): Number { return at1(m) }\n"
         "fun main(): Number {\n"
         "  m := HashMap.set(HashMap.empty(), 1, 5)\n"
@@ -2655,7 +2655,7 @@ _PAYLOAD_runtime = """\
 place Expr { this > Lit Number :U Nil }
 place Entry {}
 fun get(e: Expr): Number {
-  return match e { Lit(n) => n, Nil => 0 }
+  return match e { Lit as n => n, Nil => 0 }
 }
 fun main(): Number {
   _a := IO.print_num(get(%s |> Lit))
@@ -2680,7 +2680,7 @@ _PAYLOAD_EXACT_runtime = """\
 place Expr { this > Lit Number :U Nil }
 place Entry {}
 fun get(e: Expr): Number {
-  return match e { Lit(n) => n, Nil => 0 }
+  return match e { Lit as n => n, Nil => 0 }
 }
 fun main(): Number {
   mut n := get(%s |> Lit)
@@ -2711,10 +2711,10 @@ place Tag { this > Named String :U Anon }
 place Expr { this > Lit Number :U Nil }
 place Wrapped { this > Wrap Expr :U None }
 place Entry {}
-fun flag(e: Switch): Number { return match e { Flag(b) => if b then 1 else 0, Off => 7 } }
-fun name(e: Tag): Number { return match e { Named(s) => String.length(s), Anon => 0 } }
+fun flag(e: Switch): Number { return match e { Flag as b => if b then 1 else 0, Off => 7 } }
+fun name(e: Tag): Number { return match e { Named as s => String.length(s), Anon => 0 } }
 fun inner(e: Wrapped): Number {
-  return match e { Wrap(x) => (match x { Lit(n) => n, Nil => 0 }), None => 0 }
+  return match e { Wrap as x => (match x { Lit as n => n, Nil => 0 }), None => 0 }
 }
 fun main(): Number {
   return flag((3 > 2) |> Flag) * 100 + name("abcde" |> Named) * 10
@@ -3009,8 +3009,8 @@ def test_a_missing_key_is_absent_not_zero(tmp_path):
 place Entry {}
 fun main(): Number {
   m := HashMap.set(HashMap.empty(), 1, 0)
-  mut a := match HashMap.get(m, 1) { Found(v) => (if v == 0 then 1 else 0), Absent => 5 }
-  mut b := match HashMap.get(m, 2) { Found(v) => 7, Absent => 10 }
+  mut a := match HashMap.get(m, 1) { Found as v => (if v == 0 then 1 else 0), Absent => 5 }
+  mut b := match HashMap.get(m, 2) { Found as v => 7, Absent => 10 }
   return a + b
 }
 """
@@ -3026,7 +3026,7 @@ place Entry {}
 fun round_trip(x: Int64): Number {
   m := HashMap.set(HashMap.empty(), 1, x)
   s := HashSet.add(HashSet.empty(), x)
-  mut a := match HashMap.get(m, 1) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
+  mut a := match HashMap.get(m, 1) { Found as v => (if v == x then 1 else 0), Absent => 0 }
   return if HashSet.contains(s, x) then a else 0
 }
 fun main(): Number {
@@ -3067,7 +3067,7 @@ fun main(): Number {
   m10 := fill(HashMap.empty(), 0, 10)
   m1000 := fill(m10, 10, 1000)
   ok10 := if HashMap.size(m10) == 10 then (if HashMap.has(m10, 500) then 0 else 1) else 0
-  v999 := match HashMap.get(m1000, 999) { Found(v) => v, Absent => 0 }
+  v999 := match HashMap.get(m1000, 999) { Found as v => v, Absent => 0 }
   ok1000 := if HashMap.size(m1000) == 1000 then (if v999 == 1998 then 1 else 0) else 0
   return ok10 * 10 + ok1000
 }
@@ -3125,7 +3125,7 @@ def test_xrelmap_returns_the_stored_number(tmp_path):
     entry = """\
 place Entry {}
 fun held(x: Number): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found(v) => v, Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found as v => v, Absent => 0 }
 }
 fun main(): Number {
   _a := IO.print_num(held(2.5))
@@ -3141,7 +3141,7 @@ def test_xrelmap_at_a_point_returns_the_stored_number(tmp_path):
     entry = """\
 place Entry {}
 fun held(p: LatticePoint, x: Number): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found(v) => v, Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found as v => v, Absent => 0 }
 }
 fun both(p: LatticePoint): Number {
   _a := IO.print_num(held(p, 2.5))
@@ -3161,7 +3161,7 @@ def test_xrelmap_at_a_point_returns_a_small_integer(tmp_path):
 place Entry {}
 fun main(): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found(v) => v, Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found as v => v, Absent => 0 }),
     DomainError as d => 0 }
 }
 """
@@ -3180,19 +3180,19 @@ fun same_n(v: Number, x: Number): Number {
 }
 fun point_n(x: Number): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found(v) => same_n(v, x), Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found as v => same_n(v, x), Absent => 0 }),
     DomainError as d => 0 }
 }
 fun xrel_n(x: Number): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found(v) => same_n(v, x), Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found as v => same_n(v, x), Absent => 0 }
 }
 fun point_i(x: Int64): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found(v) => (if v == x then 1 else 0), Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found as v => (if v == x then 1 else 0), Absent => 0 }),
     DomainError as d => 0 }
 }
 fun xrel_i(x: Int64): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found(v) => (if v == x then 1 else 0), Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found as v => (if v == x then 1 else 0), Absent => 0 }
 }
 fun both_n(x: Number): Number { return point_n(x) * xrel_n(x) }
 fun both_i(x: Int64): Number { return point_i(x) * xrel_i(x) }
@@ -3202,7 +3202,7 @@ fun main(): Number {
                 + both_n(inf) + both_n(0 - inf)
   ints := both_i(Int64.max_value()) + both_i(Int64.min_value()) + both_i(9007199254740993)
   empty := match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.empty(), p) { Found(v) => 0, Absent => 1 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.empty(), p) { Found as v => 0, Absent => 1 }),
     DomainError as d => 0 }
   return floats * 100 + ints * 10 + empty
 }
@@ -3252,7 +3252,7 @@ place Entry {}
 fun main(): Number {
   m := HashMap.set(HashMap.empty(), String.concat("ab", "c"), 7)
   m2 := HashMap.set(m, String.concat("a", "bc"), 9)
-  got := match HashMap.get(m2, "abc") { Found(v) => v, Absent => 0 }
+  got := match HashMap.get(m2, "abc") { Found as v => v, Absent => 0 }
   return HashMap.size(m2) * 10 + got
 }
 """
@@ -3265,10 +3265,10 @@ def test_a_text_value_rides_a_lattice_slot_by_its_handle(tmp_path):
 place Entry {}
 fun main(): Number {
   m := XRelMap.set(XRelMap.empty(), 1536, String.concat("ab", "c"))
-  mut x := match XRelMap.get(m, 1536) { Found(v) => (if v == "abc" then 1 else 0), Absent => 0 }
+  mut x := match XRelMap.get(m, 1536) { Found as v => (if v == "abc" then 1 else 0), Absent => 0 }
   y := match LatticePoint.of_coordinate(1536) {
     LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, String.concat("a", "bc")), p) {
-      Found(v) => String.length(v), Absent => 0 }),
+      Found as v => String.length(v), Absent => 0 }),
     DomainError as d => 0 }
   return x * 10 + y
 }
@@ -3283,7 +3283,7 @@ place Entry {}
 fun main(): Number {
   m := XRelMap.set(XRelMap.empty(), String.concat("ab", "c"), 7)
   m2 := XRelMap.set(m, String.concat("a", "bc"), 9)
-  got := match XRelMap.get(m2, "abc") { Found(v) => v, Absent => 0 }
+  got := match XRelMap.get(m2, "abc") { Found as v => v, Absent => 0 }
   return XRelMap.size(m2) * 10 + got
 }
 """
@@ -3644,7 +3644,7 @@ def test_a_user_place_named_like_a_prelude_place_is_refused(tmp_path):
     entry = ("place Entry {}\nfun main(): Number {\n"
              "  m := HashMap.set(HashMap.empty(), 1, 10)\n"
              "  l := .-> Lookup { hits 32 }\n"
-             "  return l.hits + (match HashMap.get(m, 1) { Found(v) => v, Absent => 0 })\n}\n")
+             "  return l.hits + (match HashMap.get(m, 1) { Found as v => v, Absent => 0 })\n}\n")
     proj = _one_place_project(tmp_path, "Lookup", "place Lookup { hits Number }\n", entry)
     rc, out = _compile(proj, tmp_path / "exe")
     assert _clean_rejection(rc, out, 'E2006', 'takes the name of a place of the library') and "[E2006]" in out, out
@@ -3760,7 +3760,7 @@ fun d(): Decision { return Absent }
 fun l(): Lookup<Number> { return Absent }
 fun main(): Number {
   mut x := match d() { Present => 1, Absent => 2, Unknown => 3 }
-  y := match l() { Found(v) => 10, Absent => 20 }
+  y := match l() { Found as v => 10, Absent => 20 }
   return x * 100 + y
 }
 """
@@ -3772,7 +3772,7 @@ def test_the_qualified_arm_names_its_coproduct(tmp_path):
     entry = """place Entry {}
 fun main(): Number {
   mut x := match Decision.Absent { Present => 1, Absent => 2, Unknown => 3 }
-  y := match Lookup.Found(5) { Found(v) => v, Absent => 20 }
+  y := match Lookup.Found(5) { Found as v => v, Absent => 20 }
   return x * 100 + y
 }
 """

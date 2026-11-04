@@ -30,7 +30,7 @@ fun lex(s: String): TokList {
 
 // ── oracle: each token weighs a distinct value ──────────────────────────────
 fun tok_weight(t: Token): Number {
-  return match t { TNum(n)  => n,
+  return match t { TNum as n  => n,
       TPlus    => 100,
       TStar    => 200,
       TLParen  => 300,
@@ -40,7 +40,7 @@ fun tok_weight(t: Token): Number {
 
 fun checksum(l: TokList): Number {
   return match l { TkNil        => 0,
-      TkCons(h, t) => tok_weight(h) + checksum(t) }
+      TkCons as (h, t) => tok_weight(h) + checksum(t) }
 }
 
 // source "2+3*4" = codes 50 43 51 42 52

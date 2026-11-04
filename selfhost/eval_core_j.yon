@@ -6,27 +6,27 @@ place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U
 
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return match t { TLit(n)     => n |> TLit,
-      TVar(i)     => if i >= c then i + d |> TVar else i |> TVar,
-      TLam(b)     => shift(d, c + 1, b) |> TLam,
-      TApp(f, x)  => (shift(d, c, f), shift(d, c, x)) |> TApp,
-      TPair(a, b) => (shift(d, c, a), shift(d, c, b)) |> TPair,
-      TFst(p)     => shift(d, c, p) |> TFst,
-      TSnd(p)     => shift(d, c, p) |> TSnd,
-      TRefl(a)    => shift(d, c, a) |> TRefl,
-      TJ(mo, ba, pa) => (shift(d, c, mo), shift(d, c, ba), shift(d, c, pa)) |> TJ }
+  return match t { TLit as n     => n |> TLit,
+      TVar as i     => if i >= c then i + d |> TVar else i |> TVar,
+      TLam as b     => shift(d, c + 1, b) |> TLam,
+      TApp as (f, x)  => (shift(d, c, f), shift(d, c, x)) |> TApp,
+      TPair as (a, b) => (shift(d, c, a), shift(d, c, b)) |> TPair,
+      TFst as p     => shift(d, c, p) |> TFst,
+      TSnd as p     => shift(d, c, p) |> TSnd,
+      TRefl as a    => shift(d, c, a) |> TRefl,
+      TJ as (mo, ba, pa) => (shift(d, c, mo), shift(d, c, ba), shift(d, c, pa)) |> TJ }
 }
 
 fun subst(j: Number, s: Term, t: Term): Term {
-  return match t { TLit(n)     => n |> TLit,
-      TVar(i)     => if i == j then s else i |> TVar,
-      TLam(b)     => subst(j + 1, shift(1, 0, s), b) |> TLam,
-      TApp(f, x)  => (subst(j, s, f), subst(j, s, x)) |> TApp,
-      TPair(a, b) => (subst(j, s, a), subst(j, s, b)) |> TPair,
-      TFst(p)     => subst(j, s, p) |> TFst,
-      TSnd(p)     => subst(j, s, p) |> TSnd,
-      TRefl(a)    => subst(j, s, a) |> TRefl,
-      TJ(mo, ba, pa) => (subst(j, s, mo), subst(j, s, ba), subst(j, s, pa)) |> TJ }
+  return match t { TLit as n     => n |> TLit,
+      TVar as i     => if i == j then s else i |> TVar,
+      TLam as b     => subst(j + 1, shift(1, 0, s), b) |> TLam,
+      TApp as (f, x)  => (subst(j, s, f), subst(j, s, x)) |> TApp,
+      TPair as (a, b) => (subst(j, s, a), subst(j, s, b)) |> TPair,
+      TFst as p     => subst(j, s, p) |> TFst,
+      TSnd as p     => subst(j, s, p) |> TSnd,
+      TRefl as a    => subst(j, s, a) |> TRefl,
+      TJ as (mo, ba, pa) => (subst(j, s, mo), subst(j, s, ba), subst(j, s, pa)) |> TJ }
 }
 
 fun beta(body: Term, arg: Term): Term {
@@ -34,20 +34,20 @@ fun beta(body: Term, arg: Term): Term {
 }
 
 fun eval(t: Term): Term {
-  return match t { TLit(n)     => n |> TLit,
-      TVar(i)     => i |> TVar,
-      TLam(b)     => b |> TLam,
-      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))), _ => (eval(f), eval(x)) |> TApp },
-      TPair(a, b) => (eval(a), eval(b)) |> TPair,
-      TFst(p)     => match eval(p) { TPair(a, b) => eval(a), _ => eval(p) |> TFst },
-      TSnd(p)     => match eval(p) { TPair(a, b) => eval(b), _ => eval(p) |> TSnd },
-      TRefl(a)    => eval(a) |> TRefl,
-      TJ(mo, ba, pa) => match eval(pa) { TRefl(a) => eval((ba, a) |> TApp),
+  return match t { TLit as n     => n |> TLit,
+      TVar as i     => i |> TVar,
+      TLam as b     => b |> TLam,
+      TApp as (f, x)  => match eval(f) { TLam as b => eval(beta(b, eval(x))), _ => (eval(f), eval(x)) |> TApp },
+      TPair as (a, b) => (eval(a), eval(b)) |> TPair,
+      TFst as p     => match eval(p) { TPair as (a, b) => eval(a), _ => eval(p) |> TFst },
+      TSnd as p     => match eval(p) { TPair as (a, b) => eval(b), _ => eval(p) |> TSnd },
+      TRefl as a    => eval(a) |> TRefl,
+      TJ as (mo, ba, pa) => match eval(pa) { TRefl as a => eval((ba, a) |> TApp),
                          _        => (mo, ba, eval(pa)) |> TJ } }
 }
 
 fun as_num(t: Term): Number {
-  return match t { TLit(n) => n, TVar(i) => i, _ => 0 }
+  return match t { TLit as n => n, TVar as i => i, _ => 0 }
 }
 
 fun main(): Number {

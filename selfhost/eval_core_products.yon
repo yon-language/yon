@@ -5,14 +5,14 @@ place Term { this > TLit Number :U TPair Term Term :U TFst Term :U TSnd Term }
 
 
 fun as_num(t: Term): Number {
-  return match t { TLit(n) => n, _ => 0 }
+  return match t { TLit as n => n, _ => 0 }
 }
 
 fun eval(t: Term): Term {
-  return match t { TLit(n)      => n |> TLit,
-      TPair(a, b)  => (eval(a), eval(b)) |> TPair,
-      TFst(p)      => match eval(p) { TPair(a, b) => eval(a), _ => eval(p) |> TFst },
-      TSnd(p)      => match eval(p) { TPair(a, b) => eval(b), _ => eval(p) |> TSnd } }
+  return match t { TLit as n      => n |> TLit,
+      TPair as (a, b)  => (eval(a), eval(b)) |> TPair,
+      TFst as p      => match eval(p) { TPair as (a, b) => eval(a), _ => eval(p) |> TFst },
+      TSnd as p      => match eval(p) { TPair as (a, b) => eval(b), _ => eval(p) |> TSnd } }
 }
 
 fun main(): Number {

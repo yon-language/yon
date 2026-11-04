@@ -1010,7 +1010,7 @@ the points. The reducer never identifies `loop` with `refl`, so the circle stays
 
 #### `match`
 
-KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): Number { return match t { Leaf { _1 as v } => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
+KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): Number { return match t { Leaf as v => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
 
 #### `El`
 

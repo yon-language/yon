@@ -56,14 +56,14 @@ VALUES = {
              "List.head(x) * 100 + List.head(List.tail(x)) * 10 + List.length(x)", 123),
     "hashmap": ("HashMap<Number, Number>",
                 _FILL.format(empty="HashMap.empty()", n=10, set="HashMap.set(m, k, k * 7)"),
-                "HashMap.size(x) + (match HashMap.get(x, 9) { Found(v) => v, Absent => 0 })", 73),
+                "HashMap.size(x) + (match HashMap.get(x, 9) { Found as v => v, Absent => 0 })", 73),
     "hashset": ("HashSet<Number>",
                 _FILL.format(empty="HashSet.empty()", n=12, set="HashSet.add(m, k * 2)"),
                 "HashSet.size(x) + (if HashSet.contains(x, 22) then 100 else 0)"
                 " + (if HashSet.contains(x, 23) then 50 else 0)", 112),
     "xrelmap": ("XRelMap<Number, Number>",
                 _FILL.format(empty="XRelMap.empty()", n=10, set="XRelMap.set(m, k, k + 40)"),
-                "XRelMap.size(x) + (match XRelMap.get(x, 5) { Found(v) => v, Absent => 0 })", 55),
+                "XRelMap.size(x) + (match XRelMap.get(x, 5) { Found as v => v, Absent => 0 })", 55),
     "xrelset": ("XRelSet<Number>",
                 _FILL.format(empty="XRelSet.empty()", n=9, set="XRelSet.add(m, k)"),
                 "XRelSet.size(x) + (if XRelSet.contains(x, 8) then 30 else 0)", 39),
@@ -76,7 +76,7 @@ VALUES = {
                "x.a.x * 10 + x.a.y + String.length(x.b.message) + x.b.line", 50),
     "place_map": ("Bag", '  return .-> Bag { label "abc" counts HashMap.set(HashMap.empty(), 4, 40) }',
                   "String.length(x.label) + (match HashMap.get(x.counts, 4) "
-                  "{ Found(v) => v, Absent => 0 })", 43),
+                  "{ Found as v => v, Absent => 0 })", 43),
     # a SyntaxError where an Error is expected: it crosses by its own frame
     "sub_object": ("Error", '  return .-> SyntaxError { message "unexpected }" line 30 }',
                    "String.length(x.message)", 12),

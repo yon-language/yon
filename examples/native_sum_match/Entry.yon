@@ -3,16 +3,16 @@ place Entry {
 // COSA: un tipo somma NATIVO (Box porta un number, Empty e' il caso base)
 // eliminato con lo zucchero `match`, con un ramo che LEGA il payload.
 //
-// PERCHE': `match x { ctor(v) => .., base => .. }` e' l'eliminatore non-dipendente
+// PERCHE': `match x { ctor as v => .., base => .. }` e' l'eliminatore non-dipendente
 // (mu-F, la parte-per-il-tutto: un ramo per costruttore). Il suo motive e' COSTANTE
 // (fun _ => T), quindi il tipo-risultato T va sintetizzato da un ramo il cui corpo
 // NON legge il proprio payload: il caso base `Empty => 0`. Ogni ramo e' poi
-// ricontrollato nel proprio ambiente di binding, cosi' `Box(n) => n * 2` verifica
+// ricontrollato nel proprio ambiente di binding, cosi' `Box as n => n * 2` verifica
 // con n : number in scope. Prima di questo fix il sugar prendeva il PRIMO ramo come
 // testimone e falliva quando quel ramo usava il suo payload (`unknown identifier n`).
 //
 fun run(m: Maybe): Number {
-  return match m { Box(n) => n * 2, Empty => 0 }   // 21 * 2 = 42
+  return match m { Box as n => n * 2, Empty => 0 }   // 21 * 2 = 42
 }
 
 fun main(): Number { return run(21 |> Box) }

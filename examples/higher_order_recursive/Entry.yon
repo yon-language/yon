@@ -15,14 +15,14 @@ place Entry {
 fun map_list(f: Number -> Number, xs: IntList): IntList {
   return match xs {
     Nil => Nil,
-    Cons(h, t) => ((f(h)), (map_list(f, t))) |> Cons
+    Cons as (h, t) => ((f(h)), (map_list(f, t))) |> Cons
   }
 }
 
 fun sum(xs: IntList): Number {
   return match xs {
     Nil => 0,
-    Cons(h, t) => h + sum(t)
+    Cons as (h, t) => h + sum(t)
   }
 }
 

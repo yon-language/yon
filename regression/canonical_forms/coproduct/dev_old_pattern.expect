@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+match: Cons as (h, t)
+note: |
+  A pattern on a payload is Cons as (h, t), the tuple of its binders; Found as p for one
+  payload. The old form is refused, and the diagnostic shows the new one.

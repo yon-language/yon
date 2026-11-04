@@ -111,8 +111,8 @@ fun ruling(): Decision { return Absent }
 fun lookup(): Lookup<Number> { return Absent }
 fun main(): Number {
   d := match ruling() { Present => 1, Absent => 2, Unknown => 3 }
-  l := match lookup() { Found(v) => v, Absent => 20 }
-  q := match Lookup.Found(20) { Found(v) => v, Absent => 0 }
+  l := match lookup() { Found as v => v, Absent => 20 }
+  q := match Lookup.Found(20) { Found as v => v, Absent => 0 }
   return d + l + q                 // 2 + 20 + 20 = 42
 }
 ```

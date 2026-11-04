@@ -3,7 +3,7 @@ place Entry {
   fun main(): Number {
     return hit_elim(
       motive,
-      [inj(x, y) => x, quot(a, b, r) => plam i => 0],
+      [inj as (x, y) => x, quot as (a, b, r) => plam i => 0],
       hit(inj, 7))
   }
 }

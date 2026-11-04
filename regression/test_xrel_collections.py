@@ -67,7 +67,7 @@ def test_a_map_is_a_value(tmp_path):
     entry = """\
 place Entry {}
 fun read(m: XRelMap<LatticePoint, Number>, p: LatticePoint): Number {
-  return match XRelMap.get(m, p) { Found(v) => v, Absent => 0 }
+  return match XRelMap.get(m, p) { Found as v => v, Absent => 0 }
 }
 fun two(p: LatticePoint): Number {
   m1 := XRelMap.set(XRelMap.empty(), p, 1)
@@ -96,13 +96,13 @@ fun orbit_at(n: Number): Number {
 }
 fun with_q(p: LatticePoint, q: LatticePoint): Number {
   a := XRelMap.set(XRelMap.set(XRelMap.empty(), p, 42), q, 7)
-  _1 := IO.print_num(match XRelMap.get(a, p) { Found(v) => v, Absent => 0 })
+  _1 := IO.print_num(match XRelMap.get(a, p) { Found as v => v, Absent => 0 })
   _2 := IO.print_num(if XRelMap.has(a, p) then 1 else 0)
   _3 := IO.print_num(LatticePoint.orbit(p))
   _4 := IO.print_num(if LatticePoint.orbit(p) == LatticePoint.orbit(q) then 1 else 0)
   _5 := IO.print_num(if LatticePoint.orbit(p) == orbit_at(16778752) then 1 else 0)
-  _6 := IO.print_num(match XRelMap.get(XRelMap.empty(), p) { Found(v) => 1, Absent => 0 })
-  _7 := IO.print_num(match XRelMap.get(a, q) { Found(v) => v, Absent => 0 })
+  _6 := IO.print_num(match XRelMap.get(XRelMap.empty(), p) { Found as v => 1, Absent => 0 })
+  _7 := IO.print_num(match XRelMap.get(a, q) { Found as v => v, Absent => 0 })
   return 0
 }
 fun at_p(p: LatticePoint): Number {
@@ -122,10 +122,10 @@ def test_keys_that_are_not_points(tmp_path):
 place Entry {}
 fun main(): Number {
   t := XRelMap.set(XRelMap.empty(), String.concat("ab", "c"), 7)
-  _1 := IO.print_num(match XRelMap.get(t, String.concat("a", "bc")) { Found(v) => v, Absent => 0 })
+  _1 := IO.print_num(match XRelMap.get(t, String.concat("a", "bc")) { Found as v => v, Absent => 0 })
   z := XRelMap.set(XRelMap.set(XRelMap.empty(), 0.0, 1), (0 - 1) * 0.0, 2)
   _2 := IO.print_num(XRelMap.size(z))
-  _3 := IO.print_num(match XRelMap.get(z, 2.5) { Found(v) => v, Absent => 0 - 1 })
+  _3 := IO.print_num(match XRelMap.get(z, 2.5) { Found as v => v, Absent => 0 - 1 })
   return 0
 }
 """
@@ -162,8 +162,8 @@ fun main(): Number {
   mut j := 0
   iter 300 do {
     key := j * 0.5
-    sh <- sh + (match HashMap.get(h, key) { Found(v) => v, Absent => 0 - 1 })
-    sx <- sx + (match XRelMap.get(x, key) { Found(v) => v, Absent => 0 - 1 })
+    sh <- sh + (match HashMap.get(h, key) { Found as v => v, Absent => 0 - 1 })
+    sx <- sx + (match XRelMap.get(x, key) { Found as v => v, Absent => 0 - 1 })
     j <- j + 1
   }
   _1 := IO.print_num(sh)
@@ -192,8 +192,8 @@ place Entry {}
 fun k(p: LatticePoint): LatticePoint { return XRelFrame.canon(XRelFrame.curtis(), p) }
 fun three(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number {
   a := XRelMap.set(XRelMap.empty(), k(p), 100)
-  _1 := IO.print_num(match XRelMap.get(a, k(m)) { Found(v) => v, Absent => 0 })
-  _2 := IO.print_num(match XRelMap.get(a, k(q)) { Found(v) => v, Absent => 0 })
+  _1 := IO.print_num(match XRelMap.get(a, k(m)) { Found as v => v, Absent => 0 })
+  _2 := IO.print_num(match XRelMap.get(a, k(q)) { Found as v => v, Absent => 0 })
   s := XRelSet.add(XRelSet.add(XRelSet.add(XRelSet.empty(), k(p)), k(m)), k(q))
   _3 := IO.print_num(XRelSet.size(s))
   return 0

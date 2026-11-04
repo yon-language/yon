@@ -22,14 +22,14 @@ place SsaEnv { this > SeNil :U SeCons String SsaEnv }
 place EmitR { this > ER String String Number }
 
 /* accessors on EmitR (single constructor -> match with one branch). */
-fun er_ssa(e: EmitR):  String { return match e { ER(s, c, n) => s } }
-fun er_code(e: EmitR): String { return match e { ER(s, c, n) => c } }
-fun er_ctr(e: EmitR):  Number { return match e { ER(s, c, n) => n } }
+fun er_ssa(e: EmitR):  String { return match e { ER as (s, c, n) => s } }
+fun er_code(e: EmitR): String { return match e { ER as (s, c, n) => c } }
+fun er_ctr(e: EmitR):  Number { return match e { ER as (s, c, n) => n } }
 
 /* environment: look up the i-th de Bruijn index. */
 fun lookup(i: Number, env: SsaEnv): String {
   return match env { SeNil => "%vERR",
-      SeCons(h, rest) => if i == 0 then h else lookup(i - 1, rest) }
+      SeCons as (h, rest) => if i == 0 then h else lookup(i - 1, rest) }
 }
 
 /* text helpers. */
@@ -50,20 +50,20 @@ fun line_raw(ssa: String, rhs: String): String {
 /* the emission catamorphism (threading env + counter). */
 fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
   return match t {
-    TLit(k) =>
+    TLit as k =>
       /* %vn = arith.constant k.0 : f64 */
       ((ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) |> ER),
-    TVar(i) =>
+    TVar as i =>
       /* a variable is already an ssa in env: no new line. */
       ((lookup(i, env), "", n) |> ER),
-    TLet(e1, body) =>
+    TLet as (e1, body) =>
       /* x := e1 ; body   (x is de Bruijn 0 in body) */
       gen_let(e1, body, env, n),
-    TCall(name, arg) =>
+    TCall as (name, arg) =>
       /* %vn = func.call @name(<arg>) : (f64) -> f64 */
       gen_call(name, arg, env, n),
-    TAdd(a, b) => gen_bin("arith.addf", a, b, env, n),
-    TMul(a, b) => gen_bin("arith.mulf", a, b, env, n)
+    TAdd as (a, b) => gen_bin("arith.addf", a, b, env, n),
+    TMul as (a, b) => gen_bin("arith.mulf", a, b, env, n)
   }
 }
 /* let: emit e1, push its ssa onto env, emit body in that env. */
@@ -95,7 +95,7 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
 /* a top-level function definition: func.func @name(%arg0: f64) -> f64 { body }. */
 fun gen_fun(f: Fun): String {
   return match f {
-    FnDef(name, body) => gen_fundef(name, body)
+    FnDef as (name, body) => gen_fundef(name, body)
   }
 }
 fun gen_fundef(name: String, body: Term): String {
@@ -110,7 +110,7 @@ fun gen_fundef(name: String, body: Term): String {
 fun gen_funs(fs: FunList): String {
   return match fs {
     FlNil => "",
-    FlCons(f, rest) => String.concat(gen_fun(f), gen_funs(rest))
+    FlCons as (f, rest) => String.concat(gen_fun(f), gen_funs(rest))
   }
 }
 

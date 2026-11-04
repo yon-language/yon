@@ -15,12 +15,12 @@ place Entry {
 
 // forma ESAUSTIVA: ogni costruttore elencato (il path senza wildcard)
 fun weight_exhaustive(c: Color): Number {
-  return match c { Red => 0, Green => 0, Blue { _1 as n } => n, Gray { } => 0 }
+  return match c { Red => 0, Green => 0, Blue as n => n, Gray { } => 0 }
 }
 
 // forma WILDCARD: la stessa intenzione, detta una volta
 fun weight_wild(c: Color): Number {
-  return match c { Blue { _1 as n } => n, _ => 0 }
+  return match c { Blue as n => n, _ => 0 }
 }
 
 // match-zucchero col wildcard

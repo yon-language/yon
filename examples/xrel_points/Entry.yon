@@ -23,7 +23,7 @@ fun orbit_at(n: Number): Number {
 fun checks(p: LatticePoint): Number {
   a0 := XRelMap.empty()
   a1 := XRelMap.set(a0, p, 42)
-  v := match XRelMap.get(a1, p) { Found(x) => x, Absent => 0 }
+  v := match XRelMap.get(a1, p) { Found as x => x, Absent => 0 }
   has := XRelMap.has(a1, p) and not XRelMap.has(a0, p)
   o0 := LatticePoint.orbit(p)
 

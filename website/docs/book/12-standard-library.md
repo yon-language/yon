@@ -19,7 +19,7 @@ value is encoded) is derived from the carrier of its parameters, never
 written per type: there is no collection per precision or per element type,
 and no type of the same name in two worlds. A lookup answers with a
 coproduct, `Lookup<V> { Found V :U Absent }`: `match HashMap.get(m, k) {
-Found(v) => …, Absent => … }`, so an absent key is never a value in
+Found as v => …, Absent => … }`, so an absent key is never a value in
 disguise. The runtime primitives are the places' `is given` bodies; `get` is
 written in Yon on top of them. The maps and sets come in two families with
 the same semantics and two stores, as an interface has two implementations:
@@ -82,7 +82,7 @@ hashes).
 fun main(): Number {
   m := HashMap.empty()
   m2 := HashMap.set(m, 1, 10)
-  ten := match HashMap.get(m2, 1) { Found(v) => v, Absent => 0 }
+  ten := match HashMap.get(m2, 1) { Found as v => v, Absent => 0 }
   g := Math.gcd(12, 18)                    // 6
   b := Bits.band(12, 10)                    // 8
   vl := VoyagerList.empty()

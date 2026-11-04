@@ -1,6 +1,6 @@
 place Sum { this > A :U B Number }
 place Entry {
-  fun pick(s: Sum): Number { return match s { B(x) => x } }
+  fun pick(s: Sum): Number { return match s { B as x => x } }
   fun main(): Number {
     return pick(7 |> B)
   }

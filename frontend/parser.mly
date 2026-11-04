@@ -1078,13 +1078,28 @@ hit_branch:
   (* the literals as patterns on the fused Boolean: `match b { true => ..,
      false => .. }` — they NAME the kernel arms tt/ff. *)
   | b = BOOL_LIT FATARROW v = expr { ((if b then "true" else "false"), PatVars [], v) }
-  | ctor = IDENT LPAREN vars = separated_list(COMMA, IDENT) RPAREN FATARROW v = expr
+  (* more payloads: the tuple of the binders, a product *)
+  | ctor = IDENT AS LPAREN vars = separated_nonempty_list(COMMA, IDENT) RPAREN FATARROW v = expr
     { (ctor, PatVars vars, v) }
+  (* the old form: the parentheses are for products *)
+  | ctor = IDENT LPAREN vars = separated_list(COMMA, IDENT) RPAREN FATARROW expr
+    { failwith (match vars with
+        | [] -> Printf.sprintf "a pattern with no payload is the bare name: %s =>" ctor
+        | [x] -> Printf.sprintf "a pattern on a payload is written %s as %s =>" ctor x
+        | _ -> Printf.sprintf "a pattern on a payload is written %s as (%s) =>" ctor
+                 (String.concat ", " vars)) }
   /* the co-mediatrice: field names bind projections BY NAME — the mirror of
      `.-> Cons { head 5 tail rest }`. `head` binds as itself, `head as h`
      renames. Unmentioned fields are discarded. */
   | ctor = IDENT LBRACE fs = list(pat_field) RBRACE FATARROW v = expr
-    { (ctor, PatFields fs, v) }
+    { (match List.find_opt (fun (f, _) ->
+          String.length f > 1 && f.[0] = '_' && f.[1] >= '0' && f.[1] <= '9') fs with
+       | Some _ ->
+           failwith (Printf.sprintf
+             "a pattern on a payload is written %s as x =>, or %s as (x, y) => for more \
+              payloads: the braces are for the fields of a place" ctor ctor)
+       | None -> ());
+      (ctor, PatFields fs, v) }
 
 pat_field:
   | f = IDENT              { (f, f) }

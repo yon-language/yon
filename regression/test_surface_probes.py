@@ -21,7 +21,7 @@ TOML = '''[package]
 name = "probe"
 
 [world.W]
-objects = ["X", "Chain", "Box", "Sum", "Tree"]
+objects = ["X", "Chain", "Box", "Sum", "Tree", "L", "B"]
 spaces  = ["w"]
 
 [runtime]
@@ -207,7 +207,7 @@ def test_payload_arms_go_past_the_slots_of_one_heap(tmp_path):
            "fun build(i: Number, acc: Chain): Chain {\n"
            "  return if i == 0 then acc else build(i - 1, (i, acc) |> Link)\n}\n"
            "fun len(c: Chain, n: Number): Number {\n"
-           "  return match c { End => n, Link(h, t) => len(t, n + 1) }\n}\n"
+           "  return match c { End => n, Link as (h, t) => len(t, n + 1) }\n}\n"
            "fun main(): Number { return if len(build(200000, End), 0) == 200000 then 42 else 1 }\n}\n")
     extra = {"w/Topos.yon": "topos WTopos where {\n}\n"}
     r, exe = _compile(tmp_path, src, extra)
@@ -356,7 +356,7 @@ def test_a_clause_goes_on_across_lines_at_its_separators(tmp_path):
     src = ("place Tree {\n  this > Leaf Number\n    :U Node Tree Tree :U\n    Nil\n}\n"
            "place Entry {\n"
            "fun count(t: Tree): Number {\n"
-           "  return match t { Leaf(x) => x, Node(a, b) => count(a) + count(b), Nil => 0 }\n}\n"
+           "  return match t { Leaf as x => x, Node as (a, b) => count(a) + count(b), Nil => 0 }\n}\n"
            "fun main(): Number {\n"
            "  return count((40 |> Leaf, 2 |> Leaf) |> Node)\n}\n}\n")
     assert _exit(tmp_path, src) == 42
@@ -386,6 +386,25 @@ def test_a_name_that_is_no_fun_and_no_arm_is_refused(tmp_path):
     src = "place Entry {\nfun main(): Number { return 2 |> nessuno }\n}\n"
     r, _ = _compile(tmp_path, src)
     assert r.returncode != 0 and "nessuno" in r.stdout + r.stderr
+
+
+def test_a_pattern_with_parentheses_is_refused_and_the_form_shown(tmp_path):
+    _refused(tmp_path, "place L { this > Nil :U Cons Number L }\n"
+             "place Entry {\nfun h(l: L): Number { return match l { Nil => 0, Cons(h, t) => h } }\n"
+             "fun main(): Number { return 0 }\n}\n", "E1001", "Cons as (h, t)")
+
+
+def test_a_pattern_on_a_projection_is_refused_and_the_form_shown(tmp_path):
+    _refused(tmp_path, "place B { this > Full Number :U Empty }\n"
+             "place Entry {\nfun h(l: B): Number { return match l { Full { _1 as p } => p, Empty => 0 } }\n"
+             "fun main(): Number { return 0 }\n}\n", "E1001", "Full as x")
+
+
+def test_binders_are_a_tuple_and_underscore_discards(tmp_path):
+    src = ("place L { this > Nil :U Cons Number L }\n"
+           "place Entry {\nfun h(l: L): Number { return match l { Nil => 0, Cons as (h, _) => h } }\n"
+           "fun main(): Number { return (42, Nil) |> Cons |> h }\n}\n")
+    assert _exit(tmp_path, src) == 42
 
 
 FUNS = ("fun inc(x: Number): Number { return x + 1 }\n"

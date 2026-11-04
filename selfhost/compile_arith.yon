@@ -34,19 +34,19 @@ fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 /* ---- token/list peeking ---- */
 fun tok_tag(t: Token): Number {
-  return match t { TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 }
+  return match t { TNum as n=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 }
 }
 fun tok_num(t: Token): Number {
-  return match t { TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0 }
+  return match t { TNum as n=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0 }
 }
 fun head_tag(l: TokList): Number {
-  return match l { TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) }
+  return match l { TkNil => 0 - 1, TkCons as (h, t) => tok_tag(h) }
 }
 fun head_num(l: TokList): Number {
-  return match l { TkNil => 0, TkCons(h, t) => tok_num(h) }
+  return match l { TkNil => 0, TkCons as (h, t) => tok_num(h) }
 }
 fun tail(l: TokList): TokList {
-  return match l { TkNil => TkNil, TkCons(h, t) => t }
+  return match l { TkNil => TkNil, TkCons as (h, t) => t }
 }
 
 /* ---- recursive-descent parser: TokList -> Parse (builds Term) ---- */
@@ -60,37 +60,37 @@ fun parse_factor(l: TokList): Parse {
 fun parse_term(l: TokList): Parse { return term_more(parse_factor(l)) }
 fun term_more(p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) =>
+      POk as (left, rest) =>
         if head_tag(rest) == 2
         then combine_mul(left, parse_term(tail(rest)))
         else (left, rest) |> POk }
 }
 fun combine_mul(left: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(right, rest) => ((left, right) |> TMul, rest) |> POk }
+      POk as (right, rest) => ((left, right) |> TMul, rest) |> POk }
 }
 /* expr := term ('+' expr)? */
 fun parse_expr(l: TokList): Parse { return expr_more(parse_term(l)) }
 fun expr_more(p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) =>
+      POk as (left, rest) =>
         if head_tag(rest) == 1
         then combine_add(left, parse_expr(tail(rest)))
         else (left, rest) |> POk }
 }
 fun combine_add(left: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(right, rest) => ((left, right) |> TAdd, rest) |> POk }
+      POk as (right, rest) => ((left, right) |> TAdd, rest) |> POk }
 }
 /* extract the Term from a successful parse (TLit 0 on error). */
 fun term_of(p: Parse): Term {
-  return match p { PErr => 0 |> TLit, POk(e, rest) => e }
+  return match p { PErr => 0 |> TLit, POk as (e, rest) => e }
 }
 
 /* ---- back end: gen (Term -> MLIR text) ---- */
-fun er_ssa(e: EmitR):  String { return match e { ER(s, c, n) => s } }
-fun er_code(e: EmitR): String { return match e { ER(s, c, n) => c } }
-fun er_ctr(e: EmitR):  Number { return match e { ER(s, c, n) => n } }
+fun er_ssa(e: EmitR):  String { return match e { ER as (s, c, n) => s } }
+fun er_code(e: EmitR): String { return match e { ER as (s, c, n) => c } }
+fun er_ctr(e: EmitR):  Number { return match e { ER as (s, c, n) => n } }
 
 fun ssa_name(n: Number): String { return String.concat("%v", String.from_int(n)) }
 fun num_lit(k: Number): String  { return String.concat(String.from_int(k), ".0") }
@@ -101,10 +101,10 @@ fun line(ssa: String, rhs: String): String {
 
 fun gen(t: Term, n: Number): EmitR {
   return match t {
-    TLit(k) =>
+    TLit as k =>
       (ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) |> ER,
-    TAdd(a, b) => gen_bin("arith.addf", a, b, n),
-    TMul(a, b) => gen_bin("arith.mulf", a, b, n)
+    TAdd as (a, b) => gen_bin("arith.addf", a, b, n),
+    TMul as (a, b) => gen_bin("arith.mulf", a, b, n)
   }
 }
 fun gen_bin(op: String, a: Term, b: Term, n: Number): EmitR {

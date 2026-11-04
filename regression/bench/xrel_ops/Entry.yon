@@ -11,7 +11,7 @@ place Entry {
   }
   fun get_k(a: XRelMap<LatticePoint, Number>, k: Number): Number {
     return match LatticePoint.at_index(k % 196560) {
-      LatticePoint as p => (match XRelMap.get(a, p) { Found(x) => x, Absent => 0 }),
+      LatticePoint as p => (match XRelMap.get(a, p) { Found as x => x, Absent => 0 }),
       DomainError as d => 0 }
   }
   fun orbit_k(k: Number): Number {

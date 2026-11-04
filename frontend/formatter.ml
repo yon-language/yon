@@ -204,7 +204,7 @@ and fmt_expr (e : expr) : string =
         let hd = match pat with
           | PatVars [] -> name
           | PatVars binders ->
-              Printf.sprintf "%s(%s)" name (String.concat ", " binders)
+              Printf.sprintf "%s as (%s)" name (String.concat ", " binders)
           | PatWitness w -> Printf.sprintf "%s as %s" name w
           | PatFields fs ->
               Printf.sprintf "%s { %s }" name

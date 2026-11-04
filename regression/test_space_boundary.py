@@ -69,7 +69,7 @@ _BUILD = """place Q {
 _READ_MAP = """place Entry {
   fun main(): Number {
     mut m := Q.build(10)
-    return HashMap.size(m) + (match HashMap.get(m, 3) { Found(v) => v, Absent => 0 })
+    return HashMap.size(m) + (match HashMap.get(m, 3) { Found as v => v, Absent => 0 })
   }
 }
 """
@@ -114,7 +114,7 @@ def test_an_xrelmap_made_in_another_space_is_copied_to_main(tmp_path):
     rc, out, exe = _in_binary(tmp_path, """place Entry {
   fun main(): Number {
     mut m := Q.points(6)
-    return XRelMap.size(m) + (match XRelMap.get(m, 5) { Found(v) => v, Absent => 0 })
+    return XRelMap.size(m) + (match XRelMap.get(m, 5) { Found as v => v, Absent => 0 })
   }
 }
 """)
@@ -365,7 +365,7 @@ def test_a_map_crosses_between_processes(tmp_path):
 place Entry {
   fun main(): Number {
     mut m := build(10)
-    return HashMap.size(m) + (match HashMap.get(m, 3) { Found(v) => v, Absent => 0 })
+    return HashMap.size(m) + (match HashMap.get(m, 3) { Found as v => v, Absent => 0 })
   }
 }
 """)

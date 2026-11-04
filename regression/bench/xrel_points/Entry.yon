@@ -49,7 +49,7 @@ place Entry {
   fun timed_get(a: XRelMap<LatticePoint, Number>, addr: LatticePoint, m: Number): Number visits Output {
     acc := Space.make(0)
     t0 := Time.now_ns(0)
-    iter m do { _ := Space.set(acc, Space.get(acc) + (match XRelMap.get(a, addr) { Found(x) => x, Absent => 0 })) }
+    iter m do { _ := Space.set(acc, Space.get(acc) + (match XRelMap.get(a, addr) { Found as x => x, Absent => 0 })) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
@@ -118,7 +118,7 @@ place Entry {
     // orbit comparison latency, baseline-subtracted (same baseline shape, Mso iters)
     so_net := (min_so(x, y, reps_r, mso) - min_get_base(reps_r, mso))
 
-    _1 := Output.print(String.from_int((match XRelMap.get(a, a0) { Found(v) => v, Absent => 0 })))
+    _1 := Output.print(String.from_int((match XRelMap.get(a, a0) { Found as v => v, Absent => 0 })))
     _2 := Output.print(String.from_int(if XRelMap.has(a, a0) then 1 else 0))
     _3 := Output.print(String.from_int(put_net))
     _4 := Output.print(String.from_int(get_net))

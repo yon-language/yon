@@ -16,9 +16,9 @@ place Entry {
 
     // XRelMap — key = class, not specimen: the map is keyed by canon(f, x)
     mm := XRelMap.set(XRelMap.empty(), cls(f, p), 100)
-    v4 := match XRelMap.get(mm, cls(f, p)) { Found(v) => v, Absent => 0 }   // exact point -> 100
-    v5 := match XRelMap.get(mm, cls(f, q)) { Found(v) => v, Absent => 0 }   // different class -> Absent (0)
-    v6 := match XRelMap.get(mm, cls(f, m)) { Found(v) => v, Absent => 0 }   // same class (antipode) -> 100
+    v4 := match XRelMap.get(mm, cls(f, p)) { Found as v => v, Absent => 0 }   // exact point -> 100
+    v5 := match XRelMap.get(mm, cls(f, q)) { Found as v => v, Absent => 0 }   // different class -> Absent (0)
+    v6 := match XRelMap.get(mm, cls(f, m)) { Found as v => v, Absent => 0 }   // same class (antipode) -> 100
 
     // XSimplex — classify relations
     v7 := XSimplex.of2(1536, 1280)

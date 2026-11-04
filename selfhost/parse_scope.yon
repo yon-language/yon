@@ -31,59 +31,59 @@ fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U TAdd Term Term :U TMul Term Term }
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return match t { TLit(n)     => n |> TLit,
-      TVar(i)     => if i >= c then i + d |> TVar else i |> TVar,
-      TLam(b)     => shift(d, c + 1, b) |> TLam,
-      TApp(f, x)  => (shift(d, c, f), shift(d, c, x)) |> TApp,
-      TAdd(a, b)  => (shift(d, c, a), shift(d, c, b)) |> TAdd,
-      TMul(a, b)  => (shift(d, c, a), shift(d, c, b)) |> TMul }
+  return match t { TLit as n     => n |> TLit,
+      TVar as i     => if i >= c then i + d |> TVar else i |> TVar,
+      TLam as b     => shift(d, c + 1, b) |> TLam,
+      TApp as (f, x)  => (shift(d, c, f), shift(d, c, x)) |> TApp,
+      TAdd as (a, b)  => (shift(d, c, a), shift(d, c, b)) |> TAdd,
+      TMul as (a, b)  => (shift(d, c, a), shift(d, c, b)) |> TMul }
 }
 fun subst(j: Number, s: Term, t: Term): Term {
-  return match t { TLit(n)     => n |> TLit,
-      TVar(i)     => if i == j then s else i |> TVar,
-      TLam(b)     => subst(j + 1, shift(1, 0, s), b) |> TLam,
-      TApp(f, x)  => (subst(j, s, f), subst(j, s, x)) |> TApp,
-      TAdd(a, b)  => (subst(j, s, a), subst(j, s, b)) |> TAdd,
-      TMul(a, b)  => (subst(j, s, a), subst(j, s, b)) |> TMul }
+  return match t { TLit as n     => n |> TLit,
+      TVar as i     => if i == j then s else i |> TVar,
+      TLam as b     => subst(j + 1, shift(1, 0, s), b) |> TLam,
+      TApp as (f, x)  => (subst(j, s, f), subst(j, s, x)) |> TApp,
+      TAdd as (a, b)  => (subst(j, s, a), subst(j, s, b)) |> TAdd,
+      TMul as (a, b)  => (subst(j, s, a), subst(j, s, b)) |> TMul }
 }
 fun beta(body: Term, arg: Term): Term {
   return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
 }
 fun add_vals(x: Term, y: Term): Term {
-  return match x { TLit(nx) => match y { TLit(ny) => nx + ny |> TLit, _ => (nx |> TLit, y) |> TAdd },
+  return match x { TLit as nx => match y { TLit as ny => nx + ny |> TLit, _ => (nx |> TLit, y) |> TAdd },
       _ => (x, y) |> TAdd }
 }
 fun mul_vals(x: Term, y: Term): Term {
-  return match x { TLit(nx) => match y { TLit(ny) => nx * ny |> TLit, _ => (nx |> TLit, y) |> TMul },
+  return match x { TLit as nx => match y { TLit as ny => nx * ny |> TLit, _ => (nx |> TLit, y) |> TMul },
       _ => (x, y) |> TMul }
 }
 fun eval(t: Term): Term {
-  return match t { TLit(n)     => n |> TLit,
-      TVar(i)     => i |> TVar,
-      TLam(b)     => b |> TLam,
-      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))),
+  return match t { TLit as n     => n |> TLit,
+      TVar as i     => i |> TVar,
+      TLam as b     => b |> TLam,
+      TApp as (f, x)  => match eval(f) { TLam as b => eval(beta(b, eval(x))),
                          _       => (eval(f), eval(x)) |> TApp },
-      TAdd(a, b)  => add_vals(eval(a), eval(b)),
-      TMul(a, b)  => mul_vals(eval(a), eval(b)) }
+      TAdd as (a, b)  => add_vals(eval(a), eval(b)),
+      TMul as (a, b)  => mul_vals(eval(a), eval(b)) }
 }
 
 // ── tag-based peek on the TokList (tag: Num0 Plus1 Star2 LP3 RP4 End5 Name6 Eq7 Lam8) ──
 fun tok_tag(t: Token): Number {
-  return match t { TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5,
-      TName(n)=>6, TEq=>7, TLamTok=>8 }
+  return match t { TNum as n=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5,
+      TName as n=>6, TEq=>7, TLamTok=>8 }
 }
 fun tok_num(t: Token): Number {
-  return match t { TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0,
-      TName(n)=>n, TEq=>0, TLamTok=>0 }
+  return match t { TNum as n=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0,
+      TName as n=>n, TEq=>0, TLamTok=>0 }
 }
 fun head_tag(l: TokList): Number {
-  return match l { TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) }
+  return match l { TkNil => 0 - 1, TkCons as (h, t) => tok_tag(h) }
 }
 fun head_num(l: TokList): Number {
-  return match l { TkNil => 0, TkCons(h, t) => tok_num(h) }
+  return match l { TkNil => 0, TkCons as (h, t) => tok_num(h) }
 }
 fun tail(l: TokList): TokList {
-  return match l { TkNil => TkNil, TkCons(h, t) => t }
+  return match l { TkNil => TkNil, TkCons as (h, t) => t }
 }
 
 // ── name environment -> de Bruijn index ─────────────────────────────────────
@@ -91,7 +91,7 @@ place NameEnv { this > NEnvNil :U NEnvCons Number NameEnv }
 fun bump(k: Number): Number { return if k >= 0 then k + 1 else 0 - 1 }
 fun lookup(name: Number, env: NameEnv): Number {
   return match env { NEnvNil => 0 - 1,
-      NEnvCons(h, rest) => if h == name then 0 else bump(lookup(name, rest)) }
+      NEnvCons as (h, rest) => if h == name then 0 else bump(lookup(name, rest)) }
 }
 
 // ── parser with environment, yields Term ────────────────────────────────────
@@ -106,25 +106,25 @@ fun parse_factor(l: TokList, env: NameEnv): Parse {
 }
 fun close_paren(p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(e, rest) => if head_tag(rest) == 4 then (e, tail(rest)) |> POk else PErr }
+      POk as (e, rest) => if head_tag(rest) == 4 then (e, tail(rest)) |> POk else PErr }
 }
 fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
 fun term_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) => if head_tag(rest) == 2
+      POk as (left, rest) => if head_tag(rest) == 2
                            then combine(2, left, parse_term(tail(rest), env))
                            else (left, rest) |> POk }
 }
 fun parse_expr(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, env), env) }
 fun expr_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) => if head_tag(rest) == 1
+      POk as (left, rest) => if head_tag(rest) == 1
                            then combine(1, left, parse_expr(tail(rest), env))
                            else (left, rest) |> POk }
 }
 fun combine(op: Number, left: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(right, rest) =>
+      POk as (right, rest) =>
         (if op == 1 then (left, right) |> TAdd else (left, right) |> TMul, rest) |> POk }
 }
 
@@ -139,15 +139,15 @@ fun bind_name(name: Number, rest: TokList, env: NameEnv): Parse {
 }
 fun wrap_lam(p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(body, rest) => (body |> TLam, rest) |> POk }
+      POk as (body, rest) => (body |> TLam, rest) |> POk }
 }
 
 // ── extraction + oracle ─────────────────────────────────────────────────────
 fun as_num(t: Term): Number {
-  return match t { TLit(n)=>n, TVar(i)=>i, _=>0 }
+  return match t { TLit as n=>n, TVar as i=>i, _=>0 }
 }
 fun term_of(p: Parse): Term {
-  return match p { PErr => 0 - 1 |> TLit, POk(e, rest) => e }
+  return match p { PErr => 0 - 1 |> TLit, POk as (e, rest) => e }
 }
 
 // source "\aa+a" = codes 92 97 97 43 97  (lambda, name a, body a+a)

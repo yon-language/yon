@@ -47,8 +47,8 @@ place Entry {
   // A function out of a coproduct answers every arm.
   fun total(t: Tree): Number {
     return match t {
-      Leaf { _1 as v }         => v,
-      Node { _1 as l _2 as r } => total(l) + total(r)
+      Leaf as v         => v,
+      Node as (l, r) => total(l) + total(r)
     }
   }
 

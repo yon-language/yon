@@ -2,7 +2,7 @@
 name = "comatch_canonical"
 
 [world.W]
-objects = ["List"]
+objects = ["NumList", "Opened", "Closed", "Account"]
 
 [runtime]
 backend = "memory"

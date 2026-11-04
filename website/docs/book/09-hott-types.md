@@ -113,7 +113,7 @@ fun main(): Number {
   return match hit(north) {
     north => 5,
     south => 5,
-    merid(a) => plam i => 5
+    merid as a => plam i => 5
   }
 }
 ```

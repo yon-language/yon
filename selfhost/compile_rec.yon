@@ -128,33 +128,33 @@ fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 /* ---- token/list peeking ---- */
 fun tok_tag(t: Token): Number {
   return match t {
-    TNum(n)=>0, TIdent(h)=>1, TKwFun=>2, TKwBe=>3, TColonEq=>4, TKwReturn=>5,
+    TNum as n=>0, TIdent as h=>1, TKwFun=>2, TKwBe=>3, TColonEq=>4, TKwReturn=>5,
     TKwNumber=>6, TKwIf=>7, TKwThen=>8, TKwElse=>9, TPlus=>10, TStar=>11,
     TEqEq=>12, TLParen=>13, TRParen=>14, TLBrace=>15, TRBrace=>16, TColon=>17,
     TEnd=>18, TMinus=>19 }
 }
 fun tok_num(t: Token): Number {
   return match t {
-    TNum(n)=>n, TIdent(h)=>h, TKwFun=>0, TKwBe=>0, TColonEq=>0, TKwReturn=>0,
+    TNum as n=>n, TIdent as h=>h, TKwFun=>0, TKwBe=>0, TColonEq=>0, TKwReturn=>0,
     TKwNumber=>0, TKwIf=>0, TKwThen=>0, TKwElse=>0, TPlus=>0, TStar=>0,
     TEqEq=>0, TLParen=>0, TRParen=>0, TLBrace=>0, TRBrace=>0, TColon=>0,
     TEnd=>0, TMinus=>0 }
 }
 fun head_tag(l: TokList): Number {
-  return match l { TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) }
+  return match l { TkNil => 0 - 1, TkCons as (h, t) => tok_tag(h) }
 }
 fun head_num(l: TokList): Number {
-  return match l { TkNil => 0, TkCons(h, t) => tok_num(h) }
+  return match l { TkNil => 0, TkCons as (h, t) => tok_num(h) }
 }
 fun tail(l: TokList): TokList {
-  return match l { TkNil => TkNil, TkCons(h, t) => t }
+  return match l { TkNil => TkNil, TkCons as (h, t) => t }
 }
 
 /* ---- de Bruijn name environment: identifier hash -> index (innermost = 0) ---- */
 fun bump(k: Number): Number { return if k >= 0 then k + 1 else 0 - 1 }
 fun lookup_name(name: Number, env: NameEnv): Number {
   return match env { NEnvNil => 0 - 1,
-      NEnvCons(h, rest) => if h == name then 0 else bump(lookup_name(name, rest)) }
+      NEnvCons as (h, rest) => if h == name then 0 else bump(lookup_name(name, rest)) }
 }
 
 /* ---- recursive-descent expression parser (threads the name environment) ---- */
@@ -177,19 +177,19 @@ fun parse_call(callee: Number, l: TokList, env: NameEnv): Parse {
 }
 fun call_after_arg(callee: Number, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(arg, rest) => if head_tag(rest) == 14         /* ')' */
+      POk as (arg, rest) => if head_tag(rest) == 14         /* ')' */
                           then ((callee, arg) |> TCall, tail(rest)) |> POk
                           else PErr }
 }
 fun close_paren(p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(e, rest) => if head_tag(rest) == 14 then (e, tail(rest)) |> POk else PErr }
+      POk as (e, rest) => if head_tag(rest) == 14 then (e, tail(rest)) |> POk else PErr }
 }
 /* term := factor ('*' factor)*  -- left-associative (loop, not right recursion). */
 fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
 fun term_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) => if head_tag(rest) == 11
+      POk as (left, rest) => if head_tag(rest) == 11
                            then term_more(combine(11, left, parse_factor(tail(rest), env)), env)
                            else (left, rest) |> POk }
 }
@@ -197,7 +197,7 @@ fun term_more(p: Parse, env: NameEnv): Parse {
 fun parse_expr(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, env), env) }
 fun expr_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) => if head_tag(rest) == 10
+      POk as (left, rest) => if head_tag(rest) == 10
                            then expr_more(combine(10, left, parse_term(tail(rest), env)), env)
                            else if head_tag(rest) == 19
                            then expr_more(combine(19, left, parse_term(tail(rest), env)), env)
@@ -205,7 +205,7 @@ fun expr_more(p: Parse, env: NameEnv): Parse {
 }
 fun combine(op: Number, left: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(right, rest) =>
+      POk as (right, rest) =>
         (mk_binop(op, left, right), rest) |> POk }
 }
 fun mk_binop(op: Number, left: Term, right: Term): Term {
@@ -220,25 +220,25 @@ fun parse_if(l: TokList, env: NameEnv): Parse {
 }
 fun if_after_lhs(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(a, rest) => if head_tag(rest) == 12
+      POk as (a, rest) => if head_tag(rest) == 12
                         then if_after_eq(a, parse_expr(tail(rest), env), env)
                         else PErr }
 }
 fun if_after_eq(a: Term, p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(b, rest) => if head_tag(rest) == 8
+      POk as (b, rest) => if head_tag(rest) == 8
                         then if_after_then((a, b) |> TEq, parse_expr(tail(rest), env), env)
                         else PErr }
 }
 fun if_after_then(cond: Term, p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(thenE, rest) => if head_tag(rest) == 9
+      POk as (thenE, rest) => if head_tag(rest) == 9
                             then if_after_else(cond, thenE, parse_expr(tail(rest), env))
                             else PErr }
 }
 fun if_after_else(cond: Term, thenE: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(elseE, rest) => ((cond, thenE, elseE) |> TIf, rest) |> POk }
+      POk as (elseE, rest) => ((cond, thenE, elseE) |> TIf, rest) |> POk }
 }
 
 /* ---- body parser: (IDENT ':=' expr)* 'return' expr ---- */
@@ -260,12 +260,12 @@ fun parse_let(l: TokList, env: NameEnv): Parse {
 }
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
   return match pv { PErr => PErr,
-      POk(val, rest) =>
+      POk as (val, rest) =>
         wrap_let(val, parse_body(rest, (name, env) |> NEnvCons)) }
 }
 fun wrap_let(val: Term, pb: Parse): Parse {
   return match pb { PErr => PErr,
-      POk(body, rest) => ((val, body) |> TLet, rest) |> POk }
+      POk as (body, rest) => ((val, body) |> TLet, rest) |> POk }
 }
 
 /* ---- function parser: 'fun' IDENT '(' param? ')' ':' 'number' '{' body '}' ---- */
@@ -286,7 +286,7 @@ fun fundef_body(name: Number, arity: Number, env: NameEnv, l: TokList): FunParse
 }
 fun close_fundef(name: Number, arity: Number, p: Parse): FunParse {
   return match p { PErr => FPErr,
-      POk(body, rest) => ((name, arity, body) |> FnDef, tail(rest)) |> FPOk }
+      POk as (body, rest) => ((name, arity, body) |> FnDef, tail(rest)) |> FPOk }
 }
 /* parse every top-level function into a FunList (stops at TEnd or anything else). */
 fun parse_funs(l: TokList): FunList {
@@ -296,17 +296,17 @@ fun parse_funs(l: TokList): FunList {
 }
 fun cons_fun(fp: FunParse): FunList {
   return match fp { FPErr => FlNil,
-      FPOk(f, rest) => (f, parse_funs(rest)) |> FlCons }
+      FPOk as (f, rest) => (f, parse_funs(rest)) |> FlCons }
 }
 
 /* ---- back end: gen (Term -> MLIR text) with an SSA environment ---- */
-fun er_ssa(e: EmitR):  String { return match e { ER(s, c, n) => s } }
-fun er_code(e: EmitR): String { return match e { ER(s, c, n) => c } }
-fun er_ctr(e: EmitR):  Number { return match e { ER(s, c, n) => n } }
+fun er_ssa(e: EmitR):  String { return match e { ER as (s, c, n) => s } }
+fun er_code(e: EmitR): String { return match e { ER as (s, c, n) => c } }
+fun er_ctr(e: EmitR):  Number { return match e { ER as (s, c, n) => n } }
 
 fun lookup_ssa(i: Number, env: SsaEnv): String {
   return match env { SeNil => "%vERR",
-      SeCons(h, rest) => if i == 0 then h else lookup_ssa(i - 1, rest) }
+      SeCons as (h, rest) => if i == 0 then h else lookup_ssa(i - 1, rest) }
 }
 
 fun ssa_name(n: Number): String { return String.concat("%v", String.from_int(n)) }
@@ -323,16 +323,16 @@ fun line_raw(ssa: String, rhs: String): String {
 
 fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
   return match t {
-    TLit(k) =>
+    TLit as k =>
       (ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) |> ER,
-    TVar(i) => (lookup_ssa(i, env), "", n) |> ER,
-    TLet(e1, body) => gen_let(e1, body, env, n),
-    TAdd(a, b) => gen_bin("arith.addf", a, b, env, n),
-    TSub(a, b) => gen_bin("arith.subf", a, b, env, n),
-    TMul(a, b) => gen_bin("arith.mulf", a, b, env, n),
-    TEq(a, b)  => gen_bin("arith.cmpf oeq,", a, b, env, n),
-    TIf(c, thenT, elseT) => gen_if(c, thenT, elseT, env, n),
-    TCall(callee, arg)   => gen_call(callee, arg, env, n)
+    TVar as i => (lookup_ssa(i, env), "", n) |> ER,
+    TLet as (e1, body) => gen_let(e1, body, env, n),
+    TAdd as (a, b) => gen_bin("arith.addf", a, b, env, n),
+    TSub as (a, b) => gen_bin("arith.subf", a, b, env, n),
+    TMul as (a, b) => gen_bin("arith.mulf", a, b, env, n),
+    TEq as (a, b)  => gen_bin("arith.cmpf oeq,", a, b, env, n),
+    TIf as (c, thenT, elseT) => gen_if(c, thenT, elseT, env, n),
+    TCall as (callee, arg)   => gen_call(callee, arg, env, n)
   }
 }
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
@@ -395,19 +395,19 @@ fun gen_fundef_text(name: Number, arity: Number, body: Term): String {
 /* emit every function except main (main is emitted as the i32 entry, below). */
 fun gen_funs(fs: FunList, main_hash: Number): String {
   return match fs { FlNil => "",
-      FlCons(f, rest) =>
+      FlCons as (f, rest) =>
         String.concat(gen_one_fun(f, main_hash), gen_funs(rest, main_hash)) }
 }
 fun gen_one_fun(f: Fun, main_hash: Number): String {
-  return match f { FnDef(name, arity, body) =>
+  return match f { FnDef as (name, arity, body) =>
         if name == main_hash then "" else gen_fundef_text(name, arity, body) }
 }
 /* find main's body (the entry Term). */
-fun fun_name(f: Fun): Number { return match f { FnDef(name, arity, body) => name } }
-fun fun_body(f: Fun): Term { return match f { FnDef(name, arity, body) => body } }
+fun fun_name(f: Fun): Number { return match f { FnDef as (name, arity, body) => name } }
+fun fun_body(f: Fun): Term { return match f { FnDef as (name, arity, body) => body } }
 fun main_body(fs: FunList, main_hash: Number): Term {
   return match fs { FlNil => 0 |> TLit,
-      FlCons(f, rest) =>
+      FlCons as (f, rest) =>
         if fun_name(f) == main_hash then fun_body(f) else main_body(rest, main_hash) }
 }
 

@@ -106,7 +106,7 @@ def test_a_map_made_in_a_space_is_read_after_the_space_is_dropped(tmp_path):
   fun main(): Number {
     mut m := Q.build(10)
     drop w
-    return HashMap.size(m) + (match HashMap.get(m, 3) { Found(v) => v, Absent => 0 })
+    return HashMap.size(m) + (match HashMap.get(m, 3) { Found as v => v, Absent => 0 })
   }
 }
 """)

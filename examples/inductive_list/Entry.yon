@@ -18,7 +18,7 @@ place Entry {
 fun sum(l: NumList): Number {
   return match l {
     Nil => 0,
-    Cons(h, t) => h + sum(t)
+    Cons as (h, t) => h + sum(t)
   }
 }
 

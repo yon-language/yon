@@ -118,31 +118,6 @@ def test_cross_space_union_rejected_same_world():
 
 # ---- the canonical match: the co-mediatrice pattern -----------------------
 
-def test_record_pattern_matches_by_name(tmp_path):
-    """`Cons { _1 as h _2 as t }` binds projections BY NAME (an arm declared
-    with positional payloads names them _1.._n) — the mirror of the mediatrice
-    `.-> Cons { ... }`. Byte-equal lowering with the positional twin, e2e
-    exit 42."""
-    import shutil
-    a = tmp_path / "rec"; b = tmp_path / "pos"
-    prog = ("place NumList { this > Nil :U Cons Number NumList }\n"
-            "place Entry { }\n"
-            "fun sum(xs: NumList): Number {\n"
-            "  return match xs {\n"
-            "    Nil => 0,\n"
-            "    %s => h + sum(t)\n"
-            "  }\n}\n"
-            "fun main(): Number {\n"
-            "  xs := (5, (37, Nil) |> Cons) |> Cons\n"
-            "  return sum(xs)\n}\n")
-    for d, pat in ((a, "Cons { _1 as h _2 as t }"), (b, "Cons(h, t)")):
-        shutil.copytree(ROOT / "examples" / "inductive_list", d)
-        (d / "Entry.yon").write_text(prog % pat)
-    ra, rb = _emit(a), _emit(b)
-    assert ra.returncode == 0, ra.stderr.decode(errors="replace")[-300:]
-    assert ra.stdout == rb.stdout, "record pattern lowers differently than the positional twin"
-
-
 def test_full_circle_no_constructors(tmp_path):
     """The complete new surface, end to end: the mediatrice on a payload arm
     lowers to its SPINE (the same value hit built), the bare nullary name IS
@@ -158,7 +133,7 @@ def test_full_circle_no_constructors(tmp_path):
         "fun sum(xs: NumList): Number {\n"
         "  return match xs {\n"
         "    Nil => 0,\n"
-        "    Cons { _1 as h _2 as t } => h + sum(t)\n"
+        "    Cons as (h, t) => h + sum(t)\n"
         "  }\n}\n"
         "fun main(): Number {\n"
         "  xs := (5, ((37, Nil) |> Cons)) |> Cons\n"

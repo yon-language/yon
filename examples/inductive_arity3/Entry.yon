@@ -10,7 +10,7 @@ place Entry {
 
 
 fun sum3(t: Triple): Number {
-  return match t { T3 { _1 as a _2 as b _3 as c } => a + b + c, Nil => 0 }
+  return match t { T3 as (a, b, c) => a + b + c, Nil => 0 }
 }
 
 fun main(): Number {

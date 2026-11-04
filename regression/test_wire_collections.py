@@ -122,7 +122,7 @@ _FILL_MAP = """  mut m := {empty}
 def test_a_hashmap_crosses_with_its_values(tmp_path):
     build = _FILL_MAP.format(empty="HashMap.empty()", n=10, set="HashMap.set(m, k, k * 7)")
     rc = _cross(tmp_path, "", "HashMap<Number, Number>", build,
-                "HashMap.size(x) + (match HashMap.get(x, 9) { Found(v) => v, Absent => 0 })")
+                "HashMap.size(x) + (match HashMap.get(x, 9) { Found as v => v, Absent => 0 })")
     assert rc == 10 + 63
 
 
@@ -131,7 +131,7 @@ def test_a_hashmap_larger_than_the_ring_crosses_in_pieces(tmp_path):
     build = _FILL_MAP.format(empty="HashMap.empty()", n=100000, set="HashMap.set(m, k, k * 3)")
     rc = _cross(tmp_path, "", "HashMap<Number, Number>", build,
                 "HashMap.size(x) - 100000 + (match HashMap.get(x, 99999) "
-                "{ Found(v) => v - 299997 + 7, Absent => 0 })")
+                "{ Found as v => v - 299997 + 7, Absent => 0 })")
     assert rc == 7
 
 
@@ -153,7 +153,7 @@ def test_a_list_crosses_in_order(tmp_path):
 def test_an_xrelmap_crosses_on_the_leech_heap(tmp_path):
     build = _FILL_MAP.format(empty="XRelMap.empty()", n=10, set="XRelMap.set(m, k, k + 40)")
     rc = _cross(tmp_path, "", "XRelMap<Number, Number>", build,
-                "XRelMap.size(x) + (match XRelMap.get(x, 5) { Found(v) => v, Absent => 0 })")
+                "XRelMap.size(x) + (match XRelMap.get(x, 5) { Found as v => v, Absent => 0 })")
     assert rc == 10 + 45
 
 
@@ -174,7 +174,7 @@ def test_a_place_with_a_map_field_crosses(tmp_path):
     build = '    return .-> Bag { label "abc" counts HashMap.set(HashMap.empty(), 4, 40) }'
     rc = _cross_project(tmp_path, "Bag", fields, "Bag", build,
                         "String.length(x.label) + (match HashMap.get(x.counts, 4) "
-                        "{ Found(v) => v, Absent => 0 })")
+                        "{ Found as v => v, Absent => 0 })")
     assert rc == 43
 
 

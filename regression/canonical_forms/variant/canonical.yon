@@ -2,6 +2,6 @@ place Sum { this > A :U B Number }
 place Entry {
   fun seven(): Sum { return 7 |> B }
   fun main(): Number {
-    return match seven() { A => 0, B(x) => x }
+    return match seven() { A => 0, B as x => x }
   }
 }

@@ -1,26 +1,21 @@
-// The co-mediatrice pattern: `Cons { _1 as h _2 as t }` binds projections BY
-// NAME — the mirror of the mediatrice literal `.-> P { field v }`. Bridge
-// projections are _1.._n until the no-parens migration supplies real names.
-// Exercises pat_field (both spellings: bare field and `field as name`).
-place NumList { this > Nil :U Cons Number NumList }
+// The co-mediatrice pattern: `Opened { initial balance as b }` reads an arm that is a
+// place by the names of its fields, the mirror of the mediatrice literal
+// `.-> P { field v }`. Exercises pat_field (both spellings: bare field and
+// `field as name`).
+place Opened { initial Number balance Number }
+place Closed { moment Number }
+place Account { this > Opened :U Closed }
 
 place Entry {
-  fun sum(l: NumList): Number {
-    return match l {
-      Nil => 0,
-      Cons { _1 as h _2 as t } => h + sum(t)
+  fun read(a: Account): Number {
+    return match a {
+      Opened { initial balance as b } => initial + b,
+      Closed { moment } => moment
     }
   }
-  fun head_or_zero(l: NumList): Number {
-    return match l {
-      Nil => 0,
-      Cons { _1 } => _1
-    }
-  }
+  fun open(): Account { return .-> Opened { initial 30 balance 2 } }
+  fun closed(): Account { return .-> Closed { moment 10 } }
   fun main(): Number {
-    xs := (10, (15, (17, Nil) |> Cons) |> Cons) |> Cons
-    return sum(xs) + head_or_zero(Nil)
+    return read(open()) + read(closed())
   }
 }
-
-

@@ -24,7 +24,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `algebra` | `ALGEBRA` | 1 | yes | exercised |
 | `along` | `ALONG` | 3 | yes | exercised |
 | `and` | `AND` | 2 | yes | exercised |
-| `as` | `AS` | 14 | yes | exercised |
+| `as` | `AS` | 28 | yes | exercised |
 | `at` | `AT` | 2 | yes | exercised |
 | `back` | `BACK` | 3 | yes | exercised |
 | `by` | `BY` | 9 | yes | exercised |

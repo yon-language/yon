@@ -252,39 +252,39 @@ fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 /* ---- token/list peeking ---- */
 fun tok_tag(t: Token): Number {
   return match t {
-    TNum(n)=>0, TIdent(h)=>1, TKwFun=>2, TKwBe=>3, TColonEq=>4, TKwReturn=>5,
+    TNum as n=>0, TIdent as h=>1, TKwFun=>2, TKwBe=>3, TColonEq=>4, TKwReturn=>5,
     TKwNumber=>6, TKwIf=>7, TKwThen=>8, TKwElse=>9, TPlus=>10, TStar=>11,
     TEqEq=>12, TLParen=>13, TRParen=>14, TLBrace=>15, TRBrace=>16, TColon=>17,
     TEnd=>18, TMinus=>19, TComma=>20,
     TLt=>21, TGt=>22, TLe=>23, TGe=>24, TNe=>25,
     TLBracket=>27, TRBracket=>28, TBar=>29, TArrow=>30,
-    TKwPlace=>31, TKwThis=>32, TColonU=>33, TDot=>34, TStr(sh)=>35 }
+    TKwPlace=>31, TKwThis=>32, TColonU=>33, TDot=>34, TStr as sh=>35 }
 }
 fun tok_num(t: Token): Number {
   return match t {
-    TNum(n)=>n, TIdent(h)=>h, TKwFun=>0, TKwBe=>0, TColonEq=>0, TKwReturn=>0,
+    TNum as n=>n, TIdent as h=>h, TKwFun=>0, TKwBe=>0, TColonEq=>0, TKwReturn=>0,
     TKwNumber=>0, TKwIf=>0, TKwThen=>0, TKwElse=>0, TPlus=>0, TStar=>0,
     TEqEq=>0, TLParen=>0, TRParen=>0, TLBrace=>0, TRBrace=>0, TColon=>0,
     TEnd=>0, TMinus=>0, TComma=>0,
     TLt=>0, TGt=>0, TLe=>0, TGe=>0, TNe=>0,
     TLBracket=>0, TRBracket=>0, TBar=>0, TArrow=>0,
-    TKwPlace=>0, TKwThis=>0, TColonU=>0, TDot=>0, TStr(sh)=>0 }
+    TKwPlace=>0, TKwThis=>0, TColonU=>0, TDot=>0, TStr as sh=>0 }
 }
 fun head_tag(l: TokList): Number {
-  return match l { TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) }
+  return match l { TkNil => 0 - 1, TkCons as (h, t) => tok_tag(h) }
 }
 fun head_num(l: TokList): Number {
-  return match l { TkNil => 0, TkCons(h, t) => tok_num(h) }
+  return match l { TkNil => 0, TkCons as (h, t) => tok_num(h) }
 }
 fun tail(l: TokList): TokList {
-  return match l { TkNil => TkNil, TkCons(h, t) => t }
+  return match l { TkNil => TkNil, TkCons as (h, t) => t }
 }
 
 /* ---- de Bruijn name environment: identifier hash -> index (innermost = 0) ---- */
 fun bump(k: Number): Number { return if k >= 0 then k + 1 else 0 - 1 }
 fun lookup_name(name: Number, env: NameEnv): Number {
   return match env { NEnvNil => 0 - 1,
-      NEnvCons(h, rest) => if h == name then 0 else bump(lookup_name(name, rest)) }
+      NEnvCons as (h, rest) => if h == name then 0 else bump(lookup_name(name, rest)) }
 }
 
 /* ---- recursive-descent expression parser (threads the name environment) ---- */
@@ -315,7 +315,7 @@ fun parse_args(l: TokList, env: NameEnv): Parse {
 }
 fun args_cons(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(arg, rest) =>
+      POk as (arg, rest) =>
         if head_tag(rest) == 20                          /* ',' -> more args */
           then args_prepend(arg, parse_args(tail(rest), env))
         else if head_tag(rest) == 14                     /* ')' -> last arg */
@@ -324,17 +324,17 @@ fun args_cons(p: Parse, env: NameEnv): Parse {
 }
 fun args_prepend(arg: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(rest_spine, rest) => ((arg, rest_spine) |> TArgs, rest) |> POk }
+      POk as (rest_spine, rest) => ((arg, rest_spine) |> TArgs, rest) |> POk }
 }
 fun call_with_args(callee: Number, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(spine, rest) => ((callee, spine) |> TCall, rest) |> POk }
+      POk as (spine, rest) => ((callee, spine) |> TCall, rest) |> POk }
 }
 /* '(' e ')' is e; '(' e ',' .. ')' is a tuple, an argument spine for the pipe that
  * follows it. */
 fun close_paren(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(e, rest) => if head_tag(rest) == 14 then (e, tail(rest)) |> POk
+      POk as (e, rest) => if head_tag(rest) == 14 then (e, tail(rest)) |> POk
         else if head_tag(rest) == 20 then args_prepend(e, parse_args(tail(rest), env))
         else PErr }
 }
@@ -342,7 +342,7 @@ fun close_paren(p: Parse, env: NameEnv): Parse {
 fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
 fun term_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) => if head_tag(rest) == 11
+      POk as (left, rest) => if head_tag(rest) == 11
                            then term_more(combine(11, left, parse_factor(tail(rest), env)), env)
                            else (left, rest) |> POk }
 }
@@ -354,16 +354,16 @@ fun parse_sum(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, 
 fun parse_expr(l: TokList, env: NameEnv): Parse { return pipe_more(parse_sum(l, env), env) }
 fun pipe_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) => if head_tag(rest) == 29
+      POk as (left, rest) => if head_tag(rest) == 29
         then pipe_more(((head_num(tail(tail(rest))), pipe_args(left)) |> TCall, tail(tail(tail(rest)))) |> POk, env)
         else (left, rest) |> POk }
 }
 fun pipe_args(e: Term): Term {
-  return match e { TArgs(a, more) => e, _ => (e, TNoArg) |> TArgs }
+  return match e { TArgs as (a, more) => e, _ => (e, TNoArg) |> TArgs }
 }
 fun expr_more(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(left, rest) => if head_tag(rest) == 10
+      POk as (left, rest) => if head_tag(rest) == 10
                            then expr_more(combine(10, left, parse_term(tail(rest), env)), env)
                            else if head_tag(rest) == 19
                            then expr_more(combine(19, left, parse_term(tail(rest), env)), env)
@@ -371,7 +371,7 @@ fun expr_more(p: Parse, env: NameEnv): Parse {
 }
 fun combine(op: Number, left: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(right, rest) =>
+      POk as (right, rest) =>
         (mk_binop(op, left, right), rest) |> POk }
 }
 fun mk_binop(op: Number, left: Term, right: Term): Term {
@@ -386,20 +386,20 @@ fun name_or_arm(name: Number, rest: TokList, env: NameEnv): Parse {
   return if i == 0 - 1 then ((name, TNoArg) |> THit, rest) |> POk
     else (i |> TVar, rest) |> POk
 }
-/* match e { C0 => e0, C1(x) => e1, .. } -- the branch list drives a tag switch.
+/* match e { C0 => e0, C1 as x => e1, .. } -- the branch list drives a tag switch.
  * l is after the keyword. */
 fun parse_match(l: TokList, env: NameEnv): Parse {
   return match_after_scrut(parse_expr(l, env), env)
 }
 fun match_after_scrut(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(scrut, rest) => if head_tag(rest) == 15         /* '{' opens the branches */
+      POk as (scrut, rest) => if head_tag(rest) == 15         /* '{' opens the branches */
                             then match_after_branches(scrut, parse_branches(tail(rest), env))
                             else PErr }
 }
 fun match_after_branches(scrut: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(brs, rest) => if head_tag(rest) == 16           /* '}' closes the branches */
+      POk as (brs, rest) => if head_tag(rest) == 16           /* '}' closes the branches */
                           then ((brs, scrut) |> THitElim, tail(rest)) |> POk
                           else PErr }
 }
@@ -411,24 +411,28 @@ fun parse_branches(l: TokList, env: NameEnv): Parse {
 }
 fun parse_one_branch(l: TokList, env: NameEnv): Parse {
   ctor := head_num(l)                              /* the constructor pattern */
-  return if head_tag(tail(l)) == 13                      /* '(' -> payload binders */
-    then branch_with_binders(ctor, parse_params(tail(tail(l)), env, 0), env)
-    else if head_tag(tail(l)) == 30                      /* '=>' -> nullary pattern */
-    then branch_after_arrow(ctor, 0, parse_expr(tail(tail(l)), env), env)
+  after := tail(l)
+  return if head_tag(after) == 1                         /* 'as' -> payload binders */
+    then (if head_tag(tail(after)) == 13                 /* 'as' '(' a ',' b ')' */
+            then branch_with_binders(ctor, parse_params(tail(tail(after)), env, 0), env)
+            else branch_with_binders(ctor,
+                   ((head_num(tail(after)), env) |> NEnvCons, 1, tail(tail(after))) |> PR, env))
+    else if head_tag(after) == 30                        /* '=>' -> nullary pattern */
+    then branch_after_arrow(ctor, 0, parse_expr(tail(after), env), env)
     else PErr
 }
 /* the binders are parsed with parse_params (like function parameters), pushed onto
  * a branch-local env; the body is parsed in that env, the following branches in the
  * outer env (binders are scoped to their own branch body). */
 fun branch_with_binders(ctor: Number, pr: ParamRes, outer: NameEnv): Parse {
-  return match pr { PR(env2, arity, rest) =>
+  return match pr { PR as (env2, arity, rest) =>
         if head_tag(rest) == 30                           /* '=>' */
           then branch_after_arrow(ctor, arity, parse_expr(tail(rest), env2), outer)
           else PErr }
 }
 fun branch_after_arrow(ctor: Number, arity: Number, p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(body, rest) =>
+      POk as (body, rest) =>
         if head_tag(rest) == 20                           /* ',' -> more branches */
           then br_prepend(ctor, arity, body, parse_branches(tail(rest), env))
         else if head_tag(rest) == 16                      /* '}' -> last branch (keep '}') */
@@ -437,7 +441,7 @@ fun branch_after_arrow(ctor: Number, arity: Number, p: Parse, env: NameEnv): Par
 }
 fun br_prepend(ctor: Number, arity: Number, body: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(rest_brs, rest) => ((ctor, arity, body, rest_brs) |> TBranch, rest) |> POk }
+      POk as (rest_brs, rest) => ((ctor, arity, body, rest_brs) |> TBranch, rest) |> POk }
 }
 
 /* if := 'if' expr CMP expr 'then' expr 'else' expr, CMP one of == != < > <= >=.
@@ -456,25 +460,25 @@ fun parse_if(l: TokList, env: NameEnv): Parse {
 }
 fun if_after_lhs(p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(a, rest) => if cmp_op(head_tag(rest)) >= 0
+      POk as (a, rest) => if cmp_op(head_tag(rest)) >= 0
                         then if_after_cmp(a, cmp_op(head_tag(rest)), parse_expr(tail(rest), env), env)
                         else PErr }
 }
 fun if_after_cmp(a: Term, op: Number, p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(b, rest) => if head_tag(rest) == 8
+      POk as (b, rest) => if head_tag(rest) == 8
                         then if_after_then((op, a, b) |> TCmp, parse_expr(tail(rest), env), env)
                         else PErr }
 }
 fun if_after_then(cond: Term, p: Parse, env: NameEnv): Parse {
   return match p { PErr => PErr,
-      POk(thenE, rest) => if head_tag(rest) == 9
+      POk as (thenE, rest) => if head_tag(rest) == 9
                             then if_after_else(cond, thenE, parse_expr(tail(rest), env))
                             else PErr }
 }
 fun if_after_else(cond: Term, thenE: Term, p: Parse): Parse {
   return match p { PErr => PErr,
-      POk(elseE, rest) => ((cond, thenE, elseE) |> TIf, rest) |> POk }
+      POk as (elseE, rest) => ((cond, thenE, elseE) |> TIf, rest) |> POk }
 }
 
 /* ---- body parser: (IDENT ':=' expr)* 'return' expr ---- */
@@ -496,12 +500,12 @@ fun parse_let(l: TokList, env: NameEnv): Parse {
 }
 fun build_let(pv: Parse, name: Number, env: NameEnv): Parse {
   return match pv { PErr => PErr,
-      POk(val, rest) =>
+      POk as (val, rest) =>
         wrap_let(val, parse_body(rest, (name, env) |> NEnvCons)) }
 }
 fun wrap_let(val: Term, pb: Parse): Parse {
   return match pb { PErr => PErr,
-      POk(body, rest) => ((val, body) |> TLet, rest) |> POk }
+      POk as (body, rest) => ((val, body) |> TLet, rest) |> POk }
 }
 
 /* ---- function parser: 'fun' IDENT '(' (IDENT (',' IDENT)*)? ')' ':' 'number' '{' body '}' ---- */
@@ -537,7 +541,7 @@ fun parse_fundef(l: TokList): FunParse {
   return fundef_with_params(name, parse_params(after_lparen, NEnvNil, 0))
 }
 fun fundef_with_params(name: Number, pr: ParamRes): FunParse {
-  return match pr { PR(env, arity, rest) =>
+  return match pr { PR as (env, arity, rest) =>
         fundef_body(name, arity, env, skip_after_params(rest)) }
 }
 fun fundef_body(name: Number, arity: Number, env: NameEnv, l: TokList): FunParse {
@@ -545,7 +549,7 @@ fun fundef_body(name: Number, arity: Number, env: NameEnv, l: TokList): FunParse
 }
 fun close_fundef(name: Number, arity: Number, p: Parse): FunParse {
   return match p { PErr => FPErr,
-      POk(body, rest) => ((name, arity, body) |> FnDef, tail(rest)) |> FPOk }
+      POk as (body, rest) => ((name, arity, body) |> FnDef, tail(rest)) |> FPOk }
 }
 /* ---- coproduct arm parsing (shared registry builder: arm tag = its index) ---- */
 /* skip an optional '(type, ..)' after an arm name (the arg types are not
@@ -591,25 +595,25 @@ fun parse_items(l: TokList, reg: CtorReg): Program {
     else (FlNil, reg) |> Prog                      /* end of items */
 }
 fun items_after_ind(ir: IndRes): Program {
-  return match ir { IR(reg2, rest) => parse_items(rest, reg2) }
+  return match ir { IR as (reg2, rest) => parse_items(rest, reg2) }
 }
 fun cons_item(fp: FunParse, reg: CtorReg): Program {
   return match fp { FPErr => (FlNil, reg) |> Prog,
-      FPOk(f, rest) => prepend_fun(f, parse_items(rest, reg)) }
+      FPOk as (f, rest) => prepend_fun(f, parse_items(rest, reg)) }
 }
 fun prepend_fun(f: Fun, prog: Program): Program {
-  return match prog { Prog(funs, reg) => ((f, funs) |> FlCons, reg) |> Prog }
+  return match prog { Prog as (funs, reg) => ((f, funs) |> FlCons, reg) |> Prog }
 }
 
 /* is this name an arm of the registry? */
 fun is_arm(hash: Number, reg: CtorReg): Number {
   return match reg { CrNil => 0,
-      CrCons(h, t, rest) => if h == hash then 1 else is_arm(hash, rest) }
+      CrCons as (h, t, rest) => if h == hash then 1 else is_arm(hash, rest) }
 }
 /* registry lookup: constructor-name hash -> tag. */
 fun tag_of(hash: Number, reg: CtorReg): Number {
   return match reg { CrNil => 0,
-      CrCons(h, t, rest) => if h == hash then t else tag_of(hash, rest) }
+      CrCons as (h, t, rest) => if h == hash then t else tag_of(hash, rest) }
 }
 /* is this term the empty branch spine? */
 fun is_brnil(t: Term): Number {
@@ -617,13 +621,13 @@ fun is_brnil(t: Term): Number {
 }
 
 /* ---- back end: gen (Term -> MLIR text) with an SSA environment ---- */
-fun er_ssa(e: EmitR):  String { return match e { ER(s, c, n) => s } }
-fun er_code(e: EmitR): String { return match e { ER(s, c, n) => c } }
-fun er_ctr(e: EmitR):  Number { return match e { ER(s, c, n) => n } }
+fun er_ssa(e: EmitR):  String { return match e { ER as (s, c, n) => s } }
+fun er_code(e: EmitR): String { return match e { ER as (s, c, n) => c } }
+fun er_ctr(e: EmitR):  Number { return match e { ER as (s, c, n) => n } }
 
 fun lookup_ssa(i: Number, env: SsaEnv): String {
   return match env { SeNil => "%vERR",
-      SeCons(h, rest) => if i == 0 then h else lookup_ssa(i - 1, rest) }
+      SeCons as (h, rest) => if i == 0 then h else lookup_ssa(i - 1, rest) }
 }
 
 fun ssa_name(n: Number): String { return String.concat("%v", String.from_int(n)) }
@@ -650,26 +654,26 @@ fun cmp_pred(op: Number): String {
 }
 fun gen(t: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return match t {
-    TLit(k) =>
+    TLit as k =>
       (ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) |> ER,
-    TVar(i) => (lookup_ssa(i, env), "", n) |> ER,
-    TLet(e1, body) => gen_let(e1, body, env, n, reg),
-    TAdd(a, b) => gen_bin("arith.addf", a, b, env, n, reg),
-    TSub(a, b) => gen_bin("arith.subf", a, b, env, n, reg),
-    TMul(a, b) => gen_bin("arith.mulf", a, b, env, n, reg),
-    TCmp(op, a, b) => gen_bin(cmp_pred(op), a, b, env, n, reg),
-    TIf(c, thenT, elseT) => gen_if(c, thenT, elseT, env, n, reg),
-    TCall(callee, spine) => if is_arm(callee, reg) == 1 then gen_hit(callee, spine, env, n, reg)
+    TVar as i => (lookup_ssa(i, env), "", n) |> ER,
+    TLet as (e1, body) => gen_let(e1, body, env, n, reg),
+    TAdd as (a, b) => gen_bin("arith.addf", a, b, env, n, reg),
+    TSub as (a, b) => gen_bin("arith.subf", a, b, env, n, reg),
+    TMul as (a, b) => gen_bin("arith.mulf", a, b, env, n, reg),
+    TCmp as (op, a, b) => gen_bin(cmp_pred(op), a, b, env, n, reg),
+    TIf as (c, thenT, elseT) => gen_if(c, thenT, elseT, env, n, reg),
+    TCall as (callee, spine) => if is_arm(callee, reg) == 1 then gen_hit(callee, spine, env, n, reg)
                             else gen_call(callee, spine, env, n, reg),
-    THit(ctor, spine) => gen_hit(ctor, spine, env, n, reg),
-    THitElim(brs, scrut) => gen_hitelim(brs, scrut, env, n, reg),
+    THit as (ctor, spine) => gen_hit(ctor, spine, env, n, reg),
+    THitElim as (brs, scrut) => gen_hitelim(brs, scrut, env, n, reg),
     /* spine and branch nodes are only walked by their own emitters, never alone. */
-    TArgs(a, b) => ("%vERR", "", n) |> ER,
+    TArgs as (a, b) => ("%vERR", "", n) |> ER,
     TNoArg      => ("%vERR", "", n) |> ER,
-    TBranch(c, ar, a, b) => ("%vERR", "", n) |> ER,
+    TBranch as (c, ar, a, b) => ("%vERR", "", n) |> ER,
     TBrNil      => ("%vERR", "", n) |> ER,
-    TStrLit(s)  => gen_strlit(s, n),
-    TRtCall(sym, spine) => gen_rtcall(sym, spine, env, n, reg)
+    TStrLit as s  => gen_strlit(s, n),
+    TRtCall as (sym, spine) => gen_rtcall(sym, spine, env, n, reg)
   }
 }
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
@@ -688,7 +692,7 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number, reg: CtorReg):
 }
 /* count the arguments in a spine. */
 fun spine_count(spine: Term): Number {
-  return match spine { TNoArg => 0, TArgs(a, rest) => 1 + spine_count(rest), _ => 0 }
+  return match spine { TNoArg => 0, TArgs as (a, rest) => 1 + spine_count(rest), _ => 0 }
 }
 /* the "(f64, f64, ...)" operand-type list for a call of arity k. */
 fun call_sig(k: Number, i: Number): String {
@@ -700,7 +704,7 @@ fun call_sig(k: Number, i: Number): String {
  * is the comma-joined list of argument ssas. */
 fun gen_args(spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return match spine { TNoArg => ("", "", n) |> ER,
-      TArgs(a, rest) => gen_args_cons(a, rest, env, n, reg),
+      TArgs as (a, rest) => gen_args_cons(a, rest, env, n, reg),
       _ => ("", "", n) |> ER }
 }
 fun gen_args_cons(a: Term, rest: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
@@ -776,7 +780,7 @@ fun gen_leaf_of(val_ssa: String, n: Number): EmitR {
 /* the inner spine: leaf(0) if empty, else node2(0, leaf(head), spine(rest)). */
 fun gen_inner_spine(spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return match spine { TNoArg => gen_leaf_const(0, n),
-      TArgs(a, rest) => gen_spine_cons(0, a, rest, env, n, reg),
+      TArgs as (a, rest) => gen_spine_cons(0, a, rest, env, n, reg),
       _ => ("%vERR", "", n) |> ER }
 }
 /* node2(node_tag, leaf(gen a), gen_inner_spine(rest)) -- one spine cell. A child
@@ -804,14 +808,14 @@ fun gen_hit(ctor: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): Em
     else gen_hit_payload(tag, spine, env, n, reg)
 }
 fun gen_hit_payload(tag: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
-  return match spine { TArgs(a0, rest) => gen_spine_cons(tag, a0, rest, env, n, reg),
+  return match spine { TArgs as (a0, rest) => gen_spine_cons(tag, a0, rest, env, n, reg),
       _ => ("%vERR", "", n) |> ER }
 }
 /* match: read the scrutinee tag with label(), then a tag switch over branches. */
 /* accessors on BindRes. */
-fun br_env(b: BindRes):  SsaEnv { return match b { BR(e, c, n) => e } }
-fun br_code(b: BindRes): String { return match b { BR(e, c, n) => c } }
-fun br_n(b: BindRes):    Number { return match b { BR(e, c, n) => n } }
+fun br_env(b: BindRes):  SsaEnv { return match b { BR as (e, c, n) => e } }
+fun br_code(b: BindRes): String { return match b { BR as (e, c, n) => c } }
+fun br_n(b: BindRes):    Number { return match b { BR as (e, c, n) => n } }
 /* bind k payloads projected from the scrutinee: payload j = label(child(tail_j, 0)),
  * tail_0 = scrut, tail_{j+1} = child(tail_j, 1). Binds them innermost-last onto env. */
 fun gen_bind(tail_ssa: String, j: Number, k: Number, env: SsaEnv, n: Number): BindRes {
@@ -849,7 +853,7 @@ fun gen_hitelim(brs: Term, scrut: Term, env: SsaEnv, n: Number, reg: CtorReg): E
 }
 fun gen_br_chain(brs: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   return match brs { TBrNil => ("%vERR", "", n) |> ER,
-      TBranch(ctor, arity, body, rest) => gen_br_one(ctor, arity, body, rest, t_ssa, scrut_ssa, env, n, reg),
+      TBranch as (ctor, arity, body, rest) => gen_br_one(ctor, arity, body, rest, t_ssa, scrut_ssa, env, n, reg),
       _ => ("%vERR", "", n) |> ER }
 }
 fun gen_br_one(ctor: Number, arity: Number, body: Term, rest: Term, t_ssa: String, scrut_ssa: String, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
@@ -913,22 +917,22 @@ fun gen_fundef_text(name: Number, arity: Number, body: Term, reg: CtorReg): Stri
  * at finish -> O(N). gen_funs keeps its String signature. */
 fun gen_funs_into(buf: Buffer, fs: FunList, main_hash: Number, reg: CtorReg): Buffer {
   return match fs { FlNil => buf,
-      FlCons(f, rest) =>
+      FlCons as (f, rest) =>
         gen_funs_into(Buffer.append(buf, gen_one_fun(f, main_hash, reg)), rest, main_hash, reg) }
 }
 fun gen_funs(fs: FunList, main_hash: Number, reg: CtorReg): String {
   return Buffer.finish(gen_funs_into(Buffer.make(0), fs, main_hash, reg))
 }
 fun gen_one_fun(f: Fun, main_hash: Number, reg: CtorReg): String {
-  return match f { FnDef(name, arity, body) =>
+  return match f { FnDef as (name, arity, body) =>
         if name == main_hash then "" else gen_fundef_text(name, arity, body, reg) }
 }
 /* find main's body (the entry Term). */
-fun fun_name(f: Fun): Number { return match f { FnDef(name, arity, body) => name } }
-fun fun_body(f: Fun): Term { return match f { FnDef(name, arity, body) => body } }
+fun fun_name(f: Fun): Number { return match f { FnDef as (name, arity, body) => name } }
+fun fun_body(f: Fun): Term { return match f { FnDef as (name, arity, body) => body } }
 fun main_body(fs: FunList, main_hash: Number): Term {
   return match fs { FlNil => 0 |> TLit,
-      FlCons(f, rest) =>
+      FlCons as (f, rest) =>
         if fun_name(f) == main_hash then fun_body(f) else main_body(rest, main_hash) }
 }
 
@@ -936,15 +940,15 @@ fun main_body(fs: FunList, main_hash: Number): Term {
 /* the String payload of a TStr token (empty for any other token). */
 fun tok_str(t: Token): String {
   return match t {
-    TNum(n)=>"", TIdent(h)=>"", TKwFun=>"", TKwBe=>"", TColonEq=>"", TKwReturn=>"",
+    TNum as n=>"", TIdent as h=>"", TKwFun=>"", TKwBe=>"", TColonEq=>"", TKwReturn=>"",
     TKwNumber=>"", TKwIf=>"", TKwThen=>"", TKwElse=>"", TPlus=>"", TStar=>"",
     TEqEq=>"", TLParen=>"", TRParen=>"", TLBrace=>"", TRBrace=>"", TColon=>"",
     TEnd=>"", TMinus=>"", TComma=>"", TLt=>"", TGt=>"", TLe=>"", TGe=>"", TNe=>"",
     TLBracket=>"", TRBracket=>"", TBar=>"", TArrow=>"", TKwPlace=>"", TKwThis=>"",
-    TColonU=>"", TDot=>"", TStr(sh)=>sh }
+    TColonU=>"", TDot=>"", TStr as sh=>sh }
 }
 fun head_str(l: TokList): String {
-  return match l { TkNil => "", TkCons(h, t) => tok_str(h) }
+  return match l { TkNil => "", TkCons as (h, t) => tok_str(h) }
 }
 /* map (module, op) name hashes to the runtime symbol (mirrors yonc's stdlib). */
 fun rt_string_symbol(op: Number): String {
@@ -983,11 +987,11 @@ fun rt_symbol(m: Number, op: Number): String {
 /* qualified call: MODULE '.' OP '(' args ')'. l at MODULE (an ident). */
 fun qcall_with_args(sym: String, p: Parse): Parse {
   return match p { PErr => PErr,
-    POk(spine, rest) => ((sym, spine) |> TRtCall, rest) |> POk }
+    POk as (spine, rest) => ((sym, spine) |> TRtCall, rest) |> POk }
 }
 fun drop_dummy_spine(p: Parse): Parse {
   return match p { PErr => PErr,
-    POk(spine, rest) => (TNoArg, rest) |> POk }
+    POk as (spine, rest) => (TNoArg, rest) |> POk }
 }
 fun parse_qcall(modh: Number, l: TokList, env: NameEnv): Parse {
   oph := head_num(tail(tail(l)))                           /* op ident hash */
@@ -1118,8 +1122,8 @@ fun main(): Number {
 }
 /* accessors on the parsed Program. */
 fun prog_funs(p: Program): FunList {
-  return match p { Prog(funs, reg) => funs }
+  return match p { Prog as (funs, reg) => funs }
 }
 fun prog_reg(p: Program): CtorReg {
-  return match p { Prog(funs, reg) => reg }
+  return match p { Prog as (funs, reg) => reg }
 }

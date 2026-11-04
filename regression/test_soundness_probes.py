@@ -305,7 +305,7 @@ place IntExpr { this > Lit Int64 :U Nil }
 place Entry {
   fun via_list(x: Int64): Int64 { return List.head(List.cons(x, List.empty(0))) }
   fun wrap(x: Int64): IntExpr { return x |> Lit }
-  fun unwrap(e: IntExpr): Int64 { return match e { Lit(n) => n, Nil => 0 } }
+  fun unwrap(e: IntExpr): Int64 { return match e { Lit as n => n, Nil => 0 } }
   fun adder(k: Int64): Int64 -> Int64 { return fun(y: Int64) => k + y }
   fun same(x: Int64): Number {
     f := adder(x)

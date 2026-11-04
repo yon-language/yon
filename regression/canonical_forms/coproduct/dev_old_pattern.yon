@@ -1,0 +1,5 @@
+place List2 { this > Nil :U Cons Number List2 }
+place Entry {
+  fun head(l: List2): Number { return match l { Nil => 0, Cons(h, t) => h } }
+  fun main(): Number { return 0 }
+}

@@ -37,7 +37,7 @@ place Entry {
   fun timed_get(mp: HashMap<Number, Number>, m: Number): Number visits Output {
     acc := Space.make(0)
     t0 := Time.now_ns(0)
-    iter m do { v := (match HashMap.get(mp, 42) { Found(x) => x, Absent => 0 })
+    iter m do { v := (match HashMap.get(mp, 42) { Found as x => x, Absent => 0 })
                 _ := Space.set(acc, Space.get(acc) + v) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
@@ -66,7 +66,7 @@ place Entry {
     iter 11 do { _ := Space.set(gkb, min2(Space.get(gkb), timed_get_base(m))) }
     _1 := Output.print(String.from_int(sz))                                  // final_size = N
     _2 := Output.print(String.from_int((Space.get(ins) - Space.get(insb)))) // insert net ns for N
-    _3 := Output.print(String.from_int((match HashMap.get(mp, 42) { Found(x) => x, Absent => 0 })))                // get value guard (==43)
+    _3 := Output.print(String.from_int((match HashMap.get(mp, 42) { Found as x => x, Absent => 0 })))                // get value guard (==43)
     _4 := Output.print(String.from_int((Space.get(gk) - Space.get(gkb))))   // get net ns for M
     return 0
   }
