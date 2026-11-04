@@ -79,6 +79,35 @@ STEP = ("  fun step(t: Term): Term {\n"
         "  }\n")
 
 
+def test_a_step_computes_on_the_term_it_is_given(tmp_path):
+    r = _compile(_with_proofs(tmp_path, STEP +
+                 "  fun if_true(u: Term, v: Term): step((yes, u, v) ↪ ite) = u { return clear }\n"),
+                 tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_step_does_not_compute_to_the_other_branch(tmp_path):
+    _refused(tmp_path, STEP +
+             "  fun if_true(u: Term, v: Term): step((yes, u, v) ↪ ite) = v { return clear }\n")
+
+
+def test_induction_computes_under_a_constructor(tmp_path):
+    r = _nat(tmp_path,
+             "  fun zr(n: Nat): plus(n, zero) = n {\n"
+             "    return match n { zero => clear, succ as m => (s_, zr(m)) ↦ ap }\n  }\n"
+             "  fun sr(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {\n"
+             "    return match a { zero => clear, succ as m => (s_, sr(m, b)) ↦ ap }\n  }\n")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_induction_does_not_prove_a_false_statement(tmp_path):
+    r = _nat(tmp_path,
+             "  fun bad(n: Nat): plus(n, zero) = zero {\n"
+             "    return match n { zero => clear, succ as m => (s_, bad(m)) ↦ ap }\n  }\n")
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "mismatch" in out, out
+
+
 def _rule(tmp_path, body, *words):
     r = _nat(tmp_path, body)
     out = r.stdout + r.stderr

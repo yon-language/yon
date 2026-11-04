@@ -268,7 +268,10 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
                     && List.for_all (is_pure_expr env) args
        | None ->
            (* a cell, and the algebra of paths, have no effect *)
-           (Hit_env.cell_of_place name <> None || List.mem name ["concat"; "inv"; "ap"])
+           (Hit_env.cell_of_place name <> None
+            || List.mem name ["concat"; "inv"; "ap"]
+            || List.exists (fun (_, variants) ->
+                   List.exists (fun v -> v.v_name = name) variants) env.named_sums)
            && List.for_all (is_pure_expr env) args)
   (* A data constructor and its eliminator are effect-free: `hit(ctor, args)` is
      pure iff its arguments are, and `match`/`hit_elim` is pure iff its scrutinee

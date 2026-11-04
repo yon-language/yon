@@ -351,6 +351,30 @@ let rec conversion_form (t : Ast.term) : Ast.term =
       HITElim (List.map (fun (c, vs, b) -> (c, vs, conversion_form b)) brs, conversion_form x)
   | t -> t
 
+(* An arm applied to its payload is one term of the kernel, written as a call or as a
+   constructor: the eliminator computes on the constructor. *)
+let rec arms_as_constructors (env : Tyenv.env) (t : Ast.term) : Ast.term =
+  let open Ast in
+  let go = arms_as_constructors env in
+  let rec spine t acc = match t with App (f, a) -> spine f (a :: acc) | h -> (h, acc) in
+  match t with
+  | App _ ->
+      (match spine t [] with
+       | Var c, args
+         when List.exists (fun (_, (v : Surface_ast.variant)) ->
+             List.length v.Surface_ast.v_args = List.length args)
+             (Tyenv.lookup_sum_constructor env c) ->
+           HITConstr (c, List.map go args)
+       | _ ->
+           (match t with App (a, b) -> App (go a, go b) | t -> t))
+  | Lam (x, ty, b) -> Lam (x, ty, go b)
+  | Refl b -> Refl (go b)
+  | PLam (i, b) -> PLam (i, go b)
+  | PApp (b, d) -> PApp (go b, d)
+  | HITConstr (c, args) -> HITConstr (c, List.map go args)
+  | HITElim (brs, x) -> HITElim (List.map (fun (c, vs, b) -> (c, vs, go b)) brs, go x)
+  | t -> t
+
 let ty_term_equal ?(carrier : ty option)
     (env : Tyenv.env) (ctx : Reduce.ctx) (t1 : ty_term) (t2 : ty_term) : bool =
   match t1, t2 with
@@ -361,9 +385,22 @@ let ty_term_equal ?(carrier : ty option)
         (match Desugar.desugar_expr_pure env e1,
                Desugar.desugar_expr_pure env e2 with
          | Some c1, Some c2 ->
-             let dctx = { ctx with Reduce.deltas = certified_deltas env } in
-             let nf1 = Reduce.normalize dctx c1 in
-             let nf2 = Reduce.normalize dctx c2 in
+             let dctx = { ctx with Reduce.deltas =
+                            List.map (fun (n, b) -> (n, arms_as_constructors env b))
+                              (certified_deltas env) } in
+             let c1 = arms_as_constructors env c1 and c2 = arms_as_constructors env c2 in
+             (* the normal form goes under the constructors and the stuck applications *)
+             let rec deep t =
+               match Reduce.normalize dctx t with
+               | Ast.HITConstr (c, args) -> Ast.HITConstr (c, List.map deep args)
+               | Ast.App (a, b) -> Ast.App (deep_head a, deep b)
+               | t -> t
+             and deep_head t =
+               match t with
+               | Ast.App (a, b) -> Ast.App (deep_head a, deep b)
+               | t -> t in
+             let nf1 = deep c1 in
+             let nf2 = deep c2 in
              if Ast.term_equal nf1 nf2 then true
              else if Ast.term_equal (conversion_form nf1) (conversion_form nf2) then true
              else

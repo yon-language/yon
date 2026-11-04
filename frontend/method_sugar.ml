@@ -420,8 +420,22 @@ let qualify_homes (p : S.program) : S.program =
           | S.EVar (n, l) when List.mem n sibs && not (Hashtbl.mem names n) ->
               Some (S.EVar (qual h n, l))
           | _ -> None in
-        S.TopFun { fd with S.fn_body =
-            List.map (map_stmt by_name) (List.map (rw_stmt sibs h) fd.S.fn_body) }
+        (* the statement of a proof names its siblings too *)
+        let rec rw_ty = function
+          | S.TyId (a, S.TyTermExpr x, S.TyTermExpr y) ->
+              S.TyId (rw_ty a,
+                      S.TyTermExpr (map_expr by_name (rw_expr sibs h x)),
+                      S.TyTermExpr (map_expr by_name (rw_expr sibs h y)))
+          | S.TyPi (x, a, b) -> S.TyPi (x, rw_ty a, rw_ty b)
+          | S.TySigma (x, a, b) -> S.TySigma (x, rw_ty a, rw_ty b)
+          | S.TyArrow (a, b) -> S.TyArrow (rw_ty a, rw_ty b)
+          | t -> t in
+        S.TopFun { fd with
+            S.fn_return = Option.map rw_ty fd.S.fn_return;
+            S.fn_params = List.map (fun (pm : S.param) ->
+                { pm with S.param_ty = rw_ty pm.S.param_ty }) fd.S.fn_params;
+            S.fn_body =
+              List.map (map_stmt by_name) (List.map (rw_stmt sibs h) fd.S.fn_body) }
     | S.TopView vd ->
         in_house vd.S.vw_loc (fun sibs h ->
           S.TopView { vd with S.vw_items =

@@ -888,6 +888,19 @@ let rec subst_evar_in_ty (xv : string) (repl : expr) (t : ty) : ty =
   | TyPathP ((i, a), x, y) -> TyPathP ((i, r a), rt x, rt y)
   | _ -> t
 
+let refined_sites = ref 0
+
+(* The result of a call, when it is a path over the parameters: the arguments in their place,
+   all at once, since an argument may name another parameter. *)
+let instantiate_path_return (params : (string * ty) list) (args : expr list) (t : ty) : ty =
+  match t with
+  | TyId _ when List.length params = List.length args ->
+      let held = List.mapi (fun i (p, _) -> (p, Printf.sprintf "__arg_%d" i)) params in
+      let t = List.fold_left (fun acc (p, h) ->
+          subst_evar_in_ty p (EVar (h, dummy_loc)) acc) t held in
+      List.fold_left2 (fun acc (_, h) a -> subst_evar_in_ty h a acc) t held args
+  | t -> t
+
 (* Does the type refer to [xv] at a term endpoint? Only then is the expected type
    a genuine motive that varies with the scrutinee, so the dependent check is
    warranted (otherwise the ordinary constant-motive path applies unchanged). *)
@@ -3953,13 +3966,22 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                         let branch_env =
                           Tyenv.add_vars env
                             (List.combine vars (List.map snd params)) in
-                        let ctor_expr =
-                          EHITConstr
-                            (ctor, List.map (fun n -> EVar (n, loc)) vars, loc) in
+                        (* the arm as a term the kernel reduces on *)
                         let ctor_expr = match ctor with
                           | "true" -> ELit (LitBool true, loc)
                           | "false" -> ELit (LitBool false, loc)
-                          | _ -> ctor_expr in
+                          | _ ->
+                              (* sites of their own: a site records what stands there *)
+                              let own () =
+                                incr refined_sites;
+                                { loc with start_line = - !refined_sites } in
+                              if vars = [] then EVar (ctor, own ())
+                              else begin
+                                let l = own () in
+                                Hashtbl.replace arrow_sites
+                                  (l.file, l.start_line, l.start_col, ctor) Inject;
+                                ECall (ctor, List.map (fun n -> EVar (n, own ())) vars, l)
+                              end in
                         let refined = subst_evar_in_ty xv ctor_expr expected in
                         let* () = check branch_env ctx body refined in
                         go_branches rest)
@@ -4157,11 +4179,26 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
    * cubical dispatch).  A carrier/domain mismatch is a clean type error; any
    * other shape (dependent f -> PathP, untracked-endpoint path) keeps the
    * existing loose cubical typing — no fake precision. *)
+  (* two paths compose when the end of the first converts to the start of the second *)
+  if name = "concat"
+     && (match arg_tys with
+         | [TyId (a1, _, y1); TyId (a2, y2, _)] ->
+             Dispatcher.type_equal env ctx a1 a2 && Dispatcher.ty_term_equal env ctx y1 y2
+         | _ -> false) then
+    (match arg_tys with
+     | [TyId (a1, x, _); TyId (_, _, z)] -> ok (TyId (a1, x, z))
+     | _ -> assert false)
+  else
   if name = "ap" then
     (match args, arg_tys with
      | [f_e; _], [TyArrow (dom, cod); TyId (carrier, x, y)]
        when Dispatcher.type_equal env ctx dom carrier ->
-         let apf t = match t with TyTermExpr ex -> TyTermExpr (EApp (f_e, [ex], loc)) in
+         let apf t = match t with
+           | TyTermExpr ex ->
+               (match f_e with
+                | EVar (n, _) when Tyenv.lookup_fun env n <> None ->
+                    TyTermExpr (ECall (n, [ex], loc))
+                | _ -> TyTermExpr (EApp (f_e, [ex], loc))) in
          ok (TyId (cod, apf x, apf y))
      | [_; _], [TyArrow (dom, _); TyId (carrier, _, _)]
        when not (Dispatcher.type_equal env ctx dom carrier) ->
@@ -4349,7 +4386,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
              (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col)
              fs.fs_return
        | _ -> ());
-      ok fs.fs_return
+      ok (instantiate_path_return fs.fs_params args fs.fs_return)
   | None ->
       (* Try qualified operation (desugared name: "Place__op"). *)
       (match Tyenv.lookup_op env name with
@@ -7980,6 +8017,7 @@ let same_sentinel = -424242
 
 let elaborate_id_sugar (p : program) : program =
   Hit_env.register_places p;
+  let p = Method_sugar.qualify_homes p in
   (* mono = composition: expand inherited fields FIRST, so every path below
      (and everything downstream of this chokepoint) sees the composed place *)
   let p = expand_mono_fields p in
