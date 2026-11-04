@@ -250,7 +250,7 @@
 %token TYPE_KW PI SIGMA ID REFL PAIR FST SND IND_PATH
 %token EL QUOTE EL_MATCH
 %token HIT_ELIM LBRACKET RBRACKET
-%token ATSIGN I0 I1 PLAM PATHP HIT_KW
+%token ATSIGN I0 I1 WALK PLAM PATHP HIT_KW
 /* Metonymic surface sugar (journey metaphor): desugar to the cubical primitives. */
 %token BACK CARRY ALONG THROUGH
 %token PLUSPLUS          /* p ++ q = concat */
@@ -291,7 +291,7 @@
  *   - `f(x) in S`: the call in a Space, not `f(x)` followed by `in …`;
  *   - `T in A, B`: one constrained type over A and B;
  *   - `functor (…) => e from W to V law L`: the law belongs to the functor;
- *   - `compose f with g @ I0` and `plam i => e @ I0` / `.m(…)`: the
+ *   - `compose f with g @ I0` and `walk i => e @ I0` / `.m(…)`: the
  *     application belongs to the last operand / to the body;
  *   - `clear e`: reflexivity on e; bare `clear` only when no atom follows. */
 %nonassoc CLAUSE_END
@@ -1820,13 +1820,13 @@ expr_atom:
   (* the kernel's forms, refused on the surface *)
   | HIT_ELIM LPAREN expr COMMA LBRACKET separated_list(COMMA, hit_branch) RBRACKET COMMA expr RPAREN
     { failwith "hit_elim is a form of the kernel: the eliminator is written match x { arm => .. }" }
-  (* Metonymic: `match x { ctor => .., loop => plam i => .. }` = hit_elim with a
+  (* Metonymic: `match x { ctor => .., loop => walk i => .. }` = hit_elim with a
      SYNTHESIZED motive (non-dependent). The sentinel motive __match tells the
      type checker to infer the result type from the branches. *)
   | MATCH_KW x = expr_atom LBRACE branches = separated_list(COMMA, hit_branch) RBRACE
     { let l = mk_loc $startpos $endpos in
       EHITElim (EVar ("__match", l), branches, x, l) }
-  | PLAM i = IDENT FATARROW body = expr
+  | walk_kw i = IDENT FATARROW body = expr
     { EPathAbs (i, body, mk_loc $startpos $endpos) }
   | HIT_KW LPAREN ctor = IDENT RPAREN
     { failwith (Printf.sprintf "hit is a form of the kernel: a nullary arm is its name: %s" ctor) }
@@ -1911,10 +1911,14 @@ expr_atom:
   (* No EAll ("all P where c"): the condition would be dropped at desugar
      and __all has no lowering. *)
 
+walk_kw:
+  | WALK { () }
+  | PLAM { failwith "plam is refused: the abstraction of a path is written walk i => e" }
+
 hcomp_side:
-  | face_var = IDENT EQ I0 FATARROW PLAM binder = IDENT FATARROW body = expr
+  | face_var = IDENT EQ I0 FATARROW walk_kw binder = IDENT FATARROW body = expr
     { (face_var, false, binder, body) }
-  | face_var = IDENT EQ I1 FATARROW PLAM binder = IDENT FATARROW body = expr
+  | face_var = IDENT EQ I1 FATARROW walk_kw binder = IDENT FATARROW body = expr
     { (face_var, true, binder, body) }
 
 hcomp_base:

@@ -1,6 +1,6 @@
 place Entry {
   fun main: Number {
-    p := plam i => 7
+    p := walk i => 7
     return (p @ I0) - 7
   }
 }

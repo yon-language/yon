@@ -136,6 +136,7 @@ let tok_name = function
   | Parser.I0 -> "I0"
   | Parser.I1 -> "I1"
   | Parser.PLAM -> "PLAM"
+  | Parser.WALK -> "WALK"
   | Parser.PATHP -> "PATHP"
   | Parser.HIT_KW -> "HIT_KW"
   | Parser.HEYT_INT_KW -> "HEYT_INT_KW"

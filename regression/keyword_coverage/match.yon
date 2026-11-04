@@ -1,6 +1,6 @@
 /* match x { ctor => .. }: the eliminator, a branch for each arm and each cell. */
 place Entry {
   fun main: Number {
-    return match S1.base { base => 42, loop => plam i => 42 }
+    return match S1.base { base => 42, loop => walk i => 42 }
   }
 }

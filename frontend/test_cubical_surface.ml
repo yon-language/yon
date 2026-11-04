@@ -46,9 +46,9 @@ let () =
    | Ok (TyId (TyPrim "number",
                   TyTermExpr (EVar ("n", _)),
                   TyTermExpr (EVar ("n", _)))) ->
-       check "plam i => n : Id(number, n, n)" true
-   | Ok other -> check (Printf.sprintf "plam: unexpected %s" (Tyenv.ty_to_string other)) false
-   | Error e -> check (Printf.sprintf "plam: infer failed: %s" (Tycheck.error_to_string e)) false);
+       check "walk i => n : Id(number, n, n)" true
+   | Ok other -> check (Printf.sprintf "walk: unexpected %s" (Tyenv.ty_to_string other)) false
+   | Error e -> check (Printf.sprintf "walk: infer failed: %s" (Tycheck.error_to_string e)) false);
 
   let varying =
     EPathAbs ("i", EPathApp (EVar ("p", dl), DIVar "i", dl), dl) in
@@ -56,8 +56,8 @@ let () =
    | Ok (TyId (TyPrim "number",
                   TyTermExpr (EPathApp (EVar ("p", _), DI0, _)),
                   TyTermExpr (EPathApp (EVar ("p", _), DI1, _)))) ->
-       check "plam i => p @ i records p @ I0 and p @ I1" true
-   | _ -> check "plam i => p @ i has incorrect endpoints" false);
+       check "walk i => p @ i records p @ I0 and p @ I1" true
+   | _ -> check "walk i => p @ i has incorrect endpoints" false);
 
   (* applying @ to a non-path is rejected *)
   (match Tycheck.infer env ctx (EPathApp (EVar ("n", dl), DI0, dl)) with

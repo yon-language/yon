@@ -1,6 +1,6 @@
 place Entry {
   fun main: Number {
-    p := plam i => hcomp Number [ i = I0 => plam j => 9 ] 5
+    p := walk i => hcomp Number [ i = I0 => walk j => 9 ] 5
     return (p @ I0) - 9
   }
 }

@@ -111,7 +111,7 @@ fun quota(p: Suspension<Number>): Number {
   return match p {
     north => 5,
     south => 5,
-    merid as a => plam i => 5
+    merid as a => walk i => 5
   }
 }
 fun main: Number {
@@ -121,7 +121,7 @@ fun main: Number {
 
 `north` is a point of the suspension (poles `north` and `south`, with `merid` the
 meridian path between them); the `merid` branch is a path between what the match gives
-at the two poles, built with `plam`, a path-lambda over the interval, and the kernel's
+at the two poles, built with `walk`, a path-lambda over the interval, and the kernel's
 conversion checks its ends. Giving the poles two values with no path between them is
 refused.
 

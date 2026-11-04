@@ -2,9 +2,9 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_hit_elim.ml — Tarski HIT eliminator typing, with DEPENDENT path branches.
  *
- * hit_elim(C, [base => v_base, loop => plam i => body], x):
+ * hit_elim(C, [base => v_base, loop => walk i => body], x):
  *   point base : El(C base)
- *   path  loop : plam i => body  with  body : El(C(loop @ i))   (path-over)
+ *   path  loop : walk i => body  with  body : El(C(loop @ i))   (path-over)
  *   result     : El(C x)
  * The line El(C(loop@i)) varies along the interval (uses path application);
  * at the endpoints loop@0 / loop@1 the boundary matches by computation.
@@ -43,7 +43,7 @@ let () =
     Tyenv.add_vars Tyenv.empty
       [("C", motive_ty); ("x", s1); ("vb", elC_base); ("vbody", elC_loop_i)] in
 
-  (* dependent loop branch: loop => plam i => vbody *)
+  (* dependent loop branch: loop => walk i => vbody *)
   let elim =
     EHITElim (EVar ("C", dl),
               [("base", PatVars [], EVar ("vb", dl));

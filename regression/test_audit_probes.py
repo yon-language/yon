@@ -1838,7 +1838,7 @@ def test_a_meridian_does_not_end_at_the_north_pole(tmp_path):
                    reason="a composition on an active face is the side at its far end: the kernel "
                           "does not reduce hcomp over a cell yet")
 def test_a_composition_on_an_active_face_is_the_side_at_its_end(tmp_path):
-    claim = ("(plam i => hcomp Suspension [ i = I0 => plam j => (m ↦ merid) @ j ] Suspension.north) @ I0"
+    claim = ("(walk i => hcomp Suspension [ i = I0 => walk j => (m ↦ merid) @ j ] Suspension.north) @ I0"
              " = Suspension.south")
     _ends_at_kernel(tmp_path, claim, "hcomp at i = I0")
 
@@ -2284,7 +2284,7 @@ def test_the_circle_base_point_eliminates(tmp_path):
     proj = _project(tmp_path,
         "place Entry {\n"
         "fun main: Number {\n"
-        "  return match S1.base { base => 42, loop => plam i => 42 }\n}\n}\n")
+        "  return match S1.base { base => 42, loop => walk i => 42 }\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     assert rc == 0, out
     assert _run(tmp_path / "out")[0] == 42
@@ -2294,7 +2294,7 @@ def test_the_sphere_base_point_eliminates(tmp_path):
     proj = _project(tmp_path,
         "place Entry {\n"
         "fun main: Number {\n"
-        "  return match S2.base { base => 42, surf => plam i => plam j => 42 }\n}\n}\n")
+        "  return match S2.base { base => 42, surf => walk i => walk j => 42 }\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     _verdict(rc == 0, f"S2 elimination refused: {out.strip()[-160:]}")
     assert _run(tmp_path / "out")[0] == 42

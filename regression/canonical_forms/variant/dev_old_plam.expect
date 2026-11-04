@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: written walk i => e
+note: |
+  The abstraction of a path is walk i => e; plam is the old spelling.

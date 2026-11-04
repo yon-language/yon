@@ -56,7 +56,7 @@ let () =
   check "tm: snd"        (Pretty.pp_term (Snd (Var "p"))) "snd p";
   check "tm: streamcons" (Pretty.pp_term (StreamCons (Var "h", Var "k"))) "h :: k";
   check "tm: unit"       (Pretty.pp_term Unit) "()";
-  check "tm: plam"       (Pretty.pp_term (PLam ("i", Var "x"))) "<i> x";
+  check "tm: walk"       (Pretty.pp_term (PLam ("i", Var "x"))) "<i> x";
   check "tm: papp"       (Pretty.pp_term (PApp (Var "p", I0))) "(p @ 0)";
   check "tm: transp"     (Pretty.pp_term (Transp (("i", a), Var "t"))) "transp <i>A t";
   check "tm: unglue"     (Pretty.pp_term (Unglue (Var "g"))) "unglue(g)";

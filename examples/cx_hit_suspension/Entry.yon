@@ -4,12 +4,12 @@ place Entry {
 // tipo-risultato e' inferito dai branch.
 // PERCHE': `match x { ctor => .. }` e' l'eliminatore universale (la parte per il
 // tutto: ogni costruttore un caso); i tipi induttivi SUPERIORI portano i cammini
-// fra i punti dentro il dato, e il ramo `merid` lo riflette con un `plam`.
+// fra i punti dentro il dato, e il ramo `merid` lo riflette con un `walk`.
 fun quota(p: Suspension<Number>): Number {
   return match p {
     north => 5,
     south => 5,
-    merid as a => plam i => 5
+    merid as a => walk i => 5
   }     // -> 5
 }
 fun main: Number {

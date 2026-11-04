@@ -1823,7 +1823,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   | EHITElim (EVar ("__match", _), branches, x, loc) ->
       (* `match x { ctor => v, .. }`: a non-dependent HIT eliminator whose motive
          is SYNTHESIZED. Infer the scrutinee's HIT type for the motive domain,
-         and take the first POINT branch body (a plain value, not a `plam`) as a
+         and take the first POINT branch body (a plain value, not a `walk`) as a
          witness of the result type, giving the constant motive
          `fun(_: HIT) => <body> : HIT -> T`. Then reuse the standard rule below.
          A point branch that references its own payload binders cannot serve as
@@ -2097,14 +2097,14 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                                   let* () = check branch_env ctx body line_i in
                                   check_branches rest
                               | _ -> err loc (Printf.sprintf
-                                  "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
+                                  "hit_elim: path branch %s must be a path abstraction (walk i => ...)"
                                   ctor)))
                   in
                   let* () = check_branches branches in
                   ok (TyEl (TyTermExpr (EApp (c, [x], loc))))
                 else
                   (* non-dependent recursor: motive C : HIT -> T for a concrete
-                   * T. Point branch : T; path branch plam i => body, body : T
+                   * T. Point branch : T; path branch walk i => body, body : T
                    * (constant line); result : T. *)
                   (match c_ty with
                    | TyArrow (_, cod) | TyPi (_, _, cod) ->
@@ -2131,7 +2131,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                                        let* () = check branch_env ctx body cod in
                                        check_rec rest
                                    | _ -> err loc (Printf.sprintf
-                                       "hit_elim: path branch %s must be a path abstraction (plam i => ...)"
+                                       "hit_elim: path branch %s must be a path abstraction (walk i => ...)"
                                        ctor)))
                        in
                        let* () = check_rec branches in
@@ -2148,7 +2148,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        | _ -> err loc "path application (@): the head is not a path (Id type)")
 
   | EPathAbs (i, e, _loc) ->
-      (* plam i => e : a path <i> e. Non-dependent typing: the body has type A
+      (* walk i => e : a path <i> e. Non-dependent typing: the body has type A
        * (the carrier); the path runs e[i:=0] ~> e[i:=1]. Keep the actual
        * endpoint expressions so Dispatcher conversion can normalize path
        * applications and certified deltas. *)

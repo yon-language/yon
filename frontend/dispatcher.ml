@@ -122,7 +122,7 @@ let rec classify_expr (e : expr) : fragment =
   | EApp _ -> FragCATT  (* general application *)
   | EHITElim _ -> FragCubical  (* HIT eliminator *)
   | EPathApp _ -> FragCubical  (* path application p @ i *)
-  | EPathAbs _ -> FragCubical  (* path abstraction plam i => e *)
+  | EPathAbs _ -> FragCubical  (* path abstraction walk i => e *)
   | EHITConstr _ -> FragCubical  (* HIT constructor hit(...) *)
   | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _ -> FragCATT
   | EViewLam _ -> FragCATT  (* 5o handle lambda *)

@@ -1,7 +1,7 @@
 place Entry {
 // S1 from the prelude: name its point and eliminate it, a branch for its cell.
 fun circle_elim: Number {
-  return match S1.base { base => 42, loop => plam i => 42 }
+  return match S1.base { base => 42, loop => walk i => 42 }
 }
 fun main: Number {
   return circle_elim

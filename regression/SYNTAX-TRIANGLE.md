@@ -9,11 +9,11 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `regression/CANONICAL-FORMS.md`. Regenerate this file with
 `python regression/test_syntax_triangle.py`.
 
-- lexer keywords: **108**
+- lexer keywords: **109**
 - corpus files: **356**
 - CodeWindows: **23**  (project **11**, single-file **12**)
 - prose `.yon` blocks marked illustrative (exempt, counted): **32**
-- allowlisted reserved/kernel tokens: **7**
+- allowlisted reserved/kernel tokens: **8**
 
 ## Keywords (lexer x corpus-count x book anchor)
 
@@ -87,7 +87,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
 | `place` | `PLACE` | 308 | yes | exercised |
-| `plam` | `PLAM` | 16 | yes | exercised |
+| `plam` | `PLAM` | 0 | yes | allowlisted |
 | `present` | `PRESENT` | 3 | yes | exercised |
 | `produce` | `PRODUCE` | 15 | yes | exercised |
 | `promote` | `PROMOTE` | 1 | yes | exercised |
@@ -122,6 +122,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `via` | `VIA_KW` | 2 | yes | exercised |
 | `view` | `VIEW` | 6 | yes | exercised |
 | `visits` | `VISITS` | 18 | yes | exercised |
+| `walk` | `WALK` | 16 | yes | exercised |
 | `when` | `WHEN` | 9 | yes | exercised |
 | `where` | `WHERE` | 62 | yes | exercised |
 | `while` | `WHILE_KW` | 4 | yes | exercised |

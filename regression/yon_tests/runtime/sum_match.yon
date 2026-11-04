@@ -4,7 +4,7 @@ place Entry {
   fun polo: Suspension<Number> { return south }
   fun main: Number {
     payload := match seven { inj as x => x, quot as (a, b, r) => r }
-    side := match polo { north => 4, south => 4, merid as a => plam i => 4 }
+    side := match polo { north => 4, south => 4, merid as a => walk i => 4 }
     return payload + side - 11
   }
 }

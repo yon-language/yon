@@ -541,6 +541,18 @@ def test_hit_elim_on_the_surface_is_refused_and_match_shown(tmp_path):
              "fun main: Number { return 0 }\n}\n", "E1001", "written match x")
 
 
+def test_plam_is_refused_and_walk_shown(tmp_path):
+    src = ("place Entry {\nfun main: Number {\n"
+           "  return match S1.base { base => 42, loop => plam i => 42 }\n}\n}\n")
+    _refused(tmp_path, src, "E1001", "written walk i => e")
+
+
+def test_plam_on_a_face_is_refused_too(tmp_path):
+    src = ("place Entry {\nfun main: Number {\n"
+           "  return hcomp Number [ i = I0 => plam j => 1 ] 1\n}\n}\n")
+    _refused(tmp_path, src, "E1001", "written walk i => e")
+
+
 def test_an_arrow_into_a_call_is_refused_and_the_tuple_shown(tmp_path):
     src = ("place Entry {\nfun add(a: Number, b: Number): Number { return a + b }\n"
            "fun main: Number { return 40 ↦ add(2) }\n}\n")
@@ -643,7 +655,7 @@ def test_an_untyped_quantifier_is_refused_and_the_typed_form_proposed(tmp_path):
 def test_a_law_in_a_coproduct_generates_a_cell(tmp_path):
     src = ("place Entry {\n"
            "fun f(s: S1): Number {\n"
-           "  return match s { base => 42, loop => plam i => 42 }\n"
+           "  return match s { base => 42, loop => walk i => 42 }\n"
            "}\n"
            "fun main: Number { return f(S1.base) }\n}\n")
     assert _exit(tmp_path, src) == 42

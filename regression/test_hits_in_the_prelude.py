@@ -52,28 +52,28 @@ def _refused(tmp_path, entry, places, *words):
 
 
 def test_the_circle_is_read_from_the_prelude(tmp_path):
-    src = _entry("fun f(s: S1): Number { return match s { base => 42, loop => plam i => 42 } }\n",
+    src = _entry("fun f(s: S1): Number { return match s { base => 42, loop => walk i => 42 } }\n",
                  "return f(S1.base)")
     assert _exit(tmp_path, src) == 42
 
 
 def test_the_sphere_has_a_true_two_cell(tmp_path):
     src = _entry("fun f(s: S2): Number {\n"
-                 "  return match s { base => 42, surf => plam i => plam j => 42 }\n}\n",
+                 "  return match s { base => 42, surf => walk i => walk j => 42 }\n}\n",
                  "return f(S2.base)")
     assert _exit(tmp_path, src) == 42
 
 
 def test_a_two_cell_is_a_path_between_paths(tmp_path):
     src = _entry("fun f(s: S2): Number {\n"
-                 "  return match s { base => 42, surf => plam i => 42 }\n}\n")
+                 "  return match s { base => 42, surf => walk i => 42 }\n}\n")
     r, _ = _compile(tmp_path, src)
     assert r.returncode != 0 and "E2001" in r.stdout + r.stderr, r.stdout + r.stderr
 
 
 def test_the_circle_has_no_two_cell_to_give(tmp_path):
     src = _entry("fun f(s: S1): Number {\n"
-                 "  return match s { base => 42, loop => plam i => plam j => 42 }\n}\n")
+                 "  return match s { base => 42, loop => walk i => walk j => 42 }\n}\n")
     r, _ = _compile(tmp_path, src)
     assert r.returncode != 0 and "E2001" in r.stdout + r.stderr, r.stdout + r.stderr
 
@@ -121,7 +121,7 @@ PERSONA = {"Cliente": "place Cliente { nome Number }\n",
 def test_a_concrete_pushout_is_a_place_with_a_glue(tmp_path):
     uso = {**PERSONA, "Uso": "place Uso {\n"
            "  fun presente(p: Persona): Number {\n"
-           "    return match p { inl as c => 42, inr as u => 42, glue as k => plam i => 42 }\n  }\n"
+           "    return match p { inl as c => 42, inr as u => 42, glue as k => walk i => 42 }\n  }\n"
            "  fun run: Number { return presente(.-> Cliente { nome 1 } ↪ inl) }\n}\n"}
     assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n", uso) == 42
 
@@ -129,14 +129,14 @@ def test_a_concrete_pushout_is_a_place_with_a_glue(tmp_path):
 def test_a_map_out_of_a_pushout_that_tears_the_glue_is_refused(tmp_path):
     uso = {**PERSONA, "Uso": "place Uso {\n"
            "  fun presente(p: Persona): Number {\n"
-           "    return match p { inl as c => 42, inr as u => 41, glue as k => plam i => 42 }\n  }\n}\n"}
+           "    return match p { inl as c => 42, inr as u => 41, glue as k => walk i => 42 }\n  }\n}\n"}
     _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, "mismatch")
 
 
 TO_CIRCLE = ("fun to_circle(s: Suspension<Boolean>): S1 {\n"
              "  return match s { north => S1.base, south => S1.base,\n"
-             "    merid as b => match b { true => plam i => loop @ i,\n"
-             "                            false => plam i => S1.base } }\n}\n")
+             "    merid as b => match b { true => walk i => loop @ i,\n"
+             "                            false => walk i => S1.base } }\n}\n")
 
 
 def test_suspension_of_boolean_maps_to_the_circle(tmp_path):
@@ -147,21 +147,21 @@ def test_an_if_with_two_equal_ends_is_no_rule_of_the_kernel(tmp_path):
     # the two ends of the cell are proved by a match on b, not by a rule on the if
     src = _entry("fun to_circle(s: Suspension<Boolean>): S1 {\n"
                  "  return match s { north => S1.base, south => S1.base,\n"
-                 "    merid as b => plam i => if b then loop @ i else S1.base }\n}\n")
+                 "    merid as b => walk i => if b then loop @ i else S1.base }\n}\n")
     _refused(tmp_path, src, None, "mismatch")
 
 
 def test_the_map_back_from_the_circle(tmp_path):
     src = _entry("fun from_circle(s: S1): Suspension<Boolean> {\n"
                  "  return match s { base => north,\n"
-                 "    loop => plam i => ((true ↦ merid) ++ inv(false ↦ merid)) @ i }\n}\n")
+                 "    loop => walk i => ((true ↦ merid) ++ inv(false ↦ merid)) @ i }\n}\n")
     assert _exit(tmp_path, src) == 42
 
 
 def test_there_is_no_map_to_boolean_that_sends_the_poles_apart(tmp_path):
     src = _entry("fun e_polo_nord(s: Suspension<S1>): Boolean {\n"
                  "  return match s { north => true, south => false,\n"
-                 "    merid as x => plam i => true }\n}\n")
+                 "    merid as x => walk i => true }\n}\n")
     _refused(tmp_path, src, None, "mismatch")
 
 
@@ -171,12 +171,12 @@ def test_the_suspension_of_boolean_is_the_circle_by_univalence(tmp_path):
     src = _entry(TO_CIRCLE +
                  "fun from_circle(s: S1): Suspension<Boolean> {\n"
                  "  return match s { base => north,\n"
-                 "    loop => plam i => ((true ↦ merid) ++ inv(false ↦ merid)) @ i }\n}\n"
+                 "    loop => walk i => ((true ↦ merid) ++ inv(false ↦ merid)) @ i }\n}\n"
                  "fun eta(x: Suspension<Boolean>): from_circle(to_circle(x)) = x {\n"
                  "  return match x { north => clear, south => false ↦ merid,\n"
-                 "    merid as b => plam i => plam j => clear }\n}\n"
+                 "    merid as b => walk i => walk j => clear }\n}\n"
                  "fun eps(x: S1): to_circle(from_circle(x)) = x {\n"
-                 "  return match x { base => clear, loop => plam i => plam j => loop @ i }\n}\n"
+                 "  return match x { base => clear, loop => walk i => walk j => loop @ i }\n}\n"
                  "fun path: Suspension<Boolean> = S1 {\n"
                  "  return ua(equiv(to_circle, from_circle, eta, eps))\n}\n")
     assert _exit(tmp_path, src) == 42

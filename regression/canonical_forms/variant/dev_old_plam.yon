@@ -1,0 +1,5 @@
+place Entry {
+  fun main: Number {
+    return match S1.base { base => 42, loop => plam i => 42 }
+  }
+}

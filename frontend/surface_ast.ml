@@ -402,7 +402,7 @@ and expr =
          the arm's field order is known — tycheck/desugar), the mirror of
          the mediatrice literal `.-> Cons { head 5 tail rest }`. *)
   | EPathApp of expr * dim * location
-  | EPathAbs of string * expr * location              (* plam i => e : path abstraction <i> e *)
+  | EPathAbs of string * expr * location              (* walk i => e : path abstraction <i> e *)
   | EHITConstr of string * expr list * location       (* hit(base), hit(loop), hit(merid, a): HIT constructor *)
   | EWireTo of string * location                      (* "wire to Space": open the transport toward a Space *)
   | EProduce of stmt list * location                  (* "produce { ... }" as an expression: the value is the stream id *)

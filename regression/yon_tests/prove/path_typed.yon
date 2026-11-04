@@ -1,4 +1,4 @@
 place Entry {
-  fun line: 3 = 3 { return plam i => 3 }
+  fun line: 3 = 3 { return walk i => 3 }
   fun main: Number { return (line @ I0) - 3 }
 }

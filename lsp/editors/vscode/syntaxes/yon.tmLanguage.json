@@ -69,7 +69,7 @@
         },
         {
           "name": "keyword.other.hott.yon",
-          "match": "\\b(refl|pair|fst|snd|ind_path|quote|el_match|hit_elim|hit|I0|I1|plam)\\b"
+          "match": "\\b(refl|pair|fst|snd|ind_path|quote|el_match|hit_elim|hit|I0|I1|walk)\\b"
         }
       ]
     },

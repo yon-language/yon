@@ -240,7 +240,8 @@
       "hit", HIT_KW;             (* HIT constructor: hit(base), hit(merid, a) *)
       "I0", I0;                  (* interval endpoint 0 *)
       "I1", I1;                  (* interval endpoint 1 *)
-      "plam", PLAM;              (* path abstraction <i> e *)
+      "walk", WALK;              (* path abstraction <i> e *)
+      "plam", PLAM;              (* the old spelling: refused by the parser *)
       "PathP", PATHP;            (* dependent path type *)
 
       (* Metonymic surface sugar (journey metaphor) — pure NAMES that desugar to

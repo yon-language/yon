@@ -63,14 +63,14 @@ def test_a_cell_needs_a_branch_of_its_own(tmp_path):
 
 def test_a_map_out_of_the_circle_respects_its_cell(tmp_path):
     uso = {**CERCHIO, "Uso": _uso(
-        "fun f(s: Cerchio): Number { return match s { punto => 42, giro => plam i => 42 } }\n"
+        "fun f(s: Cerchio): Number { return match s { punto => 42, giro => walk i => 42 } }\n"
         "fun run: Number { return f(punto) }\n")}
     assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n", uso) == 42
 
 
 def test_a_branch_whose_ends_miss_the_points_is_refused(tmp_path):
     uso = {**CERCHIO, "Uso": _uso(
-        "fun f(s: Cerchio): Number { return match s { punto => 42, giro => plam i => 41 } }\n")}
+        "fun f(s: Cerchio): Number { return match s { punto => 42, giro => walk i => 41 } }\n")}
     _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, "E2001", "mismatch")
 
 
@@ -78,7 +78,7 @@ def test_a_cell_is_a_path_between_its_ends(tmp_path):
     uso = {**CERCHIO, "Uso": _uso(
         "fun g: punto = punto { return giro }\n"
         "fun at0: Cerchio { return giro @ I0 }\n"
-        "fun run: Number { return match at0 { punto => 42, giro => plam i => 42 } }\n")}
+        "fun run: Number { return match at0 { punto => 42, giro => walk i => 42 } }\n")}
     assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n", uso) == 42
 
 
@@ -95,7 +95,7 @@ def test_a_quantified_cell_is_applied_like_an_arrow(tmp_path):
 def test_the_branch_of_a_quantified_cell_binds_its_variable(tmp_path):
     uso = {**SOSPESO, "Uso": _uso(
         "fun f(s: Sospeso<Number>): Number {\n"
-        "  return match s { nord => 1, sud => 1, meridiano as a => plam i => 1 }\n}\n"
+        "  return match s { nord => 1, sud => 1, meridiano as a => walk i => 1 }\n}\n"
         "fun run: Number { return f(nord) * 42 }\n")}
     assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n", uso) == 42
 
@@ -103,7 +103,7 @@ def test_the_branch_of_a_quantified_cell_binds_its_variable(tmp_path):
 def test_a_meridian_between_two_different_values_is_refused(tmp_path):
     uso = {**SOSPESO, "Uso": _uso(
         "fun f(s: Sospeso<Number>): Number {\n"
-        "  return match s { nord => 1, sud => 2, meridiano as a => plam i => 1 }\n}\n")}
+        "  return match s { nord => 1, sud => 2, meridiano as a => walk i => 1 }\n}\n")}
     _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, "E2001", "mismatch")
 
 
@@ -137,6 +137,6 @@ def test_a_path_arm_comes_back_as_a_law(tmp_path):
     # the slot for path arms in the clause is refused; the law is its form
     ok = {"Lista": "place Lista {\n  this > Vuota :U Testa Number Lista\n  law dup Vuota = Vuota\n}\n",
           "Uso": _uso("fun f(l: Lista): Number {\n"
-                      "  return match l { Vuota => 42, Testa as (h, t) => 42, dup => plam i => 42 }\n}\n"
+                      "  return match l { Vuota => 42, Testa as (h, t) => 42, dup => walk i => 42 }\n}\n"
                       "fun run: Number { return f(Vuota) }\n")}
     assert _exit(tmp_path, "place Entry {\nfun main: Number { return Uso.run }\n}\n", ok) == 42

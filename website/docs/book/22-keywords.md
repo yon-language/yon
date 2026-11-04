@@ -965,25 +965,29 @@ erase at compile time, so they carry no runtime benchmark.
 
 #### `plam`
 
-Path abstraction: `plam i => e` builds a path by binding a dimension variable `i`; applied at an
+The old spelling of `walk`, refused: the abstraction of a path is written `walk i => e`.
+
+#### `walk`
+
+Path abstraction: `walk i => e` builds a path by binding a dimension variable `i`; applied at an
 endpoint it recovers the face. The companion of `refl` for non-constant paths (`path_app`,
 `path_typed`).
 
 #### `I0`
 
 Interval endpoint 0: the start of the abstract interval a path runs over. Read a closed path at its
-start with `p @ I0`, and substituting `i := I0` in a `plam i => e` recovers the path's left face.
+start with `p @ I0`, and substituting `i := I0` in a `walk i => e` recovers the path's left face.
 Paired with `I1`.
 
 #### `I1`
 
 Interval endpoint 1: the far end of the interval. `p @ I1` reads a path at its end, and `i := I1` in a
-`plam i => e` recovers the right face. Paired with `I0`.
+`walk i => e` recovers the right face. Paired with `I0`.
 
 #### `PathP`
 
 Dependent path type: the type former behind a path whose endpoints live in a family of types that
-itself varies over the interval, the dependent generalisation of `Id`. A `plam i => e` inhabits a
+itself varies over the interval, the dependent generalisation of `Id`. A `walk i => e` inhabits a
 `PathP` when the type of `e` depends on `i`; when it does not, the `PathP` is just an ordinary `Id`
 path.
 
@@ -1033,7 +1037,7 @@ inhabitant to `body`. Lowers to the body application and runs.
 
 <CodeWindow file="circle_hit.yon" run="yonc circle_hit.yon -o circle_hit && ./circle_hit; echo $?" out={["42"]}>
 {`fun circle_elim: Number {
-  return match S1.base { base => 42, loop => plam i => 42 }
+  return match S1.base { base => 42, loop => walk i => 42 }
 }
 fun main: Number {
   return circle_elim

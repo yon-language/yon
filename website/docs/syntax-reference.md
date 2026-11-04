@@ -138,7 +138,7 @@ from the call sites.
 | `.-> P { field value }` | ✓ | Section construction through the mediatrice, **no `=`** between field and value. (`new` and `verify` are retired: the constructor is the mediating arrow, and a law-verified place is instantiated like any other) |
 | [`clear(t)`](/book/keywords#clear), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms. `clear` is the reflexivity proof: the path that needs no argument, because the two ends are definitionally the same |
 | [`ind_path(C, d, p)`](/book/keywords#ind_path) | ✓ | The J eliminator: computes `d(basepoint)` when `p` is [`clear`](/book/keywords#clear) in evidence at the call site; a J stuck on a non-reflexive path is rejected at compile time (the runtime never decides path equality) |
-| [`plam i => e`](/book/keywords#plam) | ✓ | Path abstraction over a dimension `i`; the face system for the compositions is written `i = I0 => plam j => e` / `i = I1 => plam j => e` |
+| [`walk i => e`](/book/keywords#walk) | ✓ | Path abstraction over a dimension `i`; the face system for the compositions is written `i = I0 => walk j => e` / `i = I1 => walk j => e` |
 | [`hit`](/book/keywords#hit), [`hit_elim`](/book/keywords#hit_elim) | ✗ | Forms of the **kernel**, refused on the surface: a nullary arm is its name, an injection `x ↪ Arm`, the eliminator `match` |
 | [`comp(line)[faces]`](/book/keywords#comp) / [`hcomp T[faces]`](/book/keywords#hcomp) | ✓ | Kan composition along a line / homogeneous composition; reduced by the kernel (`regression/yon_tests/prove`) |
 | [`quote(c, a)`](/book/keywords#quote) / [`el_match(target, ret, body)`](/book/keywords#el_match) | ✓ | Universe-code introduction / elimination for `El(c)`; lowers to the inhabitant / the body application. The deeper Tarski reflection is still ahead |
@@ -194,7 +194,7 @@ never by its operands, so the reading is never ambiguous:
 - between two expressions, `a => b` is classical implication;
 - after a parameter list, `fun(x) => e` (and `move(…) =>`, `view(…) =>`, …)
   starts a lambda body;
-- after a dimension, `plam i => e` starts a path abstraction;
+- after a dimension, `walk i => e` starts a path abstraction;
 - after a pattern, `Ctor => e` in a `match`, or a face `i = I0 => …`, starts a
   branch.
 
@@ -301,7 +301,7 @@ A `place` then takes its world by inference from the project's toml, not from an
 | `operation add(a: A, b: A): A as "+"` | ✓ | An operation of an algebra and the operator that writes it; a nullary operation (`operation zero: A`) is a neutral element |
 | `law associative ∀a : A ∀b : A ∀c : A, (a + b) + c = a + (b + c)` | ✓ | A law stated over the carrier: each quantifier carries its type, here the carrier; the comma closes the quantifiers, and the statement reaches the end of the line, with parentheses only to group |
 | `place Cerchio { this > punto  law giro punto = punto }` | ✓ | **A cell**: a law in the body of a place with `this >` is constitutive. The arms are the 0-cells, each law a cell, of the order its ends say; source and target have one type. A cell is an arrow with a name in the house: `x ↦ meridiano` is a path, `x ↦ meridiano @ i` a point on it |
-| `match s { punto => 42, giro => plam i => 42 }` | ✓ | The eliminator wants a branch for each cell: a path between what it gives at the two ends, decided by the kernel's conversion. `meridiano as a => plam i => ..`, `quot as (a, b, r) => ..` bind the quantifiers and the premise |
+| `match s { punto => 42, giro => walk i => 42 }` | ✓ | The eliminator wants a branch for each cell: a path between what it gives at the two ends, decided by the kernel's conversion. `meridiano as a => walk i => ..`, `quot as (a, b, r) => ..` bind the quantifiers and the premise |
 | `law nothing zero + zero = zero` | ✓ | A law with no quantifier: the statement follows its name, to the end of the line |
 | `law retract ∀x : V, value_of(word_of(x)) = x is given` | ✓ | **An axiom**: a law of a place that is not an algebra, about faces the certification cannot read (given ones); it is declared, never certified, and its variables range over every type. A law of an algebra is certified on each model and cannot be given |
 | `carried by i64` (in an algebra) | ✓ | **A carrier model**: the carrier is a model of the algebra, with the machine's operation for each symbol (`as "+"` the machine's sum, `as "0"` its zero). Its laws are certified like those of any model; `carried by C is given` declares it an axiom, admitted only where the certification does not decide (E2102) |
@@ -567,6 +567,7 @@ Every keyword, alphabetically, each linked to its entry in
 [`via`](/book/keywords#via) ·
 [`view`](/book/keywords#view) ·
 [`visits`](/book/keywords#visits) ·
+[`walk`](/book/keywords#walk) ·
 [`when`](/book/keywords#when) ·
 [`where`](/book/keywords#where) ·
 [`while`](/book/keywords#while) ·
