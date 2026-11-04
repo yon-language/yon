@@ -1,0 +1,9 @@
+[package]
+name = "meta"
+
+[world.Kernel]
+objects = ["Term", "Proofs"]
+spaces  = ["kernel"]
+
+[runtime]
+backend = "memory"

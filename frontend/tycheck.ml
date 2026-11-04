@@ -3873,6 +3873,11 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
          same tag switch). *)
       let xv = (match x with EVar (xv, _) -> xv | _ -> assert false) in
       let* x_ty = infer env ctx x in
+      (match x_ty with
+       | TyPrim p when Hashtbl.mem Surface_ast.fusion_of_prim p ->
+           Hashtbl.replace Surface_ast.fused_elim_sites
+             (loc.file, loc.start_line, loc.start_col) ()
+       | _ -> ());
       record_match_coproduct env loc x_ty;
       (match hit_signature_of env x_ty with
        | None -> fallback env e expected
@@ -3933,6 +3938,10 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                         let ctor_expr =
                           EHITConstr
                             (ctor, List.map (fun n -> EVar (n, loc)) vars, loc) in
+                        let ctor_expr = match ctor with
+                          | "true" -> ELit (LitBool true, loc)
+                          | "false" -> ELit (LitBool false, loc)
+                          | _ -> ctor_expr in
                         let refined = subst_evar_in_ty xv ctor_expr expected in
                         let* () = check branch_env ctx body refined in
                         go_branches rest)
@@ -7940,9 +7949,25 @@ let elaborate_id_sugar (p : program) : program =
     let genv = resolve_arm_injections genv p3 in
     let genv = register_deltas genv p3 in
     let ctx = Reduce.empty_ctx in
-    let fix_plainly (ep : expr) (e : expr) : expr =
+    (* a branch of a match on a variable proves the end at the arm of that branch *)
+    let rec fix_plainly (ep : expr) (e : expr) : expr =
       match e with
       | ERefl (EVar ("__plainly__", _), l) -> ERefl (ep, l)
+      | EParen (a, l) -> EParen (fix_plainly ep a, l)
+      | EHITElim ((EVar ("__match", _) as m), branches, x, l) ->
+          let at_arm c pat =
+            match x with
+            | EVar (v, _) ->
+                let point = match c, pat with
+                  | "true", _ -> ELit (LitBool true, l)
+                  | "false", _ -> ELit (LitBool false, l)
+                  | _, PatVars [] -> EVar (c, l)
+                  | _, PatVars vs -> ECall (c, List.map (fun w -> EVar (w, l)) vs, l)
+                  | _, PatWitness w -> ECall (c, [EVar (w, l)], l)
+                  | _, PatFields _ -> EVar (v, l) in
+                Desugar.subst_evar_in_expr v point ep
+            | _ -> ep in
+          EHITElim (m, List.map (fun (c, pat, b) -> (c, pat, fix_plainly (at_arm c pat) b)) branches, x, l)
       | _ -> e
     in
     (* the carrier of a path is read off its left endpoint, under the binders of its type;

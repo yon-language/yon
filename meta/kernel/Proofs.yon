@@ -1,0 +1,9 @@
+/* Proofs — the theorems of the fragment: each fun's type is its statement. */
+place Proofs {
+  statement Term
+
+  /* if b then x else x = x: the kernel has no rule for it, the two cases prove it. */
+  fun if_same(b: Boolean, x: Term): (if b then x else x) = x {
+    return match b { true => clear, false => clear }
+  }
+}

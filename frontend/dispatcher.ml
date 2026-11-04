@@ -320,7 +320,8 @@ let is_ring_carrier (t : ty) : bool =
   | _ -> false
 
 (* What conversion adds to the normal form, up to which two paths are one: a path along
-   which nothing varies is the trivial path. *)
+   which nothing varies is the trivial path, and an if on a known Boolean is its branch, the
+   computation rule of the eliminator. *)
 let rec conversion_form (t : Ast.term) : Ast.term =
   let open Ast in
   let rec mentions i t =
@@ -332,6 +333,12 @@ let rec conversion_form (t : Ast.term) : Ast.term =
     | HITElim (brs, x) -> mentions i x || List.exists (fun (_, _, b) -> mentions i b) brs
     | _ -> false in
   match t with
+  | App (App (App (Var ("__if" | "__if_expr") as f, c), a), b) ->
+      let c' = conversion_form c in
+      (match Builtins.decode_bool c' with
+       | Some true -> conversion_form a
+       | Some false -> conversion_form b
+       | None -> App (App (App (f, c'), conversion_form a), conversion_form b))
   | App (a, b) -> App (conversion_form a, conversion_form b)
   | PLam (i, b) ->
       let b' = conversion_form b in

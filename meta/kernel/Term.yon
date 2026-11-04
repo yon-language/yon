@@ -1,0 +1,2 @@
+/* Term — the terms of the fragment: the two Booleans, the variables, and the if. */
+place Term { this > yes :U no :U var Number :U ite Term Term Term }
