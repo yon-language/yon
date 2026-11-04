@@ -10,15 +10,15 @@ place TokList { this > TkNil :U TkCons(Token, TokList) }
 
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
-    else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
-    else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
-    else if c == 40 then hit(TkCons, hit(TLParen), lex_from(s, i + 1, len))
-    else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
-    else if c >= 48 then hit(TkCons, hit(TNum, c - 48), lex_from(s, i + 1, len))
+    else if c == 43 then .-> TkCons { _1 TPlus _2 lex_from(s, i + 1, len) }
+    else if c == 42 then .-> TkCons { _1 TStar _2 lex_from(s, i + 1, len) }
+    else if c == 40 then .-> TkCons { _1 TLParen _2 lex_from(s, i + 1, len) }
+    else if c == 41 then .-> TkCons { _1 TRParen _2 lex_from(s, i + 1, len) }
+    else if c >= 48 then .-> TkCons { _1 .-> TNum { _1 c - 48 } _2 lex_from(s, i + 1, len) }
     else lex_from(s, i + 1, len)
 }
 fun lex_from(s: String, i: Number, len: Number): TokList {
-  return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
+  return if i >= len then .-> TkCons { _1 TEnd _2 TkNil }
     else emit_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
@@ -28,79 +28,68 @@ place Expr { this > ENum(Number) :U EAdd(Expr, Expr) :U EMul(Expr, Expr) }
 place Parse { this > POk(Expr, TokList) :U PErr }   // (tree, rest) or error
 
 // ── tag-based peek on the TokList ───────────────────────────────────────────
-fun motTn(t: Token): Number { return 0 }
 fun tok_tag(t: Token): Number {
-  return hit_elim(motTn, [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 ], t)
+  return match t { TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5 }
 }
 fun tok_num(t: Token): Number {
-  return hit_elim(motTn, [ TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0 ], t)
+  return match t { TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0 }
 }
-fun motLn(l: TokList): Number { return 0 }
 fun head_tag(l: TokList): Number {
-  return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
+  return match l { TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) }
 }
 fun head_num(l: TokList): Number {
-  return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
+  return match l { TkNil => 0, TkCons(h, t) => tok_num(h) }
 }
-fun motLl(l: TokList): TokList { return hit(TkNil) }
 fun tail(l: TokList): TokList {
-  return hit_elim(motLl, [ TkNil => hit(TkNil), TkCons(h, t) => t ], l)
+  return match l { TkNil => TkNil, TkCons(h, t) => t }
 }
 
 // ── recursive-descent parser with precedence ────────────────────────────────
-fun motP(p: Parse): Parse { return hit(PErr) }
 
 // factor := NUM
 fun parse_factor(l: TokList): Parse {
   return if head_tag(l) == 0
-    then hit(POk, hit(ENum, head_num(l)), tail(l))
-    else hit(PErr)
+    then .-> POk { _1 .-> ENum { _1 head_num(l) } _2 tail(l) }
+    else PErr
 }
 
 // term := factor ('*' term)?
 fun parse_term(l: TokList): Parse { return term_more(parse_factor(l)) }
 fun term_more(p: Parse): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
+  return match p { PErr => PErr,
       POk(left, rest) =>
         if head_tag(rest) == 2
         then combine_mul(left, parse_term(tail(rest)))
-        else hit(POk, left, rest) ], p)
+        else .-> POk { _1 left _2 rest } }
 }
 fun combine_mul(left: Expr, p: Parse): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
-      POk(right, rest) => hit(POk, hit(EMul, left, right), rest) ], p)
+  return match p { PErr => PErr,
+      POk(right, rest) => .-> POk { _1 .-> EMul { _1 left _2 right } _2 rest } }
 }
 
 // expr := term ('+' expr)?
 fun parse_expr(l: TokList): Parse { return expr_more(parse_term(l)) }
 fun expr_more(p: Parse): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
+  return match p { PErr => PErr,
       POk(left, rest) =>
         if head_tag(rest) == 1
         then combine_add(left, parse_expr(tail(rest)))
-        else hit(POk, left, rest) ], p)
+        else .-> POk { _1 left _2 rest } }
 }
 fun combine_add(left: Expr, p: Parse): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
-      POk(right, rest) => hit(POk, hit(EAdd, left, right), rest) ], p)
+  return match p { PErr => PErr,
+      POk(right, rest) => .-> POk { _1 .-> EAdd { _1 left _2 right } _2 rest } }
 }
 
 // arithmetic eval: catamorphism Expr -> number
-fun motE(e: Expr): Number { return 0 }
 fun eval_expr(e: Expr): Number {
-  return hit_elim(motE,
-    [ ENum(n)    => n,
+  return match e { ENum(n)    => n,
       EAdd(a, b) => eval_expr(a) + eval_expr(b),
-      EMul(a, b) => eval_expr(a) * eval_expr(b) ], e)
+      EMul(a, b) => eval_expr(a) * eval_expr(b) }
 }
 
-fun motPn(p: Parse): Number { return 0 }
 fun result_of(p: Parse): Number {
-  return hit_elim(motPn, [ PErr => 0 - 1, POk(e, rest) => eval_expr(e) ], p)
+  return match p { PErr => 0 - 1, POk(e, rest) => eval_expr(e) }
 }
 
 // ── oracle:  "2+3*4" = 2 + (3*4) = 14 ───────────────────────────────────────

@@ -1,7 +1,7 @@
 // Front end: a minimal lexer written in Yon. It reads a String and produces a
 // TokList (single digits and the operators + * ( ), spaces ignored). Two mutually
 // recursive functions (lex_from looks at the char, emit_at dispatches and recurs);
-// dispatch on String.char_at (a number) via an if/else-if chain, not hit_elim.
+// dispatch on String.char_at (a number) via an if/else-if chain, not match.
 // Oracle: structural checksum of "2+3*4" = 309.
 place Token { this > TNum(Number) :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
 place TokList { this > TkNil :U TkCons(Token, TokList) }
@@ -9,18 +9,18 @@ place TokList { this > TkNil :U TkCons(Token, TokList) }
 // decide the token for the character c at position i, then continue from i+1
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
-    else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
-    else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
-    else if c == 40 then hit(TkCons, hit(TLParen), lex_from(s, i + 1, len))
-    else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
-    else if c >= 48 then hit(TkCons, hit(TNum, c - 48), lex_from(s, i + 1, len))
+    else if c == 43 then .-> TkCons { _1 TPlus _2 lex_from(s, i + 1, len) }
+    else if c == 42 then .-> TkCons { _1 TStar _2 lex_from(s, i + 1, len) }
+    else if c == 40 then .-> TkCons { _1 TLParen _2 lex_from(s, i + 1, len) }
+    else if c == 41 then .-> TkCons { _1 TRParen _2 lex_from(s, i + 1, len) }
+    else if c >= 48 then .-> TkCons { _1 .-> TNum { _1 c - 48 } _2 lex_from(s, i + 1, len) }
     else lex_from(s, i + 1, len)
 }
 
 // scan from i: at the end of the string close with TEnd, otherwise read and dispatch
 fun lex_from(s: String, i: Number, len: Number): TokList {
   return if i >= len
-    then hit(TkCons, hit(TEnd), hit(TkNil))
+    then .-> TkCons { _1 TEnd _2 TkNil }
     else emit_at(s, i, len, String.char_at(s, i))
 }
 
@@ -29,22 +29,18 @@ fun lex(s: String): TokList {
 }
 
 // ── oracle: each token weighs a distinct value ──────────────────────────────
-fun motN(t: Token): Number { return 0 }
 fun tok_weight(t: Token): Number {
-  return hit_elim(motN,
-    [ TNum(n)  => n,
+  return match t { TNum(n)  => n,
       TPlus    => 100,
       TStar    => 200,
       TLParen  => 300,
       TRParen  => 400,
-      TEnd     => 0 ], t)
+      TEnd     => 0 }
 }
 
-fun motL(l: TokList): Number { return 0 }
 fun checksum(l: TokList): Number {
-  return hit_elim(motL,
-    [ TkNil        => 0,
-      TkCons(h, t) => tok_weight(h) + checksum(t) ], l)
+  return match l { TkNil        => 0,
+      TkCons(h, t) => tok_weight(h) + checksum(t) }
 }
 
 // source "2+3*4" = codes 50 43 51 42 52

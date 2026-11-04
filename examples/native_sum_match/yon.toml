@@ -1,5 +1,8 @@
 [package]
 name = "native_sum_match"
 
+[world.W]
+objects = ["Maybe"]
+
 [runtime]
 backend = "memory"

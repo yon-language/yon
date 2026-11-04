@@ -51,15 +51,15 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `forever` | `FOREVER` | 1 | yes | exercised |
 | `from` | `FROM` | 37 | yes | exercised |
 | `fst` | `FST` | 7 | yes | exercised |
-| `fun` | `FUN` | 370 | yes | exercised |
+| `fun` | `FUN` | 368 | yes | exercised |
 | `functor` | `FUNCTOR` | 9 | yes | exercised |
 | `geomorph` | `GEOM_MORPHISM` | 5 | yes | exercised |
 | `given` | `GIVEN` | 0 | yes | **UNCOVERED** |
 | `hcomp` | `HCOMP` | 3 | yes | exercised |
 | `here` | `HERE` | 1 | yes | exercised |
 | `heyting` | `HEYT_INT_KW` | 3 | yes | exercised |
-| `hit` | `HIT_KW` | 13 | yes | exercised |
-| `hit_elim` | `HIT_ELIM` | 8 | yes | exercised |
+| `hit` | `HIT_KW` | 6 | yes | exercised |
+| `hit_elim` | `HIT_ELIM` | 4 | yes | exercised |
 | `if` | `IF_KW` | 33 | yes | exercised |
 | `import` | `IMPORT` | 11 | yes | exercised |
 | `in` | `IN` | 8 | yes | exercised |
@@ -70,7 +70,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `iter` | `ITER_KW` | 2 | yes | exercised |
 | `law` | `LAW` | 7 | yes | exercised |
 | `maps` | `MAPS` | 4 | yes | exercised |
-| `match` | `MATCH_KW` | 27 | yes | exercised |
+| `match` | `MATCH_KW` | 31 | yes | exercised |
 | `morph` | `MORPH_KW` | 5 | yes | exercised |
 | `morphism` | `MORPHISM_KW` | 5 | yes | exercised |
 | `most` | `MOST` | 2 | yes | exercised |
@@ -86,7 +86,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `over` | `OVER` | 2 | yes | exercised |
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
-| `place` | `PLACE` | 301 | yes | exercised |
+| `place` | `PLACE` | 306 | yes | exercised |
 | `plam` | `PLAM` | 18 | yes | exercised |
 | `present` | `PRESENT` | 3 | yes | exercised |
 | `produce` | `PRODUCE` | 15 | yes | exercised |
@@ -100,7 +100,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `repeat` | `REPEAT` | 2 | yes | exercised |
 | `requires` | `REQUIRES` | 1 | yes | exercised |
 | `resolves` | `RESOLVES` | 1 | yes | exercised |
-| `return` | `RETURN` | 360 | yes | exercised |
+| `return` | `RETURN` | 358 | yes | exercised |
 | `scope` | `SCOPE` | 2 | yes | exercised |
 | `sequence` | `SEQUENCE` | 1 | yes | exercised |
 | `share` | `SHARE` | 1 | yes | exercised |
@@ -110,7 +110,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `spawn` | `SPAWN` | 1 | yes | exercised |
 | `stream` | `STREAM` | 5 | yes | exercised |
 | `then` | `THEN_KW` | 33 | yes | exercised |
-| `this` | `THIS` | 17 | yes | exercised |
+| `this` | `THIS` | 22 | yes | exercised |
 | `through` | `THROUGH` | 3 | yes | exercised |
 | `times` | `TIMES` | 2 | yes | exercised |
 | `to` | `TO` | 41 | yes | exercised |

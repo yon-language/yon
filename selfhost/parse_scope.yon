@@ -11,142 +11,121 @@ place TokList { this > TkNil :U TkCons(Token, TokList) }
 // exact checks, and c>=97 (names) BEFORE c>=48 (digits), or '='/letters would lex as digits
 fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
-    else if c == 43 then hit(TkCons, hit(TPlus),   lex_from(s, i + 1, len))
-    else if c == 42 then hit(TkCons, hit(TStar),   lex_from(s, i + 1, len))
-    else if c == 40 then hit(TkCons, hit(TLParen), lex_from(s, i + 1, len))
-    else if c == 41 then hit(TkCons, hit(TRParen), lex_from(s, i + 1, len))
-    else if c == 61 then hit(TkCons, hit(TEq),      lex_from(s, i + 1, len))
-    else if c == 92 then hit(TkCons, hit(TLamTok),  lex_from(s, i + 1, len))
-    else if c >= 97 then hit(TkCons, hit(TName, c - 97), lex_from(s, i + 1, len))
-    else if c >= 48 then hit(TkCons, hit(TNum, c - 48),  lex_from(s, i + 1, len))
+    else if c == 43 then .-> TkCons { _1 TPlus _2 lex_from(s, i + 1, len) }
+    else if c == 42 then .-> TkCons { _1 TStar _2 lex_from(s, i + 1, len) }
+    else if c == 40 then .-> TkCons { _1 TLParen _2 lex_from(s, i + 1, len) }
+    else if c == 41 then .-> TkCons { _1 TRParen _2 lex_from(s, i + 1, len) }
+    else if c == 61 then .-> TkCons { _1 TEq _2 lex_from(s, i + 1, len) }
+    else if c == 92 then .-> TkCons { _1 TLamTok _2 lex_from(s, i + 1, len) }
+    else if c >= 97 then .-> TkCons { _1 .-> TName { _1 c - 97 } _2 lex_from(s, i + 1, len) }
+    else if c >= 48 then .-> TkCons { _1 .-> TNum { _1 c - 48 } _2 lex_from(s, i + 1, len) }
     else lex_from(s, i + 1, len)
 }
 fun lex_from(s: String, i: Number, len: Number): TokList {
-  return if i >= len then hit(TkCons, hit(TEnd), hit(TkNil))
+  return if i >= len then .-> TkCons { _1 TEnd _2 TkNil }
     else emit_at(s, i, len, String.char_at(s, i))
 }
 fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
 
 // ── unified Term + eval ─────────────────────────────────────────────────────
 place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
-fun motT(t: Term): Term { return hit(TLit, 0) }
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
-      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
-      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
-      TAdd(a, b)  => hit(TAdd, shift(d, c, a), shift(d, c, b)),
-      TMul(a, b)  => hit(TMul, shift(d, c, a), shift(d, c, b)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i >= c then .-> TVar { _1 i + d } else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 shift(d, c + 1, b) },
+      TApp(f, x)  => .-> TApp { _1 shift(d, c, f) _2 shift(d, c, x) },
+      TAdd(a, b)  => .-> TAdd { _1 shift(d, c, a) _2 shift(d, c, b) },
+      TMul(a, b)  => .-> TMul { _1 shift(d, c, a) _2 shift(d, c, b) } }
 }
 fun subst(j: Number, s: Term, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i == j then s else hit(TVar, i),
-      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
-      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
-      TAdd(a, b)  => hit(TAdd, subst(j, s, a), subst(j, s, b)),
-      TMul(a, b)  => hit(TMul, subst(j, s, a), subst(j, s, b)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i == j then s else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 subst(j + 1, shift(1, 0, s), b) },
+      TApp(f, x)  => .-> TApp { _1 subst(j, s, f) _2 subst(j, s, x) },
+      TAdd(a, b)  => .-> TAdd { _1 subst(j, s, a) _2 subst(j, s, b) },
+      TMul(a, b)  => .-> TMul { _1 subst(j, s, a) _2 subst(j, s, b) } }
 }
 fun beta(body: Term, arg: Term): Term {
   return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
 }
 fun add_vals(x: Term, y: Term): Term {
-  return hit_elim(motT,
-    [ TLit(nx) => hit_elim(motT,
-        [ TLit(ny) => hit(TLit, nx + ny), _ => hit(TAdd, hit(TLit, nx), y) ], y),
-      _ => hit(TAdd, x, y) ], x)
+  return match x { TLit(nx) => match y { TLit(ny) => .-> TLit { _1 nx + ny }, _ => .-> TAdd { _1 .-> TLit { _1 nx } _2 y } },
+      _ => .-> TAdd { _1 x _2 y } }
 }
 fun mul_vals(x: Term, y: Term): Term {
-  return hit_elim(motT,
-    [ TLit(nx) => hit_elim(motT,
-        [ TLit(ny) => hit(TLit, nx * ny), _ => hit(TMul, hit(TLit, nx), y) ], y),
-      _ => hit(TMul, x, y) ], x)
+  return match x { TLit(nx) => match y { TLit(ny) => .-> TLit { _1 nx * ny }, _ => .-> TMul { _1 .-> TLit { _1 nx } _2 y } },
+      _ => .-> TMul { _1 x _2 y } }
 }
 fun eval(t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => hit(TVar, i),
-      TLam(b)     => hit(TLam, b),
-      TApp(f, x)  => hit_elim(motT,
-                       [ TLam(b) => eval(beta(b, eval(x))),
-                         _       => hit(TApp, eval(f), eval(x)) ], eval(f)),
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 b },
+      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))),
+                         _       => .-> TApp { _1 eval(f) _2 eval(x) } },
       TAdd(a, b)  => add_vals(eval(a), eval(b)),
-      TMul(a, b)  => mul_vals(eval(a), eval(b)) ], t)
+      TMul(a, b)  => mul_vals(eval(a), eval(b)) }
 }
 
 // ── tag-based peek on the TokList (tag: Num0 Plus1 Star2 LP3 RP4 End5 Name6 Eq7 Lam8) ──
-fun motTn(t: Token): Number { return 0 }
 fun tok_tag(t: Token): Number {
-  return hit_elim(motTn,
-    [ TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5,
-      TName(n)=>6, TEq=>7, TLamTok=>8 ], t)
+  return match t { TNum(n)=>0, TPlus=>1, TStar=>2, TLParen=>3, TRParen=>4, TEnd=>5,
+      TName(n)=>6, TEq=>7, TLamTok=>8 }
 }
 fun tok_num(t: Token): Number {
-  return hit_elim(motTn,
-    [ TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0,
-      TName(n)=>n, TEq=>0, TLamTok=>0 ], t)
+  return match t { TNum(n)=>n, TPlus=>0, TStar=>0, TLParen=>0, TRParen=>0, TEnd=>0,
+      TName(n)=>n, TEq=>0, TLamTok=>0 }
 }
-fun motLn(l: TokList): Number { return 0 }
 fun head_tag(l: TokList): Number {
-  return hit_elim(motLn, [ TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) ], l)
+  return match l { TkNil => 0 - 1, TkCons(h, t) => tok_tag(h) }
 }
 fun head_num(l: TokList): Number {
-  return hit_elim(motLn, [ TkNil => 0, TkCons(h, t) => tok_num(h) ], l)
+  return match l { TkNil => 0, TkCons(h, t) => tok_num(h) }
 }
-fun motLl(l: TokList): TokList { return hit(TkNil) }
 fun tail(l: TokList): TokList {
-  return hit_elim(motLl, [ TkNil => hit(TkNil), TkCons(h, t) => t ], l)
+  return match l { TkNil => TkNil, TkCons(h, t) => t }
 }
 
 // ── name environment -> de Bruijn index ─────────────────────────────────────
 place NameEnv { this > NEnvNil :U NEnvCons(Number, NameEnv) }
 fun bump(k: Number): Number { return if k >= 0 then k + 1 else 0 - 1 }
-fun motNEn(e: NameEnv): Number { return 0 }
 fun lookup(name: Number, env: NameEnv): Number {
-  return hit_elim(motNEn,
-    [ NEnvNil => 0 - 1,
-      NEnvCons(h, rest) => if h == name then 0 else bump(lookup(name, rest)) ], env)
+  return match env { NEnvNil => 0 - 1,
+      NEnvCons(h, rest) => if h == name then 0 else bump(lookup(name, rest)) }
 }
 
 // ── parser with environment, yields Term ────────────────────────────────────
 place Parse { this > POk(Term, TokList) :U PErr }
-fun motP(p: Parse): Parse { return hit(PErr) }
 
 // factor := NUM | NAME | '(' expr ')'
 fun parse_factor(l: TokList, env: NameEnv): Parse {
-  return if head_tag(l) == 0 then hit(POk, hit(TLit, head_num(l)), tail(l))
-    else if head_tag(l) == 6 then hit(POk, hit(TVar, lookup(head_num(l), env)), tail(l))
+  return if head_tag(l) == 0 then .-> POk { _1 .-> TLit { _1 head_num(l) } _2 tail(l) }
+    else if head_tag(l) == 6 then .-> POk { _1 .-> TVar { _1 lookup(head_num(l), env) } _2 tail(l) }
     else if head_tag(l) == 3 then close_paren(parse_expr(tail(l), env))
-    else hit(PErr)
+    else PErr
 }
 fun close_paren(p: Parse): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
-      POk(e, rest) => if head_tag(rest) == 4 then hit(POk, e, tail(rest)) else hit(PErr) ], p)
+  return match p { PErr => PErr,
+      POk(e, rest) => if head_tag(rest) == 4 then .-> POk { _1 e _2 tail(rest) } else PErr }
 }
 fun parse_term(l: TokList, env: NameEnv): Parse { return term_more(parse_factor(l, env), env) }
 fun term_more(p: Parse, env: NameEnv): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
+  return match p { PErr => PErr,
       POk(left, rest) => if head_tag(rest) == 2
                            then combine(2, left, parse_term(tail(rest), env))
-                           else hit(POk, left, rest) ], p)
+                           else .-> POk { _1 left _2 rest } }
 }
 fun parse_expr(l: TokList, env: NameEnv): Parse { return expr_more(parse_term(l, env), env) }
 fun expr_more(p: Parse, env: NameEnv): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
+  return match p { PErr => PErr,
       POk(left, rest) => if head_tag(rest) == 1
                            then combine(1, left, parse_expr(tail(rest), env))
-                           else hit(POk, left, rest) ], p)
+                           else .-> POk { _1 left _2 rest } }
 }
 fun combine(op: Number, left: Term, p: Parse): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
+  return match p { PErr => PErr,
       POk(right, rest) =>
-        hit(POk, if op == 1 then hit(TAdd, left, right) else hit(TMul, left, right), rest) ], p)
+        .-> POk { _1 if op == 1 then .-> TAdd { _1 left _2 right } else .-> TMul { _1 left _2 right } _2 rest } }
 }
 
 // the binder: '\' name body -> TLam(body') with name at the head of the environment
@@ -156,22 +135,19 @@ fun parse_lam(l: TokList, env: NameEnv): Parse {
     else parse_expr(l, env)
 }
 fun bind_name(name: Number, rest: TokList, env: NameEnv): Parse {
-  return wrap_lam(parse_expr(rest, hit(NEnvCons, name, env)))
+  return wrap_lam(parse_expr(rest, .-> NEnvCons { _1 name _2 env }))
 }
 fun wrap_lam(p: Parse): Parse {
-  return hit_elim(motP,
-    [ PErr => hit(PErr),
-      POk(body, rest) => hit(POk, hit(TLam, body), rest) ], p)
+  return match p { PErr => PErr,
+      POk(body, rest) => .-> POk { _1 .-> TLam { _1 body } _2 rest } }
 }
 
 // ── extraction + oracle ─────────────────────────────────────────────────────
-fun motN(t: Term): Number { return 0 }
 fun as_num(t: Term): Number {
-  return hit_elim(motN, [ TLit(n)=>n, TVar(i)=>i, _=>0 ], t)
+  return match t { TLit(n)=>n, TVar(i)=>i, _=>0 }
 }
-fun motPt(p: Parse): Term { return hit(TLit, 0 - 1) }
 fun term_of(p: Parse): Term {
-  return hit_elim(motPt, [ PErr => hit(TLit, 0 - 1), POk(e, rest) => e ], p)
+  return match p { PErr => .-> TLit { _1 0 - 1 }, POk(e, rest) => e }
 }
 
 // source "\aa+a" = codes 92 97 97 43 97  (lambda, name a, body a+a)
@@ -183,7 +159,7 @@ fun src(): String {
 }
 
 fun main(): Number {
-  tree := parse_lam(lex(src()), hit(NEnvNil))
+  tree := parse_lam(lex(src()), NEnvNil)
   // the Term must be TLam(TAdd(TVar 0, TVar 0)); applied to 21 -> 42
-  return as_num(eval(hit(TApp, term_of(tree), hit(TLit, 21)))) - 42
+  return as_num(eval(.-> TApp { _1 term_of(tree) _2 .-> TLit { _1 21 } })) - 42
 }

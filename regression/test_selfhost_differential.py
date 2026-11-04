@@ -52,46 +52,39 @@ PROGRAMS = [
                    "fun main(): Number {\n"
                    "  /* inline */ return 40 + 2 // a line comment\n"
                    "}\n", 42),
-    # Stage 1 of the heavy core: nullary coproduct places, hit and hit_elim
+    # Stage 1 of the heavy core: nullary coproduct places, bare arms and match
     # (a runtime tag switch over MerkleTree labels).
     ("enum_bit",   "place Bit { this > O :U I }\n"
-                   "fun mot(b: Bit): Number { return 0 }\n"
-                   "fun v(b: Bit): Number { return hit_elim(mot, [ O => 0, I => 1 ], b) }\n"
-                   "fun main(): Number { return v(hit(I)) }", 1),
+                   "fun v(b: Bit): Number { return match b { O => 0, I => 1 } }\n"
+                   "fun main(): Number { return v(I) }", 1),
     ("enum_dir",   "place Dir { this > N :U S :U E }\n"
-                   "fun mot(d: Dir): Number { return 0 }\n"
-                   "fun code(d: Dir): Number { return hit_elim(mot, [ N => 10, S => 20, E => 30 ], d) }\n"
-                   "fun main(): Number { return code(hit(E)) }", 30),
-    # Stage 2: number-payload arms -- hit stores a raw number child,
+                   "fun code(d: Dir): Number { return match d { N => 10, S => 20, E => 30 } }\n"
+                   "fun main(): Number { return code(E) }", 30),
+    # Stage 2: number-payload arms -- an injection stores a raw number child,
     # a pattern binder projects it back with child().
     ("payload_lit", "place Val { this > Lit(Number) }\n"
-                    "fun mot(v: Val): Number { return 0 }\n"
-                    "fun get(v: Val): Number { return hit_elim(mot, [ Lit(n) => n ], v) }\n"
-                    "fun main(): Number { return get(hit(Lit, 42)) }", 42),
+                    "fun get(v: Val): Number { return match v { Lit(n) => n } }\n"
+                    "fun main(): Number { return get(.-> Lit { _1 42 }) }", 42),
     # a mix of a nullary and a payload arm (the names are arbitrary user
     # constructors -- Yon has no built-in option type).
     ("payload_mix", "place Box { this > Empty :U Full(Number) }\n"
-                    "fun mot(o: Box): Number { return 0 }\n"
-                    "fun un(o: Box): Number { return hit_elim(mot, [ Empty => 99, Full(x) => x ], o) }\n"
-                    "fun main(): Number { return un(hit(Full, 7)) }", 7),
+                    "fun un(o: Box): Number { return match o { Empty => 99, Full(x) => x } }\n"
+                    "fun main(): Number { return un(.-> Full { _1 7 }) }", 7),
     # a two-field arm: both payloads projected.
     ("payload_duo", "place Duo { this > Both(Number, Number) }\n"
-                    "fun mot(d: Duo): Number { return 0 }\n"
-                    "fun a(d: Duo): Number { return hit_elim(mot, [ Both(x, y) => x ], d) }\n"
-                    "fun b(d: Duo): Number { return hit_elim(mot, [ Both(x, y) => y ], d) }\n"
-                    "fun main(): Number { return a(hit(Both, 5, 9)) + b(hit(Both, 5, 9)) }", 14),
+                    "fun a(d: Duo): Number { return match d { Both(x, y) => x } }\n"
+                    "fun b(d: Duo): Number { return match d { Both(x, y) => y } }\n"
+                    "fun main(): Number { return a(.-> Both { _1 5 _2 9 }) + b(.-> Both { _1 5 _2 9 }) }", 14),
     # Stage 3: nested / recursive payloads (a sum handle stored raw as a child).
     # ev(build(3)) = -(-(-7)) = -7 = 249 mod 256.
     ("rec_neg",    "place Term { this > Lit(Number) :U Neg(Term) }\n"
-                   "fun mot(t: Term): Number { return 0 }\n"
-                   "fun ev(t: Term): Number { return hit_elim(mot, [ Lit(n) => n, Neg(m) => 0 - ev(m) ], t) }\n"
-                   "fun build(k: Number): Term { return if k == 0 then hit(Lit, 7) else hit(Neg, build(k - 1)) }\n"
+                   "fun ev(t: Term): Number { return match t { Lit(n) => n, Neg(m) => 0 - ev(m) } }\n"
+                   "fun build(k: Number): Term { return if k == 0 then .-> Lit { _1 7 } else .-> Neg { _1 build(k - 1) } }\n"
                    "fun main(): Number { return ev(build(3)) }", 249),
     # a recursive list with a number + a nested-list payload; sum = 42.
     ("rec_list",   "place Lst { this > Nil :U Cons(Number, Lst) }\n"
-                   "fun mot(l: Lst): Number { return 0 }\n"
-                   "fun sum(l: Lst): Number { return hit_elim(mot, [ Nil => 0, Cons(h, t) => h + sum(t) ], l) }\n"
-                   "fun main(): Number { return sum(hit(Cons, 10, hit(Cons, 20, hit(Cons, 12, hit(Nil))))) }", 42),
+                   "fun sum(l: Lst): Number { return match l { Nil => 0, Cons(h, t) => h + sum(t) } }\n"
+                   "fun main(): Number { return sum(.-> Cons { _1 10 _2 .-> Cons { _1 20 _2 .-> Cons { _1 12 _2 Nil } } }) }", 42),
     # String literals and qualified runtime calls (String.op). A literal lexes
     # to a content handle (substring), lowers to a from_char/concat chain that
     # interns to the same content-address as yonc's global+string_lit, so the

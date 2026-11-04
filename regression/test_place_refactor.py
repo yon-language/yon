@@ -157,7 +157,7 @@ def test_record_pattern_matches_by_name(tmp_path):
             "    %s => h + sum(t)\n"
             "  }\n}\n"
             "fun main(): Number {\n"
-            "  xs := hit(Cons, 5, hit(Cons, 37, hit(Nil)))\n"
+            "  xs := .-> Cons { _1 5 _2 .-> Cons { _1 37 _2 Nil } }\n"
             "  return sum(xs)\n}\n")
     for d, pat in ((a, "Cons { _1 as h _2 as t }"), (b, "Cons(h, t)")):
         shutil.copytree(ROOT / "examples" / "inductive_list", d)

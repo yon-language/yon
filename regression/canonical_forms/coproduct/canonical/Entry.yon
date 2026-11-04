@@ -11,7 +11,7 @@ place Entry {
     }
   }
   fun main(): Number {
-    return sum(hit(Cons, 10, hit(Cons, 15, hit(Cons, 17, hit(Nil)))))
+    return sum(.-> Cons { _1 10 _2 .-> Cons { _1 15 _2 .-> Cons { _1 17 _2 Nil } } })
   }
 }
 

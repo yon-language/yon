@@ -1,3 +1,4 @@
+place Maybe { this > Box(Number) :U Empty }
 place Entry {
 // COSA: un tipo somma NATIVO (Box porta un number, Empty e' il caso base)
 // eliminato con lo zucchero `match`, con un ramo che LEGA il payload.
@@ -16,12 +17,9 @@ place Entry {
 // stuck: per il calcolo su dati costruiti a runtime i seed self-host usano MerkleTree
 // (l'algebra iniziale content-addressed, che il tag lo dispaccia a runtime).
 
-// La firma di `declares` introduce i costruttori Box/Empty nell'ambiente.
-fun declares(s: (Box(Number) | Empty)): Number { return 0 }
-
-fun run(): Number {
-  return match hit(Box, 21) { Box(n) => n * 2, Empty => 0 }   // 21 * 2 = 42
+fun run(m: Maybe): Number {
+  return match m { Box(n) => n * 2, Empty => 0 }   // 21 * 2 = 42
 }
 
-fun main(): Number { return run() }
+fun main(): Number { return run(.-> Box { _1 21 }) }
 }

@@ -4,32 +4,29 @@
 // Oracle: J(_, lam.0, TRefl 7) = 7  (as the OCaml kernel, j_computes.yon).
 place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) :U TRefl(Term) :U TJ(Term, Term, Term) }
 
-fun motT(t: Term): Term { return hit(TLit, 0) }
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
-      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
-      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
-      TPair(a, b) => hit(TPair, shift(d, c, a), shift(d, c, b)),
-      TFst(p)     => hit(TFst, shift(d, c, p)),
-      TSnd(p)     => hit(TSnd, shift(d, c, p)),
-      TRefl(a)    => hit(TRefl, shift(d, c, a)),
-      TJ(mo, ba, pa) => hit(TJ, shift(d, c, mo), shift(d, c, ba), shift(d, c, pa)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i >= c then .-> TVar { _1 i + d } else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 shift(d, c + 1, b) },
+      TApp(f, x)  => .-> TApp { _1 shift(d, c, f) _2 shift(d, c, x) },
+      TPair(a, b) => .-> TPair { _1 shift(d, c, a) _2 shift(d, c, b) },
+      TFst(p)     => .-> TFst { _1 shift(d, c, p) },
+      TSnd(p)     => .-> TSnd { _1 shift(d, c, p) },
+      TRefl(a)    => .-> TRefl { _1 shift(d, c, a) },
+      TJ(mo, ba, pa) => .-> TJ { _1 shift(d, c, mo) _2 shift(d, c, ba) _3 shift(d, c, pa) } }
 }
 
 fun subst(j: Number, s: Term, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i == j then s else hit(TVar, i),
-      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
-      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
-      TPair(a, b) => hit(TPair, subst(j, s, a), subst(j, s, b)),
-      TFst(p)     => hit(TFst, subst(j, s, p)),
-      TSnd(p)     => hit(TSnd, subst(j, s, p)),
-      TRefl(a)    => hit(TRefl, subst(j, s, a)),
-      TJ(mo, ba, pa) => hit(TJ, subst(j, s, mo), subst(j, s, ba), subst(j, s, pa)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i == j then s else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 subst(j + 1, shift(1, 0, s), b) },
+      TApp(f, x)  => .-> TApp { _1 subst(j, s, f) _2 subst(j, s, x) },
+      TPair(a, b) => .-> TPair { _1 subst(j, s, a) _2 subst(j, s, b) },
+      TFst(p)     => .-> TFst { _1 subst(j, s, p) },
+      TSnd(p)     => .-> TSnd { _1 subst(j, s, p) },
+      TRefl(a)    => .-> TRefl { _1 subst(j, s, a) },
+      TJ(mo, ba, pa) => .-> TJ { _1 subst(j, s, mo) _2 subst(j, s, ba) _3 subst(j, s, pa) } }
 }
 
 fun beta(body: Term, arg: Term): Term {
@@ -37,26 +34,23 @@ fun beta(body: Term, arg: Term): Term {
 }
 
 fun eval(t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => hit(TVar, i),
-      TLam(b)     => hit(TLam, b),
-      TApp(f, x)  => hit_elim(motT, [ TLam(b) => eval(beta(b, eval(x))), _ => hit(TApp, eval(f), eval(x)) ], eval(f)),
-      TPair(a, b) => hit(TPair, eval(a), eval(b)),
-      TFst(p)     => hit_elim(motT, [ TPair(a, b) => eval(a), _ => hit(TFst, eval(p)) ], eval(p)),
-      TSnd(p)     => hit_elim(motT, [ TPair(a, b) => eval(b), _ => hit(TSnd, eval(p)) ], eval(p)),
-      TRefl(a)    => hit(TRefl, eval(a)),
-      TJ(mo, ba, pa) => hit_elim(motT,
-                       [ TRefl(a) => eval(hit(TApp, ba, a)),
-                         _        => hit(TJ, mo, ba, eval(pa)) ], eval(pa)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 b },
+      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))), _ => .-> TApp { _1 eval(f) _2 eval(x) } },
+      TPair(a, b) => .-> TPair { _1 eval(a) _2 eval(b) },
+      TFst(p)     => match eval(p) { TPair(a, b) => eval(a), _ => .-> TFst { _1 eval(p) } },
+      TSnd(p)     => match eval(p) { TPair(a, b) => eval(b), _ => .-> TSnd { _1 eval(p) } },
+      TRefl(a)    => .-> TRefl { _1 eval(a) },
+      TJ(mo, ba, pa) => match eval(pa) { TRefl(a) => eval(.-> TApp { _1 ba _2 a }),
+                         _        => .-> TJ { _1 mo _2 ba _3 eval(pa) } } }
 }
 
-fun motN(t: Term): Number { return 0 }
 fun as_num(t: Term): Number {
-  return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
+  return match t { TLit(n) => n, TVar(i) => i, _ => 0 }
 }
 
 fun main(): Number {
-  r := eval(hit(TJ, hit(TLit, 0), hit(TLam, hit(TVar, 0)), hit(TRefl, hit(TLit, 7))))
+  r := eval(.-> TJ { _1 .-> TLit { _1 0 } _2 .-> TLam { _1 .-> TVar { _1 0 } } _3 .-> TRefl { _1 .-> TLit { _1 7 } } })
   return as_num(r) - 7
 }

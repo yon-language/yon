@@ -301,10 +301,11 @@ def test_int64_crosses_every_uniform_slot_bit_for_bit(tmp_path):
     """Int64.MAX, Int64.MIN and 2^53+1 come back equal through a List, a
     coproduct payload and a closure capture."""
     entry = """\
+place IntExpr { this > Lit(Int64) :U Nil }
 place Entry {
   fun via_list(x: Int64): Int64 { return List.head(List.cons(x, List.empty(0))) }
-  fun wrap(x: Int64): (Lit(Int64) | Nil) { return hit(Lit, x) }
-  fun unwrap(e: (Lit(Int64) | Nil)): Int64 { return match e { Lit(n) => n, Nil => 0 } }
+  fun wrap(x: Int64): IntExpr { return .-> Lit { _1 x } }
+  fun unwrap(e: IntExpr): Int64 { return match e { Lit(n) => n, Nil => 0 } }
   fun adder(k: Int64): Int64 -> Int64 { return fun(y: Int64) => k + y }
   fun same(x: Int64): Number {
     f := adder(x)
@@ -318,7 +319,7 @@ place Entry {
   }
 }
 """
-    rc = _compile_and_run(tmp_path, entry)
+    rc = _compile_and_run(tmp_path, entry, '\n[world.W]\nobjects = ["IntExpr"]\n')
     assert rc == 111, f"Int64 through the slots: {rc}"
 
 

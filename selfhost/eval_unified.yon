@@ -3,25 +3,22 @@
 // single `_ => stuck`; shift/subst stay exhaustive. Oracle: (lam. x+x) 21 = 42.
 place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TAdd(Term, Term) :U TMul(Term, Term) }
 
-fun motT(t: Term): Term { return hit(TLit, 0) }
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
-      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
-      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
-      TAdd(a, b)  => hit(TAdd, shift(d, c, a), shift(d, c, b)),
-      TMul(a, b)  => hit(TMul, shift(d, c, a), shift(d, c, b)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i >= c then .-> TVar { _1 i + d } else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 shift(d, c + 1, b) },
+      TApp(f, x)  => .-> TApp { _1 shift(d, c, f) _2 shift(d, c, x) },
+      TAdd(a, b)  => .-> TAdd { _1 shift(d, c, a) _2 shift(d, c, b) },
+      TMul(a, b)  => .-> TMul { _1 shift(d, c, a) _2 shift(d, c, b) } }
 }
 fun subst(j: Number, s: Term, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i == j then s else hit(TVar, i),
-      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
-      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
-      TAdd(a, b)  => hit(TAdd, subst(j, s, a), subst(j, s, b)),
-      TMul(a, b)  => hit(TMul, subst(j, s, a), subst(j, s, b)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i == j then s else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 subst(j + 1, shift(1, 0, s), b) },
+      TApp(f, x)  => .-> TApp { _1 subst(j, s, f) _2 subst(j, s, x) },
+      TAdd(a, b)  => .-> TAdd { _1 subst(j, s, a) _2 subst(j, s, b) },
+      TMul(a, b)  => .-> TMul { _1 subst(j, s, a) _2 subst(j, s, b) } }
 }
 fun beta(body: Term, arg: Term): Term {
   return shift(0 - 1, 0, subst(0, shift(1, 0, arg), body))
@@ -29,39 +26,30 @@ fun beta(body: Term, arg: Term): Term {
 
 // sum of two ALREADY evaluated values: computes on two TLit, otherwise stuck
 fun add_vals(x: Term, y: Term): Term {
-  return hit_elim(motT,
-    [ TLit(nx) => hit_elim(motT,
-        [ TLit(ny) => hit(TLit, nx + ny), _ => hit(TAdd, hit(TLit, nx), y) ], y),
-      _ => hit(TAdd, x, y) ], x)
+  return match x { TLit(nx) => match y { TLit(ny) => .-> TLit { _1 nx + ny }, _ => .-> TAdd { _1 .-> TLit { _1 nx } _2 y } },
+      _ => .-> TAdd { _1 x _2 y } }
 }
 fun mul_vals(x: Term, y: Term): Term {
-  return hit_elim(motT,
-    [ TLit(nx) => hit_elim(motT,
-        [ TLit(ny) => hit(TLit, nx * ny), _ => hit(TMul, hit(TLit, nx), y) ], y),
-      _ => hit(TMul, x, y) ], x)
+  return match x { TLit(nx) => match y { TLit(ny) => .-> TLit { _1 nx * ny }, _ => .-> TMul { _1 .-> TLit { _1 nx } _2 y } },
+      _ => .-> TMul { _1 x _2 y } }
 }
 
 fun eval(t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => hit(TVar, i),
-      TLam(b)     => hit(TLam, b),
-      TApp(f, x)  => hit_elim(motT,
-                       [ TLam(b) => eval(beta(b, eval(x))),
-                         _       => hit(TApp, eval(f), eval(x)) ], eval(f)),
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 b },
+      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))),
+                         _       => .-> TApp { _1 eval(f) _2 eval(x) } },
       TAdd(a, b)  => add_vals(eval(a), eval(b)),
-      TMul(a, b)  => mul_vals(eval(a), eval(b)) ], t)
+      TMul(a, b)  => mul_vals(eval(a), eval(b)) }
 }
 
-fun motN(t: Term): Number { return 0 }
 fun as_num(t: Term): Number {
-  return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
+  return match t { TLit(n) => n, TVar(i) => i, _ => 0 }
 }
 
 // ORACLE: (lam. var0 + var0) 21  ->  21 + 21  ->  42
 fun main(): Number {
-  r := eval(hit(TApp,
-                      hit(TLam, hit(TAdd, hit(TVar, 0), hit(TVar, 0))),
-                      hit(TLit, 21)))
+  r := eval(.-> TApp { _1 .-> TLam { _1 .-> TAdd { _1 .-> TVar { _1 0 } _2 .-> TVar { _1 0 } } } _2 .-> TLit { _1 21 } })
   return as_num(r) - 42
 }

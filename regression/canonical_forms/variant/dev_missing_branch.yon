@@ -1,7 +1,7 @@
+place Sum { this > A :U B(Number) }
 place Entry {
-  fun motive(q: Quotient): Number { return 0 }
+  fun pick(s: Sum): Number { return match s { B(x) => x } }
   fun main(): Number {
-    return hit_elim(motive, [inj(x) => x], hit(inj, 7))
+    return pick(.-> B { _1 7 })
   }
 }
-

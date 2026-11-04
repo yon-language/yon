@@ -3,22 +3,19 @@
 // `_ =>`. Oracle: Fst(Pair(20, 22)) -> 20.
 place Term { this > TLit(Number) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
 
-fun motT(t: Term): Term { return hit(TLit, 0) }
 
-fun motN(t: Term): Number { return 0 }
 fun as_num(t: Term): Number {
-  return hit_elim(motN, [ TLit(n) => n, _ => 0 ], t)
+  return match t { TLit(n) => n, _ => 0 }
 }
 
 fun eval(t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)      => hit(TLit, n),
-      TPair(a, b)  => hit(TPair, eval(a), eval(b)),
-      TFst(p)      => hit_elim(motT, [ TPair(a, b) => eval(a), _ => hit(TFst, eval(p)) ], eval(p)),
-      TSnd(p)      => hit_elim(motT, [ TPair(a, b) => eval(b), _ => hit(TSnd, eval(p)) ], eval(p)) ], t)
+  return match t { TLit(n)      => .-> TLit { _1 n },
+      TPair(a, b)  => .-> TPair { _1 eval(a) _2 eval(b) },
+      TFst(p)      => match eval(p) { TPair(a, b) => eval(a), _ => .-> TFst { _1 eval(p) } },
+      TSnd(p)      => match eval(p) { TPair(a, b) => eval(b), _ => .-> TSnd { _1 eval(p) } } }
 }
 
 fun main(): Number {
-  r := eval(hit(TFst, hit(TPair, hit(TLit, 20), hit(TLit, 22))))
+  r := eval(.-> TFst { _1 .-> TPair { _1 .-> TLit { _1 20 } _2 .-> TLit { _1 22 } } })
   return as_num(r) - 20
 }

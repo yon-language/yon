@@ -2,4 +2,4 @@ status: accept
 exit: 7
 covers: variant hit_branch
 note: |
-  A sum type A | B(number) and its eliminator: hit_elim(motive, [branches], hit(ctor, payload)).
+  A sum type A | B(number) and its eliminator: match on a value of the sum, with a branch per arm.

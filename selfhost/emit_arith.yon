@@ -1,7 +1,7 @@
 /* gen: Term -> String (MLIR text), in Yon.
  *
  * A Yon-in-Yon code generator. Where an evaluator interprets (eval: Term ->
- * value), this one compiles: the same hit_elim catamorphism over Term, but the
+ * value), this one compiles: the same match catamorphism over Term, but the
  * algebra is MLIR-text accumulation plus two threaded states (an SSA counter and
  * a name-to-ssa environment for variables), instead of reduction. It covers
  * TLit/TAdd/TMul (arithmetic), TVar/TLet (the `be`
@@ -21,19 +21,15 @@ place SsaEnv { this > SeNil :U SeCons(String, SsaEnv) }
 /* result of gen: (result ssa, accumulated code, next counter). */
 place EmitR { this > ER(String, String, Number) }
 
-/* accessors on EmitR (single constructor -> hit_elim with an explicit motive). */
-fun motS(e: EmitR): String { return "" }
-fun motN(e: EmitR): Number { return 0 }
-fun er_ssa(e: EmitR):  String { return hit_elim(motS, [ ER(s, c, n) => s ], e) }
-fun er_code(e: EmitR): String { return hit_elim(motS, [ ER(s, c, n) => c ], e) }
-fun er_ctr(e: EmitR):  Number { return hit_elim(motN, [ ER(s, c, n) => n ], e) }
+/* accessors on EmitR (single constructor -> match with one branch). */
+fun er_ssa(e: EmitR):  String { return match e { ER(s, c, n) => s } }
+fun er_code(e: EmitR): String { return match e { ER(s, c, n) => c } }
+fun er_ctr(e: EmitR):  Number { return match e { ER(s, c, n) => n } }
 
 /* environment: look up the i-th de Bruijn index. */
-fun motLk(e: SsaEnv): String { return "" }
 fun lookup(i: Number, env: SsaEnv): String {
-  return hit_elim(motLk,
-    [ SeNil => "%vERR",
-      SeCons(h, rest) => if i == 0 then h else lookup(i - 1, rest) ], env)
+  return match env { SeNil => "%vERR",
+      SeCons(h, rest) => if i == 0 then h else lookup(i - 1, rest) }
 }
 
 /* text helpers. */
@@ -52,17 +48,14 @@ fun line_raw(ssa: String, rhs: String): String {
 }
 
 /* the emission catamorphism (threading env + counter). */
-fun motER(t: Term): EmitR { return hit(ER, "", "", 0) }
 fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
-  return hit_elim(motER, [
+  return match t {
     TLit(k) =>
       /* %vn = arith.constant k.0 : f64 */
-      hit(ER, ssa_name(n),
-         line(ssa_name(n), String.concat("arith.constant ", num_lit(k))),
-         n + 1),
+      .-> ER { _1 ssa_name(n) _2 line(ssa_name(n), String.concat("arith.constant ", num_lit(k))) _3 n + 1 },
     TVar(i) =>
       /* a variable is already an ssa in env: no new line. */
-      hit(ER, lookup(i, env), "", n),
+      .-> ER { _1 lookup(i, env) _2 "" _3 n },
     TLet(e1, body) =>
       /* x := e1 ; body   (x is de Bruijn 0 in body) */
       gen_let(e1, body, env, n),
@@ -71,15 +64,13 @@ fun gen(t: Term, env: SsaEnv, n: Number): EmitR {
       gen_call(name, arg, env, n),
     TAdd(a, b) => gen_bin("arith.addf", a, b, env, n),
     TMul(a, b) => gen_bin("arith.mulf", a, b, env, n)
-  ], t)
+  }
 }
 /* let: emit e1, push its ssa onto env, emit body in that env. */
 fun gen_let(e1: Term, body: Term, env: SsaEnv, n: Number): EmitR {
   ea := gen(e1, env, n)
-  eb := gen(body, hit(SeCons, er_ssa(ea), env), er_ctr(ea))
-  return hit(ER, er_ssa(eb),
-            String.concat(er_code(ea), er_code(eb)),
-            er_ctr(eb))
+  eb := gen(body, .-> SeCons { _1 er_ssa(ea) _2 env }, er_ctr(ea))
+  return .-> ER { _1 er_ssa(eb) _2 String.concat(er_code(ea), er_code(eb)) _3 er_ctr(eb) }
 }
 /* call: emit the argument, then "<ssa> = func.call @name(<arg>) : (f64) -> f64". */
 fun gen_call(name: String, arg: Term, env: SsaEnv, n: Number): EmitR {
@@ -88,9 +79,7 @@ fun gen_call(name: String, arg: Term, env: SsaEnv, n: Number): EmitR {
   rhs := String.concat("func.call @",
                  String.concat(name,
                    String.concat("(", String.concat(er_ssa(ea), ") : (f64) -> f64"))))
-  return hit(ER, ssa_name(m),
-            String.concat(er_code(ea), line_raw(ssa_name(m), rhs)),
-            m + 1)
+  return .-> ER { _1 ssa_name(m) _2 String.concat(er_code(ea), line_raw(ssa_name(m), rhs)) _3 m + 1 }
 }
 /* binop: emit a, then b (same env), then "<ssa> = <op> <sa>, <sb> : f64". */
 fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
@@ -99,34 +88,30 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
   m  := er_ctr(eb)
   rhs := String.concat(String.concat(op, " "),
                  String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
-  return hit(ER, ssa_name(m),
-            String.concat(String.concat(er_code(ea), er_code(eb)),
-                          line(ssa_name(m), rhs)),
-            m + 1)
+  return .-> ER { _1 ssa_name(m) _2 String.concat(String.concat(er_code(ea), er_code(eb)),
+                          line(ssa_name(m), rhs)) _3 m + 1 }
 }
 
 /* a top-level function definition: func.func @name(%arg0: f64) -> f64 { body }. */
-fun motFunS(f: Fun): String { return "" }
 fun gen_fun(f: Fun): String {
-  return hit_elim(motFunS, [
+  return match f {
     FnDef(name, body) => gen_fundef(name, body)
-  ], f)
+  }
 }
 fun gen_fundef(name: String, body: Term): String {
   /* the parameter is %arg0 = de Bruijn 0 of the body. */
-  eb := gen(body, hit(SeCons, "%arg0", hit(SeNil)), 0)
+  eb := gen(body, .-> SeCons { _1 "%arg0" _2 SeNil }, 0)
   return String.concat(
     String.concat(String.concat("  func.func @", name), "(%arg0: f64) -> f64 {\n"),
     String.concat(er_code(eb),
       String.concat(String.concat("    return ", er_ssa(eb)), " : f64\n  }\n")))
 }
 /* emit every function definition, in order. */
-fun motFunLs(fs: FunList): String { return "" }
 fun gen_funs(fs: FunList): String {
-  return hit_elim(motFunLs, [
+  return match fs {
     FlNil => "",
     FlCons(f, rest) => String.concat(gen_fun(f), gen_funs(rest))
-  ], fs)
+  }
 }
 
 /* fixed MLIR boilerplate. */
@@ -160,11 +145,9 @@ fun main(): Number {
    *   fun double(x): number { return x + x }
    *   fun main(): number { return double(21) }
    * core: FnDef("double", TAdd(TVar 0, TVar 0)) ; main = TCall("double", TLit 21) */
-  funs := hit(FlCons,
-                    hit(FnDef, "double", hit(TAdd, hit(TVar, 0), hit(TVar, 0))),
-                    hit(FlNil))
-  mainT := hit(TCall, "double", hit(TLit, 21))
-  rmain := gen(mainT, hit(SeNil), 0)
+  funs := .-> FlCons { _1 .-> FnDef { _1 "double" _2 .-> TAdd { _1 .-> TVar { _1 0 } _2 .-> TVar { _1 0 } } } _2 FlNil }
+  mainT := .-> TCall { _1 "double" _2 .-> TLit { _1 21 } }
+  rmain := gen(mainT, SeNil, 0)
   full := String.concat(mod_head(),
                   String.concat(gen_funs(funs),
                     String.concat(main_head(),

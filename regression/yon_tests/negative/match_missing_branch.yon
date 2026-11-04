@@ -1,0 +1,7 @@
+place Sum { this > A :U B(Number) }
+place Entry {
+  fun pick(s: Sum): Number { return match s { B(x) => x } }
+  fun main(): Number {
+    return pick(.-> B { _1 7 })
+  }
+}

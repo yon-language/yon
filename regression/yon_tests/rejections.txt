@@ -28,7 +28,7 @@ regression/yon_tests/negative/subcontains_structural_reject | E2001 | read: para
 # --- single-file negative fixtures (false proofs, illegal programs) ----------
 regression/yon_tests/negative/false_eta.yon | E2001 | type mismatch: expected Id_Sigma(x : number). number(_code, p), got Id_Sigma(x : number). number(p, p)
 regression/yon_tests/negative/false_id.yon | E2001 | type mismatch: expected Id_number(
-regression/yon_tests/negative/hit_elim_missing_branch.yon | E2001 | hit_elim: missing branch(es): quot
+regression/yon_tests/negative/match_missing_branch.yon | E2001 | match: missing branch(es) for A
 regression/yon_tests/negative/hit_elim_wrong_arity.yon | E2001 | hit_elim: branch inj expects 1 payload binder(s), got 2
 regression/yon_tests/negative/neg_arity.yon | E2001 | f: expected 1 arguments, got 2
 regression/yon_tests/negative/neg_assign_in_produce.yon | E2001 | is not supported inside a `produce` block

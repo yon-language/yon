@@ -1,5 +1,8 @@
 [package]
 name = "native_sum_runtime"
 
+[world.W]
+objects = ["Expr"]
+
 [runtime]
 backend = "memory"

@@ -1260,7 +1260,7 @@ def test_a_let_bound_lambda_wins_over_a_top_level_homonym_in_a_match_arm(tmp_pat
            "fun sq(x: Number): Number { return 1000 }\n"
            "fun main(): Number {\n"
            "  sq := fun(x: Number) => x * x\n"
-           "  return match hit(Box, 3) { Box(v) => sq(v), Empty => 0 }\n"
+           "  return match .-> Box { _1 3 } { Box(v) => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
     _verdict(v == 9, f"sq(3) with the local sq is 9, got {v} (1000 mod 256 = 232 is the top-level sq)")
@@ -1272,7 +1272,7 @@ def test_a_let_bound_lambda_is_callable_from_a_match_arm(tmp_path):
     src = ("place Entry {}\n"
            "fun main(): Number {\n"
            "  sq := fun(x: Number) => x * x\n"
-           "  return match hit(Box, 3) { Box(v) => sq(v), Empty => 0 }\n"
+           "  return match .-> Box { _1 3 } { Box(v) => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
     v = _value_desugar(tmp_path, src)
     _verdict(v == 9, f"sq(3) is 9, got {v}")
@@ -1512,14 +1512,12 @@ def test_a_named_path_is_in_scope_in_a_reassignment(tmp_path):
     _verdict(v == 7, f"clear 7 read at I0 is 7, got {v}")
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a sum value bound by name is in scope in a later reassignment")
 def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
     src = ("place Box { this > Full(Number) :U Empty }\n"
            "place Entry {}\n"
            "fun code(b: Box): Number { return match b { Full(n) => n, Empty => 0 } }\n"
            "fun main(): Number {\n"
-           "  v := hit(Full, 5)\n"
+           "  v := .-> Full { _1 5 }\n"
            "  mut acc := 0\n"
            "  acc <- code(v)\n"
            "  return acc\n"
@@ -2627,8 +2625,8 @@ def test_a_handled_nullary_operation_returns_the_handler_value(tmp_path):
 
 
 
-def _build_run_runtime(tmp_path, entry, timeout=30, env=None):
-    proj = _project(tmp_path, entry)
+def _build_run_runtime(tmp_path, entry, timeout=30, env=None, extra=""):
+    proj = _project(tmp_path, entry, extra) if extra else _project(tmp_path, entry)
     exe = tmp_path / "probe.exe"
     rc, out = _compile(proj, exe)
     assert rc == 0, out
@@ -2651,39 +2649,41 @@ def _lit_runtime(x):
 
 # --- Number payloads of a coproduct and closure captures keep their value -----
 
+_EXPR_WORLD = '\n[world.W]\nobjects = ["Expr"]\n'
+
 _PAYLOAD_runtime = """\
+place Expr { this > Lit(Number) :U Nil }
 place Entry {}
-fun mot(e: (Lit(Number) | Nil)): Number { return 0 }
-fun get(e: (Lit(Number) | Nil)): Number {
-  return hit_elim(mot, [Lit(n) => n, Nil => 0], e)
+fun get(e: Expr): Number {
+  return match e { Lit(n) => n, Nil => 0 }
 }
 fun main(): Number {
-  _a := IO.print_num(get(hit(Lit, %s)))
+  _a := IO.print_num(get(.-> Lit { _1 %s }))
   return 0
 }
 """
 
 
 def test_coproduct_payload_keeps_a_fraction(tmp_path):
-    rc, out = _build_run_runtime(tmp_path, _PAYLOAD_runtime % "1.5")
+    rc, out = _build_run_runtime(tmp_path, _PAYLOAD_runtime % "1.5", extra=_EXPR_WORLD)
     _verdict(_numbers_runtime(out) == [1.5], f"payload 1.5 read back as {out.strip()}")
 
 
 def test_coproduct_payload_keeps_a_negative(tmp_path):
-    rc, out = _build_run_runtime(tmp_path, _PAYLOAD_runtime % "0 - 3")
+    rc, out = _build_run_runtime(tmp_path, _PAYLOAD_runtime % "0 - 3", extra=_EXPR_WORLD)
     _verdict(_numbers_runtime(out) == [-3.0], f"payload -3 read back as {out.strip()}")
 
 
 # A child of a node is always a node handle; a value enters as a leaf whose
 # label is its exact f64, so whatever goes in comes out bit for bit.
 _PAYLOAD_EXACT_runtime = """\
+place Expr { this > Lit(Number) :U Nil }
 place Entry {}
-fun mot(e: (Lit(Number) | Nil)): Number { return 0 }
-fun get(e: (Lit(Number) | Nil)): Number {
-  return hit_elim(mot, [Lit(n) => n, Nil => 0], e)
+fun get(e: Expr): Number {
+  return match e { Lit(n) => n, Nil => 0 }
 }
 fun main(): Number {
-  mut n := get(hit(Lit, %s))
+  mut n := get(.-> Lit { _1 %s })
   return if %s then 1 else 0
 }
 """
@@ -2699,25 +2699,29 @@ _PAYLOAD_VALUES = {
 @pytest.mark.parametrize("value", sorted(_PAYLOAD_VALUES))
 def test_coproduct_payload_reads_back_bit_for_bit(tmp_path, value):
     put, check = _PAYLOAD_VALUES[value]
-    rc, _ = _build_run_runtime(tmp_path, _PAYLOAD_EXACT_runtime % (put, check))
+    rc, _ = _build_run_runtime(tmp_path, _PAYLOAD_EXACT_runtime % (put, check), extra=_EXPR_WORLD)
     assert rc == 1, f"{put} did not read back as itself"
 
 
 def test_coproduct_payloads_of_every_carrier_read_back(tmp_path):
     """A Boolean, a String and a nested coproduct payload come back as they went in."""
     entry = """\
+place Switch { this > Flag(Boolean) :U Off }
+place Tag { this > Named(String) :U Anon }
+place Expr { this > Lit(Number) :U Nil }
+place Wrapped { this > Wrap(Expr) :U None }
 place Entry {}
-fun flag(e: (Flag(Boolean) | Off)): Number { return match e { Flag(b) => if b then 1 else 0, Off => 7 } }
-fun name(e: (Named(String) | Anon)): Number { return match e { Named(s) => String.length(s), Anon => 0 } }
-fun inner(e: (Wrap((Lit(Number) | Nil)) | None)): Number {
+fun flag(e: Switch): Number { return match e { Flag(b) => if b then 1 else 0, Off => 7 } }
+fun name(e: Tag): Number { return match e { Named(s) => String.length(s), Anon => 0 } }
+fun inner(e: Wrapped): Number {
   return match e { Wrap(x) => (match x { Lit(n) => n, Nil => 0 }), None => 0 }
 }
 fun main(): Number {
-  return flag(hit(Flag, 3 > 2)) * 100 + name(hit(Named, "abcde")) * 10
-       + inner(hit(Wrap, hit(Lit, 0.5))) * 2
+  return flag(.-> Flag { _1 3 > 2 }) * 100 + name(.-> Named { _1 "abcde" }) * 10
+       + inner(.-> Wrap { _1 .-> Lit { _1 0.5 } }) * 2
 }
 """
-    rc, _ = _build_run_runtime(tmp_path, entry)
+    rc, _ = _build_run_runtime(tmp_path, entry, extra='\n[world.W]\nobjects = ["Switch", "Tag", "Expr", "Wrapped"]\n')
     assert rc == 151, f"payloads read back as {rc}, expected 1*100 + 5*10 + 0.5*2 = 151"
 
 
@@ -2739,7 +2743,7 @@ fun main(): Number {
 
 
 def test_coproduct_payload_keeps_a_small_integer(tmp_path):
-    rc, out = _build_run_runtime(tmp_path, _PAYLOAD_runtime % "7")
+    rc, out = _build_run_runtime(tmp_path, _PAYLOAD_runtime % "7", extra=_EXPR_WORLD)
     assert _numbers_runtime(out) == [7.0]
 
 
@@ -3518,8 +3522,6 @@ def _selfhost_run_runtime(tmp_path, compiler, src):
     return _run(exe)[0]
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a function named fozp is called, not read as the hit_elim keyword")
 def test_selfhost_function_named_like_no_keyword_is_called(tmp_path, selfhost_compiler_runtime):
     rc = _selfhost_run_runtime(tmp_path, selfhost_compiler_runtime,
                        "fun fozp(x): Number { return x + 1 }\n"

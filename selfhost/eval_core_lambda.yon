@@ -4,28 +4,25 @@
 // `_ =>`. Oracle: (lam.0) 42 = 42, Fst((lam.0) Pair(20,22)) = 20.
 place Term { this > TLit(Number) :U TVar(Number) :U TLam(Term) :U TApp(Term, Term) :U TPair(Term, Term) :U TFst(Term) :U TSnd(Term) }
 
-fun motT(t: Term): Term { return hit(TLit, 0) }
 
 fun shift(d: Number, c: Number, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i >= c then hit(TVar, i + d) else hit(TVar, i),
-      TLam(b)     => hit(TLam, shift(d, c + 1, b)),
-      TApp(f, x)  => hit(TApp, shift(d, c, f), shift(d, c, x)),
-      TPair(a, b) => hit(TPair, shift(d, c, a), shift(d, c, b)),
-      TFst(p)     => hit(TFst, shift(d, c, p)),
-      TSnd(p)     => hit(TSnd, shift(d, c, p)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i >= c then .-> TVar { _1 i + d } else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 shift(d, c + 1, b) },
+      TApp(f, x)  => .-> TApp { _1 shift(d, c, f) _2 shift(d, c, x) },
+      TPair(a, b) => .-> TPair { _1 shift(d, c, a) _2 shift(d, c, b) },
+      TFst(p)     => .-> TFst { _1 shift(d, c, p) },
+      TSnd(p)     => .-> TSnd { _1 shift(d, c, p) } }
 }
 
 fun subst(j: Number, s: Term, t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => if i == j then s else hit(TVar, i),
-      TLam(b)     => hit(TLam, subst(j + 1, shift(1, 0, s), b)),
-      TApp(f, x)  => hit(TApp, subst(j, s, f), subst(j, s, x)),
-      TPair(a, b) => hit(TPair, subst(j, s, a), subst(j, s, b)),
-      TFst(p)     => hit(TFst, subst(j, s, p)),
-      TSnd(p)     => hit(TSnd, subst(j, s, p)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => if i == j then s else .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 subst(j + 1, shift(1, 0, s), b) },
+      TApp(f, x)  => .-> TApp { _1 subst(j, s, f) _2 subst(j, s, x) },
+      TPair(a, b) => .-> TPair { _1 subst(j, s, a) _2 subst(j, s, b) },
+      TFst(p)     => .-> TFst { _1 subst(j, s, p) },
+      TSnd(p)     => .-> TSnd { _1 subst(j, s, p) } }
 }
 
 fun beta(body: Term, arg: Term): Term {
@@ -33,26 +30,22 @@ fun beta(body: Term, arg: Term): Term {
 }
 
 fun eval(t: Term): Term {
-  return hit_elim(motT,
-    [ TLit(n)     => hit(TLit, n),
-      TVar(i)     => hit(TVar, i),
-      TLam(b)     => hit(TLam, b),
-      TApp(f, x)  => hit_elim(motT,
-                       [ TLam(b) => eval(beta(b, eval(x))),
-                         _       => hit(TApp, eval(f), eval(x)) ], eval(f)),
-      TPair(a, b) => hit(TPair, eval(a), eval(b)),
-      TFst(p)     => hit_elim(motT, [ TPair(a, b) => eval(a), _ => hit(TFst, eval(p)) ], eval(p)),
-      TSnd(p)     => hit_elim(motT, [ TPair(a, b) => eval(b), _ => hit(TSnd, eval(p)) ], eval(p)) ], t)
+  return match t { TLit(n)     => .-> TLit { _1 n },
+      TVar(i)     => .-> TVar { _1 i },
+      TLam(b)     => .-> TLam { _1 b },
+      TApp(f, x)  => match eval(f) { TLam(b) => eval(beta(b, eval(x))),
+                         _       => .-> TApp { _1 eval(f) _2 eval(x) } },
+      TPair(a, b) => .-> TPair { _1 eval(a) _2 eval(b) },
+      TFst(p)     => match eval(p) { TPair(a, b) => eval(a), _ => .-> TFst { _1 eval(p) } },
+      TSnd(p)     => match eval(p) { TPair(a, b) => eval(b), _ => .-> TSnd { _1 eval(p) } } }
 }
 
-fun motN(t: Term): Number { return 0 }
 fun as_num(t: Term): Number {
-  return hit_elim(motN, [ TLit(n) => n, TVar(i) => i, _ => 0 ], t)
+  return match t { TLit(n) => n, TVar(i) => i, _ => 0 }
 }
 
 fun main(): Number {
-  id_lit   := eval(hit(TApp, hit(TLam, hit(TVar, 0)), hit(TLit, 42)))
-  fst_beta := eval(hit(TFst, hit(TApp, hit(TLam, hit(TVar, 0)),
-                                       hit(TPair, hit(TLit, 20), hit(TLit, 22)))))
+  id_lit   := eval(.-> TApp { _1 .-> TLam { _1 .-> TVar { _1 0 } } _2 .-> TLit { _1 42 } })
+  fst_beta := eval(.-> TFst { _1 .-> TApp { _1 .-> TLam { _1 .-> TVar { _1 0 } } _2 .-> TPair { _1 .-> TLit { _1 20 } _2 .-> TLit { _1 22 } } } })
   return (as_num(id_lit) - 42) + (as_num(fst_beta) - 20)
 }
