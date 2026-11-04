@@ -55,12 +55,12 @@ A `topos` block declares **subobject classifiers** over the objects of its
 space (the objects are the place files in that directory), each `prop` is a
 map into Ω you can evaluate:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
-// in the space directory: State.yon
+// w/State.yon
 place State { balance Number }
 
-// in the same directory: Topos.yon
+// w/Topos.yon
 topos Bank where {
   prop is_overdrawn(s: State) = s.balance < 0
 }
@@ -88,8 +88,9 @@ at one object of the site and fail at another. In Yon the stage is a
 place, and the statement is a pattern condition, the same patterns that
 drive `when`:
 
+<!-- yon-gate: fragment -->
 ```yon
-// NodeA.yon, a place file in the site's space directory
+// w/NodeA.yon, a place file in the site's space directory
 place NodeA { value Number }
 
 // Entry.yon

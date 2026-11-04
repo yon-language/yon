@@ -39,6 +39,7 @@ objects = ["Guest"]
 spaces  = ["sala", "cucina"]
 ```
 
+<!-- yon-gate: fragment -->
 ```yon
 // sala/Order.yon
 place Order {
@@ -46,6 +47,7 @@ place Order {
 }
 ```
 
+<!-- yon-gate: fragment -->
 ```yon
 // cucina/Ticket.yon
 place Ticket {
@@ -56,6 +58,16 @@ place Ticket {
 An order placed in the dining room becomes a ticket in the kitchen. That
 crossing is a `move`, a file in the `sala` Space:
 
+<!-- yon-gate: fragment
+// sala/Order.yon
+place Order {
+  total Number
+}
+// cucina/Ticket.yon
+place Ticket {
+  total Number
+}
+-->
 ```yon
 // sala/ToKitchen.yon
 fun withTax(x: Number): Number { return x * 110 / 100 }
@@ -66,6 +78,21 @@ move ToKitchen from Order to Ticket {
 
 The entry place applies it:
 
+<!-- yon-gate: fragment
+// sala/Order.yon
+place Order {
+  total Number
+}
+// cucina/Ticket.yon
+place Ticket {
+  total Number
+}
+// sala/ToKitchen.yon
+fun withTax(x: Number): Number { return x * 110 / 100 }
+move ToKitchen from Order to Ticket {
+  total maps to total by withTax
+}
+-->
 ```yon
 // Entry.yon
 place Entry { }
@@ -109,6 +136,7 @@ A package is a directory (`yon.toml` + sources). Importing a function *from a
 Space* turns it into a remote arrow. Here the kitchen exposes a price function;
 the dining room calls it across the boundary:
 
+<!-- yon-gate: fragment -->
 ```yon
 // kitchen.yon, compiled to ./Kitchen_srv
 fun plate_price(dish: Number): Number { return dish * 3 }
@@ -116,6 +144,11 @@ internal fun recipe_secret(dish: Number): Number { return dish + 1000 }
 fun main: Number { return 0 }
 ```
 
+<!-- yon-gate: fragment
+// kitchen.yon
+fun plate_price(dish: Number): Number { return dish * 3 }
+fun main: Number { return 0 }
+-->
 ```yon
 // pass.yon, the entry binary
 import kitchen::plate_price from Kitchen
@@ -168,6 +201,7 @@ the block becomes an `IsolatedFromAbove` region in the IR, every outer binding
 it uses must enter as an explicit capture, and an implicit reference is a
 verifier error:
 
+<!-- yon-gate: fragment -->
 ```yon
 // Entry.yon
 place Entry { }

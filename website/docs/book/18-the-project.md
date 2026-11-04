@@ -22,7 +22,7 @@ yonproj/
 
 A library is a directory without a `main`. Publish it by pushing a tag:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 /* rates, currency conversion, published as a git package. */
 fun eur_to_usd(eur: Number): Number { return eur * 110 / 100 }
@@ -84,7 +84,7 @@ rates = { git = "https://github.com/utente/rates", version = "1.0" }
 And the program, both kinds of import at work, a loop, mutation, and three
 calls that each cross a process boundary:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: external a git dependency, resolved by yon-pkg install -->
 ```yon
 import "yonproj/rates"
 import bank::deposit_net from Bank

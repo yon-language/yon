@@ -53,7 +53,7 @@ fun main(): Number {
 
 ## System: files, environment, arguments
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 _w := File.write_text("/tmp/out.txt", "ciao")
 readback := File.read_text("/tmp/out.txt")

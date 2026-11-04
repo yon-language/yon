@@ -47,7 +47,7 @@ also carries a `Topos.yon` that declares the topos of the site, and an
 A place body declares its **sections**, the fields it stores, and nothing else by
 default. An order has a table and a running total, `sala/Order.yon`:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 place Order {
   table Number
@@ -58,7 +58,15 @@ place Order {
 A place has no hidden state. You create one with the mediating arrow `.->` and
 read its sections with a dot. `Entry.yon`:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment
+place Order {
+  table Number
+  total Number
+}
+place Ticket {
+  total Number
+}
+-->
 ```yon
 place Entry { }
 fun main(): Number {
@@ -80,7 +88,7 @@ Where a place needs an effectful interface, it lists **operations** alongside
 its sections, directly in its body. An order accumulates
 items, and a kitchen ticket can be retagged:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 place Order {
   table Number
@@ -136,7 +144,15 @@ place is refused (E2005) until one of them is renamed.
 A place can carve out a sub-object of another with `this <` — the mirror of the coproduct's `this >`: `>` reads "I contain" (⊃), `<` reads "I am contained" (⊂). A VIP order is
 still an order, restricted:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment
+place Order {
+  table Number
+  total Number
+}
+place Ticket {
+  total Number
+}
+-->
 ```yon
 place VipOrder {
   this < Order
@@ -174,7 +190,7 @@ up the courses does not change the total, and neither does the grouping. In most
 languages that is a comment, a thing you believe. In Yon you declare it, and the
 compiler checks it. `sala/Tally.yon`:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 place Tally {
   total Number
@@ -192,7 +208,7 @@ algebra carries its laws as verified facts — there is nothing to ask at
 runtime, and no explicit trigger to write — the `verify` word was retired,
 and the verification descends from `uses` by itself:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 place Tally {
   operation add(a: Number, b: Number): Number uses algebra Additive

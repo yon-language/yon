@@ -12,7 +12,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 - lexer keywords: **109**
 - corpus files: **356**
 - CodeWindows: **23**  (project **11**, single-file **12**)
-- prose `.yon` blocks marked illustrative (exempt, counted): **32**
+- prose `.yon` blocks marked fragment (compiled, counted): **43**
 - allowlisted reserved/kernel tokens: **8**
 
 ## Keywords (lexer x corpus-count x book anchor)

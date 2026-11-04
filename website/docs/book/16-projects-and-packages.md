@@ -82,6 +82,7 @@ generated, never edited.
 Imports load transitively (with a cycle guard), and every top-level
 declaration of an imported module arrives **prefixed with its module name**:
 
+<!-- yon-gate: external a git dependency, resolved by yon-pkg install -->
 ```yon
 // Entry.yon
 import "github.com/utente/geometria"

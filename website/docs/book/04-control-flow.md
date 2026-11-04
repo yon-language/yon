@@ -70,7 +70,7 @@ fun main(): Number {
 
 A `forever` in flight (the loop runs without bound, printing as it goes):
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 fun main(): Number {
   mut n := 0

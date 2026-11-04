@@ -11,6 +11,7 @@ Yon's type system has a homotopy-type-theoretic layer: universes (`Type`,
 `Sigma(x: A). B`), and the identity type, written `x = y`, with the carrier
 inferred from the endpoints, with its introduction and eliminator.
 
+<!-- yon-gate: fragment -->
 ```yon
 // Entry.yon, at the project root
 place Entry { }
@@ -144,8 +145,9 @@ parameter is read in the laws, by the kernel, and does not exist at run time.
 
 The most Yon-flavoured citizen is the **comprehension**:
 
+<!-- yon-gate: fragment -->
 ```yon
-// Account.yon, a place file in the site's space directory.
+// w/Account.yon, a place file in the site's space directory.
 // A separate Entry.yon at the project root supplies main.
 place Account { v Number }
 

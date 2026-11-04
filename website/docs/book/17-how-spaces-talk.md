@@ -169,17 +169,19 @@ value of another shape is never rebuilt.
 
 In the language this is the subscription pipeline:
 
+<!-- yon-gate: project regression/cross_space/weather_sub -->
 ```yon
 // Entry.yon, the consumer
-import weather::forecasts from Weather    // forecasts: fun(): Wire<Reading>
+import weather::forecasts from Weather
 
-place Entry { }
-fun main: Number {
-  w := wire to space Weather
-  sub := w.awaits(forecasts)
-  readings := sub.stream          // the drained frames, as a local stream
-  total := readings.fold(0, sum_reading)
-  return total
+place Entry {
+  fun main(): Number {
+    w := wire to space Weather
+    sub := w.awaits(forecasts)
+    s := sub.stream
+    total := s.fold(0, fun(a: Number, r: Reading) => a + r.temp + String.length(r.label))
+    return total
+  }
 }
 ```
 
@@ -252,7 +254,13 @@ Space that made it. Given to another Space, it would name nothing there. So
 handing one over is a type error, and it is refused even when, today, both
 Spaces share one process:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: refuses closure
+// w/Q.yon
+place Q {
+  v Number
+  fun apply(f: Number -> Number, x: Number): Number { return x ↦ f }
+}
+-->
 ```yon
 place Entry {
   fun main: Number {

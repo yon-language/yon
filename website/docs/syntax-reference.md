@@ -53,6 +53,7 @@ object*: sections of the builtin `String` place. At runtime a string is a
 handle into the content-addressed heap; literals are interned, so the same
 literal is the same value and `String.equal` compares content:
 
+<!-- yon-gate: fragment -->
 ```yon
 fun greet(who: String): String {
   return String.concat("ciao ", who)
@@ -230,6 +231,7 @@ A `scope` is a statement, not an expression: it gives no value of its own,
 and the names it defines stay inside. A result leaves the scope through a cell
 declared outside it, which the body writes with `<-`:
 
+<!-- yon-gate: fragment -->
 ```yon
 fun main(): Number {
   base := 40
@@ -257,12 +259,13 @@ runtime cost. `if/then/else` lowers to `scf.if`, `iter` to `scf.for`, and
 
 ## Functions
 
+<!-- yon-gate: fragment -->
 ```yon
 fun f(x: Number, y: Number): Number { return x + y }
-fun g<A, B>(x: A): B { ... }                      // type parameters
-fun h(x: Number): Number visits Output { ... }    // declared effect
-internal fun secret(x: Number): Number { ... }    // only its house calls it; not exported cross-Space
-fun p(x: Number) on error E: Number { ... }       // partial: it declares how it fails
+fun g<A>(x: A): A { return x }                                      // type parameters
+fun h(x: Number): Number visits Output { return x }                 // declared effect
+internal fun secret(x: Number): Number { return x }                 // only its house calls it; not exported cross-Space
+fun p(x: Number) on error DomainError: Number { return x }          // partial: it declares how it fails
 ```
 
 The four modifiers above, type parameters, `visits`, `internal` and
@@ -353,7 +356,14 @@ accepted in silence.
 
 ## Topos declarations
 
+<!-- yon-gate: fragment
+// w/State.yon
+place State { balance Number }
+// w/Coin.yon
+place Coin { this > Heads :U Tails }
+-->
 ```yon
+// w/Topos.yon
 topos where {
   morphism plus(a: Int64, b: Int64): Int64       // the site's generators
   prop is_overdrawn(s: State) = s.balance < 0

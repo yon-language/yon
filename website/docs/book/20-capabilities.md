@@ -10,7 +10,7 @@ A move can declare more than well-typed fields: it can declare the **authority**
 it needs. The declaration is checked at run time but not yet enforced (see
 *Status* below).
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 place EUR { balance Number }
 place USD { balance Number }

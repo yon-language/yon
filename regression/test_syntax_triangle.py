@@ -17,7 +17,7 @@ legs (numbered 1, 2, 4) plus a regenerable matrix:
   Leg 4  book -> corpus       every CodeWindow `file="proj/"` block is byte-identical
                              to the real examples/proj files (net of omitted files);
                              every other `.yon` fenced block compiles to a recorded
-                             exit or is marked illustrative.
+                             exit or is marked fragment, and compiles.
 
 The production side (one canonical form and its rejected deviations per grammar
 production) is a separate gate,
@@ -135,7 +135,7 @@ def _clean_block(s: str) -> str:
 
 
 CODEWINDOW = re.compile(r"<CodeWindow\s+(.*?)>(.*?)</CodeWindow>", re.S)
-MARKER = re.compile(r"<!--\s*yon-gate:\s*(exit\s+-?\d+|illustrative|project\s+\S+)\s*-->")
+MARKER = re.compile(r"<!--\s*yon-gate:\s*(exit\s+-?\d+|fragment|refuses\s[^\n]*|external\s[^\n]*|project\s+\S+)(.*?)-->", re.S)
 PATH_MARKER = re.compile(r"^// ([\w./]+\.(?:yon|toml))\b")
 
 
@@ -157,22 +157,33 @@ def codewindows():
     return out
 
 
+# What a fragment leans on, written in the comment of its marker: `// w/Order.yon` and the file.
+FRAGMENT_CONTEXT = {}
+
+
+def _doc_pages():
+    return sorted(list(BOOK.glob("*.md")) + list(BOOK.glob("*.mdx")) + [BOOK.parent / "syntax-reference.md"])
+
+
 def fenced_yon_blocks():
-    """Non-CodeWindow ```yon blocks with their preceding yon-gate marker (or None)."""
+    """Non-CodeWindow ```yon blocks with their yon-gate marker right above (or None)."""
     out = []
-    for md in sorted(BOOK.glob("*.md")):
+    for md in _doc_pages():
         text = md.read_text()
         stripped = re.sub(r"<CodeWindow.*?</CodeWindow>", lambda mm: "\n" * mm.group(0).count("\n"), text, flags=re.S)
         for m in re.finditer(r"```yon\n(.*?)```", stripped, re.S):
-            pre = stripped[:m.start()]
-            mk = None
-            tail = pre.rstrip().splitlines()[-3:] if pre.strip() else []
-            for line in reversed(tail):
-                g = MARKER.search(line)
+            pre = stripped[:m.start()].rstrip()
+            mk, ctx = None, ""
+            if pre.endswith("-->"):
+                g = MARKER.search(pre[pre.rfind("<!--"):])
                 if g:
-                    mk = g.group(1).strip()
-                    break
-            out.append((md.stem, mk, m.group(1).strip("\n")))
+                    mk, ctx = g.group(1).strip(), g.group(2)
+            content = m.group(1).strip("\n")
+            FRAGMENT_CONTEXT[(md.stem, content)] = ctx
+            out.append((md.stem, mk, content))
+    return out
+
+
     return out
 
 
@@ -356,14 +367,155 @@ def test_leg4_codewindow_runs(cw, tmp_path):
                          ids=lambda b: f"{b[0]}:{_stable_id(b[2])}")
 def test_leg4_prose_block_marked(blk):
     chapter, marker, content = blk
-    if content.splitlines() and PATH_MARKER.match(content.splitlines()[0]):
-        return  # a project-file fragment, covered by assembled-project fidelity
     assert marker is not None, (
-        f"{chapter}: a ```yon block has no `<!-- yon-gate: ... -->` marker. Add "
-        "`exit N` (a compiling standalone), `illustrative` (a fragment, counted), "
-        "or `project NAME` (a project file). First line: "
+        f"{chapter}: a ```yon block has no `<!-- yon-gate: ... -->` marker. Add `exit N` (it "
+        "compiles and exits so), `fragment` (it compiles; what it leans on follows in the "
+        "comment), `refuses WORDS` (it is refused, with those words), `project PATH` (it is a file "
+        "of that project) or `external WHY`. First line: "
         f"{content.splitlines()[0][:60] if content.splitlines() else '(empty)'!r}"
     )
+
+
+FRAGMENT_TOML = ('[package]\nname = "fragment"\n\n[world.W]\nobjects = ["X"]\nspaces  = [{spaces}]\n\n'
+                 '[runtime]\nbackend = "memory"\n')
+
+
+def _files_of(text):
+    """Text with `// path.yon` lines -> ({path: body}, what comes before the first of them)."""
+    files, cur, buf, head = {}, None, [], []
+    for line in text.splitlines():
+        pm = PATH_MARKER.match(line)
+        if pm:
+            if cur:
+                files[cur] = "\n".join(buf) + "\n"
+            cur, buf = pm.group(1), []
+        elif cur is None:
+            head.append(line)
+        else:
+            buf.append(line)
+    if cur:
+        files[cur] = "\n".join(buf) + "\n"
+    return files, "\n".join(head)
+
+
+def _split_places(text):
+    """The places written at column 0 go to files of their own: ({w/P.yon: decl}, the rest)."""
+    files, rest, cur, depth = {}, [], None, 0
+    for line in text.splitlines():
+        m = re.match(r"(?:internal\s+)?(?:place|error)\s+(\w+)", line)
+        if cur is None and m and m.group(1) != "Entry":
+            cur, depth = m.group(1), 0
+            files[cur] = []
+        if cur is None:
+            rest.append(line)
+            continue
+        files[cur].append(line)
+        depth += line.count("{") - line.count("}")
+        if depth <= 0 and "{" in "".join(files[cur]):
+            cur = None
+    return ({f"w/{k}.yon": "\n".join(v) + "\n" for k, v in files.items()}, "\n".join(rest))
+
+
+def compile_fragment(chapter, content, tmp):
+    """A fragment compiles as it stands, or as the funs, or as the statements of a place Entry,
+    in a project whose places have files of their own. Returns (ok, the messages)."""
+    context, ctx_head = _files_of(FRAGMENT_CONTEXT.get((chapter, content), ""))
+    own, body = _files_of(content)
+    ctx_places, ctx_rest = _split_places(ctx_head)
+    places, rest = _split_places(body)
+    named = {**ctx_places, **context, **places, **own}
+    main = "fun main: Number { return 0 }\n"
+    # a source compiled to a binary of its own, beside the sources it imports from
+    alone = [p for p in own if "/" not in p and p != "Entry.yon"]
+    if alone:
+        here = tmp / "alone"
+        here.mkdir()
+        for rel, t in named.items():
+            (here / rel).write_text(t)
+        msgs = []
+        for p in alone:
+            r = _run([str(YONC), "--emit=mlir", str(here / p), "-o", str(here / "o.mlir")])
+            if r.returncode != 0:
+                msgs.append(r.stdout + r.stderr)
+        return not msgs, "\n".join(msgs)
+    if "Entry.yon" in named:
+        entries = [None]
+    elif "place Entry" in rest or "place Entry" in ctx_rest:
+        entries = [ctx_rest + "\n" + rest + "\n"]
+    else:
+        entries = [ctx_rest + "\n" + rest + "\n" + "place Entry {\n" + ("" if "fun main" in rest else main) + "}\n",
+                   ctx_rest + "\nplace Entry {\n" + rest + "\n" + ("" if "fun main" in rest else main) + "}\n",
+                   ctx_rest + "\nplace Entry {\nfun main: Number {\n" + rest + "\nreturn 0\n}\n}\n"]
+    msgs = []
+    for i, entry in enumerate(entries):
+        here = tmp / f"s{i}"
+        files = dict(named)
+        if entry is not None:
+            files["Entry.yon"] = entry
+        spaces = sorted({p.split("/")[0] for p in files if "/" in p}
+                        | (set() if "yon.toml" in files else {"w"}))
+        here.mkdir()
+        for rel, t in files.items():
+            (here / rel).parent.mkdir(parents=True, exist_ok=True)
+            (here / rel).write_text(t)
+        for sp in spaces:
+            (here / sp).mkdir(exist_ok=True)
+            topos = here / sp / "Topos.yon"
+            if not topos.exists():
+                topos.write_text("topos %sTopos where {\n}\n" % sp.capitalize())
+        if "yon.toml" not in files:
+            (here / "yon.toml").write_text(FRAGMENT_TOML.format(spaces=", ".join(f'"{x}"' for x in spaces)))
+        r = _run([str(YONC), "--emit=mlir", str(here), "-o", str(here / "o.mlir")])
+        if r.returncode == 0:
+            return True, ""
+        msgs.append(r.stdout + r.stderr)
+    return False, "\n".join(msgs)
+
+
+@pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
+@pytest.mark.parametrize(
+    "blk", [b for b in fenced_yon_blocks() if b[1] == "fragment"],
+    ids=lambda b: f"{b[0]}:{_stable_id(b[2])}")
+def test_leg4_fragment_compiles(blk, tmp_path):
+    chapter, _marker, content = blk
+    ok, out = compile_fragment(chapter, content, tmp_path)
+    assert ok, f"{chapter}: a fragment does not compile:\n{content[:300]}\n--- yonc ---\n{out[:700]}"
+
+
+@pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
+@pytest.mark.parametrize(
+    "blk", [b for b in fenced_yon_blocks() if b[1] and b[1].startswith("refuses")],
+    ids=lambda b: f"{b[0]}:{_stable_id(b[2])}")
+def test_leg4_refused_block_is_refused_with_its_words(blk, tmp_path):
+    chapter, marker, content = blk
+    ok, out = compile_fragment(chapter, content, tmp_path)
+    assert not ok, f"{chapter}: a block shown as refused compiles:\n{content[:300]}"
+    words = marker.split(None, 1)[1]
+    assert words in out, f"{chapter}: refused without the words {words!r}:\n{out[-400:]}"
+
+
+@pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
+@pytest.mark.parametrize(
+    "blk", [b for b in fenced_yon_blocks() if b[1] and b[1].startswith("project")],
+    ids=lambda b: f"{b[0]}:{_stable_id(b[2])}")
+def test_leg4_project_block_is_the_file_of_a_project_that_compiles(blk, tmp_path):
+    chapter, marker, content = blk
+    proj = ROOT / marker.split()[1]
+    files, _ = _files_of(content)
+    assert files, f"{chapter}: a project block names no file"
+    for rel, body in files.items():
+        assert (proj / rel).read_text().rstrip("\n") == body.rstrip("\n"), f"{chapter}: {rel} diverges"
+    r = _run([str(YONC), "--emit=mlir", str(proj), "-o", str(tmp_path / "o.mlir")])
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_leg4_external_blocks_are_the_known_ones():
+    # a block outside the gate has a reason, and the list does not grow unseen
+    external = sorted(b[0] for b in fenced_yon_blocks() if b[1] and b[1].startswith("external"))
+    assert external == EXTERNAL_BLOCKS
+
+
+EXTERNAL_BLOCKS = ["05-functions-and-effects", "16-projects-and-packages", "18-the-project"]
 
 
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
@@ -388,7 +540,7 @@ def build_matrix() -> str:
 
     exempt = 0
     for _, mk, content in fenced_yon_blocks():
-        if mk == "illustrative":
+        if mk == "fragment":
             exempt += 1
 
     lines = []
@@ -408,7 +560,7 @@ def build_matrix() -> str:
     lines.append(f"- CodeWindows: **{len(codewindows())}**  "
                  f"(project **{len(_project_codewindows())}**, single-file "
                  f"**{len(codewindows()) - len(_project_codewindows())}**)")
-    lines.append(f"- prose `.yon` blocks marked illustrative (exempt, counted): **{exempt}**")
+    lines.append(f"- prose `.yon` blocks marked fragment (compiled, counted): **{exempt}**")
     lines.append(f"- allowlisted reserved/kernel tokens: **{len(KEYWORD_ALLOWLIST)}**")
     lines.append("")
 

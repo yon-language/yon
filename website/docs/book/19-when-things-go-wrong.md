@@ -21,21 +21,25 @@ never changes, and a new error declares itself from below. Each error and
 each place is its own file, so the declarations sit side by side in the space.
 `s/QueryError.yon` has `message` from `Error` and adds its own field:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 error QueryError { this < Error  sqlstate Number }
 ```
 
 A place names the error it can raise. `s/QueryInsert.yon`:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment
+error QueryError { this < Error  sqlstate Number }
+-->
 ```yon
 place QueryInsert on error QueryError { sql Number }
 ```
 
 `Entry.yon` reads a sub-error where the base is expected and returns 42:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment
+error QueryError { this < Error  sqlstate Number }
+-->
 ```yon
 place Entry { }
 fun handle(e: Error): Number { return String.length(e.message) }

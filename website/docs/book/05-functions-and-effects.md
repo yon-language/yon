@@ -82,7 +82,7 @@ one says the *body* is. The primitives of the runtime are the library's, so
 (E2007), and a function of yours has its body in Yon. The prelude's
 `prelude/num64/Math.yon` is the face of the mathematical functions:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: external the library's own declaration, prelude/ holds it -->
 ```yon
 place Math {
   fun floor(x: Number): Number is given
@@ -151,14 +151,16 @@ it (a user place that takes a library name is refused, E2006).
 `s/SyntaxError.yon` carries only its extra field; `message` it has from
 `Error`:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 place SyntaxError { this < Error  line Number }
 ```
 
 `Entry.yon` builds the sub-object and passes it where an `Error` is expected:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment
+place SyntaxError { this < Error  line Number }
+-->
 ```yon
 place Entry { }
 fun describe(e: Error): Number { return String.length(e.message) }   // accepts any sub-object

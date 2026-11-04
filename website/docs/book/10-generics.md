@@ -8,7 +8,7 @@ sidebar_position: 10
 
 Write a function that hands back what it was given. For a number it reads:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 fun id(x: Number): Number { return x }
 ```
@@ -96,7 +96,7 @@ give it a type parameter when the object is the same whatever type flows through
 it. An envelope that carries a payload across Spaces (chapter 17) is the honest
 shape:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment -->
 ```yon
 // a domain object parametric over its payload; declared once, used at each type.
 place Envelope<T> { payload T }
@@ -124,7 +124,12 @@ Arrows are ordinary declarations, so they take type parameters too. The
 functorial arrow, the `reduction`, carries its parameters between the name and
 its object:
 
-<!-- yon-gate: illustrative -->
+<!-- yon-gate: fragment
+place Tally {
+  count Number
+  operation add(x: Number): Number
+}
+-->
 ```yon
 // a fold generic in the type it carries.
 reduction Sum<T> of Tally {
