@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
 - productions REDUCED by a fixture (Menhir-verified): **99 / 99** surface (+3 structural allowlisted)
-- deviations rejected: **29**
+- deviations rejected: **31**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -57,6 +57,8 @@ from them; the `.yon` files are the specification, not this text.
 | geomorph | `canonical` | accept | 0 | — |
 | hott | `canonical` | accept | 42 | — |
 | hott | `dev_false_id` | reject_clean | 1 | `type mismatch` |
+| hott | `dev_old_id` | reject_clean | 1 | `written x = y` |
+| hott | `dev_old_same` | reject_clean | 1 | `written x = y` |
 | hott | `dev_path_nonpath` | reject_clean | 1 | `path application` |
 | hott | `dev_quote_carrier` | reject_clean | 1 | `quote` |
 | if_expr | `canonical` | accept | 42 | — |

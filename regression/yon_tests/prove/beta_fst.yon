@@ -1,5 +1,5 @@
 // fst(pair(a,b)) = a, in Yon: the proof type-checks iff beta-fst holds
 place Entry {
-  fun beta_fst(a: Number, b: Number): Id(Number, fst(pair(a, b)), a) { return refl(a) }
+  fun beta_fst(a: Number, b: Number): fst(pair(a, b)) = a { return refl(a) }
   fun main(): Number { return 0 }
 }

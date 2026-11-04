@@ -2,7 +2,7 @@
 
 Three kinds of test-in-Yon, mapped to three levels of "is this realized":
 
-  prove/    type-level proofs. A function `fun p(): Id(T, lhs, rhs) { return
+  prove/    type-level proofs. A function `fun p(): lhs = rhs { return
             refl(...) }` type-checks IFF lhs and rhs are definitionally equal.
             The proposition is the type, refl is the proof, the type-checker is
             the oracle. Expected: EMIT succeeds (exit 0) == property holds.

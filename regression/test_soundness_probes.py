@@ -85,7 +85,7 @@ place Bad { f Bad -> Number }
 place Entry {
   fun omega(b: Bad): Number { g := b.f  return g(b) }
   fun boom(n: Number): Number { return omega(.-> Bad { f omega }) }
-  fun force(n: Number): Same(boom(n), 0) { return clear }
+  fun force(n: Number): boom(n) = 0 { return clear }
   fun main(): Number { return 0 }
 }
 """
@@ -95,14 +95,14 @@ def test_checker_terminates_on_negative_place(tmp_path):
     """The checker never diverges. The place construction `.-> Bad {...}` is
     opaque to the reducer, so the self-application is never unfolded (a
     TimeoutExpired would mean it diverged). Terminating is not enough: the
-    program asks `clear` to prove Same(boom(n), 0), which is false, so the
+    program asks `clear` to prove boom(n) = 0, which is false, so the
     checker must REJECT it, cleanly (a stable [E....] code, no uncaught OCaml
     exception)."""
     proj = _project(tmp_path, _BAD, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out", timeout=60)
     assert "Fatal error" not in out, f"the checker crashed instead of deciding:\n{out}"
     assert _clean_rejection(rc, out, 'E2001', 'expected Id_number(boom(n), _code), got Id_number(boom(n), boom(n))'), (
-        f"Same(boom(n), 0) is false, so `clear` must be rejected with a diagnostic "
+        f"boom(n) = 0 is false, so `clear` must be rejected with a diagnostic "
         f"code (rc={rc}):\n{out}")
 
 
@@ -640,7 +640,7 @@ def test_bare_value_never_inhabits_a_subobject(tmp_path, arg, extra):
     neither proved, nor checked at runtime, nor silently admitted. A witness is
     required. (The predicate is a type, so a Boolean such as `n > 0` does not
     parse there.)"""
-    entry = (f"place Entry {{\n  fun five(x: {{ n : Number where Same(n, 5) }}): Number {{ return 0 }}\n"
+    entry = (f"place Entry {{\n  fun five(x: {{ n : Number where n = 5 }}): Number {{ return 0 }}\n"
              f"{extra}  fun main(): Number {{ return five({arg}) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'five: parameter x expects') and "five: parameter x expects" in out, out

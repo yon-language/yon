@@ -777,7 +777,7 @@ let test_tycheck_ua () =
    refused. *)
 let test_tycheck_transport () =
   let src_known = {|
-    fun transport_value(p: Id(Type, Number, Number), x: Number): Number {
+    fun transport_value(p: Number = Number, x: Number): Number {
       return transport(p, x)
     }
   |} in
@@ -791,7 +791,7 @@ let test_tycheck_transport () =
   | Error msg, _ | _, Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
   | Ok known, Ok bare ->
       if known.cr_errors = [] && bare.cr_errors <> [] then
-        (Printf.printf "transport along Id(Type, A, B) type-checks, along a bare \
+        (Printf.printf "transport along A = B type-checks, along a bare \
                         Path it is refused. Status: PASS\n"; true)
       else
         (List.iter (fun e ->

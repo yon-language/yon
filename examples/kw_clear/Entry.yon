@@ -1,6 +1,6 @@
 place Entry {
   fun dbl(n: Number): Number { return n + n }
-  fun coherence(a: Number): Same(dbl(a), a + a) {
+  fun coherence(a: Number): dbl(a) = a + a {
     return clear
   }
   fun main(): Number {
@@ -22,11 +22,11 @@ place Entry {
 //    through (trasporto lungo una funzione).
 //
 // 2) NUDA `clear` in posizione return: la prova che i due lati di un
-//    Same(X, Y) sono lo stesso valore PER COMPUTAZIONE. L'endpoint e' inferito
+//    X = Y sono lo stesso valore PER COMPUTAZIONE. L'endpoint e' inferito
 //    dal tipo di ritorno; il compilatore CONTROLLA che i lati riducano a una
 //    cosa sola (se no, rifiuta: vedi examples/false_coherence.yon).
 
 
-// forma nuda: Same(dbl(a), a + a) — i due lati computano allo stesso valore,
+// forma nuda: dbl(a) = a + a — i due lati computano allo stesso valore,
 // quindi la riflessivita' dell'endpoint la abita. Il compilatore verifica.
 

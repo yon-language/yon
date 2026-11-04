@@ -70,13 +70,7 @@ let rec fmt_ty (t : ty) : string =
   | TyHeytInt n -> Printf.sprintf "heyt_int<%d>" n
   | TyPi (x, a, b) -> Printf.sprintf "Pi(%s: %s). %s" x (fmt_ty a) (fmt_ty b)
   | TySigma (x, a, b) -> Printf.sprintf "Sigma(%s: %s). %s" x (fmt_ty a) (fmt_ty b)
-  | TyId (TyMetaVar (-424242), x, y) ->
-      (* `Same(x, y)` sugar: Id with the inference-sentinel carrier (parser.mly).
-         Print the sugar back, not `Id(<metavar>, ..)` whose carrier has no
-         surface form (which is what made these files uncovered). *)
-      Printf.sprintf "Same(%s, %s)" (fmt_ty_term x) (fmt_ty_term y)
-  | TyId (a, x, y) ->
-      Printf.sprintf "Id(%s, %s, %s)" (fmt_ty a) (fmt_ty_term x) (fmt_ty_term y)
+  | TyId (_, x, y) -> Printf.sprintf "%s = %s" (fmt_ty_term x) (fmt_ty_term y)
   | TyEl c -> Printf.sprintf "El(%s)" (fmt_ty_term c)
   | TyPathP ((i, a), x, y) ->
       Printf.sprintf "PathP(%s, %s, %s, %s)" i (fmt_ty a) (fmt_ty_term x) (fmt_ty_term y)

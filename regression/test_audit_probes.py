@@ -77,8 +77,8 @@ def _verdict(ok: bool, msg: str):
 # --- identity types ------------------------------------------------------------
 
 def test_reflexivity_does_not_inhabit_a_false_identity(tmp_path):
-    """refl(0) has type Id(Number, 0, 0); the checker refuses it at 0 = 1."""
-    entry = ("place Entry {\n  fun bad(): Id(Number, 0, 1) { return refl(0) }\n"
+    """refl(0) has type 0 = 0; the checker refuses it at 0 = 1."""
+    entry = ("place Entry {\n  fun bad(): 0 = 1 { return refl(0) }\n"
              "  fun main(): Number { return 0 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_number'), out
@@ -88,9 +88,9 @@ def test_reflexivity_does_not_inhabit_a_false_identity(tmp_path):
 # checker does not know cannot stand for every identity. Passing refl(0) through
 # a `Path` parameter must not let it come back typed 0 = 1.
 _LAUNDER = {
-    "kernel": ("fun launder(p: Path): Id(Number, 0, 1) { return p }",
+    "kernel": ("fun launder(p: Path): 0 = 1 { return p }",
                "launder(refl(0))"),
-    "surface": ("fun launder(p: Path): Same(0, 1) { return p }",
+    "surface": ("fun launder(p: Path): 0 = 1 { return p }",
                 "launder(clear 0)"),
 }
 
@@ -111,10 +111,10 @@ def test_a_path_does_not_prove_every_identity(tmp_path, voice):
 
 
 def test_an_identity_flows_into_path_by_forgetting_its_endpoints(tmp_path):
-    """Id(A, x, y) is a point of the total space of paths: it is accepted where
+    """x = y is a point of the total space of paths: it is accepted where
     a bare Path is expected, as an argument and as a return value."""
     entry = ("place Entry {\n"
-             "  fun seven(): Id(Number, 7, 7) { return refl(7) }\n"
+             "  fun seven(): 7 = 7 { return refl(7) }\n"
              "  fun forget(): Path { return seven() }\n"
              "  fun weigh(p: Path): Number { return 7 }\n"
              "  fun main(): Number { q := forget()  return weigh(q) + weigh(seven()) }\n"
@@ -1604,8 +1604,8 @@ _BOOL_BIT_kernel = (
     "place Entry {\n"
     "fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }\n"
     "fun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }\n"
-    "fun eta(a: Bool): Id(Bool, bit2b(b2bit(a)), a) { return match a { tt => clear tt, ff => clear ff } }\n"
-    "fun eps(b: Bit): Id(Bit, b2bit(bit2b(b)), b) { return match b { one => clear one, zero => clear zero } }\n")
+    "fun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }\n"
+    "fun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }\n")
 
 
 def test_transport_along_a_named_univalence_path_lands_in_the_target(tmp_path):
@@ -1659,7 +1659,8 @@ _RING_LAWS = {
 @pytest.mark.parametrize("law", sorted(_RING_LAWS))
 def test_refl_proves_exactly_the_ring_laws_of_the_carrier(tmp_path, law):
     param, sides, holds = _RING_LAWS[law]
-    entry = (f"place Entry {{\n  fun identity({param}): Same({sides}) {{ return clear }}\n"
+    endpoints = " = ".join(sides.split(", "))
+    entry = (f"place Entry {{\n  fun identity({param}): {endpoints} {{ return clear }}\n"
              "  fun main(): Number { return 42 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     if holds:
@@ -1682,7 +1683,7 @@ def _accepted_identity_is_false_kernel(tmp_path, entry):
 
 def test_dividing_back_is_not_an_identity_on_floats(tmp_path):
     entry = ("place Entry {\n"
-             "  fun third(x: Number): Id(Number, (x * 3) / 3, x) { return clear x }\n"
+             "  fun third(x: Number): (x * 3) / 3 = x { return clear x }\n"
              "  fun differs(x: Number): Number { return if (x * 3) / 3 == x then 0 else 1 }\n"
              "  fun main(): Number { return differs(0.1) }\n}\n")
     _accepted_identity_is_false_kernel(tmp_path, entry)
@@ -1693,7 +1694,7 @@ def test_large_coefficients_do_not_wrap(tmp_path):
     lhs = "(a + 2147483648) * (b + 2147483648)"
     rhs = f"a * b + 2147483648 * a + 2147483648 * b - {big} - {big}"
     entry = ("place Entry {\n"
-             f"  fun wide(a: Number, b: Number): Id(Number, {lhs}, {rhs}) {{ return clear ({lhs}) }}\n"
+             f"  fun wide(a: Number, b: Number): {lhs} = {rhs} {{ return clear ({lhs}) }}\n"
              f"  fun lhs(a: Number, b: Number): Number {{ return {lhs} }}\n"
              f"  fun rhs(a: Number, b: Number): Number {{ return {rhs} }}\n"
              "  fun main(): Number { return if lhs(0, 0) == rhs(0, 0) then 0 else 1 }\n}\n")
@@ -1702,7 +1703,7 @@ def test_large_coefficients_do_not_wrap(tmp_path):
 
 def test_a_shifted_value_is_not_identical_to_itself(tmp_path):
     entry = ("place Entry {\n"
-             "  fun off(x: Number): Id(Number, x + 1, x) { return clear x }\n"
+             "  fun off(x: Number): x + 1 = x { return clear x }\n"
              "  fun main(): Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
     assert _clean_rejection(rc, out, 'E2001', 'expected Id_number(_code, x), got Id_number(x, x)'), out
@@ -2306,7 +2307,7 @@ def test_the_sphere_base_point_eliminates(tmp_path):
 _TRANSPORT_PARAM_frontend = """place Entry {
 fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
-fun go(p: Id(Type, Int64, Int64), v: Int64): Int64 { return transport(p, v) }
+fun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }
 fun main(): Number {
   y := go(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)
   return if y == 11 then 11 else 0

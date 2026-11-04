@@ -9,7 +9,7 @@
 place Entry {
   fun f(x: Number): Number { return x }
   fun g(x: Number): Number { return x + 1.0 }
-  fun violate_naturality(a: Number): Same(g(f(a)), a) {
+  fun violate_naturality(a: Number): g(f(a)) = a {
     return clear
   }
   fun main(): Number { return 0 }

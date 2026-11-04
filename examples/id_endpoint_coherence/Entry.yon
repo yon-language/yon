@@ -12,7 +12,7 @@ place Entry {
 fun f(x: Number): Number { return x }
 fun g(x: Number): Number { return x }
 
-fun coherence(a: Number): Same(g(f(a)), a) {
+fun coherence(a: Number): g(f(a)) = a {
   return clear
 }
 

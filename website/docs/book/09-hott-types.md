@@ -8,10 +8,8 @@ sidebar_position: 9
 
 Yon's type system has a homotopy-type-theoretic layer: universes (`Type`,
 `Type_0`, `Type_1`, …), dependent functions and pairs (`Pi(x: A). B`,
-`Sigma(x: A). B`), and the identity type — written `Same(X, Y)` at the surface,
-with the carrier inferred from the endpoints — with its introduction and
-eliminator. The explicit form `Id(A, x, y)`, carrier written out, stays
-available in the lower stratum for when the endpoints do not determine it.
+`Sigma(x: A). B`), and the identity type, written `x = y`, with the carrier
+inferred from the endpoints, with its introduction and eliminator.
 
 ```yon
 // Entry.yon, at the project root
@@ -44,7 +42,7 @@ really do reduce to one value before it accepts it:
 <!-- yon-gate: exit 0 -->
 ```yon
 fun f(x: Number): Number { return x }
-fun coherence(a: Number): Same(f(a), a) {   // Id(number, f(a), a), carrier inferred
+fun coherence(a: Number): f(a) = a {   // f(a) = a, carrier inferred
   return clear                              // reflexivity of the endpoint: f(a) computes to a
 }
 fun main(): Number { return 0 }
@@ -135,7 +133,7 @@ place Account { v Number }
 /* The comprehension type: the subobject of Account carved out by the
  * (here, contractibility-flavoured) fibre. Declaring it type-checks;
  * the coercion runs {a : A where P} <: A (forgetful mono). */
-fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): Number {
+fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). x = y }): Number {
   return 7
 }
 ```

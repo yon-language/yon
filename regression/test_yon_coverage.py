@@ -46,6 +46,12 @@ KERNEL_INTERNAL = {
     "I1": "test_path_core",   # cubical interval endpoint 1
 }
 
+# Keywords kept only to refuse the old form: a fixture must be refused, with the new form.
+REFUSED = {
+    "Id": ("hott/dev_old_id.yon", "written x = y"),
+    "Same": ("hott/dev_old_same.yon", "written x = y"),
+}
+
 # Lexing prefixes that are not standalone tokens: the real surface form is the
 # numbered universe (Type_0, Type_1, ...). Covered iff a numbered form is used.
 LEXING_PREFIXES = {"Type_"}
@@ -104,6 +110,12 @@ def test_keyword_covered(kw):
         assert any(t.startswith(kw) and t != kw for t in EXERCISED), (
             f"no numbered form of '{kw}' (e.g. {kw}0) exercised"
         )
+        return
+    if kw in REFUSED:
+        fixture, words = REFUSED[kw]
+        r = subprocess.run([str(EMIT), str(ROOT / "regression" / "canonical_forms" / fixture)],
+                           capture_output=True, text=True, timeout=60)
+        assert r.returncode != 0 and words in r.stdout + r.stderr, r.stdout + r.stderr
         return
     assert kw in KERNEL_INTERNAL, (
         f"keyword '{kw}' is exercised by no example and is not a known "

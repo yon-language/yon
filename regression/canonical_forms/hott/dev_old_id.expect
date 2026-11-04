@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: written x = y
+note: |
+  The type of a path is written with its endpoints: the carrier is read off them.

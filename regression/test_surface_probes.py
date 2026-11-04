@@ -458,6 +458,43 @@ def test_a_qualified_nullary_arm_stays_bare(tmp_path):
     assert _exit(tmp_path, src) == 42
 
 
+def test_the_type_of_a_path_is_written_with_its_endpoints(tmp_path):
+    src = ("place Entry {\n"
+           "fun twice(x: Number): Number { return x + x }\n"
+           "fun proof(a: Number): twice(a) = a + a { return clear }\n"
+           "fun main(): Number { return 42 }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_the_carrier_of_a_path_is_read_off_a_parameter(tmp_path):
+    src = ("place Entry {\n"
+           "fun use(p: 1 = 1): Number { return 42 }\n"
+           "fun main(): Number { return 42 }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_false_path_is_refused(tmp_path):
+    src = ("place Entry {\n"
+           "fun bad(a: Number): a = a + 1 { return clear }\n"
+           "fun main(): Number { return 0 }\n}\n")
+    r, _ = _compile(tmp_path, src)
+    assert r.returncode != 0 and "E2001" in r.stdout + r.stderr
+
+
+def test_id_is_refused_and_the_endpoints_shown(tmp_path):
+    src = ("place Entry {\n"
+           "fun bad(): Id(Number, 1, 1) { return clear }\n"
+           "fun main(): Number { return 0 }\n}\n")
+    _refused(tmp_path, src, "E1001", "written x = y")
+
+
+def test_same_is_refused_and_the_endpoints_shown(tmp_path):
+    src = ("place Entry {\n"
+           "fun bad(): Same(1, 1) { return clear }\n"
+           "fun main(): Number { return 0 }\n}\n")
+    _refused(tmp_path, src, "E1001", "written x = y")
+
+
 FUNS = ("fun inc(x: Number): Number { return x + 1 }\n"
         "fun add(a: Number, b: Number): Number { return a + b }\n"
         "fun add3(a: Number, b: Number, c: Number): Number { return a + b + c }\n")
@@ -493,7 +530,7 @@ def test_a_call_with_arguments_stays(tmp_path):
 
 def test_the_path_application_takes_the_whole_pipe(tmp_path):
     src = ("place Entry {\n"
-           "fun road(x: Number): Id(Number, x, x) { return clear x }\n"
+           "fun road(x: Number): x = x { return clear x }\n"
            "fun main(): Number { return 42 ↦ road @ I0 }\n}\n")
     assert _exit(tmp_path, src) == 42
 

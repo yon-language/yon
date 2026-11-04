@@ -278,7 +278,7 @@ The constraint of the `topos ... where { }` block, and of the comprehension `{ x
 place Account { balance Number }
 // Entry.yon
 place Entry {
-  fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). Id(Account, x, y) }): Number { return 0 }
+  fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). x = y }): Number { return 0 }
   fun main(): Number { return 0 }
 }`}
 </CodeWindow>
@@ -872,7 +872,7 @@ The dependent sum: `Sigma(x: A). B` is the type of dependent pairs, lowered to t
 
 #### `Id`
 
-The identity type: `Id(A, x, y)` is the type of paths from x to y.
+The old spelling of the identity type, refused: the type of paths from x to y is written `x = y`, and its carrier is read off the endpoints.
 
 #### `pair`
 
@@ -910,7 +910,7 @@ KERNEL FORM (the surface spelling is `clear`). The reflexivity path: the proof t
 
 #### `Same`
 
-`Same(X, Y)` is the proposition that `X` and `Y` are the same value, sugar for `Id(A, X, Y)` with the carrier `A` inferred from the endpoints. It reads as a law of the domain — `Same(total(merge(a, b)), total(a) + total(b))` — without spelling out the carrier. The raw `Id(A, X, Y)`, carrier written, stays available in the lower stratum for when the endpoints do not determine it.
+The old spelling, refused: the proposition that `X` and `Y` are the same value is written `X = Y`, with the carrier inferred from the endpoints. It reads as a law of the domain — `total(merge(a, b)) = total(a) + total(b)` — without spelling out the carrier. The raw `X = Y`, carrier written, stays available in the lower stratum for when the endpoints do not determine it.
 
 #### `clear`
 

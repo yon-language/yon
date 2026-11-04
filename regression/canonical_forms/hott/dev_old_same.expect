@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: written x = y
+note: |
+  Same(x, y) was the sugar of what is now the only form, x = y.

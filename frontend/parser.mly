@@ -212,9 +212,9 @@
 %token AMPAMPQ PIPEPIPEQ BANGQ FATARROWQ
 /* the quantifiers of a statement, and ↔ (the two implications) */
 %token FORALL EXISTS IFFQ
-/* from the lexer, see its trailer: the end of a `this >` clause, and the statement that
-   follows the name of a law on its line */
-%token ARMS_END LAW_STATEMENT
+/* from the lexer, see its trailer: the end of a `this >` clause, the statement that
+   follows the name of a law on its line, and a type that is a path */
+%token ARMS_END LAW_STATEMENT PATH_TYPE
 /* Intuitionistic bitwise ops with the `?` tag. They lower to topos.heyt_int_*
  * ops on !topos.heyt_int<64> carrying a (value, mask) pair (see emit_mlir). */
 %token AMPQ PIPEQ CARETQ TILDEQ
@@ -990,6 +990,9 @@ lambda_param:
 /* type_atom + arrow chain.
  * Syntax: T -> U -> V parses as T -> (U -> V) (right-associative). */
 type_expr:
+  (* a path: the carrier is inferred from the endpoints (Tycheck.elaborate_id_sugar) *)
+  | PATH_TYPE x = expr EQ y = expr %prec LOWEST
+    { TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y) }
   | a = type_atom ARROW b = type_expr
     { TyArrow (a, b) }
   | a = type_atom %prec CLAUSE_END
@@ -1044,15 +1047,11 @@ type_atom:
     { TyPi (x, a, b) }
   | SIGMA LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
     { TySigma (x, a, b) }
-  | ID LPAREN a = type_expr COMMA x = expr COMMA y = expr RPAREN
-    { TyId (a, TyTermExpr x, TyTermExpr y) }
-  (* `Same(X, Y)` = Id(A, X, Y), A inferred from the endpoints. Keyword-first
-     (see header design note): the leading SAME + parens commit the parser, so
-     no expr/type_expr clash. The carrier is a sentinel metavar resolved by
-     Tycheck.elaborate_id_sugar. Pure sugar: same kernel Id, same rejection on
-     a false equation. *)
-  | SAME LPAREN x = expr COMMA y = expr RPAREN
-    { TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y) }
+  (* the old forms *)
+  | ID LPAREN type_expr COMMA expr COMMA expr RPAREN
+    { failwith "the type of a path is written x = y: Id(A, x, y) is gone, its carrier is read off the endpoints" }
+  | SAME LPAREN expr COMMA expr RPAREN
+    { failwith "the type of a path is written x = y: Same(x, y) is gone" }
   | PATHP LPAREN i = IDENT COMMA a = type_expr COMMA x = IDENT COMMA y = IDENT RPAREN
     { TyPathP ((i, a), TyTermExpr (EVar (x, mk_loc $startpos $endpos)), TyTermExpr (EVar (y, mk_loc $startpos $endpos))) }
   | EL LPAREN c = expr RPAREN
@@ -1147,7 +1146,7 @@ arm:
   | b = BOOL_LIT
     { { v_name = (if b then "true" else "false"); v_args = [] } }
   (* a path is no arm: it is a cell, a law of the place *)
-  | name = IDENT list(named_type) COLON expr EQ expr
+  | name = IDENT list(named_type) COLON PATH_TYPE expr EQ expr
     { failwith (Printf.sprintf
         "a path is not an arm: it is a cell of the place: write law %s source = target" name) }
   (* the old form: the parentheses are for products *)

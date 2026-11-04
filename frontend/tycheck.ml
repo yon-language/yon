@@ -7560,18 +7560,39 @@ let elaborate_id_sugar (p : program) : program =
       | ERefl (EVar ("__plainly__", _), l) -> ERefl (ep, l)
       | _ -> e
     in
+    (* the carrier of a path is read off its left endpoint, under the binders of its type;
+       a type at the endpoint is a point of the universe *)
+    let rec resolve_ty env (t : ty) : ty =
+      match t with
+      | TyId (TyMetaVar s, (TyTermExpr x as tx), ty_r) when s = same_sentinel ->
+          let carrier =
+            match infer env ctx x, x with
+            | Ok c, _ -> c
+            | Error _, EVar (n, _)
+              when Tyenv.lookup_place env n <> None || Surface_ast.prim_of_face n <> None ->
+                TyUniverse 0
+            | Error _, _ -> TyMetaVar s in
+          TyId (carrier, tx, ty_r)
+      | TyPi (x, a, b) ->
+          let a' = resolve_ty env a in
+          TyPi (x, a', resolve_ty (Tyenv.add_var env x a') b)
+      | TySigma (x, a, b) ->
+          let a' = resolve_ty env a in
+          TySigma (x, a', resolve_ty (Tyenv.add_var env x a') b)
+      | TyArrow (a, b) -> TyArrow (resolve_ty env a, resolve_ty env b)
+      | t -> t in
     let resolve_fun (fd : fun_decl) : fun_decl =
-      let lenv = List.fold_left
-          (fun e (pm : param) -> Tyenv.add_var e pm.param_name pm.param_ty)
-          genv fd.fn_params in
-      let fn_return, endpoint =
-        match fd.fn_return with
-        | Some (TyId (TyMetaVar s, (TyTermExpr x as tx), ty_r)) when s = same_sentinel ->
-            let carrier =
-              (match infer lenv ctx x with Ok t -> t | Error _ -> TyMetaVar s) in
-            (Some (TyId (carrier, tx, ty_r)), Some x)
-        | Some (TyId (_, TyTermExpr x, _)) -> (fd.fn_return, Some x)
-        | _ -> (fd.fn_return, None)
+      let lenv, fn_params = List.fold_left
+          (fun (e, acc) (pm : param) ->
+             let t = resolve_ty e pm.param_ty in
+             (Tyenv.add_var e pm.param_name t, { pm with param_ty = t } :: acc))
+          (genv, []) fd.fn_params in
+      let fn_params = List.rev fn_params in
+      let fn_return = Option.map (resolve_ty lenv) fd.fn_return in
+      let endpoint =
+        match fn_return with
+        | Some (TyId (_, TyTermExpr x, _)) -> Some x
+        | _ -> None
       in
       let fn_body =
         match endpoint with
@@ -7582,7 +7603,7 @@ let elaborate_id_sugar (p : program) : program =
               | SLet (n, e, l) -> SLet (n, fix_plainly ep e, l)
               | s -> s) fd.fn_body
       in
-      { fd with fn_return; fn_body }
+      { fd with fn_params; fn_return; fn_body }
     in
     List.map (function TopFun fd -> TopFun (resolve_fun fd) | d -> d) p
 

@@ -437,63 +437,116 @@ and string_lit buf = parse
   | _ as c           { Buffer.add_char buf c; string_lit buf lexbuf }
 
 {
-  (* The clause `this > arms`: it ends at the end of its line, unless the next line
-     goes on with `:U` or the line itself ends with `:U` or `>`. The parser cannot see
-     lines, so its end is a token of its own. *)
-  let clause_owner = ref None
+  (* Three things the parser cannot see, since it does not see lines and reads one token
+     ahead; the lexer tells it with a token of their own.
+     - The clause `this > arms` ends at the end of its line, unless the next line goes on
+       with `:U` or the line itself ends with `:U` or `>`.
+     - After `law name`, what follows on the line is the statement; a bare name is a law a
+       place only declares.
+     - After a colon, a `where` or the dot of a binder comes a type. A type with an `=` of
+       its own, on its line, is a path, and its endpoints are expressions, not types. *)
+  type pending_token = {
+    t : Parser.token;
+    start_p : Lexing.position;
+    curr_p : Lexing.position;
+  }
+
+  let owner = ref None
   let in_clause = ref false
+  let type_follows = ref false
   let previous = ref EOF
   let previous_previous = ref EOF
   let previous_line = ref 0
-  let held = ref None
+  let held : pending_token list ref = ref []
+  let lexed_to = ref Lexing.dummy_pos
+
+  let lex_one (lexbuf : Lexing.lexbuf) : pending_token =
+    if !lexed_to != Lexing.dummy_pos then lexbuf.Lexing.lex_curr_p <- !lexed_to;
+    let t = raw_token lexbuf in
+    lexed_to := lexbuf.Lexing.lex_curr_p;
+    { t; start_p = lexbuf.Lexing.lex_start_p; curr_p = lexbuf.Lexing.lex_curr_p }
+
+  let path_ahead (lexbuf : Lexing.lexbuf) (line : int) : bool =
+    let rec scan i depth =
+      let p =
+        match List.nth_opt !held i with
+        | Some p -> p
+        | None -> let p = lex_one lexbuf in held := !held @ [p]; p in
+      if p.start_p.Lexing.pos_lnum > line then false
+      else match p.t with
+        | PI | SIGMA when i = 0 -> false
+        | EQ when depth = 0 -> true
+        | LPAREN -> scan (i + 1) (depth + 1)
+        | RPAREN -> depth > 0 && scan (i + 1) (depth - 1)
+        | EOF -> false
+        | LBRACE | RBRACE | COMMA | COLONEQ | WHERE when depth = 0 -> false
+        | _ -> scan (i + 1) depth in
+    scan 0 0
 
   let token (lexbuf : Lexing.lexbuf) : Parser.token =
-    (match !clause_owner with
+    (match !owner with
      | Some l when l == lexbuf -> ()
      | _ ->
-         clause_owner := Some lexbuf;
-         in_clause := false; previous := EOF; previous_previous := EOF; held := None);
-    let tok =
-      match !held with
-      | Some t -> held := None; t
-      | None -> raw_token lexbuf in
-    let line = lexbuf.Lexing.lex_start_p.Lexing.pos_lnum in
-    let finish t =
+         owner := Some lexbuf;
+         in_clause := false; type_follows := false;
+         previous := EOF; previous_previous := EOF;
+         held := []; lexed_to := Lexing.dummy_pos);
+    let virtual_token v =
       previous_previous := !previous;
-      previous := t; previous_line := line; t in
-    (* `law name`: what follows on its line is the statement, and a statement has its
-       own `=`; the bare name is a law the place only declares *)
-    if tok = ARMS_END || tok = LAW_STATEMENT then finish tok else
-    if (match tok, !previous with IDENT _, LAW -> true | _ -> false) then begin
-      statement := Line 0;
-      finish tok
-    end else
-    if (match !previous_previous with LAW -> true | _ -> false)
-       && line = !previous_line
-       && (match tok with
-           | IDENT _ | NUM_LIT _ | STR_LIT _ | BOOL_LIT _ | LPAREN | CLEAR -> true
-           | _ -> false) then begin
-      previous_previous := EOF;
-      held := Some tok;
-      previous := LAW_STATEMENT;
-      LAW_STATEMENT
-    end else
-    if not !in_clause then begin
-      if tok = GT && !previous = THIS then in_clause := true;
-      finish tok
-    end else
-      match tok with
-      | COLON_U -> finish tok
-      | _ when !previous = COLON_U || !previous = GT && line > !previous_line -> finish tok
-      | _ when line > !previous_line ->
-          in_clause := false;
-          held := Some tok;
-          previous := ARMS_END;
-          ARMS_END
-      | IDENT _ | BOOL_LIT _ | LT | GT | COMMA | LPAREN | RPAREN | ARROW | IN | COLON | EQ -> finish tok
-      | _ ->
-          in_clause := false;
-          held := Some tok;
-          previous := ARMS_END;
-          ARMS_END
+      previous := v;
+      v in
+    if !type_follows
+       && (type_follows := false; path_ahead lexbuf !previous_line) then
+      virtual_token PATH_TYPE
+    else begin
+      let p =
+        match !held with
+        | p :: rest -> held := rest; p
+        | [] -> lex_one lexbuf in
+      lexbuf.Lexing.lex_start_p <- p.start_p;
+      lexbuf.Lexing.lex_curr_p <- p.curr_p;
+      let tok = p.t in
+      let line = p.start_p.Lexing.pos_lnum in
+      let put_back () = held := p :: !held in
+      let finish t =
+        (match t with
+         | COLON | WHERE -> type_follows := true
+         | DOT when !previous = RPAREN -> type_follows := true
+         | _ -> ());
+        previous_previous := !previous;
+        previous := t; previous_line := line; t in
+      if (match tok, !previous with IDENT _, LAW -> true | _ -> false) then begin
+        statement := Line 0;
+        finish tok
+      end else
+      if !previous_previous = LAW
+         && line = !previous_line
+         && (match tok with
+             | IDENT _ | NUM_LIT _ | STR_LIT _ | BOOL_LIT _ | LPAREN | CLEAR -> true
+             | _ -> false) then begin
+        put_back ();
+        previous_previous := EOF;
+        previous := LAW_STATEMENT;
+        LAW_STATEMENT
+      end else
+      if not !in_clause then begin
+        if tok = GT && !previous = THIS then in_clause := true;
+        finish tok
+      end else
+        match tok with
+        | COLON_U -> finish tok
+        | _ when !previous = COLON_U || (!previous = GT && line > !previous_line) -> finish tok
+        | _ when line > !previous_line ->
+            in_clause := false;
+            put_back ();
+            previous := ARMS_END;
+            ARMS_END
+        | IDENT _ | BOOL_LIT _ | LT | GT | COMMA | LPAREN | RPAREN | ARROW | IN | COLON | EQ ->
+            finish tok
+        | _ ->
+            in_clause := false;
+            put_back ();
+            previous := ARMS_END;
+            ARMS_END
+    end
 }
