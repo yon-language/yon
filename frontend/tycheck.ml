@@ -3565,7 +3565,18 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
               if b = "_" then acc
               else Desugar.subst_evar_in_expr v (EVar (b, loc)) acc) e params vs in
           (* the binders in order: a premise's carrier is read off its left end *)
-          let benv = List.fold_left2 (fun e (_, t) b ->
+          let benv = List.fold_left2 (fun e (v, t) b ->
+              (* the witness of a relation is the path that the relation returns *)
+              let t =
+                match v, Option.map rename cell.Hit_env.hpc_premise with
+                | "__premise", Some (ECall (r, args, _)) ->
+                    (match Hashtbl.find_opt Hit_env.path_relations r with
+                     | Some (ps, l, rr) when List.length ps = List.length args ->
+                         let at_args x = List.fold_left2 (fun acc p a ->
+                             Desugar.subst_evar_in_expr p a acc) x ps args in
+                         TyId (TyMetaVar (-424242), TyTermExpr (at_args l), TyTermExpr (at_args rr))
+                     | _ -> t)
+                | _ -> t in
               let t = match t with
                 | TyId (TyMetaVar _, TyTermExpr l, TyTermExpr r) ->
                     let l' = rename l in
@@ -3655,6 +3666,13 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       let c = Option.get (named_coproduct_of_ty env expected) in
       Hashtbl.replace bare_point_sites (site_of loc) (x, c);
       ok ()
+  (* the result of a relation: the type of a path between two terms of one type *)
+  | EBinop (OpEq, a, b, loc), TyUniverse _ ->
+      let* ta = infer env ctx a in
+      let* tb = infer env ctx b in
+      if Dispatcher.type_equal env ctx ta tb then ok ()
+      else err loc (Printf.sprintf "the two ends of a path have different types: %s and %s"
+                      (Tyenv.ty_to_string ta) (Tyenv.ty_to_string tb))
   (* x ↪ Arm against a coproduct with that arm: the injection of that sum *)
   | ECall (ctor, args, loc), _
     when Tyenv.lookup_fun env ctor = None

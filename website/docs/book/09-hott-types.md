@@ -139,7 +139,28 @@ place Pushout<A, B, C, f : A -> B, g : A -> C> { this > inl B :U inr C
 
 The argument is the name of a fun of that type, as in `Pushout<Number, Number, Number, Frecce.uno,
 Frecce.due>`, and the name is its identity: two funs with the same body make two types. The
-parameter is read in the laws, by the kernel, and does not exist at run time.
+parameter is read in the laws, by the kernel, and does not exist at run time: the laws declare,
+and the funs apply them through the cells.
+
+A relation is a fun whose result is a type, and that type may be a path:
+
+<!-- yon-gate: fragment -->
+```yon
+place Entry {
+  fun lower(s: String): String { return String.concat(s, "") }
+  fun same_case(a: String, b: String): Type { return a ↦ lower = b ↦ lower }
+  fun domain_of(s: String): Number { return String.length(s) }
+  fun domain(e: Quotient<String, same_case>): Number {
+    return match e { inj as s => s ↦ lower ↦ domain_of,
+                     quot as (a, b, prova) => (domain_of, prova) ↦ ap }
+  }
+  fun main: Number { return 0 }
+}
+```
+
+The branch of `quot` receives the witness of the relation as a path, and `ap` carries it through
+`domain_of`. A branch without `lower` is refused: the relation says nothing about `a` and `b`
+themselves.
 
 ## Comprehension types
 

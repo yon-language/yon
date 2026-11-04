@@ -1494,6 +1494,9 @@ lvalue:
 
 return_stmt:
   | RETURN e = expr                       { SReturn (e, mk_loc $startpos $endpos) }
+  (* a fun whose result is a type may return the type of a path *)
+  | RETURN PATH_TYPE x = expr EQ y = expr
+    { let l = mk_loc $startpos $endpos in SReturn (EBinop (OpEq, x, y, l), l) }
 
 call_or_new_stmt:
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN

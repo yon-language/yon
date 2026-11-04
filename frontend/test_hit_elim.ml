@@ -26,7 +26,7 @@ let () =
              hit_points = [ { Hit_env.pc_name = "base"; pc_params = []; pc_result = TyUser "S1" } ];
              hit_paths = [ { Hit_env.hpc_name = "loop"; hpc_params = [];
                              hpc_left = EVar ("base", dummy_loc);
-                             hpc_right = EVar ("base", dummy_loc) } ] })
+                             hpc_right = EVar ("base", dummy_loc); hpc_premise = None } ] })
     :: !Hit_env.registry;
   let dl = dummy_loc in
   let ctx = Reduce.empty_ctx in

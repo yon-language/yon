@@ -458,6 +458,7 @@ and string_lit buf = parse
   let in_clause = ref false
   let type_follows = ref false
   let binder : int option ref = ref None
+  let type_body = ref false
   let previous = ref EOF
   let previous_previous = ref EOF
   let previous_line = ref 0
@@ -492,7 +493,7 @@ and string_lit buf = parse
      | Some l when l == lexbuf -> ()
      | _ ->
          owner := Some lexbuf;
-         in_clause := false; type_follows := false; binder := None;
+         in_clause := false; type_follows := false; binder := None; type_body := false;
          previous := EOF; previous_previous := EOF;
          held := []; lexed_to := Lexing.dummy_pos);
     let virtual_token v =
@@ -515,6 +516,10 @@ and string_lit buf = parse
       let finish t =
         (match t with
          | COLON | WHERE -> type_follows := true
+         (* the body of a fun whose result is a type: what it returns may be a path *)
+         | LBRACE when !previous = TYPE_KW && !previous_previous = COLON -> type_body := true
+         | RETURN when !type_body -> type_body := false; type_follows := true
+         | RBRACE -> type_body := false
          (* the comma after the binder of a dependent type: what follows is its body *)
          | PI | SIGMA -> binder := Some 0
          | LPAREN | LT when !binder <> None -> binder := Option.map succ !binder

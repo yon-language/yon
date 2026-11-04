@@ -49,6 +49,7 @@ type path_constructor = {
   hpc_params : (string * ty) list;
   hpc_left : expr;                        (* left endpoint *)
   hpc_right : expr;                       (* right endpoint *)
+  hpc_premise : expr option;              (* what the last parameter witnesses, if the law has a premise *)
 }
 
 (* The full HIT signature. *)
@@ -154,7 +155,7 @@ let signature_of_place ?house_fun (pd : place_decl) : hit_signature option =
                       | None -> [("__premise", TyPrim "proposition")])
                  | None -> [] in
                Some { hpc_name = name; hpc_params = quantified @ witness;
-                      hpc_left = left; hpc_right = right }
+                      hpc_left = left; hpc_right = right; hpc_premise = premise }
            | None -> None)
       | _ -> None) pd.pd_members in
   if pd.pd_arms = [] || cells = [] then None
@@ -167,7 +168,43 @@ let signature_of_place ?house_fun (pd : place_decl) : hit_signature option =
           pc_result = TyUser pd.pd_name }) pd.pd_arms;
     hit_paths = cells }
 
+(* The funs whose result is the type of a path: a relation. A witness of the relation is a path
+   between the two ends, with the arguments in place of the parameters. *)
+let path_relations : (string, string list * expr * expr) Hashtbl.t = Hashtbl.create 8
+
+let register_relations (p : program) : unit =
+  let of_place home =
+    List.filter_map (function
+        | TopFun fd when fd.fn_home = Some home -> Some fd.fn_name
+        | _ -> None) p in
+  List.iter (function
+      | TopFun ({ fn_return = Some (TyUniverse _);
+                  fn_body = [SReturn (EBinop (OpEq, l, r, _), _)]; _ } as fd) ->
+          let params = List.map (fun pm -> pm.param_name) fd.fn_params in
+          let sibling home n =
+            if not (List.mem n params) && List.mem n (of_place home)
+            then home ^ "__" ^ n else n in
+          let rec q home e = match e with
+            | ECall (n, a, l) ->
+                let n' = sibling home n in
+                (match Hashtbl.find_opt arrow_sites (l.file, l.start_line, l.start_col, n) with
+                 | Some k -> Hashtbl.replace arrow_sites (l.file, l.start_line, l.start_col, n') k
+                 | None -> ());
+                ECall (n', List.map (q home) a, l)
+            | EParen (a, l) -> EParen (q home a, l)
+            | EBinop (o, a, b, l) -> EBinop (o, q home a, q home b, l)
+            | e -> e in
+          let home = fd.fn_home in
+          let own e = match home with Some h when h <> "Entry" -> q h e | _ -> e in
+          let entry = (params, own l, own r) in
+          Hashtbl.replace path_relations fd.fn_name entry;
+          (match home with
+           | Some h -> Hashtbl.replace path_relations (h ^ "__" ^ fd.fn_name) entry
+           | None -> ())
+      | _ -> ()) p
+
 let register_places (p : program) : unit =
+  register_relations p;
   registry := List.fold_left (fun env d ->
       match d with
       | TopPlace pd ->

@@ -93,7 +93,7 @@ def _email(lowered):
             "  fun domain_of(s: String): Number { return String.length(s) }\n"
             "  fun domain(e: Email): Number {\n"
             f"    return match e {{ inj as s => {lowered} ↦ domain_of,\n"
-            "                     quot as (a, b, r) => (domain_of, r) ↦ ap }\n"
+            "                     quot as (a, b, prova) => (domain_of, prova) ↦ ap }\n"
             "  }\n"
             "  fun run: Number { return domain(\"abc\" ↪ inj) }\n}\n"}
 
@@ -270,13 +270,6 @@ def test_a_map_out_of_the_generic_quotient_owes_the_relation_a_path(tmp_path):
     _refused(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso, "mismatch")
 
 
-def test_a_relation_with_a_path_for_a_result_is_not_yet_a_form(tmp_path):
-    uso = {"Rel": "place Rel {\n"
-           "  fun stessa(a: Number, b: Number): Type { return a = b }\n}\n"}
-    r, _ = _compile(tmp_path, "place Entry {\nfun main: Number { return 0 }\n}\n", uso)
-    assert r.returncode != 0 and "E1001" in r.stdout + r.stderr
-
-
 def test_a_term_parameter_is_read_in_a_law_not_at_run_time(tmp_path):
     # a fun of the place would need the arrow as a value, which erasure does not carry
     places = {"Scatola": "place Scatola<r : Number -> Number> { this > piena Number\n"
@@ -294,3 +287,29 @@ def test_a_term_parameter_may_name_a_fun_of_a_place_read_later(tmp_path):
            "Zeta": "place Zeta {\n"
            "  fun ogni(a: Number, b: Number): Type { return Number }\n}\n"}
     assert _exit(tmp_path, "place Entry {\nfun main: Number { return 42 }\n}\n", uso) == 42
+
+
+def _generic_up_to_case(lowered):
+    return ("place Entry {\n"
+            "  fun lower(s: String): String { return String.concat(s, \"\") }\n"
+            "  fun same_case(a: String, b: String): Type { return a ↦ lower = b ↦ lower }\n"
+            "  fun domain_of(s: String): Number { return String.length(s) }\n"
+            "  fun domain(e: Quotient<String, same_case>): Number {\n"
+            f"    return match e {{ inj as s => {lowered} ↦ domain_of,\n"
+            "                     quot as (a, b, prova) => (domain_of, prova) ↦ ap }\n"
+            "  }\n"
+            "  fun dentro(s: String): Quotient<String, same_case> { return s ↪ inj }\n"
+            "  fun main: Number { return domain(dentro(\"abc\")) }\n}\n")
+
+
+def test_the_generic_quotient_carries_a_true_relation(tmp_path):
+    assert _exit(tmp_path, _generic_up_to_case("s ↦ lower")) == 3
+
+
+def test_a_map_out_of_the_generic_quotient_without_lower_is_refused(tmp_path):
+    _refused(tmp_path, _generic_up_to_case("s"), None, "mismatch")
+
+
+def test_a_relation_that_is_no_path_of_one_type_is_refused(tmp_path):
+    src = _entry("fun storta(a: String, b: Number): Type { return a = b }\n")
+    _refused(tmp_path, src, None, "different types")
