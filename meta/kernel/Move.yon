@@ -1,0 +1,20 @@
+/* Move — none or one step, as a valley needs: its projections are where it starts and ends. */
+place Move {
+  this > still Term :U once Step
+
+  fun start(m: Move): Term {
+    return match m { still as t => t, once as d => d ↦ Step.src }
+  }
+  fun finish(m: Move): Term {
+    return match m { still as t => t, once as d => d ↦ Step.tgt }
+  }
+  fun in_c(m: Move, u: Term, v: Term): Move {
+    return match m { still as t => (t, u, v) ↪ ite ↪ still, once as d => (d, u, v) ↪ inC ↪ once }
+  }
+  fun in_u(c: Term, m: Move, v: Term): Move {
+    return match m { still as t => (c, t, v) ↪ ite ↪ still, once as d => (c, d, v) ↪ inU ↪ once }
+  }
+  fun in_v(c: Term, u: Term, m: Move): Move {
+    return match m { still as t => (c, u, t) ↪ ite ↪ still, once as d => (c, u, d) ↪ inV ↪ once }
+  }
+}

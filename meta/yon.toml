@@ -3,7 +3,7 @@ name = "meta"
 kind = "proof"
 
 [world.Kernel]
-objects = ["Term", "Proofs", "Nat", "Empty", "Step"]
+objects = ["Term", "Proofs", "Nat", "Empty", "Step", "Move", "Peak"]
 spaces  = ["kernel"]
 
 [runtime]

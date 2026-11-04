@@ -182,6 +182,17 @@ def test_termination_is_refused_for_a_step_that_grows(tmp_path):
     _broken(tmp_path, "Step.yon", "ifFalse as (u, v) => v,", "ifFalse as (u, v) => (no, u, v) ↪ ite,")
 
 
+def test_a_peak_with_a_wrong_source_is_refused(tmp_path):
+    _broken(tmp_path, "Peak.yon", "rootT as u => (u, u) ↪ ifTrue,", "rootT as u => (u, u) ↪ ifFalse,")
+
+
+def test_a_critical_pair_with_a_wrong_valley_is_refused(tmp_path):
+    # the same_inU peak closes through two steps: one of them alone does not meet
+    _broken(tmp_path, "Peak.yon",
+            "sameU as (c, e) => (c, (e ↦ Step.tgt)) ↪ ifSame ↪ once,",
+            "sameU as (c, e) => (c, e ↦ Step.tgt, e ↦ Step.src) ↪ ite ↪ still,")
+
+
 def test_different_arms_are_distinct(tmp_path):
     _broken(tmp_path, "Proofs.yon", "fun absurd(p: true = false): Empty",
             "fun absurd(p: true = true): Empty")

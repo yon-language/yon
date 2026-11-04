@@ -1,0 +1,135 @@
+/* Peak — two steps out of one term: every overlap of the rules, the critical pairs among them. Each
+ * peak has its valley: l1 then l2 from the end of left, r1 then r2 from the end of right. */
+place Peak {
+  this > rootT Term :U rootF Term :U trueU Step Term :U trueV Term Step :U falseU Step Term :U falseV Term Step
+      :U sameC Step Term :U sameU Term Step :U sameV Term Step
+      :U cU Step Step Term :U cV Step Term Step :U uV Term Step Step
+      :U inCp Peak Term Term :U inUp Term Peak Term :U inVp Term Term Peak :U swap Peak
+
+  fun left(p: Peak): Step {
+    return match p {
+      rootT as u => (u, u) ↪ ifTrue,
+      rootF as u => (u, u) ↪ ifFalse,
+      trueU as (e, v) => ((e ↦ Step.src), v) ↪ ifTrue,
+      trueV as (u, e) => (u, (e ↦ Step.src)) ↪ ifTrue,
+      falseU as (e, v) => ((e ↦ Step.src), v) ↪ ifFalse,
+      falseV as (u, e) => (u, (e ↦ Step.src)) ↪ ifFalse,
+      sameC as (e, u) => ((e ↦ Step.src), u) ↪ ifSame,
+      sameU as (c, e) => (c, (e ↦ Step.src)) ↪ ifSame,
+      sameV as (c, e) => (c, (e ↦ Step.src)) ↪ ifSame,
+      cU as (e, f, v) => (e, (f ↦ Step.src), v) ↪ inC,
+      cV as (e, u, f) => (e, u, (f ↦ Step.src)) ↪ inC,
+      uV as (c, e, f) => (c, e, (f ↦ Step.src)) ↪ inU,
+      inCp as (p, u, v) => (left(p), u, v) ↪ inC,
+      inUp as (c, p, v) => (c, left(p), v) ↪ inU,
+      inVp as (c, u, p) => (c, u, left(p)) ↪ inV,
+      swap as p => right(p)
+    }
+  }
+
+  fun right(p: Peak): Step {
+    return match p {
+      rootT as u => (yes, u) ↪ ifSame,
+      rootF as u => (no, u) ↪ ifSame,
+      trueU as (e, v) => (yes, e, v) ↪ inU,
+      trueV as (u, e) => (yes, u, e) ↪ inV,
+      falseU as (e, v) => (no, e, v) ↪ inU,
+      falseV as (u, e) => (no, u, e) ↪ inV,
+      sameC as (e, u) => (e, u, u) ↪ inC,
+      sameU as (c, e) => (c, e, (e ↦ Step.src)) ↪ inU,
+      sameV as (c, e) => (c, (e ↦ Step.src), e) ↪ inV,
+      cU as (e, f, v) => ((e ↦ Step.src), f, v) ↪ inU,
+      cV as (e, u, f) => ((e ↦ Step.src), u, f) ↪ inV,
+      uV as (c, e, f) => (c, (e ↦ Step.src), f) ↪ inV,
+      inCp as (p, u, v) => (right(p), u, v) ↪ inC,
+      inUp as (c, p, v) => (c, right(p), v) ↪ inU,
+      inVp as (c, u, p) => (c, u, right(p)) ↪ inV,
+      swap as p => left(p)
+    }
+  }
+
+  fun l1(p: Peak): Move {
+    return match p {
+      rootT as u => u ↪ still,
+      rootF as u => u ↪ still,
+      trueU as (e, v) => e ↪ once,
+      trueV as (u, e) => u ↪ still,
+      falseU as (e, v) => v ↪ still,
+      falseV as (u, e) => e ↪ once,
+      sameC as (e, u) => u ↪ still,
+      sameU as (c, e) => e ↪ once,
+      sameV as (c, e) => e ↪ once,
+      cU as (e, f, v) => ((e ↦ Step.tgt), f, v) ↪ inU ↪ once,
+      cV as (e, u, f) => ((e ↦ Step.tgt), u, f) ↪ inV ↪ once,
+      uV as (c, e, f) => (c, (e ↦ Step.tgt), f) ↪ inV ↪ once,
+      inCp as (p, u, v) => (l1(p), u, v) ↦ Move.in_c,
+      inUp as (c, p, v) => (c, l1(p), v) ↦ Move.in_u,
+      inVp as (c, u, p) => (c, u, l1(p)) ↦ Move.in_v,
+      swap as p => r1(p)
+    }
+  }
+
+  fun l2(p: Peak): Move {
+    return match p {
+      rootT as u => u ↪ still,
+      rootF as u => u ↪ still,
+      trueU as (e, v) => (e ↦ Step.tgt) ↪ still,
+      trueV as (u, e) => u ↪ still,
+      falseU as (e, v) => v ↪ still,
+      falseV as (u, e) => (e ↦ Step.tgt) ↪ still,
+      sameC as (e, u) => u ↪ still,
+      sameU as (c, e) => (e ↦ Step.tgt) ↪ still,
+      sameV as (c, e) => (e ↦ Step.tgt) ↪ still,
+      cU as (e, f, v) => ((e ↦ Step.tgt), (f ↦ Step.tgt), v) ↪ ite ↪ still,
+      cV as (e, u, f) => ((e ↦ Step.tgt), u, (f ↦ Step.tgt)) ↪ ite ↪ still,
+      uV as (c, e, f) => (c, (e ↦ Step.tgt), (f ↦ Step.tgt)) ↪ ite ↪ still,
+      inCp as (p, u, v) => (l2(p), u, v) ↦ Move.in_c,
+      inUp as (c, p, v) => (c, l2(p), v) ↦ Move.in_u,
+      inVp as (c, u, p) => (c, u, l2(p)) ↦ Move.in_v,
+      swap as p => r2(p)
+    }
+  }
+
+  fun r1(p: Peak): Move {
+    return match p {
+      rootT as u => u ↪ still,
+      rootF as u => u ↪ still,
+      trueU as (e, v) => ((e ↦ Step.tgt), v) ↪ ifTrue ↪ once,
+      trueV as (u, e) => (u, (e ↦ Step.tgt)) ↪ ifTrue ↪ once,
+      falseU as (e, v) => ((e ↦ Step.tgt), v) ↪ ifFalse ↪ once,
+      falseV as (u, e) => (u, (e ↦ Step.tgt)) ↪ ifFalse ↪ once,
+      sameC as (e, u) => ((e ↦ Step.tgt), u) ↪ ifSame ↪ once,
+      sameU as (c, e) => (c, (e ↦ Step.tgt), e) ↪ inV ↪ once,
+      sameV as (c, e) => (c, e, (e ↦ Step.tgt)) ↪ inU ↪ once,
+      cU as (e, f, v) => (e, (f ↦ Step.tgt), v) ↪ inC ↪ once,
+      cV as (e, u, f) => (e, u, (f ↦ Step.tgt)) ↪ inC ↪ once,
+      uV as (c, e, f) => (c, e, (f ↦ Step.tgt)) ↪ inU ↪ once,
+      inCp as (p, u, v) => (r1(p), u, v) ↦ Move.in_c,
+      inUp as (c, p, v) => (c, r1(p), v) ↦ Move.in_u,
+      inVp as (c, u, p) => (c, u, r1(p)) ↦ Move.in_v,
+      swap as p => l1(p)
+    }
+  }
+
+  fun r2(p: Peak): Move {
+    return match p {
+      rootT as u => u ↪ still,
+      rootF as u => u ↪ still,
+      trueU as (e, v) => (e ↦ Step.tgt) ↪ still,
+      trueV as (u, e) => u ↪ still,
+      falseU as (e, v) => v ↪ still,
+      falseV as (u, e) => (e ↦ Step.tgt) ↪ still,
+      sameC as (e, u) => u ↪ still,
+      sameU as (c, e) => (c, (e ↦ Step.tgt)) ↪ ifSame ↪ once,
+      sameV as (c, e) => (c, (e ↦ Step.tgt)) ↪ ifSame ↪ once,
+      cU as (e, f, v) => ((e ↦ Step.tgt), (f ↦ Step.tgt), v) ↪ ite ↪ still,
+      cV as (e, u, f) => ((e ↦ Step.tgt), u, (f ↦ Step.tgt)) ↪ ite ↪ still,
+      uV as (c, e, f) => (c, (e ↦ Step.tgt), (f ↦ Step.tgt)) ↪ ite ↪ still,
+      inCp as (p, u, v) => (r2(p), u, v) ↦ Move.in_c,
+      inUp as (c, p, v) => (c, r2(p), v) ↦ Move.in_u,
+      inVp as (c, u, p) => (c, u, r2(p)) ↦ Move.in_v,
+      swap as p => l2(p)
+    }
+  }
+
+}

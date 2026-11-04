@@ -118,4 +118,78 @@ place Proofs {
                (one_more, inv(plus_succ(gap(e), plus(size(c), plus(size(u), size(e ↦ Step.tgt)))))) ↦ ap)))))
     }
   }
+
+  /* Local confluence: every peak has a valley. */
+  fun start_in_c(m: Move, u: Term, v: Term): (m, u, v) ↦ Move.in_c ↦ Move.start = (m ↦ Move.start, u, v) ↪ ite {
+    return match m { still as t => clear, once as d => clear }
+  }
+  fun finish_in_c(m: Move, u: Term, v: Term): (m, u, v) ↦ Move.in_c ↦ Move.finish = (m ↦ Move.finish, u, v) ↪ ite {
+    return match m { still as t => clear, once as d => clear }
+  }
+  fun start_in_u(c: Term, m: Move, v: Term): (c, m, v) ↦ Move.in_u ↦ Move.start = (c, m ↦ Move.start, v) ↪ ite {
+    return match m { still as t => clear, once as d => clear }
+  }
+  fun finish_in_u(c: Term, m: Move, v: Term): (c, m, v) ↦ Move.in_u ↦ Move.finish = (c, m ↦ Move.finish, v) ↪ ite {
+    return match m { still as t => clear, once as d => clear }
+  }
+  fun start_in_v(c: Term, u: Term, m: Move): (c, u, m) ↦ Move.in_v ↦ Move.start = (c, u, m ↦ Move.start) ↪ ite {
+    return match m { still as t => clear, once as d => clear }
+  }
+  fun finish_in_v(c: Term, u: Term, m: Move): (c, u, m) ↦ Move.in_v ↦ Move.finish = (c, u, m ↦ Move.finish) ↪ ite {
+    return match m { still as t => clear, once as d => clear }
+  }
+  fun same_source(p: Peak): p ↦ Peak.left ↦ Step.src = p ↦ Peak.right ↦ Step.src {
+    return match p {
+      rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
+      inCp as (p, u, v) => (fun(x: Term) => (x, u, v) ↪ ite, same_source(p)) ↦ ap,
+      inUp as (c, p, v) => (fun(x: Term) => (c, x, v) ↪ ite, same_source(p)) ↦ ap,
+      inVp as (c, u, p) => (fun(x: Term) => (c, u, x) ↪ ite, same_source(p)) ↦ ap,
+      swap as p2 => inv(same_source(p2))
+    }
+  }
+  fun left_starts(p: Peak): p ↦ Peak.l1 ↦ Move.start = p ↦ Peak.left ↦ Step.tgt {
+    return match p {
+      rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
+      inCp as (p, u, v) => concat(start_in_c(p ↦ Peak.l1, u, v), (fun(x: Term) => (x, u, v) ↪ ite, left_starts(p)) ↦ ap),
+      inUp as (c, p, v) => concat(start_in_u(c, p ↦ Peak.l1, v), (fun(x: Term) => (c, x, v) ↪ ite, left_starts(p)) ↦ ap),
+      inVp as (c, u, p) => concat(start_in_v(c, u, p ↦ Peak.l1), (fun(x: Term) => (c, u, x) ↪ ite, left_starts(p)) ↦ ap),
+      swap as p2 => right_starts(p2)
+    }
+  }
+  fun right_starts(p: Peak): p ↦ Peak.r1 ↦ Move.start = p ↦ Peak.right ↦ Step.tgt {
+    return match p {
+      rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
+      inCp as (p, u, v) => concat(start_in_c(p ↦ Peak.r1, u, v), (fun(x: Term) => (x, u, v) ↪ ite, right_starts(p)) ↦ ap),
+      inUp as (c, p, v) => concat(start_in_u(c, p ↦ Peak.r1, v), (fun(x: Term) => (c, x, v) ↪ ite, right_starts(p)) ↦ ap),
+      inVp as (c, u, p) => concat(start_in_v(c, u, p ↦ Peak.r1), (fun(x: Term) => (c, u, x) ↪ ite, right_starts(p)) ↦ ap),
+      swap as p2 => left_starts(p2)
+    }
+  }
+  fun left_links(p: Peak): p ↦ Peak.l1 ↦ Move.finish = p ↦ Peak.l2 ↦ Move.start {
+    return match p {
+      rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
+      inCp as (p, u, v) => concat(finish_in_c(p ↦ Peak.l1, u, v), concat((fun(x: Term) => (x, u, v) ↪ ite, left_links(p)) ↦ ap, inv(start_in_c(p ↦ Peak.l2, u, v)))),
+      inUp as (c, p, v) => concat(finish_in_u(c, p ↦ Peak.l1, v), concat((fun(x: Term) => (c, x, v) ↪ ite, left_links(p)) ↦ ap, inv(start_in_u(c, p ↦ Peak.l2, v)))),
+      inVp as (c, u, p) => concat(finish_in_v(c, u, p ↦ Peak.l1), concat((fun(x: Term) => (c, u, x) ↪ ite, left_links(p)) ↦ ap, inv(start_in_v(c, u, p ↦ Peak.l2)))),
+      swap as p2 => right_links(p2)
+    }
+  }
+  fun right_links(p: Peak): p ↦ Peak.r1 ↦ Move.finish = p ↦ Peak.r2 ↦ Move.start {
+    return match p {
+      rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
+      inCp as (p, u, v) => concat(finish_in_c(p ↦ Peak.r1, u, v), concat((fun(x: Term) => (x, u, v) ↪ ite, right_links(p)) ↦ ap, inv(start_in_c(p ↦ Peak.r2, u, v)))),
+      inUp as (c, p, v) => concat(finish_in_u(c, p ↦ Peak.r1, v), concat((fun(x: Term) => (c, x, v) ↪ ite, right_links(p)) ↦ ap, inv(start_in_u(c, p ↦ Peak.r2, v)))),
+      inVp as (c, u, p) => concat(finish_in_v(c, u, p ↦ Peak.r1), concat((fun(x: Term) => (c, u, x) ↪ ite, right_links(p)) ↦ ap, inv(start_in_v(c, u, p ↦ Peak.r2)))),
+      swap as p2 => left_links(p2)
+    }
+  }
+  fun valley_meets(p: Peak): p ↦ Peak.l2 ↦ Move.finish = p ↦ Peak.r2 ↦ Move.finish {
+    return match p {
+      rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
+      inCp as (p, u, v) => concat(finish_in_c(p ↦ Peak.l2, u, v), concat((fun(x: Term) => (x, u, v) ↪ ite, valley_meets(p)) ↦ ap, inv(finish_in_c(p ↦ Peak.r2, u, v)))),
+      inUp as (c, p, v) => concat(finish_in_u(c, p ↦ Peak.l2, v), concat((fun(x: Term) => (c, x, v) ↪ ite, valley_meets(p)) ↦ ap, inv(finish_in_u(c, p ↦ Peak.r2, v)))),
+      inVp as (c, u, p) => concat(finish_in_v(c, u, p ↦ Peak.l2), concat((fun(x: Term) => (c, u, x) ↪ ite, valley_meets(p)) ↦ ap, inv(finish_in_v(c, u, p ↦ Peak.r2)))),
+      swap as p2 => inv(valley_meets(p2))
+    }
+  }
 }
