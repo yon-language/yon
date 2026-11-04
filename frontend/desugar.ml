@@ -3408,41 +3408,90 @@ let place_info = List.filter_map (function
 let () = produce_block_ref := desugar_produce_block
 let () = spawn_block_ref := desugar_spawn_block
 
-(* A fun is impure when its body writes the memory of a region, reaches the
-   operating system, or calls a fun that does: the faces of the raw memory and
-   of SystemOs are the seeds, and the relation is closed along the calls. A
-   body of anything but bindings and a return, a loop say, is impure too. *)
+(* A fun acts when its body has an effect, waits, or reaches memory that is not its
+   own: it reads or writes the words of a region, or calls a fun that acts. Purity is
+   judged inside the Space: a value fixed for the life of the Space is a point of its
+   topos. A cell of the activation does not make a fun act: it cannot leave it, by the
+   mobility judgment, so a loop on local cells is pure (the runST criterion). A body
+   that builds, matches, branches and calls what is pure, is pure. *)
+let pure_systemos =
+  [ "SystemOs__arg_count"; "SystemOs__fnv_heap_region"; "SystemOs__leech_heap_region";
+    "SystemOs__process_id" ]
+
+let word_faces =
+  [ "FnvHeap__read_word"; "LeechHeap__read_word";
+    "FnvHeap__compare_and_swap_word"; "LeechHeap__compare_and_swap_word" ]
+  @ Stdlib_runtime.raw_memory_writers
+
+(* A primitive of the runtime with no declaration in the prelude. *)
+let primitive_acts (n : string) : bool =
+  let starts p = String.starts_with ~prefix:p n in
+  if starts "__" then
+    List.exists starts
+      [ "__yon_rpc"; "__morph_in_"; "__stream"; "__space"; "__spawn"; "__wire"; "__observe" ]
+  else
+    not (List.mem n [ "XTower__depth"; "Args__count"; "Args__get" ]
+         || List.exists starts
+              [ "Math__"; "Bits__"; "String__"; "List__"; "MerkleTree__"; "Crypto__";
+                "Number__"; "Leech__"; "HashSet__"; "HashMap__"; "XRelMap__"; "XRelSet__";
+                "XRelFrame__"; "XTower__"; "LatticePoint__" ])
+
 let impure_funs (p : S.program) : unit =
   Hashtbl.reset Tyenv.impure_funs;
   Hashtbl.reset given_names;
   List.iter (function
     | S.TopFun fd when fd.S.fn_given -> Hashtbl.replace given_names fd.S.fn_name ()
     | _ -> ()) p;
-  match !current_env with
-  | None -> ()
-  | Some env ->
-      let seed (fd : S.fun_decl) =
-        fd.S.fn_given
-        && (fd.S.fn_home = Some "SystemOs"
-            || List.mem fd.S.fn_name Stdlib_runtime.raw_memory_writers
-            || List.mem fd.S.fn_name
-                 [ "FnvHeap__compare_and_swap_word"; "LeechHeap__compare_and_swap_word" ]) in
-      let funs = List.filter_map (function S.TopFun fd -> Some fd | _ -> None) p in
-      List.iter (fun fd -> if seed fd then Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ()) funs;
-      let body_pure (fd : S.fun_decl) =
-        List.for_all (function
-          | S.SLet (_, e, _) | S.SReturn (e, _) -> Tyenv.is_pure_expr env e
-          | _ -> false) fd.S.fn_body in
-      let changed = ref true in
-      while !changed do
-        changed := false;
-        List.iter (fun (fd : S.fun_decl) ->
-          if not fd.S.fn_given && not (Hashtbl.mem Tyenv.impure_funs fd.S.fn_name)
-             && not (body_pure fd) then begin
-            Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ();
-            changed := true
-          end) funs
-      done
+  let funs = List.filter_map (function S.TopFun fd -> Some fd | _ -> None) p in
+  let declared = Hashtbl.create 256 in
+  List.iter (fun (fd : S.fun_decl) -> Hashtbl.replace declared fd.S.fn_name ()) funs;
+  let seed (fd : S.fun_decl) =
+    fd.S.fn_given
+    && ((fd.S.fn_home = Some "SystemOs" && not (List.mem fd.S.fn_name pure_systemos))
+        || List.mem fd.S.fn_name word_faces) in
+  List.iter (fun fd -> if seed fd then Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ()) funs;
+  let acts (fd : S.fun_decl) =
+    (* the names bound in the body: a cell among them is of this activation *)
+    let locals = Hashtbl.create 16 in
+    let rec bind (s : S.stmt) =
+      (match s with S.SLet (x, _, _) -> Hashtbl.replace locals x () | _ -> ());
+      List.iter (List.iter bind) (S.sub_stmts s) in
+    List.iter bind fd.S.fn_body;
+    let own x = Hashtbl.mem locals x in
+    let rec expr (e : S.expr) =
+      (match e with
+       | S.EProduce _ | S.ESpawn _ | S.EWireTo _ | S.EIn _ -> true
+       | S.EVar (x, _) -> Hashtbl.mem Tyenv.impure_funs x
+       | S.ECall (("Space__get" | "Space__set" | "Space.get" | "Space.set"), S.EVar (h, _) :: _, _)
+         when own h -> false
+       | S.ECall (("Space__make" | "Space__new" | "Space.make" | "Space.new"), _, _) -> false
+       | S.ECall (n, _, _) ->
+           Hashtbl.mem Tyenv.impure_funs n
+           || (not (Hashtbl.mem declared n) && not (own n)
+               && not (List.exists (fun (pm : S.param) -> pm.S.param_name = n) fd.S.fn_params)
+               && primitive_acts n)
+       | _ -> false)
+      || (let es, blocks = S.sub_exprs e in
+          List.exists expr es || List.exists (List.exists stmt) blocks)
+    and stmt (s : S.stmt) =
+      (match s with
+       | S.SEmit _ | S.SPromote _ | S.SDrop _ | S.SInSequence _ | S.SForces _ | S.SScope _ -> true
+       | S.SAssignBecomes ((S.LVar x | S.LField (x, _)), _, _) -> not (own x)
+       | S.SAssignHolds ((S.LVar x | S.LField (x, _)), _, _) -> not (own x)
+       | _ -> false)
+      || List.exists expr (S.stmt_exprs s)
+      || List.exists (List.exists stmt) (S.sub_stmts s) in
+    List.exists stmt fd.S.fn_body in
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    List.iter (fun (fd : S.fun_decl) ->
+      if not fd.S.fn_given && not (Hashtbl.mem Tyenv.impure_funs fd.S.fn_name)
+         && acts fd then begin
+        Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ();
+        changed := true
+      end) funs
+  done
 
 let desugar_program ?(env : Tyenv.env option = None)
     ?(place_to_space : (string * string) list = []) (p : S.program) : desugar_result =

@@ -27,6 +27,7 @@ let () =
      communication graph (wire and import arcs, from the source) and exits before
      emission. It never changes what the compiler emits. *)
   let dump_space_graph = Array.exists (fun a -> a = "--dump-space-graph") argv in
+  let dump_acting = Array.exists (fun a -> a = "--dump-acting") argv in
   (* A package is a directory. If `path` is a directory, all the .yon files in
    * it (recursively, e.g. under src/) share one scope (concatenated into a
    * single program). yon_modules/ is skipped here: dependencies are pulled in
@@ -627,6 +628,12 @@ let () =
     | Desugar.Path_not_known msg ->
         Printf.eprintf "%s\n" (Error_codes.to_cli (Error_codes.make Error_codes.Type_check msg));
         exit 3 in
+  (* The funs that act, by name: the purity the compiler infers. *)
+  (if dump_acting then begin
+    let names = Hashtbl.fold (fun n () acc -> n :: acc) Tyenv.impure_funs [] in
+    List.iter print_endline (List.sort compare names);
+    exit 0
+  end);
   (* Kernel re-check: the dependent Core checker certifies the well-formedness of
      every dependent type the surface elaboration produced, over the ORIGINAL codes
      (before El_normalize computes them away). A genuine ill-formed dependent type is
