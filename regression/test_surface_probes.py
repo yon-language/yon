@@ -519,6 +519,24 @@ def test_a_quantifier_over_another_type_in_an_algebra_is_refused(tmp_path):
     assert r.returncode != 0 and "E2001" in out and "ranges over the carrier" in out, out
 
 
+def test_a_law_without_quantifiers_follows_its_name(tmp_path):
+    extra = dict(ALGEBRA)
+    extra["w/Somma.yon"] = extra["w/Somma.yon"].replace(
+        "  carried by i64", "  operation zero(): Somma as \"0\"\n  carried by i64")
+    extra["w/Somma.yon"] %= "law nulla zero() + zero() = zero()"
+    assert _exit(tmp_path, _main("  return 42"), extra) == 42
+
+
+def test_a_statement_in_parentheses_is_refused(tmp_path):
+    extra = dict(ALGEBRA)
+    extra["w/Somma.yon"] = extra["w/Somma.yon"].replace(
+        "  carried by i64", "  operation zero(): Somma as \"0\"\n  carried by i64")
+    extra["w/Somma.yon"] %= "law nulla (zero() = zero())"
+    r, _ = _compile(tmp_path, _main("  return 42"), extra)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E1001" in out and "without parentheses" in out, out
+
+
 def test_a_statement_stops_at_the_end_of_the_line(tmp_path):
     extra = dict(ALGEBRA)
     extra["w/Somma.yon"] %= "law uno ∀a : Somma ∀b : Somma, a + b = b + a\n  law due ∀a : Somma, a = a"

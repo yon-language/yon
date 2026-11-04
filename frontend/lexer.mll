@@ -443,6 +443,7 @@ and string_lit buf = parse
   let clause_owner = ref None
   let in_clause = ref false
   let previous = ref EOF
+  let previous_previous = ref EOF
   let previous_line = ref 0
   let held = ref None
 
@@ -451,14 +452,32 @@ and string_lit buf = parse
      | Some l when l == lexbuf -> ()
      | _ ->
          clause_owner := Some lexbuf;
-         in_clause := false; previous := EOF; held := None);
+         in_clause := false; previous := EOF; previous_previous := EOF; held := None);
     let tok =
       match !held with
       | Some t -> held := None; t
       | None -> raw_token lexbuf in
     let line = lexbuf.Lexing.lex_start_p.Lexing.pos_lnum in
     let finish t =
+      previous_previous := !previous;
       previous := t; previous_line := line; t in
+    (* `law name`: what follows on its line is the statement, and a statement has its
+       own `=`; the bare name is a law the place only declares *)
+    if tok = ARMS_END || tok = LAW_STATEMENT then finish tok else
+    if (match tok, !previous with IDENT _, LAW -> true | _ -> false) then begin
+      statement := Line 0;
+      finish tok
+    end else
+    if (match !previous_previous with LAW -> true | _ -> false)
+       && line = !previous_line
+       && (match tok with
+           | IDENT _ | NUM_LIT _ | STR_LIT _ | BOOL_LIT _ | LPAREN | CLEAR -> true
+           | _ -> false) then begin
+      previous_previous := EOF;
+      held := Some tok;
+      previous := LAW_STATEMENT;
+      LAW_STATEMENT
+    end else
     if not !in_clause then begin
       if tok = GT && !previous = THIS then in_clause := true;
       finish tok

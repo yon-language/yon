@@ -175,6 +175,7 @@ let tok_name = function
   | Parser.DOTARROW -> "DOTARROW"
   | Parser.THIS -> "THIS"
   | Parser.ARMS_END -> "ARMS_END"
+  | Parser.LAW_STATEMENT -> "LAW_STATEMENT"
   | Parser.COLON_U -> "COLON_U"
   | Parser.COLONEQ -> "COLONEQ"
   | Parser.EOF -> "EOF"

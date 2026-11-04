@@ -212,8 +212,9 @@
 %token AMPAMPQ PIPEPIPEQ BANGQ FATARROWQ
 /* the quantifiers of a statement, and ↔ (the two implications) */
 %token FORALL EXISTS IFFQ
-/* the end of a `this >` clause, from the lexer: see its trailer */
-%token ARMS_END
+/* from the lexer, see its trailer: the end of a `this >` clause, and the statement that
+   follows the name of a law on its line */
+%token ARMS_END LAW_STATEMENT
 /* Intuitionistic bitwise ops with the `?` tag. They lower to topos.heyt_int_*
  * ops on !topos.heyt_int<64> carrying a (value, mask) pair (see emit_mlir). */
 %token AMPQ PIPEQ CARETQ TILDEQ
@@ -836,6 +837,12 @@ place_member:
      effectfulness is a theorem of the list. */
   | od = operation_decl                   { PbiMember (FoOp od) }
   | LAW l = IDENT                         { PbiMember (FoLaw (l, None)) }
+  /* no quantifier: the statement follows the name, to the end of the line */
+  | LAW l = IDENT LAW_STATEMENT body = expr g = boption(preceded(IS, GIVEN))
+    { match body with
+      | EParen _ -> failwith (Printf.sprintf
+          "law %s: the statement follows the name without parentheses: they only group" l)
+      | _ -> PbiMember (FoLaw (l, Some { ls_quants = []; ls_body = body; ls_given = g })) }
   | LAW l = IDENT q = law_quantifiers COMMA body = expr g = boption(preceded(IS, GIVEN))
     { PbiMember (FoLaw (l, Some { ls_quants = q; ls_body = body; ls_given = g })) }
   /* the quantifier without its type is the old form: refused, the new one shown */
