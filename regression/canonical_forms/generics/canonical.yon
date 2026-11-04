@@ -1,4 +1,4 @@
 place Entry {
   fun identity<T>(x: T): T { return x }
-  fun main(): Number { return identity(42) }
+  fun main: Number { return identity(42) }
 }

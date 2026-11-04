@@ -95,7 +95,7 @@ def test_value_dependent_el_compiles(tmp_path):
     """A value-dependent `El` lowers to the uniform box {ptr, i64}."""
     src = STUCK_FAM + (
         "fun viaEl(x: Number, p: El(Fam(x))): Number { return 0 }\n"
-        "fun main(): Number { return 0 }\n"
+        "fun main: Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     sig = _sig(mlir, "viaEl")
@@ -112,7 +112,7 @@ def test_boxed_carrier_is_uniform(tmp_path):
         "fun Gam(y: Number): Type_0 { return Gam(y) }\n"
         "fun useF(x: Number, p: El(Fam(x))): Number { return 0 }\n"
         "fun useG(y: Number, q: El(Gam(y))): Number { return 0 }\n"
-        "fun main(): Number { return 0 }\n"
+        "fun main: Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     sf, sg = _sig(mlir, "useF"), _sig(mlir, "useG")
@@ -129,7 +129,7 @@ def test_boxed_value_round_trips_through_call(tmp_path):
     `El(stuck)` and RETURNS `El(stuck)` carries the box through unmodified."""
     src = STUCK_FAM + (
         "fun passBox(x: Number, p: El(Fam(x))): El(Fam(x)) { return p }\n"
-        "fun main(): Number { return 0 }\n"
+        "fun main: Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     sig, ret = _sig(mlir, "passBox"), _ret(mlir, "passBox")
@@ -151,7 +151,7 @@ def test_computed_case_never_boxed(tmp_path):
         "fun Fam(x: Number): Type_0 { return Number }\n"
         "fun viaEl(p: El(Fam(7))): Number { return 0 }\n"
         "fun direct(p: Number): Number { return 0 }\n"
-        "fun main(): Number { return 0 }\n"
+        "fun main: Number { return 0 }\n"
     )
     mlir = _emit(src, tmp_path)
     se, sd = _sig(mlir, "viaEl"), _sig(mlir, "direct")

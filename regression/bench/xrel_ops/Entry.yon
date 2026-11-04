@@ -37,7 +37,7 @@ place Entry {
     return Time.now_ns(0) - t0
   }
   fun put_loop(n: Number): Number visits Output {
-    a := Space.make(XRelMap.empty())
+    a := Space.make(XRelMap.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)
@@ -46,7 +46,7 @@ place Entry {
     return Time.now_ns(0) - t0
   }
   fun get_loop(n: Number): Number visits Output {
-    a := Space.make(XRelMap.empty())
+    a := Space.make(XRelMap.empty)
     i := Space.make(0)
     iter n do { k := Space.get(i)
                 _ := Space.set(a, put_k(Space.get(a), k))

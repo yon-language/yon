@@ -57,12 +57,12 @@ def _run(tmp_path: Path, entry: str, files=None, objects=()):
 def test_a_negative_int64_literal_leaves_the_other_literals_as_they_are(tmp_path):
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  mut acc := 0\n"
         "  repeat at most 3 times { acc <- acc + 2 }\n"
-        "  return if neg() == int64(-5) then acc + 36 else 1\n"
+        "  return if neg == int64(-5) then acc + 36 else 1\n"
         "}\n"
-        "fun neg(): Int64 { return -5 }\n"
+        "fun neg: Int64 { return -5 }\n"
         "fun int64(n: Int64): Int64 { return n }\n"
         "}\n"))
     assert r.returncode == 42, r.stderr
@@ -71,7 +71,7 @@ def test_a_negative_int64_literal_leaves_the_other_literals_as_they_are(tmp_path
 def test_the_point_of_one_after_other_statements_is_the_point(tmp_path):
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  _ := done(1)\n"
         "  return 42\n"
         "}\n"
@@ -104,20 +104,20 @@ def test_the_house_names_its_funs_inside_a_write_and_an_iteration(tmp_path):
     # and the Int64 the fun answers from its cell is that Int64
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number {\n"
-        "  return if Counter.run() == Counter.expected() then 42 else 1\n"
+        "fun main: Number {\n"
+        "  return if Counter.run == Counter.expected then 42 else 1\n"
         "}\n"
         "}\n"),
         files={"Counter.yon": (
             "place Counter {\n"
-            "  fun run(): Int64 {\n"
-            "    mut x := start()\n"
-            "    iter 3 do { x <- x + step() }\n"
+            "  fun run: Int64 {\n"
+            "    mut x := start\n"
+            "    iter 3 do { x <- x + step }\n"
             "    return x\n"
             "  }\n"
-            "  fun expected(): Int64 { return 42 }\n"
-            "  internal fun start(): Int64 { return 30 }\n"
-            "  internal fun step(): Int64 { return 4 }\n"
+            "  fun expected: Int64 { return 42 }\n"
+            "  internal fun start: Int64 { return 30 }\n"
+            "  internal fun step: Int64 { return 4 }\n"
             "}\n")},
         objects=("Counter",))
     assert r.returncode == 42, r.stderr
@@ -126,12 +126,12 @@ def test_the_house_names_its_funs_inside_a_write_and_an_iteration(tmp_path):
 def test_a_local_named_as_a_fun_of_the_program_is_the_local(tmp_path):
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number { return twice(21) }\n"
+        "fun main: Number { return twice(21) }\n"
         "fun twice(n: Number): Number {\n"
         "  w := n * 2\n"
         "  return w\n"
         "}\n"
-        "fun w(): Number { return 1 }\n"
+        "fun w: Number { return 1 }\n"
         "}\n"))
     assert r.returncode == 42, r.stderr
 
@@ -142,8 +142,8 @@ def test_the_arguments_of_a_call_answering_one_are_checked(tmp_path):
     (proj / "yon.toml").write_text('[package]\nname = "probe"\n\n[runtime]\nbackend = "memory"\n')
     (proj / "Entry.yon").write_text(
         "place Entry {\n"
-        "fun main(): Number { return 1 }\n"
-        "fun outer(): Unit { return say(\"text\") }\n"
+        "fun main: Number { return 1 }\n"
+        "fun outer: Unit { return say(\"text\") }\n"
         "fun say(n: Int64): Unit { return star }\n"
         "}\n")
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
@@ -158,21 +158,21 @@ def test_a_boolean_cell_holds_its_boolean(tmp_path):
     # holding a number, later in the same fun, is read as its number
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  mut b := true\n"
         "  mut n := 0\n"
         "  while n < 3 do {\n"
         "    b <- not b\n"
         "    n <- n + 1\n"
         "  }\n"
-        "  return if b then 1 else other() + flag(false)\n"
+        "  return if b then 1 else other + flag(false)\n"
         "}\n"
         "fun flag(x: Boolean): Number {\n"
         "  mut c := x\n"
         "  c <- c or true\n"
         "  return if c then 2 else 0\n"
         "}\n"
-        "fun other(): Number {\n"
+        "fun other: Number {\n"
         "  mut b := 40\n"
         "  b <- b + 0\n"
         "  return b\n"
@@ -186,11 +186,11 @@ def test_a_pure_fun_answering_one_with_no_parameters_is_called(tmp_path):
     # program's chain is no call of it
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number {\n"
-        "  _ := nothing()\n"
-        "  x := nothing()\n"
+        "fun main: Number {\n"
+        "  _ := nothing\n"
+        "  x := nothing\n"
         "  return 42\n"
         "}\n"
-        "fun nothing(): Unit { return star }\n"
+        "fun nothing: Unit { return star }\n"
         "}\n"))
     assert r.returncode == 42, r.stderr

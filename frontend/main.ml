@@ -212,7 +212,7 @@ let test_pipeline () =
       return x
     }
     
-    fun main() {
+    fun main {
       return identity(42)
     }
   |} in
@@ -274,7 +274,7 @@ let test_parse_partial_forever () =
       return 100 / input
     }
     
-    fun event_loop() {
+    fun event_loop {
       forever {
         process_next_event()
       }
@@ -297,7 +297,7 @@ let test_arithmetic_program () =
       return a + b
     }
     
-    fun main(): Number {
+    fun main: Number {
       return add(7, 5)
     }
   |} in
@@ -341,7 +341,7 @@ let test_conditional_program () =
       }
     }
     
-    fun main(): Number {
+    fun main: Number {
       return classify(42)
     }
   |} in
@@ -391,7 +391,7 @@ let test_tycheck_wrong_arity () =
       return a + b
     }
     
-    fun main(): Number {
+    fun main: Number {
       return add(1, 2, 3)
     }
   |} in
@@ -416,7 +416,7 @@ let test_tycheck_wrong_type () =
       return s + s
     }
     
-    fun main(): Text {
+    fun main: Text {
       return greet(42)
     }
   |} in
@@ -577,7 +577,7 @@ let test_full_pipeline_typed () =
       return a * b
     }
     
-    fun main(): Number {
+    fun main: Number {
       return mul(6, 7)
     }
   |} in
@@ -739,7 +739,7 @@ let test_tycheck_refl () =
  * caught earlier. *)
 let test_tycheck_refl_wrong_arity () =
   let src = {|
-    fun bad(): Path {
+    fun bad: Path {
       return refl()
     }
   |} in
@@ -855,8 +855,8 @@ let test_stdlib_space () =
 (* Test 51: HIT lookup — S1 base constructor. *)
 let test_hit_s1_base () =
   let src = {|
-    fun get_base(): S1 {
-      return base()
+    fun get_base: S1 {
+      return hit(base)
     }
   |} in
   Printf.printf "\n=== Test 51: HIT — S1 base point constructor ===\n";
@@ -874,7 +874,7 @@ let test_hit_s1_base () =
 (* Test 54: HIT constructor arity check. *)
 let test_hit_arity () =
   let src = {|
-    fun bad(): S1 {
+    fun bad: S1 {
       return base(42)
     }
   |} in
@@ -1107,7 +1107,7 @@ let test_diagnostics_format () =
 (* Test 61: Diagnostics — type mismatch error formatting. *)
 let test_diagnostics_type_mismatch () =
   Printf.printf "\n=== Test 61: Diagnostics — type mismatch formatting ===\n";
-  let src = "fun add(a: Number, b: number): Number {\n  return a + b\n}\n\nfun main(): Number {\n  return add(\"hello\", 2)\n}\n" in
+  let src = "fun add(a: Number, b: number): Number {\n  return a + b\n}\n\nfun main: Number {\n  return add(\"hello\", 2)\n}\n" in
   let err = Diagnostics.format_ty_error src 6 13
     (Diagnostics.TypeMismatch {
        context = "argument to add";
@@ -2106,7 +2106,7 @@ let test_heyt_surface_branch_present () =
       when x is unknown { return "indeterminate" }
       otherwise { return "impossible" }
     }
-    fun main(): Text { return classify(present) }
+    fun main: Text { return classify(present) }
   |} in
   Printf.printf "\n=== Test 96: SWhen dispatch on Heyt value (present) ===\n";
   match parse_string src with
@@ -2130,7 +2130,7 @@ let test_heyt_surface_branch_unknown () =
       when x is unknown { return "indeterminate" }
       otherwise { return "impossible" }
     }
-    fun main(): Text { return classify(unknown) }
+    fun main: Text { return classify(unknown) }
   |} in
   Printf.printf "\n=== Test 97: SWhen dispatch on Heyt value (unknown) — intuitionistic ===\n";
   match parse_string src with
@@ -2191,7 +2191,7 @@ let test_hit_reduce_comp () =
  * to Refl-wrapping the underlying Heyting value. *)
 let test_coherence_refl_canonical () =
   let src = {|
-    fun main(): proposition {
+    fun main: proposition {
       return refl(present)
     }
   |} in
@@ -2219,7 +2219,7 @@ let test_generics_pair () =
   let src = {|
     fun first<A, B>(a: A, b: B): A { return a }
     fun second<A, B>(a: A, b: B): B { return b }
-    fun main(): Text {
+    fun main: Text {
       return second(1, "hi")
     }
   |} in

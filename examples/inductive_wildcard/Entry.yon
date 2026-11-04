@@ -26,7 +26,7 @@ fun weight_wild(c: Color): Number {
 // match-zucchero col wildcard
 fun is_blue(c: Color): Number { return match c { Blue { } => 1, _ => 0 } }
 
-fun main(): Number {
+fun main: Number {
   // le due forme coincidono su ogni costruttore -> ciascuna differenza e' 0
   d1 := weight_exhaustive(7 ↪ Blue)  - weight_wild(7 ↪ Blue)
   d2 := weight_exhaustive(Red)      - weight_wild(Red)

@@ -26,7 +26,7 @@ def _value(tmp_path: Path, main_body: str) -> int:
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n" + main_body + "}\n}\n")
+        "place Entry {\nfun main: Number {\n" + main_body + "}\n}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
                        capture_output=True, text=True, timeout=180)
@@ -41,8 +41,8 @@ def _signed_is(word: str, int64: str) -> str:
 
 
 def test_the_sum_wraps_past_the_largest_integer(tmp_path):
-    w = "Word64.add(Word64.from_int64(Int64.max_value()), Word64.one())"
-    assert _value(tmp_path, _signed_is(w, "Int64.min_value()")) == 42
+    w = "Word64.add(Word64.from_int64(Int64.max_value), Word64.one)"
+    assert _value(tmp_path, _signed_is(w, "Int64.min_value")) == 42
 
 
 def test_the_product_wraps(tmp_path):
@@ -51,7 +51,7 @@ def test_the_product_wraps(tmp_path):
 
 
 def test_the_difference_wraps_below_zero(tmp_path):
-    w = "Word64.sub(Word64.zero(), Word64.one())"
+    w = "Word64.sub(Word64.zero, Word64.one)"
     assert _value(tmp_path, _signed_is(w, "0 - 1")) == 42
 
 
@@ -60,14 +60,14 @@ def test_and_or_xor_not(tmp_path):
             "  ok := Word64.bit_and(a, b) == Word64.from_int64(8)\n"
             "    and Word64.bit_or(a, b) == Word64.from_int64(14)\n"
             "    and Word64.bit_xor(a, b) == Word64.from_int64(6)\n"
-            "    and Word64.bit_not(Word64.zero()) == Word64.from_int64(0 - 1)\n"
+            "    and Word64.bit_not(Word64.zero) == Word64.from_int64(0 - 1)\n"
             "  return if ok then 42 else 1\n")
     assert _value(tmp_path, body) == 42
 
 
 def test_shift_left_drops_the_top_bits(tmp_path):
     body = ("  return match Word64.shift_left(Word64.from_int64(3), 62) {\n"
-            "    Word64 as w => (if w == Word64.from_int64(Int64.min_value() + Int64.two_to_62())"
+            "    Word64 as w => (if w == Word64.from_int64(Int64.min_value + Int64.two_to_62)"
             " then 42 else 1),\n"
             "    DomainError as d => 2 }\n")
     assert _value(tmp_path, body) == 42
@@ -82,13 +82,13 @@ def test_shift_right_is_logical(tmp_path):
 
 
 def test_a_shift_of_64_places_is_a_domain_error(tmp_path):
-    body = ("  return match Word64.shift_left(Word64.one(), 64) {\n"
+    body = ("  return match Word64.shift_left(Word64.one, 64) {\n"
             "    Word64 as w => 1,\n    DomainError as d => 42 }\n")
     assert _value(tmp_path, body) == 42
 
 
 def test_a_word_of_2_63_or_more_has_no_unsigned_int64(tmp_path):
-    body = ("  return match Word64.to_unsigned(Word64.bit_not(Word64.zero())) {\n"
+    body = ("  return match Word64.to_unsigned(Word64.bit_not(Word64.zero)) {\n"
             "    Int64 as n => 1,\n    DomainError as d => 42 }\n")
     assert _value(tmp_path, body) == 42
 
@@ -105,8 +105,8 @@ def test_a_word_takes_no_integer_arithmetic(tmp_path):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n"
-        "  return if Word64.one() + 1 == Word64.zero() then 1 else 2\n}\n}\n")
+        "place Entry {\nfun main: Number {\n"
+        "  return if Word64.one + 1 == Word64.zero then 1 else 2\n}\n}\n")
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=180)
     out = r.stdout + r.stderr

@@ -28,7 +28,7 @@ fun chain_three(a: Number, b: Number): Number visits Output {
   }
   return 3
 }
-fun main(): Number visits Output {
+fun main: Number visits Output {
   x := chain_one(3, 5)
   y := chain_two(2)
   z := chain_three(3, 5)

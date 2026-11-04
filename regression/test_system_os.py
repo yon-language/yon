@@ -35,7 +35,7 @@ def _build(tmp_path: Path, main_body: str, env=None, name="proj"):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n" + main_body + "}\n}\n")
+        "place Entry {\nfun main: Number {\n" + main_body + "}\n}\n")
     exe = tmp_path / (name + ".exe")
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True,
                        text=True, timeout=180, env=env)
@@ -83,15 +83,15 @@ def test_the_space_has_a_region_for_each_heap_made_when_it_starts(tmp_path):
     # the FnvHeap's root (64 words of state, a directory of 65,600 parts),
     # the LeechHeap's root (64 words of state, the next generation of each
     # of the 202,902 places of the tree over the shell)
-    body = ("  f := SystemOs.fnv_heap_region()\n  l := SystemOs.leech_heap_region()\n"
+    body = ("  f := SystemOs.fnv_heap_region\n  l := SystemOs.leech_heap_region\n"
             "  return if SystemOs.words(f) == 65664 and SystemOs.words(l) == 202966"
             " and f != l then 42 else 1\n")
     assert _value(tmp_path, body) == 42
 
 
 def test_the_region_of_the_space_is_the_same_at_every_ask(tmp_path):
-    body = ("  return if SystemOs.fnv_heap_region() == SystemOs.fnv_heap_region()"
-            " and SystemOs.leech_heap_region() == SystemOs.leech_heap_region()"
+    body = ("  return if SystemOs.fnv_heap_region == SystemOs.fnv_heap_region"
+            " and SystemOs.leech_heap_region == SystemOs.leech_heap_region"
             " then 42 else 1\n")
     assert _value(tmp_path, body) == 42
 
@@ -99,7 +99,7 @@ def test_the_region_of_the_space_is_the_same_at_every_ask(tmp_path):
 def test_heap_code_asks_for_its_region_without_allocating(tmp_path):
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun probe_first(): Word64 { return read_word(SystemOs.fnv_heap_region(), 0) }\n")
+        "  fun probe_first(): Word64 { return read_word(SystemOs.fnv_heap_region, 0) }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out
 
@@ -197,7 +197,7 @@ def test_the_wall_clock_is_after_2025(tmp_path):
 
 
 def test_arg_count_counts_the_program_and_its_arguments(tmp_path):
-    assert _value(tmp_path, "  return SystemOs.arg_count()\n", args=("a", "bc")) == 3
+    assert _value(tmp_path, "  return SystemOs.arg_count\n", args=("a", "bc")) == 3
 
 
 def test_arg_gives_the_argument_text(tmp_path):
@@ -231,7 +231,7 @@ def test_write_error_puts_the_text_on_the_standard_error(tmp_path):
 
 
 def test_process_id_is_the_id_the_kernel_gave(tmp_path):
-    rc, out, exe = _build(tmp_path, "  return SystemOs.process_id()\n")
+    rc, out, exe = _build(tmp_path, "  return SystemOs.process_id\n")
     assert rc == 0, out
     p = subprocess.Popen([str(exe)])
     assert p.wait(timeout=30) == p.pid % 256
@@ -244,7 +244,7 @@ def _exists(pid_expr: str) -> str:
 
 
 def test_the_running_process_exists(tmp_path):
-    assert _value(tmp_path, _exists("SystemOs.process_id()")) == 42
+    assert _value(tmp_path, _exists("SystemOs.process_id")) == 42
 
 
 def test_a_process_that_ended_does_not_exist(tmp_path):
@@ -321,7 +321,7 @@ def test_heap_code_that_reads_and_writes_words_and_computes_is_accepted(tmp_path
     env = _prelude_with_heap_funs(
         tmp_path,
         "  fun bump(r: Region, i: Int64): Word64 {\n"
-        "    w := Word64.add(Word64.mul(read_word(r, i), Word64.from_int64(31)), Word64.one())\n"
+        "    w := Word64.add(Word64.mul(read_word(r, i), Word64.from_int64(31)), Word64.one)\n"
         "    _u := write_word(r, i, w)\n"
         "    return w\n  }\n")
     rc, out, exe = _build(tmp_path, "  return 1\n", env=env)
@@ -341,7 +341,7 @@ def test_heap_code_answering_a_boolean_and_a_nullary_arm_is_accepted(tmp_path):
     # a nullary arm is a constant, not a node: it allocates nothing
     env = _prelude_with_heap_funs(
         tmp_path,
-        "  fun is_zero(r: Region, i: Int64): Boolean { return read_word(r, i) == Word64.zero() }\n"
+        "  fun is_zero(r: Region, i: Int64): Boolean { return read_word(r, i) == Word64.zero }\n"
         "  fun probe_first(r: Region): Lookup<Word64> { return Absent }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc == 0 and "E2009" not in out, out

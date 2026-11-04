@@ -30,8 +30,8 @@ internal place Word64 carried by i64 uses algebra Additive, Multiplicative {
 
   /* ─── The ring ───────────────────────────────────────────── [T] ─── */
 
-  fun zero(): Word64 { return from_int64(0) }
-  fun one(): Word64 { return from_int64(1) }
+  fun zero: Word64 { return from_int64(0) }
+  fun one: Word64 { return from_int64(1) }
   /* the sum and the product are the machine's, taken from the model of i64
      that Additive and Multiplicative declare: Word64.add, Word64.mul */
   fun sub(a: Word64, b: Word64): Word64 { return a - b }
@@ -45,7 +45,7 @@ internal place Word64 carried by i64 uses algebra Additive, Multiplicative {
 
   /* 2^k, for k in [0, 64) */
   internal fun power_of_two(k: Int64): Word64 {
-    return if k == 0 then one() else mul(power_of_two(k - 1), from_int64(2))
+    return if k == 0 then one else mul(power_of_two(k - 1), from_int64(2))
   }
 
   /* ─── The shifts ─────────────────────────────────────────── [E] ─── */
@@ -69,7 +69,7 @@ internal place Word64 carried by i64 uses algebra Additive, Multiplicative {
   internal fun down(w: Word64, k: Int64): Word64 {
     return if k == 0 then w
            else if as_signed(w) >= 0 then from_int64(as_signed(w) / as_signed(power_of_two(k)))
-           else bit_or(from_int64(as_signed(bit_and(w, from_int64(Int64.max_value())))
+           else bit_or(from_int64(as_signed(bit_and(w, from_int64(Int64.max_value)))
                                   / as_signed(power_of_two(k))),
                        power_of_two(63 - k))
   }

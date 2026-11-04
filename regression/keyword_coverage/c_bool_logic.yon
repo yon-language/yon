@@ -3,7 +3,7 @@
 // in comments) until this micro-test — found via the comment-stripped coverage
 // audit. VERIFIED: emits MLIR (exit 0).
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     t := true
     f := false
     conj := (t and f)

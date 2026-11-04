@@ -174,7 +174,7 @@ In the language this is the subscription pipeline:
 import weather::forecasts from Weather    // forecasts: fun(): Wire<Reading>
 
 place Entry { }
-fun main(): Number {
+fun main: Number {
   w := wire to space Weather
   sub := w.awaits(forecasts)
   readings := sub.stream          // the drained frames, as a local stream
@@ -255,7 +255,7 @@ Spaces share one process:
 <!-- yon-gate: illustrative -->
 ```yon
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     k := 5
     return Q.apply(fun(x: Number) => x + k, 1)   // Q lives in Space w: refused
   }

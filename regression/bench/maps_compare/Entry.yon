@@ -13,7 +13,7 @@ place Entry {
     return match LatticePoint.at_index(k % 196560) { LatticePoint as key => 1, DomainError as d => 0 }
   }
   fun hash_point_build(n: Number): HashMap<LatticePoint, Number> {
-    mut m := HashMap.empty()
+    mut m := HashMap.empty
     mut k := 0
     iter n do {
       m <- hash_point_put(m, k)
@@ -48,7 +48,7 @@ place Entry {
     return Time.now_ns(0) - t0 + 0 * acc
   }
   fun hash_point_set(start: Number, n: Number): HashSet<LatticePoint> {
-    mut s := HashSet.empty()
+    mut s := HashSet.empty
     mut k := start
     iter n do {
       s <- hash_point_add(s, k)
@@ -124,7 +124,7 @@ place Entry {
     return 1
   }
   fun hash_number_build(n: Number): HashMap<Number, Number> {
-    mut m := HashMap.empty()
+    mut m := HashMap.empty
     mut k := 0
     iter n do {
       m <- hash_number_put(m, k)
@@ -179,7 +179,7 @@ place Entry {
     return Time.now_ns(0) - t0 + 0 * acc
   }
   fun hash_number_set(start: Number, n: Number): HashSet<Number> {
-    mut s := HashSet.empty()
+    mut s := HashSet.empty
     mut k := start
     iter n do {
       s <- hash_number_add(s, k)
@@ -266,7 +266,7 @@ place Entry {
     return 1
   }
   fun hash_text_build(n: Number): HashMap<String, Number> {
-    mut m := HashMap.empty()
+    mut m := HashMap.empty
     mut k := 0
     iter n do {
       m <- hash_text_put(m, k)
@@ -321,7 +321,7 @@ place Entry {
     return Time.now_ns(0) - t0 + 0 * acc
   }
   fun hash_text_set(start: Number, n: Number): HashSet<String> {
-    mut s := HashSet.empty()
+    mut s := HashSet.empty
     mut k := start
     iter n do {
       s <- hash_text_add(s, k)
@@ -408,7 +408,7 @@ place Entry {
     return match LatticePoint.at_index(k % 196560) { LatticePoint as key => 1, DomainError as d => 0 }
   }
   fun xrel_point_build(n: Number): XRelMap<LatticePoint, Number> {
-    mut m := XRelMap.empty()
+    mut m := XRelMap.empty
     mut k := 0
     iter n do {
       m <- xrel_point_put(m, k)
@@ -443,7 +443,7 @@ place Entry {
     return Time.now_ns(0) - t0 + 0 * acc
   }
   fun xrel_point_set(start: Number, n: Number): XRelSet<LatticePoint> {
-    mut s := XRelSet.empty()
+    mut s := XRelSet.empty
     mut k := start
     iter n do {
       s <- xrel_point_add(s, k)
@@ -519,7 +519,7 @@ place Entry {
     return 1
   }
   fun xrel_number_build(n: Number): XRelMap<Number, Number> {
-    mut m := XRelMap.empty()
+    mut m := XRelMap.empty
     mut k := 0
     iter n do {
       m <- xrel_number_put(m, k)
@@ -574,7 +574,7 @@ place Entry {
     return Time.now_ns(0) - t0 + 0 * acc
   }
   fun xrel_number_set(start: Number, n: Number): XRelSet<Number> {
-    mut s := XRelSet.empty()
+    mut s := XRelSet.empty
     mut k := start
     iter n do {
       s <- xrel_number_add(s, k)
@@ -661,7 +661,7 @@ place Entry {
     return 1
   }
   fun xrel_text_build(n: Number): XRelMap<String, Number> {
-    mut m := XRelMap.empty()
+    mut m := XRelMap.empty
     mut k := 0
     iter n do {
       m <- xrel_text_put(m, k)
@@ -716,7 +716,7 @@ place Entry {
     return Time.now_ns(0) - t0 + 0 * acc
   }
   fun xrel_text_set(start: Number, n: Number): XRelSet<String> {
-    mut s := XRelSet.empty()
+    mut s := XRelSet.empty
     mut k := start
     iter n do {
       s <- xrel_text_add(s, k)

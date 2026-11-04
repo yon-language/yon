@@ -46,7 +46,7 @@ fun heval(p: MerkleTree): Number {
     else h_imp(heval(MerkleTree.child(p, 0)), heval(MerkleTree.child(p, 1)))
 }
 
-fun main(): Number {
+fun main: Number {
   // NOT unknown = absent (1)
   not_u := heval(mk_not(mk_p(2)))
   // excluded middle at unknown: U or NOT U = unknown (2), NOT present

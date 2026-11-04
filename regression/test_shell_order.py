@@ -34,7 +34,7 @@ def _run(tmp_path: Path, entry: str):
 
 
 _ENTRY = """place Entry {
-fun main(): Number {
+fun main: Number {
   mut bad := 0
   mut i := 0
   while i < 196560 do {
@@ -88,7 +88,7 @@ def test_the_orbits_tile_the_shapes_in_order(tmp_path):
     # Octadic [0, 97152), Golay [97152, 195456), Axial [195456, 196560); each
     # orbit starts where the one before it in its shape ends
     entry = """place Entry {
-fun main(): Number {
+fun main: Number {
   return if ends(4) == first(5) and ends(5) == first(6) and ends(6) == first(7)
             and ends(7) == first(8) and ends(8) == first(9) and ends(9) == first(10)
             and ends(10) == first(11) and ends(11) == first(0) and ends(0) == first(1)
@@ -115,7 +115,7 @@ fun sfirst(s: Number): Number {
     ("LatticePoint.shape_count(3)", "not a shape of the shell under N, an integer in [0, 3)"),
 ])
 def test_an_interval_off_the_order_is_a_domain_error(tmp_path, call, words):
-    entry = ("place Entry {\nfun main(): Number {\n"
+    entry = ("place Entry {\nfun main: Number {\n"
              f"  return match {call} {{\n"
              "    Number as n => 1,\n"
              f"    DomainError as d => (if d.message == \"{words}\" then 42 else 2) }}\n"

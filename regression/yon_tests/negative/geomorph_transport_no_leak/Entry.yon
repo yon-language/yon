@@ -3,7 +3,7 @@ place Entry {
     pull(a: AccountEU): Account { return a }
   }
   fun read(a: Account): Number { return a.balance }
-  fun main(): Number {
+  fun main: Number {
     eu := .-> AccountEU { balance 7 }
     return read(eu)
   }

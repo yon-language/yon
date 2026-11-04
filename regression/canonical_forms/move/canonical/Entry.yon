@@ -4,5 +4,5 @@ place Entry {
       return .-> AccountEU { balance s.balance }
     }
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

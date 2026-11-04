@@ -14,5 +14,5 @@
 // has without its own arm. With the endpoint-aware arm, c != b is rejected -> exit 3.
 place Entry {
   fun coerce(q: PathP(i, Number, a, c)): PathP(i, Number, a, b) { return q }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

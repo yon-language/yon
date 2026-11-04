@@ -2,5 +2,5 @@
 // check_fun_decl_accum rejects duplicate parameter names -> exit 3.
 place Entry {
   fun f(a: Number, a: Number): Number { return a }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

@@ -15,7 +15,7 @@ fun eval(t: Term): Term {
       TSnd as p      => match eval(p) { TPair as (a, b) => eval(b), _ => eval(p) ↪ TSnd } }
 }
 
-fun main(): Number {
+fun main: Number {
   r := eval((20 ↪ TLit, 22 ↪ TLit) ↪ TPair ↪ TFst)
   return as_num(r) - 20
 }

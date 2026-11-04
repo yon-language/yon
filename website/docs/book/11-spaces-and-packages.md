@@ -16,7 +16,7 @@ ontology. Here is the restaurant, with its dining room (`sala`) and its kitchen
 ```
 restaurant/
   yon.toml
-  Entry.yon          // place Entry { } + top-level fun main()
+  Entry.yon          // place Entry { } + top-level fun main
   sala/              // the Space "sala" (the dining room)
     Topos.yon        // topos SalaTopos where { }
     Order.yon        // place Order { total Number }
@@ -69,7 +69,7 @@ The entry place applies it:
 ```yon
 // Entry.yon
 place Entry { }
-fun main(): Number {
+fun main: Number {
   table4 := .-> Order { total 40 }
   fired := apply_move(ToKitchen, table4)
   return fired.total          // 44: read on the transported instance
@@ -113,7 +113,7 @@ the dining room calls it across the boundary:
 // kitchen.yon, compiled to ./Kitchen_srv
 fun plate_price(dish: Number): Number { return dish * 3 }
 internal fun recipe_secret(dish: Number): Number { return dish + 1000 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 ```
 
 ```yon

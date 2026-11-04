@@ -3,5 +3,5 @@ place Entry {
   fun on_query_fail(q: QueryError): Number {
     return handle(q)
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

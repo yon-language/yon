@@ -78,8 +78,8 @@ def _verdict(ok: bool, msg: str):
 
 def test_reflexivity_does_not_inhabit_a_false_identity(tmp_path):
     """refl(0) has type 0 = 0; the checker refuses it at 0 = 1."""
-    entry = ("place Entry {\n  fun bad(): 0 = 1 { return refl(0) }\n"
-             "  fun main(): Number { return 0 }\n}\n")
+    entry = ("place Entry {\n  fun bad: 0 = 1 { return refl(0) }\n"
+             "  fun main: Number { return 0 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_number'), out
 
@@ -99,7 +99,7 @@ _LAUNDER = {
 def test_a_path_does_not_prove_every_identity(tmp_path, voice):
     launder, call = _LAUNDER[voice]
     entry = (f"place Entry {{\n  {launder}\n"
-             f"  fun main(): Number {{ q := {call}  return (q @ I0) * 10 + (q @ I1) }}\n}}\n")
+             f"  fun main: Number {{ q := {call}  return (q @ I0) * 10 + (q @ I1) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     if _clean_rejection(rc, out, 'E2001', 'expected Id_number', 'got Path'):
         return
@@ -114,10 +114,10 @@ def test_an_identity_flows_into_path_by_forgetting_its_endpoints(tmp_path):
     """x = y is a point of the total space of paths: it is accepted where
     a bare Path is expected, as an argument and as a return value."""
     entry = ("place Entry {\n"
-             "  fun seven(): 7 = 7 { return refl(7) }\n"
-             "  fun forget(): Path { return seven() }\n"
+             "  fun seven: 7 = 7 { return refl(7) }\n"
+             "  fun forget: Path { return seven }\n"
              "  fun weigh(p: Path): Number { return 7 }\n"
-             "  fun main(): Number { q := forget()  return weigh(q) + weigh(seven()) }\n"
+             "  fun main: Number { q := forget  return weigh(q) + weigh(seven) }\n"
              "}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert rc == 0, out
@@ -191,7 +191,7 @@ fun main(): Number {
 def test_a_number_is_not_a_lattice_point(tmp_path):
     rc, out = _compile(_project(tmp_path, """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   return LatticePoint.orbit(1536)
 }
 """), tmp_path / "out")
@@ -201,7 +201,7 @@ fun main(): Number {
 def test_a_lattice_point_has_no_arithmetic(tmp_path):
     rc, out = _compile(_project(tmp_path, """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   return match LatticePoint.at_index(0) { LatticePoint as p => LatticePoint.index(p + 1), DomainError as d => 0 }
 }
 """), tmp_path / "out")
@@ -214,7 +214,7 @@ def test_an_xrelmap_is_keyed_by_lattice_points(tmp_path):
 place Entry {}
 fun main(): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found as v => v, Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, 42), p) { Found as v => v, Absent => 0 }),
     DomainError as d => 0
   }
 }
@@ -238,14 +238,14 @@ def _run_entry_names(tmp_path, body):
 
 def test_a_name_is_defined_with_colon_eq(tmp_path):
     rc, out, code = _run_entry_names(tmp_path,
-        "fun main(): Number {\n  mut x := 1 + 2\n  return x\n}\n")
+        "fun main: Number {\n  mut x := 1 + 2\n  return x\n}\n")
     _verdict(rc == 0 and code == 3, f"mut x := 1 + 2: rc={rc} code={code} {out[-200:]}")
 
 
 def test_holds_is_no_binder(tmp_path):
     old_form = "x " + "holds 3"     # the binder this probe refuses
     rc, out, _ = _run_entry_names(tmp_path,
-        "fun main(): Number {\n  " + old_form + "\n  return x\n}\n")
+        "fun main: Number {\n  " + old_form + "\n  return x\n}\n")
     _verdict(_clean_rejection(rc, out, "E1001", "Entry.yon:3:"),
              f"{old_form} was not a clean syntax error: rc={rc} {out[-200:]}")
 
@@ -253,19 +253,19 @@ def test_holds_is_no_binder(tmp_path):
 def test_holds_is_an_ordinary_name(tmp_path):
     rc, out, code = _run_entry_names(tmp_path,
         "fun holds(n: Number): Number { return n + 1 }\n"
-        "fun main(): Number { return holds(41) }\n")
+        "fun main: Number { return holds(41) }\n")
     _verdict(rc == 0 and code == 42, f"fun holds: rc={rc} code={code} {out[-200:]}")
 
 
 def test_a_name_is_defined_once_in_its_scope(tmp_path):
     (tmp_path / "twice").mkdir()
     rc, out, _ = _run_entry_names(tmp_path / "twice",
-        "fun main(): Number {\n  mut x := 1\n  mut x := x + 1\n  return x\n}\n")
+        "fun main: Number {\n  mut x := 1\n  mut x := x + 1\n  return x\n}\n")
     _verdict(_clean_rejection(rc, out, 'E2001', 'is already bound in this scope') and "already bound" in out,
              f"a second definition of x was not refused as such: rc={rc} {out[-200:]}")
     (tmp_path / "again").mkdir()
     rc, out, code = _run_entry_names(tmp_path / "again",
-        "fun main(): Number {\n  mut x := 1\n  x <- x + 1\n  return x\n}\n")
+        "fun main: Number {\n  mut x := 1\n  x <- x + 1\n  return x\n}\n")
     _verdict(rc == 0 and code == 2, f"mut x := 1; x <- x + 1: rc={rc} code={code} {out[-200:]}")
 
 
@@ -288,7 +288,7 @@ _MISPLACED_RETURNS = {
 @pytest.mark.parametrize("form", sorted(_MISPLACED_RETURNS))
 def test_a_return_outside_the_tail_is_refused(tmp_path, form):
     entry = ("place Entry {}\nfun f(c: Number): Number {\n" + _MISPLACED_RETURNS[form] +
-             "}\nfun main(): Number { return f(1) }\n")
+             "}\nfun main: Number { return f(1) }\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2002', 'is not at the end of its body') and "[E2002]" in out, out
     assert "[line 3," in out, f"the diagnostic does not point at the return:\n{out}"
@@ -296,7 +296,7 @@ def test_a_return_outside_the_tail_is_refused(tmp_path, form):
 
 def test_a_case_analysis_in_the_tail_ends_in_a_return_in_each_branch(tmp_path):
     entry = ("place Entry {}\nfun f(c: Number): Number { when c == 1 { return 5 } otherwise { return 9 } }\n"
-             "fun main(): Number { return f(1) * 10 + f(2) }\n")
+             "fun main: Number { return f(1) * 10 + f(2) }\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert rc == 0, out
     assert _run(tmp_path / "out")[0] == 59
@@ -308,7 +308,7 @@ def test_a_nested_case_analysis_passes_the_tail_to_every_branch(tmp_path):
              "  when a == 1 {\n"
              "    when b == 1 { return 1 } otherwise { return 2 }\n"
              "  } otherwise { return 3 }\n}\n"
-             "fun main(): Number { return f(1, 1) * 100 + f(1, 0) * 10 + f(0, 0) }\n")
+             "fun main: Number { return f(1, 1) * 100 + f(1, 0) * 10 + f(0, 0) }\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert rc == 0, out
     assert _run(tmp_path / "out")[0] == 123 % 256
@@ -357,7 +357,7 @@ def test_compose_applies_the_first_function_then_the_second(tmp_path):
     entry = """place Entry {
   fun f(x: Number): Number { return x + 3 }
   fun g(y: Number): Number { return y * 2 }
-  fun main(): Number {
+  fun main: Number {
     h := compose f with g
     return h(1)
   }
@@ -370,7 +370,7 @@ def test_compose_requires_the_output_of_the_first_to_be_the_input_of_the_second(
     entry = """place Entry {
   fun f(x: Number): Text { return "abc" }
   fun g(y: Number): Number { return y * 2 }
-  fun main(): Number {
+  fun main: Number {
     h := compose f with g
     return h(1)
   }
@@ -389,7 +389,7 @@ def test_compose_of_two_function_parameters_computes_their_composite(tmp_path):
   }
   fun inc(x: Number): Number { return x + 3 }
   fun dbl(y: Number): Number { return y * 2 }
-  fun main(): Number { return twice_then(inc, dbl, 1) }
+  fun main: Number { return twice_then(inc, dbl, 1) }
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "exe")
@@ -399,7 +399,7 @@ def test_compose_of_two_function_parameters_computes_their_composite(tmp_path):
 
 def test_compose_of_two_bound_lambdas_computes_their_composite(tmp_path):
     entry = """place Entry {
-  fun main(): Number {
+  fun main: Number {
     f := fun(x: Number) => x + 3
     g := fun(y: Number) => y * 2
     h := compose f with g
@@ -418,8 +418,8 @@ def test_compose_of_two_bound_lambdas_computes_their_composite(tmp_path):
 
 def test_a_unit_body_still_rejects_an_unbound_name(tmp_path):
     entry = """place Entry {
-  fun f(): Unit { return no_such_name + "x" }
-  fun main(): Number { return 7 }
+  fun f: Unit { return no_such_name + "x" }
+  fun main: Number { return 7 }
 }
 """
     _must_reject_checker(tmp_path, entry, "unbound name under Unit", 'E2001', 'unknown identifier')
@@ -428,8 +428,8 @@ def test_a_unit_body_still_rejects_an_unbound_name(tmp_path):
 def test_a_unit_body_still_rejects_a_wrong_arity_call(tmp_path):
     entry = """place Entry {
   fun k(a: Number): Number { return a }
-  fun f(): Unit { return k(1, 2, 3, 4) }
-  fun main(): Number { return 7 }
+  fun f: Unit { return k(1, 2, 3, 4) }
+  fun main: Number { return 7 }
 }
 """
     _must_reject_checker(tmp_path, entry, "four arguments to a unary function under Unit",
@@ -438,8 +438,8 @@ def test_a_unit_body_still_rejects_a_wrong_arity_call(tmp_path):
 
 def test_an_unbound_name_is_rejected_at_a_non_terminal_type(tmp_path):
     entry = """place Entry {
-  fun f(): Number { return no_such_name + "x" }
-  fun main(): Number { return 7 }
+  fun f: Number { return no_such_name + "x" }
+  fun main: Number { return 7 }
 }
 """
     proj = _project(tmp_path, entry)
@@ -489,7 +489,7 @@ def test_stdlib_arguments_match_the_declared_signature(tmp_path):
     # the prelude's Math is the face of these primitives: the call is checked
     # against it like any other
     entry = """place Entry {
-fun main(): Number {
+fun main: Number {
   return Math.abs("abc")
 }
 }
@@ -500,7 +500,7 @@ fun main(): Number {
 
 def test_a_prelude_string_function_rejects_a_number(tmp_path):
     entry = """place Entry {
-fun main(): Number {
+fun main: Number {
   return String.length(42)
 }
 }
@@ -531,7 +531,7 @@ fun main(): Number {
 def test_a_user_function_with_an_ordinary_name_is_called(tmp_path):
     entry = """place Entry {
   fun plus(a: Number, b: Number): Number { return a + b }
-  fun main(): Number { return plus(40, 2) }
+  fun main: Number { return plus(40, 2) }
 }
 """
     assert _value_checker(tmp_path, entry) == 42
@@ -540,7 +540,7 @@ def test_a_user_function_with_an_ordinary_name_is_called(tmp_path):
 def test_a_user_function_named_like_a_stream_combinator_is_called(tmp_path):
     entry = """place Entry {
   fun take(a: Number, b: Number): Number { return a + b }
-  fun main(): Number { return take(40, 2) }
+  fun main: Number { return take(40, 2) }
 }
 """
     code = _value_checker(tmp_path, entry)
@@ -551,7 +551,7 @@ def test_a_user_function_named_like_a_stream_combinator_is_called(tmp_path):
 
 def test_a_view_lambda_reads_its_section(tmp_path):
     entry = """place Entry {
-  fun main(): Number {
+  fun main: Number {
     vw := view(s: P) => s.v + 2 of P
     sp := .-> P { v 40 }
     return vw(sp)
@@ -565,7 +565,7 @@ def test_a_view_lambda_reads_its_section(tmp_path):
                    reason="the body of a view lambda is type-checked")
 def test_a_view_lambda_body_is_type_checked(tmp_path):
     entry = """place Entry {
-  fun main(): Number {
+  fun main: Number {
     vw := view(s: P) => s.v + "x" of P
     sp := .-> P { v 40 }
     return vw(sp)
@@ -584,7 +584,7 @@ def test_a_move_converts_a_field_through_its_handler(tmp_path):
     v converts to v by double_it
   }
   fun double_it(x: Number): Number { return x * 2 }
-  fun main(): Number {
+  fun main: Number {
     p := .-> P { v 21 }
     q := apply_move(PtoQ, p)
     return q.v
@@ -602,7 +602,7 @@ def test_a_move_naming_an_unknown_handler_is_rejected(tmp_path):
     v converts to v by double_itt
   }
   fun double_it(x: Number): Number { return x * 2 }
-  fun main(): Number {
+  fun main: Number {
     p := .-> P { v 21 }
     q := apply_move(PtoQ, p)
     return q.v
@@ -618,7 +618,7 @@ def test_a_move_naming_an_unknown_handler_is_rejected(tmp_path):
 def test_a_number_parameter_is_a_number(tmp_path):
     entry = """place Entry {
 fun b(g: Number): Number { return g + 40 }
-fun main(): Number { return b(2) }
+fun main: Number { return b(2) }
 }
 """
     assert _value_checker(tmp_path, entry) == 42
@@ -628,12 +628,12 @@ fun main(): Number { return b(2) }
                    reason="a lambda bound in one function does not retype a same-named parameter of another")
 def test_a_local_lambda_does_not_retype_a_parameter_elsewhere(tmp_path):
     entry = """place Entry {
-fun a(): Number {
+fun a: Number {
   g := fun(x: Number) => x + 1
   return g(1)
 }
 fun b(g: Number): Number { return g + 40 }
-fun main(): Number { return a() + b(0) }
+fun main: Number { return a + b(0) }
 }
 """
     proj = _project(tmp_path, entry)
@@ -674,16 +674,16 @@ def test_a_local_binding_shadows_a_function_of_the_same_name(tmp_path):
     """`total := 42` inside main makes `total` mean 42 there, even when a
     top-level function is called `total`."""
     entry = ("place Entry {\n"
-             "fun total(): Number { return 1 }\n"
-             "fun main(): Number {\n  total := 41 + 1\n  return total\n}\n}\n")
+             "fun total: Number { return 1 }\n"
+             "fun main: Number {\n  total := 41 + 1\n  return total\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     _verdict(rc == 42, f"the local `total` should be 42, main returned {rc}")
 
 
 def test_a_local_binding_with_a_fresh_name_is_kept(tmp_path):
     entry = ("place Entry {\n"
-             "fun total(): Number { return 1 }\n"
-             "fun main(): Number {\n  subtotal := 41 + 1\n  return subtotal + total() - 1\n}\n}\n")
+             "fun total: Number { return 1 }\n"
+             "fun main: Number {\n  subtotal := 41 + 1\n  return subtotal + total - 1\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     assert rc == 42
 
@@ -796,14 +796,14 @@ def test_a_stream_passed_to_a_function_is_refused_not_zero(tmp_path):
 def test_a_user_function_named_iterate_is_called(tmp_path):
     entry = """place Entry {
   fun iterate(a: Number, b: Number): Number { return a * b }
-  fun main(): Number { return iterate(6, 7) }
+  fun main: Number { return iterate(6, 7) }
 }
 """
     assert _value_checker(tmp_path, entry) == 42
 
 
 def test_head_of_a_list_is_its_first_cons(tmp_path):
-    entry = ("place Entry {\nfun main(): Number {\n"
+    entry = ("place Entry {\nfun main: Number {\n"
              "  return List.head(List.cons(10, List.cons(11, List.empty(0))))\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry)
     assert rc == 10
@@ -828,14 +828,14 @@ _COUNTER_lowering = dict(_TOPOS_lowering, **{"w/Counter.yon":
 def test_an_operation_with_a_handler_runs_the_handler(tmp_path):
     entry = ("place Entry {\n  reduction Bump of Counter {\n    seed := 0\n"
              "    on tick(n: Number) {\n      return n + 1\n    }\n  }\n"
-             "  fun main(): Number visits Counter { return Counter.tick(5) }\n}\n")
+             "  fun main: Number visits Counter { return Counter.tick(5) }\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry, _WORLD_lowering, _COUNTER_lowering)
     assert rc == 6
 
 
 def test_an_operation_without_a_handler_is_refused(tmp_path):
     entry = ("place Entry {\n"
-             "  fun main(): Number visits Counter { return Counter.tick(5) }\n}\n")
+             "  fun main: Number visits Counter { return Counter.tick(5) }\n}\n")
     proj = _project(tmp_path, entry, _WORLD_lowering, _COUNTER_lowering)
     rc, out = _compile(proj, tmp_path / "out")
     if _clean_rejection(rc, out, 'E2003', 'no reduction of Counter handles it'):
@@ -848,7 +848,7 @@ def test_an_operation_without_a_handler_is_refused(tmp_path):
 
 def test_an_operation_called_in_a_condition_without_a_handler_is_refused(tmp_path):
     entry = ("place Entry {\n"
-             "  fun main(): Number visits Counter {\n    mut r := 0\n"
+             "  fun main: Number visits Counter {\n    mut r := 0\n"
              "    when Counter.tick(5) > 0 { r <- 1 }\n    return r\n  }\n}\n")
     proj = _project(tmp_path, entry, _WORLD_lowering, _COUNTER_lowering)
     rc, out = _compile(proj, tmp_path / "out")
@@ -861,7 +861,7 @@ def test_integer_division_by_zero_is_not_an_ordinary_number(tmp_path):
     entry = ("place Entry {\n"
              "fun d(a: Int64, b: Int64): Int64 { return a / b }\n"
              "fun m(a: Int64, b: Int64): Int64 { return a % b }\n"
-             "fun main(): Number {\n"
+             "fun main: Number {\n"
              "  q := d(7, 0)\n"
              "  mut r := m(7, 0)\n"
              "  return if q + r == 0 then 5 else 6\n}\n}\n")
@@ -878,7 +878,7 @@ def test_integer_division_by_zero_is_not_an_ordinary_number(tmp_path):
 def test_integer_division_by_a_nonzero_truncates(tmp_path):
     entry = ("place Entry {\n"
              "fun d(a: Int64, b: Int64): Int64 { return a / b }\n"
-             "fun main(): Number { return if d(7, 2) == 3 then (if d(0 - 7, 2) == 0 - 3 then 5 else 6) else 7 }\n}\n")
+             "fun main: Number { return if d(7, 2) == 3 then (if d(0 - 7, 2) == 0 - 3 then 5 else 6) else 7 }\n}\n")
     rc, out = _build_run_lowering(tmp_path, entry)
     assert rc == 5, (rc, out)
 
@@ -886,12 +886,12 @@ def test_integer_division_by_a_nonzero_truncates(tmp_path):
 # --- mutable cells are local to their function ------------------------------------
 
 _P_lowering = dict(_TOPOS_lowering, **{"w/P.yon": "place P {\n  x Number\n}\n"})
-_H_lowering = ("fun h(): Number {\n  mut c := .-> P { x 1 }\n  c <- .-> P { x 2 }\n  return c.x\n}\n")
+_H_lowering = ("fun h: Number {\n  mut c := .-> P { x 1 }\n  c <- .-> P { x 2 }\n  return c.x\n}\n")
 
 
 def test_a_cell_reads_its_own_type_beside_a_namesake_place_cell(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
-             "fun main(): Number {\n  mut k := IO.print_num(h())\n"
+             "fun main(): Number {\n  mut k := IO.print_num(h)\n"
              "  mut c := 0\n  c <- 7\n  return c\n}\n}\n")
     rc, out = _build_run_lowering(tmp_path, entry, _WORLD_lowering, _P_lowering)
     assert out.split() == ["2"], out
@@ -900,7 +900,7 @@ def test_a_cell_reads_its_own_type_beside_a_namesake_place_cell(tmp_path):
 
 def test_a_number_cell_beside_a_namesake_place_cell_compiles(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
-             "fun main(): Number {\n  mut k := h()\n"
+             "fun main: Number {\n  mut k := h\n"
              "  mut c := 0\n  c <- 7\n  return c + k * 10\n}\n}\n")
     proj = _project(tmp_path, entry, _WORLD_lowering, _P_lowering)
     rc, out = _compile(proj, tmp_path / "out")
@@ -911,7 +911,7 @@ def test_a_number_cell_beside_a_namesake_place_cell_compiles(tmp_path):
 
 def test_cells_with_distinct_names_keep_their_types(tmp_path):
     entry = ("place Entry {\n" + _H_lowering +
-             "fun main(): Number {\n  mut k := h()\n"
+             "fun main: Number {\n  mut k := h\n"
              "  mut d := 0\n  d <- 7\n  return d + k * 10\n}\n}\n")
     rc, _ = _build_run_lowering(tmp_path, entry, _WORLD_lowering, _P_lowering)
     assert rc == 27
@@ -923,7 +923,7 @@ _TEMPS_lowering = dict(_TOPOS_lowering, **{"w/Celsius.yon": "place Celsius { deg
                          "w/Fahrenheit.yon": "place Fahrenheit { degrees Number }\n"})
 _MOVE_lowering = ("place Entry {{\n{local}"
          "  move M from Celsius to Fahrenheit {{\n    degrees maps to degrees by {by}\n  }}\n"
-         "  fun main(): Number {{\n    mut c := .-> Celsius {{ degrees 100 }}\n"
+         "  fun main: Number {{\n    mut c := .-> Celsius {{ degrees 100 }}\n"
          "    f := apply_move(M, c)\n    return f.degrees + {bias}\n  }}\n}}\n")
 
 
@@ -988,16 +988,16 @@ def test_an_imported_function_has_the_signature_of_its_own_module(tmp_path, orde
     # module's stats, never imported, does not decide the type of the call
     (tmp_path / "alpha.yon").write_text(
         "place Entry {\n  fun stats(x: Number): Number { return x + 1 }\n"
-        "  fun main(): Number { return 0 }\n}\n")
+        "  fun main: Number { return 0 }\n}\n")
     (tmp_path / "beta.yon").write_text(
         "place Entry {\n  fun stats(x: Number): Text { return \"no\" }\n"
         "  fun other(x: Number): Number { return x * 2 }\n"
-        "  fun main(): Number { return 0 }\n}\n")
+        "  fun main: Number { return 0 }\n}\n")
     imports = ["import alpha::stats from A\n", "import beta::other from B\n"]
     if order == "beta_first":
         imports.reverse()
     (tmp_path / "client.yon").write_text(
-        "".join(imports) + "place Entry {\n  fun main(): Number {\n"
+        "".join(imports) + "place Entry {\n  fun main: Number {\n"
         "    return stats(1) + other(3)\n  }\n}\n")
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
     assert rc == 0, out
@@ -1006,10 +1006,10 @@ def test_an_imported_function_has_the_signature_of_its_own_module(tmp_path, orde
 def _two_stats_modules(tmp_path):
     (tmp_path / "alpha.yon").write_text(
         "place Entry {\n  fun stats(x: Number): Number { return x + 1 }\n"
-        "  fun main(): Number { return 0 }\n}\n")
+        "  fun main: Number { return 0 }\n}\n")
     (tmp_path / "beta.yon").write_text(
         "place Entry {\n  fun stats(x: Number): Number { return x * 100 }\n"
-        "  fun main(): Number { return 0 }\n}\n")
+        "  fun main: Number { return 0 }\n}\n")
 
 
 _TWO_STATS_IMPORTS = "import alpha::stats from A\nimport beta::stats from B\n"
@@ -1020,7 +1020,7 @@ def test_a_name_imported_from_two_modules_is_refused_bare(tmp_path):
     # the checker the signature of the last)
     _two_stats_modules(tmp_path)
     (tmp_path / "client.yon").write_text(
-        _TWO_STATS_IMPORTS + "place Entry {\n  fun main(): Number {\n"
+        _TWO_STATS_IMPORTS + "place Entry {\n  fun main: Number {\n"
         "    return stats(1)\n  }\n}\n")
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
     assert _clean_rejection(rc, out, 'E2001', 'is imported from alpha and beta'), out
@@ -1031,7 +1031,7 @@ def test_a_name_imported_from_two_modules_is_refused_bare(tmp_path):
 def test_a_name_imported_from_two_modules_is_called_qualified(tmp_path):
     _two_stats_modules(tmp_path)
     (tmp_path / "client.yon").write_text(
-        _TWO_STATS_IMPORTS + "place Entry {\n  fun main(): Number {\n"
+        _TWO_STATS_IMPORTS + "place Entry {\n  fun main: Number {\n"
         "    return alpha::stats(1) + beta::stats(1)\n  }\n}\n")
     for src, out in (("alpha.yon", "A_srv"), ("beta.yon", "B_srv"),
                      ("client.yon", "client")):
@@ -1073,12 +1073,12 @@ def _wire_lowering(tmp_path, consumer_reading):
     svc, sub = tmp_path / "meteo_svc", tmp_path / "meteo_sub"
     files = {
         svc / "yon.toml": _SHM_TOML_lowering.format(name="meteo_svc", spaces='"w"'),
-        svc / "Entry.yon": "place Entry {\n  fun main(): Number { return 0 }\n}\n",
+        svc / "Entry.yon": "place Entry {\n  fun main: Number { return 0 }\n}\n",
         svc / "w/Topos.yon": "topos WTopos where {\n}\n",
         svc / "w/Reading.yon": "place Reading {\n  temp Number\n  humidity Number\n\n" + _SAMPLES_lowering + "}\n",
         sub / "yon.toml": _SHM_TOML_lowering.format(name="meteo_sub", spaces='"w", "Meteo"'),
         sub / "Entry.yon": ("import meteo::samples from Meteo\n\nplace Entry {\n"
-                            "  fun main(): Number {\n    w := wire to space Meteo\n"
+                            "  fun main: Number {\n    w := wire to space Meteo\n"
                             "    sub := w.awaits(samples)\n    s := sub.stream\n"
                             "    total := s.fold(0, fun(a: Number, r: Reading) => a + r.temp)\n"
                             "    return total\n  }\n}\n"),
@@ -1163,7 +1163,7 @@ def _floor_program_desugar(form):
             "  _p := IO.print_num(if got == want and 1 / got == 1 / want then 1 else 0)\n"
             "  _q := IO.print_num(got)\n"
             "  return 0\n}\n"
-            "fun main(): Number {\n" + calls + "\n  return 0\n}\n")
+            "fun main: Number {\n" + calls + "\n  return 0\n}\n")
 
 
 def _floor_disagreements_desugar(tmp_path, form):
@@ -1180,7 +1180,7 @@ def test_the_sign_of_negative_zero_survives_numbers_functions(tmp_path):
     the bare floor."""
     src = ("place Entry {}\n"
            "fun neg(x: Number): Number { return if 1 / x < 0 then 1 else 0 }\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  z := 0 * (0 - 1)\n"
            "  mut r := match Number.sqrt(z) { Number as v => v, DomainError as d => 1 }\n"
            "  return neg(r) * 1000 + neg(Number.sin(z)) * 100 + neg(Number.floor(z)) * 10\n"
@@ -1215,7 +1215,7 @@ _OV_TOML_desugar = '[world.W]\nobjects = ["X"]\nspaces  = ["w"]'
 _SQUARE_desugar = ("place Square {\n  side := Number\n"
            "  fun area(s: Square): Number { return s.side * s.side }\n}\n")
 _ENTRY_RESOLVED_desugar = ("place Entry {}\n"
-                   "fun main(): Number {\n"
+                   "fun main: Number {\n"
                    "  sq := .-> Square { side 5 }\n"
                    "  ci := .-> Circle { r 2 }\n"
                    "  return sq.area() + Circle.k(sq)\n"
@@ -1258,7 +1258,7 @@ _SUM_DECL_desugar = "fun declares(s: (Box(Number) | Empty)): Number { return 0 }
 def test_a_let_bound_lambda_wins_over_a_top_level_homonym_in_a_match_arm(tmp_path):
     src = ("place Entry {}\n"
            "fun sq(x: Number): Number { return 1000 }\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  sq := fun(x: Number) => x * x\n"
            "  return match (3 ↪ Box) { Box as v => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
@@ -1270,7 +1270,7 @@ def test_a_let_bound_lambda_wins_over_a_top_level_homonym_in_a_match_arm(tmp_pat
                    reason="a let-bound lambda is callable from a match arm")
 def test_a_let_bound_lambda_is_callable_from_a_match_arm(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  sq := fun(x: Number) => x * x\n"
            "  return match (3 ↪ Box) { Box as v => sq(v), Empty => 0 }\n"
            "}\n" + _SUM_DECL_desugar)
@@ -1282,7 +1282,7 @@ def test_a_let_bound_lambda_is_callable_from_a_match_arm(tmp_path):
                    reason="an inner binding shadows an outer let-bound lambda of the same name")
 def test_an_inner_binding_shadows_a_let_bound_lambda(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  f := fun(x: Number) => x + 1\n"
            "  when true {\n"
            "    f := 5\n"
@@ -1297,7 +1297,7 @@ def test_an_inner_binding_shadows_a_let_bound_lambda(tmp_path):
 
 def test_a_let_bound_lambda_is_callable_directly(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  sq := fun(x: Number) => x * x\n"
            "  return sq(3)\n"
            "}\n")
@@ -1314,7 +1314,7 @@ def _ab_program_desugar(b_arms, main_body):
             f"place B {{ this > {b_arms} }}\n"
             "place Entry {}\n"
             "fun code(a: A): Number { return match a { X => 1, Y => 2 } }\n"
-            f"fun main(): Number {{ return {main_body} }}\n")
+            f"fun main: Number {{ return {main_body} }}\n")
 
 
 def test_homonymous_arms_across_sums_keep_their_own_tags(tmp_path):
@@ -1339,7 +1339,7 @@ def test_distinct_arm_names_dispatch_by_tag(tmp_path):
 def _bool_program_desugar(arms):
     return ("place Entry {}\n"
             f"fun pick(b: Boolean): Number {{ return match b {{ {arms} }} }}\n"
-            "fun main(): Number { return pick(true) * 10 + pick(false) }\n")
+            "fun main: Number { return pick(true) * 10 + pick(false) }\n")
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -1389,7 +1389,7 @@ def test_forces_rejects_an_ill_typed_condition(tmp_path):
 
 def test_when_does_not_run_its_body_under_a_false_condition(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  mut acc := 0\n"
            "  when 1 == 2 {\n"
            "    acc <- acc + 5\n"
@@ -1412,7 +1412,7 @@ _NOT_NATURAL_desugar = ("place Entry {}\n"
                 "morph F from Account to AccountEU {\n  on morphism deposit via df\n}\n"
                 "morph G from Account to AccountEU {\n  on morphism deposit via dg\n}\n"
                 "nat transform Eta from F to G {\n  for each deposit by eta\n}\n"
-                "fun main(): Number { return 0 }\n")
+                "fun main: Number { return 0 }\n")
 
 
 @pytest.mark.skipif(shutil.which("z3") is None or not FRONTEND.exists(),
@@ -1444,7 +1444,7 @@ def _reduction_desugar(body):
             "    on tick(n: Number) {\n"
             f"{body}"
             "    }\n  }\n"
-            "  fun main(): Number { return 7 }\n}\n")
+            "  fun main: Number { return 7 }\n}\n")
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -1502,7 +1502,7 @@ def test_a_stream_may_carry_4294967294(tmp_path):
                    reason="a path bound by name is in scope in a later reassignment")
 def test_a_named_path_is_in_scope_in_a_reassignment(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  p := clear 7\n"
            "  mut acc := 0\n"
            "  acc <- p @ I0\n"
@@ -1516,7 +1516,7 @@ def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
     src = ("place Box { this > Full Number :U Empty }\n"
            "place Entry {}\n"
            "fun code(b: Box): Number { return match b { Full as n => n, Empty => 0 } }\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  v := 5 ↪ Full\n"
            "  mut acc := 0\n"
            "  acc <- code(v)\n"
@@ -1530,7 +1530,7 @@ def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
                    reason="the method form a.concat(b) on two Strings is String concatenation")
 def test_string_concat_method_form(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  mut a := \"ab\"\n"
            "  mut b := \"cde\"\n"
            "  s := a.concat(b)\n"
@@ -1542,7 +1542,7 @@ def test_string_concat_method_form(tmp_path):
 
 def test_string_concat_qualified_form(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  mut a := \"ab\"\n"
            "  mut b := \"cde\"\n"
            "  s := String.concat(a, b)\n"
@@ -1553,7 +1553,7 @@ def test_string_concat_qualified_form(tmp_path):
 
 def test_a_named_path_is_in_scope_in_a_binding(tmp_path):
     src = ("place Entry {}\n"
-           "fun main(): Number {\n"
+           "fun main: Number {\n"
            "  p := clear 7\n"
            "  mut acc := p @ I0\n"
            "  return acc\n"
@@ -1580,7 +1580,7 @@ _FAMILY_kernel = "  fun Fam(x: Number): Type_0 { return if x > 7 then text else 
 def test_codes_applied_to_different_arguments_are_different_types(tmp_path):
     entry = ("place Entry {\n" + _FAMILY_kernel +
              "  fun cast(e: El(Fam(7))): El(Fam(8)) { return e }\n"
-             "  fun main(): Number { return 0 }\n}\n")
+             "  fun main: Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
     _verdict(_clean_rejection(rc, out, 'E2001', 'type mismatch: expected El(Fam('),
              f"El(Fam(7)) was accepted as El(Fam(8)) (rc={rc})")
@@ -1591,7 +1591,7 @@ def test_codes_of_different_families_are_different_types(tmp_path):
              "  fun Fam(x: Number): Type_0 { return number }\n"
              "  fun Gam(x: Number): Type_0 { return text }\n"
              "  fun cast(e: El(Fam(7))): El(Gam(7)) { return e }\n"
-             "  fun main(): Number { return 0 }\n}\n")
+             "  fun main: Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
     assert _clean_rejection(rc, out, 'E2001', 'expected El(Gam(_code)), got El(Fam(_code))'), out
 
@@ -1610,7 +1610,7 @@ _BOOL_BIT_kernel = (
 
 def test_transport_along_a_named_univalence_path_lands_in_the_target(tmp_path):
     entry = _BOOL_BIT_kernel + (
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  mut u := ua(equiv(b2bit, bit2b, eta, eps))\n"
         "  y := transport(u, tt)\n"
         "  return match y { one => 1, zero => 0 }\n}\n}\n")
@@ -1621,7 +1621,7 @@ def test_transport_along_a_named_univalence_path_lands_in_the_target(tmp_path):
 
 def test_transport_along_a_named_univalence_path_leaves_the_source(tmp_path):
     entry = _BOOL_BIT_kernel + (
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  mut u := ua(equiv(b2bit, bit2b, eta, eps))\n"
         "  y := transport(u, tt)\n"
         "  return match y { tt => 1, ff => 2 }\n}\n}\n")
@@ -1635,7 +1635,7 @@ def test_transport_along_a_named_univalence_path_leaves_the_source(tmp_path):
 
 def test_transport_along_an_inline_univalence_path_lands_in_the_target(tmp_path):
     entry = _BOOL_BIT_kernel + (
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  y := transport(ua(equiv(b2bit, bit2b, eta, eps)), tt)\n"
         "  return match y { one => 1, zero => 0 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
@@ -1661,7 +1661,7 @@ def test_refl_proves_exactly_the_ring_laws_of_the_carrier(tmp_path, law):
     param, sides, holds = _RING_LAWS[law]
     endpoints = " = ".join(sides.split(", "))
     entry = (f"place Entry {{\n  fun identity({param}): {endpoints} {{ return clear }}\n"
-             "  fun main(): Number { return 42 }\n}\n")
+             "  fun main: Number { return 42 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     if holds:
         assert rc == 0, out
@@ -1685,7 +1685,7 @@ def test_dividing_back_is_not_an_identity_on_floats(tmp_path):
     entry = ("place Entry {\n"
              "  fun third(x: Number): (x * 3) / 3 = x { return clear x }\n"
              "  fun differs(x: Number): Number { return if (x * 3) / 3 == x then 0 else 1 }\n"
-             "  fun main(): Number { return differs(0.1) }\n}\n")
+             "  fun main: Number { return differs(0.1) }\n}\n")
     _accepted_identity_is_false_kernel(tmp_path, entry)
 
 
@@ -1697,14 +1697,14 @@ def test_large_coefficients_do_not_wrap(tmp_path):
              f"  fun wide(a: Number, b: Number): {lhs} = {rhs} {{ return clear ({lhs}) }}\n"
              f"  fun lhs(a: Number, b: Number): Number {{ return {lhs} }}\n"
              f"  fun rhs(a: Number, b: Number): Number {{ return {rhs} }}\n"
-             "  fun main(): Number { return if lhs(0, 0) == rhs(0, 0) then 0 else 1 }\n}\n")
+             "  fun main: Number { return if lhs(0, 0) == rhs(0, 0) then 0 else 1 }\n}\n")
     _accepted_identity_is_false_kernel(tmp_path, entry)
 
 
 def test_a_shifted_value_is_not_identical_to_itself(tmp_path):
     entry = ("place Entry {\n"
              "  fun off(x: Number): x + 1 = x { return clear x }\n"
-             "  fun main(): Number { return 0 }\n}\n")
+             "  fun main: Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
     assert _clean_rejection(rc, out, 'E2001', 'expected Id_number(_code, x), got Id_number(x, x)'), out
 
@@ -1720,7 +1720,7 @@ def test_naturality_is_not_proven_for_a_square_that_does_not_commute(tmp_path):
              "  morph M1 from A to B { on morphism step via shift }\n"
              "  morph M2 from A to B { on morphism step via mark }\n"
              "  nat transform Eta from M1 to M2 { for each step by eta }\n"
-             "  fun main(): Number { return __check_naturality_Eta__step(3) }\n}\n")
+             "  fun main: Number { return __check_naturality_Eta__step(3) }\n}\n")
     proj = _project(tmp_path, entry)
     fe = subprocess.run([str(FRONTEND), str(proj)], capture_output=True, text=True, timeout=120)
     # the square is not proven (its components carry `clear input`, outside the
@@ -1736,7 +1736,7 @@ _IS_AND_kernel = ("place Entry {{\n"
            "    mut r := 0\n"
            "    when {cond} {{ r <- 1 }}\n"
            "    return r\n  }}\n"
-           "  fun main(): Number {{ return probe(5, 3) * 10 + probe(5, 7) }}\n}}\n")
+           "  fun main: Number {{ return probe(5, 3) * 10 + probe(5, 7) }}\n}}\n")
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -1760,7 +1760,7 @@ def test_is_binds_tighter_than_and_on_the_left(tmp_path):
 
 @pytest.mark.parametrize("value, arm", [("present", 1), ("absent", 2), ("unknown", 3)])
 def test_unknown_does_not_become_false(tmp_path, value, arm):
-    entry = ("place Entry {}\nfun main(): Number {\n"
+    entry = ("place Entry {}\nfun main: Number {\n"
              f"  p := {value}\n"
              "  return match decide(p) { Present => 1, Absent => 2, Unknown => 3 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
@@ -1769,7 +1769,7 @@ def test_unknown_does_not_become_false(tmp_path, value, arm):
 
 
 def test_a_decision_is_left_only_by_answering_unknown(tmp_path):
-    entry = ("place Entry {}\nfun main(): Number {\n  p := unknown\n"
+    entry = ("place Entry {}\nfun main: Number {\n  p := unknown\n"
              "  return match decide(p) { Present => 1, Absent => 2 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'missing branch(es) for Unknown') and "Unknown" in out, out
@@ -1780,7 +1780,7 @@ def test_a_decision_is_left_only_by_answering_unknown(tmp_path):
     ("to_bool_dec(decide(p))", "unknown function or operation: to_bool_dec"),
     ("p", "expected boolean, got proposition")])
 def test_there_is_no_arrow_from_proposition_to_boolean(tmp_path, form, reason):
-    entry = ("place Entry {}\nfun main(): Number {\n  p := unknown\n"
+    entry = ("place Entry {}\nfun main: Number {\n  p := unknown\n"
              f"  return if {form} then 1 else 2\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, "E2001", reason), out
@@ -1790,7 +1790,7 @@ def test_a_boolean_flows_into_a_proposition(tmp_path):
     """Boolean <: proposition: a comparison returned where a proposition is
     expected is accepted, whichever way the proposition type is written."""
     entry = ("place Entry {}\nfun f(x: Number): proposition { return x > 0 }\n"
-             "fun main(): Number { return match decide(f(1)) { Present => 42, Absent => 0, Unknown => 1 } }\n")
+             "fun main: Number { return match decide(f(1)) { Present => 42, Absent => 0, Unknown => 1 } }\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert rc == 0, out
     assert _run(tmp_path / "out")[0] == 42
@@ -1800,7 +1800,7 @@ def test_a_proposition_is_not_a_boolean(tmp_path):
     entry = ("place Entry {\n"
              "  fun f(b: Boolean): Number { return if b then 1 else 2 }\n"
              "  fun g(p: proposition): Number { return f(p) }\n"
-             "  fun main(): Number { return g(unknown) }\n}\n")
+             "  fun main: Number { return g(unknown) }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
     _verdict(_clean_rejection(rc, out, 'E2001', 'expects boolean, got proposition'),
              f"the checker accepted a proposition as a boolean (rc={rc}, "
@@ -1810,7 +1810,7 @@ def test_a_proposition_is_not_a_boolean(tmp_path):
 # --- cubical composition -------------------------------------------------------
 
 _SUSP_kernel = ("place Entry {{\n"
-         "fun main(): Number {{\n"
+         "fun main: Number {{\n"
          "  mut n := hit(north)\n"
          "  m := hit(merid, 0)\n"
          "{body}"
@@ -1847,7 +1847,7 @@ _SHADOW_kernel = ("place Entry {{\n"
            "  fun pick({tparams}x: Number): Number {{ return x }}\n"
            "  fun g(pick: Number -> Number): Number {{ return pick(5) }}\n"
            "  fun inc(a: Number): Number {{ return a + 1 }}\n"
-           "  fun main(): Number {{ return g(inc) }}\n}}\n")
+           "  fun main: Number {{ return g(inc) }}\n}}\n")
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -1872,8 +1872,8 @@ def test_a_parameter_shadows_a_plain_function_of_the_same_name(tmp_path):
 def test_an_inferred_section_is_not_a_number(tmp_path):
     entry = ("place Box { v Number }\n"
              "place Entry {\n"
-             "  fun mk() { return .-> Box { v 1 } }\n"
-             "  fun main(): Number { mut n := mk() + 1  return n }\n}\n")
+             "  fun mk { return .-> Box { v 1 } }\n"
+             "  fun main: Number { mut n := mk + 1  return n }\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _BOX_kernel)
     _verdict(_clean_rejection(rc, out, 'E2001', 'Box'),
              f"the checker accepted a section plus a number (rc={rc}, "
@@ -1970,7 +1970,7 @@ def test_drop_in_a_callee_while_the_caller_still_reads_the_space_is_refused(tmp_
 def test_drop_before_reading_a_place_parameter_is_refused(tmp_path):
     entry = ("place Entry { }\n"
              "fun peek(a: DP): Number {\n  drop D\n  return a.n\n}\n"
-             "fun main(): Number {\n  p := .-> DP { n 7 }\n  return peek(p)\n}\n")
+             "fun main: Number {\n  p := .-> DP { n 7 }\n  return peek(p)\n}\n")
     refused, rc, out = _drop_refused_frontend(tmp_path, entry)
     _verdict(refused, f"drop D accepted before a.n with a: DP: rc={rc}")
 
@@ -2005,7 +2005,7 @@ def _boundary_project_frontend(tmp, a_body):
     (root / "C" / "CP.yon").write_text(
         "import svc::b_op from Bx\nplace CP { }\n"
         "fun c_op(x: Number): Number { mut r := b_op(x)  return r }\n")
-    (root / "Entry.yon").write_text("place Entry { }\nfun main(): Number { return 0 }\n")
+    (root / "Entry.yon").write_text("place Entry { }\nfun main: Number { return 0 }\n")
     return root
 
 
@@ -2035,7 +2035,7 @@ _AW_TOML_frontend = ('[package]\nname = "aw"\n\n[runtime]\nbackend = "shm"\n\n'
 _AW_ENTRY_frontend = """import pa::pa from Alpha
 import pb::pb from Beta
 place Entry {
-fun main(): Number {
+fun main: Number {
   return fa() + Other.fb()
 }
 fun fa(): Number {
@@ -2048,10 +2048,10 @@ fun fa(): Number {
 """
 _AW_OTHER_frontend = """import pb::pb from Beta
 place Other {
-fun d1(): Number { return 0 }
-fun d2(): Number { return 0 }
-fun d3(): Number { return 0 }
-fun d4(): Number { return 0 }
+fun d1: Number { return 0 }
+fun d2: Number { return 0 }
+fun d3: Number { return 0 }
+fun d4: Number { return 0 }
 fun fb(): Number {
   w := wire to space Beta
   sub := w.awaits(pb)
@@ -2095,7 +2095,7 @@ def test_two_subscriptions_at_the_same_position_in_two_files_keep_their_spaces(t
                    reason="user source cannot reach a Space by spelling the runtime's internal call name")
 def test_a_runtime_rpc_name_in_user_source_is_refused(tmp_path):
     entry = ("import svc::d_op from D\nplace Entry { }\n"
-             "fun main(): Number {\n  return __yon_rpc2_invoke1__D(7, 3)\n}\n")
+             "fun main: Number {\n  return __yon_rpc2_invoke1__D(7, 3)\n}\n")
     rc, out = _compile(_d_project_frontend(tmp_path, entry), tmp_path / "out")
     _verdict(_clean_rejection(rc, out, 'E2001', '__yon_rpc2_invoke1__D'),
              f"forged call to Space D with selector 7 compiled: rc={rc}")
@@ -2106,7 +2106,7 @@ def test_a_runtime_rpc_name_in_user_source_is_refused(tmp_path):
 def _geo_project_frontend(tmp, geo_src):
     return _project(tmp,
         'import "x/geo"\nplace Entry { }\n'
-        "fun main(): Number {\n  return geo::apply(fun(y: Number) => y + 1, 1)\n}\n",
+        "fun main: Number {\n  return geo::apply(fun(y: Number) => y + 1, 1)\n}\n",
         files={"yon_modules/geo/geo.yon": geo_src})
 
 
@@ -2136,25 +2136,23 @@ def test_a_dependency_parameter_shadows_a_module_function(tmp_path):
 
 def _homes_project_frontend(tmp, f_body):
     return _project(tmp,
-        "internal fun helper(): Number { return 1 }\nplace Entry { }\n"
-        "fun main(): Number { return P.f() }\n",
+        "internal fun helper: Number { return 1 }\nplace Entry { }\n"
+        "fun main: Number { return P.f }\n",
         extra='\n[world.W]\nobjects = ["X"]\nspaces = ["w"]\n',
         files={"w/Topos.yon": "topos WTopos where {\n}\n",
-               "P.yon": "place P {\n  internal fun helper(): Number { return 2 }\n"
-                        "  fun f(): Number {\n" + f_body + "  }\n}\n"})
+               "P.yon": "place P {\n  internal fun helper: Number { return 2 }\n"
+                        "  fun f: Number {\n" + f_body + "  }\n}\n"})
 
 
 def test_a_sibling_call_resolves_to_the_sibling(tmp_path):
-    rc, out = _compile(_homes_project_frontend(tmp_path, "    return helper()\n"), tmp_path / "out")
+    rc, out = _compile(_homes_project_frontend(tmp_path, "    return helper\n"), tmp_path / "out")
     assert rc == 0, out
     code, _ = _run(tmp_path / "out")
     assert code == 2
 
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="a sibling call inside a when block resolves to the sibling, not to a global homonym")
 def test_a_sibling_call_inside_when_resolves_to_the_sibling(tmp_path):
-    body = "    mut r := 0\n    when 1 == 1 { r <- helper() }\n    return r\n"
+    body = "    mut r := 0\n    when 1 == 1 { r <- helper }\n    return r\n"
     rc, out = _compile(_homes_project_frontend(tmp_path, body), tmp_path / "out")
     assert rc == 0, out
     code, _ = _run(tmp_path / "out")
@@ -2176,7 +2174,7 @@ _NAT_PROJ_frontend = """place Entry {
   nat transform Eta from F to G {
     for each deposit by idf
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """
 
@@ -2228,7 +2226,7 @@ _SQUARES = {
 
 
 def _square_project(tmp, ty, fa, ga, given=False):
-    src = (_NAT_PROJ_frontend.replace("Number", ty).replace("fun main(): " + ty, "fun main(): Number")
+    src = (_NAT_PROJ_frontend.replace("Number", ty).replace("fun main: " + ty, "fun main: Number")
            % (fa, ga))
     if given:
         src = src.replace("nat transform Eta from F to G {", "nat transform Eta from F to G is given {")
@@ -2283,7 +2281,7 @@ def test_a_naturality_verdict_reaches_whoever_compiles(tmp_path):
 def test_the_circle_base_point_eliminates(tmp_path):
     proj = _project(tmp_path,
         "place Entry {\nfun motive(x: S1): Number { return 0 }\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  return hit_elim(motive, [base => 42, loop => plam i => 42], hit(base))\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     assert rc == 0, out
@@ -2295,7 +2293,7 @@ def test_the_circle_base_point_eliminates(tmp_path):
 def test_the_sphere_base_point_eliminates(tmp_path):
     proj = _project(tmp_path,
         "place Entry {\nfun motive(x: S2): Number { return 0 }\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  return hit_elim(motive, [base => 42, surf => plam i => 42], hit(base))\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     _verdict(rc == 0, f"S2 elimination refused: {out.strip()[-160:]}")
@@ -2308,7 +2306,7 @@ _TRANSPORT_PARAM_frontend = """place Entry {
 fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 fun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }
-fun main(): Number {
+fun main: Number {
   y := go(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)
   return if y == 11 then 11 else 0
 }
@@ -2320,7 +2318,7 @@ def test_transport_along_an_inline_univalence_path_applies_the_equivalence(tmp_p
     proj = _project(tmp_path,
         "place Entry {\nfun succ(n: Int64): Int64 { return n + 1 }\n"
         "fun pred(n: Int64): Int64 { return n - 1 }\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  y := transport(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)\n"
         "  return if y == 11 then 11 else 0\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
@@ -2372,7 +2370,7 @@ def _fmt_keeps_frontend(tmp, src, needle):
 
 @pytest.mark.skipif(not FMT_frontend.exists(), reason="yonfmt is not built")
 def test_formatting_keeps_an_integer_literal(tmp_path):
-    ok, out = _fmt_keeps_frontend(tmp_path, "place Entry {\n  fun main(): Number { return 42 }\n}\n", "42")
+    ok, out = _fmt_keeps_frontend(tmp_path, "place Entry {\n  fun main: Number { return 42 }\n}\n", "42")
     assert ok, out
 
 
@@ -2381,7 +2379,7 @@ def test_formatting_keeps_an_integer_literal(tmp_path):
                    reason="formatting keeps every digit of a numeric literal")
 def test_formatting_keeps_every_digit_of_a_literal(tmp_path):
     ok, out = _fmt_keeps_frontend(tmp_path,
-        "place Entry {\n  fun main(): Number { return 3.14159265 }\n}\n", "3.14159265")
+        "place Entry {\n  fun main: Number { return 3.14159265 }\n}\n", "3.14159265")
     _verdict(ok, f"formatted text: {out!r}")
 
 
@@ -2391,7 +2389,7 @@ def test_formatting_keeps_every_digit_of_a_literal(tmp_path):
 def test_formatting_keeps_a_function_error_clause(tmp_path):
     ok, out = _fmt_keeps_frontend(tmp_path,
         "place Entry {\n  fun half(n: Number) on error DomainError: Number { return n / 2 }\n"
-        "  fun main(): Number { return half(84) }\n}\n", "on error DomainError")
+        "  fun main: Number { return half(84) }\n}\n", "on error DomainError")
     _verdict(ok, f"formatted text: {out!r}")
 
 
@@ -2411,7 +2409,7 @@ def test_formatting_keeps_a_when_here_filter(tmp_path):
                    reason="formatting keeps comments")
 def test_formatting_keeps_comments(tmp_path):
     ok, out = _fmt_keeps_frontend(tmp_path,
-        "place Entry {\n  // the answer\n  fun main(): Number { return 42 }\n}\n", "// the answer")
+        "place Entry {\n  // the answer\n  fun main: Number { return 42 }\n}\n", "// the answer")
     _verdict(ok, f"formatted text: {out!r}")
 
 
@@ -2433,7 +2431,7 @@ def _build_run_dialect(proj, tmp):
 def _nested_dialect(tmp, node_src, literal):
     return _project(tmp, (
         "place Entry {\n"
-        "  fun main(): Number {\n"
+        "  fun main: Number {\n"
         f"    mut n := .-> Node {{ {literal} }}\n"
         "    return n.child.v\n"
         "  }\n"
@@ -2487,7 +2485,7 @@ def test_nested_field_getter_buffer_holds_the_loaded_bytes(tmp_path):
 def test_section_literal_binds_fields_by_name(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {\n"
-        "  fun main(): Number {\n"
+        "  fun main: Number {\n"
         "    p := .-> P { b 1 a 2 }\n"
         "    return p.a * 10 + p.b\n"
         "  }\n"
@@ -2501,7 +2499,7 @@ def test_section_literal_binds_fields_by_name(tmp_path):
 def test_section_literal_binds_fields_of_different_types_by_name(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {\n"
-        "  fun main(): Number {\n"
+        "  fun main: Number {\n"
         "    q := .-> Q { n 3 name \"ab\" }\n"
         "    return String.length(q.name) * 10 + q.n\n"
         "  }\n"
@@ -2520,8 +2518,8 @@ def test_adding_to_a_set_leaves_the_original_unchanged(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {}\n"
         "fun sz(s: HashSet<Number>): Number { return HashSet.size(s) }\n"
-        "fun main(): Number {\n"
-        "  s := HashSet.add(HashSet.empty(), 1)\n"
+        "fun main: Number {\n"
+        "  s := HashSet.add(HashSet.empty, 1)\n"
         "  mut t := HashSet.add(s, 2)\n"
         "  mut b := HashSet.size(s)\n"
         "  mut c := sz(s)\n"
@@ -2537,8 +2535,8 @@ def test_setting_a_map_key_leaves_the_original_unchanged(tmp_path):
         "fun at1(m: HashMap<Number, Number>): Number {\n"
         "  return match HashMap.get(m, 1) { Found as v => v, Absent => 0 }\n}\n"
         "fun look(m: HashMap<Number, Number>): Number { return at1(m) }\n"
-        "fun main(): Number {\n"
-        "  m := HashMap.set(HashMap.empty(), 1, 5)\n"
+        "fun main: Number {\n"
+        "  m := HashMap.set(HashMap.empty, 1, 5)\n"
         "  mut t := HashMap.set(m, 1, 9)\n"
         "  mut b := at1(m)\n"
         "  mut c := look(m)\n"
@@ -2555,7 +2553,7 @@ def test_scalar_negation_of_unknown_is_false(tmp_path):
     """G3: not unknown is absent, and not not unknown is present."""
     proj = _project(tmp_path, (
         "place Entry {}\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  s := match decide(!? unknown) { Present => 10, Absent => 0, Unknown => 20 }\n"
         "  mut t := match decide(!? (!? unknown)) { Present => 1, Absent => 0, Unknown => 2 }\n"
         "  return s + t\n"
@@ -2569,7 +2567,7 @@ def test_scalar_negation_of_unknown_is_false(tmp_path):
 def test_heyting_integer_negation_of_unknown_is_decided(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {}\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  mut n := ~? heyting(0, 1)\n"
         "  return __heyt_int_mask(n)\n"
         "}\n"))
@@ -2582,7 +2580,7 @@ def test_heyting_integer_negation_of_unknown_is_decided(tmp_path):
 def test_heyting_integer_implies_itself(tmp_path):
     proj = _project(tmp_path, (
         "place Entry {}\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  h := heyting(0, 1)\n"
         "  return match decide(h =>? h) { Present => 7, Absent => 3, Unknown => 3 }\n"
         "}\n"))
@@ -2608,18 +2606,18 @@ def test_a_handled_nullary_operation_returns_the_handler_value(tmp_path):
         "place Entry {\n"
         "  reduction Keep of Acc {\n"
         "    seed := 0\n"
-        "    on balance() {\n"
+        "    on balance {\n"
         "      return 40\n"
         "    }\n"
         "  }\n"
-        "  fun main(): Number visits Acc { return Acc.balance() + 5 }\n"
+        "  fun main: Number visits Acc { return Acc.balance + 5 }\n"
         "}\n"), extra=WORLD_dialect, files={
             "w/Topos.yon": TOPOS_dialect,
-            "w/Acc.yon": "place Acc {\n  total Number\n  operation balance(): Number\n}\n"})
+            "w/Acc.yon": "place Acc {\n  total Number\n  operation balance: Number\n}\n"})
     rc, out = _compile(proj, tmp_path / "a.out")
     _verdict(rc == 0, "handled nullary operation does not compile: " + out[-300:])
     code, _ = _run(tmp_path / "a.out")
-    _verdict(code == 45, f"Acc.balance() + 5 gave {code}, expected 45")
+    _verdict(code == 45, f"Acc.balance + 5 gave {code}, expected 45")
 
 
 # === the runtime, the prelude and the self-host -----------------------
@@ -2683,7 +2681,7 @@ place Entry {}
 fun get(e: Expr): Number {
   return match e { Lit as n => n, Nil => 0 }
 }
-fun main(): Number {
+fun main: Number {
   mut n := get(%s ↪ Lit)
   return if %s then 1 else 0
 }
@@ -2717,7 +2715,7 @@ fun name(e: Tag): Number { return match e { Named as s => String.length(s), Anon
 fun inner(e: Wrapped): Number {
   return match e { Wrap as x => (match x { Lit as n => n, Nil => 0 }), None => 0 }
 }
-fun main(): Number {
+fun main: Number {
   return flag((3 > 2) ↪ Flag) * 100 + name("abcde" ↪ Named) * 10
        + inner(0.5 ↪ Lit ↪ Wrap) * 2
 }
@@ -2730,7 +2728,7 @@ def test_a_value_is_never_cast_into_a_child(tmp_path):
     """A child that is not a node handle stops the program; it is never cast."""
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   mut n := MerkleTree.node2(9, 1.5, MerkleTree.leaf(0))
   return MerkleTree.label(MerkleTree.child(n, 0))
 }
@@ -2751,7 +2749,7 @@ def test_coproduct_payload_keeps_a_small_integer(tmp_path):
 def test_prelude_sqrt_result_survives_its_success_arm(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   mut a := match Number.sqrt(2) { Number as r => r, DomainError as d => 0 - 1 }
   return if a > 1.414 then (if a < 1.415 then 1 else 0) else 0
 }
@@ -2840,7 +2838,7 @@ def _wire_runtime(tmp_path, svc_place, consumer_fold, consumer_place, iface):
     svc = tmp_path / "svc"
     (svc / "w").mkdir(parents=True)
     (svc / "yon.toml").write_text(toml.format(n="weather_svc", s='"w"'))
-    (svc / "Entry.yon").write_text("place Entry {\n  fun main(): Number { return 0 }\n}\n")
+    (svc / "Entry.yon").write_text("place Entry {\n  fun main: Number { return 0 }\n}\n")
     (svc / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
     (svc / "w" / "R.yon").write_text(svc_place)
     sub = tmp_path / "sub"
@@ -2851,7 +2849,7 @@ def _wire_runtime(tmp_path, svc_place, consumer_fold, consumer_place, iface):
     (sub / "w" / "R.yon").write_text(consumer_place)
     (sub / "yon_modules" / "weather" / "weather.yon").write_text(iface)
     (sub / "Entry.yon").write_text(
-        "import weather::feed from Weather\n\nplace Entry {\n  fun main(): Number {\n"
+        "import weather::feed from Weather\n\nplace Entry {\n  fun main: Number {\n"
         "    w := wire to space Weather\n    sub := w.awaits(feed)\n"
         "    s := sub.stream\n    total := s.fold(0, " + consumer_fold + ")\n"
         "    return total\n  }\n}\n")
@@ -2949,7 +2947,7 @@ fun one(k: Number): Number {
   }
   return results.fold(0, fun(a: Number, v: Number) => a + v)
 }
-fun main(): Number {
+fun main: Number {
   mut good := 0
   mut i := 0
   while i < 40 do {
@@ -2968,9 +2966,9 @@ fun main(): Number {
 def test_hashset_union_keeps_minus_one(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
-  s := HashSet.add(HashSet.empty(), 0 - 1)
-  return HashSet.size(HashSet.union(s, HashSet.empty()))
+fun main: Number {
+  s := HashSet.add(HashSet.empty, 0 - 1)
+  return HashSet.size(HashSet.union(s, HashSet.empty))
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
@@ -2980,9 +2978,9 @@ fun main(): Number {
 def test_hashset_union_keeps_four(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
-  s := HashSet.add(HashSet.empty(), 4)
-  return HashSet.size(HashSet.union(s, HashSet.empty()))
+fun main: Number {
+  s := HashSet.add(HashSet.empty, 4)
+  return HashSet.size(HashSet.union(s, HashSet.empty))
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
@@ -2992,8 +2990,8 @@ fun main(): Number {
 def test_hashmap_set_leaves_the_source_map_unchanged(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
-  m1 := HashMap.set(HashMap.empty(), 1, 10)
+fun main: Number {
+  m1 := HashMap.set(HashMap.empty, 1, 10)
   m2 := HashMap.set(m1, 2, 20)
   return HashMap.size(m1) * 10 + HashMap.size(m2)
 }
@@ -3009,7 +3007,7 @@ def test_a_missing_key_is_absent_not_zero(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  m := HashMap.set(HashMap.empty(), 1, 0)
+  m := HashMap.set(HashMap.empty, 1, 0)
   mut a := match HashMap.get(m, 1) { Found as v => (if v == 0 then 1 else 0), Absent => 5 }
   mut b := match HashMap.get(m, 2) { Found as v => 7, Absent => 10 }
   return a + b
@@ -3025,13 +3023,13 @@ def test_a_collection_holds_its_elements_bit_for_bit(tmp_path):
     entry = """\
 place Entry {}
 fun round_trip(x: Int64): Number {
-  m := HashMap.set(HashMap.empty(), 1, x)
-  s := HashSet.add(HashSet.empty(), x)
+  m := HashMap.set(HashMap.empty, 1, x)
+  s := HashSet.add(HashSet.empty, x)
   mut a := match HashMap.get(m, 1) { Found as v => (if v == x then 1 else 0), Absent => 0 }
   return if HashSet.contains(s, x) then a else 0
 }
-fun main(): Number {
-  return round_trip(Int64.max_value()) + round_trip(Int64.min_value()) * 10
+fun main: Number {
+  return round_trip(Int64.max_value) + round_trip(Int64.min_value) * 10
        + round_trip(9007199254740993) * 100
 }
 """
@@ -3044,11 +3042,11 @@ def test_one_collection_is_not_another(tmp_path):
     HashMap<Number, Number>."""
     for i, (body, reason) in enumerate([
             ("fun f(s: HashSet<Number>): Number { return HashSet.size(s) }\n"
-             "fun main(): Number { return f(HashMap.set(HashMap.empty(), 1, 2)) }\n",
+             "fun main: Number { return f(HashMap.set(HashMap.empty, 1, 2)) }\n",
              "parameter s expects HashSet<number>, got HashMap<number, number>"),
             ("fun f(m: HashMap<Number, Number>): Number { return HashMap.size(m) }\n"
-             "fun big(): Int64 { return 5 }\n"
-             "fun main(): Number { return f(HashMap.set(HashMap.empty(), 1, big())) }\n",
+             "fun big: Int64 { return 5 }\n"
+             "fun main: Number { return f(HashMap.set(HashMap.empty, 1, big)) }\n",
              "parameter m expects HashMap<number, number>, got HashMap<number, Int64>")]):
         d = tmp_path / str(i)
         d.mkdir()
@@ -3065,7 +3063,7 @@ fun fill(m: HashMap<Number, Number>, i: Number, n: Number): HashMap<Number, Numb
   return if i >= n then m else fill(HashMap.set(m, i, i * 2), i + 1, n)
 }
 fun main(): Number {
-  m10 := fill(HashMap.empty(), 0, 10)
+  m10 := fill(HashMap.empty, 0, 10)
   m1000 := fill(m10, 10, 1000)
   ok10 := if HashMap.size(m10) == 10 then (if HashMap.has(m10, 500) then 0 else 1) else 0
   v999 := match HashMap.get(m1000, 999) { Found as v => v, Absent => 0 }
@@ -3081,10 +3079,10 @@ def test_a_key_is_identified_by_its_bits(tmp_path):
     """-0.0 and 0.0 are two keys, the identity of the heap; a NaN key finds itself."""
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   negz := 0.0 * (0 - 1)
   nan := 0.0 / 0.0
-  s := HashSet.add(HashSet.add(HashSet.add(HashSet.empty(), 0.0), negz), nan)
+  s := HashSet.add(HashSet.add(HashSet.add(HashSet.empty, 0.0), negz), nan)
   return HashSet.size(s) * 10 + (if HashSet.contains(s, nan) then 1 else 0)
 }
 """
@@ -3095,9 +3093,9 @@ fun main(): Number {
 def test_union_and_intersection_leave_their_operands(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
-  mut a := HashSet.add(HashSet.add(HashSet.empty(), 1), 2)
-  mut b := HashSet.add(HashSet.add(HashSet.empty(), 2), 3)
+fun main: Number {
+  mut a := HashSet.add(HashSet.add(HashSet.empty, 1), 2)
+  mut b := HashSet.add(HashSet.add(HashSet.empty, 2), 3)
   mut u := HashSet.union(a, b)
   mut i := HashSet.intersect(a, b)
   return HashSet.size(u) * 1000 + HashSet.size(i) * 100 + HashSet.size(a) * 10 + HashSet.size(b)
@@ -3126,7 +3124,7 @@ def test_xrelmap_returns_the_stored_number(tmp_path):
     entry = """\
 place Entry {}
 fun held(x: Number): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found as v => v, Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty, 1536, x), 1536) { Found as v => v, Absent => 0 }
 }
 fun main(): Number {
   _a := IO.print_num(held(2.5))
@@ -3142,14 +3140,14 @@ def test_xrelmap_at_a_point_returns_the_stored_number(tmp_path):
     entry = """\
 place Entry {}
 fun held(p: LatticePoint, x: Number): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found as v => v, Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty, p, x), p) { Found as v => v, Absent => 0 }
 }
 fun both(p: LatticePoint): Number {
   _a := IO.print_num(held(p, 2.5))
   _b := IO.print_num(held(p, 0 - 3))
   return 0
 }
-fun main(): Number {
+fun main: Number {
   return match LatticePoint.of_coordinate(1536) { LatticePoint as p => both(p), DomainError as d => 1 }
 }
 """
@@ -3162,7 +3160,7 @@ def test_xrelmap_at_a_point_returns_a_small_integer(tmp_path):
 place Entry {}
 fun main(): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, 42), p) { Found as v => v, Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, 42), p) { Found as v => v, Absent => 0 }),
     DomainError as d => 0 }
 }
 """
@@ -3181,19 +3179,19 @@ fun same_n(v: Number, x: Number): Number {
 }
 fun point_n(x: Number): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found as v => same_n(v, x), Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, x), p) { Found as v => same_n(v, x), Absent => 0 }),
     DomainError as d => 0 }
 }
 fun xrel_n(x: Number): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found as v => same_n(v, x), Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty, 1536, x), 1536) { Found as v => same_n(v, x), Absent => 0 }
 }
 fun point_i(x: Int64): Number {
   return match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, x), p) { Found as v => (if v == x then 1 else 0), Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, x), p) { Found as v => (if v == x then 1 else 0), Absent => 0 }),
     DomainError as d => 0 }
 }
 fun xrel_i(x: Int64): Number {
-  return match XRelMap.get(XRelMap.set(XRelMap.empty(), 1536, x), 1536) { Found as v => (if v == x then 1 else 0), Absent => 0 }
+  return match XRelMap.get(XRelMap.set(XRelMap.empty, 1536, x), 1536) { Found as v => (if v == x then 1 else 0), Absent => 0 }
 }
 fun both_n(x: Number): Number { return point_n(x) * xrel_n(x) }
 fun both_i(x: Int64): Number { return point_i(x) * xrel_i(x) }
@@ -3201,9 +3199,9 @@ fun main(): Number {
   inf := 1 / 0.0
   floats := both_n(2.5) + both_n(0 - 3) + both_n(0.0 * (0 - 1)) + both_n(0.0 / 0.0)
                 + both_n(inf) + both_n(0 - inf)
-  ints := both_i(Int64.max_value()) + both_i(Int64.min_value()) + both_i(9007199254740993)
+  ints := both_i(Int64.max_value) + both_i(Int64.min_value) + both_i(9007199254740993)
   empty := match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.empty(), p) { Found as v => 0, Absent => 1 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.empty, p) { Found as v => 0, Absent => 1 }),
     DomainError as d => 0 }
   return floats * 100 + ints * 10 + empty
 }
@@ -3218,8 +3216,8 @@ def test_a_lattice_slot_holds_every_value_bit_for_bit(tmp_path):
 def test_a_value_that_does_not_fit_a_slot_is_refused(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
-  mut a := XRelMap.set(XRelMap.empty(), 1536, true)
+fun main: Number {
+  mut a := XRelMap.set(XRelMap.empty, 1536, true)
   return 0
 }
 """
@@ -3237,9 +3235,9 @@ def test_there_is_no_ceiling_on_the_number_of_maps(tmp_path):
 place Entry {}
 fun many(i: Number, acc: Number): Number {
   return if i == 0 then acc
-         else many(i - 1, acc + HashMap.size(HashMap.set(HashMap.set(HashMap.empty(), i, 1), 0 - i, 2)))
+         else many(i - 1, acc + HashMap.size(HashMap.set(HashMap.set(HashMap.empty, i, 1), 0 - i, 2)))
 }
-fun main(): Number {
+fun main: Number {
   return many(1000, 0) / 1000
 }
 """
@@ -3251,7 +3249,7 @@ def test_text_keys_equal_by_content_are_one_key(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  m := HashMap.set(HashMap.empty(), String.concat("ab", "c"), 7)
+  m := HashMap.set(HashMap.empty, String.concat("ab", "c"), 7)
   m2 := HashMap.set(m, String.concat("a", "bc"), 9)
   got := match HashMap.get(m2, "abc") { Found as v => v, Absent => 0 }
   return HashMap.size(m2) * 10 + got
@@ -3265,10 +3263,10 @@ def test_a_text_value_rides_a_lattice_slot_by_its_handle(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  m := XRelMap.set(XRelMap.empty(), 1536, String.concat("ab", "c"))
+  m := XRelMap.set(XRelMap.empty, 1536, String.concat("ab", "c"))
   mut x := match XRelMap.get(m, 1536) { Found as v => (if v == "abc" then 1 else 0), Absent => 0 }
   y := match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty(), p, String.concat("a", "bc")), p) {
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, String.concat("a", "bc")), p) {
       Found as v => String.length(v), Absent => 0 }),
     DomainError as d => 0 }
   return x * 10 + y
@@ -3282,7 +3280,7 @@ def test_text_keys_equal_by_content_are_one_key_in_xrelmap(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  m := XRelMap.set(XRelMap.empty(), String.concat("ab", "c"), 7)
+  m := XRelMap.set(XRelMap.empty, String.concat("ab", "c"), 7)
   m2 := XRelMap.set(m, String.concat("a", "bc"), 9)
   got := match XRelMap.get(m2, "abc") { Found as v => v, Absent => 0 }
   return XRelMap.size(m2) * 10 + got
@@ -3292,13 +3290,13 @@ fun main(): Number {
     _verdict(rc == 19, f"size*10 + value at abc = {rc}, expected 19")
 
 
-@pytest.mark.parametrize("call", ["HashMap.value(HashMap.set(HashMap.empty(), 1, 42), 1)",
-                                  "XRelMap.value(XRelMap.set(XRelMap.empty(), 1536, 42), 1536)",
-                                  "match LatticePoint.of_coordinate(1536) { LatticePoint as p => XRelMap.value(XRelMap.set(XRelMap.empty(), p, 42), p), DomainError as d => 0 }"])
+@pytest.mark.parametrize("call", ["HashMap.value(HashMap.set(HashMap.empty, 1, 42), 1)",
+                                  "XRelMap.value(XRelMap.set(XRelMap.empty, 1536, 42), 1536)",
+                                  "match LatticePoint.of_coordinate(1536) { LatticePoint as p => XRelMap.value(XRelMap.set(XRelMap.empty, p, 42), p), DomainError as d => 0 }"])
 def test_a_collection_offers_get_and_keeps_value_to_itself(tmp_path, call):
     """`value` reads a key the collection holds and stops on any other: it is
     how `get` is built, internal to its house. Outside, the face is `get`."""
-    entry = f"place Entry {{}}\nfun main(): Number {{\n  return {call}\n}}\n"
+    entry = f"place Entry {{}}\nfun main: Number {{\n  return {call}\n}}\n"
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'is internal to') and "is internal to" in out, out[-400:]
 
@@ -3315,7 +3313,7 @@ def test_a_body_is_never_replaced_by_a_primitive_of_its_name(tmp_path):
     assert given in src, "the prelude no longer declares floor as given"
     number.write_text(src.replace(
         given, "  fun floor(n: Number): Number { return Math.floor(n) + 7 }\n"))
-    proj = _project(tmp_path, "place Entry {}\nfun main(): Number { return Number.floor(2.5) }\n")
+    proj = _project(tmp_path, "place Entry {}\nfun main: Number { return Number.floor(2.5) }\n")
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "out")],
                        capture_output=True, text=True, timeout=120,
                        env={**os.environ, "YON_PRELUDE": str(prelude)})
@@ -3338,7 +3336,7 @@ def test_a_body_named_like_a_lowered_primitive_runs_its_body(tmp_path):
     given = "  fun length(s: String): Number is given\n"
     assert given in src, "the prelude no longer declares String.length as given"
     text.write_text(src.replace(given, "  fun length(s: String): Number { return 40 + 2 }\n"))
-    proj = _project(tmp_path, 'place Entry {}\nfun main(): Number { return String.length("abc") }\n')
+    proj = _project(tmp_path, 'place Entry {}\nfun main: Number { return String.length("abc") }\n')
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "out")],
                        capture_output=True, text=True, timeout=120,
                        env={**os.environ, "YON_PRELUDE": str(prelude)})
@@ -3351,8 +3349,8 @@ def test_a_body_named_like_a_lowered_primitive_runs_its_body(tmp_path):
 
 
 def test_is_given_and_a_body_exclude_each_other(tmp_path):
-    rc, out = _compile(_project(tmp_path, "place Entry {}\nfun f(): Number is given { return 1 }\n"
-                                          "fun main(): Number { return f() }\n"), tmp_path / "out")
+    rc, out = _compile(_project(tmp_path, "place Entry {}\nfun f: Number is given { return 1 }\n"
+                                          "fun main: Number { return f }\n"), tmp_path / "out")
     _verdict(_clean_rejection(rc, out, 'E1001', 'is given and has a body') and "is given and has a body" in out,
              f"is given with a body was not refused as such: rc={rc} {out[-200:]}")
 
@@ -3360,7 +3358,7 @@ def test_is_given_and_a_body_exclude_each_other(tmp_path):
 def test_merkle_node3_children_are_its_leaves(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   pad1 := MerkleTree.leaf(500)
   pad2 := MerkleTree.leaf(600)
   mut n := MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
@@ -3375,7 +3373,7 @@ fun main(): Number {
 def test_merkle_node3_streams_its_leaves(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   mut n := MerkleTree.node3(9, MerkleTree.leaf(11), MerkleTree.leaf(22), MerkleTree.leaf(33))
   return List.length(MerkleTree.to_stream(n))
 }
@@ -3387,7 +3385,7 @@ fun main(): Number {
 def test_merkle_node2_children_are_its_leaves(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   mut n := MerkleTree.node2(9, MerkleTree.leaf(11), MerkleTree.leaf(22))
   return MerkleTree.label(MerkleTree.child(n, 0)) + MerkleTree.label(MerkleTree.child(n, 1))
 }
@@ -3403,7 +3401,7 @@ fun main(): Number {
 def test_out_of_range_substring_is_a_neutral_string(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   return String.length(String.concat(String.substring("ab", 5, 1), "x"))
 }
 """
@@ -3414,7 +3412,7 @@ fun main(): Number {
 def test_empty_substring_is_neutral_for_concat(tmp_path):
     entry = """\
 place Entry {}
-fun main(): Number {
+fun main: Number {
   return String.length(String.concat(String.substring("ab", 0, 0), "x"))
 }
 """
@@ -3476,7 +3474,7 @@ def test_raw_addition_reaches_through_a_negative_generator(tmp_path):
 def test_int64_shift_right_terminates_on_a_negative_count(tmp_path):
     entry = """\
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     mut a := Int64.shift_right(8, 0 - 1)
     return if a == a then 7 else 9
   }
@@ -3492,7 +3490,7 @@ place Entry {
 def test_int64_shift_right_on_a_positive_count(tmp_path):
     entry = """\
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     return if Int64.shift_right(8, 1) == 4 then 1 else 0
   }
 }
@@ -3526,7 +3524,7 @@ def _selfhost_run_runtime(tmp_path, compiler, src):
 def test_selfhost_function_named_like_no_keyword_is_called(tmp_path, selfhost_compiler_runtime):
     rc = _selfhost_run_runtime(tmp_path, selfhost_compiler_runtime,
                        "fun fozp(x): Number { return x + 1 }\n"
-                       "fun main(): Number { return fozp(41) }")
+                       "fun main: Number { return fozp(41) }")
     _verdict(rc == 42, f"fozp(41) gave exit {rc}, expected 42")
 
 
@@ -3536,7 +3534,7 @@ def test_selfhost_distinct_names_are_distinct_functions(tmp_path, selfhost_compi
     rc = _selfhost_run_runtime(tmp_path, selfhost_compiler_runtime,
                        "fun aaaa(x): Number { return x + 1 }\n"
                        "fun aobsf(x): Number { return x * 10 }\n"
-                       "fun main(): Number { return aaaa(2) + aobsf(3) }")
+                       "fun main: Number { return aaaa(2) + aobsf(3) }")
     _verdict(rc == 33, f"exit {rc} (None = the emitted module did not lower), expected 33")
 
 
@@ -3544,7 +3542,7 @@ def test_selfhost_two_names_with_distinct_hashes_call_their_own_bodies(tmp_path,
     rc = _selfhost_run_runtime(tmp_path, selfhost_compiler_runtime,
                        "fun aaaa(x): Number { return x + 1 }\n"
                        "fun aobsg(x): Number { return x * 10 }\n"
-                       "fun main(): Number { return aaaa(2) + aobsg(3) }")
+                       "fun main: Number { return aaaa(2) + aobsg(3) }")
     assert rc == 33
 
 
@@ -3643,7 +3641,7 @@ def test_a_user_place_named_like_a_prelude_place_is_refused(tmp_path):
     # it took the place of the prelude's Lookup, which HashMap.get returns:
     # the MLIR verifier refused the program
     entry = ("place Entry {}\nfun main(): Number {\n"
-             "  m := HashMap.set(HashMap.empty(), 1, 10)\n"
+             "  m := HashMap.set(HashMap.empty, 1, 10)\n"
              "  l := .-> Lookup { hits 32 }\n"
              "  return l.hits + (match HashMap.get(m, 1) { Found as v => v, Absent => 0 })\n}\n")
     proj = _one_place_project(tmp_path, "Lookup", "place Lookup { hits Number }\n", entry)
@@ -3656,7 +3654,7 @@ _GCD_DECL = ("place %s {\n  count Number\n"
              "  operation gcd(a: Number, b: Number): Number\n}\n")
 _GCD_ENTRY = ("place Entry {\n  reduction R of %s {\n"
               "    on gcd(a: Number, b: Number) { return 99 }\n  }\n"
-              "  fun main(): Number visits %s { return %s.gcd(12, 18) }\n}\n")
+              "  fun main: Number visits %s { return %s.gcd(12, 18) }\n}\n")
 
 
 def test_a_user_place_named_like_a_registry_place_is_refused(tmp_path):
@@ -3679,8 +3677,8 @@ def test_is_given_outside_the_prelude_is_refused(tmp_path):
     # a place with a name of its own: `is given` declares a primitive of the
     # runtime, and those are declared in the prelude only
     proj = _one_place_project(tmp_path, "Tools",
-                              "place Tools {\n  fun f(): Number is given\n}\n",
-                              "place Entry {}\nfun main(): Number { return 0 }\n")
+                              "place Tools {\n  fun f: Number is given\n}\n",
+                              "place Entry {}\nfun main: Number { return 0 }\n")
     rc, out = _compile(proj, tmp_path / "exe")
     assert _clean_rejection(rc, out, 'E2007', 'prelude only') and "[E2007]" in out, out
     assert "fun Tools.f is given" in out and "prelude only" in out, out
@@ -3688,7 +3686,7 @@ def test_is_given_outside_the_prelude_is_refused(tmp_path):
 
 def test_a_library_place_is_extended_with_this_under(tmp_path):
     entry = ("place Entry {}\nfun handle(e: Error): Number { return String.length(e.message) }\n"
-             "fun main(): Number {\n  mut a := .-> AppError { message \"boom\" code 38 }\n"
+             "fun main: Number {\n  mut a := .-> AppError { message \"boom\" code 38 }\n"
              "  return handle(a) + a.code\n}\n")
     proj = _one_place_project(tmp_path, "AppError",
                               "place AppError { this < Error  code Number }\n", entry)
@@ -3705,7 +3703,7 @@ def test_a_user_face_of_unit_does_not_take_the_primitive_over(tmp_path):
     # value is checked against star. The old checker asked for a branch `nil`.
     # Checked at the type checker: a Unit value at runtime still fails in emit
     # (notes/audit/REGISTERED_FOR_LATER_LOTS.md); when it runs, expect exit 7.
-    entry = ("place Entry {}\nfun main(): Number {\n  mut u := star\n"
+    entry = ("place Entry {}\nfun main: Number {\n  mut u := star\n"
              "  return match u { star => 7 }\n}\n")
     files = {"w/Topos.yon": "topos WTopos where {\n}\n",
              "w/Nada.yon": "place Nada carried by unit { this > nil }\n"}
@@ -3723,9 +3721,9 @@ def test_a_coproduct_returned_by_a_call_without_arguments_is_matched(tmp_path):
     # the call with none returned the section, and the match on it was
     # refused by the MLIR verifier
     entry = """place Entry {}
-fun d(): Decision { return Unknown }
-fun main(): Number {
-  return match d() { Present => 1, Absent => 2, Unknown => 3 }
+fun d: Decision { return Unknown }
+fun main: Number {
+  return match d { Present => 1, Absent => 2, Unknown => 3 }
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "exe")
@@ -3757,11 +3755,11 @@ def test_absent_is_an_arm_of_decision_and_of_lookup(tmp_path):
     # an arm without payload listed by two coproducts injects into each: the
     # expected type names the arrow
     entry = """place Entry {}
-fun d(): Decision { return Absent }
-fun l(): Lookup<Number> { return Absent }
-fun main(): Number {
-  mut x := match d() { Present => 1, Absent => 2, Unknown => 3 }
-  y := match l() { Found as v => 10, Absent => 20 }
+fun d: Decision { return Absent }
+fun l: Lookup<Number> { return Absent }
+fun main: Number {
+  mut x := match d { Present => 1, Absent => 2, Unknown => 3 }
+  y := match l { Found as v => 10, Absent => 20 }
   return x * 100 + y
 }
 """
@@ -3771,7 +3769,7 @@ fun main(): Number {
 
 def test_the_qualified_arm_names_its_coproduct(tmp_path):
     entry = """place Entry {}
-fun main(): Number {
+fun main: Number {
   mut x := match Decision.Absent { Present => 1, Absent => 2, Unknown => 3 }
   y := match (5 ↪ Lookup.Found) { Found as v => v, Absent => 20 }
   return x * 100 + y
@@ -3785,16 +3783,16 @@ fun main(): Number {
 # other coproduct, it collides with No in Ask or with Nay in Flip, so the
 # program computes 220 only when each arm has the position of ITS coproduct.
 _ASK_FLIP = """place Entry {}
-fun ask(): Ask { return No }
-fun flip(): Flip { return Nay }
+fun ask: Ask { return No }
+fun flip: Flip { return Nay }
 fun score(a: Ask): Number {
   return match a { Yes => 1, No => 2 }
 }
 fun turn(f: Flip): Number {
   return match f { %s => 10, Nay => 20 }
 }
-fun main(): Number {
-  return score(ask()) * 100 + turn(flip())
+fun main: Number {
+  return score(ask) * 100 + turn(flip)
 }
 """
 
@@ -3816,7 +3814,7 @@ def test_one_arm_name_in_two_coproducts_in_other_positions(tmp_path):
 
 def test_a_shared_arm_without_an_expected_type_is_refused(tmp_path):
     entry = """place Entry {}
-fun main(): Number {
+fun main: Number {
   y := Yes
   return 7
 }
@@ -3831,7 +3829,7 @@ def test_an_arm_and_an_arrow_of_its_home_with_one_name_are_refused(tmp_path):
     # in the home of a place one name names one arrow: `4 ↪ Ask.Yes` cannot be
     # both the injection of the arm Yes and the fun Yes of the braces
     entry = """place Entry {}
-fun main(): Number {
+fun main: Number {
   return 4 ↪ Ask.Yes
 }
 """
@@ -3851,7 +3849,7 @@ def test_a_place_arm_of_two_unions_is_usable_as_each(tmp_path):
     entry = """place Entry {
   fun accept(a: Account): Number { return 7 }
   fun log(l: Ledger): Number { return 8 }
-  fun main(): Number {
+  fun main: Number {
     o := .-> Opened { initial 42 }
     return accept(o) * 10 + log(o)
   }

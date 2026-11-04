@@ -16,7 +16,7 @@ place Entry {
       LatticePoint as p => 1, DomainError as d => 0 }
   }
   fun timed_put(n: Number): Number visits Output {
-    ac := Space.make(XRelMap.empty())
+    ac := Space.make(XRelMap.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)
@@ -38,7 +38,7 @@ place Entry {
     return (t1 - t0)
   }
   fun build_map(n: Number): XRelMap<LatticePoint, Number> {
-    ac := Space.make(XRelMap.empty())
+    ac := Space.make(XRelMap.empty)
     i := Space.make(0)
     iter n do { k := Space.get(i)
                 addr := Leech.embed(k, 1)

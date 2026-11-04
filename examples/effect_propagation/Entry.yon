@@ -3,5 +3,5 @@ fun do_emit(s: String): Unit visits Output { return Output.print(s) }
 fun caller(s: String): Unit visits Output {
   return do_emit(s)
 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 }

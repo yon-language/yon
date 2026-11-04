@@ -61,7 +61,7 @@ internal place LeechHeap<V> carried by i64 {
      stage writes its next word on top of the gestation area */
   fun stage(w: Word64): Unit {
     t := as_int(read_word(scratch(0), 0))
-    _ := write_word(scratch((t + 1) / scratch_words()), (t + 1) % scratch_words(), w)
+    _ := write_word(scratch((t + 1) / scratch_words), (t + 1) % scratch_words, w)
     return write_word(scratch(0), 0, as_word(t + 1))
   }
 
@@ -70,7 +70,7 @@ internal place LeechHeap<V> carried by i64 {
      handle answered, its words taken off the top */
   fun commit(level: Int64, i: Int64, n: Int64): LeechHeap<Word64> {
     t := as_int(read_word(scratch(0), 0))
-    _ := if level < 0 or level > 4 or i < 0 or i >= points()
+    _ := if level < 0 or level > 4 or i < 0 or i >= points
          then SystemOs.refuse(LeechNodeUnknown, as_word(level), as_word(i), as_word(0))
          else int64(0)
     _ := if n < 0 or n > t
@@ -81,7 +81,7 @@ internal place LeechHeap<V> carried by i64 {
          else int64(0)
     j := i / span(level)
     g := claim(level, j)
-    h := (g * 8 + level) * point_bits() + j
+    h := (g * 8 + level) * point_bits + j
     s := segment_of(h)
     base := slot_of(h) * slot_words(level)
     mut k := int64(0)
@@ -103,8 +103,8 @@ internal place LeechHeap<V> carried by i64 {
 
   /* the name of a node: its level, its generation, its place on the level */
   fun level<V>(h: LeechHeap<V>): Int64 { return level_of(h) }
-  fun generation<V>(h: LeechHeap<V>): Int64 { return h / (8 * point_bits()) }
-  fun place_of<V>(h: LeechHeap<V>): Int64 { return h % point_bits() }
+  fun generation<V>(h: LeechHeap<V>): Int64 { return h / (8 * point_bits) }
+  fun place_of<V>(h: LeechHeap<V>): Int64 { return h % point_bits }
 
   /* where the name puts the node: its segment of the level, its slot in it */
   fun segment<V>(h: LeechHeap<V>): Int64 { return segment_number(h) }
@@ -112,7 +112,7 @@ internal place LeechHeap<V> carried by i64 {
 
   /* the next generation free at the place of level `level` holding index i */
   fun next_generation(level: Int64, i: Int64): Int64 {
-    _ := if level < 0 or level > 4 or i < 0 or i >= points()
+    _ := if level < 0 or level > 4 or i < 0 or i >= points
          then SystemOs.refuse(LeechNodeUnknown, as_word(level), as_word(i), as_word(0))
          else int64(0)
     return root_get(mark(level, i / span(level)))
@@ -129,10 +129,10 @@ internal place LeechHeap<V> carried by i64 {
 
   /* ─── The shape ──────────────────────────────────────────── [T] ─── */
 
-  internal fun points(): Int64 { return 196560 }
-  internal fun point_bits(): Int64 { return 262144 }
-  internal fun max_segments(): Int64 { return 13120 }
-  internal fun scratch_words(): Int64 { return 1048576 }
+  internal fun points: Int64 { return 196560 }
+  internal fun point_bits: Int64 { return 262144 }
+  internal fun max_segments: Int64 { return 13120 }
+  internal fun scratch_words: Int64 { return 1048576 }
 
   /* the indices a node of the level covers: 32^(4 - level) */
   internal fun span(level: Int64): Int64 {
@@ -143,9 +143,9 @@ internal place LeechHeap<V> carried by i64 {
            else 1
   }
   /* the places of the level: the shell cut in spans, the last one short */
-  internal fun places(level: Int64): Int64 { return (points() + span(level) - 1) / span(level) }
+  internal fun places(level: Int64): Int64 { return (points + span(level) - 1) / span(level) }
   /* the whole generations of the level a segment holds */
-  internal fun per_segment(level: Int64): Int64 { return points() / places(level) }
+  internal fun per_segment(level: Int64): Int64 { return points / places(level) }
   /* five words a point, twenty-four a node above it */
   internal fun slot_words(level: Int64): Int64 { return if level == 4 then 5 else 24 }
 
@@ -175,8 +175,8 @@ internal place LeechHeap<V> carried by i64 {
   /* ─── The root: 0 to 63 its state (2 + l the segments of level l), then
          the next generation free at each place, level after level ─ [T] ─── */
 
-  internal fun root(): Region { return SystemOs.leech_heap_region() }
-  internal fun root_get(i: Int64): Int64 { return as_int(read_word(root(), i)) }
+  internal fun root: Region { return SystemOs.leech_heap_region }
+  internal fun root_get(i: Int64): Int64 { return as_int(read_word(root, i)) }
 
   /* the word of the root holding the next generation of place j of a level */
   internal fun mark(level: Int64, j: Int64): Int64 { return 64 + first_mark(level) + j }
@@ -190,13 +190,13 @@ internal place LeechHeap<V> carried by i64 {
   internal fun claim(level: Int64, j: Int64): Int64 {
     w := mark(level, j)
     mut g := root_get(w)
-    mut found := as_int(compare_and_swap_word(root(), w, as_word(g), as_word(g + 1)))
+    mut found := as_int(compare_and_swap_word(root, w, as_word(g), as_word(g + 1)))
     while found != g do {
       g <- found
-      found <- as_int(compare_and_swap_word(root(), w, as_word(g), as_word(g + 1)))
+      found <- as_int(compare_and_swap_word(root, w, as_word(g), as_word(g + 1)))
     }
     s := g / per_segment(level)
-    _ := if s >= max_segments()
+    _ := if s >= max_segments
          then SystemOs.refuse(SegmentsExhausted, as_word(s), as_word(0), as_word(0))
          else counted(level, s + 1)
     return g
@@ -206,7 +206,7 @@ internal place LeechHeap<V> carried by i64 {
   internal fun counted(level: Int64, n: Int64): Int64 {
     mut seen := root_get(2 + level)
     while seen < n do {
-      found := as_int(compare_and_swap_word(root(), 2 + level, as_word(seen), as_word(n)))
+      found := as_int(compare_and_swap_word(root, 2 + level, as_word(seen), as_word(n)))
       seen <- if found == seen then n else found
     }
     return seen
@@ -214,23 +214,23 @@ internal place LeechHeap<V> carried by i64 {
 
   internal fun scratch(c: Int64): Region { return SystemOs.leech_heap_scratch(c) }
   internal fun staged(i: Int64): Word64 {
-    return read_word(scratch((i + 1) / scratch_words()), (i + 1) % scratch_words())
+    return read_word(scratch((i + 1) / scratch_words), (i + 1) % scratch_words)
   }
 
   /* ─── The handle: (generation * 8 + level) * 2^18 + place ─── [T] ─── */
 
-  internal fun level_of<T>(h: LeechHeap<T>): Int64 { return (h / point_bits()) % 8 }
+  internal fun level_of<T>(h: LeechHeap<T>): Int64 { return (h / point_bits) % 8 }
   internal fun segment_number<T>(h: LeechHeap<T>): Int64 {
-    return (h / (8 * point_bits())) / per_segment(level_of(h))
+    return (h / (8 * point_bits)) / per_segment(level_of(h))
   }
   internal fun slot_of<T>(h: LeechHeap<T>): Int64 {
     l := level_of(h)
-    return ((h / (8 * point_bits())) % per_segment(l)) * places(l) + h % point_bits()
+    return ((h / (8 * point_bits)) % per_segment(l)) * places(l) + h % point_bits
   }
   /* the region of the segment: part l * 13,120 + segment of the Space's
      heap, of 196,560 slots of the level */
   internal fun segment_of<T>(h: LeechHeap<T>): Region {
     l := level_of(h)
-    return SystemOs.leech_heap_part(l * max_segments() + segment_number(h), points() * slot_words(l))
+    return SystemOs.leech_heap_part(l * max_segments + segment_number(h), points * slot_words(l))
   }
 }

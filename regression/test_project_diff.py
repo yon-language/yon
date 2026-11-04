@@ -33,7 +33,7 @@ def _base(root: Path):
         "fun a_op(x: Number): Number { return x + 1 }\nplace AP { }\n")
     (root / "A" / "Topos.yon").write_text("topos TA where { }\n")
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): Number { return 0 }\n")
+        "place Entry { }\nfun main: Number { return 0 }\n")
     return root
 
 
@@ -52,7 +52,7 @@ def _mk_drop(root):
 def _mk_entrypoint(root):
     _base(root)
     (root / "Entry.yon").unlink()
-    (root / "main.yon").write_text("fun main(): Number { return 0 }\n")
+    (root / "main.yon").write_text("fun main: Number { return 0 }\n")
     return root
 
 
@@ -90,7 +90,7 @@ def _mk_boundary(root):
     (root / "Bx" / "BxP.yon").write_text(
         "fun b_op(x: Number): Number { return x + 1 }\nplace BxP { }\n")
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): Number { return 0 }\n")
+        "place Entry { }\nfun main: Number { return 0 }\n")
     return root
 
 

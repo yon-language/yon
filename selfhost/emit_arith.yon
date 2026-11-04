@@ -115,13 +115,13 @@ fun gen_funs(fs: FunList): String {
 }
 
 /* fixed MLIR boilerplate. */
-fun mod_head(): String {
+fun mod_head: String {
   return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n"
 }
-fun main_head(): String {
+fun main_head: String {
   return "  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
 }
-fun stubs(): String {
+fun stubs: String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 /* fptosi(result) -> i32 + return + close main. */
@@ -148,12 +148,12 @@ fun main(): Number {
   funs := (("double", (0 ↪ TVar, 0 ↪ TVar) ↪ TAdd) ↪ FnDef, FlNil) ↪ FlCons
   mainT := ("double", 21 ↪ TLit) ↪ TCall
   rmain := gen(mainT, SeNil, 0)
-  full := String.concat(mod_head(),
+  full := String.concat(mod_head,
                   String.concat(gen_funs(funs),
-                    String.concat(main_head(),
+                    String.concat(main_head,
                       String.concat(er_code(rmain),
                         String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
-                          stubs())))))
+                          stubs)))))
   _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)   /* write the emitted MLIR */
   _p := String.print(full)
   return checksum(full)

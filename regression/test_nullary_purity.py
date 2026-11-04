@@ -17,10 +17,10 @@ FRONTEND = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
 pytestmark = pytest.mark.skipif(not FRONTEND.exists(), reason="frontend not built")
 
 USO = """place Uso {
-  fun built(): Opened { return .-> Opened { initial 1 } }
+  fun built: Opened { return .-> Opened { initial 1 } }
   fun branches(n: Number): Number { return if n > 0 then 1 else 0 }
   fun matched(s: Scelta): Number { return match s { Si => 1, No => 0 } }
-  fun loop_on_a_local_cell(): Number {
+  fun loop_on_a_local_cell: Number {
     mut c := 0
     mut i := 0
     while i < 10 do { c <- c + i
@@ -29,7 +29,7 @@ USO = """place Uso {
   }
   fun prints(): Number { return IO.print_num(1) }
   fun calls_one_that_prints(): Number { return prints() }
-  fun args(): Number { return SystemOs.arg_count() }
+  fun args: Number { return SystemOs.arg_count }
   fun clock(): Int64 { return SystemOs.monotonic_ns() }
   fun calls_the_clock(): Int64 { return clock() }
 }
@@ -45,7 +45,7 @@ def _acting(tmp_path):
     (proj / "w" / "Opened.yon").write_text("place Opened { initial Number }\n")
     (proj / "w" / "Scelta.yon").write_text("place Scelta { this > Si :U No }\n")
     (proj / "w" / "Uso.yon").write_text(USO)
-    (proj / "Entry.yon").write_text("place Entry {\n  fun main(): Number { return 0 }\n}\n")
+    (proj / "Entry.yon").write_text("place Entry {\n  fun main: Number { return 0 }\n}\n")
     r = subprocess.run([str(FRONTEND), str(proj), "--dump-acting"], capture_output=True,
                        text=True, timeout=120, cwd=ROOT)
     assert r.returncode == 0, r.stdout + r.stderr

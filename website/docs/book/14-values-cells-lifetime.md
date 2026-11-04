@@ -28,7 +28,7 @@ it holds is still immutable content.
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): Number {
+fun main: Number {
   v := 7
   c1 := Space.make(v)            // a cell holding 7
   c2 := Space.make(v)            // ANOTHER cell holding 7

@@ -16,5 +16,5 @@
 // pins the other direction (different end endpoint -> rejected).
 place Entry {
   fun reflPath(q: PathP(i, Number, a, b)): PathP(i, Number, a, b) { return q }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

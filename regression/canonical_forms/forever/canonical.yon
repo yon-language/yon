@@ -2,5 +2,5 @@ place Entry {
   fun spin(): Number visits Output {
     forever { _ := String.print("tick") }
   }
-  fun main(): Number { return 42 }
+  fun main: Number { return 42 }
 }

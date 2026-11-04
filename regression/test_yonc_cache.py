@@ -59,7 +59,7 @@ def test_a_cached_compilation_gives_the_verdict_of_a_fresh_one(tmp_path, name):
 
 def test_a_failing_compilation_is_replayed_with_this_input_in_its_messages(tmp_path):
     cache = tmp_path / "cache"
-    text = "place Entry {\n  fun main(): Number { return ) }\n}\n"   # a parse error names its file
+    text = "place Entry {\n  fun main: Number { return ) }\n}\n"   # a parse error names its file
     a, b = tmp_path / "a" / "bad.yon", tmp_path / "b" / "bad.yon"
     for p in (a, b):
         p.parent.mkdir()
@@ -78,8 +78,8 @@ def test_two_files_of_one_directory_are_two_compilations(tmp_path):
     # both read the same directory (the signatures of their imports): the key
     # says which one is compiled
     cache = tmp_path / "cache"
-    (tmp_path / "one.yon").write_text("place Entry {\n  fun main(): Number { return 11 }\n}\n")
-    (tmp_path / "two.yon").write_text("place Entry {\n  fun main(): Number { return 22 }\n}\n")
+    (tmp_path / "one.yon").write_text("place Entry {\n  fun main: Number { return 11 }\n}\n")
+    (tmp_path / "two.yon").write_text("place Entry {\n  fun main: Number { return 22 }\n}\n")
     assert _yonc(tmp_path / "one.yon", tmp_path / "o1", cache).returncode == 0
     assert _yonc(tmp_path / "two.yon", tmp_path / "o2", cache).returncode == 0
     assert _verdict(tmp_path / "o1")[0] == 11 and _verdict(tmp_path / "o2")[0] == 22

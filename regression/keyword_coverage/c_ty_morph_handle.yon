@@ -3,5 +3,5 @@
 // The type is opaque: tycheck accepts any topos identifiers (no decl needed).
 place Entry {
   fun run(m: morph from Account to AccountEU): Number { return 0 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

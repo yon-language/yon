@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number visits Output {
-    mut inv := HashSet.empty()
+    mut inv := HashSet.empty
     inv <- HashSet.add(inv, 1445)
     inv <- HashSet.add(inv, 1445)
     inv <- HashSet.add(inv, 2361)

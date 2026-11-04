@@ -1,0 +1,6 @@
+status: reject_clean
+exit: 1
+match: fun answer is a point: it is declared without ()
+note: |
+  A pure nullary is a point 1 -> X: it is declared and named without (). One that acts is
+  declared and called with ().

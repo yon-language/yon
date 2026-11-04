@@ -1,7 +1,7 @@
 // NEGATIVE TWIN of the stage-3 specimen: the arm Opened does NOT expose
 // `balance` -> the field-on-union obligation must reject, cleanly.
 place Entry {
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 place Account {
   this > Opened :U Closed

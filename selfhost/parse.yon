@@ -26,7 +26,7 @@ fun eval(e: MerkleTree): Number {
 // --- tokens (content-addressed) ---
 fun tok_num(v: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(v), MerkleTree.leaf(0)) }
 fun tok_op(kind: Number): MerkleTree { return MerkleTree.node2(kind, MerkleTree.leaf(0), MerkleTree.leaf(0)) }
-fun toks_nil(): MerkleTree { return MerkleTree.leaf(0 - 1) }
+fun toks_nil: MerkleTree { return MerkleTree.leaf(0 - 1) }
 fun toks_cons(tok: MerkleTree, rest: MerkleTree): MerkleTree { return MerkleTree.node2(0, tok, rest) }
 
 fun is_nil(l: MerkleTree): Number { return if MerkleTree.label(l) == (0 - 1) then 1 else 0 }
@@ -48,12 +48,12 @@ fun parse(toks: MerkleTree): MerkleTree {
   return parse_loop(MerkleTree.child(toks, 1), mk_lit(tok_val(MerkleTree.child(toks, 0))))
 }
 
-fun main(): Number {
+fun main: Number {
   // token stream for "2 + 3 * 4"
   ts := toks_cons(tok_num(2),
               toks_cons(tok_op(2),
               toks_cons(tok_num(3),
               toks_cons(tok_op(3),
-              toks_cons(tok_num(4), toks_nil())))))
+              toks_cons(tok_num(4), toks_nil)))))
   return eval(parse(ts))
 }

@@ -113,13 +113,13 @@ projection: `XRelFrame.canon(f, p)` is the representative of p's class, the
 member with the smallest index, so `canon(f, canon(f, p))` is
 `canon(f, p)`. The frames form a lattice of partitions:
 
-- `XRelFrame.discrete()` is the finest, each point its own class: `canon` is
+- `XRelFrame.discrete` is the finest, each point its own class: `canon` is
   the identity.
-- `XRelFrame.whole()` is the coarsest, a single class.
+- `XRelFrame.whole` is the coarsest, a single class.
 - `XRelFrame.refine(f, r)` splits each class of `f` by the type of `v ^ r`
   (the meet of `f` with the partition that `r` draws); refining `discrete`
   leaves it `discrete`. There is no bound on the number of references.
-- `XRelFrame.curtis()` is the frame of the 26 Curtis octads, refined from
+- `XRelFrame.curtis` is the frame of the 26 Curtis octads, refined from
   `whole` octad by octad: 98,260 classes.
 
 A frame made from references never separates a point from its negative: the
@@ -152,7 +152,7 @@ is addressed by the content of its children:
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): Number {
+fun main: Number {
   l1 := MerkleTree.leaf(7)
   l2 := MerkleTree.leaf(9)
   t := MerkleTree.node2(1, l1, l2)

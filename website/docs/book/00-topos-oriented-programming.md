@@ -63,7 +63,7 @@ philosophy:
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): Number {
+fun main: Number {
   a := "ab"
   b := String.concat("a", "b")   // built by a different route
   same := String.equal(a, b)     // same content, same slot

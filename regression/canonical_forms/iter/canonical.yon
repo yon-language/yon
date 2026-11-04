@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     mut acc := 0
     iter 42 do { acc <- acc + 1 }
     return acc

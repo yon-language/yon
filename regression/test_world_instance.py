@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 _SERVER = """\
 place Entry {
   fun instance(x: Number): Number { return String.length(Env.get("YON_PROBE_INSTANCE")) + x * 0 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """
 

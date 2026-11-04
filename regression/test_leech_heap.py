@@ -43,7 +43,7 @@ def _build(tmp_path: Path, main_body: str, extra: str = ""):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n" + main_body + "}\n" + _HELPERS + extra + "}\n")
+        "place Entry {\nfun main: Number {\n" + main_body + "}\n" + _HELPERS + extra + "}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True,
                        text=True, timeout=300)

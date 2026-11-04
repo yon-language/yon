@@ -39,7 +39,7 @@ def _run(tmp_path, source):
 
 
 _CELL_CAP_ALIAS = """place Entry {
-fun main(): Number {
+fun main: Number {
   mut i := 0
   mut bad := 0
   iter 1100 do {
@@ -61,7 +61,7 @@ def test_a_cell_in_a_loop_body_lives_one_turn(tmp_path):
 
 def test_a_hundred_thousand_turns_with_a_cell_in_the_body(tmp_path):
     src = """place Entry {
-fun main(): Number {
+fun main: Number {
   mut i := 0
   mut bad := 0
   while i < 100000 do {
@@ -79,7 +79,7 @@ fun main(): Number {
 
 def test_the_hidden_cell_of_a_for_every_lives_one_turn_of_the_outer_loop(tmp_path):
     src = """place Entry {
-fun main(): Number {
+fun main: Number {
   l := List.cons(1, List.cons(2, List.cons(3, List.empty(0))))
   mut total := 0
   iter 2000 do {
@@ -101,7 +101,7 @@ fun deep(n: Number): Number {
   c <- c + 1
   return if n == 0 then c else deep(n - 1) + 0 * c
 }
-fun main(): Number {
+fun main: Number {
   return deep(1100)
 }
 }

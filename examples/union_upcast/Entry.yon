@@ -3,7 +3,7 @@
 // to identity) — the upcast costs nothing, like a set inclusion.
 place Entry {
   fun accept(a: Account): Number { return 7 }
-  fun main(): Number {
+  fun main: Number {
     o := .-> Opened { initial 42 }
     return accept(o)
   }

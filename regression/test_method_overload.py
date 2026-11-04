@@ -50,7 +50,7 @@ CIRCLE = ("place Circle {\n  r := Number\n"
 
 def test_dispatch_by_receiver_type(tmp_path):
     # sq.area() -> Square's area (25); ci.area() -> Circle's area (12); 25+12=37.
-    main = ("fun main(): Number {\n"
+    main = ("fun main: Number {\n"
             "  sq := .-> Square { side 5 }\n"
             "  ci := .-> Circle { r 2 }\n"
             "  return sq.area() + ci.area()\n}\n")
@@ -59,7 +59,7 @@ def test_dispatch_by_receiver_type(tmp_path):
 
 def test_qualified_call(tmp_path):
     # the Place.method(x) form resolves to the same target.
-    main = ("fun main(): Number {\n"
+    main = ("fun main: Number {\n"
             "  sq := .-> Square { side 5 }\n"
             "  return Square.area(sq)\n}\n")
     assert _run(tmp_path, {"Square": SQUARE, "Circle": CIRCLE}, main) == 25
@@ -69,7 +69,7 @@ def test_third_place_extends_without_touching_others(tmp_path):
     # adding a place with the same method name is open: no change to Square/Circle.
     tri = ("place Tri {\n  base := Number\n"
            "  fun area(t: Tri): Number { return t.base }\n}\n")
-    main = ("fun main(): Number {\n"
+    main = ("fun main: Number {\n"
             "  sq := .-> Square { side 4 }\n"
             "  t := .-> Tri { base 9 }\n"
             "  return sq.area() + t.area()\n}\n")  # 16 + 9 = 25
@@ -93,7 +93,7 @@ def test_genuine_ambiguity_is_rejected(tmp_path):
     dup = ("place Square {\n  side := Number\n"
            "  fun area(s: Square): Number { return s.side * s.side }\n"
            "  fun area(s: Square): Number { return s.side }\n}\n")
-    rc, out = _reject(tmp_path, {"Square": dup}, "fun main(): Number { return 0 }\n")
+    rc, out = _reject(tmp_path, {"Square": dup}, "fun main: Number { return 0 }\n")
     assert rc != 0, "same-name same-receiver methods should be rejected"
     assert "TYPE ERROR [E2001]" in out, out
     assert "duplicate top-level function" in out and "area" in out, out
@@ -113,7 +113,7 @@ def test_method_absent_for_receiver_type_is_rejected(tmp_path, method):
     dispatch to some other place's `m`: both when `m` is overloaded on two other
     places (area: Square and Circle) and when exactly one other place has it
     (radius: Circle only). Tri declares no methods at all."""
-    main = ("fun main(): Number {\n"
+    main = ("fun main: Number {\n"
             "  t := .-> Tri { base 5 }\n"
             f"  return t.{method}()\n}}\n")
     rc, out = _reject(tmp_path, {"Square": SQUARE, "Circle": CIRCLE_RADIUS, "Tri": TRI}, main)
@@ -125,7 +125,7 @@ def test_method_absent_for_receiver_type_is_rejected(tmp_path, method):
 def test_unique_method_dispatches_on_its_own_receiver(tmp_path):
     # the control for the rejection above: the same places, the method called on
     # the place that declares it, compiles and runs (radius 2 + Tri.base 5 = 7).
-    main = ("fun main(): Number {\n"
+    main = ("fun main: Number {\n"
             "  ci := .-> Circle { r 2 }\n"
             "  t := .-> Tri { base 5 }\n"
             "  return ci.radius() + t.base\n}\n")

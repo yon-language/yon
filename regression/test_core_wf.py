@@ -47,7 +47,7 @@ def test_a1_dependent_types_certified(tmp_path):
     src = """
 fun Fam(x: Number): Type_0 { return Number }
 fun takes(p: Sigma(x: Number). El(Fam(x))): Number { return 0 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 """
     r = _run(src, tmp_path, core_wf=True)
     assert r.returncode == 0, r.stderr.decode(errors="replace")[-800:]
@@ -65,7 +65,7 @@ def test_rejects_el_of_non_code(tmp_path):
     src = """
 fun g(x: Number): Number { return x }
 fun f(y: Number, p: El(g(y))): Number { return 0 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 """
     r = _run(src, tmp_path)
     assert r.returncode != 0, "gate accepted El of a non-code"
@@ -80,7 +80,7 @@ def test_ordinary_program_not_false_rejected(tmp_path):
     """A plain runtime program compiles: out-of-fragment types are skipped."""
     src = """
 fun add(a: Number, b: Number): Number { return a }
-fun main(): Number { return add(2, 3) }
+fun main: Number { return add(2, 3) }
 """
     r = _run(src, tmp_path, core_wf=True)
     err = r.stderr.decode(errors="replace")

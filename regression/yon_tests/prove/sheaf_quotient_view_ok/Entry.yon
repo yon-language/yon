@@ -1,4 +1,4 @@
 place Entry {
   fun classify(x: Number): Number { return x }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

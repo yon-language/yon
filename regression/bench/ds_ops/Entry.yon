@@ -10,9 +10,9 @@ place Entry {
   fun warm(): Number visits Output {
     l := Space.make(List.empty(0))
     _a := Space.set(l, List.cons(Space.get(l), 1))
-    m := Space.make(HashMap.empty())
+    m := Space.make(HashMap.empty)
     _b := Space.set(m, HashMap.set(Space.get(m), 1, 1))
-    s := Space.make(HashSet.empty())
+    s := Space.make(HashSet.empty)
     _c := Space.set(s, HashSet.add(Space.get(s), 1))
     return 0
   }
@@ -35,7 +35,7 @@ place Entry {
     return Time.now_ns(0) - t0
   }
   fun set_loop(n: Number): Number visits Output {
-    m := Space.make(HashMap.empty())
+    m := Space.make(HashMap.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)
@@ -44,7 +44,7 @@ place Entry {
     return Time.now_ns(0) - t0
   }
   fun add_loop(n: Number): Number visits Output {
-    s := Space.make(HashSet.empty())
+    s := Space.make(HashSet.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)

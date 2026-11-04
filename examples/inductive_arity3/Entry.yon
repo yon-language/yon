@@ -13,7 +13,7 @@ fun sum3(t: Triple): Number {
   return match t { T3 as (a, b, c) => a + b + c, Nil => 0 }
 }
 
-fun main(): Number {
+fun main: Number {
   return sum3((12, 13, 17) ↪ T3)   // 12 + 13 + 17 = 42, incluso il terzo (indice 2)
 }
 }

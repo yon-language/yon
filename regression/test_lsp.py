@@ -116,7 +116,7 @@ def _world_project(root: Path):
     # main uses a_op so the package is lint-clean too (no W1001 unused-function):
     # the check below can then demand the full "OK: no errors" verdict.
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): Number { return a_op(0) - 1 }\n")
+        "place Entry { }\nfun main: Number { return a_op(0) - 1 }\n")
     return root
 
 
@@ -200,7 +200,7 @@ def _cross_file_call_project(root: Path):
     # main uses a_op so the project is lint-clean (no unused-function warnings);
     # these tests are about cross-file type resolution, not lint.
     (root / "Entry.yon").write_text(
-        "place Entry { }\nfun main(): Number { return a_op(1) }\n")
+        "place Entry { }\nfun main: Number { return a_op(1) }\n")
     return root
 
 

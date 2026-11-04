@@ -1,6 +1,6 @@
 place Entry {
   fun read(b: B): Number { return b.value }
-  fun main(): Number {
+  fun main: Number {
     a := .-> A { value 7 }
     return read(a)
   }

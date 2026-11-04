@@ -56,14 +56,14 @@ fun idem(f: XRelFrame, p: LatticePoint): Number {
   return if ix(f, XRelFrame.canon(f, p)) == ix(f, p) then 1 else 0
 }
 fun all_frames(p: LatticePoint): Number {
-  fb := XRelFrame.refine(XRelFrame.whole(), p)
-  _1 := IO.print_num(idem(XRelFrame.discrete(), p))
-  _2 := IO.print_num(idem(XRelFrame.whole(), p))
-  _3 := IO.print_num(idem(XRelFrame.curtis(), p))
+  fb := XRelFrame.refine(XRelFrame.whole, p)
+  _1 := IO.print_num(idem(XRelFrame.discrete, p))
+  _2 := IO.print_num(idem(XRelFrame.whole, p))
+  _3 := IO.print_num(idem(XRelFrame.curtis, p))
   _4 := IO.print_num(idem(fb, p))
   return 0
 }
-fun main(): Number {
+fun main: Number {
   return match LatticePoint.of_coordinate(1280) {
     LatticePoint as p => all_frames(p), DomainError as d => 0 - 1 }
 }
@@ -82,15 +82,15 @@ fun same(f: XRelFrame, p: LatticePoint, q: LatticePoint): Number {
   return if ix(f, p) == ix(f, q) then 1 else 0
 }
 fun three(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number {
-  fb := XRelFrame.refine(XRelFrame.whole(), p)
-  d2 := XRelFrame.refine(XRelFrame.discrete(), p)
-  _1 := IO.print_num(same(XRelFrame.discrete(), p, m))
-  _2 := IO.print_num(same(XRelFrame.curtis(), p, m))
+  fb := XRelFrame.refine(XRelFrame.whole, p)
+  d2 := XRelFrame.refine(XRelFrame.discrete, p)
+  _1 := IO.print_num(same(XRelFrame.discrete, p, m))
+  _2 := IO.print_num(same(XRelFrame.curtis, p, m))
   _3 := IO.print_num(same(fb, p, m))
   _4 := IO.print_num(same(fb, p, q))
-  _5 := IO.print_num(same(XRelFrame.whole(), p, q))
+  _5 := IO.print_num(same(XRelFrame.whole, p, q))
   _6 := IO.print_num(same(d2, p, m))
-  _7 := IO.print_num(if ix(XRelFrame.discrete(), q) == LatticePoint.index(q) then 1 else 0)
+  _7 := IO.print_num(if ix(XRelFrame.discrete, q) == LatticePoint.index(q) then 1 else 0)
   return 0
 }
 fun with_m(p: LatticePoint, q: LatticePoint): Number {
@@ -101,7 +101,7 @@ fun with_q(p: LatticePoint): Number {
   return match LatticePoint.of_coordinate(1280) {
     LatticePoint as q => with_m(p, q), DomainError as d => 0 - 1 }
 }
-fun main(): Number {
+fun main: Number {
   return match LatticePoint.of_coordinate(1536) {
     LatticePoint as p => with_q(p), DomainError as d => 0 - 1 }
 }

@@ -1,5 +1,5 @@
 place Box { this > Full Number :U Empty }
 place Entry {
-  fun mk(): Box { return .-> Full { _1 1 } }
-  fun main(): Number { return 0 }
+  fun mk: Box { return .-> Full { _1 1 } }
+  fun main: Number { return 0 }
 }

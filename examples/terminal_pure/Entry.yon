@@ -1,4 +1,4 @@
 place Entry {
   fun discard_pure(a: Account): Unit { return a }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

@@ -55,7 +55,7 @@ def test_a_nullary_arm_and_a_payload_arm_are_told_apart(tmp_path):
     entry = """place Entry {
 fun none(n: Number): Lookup<Number> { return Absent }
 fun some(n: Number): Lookup<Number> { return n ↪ Found }
-fun main(): Number {
+fun main: Number {
   return match none(1) { Found as x => x, Absent => 40 } + match some(2) { Found as x => x, Absent => 0 }
 }
 }
@@ -66,7 +66,7 @@ fun main(): Number {
 def test_a_nullary_arm_is_a_constant_with_no_node(tmp_path):
     entry = """place Entry {
 fun none(n: Number): Lookup<Number> { return Absent }
-fun main(): Number { return match none(1) { Found as x => x, Absent => 42 } }
+fun main: Number { return match none(1) { Found as x => x, Absent => 42 } }
 }
 """
     mlir = _emit(tmp_path, entry)
@@ -79,7 +79,7 @@ def test_a_constant_inside_a_payload_comes_back(tmp_path):
     entry = """place Entry {
 fun inner(n: Number): Lookup<Number> { return if n > 0 then n ↪ Found else Absent }
 fun outer(n: Number): Lookup<Lookup<Number>> { return inner(n) ↪ Found }
-fun main(): Number {
+fun main: Number {
   a := match outer(0) { Found as l => (match l { Found as x => x, Absent => 40 }), Absent => 0 }
   b := match outer(2) { Found as l => (match l { Found as x => x, Absent => 0 }), Absent => 0 }
   return a + b
@@ -97,7 +97,7 @@ fun len(c: Chain<Number>): Number {
 fun total(c: Chain<Number>): Number {
   return match c { Nil => 0, Link as (x, rest) => x + total(rest) }
 }
-fun main(): Number {
+fun main: Number {
   c := (7, (8, (24, Nil) ↪ Link) ↪ Link) ↪ Link
   return len(c) * 0 + total(c) + 3
 }
@@ -109,7 +109,7 @@ fun main(): Number {
 def test_a_wildcard_branch_after_a_nullary_arm(tmp_path):
     entry = """place Entry {
 fun pick(n: Number): Lookup<Number> { return if n > 0 then n ↪ Found else Absent }
-fun main(): Number {
+fun main: Number {
   return match pick(0) { Absent => 42, _ => 1 }
 }
 }

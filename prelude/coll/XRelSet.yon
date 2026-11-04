@@ -6,7 +6,7 @@
  *
  * Markers: [G] given, the runtime primitive */
 place XRelSet<T> {
-  fun empty<T>(): XRelSet<T> is given
+  fun empty<T>: XRelSet<T> is given
   fun add<T>(s: XRelSet<T>, x: T): XRelSet<T> is given
   fun contains<T>(s: XRelSet<T>, x: T): Boolean is given
   fun size<T>(s: XRelSet<T>): Number is given

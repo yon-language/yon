@@ -32,7 +32,7 @@ def _run(tmp_path: Path, entry: str):
 def test_a_guard_on_the_left_of_and_keeps_the_division_out(tmp_path):
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number { return if guarded(0) then 1 else 42 }\n"
+        "fun main: Number { return if guarded(0) then 1 else 42 }\n"
         "fun guarded(x: Number): Boolean { return x != 0 and 10 / x > 1 }\n"
         "}\n"))
     assert r.returncode == 42, r.stderr
@@ -56,7 +56,7 @@ _SEEN = (
 def test_the_right_side_is_read_only_when_it_decides(tmp_path, expr, value, reads):
     r = _run(tmp_path, (
         "place Entry {\n"
-        f"fun main(): Number {{ return if {expr} then 42 else 7 }}\n"
+        f"fun main: Number {{ return if {expr} then 42 else 7 }}\n"
         + _SEEN + "}\n"))
     assert r.returncode == (42 if value else 7), r.stderr
     assert r.stdout.count("read") == reads, r.stdout
@@ -65,7 +65,7 @@ def test_the_right_side_is_read_only_when_it_decides(tmp_path, expr, value, read
 def test_a_chain_stops_at_the_first_side_that_decides(tmp_path):
     r = _run(tmp_path, (
         "place Entry {\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  return if seen(true) and seen(false) and seen(true) then 7 else 42\n"
         "}\n" + _SEEN + "}\n"))
     assert r.returncode == 42, r.stderr

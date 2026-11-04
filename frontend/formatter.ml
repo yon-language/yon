@@ -361,12 +361,17 @@ let fmt_fun (f : fmt) (fn : fun_decl) : unit =
   let prefix = if fn.fn_internal then "internal " else "" in
   let oerr = match fn.fn_on_error with
     | Some e -> " on error " ^ e | None -> "" in
+  let dom =
+    if fn.fn_params = []
+       && Hashtbl.mem Surface_ast.bare_nullary_decls
+            (fn.fn_loc.file, fn.fn_loc.start_line, fn.fn_loc.start_col)
+    then "" else "(" ^ params ^ ")" in
   if fn.fn_given then
     (* `is given`: no body to print — the signature and the word *)
-    line f (Printf.sprintf "%sfun %s%s(%s)%s%s%s is given"
-              prefix fn.fn_name tps params oerr ret visits)
+    line f (Printf.sprintf "%sfun %s%s%s%s%s%s is given"
+              prefix fn.fn_name tps dom oerr ret visits)
   else begin
-    line f (Printf.sprintf "%sfun %s%s(%s)%s%s {" prefix fn.fn_name tps params ret visits);
+    line f (Printf.sprintf "%sfun %s%s%s%s%s {" prefix fn.fn_name tps dom ret visits);
     f.indent <- f.indent + 1;
     List.iter (fmt_stmt f) fn.fn_body;
     f.indent <- f.indent - 1;
@@ -479,7 +484,8 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
           | Some a -> " uses algebra " ^ a | None -> "" in
         let sym = match op.op_symbol with
           | Some s -> Printf.sprintf " as %S" s | None -> "" in
-        line f (Printf.sprintf "operation %s(%s)%s%s%s" op.op_name params ret sym alg)
+        let dom = if op.op_params = [] then "" else "(" ^ params ^ ")" in
+        line f (Printf.sprintf "operation %s%s%s%s%s" op.op_name dom ret sym alg)
     | FoLaw (l, None) -> line f ("law " ^ l)
     | FoLaw (l, Some st) ->
         let q = String.concat " " (List.map (fun (k, x, t) ->

@@ -2,10 +2,10 @@ place Entry {
   fun cls(f: XRelFrame, p: LatticePoint): LatticePoint { return XRelFrame.canon(f, p) }
   fun contract(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number visits Output {
     // the frame by 1536: a class is the type against 1536
-    f := XRelFrame.refine(XRelFrame.whole(), p)
+    f := XRelFrame.refine(XRelFrame.whole, p)
 
     // XRelSet — dedup by class: the set holds canon(f, x)
-    mut r := XRelSet.empty()
+    mut r := XRelSet.empty
     r <- XRelSet.add(r, cls(f, p))
     r <- XRelSet.add(r, cls(f, p))
     v1 := XRelSet.size(r)                 // a class, deduped -> 1
@@ -15,7 +15,7 @@ place Entry {
     v3 := XRelSet.size(r)                 // 16778752 is 1536's class -> still 2
 
     // XRelMap — key = class, not specimen: the map is keyed by canon(f, x)
-    mm := XRelMap.set(XRelMap.empty(), cls(f, p), 100)
+    mm := XRelMap.set(XRelMap.empty, cls(f, p), 100)
     v4 := match XRelMap.get(mm, cls(f, p)) { Found as v => v, Absent => 0 }   // exact point -> 100
     v5 := match XRelMap.get(mm, cls(f, q)) { Found as v => v, Absent => 0 }   // different class -> Absent (0)
     v6 := match XRelMap.get(mm, cls(f, m)) { Found as v => v, Absent => 0 }   // same class (antipode) -> 100

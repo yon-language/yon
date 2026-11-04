@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     p := .-> Pt { x 42 }
     return p.x
   }

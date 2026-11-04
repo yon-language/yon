@@ -1,4 +1,4 @@
 place Tree { this > Leaf :U Node(Tree, Tree) }
 place Entry {
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

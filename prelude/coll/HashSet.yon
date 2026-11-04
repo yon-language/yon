@@ -4,7 +4,7 @@
  *
  * Markers: [G] given, the runtime primitive */
 place HashSet<T> {
-  fun empty<T>(): HashSet<T> is given
+  fun empty<T>: HashSet<T> is given
   fun add<T>(s: HashSet<T>, x: T): HashSet<T> is given
   fun contains<T>(s: HashSet<T>, x: T): Boolean is given
   fun size<T>(s: HashSet<T>): Number is given

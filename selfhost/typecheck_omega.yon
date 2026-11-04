@@ -53,7 +53,7 @@ fun check_eq(a: MerkleTree, b: MerkleTree): Number {
     else 2                                                      // a open -> stuck (UNKNOWN)
 }
 
-fun main(): Number {
+fun main: Number {
   v_refl := check_eq(mk_var(0), mk_var(0))                     // x = x  -> PRESENT (0)
   v_conv := check_eq(mk_add(mk_lit(2), mk_lit(3)), mk_lit(5))  // 2+3 = 5 -> PRESENT (0)
   v_neq  := check_eq(mk_lit(2), mk_lit(3))                     // 2 = 3  -> ABSENT (1)

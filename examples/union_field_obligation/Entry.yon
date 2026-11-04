@@ -3,7 +3,7 @@
 // on every arm: Opened and Closed (in w/) both expose it. The negative
 // twin (union_field_obligation_reject) pins the reject when an arm lacks it.
 place Entry {
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 place Account {
   this > Opened :U Closed

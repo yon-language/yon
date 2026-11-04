@@ -26,7 +26,7 @@ fun sum(xs: IntList): Number {
   }
 }
 
-fun main(): Number {
+fun main: Number {
   // [20, 20] -- map (y => y + 1) --> [21, 21] -- sum --> 42
   xs := (20, (20, Nil) ↪ Cons) ↪ Cons
   return sum(map_list(fun(y: Number) => y + 1, xs))

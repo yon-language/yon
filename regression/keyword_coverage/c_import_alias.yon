@@ -3,5 +3,5 @@
 // the micro-test self-contained (no remote module signature to resolve).
 import Bank::deposit as bank_deposit
 place Entry {
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

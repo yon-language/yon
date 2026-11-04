@@ -3437,7 +3437,9 @@ let primitive_acts (n : string) : bool =
          || List.exists starts
               [ "Math__"; "Bits__"; "String__"; "List__"; "MerkleTree__"; "Crypto__";
                 "Number__"; "Leech__"; "HashSet__"; "HashMap__"; "XRelMap__"; "XRelSet__";
-                "XRelFrame__"; "XTower__"; "LatticePoint__" ])
+                "XRelFrame__"; "XTower__"; "LatticePoint__";
+                "S1__"; "S2__"; "Suspension__"; "PropTrunc__"; "SetTrunc__"; "Pushout__";
+                "Quotient__" ])
 
 let impure_funs (p : S.program) : unit =
   Hashtbl.reset Tyenv.impure_funs;
@@ -3449,9 +3451,11 @@ let impure_funs (p : S.program) : unit =
   let declared = Hashtbl.create 256 in
   List.iter (fun (fd : S.fun_decl) -> Hashtbl.replace declared fd.S.fn_name ()) funs;
   let seed (fd : S.fun_decl) =
-    fd.S.fn_given
-    && ((fd.S.fn_home = Some "SystemOs" && not (List.mem fd.S.fn_name pure_systemos))
-        || List.mem fd.S.fn_name word_faces) in
+    fd.S.fn_visits <> []    (* it declares an effect *)
+    || (fd.S.fn_given
+        && ((fd.S.fn_home = Some "SystemOs" && not (List.mem fd.S.fn_name pure_systemos))
+            || fd.S.fn_name = "String__print"
+            || List.mem fd.S.fn_name word_faces)) in
   List.iter (fun fd -> if seed fd then Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ()) funs;
   let acts (fd : S.fun_decl) =
     (* the names bound in the body: a cell among them is of this activation *)
@@ -3468,6 +3472,9 @@ let impure_funs (p : S.program) : unit =
        | S.ECall (("Space__get" | "Space__set" | "Space.get" | "Space.set"), S.EVar (h, _) :: _, _)
          when own h -> false
        | S.ECall (("Space__make" | "Space__new" | "Space.make" | "Space.new"), _, _) -> false
+       | S.ECall (n, _, l)
+         when Hashtbl.find_opt S.arrow_sites (l.S.file, l.S.start_line, l.S.start_col, n)
+              = Some S.Inject -> false
        | S.ECall (n, _, _) ->
            Hashtbl.mem Tyenv.impure_funs n
            || (not (Hashtbl.mem declared n) && not (own n)
@@ -3479,6 +3486,7 @@ let impure_funs (p : S.program) : unit =
     and stmt (s : S.stmt) =
       (match s with
        | S.SEmit _ | S.SPromote _ | S.SDrop _ | S.SInSequence _ | S.SForces _ | S.SScope _ -> true
+       | S.SCall (n, a, l) -> expr (S.ECall (n, a, l))
        | S.SAssignBecomes ((S.LVar x | S.LField (x, _)), _, _) -> not (own x)
        | S.SAssignHolds ((S.LVar x | S.LField (x, _)), _, _) -> not (own x)
        | _ -> false)

@@ -17,7 +17,7 @@ YONC = ROOT / "toolchain" / "yonc"
 
 pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missing")
 
-_MAIN = ("place Entry {\n  fun main(): Number {\n"
+_MAIN = ("place Entry {\n  fun main: Number {\n"
          "    a := match decide(some_other(Heads)) { Present => 40, Absent => 0, Unknown => 1 }\n"
          "    b := match decide(all_same(Heads)) { Present => 0, Absent => 2, Unknown => 1 }\n"
          "    return a + b\n  }\n}\n")

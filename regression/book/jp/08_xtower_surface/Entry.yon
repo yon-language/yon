@@ -4,7 +4,7 @@ place Entry {
     w1 := XTower.width(1)
     w2 := XTower.width(2)
     w3 := XTower.width(3)
-    dep := XTower.depth()
+    dep := XTower.depth
     c0 := XTower.class(1536, 0)
     c2 := XTower.class(1536, 2)
     sb_same := XTower.same_branch(1536, 1280, 2)

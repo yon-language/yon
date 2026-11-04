@@ -2,7 +2,7 @@
 
 Three kinds of test-in-Yon, mapped to three levels of "is this realized":
 
-  prove/    type-level proofs. A function `fun p(): lhs = rhs { return
+  prove/    type-level proofs. A function `fun p: lhs = rhs { return
             refl(...) }` type-checks IFF lhs and rhs are definitionally equal.
             The proposition is the type, refl is the proof, the type-checker is
             the oracle. Expected: EMIT succeeds (exit 0) == property holds.
@@ -13,7 +13,7 @@ Three kinds of test-in-Yon, mapped to three levels of "is this realized":
             yon_tests/rejections.txt, so a parse error or an unrelated type
             error cannot pass for the refusal the fixture was written to show.
 
-  runtime/  operational checks: `fun main(): Number { return actual - expected }`
+  runtime/  operational checks: `fun main: Number { return actual - expected }`
             returns 0 iff the property holds at run time. Expected: the native
             binary exits 0. This is where forms that only compute (not
             definitionally equal) are proved -- e.g. J on refl.

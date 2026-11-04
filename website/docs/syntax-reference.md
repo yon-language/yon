@@ -118,9 +118,12 @@ from the call sites.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty()`, `XSet.empty()`, `Vec.empty()`, `XRelMap.empty()`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
+| `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty`, `XSet.empty()`, `Vec.empty()`, `XRelMap.empty`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
 | `obj.field`, `x.f1.f2` | ✓ | Field access (chains left-associatively) |
 | `e.method(args).map(f).fold(0, g)` | ✓ | Method chaining: `recv.m(args)` ≡ `m(recv, args)` |
+| `fun answer: Number { return 42 }`, used as `answer` | ✓ | **A point** `1 → X`: a pure nullary is declared and named without `()`; a value fixed for the life of the Space is pure |
+| `fun tick(): Int64 { .. }`, used as `tick()` | ✓ | **A nullary that acts**: an effect, a wait, shared memory, a cell that leaves, or a call of one that acts; `()` is the empty product |
+| `operation zero: Additive as "0"`, used as `zero` | ✓ | A constant of an algebra |
 | `a ↦ f`, `a ↦ f(args)`, `(a, b) ↦ f` | ✓ | Pipe: passes `a` as the **first** argument of the call; a tuple spreads into the arguments. The call `f(a, b)` stays |
 | `if c then a else b` | ✓ | Conditional expression |
 | `fun(x: T, y) => e` | ✓ | Inline lambda (unannotated params are inferred) |
@@ -295,7 +298,7 @@ A `place` then takes its world by inference from the project's toml, not from an
 | `operation op(...) uses algebra Additive` | ✓ | Bind to a catalog algebra; laws certified by the compiler |
 | `law commutative` etc. | ✓ | Declared law, verified (AlgebraVerifier) |
 | `place A is algebra { ... }` | ✓ | **An algebra**: a theory, its operations and its laws. Inside it the name `A` stands for the carrier of any model. It lowers to nothing that runs: the models give the operations |
-| `operation add(a: A, b: A): A as "+"` | ✓ | An operation of an algebra and the operator that writes it; a nullary operation (`operation zero(): A`) is a neutral element |
+| `operation add(a: A, b: A): A as "+"` | ✓ | An operation of an algebra and the operator that writes it; a nullary operation (`operation zero: A`) is a neutral element |
 | `law associative ∀a : A ∀b : A ∀c : A, (a + b) + c = a + (b + c)` | ✓ | A law stated over the carrier: each quantifier carries its type, here the carrier; the comma closes the quantifiers, and the statement reaches the end of the line, with parentheses only to group |
 | `law nothing zero + zero = zero` | ✓ | A law with no quantifier: the statement follows its name, to the end of the line |
 | `law retract ∀x : V, value_of(word_of(x)) = x is given` | ✓ | **An axiom**: a law of a place that is not an algebra, about faces the certification cannot read (given ones); it is declared, never certified, and its variables range over every type. A law of an algebra is certified on each model and cannot be given |

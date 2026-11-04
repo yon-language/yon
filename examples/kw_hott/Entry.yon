@@ -13,7 +13,7 @@ fun proj_sum(a: Number, b: Number): Number {
   y := snd(p)
   return x + y
 }
-fun main(): Number {
+fun main: Number {
   direct := takes(pair(20, 10))
   return direct + proj_sum(7, 5)        // 30 + 12 = 42
 }

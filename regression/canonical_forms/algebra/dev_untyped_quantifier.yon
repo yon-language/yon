@@ -3,5 +3,5 @@ place Plus is algebra {
   law commutative ∀a ∀b (a + b = b + a)
 }
 place Entry {
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

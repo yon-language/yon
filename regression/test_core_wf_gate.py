@@ -74,7 +74,7 @@ def _bodies_checked(stderr: str) -> int | None:
 
 
 _MIN_PROJECT_TOML = '[package]\nname = "minp"\n[runtime]\nbackend = "memory"\n'
-_MIN_PROJECT_ENTRY = "place Entry {\n  fun main(): Number { return 0 }\n}\n"
+_MIN_PROJECT_ENTRY = "place Entry {\n  fun main: Number { return 0 }\n}\n"
 
 
 def test_gate_runs_on_corpus_without_false_reject(tmp_path):
@@ -135,7 +135,7 @@ def test_gate_runs_on_corpus_without_false_reject(tmp_path):
 ILL_TYPED_SRC = """\
 fun bad(A: Type, B: Type, x: El(A)): El(B) { return x }
 
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 """
 
 

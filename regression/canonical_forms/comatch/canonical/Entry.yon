@@ -13,9 +13,9 @@ place Entry {
       Closed { moment } => moment
     }
   }
-  fun open(): Account { return .-> Opened { initial 30 balance 2 } }
-  fun closed(): Account { return .-> Closed { moment 10 } }
-  fun main(): Number {
-    return read(open()) + read(closed())
+  fun open: Account { return .-> Opened { initial 30 balance 2 } }
+  fun closed: Account { return .-> Closed { moment 10 } }
+  fun main: Number {
+    return read(open) + read(closed)
   }
 }

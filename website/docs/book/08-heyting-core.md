@@ -19,7 +19,7 @@ values that do not mean unknown.
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): Number {
+fun main: Number {
   u := unknown
   p := present
   both := p &&? u            // unknown: conjunction with the undecided
@@ -67,7 +67,7 @@ topos Bank where {
 
 // Entry.yon
 place Entry { }
-fun main(): Number {
+fun main: Number {
   s := .-> State { balance 5 }
   bad := is_overdrawn(s)
   return match decide(bad) { Present => 0, Absent => 42, Unknown => 1 }
@@ -101,7 +101,7 @@ fun guard(): Number {
   }
   return r
 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 ```
 
 The block runs only where the condition holds at that stage. Patterns

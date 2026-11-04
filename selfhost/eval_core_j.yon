@@ -50,7 +50,7 @@ fun as_num(t: Term): Number {
   return match t { TLit as n => n, TVar as i => i, _ => 0 }
 }
 
-fun main(): Number {
+fun main: Number {
   r := eval((0 ↪ TLit, 0 ↪ TVar ↪ TLam, 7 ↪ TLit ↪ TRefl) ↪ TJ)
   return as_num(r) - 7
 }

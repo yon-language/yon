@@ -54,7 +54,7 @@ def _rejected(out: str, code: str, *words: str) -> bool:
 
 
 _AT = """\
-fun main(): Number {{
+fun main: Number {{
   return match LatticePoint.of_coordinate({n}) {{
     LatticePoint as p => {f}(p), DomainError as d => 0 - 1 }}
 }}
@@ -70,12 +70,12 @@ fun read(m: XRelMap<LatticePoint, Number>, p: LatticePoint): Number {
   return match XRelMap.get(m, p) { Found as v => v, Absent => 0 }
 }
 fun two(p: LatticePoint): Number {
-  m1 := XRelMap.set(XRelMap.empty(), p, 1)
+  m1 := XRelMap.set(XRelMap.empty, p, 1)
   m2 := XRelMap.set(m1, p, 2)
   _1 := IO.print_num(read(m1, p))
   _2 := IO.print_num(read(m2, p))
   _3 := IO.print_num(XRelMap.size(m2))
-  _4 := IO.print_num(XRelMap.size(XRelMap.empty()))
+  _4 := IO.print_num(XRelMap.size(XRelMap.empty))
   return 0
 }
 """ + _AT.format(n=1536, f="two")
@@ -95,13 +95,13 @@ fun orbit_at(n: Number): Number {
     LatticePoint as q => LatticePoint.orbit(q), DomainError as d => 0 - 1 }
 }
 fun with_q(p: LatticePoint, q: LatticePoint): Number {
-  a := XRelMap.set(XRelMap.set(XRelMap.empty(), p, 42), q, 7)
+  a := XRelMap.set(XRelMap.set(XRelMap.empty, p, 42), q, 7)
   _1 := IO.print_num(match XRelMap.get(a, p) { Found as v => v, Absent => 0 })
   _2 := IO.print_num(if XRelMap.has(a, p) then 1 else 0)
   _3 := IO.print_num(LatticePoint.orbit(p))
   _4 := IO.print_num(if LatticePoint.orbit(p) == LatticePoint.orbit(q) then 1 else 0)
   _5 := IO.print_num(if LatticePoint.orbit(p) == orbit_at(16778752) then 1 else 0)
-  _6 := IO.print_num(match XRelMap.get(XRelMap.empty(), p) { Found as v => 1, Absent => 0 })
+  _6 := IO.print_num(match XRelMap.get(XRelMap.empty, p) { Found as v => 1, Absent => 0 })
   _7 := IO.print_num(match XRelMap.get(a, q) { Found as v => v, Absent => 0 })
   return 0
 }
@@ -121,9 +121,9 @@ def test_keys_that_are_not_points(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  t := XRelMap.set(XRelMap.empty(), String.concat("ab", "c"), 7)
+  t := XRelMap.set(XRelMap.empty, String.concat("ab", "c"), 7)
   _1 := IO.print_num(match XRelMap.get(t, String.concat("a", "bc")) { Found as v => v, Absent => 0 })
-  z := XRelMap.set(XRelMap.set(XRelMap.empty(), 0.0, 1), (0 - 1) * 0.0, 2)
+  z := XRelMap.set(XRelMap.set(XRelMap.empty, 0.0, 1), (0 - 1) * 0.0, 2)
   _2 := IO.print_num(XRelMap.size(z))
   _3 := IO.print_num(match XRelMap.get(z, 2.5) { Found as v => v, Absent => 0 - 1 })
   return 0
@@ -140,12 +140,12 @@ def test_same_answers_as_hashmap_and_hashset(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  mut h := HashMap.empty()
-  mut x := XRelMap.empty()
-  mut ha := HashSet.empty()
-  mut hb := HashSet.empty()
-  mut xa := XRelSet.empty()
-  mut xb := XRelSet.empty()
+  mut h := HashMap.empty
+  mut x := XRelMap.empty
+  mut ha := HashSet.empty
+  mut hb := HashSet.empty
+  mut xa := XRelSet.empty
+  mut xb := XRelSet.empty
   mut i := 0
   iter 300 do {
     key := (i % 200) * 0.5
@@ -189,12 +189,12 @@ def test_a_map_on_the_classes_keys_by_canon(tmp_path):
     negative of 1536 finds what 1536 stored, 1280 does not."""
     entry = """\
 place Entry {}
-fun k(p: LatticePoint): LatticePoint { return XRelFrame.canon(XRelFrame.curtis(), p) }
+fun k(p: LatticePoint): LatticePoint { return XRelFrame.canon(XRelFrame.curtis, p) }
 fun three(p: LatticePoint, q: LatticePoint, m: LatticePoint): Number {
-  a := XRelMap.set(XRelMap.empty(), k(p), 100)
+  a := XRelMap.set(XRelMap.empty, k(p), 100)
   _1 := IO.print_num(match XRelMap.get(a, k(m)) { Found as v => v, Absent => 0 })
   _2 := IO.print_num(match XRelMap.get(a, k(q)) { Found as v => v, Absent => 0 })
-  s := XRelSet.add(XRelSet.add(XRelSet.add(XRelSet.empty(), k(p)), k(m)), k(q))
+  s := XRelSet.add(XRelSet.add(XRelSet.add(XRelSet.empty, k(p)), k(m)), k(q))
   _3 := IO.print_num(XRelSet.size(s))
   return 0
 }
@@ -214,11 +214,11 @@ fun at_p(p: LatticePoint): Number {
 
 @pytest.mark.parametrize("call", [
     "Arena.empty()",
-    "XRelMap.add_ref(XRelMap.empty(), 1536)",
-    "XRelSet.add_ref(XRelSet.empty(), 1536)",
+    "XRelMap.add_ref(XRelMap.empty, 1536)",
+    "XRelSet.add_ref(XRelSet.empty, 1536)",
 ])
 def test_retired_forms_are_refused(tmp_path, call):
-    entry = f"place Entry {{}}\nfun main(): Number {{\n  a := {call}\n  return 0\n}}\n"
+    entry = f"place Entry {{}}\nfun main: Number {{\n  a := {call}\n  return 0\n}}\n"
     rc, out, _ = _compile(tmp_path, entry)
     if not (rc != 0 and _rejected(out, "E2001", "unknown function or operation")):
         raise ProbeOutcome(f"{call} still compiles: rc={rc}")

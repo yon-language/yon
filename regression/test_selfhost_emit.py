@@ -63,7 +63,7 @@ def test_m2_compile_arith(tmp_path):
 @pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc not present")
 def test_m3_compile_fun(tmp_path):
     # the Yon0 SURFACE. Lexes a real function with keywords, multi-digit
-    # numbers and identifiers, parses `fun main(): Number { x := 20
+    # numbers and identifiers, parses `fun main: Number { x := 20
     # y := 22  return x + y }` into nested TLet with de Bruijn variables,
     # and the emitted program exits 42 = (20 + 22) mod 256.
     _end_to_end(tmp_path, ROOT / "selfhost" / "compile_fun.yon", 42)
@@ -82,7 +82,7 @@ def test_m4_compile_if(tmp_path):
 def test_m5_compile_rec(tmp_path):
     # functions, calls and RECURSION. Compiles two top-level functions,
     # `fun fact(n): Number { return if n == 0 then 1 else n * fact(n - 1) }`
-    # and `fun main(): Number { return fact(5) }`, to real func.func/func.call
+    # and `fun main: Number { return fact(5) }`, to real func.func/func.call
     # (a name is emitted as @fn_<hash>). The recursive self-call sits in the
     # else branch, so scf.if's laziness bottoms the recursion out at n == 0;
     # fact(5) = 120, so the emitted program exits 120.

@@ -20,7 +20,7 @@ place PublicDino in PublicPark {
   view LegalLens of PublicDino {
     show bucket = bucket_of(cohort)
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 
 

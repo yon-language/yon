@@ -4,5 +4,5 @@
 // x, y are free term identifiers.
 place Entry {
   fun usePath(p: PathP(i, Number, a, b)): Number { return 0 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

@@ -44,7 +44,7 @@ fun checksum(l: TokList): Number {
 }
 
 // source "2+3*4" = codes 50 43 51 42 52
-fun src(): String {
+fun src: String {
   return String.concat(
            String.concat(String.from_char(50), String.from_char(43)),
            String.concat(String.concat(String.from_char(51), String.from_char(42)),
@@ -52,6 +52,6 @@ fun src(): String {
 }
 
 // expected: TNum2, TPlus, TNum3, TStar, TNum4, TEnd = 2+100+3+200+4+0 = 309
-fun main(): Number {
-  return checksum(lex(src())) - 309
+fun main: Number {
+  return checksum(lex(src)) - 309
 }

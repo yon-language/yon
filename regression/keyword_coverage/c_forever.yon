@@ -8,6 +8,6 @@ place Entry {
       _ := String.print("tick")
     }
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 

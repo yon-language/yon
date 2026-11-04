@@ -33,7 +33,7 @@ def _build(tmp_path: Path, main_body: str, extra: str = ""):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n" + main_body + "}\n" + _INT64 + extra + "}\n")
+        "place Entry {\nfun main: Number {\n" + main_body + "}\n" + _INT64 + extra + "}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True,
                        text=True, timeout=300)
@@ -162,7 +162,7 @@ _REPLICAS = (
     "   the heap and its deduplication */\n"
     "fun weighted(r: Number): Word64 {\n"
     "  t := Word64.from_int64(11)\n"
-    "  mut s := Word64.zero()\n"
+    "  mut s := Word64.zero\n"
     "  mut k := int64(0)\n"
     "  while k < 3000 do {\n"
     "    v := if r == 0 then k + 1 else 3000 - k\n"
@@ -172,7 +172,7 @@ _REPLICAS = (
     "  return s\n}\n")
 _REPLICAS_MAIN = (
     "  sums := spawn in 2 parallel {\n    promote weighted(spawn_index)\n  }\n"
-    "  total := sums.fold(Word64.zero(), fun(a: Word64, v: Word64) => a + v)\n"
+    "  total := sums.fold(Word64.zero, fun(a: Word64, v: Word64) => a + v)\n"
     "  mine := weighted(0)\n"
     "  return if total == mine + mine then 42 else 1\n")
 
@@ -221,7 +221,7 @@ def test_outside_the_heap_a_handle_is_not_its_word(tmp_path):
 
 
 def test_outside_the_heap_no_word_becomes_a_value(tmp_path):
-    rc, out, _ = _build(tmp_path, "  return FnvHeap.value_of(Word64.zero())\n")
+    rc, out, _ = _build(tmp_path, "  return FnvHeap.value_of(Word64.zero)\n")
     assert rc != 0 and "E2001" in out, out
     assert ("FnvHeap.value_of is internal to FnvHeap: it is part of how FnvHeap is "
             "built, reachable only from the funs of FnvHeap") in out, out
@@ -255,7 +255,7 @@ def test_a_law_of_an_algebra_is_not_given(tmp_path):
         "place Plus is algebra {\n"
         "  operation plus(a: Plus, b: Plus): Plus as \"+\"\n"
         "  law commutative ∀a : Plus ∀b : Plus, a + b = b + a is given\n}\n")
-    (proj / "Entry.yon").write_text("place Entry {\n  fun main(): Number { return 42 }\n}\n")
+    (proj / "Entry.yon").write_text("place Entry {\n  fun main: Number { return 42 }\n}\n")
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=300)
     out = r.stdout + r.stderr

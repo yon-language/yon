@@ -4,7 +4,7 @@ place Entry {
       LatticePoint as q => LatticePoint.orbit(q), DomainError as d => 0 - 1 }
   }
   fun display(p: LatticePoint, q: LatticePoint): Number visits Output {
-    mut a := XRelMap.empty()
+    mut a := XRelMap.empty
     a <- XRelMap.set(a, p, 42)
     a <- XRelMap.set(a, q, 7)
     _1 := Output.print(String.from_int(match XRelMap.get(a, p) { Found as v => v, Absent => 0 }))

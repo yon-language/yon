@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     f := functor (x: Number) => x from W to V
       law identity
       law composition

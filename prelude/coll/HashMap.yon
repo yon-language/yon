@@ -7,7 +7,7 @@ place HashMap<K, V> {
 
   /* ─── The primitives ─────────────────────────────────────── [G] ─── */
 
-  fun empty<K, V>(): HashMap<K, V> is given
+  fun empty<K, V>: HashMap<K, V> is given
   fun set<K, V>(m: HashMap<K, V>, k: K, v: V): HashMap<K, V> is given
   fun has<K, V>(m: HashMap<K, V>, k: K): Boolean is given
   fun size<K, V>(m: HashMap<K, V>): Number is given

@@ -65,7 +65,7 @@ Failure is a value: string-producing operations return the `0.0` handle when
 the file is missing, the variable unset, the index out of range. Note the
 convention in the *system* modules: their no-parameter builtins take a dummy
 `0` (`Args.count(0)`, `Time.now_ms(0)`), while the collection constructors
-are genuinely zero-argument (`HashMap.empty()`, `VoyagerList.empty()`).
+are genuinely zero-argument (`HashMap.empty`, `VoyagerList.empty()`).
 
 ## Numbers, time, randomness, hashing
 
@@ -80,7 +80,7 @@ hashes).
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main(): Number {
-  m := HashMap.empty()
+  m := HashMap.empty
   m2 := HashMap.set(m, 1, 10)
   ten := match HashMap.get(m2, 1) { Found as v => v, Absent => 0 }
   g := Math.gcd(12, 18)                    // 6
@@ -143,7 +143,7 @@ names, and `Number.sqrt`, `Number.ln` are libm's on their domain, with a
 <!-- yon-gate: exit 32 -->
 ```yon
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     g := Number.gcd(12, 8)      // 4
     m := Number.max(3, 7)       // 7
     f := Number.floor(21.9)     // 21
@@ -158,7 +158,7 @@ is a genuine functor rather than an arrow between two objects of one site. The
 bare names in your code mean the 64-bit site, which is the language default.
 `Int64` is the ring ℤ/2⁶⁴ at runtime, as the checker proves its laws: its
 values are 64-bit integers from end to end, `+`, `-` and `*` wrap modulo 2⁶⁴
-(`Int64.max_value() + 1` is `Int64.min_value()`), `/` and `%` truncate, so
+(`Int64.max_value + 1` is `Int64.min_value`), `/` and `%` truncate, so
 `Int64.div(7, 2)` is 3. An integer literal written at an `Int64` is the exact
 integer its digits name, past 2⁵³ too (`9007199254740993` stays odd), and
 `Int64.to_text` writes the exact digits of any value. An `Int64` is not a
@@ -173,7 +173,7 @@ and the caller handles the failure by matching on the arms of the coproduct.
 <!-- yon-gate: exit 37 -->
 ```yon
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     g := Int64.gcd(12, 8)                   // 4
     d := Int64.div(7, 2)                    // 3, or a DomainError
     bc := Int64.bit_count(7)                // 3

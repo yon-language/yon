@@ -39,7 +39,7 @@ def rand_place_file(rng, name):
     fields = "\n".join(f"  {fn} Number" for fn in fnames)  # all-Number: views/moves stay valid
     extra, has_op = "", False
     if rng.random() < 0.4:
-        extra += f"\n  fun mm(): Number {{ return {rng.randint(0, 99)} }}"
+        extra += f"\n  fun mm: Number {{ return {rng.randint(0, 99)} }}"
     if rng.random() < 0.3:  # a place that carries an operation (a reduction target)
         has_op = True
         extra += "\n  operation op(v: Number): Number"
@@ -90,7 +90,7 @@ def gen_files(rng):
             '[world.W]', 'objects=["Code"]',
             'spaces=[' + ",".join(f'"{s}"' for s in spaces) + ']']
     files["yon.toml"] = "\n".join(toml) + "\n"
-    files["Entry.yon"] = "place Entry { fun main(): Number { return 0 } }\n"
+    files["Entry.yon"] = "place Entry { fun main: Number { return 0 } }\n"
     pinfo = {}  # place name -> {"fields": [...], "op": bool, "space": s}
     for s in spaces:
         files[f"{s}/Topos.yon"] = f"topos T_{s} where {{ }}\n"

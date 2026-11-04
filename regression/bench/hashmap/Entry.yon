@@ -7,7 +7,7 @@ place Entry {
            else n
   }
   fun timed_insert(n: Number): Number visits Output {
-    mapc := Space.make(HashMap.empty())
+    mapc := Space.make(HashMap.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)
@@ -27,7 +27,7 @@ place Entry {
     return (t1 - t0)
   }
   fun build_map(n: Number): HashMap<Number, Number> {
-    mapc := Space.make(HashMap.empty())
+    mapc := Space.make(HashMap.empty)
     i := Space.make(0)
     iter n do { k := Space.get(i)
                 _ := Space.set(mapc, HashMap.set(Space.get(mapc), k, k + 1))

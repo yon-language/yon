@@ -4,9 +4,9 @@
  * i64 that uses Additive takes from it the operations it does not give. */
 place Additive is algebra {
   operation add(a: Additive, b: Additive): Additive as "+"
-  operation zero(): Additive as "0"
+  operation zero: Additive as "0"
   law associative ∀a : Additive ∀b : Additive ∀c : Additive, (a + b) + c = a + (b + c)
   law commutative ∀a : Additive ∀b : Additive, a + b = b + a
-  law neutral ∀a : Additive, a + zero() = a
+  law neutral ∀a : Additive, a + zero = a
   carried by i64
 }

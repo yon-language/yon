@@ -5,7 +5,7 @@ place Entry {
  * return = nc_distinct*10 + comm_same
  *   nc_distinct=1 (i due minus sono diversi), comm_same=1 (i due and uguali)
  *   = 1*10 + 1 = 11. */
-fun main(): Number {
+fun main: Number {
   a := MerkleTree.leaf(1)
   b := MerkleTree.leaf(2)
 

@@ -43,9 +43,9 @@ fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
     else word_hash(s, i + 1, j, h * 31 + String.char_at(s, i))
 }
 fun hash_of(s: String): Number { return word_hash(s, 0, String.length(s), 0) }
-fun kw_fun(): Number    { return hash_of("fun") }
-fun kw_return(): Number { return hash_of("return") }
-fun kw_number(): Number { return hash_of("number") }
+fun kw_fun: Number    { return hash_of("fun") }
+fun kw_return: Number { return hash_of("return") }
+fun kw_number: Number { return hash_of("number") }
 
 /* ---- lexer: String -> TokList ---- */
 /* end index of the lowercase-letter run [i..): first non-letter position (a=97,z=122). */
@@ -69,9 +69,9 @@ fun num_val(s: String, i: Number, j: Number, acc: Number): Number {
 }
 /* a word hash -> its token: a keyword if it matches one, else an identifier. */
 fun classify(h: Number): Token {
-  return if h == kw_fun() then TKwFun
-    else if h == kw_return() then TKwReturn
-    else if h == kw_number() then TKwNumber
+  return if h == kw_fun then TKwFun
+    else if h == kw_return then TKwReturn
+    else if h == kw_number then TKwNumber
     else h ↪ TIdent
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
@@ -266,10 +266,10 @@ fun gen_bin(op: String, a: Term, b: Term, env: SsaEnv, n: Number): EmitR {
 }
 
 /* ---- module boilerplate ---- */
-fun mod_prefix(): String {
+fun mod_prefix: String {
   return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
 }
-fun stubs(): String {
+fun stubs: String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun mod_suffix(result_ssa: String, ctr: Number): String {
@@ -278,20 +278,20 @@ fun mod_suffix(result_ssa: String, ctr: Number): String {
     String.concat("    ", String.concat(rss,
       String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
     String.concat(String.concat("    return ", String.concat(rss, " : i32\n  }\n")),
-      stubs()))
+      stubs))
 }
 
 /* the Yon0 source (real newlines via \n), lexed and compiled by this program. */
-fun src(): String {
+fun src: String {
   return "fun main(): number {\n  x := 20\n  y := 22\n  return x + y\n}\n"
 }
 
 fun main(): Number {
   /* full pipeline: source text -> tokens -> Term -> MLIR module -> file.
    * expected Term: TLet(20, TLet(22, TAdd(TVar 1, TVar 0))) -> emitted exit 42. */
-  prog := term_of(parse_program(lex(src())))
+  prog := term_of(parse_program(lex(src)))
   r := gen(prog, SeNil, 0)
-  full := String.concat(mod_prefix(),
+  full := String.concat(mod_prefix,
                   String.concat(er_code(r),
                     mod_suffix(er_ssa(r), er_ctr(r))))
   _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)

@@ -1,6 +1,6 @@
 greeting := 10
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     x := 42
     return x
   }

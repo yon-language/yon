@@ -9,5 +9,5 @@ fun consumer(): Number {
   v := Wire.recv_shm(sid)
   return 0
 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 }

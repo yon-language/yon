@@ -52,9 +52,9 @@ place Int64 carried by i64 {
    * 2^63 - 1, the smallest -2^63, and MAX + 1 wraps to MIN. Both are
    * computed from 2^62, which a literal holds exactly. */
 
-  fun two_to_62(): Int64 { return 4611686018427387904 }
-  fun max_value(): Int64 { return two_to_62() - 1 + two_to_62() }
-  fun min_value(): Int64 { return 0 - two_to_62() - two_to_62() }
+  fun two_to_62: Int64 { return 4611686018427387904 }
+  fun max_value: Int64 { return two_to_62 - 1 + two_to_62 }
+  fun min_value: Int64 { return 0 - two_to_62 - two_to_62 }
 
   /* ─── Predicates ─────────────────────────────────────────── [T] ─── */
 

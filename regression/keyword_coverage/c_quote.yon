@@ -4,7 +4,7 @@
 // decoded carrier TyPrim "number". The handle is bound and the function
 // returns a plain number (quote lowers to its inhabitant `a` in desugar).
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     q := quote(Number, 0)
     return 0
   }

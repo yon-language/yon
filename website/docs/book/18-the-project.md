@@ -57,7 +57,7 @@ internal fun audit_key(x: Number): Number { return x * 1789 }
 
 /* A service package still has a main: the binary is both the program and
  * the server (serve mode is chosen at launch). An idle main is the rule. */
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 ```
 
 Compile it **as the server binary**, named for its Space and placed next to

@@ -80,7 +80,7 @@ let () =
   check "typecheck: return XTower.width(0)"
     (accepts (mkmain ~body:[ SReturn (call "XTower__width" [enum 0.0], loc) ]));
   check "typecheck: return XTower.depth()"
-    (accepts (mkmain ~body:[ SReturn (call "XTower__depth" [], loc) ]));
+    (accepts (mkmain ~body:[ SReturn (EField (EVar ("XTower", loc), "depth", loc), loc) ]));
 
   (* (3) lower: the emitted MLIR calls the matching runtime symbol *)
   check "lower: XTower.class -> @yon_rt_xtower_class"
@@ -93,7 +93,7 @@ let () =
     (contains (mlir_of (mkmain ~body:[ SReturn (call "XTower__width" [enum 0.0], loc) ]))
               "yon_rt_xtower_width");
   check "lower: XTower.depth -> @yon_rt_xtower_depth"
-    (contains (mlir_of (mkmain ~body:[ SReturn (call "XTower__depth" [], loc) ]))
+    (contains (mlir_of (mkmain ~body:[ SReturn (EField (EVar ("XTower", loc), "depth", loc), loc) ]))
               "yon_rt_xtower_depth");
 
   Printf.printf "\n%d passed, %d failed\n" !pass !fails;

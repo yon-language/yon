@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     mut x := 40
     x <- 42
     return x

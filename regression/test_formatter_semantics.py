@@ -164,7 +164,7 @@ def test_corpus_units_cover_the_formatter_corpus():
 
 _DROP_PROBE = """\
 place Entry { }
-fun main(): Number {
+fun main: Number {
   mut x := 1
   x <- x + 41
   return x

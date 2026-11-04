@@ -28,7 +28,7 @@ def _run(tmp_path: Path, main_body: str):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n" + main_body + "}\n}\n")
+        "place Entry {\nfun main: Number {\n" + main_body + "}\n}\n")
     return subprocess.run([str(EVR), "--trace", str(proj)],
                           capture_output=True, text=True, timeout=120)
 

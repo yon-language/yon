@@ -20,7 +20,7 @@ def _exit(tmp_path: Path, body: str) -> int:
     proj = tmp_path / "proj"
     proj.mkdir()
     (proj / "yon.toml").write_text('[package]\nname = "probe"\n\n[runtime]\nbackend = "memory"\n')
-    (proj / "Entry.yon").write_text("place Entry {\nfun main(): Number {\n" + body + "}\n}\n")
+    (proj / "Entry.yon").write_text("place Entry {\nfun main: Number {\n" + body + "}\n}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True,
                        text=True, timeout=300)

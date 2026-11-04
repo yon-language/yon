@@ -56,7 +56,7 @@ The primitives of the runtime belong to the library, so `is given` is written in
             out={["42"]}>
 {`// Entry.yon
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     a := Math.floor(21.9)
     b := Math.sqrt(441)
     return a + b
@@ -132,7 +132,7 @@ The companion of `for`; see above.
   }
   return acc
 }
-fun main(): Number {
+fun main: Number {
   lst := List.cons(5, List.cons(7, List.cons(9, List.empty(0))))
   return total(lst)
 }`}
@@ -222,7 +222,7 @@ place Entry {
     }
     return r
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }`}
 </CodeWindow>
 
@@ -237,7 +237,7 @@ Emits a value: into the channel of a `produce` block, or into the active handler
 <CodeWindow file="kw_produce_emit.yon" run="yonc kw_produce_emit.yon -o produce_emit && ./produce_emit; echo $?" out={["42"]}>
 
 ```yon
-fun main(): Number {
+fun main: Number {
   s := produce {
     emit 41
     emit 1
@@ -279,7 +279,7 @@ place Account { balance Number }
 // Entry.yon
 place Entry {
   fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). x = y }): Number { return 0 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }`}
 </CodeWindow>
 
@@ -465,7 +465,7 @@ place Or {
 }
 // Entry.yon
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     return 0
   }
 }`}
@@ -543,7 +543,7 @@ place Entry {
       return .-> AccountEU { balance s.balance }
     }
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }`}
 </CodeWindow>
 
@@ -573,7 +573,7 @@ place Entry {
   nat transform Eta from F to G {
     for each X by F
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }`}
 </CodeWindow>
 
@@ -615,7 +615,7 @@ place Entry {
       return tmp
     }
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }`}
 </CodeWindow>
 
@@ -720,15 +720,15 @@ fun readings(): Wire<Number> {
     emit 10
     emit 11
     emit 15
-  }
+}
   return s
 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 
 // subscriber.yon, the consumer
 import sensors::readings from Sensors
 
-fun main(): Number {
+  fun main(): Number {
   w := wire to space Sensors
   sub := w.awaits(readings)
   s := sub.stream
@@ -766,7 +766,7 @@ The replica-count marker in `spawn in N parallel { ... }`: `N` is evaluated in t
 <CodeWindow file="spawn_parallel_collect.yon" run="yonc spawn_parallel_collect.yon -o spc && ./spc; echo $?" out={["10"]}>
 
 ```yon
-fun main(): Number {
+fun main: Number {
   results := spawn in 4 parallel {
     promote spawn_index + 1
   }
@@ -836,7 +836,7 @@ fun main(): Number visits Output {
 <CodeWindow file="kw_heyting.yon"
             run="yonc kw_heyting.yon -o heyting && ./heyting; echo $?"
             out={["42"]}>
-{`fun main(): Number {
+{`fun main: Number {
   u := unknown
   p := present
   both := p &&? u            // unknown: conjunction with the undecided
@@ -898,7 +898,7 @@ fun proj_sum(a: Number, b: Number): Number {
   y := snd(p)
   return x + y
 }
-fun main(): Number {
+fun main: Number {
   direct := takes(pair(20, 10))
   return direct + proj_sum(7, 5)        // 30 + 12 = 42
 }`}
@@ -949,7 +949,7 @@ The universe of types (`Type_1`, `Type_2`, ... for the levels). A universe-typed
             out={["42"]}>
 {`fun diag(a: Number): Number { return a * 6 }
 fun universe_taker(t: Type): Number { return 7 }
-fun main(): Number {
+fun main: Number {
   r := clear 7                          // a path value, let-bound
   moved := ind_path(0, diag, clear 7)   // J computes diag(7) = 42
   return moved
@@ -1032,10 +1032,10 @@ inhabitant to `body`. Lowers to the body application and runs.
 
 <CodeWindow file="circle_hit.yon" run="yonc circle_hit.yon -o circle_hit && ./circle_hit; echo $?" out={["42"]}>
 {`fun motive(x: S1): Number { return 0 }
-fun circle_elim(): Number {
+fun circle_elim: Number {
   return hit_elim(motive, [base => 42, loop => plam i => 42], hit(base))
 }
-fun main(): Number {
-  return circle_elim()
+fun main: Number {
+  return circle_elim
 }`}
 </CodeWindow>

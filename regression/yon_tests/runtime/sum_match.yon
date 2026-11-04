@@ -1,7 +1,7 @@
 place Entry {
   fun quotient_motive(q: Quotient): Number { return 0 }
   fun suspension_motive(s: Suspension): Number { return 0 }
-  fun main(): Number {
+  fun main: Number {
     payload := hit_elim(
       quotient_motive,
       [inj as x => x, quot as (a, b, r) => plam i => 0],

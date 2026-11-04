@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     t := Tag.make(40)
     return if Tag.value(t) == 40 then 42 else 1
   }

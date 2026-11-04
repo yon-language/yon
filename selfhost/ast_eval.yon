@@ -27,7 +27,7 @@ fun eval(e: MerkleTree): Number {
          else eval(MerkleTree.child(e, 0)) * eval(MerkleTree.child(e, 1))
 }
 
-fun main(): Number {
+fun main: Number {
   add23 := MerkleTree.node2_commutative(2, lit(2), lit(3))
   add32 := MerkleTree.node2_commutative(2, lit(3), lit(2))
   add41 := MerkleTree.node2_commutative(2, lit(4), lit(1))

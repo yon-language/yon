@@ -10,7 +10,7 @@ place Entry {
       Cons as (h, t) => h + sum(t)
     }
   }
-  fun main(): Number {
+  fun main: Number {
     return sum((10, (15, (17, Nil) ↪ Cons) ↪ Cons) ↪ Cons)
   }
 }

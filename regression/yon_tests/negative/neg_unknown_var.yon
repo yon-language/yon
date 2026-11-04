@@ -1,5 +1,5 @@
 // Unbound variable. `nonexistent` is not a var, fun, move, reduction, view, or
 // place: the EVar fallthrough in infer raises "unknown identifier" -> exit 3.
 place Entry {
-  fun main(): Number { return nonexistent }
+  fun main: Number { return nonexistent }
 }

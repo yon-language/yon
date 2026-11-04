@@ -169,9 +169,9 @@ def _lit(x: float) -> str:
     if math.isnan(x):
         return "(recip(0) - recip(0))"
     if math.isinf(x):
-        return "recip(0)" if x > 0 else "recip(negz())"
+        return "recip(0)" if x > 0 else "recip(negz)"
     if x == 0:
-        return "negz()" if math.copysign(1.0, x) < 0 else "0"
+        return "negz" if math.copysign(1.0, x) < 0 else "0"
     s = format(Decimal(abs(x)), "f")
     if "." not in s:
         s += ".0"
@@ -216,7 +216,7 @@ def _program(form: str, fn: str, exps) -> str:
                    f"{_lit(e[3]) if e[0] == 'ball' else '1'}, {1 if e[0] == 'ball' else 0})"
         lines.append(f"  _v{i} := {body}")
     return ("place Entry {}\n"
-            "fun negz(): Number { return 0 * (0 - 1) }\n"
+            "fun negz: Number { return 0 * (0 - 1) }\n"
             "fun recip(x: Number): Number { return 1 / x }\n"
             "fun raw(i: Number, y: Number): Number {\n"
             "  _i := IO.print_num(i)\n  _k := IO.print_num(0)\n"
@@ -229,7 +229,7 @@ def _program(form: str, fn: str, exps) -> str:
             "  _y := IO.print_num(0)\n  return 0\n}\n"
             "fun report(i: Number, y: Number, a: Number, u: Number, scaled: Number): Number {\n"
             "  return if scaled == 1 then near(i, y, a, u) else raw(i, y)\n}\n"
-            "fun main(): Number {\n" + "\n".join(lines) + "\n  return 0\n}\n")
+            "fun main: Number {\n" + "\n".join(lines) + "\n  return 0\n}\n")
 
 
 def _parse(tok: str) -> float:

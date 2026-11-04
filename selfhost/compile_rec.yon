@@ -47,12 +47,12 @@ fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
     else word_hash(s, i + 1, j, h * 31 + String.char_at(s, i))
 }
 fun hash_of(s: String): Number { return word_hash(s, 0, String.length(s), 0) }
-fun kw_fun(): Number    { return hash_of("fun") }
-fun kw_return(): Number { return hash_of("return") }
-fun kw_number(): Number { return hash_of("number") }
-fun kw_if(): Number     { return hash_of("if") }
-fun kw_then(): Number   { return hash_of("then") }
-fun kw_else(): Number   { return hash_of("else") }
+fun kw_fun: Number    { return hash_of("fun") }
+fun kw_return: Number { return hash_of("return") }
+fun kw_number: Number { return hash_of("number") }
+fun kw_if: Number     { return hash_of("if") }
+fun kw_then: Number   { return hash_of("then") }
+fun kw_else: Number   { return hash_of("else") }
 
 /* ---- lexer: String -> TokList ---- */
 fun word_end(s: String, i: Number, len: Number): Number {
@@ -72,12 +72,12 @@ fun num_val(s: String, i: Number, j: Number, acc: Number): Number {
     else num_val(s, i + 1, j, acc * 10 + (String.char_at(s, i) - 48))
 }
 fun classify(h: Number): Token {
-  return if h == kw_fun() then TKwFun
-    else if h == kw_return() then TKwReturn
-    else if h == kw_number() then TKwNumber
-    else if h == kw_if() then TKwIf
-    else if h == kw_then() then TKwThen
-    else if h == kw_else() then TKwElse
+  return if h == kw_fun then TKwFun
+    else if h == kw_return then TKwReturn
+    else if h == kw_number then TKwNumber
+    else if h == kw_if then TKwIf
+    else if h == kw_then then TKwThen
+    else if h == kw_else then TKwElse
     else h ↪ TIdent
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
@@ -412,13 +412,13 @@ fun main_body(fs: FunList, main_hash: Number): Term {
 }
 
 /* ---- module boilerplate ---- */
-fun mod_head(): String {
+fun mod_head: String {
   return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n"
 }
-fun main_head(): String {
+fun main_head: String {
   return "  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
 }
-fun stubs(): String {
+fun stubs: String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun main_tail(result_ssa: String, ctr: Number): String {
@@ -430,23 +430,23 @@ fun main_tail(result_ssa: String, ctr: Number): String {
 }
 
 /* the Yon0 source: a recursive factorial plus a main that calls it. */
-fun src(): String {
+fun src: String {
   return "fun fact(n): number {\n  return if n == 0 then 1 else n * fact(n - 1)\n}\nfun main(): number {\n  return fact(5)\n}\n"
 }
 
 fun main(): Number {
   /* full pipeline: source -> tokens -> FunList -> MLIR module -> file.
    * main = fact(5) = 120 -> emitted exit 120. */
-  funs  := parse_funs(lex(src()))
+  funs  := parse_funs(lex(src))
   mh    := hash_of("main")
   helpers := gen_funs(funs, mh)
   rmain := gen(main_body(funs, mh), SeNil, 0)
-  full  := String.concat(mod_head(),
+  full  := String.concat(mod_head,
                    String.concat(helpers,
-                     String.concat(main_head(),
+                     String.concat(main_head,
                        String.concat(er_code(rmain),
                          String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
-                           stubs())))))
+                           stubs)))))
   _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
   _p := String.print(full)
   return String.length(full)

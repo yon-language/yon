@@ -164,9 +164,9 @@ place Number carried by number {
 
   /* ─── Constants ──────────────────────────────────────────── [T] ─── */
 
-  fun pi(): Number      { return 3.14159265358979 }
-  fun e(): Number       { return 2.71828182845905 }
-  fun epsilon(): Number { return 0.000000000000000222 }
+  fun pi: Number      { return 3.14159265358979 }
+  fun e: Number       { return 2.71828182845905 }
+  fun epsilon: Number { return 0.000000000000000222 }
 
   /* Negate — additive (negate(a+b) = negate(a)+negate(b)) and an
    * involution: apply it twice and you are home. No law is declared on it.

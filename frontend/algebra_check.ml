@@ -112,7 +112,12 @@ let unfold (algebra_ops : S.operation_decl list)
     | S.ENot (a, l) -> S.ENot (g a, l)
     | S.EHITElim (m, branches, x, l) ->
         S.EHITElim (m, List.map (fun (c, pat, b) -> (c, pat, g b)) branches, g x, l)
-    | S.EVar _ | S.ELit _ -> e
+    | S.EVar (x, _) ->
+        (* the name of a constant, or of a nullary fun of the house, is its value *)
+        (match (try resolve x [] with Not_modelled _ -> None) with
+         | Some body -> go (depth + 1) body
+         | None -> e)
+    | S.ELit _ -> e
     | _ -> raise (Not_modelled "a form outside the modelled fragment")
   in
   go 0 e

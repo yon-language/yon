@@ -3,5 +3,5 @@
 // to the nominal 0-cell carrier TyPrim c via Catt_r_yon.el_decode (TmVar c).
 place Entry {
   fun useEl(e: El(Carrier)): Number { return 0 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

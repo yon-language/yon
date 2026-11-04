@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     x := 42
     mut r := 0
     when x == 42 { r <- 1 } otherwise { r <- 2 }

@@ -101,7 +101,7 @@ def test_path_constructor_slot_is_refused_and_the_law_shown(tmp_path):
     """A path is not an arm of the clause: it is a cell, a law of the place. Comes back in
     the form with laws when they are constitutive."""
     r = _twin(tmp_path, "place NumList {\n  this > Nil :U dup : Nil = Nil\n}\n"
-                        "place Entry { }\nfun main(): Number { return 0 }\n")
+                        "place Entry { }\nfun main: Number { return 0 }\n")
     out = r.stderr + r.stdout
     assert r.returncode != 0 and b"E1001" in out and b"law dup" in out, out
 
@@ -111,7 +111,7 @@ def test_record_pattern_on_a_payload_is_refused_and_the_tuple_shown(tmp_path):
             "place Entry { }\n"
             "fun sum(xs: NumList): Number {\n"
             "  return match xs { Nil => 0, %s => h + sum(t) }\n}\n"
-            "fun main(): Number { return sum((5, (37, Nil) ↪ Cons) ↪ Cons) }\n")
+            "fun main: Number { return sum((5, (37, Nil) ↪ Cons) ↪ Cons) }\n")
     r = _twin(tmp_path, prog % "Cons { _1 as h _2 as t }")
     out = r.stderr + r.stdout
     assert r.returncode != 0 and b"E1001" in out and b"Cons as (x, y)" in out, out
@@ -119,7 +119,7 @@ def test_record_pattern_on_a_payload_is_refused_and_the_tuple_shown(tmp_path):
 
 def test_mediatrice_on_arm_is_refused_and_the_injection_shown(tmp_path):
     r = _twin(tmp_path, "place NumList { this > Nil :U Cons Number NumList }\n"
-                        "place Entry { }\nfun main(): Number {\n"
+                        "place Entry { }\nfun main: Number {\n"
                         "  c := .-> Cons { _1 1 }\n  return 0\n}\n")
     out = (r.stderr + r.stdout).decode()
     assert r.returncode != 0 and "E2001" in out and "(x1, x2) ↪ Cons" in out, out
@@ -133,7 +133,7 @@ def test_injection_needs_the_whole_payload(tmp_path):
     (twin / "Entry.yon").write_text(
         "place NumList { this > Nil :U Cons Number NumList }\n"
         "place Entry { }\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  c := 1 ↪ Cons\n"
         "  return 0\n}\n")
     r = _emit(twin)
@@ -171,7 +171,7 @@ def test_full_circle_no_constructors(tmp_path):
         "    Nil => 0,\n"
         "    Cons as (h, t) => h + sum(t)\n"
         "  }\n}\n"
-        "fun main(): Number {\n"
+        "fun main: Number {\n"
         "  xs := (5, ((37, Nil) ↪ Cons)) ↪ Cons\n"
         "  return sum(xs)\n}\n")
     r = _emit(twin)

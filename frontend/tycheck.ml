@@ -1650,6 +1650,47 @@ let arm_mediatrice_err (env : Tyenv.env) (place_name : string) loc =
      else "(" ^ String.concat ", " (List.init n (fun i -> Printf.sprintf "x%d" (i + 1))) ^ ")")
     place_name)
 
+(* The declaration of a nullary says what it is. *)
+let nullary_decl_refusal (fn : fun_decl) : type_error list =
+  (* main is named by no one, it is the world that calls it: its form says nothing to a caller *)
+  if fn.fn_params <> [] || String.starts_with ~prefix:"__" fn.fn_name
+     || fn.fn_name = "main" then [] else
+  let shown = Str.global_replace (Str.regexp_string "__") "." fn.fn_name in
+  let base = match fn.fn_home with
+    | Some h -> Method_sugar.base_name h fn.fn_name
+    | None -> fn.fn_name in
+  let bare = Hashtbl.mem Surface_ast.bare_nullary_decls
+      (fn.fn_loc.file, fn.fn_loc.start_line, fn.fn_loc.start_col) in
+  let acts = Hashtbl.mem Tyenv.impure_funs fn.fn_name in
+  let refuse msg =
+    match (err fn.fn_loc msg : unit tc_result) with
+    | Error e -> [e]
+    | Ok () -> [] in
+  if acts && bare then
+    refuse (Printf.sprintf "fun %s acts: it is declared with (), and called %s()" shown shown)
+  else if not acts && not bare then
+    refuse (Printf.sprintf "fun %s is a point: it is declared without (): fun %s: T" shown base)
+  else []
+
+(* A pure nullary is a point: it is named without (). One that acts is called with (). *)
+let nullary_refusal (env : Tyenv.env) (name : string) (args : expr list) (loc : location)
+    : string option =
+  if args <> [] || String.starts_with ~prefix:"__" name then None else
+  let shown = Str.global_replace (Str.regexp_string "__") "." name in
+  let bare = Hashtbl.mem Surface_ast.bare_nullary_sites
+      (loc.file, loc.start_line, loc.start_col, name) in
+  let declared =
+    match Tyenv.lookup_fun env name with
+    | Some fs -> fs.Tyenv.fs_params = []
+    | None -> false in
+  if not (declared || Hashtbl.mem Surface_ast.nullary_operations name
+          || List.mem name ["XTower__depth"; "Args__count"]) then None
+  else if Tyenv.lookup_var env name <> None then None
+  else if Hashtbl.mem Tyenv.impure_funs name then
+    (if bare then Some (Printf.sprintf "%s acts: it is called %s()" shown shown) else None)
+  else if bare then None
+  else Some (Printf.sprintf "%s is a point: it is named %s, without ()" shown shown)
+
 (* `x ↪ Found`: an injection. Its type is the coproduct, whose parameters are instantiated
    by unification, from the expected type and from the payload. *)
 let arrow_kind (name : string) (loc : location) =
@@ -1685,6 +1726,9 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
 
   | ENew (place_name, _, loc) when Tyenv.is_synthetic_place env place_name ->
       arm_mediatrice_err env place_name loc
+
+  | ECall (name, args, loc) when nullary_refusal env name args loc <> None ->
+      err loc (Option.get (nullary_refusal env name args loc))
 
   | ECall (name, _, loc) when arrow_refusal env name loc <> None ->
       err loc (Option.get (arrow_refusal env name loc))
@@ -3415,6 +3459,8 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                   (Tyenv.ty_to_string sum_ty))))
   | ENew (place_name, _, loc), _ when Tyenv.is_synthetic_place env place_name ->
       arm_mediatrice_err env place_name loc
+  | ECall (name, args, loc), _ when nullary_refusal env name args loc <> None ->
+      err loc (Option.get (nullary_refusal env name args loc))
   | ECall (name, _, loc), _ when arrow_refusal env name loc <> None ->
       err loc (Option.get (arrow_refusal env name loc))
   | ECall (name, args, loc), _ when is_arm_injection env name loc ->
@@ -6423,7 +6469,7 @@ and check_fun_decl_at_home (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
    two semantically identical or factor shared pieces. *)
 and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     : type_error list =
-  with_home fn (fun () -> check_fun_decl_accum_at_home env ctx fn)
+  nullary_decl_refusal fn @ with_home fn (fun () -> check_fun_decl_accum_at_home env ctx fn)
 
 and check_fun_decl_accum_at_home (env : Tyenv.env) (ctx : Reduce.ctx)
     (fn : fun_decl) : type_error list =
@@ -7646,6 +7692,7 @@ let check_program (p : program) : check_result =
          | None -> ())
     | _ -> ()) p;
   let p = Method_sugar.qualify_overloads p in
+  Desugar.impure_funs p;
   Hashtbl.reset fun_space;
   Hashtbl.reset Surface_ast.producer_roots;
   Hashtbl.reset Surface_ast.wire_types;

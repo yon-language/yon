@@ -29,7 +29,7 @@ def _build(tmp_path: Path, house: str, main_expr: str):
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Word.yon").write_text("internal place Word carried by i64 {\n" + house + "}\n")
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n  return " + main_expr + "\n}\n}\n")
+        "place Entry {\nfun main: Number {\n  return " + main_expr + "\n}\n}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
                        capture_output=True, text=True, timeout=180)
@@ -53,9 +53,9 @@ def test_inside_the_house_the_place_and_its_carrier_convert_both_ways(tmp_path):
 
 def test_inside_the_house_the_sum_wraps(tmp_path):
     house = (_MAKE
-             + "  fun wrap(): Word { return make(Int64.max_value()) + make(1) }\n"
-             + "  fun is_min(w: Word): Boolean { return w == Int64.min_value() }\n")
-    assert _value(tmp_path, house, "if Word.is_min(Word.wrap()) then 42 else 1") == 42
+             + "  fun wrap: Word { return make(Int64.max_value) + make(1) }\n"
+             + "  fun is_min(w: Word): Boolean { return w == Int64.min_value }\n")
+    assert _value(tmp_path, house, "if Word.is_min(Word.wrap) then 42 else 1") == 42
 
 
 def test_inside_the_house_the_product_wraps(tmp_path):
@@ -74,12 +74,12 @@ def test_outside_the_house_the_place_takes_no_arithmetic(tmp_path):
 
 def test_outside_the_house_a_carrier_value_is_not_the_place(tmp_path):
     rc, out, _ = _build(tmp_path, "  fun same(w: Word): Word { return w }\n",
-                        "if Word.same(Int64.max_value()) == Word.same(Int64.max_value()) then 1 else 2")
+                        "if Word.same(Int64.max_value) == Word.same(Int64.max_value) then 1 else 2")
     assert rc != 0 and "[E2001]" in out and "Fatal error" not in out, out
 
 
 def test_the_bit_operators_apply_to_64_bit_integers(tmp_path):
-    expr = ("if Int64.max_value() & 255 == 255 and ~(Int64.min_value()) == Int64.max_value()"
+    expr = ("if Int64.max_value & 255 == 255 and ~(Int64.min_value) == Int64.max_value"
             " and (Int64.ipow_ok(2, 60) | 1) - 1 == Int64.ipow_ok(2, 60)"
             " and (Int64.ipow_ok(2, 40) ^ Int64.ipow_ok(2, 40)) == 0 then 42 else 1")
     assert _value(tmp_path, _MAKE, expr) == 42
@@ -94,7 +94,7 @@ def _header(tmp_path, header):
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Word.yon").write_text(header + " { }\n")
-    (proj / "Entry.yon").write_text("place Entry {\nfun main(): Number {\n  return 42\n}\n}\n")
+    (proj / "Entry.yon").write_text("place Entry {\nfun main: Number {\n  return 42\n}\n}\n")
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
                        capture_output=True, text=True, timeout=180)
     return r.returncode, r.stdout + r.stderr

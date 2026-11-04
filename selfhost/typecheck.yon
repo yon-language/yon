@@ -45,7 +45,7 @@ fun infer(e: MerkleTree): Number {
              then infer(MerkleTree.child(MerkleTree.child(e, 1), 0)) else 0) else 0)
 }
 
-fun main(): Number {
+fun main: Number {
   // well-typed: if (2 < 3) then 10 else 20  ->  NUMBER (1)
   prog_ok := mk_if(mk_lt(mk_lit(2), mk_lit(3)), mk_lit(10), mk_lit(20))
   // ill-typed: 2 + true  ->  ERROR (0)

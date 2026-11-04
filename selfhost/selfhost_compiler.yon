@@ -67,15 +67,15 @@ fun word_hash(s: String, i: Number, j: Number, h: Number): Number {
     else word_hash(s, i + 1, j, mod_reduce(h * 31 + String.char_at(s, i), 2000003))
 }
 fun hash_of(s: String): Number { return word_hash(s, 0, String.length(s), 0) }
-fun kw_fun(): Number    { return hash_of("fun") }
-fun kw_return(): Number { return hash_of("return") }
-fun kw_number(): Number { return hash_of("number") }
-fun kw_if(): Number     { return hash_of("if") }
-fun kw_then(): Number   { return hash_of("then") }
-fun kw_else(): Number   { return hash_of("else") }
-fun kw_place(): Number     { return hash_of("place") }
-fun kw_this(): Number      { return hash_of("this") }
-fun kw_match(): Number     { return hash_of("match") }
+fun kw_fun: Number    { return hash_of("fun") }
+fun kw_return: Number { return hash_of("return") }
+fun kw_number: Number { return hash_of("number") }
+fun kw_if: Number     { return hash_of("if") }
+fun kw_then: Number   { return hash_of("then") }
+fun kw_else: Number   { return hash_of("else") }
+fun kw_place: Number     { return hash_of("place") }
+fun kw_this: Number      { return hash_of("this") }
+fun kw_match: Number     { return hash_of("match") }
 
 /* ---- lexer: String -> TokList ---- */
 /* an identifier char: a-z (97-122), A-Z (65-90), 0-9 (48-57), or '_' (95).
@@ -104,14 +104,14 @@ fun num_val(s: String, i: Number, j: Number, acc: Number): Number {
     else num_val(s, i + 1, j, acc * 10 + (String.char_at(s, i) - 48))
 }
 fun classify(h: Number): Token {
-  return if h == kw_fun() then TKwFun
-    else if h == kw_return() then TKwReturn
-    else if h == kw_number() then TKwNumber
-    else if h == kw_if() then TKwIf
-    else if h == kw_then() then TKwThen
-    else if h == kw_else() then TKwElse
-    else if h == kw_place() then TKwPlace
-    else if h == kw_this() then TKwThis
+  return if h == kw_fun then TKwFun
+    else if h == kw_return then TKwReturn
+    else if h == kw_number then TKwNumber
+    else if h == kw_if then TKwIf
+    else if h == kw_then then TKwThen
+    else if h == kw_else then TKwElse
+    else if h == kw_place then TKwPlace
+    else if h == kw_this then TKwThis
     else h ↪ TIdent
 }
 fun lex_word(s: String, i: Number, len: Number): TokList {
@@ -301,7 +301,7 @@ fun parse_factor(l: TokList, env: NameEnv): Parse {
   return if head_tag(l) == 0 then (head_num(l) ↪ TLit, tail(l)) ↪ POk
     else if head_tag(l) == 35 then (head_str(l) ↪ TStrLit, tail(l)) ↪ POk  /* string literal */
     else if head_tag(l) == 1 then
-      (if head_num(l) == kw_match() then parse_match(tail(l), env)     /* match e { .. } */
+      (if head_num(l) == kw_match then parse_match(tail(l), env)     /* match e { .. } */
        else if head_tag(tail(l)) == 34 then parse_qcall(head_num(l), l, env)  /* Module.op(..) */
        else if head_tag(tail(l)) == 13 then parse_call(head_num(l), tail(l), env)  /* call */
        else name_or_arm(head_num(l), tail(l), env))         /* variable or nullary arm */
@@ -386,7 +386,8 @@ fun mk_binop(op: Number, left: Term, right: Term): Term {
     else (left, right) ↪ TMul
 }
 
-/* a name bound in scope is a variable; any other is a nullary arm. */
+/* a name bound in scope is a variable; any other is a nullary arm or a point, which the
+ * emitter tells apart. */
 fun name_or_arm(name: Number, rest: TokList, env: NameEnv): Parse {
   i := lookup_name(name, env)
   return if i == 0 - 1 then ((name, TNoArg) ↪ THit, rest) ↪ POk
@@ -543,8 +544,10 @@ fun skip_after_params(l: TokList): TokList {
 }
 fun parse_fundef(l: TokList): FunParse {
   name := head_num(tail(l))            /* IDENT after 'fun' */
-  after_lparen := tail(tail(tail(l)))  /* skip fun, IDENT, '(' -> at params or ')' */
-  return fundef_with_params(name, parse_params(after_lparen, NEnvNil, 0))
+  after_name := tail(tail(l))
+  return if head_tag(after_name) == 13   /* '(' -> params, or the () of one that acts */
+    then fundef_with_params(name, parse_params(tail(after_name), NEnvNil, 0))
+    else fundef_body(name, 0, NEnvNil, skip_after_params(after_name))  /* a point */
 }
 fun fundef_with_params(name: Number, pr: ParamRes): FunParse {
   return match pr { PR as (env, arity, rest) =>
@@ -611,6 +614,11 @@ fun prepend_fun(f: Fun, prog: Program): Program {
   return match prog { Prog as (funs, reg) => ((f, funs) ↪ FlCons, reg) ↪ Prog }
 }
 
+/* is this name an arm of the registry? */
+fun is_arm(hash: Number, reg: CtorReg): Number {
+  return match reg { CrNil => 0,
+      CrCons as (h, t, rest) => if h == hash then 1 else is_arm(hash, rest) }
+}
 /* registry lookup: constructor-name hash -> tag. */
 fun tag_of(hash: Number, reg: CtorReg): Number {
   return match reg { CrNil => 0,
@@ -803,7 +811,9 @@ fun gen_spine_cons(node_tag: Number, a: Term, rest: Term, env: SsaEnv, n: Number
 /* injection into an arm: nullary -> leaf(tag); with args -> node2(tag, leaf(a0), spine(rest)). */
 fun gen_hit(ctor: Number, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): EmitR {
   tag := tag_of(ctor, reg)
-  return if is_noarg(spine) == 1
+  return if is_arm(ctor, reg) == 0          /* a bare name that is no arm: a point */
+    then gen_call(ctor, spine, env, n, reg)
+    else if is_noarg(spine) == 1
     then gen_leaf_const(tag, n)
     else gen_hit_payload(tag, spine, env, n, reg)
 }
@@ -1051,7 +1061,7 @@ fun gen_rtcall(sym: String, spine: Term, env: SsaEnv, n: Number, reg: CtorReg): 
   return (ssa_name(m), String.concat(er_code(ea), line_raw(ssa_name(m), rhs)), m + 1) ↪ ER
 }
 /* string runtime functions as external declarations (resolved from yon_rt.o). */
-fun string_stubs(): String {
+fun string_stubs: String {
   return String.concat("  func.func private @yon_rt_string_from_char(f64) -> f64\n",
     String.concat("  func.func private @yon_rt_string_concat(f64, f64) -> f64\n",
     String.concat("  func.func private @yon_rt_string_length(f64) -> f64\n",
@@ -1066,13 +1076,13 @@ fun string_stubs(): String {
 }
 
 /* ---- module boilerplate ---- */
-fun mod_head(): String {
+fun mod_head: String {
   return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n"
 }
-fun main_head(): String {
+fun main_head: String {
   return "  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
 }
-fun stubs(): String {
+fun stubs: String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun main_tail(result_ssa: String, ctr: Number): String {
@@ -1086,12 +1096,12 @@ fun main_tail(result_ssa: String, ctr: Number): String {
  * resolves them to the real XLeech2 implementation in yon_rt.o. hit/hit_elim call
  * these yon_rt_merkle_* symbols directly (this is what yonc's own emit does). */
 /* Buffer runtime functions as external declarations (resolved from yon_rt.o). */
-fun buffer_stubs(): String {
+fun buffer_stubs: String {
   return String.concat("  func.func private @yon_rt_buffer_new() -> f64\n",
     String.concat("  func.func private @yon_rt_buffer_append(f64, f64) -> f64\n",
                   "  func.func private @yon_rt_buffer_finish(f64) -> f64\n"))
 }
-fun merkle_stubs(): String {
+fun merkle_stubs: String {
   return "  func.func private @yon_rt_merkle_leaf(f64) -> f64\n  func.func private @yon_rt_merkle_node2(f64, f64, f64) -> f64\n  func.func private @yon_rt_merkle_label(f64) -> f64\n  func.func private @yon_rt_merkle_child(f64, f64) -> f64\n"
 }
 
@@ -1108,15 +1118,15 @@ fun main(): Number {
   mh     := hash_of("main")
   helpers := gen_funs(funs, mh, reg)
   rmain  := gen(main_body(funs, mh), SeNil, 0, reg)
-  full   := String.concat(mod_head(),
-                    String.concat(merkle_stubs(),
-                    String.concat(string_stubs(),
-                    String.concat(buffer_stubs(),
+  full   := String.concat(mod_head,
+                    String.concat(merkle_stubs,
+                    String.concat(string_stubs,
+                    String.concat(buffer_stubs,
                       String.concat(helpers,
-                        String.concat(main_head(),
+                        String.concat(main_head,
                           String.concat(er_code(rmain),
                             String.concat(main_tail(er_ssa(rmain), er_ctr(rmain)),
-                              stubs()))))))))
+                              stubs))))))))
   _w := File.write_text(String.concat(dir, "/out.mlir"), full)
   return String.length(full)
 }

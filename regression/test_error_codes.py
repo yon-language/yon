@@ -45,7 +45,7 @@ NO_PRODUCER = {
 }
 
 _TOML = '[package]\nname = "{name}"\n{extra}[runtime]\nbackend = "memory"\n'
-_ENTRY_OK = "place Entry {\n  fun main(): Number { return 0 }\n}\n"
+_ENTRY_OK = "place Entry {\n  fun main: Number { return 0 }\n}\n"
 
 # Producers that live in THIS module (the grep below skips this file, whose
 # NO_PRODUCER table would otherwise count as a producer of what it lists).
@@ -87,9 +87,9 @@ def test_lexer_error_carries_e1002(tmp_path):
     """A character the lexer has no token for is a LEXICAL error (E1002), not a
     parse error (E1001): the input never reaches the parser."""
     (tmp_path / "ok").mkdir()
-    rc, out = _emit(_project(tmp_path / "ok", "place Entry {\n  fun main(): Number { return 0 + 1 }\n}\n"))
+    rc, out = _emit(_project(tmp_path / "ok", "place Entry {\n  fun main: Number { return 0 + 1 }\n}\n"))
     assert rc == 0, f"the control (`+` for `$`) must emit:\n{out[-600:]}"
-    proj = _project(tmp_path, "place Entry {\n  fun main(): Number { return 0 $ 1 }\n}\n")
+    proj = _project(tmp_path, "place Entry {\n  fun main: Number { return 0 $ 1 }\n}\n")
     rc, out = _emit(proj)
     assert rc != 0 and "Fatal error: exception" not in out, out
     assert "PARSE ERROR [E1002]:" in out and "unexpected character $" in out, out

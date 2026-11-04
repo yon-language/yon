@@ -1,7 +1,7 @@
 // coverage: a parameter of arrow type `number -> number` (TyArrow)
 place Entry {
   fun apply(g: Number -> Number, x: Number): Number { return g(x) }
-  fun main(): Number {
+  fun main: Number {
     inc := fun(n: Number) => n + 1
     return apply(inc, 41)
   }

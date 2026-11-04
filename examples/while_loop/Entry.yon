@@ -1,6 +1,6 @@
 place Entry {
 /* while cond do — general loop. Conta finche' < 7, poi ritorna 7. */
-fun main(): Number {
+fun main: Number {
   c := Space.make(0)
   while Space.get(c) < 7 do {
     i := Space.get(c)

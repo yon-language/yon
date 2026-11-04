@@ -32,7 +32,7 @@ def _build(tmp_path: Path, places: dict, main_body: str, objects=()):
     for name, src in places.items():
         (proj / f"{name}.yon").write_text(src)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main(): Number {\n" + main_body + "\n}\n}\n")
+        "place Entry {\nfun main: Number {\n" + main_body + "\n}\n}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
                        capture_output=True, text=True, timeout=300)
@@ -46,7 +46,7 @@ def _run(exe):
 def test_an_operator_of_an_algebra_writes_the_models_fun(tmp_path):
     rc, out, exe = _build(tmp_path, {}, (
         "  w := Word64.from_int64(40) + Word64.from_int64(2)\n"
-        "  v := w * Word64.one()\n"
+        "  v := w * Word64.one\n"
         "  return match Word64.to_signed(v) { Int64 as n => if n == 42 then 42 else 1, "
         "DomainError as d => 0 }"))
     assert rc == 0, out
@@ -64,7 +64,7 @@ def test_a_place_that_lists_no_algebra_takes_no_operator(tmp_path):
 _COIN = ("place Coin uses algebra BooleanOr {\n"
          "  this > Heads :U Tails\n"
          "  fun join(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }\n"
-         "  fun bottom(): Coin { return Tails }\n"
+         "  fun bottom: Coin { return Tails }\n"
          "}\n")
 
 
@@ -81,7 +81,7 @@ def test_a_law_false_on_the_model_is_refuted(tmp_path):
 
 
 def test_a_model_must_give_each_operation(tmp_path):
-    src = _COIN.replace("  fun bottom(): Coin { return Tails }\n", "")
+    src = _COIN.replace("  fun bottom: Coin { return Tails }\n", "")
     rc, out, _ = _build(tmp_path, {"Coin": src}, "  return 42", objects=["Coin"])
     assert rc != 0 and "does not give its operation bottom" in out, out
 
@@ -95,7 +95,7 @@ def test_an_unknown_algebra_is_refused(tmp_path):
 def test_a_law_not_decided_is_not_certified(tmp_path):
     src = ("place Meter carried by number uses algebra Additive {\n"
            "  fun add(a: Meter, b: Meter): Meter { return a + b }\n"
-           "  fun zero(): Meter { return 0 }\n"
+           "  fun zero: Meter { return 0 }\n"
            "}\n")
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
     assert rc != 0 and "E2102" in out and "not certified" in out, out
@@ -104,10 +104,10 @@ def test_a_law_not_decided_is_not_certified(tmp_path):
 def _sum(carrier: str, extra: str = "", given: str = "") -> str:
     return ("place Sum is algebra {\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
-            '  operation zero(): Sum as "0"\n'
+            '  operation zero: Sum as "0"\n'
             "  law associative ∀a : Sum ∀b : Sum ∀c : Sum, (a + b) + c = a + (b + c)\n"
             "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
-            "  law neutral ∀a : Sum, a + zero() = a\n"
+            "  law neutral ∀a : Sum, a + zero = a\n"
             + extra +
             f"  carried by {carrier}{given}\n"
             "}\n")
@@ -153,7 +153,7 @@ def test_a_place_takes_the_operations_it_does_not_give_from_its_carrier(tmp_path
             "  fun value(w: W): Int64 { return w }\n"
             "}\n")
     rc, out, exe = _build(tmp_path, {"W": word},
-                          "  return if W.value(W.make(40) + W.make(2) * W.one()) == 42 then 42 else 1",
+                          "  return if W.value(W.make(40) + W.make(2) * W.one) == 42 then 42 else 1",
                           objects=["W"])
     assert rc == 0, out
     assert _run(exe).returncode == 42
@@ -167,12 +167,12 @@ def test_body_carried_by_is_only_for_an_algebra(tmp_path):
 
 _DERIVED = ("place Sum is algebra {\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
-            '  operation zero(): Sum as "0"\n'
+            '  operation zero: Sum as "0"\n'
             "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
-            "  law neutral ∀a : Sum, a + zero() = a\n"
+            "  law neutral ∀a : Sum, a + zero = a\n"
             "  carried by i64\n"
             "  fun double(a: Sum): Sum { return a + a }\n"
-            "  fun triple(a: Sum): Sum { return double(a) + a + zero() }\n"
+            "  fun triple(a: Sum): Sum { return double(a) + a + zero }\n"
             "}\n")
 
 _W = ("internal place W carried by i64 uses algebra Sum {\n"

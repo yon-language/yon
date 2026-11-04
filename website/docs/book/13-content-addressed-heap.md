@@ -48,7 +48,7 @@ And it holds *by construction*, whatever route built the value:
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): Number {
+fun main: Number {
   a := "ab"
   b := String.concat("a", "b")   // built by a different route
   same := String.equal(a, b)     // 1.0: same content, same slot

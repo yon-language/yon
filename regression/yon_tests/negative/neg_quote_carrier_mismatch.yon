@@ -3,7 +3,7 @@
 // rejects via Dispatcher.type_equal: "inhabitant has type text but El(number)
 // carrier is number" -> exit 3.
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     q := quote(Number, "text")
     return 0
   }

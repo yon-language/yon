@@ -894,6 +894,13 @@ cell_decl:
         cell_loc = mk_loc $startpos $endpos } }
 
 operation_decl:
+  (* a constant of an algebra: no parentheses *)
+  | OPERATION name = IDENT ret = return_type_decl sym = option(op_symbol)
+    alg = option(uses_algebra_clause)
+    { { op_name = name; op_symbol = sym; op_params = []; op_return = Some ret;
+        op_on_error = None;
+        op_algebra = alg;
+        op_loc = mk_loc $startpos $endpos } }
   (* `) on error E : T` — the clause sits BEFORE the
      return type, and the `:` after E disambiguates (no place member can
      start with `:`). Return type MANDATORY with the clause. *)
@@ -902,7 +909,10 @@ operation_decl:
     ret = option(return_type_decl)
     sym = option(op_symbol)
     alg = option(uses_algebra_clause)
-    { (if oerr <> None && ret = None then
+    { (if params = [] then
+         failwith (Printf.sprintf
+           "operation %s has no parameters: it is a constant: operation %s: T" name name));
+      (if oerr <> None && ret = None then
          failwith (Printf.sprintf
            "operation %s: `on error` requires an explicit return type \
             (`) on error E : T`)" name));
@@ -1201,6 +1211,29 @@ fun_decl:
         fn_visits = visits; fn_internal = internal; fn_given = true;
         fn_home = None;
         fn_body = []; fn_loc = mk_loc $startpos $endpos } }
+  (* no parentheses: a point 1 -> X, whose purity the checker holds it to *)
+  | internal = boption(INTERNAL) FUN name = IDENT tparams = type_params_opt
+    ret = option(return_type_decl) visits = visits_clause IS GIVEN
+    { let loc = mk_loc $startpos $endpos in
+      Hashtbl.replace Surface_ast.bare_nullary_decls (loc.file, loc.start_line, loc.start_col) ();
+      { fn_name = name; fn_type_params = tparams; fn_params = [];
+        fn_return = ret; fn_on_error = None;
+        fn_visits = visits; fn_internal = internal; fn_given = true;
+        fn_home = None; fn_body = []; fn_loc = loc } }
+  | internal = boption(INTERNAL) FUN name = IDENT tparams = type_params_opt
+    ret = option(return_type_decl) visits = visits_clause LBRACE body = list(stmt) RBRACE
+    { let loc = mk_loc $startpos $endpos in
+      Hashtbl.replace Surface_ast.bare_nullary_decls (loc.file, loc.start_line, loc.start_col) ();
+      { fn_name = name; fn_type_params = tparams; fn_params = [];
+        fn_return = ret; fn_on_error = None;
+        fn_visits = visits; fn_internal = internal; fn_given = false;
+        fn_home = None; fn_body = body; fn_loc = loc } }
+  | boption(INTERNAL) FUN name = IDENT type_params_opt option(return_type_decl)
+    visits_clause IS GIVEN LBRACE list(stmt) RBRACE
+    { failwith (Printf.sprintf
+        "fun %s is given and has a body: `is given` declares that the body is \
+         the compiler's primitive, a body declares it is this one; write one \
+         of the two" name) }
   (* `is given` and a body exclude each other: `is given` says the body is
      the compiler's (a primitive), a body says it is this one. *)
   | boption(INTERNAL) FUN name = IDENT type_params_opt

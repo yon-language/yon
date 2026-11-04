@@ -1,6 +1,6 @@
 place Entry {
   fun addone(n: Number): Number { return n + 1 }
-  fun main(): Number {
+  fun main: Number {
     f := functor (x: Number) => addone(x) from W to V
     g := functor (y: Number) => addone(y) from V to U
     h := compose f with g

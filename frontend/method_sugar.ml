@@ -99,7 +99,198 @@ and norm_nested (prov : prov) (s : S.stmt) : S.stmt =
 let normalize_fun (fn : S.fun_decl) : S.fun_decl =
   { fn with S.fn_body = norm_stmts [] fn.S.fn_body }
 
+(* The name of a nullary fun, or of a nullary operation, is its value: a point 1 -> X. *)
+let rec map_expr (f : S.expr -> S.expr option) (e : S.expr) : S.expr =
+  match f e with
+  | Some e' -> e'
+  | None ->
+      let r = map_expr f in
+      let rs = map_stmt f in
+      match e with
+      | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EAll _ | S.EPullback _ | S.EPushout _ -> e
+      | S.EField (o, n, l) -> S.EField (r o, n, l)
+      | S.ECall (n, a, l) -> S.ECall (n, List.map r a, l)
+      | S.EApp (g, a, l) -> S.EApp (r g, List.map r a, l)
+      | S.EHITElim (m, br, x, l) ->
+          S.EHITElim (r m, List.map (fun (c, p, b) -> (c, p, r b)) br, r x, l)
+      | S.EPathApp (x, d, l) -> S.EPathApp (r x, d, l)
+      | S.EPathAbs (i, b, l) -> S.EPathAbs (i, r b, l)
+      | S.EHITConstr (c, a, l) -> S.EHITConstr (c, List.map r a, l)
+      | S.EProduce (b, l) -> S.EProduce (List.map rs b, l)
+      | S.ESpawn (n, b, l) -> S.ESpawn (Option.map r n, List.map rs b, l)
+      | S.ENew (n, fas, l) ->
+          S.ENew (n, List.map (fun fa -> { fa with S.fa_value = r fa.S.fa_value }) fas, l)
+      | S.ENewIn (n, sp, fas, l) ->
+          S.ENewIn (n, sp, List.map (fun fa -> { fa with S.fa_value = r fa.S.fa_value }) fas, l)
+      | S.EBinop (o, a, b, l) -> S.EBinop (o, r a, r b, l)
+      | S.EParen (x, l) -> S.EParen (r x, l)
+      | S.EIn (x, c, l) -> S.EIn (r x, c, l)
+      | S.ERefl (x, l) -> S.ERefl (r x, l)
+      | S.EPair (a, b, l) -> S.EPair (r a, r b, l)
+      | S.EFst (x, l) -> S.EFst (r x, l)
+      | S.ESnd (x, l) -> S.ESnd (r x, l)
+      | S.EJ (a, b, c, l) -> S.EJ (r a, r b, r c, l)
+      | S.EQuote (c, x, l) -> S.EQuote (c, r x, l)
+      | S.EElMatch (a, b, c, l) -> S.EElMatch (r a, r b, r c, l)
+      | S.EPullbackVal (g, h, a, b, l) -> S.EPullbackVal (g, h, r a, r b, l)
+      | S.ENot (x, l) -> S.ENot (r x, l)
+      | S.EIfThenElse (a, b, c, l) -> S.EIfThenElse (r a, r b, r c, l)
+      | S.ELam (p, b, l) -> S.ELam (p, r b, l)
+      | S.EMoveLam (p, b, a, c, l) -> S.EMoveLam (p, r b, a, c, l)
+      | S.EReductionLam (p, b, a, l) -> S.EReductionLam (p, r b, a, l)
+      | S.EMorphLam (p, b, a, c, l) -> S.EMorphLam (p, r b, a, c, l)
+      | S.EFunctorLam (p, b, a, c, d, l) -> S.EFunctorLam (p, r b, a, c, d, l)
+      | S.EViewLam (p, b, a, l) -> S.EViewLam (p, r b, a, l)
+      | S.EComposeWith (a, b, l) -> S.EComposeWith (r a, r b, l)
+
+and map_cond f (c : S.condition) : S.condition =
+  match c with
+  | S.CondExpr e -> S.CondExpr (map_expr f e)
+  | S.CondIs (e, t) -> S.CondIs (map_expr f e, t)
+  | S.CondIsNot (e, t) -> S.CondIsNot (map_expr f e, t)
+  | S.CondAnd (a, b) -> S.CondAnd (map_cond f a, map_cond f b)
+  | S.CondOr (a, b) -> S.CondOr (map_cond f a, map_cond f b)
+
+and map_stmt f (s : S.stmt) : S.stmt =
+  let r = map_expr f in
+  let rs = List.map (map_stmt f) in
+  let fas = List.map (fun fa -> { fa with S.fa_value = r fa.S.fa_value }) in
+  match s with
+  | S.SLet (n, e, l) -> S.SLet (n, r e, l)
+  | S.SAssignHolds (v, e, l) -> S.SAssignHolds (v, r e, l)
+  | S.SAssignBecomes (v, e, l) -> S.SAssignBecomes (v, r e, l)
+  | S.SReturn (e, l) -> S.SReturn (r e, l)
+  | S.SCall (n, a, l) -> S.SCall (n, List.map r a, l)
+  | S.SNew (n, a, l) -> S.SNew (n, fas a, l)
+  | S.SNewIn (n, sp, a, l) -> S.SNewIn (n, sp, fas a, l)
+  | S.SWhen (c, b, alts, oth, l) ->
+      S.SWhen (map_cond f c, rs b,
+               List.map (fun (ac, ab) -> (map_cond f ac, rs ab)) alts, Option.map rs oth, l)
+  | S.SForEvery (k, x, e, b, l) -> S.SForEvery (k, x, r e, rs b, l)
+  | S.SInSequence (x, e, b, l) -> S.SInSequence (x, r e, rs b, l)
+  | S.SRepeat (n, b, o, l) -> S.SRepeat (n, rs b, Option.map rs o, l)
+  | S.SForever (b, l) -> S.SForever (rs b, l)
+  | S.SScope (n, b, e, l) -> S.SScope (n, rs b, r e, l)
+  | S.SProduce (b, l) -> S.SProduce (rs b, l)
+  | S.SEmit (e, l) -> S.SEmit (r e, l)
+  | S.SPromote (e, l) -> S.SPromote (r e, l)
+  | S.SForces (n, c, b, l) -> S.SForces (n, map_cond f c, rs b, l)
+  | S.SIter (e, b, l) -> S.SIter (r e, rs b, l)
+  | S.SWhile (e, b, l) -> S.SWhile (r e, rs b, l)
+  | S.SDrop _ -> s
+
+let rec map_type_terms f (t : S.ty) : S.ty =
+  let term = function S.TyTermExpr e -> S.TyTermExpr (map_expr f e) in
+  match t with
+  | S.TyId (a, x, y) -> S.TyId (a, term x, term y)
+  | S.TyPi (x, a, b) -> S.TyPi (x, map_type_terms f a, map_type_terms f b)
+  | S.TySigma (x, a, b) -> S.TySigma (x, map_type_terms f a, map_type_terms f b)
+  | S.TyArrow (a, b) -> S.TyArrow (map_type_terms f a, map_type_terms f b)
+  | t -> t
+
+(* The names a body binds: a name it binds is that binder, not a nullary fun. *)
+let bound_names (fn : S.fun_decl) : (string, unit) Hashtbl.t =
+  let bound = Hashtbl.create 16 in
+  let add x = Hashtbl.replace bound x () in
+  List.iter (fun (pm : S.param) -> add pm.S.param_name) fn.S.fn_params;
+  let note (e : S.expr) =
+    (match e with
+     | S.ELam (ps, _, _) -> List.iter (fun (x, _) -> add x) ps
+     | S.EPathAbs (i, _, _) -> add i
+     | S.EHITElim (_, br, _, _) ->
+         List.iter (fun (_, p, _) ->
+             match p with
+             | S.PatVars vs -> List.iter add vs
+             | S.PatWitness w -> add w
+             | S.PatFields fs -> List.iter (fun (_, b) -> add b) fs) br
+     | _ -> ());
+    None in
+  let rec stmt (s : S.stmt) =
+    (match s with
+     | S.SLet (x, _, _) | S.SForEvery (_, x, _, _, _) | S.SInSequence (x, _, _, _) -> add x
+     | _ -> ());
+    ignore (map_stmt note s);
+    List.iter (List.iter stmt) (S.sub_stmts s) in
+  List.iter stmt fn.S.fn_body;
+  bound
+
+let base_name home name =
+  let pfx = home ^ "__" in
+  if String.starts_with ~prefix:pfx name
+  then String.sub name (String.length pfx) (String.length name - String.length pfx)
+  else name
+
+let nullary_points (p : S.program) : S.program =
+  let global = Hashtbl.create 64 and housed = Hashtbl.create 64 in
+  List.iter (fun n -> Hashtbl.replace global n ()) ["XTower__depth"; "Args__count"];
+  List.iter (function
+    | S.TopFun fd when fd.S.fn_params = [] ->
+        (match fd.S.fn_home with
+         | Some h ->
+             Hashtbl.replace housed (h, base_name h fd.S.fn_name) ();
+             Hashtbl.replace global (h ^ "__" ^ base_name h fd.S.fn_name) ()
+         | None -> Hashtbl.replace global fd.S.fn_name ())
+    | S.TopPlace pd ->
+        List.iter (function
+          | S.FoOp o when o.S.op_params = [] ->
+              Hashtbl.replace housed (pd.S.pd_name, o.S.op_name) ();
+              Hashtbl.replace global (pd.S.pd_name ^ "__" ^ o.S.op_name) ();
+              Hashtbl.replace S.nullary_operations (pd.S.pd_name ^ "__" ^ o.S.op_name) ()
+          | _ -> ()) pd.S.pd_members
+    | _ -> ()) p;
+  (* a model takes the constants of its algebras *)
+  let constants_of a =
+    List.concat_map (function
+      | S.TopPlace pd when pd.S.pd_name = a ->
+          List.filter_map (function
+            | S.FoOp o when o.S.op_params = [] -> Some o.S.op_name
+            | _ -> None) pd.S.pd_members
+      | _ -> []) p in
+  List.iter (function
+    | S.TopPlace pd ->
+        List.iter (fun a ->
+          List.iter (fun c ->
+            Hashtbl.replace housed (pd.S.pd_name, c) ();
+            Hashtbl.replace global (pd.S.pd_name ^ "__" ^ c) ();
+            Hashtbl.replace S.nullary_operations (pd.S.pd_name ^ "__" ^ c) ())
+            (constants_of a))
+          (Option.value ~default:[] (Hashtbl.find_opt S.place_algebras pd.S.pd_name))
+    | _ -> ()) p;
+  let mark (l : S.location) n =
+    Hashtbl.replace S.bare_nullary_sites (l.S.file, l.S.start_line, l.S.start_col, n) () in
+  let rewrite ~(home : string option) ~(bound : string -> bool) (e : S.expr) : S.expr option =
+    match e with
+    (* a subscription names its producer: the name is the arrow, not its value *)
+    | S.ECall ("awaits", _, _) -> Some e
+    | S.EVar (x, l) when not (bound x) ->
+        (match home with
+         | Some h when Hashtbl.mem housed (h, x) ->
+             let n = h ^ "__" ^ x in mark l n; Some (S.ECall (n, [], l))
+         | _ ->
+             if Hashtbl.mem global x then (mark l x; Some (S.ECall (x, [], l))) else None)
+    | S.EField (S.EVar (m, _), f, l) when not (bound m) && Hashtbl.mem global (m ^ "__" ^ f) ->
+        let n = m ^ "__" ^ f in mark l n; Some (S.ECall (n, [], l))
+    | _ -> None in
+  List.map (function
+    | S.TopFun fn ->
+        let names = bound_names fn in
+        let f = rewrite ~home:fn.S.fn_home ~bound:(Hashtbl.mem names) in
+        S.TopFun { fn with
+          S.fn_body = List.map (map_stmt f) fn.S.fn_body;
+          S.fn_return = Option.map (map_type_terms f) fn.S.fn_return;
+          S.fn_params = List.map (fun (pm : S.param) ->
+              { pm with S.param_ty = map_type_terms f pm.S.param_ty }) fn.S.fn_params }
+    | S.TopPlace pd ->
+        S.TopPlace { pd with S.pd_members = List.map (function
+            | S.FoLaw (n, Some st) ->
+                let vars = List.map (fun (_, x, _) -> x) st.S.ls_quants in
+                let f = rewrite ~home:(Some pd.S.pd_name) ~bound:(fun x -> List.mem x vars) in
+                S.FoLaw (n, Some { st with S.ls_body = map_expr f st.S.ls_body })
+            | m -> m) pd.S.pd_members }
+    | d -> d) p
+
 let normalize_program (p : S.program) : S.program =
+  let p = nullary_points p in
   List.map (function
     | S.TopFun fn -> S.TopFun (normalize_fun fn)
     | other -> other) p

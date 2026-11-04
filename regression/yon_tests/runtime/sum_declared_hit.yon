@@ -1,8 +1,8 @@
 place Sum { this > A :U B Number }
 place Entry {
-  fun seven(): Sum { return 7 ↪ B }
-  fun main(): Number {
-    result := match seven() { A => 0, B as x => x }
+  fun seven: Sum { return 7 ↪ B }
+  fun main: Number {
+    result := match seven { A => 0, B as x => x }
     return result - 7
   }
 }

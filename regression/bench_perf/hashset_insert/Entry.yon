@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number visits Output {
-    h := Space.make(HashSet.empty())
+    h := Space.make(HashSet.empty)
     i := Space.make(0)
     iter 1000000 do { k := Space.get(i)
                  _ := Space.set(h, HashSet.add(Space.get(h), k))

@@ -4,7 +4,7 @@ The syntax triangle gates the book's ```yon blocks and CodeWindows: those are
 compiled for real. Nothing gated the rest of the site — the React homepage,
 the thirty components, the prose outside a fenced block — and that is exactly
 where a retired form survives unnoticed. The homepage shipped
-`fun main(): number` (lowercase, an E1001 since the primitives became prelude
+`fun main: number` (lowercase, an E1001 since the primitives became prelude
 places) for as long as it took a human to read it.
 
 Two legs, both cheap:

@@ -1,6 +1,6 @@
 place Entry {
 /* String: from_int, concat, length, char_at. */
-fun main(): Number {
+fun main: Number {
   a := String.from_int(123)
   b := String.from_int(45)
   ab := String.concat(a, b)

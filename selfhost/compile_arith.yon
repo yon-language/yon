@@ -118,10 +118,10 @@ fun gen_bin(op: String, a: Term, b: Term, n: Number): EmitR {
 }
 
 /* ---- module boilerplate ---- */
-fun mod_prefix(): String {
+fun mod_prefix: String {
   return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
 }
-fun stubs(): String {
+fun stubs: String {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
 fun mod_suffix(result_ssa: String, ctr: Number): String {
@@ -130,14 +130,14 @@ fun mod_suffix(result_ssa: String, ctr: Number): String {
     String.concat("    ", String.concat(rss,
       String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
     String.concat(String.concat("    return ", String.concat(rss, " : i32\n  }\n")),
-      stubs()))
+      stubs))
 }
 
 fun main(): Number {
   /* the whole pipeline: source text -> tokens -> Term -> MLIR module -> file. */
   prog := term_of(parse_expr(lex("2+3*4")))     /* 2 + (3*4) = 14 */
   r := gen(prog, 0)
-  full := String.concat(mod_prefix(),
+  full := String.concat(mod_prefix,
                   String.concat(er_code(r),
                     mod_suffix(er_ssa(r), er_ctr(r))))
   _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)

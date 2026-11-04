@@ -12,7 +12,7 @@ place Entry {
   fun violate_naturality(a: Number): g(f(a)) = a {
     return clear
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 
 // g is not the inverse of f — constant distortion.

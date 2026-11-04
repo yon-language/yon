@@ -15,5 +15,5 @@ place Entry {
     }
     on morphism deposit via wrong_sig
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

@@ -12,7 +12,7 @@ fun double(x): Number { return x * 2 }              // param type inferred
 fun id<A>(x: A): A { return x }                     // type parameter
 internal fun helper(x: Number): Number { return x + 1 }
 
-fun main(): Number {
+fun main: Number {
   twice := fun(n: Number) => n * 2            // inline lambda
   a := 10 ↦ double()                         // pipe: 20
   b := twice(a) + helper(1)                   // 40 + 2 = 42
@@ -59,7 +59,7 @@ place Entry {
     return if n < 0 then .-> DomainError { message "half of a negative" }
            else n / 2
   }
-  fun main(): Number {
+  fun main: Number {
     a := half(0 - 4)
     return match a { Number as v => 1, DomainError as e => 30 }
   }
@@ -162,7 +162,7 @@ place SyntaxError { this < Error  line Number }
 ```yon
 place Entry { }
 fun describe(e: Error): Number { return String.length(e.message) }   // accepts any sub-object
-fun main(): Number {
+fun main: Number {
   s := .-> SyntaxError { message "unexpected }" line 30 }
   return describe(s) + s.line     // 12 + 30 = 42: SyntaxError used as Error
 }

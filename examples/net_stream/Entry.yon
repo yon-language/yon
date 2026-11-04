@@ -10,5 +10,5 @@ fun client_node(): Number {
   ok := Wire.send_net(sid, 42)
   return 0
 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 }

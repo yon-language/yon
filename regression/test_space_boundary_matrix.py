@@ -49,23 +49,23 @@ _FILL = """  mut m := {empty}
 VALUES = {
     "scalar": ("Number", "  return 42", "x", 42),
     # 2^62 + 1 has no f64: a value carried as a Number would come back as 2^62
-    "int64": ("Int64", "  return Int64.two_to_62() + 1",
-              "if x - Int64.two_to_62() == 1 then 42 else 1", 42),
+    "int64": ("Int64", "  return Int64.two_to_62 + 1",
+              "if x - Int64.two_to_62 == 1 then 42 else 1", 42),
     "text": ("Text", '  return "seven c"', "String.length(x)", 7),
     "list": ("List<Number>", "  return List.cons(1, List.cons(2, List.cons(3, List.empty(0))))",
              "List.head(x) * 100 + List.head(List.tail(x)) * 10 + List.length(x)", 123),
     "hashmap": ("HashMap<Number, Number>",
-                _FILL.format(empty="HashMap.empty()", n=10, set="HashMap.set(m, k, k * 7)"),
+                _FILL.format(empty="HashMap.empty", n=10, set="HashMap.set(m, k, k * 7)"),
                 "HashMap.size(x) + (match HashMap.get(x, 9) { Found as v => v, Absent => 0 })", 73),
     "hashset": ("HashSet<Number>",
-                _FILL.format(empty="HashSet.empty()", n=12, set="HashSet.add(m, k * 2)"),
+                _FILL.format(empty="HashSet.empty", n=12, set="HashSet.add(m, k * 2)"),
                 "HashSet.size(x) + (if HashSet.contains(x, 22) then 100 else 0)"
                 " + (if HashSet.contains(x, 23) then 50 else 0)", 112),
     "xrelmap": ("XRelMap<Number, Number>",
-                _FILL.format(empty="XRelMap.empty()", n=10, set="XRelMap.set(m, k, k + 40)"),
+                _FILL.format(empty="XRelMap.empty", n=10, set="XRelMap.set(m, k, k + 40)"),
                 "XRelMap.size(x) + (match XRelMap.get(x, 5) { Found as v => v, Absent => 0 })", 55),
     "xrelset": ("XRelSet<Number>",
-                _FILL.format(empty="XRelSet.empty()", n=9, set="XRelSet.add(m, k)"),
+                _FILL.format(empty="XRelSet.empty", n=9, set="XRelSet.add(m, k)"),
                 "XRelSet.size(x) + (if XRelSet.contains(x, 8) then 30 else 0)", 39),
     "place": ("Pt", "  return .-> Pt { x 4 y 2 }", "x.x * 10 + x.y", 42),
     "place_text": ("Note", '  return .-> Note { message "unexpected }" line 30 }',
@@ -74,7 +74,7 @@ VALUES = {
                        '  n := .-> Note { message "abc" line 5 }\n'
                        "  return .-> Line { a p b n }",
                "x.a.x * 10 + x.a.y + String.length(x.b.message) + x.b.line", 50),
-    "place_map": ("Bag", '  return .-> Bag { label "abc" counts HashMap.set(HashMap.empty(), 4, 40) }',
+    "place_map": ("Bag", '  return .-> Bag { label "abc" counts HashMap.set(HashMap.empty, 4, 40) }',
                   "String.length(x.label) + (match HashMap.get(x.counts, 4) "
                   "{ Found as v => v, Absent => 0 })", 43),
     # a SyntaxError where an Error is expected: it crosses by its own frame
@@ -145,13 +145,13 @@ def _in_binary(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=
     _side(proj, "probe", '"w"', '"Q", "Pt", "Note", "Line", "Bag", "SyntaxError"')
     if boundary == "bin_arg":
         q = f"  fun digest(x: {ty}): Number {{ return {read} }}\n"
-        main = f"  fun make(): {ty} {{\n{_indent(build)}\n  }}\n" \
-               "  fun main(): Number { return Q.digest(make()) }\n"
+        main = f"  fun make: {ty} {{\n{_indent(build)}\n  }}\n" \
+               "  fun main: Number { return Q.digest(make) }\n"
         if inline:
-            main = f"  fun main(): Number {{\n    v := {inline}\n    return Q.digest(v)\n  }}\n"
+            main = f"  fun main: Number {{\n    v := {inline}\n    return Q.digest(v)\n  }}\n"
     else:
-        q = f"  fun build(): {ty} {{\n{_indent(build)}\n  }}\n"
-        main = f"  fun main(): Number {{\n    x := Q.build()\n    return {read}\n  }}\n"
+        q = f"  fun build: {ty} {{\n{_indent(build)}\n  }}\n"
+        main = f"  fun main: Number {{\n    x := Q.build\n    return {read}\n  }}\n"
     (proj / "w" / "Q.yon").write_text(f"place Q {{\n  side Number\n{q}}}\n")
     (proj / "Entry.yon").write_text(f"place Entry {{\n{main}}}\n")
     exe = tmp / "probe.exe"
@@ -165,30 +165,30 @@ def _between_processes(tmp: Path, boundary: str, ty: str, build: str, read: str,
     objects = '"X", "Pt", "Note", "Line", "Bag", "SyntaxError"'
     _side(svc, "svc", '"w"', objects)
     _side(cli, "cli", '"w", "P"', objects)
-    build_fn = f"fun build(): {ty} {{\n{build}\n}}\n"
+    build_fn = f"fun build: {ty} {{\n{build}\n}}\n"
     if boundary == "proc_arg":
         exported = f"fun digest(x: {ty}): Number {{ return {read} }}\n"
         stub = f"fun digest(x: {ty}): Number {{ return 0 }}\n"
         imp = "digest"
-        main = f"  fun make(): {ty} {{\n{_indent(build)}\n  }}\n" \
-               "  fun main(): Number { return digest(make()) }\n"
+        main = f"  fun make: {ty} {{\n{_indent(build)}\n  }}\n" \
+               "  fun main: Number { return digest(make) }\n"
         if inline:
-            main = f"  fun main(): Number {{\n    v := {inline}\n    return digest(v)\n  }}\n"
+            main = f"  fun main: Number {{\n    v := {inline}\n    return digest(v)\n  }}\n"
     elif boundary == "proc_res":
         exported = stub = build_fn
         imp = "build"
-        main = f"  fun main(): Number {{\n    x := build()\n    return {read}\n  }}\n"
+        main = f"  fun main: Number {{\n    x := build()\n    return {read}\n  }}\n"
     else:
-        made = inline or "build()"
+        made = inline or "build"
         exported = stub = (build_fn if not inline else "") + \
             f"fun items(): Wire<{ty}> {{\n  v := {made}\n" \
             "  s := produce {\n    emit v\n  }\n  return s\n}\n"
         imp = "items"
-        main = ("  fun main(): Number {\n    w := wire to space P\n"
+        main = ("  fun main: Number {\n    w := wire to space P\n"
                 "    sub := w.awaits(items)\n    s := sub.stream\n"
                 f"    return s.fold(0, fun(a: Number, x: {ty}) => a + {read})\n  }}\n")
     (svc / "Entry.yon").write_text(
-        "place Entry {\n" + _indent(exported) + "\n  fun main(): Number { return 0 }\n}\n")
+        "place Entry {\n" + _indent(exported) + "\n  fun main: Number { return 0 }\n}\n")
     (cli / "yon_modules" / "prod").mkdir(parents=True)
     (cli / "yon_modules" / "prod" / "prod.yon").write_text(stub)
     (cli / "Entry.yon").write_text(f"import prod::{imp} from P\n\nplace Entry {{\n{main}}}\n")

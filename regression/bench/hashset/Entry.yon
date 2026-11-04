@@ -7,7 +7,7 @@ place Entry {
            else n
   }
   fun timed_insert(n: Number): Number visits Output {
-    setc := Space.make(HashSet.empty())
+    setc := Space.make(HashSet.empty)
     i := Space.make(0)
     t0 := Time.now_ns(0)
     iter n do { k := Space.get(i)
@@ -27,7 +27,7 @@ place Entry {
     return (t1 - t0)
   }
   fun build_set(n: Number): HashSet<Number> {
-    setc := Space.make(HashSet.empty())
+    setc := Space.make(HashSet.empty)
     i := Space.make(0)
     iter n do { k := Space.get(i)
                 _ := Space.set(setc, HashSet.add(Space.get(setc), k))

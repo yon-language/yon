@@ -5,5 +5,5 @@ place Entry {
       return n
     }
   }
-  fun main(): Number { return 7 }
+  fun main: Number { return 7 }
 }

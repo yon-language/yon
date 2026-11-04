@@ -3,5 +3,5 @@
 // Well-formed iff 1 <= N <= 64 (tycheck.ml check_type_well_formed).
 place Entry {
   fun bits(h: heyting<8>): Number { return 0 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

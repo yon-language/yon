@@ -11,7 +11,7 @@
 place Entry {
   fun plain(x: Number): Number { return x }
   fun run(m: morph from S1 to S2): Number { return 0 }
-  fun main(): Number {
+  fun main: Number {
     return run(plain)
   }
 }

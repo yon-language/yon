@@ -1,6 +1,6 @@
 place Entry {
   fun main(): Number visits Output {
-    mut m := HashMap.empty()
+    mut m := HashMap.empty
     m <- HashMap.set(m, 1445, 1)
     m <- HashMap.set(m, 1280, 2)
     _1 := Output.print(String.from_int(match HashMap.get(m, 1445) { Found as v => v, Absent => 0 }))

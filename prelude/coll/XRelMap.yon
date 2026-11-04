@@ -12,7 +12,7 @@ place XRelMap<K, V> {
 
   /* ─── The primitives ─────────────────────────────────────── [G] ─── */
 
-  fun empty<K, V>(): XRelMap<K, V> is given
+  fun empty<K, V>: XRelMap<K, V> is given
   fun set<K, V>(m: XRelMap<K, V>, k: K, v: V): XRelMap<K, V> is given
   fun has<K, V>(m: XRelMap<K, V>, k: K): Boolean is given
   fun size<K, V>(m: XRelMap<K, V>): Number is given

@@ -28,21 +28,21 @@ def _cross(tmp_path: Path, decls: str, elem: str, build: str, read: str) -> int:
     """decls: places both sides declare; build: the producer's value; read:
     the consumer's number from `x` (the arrived value)."""
     (tmp_path / "prod.yon").write_text(f"""{decls}
-fun value(): {elem} {{
+fun value: {elem} {{
 {build}
 }}
 fun items(): Wire<{elem}> {{
-  v := value()
+  v := value
   s := produce {{
     emit v
   }}
   return s
 }}
-fun main(): Number {{ return 0 }}
+fun main: Number {{ return 0 }}
 """)
     (tmp_path / "cons.yon").write_text(f"""import prod::items from P
 {decls}
-fun main(): Number {{
+fun main: Number {{
   w := wire to space P
   sub := w.awaits(items)
   s := sub.stream
@@ -67,11 +67,11 @@ def _cross_project(tmp_path: Path, place: str, fields: str, elem: str, build: st
     toml = '[package]\nname = "{n}"\n\n[runtime]\nbackend = "shm"\n\n' \
            '[world.W]\nobjects = ["X"]\nspaces  = [{s}]\n'
     funs = f"""
-  fun value(): {elem} {{
+  fun value: {elem} {{
 {build}
   }}
   fun items(): Wire<{elem}> {{
-    v := value()
+    v := value
     s := produce {{
       emit v
     }}
@@ -83,15 +83,15 @@ def _cross_project(tmp_path: Path, place: str, fields: str, elem: str, build: st
         (d / "yon.toml").write_text(toml.format(n=d.name, s=spaces))
         (d / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
     (svc / "w" / f"{place}.yon").write_text(f"place {place} {{\n{fields}{funs}\n}}\n")
-    (svc / "Entry.yon").write_text("place Entry {\n  fun main(): Number { return 0 }\n}\n")
+    (svc / "Entry.yon").write_text("place Entry {\n  fun main: Number { return 0 }\n}\n")
     (sub / "w" / f"{place}.yon").write_text(f"place {place} {{\n{fields}}}\n")
     (sub / "yon_modules" / "prod").mkdir(parents=True)
     (sub / "yon_modules" / "prod" / "prod.yon").write_text(
-        f"fun items(): Wire<{elem}> {{\n  s := produce {{ emit value() }}\n  return s\n}}\n")
+        f"fun items(): Wire<{elem}> {{\n  s := produce {{ emit value }}\n  return s\n}}\n")
     (sub / "Entry.yon").write_text(f"""import prod::items from P
 
 place Entry {{
-  fun main(): Number {{
+  fun main: Number {{
     w := wire to space P
     sub := w.awaits(items)
     s := sub.stream
@@ -120,7 +120,7 @@ _FILL_MAP = """  mut m := {empty}
 
 
 def test_a_hashmap_crosses_with_its_values(tmp_path):
-    build = _FILL_MAP.format(empty="HashMap.empty()", n=10, set="HashMap.set(m, k, k * 7)")
+    build = _FILL_MAP.format(empty="HashMap.empty", n=10, set="HashMap.set(m, k, k * 7)")
     rc = _cross(tmp_path, "", "HashMap<Number, Number>", build,
                 "HashMap.size(x) + (match HashMap.get(x, 9) { Found as v => v, Absent => 0 })")
     assert rc == 10 + 63
@@ -128,7 +128,7 @@ def test_a_hashmap_crosses_with_its_values(tmp_path):
 
 def test_a_hashmap_larger_than_the_ring_crosses_in_pieces(tmp_path):
     # 10^5 entries: about 1.6 MB of frame against a 64 KB ring
-    build = _FILL_MAP.format(empty="HashMap.empty()", n=100000, set="HashMap.set(m, k, k * 3)")
+    build = _FILL_MAP.format(empty="HashMap.empty", n=100000, set="HashMap.set(m, k, k * 3)")
     rc = _cross(tmp_path, "", "HashMap<Number, Number>", build,
                 "HashMap.size(x) - 100000 + (match HashMap.get(x, 99999) "
                 "{ Found as v => v - 299997 + 7, Absent => 0 })")
@@ -136,7 +136,7 @@ def test_a_hashmap_larger_than_the_ring_crosses_in_pieces(tmp_path):
 
 
 def test_a_hashset_crosses(tmp_path):
-    build = _FILL_MAP.format(empty="HashSet.empty()", n=12, set="HashSet.add(m, k * 2)")
+    build = _FILL_MAP.format(empty="HashSet.empty", n=12, set="HashSet.add(m, k * 2)")
     rc = _cross(tmp_path, "", "HashSet<Number>", build,
                 "HashSet.size(x) + (if HashSet.contains(x, 22) then 100 else 0)"
                 " + (if HashSet.contains(x, 23) then 50 else 0)")
@@ -151,14 +151,14 @@ def test_a_list_crosses_in_order(tmp_path):
 
 
 def test_an_xrelmap_crosses_on_the_leech_heap(tmp_path):
-    build = _FILL_MAP.format(empty="XRelMap.empty()", n=10, set="XRelMap.set(m, k, k + 40)")
+    build = _FILL_MAP.format(empty="XRelMap.empty", n=10, set="XRelMap.set(m, k, k + 40)")
     rc = _cross(tmp_path, "", "XRelMap<Number, Number>", build,
                 "XRelMap.size(x) + (match XRelMap.get(x, 5) { Found as v => v, Absent => 0 })")
     assert rc == 10 + 45
 
 
 def test_an_xrelset_crosses(tmp_path):
-    build = _FILL_MAP.format(empty="XRelSet.empty()", n=9, set="XRelSet.add(m, k)")
+    build = _FILL_MAP.format(empty="XRelSet.empty", n=9, set="XRelSet.add(m, k)")
     rc = _cross(tmp_path, "", "XRelSet<Number>", build,
                 "XRelSet.size(x) + (if XRelSet.contains(x, 8) then 30 else 0)")
     assert rc == 39
@@ -171,7 +171,7 @@ def test_a_string_crosses(tmp_path):
 
 def test_a_place_with_a_map_field_crosses(tmp_path):
     fields = "  label String\n  counts HashMap<Number, Number>\n"
-    build = '    return .-> Bag { label "abc" counts HashMap.set(HashMap.empty(), 4, 40) }'
+    build = '    return .-> Bag { label "abc" counts HashMap.set(HashMap.empty, 4, 40) }'
     rc = _cross_project(tmp_path, "Bag", fields, "Bag", build,
                         "String.length(x.label) + (match HashMap.get(x.counts, 4) "
                         "{ Found as v => v, Absent => 0 })")
@@ -188,9 +188,9 @@ def test_a_list_of_strings_crosses(tmp_path):
 
 _POINTS = """  return match LatticePoint.at_index(195500) {
     LatticePoint as a => (match LatticePoint.at_index(10) {
-      LatticePoint as b => XRelSet.add(XRelSet.add(XRelSet.empty(), a), b),
-      DomainError as d => XRelSet.empty() }),
-    DomainError as d => XRelSet.empty() }"""
+      LatticePoint as b => XRelSet.add(XRelSet.add(XRelSet.empty, a), b),
+      DomainError as d => XRelSet.empty }),
+    DomainError as d => XRelSet.empty }"""
 
 
 def test_an_xrelset_of_points_crosses_by_its_points(tmp_path):

@@ -49,7 +49,7 @@ fun as_num(t: Term): Number {
 }
 
 // ORACLE: (lam. var0 + var0) 21  ->  21 + 21  ->  42
-fun main(): Number {
+fun main: Number {
   r := eval(((0 ↪ TVar, 0 ↪ TVar) ↪ TAdd ↪ TLam, 21 ↪ TLit) ↪ TApp)
   return as_num(r) - 42
 }

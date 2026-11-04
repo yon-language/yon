@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     a := Math.floor(21.9)
     b := Math.sqrt(441)
     return a + b

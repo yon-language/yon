@@ -1,7 +1,7 @@
 place Sum { this > A :U B Number }
 place Entry {
   fun pick(s: Sum): Number { return match s { B as x => x } }
-  fun main(): Number {
+  fun main: Number {
     return pick(7 ↪ B)
   }
 }

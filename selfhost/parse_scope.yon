@@ -151,15 +151,15 @@ fun term_of(p: Parse): Term {
 }
 
 // source "\aa+a" = codes 92 97 97 43 97  (lambda, name a, body a+a)
-fun src(): String {
+fun src: String {
   return String.concat(
            String.concat(String.from_char(92), String.from_char(97)),
            String.concat(String.concat(String.from_char(97), String.from_char(43)),
                          String.from_char(97)))
 }
 
-fun main(): Number {
-  tree := parse_lam(lex(src()), NEnvNil)
+fun main: Number {
+  tree := parse_lam(lex(src), NEnvNil)
   // the Term must be TLam(TAdd(TVar 0, TVar 0)); applied to 21 -> 42
   return as_num(eval((term_of(tree), 21 ↪ TLit) ↪ TApp)) - 42
 }

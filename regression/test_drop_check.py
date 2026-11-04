@@ -45,7 +45,7 @@ _DEBUG_ENV = {**os.environ, "YON_DEBUG_DROPS": "1"}
 # platforms where MADV_DONTNEED zero-fills (Linux) and return 0 instead of 7.
 _HANDLE_ESCAPE = """\
 place Entry { }
-fun main(): Number {
+fun main: Number {
   p := .-> DP { n 7 }
   filler := 1
   y := p.n
@@ -56,7 +56,7 @@ fun main(): Number {
 _AUTO_NO_DROP = """\
 import svc::d_op from D
 place Entry { }
-fun main(): Number {
+fun main: Number {
   r := d_op(5)
   s := r + 1
   return s - s
@@ -81,10 +81,10 @@ fun main(): Number {
 _ILLEGAL_TRANSITIVE = """\
 import svc::d_op from D
 place Entry { }
-fun helper(): Number { r := d_op(9)  return r }
+fun helper: Number { r := d_op(9)  return r }
 fun main(): Number {
   drop D
-  r := helper()
+  r := helper
   return r - r
 }
 """

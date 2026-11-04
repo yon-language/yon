@@ -19,9 +19,9 @@ internal place XRelFrame carried by i64 {
 
   /* ─── The frames ─────────────────────────────────────────── [G] ─── */
 
-  fun discrete(): XRelFrame is given
-  fun whole(): XRelFrame is given
-  fun curtis(): XRelFrame is given
+  fun discrete: XRelFrame is given
+  fun whole: XRelFrame is given
+  fun curtis: XRelFrame is given
   fun refine(f: XRelFrame, r: LatticePoint): XRelFrame is given
 
   /* ─── The projection ─────────────────────────────────────── [G] ─── */

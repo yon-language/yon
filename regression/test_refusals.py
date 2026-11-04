@@ -83,7 +83,7 @@ def test_the_words_of_the_occasion_take_their_places(tmp_path):
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
         "place Entry {\nfun main(): Number {\n"
-        "  n := SystemOs.refuse(WordOutsideRegion, Word64.from_int64(7), Word64.from_int64(5), Word64.zero())\n"
+        "  n := SystemOs.refuse(WordOutsideRegion, Word64.from_int64(7), Word64.from_int64(5), Word64.zero)\n"
         "  return n + 1\n}\n}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True, text=True, timeout=180)

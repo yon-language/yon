@@ -3,7 +3,7 @@
 // target must be an El(_): here quote(number, 0) : El(number). body is a
 // function; el_match returns its codomain. Lowers to (body target) in desugar.
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     e := el_match(quote(Number, 0), 0, fun(z: Number) => z)
     return e
   }

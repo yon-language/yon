@@ -3,9 +3,9 @@
  * i64, with the machine's product and one (the ring Z/2^64). */
 place Multiplicative is algebra {
   operation mul(a: Multiplicative, b: Multiplicative): Multiplicative as "*"
-  operation one(): Multiplicative as "1"
+  operation one: Multiplicative as "1"
   law associative ∀a : Multiplicative ∀b : Multiplicative ∀c : Multiplicative, (a * b) * c = a * (b * c)
   law commutative ∀a : Multiplicative ∀b : Multiplicative, a * b = b * a
-  law neutral ∀a : Multiplicative, a * one() = a
+  law neutral ∀a : Multiplicative, a * one = a
   carried by i64
 }

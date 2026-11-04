@@ -1,5 +1,5 @@
 /* Interface of the Nested producer (nominal cross-Space import). */
-fun pairs(): Wire<Outer> {
+fun pairs: Wire<Outer> {
   s := produce { emit .-> Outer { tag 7 inner .-> Inner { a 3 b "hi" } } }
   return s
 }

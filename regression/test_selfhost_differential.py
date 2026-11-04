@@ -23,77 +23,77 @@ COMPILER = ROOT / "selfhost" / "selfhost_compiler.yon"
 # (name, Yon0 source, expected exit). The core assertion is reference == self-hosted;
 # `expected` is a sanity anchor that also rejects a shared-wrong-answer.
 PROGRAMS = [
-    ("arith",      "fun main(): Number { return 2 + 3 * 4 }", 14),
-    ("single_sub", "fun main(): Number { return 10 - 3 }", 7),
-    ("chain_sub",  "fun main(): Number { return 10 - 3 - 2 }", 5),
-    ("mixed_prec", "fun main(): Number { return 100 - 2 * 3 - 4 }", 90),
-    ("let42",      "fun main(): Number { x := 20  y := 22  return x + y }", 42),
-    ("if_false",   "fun main(): Number { x := 20  y := 22  "
+    ("arith",      "fun main: Number { return 2 + 3 * 4 }", 14),
+    ("single_sub", "fun main: Number { return 10 - 3 }", 7),
+    ("chain_sub",  "fun main: Number { return 10 - 3 - 2 }", 5),
+    ("mixed_prec", "fun main: Number { return 100 - 2 * 3 - 4 }", 90),
+    ("let42",      "fun main: Number { x := 20  y := 22  return x + y }", 42),
+    ("if_false",   "fun main: Number { x := 20  y := 22  "
                    "return if x == y then 99 else x + y }", 42),
     ("call",       "fun dbl(x): Number { return x + x }\n"
-                   "fun main(): Number { return dbl(21) }", 42),
+                   "fun main: Number { return dbl(21) }", 42),
     ("fact5",      "fun fact(n): Number { return if n == 0 then 1 else n * fact(n - 1) }\n"
-                   "fun main(): Number { return fact(5) }", 120),
+                   "fun main: Number { return fact(5) }", 120),
     ("sum10",      "fun sum(n): Number { return if n == 0 then 0 else n + sum(n - 1) }\n"
-                   "fun main(): Number { return sum(10) }", 55),
+                   "fun main: Number { return sum(10) }", 55),
     # multiple parameters (3-arg), plus a digit in the function name (sub3).
     ("multi_arg",  "fun sub3(a, b, c): Number { return a - b - c }\n"
-                   "fun main(): Number { return sub3(100, 30, 8) }", 62),
+                   "fun main: Number { return sub3(100, 30, 8) }", 62),
     # underscore in identifiers, two parameters.
     ("ident_us",   "fun add_two(x, y): Number { return x + y }\n"
-                   "fun main(): Number { return add_two(19, 23) }", 42),
+                   "fun main: Number { return add_two(19, 23) }", 42),
     # comparison operators beyond ==: <, !=, and >= inside a recursion.
-    ("cmp_lt",     "fun main(): Number { return if 3 < 4 then 11 else 22 }", 11),
-    ("cmp_ne",     "fun main(): Number { return if 3 != 3 then 11 else 22 }", 22),
+    ("cmp_lt",     "fun main: Number { return if 3 < 4 then 11 else 22 }", 11),
+    ("cmp_ne",     "fun main: Number { return if 3 != 3 then 11 else 22 }", 22),
     ("cmp_ge_rec", "fun cd(n): Number { return if n >= 1 then cd(n - 1) else 42 }\n"
-                   "fun main(): Number { return cd(9) }", 42),
+                   "fun main: Number { return cd(9) }", 42),
     # block and line comments must be skipped by the lexer.
     ("comments",   "/* a header comment */\n"
-                   "fun main(): Number {\n"
+                   "fun main: Number {\n"
                    "  /* inline */ return 40 + 2 // a line comment\n"
                    "}\n", 42),
     # Stage 1 of the heavy core: nullary coproduct places, bare arms and match
     # (a runtime tag switch over MerkleTree labels).
     ("enum_bit",   "place Bit { this > O :U I }\n"
                    "fun v(b: Bit): Number { return match b { O => 0, I => 1 } }\n"
-                   "fun main(): Number { return v(I) }", 1),
+                   "fun main: Number { return v(I) }", 1),
     ("enum_dir",   "place Dir { this > N :U S :U E }\n"
                    "fun code(d: Dir): Number { return match d { N => 10, S => 20, E => 30 } }\n"
-                   "fun main(): Number { return code(E) }", 30),
+                   "fun main: Number { return code(E) }", 30),
     # Stage 2: number-payload arms -- an injection stores a raw number child,
     # a pattern binder projects it back with child().
     ("payload_lit", "place Val { this > Lit Number }\n"
                     "fun get(v: Val): Number { return match v { Lit as n => n } }\n"
-                    "fun main(): Number { return get(42 ↪ Lit) }", 42),
+                    "fun main: Number { return get(42 ↪ Lit) }", 42),
     # a mix of a nullary and a payload arm (the names are arbitrary user
     # constructors -- Yon has no built-in option type).
     ("payload_mix", "place Box { this > Empty :U Full Number }\n"
                     "fun un(o: Box): Number { return match o { Empty => 99, Full as x => x } }\n"
-                    "fun main(): Number { return un(7 ↪ Full) }", 7),
+                    "fun main: Number { return un(7 ↪ Full) }", 7),
     # a two-field arm: both payloads projected.
     ("payload_duo", "place Duo { this > Both Number Number }\n"
                     "fun a(d: Duo): Number { return match d { Both as (x, y) => x } }\n"
                     "fun b(d: Duo): Number { return match d { Both as (x, y) => y } }\n"
-                    "fun main(): Number { return a((5, 9) ↪ Both) + b((5, 9) ↪ Both) }", 14),
+                    "fun main: Number { return a((5, 9) ↪ Both) + b((5, 9) ↪ Both) }", 14),
     # Stage 3: nested / recursive payloads (a sum handle stored raw as a child).
     # ev(build(3)) = -(-(-7)) = -7 = 249 mod 256.
     ("rec_neg",    "place Term { this > Lit Number :U Neg Term }\n"
                    "fun ev(t: Term): Number { return match t { Lit as n => n, Neg as m => 0 - ev(m) } }\n"
                    "fun build(k: Number): Term { return if k == 0 then 7 ↪ Lit else build(k - 1) ↪ Neg }\n"
-                   "fun main(): Number { return ev(build(3)) }", 249),
+                   "fun main: Number { return ev(build(3)) }", 249),
     # a recursive list with a number + a nested-list payload; sum = 42.
     ("rec_list",   "place Lst { this > Nil :U Cons Number Lst }\n"
                    "fun sum(l: Lst): Number { return match l { Nil => 0, Cons as (h, t) => h + sum(t) } }\n"
-                   "fun main(): Number { return sum((10, (20, (12, Nil) ↪ Cons) ↪ Cons) ↪ Cons) }", 42),
+                   "fun main: Number { return sum((10, (20, (12, Nil) ↪ Cons) ↪ Cons) ↪ Cons) }", 42),
     # String literals and qualified runtime calls (String.op). A literal lexes
     # to a content handle (substring), lowers to a from_char/concat chain that
     # interns to the same content-address as yonc's global+string_lit, so the
     # exit codes agree; `String.op(..)` lowers to a runtime call.
-    ("str_len",    'fun main(): Number { return String.length("hello") }', 5),
-    ("str_concat", 'fun main(): Number { return String.length(String.concat("ab", "cde")) }', 5),
-    ("str_char",   'fun main(): Number { return String.char_at("ABC", 1) }', 66),
+    ("str_len",    'fun main: Number { return String.length("hello") }', 5),
+    ("str_concat", 'fun main: Number { return String.length(String.concat("ab", "cde")) }', 5),
+    ("str_char",   'fun main: Number { return String.char_at("ABC", 1) }', 66),
     ("str_in_fun", 'fun size(s): Number { return String.length(s) }\n'
-                   'fun main(): Number { return size("abcd") }', 4),
+                   'fun main: Number { return size("abcd") }', 4),
 ]
 
 

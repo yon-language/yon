@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     p := pair(40, 2)
     w := refl(fst(p))
     return fst(p) + snd(p)

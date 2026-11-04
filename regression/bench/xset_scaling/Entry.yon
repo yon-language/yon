@@ -14,7 +14,7 @@ place Entry {
     return Space.get(s)
   }
   fun build_hset(lo: Number, n: Number): HashSet<Number> {
-    s := Space.make(HashSet.empty())
+    s := Space.make(HashSet.empty)
     i := Space.make(0)
     iter n do { _ := Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
                 _2 := Space.set(i, Space.get(i) + 1) }

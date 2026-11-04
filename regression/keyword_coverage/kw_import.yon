@@ -1,5 +1,5 @@
 // coverage: `import` of a local module
 import "kw_import_mod.yon"
 place Entry {
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }

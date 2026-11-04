@@ -1,5 +1,5 @@
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     mut p := .-> Pt { x 40  y 1 }
     p <- .-> Pt { x 42  y 9 }
     return p.x

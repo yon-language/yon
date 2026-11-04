@@ -19,8 +19,8 @@ place SystemOs {
 
   /* the regions the two heaps of the Space running now live in, made when
      the Space starts: its FnvHeap's, its LeechHeap's */
-  fun fnv_heap_region(): Region is given
-  fun leech_heap_region(): Region is given
+  fun fnv_heap_region: Region is given
+  fun leech_heap_region: Region is given
   /* part n of the FnvHeap of the Space running now, of `words` words: made
      by the first process of the Space that asks for it, the same region for
      every later ask; the replicas of a Space that share its heaps share its
@@ -61,13 +61,13 @@ place SystemOs {
   fun monotonic_ns(): Int64 is given
   /* nanoseconds since 1970-01-01 UTC, on the clock of the wall */
   fun wall_ns(): Int64 is given
-  fun arg_count(): Number is given
+  fun arg_count: Number is given
   internal fun unchecked_arg(i: Number): Text is given
   /* writes the text, whole, on the standard output / the standard error; the
      answer is the bytes written */
   fun write_output(t: Text): Number is given
   fun write_error(t: Text): Number is given
-  fun process_id(): Number is given
+  fun process_id: Number is given
   internal fun unchecked_process_exists(pid: Number): Boolean is given
   internal fun unchecked_terminate(pid: Number): Boolean is given
 
@@ -129,7 +129,7 @@ place SystemOs {
   /* ─── Arguments, processes ───────────────────────────────── [E] ─── */
 
   fun arg(i: Number) on error DomainError: Text {
-    return if Number.is_integer(i) and i >= 0 and i < arg_count() then unchecked_arg(i)
+    return if Number.is_integer(i) and i >= 0 and i < arg_count then unchecked_arg(i)
            else .-> DomainError { message "not the index of an argument" }
   }
 

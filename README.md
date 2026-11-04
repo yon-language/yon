@@ -52,7 +52,7 @@ place Entry {
     }
   }
 
-  fun main(): Number {
+  fun main: Number {
     // Equal subtrees share one address: the heap is content-addressed.
     t := (20 ↪ Leaf, 20 ↪ Leaf) ↪ Node
 

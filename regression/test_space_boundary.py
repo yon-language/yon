@@ -36,7 +36,7 @@ backend = "memory"
 _BUILD = """place Q {
   side Number
   fun build(n: Number): HashMap<Number, Number> {
-    mut m := HashMap.empty()
+    mut m := HashMap.empty
     mut k := 0
     iter n do {
       m <- HashMap.set(m, k, k * 100)
@@ -48,7 +48,7 @@ _BUILD = """place Q {
   fun adder(n: Number): Number -> Number { return fun(x: Number) => x + n }
   fun peek(c: Space): Number { return Space.get(c) }
   fun points(n: Number): XRelMap<Number, Number> {
-    mut m := XRelMap.empty()
+    mut m := XRelMap.empty
     mut k := 0
     iter n do {
       m <- XRelMap.set(m, k, k + 40)
@@ -124,7 +124,7 @@ def test_an_xrelmap_made_in_another_space_is_copied_to_main(tmp_path):
 
 def test_a_text_crosses_into_another_space(tmp_path):
     rc, out, exe = _in_binary(tmp_path, """place Entry {
-  fun main(): Number { return Q.len("seven c") }
+  fun main: Number { return Q.len("seven c") }
 }
 """)
     assert rc == 0, out
@@ -133,7 +133,7 @@ def test_a_text_crosses_into_another_space(tmp_path):
 
 def test_a_channel_does_not_cross_and_the_error_says_subscribe(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main(): Number {
+  fun main: Number {
     s := Q.flow()
     return 0
   }
@@ -144,7 +144,7 @@ def test_a_channel_does_not_cross_and_the_error_says_subscribe(tmp_path):
 
 def test_a_closure_does_not_cross_into_another_space(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main(): Number {
+  fun main: Number {
     mut k := 5
     return Q.apply(fun(x: Number) => x + k, 1)
   }
@@ -155,7 +155,7 @@ def test_a_closure_does_not_cross_into_another_space(tmp_path):
 
 def test_a_closure_does_not_come_back_from_another_space(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main(): Number {
+  fun main: Number {
     f := Q.adder(3)
     return 0
   }
@@ -166,7 +166,7 @@ def test_a_closure_does_not_come_back_from_another_space(tmp_path):
 
 def test_a_cell_does_not_cross_into_another_space(tmp_path):
     rc, out, _ = _in_binary(tmp_path, """place Entry {
-  fun main(): Number {
+  fun main: Number {
     c := Space.make(7)
     return Q.peek(c)
   }
@@ -184,9 +184,9 @@ def test_a_closure_returned_inside_one_space_is_a_value(tmp_path, params, args):
     src.mkdir()
     (src / "yon.toml").write_text('[package]\nname = "one"\n[runtime]\nbackend = "memory"\n')
     (src / "Entry.yon").write_text(f"""place Entry {{
-  fun build({params}): Number -> Number {{ return fun(y: Number) => y + 41 }}
-  fun main(): Number {{
-    f := build({args})
+  fun build{"(" + params + ")" if params else ""}: Number -> Number {{ return fun(y: Number) => y + 41 }}
+  fun main: Number {{
+    f := build{"(" + args + ")" if args else ""}
     return f(1)
   }}
 }}
@@ -199,7 +199,7 @@ def test_a_closure_returned_inside_one_space_is_a_value(tmp_path, params, args):
 def test_a_call_inside_one_space_is_not_a_crossing(tmp_path):
     # the same closure handed within Q's own Space is an ordinary call
     proj = _project(tmp_path, """place Entry {
-  fun main(): Number { return Q.inside(4) }
+  fun main: Number { return Q.inside(4) }
 }
 """)
     (proj / "w" / "Q.yon").write_text(_BUILD.replace(
@@ -230,7 +230,7 @@ def _note_project(tmp_path: Path, space_file: str, entry: str) -> Path:
 
 
 _NOTE_ENTRY = """place Entry { }
-fun main(): Number {
+fun main: Number {
   s := .-> %s { message "unexpected }" line 30 }
   d := describe(s)
   return d + s.line
@@ -272,7 +272,7 @@ _ECHO = """place Entry {
   fun slen(s: String): Number { return String.length(s) }
   fun twice(x: Number): Number { return x * 2 }
   fun build(n: Number): HashMap<Number, Number> {
-    mut m := HashMap.empty()
+    mut m := HashMap.empty
     mut k := 0
     iter n do {
       m <- HashMap.set(m, k, k * 100)
@@ -280,7 +280,7 @@ _ECHO = """place Entry {
     }
     return m
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """
 
@@ -305,7 +305,7 @@ def test_an_import_is_checked_on_its_types(tmp_path):
     rc, out = _between_processes(tmp_path, """import echo::twice from Echo
 
 place Entry {
-  fun main(): Number { return twice("a") }
+  fun main: Number { return twice("a") }
 }
 """)
     assert _refused(rc, out, "argument 1 of twice"), out
@@ -322,7 +322,7 @@ def test_a_call_to_another_version_of_the_signature_is_refused(tmp_path):
     (tmp_path / "client.yon").write_text("""import echo::twice from Echo
 
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     r := twice(21)
     return 0
   }
@@ -341,7 +341,7 @@ def test_a_number_still_crosses_between_processes(tmp_path):
     rc, out = _between_processes(tmp_path, """import echo::twice from Echo
 
 place Entry {
-  fun main(): Number { return twice(21) }
+  fun main: Number { return twice(21) }
 }
 """)
     assert rc == 0, out
@@ -352,7 +352,7 @@ def test_a_text_crosses_between_processes(tmp_path):
     rc, out = _between_processes(tmp_path, """import echo::slen from Echo
 
 place Entry {
-  fun main(): Number { return slen("hello") }
+  fun main: Number { return slen("hello") }
 }
 """)
     assert rc == 0, out
@@ -383,7 +383,7 @@ def _producer(tmp_path: Path, elem: str, value: str):
       emit %s
     }
   }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """ % (elem, value))
     return _yonc(src, tmp_path / "prod")
@@ -434,12 +434,12 @@ def test_a_place_with_a_text_crosses_between_processes(tmp_path):
         (tmp_path / p / "w" / "Note.yon").write_text("place Note { message Text  line Number }\n")
     (tmp_path / "svc" / "Entry.yon").write_text(
         "place Entry {\n  fun describe(e: Note): Number { return String.length(e.message) + e.line }\n"
-        "  fun main(): Number { return 0 }\n}\n")
+        "  fun main: Number { return 0 }\n}\n")
     mods = tmp_path / "client" / "yon_modules" / "notes"
     mods.mkdir(parents=True)
     (mods / "notes.yon").write_text("fun describe(e: Note): Number { return 0 }\n")
     (tmp_path / "client" / "Entry.yon").write_text(
-        "import notes::describe from Notes\n\nplace Entry {\n  fun main(): Number {\n"
+        "import notes::describe from Notes\n\nplace Entry {\n  fun main: Number {\n"
         "    n := .-> Note { message \"unexpected }\" line 30 }\n"
         "    return describe(n)\n  }\n}\n")
     rc, out = _yonc(tmp_path / "svc", tmp_path / "Notes_srv")

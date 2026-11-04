@@ -268,6 +268,12 @@ type arrow_kind = Apply | Inject | Old_pipe
 let arrow_sites : (string * int * int * string, arrow_kind) Hashtbl.t = Hashtbl.create 32
 let arm_call_sites : (string * int * int * string, unit) Hashtbl.t = Hashtbl.create 32
 
+(* A nullary fun or operation, named without (), by site and name; the funs declared
+   without (), by the site of the declaration; the operations with no parameters. *)
+let bare_nullary_sites : (string * int * int * string, unit) Hashtbl.t = Hashtbl.create 64
+let bare_nullary_decls : (string * int * int, unit) Hashtbl.t = Hashtbl.create 64
+let nullary_operations : (string, unit) Hashtbl.t = Hashtbl.create 16
+
 (* The field read on a coproduct at a site, with the arms that give it: the
    read is the copairing of the projections of the arms. *)
 let union_field_sites : (string * int * int, string list) Hashtbl.t = Hashtbl.create 16

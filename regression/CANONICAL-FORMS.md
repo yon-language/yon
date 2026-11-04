@@ -9,7 +9,7 @@ from them; the `.yon` files are the specification, not this text.
 
 - constructs: **41**
 - productions REDUCED by a fixture (Menhir-verified): **99 / 99** surface (+3 structural allowlisted)
-- deviations rejected: **31**
+- deviations rejected: **32**
 - deviations still accepted (`accepted_deviation`): **1**
 
 | construct | fixture | status | exit | match |
@@ -50,6 +50,7 @@ from them; the `.yon` files are the specification, not this text.
 | function | `canonical` | accept | 42 | — |
 | function | `dev_dup_param` | reject_clean | 1 | `duplicate parameter` |
 | function | `dev_empty_body` | reject_clean | 1 | `empty body but a return type` |
+| function | `dev_pure_with_unit` | reject_clean | 1 | `fun answer is a point: it is declared without ()` |
 | functor | `canonical` | accept | 0 | — |
 | fusion | `canonical` | accept | 42 | — |
 | fusion | `dev_old_is` | reject_clean | 1 | `is no longer the carrier` |

@@ -180,7 +180,7 @@ for fam, _, _ in FAMILIES:
         w(f"    _{fam}_{kind} := {fam}_{kind}_check(n)")
 w("    return 0")
 w("  }")
-w("  fun main(): Number visits Output {")
+w("  fun main: Number visits Output {")
 w("    full := Args.count(0) >= 4")
 w("    fam := if full then arg(1) else 0")
 w("    kind := if full then arg(2) else 0")

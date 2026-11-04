@@ -83,7 +83,7 @@ let source_of (loc : S.location) : string option =
 (* The algebra's name replaced by the model's, and each call of a name in
    `calls` (not after a dot, not the name a `fun` declares) addressed to the
    model. *)
-let instantiate_text (text : string) (algebra : string) (model : string) (calls : string list) : string =
+let instantiate_text (text : string) (algebra : string) (model : string) (calls : string list) (constants : string list) : string =
   let b = Buffer.create (String.length text + 64) in
   let n = String.length text in
   let rec next_non_space i = if i < n && (text.[i] = ' ' || text.[i] = '\t') then next_non_space (i + 1) else i in
@@ -96,7 +96,7 @@ let instantiate_text (text : string) (algebra : string) (model : string) (calls 
       let w = String.sub text i (!j - i) in
       let k = next_non_space !j in
       if w = algebra then Buffer.add_string b model
-      else if List.mem w calls && not prev_dot && !last_word <> "fun" && k < n && text.[k] = '(' then
+      else if List.mem w calls && not prev_dot && !last_word <> "fun" && (List.mem w constants || (k < n && text.[k] = '(')) then
         Buffer.add_string b (model ^ "." ^ w)
       else Buffer.add_string b w;
       last_word := w;
@@ -131,6 +131,9 @@ let instances (p : S.program) (places : S.place_decl list) : S.top_decl list =
           let ops = List.filter_map (function S.FoOp o -> Some o.S.op_name | _ -> None) apd.S.pd_members in
           let ds = derived p a in
           let calls = ops @ List.map (fun (fd : S.fun_decl) -> fd.S.fn_name) ds in
+          let constants = List.filter_map (function
+              | S.FoOp o when o.S.op_params = [] -> Some o.S.op_name
+              | _ -> None) apd.S.pd_members in
           List.concat_map (fun (fd : S.fun_decl) ->
             if gives p pd.S.pd_name fd.S.fn_name then []
             else match source_of fd.S.fn_loc with
@@ -140,7 +143,7 @@ let instances (p : S.program) (places : S.place_decl list) : S.top_decl list =
                     fd.S.fn_name a fd.S.fn_loc.S.file pd.S.pd_name)
               | Some text ->
                   let text = String.make fd.S.fn_loc.S.start_col ' '
-                             ^ instantiate_text text a pd.S.pd_name calls in
+                             ^ instantiate_text text a pd.S.pd_name calls constants in
                   (* the instance's site: the source of the derived operation,
                      named with its model, so no two instances share a site *)
                   let file = Printf.sprintf "%s (%s.%s in %s)"
@@ -182,6 +185,9 @@ let complete (p : S.program) : S.program =
                      | Some sym ->
                          (match machine_term sym args loc with
                           | Some body ->
+                              if params = [] then
+                                Hashtbl.replace S.bare_nullary_decls
+                                  (loc.S.file, loc.S.start_line, loc.S.start_col) ();
                               added := S.TopFun {
                                   S.fn_name = o.S.op_name;
                                   fn_type_params = [];

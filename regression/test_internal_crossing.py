@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 
 _OTHER = (
     "place Other {\n"
-    "  fun bump(w: Word64): Word64 { return w + Word64.one() }\n"
+    "  fun bump(w: Word64): Word64 { return w + Word64.one }\n"
     "  fun next(p: LatticePoint): LatticePoint {\n"
     "    return match LatticePoint.at_index(LatticePoint.index(p) + 1) {\n"
     "      LatticePoint as q => q, DomainError as d => p }\n"
@@ -40,7 +40,7 @@ def _build(tmp_path: Path, main_body: str):
                                    '[runtime]\nbackend = "memory"\n')
     (proj / "w" / "Topos.yon").write_text("topos where {\n}\n")
     (proj / "w" / "Other.yon").write_text(_OTHER)
-    (proj / "Entry.yon").write_text("place Entry {\n  fun main(): Number {\n" + main_body
+    (proj / "Entry.yon").write_text("place Entry {\n  fun main: Number {\n" + main_body
                                     + "\n  }\n}\n")
     exe = tmp_path / "exe"
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)], capture_output=True, text=True,
@@ -73,12 +73,12 @@ def test_a_lattice_point_goes_to_another_space_and_comes_back(tmp_path):
 def test_a_set_of_lattice_points_goes_and_comes_back(tmp_path):
     rc, err = _value(tmp_path, (
         "    return match LatticePoint.at_index(7) { LatticePoint as q => "
-        "(if XRelSet.contains(Other.grow(XRelSet.empty(), q), q) then 42 else 1), "
+        "(if XRelSet.contains(Other.grow(XRelSet.empty, q), q) then 42 else 1), "
         "DomainError as d => 0 }"))
     assert rc == 42, err
 
 
 def test_a_frame_is_refused_at_compile_time(tmp_path):
-    rc, out, _ = _build(tmp_path, "    f := Other.keep(XRelFrame.whole())\n    return 42")
+    rc, out, _ = _build(tmp_path, "    f := Other.keep(XRelFrame.whole)\n    return 42")
     assert rc != 0 and "E2001" in out, out
     assert "argument 1 of Other__keep of type XRelFrame crosses into another Space" in out, out

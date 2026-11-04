@@ -2,5 +2,5 @@
 // the declared return type via Dispatcher.subtype) must reject this at compile
 // time. text is not a subtype of number, so exit 3.
 place Entry {
-  fun main(): Number { return "text" }
+  fun main: Number { return "text" }
 }

@@ -17,7 +17,7 @@ fun eval(e: Expr): Number {
   return match e { Lit as n => n, Neg as m => 0 - m, Add as s => s + s }
 }
 
-fun main(): Number {
+fun main: Number {
   a := eval(5 ↪ Lit)     // 5
   b := eval(3 ↪ Neg)     // 0 - 3 = -3
   c := eval(20 ↪ Add)    // 20 + 20 = 40

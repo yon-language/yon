@@ -5,5 +5,5 @@ place Entry {
 // The raw `Id` / `refl` / `ind_path` remain available in the KERNEL stratum.
 fun beta_fst(a: Number, b: Number): fst(pair(a, b)) = a { return clear }
 fun diag(x: Number): Number { return x + 35 }
-fun main(): Number { return induct(diag, clear 7) }   // -> 42
+fun main: Number { return induct(diag, clear 7) }   // -> 42
 }

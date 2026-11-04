@@ -14,7 +14,7 @@ inferred from the endpoints, with its introduction and eliminator.
 ```yon
 // Entry.yon, at the project root
 place Entry { }
-fun main(): Number {
+fun main: Number {
   p := pair(40, 2)
   x := fst(p)
   y := snd(p)
@@ -45,7 +45,7 @@ fun f(x: Number): Number { return x }
 fun coherence(a: Number): f(a) = a {   // f(a) = a, carrier inferred
   return clear                              // reflexivity of the endpoint: f(a) computes to a
 }
-fun main(): Number { return 0 }
+fun main: Number { return 0 }
 ```
 
 ## Paths as journeys
@@ -70,7 +70,7 @@ These compute. Read a closed path at an endpoint with `@ I0` (its start) or
 <!-- yon-gate: exit 22 -->
 ```yon
 fun dbl(n: Number): Number { return n + n }
-fun main(): Number {
+fun main: Number {
   reversed := back clear 5        // inv(clear 5)              = clear 5
   joined   := clear 7 ++ clear 7  // concat(clear 7, clear 7)  = clear 7
   shadow   := clear 5 through dbl // ap(dbl, clear 5)          = clear 10
@@ -89,7 +89,7 @@ other; on `Number`, a float, `(n + 1) - 1` is not always `n`):
 ```yon
 fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
-fun main(): Number {
+fun main: Number {
   bridge := succ <=> pred    // the two-way bridge
   y := carry 10 along bridge // transport 10 across it: succ 10 = 11
   return if y == 11 then 11 else 0
@@ -107,7 +107,7 @@ constructor, the result type read off the branches.
 
 <!-- yon-gate: exit 5 -->
 ```yon
-fun main(): Number {
+fun main: Number {
   return match hit(north) {
     north => 5,
     south => 5,

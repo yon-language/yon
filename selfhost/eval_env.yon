@@ -18,7 +18,7 @@ fun mk_lit(n: Number): MerkleTree { return MerkleTree.node2(1, MerkleTree.leaf(n
 fun mk_var(i: Number): MerkleTree { return MerkleTree.node2(4, MerkleTree.leaf(i), MerkleTree.leaf(0)) }
 fun mk_let(vexpr: MerkleTree, body: MerkleTree): MerkleTree { return MerkleTree.node2(5, vexpr, body) }
 
-fun env_nil(): MerkleTree { return MerkleTree.leaf(0 - 1) }
+fun env_nil: MerkleTree { return MerkleTree.leaf(0 - 1) }
 fun env_cons(v: Number, rest: MerkleTree): MerkleTree {
   return MerkleTree.node2(0, MerkleTree.leaf(v), rest)
 }
@@ -39,9 +39,9 @@ fun eval(e: MerkleTree, env: MerkleTree): Number {
          else eval(MerkleTree.child(e, 1), env_cons(eval(MerkleTree.child(e, 0), env), env))
 }
 
-fun main(): Number {
+fun main: Number {
   // body = x * (x + 1), with x = de Bruijn 0
   body := MerkleTree.node2(3, mk_var(0), MerkleTree.node2(2, mk_var(0), mk_lit(1)))
   prog := mk_let(MerkleTree.node2_commutative(2, mk_lit(2), mk_lit(3)), body)
-  return eval(prog, env_nil())
+  return eval(prog, env_nil)
 }

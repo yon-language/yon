@@ -1,7 +1,7 @@
 place Coin uses algebra BooleanOr, Turn, Pick {
   this > Heads :U Tails
   fun join(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }
-  fun bottom(): Coin { return Tails }
+  fun bottom: Coin { return Tails }
   fun pick(a: Coin, b: Coin): Coin { return join(a, b) }
   fun flip(a: Coin): Coin { return match a { Heads => Tails, Tails => Heads } }
 }

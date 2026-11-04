@@ -86,7 +86,7 @@ place Entry {
   fun omega(b: Bad): Number { g := b.f  return g(b) }
   fun boom(n: Number): Number { return omega(.-> Bad { f omega }) }
   fun force(n: Number): boom(n) = 0 { return clear }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """
 
@@ -109,7 +109,7 @@ def test_checker_terminates_on_negative_place(tmp_path):
 @pytest.mark.xfail(strict=True, reason="a place that occurs negatively in its own "
                    "fields, `place Bad { f Bad -> Number }`, is not strictly positive")
 def test_negative_place_rejected(tmp_path):
-    entry = "place Bad { f Bad -> Number }\nplace Entry { fun main(): Number { return 0 } }\n"
+    entry = "place Bad { f Bad -> Number }\nplace Entry { fun main: Number { return 0 } }\n"
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'Bad'), out
@@ -121,7 +121,7 @@ def test_no_field_access_on_abstract_t(tmp_path):
     entry = """\
 place Entry {
   fun bad<T>(x: T): Number { return x.foo }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
@@ -136,7 +136,7 @@ def test_t_to_t_is_the_identity(tmp_path, body, reason):
     entry = f"""\
 place Entry {{
   fun notid<T>(x: T): T {{ return {body} }}
-  fun main(): Number {{ return notid(5) }}
+  fun main: Number {{ return notid(5) }}
 }}
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
@@ -154,7 +154,7 @@ def test_an_abstract_t_admits_no_operation(tmp_path, body):
     entry = f"""\
 place Entry {{
   fun bad<T>(x: T): Number {{ return {body} }}
-  fun main(): Number {{ return 0 }}
+  fun main: Number {{ return 0 }}
 }}
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
@@ -170,7 +170,7 @@ place Entry {
     when x is 5 { r <- 1 }
     return r
   }
-  fun main(): Number { return peek(5) }
+  fun main: Number { return peek(5) }
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
@@ -185,7 +185,7 @@ place Entry {
   fun identity<T>(x: T): T { return x }
   fun first<A, B>(x: A, y: B): A { return x }
   fun apply(f: Number -> Number, x: Number): Number { return f(x) }
-  fun main(): Number {
+  fun main: Number {
     return identity(40) + String.length(first("ok", 0)) + apply(identity, 0)
   }
 }
@@ -198,7 +198,7 @@ def test_a_generic_result_is_not_another_type(tmp_path):
     entry = """\
 place Entry {
   fun identity<T>(x: T): T { return x }
-  fun main(): Number { return String.length(identity(5)) }
+  fun main: Number { return String.length(identity(5)) }
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
@@ -210,10 +210,10 @@ place Entry {
 def test_int64_exact_past_2_53_through_list(tmp_path):
     entry = """\
 place Entry {
-  fun big(): Int64 { return Int64.ipow_ok(2, 53) + 1 }
+  fun big: Int64 { return Int64.ipow_ok(2, 53) + 1 }
   fun first(xs: List<Int64>): Int64 { return List.head(xs) }
-  fun main(): Number {
-    xs := List.cons(big(), List.empty(0))
+  fun main: Number {
+    xs := List.cons(big, List.empty(0))
     return if Int64.is_odd(first(xs)) then 1 else 0
   }
 }
@@ -227,14 +227,14 @@ def test_int64_exact_across_spaces(tmp_path):
     (tmp_path / "echo.yon").write_text("""\
 place Entry {
   fun odd_remote(x: Int64): Number { return if Int64.is_odd(x) then 1 else 0 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """)
     (tmp_path / "client.yon").write_text("""\
 import echo::odd_remote from Echo
 
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     a := odd_remote(Int64.ipow_ok(2, 40) + 1)
     b := odd_remote(Int64.ipow_ok(2, 52) + 1)
     mut c := odd_remote(Int64.ipow_ok(2, 53) + 1)
@@ -255,9 +255,9 @@ place Entry {
 def test_int64_is_exact_past_2_53(tmp_path):
     entry = """\
 place Entry {
-  fun big(): Int64 { return 9007199254740992 + 1 }
-  fun base(): Int64 { return 9007199254740992 }
-  fun main(): Number { return if big() - base() == 1 then 1 else 0 }
+  fun big: Int64 { return 9007199254740992 + 1 }
+  fun base: Int64 { return 9007199254740992 }
+  fun main: Number { return if big - base == 1 then 1 else 0 }
 }
 """
     assert _compile_and_run(tmp_path, entry) == 1
@@ -268,11 +268,11 @@ def test_int64_overflow_is_a_declared_refusal(tmp_path):
     Int64, so the program stops with the reason (exit 3), never wraps."""
     msg = ("error: arithmetic: an Int64 operation leaves [-2^63, 2^63); "
            "its result is no Int64 (the ring that wraps is Word64)")
-    for expr in ("Int64.max_value() + 1", "Int64.min_value() - 1",
-                 "Int64.two_to_62() * 2"):
+    for expr in ("Int64.max_value + 1", "Int64.min_value - 1",
+                 "Int64.two_to_62 * 2"):
         d = tmp_path / str(abs(hash(expr)))
         d.mkdir()
-        entry = ("place Entry {\n  fun main(): Number {\n"
+        entry = ("place Entry {\n  fun main: Number {\n"
                  f"    n := {expr}\n"
                  "    return if n > 0 then 1 else 2\n  }\n}\n")
         src = d / "Entry.yon"
@@ -286,10 +286,10 @@ def test_int64_overflow_is_a_declared_refusal(tmp_path):
 def test_int64_in_range_is_exact(tmp_path):
     entry = """\
 place Entry {
-  fun main(): Number {
-    a := if Int64.max_value() - 1 + 1 == Int64.max_value() then 1 else 0
-    b := if Int64.min_value() + 1 - 1 == Int64.min_value() then 10 else 0
-    mut c := if Int64.ipow_ok(2, 62) - 1 + Int64.ipow_ok(2, 62) == Int64.max_value() then 100 else 0
+  fun main: Number {
+    a := if Int64.max_value - 1 + 1 == Int64.max_value then 1 else 0
+    b := if Int64.min_value + 1 - 1 == Int64.min_value then 10 else 0
+    mut c := if Int64.ipow_ok(2, 62) - 1 + Int64.ipow_ok(2, 62) == Int64.max_value then 100 else 0
     return a + b + c
   }
 }
@@ -313,8 +313,8 @@ place Entry {
     mut c := if unwrap(wrap(x)) == x then a else 0
     return if f(0) == x then c else 0
   }
-  fun main(): Number {
-    return same(Int64.max_value()) + same(Int64.min_value()) * 10
+  fun main: Number {
+    return same(Int64.max_value) + same(Int64.min_value) * 10
          + same(9007199254740992 + 1) * 100
   }
 }
@@ -328,11 +328,11 @@ def test_an_integer_literal_past_2_53_is_exact(tmp_path):
     literal is Int64.MAX."""
     entry = """\
 place Entry {
-  fun odd(): Int64 { return 9007199254740993 }
-  fun top(): Int64 { return 9223372036854775807 }
-  fun main(): Number {
-    a := if Int64.is_odd(odd()) then 1 else 0
-    return if top() == Int64.max_value() then a + 10 else a
+  fun odd: Int64 { return 9007199254740993 }
+  fun top: Int64 { return 9223372036854775807 }
+  fun main: Number {
+    a := if Int64.is_odd(odd) then 1 else 0
+    return if top == Int64.max_value then a + 10 else a
   }
 }
 """
@@ -343,7 +343,7 @@ place Entry {
                    "does not fit an Int64, and the refusal names it (today it falls back "
                    "to a Number and the refusal is a type mismatch)")
 def test_an_integer_literal_past_int64_max_is_refused_by_its_range(tmp_path):
-    over = "place Entry {\n  fun m(): Int64 { return 9223372036854775808 }\n  fun main(): Number { return 0 }\n}\n"
+    over = "place Entry {\n  fun m: Int64 { return 9223372036854775808 }\n  fun main: Number { return 0 }\n}\n"
     rc, out = _compile(_project(tmp_path, over), tmp_path / "out")
     assert _clean_rejection(rc, out, "E2001", "9223372036854775808", "Int64"), out
 
@@ -351,9 +351,9 @@ def test_an_integer_literal_past_int64_max_is_refused_by_its_range(tmp_path):
 def test_int64_to_text_writes_its_exact_digits(tmp_path):
     entry = """\
 place Entry {
-  fun main(): Number {
-    _a := String.print(Int64.to_text(Int64.max_value()))
-    _b := String.print(Int64.to_text(Int64.min_value()))
+  fun main: Number {
+    _a := String.print(Int64.to_text(Int64.max_value))
+    _b := String.print(Int64.to_text(Int64.min_value))
     _c := String.print(Int64.to_text(9007199254740993))
     _d := String.print(Int64.to_text(0 - 42))
     return 0
@@ -376,7 +376,7 @@ place Entry {
   fun rhs(a: Int32, b: Int32): Int64 { return Int32.widen_i32_i64(a) + Int32.widen_i32_i64(b) }
   fun holds_law(a: Int32, b: Int32): Number { return if lhs(a, b) == rhs(a, b) then 1 else 0 }
   fun wrapped(a: Int32, b: Int32): Number { return if a + b < 0 then 1 else 0 }
-  fun main(): Number { return %s(2147483647, 1) }
+  fun main: Number { return %s(2147483647, 1) }
 }
 """
 
@@ -404,7 +404,7 @@ place Entry {
   fun __conto(x: Number): Number { return x + 2 }
   fun yon_rt_saldo(x: Number): Number { return x + 4 }
   fun a__b(x: Number): Number { return x + 8 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """
 
@@ -413,7 +413,7 @@ def _call_remote(tmp: Path, fn: str) -> int:
     (tmp / "ledger.yon").write_text(_LEDGER)
     (tmp / "client.yon").write_text(
         f"import ledger::{fn} from Ledger\n\n"
-        f"place Entry {{\n  fun main(): Number {{ return {fn}(100) }}\n}}\n")
+        f"place Entry {{\n  fun main: Number {{ return {fn}(100) }}\n}}\n")
     rc, out = _compile(tmp / "ledger.yon", tmp / "Ledger_srv", cwd=tmp)
     assert rc == 0, out
     rc, out = _compile(tmp / "client.yon", tmp / "client", cwd=tmp)
@@ -448,7 +448,7 @@ def test_reserved_prefix_names_are_exported(tmp_path, fn, expected):
 def test_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
     """A failure must be a typed value the program has to handle. Either the
     sentinel-producing program is rejected, or it no longer yields the sentinel."""
-    proj = _project(tmp_path, f"place Entry {{ fun main(): Number {{ return {expr} }} }}\n")
+    proj = _project(tmp_path, f"place Entry {{ fun main: Number {{ return {expr} }} }}\n")
     rc, out = _compile(proj, tmp_path / "out")
     if rc != 0:
         # refused: by its own reason, the operation that can fail
@@ -463,7 +463,7 @@ def test_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
 @pytest.mark.xfail(strict=True, reason="`internal` hides a place from outside its "
                    "Space, so matching on its arms from outside is refused")
 def test_internal_place_match_from_outside_rejected(tmp_path):
-    entry = "place Entry { fun main(): Number { return match A { A => 1, B => 2 } } }\n"
+    entry = "place Entry { fun main: Number { return match A { A => 1, B => 2 } } }\n"
     files = {"w/Topos.yon": "topos WTopos where {\n}\n",
              "w/Secret.yon": "internal place Secret { this > A :U B }\n"}
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Secret"]\nspaces  = ["w"]\n', files)
@@ -479,7 +479,7 @@ def test_subobject_with_incompatible_field_rejected(tmp_path):
     entry = """\
 place Entry {
   fun read(b: B): Number { return b.value }
-  fun main(): Number { a := .-> A { value "hi" }  return read(a) }
+  fun main: Number { a := .-> A { value "hi" }  return read(a) }
 }
 """
     files = {"w/Topos.yon": "topos WTopos where {\n}\n",
@@ -497,9 +497,9 @@ def test_escaping_closure_over_cell(tmp_path):
     otherwise it would read another activation's cell (exit 99)."""
     entry = """\
 place Entry {
-  fun mk(): Number -> Number { mut c := 10  c <- 20  return fun(y: Number) => y + c }
+  fun mk: Number -> Number { mut c := 10  c <- 20  return fun(y: Number) => y + c }
   fun user(f: Number -> Number): Number { mut d := 90  d <- 98  return f(1) }
-  fun main(): Number { f := mk()  return user(f) }
+  fun main: Number { f := mk  return user(f) }
 }
 """
     proj = _project(tmp_path, entry)
@@ -578,7 +578,7 @@ _CLOSED_BY_STRUCTURE = {"return_in_while", "assigned_after_the_return"}
 @pytest.mark.parametrize("form", sorted(_CELL_ESCAPES))
 def test_every_escape_route_of_a_cell_is_rejected(tmp_path, form):
     entry = (f"{_CELL_PLACES}place Entry {{\n  {_CELL_ESCAPES[form]}\n"
-             "  fun main(): Number { return 0 }\n}\n")
+             "  fun main: Number { return 0 }\n}\n")
     proj = _project(tmp_path, entry, '\n[world.W]\nobjects = ["Box", "P", "Q", "Bit"]\n')
     rc, out = _compile(proj, tmp_path / "out")
     if form in _CLOSED_BY_STRUCTURE:
@@ -592,9 +592,9 @@ def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
     """The cross-Space call is a wire: the argument leaves the process."""
     (tmp_path / "echo.yon").write_text(
         "place Entry {\n  fun use_remote(g: Number -> Number): Number { return g(1) }\n"
-        "  fun main(): Number { return 0 }\n}\n")
+        "  fun main: Number { return 0 }\n}\n")
     (tmp_path / "client.yon").write_text(
-        "import echo::use_remote from Echo\n\nplace Entry {\n  fun main(): Number {\n"
+        "import echo::use_remote from Echo\n\nplace Entry {\n  fun main: Number {\n"
         "    mut k := 10\n    k <- 20\n    return use_remote(fun(y: Number) => y + k)\n  }\n}\n")
     rc, out = _compile(tmp_path / "client.yon", tmp_path / "client", cwd=tmp_path)
     assert _clean_rejection(rc, out, 'E2001', 'crosses into another Space') and "crosses" in out, out
@@ -602,29 +602,31 @@ def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
 
 @pytest.mark.parametrize("body,expected", [
     # variant D: applied inside its own activation
-    ("fun mk(): Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  return g(1) }", 21),
+    ("fun mk: Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  return g(1) }", 21),
     # passed downward: the callee runs inside the owner's activation
     ("fun apply(g: Number -> Number): Number { return g(1) }\n"
-     "  fun mk(): Number { mut c := 10  c <- 20  return apply(fun(y: Number) => y + c) }", 21),
+     "  fun mk: Number { mut c := 10  c <- 20  return apply(fun(y: Number) => y + c) }", 21),
     # an immutable binding is captured by value: the closure is mobile
-    ("fun mk2(): Number -> Number { mut c := 20  return fun(y: Number) => y + c }\n"
-     "  fun mk(): Number { f := mk2()  return f(1) }", 21),
+    ("fun mk2: Number -> Number { mut c := 20  return fun(y: Number) => y + c }\n"
+     "  fun mk: Number { f := mk2  return f(1) }", 21),
     # ... also when that value was read out of a cell
-    ("fun mk2(): Number -> Number { mut c := 10  c <- 20  n := c + 0  return fun(y: Number) => y + n }\n"
-     "  fun mk(): Number { f := mk2()  return f(1) }", 21),
+    ("fun mk2: Number -> Number { mut c := 10  c <- 20  n := c + 0  return fun(y: Number) => y + n }\n"
+     "  fun mk: Number { f := mk2  return f(1) }", 21),
     # a cell READ is a value, and so is what the closure computes
-    ("fun mk(): Number { mut c := 10  c <- 20  return c }", 20),
-    ("fun mk(): Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  n := g(1)  return n }", 21),
+    ("fun mk: Number { mut c := 10  c <- 20  return c }", 20),
+    ("fun mk: Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  n := g(1)  return n }", 21),
     # a Space cell used inside its activation, or handed back to its owner
-    ("fun mk(): Number { mut h := Space.make(20)  g := fun(y: Number) => y + Space.get(h)  return g(1) }", 21),
+    ("fun mk: Number { mut h := Space.make(20)  g := fun(y: Number) => y + Space.get(h)  return g(1) }", 21),
     ("fun pass(k: Space): Space { return k }\n"
-     "  fun mk(): Number { mut h := Space.make(21)  h2 := pass(h)  return Space.get(h2) }", 21),
+     "  fun mk: Number { mut h := Space.make(21)  h2 := pass(h)  return Space.get(h2) }", 21),
     # what crosses the wire is the closure's value, a number
     ("fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  g := fun(y: Number) => y + c  "
      "_s := Wire.send(ch, g(1))  return Wire.recv(ch) }", 21),
 ])
 def test_mobile_uses_of_a_cell_are_untouched(tmp_path, body, expected):
-    entry = f"place Entry {{\n  {body}\n  fun main(): Number {{ return mk() }}\n}}\n"
+    call = "mk()" if "Wire." in body else "mk"
+    main = "fun main()" if "Wire." in body else "fun main"
+    entry = f"place Entry {{\n  {body}\n  {main}: Number {{ return {call} }}\n}}\n"
     assert _compile_and_run(tmp_path, entry) == expected
 
 
@@ -641,7 +643,7 @@ def test_bare_value_never_inhabits_a_subobject(tmp_path, arg, extra):
     required. (The predicate is a type, so a Boolean such as `n > 0` does not
     parse there.)"""
     entry = (f"place Entry {{\n  fun five(x: {{ n : Number where n = 5 }}): Number {{ return 0 }}\n"
-             f"{extra}  fun main(): Number {{ return five({arg}) }}\n}}\n")
+             f"{extra}  fun main: Number {{ return five({arg}) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
     assert _clean_rejection(rc, out, 'E2001', 'five: parameter x expects') and "five: parameter x expects" in out, out
 
@@ -654,13 +656,13 @@ place Entry {
     return if n < 0 then .-> DomainError { message "neg" } else n / 2
   }
   fun relay(n: Number) on error DomainError: Number { return half(n) }
-  fun main(): Number { return match relay(%s) { Number as v => 1, DomainError as e => 30 } }
+  fun main: Number { return match relay(%s) { Number as v => 1, DomainError as e => 30 } }
 }
 """
 
 
 @pytest.mark.parametrize("entry,expected", [
-    ("place Entry { fun main(): Number { return match Int64.div(5, 0) "
+    ("place Entry { fun main: Number { return match Int64.div(5, 0) "
      "{ Int64 as v => 1, DomainError as e => 30 } } }\n", 30),
     (_HALF % "0 - 4", 30),
     (_HALF % "8", 1),
@@ -678,9 +680,9 @@ def test_latent_effect_in_arrow_type(tmp_path):
     entry = """\
 place Entry {
   fun announce(n: Number): Number visits Output { _u := Output.print("hi")  return n }
-  fun mk(): Number -> Number visits Output { return fun(y: Number) => announce(y) }
+  fun mk: Number -> Number visits Output { return fun(y: Number) => announce(y) }
   fun apply(g: Number -> Number): Number { return g(41) }
-  fun main(): Number visits Output { return apply(mk()) + 1 }
+  fun main: Number visits Output { return apply(mk) + 1 }
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
@@ -697,7 +699,7 @@ import beta::pong from Beta
 
 place Entry {
   fun ping(n: Number): Number { return if n <= 0 then 0 else pong(n - 1) + 1 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """)
     (tmp_path / "beta.yon").write_text("""\
@@ -705,7 +707,7 @@ import alpha::ping from Alpha
 
 place Entry {
   fun pong(n: Number): Number { return if n <= 0 then 0 else ping(n - 1) + 1 }
-  fun main(): Number { return 0 }
+  fun main: Number { return 0 }
 }
 """)
     outs = [_compile(tmp_path / f"{n}.yon", tmp_path / f"{n.title()}_srv", cwd=tmp_path)
@@ -720,7 +722,7 @@ place Entry {
 def test_cell_read_in_type_index(tmp_path):
     entry = """\
 place Entry {
-  fun main(): Number {
+  fun main: Number {
     mut c := 5
     p := clear c
     c <- 6

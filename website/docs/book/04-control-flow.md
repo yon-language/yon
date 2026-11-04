@@ -8,7 +8,7 @@ sidebar_position: 4
 
 <!-- yon-gate: exit 42 -->
 ```yon
-fun main(): Number {
+fun main: Number {
   x := present
   mut acc := 0
   when x is present { acc <- 10 }

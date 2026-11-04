@@ -26,7 +26,7 @@ later, once per call, instead of once per source file.
 fun id<T>(x: T): T {
   return x
 }
-fun main(): Number {
+fun main: Number {
   return id(42)
 }
 ```
@@ -50,7 +50,7 @@ A function may leave several types blank, and they vary independently:
 fun first<A, B>(x: A, y: B): A {
   return x
 }
-fun main(): Number {
+fun main: Number {
   n := first(7, 99)         // A and B both Number
   t := first("hi", 5)       // A is Text, B is Number
   return n + String.length(t)     // 7 + 2 = 9

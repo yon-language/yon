@@ -43,7 +43,7 @@ fun on_query_fail(q: QueryError): Number {
   return handle(q)               // sub-error used where Error is expected
 }
 
-fun main(): Number {
+fun main: Number {
   q := .-> QueryError { message "duplicate key"  sqlstate 29 }
   return on_query_fail(q) + q.sqlstate    // 13 + 29 = 42
 }

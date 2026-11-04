@@ -1,4 +1,4 @@
 place Entry {
   fun ignored(s: A | B(Number)): Number { return 42 }
-  fun main(): Number { return 42 }
+  fun main: Number { return 42 }
 }

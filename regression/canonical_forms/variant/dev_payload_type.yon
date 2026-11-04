@@ -1,7 +1,7 @@
 place Sum { this > A :U B Number }
 place Entry {
-  fun wrong(): Sum { return "not a number" ↪ B }
-  fun main(): Number {
-    return match wrong() { A => 0, B as x => x }
+  fun wrong: Sum { return "not a number" ↪ B }
+  fun main: Number {
+    return match wrong { A => 0, B as x => x }
   }
 }

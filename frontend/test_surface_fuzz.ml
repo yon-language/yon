@@ -157,24 +157,24 @@ let cub_prelude =
 let gen_grammar () =
   let n = 1 + Random.int 5 in
   let body = String.concat "\n  " (List.init n (fun _ -> gen_stmt 3)) in
-  Printf.sprintf "%sfun main(): Number {\n  %s\n  return %s\n}"
+  Printf.sprintf "%sfun main: Number {\n  %s\n  return %s\n}"
     cub_prelude body (gen_expr 2)
 
 (* corpus of real-ish seeds to mutate (near the valid manifold, where crashes hide) *)
 let seeds = [|
-  "fun main(): Number {\n  x := 0\n  return x\n}";
-  "fun main(): Number {\n  mut s := 0\n  mut i := 0\n  while i < 5 do { s <- s + i  i <- i + 1 }\n  return s\n}";
-  "fun deposit_net(amount: Number): Number { return amount - amount / 20 }\nfun main(): Number {\n  d := List.cons(100, List.cons(60, List.empty(0)))\n  mut t := 0\n  for every x in d { t <- t + deposit_net(x) }\n  return t\n}";
-  "fun main(): Number {\n  iter 4 do { _ := 0 }\n  return 8\n}";
-  "internal fun k(x: Number): Number { return x * 1789 }\nfun main(): Number { return k(2) }";
-  "fun main(): Number {\n  g := HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
+  "fun main: Number {\n  x := 0\n  return x\n}";
+  "fun main: Number {\n  mut s := 0\n  mut i := 0\n  while i < 5 do { s <- s + i  i <- i + 1 }\n  return s\n}";
+  "fun deposit_net(amount: Number): Number { return amount - amount / 20 }\nfun main: Number {\n  d := List.cons(100, List.cons(60, List.empty(0)))\n  mut t := 0\n  for every x in d { t <- t + deposit_net(x) }\n  return t\n}";
+  "fun main: Number {\n  iter 4 do { _ := 0 }\n  return 8\n}";
+  "internal fun k(x: Number): Number { return x * 1789 }\nfun main: Number { return k(2) }";
+  "fun main: Number {\n  g := HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
   (* metonymic / cubical / generics seeds — near the new-syntax manifold *)
-  "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main(): Number {\n  b := succ <=> pred\n  return carry 10 along b\n}";
-  "fun main(): Number {\n  p := back (clear 5)\n  return p @ I0\n}";
-  "fun dbl(n: Number): Number { return n + n }\nfun main(): Number {\n  mut s := clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
-  "fun main(): Number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
-  "fun identity<T>(x: T): T { return x }\nfun main(): Number { return identity(7) }";
-  "fun unwrap(b: Box<number>): Number { return b.value }\nfun main(): Number { return 0 }";
+  "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main: Number {\n  b := succ <=> pred\n  return carry 10 along b\n}";
+  "fun main: Number {\n  p := back (clear 5)\n  return p @ I0\n}";
+  "fun dbl(n: Number): Number { return n + n }\nfun main: Number {\n  mut s := clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
+  "fun main: Number {\n  return match hit(base) { base => 42, loop => plam i => 42 }\n}";
+  "fun identity<T>(x: T): T { return x }\nfun main: Number { return identity(7) }";
+  "fun unwrap(b: Box<number>): Number { return b.value }\nfun main: Number { return 0 }";
 |]
 
 let rand_token () =

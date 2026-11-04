@@ -93,13 +93,13 @@ fun result_of(p: Parse): Number {
 }
 
 // ── oracle:  "2+3*4" = 2 + (3*4) = 14 ───────────────────────────────────────
-fun src(): String {
+fun src: String {
   return String.concat(
            String.concat(String.from_char(50), String.from_char(43)),
            String.concat(String.concat(String.from_char(51), String.from_char(42)),
                          String.from_char(52)))
 }
 
-fun main(): Number {
-  return result_of(parse_expr(lex(src()))) - 14
+fun main: Number {
+  return result_of(parse_expr(lex(src))) - 14
 }
