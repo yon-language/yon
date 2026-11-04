@@ -121,7 +121,7 @@ from the call sites.
 | `f(a, b)`, `mod::f(a)` | ✓ | Calls. **Nullary builtins are called with empty parens `()`**: `HashSet.empty()`, `XSet.empty()`, `Vec.empty()`, `XRelMap.empty()`. A few builtins instead take an explicit unit argument `(0)` (signature `[unit]`): `List.empty(0)`, `Time.now_ms(0)`, `Args.count(0)` |
 | `obj.field`, `x.f1.f2` | ✓ | Field access (chains left-associatively) |
 | `e.method(args).map(f).fold(0, g)` | ✓ | Method chaining: `recv.m(args)` ≡ `m(recv, args)` |
-| `a \|> f(args)` | ✓ | Pipe: passes `a` as the **first** argument of the call |
+| `a \|> f`, `a \|> f(args)`, `(a, b) \|> f` | ✓ | Pipe: passes `a` as the **first** argument of the call; a tuple spreads into the arguments. The call `f(a, b)` stays |
 | `if c then a else b` | ✓ | Conditional expression |
 | `fun(x: T, y) => e` | ✓ | Inline lambda (unannotated params are inferred) |
 | `move(s: P) => .-> Q {...} from P to Q` | ✓ | Inline move lambda (see the note below the table) |
@@ -165,23 +165,25 @@ classical twin:
 
 | Level | Operators | Associativity |
 |---|---|---|
-| 1 | `\|>` | left |
-| 2 | `=>` `=>?` | right |
-| 3 | `or` `\|\|` `\|\|?` | left |
-| 4 | `and` `&&` `&&?` | left |
-| 5 | `==` `!=` `<` `>` `<=` `>=` | left |
-| 6 | `\|` | left |
-| 7 | `\|?` | left |
-| 8 | `^` `^?` | left |
-| 9 | `&` `&?` | left |
-| 10 | `+` `-` | left |
-| 11 | `*` `/` `%` | left |
-| 12 | unary `-` | |
-| 13 | `not` `!` `!?` | |
-| 14 | `~` `~?` | |
+| 1 | `↔` | right |
+| 2 | `=>` `=>?` `→` | right |
+| 3 | `or` `\|\|` `\|\|?` `∨` | left |
+| 4 | `and` `&&` `&&?` `∧` | left |
+| 5 | `==` `!=` `≠` `<` `>` `<=` `>=` | left |
+| 6 | `@` | left |
+| 7 | `\|>` | left |
+| 8 | `\|` | left |
+| 9 | `\|?` | left |
+| 10 | `^` `^?` | left |
+| 11 | `&` `&?` | left |
+| 12 | `+` `-` | left |
+| 13 | `*` `/` `%` | left |
+| 14 | unary `-` | |
+| 15 | `not` `!` `!?` | |
+| 16 | `~` `~?` | |
 
-So `a &&? b == c` groups as `a &&? (b == c)`, and `x & y + 1` as
-`x & (y + 1)`.
+So `a &&? b == c` groups as `a &&? (b == c)`, `x & y + 1` as `x & (y + 1)`,
+`x + 1 \|> f` as `(x + 1) \|> f`, and `true \|> merid @ i` as `(true \|> merid) @ i`.
 
 **The four readings of `=>`.** The arrow `=>` is read by what stands before it,
 never by its operands, so the reading is never ambiguous:

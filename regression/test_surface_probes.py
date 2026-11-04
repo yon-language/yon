@@ -341,6 +341,46 @@ def test_a_pipe_into_a_name(tmp_path):
     assert _exit(tmp_path, src) == 42
 
 
+FUNS = ("fun inc(x: Number): Number { return x + 1 }\n"
+        "fun add(a: Number, b: Number): Number { return a + b }\n"
+        "fun add3(a: Number, b: Number, c: Number): Number { return a + b + c }\n")
+
+
+def test_arithmetic_binds_tighter_than_a_pipe(tmp_path):
+    src = "place Entry {\n" + FUNS + "fun main(): Number { return 40 + 1 |> inc }\n}\n"
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_pipe_binds_tighter_than_an_equality(tmp_path):
+    src = ("place Entry {\n" + FUNS +
+           "fun main(): Number { return if 1 |> inc == 2 |> inc then 1 else 42 }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_tuple_spreads_into_the_arguments_of_a_pipe(tmp_path):
+    src = ("place Entry {\n" + FUNS +
+           "fun main(): Number { return (40, 2) |> add }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_tuple_of_three_spreads_too(tmp_path):
+    src = ("place Entry {\n" + FUNS +
+           "fun main(): Number { return (39, 2, 1) |> add3 }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_call_with_arguments_stays(tmp_path):
+    src = "place Entry {\n" + FUNS + "fun main(): Number { return add(40, 2) }\n}\n"
+    assert _exit(tmp_path, src) == 42
+
+
+def test_the_path_application_takes_the_whole_pipe(tmp_path):
+    src = ("place Entry {\n"
+           "fun road(x: Number): Id(Number, x, x) { return clear x }\n"
+           "fun main(): Number { return 42 |> road @ I0 }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
 ALGEBRA = {
     "w/Topos.yon": "topos WTopos where {\n}\n",
     "w/Somma.yon": "place Somma is algebra {\n  operation add(a: Somma, b: Somma): Somma as \"+\"\n"

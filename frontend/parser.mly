@@ -52,6 +52,14 @@
       "law %s: a quantifier carries its type: write %s, then the statement"
       l (String.concat " " (List.map (fun (k, x) -> sym k ^ x ^ " : T") q) ^ ","))
 
+  (* The components of a tuple written in one pair of parentheses, which a pipe
+     spreads into the arguments: a pair written inside them stays a value. *)
+  let rec tuple_components (e : expr) : expr list =
+    match e with
+    | EPair (a, (EPair (_, _, l2) as rest), l1) when l1 = l2 -> a :: tuple_components rest
+    | EPair (a, b, _) -> [a; b]
+    | _ -> [e]
+
   let dot_call_expr obj fld args loc =
     if dot_is_module obj then ECall (obj ^ "__" ^ fld, args, loc)
     else ECall (fld, EVar (obj, loc) :: args, loc)
@@ -260,11 +268,15 @@
 %nonassoc CLAUSE_END
 %nonassoc ON_ERROR LAW IN COMMA ARROW DOT IDENT QIDENT VIEW REDUCTION PRODUCE
           MOVE MORPH_KW FUNCTOR FUN DOTARROW
-%left PIPEGT             (* pipe forward, left-assoc, prio bassa *)
-%right FATARROW FATARROWQ IFFQ
+/* From the weakest: <-> , -> , or, and, = and !=, @, |> , then the arithmetic. So
+   x + 1 |> f is (x + 1) |> f, and true |> merid @ i is (true |> merid) @ i. */
+%right IFFQ
+%right FATARROW FATARROWQ
 %left OR PIPEPIPE PIPEPIPEQ
 %left AND AMPAMP AMPAMPQ
 %left LT GT LEQ GEQ EQEQ NEQ
+%left ATSIGN              /* path application p @ i */
+%left PIPEGT             /* pipe forward */
 %nonassoc LRARROW        /* f <=> g = equivalence, non-associative */
 %left PIPE
 %left PIPEQ
@@ -277,10 +289,6 @@
 %nonassoc UNOT
 %nonassoc UTILDE
 %left THROUGH             /* p through f = ap(f, p), binds tight */
-%left ATSIGN              /* path application p @ i, binds tight */
-%nonassoc PREFIX_APP      /* metonymic prefixes (stay/back/span/carry) bind TIGHTER
-                             than @, so `back X @ I0` is always `(back X) @ I0` and
-                             never `back (X @ I0)` — deterministic, not menhir-arbitrary */
 
 
 /* Precedence for dangling-when. */
@@ -1516,14 +1524,21 @@ expr:
       EBinop (OpOr, ENot (e1, loc), e2, loc) }
   (* Pipe forward `a |> f(args)`. A post-parse syntactic transformation: pass
    * the LHS as the first argument of the RHS (which must be an ECall). *)
+  | e = expr ATSIGN I0
+    { EPathApp (e, DI0, mk_loc $startpos $endpos) }
+  | e = expr ATSIGN I1
+    { EPathApp (e, DI1, mk_loc $startpos $endpos) }
+  | e = expr ATSIGN id = IDENT
+    { EPathApp (e, DIVar id, mk_loc $startpos $endpos) }
   | a = expr PIPEGT b = expr
-    { match b with
+    { let lhs = tuple_components a in
+      match b with
       | ECall (name, args, _) ->
-          ECall (name, a :: args, mk_loc $startpos $endpos)
+          ECall (name, lhs @ args, mk_loc $startpos $endpos)
       | EVar (name, _) ->
-          ECall (name, [a], mk_loc $startpos $endpos)
+          ECall (name, lhs, mk_loc $startpos $endpos)
       | EField (EVar (obj, _), fld, _) when dot_is_module obj ->
-          dot_call_expr obj fld [a] (mk_loc $startpos $endpos)
+          dot_call_expr obj fld lhs (mk_loc $startpos $endpos)
       | _ -> failwith "[parser] pipe RHS must be a function call or a name"
     }
   | NOT e = expr %prec UNOT
@@ -1588,7 +1603,7 @@ expr:
  * `e.method(args)` itera su expr_atom, costruendo ECall(method, e :: args).
  * Tipico use: Sequence.from_list(l).map(f).filter(p).fold(0, g). *)
 chained_expr:
-  | e = expr_atom %prec CLAUSE_END              { e }
+  | e = expr_atom              { e }
   | recv = chained_expr DOT meth = IDENT LPAREN args = expr_list RPAREN
     { ECall (meth, recv :: args, mk_loc $startpos $endpos) }
   | recv = chained_expr DOT FOLD LPAREN args = expr_list RPAREN
@@ -1640,7 +1655,7 @@ expr_atom:
   (* Handle composition.
    * Syntax: `compose <h1> with <h2>` produces a composed handle.
    * Semantics: result(x) = h2(h1(x)). *)
-  | COMPOSE h1 = expr_atom WITH h2 = expr_atom %prec CLAUSE_END
+  | COMPOSE h1 = expr_atom WITH h2 = expr_atom
     { EComposeWith (h1, h2, mk_loc $startpos $endpos) }
   | HCOMP ty_name = IDENT LBRACKET
       sides = separated_list(COMMA, hcomp_side) RBRACKET base = hcomp_base
@@ -1682,7 +1697,7 @@ expr_atom:
      After CLEAR, a token that can start an atom continues it (greedy, as
      every prefix metonym): the bare form closes only when no atom follows
      (CLAUSE_END, see the precedence block). *)
-  | CLEAR e = expr_atom %prec PREFIX_APP
+  | CLEAR e = expr_atom
     { ERefl (e, mk_loc $startpos $endpos) }
   | CLEAR %prec CLAUSE_END
     { ERefl (EVar ("__plainly__", mk_loc $startpos $endpos), mk_loc $startpos $endpos) }
@@ -1691,13 +1706,21 @@ expr_atom:
        back p          = inv(p)
        carry x along e = transport(ua(e), x)   (e a bridge / equivalence)
      (`span` is retired: univalence is written `ua(e)` directly.) *)
-  | BACK e = expr_atom %prec PREFIX_APP
+  | BACK e = expr_atom
     { ECall ("inv", [e], mk_loc $startpos $endpos) }
-  | CARRY x = expr_atom ALONG e = expr_atom %prec PREFIX_APP
+  | CARRY x = expr_atom ALONG e = expr_atom
     { let l = mk_loc $startpos $endpos in
       ECall ("transport", [ECall ("ua", [e], l); x], l) }
   | PAIR LPAREN a = expr COMMA b = expr RPAREN
     { EPair (a, b, mk_loc $startpos $endpos) }
+  /* a tuple, a product: right-nested pairs of one location */
+  | LPAREN a = expr COMMA rest = separated_nonempty_list(COMMA, expr) RPAREN
+    { let l = mk_loc $startpos $endpos in
+      let rec nest = function
+        | [] -> assert false
+        | [x] -> x
+        | x :: more -> EPair (x, nest more, l) in
+      nest (a :: rest) }
   | FST LPAREN e = expr RPAREN
     { EFst (e, mk_loc $startpos $endpos) }
   | SND LPAREN e = expr RPAREN
@@ -1721,12 +1744,6 @@ expr_atom:
   | MATCH_KW x = expr_atom LBRACE branches = separated_list(COMMA, hit_branch) RBRACE
     { let l = mk_loc $startpos $endpos in
       EHITElim (EVar ("__match", l), branches, x, l) }
-  | e = expr_atom ATSIGN I0
-    { EPathApp (e, DI0, mk_loc $startpos $endpos) }
-  | e = expr_atom ATSIGN I1
-    { EPathApp (e, DI1, mk_loc $startpos $endpos) }
-  | e = expr_atom ATSIGN id = IDENT
-    { EPathApp (e, DIVar id, mk_loc $startpos $endpos) }
   | PLAM i = IDENT FATARROW body = expr
     { EPathAbs (i, body, mk_loc $startpos $endpos) }
   | HIT_KW LPAREN ctor = IDENT RPAREN
