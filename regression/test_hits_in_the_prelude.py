@@ -135,11 +135,20 @@ def test_a_map_out_of_a_pushout_that_tears_the_glue_is_refused(tmp_path):
 
 TO_CIRCLE = ("fun to_circle(s: Suspension<Boolean>): S1 {\n"
              "  return match s { north => S1.base, south => S1.base,\n"
-             "    merid as b => plam i => if b then loop @ i else S1.base }\n}\n")
+             "    merid as b => match b { true => plam i => loop @ i,\n"
+             "                            false => plam i => S1.base } }\n}\n")
 
 
 def test_suspension_of_boolean_maps_to_the_circle(tmp_path):
     assert _exit(tmp_path, _entry(TO_CIRCLE)) == 42
+
+
+def test_an_if_with_two_equal_ends_is_no_rule_of_the_kernel(tmp_path):
+    # the two ends of the cell are proved by a match on b, not by a rule on the if
+    src = _entry("fun to_circle(s: Suspension<Boolean>): S1 {\n"
+                 "  return match s { north => S1.base, south => S1.base,\n"
+                 "    merid as b => plam i => if b then loop @ i else S1.base }\n}\n")
+    _refused(tmp_path, src, None, "mismatch")
 
 
 def test_the_map_back_from_the_circle(tmp_path):

@@ -320,7 +320,7 @@ let is_ring_carrier (t : ty) : bool =
   | _ -> false
 
 (* What conversion adds to the normal form, up to which two paths are one: a path along
-   which nothing varies is the trivial path, and an `if` whose branches agree is either. *)
+   which nothing varies is the trivial path. *)
 let rec conversion_form (t : Ast.term) : Ast.term =
   let open Ast in
   let rec mentions i t =
@@ -332,10 +332,6 @@ let rec conversion_form (t : Ast.term) : Ast.term =
     | HITElim (brs, x) -> mentions i x || List.exists (fun (_, _, b) -> mentions i b) brs
     | _ -> false in
   match t with
-  | App (App (App (Var ("__if" | "__if_expr"), c), a), b) ->
-      let a' = conversion_form a and b' = conversion_form b in
-      if term_equal a' b' then a'
-      else App (App (App (Var "__if_expr", conversion_form c), a'), b')
   | App (a, b) -> App (conversion_form a, conversion_form b)
   | PLam (i, b) ->
       let b' = conversion_form b in
