@@ -73,8 +73,8 @@ let rec fmt_ty (t : ty) : string =
   | TyUniverse 0 -> "Type"
   | TyUniverse n -> Printf.sprintf "Type_%d" n
   | TyHeytInt n -> Printf.sprintf "heyt_int<%d>" n
-  | TyPi (x, a, b) -> Printf.sprintf "Pi(%s: %s). %s" x (fmt_ty a) (fmt_ty b)
-  | TySigma (x, a, b) -> Printf.sprintf "Sigma(%s: %s). %s" x (fmt_ty a) (fmt_ty b)
+  | TyPi (x, a, b) -> Printf.sprintf "\xce\xa0%s : %s, %s" x (fmt_ty a) (fmt_ty b)
+  | TySigma (x, a, b) -> Printf.sprintf "\xce\xa3%s : %s, %s" x (fmt_ty a) (fmt_ty b)
   | TyId (_, x, y) -> Printf.sprintf "%s = %s" (fmt_ty_term x) (fmt_ty_term y)
   | TyEl c -> Printf.sprintf "El(%s)" (fmt_ty_term c)
   | TyPathP ((i, a), x, y) ->

@@ -25,8 +25,8 @@ let () =
   check "ty: Type_0"       (Pretty.pp_ty (TyType 0)) "Type";
   check "ty: Type_n"       (Pretty.pp_ty (TyType 3)) "Type_3";
   check "ty: arrow"        (Pretty.pp_ty (TyArrow (a, b))) "(A -> B)";
-  check "ty: pi"           (Pretty.pp_ty (TyPi ("x", a, b))) "Pi(x : A). B";
-  check "ty: sigma"        (Pretty.pp_ty (TySigma ("x", a, b))) "Sigma(x : A). B";
+  check "ty: pi"           (Pretty.pp_ty (TyPi ("x", a, b))) "Πx : A, B";
+  check "ty: sigma"        (Pretty.pp_ty (TySigma ("x", a, b))) "Σx : A, B";
   check "ty: id"           (Pretty.pp_ty (TyId (a, Var "x", Var "y"))) "Id_A";
   check "ty: place"        (Pretty.pp_ty (TyPlace "Order")) "Order";
   check "ty: channel"      (Pretty.pp_ty (TyChannel (TyPlace "T"))) "Wire<T>";

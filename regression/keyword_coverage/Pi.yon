@@ -1,0 +1,5 @@
+// coverage: the word Pi for a dependent type, in ASCII
+place Entry {
+  fun f(p: Pi x : Number, Number): Number { return 0 }
+  fun main: Number { return 0 }
+}

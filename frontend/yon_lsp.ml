@@ -480,7 +480,7 @@ let abbreviations =
   [ ("mapsto", "\xe2\x86\xa6"); ("inj", "\xe2\x86\xaa");
     ("forall", "\xe2\x88\x80"); ("exists", "\xe2\x88\x83");
     ("and", "\xe2\x88\xa7"); ("or", "\xe2\x88\xa8");
-    ("to", "\xe2\x86\x92"); ("not", "\xc2\xac"); ("iff", "\xe2\x86\x94") ]
+    ("Pi", "\xce\xa0"); ("Sigma", "\xce\xa3"); ("to", "\xe2\x86\x92"); ("not", "\xc2\xac"); ("iff", "\xe2\x86\x94") ]
 
 (* The byte of a line at an LSP character: LSP counts UTF-16 units. *)
 let byte_of_character (line : string) (character : int) : int =

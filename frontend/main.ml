@@ -2279,7 +2279,7 @@ let test_universe_levels () =
     (Printf.printf "Status: FAIL\n"; false)
 
 (* Test 105: Pi and Sigma levels are the max of component levels.
- * Pi(x:Type_0). Type_1 should live in Type_2. *)
+ * Πx : Type_0, Type_1 should live in Type_2. *)
 let test_pi_sigma_levels () =
   Printf.printf "\n=== Test 105: Pi and Sigma universe levels (max rule) ===\n";
   let open Surface_ast in
@@ -2289,8 +2289,8 @@ let test_pi_sigma_levels () =
   let l_sig = Tycheck.level_of_type sig_t in
   let ok1 = (l_pi = 2) in
   let ok2 = (l_sig = 3) in
-  Printf.printf "  level(Pi(x:Type_0). Type_1) = %d (expected 2): %b\n" l_pi ok1;
-  Printf.printf "  level(Sigma(x:Type_2). Type_0) = %d (expected 3): %b\n" l_sig ok2;
+  Printf.printf "  level(Πx : Type_0, Type_1) = %d (expected 2): %b\n" l_pi ok1;
+  Printf.printf "  level(Σx : Type_2, Type_0) = %d (expected 3): %b\n" l_sig ok2;
   if ok1 && ok2 then
     (Printf.printf "Status: PASS — Pi/Sigma level = max(level(A), level(B))\n"; true)
   else
@@ -2341,10 +2341,10 @@ let test_sigma_projections () =
     (Printf.printf "Status: FAIL\n"; false)
 
 (* Test 110: Pi type (dependent function) accepted in surface signature.
- * Verifies that the parser accepts `Pi(x : Type). T` as a type. *)
+ * Verifies that the parser accepts `Πx : Type, T` as a type. *)
 let test_pi_type_parse () =
   let src = {|
-    fun applied_at(f: Pi(x : Type). Number, t: Type): Number {
+    fun applied_at(f: Πx : Type, Number, t: Type): Number {
       return 0
     }
   |} in
@@ -2352,7 +2352,7 @@ let test_pi_type_parse () =
   match parse_string src with
   | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
   | Ok _prog ->
-      Printf.printf "  fun applied_at(f: Pi(x:Type). number, t: Type): Number parsed\n";
+      Printf.printf "  fun applied_at(f: Πx : Type, number, t: Type): Number parsed\n";
       Printf.printf "Status: PASS — Pi-type syntax operational\n"; true
 
 (* Test 113: Typeclass-style dispatch via place + reduction (no test).
@@ -3170,7 +3170,7 @@ let test_exponentials () =
   in
   match exp_ty with
   | TyPi ("_", a, b) when a = TyPrim "number" && b = TyPrim "text" ->
-      Printf.printf "  text^number := Pi(_:Number). text\n";
+      Printf.printf "  text^number := Π_ : Number, text\n";
       Printf.printf "  function-space internal to topos via TyPi\n";
       Printf.printf "Status: PASS\n"; true
   | _ -> Printf.printf "FAIL\n"; false

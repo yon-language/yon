@@ -406,6 +406,8 @@ rule raw_token = parse
      ≠ ∧ ∨ → ¬ is the Yon operator of the same meaning; a statement is a
      proposition, in Omega, so ∧ ∨ → ¬ are the Heyting connectives. ↔ is the
      conjunction of the two implications; ∀ ∃ open a statement. *)
+  | "\xce\xa0"  { PI }      (* Π *)
+  | "\xce\xa3"  { SIGMA }   (* Σ *)
   | "\xe2\x88\x80"  { statement := Variable; FORALL }   (* ∀ *)
   | "\xe2\x88\x83"  { statement := Variable; EXISTS }   (* ∃ *)
   | "\xe2\x89\xa0"  { NEQ }                             (* ≠ *)
@@ -455,6 +457,7 @@ and string_lit buf = parse
   let owner = ref None
   let in_clause = ref false
   let type_follows = ref false
+  let binder : int option ref = ref None
   let previous = ref EOF
   let previous_previous = ref EOF
   let previous_line = ref 0
@@ -489,7 +492,7 @@ and string_lit buf = parse
      | Some l when l == lexbuf -> ()
      | _ ->
          owner := Some lexbuf;
-         in_clause := false; type_follows := false;
+         in_clause := false; type_follows := false; binder := None;
          previous := EOF; previous_previous := EOF;
          held := []; lexed_to := Lexing.dummy_pos);
     let virtual_token v =
@@ -512,7 +515,11 @@ and string_lit buf = parse
       let finish t =
         (match t with
          | COLON | WHERE -> type_follows := true
-         | DOT when !previous = RPAREN -> type_follows := true
+         (* the comma after the binder of a dependent type: what follows is its body *)
+         | PI | SIGMA -> binder := Some 0
+         | LPAREN | LT when !binder <> None -> binder := Option.map succ !binder
+         | RPAREN | GT when !binder <> None -> binder := Option.map pred !binder
+         | COMMA when !binder = Some 0 -> binder := None; type_follows := true
          | _ -> ());
         previous_previous := !previous;
         previous := t; previous_line := line; t in

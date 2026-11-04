@@ -10,7 +10,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 `python regression/test_syntax_triangle.py`.
 
 - lexer keywords: **109**
-- corpus files: **356**
+- corpus files: **358**
 - CodeWindows: **23**  (project **11**, single-file **12**)
 - prose `.yon` blocks marked fragment (compiled, counted): **43**
 - allowlisted reserved/kernel tokens: **8**
@@ -51,7 +51,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `forever` | `FOREVER` | 1 | yes | exercised |
 | `from` | `FROM` | 37 | yes | exercised |
 | `fst` | `FST` | 7 | yes | exercised |
-| `fun` | `FUN` | 368 | yes | exercised |
+| `fun` | `FUN` | 372 | yes | exercised |
 | `functor` | `FUNCTOR` | 9 | yes | exercised |
 | `geomorph` | `GEOM_MORPHISM` | 5 | yes | exercised |
 | `given` | `GIVEN` | 0 | yes | **UNCOVERED** |
@@ -86,7 +86,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `over` | `OVER` | 2 | yes | exercised |
 | `pair` | `PAIR` | 8 | yes | exercised |
 | `parallel` | `PARALLEL` | 1 | yes | exercised |
-| `place` | `PLACE` | 308 | yes | exercised |
+| `place` | `PLACE` | 310 | yes | exercised |
 | `plam` | `PLAM` | 0 | yes | allowlisted |
 | `present` | `PRESENT` | 3 | yes | exercised |
 | `produce` | `PRODUCE` | 15 | yes | exercised |
@@ -100,7 +100,7 @@ separate gate, `regression/test_canonical_forms.py`, projected to
 | `repeat` | `REPEAT` | 2 | yes | exercised |
 | `requires` | `REQUIRES` | 1 | yes | exercised |
 | `resolves` | `RESOLVES` | 1 | yes | exercised |
-| `return` | `RETURN` | 358 | yes | exercised |
+| `return` | `RETURN` | 362 | yes | exercised |
 | `scope` | `SCOPE` | 2 | yes | exercised |
 | `sequence` | `SEQUENCE` | 1 | yes | exercised |
 | `share` | `SHARE` | 1 | yes | exercised |

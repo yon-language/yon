@@ -169,7 +169,7 @@ let () =
   check "J (Martin-Lof) types the generic path-induction witness (typed O6 shape)"
     (Core_check.check_closed j_witness j_witness_ty);
 
-  check "no bogus inhabitant of Pi(A:U). El A"
+  check "no bogus inhabitant of ΠA : U, El A"
     (not (Core_check.check_closed
        (Lam ("A", u0, Var "A"))
        (TyPi ("A", u0, el "A"))));

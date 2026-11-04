@@ -1077,9 +1077,13 @@ type_atom:
     { TyUniverse 0 }
   | n = TYPE_LEVEL
     { TyUniverse n }
-  | PI LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
+  | PI LPAREN
+    { failwith "Pi(x: A). B is gone: a dependent function is written \xce\xa0x : A, B" }
+  | SIGMA LPAREN
+    { failwith "Sigma(x: A). B is gone: a dependent pair is written \xce\xa3x : A, B" }
+  | PI x = IDENT COLON a = type_expr COMMA b = type_expr
     { TyPi (x, a, b) }
-  | SIGMA LPAREN x = IDENT COLON a = type_expr RPAREN DOT b = type_expr
+  | SIGMA x = IDENT COLON a = type_expr COMMA b = type_expr
     { TySigma (x, a, b) }
   (* the old forms *)
   | ID LPAREN type_expr COMMA expr COMMA expr RPAREN

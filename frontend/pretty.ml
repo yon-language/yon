@@ -14,9 +14,9 @@ let rec pp_ty t =
   | TyType n -> Printf.sprintf "Type_%d" n
   | TyArrow (a, b) -> Printf.sprintf "(%s -> %s)" (pp_ty a) (pp_ty b)
   | TyPi (x, a, b) ->
-      Printf.sprintf "Pi(%s : %s). %s" x (pp_ty a) (pp_ty b)
+      Printf.sprintf "\xce\xa0%s : %s, %s" x (pp_ty a) (pp_ty b)
   | TySigma (x, a, b) ->
-      Printf.sprintf "Sigma(%s : %s). %s" x (pp_ty a) (pp_ty b)
+      Printf.sprintf "\xce\xa3%s : %s, %s" x (pp_ty a) (pp_ty b)
   | TyId (a, _, _) ->
       Printf.sprintf "Id_%s" (pp_ty a)
   | TyPlace n -> n

@@ -1,10 +1,10 @@
 place Entry {
-// Micro-example: the HoTT pair surface. `Sigma(x: A). B` is the
+// Micro-example: the HoTT pair surface. `Σx : A, B` is the
 // dependent pair type (lowered to the honest two-field struct);
 // `pair`/`fst`/`snd` are its constructor and projections.
 // (`Type` in parameter position and `refl` path values do not lower
 // in these positions today.)
-fun takes(p: Sigma(x: Number). Number): Number {
+fun takes(p: Σx : Number, Number): Number {
   return fst(p) + snd(p)
 }
 fun proj_sum(a: Number, b: Number): Number {

@@ -89,8 +89,8 @@ def test_sigma_computed_codomain(tmp_path):
     matches the concrete Sigma it computes to."""
     src = """
 fun Fam(x: Number): Type_0 { return Number }
-fun viaEl(p: Sigma(x: Number). El(Fam(x))): Number { return 0 }
-fun direct(p: Sigma(x: Number). Number): Number { return 0 }
+fun viaEl(p: Σx : Number, El(Fam(x))): Number { return 0 }
+fun direct(p: Σx : Number, Number): Number { return 0 }
 fun main: Number { return 0 }
 """
     mlir = _emit(src, tmp_path)

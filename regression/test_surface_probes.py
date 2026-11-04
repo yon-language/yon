@@ -541,6 +541,21 @@ def test_hit_elim_on_the_surface_is_refused_and_match_shown(tmp_path):
              "fun main: Number { return 0 }\n}\n", "E1001", "written match x")
 
 
+def test_a_dependent_type_is_written_with_its_symbol_or_its_word(tmp_path):
+    for i, t in enumerate(("Σx : Number, Number", "Sigma x : Number, Number",
+                           "Πx : Number, Number", "Pi x : Number, Number")):
+        src = ("place Entry {\nfun f(p: " + t + ", k: Number): Number { return k }\n"
+               "fun main: Number { return 42 }\n}\n")
+        (tmp_path / str(i)).mkdir()
+        assert _exit(tmp_path / str(i), src) == 42
+
+
+def test_the_body_of_a_dependent_type_may_be_a_path(tmp_path):
+    src = ("place Entry {\nfun f(p: Πx : Number, x = x): Number { return 42 }\n"
+           "fun main: Number { return 42 }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
 def test_plam_is_refused_and_walk_shown(tmp_path):
     src = ("place Entry {\nfun main: Number {\n"
            "  return match S1.base { base => 42, loop => plam i => 42 }\n}\n}\n")

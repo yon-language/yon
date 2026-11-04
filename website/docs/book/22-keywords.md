@@ -278,7 +278,7 @@ The constraint of the `topos ... where { }` block, and of the comprehension `{ x
 place Account { balance Number }
 // Entry.yon
 place Entry {
-  fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). x = y }): Number { return 0 }
+  fun takes_sub(s: { a : Account where Πx : Account, Πy : Account, x = y }): Number { return 0 }
   fun main: Number { return 0 }
 }`}
 </CodeWindow>
@@ -864,11 +864,11 @@ The boolean literal, in Omega.
 
 #### `Pi`
 
-The dependent product: `Pi(x: A). B` is the type of dependent functions. As a comprehension fibre, a Pi chain into `Id` is a mere proposition.
+The dependent product: `Πx : A, B` (in ASCII `Pi x : A, B`) is the type of dependent functions. As a comprehension fibre, a Pi chain into `Id` is a mere proposition.
 
 #### `Sigma`
 
-The dependent sum: `Sigma(x: A). B` is the type of dependent pairs, lowered to the honest two-field struct.
+The dependent sum: `Σx : A, B` (in ASCII `Sigma x : A, B`) is the type of dependent pairs, lowered to the honest two-field struct.
 
 #### `Id`
 
@@ -889,7 +889,7 @@ Second projection of the pair.
 <CodeWindow file="kw_hott.yon"
             run="yonc kw_hott.yon -o hott && ./hott; echo $?"
             out={["42"]}>
-{`fun takes(p: Sigma(x: Number). Number): Number {
+{`fun takes(p: Σx : Number, Number): Number {
   return fst(p) + snd(p)
 }
 fun proj_sum(a: Number, b: Number): Number {

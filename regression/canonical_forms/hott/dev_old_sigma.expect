@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: Σx : A, B
+note: |
+  A dependent type is written Σx : A, B; the round parens were no product.

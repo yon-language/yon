@@ -38,19 +38,19 @@ let () =
   check "TyPlace / TyPlace: no term, untouched"
     (s "x" (Var "a") (TyPlace "S1") = TyPlace "S1");
 
-  (* (4) TyPi binder SHADOWS: Pi(x:A). Id_A(x,y) [x := a] leaves the body alone *)
-  check "TyPi shadow: Pi(x:A).Id(x,y) [x := a] keeps body's x"
+  (* (4) TyPi binder SHADOWS: Πx : A, Id_A(x,y) [x := a] leaves the body alone *)
+  check "TyPi shadow: Πx : A, Id(x,y) [x := a] keeps body's x"
     (match s "x" (Var "a") (TyPi ("x", a, TyId (a, Var "x", Var "y"))) with
      | TyPi ("x", _, TyId (_, Var "x", Var "y")) -> true | _ -> false);
 
-  (* (5) TyPi NON-shadow: Pi(y:A). Id_A(x,y) [x := a] substitutes into codomain *)
-  check "TyPi non-shadow: Pi(y:A).Id(x,y) [x := a]  =  Pi(y:A).Id(a,y)"
+  (* (5) TyPi NON-shadow: Πy : A, Id_A(x,y) [x := a] substitutes into codomain *)
+  check "TyPi non-shadow: Πy : A, Id(x,y) [x := a]  =  Πy : A, Id(a,y)"
     (match s "x" (Var "a") (TyPi ("y", a, TyId (a, Var "x", Var "y"))) with
      | TyPi ("y", _, TyId (_, Var "a", Var "y")) -> true | _ -> false);
 
-  (* (6) CAPTURE-AVOIDANCE: Pi(y:A). Id_A(x,y) [x := y] must rename the binder,
+  (* (6) CAPTURE-AVOIDANCE: Πy : A, Id_A(x,y) [x := y] must rename the binder,
      so the substituted (free) y is NOT captured. Expect Pi(y':A).Id(y, y'). *)
-  check "TyPi capture: Pi(y:A).Id(x,y) [x := y] renames binder (no capture)"
+  check "TyPi capture: Πy : A, Id(x,y) [x := y] renames binder (no capture)"
     (match s "x" (Var "y") (TyPi ("y", a, TyId (a, Var "x", Var "y"))) with
      | TyPi (y', _, TyId (_, Var "y", Var z)) -> y' <> "y" && z = y'
      | _ -> false);

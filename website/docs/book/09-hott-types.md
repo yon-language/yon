@@ -7,8 +7,8 @@ sidebar_position: 9
 # Types from HoTT
 
 Yon's type system has a homotopy-type-theoretic layer: universes (`Type`,
-`Type_0`, `Type_1`, …), dependent functions and pairs (`Pi(x: A). B`,
-`Sigma(x: A). B`), and the identity type, written `x = y`, with the carrier
+`Type_0`, `Type_1`, …), dependent functions and pairs (`Πx : A, B`,
+`Σx : A, B`), and the identity type, written `x = y`, with the carrier
 inferred from the endpoints, with its introduction and eliminator.
 
 <!-- yon-gate: fragment -->
@@ -154,7 +154,7 @@ place Account { v Number }
 /* The comprehension type: the subobject of Account carved out by the
  * (here, contractibility-flavoured) fibre. Declaring it type-checks;
  * the coercion runs {a : A where P} <: A (forgetful mono). */
-fun takes_sub(s: { a : Account where Pi(x: Account). Pi(y: Account). x = y }): Number {
+fun takes_sub(s: { a : Account where Πx : Account, Πy : Account, x = y }): Number {
   return 7
 }
 ```

@@ -46,7 +46,7 @@ def test_a1_dependent_types_certified(tmp_path):
     """El(Fam x) is certified by the kernel checker, not skipped."""
     src = """
 fun Fam(x: Number): Type_0 { return Number }
-fun takes(p: Sigma(x: Number). El(Fam(x))): Number { return 0 }
+fun takes(p: Σx : Number, El(Fam(x))): Number { return 0 }
 fun main: Number { return 0 }
 """
     r = _run(src, tmp_path, core_wf=True)

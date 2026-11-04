@@ -2,7 +2,7 @@
 (* Copyright (c) 2026 Antonio Mennillo <antoniomennillo87@gmail.com> *)
 (* test_o6.ml — oracle: the embedding/comprehension witness of the classifier
  * theorem of Syn(Yon). For an embedding m : B -> A, with image
- * predicate P(x) := Sigma(b:B). Id(m b, x), the comprehension {x:A | P} is
+ * predicate P(x) := Σb : B, Id(m b, x), the comprehension {x:A | P} is
  * isomorphic to B:
  *     fwd : B -> {x:A | P},   fwd b      = (m b, (b, refl(m b)))
  *     bwd : {x:A | P} -> B,   bwd (x,(b,p)) = b            (= fst o snd)

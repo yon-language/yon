@@ -100,7 +100,7 @@ Equality between values is `==`. There is no `becomes` keyword.
 | `T -> U` | ✓ | Function type, right-associative |
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
-| `Pi(x: A). B`, `Sigma(x: A). B` | ✓ | Dependent function / pair types |
+| `Πx : A, B`, `Σx : A, B` (ASCII `Pi x : A, B`, `Sigma x : A, B`) | ✓ | Dependent function / pair types |
 | `x = y` | ✓ | Identity (path) type between terms `x`, `y`; the carrier is read off the endpoints |
 | `{ x : A where P }` | ✓ | **Comprehension**: the subobject of `A` carved out by the fibre `P` (a Σ whose first projection is monic when `P` is a mere proposition) |
 | `move from W1 to W2` | ✓ | Handle type of a move from `W1` to `W2` |

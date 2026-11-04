@@ -1,5 +1,5 @@
 // eta-Sigma: pair(fst p, snd p) = p, proved IN Yon (surjective pairing)
 place Entry {
-  fun eta_sigma(p: Sigma(x: Number). Number): pair(fst(p), snd(p)) = p { return refl(p) }
+  fun eta_sigma(p: Σx : Number, Number): pair(fst(p), snd(p)) = p { return refl(p) }
   fun main: Number { return 0 }
 }
