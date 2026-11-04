@@ -7025,15 +7025,20 @@ static uint8_t  cap_registry_used[YON_CAP_REGISTRY_CAP];
 
 double yon_rt_cap_grant(double name_hash_d) {
     uint32_t h = (uint32_t)name_hash_d;
+    /* a token is held at most once: a revoke leaves a hole before it, so the
+       whole registry is read before a free entry is taken */
+    uint32_t free_entry = YON_CAP_REGISTRY_CAP;
     for (uint32_t i = 0; i < YON_CAP_REGISTRY_CAP; i++) {
-        if (!cap_registry_used[i]) {
-            cap_registry_hashes[i] = h;
-            cap_registry_used[i] = 1;
-            return (double)i;
+        if (cap_registry_used[i]) {
+            if (cap_registry_hashes[i] == h) return (double)i;
+        } else if (free_entry == YON_CAP_REGISTRY_CAP) {
+            free_entry = i;
         }
-        if (cap_registry_hashes[i] == h) return (double)i;
     }
-    return -1.0; /* registry full */
+    if (free_entry == YON_CAP_REGISTRY_CAP) return -1.0; /* registry full */
+    cap_registry_hashes[free_entry] = h;
+    cap_registry_used[free_entry] = 1;
+    return (double)free_entry;
 }
 
 double yon_rt_cap_check(double name_hash_d) {
