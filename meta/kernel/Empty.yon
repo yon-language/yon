@@ -1,0 +1,2 @@
+/* Empty — no point: its only arm needs a point of itself. */
+place Empty { this > nessuno Empty }

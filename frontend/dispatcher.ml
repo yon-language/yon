@@ -293,6 +293,13 @@ let rec arith_of_ast (t : Ast.term) : Surface_ast.expr option =
    point or a path). A code written `C(base)` or `C(loop @ i)` and the code
    the checker builds from the constructor are then the same term. *)
 let resolve_points (env : Tyenv.env) (e : expr) : expr =
+  (* an arm named through its place is that arm *)
+  let e = Method_sugar.map_expr (function
+      | EField (EVar (c, _), arm, l)
+        when (match Tyenv.lookup_named_sum env c with
+            | Some vs -> List.exists (fun v -> v.v_name = arm) vs
+            | None -> false) -> Some (EVar (arm, l))
+      | _ -> None) e in
   let is_point x =
     Tyenv.lookup_var env x = None
     && ((match Tyenv.named_sum_of_ctor env x with
@@ -389,12 +396,39 @@ let ty_term_equal ?(carrier : ty option)
                             List.map (fun (n, b) -> (n, arms_as_constructors env b))
                               (certified_deltas env) } in
              let c1 = arms_as_constructors env c1 and c2 = arms_as_constructors env c2 in
-             (* the normal form goes under the constructors and the stuck applications *)
+             (* the normal form goes under the constructors; a recursive fun on a term that
+                does not yet choose a branch stays a call, the neutral form of its proofs *)
+             let rec spine t acc = match t with
+               | Ast.App (f, a) -> spine f (a :: acc) | h -> (h, acc) in
+             let rec is_stuck = function
+               | Ast.HITElim (_, x) -> (match x with Ast.HITConstr _ -> false | _ -> true)
+               | Ast.App (a, _) -> is_stuck a
+               | _ -> false in
              let rec deep t =
-               match Reduce.normalize dctx t with
-               | Ast.HITConstr (c, args) -> Ast.HITConstr (c, List.map deep args)
-               | Ast.App (a, b) -> Ast.App (deep_head a, deep b)
-               | t -> t
+               match spine t [] with
+               | (Ast.Var f as h), (_ :: _ as args) when List.mem_assoc f dctx.Reduce.deltas ->
+                   let args' = List.map deep args in
+                   let call = List.fold_left (fun a b -> Ast.App (a, b)) h args' in
+                   (* one unfolding, with no other fun open: this fun's own elimination decides *)
+                   let none = { dctx with Reduce.deltas = [] } in
+                   let unfolded = List.fold_left (fun a b -> Ast.App (a, b))
+                       (List.assoc f dctx.Reduce.deltas) args' in
+                   let r = Reduce.normalize none unfolded in
+                   let rec settle r = match r with
+                     | Ast.HITElim (brs, x) when is_stuck r ->
+                         (match deep x with
+                          | Ast.HITConstr _ as x' -> settle (Reduce.normalize none (Ast.HITElim (brs, x')))
+                          | _ -> None)
+                     | r -> Some r in
+                   (match settle r with
+                    | None -> call
+                    | Some r' -> if Ast.term_equal r' call then call else deep r')
+               | _ ->
+                   (match Reduce.normalize dctx t with
+                    | Ast.HITConstr (c, args) -> Ast.HITConstr (c, List.map deep args)
+                    | Ast.App (a, b) -> Ast.App (deep_head a, deep b)
+                    | Ast.Refl b -> Ast.Refl (deep b)
+                    | t -> t)
              and deep_head t =
                match t with
                | Ast.App (a, b) -> Ast.App (deep_head a, deep b)
@@ -412,6 +446,18 @@ let ty_term_equal ?(carrier : ty option)
                      | _ -> false)
                 | _ -> false)
          | _ -> false)
+
+(* The name of the type a term computes to, if it computes to one. *)
+let code_of_term (env : Tyenv.env) (e : expr) : string option =
+  match Desugar.desugar_expr_pure env (resolve_points env e) with
+  | None -> None
+  | Some c ->
+      let dctx = { Reduce.empty_ctx with Reduce.deltas =
+                     List.map (fun (n, b) -> (n, arms_as_constructors env b))
+                       (certified_deltas env) } in
+      (match conversion_form (Reduce.normalize dctx (arms_as_constructors env c)) with
+       | Ast.Var n -> Some n
+       | _ -> None)
 
 let rec type_equal
     (env : Tyenv.env)

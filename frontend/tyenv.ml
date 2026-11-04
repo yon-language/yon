@@ -251,6 +251,7 @@ let impure_funs : (string, unit) Hashtbl.t = Hashtbl.create 64
 let rec is_pure_expr (env : env) (e : expr) : bool =
   match e with
   | ELit _ | EVar _ -> true
+  | ELam (_, body, _) -> is_pure_expr env body
   | EField (e1, _, _) | EParen (e1, _) | EFst (e1, _) | ESnd (e1, _)
   | ENot (e1, _) | ERefl (e1, _) | EPathAbs (_, e1, _) | EPathApp (e1, _, _) ->
       is_pure_expr env e1
@@ -285,7 +286,7 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
       && List.for_all (fun (_, _, body) -> is_pure_expr env body) branches
   | ENew _ | ENewIn _ | EIn _ | EAll _
   | EMoveLam _ | EReductionLam _ | EMorphLam _ | EFunctorLam _ | EViewLam _
-  | ELam _ | EPullback _ | EPushout _ | EPullbackVal _ -> false
+  | EPullback _ | EPushout _ | EPullbackVal _ -> false
   | _ -> false
 
 (* Recognize the terminal object 1: a `TyUser p` whose place has no data

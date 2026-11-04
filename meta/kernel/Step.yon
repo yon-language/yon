@@ -1,0 +1,28 @@
+/* Step — one step of reduction, as a family in fibred form: a place and its projections src and
+ * tgt to the terms. A step from t to u is a d with d ↦ src = t and d ↦ tgt = u. */
+place Step {
+  this > ifTrue Term Term :U ifFalse Term Term :U ifSame Term Term
+      :U inC Step Term Term :U inU Term Step Term :U inV Term Term Step
+
+  fun src(d: Step): Term {
+    return match d {
+      ifTrue as (u, v) => (yes, u, v) ↪ ite,
+      ifFalse as (u, v) => (no, u, v) ↪ ite,
+      ifSame as (c, u) => (c, u, u) ↪ ite,
+      inC as (e, u, v) => (src(e), u, v) ↪ ite,
+      inU as (c, e, v) => (c, src(e), v) ↪ ite,
+      inV as (c, u, e) => (c, u, src(e)) ↪ ite
+    }
+  }
+
+  fun tgt(d: Step): Term {
+    return match d {
+      ifTrue as (u, v) => u,
+      ifFalse as (u, v) => v,
+      ifSame as (c, u) => u,
+      inC as (e, u, v) => (tgt(e), u, v) ↪ ite,
+      inU as (c, e, v) => (c, tgt(e), v) ↪ ite,
+      inV as (c, u, e) => (c, u, tgt(e)) ↪ ite
+    }
+  }
+}

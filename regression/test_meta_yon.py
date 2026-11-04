@@ -156,3 +156,21 @@ def test_a_normal_project_keeps_what_a_proof_refuses(tmp_path):
         "  fun main: Number { return 0 }\n}\n")
     r = _compile(proj, tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _broken(tmp_path, file, old, new):
+    proj = tmp_path / "meta"
+    shutil.copytree(META, proj)
+    p = proj / "kernel" / file
+    text = p.read_text()
+    assert old in text
+    p.write_text(text.replace(old, new, 1))
+    r = _compile(proj, tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out, out
+    return out
+
+
+def test_different_arms_are_distinct(tmp_path):
+    _broken(tmp_path, "Proofs.yon", "fun absurd(p: true = false): Empty",
+            "fun absurd(p: true = true): Empty")

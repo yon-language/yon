@@ -21,7 +21,7 @@ Every theorem is a test of the gate: if the compiler refuses the proof, the gate
 
 ## The rules of meta-Yon
 
-The compiler verifies them on the project `meta/`:
+The compiler verifies them on the project `meta/`, which declares `kind = "proof"` in `[package]`:
 
 - every proof fun passes the termination check (the size-change gate of `frontend/sct.ml`), and one
   that does not is refused;
@@ -34,16 +34,14 @@ The compiler verifies them on the project `meta/`:
 |---|---|
 | Inductive terms: a place with arms, recursive, payloads | present |
 | The type of a path, `x = y`, as the statement of a theorem | present |
-| `clear` as a proof where both ends compute to one normal form | present in a `return`; not in a branch of a `match` on a Boolean |
+| `clear` as a proof where both ends compute to one normal form | present, also in a branch of a `match` |
 | Dependent elimination: a `match` whose expected type is the motive, the arm substituted per branch | present for places with arms |
-| Term parameters of a place, by name of a fun | present; a value as an argument is not |
-| Reduction of a fun defined by `match` on an arm, inside the kernel's conversion | absent |
-| Indexed families: an arm whose result fixes the indices of the family | absent |
-| A type-valued fun whose result is a path | no form |
-| The termination check imposed on a project's funs | the check exists for delta rules; it is not imposed |
-| A way for a project to declare itself under these rules | no form |
-
-Each absent line is a stop for Antonio: a form is proposed and nothing is chosen alone.
+| Term parameters of a place, by name of a fun | present, in the laws and not at run time |
+| Reduction of a fun defined by `match` on an arm, inside the kernel's conversion | present |
+| Indexed families | in fibred form: a place and its projections, `src` and `tgt` for `Step`; its fibres are said in the laws and the statements |
+| Different arms are distinct, an arm is injective | proved in `Proofs`: `yes_is_not_no`, `ite_injective` |
+| A type-valued fun whose result is a path | present |
+| The termination check imposed on a project's funs | present: `kind = "proof"` in `[package]`, code E2010 |
 
 ## M1: the rule of the if
 
@@ -60,3 +58,13 @@ To prove:
 
 `ifSame` is out of the kernel before M1, so that meta-Yon does not use it to prove itself. If M1
 closes, whether it comes back into the kernel is Antonio's decision.
+
+## State of M1
+
+- Soundness: `if_same`.
+- Termination: `decreases`, the size goes down by `gap(d) + 1`.
+- Local confluence: `Peak` lists every overlap of two steps out of one term, the critical pairs among
+  them, and each has its valley: `same_source`, `left_starts`, `right_starts`, `left_links`,
+  `right_links`, `valley_meets`.
+- Open: that every two steps out of one term form a `Peak` (the inversion, by distinct arms and
+  injectivity), and confluence by Newman's lemma.

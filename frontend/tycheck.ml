@@ -888,7 +888,19 @@ let rec subst_evar_in_ty (xv : string) (repl : expr) (t : ty) : ty =
   | TyPathP ((i, a), x, y) -> TyPathP ((i, r a), rt x, rt y)
   | _ -> t
 
+(* An arm over its binders, as a term the kernel computes on. Its sites are its own: a site records
+   what stands there. *)
 let refined_sites = ref 0
+let arm_as_term (ctor : string) (vars : string list) (loc : location) : expr =
+  let own () =
+    incr refined_sites;
+    { loc with start_line = - !refined_sites } in
+  if vars = [] then EVar (ctor, own ())
+  else begin
+    let l = own () in
+    Hashtbl.replace arrow_sites (l.file, l.start_line, l.start_col, ctor) Inject;
+    ECall (ctor, List.map (fun n -> EVar (n, own ())) vars, l)
+  end
 
 (* The result of a call, when it is a path over the parameters: the arguments in their place,
    all at once, since an argument may name another parameter. *)
@@ -1574,7 +1586,12 @@ let ty_of_code (env : Tyenv.env) (c : expr) : ty option =
 let universe_path_endpoints (env : Tyenv.env) (t : ty) : (ty * ty) option =
   match t with
   | TyId (TyUniverse _, TyTermExpr ca, TyTermExpr cb) ->
-      (match ty_of_code env ca, ty_of_code env cb with
+      (* an end that computes to a code is that code *)
+      let known c = match c with
+        | EVar _ -> ty_of_code env c
+        | _ -> Option.bind (Dispatcher.code_of_term env c)
+                 (fun n -> ty_of_code env (EVar (n, dummy_loc))) in
+      (match known ca, known cb with
        | Some a, Some b -> Some (a, b)
        | _ -> None)
   | _ -> None
@@ -3680,6 +3697,13 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       Hashtbl.replace bare_point_sites (site_of loc) (x, c);
       ok ()
   (* the result of a relation: the type of a path between two terms of one type *)
+  (* a place named where a type is expected is its code *)
+  | EVar (n, _), TyUniverse _
+    when Tyenv.lookup_var env n = None && Tyenv.lookup_named_sum env n <> None -> ok ()
+  | EIfThenElse (c, a, b, _), TyUniverse _ ->
+      let* _ = infer env ctx c in
+      let* () = check env ctx a expected in
+      check env ctx b expected
   | EBinop (OpEq, a, b, loc), TyUniverse _ ->
       let* ta = infer env ctx a in
       let* tb = infer env ctx b in
@@ -3970,18 +3994,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                         let ctor_expr = match ctor with
                           | "true" -> ELit (LitBool true, loc)
                           | "false" -> ELit (LitBool false, loc)
-                          | _ ->
-                              (* sites of their own: a site records what stands there *)
-                              let own () =
-                                incr refined_sites;
-                                { loc with start_line = - !refined_sites } in
-                              if vars = [] then EVar (ctor, own ())
-                              else begin
-                                let l = own () in
-                                Hashtbl.replace arrow_sites
-                                  (l.file, l.start_line, l.start_col, ctor) Inject;
-                                ECall (ctor, List.map (fun n -> EVar (n, own ())) vars, l)
-                              end in
+                          | _ -> arm_as_term ctor vars loc in
                         let refined = subst_evar_in_ty xv ctor_expr expected in
                         let* () = check branch_env ctx body refined in
                         go_branches rest)
@@ -4198,6 +4211,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                (match f_e with
                 | EVar (n, _) when Tyenv.lookup_fun env n <> None ->
                     TyTermExpr (ECall (n, [ex], loc))
+                | ELam ([(x, _)], body, _) -> TyTermExpr (Desugar.subst_evar_in_expr x ex body)
                 | _ -> TyTermExpr (EApp (f_e, [ex], loc))) in
          ok (TyId (cod, apf x, apf y))
      | [_; _], [TyArrow (dom, _); TyId (carrier, _, _)]
@@ -4505,6 +4519,11 @@ and check_call_signature ?(arg_exprs : expr list = [])
                          (params : (string * ty) list)
                          (arg_tys : ty list)
                          (loc : location) : unit tc_result =
+  (* a parameter whose type is a path over the earlier parameters *)
+  let params =
+    if List.length arg_exprs = List.length params then
+      List.map (fun (p, t) -> (p, instantiate_path_return params arg_exprs t)) params
+    else params in
   if List.length params <> List.length arg_tys then
     err loc (Printf.sprintf
       "%s: expected %d arguments, got %d"
@@ -7647,6 +7666,27 @@ let proof_rule_errors (env : Tyenv.env) (p : program) : type_error list =
       { err_loc = fd.fn_loc; err_code = Error_codes.Proof_rule;
         err_msg = Printf.sprintf "fun %s, in a project of kind proof: %s"
             (Str.global_replace (Str.regexp_string "__") "." fd.fn_name) msg } in
+    let bodies = List.filter_map (function
+        | TopFun fd -> Some (fd.fn_name, fd.fn_body) | _ -> None) p in
+    let callees name =
+      let found = ref [] in
+      let note e =
+        (match e with
+         | ECall (n, _, _) -> found := n :: !found
+         | EVar (n, _) -> found := n :: !found
+         | _ -> ());
+        None in
+      List.iter (fun st -> ignore (Method_sugar.map_stmt note st))
+        (Option.value ~default:[] (List.assoc_opt name bodies));
+      List.filter (fun n -> List.mem_assoc n bodies) !found in
+    let reaches_itself name =
+      let seen = Hashtbl.create 16 in
+      let rec go n =
+        List.exists (fun c ->
+            c = name
+            || (not (Hashtbl.mem seen c) && (Hashtbl.replace seen c (); go c)))
+          (callees n) in
+      go name in
     let rec loops = function
       | SForever _ -> Some "forever"
       | SWhile _ -> Some "while"
@@ -7665,7 +7705,8 @@ let proof_rule_errors (env : Tyenv.env) (p : program) : type_error list =
             else (match List.find_map loops fd.fn_body with
                 | Some kw -> [refuse fd (kw ^ " is refused: a proof terminates")]
                 | None ->
-                    if List.mem fd.fn_name certified then []
+                    (* a fun the kernel does not unfold terminates if it calls itself nowhere *)
+                    if List.mem fd.fn_name certified || not (reaches_itself fd.fn_name) then []
                     else [refuse fd "it does not pass the termination check (SCT)"])
         | _ -> []) p
   end
@@ -8048,9 +8089,8 @@ let elaborate_id_sugar (p : program) : program =
                 let point = match c, pat with
                   | "true", _ -> ELit (LitBool true, l)
                   | "false", _ -> ELit (LitBool false, l)
-                  | _, PatVars [] -> EVar (c, l)
-                  | _, PatVars vs -> ECall (c, List.map (fun w -> EVar (w, l)) vs, l)
-                  | _, PatWitness w -> ECall (c, [EVar (w, l)], l)
+                  | _, PatVars vs -> arm_as_term c vs l
+                  | _, PatWitness w -> arm_as_term c [w] l
                   | _, PatFields _ -> EVar (v, l) in
                 Desugar.subst_evar_in_expr v point ep
             | _ -> ep in

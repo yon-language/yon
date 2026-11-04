@@ -6,4 +6,27 @@ place Proofs {
   fun if_same(b: Boolean, x: Term): (if b then x else x) = x {
     return match b { true => clear, false => clear }
   }
+
+  /* Different arms are distinct: a path between them gives a point of Empty. */
+  fun code(b: Boolean): Type { return if b then Number else Empty }
+  fun absurd(p: true = false): Empty { return transport((code, p) ↦ ap, 0) }
+  fun is_yes(t: Term): Boolean {
+    return match t { yes => true, no => false, var as n => false, ite as (c, u, v) => false }
+  }
+  fun yes_is_not_no(p: Term.yes = Term.no): Empty { return absurd((is_yes, p) ↦ ap) }
+  fun is_ite(t: Term): Boolean {
+    return match t { yes => false, no => false, var as n => false, ite as (c, u, v) => true }
+  }
+  fun ite_is_not_yes(c: Term, u: Term, v: Term, p: (c, u, v) ↪ ite = Term.yes): Empty {
+    return absurd((is_ite, p) ↦ ap)
+  }
+
+  /* An arm is injective: its projections undo it. */
+  fun cond_of(t: Term): Term {
+    return match t { yes => t, no => t, var as n => t, ite as (c, u, v) => c }
+  }
+  fun ite_injective(a: Term, u: Term, v: Term, b: Term, x: Term, y: Term,
+                    p: (a, u, v) ↪ ite = (b, x, y) ↪ ite): a = b {
+    return (cond_of, p) ↦ ap
+  }
 }
