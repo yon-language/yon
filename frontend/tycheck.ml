@@ -1639,9 +1639,36 @@ let reads_place_arm_fields (env : Tyenv.env) branches : bool =
       | PatFields _ -> place_arm_fields env c <> None
       | _ -> false) branches
 
+(* The injection into a payload arm, its projections in order: every one given,
+   none other. Its type is the coproduct, the arm's parameters are the coproduct's,
+   instantiated by unification from the expected type and the payload. *)
+let arm_injection (env : Tyenv.env) (place_name : string) fas loc : expr tc_result =
+  match Tyenv.lookup_place env place_name with
+  | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
+  | Some pd ->
+      let need = List.filter_map
+          (function FoField f -> Some f.fd_name | _ -> None) pd.pd_members in
+      (match List.find_opt (fun (fa : field_assignment) -> not (List.mem fa.fa_name need)) fas,
+             List.find_opt (fun f ->
+               not (List.exists (fun (fa : field_assignment) -> fa.fa_name = f) fas)) need with
+       | Some fa, _ -> err loc (Printf.sprintf
+           "place %s is a payload arm: it has no projection %s" place_name fa.fa_name)
+       | None, Some missing -> err loc (Printf.sprintf
+           "place %s is a payload arm: its mediatrice needs every projection \
+            (missing %s), there is no zero-fill" place_name missing)
+       | None, None ->
+           ok (EHITConstr (place_name,
+                 List.map (fun f ->
+                     (List.find (fun (fa : field_assignment) -> fa.fa_name = f) fas).fa_value)
+                   need, loc)))
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
+
+  | ENew (place_name, fas, loc) when Tyenv.is_synthetic_place env place_name ->
+      let* inj = arm_injection env place_name fas loc in
+      infer env ctx inj
 
   | EHITElim (EVar ("__match", _), branches, x, loc)
     when reads_place_arm_fields env branches ->
@@ -2070,8 +2097,7 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                   in
                   (* A generic named sum is instantiated at its constructor,
                      like a generic call: its parameters become fresh unknowns
-                     solved by the arguments; one the arguments do not fix
-                     stays open. *)
+                     solved by the arguments. *)
                   let generic =
                     match Tyenv.named_sum_of_ctor env ctor with
                     | Some (name, _) -> Tyenv.named_sum_params env name <> []
@@ -2090,9 +2116,16 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                       match Ty_subst.try_unify (Ty_subst.apply_subst sg w) (Ty_subst.apply_subst sg g) with
                       | Ok s -> Ty_subst.compose_subst s sg
                       | Error _ -> sg) Ty_subst.empty_subst want got in
-                    let close t = Ty_subst.map_leaves (function
-                      | TyMetaVar _ -> Some (TyPrim "unknown") | _ -> None)
-                      (Ty_subst.apply_subst sigma t) in
+                    (* a parameter nothing fixes is an error, not a generalization *)
+                    let* () =
+                      match List.find_opt (fun (_, m) ->
+                          Ty_subst.free_metavars (Ty_subst.apply_subst sigma m) <> []) fresh with
+                      | Some (v, _) -> err loc (Printf.sprintf
+                          "%s: the parameter %s of %s is fixed neither by the payload nor by \
+                           an expected type: write the type where the value is used"
+                          ctor v name)
+                      | None -> ok () in
+                    let close t = Ty_subst.apply_subst sigma t in
                     ok (List.map close want,
                         Some (TyApp (name, List.map (fun (_, m) -> close m) fresh))) in
                   let* () = check_args args arg_tys in
@@ -2723,27 +2756,6 @@ got %s" (Tyenv.ty_to_string other)))
            spawn_promote_ty := saved;
            err loc "spawn block has no promote: it must promote at least one value")
   | ENew (place_name, fas, loc) ->
-      let* () =
-        (* a payload arm's mediatrice lowers to the section of its synthetic
-           place: every projection must be given, there is no zero-fill. *)
-        if Tyenv.is_synthetic_place env place_name then
-          match Tyenv.lookup_place env place_name with
-          | Some pd ->
-              let need =
-                List.filter_map
-                  (function FoField f -> Some f.fd_name | _ -> None)
-                  pd.pd_members in
-              let given = List.map (fun fa -> fa.fa_name) fas in
-              (match List.find_opt (fun f -> not (List.mem f given)) need with
-               | Some missing ->
-                   err loc (Printf.sprintf
-                     "place %s is a payload arm: its mediatrice needs every \
-                      projection (missing %s), there is no zero-fill"
-                     place_name missing)
-               | None -> ok ())
-          | None -> ok ()
-        else ok ()
-      in
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
        | Some pd ->
@@ -3372,6 +3384,9 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                   "ambiguous injection into %s: the value inhabits more than \
                    one arm; annotate the intended side"
                   (Tyenv.ty_to_string sum_ty))))
+  | ENew (place_name, fas, loc), _ when Tyenv.is_synthetic_place env place_name ->
+      let* inj = arm_injection env place_name fas loc in
+      check env ctx inj expected
   | EHITElim (EVar ("__match", _), branches, x, loc), _
       when reads_place_arm_fields env branches ->
       let* _ = place_arm_match env ctx branches x loc (Some expected) in
@@ -4704,7 +4719,7 @@ let rec register_sum_types_in_ty (env : Tyenv.env) (t : ty) : Tyenv.env =
    (a Constant union yields a constant synthetic arm). *)
 let synth_place_of_arm (union_pd : place_decl) (v : variant) : place_decl =
   { pd_name = v.v_name;
-    pd_type_params = []; pd_fusion = None; pd_width = None;
+    pd_type_params = union_pd.pd_type_params; pd_fusion = None; pd_width = None;
     pd_arms = [];
     pd_world = union_pd.pd_world;
     pd_members =
@@ -7151,7 +7166,7 @@ let heap_alloc_errors (p : program) : type_error list =
   let rec in_expr e =
     let own = match e with
       | ENew (q, _, _) | ENewIn (q, _, _, _) -> Some (Printf.sprintf "builds a section of %s (.->)" q)
-      (* an arm with a payload is a node of the heap; a nullary arm is a
+      (* an arm with a payload is a section on the heap; a nullary arm is a
          constant and allocates nothing *)
       | EHITConstr (c, _ :: _, _) -> Some (Printf.sprintf "builds the coproduct value %s" c)
       | EPair _ -> Some "builds a pair"

@@ -21,7 +21,7 @@ TOML = '''[package]
 name = "probe"
 
 [world.W]
-objects = ["X", "Chain", "Box"]
+objects = ["X", "Chain", "Box", "Sum"]
 spaces  = ["w"]
 
 [runtime]
@@ -230,6 +230,76 @@ def test_a_nullary_fun_is_a_point(tmp_path):
     extra["w/Account.yon"] = extra["w/Account.yon"].replace("fun prova()", "fun prova")
     assert _uso(tmp_path, "fun run(): Number {\n  o := Account.prova\n"
                           "  return Account.saldo(o)\n}\n", extra) == 2
+
+
+GENERIC = {"w/Topos.yon": "topos WTopos where {\n}\n",
+           "w/Box.yon": "place Box<V> { this > Full(V) :U Empty }\n"}
+
+
+def test_a_generic_arm_is_built_from_a_context_that_is_not_generic(tmp_path):
+    src = ("place Entry {\n"
+           "fun some(x: Number): Lookup<Number> { return .-> Found { _1 x } }\n"
+           "fun leggi(l: Lookup<Number>): Number {\n"
+           "  return match l { Found as p => p, Absent => 0 }\n}\n"
+           "fun main(): Number { return leggi(some(42)) }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_generic_arm_is_built_inside_a_generic(tmp_path):
+    src = ("place Entry {\n"
+           "fun some<V>(x: V): Lookup<V> { return .-> Found { _1 x } }\n"
+           "fun leggi(l: Lookup<Number>): Number {\n"
+           "  return match l { Found as p => p, Absent => 0 }\n}\n"
+           "fun main(): Number { return leggi(some(42)) }\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_a_users_generic_arm_takes_its_parameter_from_the_payload(tmp_path):
+    src = ("place Entry {\n"
+           "fun wrap<T>(x: T): Box<T> { return .-> Full { _1 x } }\n"
+           "fun leggi(b: Box<Number>): Number {\n"
+           "  return match b { Full as p => p, Empty => 0 }\n}\n"
+           "fun main(): Number { return leggi(.-> Full { _1 40 }) + leggi(wrap(2)) }\n}\n")
+    assert _exit(tmp_path, src, GENERIC) == 42
+
+
+def test_a_payload_of_the_wrong_type_for_the_expected_parameter_is_refused(tmp_path):
+    src = ("place Entry {\n"
+           "fun some(x: Number): Lookup<Text> { return .-> Found { _1 x } }\n"
+           "fun main(): Number { return 0 }\n}\n")
+    _refused(tmp_path, src, "E2001", "expected")
+
+
+def test_a_parameter_nothing_fixes_is_refused(tmp_path):
+    extra = dict(GENERIC)
+    extra["w/Box.yon"] = "place Box<V> { this > Full(Number) :U Empty }\n"
+    src = ("place Entry {\n"
+           "fun main(): Number {\n"
+           "  x := .-> Full { _1 1 }\n"
+           "  return 0\n}\n}\n")
+    r, _ = _compile(tmp_path, src, extra)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "parameter V of Box" in out, out
+
+
+def test_an_injection_has_the_type_of_its_coproduct(tmp_path):
+    src = ("place Sum { this > A :U B(Number) :U C(Number) }\n"
+           "place Entry {\n"
+           "fun pick(n: Number): Sum { return if n > 0 then .-> B { _1 n } else .-> C { _1 n } }\n"
+           "fun main(): Number {\n"
+           "  x := match .-> B { _1 40 } { A => 0, B as p => p, C as q => q }\n"
+           "  return x + (match pick(2) { A => 0, B as p => p, C as q => 0 })\n}\n}\n")
+    assert _exit(tmp_path, src) == 42
+
+
+def test_get_of_a_hashmap_answers_found_and_absent(tmp_path):
+    src = ("place Entry {\n"
+           "fun leggi(l: Lookup<Number>): Number {\n"
+           "  return match l { Found as p => p, Absent => 2 }\n}\n"
+           "fun main(): Number {\n"
+           "  m := HashMap.set(HashMap.empty(), 1, 40)\n"
+           "  return leggi(HashMap.get(m, 1)) + leggi(HashMap.get(m, 9))\n}\n}\n")
+    assert _exit(tmp_path, src) == 42
 
 
 @pytest.mark.xfail(strict=True, reason="injection by pipe, generic arms")
