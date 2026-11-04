@@ -171,6 +171,17 @@ def _broken(tmp_path, file, old, new):
     return out
 
 
+def test_termination_is_refused_with_a_wrong_gap(tmp_path):
+    # the theorem depends on the gap it states: a gap one too large does not hold
+    _broken(tmp_path, "Proofs.yon", "ifFalse as (u, v) => size(u) ↪ succ,",
+            "ifFalse as (u, v) => size(u) ↪ succ ↪ succ,")
+
+
+def test_termination_is_refused_for_a_step_that_grows(tmp_path):
+    # a rule that keeps the whole term does not go down
+    _broken(tmp_path, "Step.yon", "ifFalse as (u, v) => v,", "ifFalse as (u, v) => (no, u, v) ↪ ite,")
+
+
 def test_different_arms_are_distinct(tmp_path):
     _broken(tmp_path, "Proofs.yon", "fun absurd(p: true = false): Empty",
             "fun absurd(p: true = true): Empty")

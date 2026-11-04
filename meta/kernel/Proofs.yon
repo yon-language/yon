@@ -29,4 +29,93 @@ place Proofs {
                     p: (a, u, v) ↪ ite = (b, x, y) ↪ ite): a = b {
     return (cond_of, p) ↦ ap
   }
+
+  /* The size of a term, and what adding is. */
+  fun plus(a: Nat, b: Nat): Nat {
+    return match a { zero => b, succ as n => (n, b) ↦ plus ↪ succ }
+  }
+  fun one_more(n: Nat): Nat { return n ↪ succ }
+  fun two_more(n: Nat): Nat { return n ↪ succ ↪ succ }
+  fun plus_zero(n: Nat): plus(n, zero) = n {
+    return match n { zero => clear, succ as m => (one_more, plus_zero(m)) ↦ ap }
+  }
+  fun plus_succ(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {
+    return match a { zero => clear, succ as m => (one_more, plus_succ(m, b)) ↦ ap }
+  }
+  fun comm(a: Nat, b: Nat): plus(a, b) = plus(b, a) {
+    return match a {
+      zero => inv(plus_zero(b)),
+      succ as m => concat((one_more, comm(m, b)) ↦ ap, inv(plus_succ(b, m)))
+    }
+  }
+  fun assoc(a: Nat, b: Nat, c: Nat): plus(plus(a, b), c) = plus(a, plus(b, c)) {
+    return match a { zero => clear, succ as m => (one_more, assoc(m, b, c)) ↦ ap }
+  }
+  fun size(t: Term): Nat {
+    return match t {
+      yes => zero ↪ succ, no => zero ↪ succ, var as n => zero ↪ succ,
+      ite as (c, u, v) => plus(size(c), plus(size(u), size(v))) ↪ succ
+    }
+  }
+
+  /* Adding is a congruence on each side. */
+  fun plus_l(a: Nat, b: Nat, r: Nat, p: a = b): plus(a, r) = plus(b, r) {
+    return (fun(x: Nat) => plus(x, r), p) ↦ ap
+  }
+  fun plus_r(r: Nat, a: Nat, b: Nat, p: a = b): plus(r, a) = plus(r, b) {
+    return (fun(x: Nat) => plus(r, x), p) ↦ ap
+  }
+  /* Exchange of two summands. */
+  fun mid(a: Nat, g: Nat, b: Nat): plus(a, plus(g, b)) = plus(g, plus(a, b)) {
+    return concat(inv(assoc(a, g, b)), concat(plus_l(plus(a, g), plus(g, a), b, comm(a, g)), assoc(g, a, b)))
+  }
+
+  /* Termination: the size goes down at every step, by gap(d) + 1. */
+  fun gap(d: Step): Nat {
+    return match d {
+      ifTrue as (u, v) => size(v) ↪ succ,
+      ifFalse as (u, v) => size(u) ↪ succ,
+      ifSame as (c, u) => plus(size(c), size(u)),
+      inC as (e, u, v) => gap(e),
+      inU as (c, e, v) => gap(e),
+      inV as (c, u, e) => gap(e)
+    }
+  }
+  fun decreases(d: Step): size(d ↦ Step.src) = plus(gap(d), size(d ↦ Step.tgt)) ↪ succ {
+    return match d {
+      ifTrue as (u, v) => (two_more, comm(size(u), size(v))) ↦ ap,
+      ifFalse as (u, v) => clear,
+      ifSame as (c, u) => (one_more, inv(assoc(size(c), size(u), size(u)))) ↦ ap,
+      inC as (e, u, v) =>
+        concat((one_more, plus_l(size(e ↦ Step.src), plus(gap(e), size(e ↦ Step.tgt)) ↪ succ,
+                                 plus(size(u), size(v)), decreases(e))) ↦ ap,
+        concat((two_more, assoc(gap(e), size(e ↦ Step.tgt), plus(size(u), size(v)))) ↦ ap,
+               (one_more, inv(plus_succ(gap(e), plus(size(e ↦ Step.tgt), plus(size(u), size(v)))))) ↦ ap)),
+      inU as (c, e, v) =>
+        concat((one_more, plus_r(size(c), plus(size(e ↦ Step.src), size(v)),
+                                 plus(plus(gap(e), size(e ↦ Step.tgt)) ↪ succ, size(v)),
+                                 plus_l(size(e ↦ Step.src), plus(gap(e), size(e ↦ Step.tgt)) ↪ succ,
+                                        size(v), decreases(e)))) ↦ ap,
+        concat((one_more, plus_succ(size(c), plus(plus(gap(e), size(e ↦ Step.tgt)), size(v)))) ↦ ap,
+        concat((two_more, plus_r(size(c), plus(plus(gap(e), size(e ↦ Step.tgt)), size(v)),
+                                 plus(gap(e), plus(size(e ↦ Step.tgt), size(v))),
+                                 assoc(gap(e), size(e ↦ Step.tgt), size(v)))) ↦ ap,
+        concat((two_more, mid(size(c), gap(e), plus(size(e ↦ Step.tgt), size(v)))) ↦ ap,
+               (one_more, inv(plus_succ(gap(e), plus(size(c), plus(size(e ↦ Step.tgt), size(v)))))) ↦ ap)))),
+      inV as (c, u, e) =>
+        concat((one_more, plus_r(size(c), plus(size(u), size(e ↦ Step.src)),
+                                 plus(size(u), plus(gap(e), size(e ↦ Step.tgt)) ↪ succ),
+                                 plus_r(size(u), size(e ↦ Step.src),
+                                        plus(gap(e), size(e ↦ Step.tgt)) ↪ succ, decreases(e)))) ↦ ap,
+        concat((one_more, plus_r(size(c), plus(size(u), plus(gap(e), size(e ↦ Step.tgt)) ↪ succ),
+                                 plus(size(u), plus(gap(e), size(e ↦ Step.tgt))) ↪ succ,
+                                 plus_succ(size(u), plus(gap(e), size(e ↦ Step.tgt))))) ↦ ap,
+        concat((one_more, plus_succ(size(c), plus(size(u), plus(gap(e), size(e ↦ Step.tgt))))) ↦ ap,
+        concat((two_more, plus_r(size(c), plus(size(u), plus(gap(e), size(e ↦ Step.tgt))),
+                                 plus(gap(e), plus(size(u), size(e ↦ Step.tgt))),
+                                 mid(size(u), gap(e), size(e ↦ Step.tgt)))) ↦ ap,
+        concat((two_more, mid(size(c), gap(e), plus(size(u), size(e ↦ Step.tgt)))) ↦ ap,
+               (one_more, inv(plus_succ(gap(e), plus(size(c), plus(size(u), size(e ↦ Step.tgt)))))) ↦ ap)))))
+    }
+  }
 }

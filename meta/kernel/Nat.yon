@@ -1,0 +1,2 @@
+/* Nat — the size of a term. */
+place Nat { this > zero :U succ Nat }
