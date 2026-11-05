@@ -215,3 +215,144 @@ def test_an_unannotated_parameter_does_not_prove_the_false(tmp_path):
         "    return k(q)\n  }\n"), tmp_path)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "annotate the lambda parameter" in out, out
+
+
+# Dependent elimination on the context: in a branch of a match on a variable, the arm stands for
+# the variable in the type of every other variable of the context.
+
+SRC_OF_ARM = {
+    "ifTrue": ("u{i}, v{i}", "yes, u{i}, v{i}"),
+    "ifFalse": ("u{i}, v{i}", "no, u{i}, v{i}"),
+    "ifSame": ("c{i}, w{i}", "c{i}, w{i}, w{i}"),
+    "inC": ("e{i}, u{i}, v{i}", "e{i} ↦ Step.src, u{i}, v{i}"),
+    "inU": ("c{i}, e{i}, v{i}", "c{i}, e{i} ↦ Step.src, v{i}"),
+    "inV": ("c{i}, u{i}, e{i}", "c{i}, u{i}, e{i} ↦ Step.src"),
+}
+TWO_STEPS = "d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.src)"
+FORGET = "  fun forget(a: Term, b: Term, p: a = b): Number { return 0 }\n"
+
+
+def _proof_rejected(tmp_path, theorem, *words):
+    r = _compile(_with_theorem(tmp_path, theorem), tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0, out
+    for w in words:
+        assert w in out, out
+
+
+def _nested_match(leaf):
+    def arms(i, inner):
+        return ",\n".join(
+            f"      {arm} as ({binders.format(i=i)}) => {inner(arm)}"
+            for arm, (binders, _) in SRC_OF_ARM.items())
+    body = arms(1, lambda a1: "match d2 {\n" + arms(2, lambda a2: leaf(a1, a2)) + "\n      }")
+    return f"    return match d1 {{\n{body}\n    }}\n"
+
+
+def _src(arm, i):
+    return SRC_OF_ARM[arm][1].format(i=i)
+
+
+def _call_injective(a1, a2):
+    c1, u1, v1 = _src(a1, 1).split(", ")
+    c2, u2, v2 = _src(a2, 2).split(", ")
+    return f"forget({c1}, {c2}, ite_injective({c1}, {u1}, {v1}, {c2}, {u2}, {v2}, q))"
+
+
+def test_a_nested_match_reads_q_at_the_arms_of_both_steps(tmp_path):
+    r = _compile(_with_theorem(tmp_path, FORGET + f"  fun heads({TWO_STEPS}): Number {{\n"
+                               + _nested_match(_call_injective) + "  }\n"), tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_branch_does_not_read_q_at_the_arm_of_another(tmp_path):
+    # every branch reads q as if d1 were ifFalse: in the branch of ifTrue that is yes = no
+    def leaf(a1, a2):
+        return _call_injective("ifFalse" if a1 == "ifTrue" else a1, a2)
+    _proof_rejected(tmp_path, FORGET + f"  fun heads({TWO_STEPS}): Number {{\n"
+                    + _nested_match(leaf) + "  }\n", "E2001", "ite_injective")
+
+
+def test_q_is_not_specialized_before_the_match(tmp_path):
+    _proof_rejected(tmp_path, FORGET +
+        f"  fun early(u: Term, v: Term, u2: Term, v2: Term, {TWO_STEPS}): Number {{\n"
+        "    x := forget(yes, no, ite_injective(yes, u, v, no, u2, v2, q))\n"
+        "    return match d1 { ifTrue as (a, b) => x, ifFalse as (a, b) => x, ifSame as (a, b) => x,\n"
+        "      inC as (a, b, c) => x, inU as (a, b, c) => x, inV as (a, b, c) => x }\n  }\n",
+        "E2001", "parameter p expects", "Step__src(d1)")
+
+
+def test_a_scrutinee_that_is_not_a_variable_refines_nothing(tmp_path):
+    _proof_rejected(tmp_path, FORGET +
+        "  fun same(d: Step): Step { return d }\n"
+        f"  fun not_var({TWO_STEPS}, u: Term, v: Term, u2: Term, v2: Term): Number {{\n"
+        "    return match same(d1) { ifTrue as (a, b) => forget(yes, no, ite_injective(yes, a, b, no, u2, v2, q)),\n"
+        "      ifFalse as (a, b) => 0, ifSame as (a, b) => 0,\n"
+        "      inC as (a, b, c) => 0, inU as (a, b, c) => 0, inV as (a, b, c) => 0 }\n  }\n",
+        "E2001", "parameter p expects", "Step__src(d1)")
+
+
+def _descent(first, second):
+    return (
+        FORGET + f"  fun descend({TWO_STEPS}): Number {{\n"
+        "    return match d1 {\n"
+        "      inC as (e, u, v) => match d2 {\n"
+        f"        inC as (e2, u2, v2) => descend({first}, {second}, "
+        "ite_injective(e ↦ Step.src, u, v, e2 ↦ Step.src, u2, v2, q)),\n"
+        "        ifTrue as (a, b) => 0, ifFalse as (a, b) => 0, ifSame as (a, b) => 0,\n"
+        "        inU as (a, b, c) => 0, inV as (a, b, c) => 0\n      },\n"
+        "      ifTrue as (a, b) => 0, ifFalse as (a, b) => 0, ifSame as (a, b) => 0,\n"
+        "      inU as (a, b, c) => 0, inV as (a, b, c) => 0\n    }\n  }\n")
+
+
+def test_direct_recursion_on_a_substep_passes_the_termination_check(tmp_path):
+    r = _compile(_with_theorem(tmp_path, _descent("e", "e2")), tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_recursion_on_the_same_step_does_not_terminate(tmp_path):
+    # the call on d1 and d2 does not go down: the termination check refuses it (and the path has
+    # the type of the substeps, so the type check refuses it too)
+    _proof_rejected(tmp_path, _descent("d1", "d2"), "E2010", "termination")
+
+
+def test_a_path_over_a_boolean_is_read_at_the_branch(tmp_path):
+    r = _compile(_with_theorem(tmp_path,
+        "  fun gone(e: Empty): Number { return 0 }\n"
+        "  fun at_true(b: Boolean, q: b = true): Number {\n"
+        "    return match b { true => 1, false => gone(absurd(inv(q))) }\n  }\n"), tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _with_one_arm(tmp_path, theorem):
+    proj = _with_theorem(tmp_path, theorem)
+    toml = proj / "yon.toml"
+    toml.write_text(toml.read_text().replace('objects = [', 'objects = ["W", ', 1))
+    (proj / "kernel" / "W.yon").write_text(
+        "place W {\n  this > only Term\n  fun inner(w: W): Term { return match w { only as t => t } }\n}\n")
+    return proj
+
+
+def test_a_binder_does_not_capture_a_name_of_the_statement(tmp_path):
+    # the u of the statement is the outer one: this would prove that every term is every other
+    r = _compile(_with_one_arm(tmp_path,
+        "  fun captured(w: W, u: Term): (w ↦ W.inner) = u {\n"
+        "    return match w { only as u => clear }\n  }\n"), tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "mismatch" in out, out
+
+
+def test_a_binder_does_not_capture_a_name_in_the_context(tmp_path):
+    # the u of q is the outer one, and it stays so in the branch that hides it
+    r = _compile(_with_one_arm(tmp_path,
+        "  fun captured(w: W, u: Term, q: (w ↦ W.inner) = u): u = u {\n"
+        "    return match w { only as u => inv(q) }\n  }\n"), tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "mismatch" in out, out
+
+
+def test_a_binder_that_hides_a_name_leaves_a_true_statement_true(tmp_path):
+    r = _compile(_with_one_arm(tmp_path,
+        "  fun kept(w: W, u: Term, q: (w ↦ W.inner) = u): (w ↦ W.inner) = u {\n"
+        "    return match w { only as u => q }\n  }\n"), tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr

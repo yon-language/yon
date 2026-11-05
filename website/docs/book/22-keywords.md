@@ -1017,7 +1017,7 @@ kernel's conversion checks. The reducer never identifies `loop` with `refl`, so 
 
 #### `match`
 
-KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is the kernel's `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): Number { return match t { Leaf as v => v, ... } }`). Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
+KERNEL FORM (the surface eliminator is `match`). `match x { ctor => v, .. }` is the kernel's `hit_elim` with the motive synthesized or, in checked position, taken from the expected type — so every branch may read its payload (`fun total(t: Tree): Number { return match t { Leaf as v => v, ... } }`). When the scrutinee is a variable, in a branch the arm stands for it in the expected type and in the type of every other variable of the context that mentions it: with `q: (d ↦ Step.src) = t`, in the branch `ifTrue as (u, v)` of `match d` the path `q` is read at the arm, reduced. A binder of the branch is a new variable: a name it hides stays the outer one in those types. Field patterns bind projections by name (`Cons { _1 as h _2 as t }`, empty braces `Gray { }` discard a payload); `hit_elim(motive, [...], x)` remains the explicit kernel spelling for dependent motives written by hand.
 
 #### `El`
 

@@ -906,7 +906,7 @@ let rec subst_evar_in_ty (xv : string) (repl : expr) (t : ty) : ty =
   let r = subst_evar_in_ty xv repl in
   let rt = function
     | TyTermExpr ex -> TyTermExpr (Desugar.subst_evar_in_expr xv repl ex) in
-  match t with
+  match deref_lambda_unknown t with
   | TyId (a, x, y) -> TyId (r a, rt x, rt y)
   | TyEl c -> TyEl (rt c)
   | TyArrow (a, b) -> TyArrow (r a, r b)
@@ -915,7 +915,7 @@ let rec subst_evar_in_ty (xv : string) (repl : expr) (t : ty) : ty =
   | TySigma (v, d, c) ->
       if String.equal v xv then TySigma (v, r d, c) else TySigma (v, r d, r c)
   | TyPathP ((i, a), x, y) -> TyPathP ((i, r a), rt x, rt y)
-  | _ -> t
+  | t -> t
 
 (* An arm over its binders, as a term the kernel computes on. Its sites are its own: a site records
    what stands there. *)
@@ -947,7 +947,7 @@ let instantiate_path_return (params : (string * ty) list) (args : expr list) (t 
    warranted (otherwise the ordinary constant-motive path applies unchanged). *)
 let rec ty_mentions_evar (xv : string) (t : ty) : bool =
   let in_tt = function TyTermExpr ex -> List.mem xv (free_vars_expr ex) in
-  match t with
+  match deref_lambda_unknown t with
   | TyId (a, x, y) -> ty_mentions_evar xv a || in_tt x || in_tt y
   | TyEl c -> in_tt c
   | TyArrow (a, b) -> ty_mentions_evar xv a || ty_mentions_evar xv b
@@ -957,6 +957,56 @@ let rec ty_mentions_evar (xv : string) (t : ty) : bool =
       ty_mentions_evar xv d || (not (String.equal v xv) && ty_mentions_evar xv c)
   | TyPathP ((_, a), x, y) -> ty_mentions_evar xv a || in_tt x || in_tt y
   | _ -> false
+
+(* The context of a branch of a match. Dependent elimination on the context: when
+   the scrutinee is a variable x, in the branch of an arm the arm stands for x in
+   the type of every other variable that mentions x, and in the type the branch
+   must have (the function returned here); a path over x becomes a path over the
+   arm, which the kernel reduces. A wildcard has no arm, and neither has a scrutinee
+   that is not a variable: nothing is refined.
+
+   A binder of the branch is a new variable. A name it hides in a type that stays
+   in scope is the outer variable, so the outer variable keeps its type under a
+   name of its own: the types of the branch do not capture it. *)
+let hidden_outer_vars = ref 0
+
+let branch_context (env : Tyenv.env) (x : expr) (arm : (string * string list) option)
+    (binders : string list) (loc : location) : Tyenv.env * (ty -> ty) =
+  let vars = env.Tyenv.vars in
+  let scrutinee = match x with
+    | EVar (xv, _) when List.mem_assoc xv vars -> Some xv
+    | _ -> None in
+  let hidden = List.filter_map (fun b ->
+      if b = "_" || Some b = scrutinee || not (List.mem_assoc b vars) then None
+      else begin
+        incr hidden_outer_vars;
+        Some (b, Printf.sprintf "__outer_%s_%d" b !hidden_outer_vars)
+      end) (List.sort_uniq compare binders) in
+  let rename t = List.fold_left (fun t (b, outer) ->
+      if ty_mentions_evar b t then subst_evar_in_ty b (EVar (outer, loc)) t else t)
+      t hidden in
+  (* the arm is built once, and only when a type speaks of it *)
+  let arm_term = lazy (match arm with
+      | Some ("true", _) -> ELit (LitBool true, loc)
+      | Some ("false", _) -> ELit (LitBool false, loc)
+      | Some (ctor, vs) -> arm_as_term ctor vs loc
+      | None -> assert false) in
+  let refine t =
+    let t = rename t in
+    match scrutinee, arm with
+    | Some xv, Some _ when ty_mentions_evar xv t ->
+        subst_evar_in_ty xv (Lazy.force arm_term) t
+    | _ -> t in
+  let refines_context = match scrutinee, arm with
+    | Some xv, Some _ -> List.exists (fun (y, t) -> y <> xv && ty_mentions_evar xv t) vars
+    | _ -> false in
+  if hidden = [] && not refines_context then (env, refine)
+  else
+    let kept = List.map (fun (b, outer) -> (outer, rename (List.assoc b vars))) hidden in
+    let refined = List.map (fun (y, t) ->
+        (* the scrutinee keeps its own type *)
+        (y, if Some y = scrutinee then rename t else refine t)) vars in
+    ({ env with Tyenv.vars = kept @ refined }, refine)
 
 (* Categorical certification for dependent elimination. An inductive is the
    initial F-algebra; its constructors form a cocone into the carrier, and a
@@ -1897,7 +1947,14 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
              (loc.file, loc.start_line, loc.start_col) ()
        | _ -> ());
       record_match_coproduct env loc x_ty;
+      (* a context the arms refine is not the outer env: no branch can be a
+         witness read there *)
+      let refines_context = match x with
+        | EVar (xv, _) ->
+            List.exists (fun (y, t) -> y <> xv && ty_mentions_evar xv t) env.E.vars
+        | _ -> false in
       let point_body =
+        if refines_context then None else
         List.fold_left
           (fun acc (_ctor, pat, body) ->
              let vars = pat_bound_names pat in
@@ -1950,7 +2007,8 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                      let vars = pat_bound_names pat in
                      let benv =
                        if List.length vars = List.length params then
-                         Tyenv.add_vars env
+                         let (renv, _) = branch_context env x (Some (ctor, vars)) vars loc in
+                         Tyenv.add_vars renv
                            (List.filter (fun (n, _) -> n <> "_")
                               (List.combine vars (List.map snd params)))
                        else env in
@@ -1967,7 +2025,9 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                          let vars2 = pat_bound_names p2 in
                          let benv2 =
                            if List.length vars2 = List.length params2 then
-                             Tyenv.add_vars env
+                             let arm2 = if c2 = "_" then None else Some (c2, vars2) in
+                             let (renv, _) = branch_context env x arm2 vars2 loc in
+                             Tyenv.add_vars renv
                                (List.filter (fun (n, _) -> n <> "_")
                                   (List.combine vars2 (List.map snd params2)))
                            else env in
@@ -2124,7 +2184,13 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                       ctor (List.length params) (List.length vars))
                   else
                     let* tys = concrete_param_types ctor params in
-                    ok (Tyenv.add_vars env (List.combine vars tys))
+                    let is_point = match Hit_env.find_constructor [hname, sig_] ctor with
+                      | Some (_, Hit_env.KPoint _) -> true
+                      | _ -> false in
+                    let (renv, _) =
+                      branch_context env x (if is_point then Some (ctor, vars) else None)
+                        vars loc in
+                    ok (Tyenv.add_vars renv (List.combine vars tys))
                 in
                 if lands_in_universe c_ty then
                   (* Tarski dependent eliminator: point branch : El(C ctor),
@@ -3382,12 +3448,14 @@ and place_arm_match env ctx branches x loc (expected : ty option) : ty tc_result
                 | None -> err loc (Printf.sprintf
                     "match %s { ... }: no field named '%s'" ctor f))
                 (ok []) bound in
-            ok (Tyenv.add_vars env typed)
-        | Some _, PatVars [] -> ok env
+            (* an arm read by its fields has no term over its binders *)
+            let (renv, at_arm) = branch_context env x None (List.map fst typed) loc in
+            ok (Tyenv.add_vars renv typed, at_arm)
+        | Some _, PatVars [] -> ok (env, Fun.id)
         | Some _, _ -> err loc (Printf.sprintf
             "match: arm %s is a place: it is read by the names of its fields, \
              %s { field as x }" ctor ctor)
-        | None, _ when ctor = "_" -> ok env
+        | None, _ when ctor = "_" -> ok (env, Fun.id)
         | None, _ ->
             (match Hit_env.find_constructor [hname, sig_] ctor with
              | None -> err loc (Printf.sprintf
@@ -3412,14 +3480,15 @@ and place_arm_match env ctx branches x loc (expected : ty option) : ty tc_result
                         | Ok vs -> ok vs
                         | Error bad -> err loc (Printf.sprintf
                             "match %s { ... }: no projection named '%s'" ctor bad)) in
-                 ok (Tyenv.add_vars env
+                 let (renv, at_arm) = branch_context env x (Some (ctor, vars)) vars loc in
+                 ok (Tyenv.add_vars renv
                        (List.filter (fun (n, _) -> n <> "_")
-                          (List.combine vars (List.map snd params))))) in
+                          (List.combine vars (List.map snd params))), at_arm)) in
       List.fold_left (fun acc (ctor, pat, body) ->
         let* acc = acc in
-        let* benv = branch_env ctor pat in
+        let* (benv, at_arm) = branch_env ctor pat in
         match acc with
-        | Some t -> let* () = check benv ctx body t in ok (Some t)
+        | Some t -> let* () = check benv ctx body (at_arm t) in ok (Some t)
         | None -> let* t = infer benv ctx body in ok (Some t))
         (ok expected) branches
       |> fun r -> let* t = r in
@@ -3597,9 +3666,10 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
     match List.find_opt (fun p -> p.Hit_env.pc_name = ctor) sig_.Hit_env.hit_points with
     | Some p ->
         let* vs = binders ctor pat (List.length p.Hit_env.pc_params) in
-        ok (Tyenv.add_vars env
+        let (renv, at_arm) = branch_context env x (Some (ctor, vs)) vs loc in
+        ok (Tyenv.add_vars renv
               (List.combine vs (List.map snd p.Hit_env.pc_params)
-               |> List.filter (fun (n, _) -> n <> "_")))
+               |> List.filter (fun (n, _) -> n <> "_")), at_arm)
     | None -> err loc (Printf.sprintf "match: %s does not belong to %s" ctor hname) in
   (* the type of the eliminator: the expected one, or that of the first point *)
   let* result =
@@ -3608,7 +3678,7 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
     | None ->
         (match List.find_opt (fun (c, _, _) ->
              List.exists (fun p -> p.Hit_env.pc_name = c) sig_.Hit_env.hit_points) branches with
-         | Some (c, pat, body) -> let* benv = point_env c pat in infer benv ctx body
+         | Some (c, pat, body) -> let* (benv, _) = point_env c pat in infer benv ctx body
          | None -> err loc "match: no branch for a point") in
   let is_point c = List.exists (fun p -> p.Hit_env.pc_name = c) sig_.Hit_env.hit_points in
   let branch_of c = List.find_opt (fun (n, _, _) -> n = c) branches in
@@ -3635,8 +3705,8 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
       if ctor = "_" then check env ctx body result else
       match List.find_opt (fun c -> c.Hit_env.hpc_name = ctor) sig_.Hit_env.hit_paths with
       | None ->
-          let* benv = point_env ctor pat in
-          check benv ctx body result
+          let* (benv, at_arm) = point_env ctor pat in
+          check benv ctx body (at_arm result)
       | Some cell ->
           let params = cell.Hit_env.hpc_params in
           let* vs = binders ctor pat (List.length params) in
@@ -3984,11 +4054,12 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                           | Error bad -> err loc (Printf.sprintf
                               "match %s { ... }: no projection named '%s'"
                               ctor bad)) in
+                   let (renv, at_arm) = branch_context env x (Some (ctor, vars)) vars loc in
                    let benv =
-                     Tyenv.add_vars env
+                     Tyenv.add_vars renv
                        (List.filter (fun (n, _) -> n <> "_")
                           (List.combine vars (List.map snd params))) in
-                   check benv ctx body expected)
+                   check benv ctx body (at_arm expected))
              (ok ()) branches)
   | EHITElim (_, branches, x, loc), _
       when (match x with
@@ -4005,7 +4076,6 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
          (the `__match` infer arm) applies unchanged. The motive is compile-time
          only: desugar/emit/runtime stay byte-identical (match still lowers to the
          same tag switch). *)
-      let xv = (match x with EVar (xv, _) -> xv | _ -> assert false) in
       let* x_ty = infer env ctx x in
       (match x_ty with
        | TyPrim p when Hashtbl.mem Surface_ast.fusion_of_prim p ->
@@ -4066,15 +4136,12 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                           "match: branch %s expects %d payload binder(s), got %d"
                           ctor (List.length params) (List.length vars))
                       else
-                        let branch_env =
-                          Tyenv.add_vars env
-                            (List.combine vars (List.map snd params)) in
                         (* the arm as a term the kernel reduces on *)
-                        let ctor_expr = match ctor with
-                          | "true" -> ELit (LitBool true, loc)
-                          | "false" -> ELit (LitBool false, loc)
-                          | _ -> arm_as_term ctor vars loc in
-                        let refined = subst_evar_in_ty xv ctor_expr expected in
+                        let (renv, at_arm) = branch_context env x (Some (ctor, vars)) vars loc in
+                        let branch_env =
+                          Tyenv.add_vars renv
+                            (List.combine vars (List.map snd params)) in
+                        let refined = at_arm expected in
                         let* () = check branch_env ctx body refined in
                         go_branches rest)
            in
