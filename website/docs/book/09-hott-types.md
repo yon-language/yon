@@ -126,13 +126,24 @@ at the two poles, built with `walk`, a path-lambda over the interval, and the ke
 conversion checks its ends. Giving the poles two values with no path between them is
 refused.
 
+The higher inductive types of the prelude live in `prelude/hit/`, one file each, and the
+kernel reads them from there: `S1.yon` (the circle), `S2.yon` (the sphere),
+`Suspension.yon` (the suspension of a type), `PropTrunc.yon` (propositional truncation),
+`SetTrunc.yon` (set truncation), `Pushout.yon` (the pushout), and `Quotient.yon` (the
+quotient by a relation). `hit.yon` in the same directory declares the topos `Hit` where
+they live, not a type of its own. Each of the seven is a place with a `this >` clause for
+its points and a law for each path: the arms are the points, the laws are the cells.
+
 A place's parameters can stand for terms as well as types, written with their type between the
-angle brackets. The quotient and the pushout of the prelude are declared so:
+angle brackets. The quotient and the pushout are declared so, in `prelude/hit/Quotient.yon`
+and `prelude/hit/Pushout.yon`:
 
 ```
+// prelude/hit/Quotient.yon
 place Quotient<A, r : (A, A) -> Type> { this > inj A
   law quot ∀a : A ∀b : A, (a, b) ↦ r → a ↪ inj = b ↪ inj }
 
+// prelude/hit/Pushout.yon
 place Pushout<A, B, C, f : A -> B, g : A -> C> { this > inl B :U inr C
   law glue ∀a : A, a ↦ f ↪ inl = a ↦ g ↪ inr }
 ```
