@@ -19,8 +19,9 @@
  * Honest limits:
  *   - No generalization of internal let-bindings (let-polymorphism); only at
  *     the level of top-level fun_decl.
- *   - Recursion: each fun is assumed with its partial signature before the
- *     walk of the body. No Mycroft-Tofte fixpoint.
+ *   - Recursion is monomorphic: a group of mutually recursive funs is inferred
+ *     together, one type for each inside the group, and generalized after it.
+ *     No Mycroft-Tofte fixpoint.
  *   - Stdlib: uses Stdlib_runtime.lookup_stdlib_signature to obtain the types
  *     of the builtins (List.cons, HashMap.get).
  *)
@@ -74,20 +75,63 @@ let add_constraint cs a b loc ctx =
 
 (* Solve all the accumulated constraints. Returns the final substitution.
  * Strategy: fold with unify, propagating the substitution incrementally. *)
+let rec solve_pair (sigma : subst) (a : ty) (b : ty) loc ctx : subst =
+  let a = apply_subst sigma a and b = apply_subst sigma b in
+  match a, b with
+  (* Two paths: the carriers agree. Their ends are terms, and the checker compares
+     terms by conversion; a carrier not resolved yet (the negative sentinel) it
+     reads off the left end. Ty_subst.unify keeps no path arm of its own. *)
+  | TyId (TyMetaVar n, _, _), TyId _ when n < 0 -> sigma
+  | TyId _, TyId (TyMetaVar n, _, _) when n < 0 -> sigma
+  | TyId (a1, _, _), TyId (a2, _, _) -> solve_pair sigma a1 a2 loc ctx
+  | TyArrow (a1, b1), TyArrow (a2, b2) ->
+      solve_pair (solve_pair sigma a1 a2 loc ctx) b1 b2 loc ctx
+  | _ ->
+      match try_unify a b with
+      | Ok s -> compose_subst s sigma
+      | Error e -> raise (Infer_error (UnifyFailed (e, loc, ctx)))
+
 let solve_constraints (cs : constraint_set) : subst =
-  List.fold_left (fun sigma (a, b, loc, ctx) ->
-    let a' = apply_subst sigma a in
-    let b' = apply_subst sigma b in
-    match try_unify a' b' with
-    | Ok s -> compose_subst s sigma
-    | Error e -> raise (Infer_error (UnifyFailed (e, loc, ctx)))
-  ) empty_subst (List.rev cs.constraints)
+  List.fold_left (fun sigma (a, b, loc, ctx) -> solve_pair sigma a b loc ctx)
+    empty_subst (List.rev cs.constraints)
+
+(* A name read by the inference: which funs a body depends on. *)
+let reads : string list ref = ref []
+let note_read (name : string) : unit = reads := name :: !reads
+
+(* The names of the parameters of a fun, for a path type over them. *)
+let param_names : (string, string list) Hashtbl.t = Hashtbl.create 16
+
+(* A fused face is its carrier. *)
+let normalize (t : ty) : ty =
+  map_leaves (function
+    | TyUser "String" -> Some (TyPrim "text")
+    | TyUser u -> Option.map (fun p -> TyPrim p) (prim_of_face u)
+    | _ -> None) t
+
+(* A path type in the signature of a fun is over its parameters: at a call they
+   are the arguments, all at once, since an argument may name a parameter. *)
+let at_arguments (fname : string) (args : expr list) (t : ty) : ty =
+  match Hashtbl.find_opt param_names fname with
+  | Some ps when List.length ps = List.length args ->
+      let held = List.mapi (fun i p -> (p, Printf.sprintf "__arg_%d" i)) ps in
+      let at (TyTermExpr e) =
+        let e = List.fold_left (fun e (p, h) ->
+            Desugar.subst_evar_in_expr p (EVar (h, dummy_loc)) e) e held in
+        TyTermExpr (List.fold_left2 (fun e (_, h) a ->
+            Desugar.subst_evar_in_expr h a e) e held args) in
+      map_leaves (function
+        | TyId (a, x, y) -> Some (TyId (a, at x, at y))
+        | _ -> None) t
+  | _ -> t
 
 (* ─── Infer expression ────────────────────────────────────────────────── *)
 
 let num = TyPrim "number"
 let bool_ty = TyPrim "boolean"
 let txt = TyPrim "text"
+
+let open_world = ref false
 
 let rec infer_expr (env : env) (cs : constraint_set) (e : expr) : ty =
   match e with
@@ -102,8 +146,11 @@ let rec infer_expr (env : env) (cs : constraint_set) (e : expr) : ty =
            (* It may be a reference to a top-level function passed as a value
             * (e.g. apply(inc, 5), where inc is a function used as an argument).
             * We build the TyArrow from the scheme. *)
-           (match lookup_fun env x with
+           (note_read x;
+            match lookup_fun env x with
             | Some sch -> instantiate sch
+            (* a bare point or a place: the checker reads it *)
+            | None when !open_world -> fresh_metavar ()
             | None -> raise (Infer_error (UnknownVar (x, loc)))))
   | EParen (inner, _) -> infer_expr env cs inner
   | EBinop (op, a, b, loc) ->
@@ -151,10 +198,11 @@ let rec infer_expr (env : env) (cs : constraint_set) (e : expr) : ty =
              (Printf.sprintf "applying %s as function" fname);
            result_ty
        | None ->
-           (match lookup_fun env fname with
+           (note_read fname;
+            match lookup_fun env fname with
             | Some sch ->
                 (* Caso (b): fun top-level, monomorfizza via instantiate *)
-                let inst_ty = instantiate sch in
+                let inst_ty = at_arguments fname args (instantiate sch) in
                 let expected_ty = build_arrow_chain arg_tys result_ty in
                 add_constraint cs inst_ty expected_ty loc
                   (Printf.sprintf "call to %s" fname);
@@ -171,10 +219,10 @@ let rec infer_expr (env : env) (cs : constraint_set) (e : expr) : ty =
                       (* For generic stdlib (TyUser n with n in type_params),
                        * generate a fresh meta-variable; for concrete ones,
                        * unify directly. *)
-                      add_constraint cs got expected loc
+                      add_constraint cs got (normalize expected) loc
                         (Printf.sprintf "stdlib %s arg" fname)
                     ) arg_tys param_tys;
-                    ret_ty
+                    normalize ret_ty
                 | None ->
                     (* Graceful fallback: return a fresh meta-variable. The
                      * downstream tycheck will catch the error with a more
@@ -261,8 +309,9 @@ and infer_condition (env : env) (cs : constraint_set)
 
 (* ─── Infer fun_decl ──────────────────────────────────────────────────── *)
 
-(* Replace residual (unresolved) meta-variables with TyPrim "unknown", for
- * compatibility with the downstream tycheck which does not know meta-vars. *)
+(* What is left of a RETURN type no use fixes, for the downstream tycheck, which
+ * does not know meta-vars. A parameter never comes here: it is a type or a type
+ * variable. *)
 let rec metavar_to_unknown (t : ty) : ty =
   match t with
   | TyMetaVar _ -> TyPrim "unknown"
@@ -275,84 +324,178 @@ let rec metavar_to_unknown (t : ty) : ty =
   | TyId (a, x, y) -> TyId (metavar_to_unknown a, x, y)
   | _ -> t
 
-(* Pre-step: build the initial fun_types from the whole program, treating each
- * fun_decl as an open scheme. The "_" and None are replaced with fresh
- * meta-variables; explicit annotations are kept. *)
-let build_initial_fun_env (p : program) : env =
-  List.fold_left (fun env top ->
-    match top with
-    | TopFun fn ->
-        let param_tys = List.map (fun p ->
-          match p.param_ty with
-          | TyUser "_" -> fresh_metavar ()
-          | t -> t
-        ) fn.fn_params in
-        let ret_ty = match fn.fn_return with
-          | Some t -> t
-          | None -> fresh_metavar ()
-        in
-        let fn_ty = build_arrow_chain param_tys ret_ty in
-        (* An open scheme: no quantification (it will be generalized later). *)
-        let sch = { bound = []; body = fn_ty } in
-        add_fun env fn.fn_name sch
-    | _ -> env
-  ) empty_env p
+let is_open (fn : fun_decl) : bool =
+  List.exists (fun p -> p.param_ty = TyUser "_") fn.fn_params
 
-(* infer_fun_decl: update fn with inferred types. A parameter type stays
- * unchanged if already annotated; "_" -> inferred type; fn_return None ->
- * inferred type. *)
-let infer_fun_decl (env0 : env) (fn : fun_decl) : fun_decl =
-  let cs = new_constraints () in
-  (* Build the local env with the parameters. For a "_" parameter, use the
-   * meta-variable already placed in env0's fun_types. *)
-  let fn_sch = match lookup_fun env0 fn.fn_name with
-    | Some s -> s
-    | None -> failwith ("hm_infer: fun " ^ fn.fn_name ^ " not in env")
-  in
-  (* Decompose fn_sch.body as an arrow chain -> extract param_tys + ret_ty *)
-  let rec decompose t n =
-    if n = 0 then ([], t)
-    else match t with
-      | TyArrow (a, b) ->
-          let (rest, ret) = decompose b (n - 1) in
-          (a :: rest, ret)
-      | _ -> failwith "hm_infer: fun signature not arrow chain"
-  in
-  let n_params = List.length fn.fn_params in
-  let (init_param_tys, init_ret_ty) = decompose fn_sch.body n_params in
-  let local_env = List.fold_left2 (fun env p t ->
-    add_var env p.param_name t
-  ) env0 fn.fn_params init_param_tys in
-  (* Walk the body *)
-  let _ = infer_stmts local_env cs init_ret_ty fn.fn_body in
-  (* Solve constraints *)
-  let sigma = solve_constraints cs in
-  (* Apply the final substitution to the parameter types and the return *)
-  let final_param_tys = List.map (apply_subst sigma) init_param_tys in
-  let final_ret_ty = apply_subst sigma init_ret_ty in
-  (* Substitute in the fn only where there was a "_" or None *)
-  let new_params = List.map2 (fun p inferred ->
+let needs_inference (fn : fun_decl) : bool =
+  is_open fn || fn.fn_return = None
+
+(* The signature of a fun as the bodies read it. A fun fully written is a closed
+ * scheme, its type parameters quantified. A fun to infer has its unknowns, open
+ * until its group is done. *)
+let initial_scheme (fn : fun_decl) : scheme =
+  let tparams = List.map (fun v -> (v, fresh_metavar ())) fn.fn_type_params in
+  let of_decl t =
+    normalize (map_leaves (function
+      | TyUser v when List.mem_assoc v tparams -> Some (List.assoc v tparams)
+      | _ -> None) t) in
+  let param_tys = List.map (fun p ->
     match p.param_ty with
-    | TyUser "_" -> { p with param_ty = metavar_to_unknown inferred }
-    | _ -> p
-  ) fn.fn_params final_param_tys in
-  let new_return = match fn.fn_return with
+    | TyUser "_" -> fresh_metavar ()
+    | t -> of_decl t) fn.fn_params in
+  let ret_ty = match fn.fn_return with
+    | Some t -> of_decl t
+    | None -> fresh_metavar () in
+  let body = build_arrow_chain param_tys ret_ty in
+  { bound = List.filter_map (function (_, TyMetaVar n) -> Some n | _ -> None) tparams; body }
+
+let rec decompose t n =
+  if n = 0 then ([], t)
+  else match t with
+    | TyArrow (a, b) ->
+        let (rest, ret) = decompose b (n - 1) in
+        (a :: rest, ret)
+    | _ -> failwith "hm_infer: fun signature not arrow chain"
+
+let walk_body (env : env) (cs : constraint_set) (fn : fun_decl) (sch : scheme) : unit =
+  let (param_tys, ret_ty) = decompose sch.body (List.length fn.fn_params) in
+  let local_env = List.fold_left2 (fun env p t ->
+    add_var env p.param_name t) env fn.fn_params param_tys in
+  ignore (infer_stmts local_env cs ret_ty fn.fn_body)
+
+(* The groups of mutually recursive funs, the ones a group calls first (Tarjan). *)
+let recursive_groups (funs : string list) (calls : string -> string list) : string list list =
+  let index = Hashtbl.create 16 and low = Hashtbl.create 16 in
+  let on_stack = Hashtbl.create 16 in
+  let stack = ref [] and next = ref 0 and groups = ref [] in
+  let rec visit v =
+    Hashtbl.replace index v !next;
+    Hashtbl.replace low v !next;
+    incr next;
+    stack := v :: !stack;
+    Hashtbl.replace on_stack v ();
+    List.iter (fun w ->
+      if not (Hashtbl.mem index w) then begin
+        visit w;
+        Hashtbl.replace low v (min (Hashtbl.find low v) (Hashtbl.find low w))
+      end else if Hashtbl.mem on_stack w then
+        Hashtbl.replace low v (min (Hashtbl.find low v) (Hashtbl.find index w)))
+      (calls v);
+    if Hashtbl.find low v = Hashtbl.find index v then begin
+      let rec pop acc =
+        match !stack with
+        | [] -> acc
+        | w :: rest ->
+            stack := rest;
+            Hashtbl.remove on_stack w;
+            if w = v then w :: acc else pop (w :: acc) in
+      groups := pop [] :: !groups
+    end in
+  List.iter (fun v -> if not (Hashtbl.mem index v) then visit v) funs;
+  List.rev !groups
+
+(* Generalization, for a fun of a group already solved: each unknown still free
+ * in its parameters is a type parameter, exactly as if the fun were written with
+ * <T>. At top level no unknown is free in the environment: what an earlier group
+ * fixed is closed, and an open one of this group is free only in this group. *)
+let type_param_names (taken : string -> bool) (fn : fun_decl) (n : int) : string list =
+  let rec go i acc k =
+    if k = 0 then List.rev acc
+    else
+      let name = if i = 1 then "T" else Printf.sprintf "T%d" i in
+      if taken name || List.mem name fn.fn_type_params then go (i + 1) acc k
+      else go (i + 1) (name :: acc) (k - 1) in
+  go 1 [] n
+
+let generalized (taken : string -> bool) (sigma : subst) (fn : fun_decl) (sch : scheme)
+    : fun_decl * scheme =
+  let (param_tys, ret_ty) = decompose (apply_subst sigma sch.body) (List.length fn.fn_params) in
+  let open_params = List.concat (List.map2 (fun p t ->
+      if p.param_ty = TyUser "_" then free_metavars t else []) fn.fn_params param_tys) in
+  let free = List.filter (fun n -> n >= 0) (List.sort_uniq compare open_params) in
+  let names = List.combine free (type_param_names taken fn (List.length free)) in
+  let named t = map_leaves (function
+    | TyMetaVar n when List.mem_assoc n names -> Some (TyUser (List.assoc n names))
+    | _ -> None) t in
+  let fn_params = List.map2 (fun p t ->
+    if p.param_ty = TyUser "_" then { p with param_ty = named t } else p) fn.fn_params param_tys in
+  let fn_return = match fn.fn_return with
     | Some t -> Some t
-    | None -> Some (metavar_to_unknown final_ret_ty)
-  in
-  { fn with fn_params = new_params; fn_return = new_return }
+    | None -> Some (metavar_to_unknown (named ret_ty)) in
+  ({ fn with fn_params; fn_return;
+             fn_type_params = fn.fn_type_params @ List.map snd names },
+   { bound = free; body = apply_subst sigma sch.body })
 
 (* ─── Top-level: infer_program ────────────────────────────────────────── *)
 
+(* A parameter without annotation whose uses do not agree: the checker reports
+   these, the fun is left as it was. *)
+let parameter_errors : (location * string) list ref = ref []
+
 let infer_program (p : program) : program =
   reset_metavars ();
-  let env0 = build_initial_fun_env p in
+  parameter_errors := [];
+  Hashtbl.reset param_names;
+  open_world := true;
+  let funs = List.filter_map (function TopFun fn -> Some fn | _ -> None) p in
+  List.iter (fun fn ->
+    Hashtbl.replace param_names fn.fn_name (List.map (fun q -> q.param_name) fn.fn_params)) funs;
+  let taken name =
+    List.exists (function
+      | TopPlace pd -> pd.pd_name = name
+      | _ -> false) p in
+  let env = ref (List.fold_left (fun env fn ->
+    add_fun env fn.fn_name (initial_scheme fn)) empty_env funs) in
+  let to_infer = List.filter needs_inference funs in
+  let find name = List.find_opt (fun fn -> fn.fn_name = name) to_infer in
+  (* which of the funs to infer a body reads *)
+  let calls name =
+    match find name with
+    | None -> []
+    | Some fn ->
+        reads := [];
+        (try walk_body !env (new_constraints ()) fn (Option.get (lookup_fun !env name))
+         with Infer_error _ -> ());
+        List.filter (fun w -> find w <> None) (List.sort_uniq compare !reads) in
+  let results = Hashtbl.create 16 in
+  List.iter (fun group ->
+    let group_funs = List.filter_map find group in
+    let scheme_of fn = Option.get (lookup_fun !env fn.fn_name) in
+    let cs = new_constraints () in
+    match
+      List.iter (fun fn -> walk_body !env cs fn (scheme_of fn)) group_funs;
+      solve_constraints cs
+    with
+    | sigma ->
+        List.iter (fun fn ->
+          let (fn', sch) = generalized taken sigma fn (scheme_of fn) in
+          Hashtbl.replace results fn.fn_name fn';
+          env := add_fun !env fn.fn_name sch) group_funs
+    | exception Infer_error why ->
+        (* the fun stays as it was; a parameter without annotation is refused *)
+        List.iter (fun fn ->
+          if is_open fn then begin
+            let detail = match why with
+              | UnifyFailed (e, _, ctx) ->
+                  Printf.sprintf "%s: %s" ctx (unify_error_to_string e)
+              | ArityMismatch (f, want, got, _) ->
+                  Printf.sprintf "%s expects %d arguments, got %d" f want got
+              | UnknownVar (x, _) | UnknownFun (x, _) -> "unknown name " ^ x in
+            let unannotated = List.filter_map (fun q ->
+                if q.param_ty = TyUser "_" then Some q.param_name else None) fn.fn_params in
+            parameter_errors := (fn.fn_loc, Printf.sprintf
+              "fun %s: the uses of its parameter%s without annotation (%s) do not agree: %s: \
+               annotate the parameter"
+              fn.fn_name
+              (if List.length unannotated > 1 then "s" else "")
+              (String.concat ", " unannotated) detail) :: !parameter_errors
+          end) group_funs)
+    (recursive_groups (List.map (fun fn -> fn.fn_name) to_infer) calls);
+  open_world := false;
+  parameter_errors := List.rev !parameter_errors;
   List.map (function
     | TopFun fn ->
-        (try TopFun (infer_fun_decl env0 fn)
-         with Infer_error _ ->
-           (* On an HM error, leave the fn unchanged; the downstream tycheck
-            * will produce a clearer message. *)
-           TopFun fn)
-    | other -> other
-  ) p
+        (match Hashtbl.find_opt results fn.fn_name with
+         | Some fn' when needs_inference fn -> TopFun fn'
+         | _ -> TopFun fn)
+    | other -> other) p

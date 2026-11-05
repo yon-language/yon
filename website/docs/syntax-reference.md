@@ -112,8 +112,11 @@ The four **handle types** make arrows first-class values: a handle can be
 passed as a parameter. Each keeps its categorical stratification: handles do
 not nest, they only compose, through [`compose`](/book/keywords#compose).
 
-A function parameter may omit its annotation; the signature pre-pass infers it
-from the call sites.
+A function parameter may omit its annotation. It then has a type variable: the
+uses in the body fix it, and uses that do not agree are refused; if it stays free
+it generalizes, and the function is generic, exactly as written with `<T>`.
+Recursion is monomorphic: inside its own body, or its group of mutually recursive
+functions, a function has one type.
 
 ## Expressions
 

@@ -219,13 +219,23 @@ let () =
   check "infer_program: multi-param a+b return inferred number"
     (ret_of [ TopFun add2 ] = Some num);
 
-  (* graceful bail-out: body references an unknown var -> inference throws
-     UnknownVar -> infer_program leaves the fn UNCHANGED (param stays "_"). *)
+  (* uses that do not agree -> infer_program leaves the fn UNCHANGED (param stays
+     "_") and records the refusal the checker reports. *)
   let bad = mkfun "bad"
       [ { param_name = "x"; param_ty = TyUser "_" } ] None
-      [ SReturn (var "undefined_here", dl) ] in
-  check "infer_program: on inference error the fn is left unchanged (param stays \"_\")"
+      [ SLet ("y", EBinop (OpAdd, var "x", ELit (LitNumber 1.0, dl), dl), dl);
+        SReturn (EBinop (OpAnd, var "x", ELit (LitBool true, dl), dl), dl) ] in
+  check "infer_program: on disagreeing uses the fn is left unchanged (param stays \"_\")"
     (param_of [ TopFun bad ] = Some (TyUser "_"));
+  check "infer_program: the disagreeing uses are recorded for the checker"
+    (List.length !Hm_infer.parameter_errors = 1);
+
+  (* a parameter nothing fixes generalizes: a type parameter, never unknown. *)
+  let free = mkfun "free"
+      [ { param_name = "x"; param_ty = TyUser "_" } ] None
+      [ SReturn (var "x", dl) ] in
+  check "infer_program: a free parameter is a type parameter"
+    (param_of [ TopFun free ] = Some (TyUser "T"));
 
   Printf.printf "\n%d passed, %d failed\n" !pass !fails;
   if !fails = 0 then exit 0 else exit 1

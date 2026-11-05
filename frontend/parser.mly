@@ -1000,7 +1000,7 @@ param:
   | name = IDENT COLON t = type_expr
     { { param_name = name; param_ty = t } }
   (* A parameter without an annotation becomes the marker TyUser "_", which
-   * the infer_fun_signatures pre-pass resolves from the call sites. *)
+   * Hm_infer resolves: fixed by the uses in the body, or generalized. *)
   | name = IDENT
     { { param_name = name; param_ty = TyUser "_" } }
 

@@ -7993,24 +7993,19 @@ let heap_alloc_errors (p : program) : type_error list =
 
 (* ─── HM type inference opt-in ──────────── *)
 (*
- * Pre-pass: for each fun_decl with a parameter marker TyUser "_" or with
- * fn_return = None, infer the type by looking at the call sites and the return
- * statements of the body.
+ * Pre-pass: for each fun_decl with fn_return = None, infer the return type by
+ * looking at the return statements of the body.
  *
  * A best-effort strategy (not full Algorithm W):
  *   1. expr_ty_heuristic produces base types from literals, binops, and ECall
  *      of known functions.
- *   2. For each "_" parameter: find ECall(name, args), take the type of the
- *      i-th argument, and aggregate by majority.
- *   3. For fn_return = None: scan the body for SReturn and apply the
- *      heuristic.
- *   4. Substitute.
+ *   2. Scan the body for SReturn and apply the heuristic.
+ *   3. Substitute.
  *
  * Honest limits:
  *   - Does not handle polymorphic recursion (Mycroft-Tofte would be needed).
- *   - Does not handle higher-order functions: a function passed as an argument
- *     makes the referring parameter take TyPrim "unknown" (a placeholder).
- *   - Does not produce universally quantified type schemes.
+ *   - It fixes only missing return types: a parameter without annotation is left
+ *     to Hm_infer, which types it or generalizes it.
  *)
 
 let rec expr_ty_heuristic
@@ -8102,69 +8097,10 @@ let infer_fun_signatures (p : program) : (program, type_error) result =
   let infer_one (fn : fun_decl) : fun_decl =
     if not (needs_inference fn) then fn
     else begin
-      (* Find the call sites of this function in the whole program. *)
-      let call_arg_lists = ref [] in
-      let rec walk_expr e =
-        match e with
-        | ECall (name, args, _) when name = fn.fn_name ->
-            call_arg_lists := args :: !call_arg_lists;
-            List.iter walk_expr args
-        | ECall (_, args, _) -> List.iter walk_expr args
-        | EBinop (_, a, b, _) -> walk_expr a; walk_expr b
-        | EParen (e, _) | ENot (e, _) -> walk_expr e
-        | EIfThenElse (c, t, e, _) -> walk_expr c; walk_expr t; walk_expr e
-        | EField (e, _, _) -> walk_expr e
-        | _ -> ()
-      and walk_stmt s =
-        match s with
-        | SLet (_, e, _) | SReturn (e, _)
-        | SAssignHolds (_, e, _) | SAssignBecomes (_, e, _)
-        | SEmit (e, _) -> walk_expr e
-        | SCall (name, args, _) ->
-            if name = fn.fn_name then call_arg_lists := args :: !call_arg_lists;
-            List.iter walk_expr args
-        | SNew (_, fas, _) | SNewIn (_, _, fas, _) ->
-            List.iter (fun fa -> walk_expr fa.fa_value) fas
-        | SWhen (_, body, alts, otherwise, _) ->
-            List.iter walk_stmt body;
-            List.iter (fun (_, b) -> List.iter walk_stmt b) alts;
-            (match otherwise with Some os -> List.iter walk_stmt os | None -> ())
-        | SForEvery (_, _, e, body, _) | SInSequence (_, e, body, _) ->
-            walk_expr e; List.iter walk_stmt body
-        | SRepeat (_, body, otherwise, _) ->
-            List.iter walk_stmt body;
-            (match otherwise with Some os -> List.iter walk_stmt os | None -> ())
-        | SForever (body, _) -> List.iter walk_stmt body
-        | SScope (_, body, e, _) -> List.iter walk_stmt body; walk_expr e
-        | SProduce (body, _) -> List.iter walk_stmt body
-        | SForces (_, _, body, _) -> List.iter walk_stmt body
-        | SIter (n, body, _) -> walk_expr n; List.iter walk_stmt body
-        | SWhile (c, body, _) -> walk_expr c; List.iter walk_stmt body
-        | SPromote (e, _) -> walk_expr e
-        | SDrop _ -> ()
-      in
-      List.iter (function
-        | TopFun other_fn -> List.iter walk_stmt other_fn.fn_body
-        | _ -> ()) p;
-      (* Infer each "_" parameter from the type of the corresponding argument at the call sites. *)
-      let n_params = List.length fn.fn_params in
-      let inferred_params = List.mapi (fun i p ->
-        if p.param_ty <> TyUser "_" then p
-        else begin
-          let arg_tys = List.filter_map (fun args ->
-            if List.length args = n_params then
-              expr_ty_heuristic [] [] known_fun_returns (List.nth args i)
-            else None
-          ) !call_arg_lists in
-          (* Maggioranza *)
-          let inferred = match arg_tys with
-            | [] -> TyPrim "unknown"
-            | t :: rest when List.for_all (fun u -> u = t) rest -> t
-            | _ -> TyPrim "unknown"
-          in
-          { p with param_ty = inferred }
-        end
-      ) fn.fn_params in
+      (* A parameter without annotation stays marked: Hm_infer gives it its type
+         variable, fixed by the uses in the body or generalized. The call sites
+         say nothing about it. *)
+      let inferred_params = fn.fn_params in
       (* Infer the return type if missing. *)
       let inferred_return =
         match fn.fn_return with
@@ -8172,7 +8108,10 @@ let infer_fun_signatures (p : program) : (program, type_error) result =
         | None ->
             let param_types = List.map (fun p -> (p.param_name, p.param_ty))
                                 inferred_params in
-            infer_body_return_type param_types known_fun_returns fn.fn_body
+            (* a return read off a parameter still marked waits for Hm_infer *)
+            (match infer_body_return_type param_types known_fun_returns fn.fn_body with
+             | Some (TyUser "_") -> None
+             | r -> r)
       in
       { fn with fn_params = inferred_params; fn_return = inferred_return }
     end
@@ -8332,7 +8271,18 @@ let elaborate_id_sugar (p : program) : program =
       in
       { fd with fn_params; fn_return; fn_body }
     in
-    List.map (function TopFun fd -> TopFun (resolve_fun fd) | d -> d) p
+    (* the signature Hm_infer gave a fun with parameters without annotation goes
+       downstream: its type parameters are the ones of a fun written with <T> *)
+    let inferred (fd : fun_decl) : fun_decl =
+      if not (Hm_infer.is_open fd) then fd
+      else
+        match List.find_map (function
+            | TopFun g when g.fn_name = fd.fn_name && not (Hm_infer.is_open g) -> Some g
+            | _ -> None) p3 with
+        | Some g -> { fd with fn_params = g.fn_params; fn_return = g.fn_return;
+                              fn_type_params = g.fn_type_params }
+        | None -> fd in
+    List.map (function TopFun fd -> TopFun (resolve_fun (inferred fd)) | d -> d) p
 
 (* A function the parser lifted out of an inline lambda. *)
 let is_lifted_lambda (name : string) : bool =
@@ -8432,6 +8382,12 @@ let check_program (p : program) : check_result =
    * completes what the light pass could not infer. Handles parameters of type
    * TyArrow (HOF). *)
   let p = Hm_infer.infer_program p in
+  match !Hm_infer.parameter_errors with
+  | _ :: _ as errs ->
+      { cr_env = Tyenv.with_builtins Tyenv.empty;
+        cr_errors = List.map (fun (loc, msg) ->
+          { err_loc = loc; err_code = Error_codes.Type_check; err_msg = msg }) errs }
+  | [] ->
   (* Register moves in Move_engine before type checking, so EVar can identify
    * move names as TyMoveHandle. *)
   List.iter (function

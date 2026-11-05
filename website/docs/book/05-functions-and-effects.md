@@ -20,9 +20,11 @@ fun main: Number {
 }
 ```
 
-**Inference.** A parameter may omit its annotation; the signature pre-pass
-resolves it from the call sites. Type parameters use angle brackets
-(`fun id<A>(x: A): A`).
+**Inference.** A parameter may omit its annotation. It has a type variable: the
+uses in the body fix it, and uses that do not agree are refused; if it stays free
+the function is generic, as if written with a type parameter. `fun double(x)` above
+has `x: Number`, fixed by `x * 2`; `fun id(x) { return x }` is `fun id<T>(x: T): T`.
+Recursion is monomorphic. Type parameters use angle brackets (`fun id<A>(x: A): A`).
 
 **Lambdas and pipes.** `fun(x) => e` is the inline lambda. The pipe
 `a ↦ f` passes `a` as the argument of `f`; more arguments are a tuple, `(a, y) ↦ f`. Method
