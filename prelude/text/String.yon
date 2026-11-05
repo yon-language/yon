@@ -110,6 +110,28 @@ place String carried by text {
     return if n <= 0 then "" else String.concat(s, replicate(s, n - 1))
   }
 
+  /* ─── Case ───────────────────────────────────────────────────── [T] ───
+   * `char_at` returns the character code, so the ASCII block A–Z is the
+   * interval 65–90 and the lowercase twin is the same code plus 32.
+   * Outside that block the code is returned unchanged: the rope can be read
+   * as bytes or as codepoints, and this function claims only the part on
+   * which the two readings agree. */
+
+  fun lower_char(c: Number): Number {
+    return if c >= 65 && c <= 90 then c + 32 else c
+  }
+
+  fun lower_step(s: String, i: Number, acc: String): String {
+    return if i < 0 then acc
+           else lower_step(s, i - 1,
+                  String.concat(String.from_char(lower_char(String.char_at(s, i))),
+                                acc))
+  }
+
+  fun lower(s: String): String {
+    return lower_step(s, String.length(s) - 1, "")
+  }
+
   /* ─── The endomorphism, declared as such ─────────────────────────────
    * Reverse carries a true law: it is an involution. The others stay
    * `fun` — take/skip/index_of preserve no interesting structure, and

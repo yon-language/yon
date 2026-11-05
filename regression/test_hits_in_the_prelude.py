@@ -88,14 +88,24 @@ def test_a_truncation_is_built_and_read(tmp_path):
 def _up_to_case(lowered):
     return {"TextUpToCase": "place TextUpToCase { this > inj String\n"
             "  law quot ∀a : String ∀b : String, a ↦ lower = b ↦ lower → a ↪ inj = b ↪ inj\n"
-            "  fun lower(s: String): String { return String.concat(s, \"\") }\n}\n",
+            "  fun lower(s: String): String { return String.lower(s) }\n}\n",
             "Uso": "place Uso {\n"
-            "  fun domain_of(s: String): Number { return String.length(s) }\n"
+            "  fun domain_of(s: String): Number {\n"
+            "    return if String.equal(s, \"abc\") then 3 else 0\n"
+            "  }\n"
             "  fun domain(e: TextUpToCase): Number {\n"
             f"    return match e {{ inj as s => {lowered} ↦ domain_of,\n"
             "                     quot as (a, b, prova) => (domain_of, prova) ↦ ap }\n"
             "  }\n"
-            "  fun run: Number { return domain(\"abc\" ↪ inj) }\n}\n"}
+            "  fun run: Number { return domain(\"AbC\" ↪ inj) }\n}\n"}
+
+
+def test_lower_lowers_ascii_letters(tmp_path):
+    src = _entry("fun same(s: String, t: String): Boolean { return String.equal(String.lower(s), t) }\n",
+                 "return if same(\"AbC\", \"abc\") && same(\"ABC\", \"abc\") && same(\"a1!Z\", \"a1!z\") "
+                 "&& same(\"@[\", \"@[\") && same(\"\", \"\") && same(\"È\", \"È\") "
+                 "then 42 else 1")
+    assert _exit(tmp_path, src) == 42
 
 
 def test_a_map_out_of_a_quotient_respects_the_relation(tmp_path):
@@ -291,15 +301,17 @@ def test_a_term_parameter_may_name_a_fun_of_a_place_read_later(tmp_path):
 
 def _generic_up_to_case(lowered):
     return ("place Entry {\n"
-            "  fun lower(s: String): String { return String.concat(s, \"\") }\n"
+            "  fun lower(s: String): String { return String.lower(s) }\n"
             "  fun same_case(a: String, b: String): Type { return a ↦ lower = b ↦ lower }\n"
-            "  fun domain_of(s: String): Number { return String.length(s) }\n"
+            "  fun domain_of(s: String): Number {\n"
+            "    return if String.equal(s, \"abc\") then 3 else 0\n"
+            "  }\n"
             "  fun domain(e: Quotient<String, same_case>): Number {\n"
             f"    return match e {{ inj as s => {lowered} ↦ domain_of,\n"
             "                     quot as (a, b, prova) => (domain_of, prova) ↦ ap }\n"
             "  }\n"
             "  fun dentro(s: String): Quotient<String, same_case> { return s ↪ inj }\n"
-            "  fun main: Number { return domain(dentro(\"abc\")) }\n}\n")
+            "  fun main: Number { return domain(dentro(\"AbC\")) }\n}\n")
 
 
 def test_the_generic_quotient_carries_a_true_relation(tmp_path):
