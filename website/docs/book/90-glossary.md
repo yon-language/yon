@@ -101,6 +101,10 @@ across packages, its own process; content
 crosses through moves, and by copy on a cross-Space call or a `Wire<T>`;
 only a mobile value crosses (a closure, a cell or a region handle never does).
 
+**Wire**, the boundary between two Spaces: what crosses it is what the wire
+can carry, while in the language this transport is the `Wire` family and
+`Wire<T>` is its type, not the boundary itself.
+
 **content addressing**, the FNV heap's contract: the address of a value
 is determined by its bytes, so same content is the same slot and equality
 is one comparison.
