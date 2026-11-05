@@ -3,6 +3,9 @@
 #
 #   gate.sh 0    build + smoke           (~10 s)
 #   gate.sh 1    0 + targeted on the dirty files (~1-3 min)
+#   gate.sh 1 main    the same, on the files changed since main (so a commit
+#                already made is not left without its targeted tests)
+#   gate.sh 1 3       the same, on the files changed by the last 3 commits
 #   gate.sh 2    1 + acceptance          (~3-5 min)   <- default
 #   gate.sh 3    2 + full pytest         (parallel + serial phase; the benchmarks
 #                only checked for their values, on a small run)
@@ -19,6 +22,10 @@
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TIER="${1:-2}"
+# The starting point of tier 1 (only): a ref (`main`) or a number of commits
+# (`3` = HEAD~3). Without it tier 1 looks at the working tree alone.
+START="${2:-}"
+BASE=""
 # The content cache of yonc is opt-in: YONC_CACHE_DIR=<dir> answers a
 # compilation already made with this toolchain from the cache
 # (toolchain/yonc_cache_key.py). Off by default: on this machine the time is in
@@ -71,6 +78,24 @@ die() {  # die <step> [output]
   [ $# -ge 2 ] && keep "$1" "$2"
   echo "GATE RED ($1) after $(( $(date +%s) - t0 ))s"; exit 1; }
 
+# Resolve the starting point before the build: a wrong argument is an answer
+# about the argument, not a partial run of the suite.
+if [ -n "$START" ]; then
+  case "$START" in
+    *[!0-9]*)
+      BASE=$(git -C "$ROOT" rev-parse --verify --quiet "${START}^{commit}") || {
+        echo "gate: starting point '$START' is not a commit" >&2; exit 2; }
+      ;;
+    *)
+      if [ "$START" -lt 1 ]; then
+        echo "gate: the number of commits must be at least 1" >&2; exit 2
+      fi
+      BASE=$(git -C "$ROOT" rev-parse --verify --quiet "HEAD~${START}^{commit}") || {
+        echo "gate: no HEAD~${START}: the history is shorter" >&2; exit 2; }
+      ;;
+  esac
+fi
+
 # --- tier 0: build + smoke ---------------------------------------------
 # The suite writes only in its own temp dirs: a file the repo does not track
 # that appears during the run is a test writing by a relative path (it would
@@ -106,8 +131,21 @@ SOUT=$("$ROOT/toolchain/yonc" "$ROOT/examples/vec_basic" -o /tmp/gate_smoke 2>&1
 [ $? -eq 62 ] || die "smoke exit (expected 62, vec_basic from the baseline)"
 [ "$TIER" = "0" ] && { echo "gate 0 green ($(( $(date +%s) - t0 ))s)"; exit 0; }
 
-# --- tier 1: targeted, from the dirty files ----------------------------
-DIRTY=$(cd "$ROOT" && git status --porcelain | awk '{print $2}')
+# --- tier 1: targeted, from the dirty files or a starting point --------
+# A starting point widens the set to the commits already made: the files
+# that differ from it (the working tree included) and the untracked ones.
+# The tests are the same map either way, so a committed change is not left
+# without its targeted tests.
+if [ -n "$BASE" ]; then
+  say "tier 1: starting point $START ($(git -C "$ROOT" rev-parse --short "$BASE"))"
+  DIRTY=$(
+    { git -C "$ROOT" diff --name-only "$BASE" --
+      git -C "$ROOT" ls-files --others --exclude-standard
+    } | sed '/^$/d' | sort -u
+  )
+else
+  DIRTY=$(git -C "$ROOT" status --porcelain | awk '{print $2}')
+fi
 PICK=""
 add() { case " $PICK " in *" $1 "*) ;; *) PICK="$PICK $1";; esac; }
 for f in $DIRTY; do
