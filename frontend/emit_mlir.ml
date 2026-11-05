@@ -263,7 +263,7 @@ let stdlib_registry : (string * (string list * string)) list = [
   (* List builtin: a slot_index in the content-addressed xheap exposed as f64.
    * Empty list = the sentinel YON_HEAP_SLOT_INVALID = (double)0xFFFFFFFF.
    * Note: List__empty takes a dummy arg for surface uniformity (the user writes
-   * `List.empty(0)`), likewise Space__make. *)
+   * `List.empty(0)`), likewise __cell_make. *)
 
   (* Vec: persistent dynamic array (v1 copy-on-write); the handle is an f64. *)
   "Vec__empty", ([], "f64");
@@ -273,9 +273,9 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Vec__size",  (["f64"], "f64");
 
   (* Space: a mutable cell kept in a static BSS registry, its id passed as f64. *)
-  "Space__make", (["f64"], "f64");
-  "Space__set",  (["f64"; "f64"], "f64");
-  "Space__get",  (["f64"], "f64");
+  "__cell_make", (["f64"], "f64");
+  "__cell_set",  (["f64"; "f64"], "f64");
+  "__cell_get",  (["f64"], "f64");
 
   (* The Ord category is place-based, not a stdlib builtin. The program writes
      `place Ord with operation compare(...)`, and the OperationOp lowering
@@ -592,7 +592,7 @@ let g_strlits : (string, string) Hashtbl.t = Hashtbl.create 16
    cross an f64 boundary), but the section TYPE would be lost, so a later `p.x`
    would try to project a field off an f64 and crash emit. This table remembers,
    per promoted cell variable, the element section type recorded at its
-   `Space__make` binding; `Space__get` on such a cell reconstructs a section from
+   `__cell_make` binding; `__cell_get` on such a cell reconstructs a section from
    the f64 handle (fptosi + xcoord_to_section, the existing inverse coercion).
    Scalar cells never enter the table. Reset per function in emit_function. *)
 let g_cell_elem : (string, string) Hashtbl.t = Hashtbl.create 16
@@ -1147,8 +1147,8 @@ let rec infer_mlir_ty (e : emitter)
    * disappear, but if the inlining fails, e.g. a variable used more than once,
    * the inference must know the type). All f64 as a stub (Sequence id). *)
   (* A read of a place-typed or Boolean promoted cell: typed as the cell's
-     element (recorded at its Space__make binding). *)
-  | C.App (C.Var "Space__get", C.Var p) when Hashtbl.mem g_cell_elem p ->
+     element (recorded at its __cell_make binding). *)
+  | C.App (C.Var "__cell_get", C.Var p) when Hashtbl.mem g_cell_elem p ->
       Hashtbl.find g_cell_elem p
   (* Field projection, carried as App(Var "__field_X", obj). *)
   | C.App (C.Var fvar, obj) when extract_field_name fvar <> None ->
@@ -1244,7 +1244,7 @@ let rec infer_mlir_ty (e : emitter)
        | _ ->
            let tv = infer_mlir_ty e env funcs value in
            (match value with
-            | C.App (C.Var "Space__make", e0) ->
+            | C.App (C.Var "__cell_make", e0) ->
                 let ety = infer_mlir_ty e env funcs e0 in
                 if is_section_ty_str ety || ety = "i1" then Hashtbl.replace g_cell_elem x ety
                 else Hashtbl.remove g_cell_elem x
@@ -1874,7 +1874,7 @@ let emit_zero_arg_call (e : emitter) (f : string) (ret : string) : string * stri
 (* A block makes a cell when its body names the cell constructor. *)
 let block_makes_cell (body : C.term) : bool =
   let fv = term_free_vars body in
-  SS.mem "Space__make" fv || SS.mem "Space__new" fv
+  SS.mem "__cell_make" fv || SS.mem "__cell_make" fv
 
 (* An integer quotient or remainder, on i64 operands, with no undefined
    case: a divisor of zero is the refusal DivisionByZero; the one quotient
@@ -2802,7 +2802,7 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf
         "%s = func.call @yon_rt_observe(%s, %s, %s) : (f64, f64, f64) -> f64" v vs vk vd);
       (v, "f64")
-  | C.App (C.Var "Space__get", (C.Var p as cellvar)) when Hashtbl.mem g_cell_elem p ->
+  | C.App (C.Var "__cell_get", (C.Var p as cellvar)) when Hashtbl.mem g_cell_elem p ->
       (* Reading a place-typed promoted cell: load the f64 handle, then rebuild the
          section from it so a downstream `p.x` projects a real place, not an f64;
          a Boolean cell reads its slot back as an i1. *)
@@ -4219,7 +4219,7 @@ let rec emit_term (e : emitter)
                        else (vv, tv)
                    | _ -> (vv, tv)) in
                 (match value with
-                 | C.App (C.Var "Space__make", e0) ->
+                 | C.App (C.Var "__cell_make", e0) ->
                      let ety = infer_mlir_ty e env funcs e0 in
                      if is_section_ty_str ety || ety = "i1" then Hashtbl.replace g_cell_elem x ety
                 else Hashtbl.remove g_cell_elem x
@@ -6625,9 +6625,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
       "text_to_prop", `RT ("yon_rt_text_to_prop", `PtrToProp);
       (* Immutable list over the content-addressed xheap *)
       (* Mutable space cell (a static BSS registry) *)
-      "Space__make",  `RT ("yon_rt_space_make",   `F64ToF64);
-      "Space__set",   `RT ("yon_rt_space_set",    `F64F64ToF64);
-      "Space__get",   `RT ("yon_rt_space_get",    `F64ToF64);
+      "__cell_make",  `RT ("yon_rt_space_make",   `F64ToF64);
+      "__cell_set",   `RT ("yon_rt_space_set",    `F64F64ToF64);
+      "__cell_get",   `RT ("yon_rt_space_get",    `F64ToF64);
     ] in
     List.iter (fun name ->
       let (params, ret) = List.assoc name stdlib_registry in

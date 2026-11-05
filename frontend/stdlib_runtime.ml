@@ -119,7 +119,7 @@ let list_append (a : term) (b : term) : term option =
  * World-indexed Space (Yoneda multi-tenancy realization):
  * 
  * A Space is allocated relative to a world tag. The same surface code
- * `Space.make(initial_value)` evaluated in two different world contexts
+ * `mut c := initial_value` evaluated in two different world contexts
  * (e.g., two different tenants, two different regions) produces TWO
  * DIFFERENT spaces with independent state. This realizes the topos-
  * theoretic intuition: a Space is a section of a sheaf, and sections
@@ -297,13 +297,11 @@ let try_reduce_stdlib (t : term) : term option =
        | _ -> None)
 
   (* Space operations *)
-  | App (Var "Space__new", init) ->
+  | App (Var "__cell_make", init) ->
       Some (space_new init)
-  | App (Var "Space__make", init) ->
-      Some (space_new init)
-  | App (Var "Space__get", sp) ->
+  | App (Var "__cell_get", sp) ->
       space_get sp
-  | App (App (Var "Space__set", sp), v) ->
+  | App (App (Var "__cell_set", sp), v) ->
       space_set sp v
 
   (* Stream operations *)
@@ -412,13 +410,13 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
      * Bit-parallel union/intersect operations, ~50x faster than HashSet for
      * medium-sized sets (10K+ elements). *)
     "XSet", [
-      "empty", [], TyUser "Map";
-      "add", [TyUser "Map"; tnum], TyUser "Map";
-      "contains", [TyUser "Map"; tnum], tbool;
-      "size", [TyUser "Map"], tnum;
-      "union", [TyUser "Map"; TyUser "Map"], TyUser "Map";
-      "intersect", [TyUser "Map"; TyUser "Map"], TyUser "Map";
-      "to_stream", [TyUser "Map"], tlist tnum;
+      "empty", [], TyUser "XSet";
+      "add", [TyUser "XSet"; tnum], TyUser "XSet";
+      "contains", [TyUser "XSet"; tnum], tbool;
+      "size", [TyUser "XSet"], tnum;
+      "union", [TyUser "XSet"; TyUser "XSet"], TyUser "XSet";
+      "intersect", [TyUser "XSet"; TyUser "XSet"], TyUser "XSet";
+      "to_stream", [TyUser "XSet"], tlist tnum;
     ];
     (* The primitives XRelSet<T> and XRelMap<K, V> (prelude/coll) declare
        `is given`: the collections of the Leech heap. *)
@@ -528,12 +526,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "open", [tnum], tnum;
       "corrupt", [tnum; tnum], tnum;
       "to_stream", [TyUser "VoyagerList"], tlist tnum;
-    ];
-    "Space", [
-      "make", [tunk], TyUser "Space";
-      "new", [tunk], TyUser "Space";
-      "get", [TyUser "Space"], tunk;
-      "set", [TyUser "Space"; tunk], tunit;
     ];
     (* There is no Lattice module: heyt_int values are built with the
      * __heyt_int_make builtins directly. *)

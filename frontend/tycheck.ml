@@ -757,7 +757,7 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
 
 (* Stop-gap (1.1): `=` (Space-cell assign) inside a produce / spawn body desugars to
    __space_update_here, which has no lowering — the cells promotion that turns `x :=`
-   into a Space cell and rewrites `x = e` into `Space.set` does not reach these
+   into a Space cell and rewrites `x = e` into a write does not reach these
    expression-context blocks, so emit_mlir would crash with a Fatal error. A clean
    compile-time error rejects it instead.
    Walks loop / when bodies but not nested produce/spawn (those run their own check). *)
@@ -1052,7 +1052,7 @@ let certify_dependent_cone (hname : string)
   | None -> false
 
 (* The mobility of a closure over a cell (Harper ch. 31, 34, 41; Turbak
-   ch. 16, 18). A local reassigned with `=`, and a cell made with `Space.make`,
+   ch. 16, 18). A local reassigned with `=`, and a cell declared `mut`,
    belong to the activation that creates them: both are freed when it returns
    (space_mark/space_reset). A lambda that mentions such a cell captures its
    HANDLE, not its value, so the closure lives in the fibre over this
@@ -1074,7 +1074,7 @@ let certify_dependent_cone (hname : string)
    - binders inside a body (match patterns, `for every`) are not subtracted:
      that can only make more names count, never fewer.
    The escape sites are: `return` and the implicit tail (leaving the call), a
-   store into a cell (`Space.set`), and the wire (`Wire.send*`, a call to a
+   store into a cell (`c <- e`), and the wire (`Wire.send*`, a call to a
    function imported from another Space). At a store or on the wire the
    function's own parameters of non-mobile type count too, since a closure
    that came in from a caller carries the caller's cells. *)
@@ -1169,9 +1169,9 @@ let ty_mobile (env : Tyenv.env) (t : ty) : bool =
 
 (* A call that makes a cell of this activation, and the cell operations. *)
 let mob_allocates (n : string) : bool =
-  List.mem n ["Space__make"; "Space__new"; "Space.make"; "Space.new"]
-let mob_reads (n : string) : bool = List.mem n ["Space__get"; "Space.get"]
-let mob_writes (n : string) : bool = List.mem n ["Space__set"; "Space.set"]
+  List.mem n ["__cell_make"]
+let mob_reads (n : string) : bool = List.mem n ["__cell_get"]
+let mob_writes (n : string) : bool = List.mem n ["__cell_set"]
 
 (* The cells this activation OWNS: locals bound only ever to a fresh cell.
    Reading one yields its contents, a name of its own ("h#"); writing one is a
@@ -1239,13 +1239,13 @@ let mob_site (env : Tyenv.env) ~(crossing : bool) (t : ty) (e : expr) (loc : loc
   mob_sites := (crossing, ty_mobile env t, e, loc) :: !mob_sites
 
 (* A store into a cell, and the wire: the value arguments cross. The first
-   argument of Space.set / Wire.send* is the cell or the channel itself. *)
+   argument of a cell write / Wire.send* is the cell or the channel itself. *)
 let mob_note_call (env : Tyenv.env) (name : string) (args : expr list)
     (arg_tys : ty list) (locate : expr -> location) =
   let has_prefix p = String.length name >= String.length p
                      && String.sub name 0 (String.length p) = p in
   let values =
-    if List.mem name ["Space__set"; "Space.set"]
+    if List.mem name ["__cell_set"]
        || has_prefix "Wire__send" || has_prefix "Wire.send" then
       (match args with _ :: rest -> Some (1, rest) | [] -> None)
     else if Hashtbl.mem wire_imports name then Some (0, args)
@@ -4230,11 +4230,14 @@ and lambda_expected_by_call env ctx (name : string) (args : expr list)
 and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                (name : string) (args : expr list) (arg_tys : ty list) (loc : location) : ty tc_result =
   match name with
-  | "Space__make" | "Space__new" | "Space__get" | "Space__set" ->
+  | _ when String.starts_with ~prefix:"Space__" name
+           && List.mem (String.sub name 7 (String.length name - 7)) ["make"; "new"; "get"; "set"] ->
       err loc (Printf.sprintf
         "`Space.%s` is gone: a Space is a package, not where a cell is made. A cell is \
          `mut c := e`, written with `c <- e`, read with `c`"
         (String.sub name 7 (String.length name - 7)))
+  | "__cell_make" | "__cell_get" | "__cell_set" ->
+      err loc (Printf.sprintf "unknown function or operation: %s" name)
   | _ ->
   match Hashtbl.find_opt ambiguous_imports name with
   | Some ms when Tyenv.lookup_fun env name = None ->
@@ -4673,7 +4676,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                       let* () = check_args (params, arg_tys) in
                       ok result
                 | None ->
-                    (* Try stdlib signatures: "List__cons", "Space__new", etc. *)
+                    (* Try stdlib signatures: "List__cons", etc. *)
                     (match Stdlib_runtime.lookup_stdlib_signature name with
                      | Some (param_tys, return_ty) ->
                          if List.length param_tys <> List.length arg_tys then
@@ -5266,7 +5269,7 @@ and type_of_lvalue (env : Tyenv.env) (ctx : Reduce.ctx)
          local reassigned with `=`), or build a fresh section with `.->`. *)
       err loc (Printf.sprintf
         "cannot assign to place field '%s.%s': place sections are immutable. \
-         Mutate through a Space cell (a `be`-bound local reassigned with `=`), or \
+         Mutate through a cell (`mut c := e`, `c <- e`), or \
          build a new section with `.-> P { ... }`." x fld)
 
 (* ─── Top-level declaration checking ───────────────────────────────── *)
@@ -6764,7 +6767,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
   (* Parameterizable runtime user-types. Lets one write
    * `fun f(R: Space): ...` and `fun g(m: Map): ...` without having to register
    * them with `place`. *)
-  let runtime_builtin = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH";
+  let runtime_builtin = ["Map"; "HashSet"; "HashMap"; "HSH";
                          "List"; "Stream"; "Sequence"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower"; "MerkleTree";
                          "VoyagerList"; "String"; "Buffer"] in
   match t with
@@ -6774,6 +6777,9 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
   | TyUser n ->
       if List.mem n primitives then ok ()
       else if List.mem n cubical_builtin then ok ()
+      else if n = "Space" && Tyenv.lookup_place env n = None then
+        err loc "`Space` is not a type: a Space is a package. A cell has the type of its \
+                 content, and it is `mut c := e`"
       else if List.mem n runtime_builtin then ok ()
       else if Tyenv.lookup_place env n <> None then ok ()
       else if Tyenv.lookup_world env n <> None then ok ()

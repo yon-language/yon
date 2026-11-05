@@ -116,3 +116,24 @@ def test_equality_on_an_abstract_type_is_refused(tmp_path, decl):
 def test_equality_with_a_type_the_body_fixes_is_accepted(tmp_path):
     _exits(tmp_path, _entry(tmp_path, "fun same(x, y) { return x + 0 == y }\n"
                                       "fun main: Number { return if same(1, 1) then 42 else 0 }"), 42)
+
+
+def test_a_space_is_not_a_type(tmp_path):
+    _refused(_entry(tmp_path, "fun f(c: Space): Number { return 0 }\nfun main: Number { return 0 }"),
+             "`Space` is not a type", "a Space is a package")
+
+
+@pytest.mark.parametrize("name", ["__cell_make", "__cell_get", "__cell_set"])
+def test_the_primitives_of_a_cell_are_not_reachable(tmp_path, name):
+    _refused(_entry(tmp_path, f"fun main: Number {{\n  x := {name}(1)\n  return 0\n}}"),
+             f"unknown function or operation: {name}")
+
+
+def test_an_xset_has_its_own_type(tmp_path):
+    _exits(tmp_path, _entry(tmp_path, "fun two(): XSet { return XSet.add(XSet.add(XSet.empty(), 1), 2) }\n"
+                                      "fun main: Number { return XSet.size(two()) + 40 }"), 42)
+
+
+def test_an_xset_is_not_an_xrelset(tmp_path):
+    _refused(_entry(tmp_path, "fun main: Number {\n  s := XSet.empty()\n  return XRelSet.size(s)\n}"),
+             "XRelSet__size")

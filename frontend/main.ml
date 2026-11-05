@@ -834,11 +834,11 @@ let test_stdlib_space () =
   Printf.printf "\n=== Test 47: stdlib Space — new, get, set ===\n";
   let open Ast in
   let init = Builtins.encode_number 42.0 in
-  let sp = invoke_stdlib (App (Var "Space__new", init)) in
-  let v0 = invoke_stdlib (App (Var "Space__get", sp)) in
+  let sp = invoke_stdlib (App (Var "__cell_make", init)) in
+  let v0 = invoke_stdlib (App (Var "__cell_get", sp)) in
   let new_val = Builtins.encode_number 100.0 in
-  let _ = invoke_stdlib (App (App (Var "Space__set", sp), new_val)) in
-  let v1 = invoke_stdlib (App (Var "Space__get", sp)) in
+  let _ = invoke_stdlib (App (App (Var "__cell_set", sp), new_val)) in
+  let v1 = invoke_stdlib (App (Var "__cell_get", sp)) in
   let ok0 = Builtins.decode_number v0 = Some 42.0 in
   let ok1 = Builtins.decode_number v1 = Some 100.0 in
   Printf.printf "  initial value 42: %b\n" ok0;

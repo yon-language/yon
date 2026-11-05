@@ -2419,8 +2419,8 @@ let desugar_world_decl (wd : S.world_decl) : C.world_decl =
  * for every / in sequence over / repeat at most / forever are lowered
  * STRUCTURALLY onto the verified primitives: while, iter and Space cells
  * (the one mutation mechanism). `x = e` promotes the binding
- * of x to a Space cell: `x := e0` -> `x := Space.make(e0)`,
- * every read of x -> `Space.get(x)`, every `x = e` -> `Space.set(x, e)`.
+ * of x to a cell: `x := e0` -> a cell made with e0,
+ * every read of x -> a read of it, every `x = e` -> a write.
  * The promotion is uniform per function (every binding of an assigned
  * name allocates a cell), which makes it shadowing-safe; lambda parameters
  * shadow as usual and are excluded inside their bodies.
@@ -2606,10 +2606,10 @@ let rec v1_lower_stmt (st : S.stmt) : S.stmt list =
 
 and v1_lower_foreach x e b loc =
   let cur = v1_fresh "cur" in
-  let getcur () = v1_call "Space__get" [S.EVar (cur, S.dummy_loc)] in
+  let getcur () = v1_call "__cell_get" [S.EVar (cur, S.dummy_loc)] in
   (* the two projections of a Cons, in the arm's own slots *)
   let field j = S.ECall ("__arm_field_" ^ string_of_int j, [getcur ()], loc) in
-  [ S.SLet (cur, v1_call "Space__make" [e], loc);
+  [ S.SLet (cur, v1_call "__cell_make" [e], loc);
     (* each turn looks whether the list is empty, takes its head and moves
        to its tail: one look per cell *)
     S.SWhile (
@@ -2618,7 +2618,7 @@ and v1_lower_foreach x e b loc =
       S.SLet (x, field 0, loc)
       :: b
       @ [ S.SLet (v1_fresh "adv",
-                  v1_call "Space__set" [S.EVar (cur, S.dummy_loc); field 1], loc) ],
+                  v1_call "__cell_set" [S.EVar (cur, S.dummy_loc); field 1], loc) ],
       loc) ]
 
 and v1_lower_foreach_stream x e b loc =
@@ -2632,16 +2632,16 @@ and v1_lower_foreach_stream x e b loc =
   let w = v1_fresh "wire" in
   let cur = v1_fresh "wcur" in
   let l = S.dummy_loc in
-  let getcur () = v1_call "Space__get" [S.EVar (cur, l)] in
+  let getcur () = v1_call "__cell_get" [S.EVar (cur, l)] in
   let recv () = v1_call "Wire__recv" [S.EVar (w, l)] in
   [ S.SLet (w, e, loc);
-    S.SLet (cur, v1_call "Space__make" [recv ()], loc);
+    S.SLet (cur, v1_call "__cell_make" [recv ()], loc);
     S.SWhile (
       S.EBinop (S.OpNeq, getcur (), v1_num 4294967295.0, l),
       S.SLet (x, getcur (), loc)
       :: b
       @ [ S.SLet (v1_fresh "adv",
-                  v1_call "Space__set" [S.EVar (cur, l); recv ()], loc) ],
+                  v1_call "__cell_set" [S.EVar (cur, l); recv ()], loc) ],
       loc) ]
 
 and v1_lower_stream_for_every recv f loc =
@@ -2653,16 +2653,16 @@ and v1_lower_stream_for_every recv f loc =
   let w = v1_fresh "fe_w" in
   let cur = v1_fresh "fe_cur" in
   let l = S.dummy_loc in
-  let getcur () = v1_call "Space__get" [S.EVar (cur, l)] in
+  let getcur () = v1_call "__cell_get" [S.EVar (cur, l)] in
   let recvw () = v1_call "Wire__recv" [S.EVar (w, l)] in
   [ S.SLet (fn, f, loc);
     S.SLet (w, S.EVar (recv, l), loc);
-    S.SLet (cur, v1_call "Space__make" [recvw ()], loc);
+    S.SLet (cur, v1_call "__cell_make" [recvw ()], loc);
     S.SWhile (
       S.EBinop (S.OpNeq, getcur (), v1_num 4294967295.0, l),
       [ S.SLet (v1_fresh "fe_r", S.ECall (fn, [getcur ()], l), loc);
         S.SLet (v1_fresh "adv",
-                v1_call "Space__set" [S.EVar (cur, l); recvw ()], loc) ],
+                v1_call "__cell_set" [S.EVar (cur, l); recvw ()], loc) ],
       loc) ]
 
 and v1_lower_stream_fold recv init f loc =
@@ -2673,20 +2673,20 @@ and v1_lower_stream_fold recv init f loc =
   let cur = v1_fresh "fl_cur" in
   let acc = v1_fresh "fl_acc" in
   let l = S.dummy_loc in
-  let getcur () = v1_call "Space__get" [S.EVar (cur, l)] in
-  let getacc () = v1_call "Space__get" [S.EVar (acc, l)] in
+  let getcur () = v1_call "__cell_get" [S.EVar (cur, l)] in
+  let getacc () = v1_call "__cell_get" [S.EVar (acc, l)] in
   let recvw () = v1_call "Wire__recv" [S.EVar (w, l)] in
   ([ S.SLet (fn, f, loc);
      S.SLet (w, S.EVar (recv, l), loc);
-     S.SLet (acc, v1_call "Space__make" [init], loc);
-     S.SLet (cur, v1_call "Space__make" [recvw ()], loc);
+     S.SLet (acc, v1_call "__cell_make" [init], loc);
+     S.SLet (cur, v1_call "__cell_make" [recvw ()], loc);
      S.SWhile (
        S.EBinop (S.OpNeq, getcur (), v1_num 4294967295.0, l),
        [ S.SLet (v1_fresh "fl_set",
-                 v1_call "Space__set"
+                 v1_call "__cell_set"
                    [S.EVar (acc, l); S.ECall (fn, [getacc (); getcur ()], l)], loc);
          S.SLet (v1_fresh "adv",
-                 v1_call "Space__set" [S.EVar (cur, l); recvw ()], loc) ],
+                 v1_call "__cell_set" [S.EVar (cur, l); recvw ()], loc) ],
        loc) ],
    getacc ())
 
@@ -2714,7 +2714,7 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   let r = v1_cell_expr cells in
   match e with
   | S.EVar (x, loc) when V1SS.mem x cells ->
-      v1_call "Space__get" [S.EVar (x, loc)]
+      v1_call "__cell_get" [S.EVar (x, loc)]
   | S.EVar _ | S.ELit _ | S.EPullback _ | S.EPushout _ -> e
   | S.EField (o, f, loc) -> S.EField (r o, f, loc)
   | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
@@ -2782,13 +2782,13 @@ and v1_cell_stmt cells st =
   let rb = v1_cell_stmts cells in
   match st with
   | S.SLet (x, e, loc) when V1SS.mem x cells ->
-      S.SLet (x, v1_call "Space__make" [re e], loc)
+      S.SLet (x, v1_call "__cell_make" [re e], loc)
   | S.SLet (x, e, loc) -> S.SLet (x, re e, loc)
   | S.SAssignBecomes (S.LVar x, e, loc) when V1SS.mem x cells ->
-      S.SCall ("Space__set", [S.EVar (x, S.dummy_loc); re e], loc)
+      S.SCall ("__cell_set", [S.EVar (x, S.dummy_loc); re e], loc)
   | S.SAssignBecomes (S.LField _, _, _) ->
       failwith ("[desugar] `x.f = e` is not implemented: place " ^
-                "sections are immutable; mutate through Space cells.")
+                "sections are immutable; mutate through a cell.")
   | S.SAssignBecomes (lv, e, loc) -> S.SAssignBecomes (lv, re e, loc)
   | S.SAssignHolds (lv, e, loc) -> S.SAssignHolds (lv, re e, loc)
   | S.SReturn (e, loc) -> S.SReturn (re e, loc)
@@ -2827,7 +2827,7 @@ let v1_lower_body (params : string list) (body : S.stmt list) : S.stmt list =
       List.filter_map
         (fun p ->
            if V1SS.mem p cells then
-             Some (S.SLet (p, v1_call "Space__make" [S.EVar (p, S.dummy_loc)],
+             Some (S.SLet (p, v1_call "__cell_make" [S.EVar (p, S.dummy_loc)],
                            S.dummy_loc))
            else None)
         params in
@@ -2840,7 +2840,7 @@ let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
     fn.S.fn_params in
   (* The function's parameters must be in the initial `locals`, otherwise
      lifted lambdas in the body would not capture them. Without this, a
-     function like `fun f(R: Space) { ... fold(fun(a,b) => Space.set(R, ...)) }`
+     function like `fun f(R: Space) { ... fold(fun(a,b) => R <- ...) }`
      would fail with "variable R not in scope". *)
   let param_names = List.map (fun p -> p.S.param_name) fn.S.fn_params in
   (* surface sugar: loops + `x = e` lowering BEFORE Core desugaring. *)
@@ -3514,9 +3514,9 @@ let impure_funs (p : S.program) : unit =
       (match e with
        | S.EProduce _ | S.ESpawn _ | S.EWireTo _ | S.EIn _ -> true
        | S.EVar (x, _) -> Hashtbl.mem Tyenv.impure_funs x
-       | S.ECall (("Space__get" | "Space__set" | "Space.get" | "Space.set"), S.EVar (h, _) :: _, _)
+       | S.ECall (("__cell_get" | "__cell_set"), S.EVar (h, _) :: _, _)
          when own h -> false
-       | S.ECall (("Space__make" | "Space__new" | "Space.make" | "Space.new"), _, _) -> false
+       | S.ECall ("__cell_make", _, _) -> false
        | S.ECall (n, _, l)
          when Hashtbl.find_opt S.arrow_sites (l.S.file, l.S.start_line, l.S.start_col, n)
               = Some S.Inject -> false

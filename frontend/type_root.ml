@@ -71,7 +71,7 @@ let debruijn (name : string) (ctx : string list) : int option =
 (* A TyUser that is neither a named inductive nor a de Bruijn self-reference is a
    concrete nominal leaf iff it names a place or a known runtime carrier; otherwise
    it is a type variable / unresolved and has no root. Mirrors tycheck's check_ty. *)
-let runtime_leaf = ["Space"; "Map"; "HashSet"; "HashMap"; "HSH"; "List"; "Stream";
+let runtime_leaf = ["Map"; "HashSet"; "HashMap"; "HSH"; "List"; "Stream";
                     "Sequence"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower";
                     "MerkleTree"; "VoyagerList"; "String"]
 let is_nominal_leaf (env : TE.env) (n : string) : bool =

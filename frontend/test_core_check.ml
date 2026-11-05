@@ -225,7 +225,7 @@ let () =
      the SOUND-over-COMPLETE bias the gate depends on. *)
   check "certify_term SKIPS a body that mentions an unseeded name"
     (match Core_check.certify_term []
-             (Lam ("x", TyPlace "number", App (Var "Space__get", Var "x")))
+             (Lam ("x", TyPlace "number", App (Var "__cell_get", Var "x")))
              (TyArrow (TyPlace "number", TyPlace "number")) with
      | `Skipped _ -> true
      | `Ok | `Type_error _ -> false);
