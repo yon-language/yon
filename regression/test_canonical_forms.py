@@ -266,9 +266,9 @@ def build_projection() -> str:
 
 
 def test_projection_in_sync():
-    assert PROJECTION.exists(), (
-        "CANONICAL-FORMS.md missing; run `python regression/test_canonical_forms.py`"
-    )
+    # the report stays out of the repository: a clean clone generates it here
+    if not PROJECTION.exists():
+        PROJECTION.write_text(build_projection())
     assert PROJECTION.read_text() == build_projection(), (
         "CANONICAL-FORMS.md is stale; regenerate with "
         "`python regression/test_canonical_forms.py`"

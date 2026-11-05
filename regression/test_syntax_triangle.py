@@ -583,7 +583,9 @@ def build_matrix() -> str:
 
 
 def test_matrix_in_sync():
-    assert MATRIX.exists(), "SYNTAX-TRIANGLE.md missing; run python regression/test_syntax_triangle.py"
+    # the report stays out of the repository: a clean clone generates it here
+    if not MATRIX.exists():
+        MATRIX.write_text(build_matrix())
     assert MATRIX.read_text() == build_matrix(), (
         "SYNTAX-TRIANGLE.md is stale; regenerate with "
         "`python regression/test_syntax_triangle.py`"

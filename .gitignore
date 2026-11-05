@@ -51,3 +51,5 @@ runtime/*.d
 
 # the content cache of yonc (regression/gate.sh)
 .yonc-cache/
+/meta/DESIGN.md
+/regression/*.md
