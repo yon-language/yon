@@ -21,14 +21,26 @@ arrows declared in it; it has no hidden state, and its space is the directory
 it lives in (an object of the category).
 
 **section**, a value of a place, immutable and identified by its content
-(a generalized element; a section of the corresponding sheaf).
+(a generalized element; a section of the corresponding sheaf). The fields of
+the place are what a section stores; a section is not a field.
 
-**handle**, the `f64` a variable actually holds for any heap value: the
-slot index of its content in the content-addressed heap.
+**handle**, what a variable actually holds for a value of a heap. Chapter 13
+gives its formats. A HeapRef has 8 bits of heap and 24 of slot: a string, or a
+node of a `MerkleTree`. A section with fields has a **section handle** of 64 bits,
+32 of heap and 32 of slot. An arm with a payload, such as a `Cons` of a list, has
+its own encoding: the reserved number `0xFFFF` in the 32 high bits, and a HeapRef
+of the chain in the 32 low bits. The heaps written in Yon in the prelude have a
+handle of their own, one 64-bit word; programs do not run on them yet. A string is
+a section of the builtin `String` place and still has a HeapRef; a nullary arm has
+no handle at all, only a negative constant.
 
-**cell**, the one thing in Yon with identity instead of content: a mutable
-register whose current value is a handle; `mut c := e` declares one and
-`c <- e` writes it.
+**cell**, a word with two senses. In memory, a cell: a mutable register with
+identity instead of content, whose current value is a handle. `mut c := e` declares
+one, `c <- e` writes it, `c` reads it, and it lives as long as the block that
+declares it. In the model it is the one mutable thing; `Vec` and
+`XSet` write in place today without being cells (chapter 14). In a place, a cell
+is a path of a higher inductive type, which never changes: a constitutive law adds
+one (see **law**), and the keyword `cell` declares a higher one.
 
 **arrow**, anything that maps; every arrow has a kind, and the kinds live
 at different levels (see chapter 6's ladder).
@@ -86,7 +98,7 @@ axiom).
 **Space**, a hermetic tenant: a directory under the project root, backed at
 runtime by its own two heaps (FNV and Leech), freed whole as one region, and,
 across packages, its own process; content
-crosses through moves, numeric cross-Space calls, and copies on a `Wire<T>`;
+crosses through moves, and by copy on a cross-Space call or a `Wire<T>`;
 only a mobile value crosses (a closure, a cell or a region handle never does).
 
 **content addressing**, the FNV heap's contract: the address of a value
@@ -122,10 +134,16 @@ frame made from references never parts `v` from `-v` (chapter 15).
 `VoyagerList` element: 12 data bits in a 24-bit word, healing up to 3
 flips.
 
-**law**, an algebraic property declared on a place's operation and
-*verified* at compile time by AlgebraVerifier; a false law does not compile.
-The verification follows from `uses algebra` (the former `verify` keyword is
-retired).
+**law**, a statement declared in a place, of one of three kinds. On an
+operation or in an algebra it is a property *certified* at compile time, on
+each model: a false law does not compile, a law refuted on a model is E2101 and
+one not decided is E2102; the verification follows from `uses algebra` (the
+former `verify` keyword is retired). In the body of a place with `this >`, and
+without `is given`, it is *constitutive*: it adds a cell to the place, a path of
+the higher inductive type, as `law loop base = base` does for the circle `S1`,
+and a `match` must give a branch for it. With `is given`, on a place that is not
+an algebra, it is an *axiom*: declared, never certified, and it adds no cell,
+even in a place with `this >`.
 
 **effect / visits**, what a function touches, written in its signature and
 checked transitively by the compiler (algebraic effects discipline).

@@ -30,7 +30,7 @@ whole scope of `x`. It is the same symbol that defines a field of a place
 `+ - * / %`.
 
 **Strings.** `Text` (the same type as `String`) is the type of a string
-literal; `String` is the builtin place whose sections (`concat`, `equal`, `length`, `print`, ...) act on those
+literal; `String` is the builtin place whose functions (`concat`, `equal`, `length`, `print`, ...) act on those
 values. At runtime a string is a handle into the content-addressed heap, and
 literals are **interned**, the same literal is the same value, which is why
 `String.equal("ciao", greeting)` holds: equality is equality of content.

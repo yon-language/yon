@@ -16,7 +16,7 @@ equivalent; Yon's O(1) value equality has no Unison equivalent.
 
 **From Erlang/Elixir.** Erlang is the gold standard of process isolation,
 and its messaging (arbitrary terms, distribution across machines,
-supervision trees) is far richer than Yon's numeric call door and copy-only `Wire<T>`. Yon's
+supervision trees) is far richer than Yon's copying call door and `Wire<T>`. Yon's
 trade is deliberate: kernel processes instead of a VM, a narrow door between
 them, and handles that are *meaningless* in the wrong process rather than merely
 forbidden. Choose Erlang for distributed systems today; Yon's bet is that

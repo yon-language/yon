@@ -32,8 +32,9 @@ were given as it was, two equal collections are the same handle, and nothing
 is ever written in place on their nodes. There is no ceiling on how many
 exist. A key is identified by what it is: a scalar by its bits, a `Text` by
 its content-addressed handle, so two texts with the same characters are one
-key however they were built. `Vec` (its own section below) and
-`XSet` change in place.
+key however they were built. `Vec` (described below) and `XSet` change in
+place today: they are neither values nor cells, a gap the design closes
+(chapter 14).
 
 A sequence is finite and pure, and it is a list: `Sequence.from_list` and `Sequence.range` give
 one, and `map`, `filter` and `fold` are funs of the prelude, written in Yon, that take any function

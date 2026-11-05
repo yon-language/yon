@@ -44,11 +44,22 @@ of values, where same content is the same thing. A `mut` binding (chapter 3)
 is surface sugar over precisely this: `mut c := e` **is** a cell, and `c <- e`
 writes it.
 
-A cell belongs to the call that made it: when that call returns, its cells are
-freed and their slots reused. So a cell, and a lambda that mentions one, never
-leaves its call: returning it, storing it in another cell, or sending it to
+A cell lives as long as the block that declares it: a loop body gives its
+cells back at each turn, a branch at its end, a function body when the call
+returns, and their slots are reused. So a cell, and a lambda that mentions one,
+never leaves its call: returning it, storing it in another cell, or sending it to
 another Space is a compile-time error. Read the value out first; the value is
 free to go anywhere.
+
+Two structures of today's runtime break this model, and they are not a third
+kind of thing: they are a gap in the implementation. A `Vec` is written in place
+on a strip of the heap's arena. Its handle is the offset of the strip, not a
+function of its content, so two `Vec`s with the same elements are two `Vec`s, and
+`Vec.set` is seen through every name of that handle. An `XSet` is written in place
+too, in a pool of its own, outside the heaps. So neither is a value; and neither
+is a cell, because it is not declared by a block and does not end with one. The
+design closes the gap: `Vec` becomes a persistent trie on the FNV heap, and `XSet`
+goes, in favour of `XRelSet` (Appendix B).
 
 ## Types at runtime
 
@@ -69,7 +80,7 @@ every value lives in the heaps of the Space whose code made it:
 |---|---|---|
 | **Identity** | by content | by point |
 | **Who lives there** | sections of places, `Text`, lists, `HashMap` / `HashSet` nodes, closures | `XRelMap` / `XRelSet` nodes |
-| **A name** | a HeapRef: the heap (which belongs to one Space) and the slot | (Space, name) as one exact integer: read in another Space it is an error |
+| **A name** | a HeapRef or a section handle (chapter 13): the heap (which belongs to one Space) and the slot | (Space, name) as one exact integer: read in another Space it is an error |
 | **Freed** | with its Space's region, whole | with its Space's region, whole |
 
 There is no process-wide heap for values. `main` is a Space too, the entry
@@ -80,7 +91,7 @@ and a `Wire<T>` copy the same way. So no name of one Space is ever held by
 another, and a region can end without asking anyone (chapter 17).
 
 The cells (`mut c := e`) are not in the heaps: they belong to the
-call that made them and end with it (above).
+block that declares them and end with it (above).
 
 Across packages, a Space is a process: the first cross-Space call spawns the
 server, shutdown cascades from the caller, a crashed server is respawned on a

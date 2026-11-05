@@ -66,17 +66,18 @@ fun main(): Number {
 }
 ```
 
-A cross-Space **call** carries numbers only (at most four arguments). Strings
-and places cross a Space boundary by copy, on a `Wire<T>` subscription
-(chapter 17). A `String` parameter in a cross-Space signature is not yet
-refused: it compiles, and the call returns a wrong value (0). This is a defect.
+A cross-Space **call** takes at most four arguments. A number rides the request
+as itself; a string crosses as a frame, by copy, and is rebuilt in the heap of
+the callee. A result of a type that has a frame (a string, a place, a collection)
+comes back the same way; a closure or a cell is refused, as an argument and as a
+result. A `Wire<T>` subscription carries values by the same frames (chapter 17).
 
 ## Bindings and mutation
 
 | Form | Status | Meaning |
 |---|---|---|
 | `x := e` | ✓ | Definition of a value, with no keyword, at top level and inside functions alike (no `let`, no `be`). Defines once per scope: a second `x := ...` of a name already bound in the same scope is a compile error; nested-scope shadowing is allowed, `_`-prefixed names are exempt |
-| `mut c := e` | ✓ | Declares a **cell** (a Space cell, the one mutable thing): mutability shows where it is born |
+| `mut c := e` | ✓ | Declares a **cell** (in the model, the one mutable thing; chapter 14 names the two exceptions of today): mutability shows where it is born |
 | `c <- e` | ✓ | Writes the cell `c`. A write to a name not declared `mut` is refused (E2008), with the message proposing `mut`. Snapshot semantics, no aliasing (`y := c` does not alias `c`'s cell). `x = e` does not exist |
 | `Space.make / set / get` | ✗ | Retired, refused: a Space is a package. A cell is `mut c := e`, `c <- e`, `c` |
 | `x.f <- e` | ✗ rejected | Field mutation: place sections are immutable; the type checker rejects it ("place sections are immutable"). Mutate through cells |
@@ -407,8 +408,8 @@ The import forms below are the surface syntax that *references* Spaces:
 | `import m::n from Space` | ✓ | **Cross-package import**: `n` becomes a remote arrow into `Space` |
 
 Cross-package calls are RPC over a named channel (`/yon_stream_<Space>`):
-a call carries only **numbers**, at most **4 arguments** (strings and places
-cross by copy on a `Wire<T>`, chapter 17); `internal`
+a call takes at most **4 arguments** (a number rides as itself; a string, a
+place or a collection crosses by copy, as a frame, chapter 17); `internal`
 functions are not exported; the server binary is `./<Space>_srv` by convention
 (override with `YON_SRV_DIR`), spawned on first contact, shut down in cascade,
 and **transparently recovered** after a crash (virgin channel, epoch advanced,
@@ -436,10 +437,10 @@ a move's `requires` check is emitted but not yet enforced, chapter 20) with opt-
 | `List` | `place List<V> { this > Nil :U Cons V List<V> }` in the prelude, written in Yon. `empty` is `Nil`; `cons`, `is_empty`, `length`, `append`, `reverse`; `head` and `tail` answer `Lookup`: `Absent` on `Nil` |
 | `HashMap` | `empty, set, has, get, value, size, to_stream`, an immutable map (a trie over the content-addressed heap) |
 | `HashSet` | `empty, add, contains, size, union, intersect, to_stream`, an immutable set |
-| `XSet` | `empty, add, contains, size, union, intersect, to_stream`, a set of lattice points: one table indexed by the shell, on the Leech heap, changed in place |
+| `XSet` | `empty, add, contains, size, union, intersect, to_stream`, a set of lattice points: one bitmap indexed by the shell, in a pool of its own outside the heaps, changed in place, neither a value nor a cell (chapter 14) |
 | `Sequence` | `from_list, range, map, filter, fold`: a finite, pure sequence over a list, fused into one loop (not the `sequence` keyword) |
 | `Stream` | `iterate, take`: an infinite, pure unfold |
-| `Vec` | `empty, push, get, set, size`, a dynamic array on an arena strip (in-place mutable, no malloc) |
+| `Vec` | `empty, push, get, set, size`, a dynamic array on an arena strip (in-place mutable, no malloc), neither a value nor a cell (chapter 14) |
 | `MerkleTree` | `leaf, node2, node2_commutative, node3, node4, label, child, equal, to_stream`, a Merkle tree on the FNV heap. The label is the node's datum, given by whoever builds the node; the identity of the node is the content address of the pair of its label and its children, so two identical subtrees are the same node and `equal` is a comparison of handles, exact. `node2` keeps the order of the children; `node2_commutative`, `node3` and `node4` sort them, for commutative operators |
 | `VoyagerList` | `empty, append, get, size, seal, open, corrupt, corrupt_at, to_stream`, a Golay-sealed list: `append` seals each entry into a codeword, `get` decodes it and corrects up to 3 flipped bits. `seal` and `open` do the same on one word (12 bits to a 24-bit codeword and back); `corrupt` and `corrupt_at` flip bits, for tests |
 | `Magma` | `gen, closure_size, is_commutative, is_associative, identity, word_push, normal_form, from_catalog` |

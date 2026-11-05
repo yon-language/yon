@@ -23,12 +23,15 @@ runtime refuses out loud rather than degrading in silence.
   vectors of Λ<sub>24</sub>), on a 64&nbsp;MB payload arena. Deduplication makes
   repeats free; the budget is spent on distinct values, not on allocations.
 - **The heap chain**: every Space has its own chain; when a heap fills, a
-  successor is created and linked. A reference names its heap (8-bit heap id,
-  24-bit slot), so it says which Space it belongs to, and deduplication holds
+  successor is created and linked. A HeapRef names its heap (8-bit heap id,
+  24-bit slot), a section handle with 32 bits of heap and 32 of slot, so the
+  reference says which Space it belongs to, and deduplication holds
   across the heaps of one Space's chain: O(1) equality survives the boundary
   between heaps. Two Spaces never share a slot: a value that crosses is copied.
   Up to 256 heaps per process in all. Measured exact at a million map entries
-  across six heaps.
+  across six heaps. This is the heap in C that programs run on today; the heaps
+  written in Yon in the prelude, which they do not run on yet, have a handle of
+  one 64-bit word and a limit of their own (chapter 13).
 - **Fixed pools, loud refusal**: 256 instances per pooled collection type (a
   HashMap or a HashSet is not pooled: it is a value in the heap), 64 Spaces, 64
   streams, 16 RPC sessions. Like a fixed-width address bus, these buy predictable
@@ -62,6 +65,10 @@ These are not on any roadmap. They are the design.
 What follows does not exist yet. Each line says what is absent today; none is a
 date.
 
+- **`Vec` and `XSet` are not yet values.** Both write in place, which the model
+  allows only to a cell (chapter 14). `Vec` is to become a persistent trie of 32
+  ways on the FNV heap, and `XSet` is to go, in favour of `XRelSet`. Until then a
+  process holds at most 256 `XSet`s, and a slot of that pool is never reclaimed.
 - **Capabilities are declared, not enforced.** A move whose `requires`
   capability is absent is not yet refused, and the static rule (a caller of a
   `requires` move must itself hold the capability) is not yet checked

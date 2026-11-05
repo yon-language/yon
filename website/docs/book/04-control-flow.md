@@ -51,8 +51,8 @@ the expression form `if c then a else b`, or end the body with a
 - `for every x in list { }`, iteration over a `List` (execution is sequential for both this
   and `in sequence over x in list { }` sequentially; parallelism is declared
   intent, not yet a runtime distinction);
-- `repeat at most N times { } otherwise { }`, the body runs N times, then
-  `otherwise`;
+- `repeat at most N times { } otherwise { }`, the body runs exactly N times,
+  then `otherwise`, if present, runs; nothing ends the loop early;
 - `forever { }`, the infinite loop, typically paired with effects inside.
 
 <!-- yon-gate: exit 9 -->

@@ -220,8 +220,8 @@ selector and at most four arguments; a fifth is rejected at compile time. A
 number rides the request as itself. A string, a place or a collection would be
 a handle into a heap the callee does not have (chapter 13), so it crosses as a
 **frame**, the same frame a wire carries, on a byte ring of the caller's
-session, in pieces, and the server rebuilds it in its own heap; a result that
-is not a number comes back the same way. The request carries the type root of
+session, in pieces, and the server rebuilds it in its own heap; a result of one
+of these types comes back the same way. The request carries the type root of
 the signature as the caller declares it, and the server compares it with its
 own before it reads an argument: two versions of a signature never exchange a
 call. The **subscription** door, just above, carries a stream of values by the
@@ -292,8 +292,8 @@ There is no `thread` and no intra-process concurrency primitive, by design.
 `spawn` forks *processes*, not threads (chapter 22, `spawn`). Shared-memory threading would puncture every
 guarantee this book has described: hermetic Spaces, the no-aliasing value
 model, cells as the *only* identity. Yon's unit of concurrency is the
-**process**: Spaces in separate binaries, the numeric call door and the copying
-`Wire<T>` between them,
+**process**: Spaces in separate binaries, the call door and the `Wire<T>`
+between them, both copying,
 shared-memory cells and convergent folds where state must
 really be shared (chapter 14), and `spawn in N parallel` for N isolated
 replicas. `for every … when here` declares parallel *intent* at the surface;

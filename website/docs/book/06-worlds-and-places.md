@@ -44,8 +44,8 @@ also carries a `Topos.yon` that declares the topos of the site, and an
 
 ## A place is its structure
 
-A place body declares its **sections**, the fields it stores, and nothing else by
-default. An order has a table and a running total, `sala/Order.yon`:
+A place body declares its **fields**, what each of its sections stores, and nothing
+else by default. An order has a table and a running total, `sala/Order.yon`:
 
 <!-- yon-gate: fragment -->
 ```yon
@@ -55,8 +55,8 @@ place Order {
 }
 ```
 
-A place has no hidden state. You create one with the mediating arrow `.->` and
-read its sections with a dot. `Entry.yon`:
+A place has no hidden state. You create a section with the mediating arrow `.->`
+and read its fields with a dot. `Entry.yon`:
 
 <!-- yon-gate: fragment
 place Order {
@@ -77,7 +77,7 @@ fun main(): Number {
 ```
 
 Note the conventions the `.->` shows: a field is written `name type` with no
-colon, `.-> P { field value }` fills the sections without an `=`, and access is
+colon, `.-> P { field value }` fills the fields without an `=`, and access is
 the usual dot. What a place does is said by arrows: the arrows that touch a
 place are declared in it (the prelude's `String` place declares its own
 functions), and the kinds of arrow are the whole of the next chapter.
@@ -85,7 +85,7 @@ functions), and the kinds of arrow are the whole of the next chapter.
 ## Operations: a place's effectful interface
 
 Where a place needs an effectful interface, it lists **operations** alongside
-its sections, directly in its body. An order accumulates
+its fields, directly in its body. An order accumulates
 items, and a kitchen ticket can be retagged:
 
 <!-- yon-gate: fragment -->

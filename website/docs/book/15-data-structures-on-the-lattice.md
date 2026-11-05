@@ -6,12 +6,13 @@ sidebar_position: 15
 
 # Data structures on the lattice
 
-The collections of both heaps (chapter 13) are *persistent* structures:
-none of them mutates, every operation returns a new handle, and sharing
-makes that cheap. The maps and sets come in two families with the same
-semantics and two stores: `HashMap`/`HashSet` in the FNV heap,
-`XRelMap`/`XRelSet` in the Leech heap. `Vec` is a cell on a strip of the
-heap's arena. All of them are below.
+`List` and the maps and sets of the two families below (chapter 13) are
+*persistent* structures: none of them mutates. Every update returns the handle
+of its result, and what it was given stays what it was; sharing makes that
+cheap. The two families have the same semantics and two stores:
+`HashMap`/`HashSet` in the FNV heap, `XRelMap`/`XRelSet` in the Leech heap.
+`Vec` and `XSet` are outside this: today they are written in place, and they are
+neither values nor cells, a gap the design closes (chapter 14).
 
 **List** is the classic cons chain: `List.cons(x, rest)` puts one new node;
 the rest is shared by address. **HashMap / HashSet** are persistent maps,
@@ -20,8 +21,8 @@ hash tries of immutable nodes in the content-addressed heap: every
 the map it was given stays what it was. The heap deduplicates every node, so
 two maps with the same entries are the same nodes, the same handle, and a
 node may be shared by maps that know nothing of each other: no write ever
-happens on a node, and nothing is reused in place. A collection that has to
-change in place is not a value but a cell, declared in a Space's arena. **Vec** is a dynamic array on an arena strip (no `malloc`): `push` appends in
+happens on a node, and nothing is reused in place. **Vec** is a dynamic array on
+an arena strip (no `malloc`), and the exception for now: `push` appends in
 place or reallocates a doubled strip on growth, and `get`/`set` are O(1) with
 `set` mutating in place.
 

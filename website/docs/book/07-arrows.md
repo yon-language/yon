@@ -49,7 +49,7 @@ objects = ["Guest"]
 spaces  = ["sala", "cucina"]
 ```
 
-An order is a file, `sala/Order.yon`. Its fields are its sections; its
+An order is a file, `sala/Order.yon`. Its fields are what a section stores; its
 `operation`s are the things a guest can do to it, which is why it is declared
 operations declared inline on the place:
 
@@ -93,7 +93,7 @@ a view and a move are about to.
 ## `view`: observe a place, never change it
 
 To read an order without touching it, you write a **view**, `sala/Bill.yon`. It
-can `show` a stored section, or a computed column that factors through a `fun`:
+can `show` a stored field, or a computed column that factors through a `fun`:
 
 <!-- yon-gate: fragment
 place Order {
@@ -199,8 +199,8 @@ base := 7
 m := move(s: Order) => .-> Ticket { total base + s.qty } from Order to Ticket
 ```
 
-What an arrow cannot carry is a **cell**: a local declared `mut`. A cell belongs to the call that made it and dies when
-that call returns, so an arrow that mentions one holds a place, not a value. It
+What an arrow cannot carry is a **cell**: a local declared `mut`. A cell lives as long as the block that declares it, at
+most until its call returns, so an arrow that mentions one holds a place, not a value. It
 can be applied inside that call, or passed down to a callee, but it cannot leave:
 returning it, storing it in a cell, or sending it to another Space is a
 compile-time error, which says the value "would outlive the call". The fix is to

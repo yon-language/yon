@@ -74,7 +74,7 @@ The binding: `x := e` reads "x is defined as e", with no keyword. It is the `:=`
 
 #### `mut`
 
-Declares a cell, the one mutable thing: `mut c := e`. A cell is a Space cell holding a reference to a value (the values themselves stay immutable). Mutability shows where it is born: reading `x := 5` you know `x` is a value; only `mut` makes a cell.
+Declares a cell: `mut c := e`. A cell holds a reference to a value (the values themselves stay immutable). Mutability shows where it is born: reading `x := 5` you know `x` is a value; among the binding forms, only `mut` declares a cell. `c <- e` writes the cell and `c` reads it; a `Vec` and an `XSet` change in place today and are not cells (chapter 14).
 
 #### `<-` (write)
 
@@ -86,7 +86,7 @@ The conditional chain: `when c { } when c2 { } otherwise { }`. Consecutive `when
 
 #### `otherwise`
 
-The else branch, of a `when` chain and of `repeat at most N times`.
+The else branch of a `when` chain. After `repeat at most N times`, the block that runs when the N rounds are done.
 
 #### `if`
 
@@ -146,7 +146,7 @@ fun main: Number {
 
 #### `repeat`
 
-`repeat at most N times { } otherwise { }`: the body runs up to N times, then the otherwise.
+`repeat at most N times { } otherwise { }`: the body runs exactly N times, then the otherwise, if present, runs. Nothing ends the loop early.
 
 #### `at`
 
@@ -450,7 +450,7 @@ place Entry {
 
 #### `law`
 
-States a law of an algebra over its carrier, with the symbols of logic: `law commutative ∀a : P ∀b : P, a + b = b + a`. It is certified on each model: refuted is E2101, not decided is E2102.
+States a law of an algebra over its carrier, with the symbols of logic: `law commutative ∀a : P ∀b : P, a + b = b + a`. It is certified on each model: refuted is E2101, not decided is E2102. In the body of a place with `this >`, a law without `is given` is constitutive: it is a cell of the place, as in `place S1 { this > base  law loop base = base }`. Outside an algebra, a law may end in `is given`: an axiom, declared and never certified, which adds no cell even in a place with `this >`.
 
 #### `fold`
 

@@ -25,10 +25,10 @@ or rehashed under you. Deduplication is not an optimization pass; it is the
 definition of allocation.
 
 A **handle**, what your variables actually hold for strings, sections,
-lists, trees, is that slot index, carried as an `f64`. This is why a string, a
-place or a collection crosses between processes by copy, on a call or on a
-`Wire<T>` (chapter 17): a handle is meaningless outside the heap that minted
-it.
+lists, trees, names that slot; its exact formats are in the section on the heap
+chain below. This is why a string, a place or a collection crosses between
+processes by copy, on a call or on a `Wire<T>` (chapter 17): a handle is
+meaningless outside the heap that minted it.
 
 ## Equality for free
 
@@ -82,7 +82,7 @@ the type of a value on a wire (chapter 17) are the same number.
 | **Address** | a slot, allocated in sequence at the content's first appearance, carried as a HeapRef (8 bits of heap, 24 of slot) | the point's index under the minimal perfect hash, a bijection with `[0, 196560)` |
 | **Collisions** | two hashes may collide; the byte comparison settles it, so distinct contents never share a slot | none: the minimal perfect hash is a bijection |
 | **Geometry** | none: the lattice only fixes how many contents one heap holds (196,560), then the chain grows | M₂₄ orbits, relational classes under a frame, Co₀ canonical forms and transport |
-| **Who lives there** | strings, lists, `HashMap`/`HashSet` tries, `MerkleTree`, sections of places, closures | `LatticePoint`, the nodes of `XRelMap`/`XRelSet`, `XSet`, `XSimplex` |
+| **Who lives there** | strings, lists, `HashMap`/`HashSet` tries, `MerkleTree`, sections of places, closures | `LatticePoint`, the nodes of `XRelMap`/`XRelSet`, `XSimplex` |
 | **The test that proves it** | `test_unit_extensionality`: 300,000 distinct contents across two heaps, every one on its own reference, the same content on the same one | `test_mphf.c` and `test_unit_mphf_ext.c`: the bijection, over the whole shell; `test_leech_theta`: the shell has 196,560 points |
 
 Every Space has its own pair of these heaps, and a value lives in the heaps of
@@ -91,9 +91,11 @@ into the next when it fills. The
 Leech heap is a sequence of generations, each a table over the shell: the
 node store of `XRelMap`/`XRelSet` puts its k-th node in the place
 (generation k div 196,560, point `at_index(k mod 196,560)`), written once;
-`XSet` and `XSimplex` hold one table indexed by the shell. A point is the
+`XSimplex` holds one table indexed by the shell. A point is the
 address in every one of them. There is no index by content in the Leech
-heap: two equal nodes are two places.
+heap: two equal nodes are two places. `XSet` is indexed by the shell too, but its
+bitmap is written in place and lies outside the heaps, in a pool of its own
+(chapter 14).
 
 **Why the FNV heap is sized by the lattice.** One FNV heap holds exactly
 **196,560 contents**, the kissing number of Λ₂₄. That is the only thing the
@@ -115,10 +117,20 @@ points that are "the same up to symmetry" are recognized as one by
 
 A single heap holds 196,560 distinct contents. That is not the ceiling, 
 it is the *unit*. The allocator keeps a **registry** of heaps (up to 256
-per process), and every reference handed out is a global **HeapRef**: a
-32-bit word whose top 8 bits name the heap and whose low 24 bits name the
-slot inside it. For heap 0 the encoding coincides with the bare slot
-index, so the chain is invisible until you need it.
+per process), and every reference to content that the chain hands out is a
+global **HeapRef**: a 32-bit word whose top 8 bits name the heap and whose low
+24 bits name the slot inside it. For heap 0 the encoding coincides with the bare
+slot index, so the chain is invisible until you need it.
+
+A section with fields has a wider handle, a **section handle** of 64 bits: the
+top 32 name a heap and the low 32 a slot. A section built by a place's mediating
+arrow, `.->`, names the heap of the current Space and its slot there. A section
+built by an arm with a payload, such as a `Cons` of a list, has a reserved number
+in the top 32 bits, which says that the low 32 bits are a HeapRef of the chain.
+
+Not everything called a section has this handle. A string is a section of the
+builtin `String` place, and its handle is a plain HeapRef. A nullary arm, such as
+`Nil`, is a negative constant: it names no slot at all.
 
 Allocation walks a **chain** of heaps in two phases:
 
@@ -145,3 +157,22 @@ re-derivation through the chain.
 The chain belongs to the FNV heap. The Leech heap does not chain: its
 domain is the shell itself, fixed at 196,560 points, so a table on it never
 fills and never needs a successor.
+
+## The heaps written in Yon
+
+All of the above describes the heap in C that compiled programs run on today.
+The prelude also has the two heaps written in Yon, `FnvHeap<V>` and
+`LeechHeap<V>` (`prelude/heap/`), tested on their own; programs do not run on
+them yet. Their handle has another format: one 64-bit word, read directly, with
+no registry of heaps behind it.
+
+| | Handle | Limit |
+|---|---|---|
+| `FnvHeap<V>` | segment × 2<sup>18</sup> + slot | 65,536 segments of 196,560 slots; a value larger than the payload area of a segment takes a segment of its own |
+| `LeechHeap<V>` | (generation × 8 + level) × 2<sup>18</sup> + place | 13,120 segments for each level of the tree over the shell |
+
+A HeapRef, a section handle and one of these handles are three different
+encodings: the 8 and 24 bits, the 32 and 32 bits, and the limit of 256 heaps
+belong to the heap in C alone. In heap 0 a HeapRef and a section handle can be the
+same number, because both are the bare slot index; they are still two different
+layouts.
