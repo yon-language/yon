@@ -196,3 +196,22 @@ def test_a_critical_pair_with_a_wrong_valley_is_refused(tmp_path):
 def test_different_arms_are_distinct(tmp_path):
     _broken(tmp_path, "Proofs.yon", "fun absurd(p: true = false): Empty",
             "fun absurd(p: true = true): Empty")
+
+
+def _with_theorem(tmp_path, theorem):
+    proj = tmp_path / "meta"
+    shutil.copytree(META, proj)
+    proofs = proj / "kernel" / "Proofs.yon"
+    proofs.write_text(proofs.read_text().replace("place Proofs {\n", "place Proofs {\n" + theorem, 1))
+    return proj
+
+
+def test_an_unannotated_parameter_does_not_prove_the_false(tmp_path):
+    # the lambda's q is read by ite_injective at (yes, u, v) = (no, u, v): the q of bad is another
+    # path, and one parameter has one type, so yes = no does not follow
+    r = _compile(_with_theorem(tmp_path,
+        "  fun bad(u: Term, v: Term, d2: Step, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Term.yes = Term.no {\n"
+        "    k := fun(q) => ite_injective(yes, u, v, no, u, v, q)\n"
+        "    return k(q)\n  }\n"), tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2001" in out and "annotate the lambda parameter" in out, out

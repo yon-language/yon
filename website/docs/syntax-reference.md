@@ -128,7 +128,7 @@ from the call sites.
 | `place P<A, f : A -> A> { … }`, `(A, B) -> C` | ✓ | A parameter that stands for a term, read in the laws; its argument is the name of a fun, and that name is its identity |
 | `a ↦ f`, `(a, b) ↦ f` | ✓ | Application: a tuple spreads into the arguments. The call `f(a, b)` stays |
 | `if c then a else b` | ✓ | Conditional expression |
-| `fun(x: T, y) => e` | ✓ | Inline lambda (unannotated params are inferred) |
+| `fun(x: T, y) => e` | ✓ | Inline lambda. An unannotated parameter has one type, from the expected type of the lambda and from its uses; left open, or given two incompatible types, it must be annotated |
 | `move(s: P) => .-> Q {...} from P to Q` | ✓ | Inline move lambda (see the note below the table) |
 | `reduction(acc, x) => e of P` | ✓ | Inline reduction lambda |
 | `view(s: P) => e of P` | ✓ | Inline view lambda |

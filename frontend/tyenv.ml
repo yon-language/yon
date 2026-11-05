@@ -121,7 +121,7 @@ let empty : env = {
 }
 
 let lookup_var (env : env) (x : string) : ty option =
-  List.assoc_opt x env.vars
+  Option.map deref_lambda_unknown (List.assoc_opt x env.vars)
 
 let lookup_place (env : env) (name : string) : place_decl option =
   List.assoc_opt name env.places
@@ -609,7 +609,11 @@ let rec ty_to_string (t : ty) : string =
   | TyUser n -> n
   | TyApp (n, args) -> n ^ "<" ^ String.concat ", " (List.map ty_to_string args) ^ ">"
   | TyVar n -> n
-  | TyMetaVar n -> Printf.sprintf "alpha%d" n
+  | TyMetaVar n ->
+      (match Hashtbl.find_opt lambda_unknowns n with
+       | Some { lu_solution = Some t; _ } -> ty_to_string t
+       | Some { lu_param; _ } -> "the unknown type of the lambda parameter " ^ lu_param
+       | None -> Printf.sprintf "alpha%d" n)
   | TyUniverse 0 -> "Type"
   | TyUniverse n -> Printf.sprintf "Type_%d" n
   | TyPi (x, a, b) ->

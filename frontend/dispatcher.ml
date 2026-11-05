@@ -458,17 +458,32 @@ let code_of_term (env : Tyenv.env) (e : expr) : string option =
        | Ast.Var n -> Some n
        | _ -> None)
 
+(* True while a value flows into a type: only there does comparing an open
+   lambda unknown with a type solve it. Elsewhere an equality is a question,
+   and an open unknown is equal only to itself. *)
+let solving_lambda_unknowns = ref false
+
 let rec type_equal
     (env : Tyenv.env)
     (ctx : Reduce.ctx)
     (t1 : ty) (t2 : ty) : bool =
+  let t1 = deref_lambda_unknown t1 and t2 = deref_lambda_unknown t2 in
   (* Direct equality on TyHeytInt. Neither Cubical nor CATT_R_Yon knows this
    * type, so the equality is handled here before the dispatch. *)
   let carrier_is p t = match t with
     | TyPrim q -> q = p
     | TyUser f -> Hashtbl.find_opt Surface_ast.fusion_places f = Some p
     | _ -> false in
+  let meets_lambda_unknown n other =
+    match other with
+    | TyMetaVar m when m = n -> true
+    (* a placeholder and a parameter still open say nothing about the type *)
+    | TyPrim "unknown" | TyUser "unknown" -> true
+    | TyMetaVar m when not (Ty_subst.is_lambda_unknown m) -> true
+    | _ -> !solving_lambda_unknowns && Ty_subst.solve_lambda_unknown n other in
   match t1, t2 with
+  | TyMetaVar n, other when Ty_subst.is_lambda_unknown n -> meets_lambda_unknown n other
+  | other, TyMetaVar n when Ty_subst.is_lambda_unknown n -> meets_lambda_unknown n other
   | TyHeytInt n1, TyHeytInt n2 -> n1 = n2
   (* inside its house an `internal place` is its carrier *)
   | TyUser u, other
@@ -632,8 +647,15 @@ let rec type_equal
  * value-flow sites, keeps the legitimate coercions and only those.
  * CATT/HoTT conversion (type_equal's dispatch) is untouched. *)
 let subtype (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : bool =
-  type_equal env ctx super sub
-  || (match sub, super with
+  let flows =
+    let mark = !lambda_unknown_trail and was = !solving_lambda_unknowns in
+    solving_lambda_unknowns := true;
+    let r = type_equal env ctx super sub in
+    solving_lambda_unknowns := was;
+    if not r then undo_lambda_unknowns mark;
+    r in
+  flows
+  || (match deref_lambda_unknown sub, deref_lambda_unknown super with
       | TyPrim "number", TyHeytInt _ -> true
       | TyHeytInt _, (TyPrim "proposition" | TyUser "proposition") -> true
       | TyPrim "number", (TyPrim "proposition" | TyUser "proposition") -> true

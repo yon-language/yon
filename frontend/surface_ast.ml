@@ -1202,3 +1202,41 @@ let proof_project = ref false
 
 (* The sites where a method on a list is that fun of the prelude. *)
 let list_method_sites : (string * int * int * int, string) Hashtbl.t = Hashtbl.create 16
+
+(* The unknown of an unannotated lambda parameter: one per parameter of the
+   source, whichever way and however many times its lambda is read. Its solution
+   is shared by the expected type of the lambda and by every use of the
+   parameter (Hindley-Milner): a parameter has one type, never one per use. The
+   trail records every solution in order, so that a reading the checker
+   abandons leaves nothing behind. *)
+type lambda_unknown = {
+  lu_param : string;
+  lu_loc : location;
+  mutable lu_solution : ty option;
+}
+let lambda_unknowns : (int, lambda_unknown) Hashtbl.t = Hashtbl.create 16
+let lambda_unknown_sites : (location * string, int) Hashtbl.t = Hashtbl.create 16
+let lambda_unknown_trail : int list ref = ref []
+
+let rec deref_lambda_unknown (t : ty) : ty =
+  match t with
+  | TyMetaVar n ->
+      (match Hashtbl.find_opt lambda_unknowns n with
+       | Some { lu_solution = Some s; _ } -> deref_lambda_unknown s
+       | _ -> t)
+  | _ -> t
+
+(* the parameter whose type is still open, if t is its unknown *)
+let open_lambda_unknown (t : ty) : lambda_unknown option =
+  match deref_lambda_unknown t with
+  | TyMetaVar n -> Hashtbl.find_opt lambda_unknowns n
+  | _ -> None
+
+let undo_lambda_unknowns (mark : int list) : unit =
+  while !lambda_unknown_trail != mark do
+    match !lambda_unknown_trail with
+    | [] -> failwith "lambda unknown trail: the mark is not on the trail"
+    | n :: rest ->
+        (Hashtbl.find lambda_unknowns n).lu_solution <- None;
+        lambda_unknown_trail := rest
+  done

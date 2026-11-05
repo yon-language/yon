@@ -495,6 +495,35 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
 
 (* ─── Expression: infer ────────────────────────────────────────────── *)
 
+(* The parameters of a lambda, with its unknown for each unannotated one. *)
+let lambda_params_with_unknowns (params : (string * ty) list) (loc : location)
+    : (string * ty) list =
+  List.map (fun (n, t) ->
+      if is_placeholder_ty t then (n, Ty_subst.lambda_unknown n loc) else (n, t))
+    params
+
+(* An error in the body of a lambda, read with the types its unannotated
+   parameters have so far, asks for what would settle them. *)
+let asks_annotation (params : (string * ty) list) (r : 'a tc_result) : 'a tc_result =
+  match r with
+  | Ok _ -> r
+  | Error e ->
+      let unannotated = List.filter_map (fun (n, t) ->
+          match t with
+          | TyMetaVar m when Ty_subst.is_lambda_unknown m ->
+              Some (n, Tyenv.ty_to_string t)
+          | _ -> None) params in
+      if unannotated = [] then r
+      else Error { e with err_msg = Printf.sprintf
+        "%s; annotate the lambda parameter%s: %s"
+        e.err_msg
+        (if List.length unannotated > 1 then "s" else "")
+        (String.concat ", " (List.map (fun (n, t) ->
+           if String.starts_with ~prefix:"the unknown" t
+           then Printf.sprintf "%s has no type yet" n
+           else Printf.sprintf "%s was read as %s" n t)
+           unannotated)) }
+
 (* Reject a handle nested inside a handle. Walk the AST looking for a nested
  * handle lambda; if one is found, return an error: morphisms, functors and
  * projections are static structures, not dynamic values built from other
@@ -1760,6 +1789,9 @@ let arrow_refusal (env : Tyenv.env) (name : string) (loc : location) : string op
   | _ -> None
 
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
+  Result.map deref_lambda_unknown (infer_node env ctx e)
+
+and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
   | ELit (l, _) -> ok (ty_of_literal l)
 
@@ -2267,7 +2299,8 @@ let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                     (* a parameter nothing fixes is an error, not a generalization *)
                     let* () =
                       match List.find_opt (fun (_, m) ->
-                          Ty_subst.free_metavars (Ty_subst.apply_subst sigma m) <> []) fresh with
+                          List.exists (fun n -> not (Ty_subst.is_lambda_unknown n))
+                            (Ty_subst.free_metavars (Ty_subst.apply_subst sigma m))) fresh with
                       | Some (v, _) -> err loc (Printf.sprintf
                           "%s: the parameter %s of %s is fixed neither by the payload nor by \
                            an expected type: write the type where the value is used"
@@ -2833,6 +2866,10 @@ got %s" (Tyenv.ty_to_string other)))
                match param_ty (List.length tys) with
                | Some pty when shared_arm_for pty arg ->
                    let* () = check env ctx arg pty in ok pty
+               | Some pty ->
+                   (match lambda_expected_by_call env ctx name args arg pty with
+                    | Some want -> let* () = check env ctx arg want in ok want
+                    | None -> infer env ctx arg)
                | _ -> infer env ctx arg in
              ok (tys @ [t]))
           (ok []) args
@@ -2942,6 +2979,20 @@ got %s" (Tyenv.ty_to_string other)))
   | EBinop (op, e1, e2, loc) ->
       let* t1 = infer env ctx e1 in
       let* t2 = infer env ctx e2 in
+      (* an operator wants operands of one type: an open lambda unknown takes
+         the type of the other side; two open ones become one, and the operator
+         waits for it *)
+      if open_lambda_unknown t1 <> None || open_lambda_unknown t2 <> None then
+        ignore (Dispatcher.subtype env ctx ~sub:t1 ~super:t2);
+      let t1 = deref_lambda_unknown t1 and t2 = deref_lambda_unknown t2 in
+      if open_lambda_unknown t1 <> None then
+        (match op with
+         | OpAdd | OpSub | OpMul | OpDiv | OpMod -> ok t1
+         | OpAnd | OpOr ->
+             ignore (Dispatcher.subtype env ctx ~sub:t1 ~super:(TyPrim "boolean"));
+             ok (TyPrim "boolean")
+         | OpLt | OpGt | OpLeq | OpGeq | OpEq | OpNeq -> ok (TyPrim "boolean"))
+      else
       (* 5 % 2, w == 0 - 1234: with an Int on the other side the integral
          literal adapts, and a literal EXPRESSION adapts through the
          bidirectional check (the EBinop rule pushes the face inward). *)
@@ -3121,13 +3172,15 @@ got %s" (Tyenv.ty_to_string other)))
 
   | ELam (params, body, _loc) ->
       (* Inline lambda: extend the env with the parameters, infer the body,
-       * return the TyArrow chain. Parameter types come annotated from the
-       * surface syntax. *)
+       * return the TyArrow chain. An annotated parameter has its annotation;
+       * an unannotated one has its unknown, solved by the expected type of the
+       * lambda and by its uses. *)
+      let params = lambda_params_with_unknowns params _loc in
       let env_ext = List.fold_left
         (fun env_acc (pname, pty) ->
            Tyenv.add_var env_acc pname pty)
         env params in
-      let* body_ty = infer env_ext ctx body in
+      let* body_ty = asks_annotation params (infer env_ext ctx body) in
       let result_ty = List.fold_right
         (fun (_pname, pty) acc -> TyArrow (pty, acc))
         params body_ty
@@ -3635,6 +3688,7 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
   ok result
 
 and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit tc_result =
+  let expected = deref_lambda_unknown expected in
   (* Universal property of the terminal object 1: for every object A there is
      a unique map `!_A : A -> 1`. So a term of any type checks against 1 (it
      maps to the unique inhabitant `()`). This is the constant functor toward 1;
@@ -3756,34 +3810,45 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
         Hashtbl.replace Surface_ast.arm_coproduct_sites (site_of loc) c;
         ok ()
       end
-  | ELam (params, body, _), (TyPi _ | TyArrow _) ->
+  | ELam ((params as lam_params), body, lam_loc), (TyPi _ | TyArrow _) ->
       (* Bidirectional lambda checking.  A dependent expected type carries the
          information needed to type an unannotated surface lambda and to align
-         its binder with endpoint terms in the codomain. *)
+         its binder with endpoint terms in the codomain: the domain of the
+         expected type solves the unknown of the parameter, the same one its
+         uses solve. *)
+      let bind env pn annotated dom k =
+        if annotated <> TyPrim "unknown" then
+          if Dispatcher.type_equal env ctx annotated dom then
+            k (Tyenv.add_var env pn dom)
+          else
+            err (location_of_expr e)
+              (Printf.sprintf "lambda parameter %s: expected %s, got %s"
+                 pn (Tyenv.ty_to_string dom) (Tyenv.ty_to_string annotated))
+        else
+          let u = Ty_subst.lambda_unknown pn lam_loc in
+          let was = Tyenv.ty_to_string u in
+          if Dispatcher.subtype env ctx ~sub:u ~super:dom then
+            k (Tyenv.add_var env pn u)
+          else
+            err (location_of_expr e)
+              (Printf.sprintf
+                 "lambda parameter %s: the expected type says %s, its uses say %s: \
+                  annotate the parameter"
+                 pn (Tyenv.ty_to_string dom) was) in
       let rec go env params expected =
         match params, expected with
-        | [], _ -> check env ctx body expected
+        | [], _ ->
+            asks_annotation (lambda_params_with_unknowns lam_params lam_loc)
+              (check env ctx body expected)
         | (pn, annotated) :: rest, TyPi (x, dom, cod) ->
-            if annotated <> TyPrim "unknown"
-               && not (Dispatcher.type_equal env ctx annotated dom) then
-              err (location_of_expr e)
-                (Printf.sprintf "lambda parameter %s: expected %s, got %s"
-                   pn (Tyenv.ty_to_string dom) (Tyenv.ty_to_string annotated))
-            else
-              let env' = Tyenv.add_var env pn dom in
+            bind env pn annotated dom @@ fun env' ->
               let cod' =
                 if String.equal x pn then cod
                 else Dispatcher.rename_ty x pn cod
               in
               go env' rest cod'
         | (pn, annotated) :: rest, TyArrow (dom, cod) ->
-            if annotated <> TyPrim "unknown"
-               && not (Dispatcher.type_equal env ctx annotated dom) then
-              err (location_of_expr e)
-                (Printf.sprintf "lambda parameter %s: expected %s, got %s"
-                   pn (Tyenv.ty_to_string dom) (Tyenv.ty_to_string annotated))
-            else
-              go (Tyenv.add_var env pn dom) rest cod
+            bind env pn annotated dom @@ fun env' -> go env' rest cod
         | _ -> fallback env e expected
       in
       go env params expected
@@ -3805,18 +3870,25 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
          (the ledger rule: never by name) for desugar to wrap. *)
       let loc_e = location_of_expr e_inj in
       let* ty_e =
+        let mark = !lambda_unknown_trail in
         match infer env ctx e_inj with
         | Ok t -> ok (Some t)
-        | Error _ -> ok None in
+        | Error _ -> undo_lambda_unknowns mark; ok None in
       (match ty_e with
        | Some t when Dispatcher.type_equal env ctx t sum_ty -> ok ()
        | _ ->
+           (* each arm is a question: what a reading of it solves is undone,
+              and the arm that answers is read again for good *)
            let hits =
              List.filter (fun v ->
-                  match check env ctx e_inj (List.hd v.v_args) with
+                  let mark = !lambda_unknown_trail in
+                  let r = check env ctx e_inj (List.hd v.v_args) in
+                  undo_lambda_unknowns mark;
+                  match r with
                   | Ok () -> true | Error _ -> false) variants in
            (match hits with
             | [v] ->
+                let* () = check env ctx e_inj (List.hd v.v_args) in
                 Hashtbl.replace Surface_ast.return_inject_sites
                   (loc_e.file, loc_e.start_line, loc_e.start_col)
                   (Surface_ast.anon_sum_key variants, v.v_name);
@@ -4043,6 +4115,37 @@ and location_of_expr (e : expr) : location =
 
 (* ─── Call checking ────────────────────────────────────────────────── *)
 
+(* The type a call expects of a lambda with unannotated parameters, when the
+   call knows it: its parameter, at the instance the other arguments fix. *)
+and lambda_expected_by_call env ctx (name : string) (args : expr list)
+    (arg : expr) (pty : ty) : ty option =
+  let awaits = function
+    | ELam (ps, _, _) -> List.exists (fun (_, t) -> is_placeholder_ty t) ps
+    | _ -> false in
+  match arg, pty with
+  | ELam _, (TyArrow _ | TyPi _) when awaits arg ->
+      if Ty_subst.type_vars pty = [] then Some pty
+      else
+        (match Tyenv.lookup_fun env name with
+         | Some fs when List.length fs.fs_params = List.length args ->
+             let tvs = List.concat_map (fun (_, t) -> Ty_subst.type_vars t) fs.fs_params in
+             let fresh = List.map (fun v -> (v, Ty_subst.fresh_metavar ())) tvs in
+             let inst = Ty_subst.subst_type_vars fresh in
+             let sigma = List.fold_left2 (fun sg (_, pt) a ->
+                 if awaits a then sg
+                 else match infer env ctx a with
+                   | Error _ -> sg
+                   | Ok at ->
+                       match Ty_subst.try_unify (Ty_subst.apply_subst sg (inst pt))
+                               (Ty_subst.apply_subst sg at) with
+                       | Ok s -> Ty_subst.compose_subst s sg
+                       | Error _ -> sg) Ty_subst.empty_subst fs.fs_params args in
+             let want = Ty_subst.apply_subst sigma (inst pty) in
+             if List.for_all Ty_subst.is_lambda_unknown (Ty_subst.free_metavars want)
+             then Some want else None
+         | _ -> None)
+  | _ -> None
+
 and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                (name : string) (args : expr list) (arg_tys : ty list) (loc : location) : ty tc_result =
   match Hashtbl.find_opt ambiguous_imports name with
@@ -4111,9 +4214,15 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                 || param = TyPrim "unknown"
                 || arg = TyPrim "unknown"
              then apply_arrow ret rest
-             else err loc (Printf.sprintf
-               "HOF %s: parameter expects %s, got %s"
-               name (Tyenv.ty_to_string param) (Tyenv.ty_to_string arg))
+             else
+               (* the arrow of a lambda: its parameter was read in its body *)
+               let of_lambda = match param with
+                 | TyMetaVar m when Ty_subst.is_lambda_unknown m ->
+                     [((Hashtbl.find lambda_unknowns m).lu_param, param)]
+                 | _ -> [] in
+               asks_annotation of_lambda (err loc (Printf.sprintf
+                 "HOF %s: parameter expects %s, got %s"
+                 name (Tyenv.ty_to_string param) (Tyenv.ty_to_string arg)))
          | _, [] -> ok t  (* finished — return the residual type *)
          | _, _ :: _ ->
              err loc (Printf.sprintf
@@ -4362,7 +4471,8 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
             | Error _ -> sg) Ty_subst.empty_subst params arg_tys in
         let close t =
           Ty_subst.map_leaves (function
-            | TyMetaVar _ -> Some (TyPrim "unknown")
+            | TyMetaVar n when not (Ty_subst.is_lambda_unknown n) ->
+                Some (TyPrim "unknown")
             | _ -> None) (Ty_subst.apply_subst sigma t) in
         { fs with fs_params = List.map (fun (n, t) -> (n, close t)) params;
                   fs_return = close (inst fs.fs_return) } in
@@ -4556,12 +4666,18 @@ and check_call_signature ?(arg_exprs : expr list = [])
           if Dispatcher.subtype env ctx ~sub:aty ~super:pty
              || comprehension_coerces_to env ctx ~sub:aty ~super:pty
           then check_args (prest, arest)
-          else err loc
+          else
+            let lambda_params =
+              if List.length arg_exprs <> List.length params then []
+              else match List.nth arg_exprs (List.length params - List.length prest - 1) with
+                | ELam (ps, _, l) -> lambda_params_with_unknowns ps l
+                | _ -> [] in
+            asks_annotation lambda_params (err loc
             (Printf.sprintf
                "%s: parameter %s expects %s, got %s%s"
                fn_name pname
                (Tyenv.ty_to_string pty) (Tyenv.ty_to_string aty)
-               (omega_hint pty aty))
+               (omega_hint pty aty)))
       | _ -> err loc "internal: signature length mismatch"
     in
     check_args (params, arg_tys)
@@ -4706,8 +4822,8 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
        * the type but not free in the outer env is universally quantified.
        *
        * Later occurrences of `name` (EVar/ECall) instantiate the scheme with
-       * fresh meta-variables, supporting polymorphic use:
-       *   let id = fun(x) => x in (id(5), id("hello"))
+       * fresh meta-variables. The unknown of an unannotated parameter is not
+       * among them: it is one type (Ty_subst.generalize).
        *
        * For non-lambdas, monomorphic (the Damas-Milner value restriction). *)
       (match e with
@@ -8151,6 +8267,11 @@ let elaborate_id_sugar (p : program) : program =
     in
     List.map (function TopFun fd -> TopFun (resolve_fun fd) | d -> d) p
 
+(* A function the parser lifted out of an inline lambda. *)
+let is_lifted_lambda (name : string) : bool =
+  String.starts_with ~prefix:"__blk_inline_p_" name
+  || String.starts_with ~prefix:"__by_inline_p_" name
+
 let check_program (p : program) : check_result =
   let p = expand_mono_fields p in   (* idempotent: shadow-check on the names *)
   Hashtbl.reset Surface_ast.method_resolutions;
@@ -8676,17 +8797,50 @@ let check_program (p : program) : check_result =
   (* Multi-error accumulation: for TopFun use the accumulating variant
    * to collect ALL body errors. For other decls, the single-error
    * variant is fine (their checks are smaller). *)
+  (* A lambda with a block body, or given to `by`, is lifted to a function: its
+     unannotated parameters have their unknowns in the signature the bodies read
+     and in the body of the function. What leaves the checker keeps the lifted
+     signature as it was written. *)
+  let lifted_with_unknowns (fn : fun_decl) : fun_decl =
+    if not (is_lifted_lambda fn.fn_name) then fn
+    else
+      { fn with fn_params = List.map (fun q ->
+            if is_placeholder_ty q.param_ty
+            then { q with param_ty = Ty_subst.lambda_unknown q.param_name fn.fn_loc }
+            else q) fn.fn_params } in
+  let env_of_bodies = List.fold_left (fun env td ->
+      match td with
+      | TopFun fn when is_lifted_lambda fn.fn_name ->
+          (match Tyenv.lookup_fun env fn.fn_name with
+           | Some fs ->
+               let fn' = lifted_with_unknowns fn in
+               Tyenv.add_fun env fn.fn_name
+                 { fs with fs_params = List.map (fun q -> (q.param_name, q.param_ty)) fn'.fn_params }
+           | None -> env)
+      | _ -> env) env_with_sigs p in
   let errors = List.fold_left
     (fun errs td ->
        match td with
        | TopFun fn ->
-           let fn_errs = check_fun_decl_accum env_with_sigs ctx fn in
+           let fn_errs = check_fun_decl_accum env_of_bodies ctx (lifted_with_unknowns fn) in
            List.rev_append (List.rev fn_errs) errs
        | _ ->
-           match check_decl env_with_sigs ctx td with
+           match check_decl env_of_bodies ctx td with
            | Ok () -> errs
            | Error e -> e :: errs)
     [] p
   in
+  (* the verdict on what the whole program left open *)
+  let errors =
+    if errors <> [] then errors else
+    Hashtbl.fold (fun _ lu acc ->
+        if lu.lu_solution <> None then acc
+        else (lu.lu_loc, lu.lu_param) :: acc) lambda_unknowns []
+    |> List.sort compare
+    |> List.rev_map (fun (loc, param) ->
+         { err_loc = loc; err_code = Error_codes.Type_check; err_msg = Printf.sprintf
+             "lambda parameter %s: neither the expected type of the lambda nor a \
+              use of the parameter gives it a type: annotate the parameter"
+             param }) in
   { cr_env = env_with_sigs;
     cr_errors = List.rev errors @ heap_errors; }

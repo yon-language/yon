@@ -29,12 +29,30 @@ open Surface_ast
 
 let metavar_counter = ref 0
 
-let reset_metavars () = metavar_counter := 0
+let reset_metavars () =
+  metavar_counter := 0;
+  Hashtbl.reset lambda_unknowns;
+  Hashtbl.reset lambda_unknown_sites;
+  lambda_unknown_trail := []
 
 let fresh_metavar () : ty =
   let n = !metavar_counter in
   incr metavar_counter;
   TyMetaVar n
+
+(* The one unknown of the parameter [param] of the lambda at [loc]. *)
+let lambda_unknown (param : string) (loc : location) : ty =
+  match Hashtbl.find_opt lambda_unknown_sites (loc, param) with
+  | Some n -> TyMetaVar n
+  | None ->
+      let n = !metavar_counter in
+      incr metavar_counter;
+      Hashtbl.replace lambda_unknowns n
+        { lu_param = param; lu_loc = loc; lu_solution = None };
+      Hashtbl.replace lambda_unknown_sites (loc, param) n;
+      TyMetaVar n
+
+let is_lambda_unknown (n : int) : bool = Hashtbl.mem lambda_unknowns n
 
 (* ─── Substitution ───────────────────────────────────────────────────── *)
 
@@ -148,7 +166,7 @@ let compose_subst (sigma1 : subst) (sigma2 : subst) : subst =
 (* ─── Free meta-variables ────────────────────────────────────────────── *)
 
 let rec free_metavars (t : ty) : int list =
-  match t with
+  match deref_lambda_unknown t with
   | TyMetaVar n -> [n]
   | TyApp ("List", [inner]) -> free_metavars inner
   | TyMap (k, v) -> free_metavars k @ free_metavars v
@@ -180,6 +198,15 @@ let uniq (xs : 'a list) : 'a list =
 let occur_check (n : int) (t : ty) : bool =
   List.mem n (free_metavars t)
 
+(* Solve an open lambda unknown; a type that contains it is no solution. *)
+let solve_lambda_unknown (n : int) (t : ty) : bool =
+  if occur_check n t then false
+  else begin
+    (Hashtbl.find lambda_unknowns n).lu_solution <- Some t;
+    lambda_unknown_trail := n :: !lambda_unknown_trail;
+    true
+  end
+
 (* ─── Unification (Robinson 1965) ────────────────────────────────────── *)
 
 type unify_error =
@@ -199,7 +226,7 @@ let unify_error_to_string = function
 (* unify a b: returns the most general unifier sigma such that
  * apply_subst sigma a = apply_subst sigma b. *)
 let rec unify (a : ty) (b : ty) : subst =
-  match a, b with
+  match deref_lambda_unknown a, deref_lambda_unknown b with
   | TyMetaVar n, TyMetaVar m when n = m -> empty_subst
   (* "unknown" carries no information: it leaves an unknown free, for a
      later argument to fix *)
@@ -299,7 +326,9 @@ type scheme = {
  * that is not free in the environment is quantified. *)
 let generalize (env_metavars : int list) (t : ty) : scheme =
   let t_fms = uniq (free_metavars t) in
-  let bound = List.filter (fun n -> not (List.mem n env_metavars)) t_fms in
+  (* the unknown of a lambda parameter is one type: it never generalizes *)
+  let bound = List.filter (fun n ->
+      not (List.mem n env_metavars) && not (is_lambda_unknown n)) t_fms in
   { bound; body = t }
 
 (* instantiate s: takes a scheme forall a1,...,an. T and produces T[a_i |-> b_i]
