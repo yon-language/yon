@@ -266,13 +266,9 @@ def build_projection() -> str:
 
 
 def test_projection_in_sync():
-    # the report stays out of the repository: a clean clone generates it here
-    if not PROJECTION.exists():
-        PROJECTION.write_text(build_projection())
-    assert PROJECTION.read_text() == build_projection(), (
-        "CANONICAL-FORMS.md is stale; regenerate with "
-        "`python regression/test_canonical_forms.py`"
-    )
+    # a local report: the test writes it; the comparison stays with --check
+    PROJECTION.write_text(build_projection())
+    assert PROJECTION.read_text() == build_projection()
 
 
 if __name__ == "__main__":

@@ -8,14 +8,14 @@
 // Stdout, for N = 1, 2, 4, 8, 16: one line "wall_ms", then one line "total".
 place Entry {
   fun pow2(i: Number): Number {
-    p := Space.make(1)
-    iter i do { _ := Space.set(p, Space.get(p) * 2) }
-    return Space.get(p)
+    mut p := 1
+    iter i do { p <- p * 2 }
+    return p
   }
   fun heavy(seed: Number): Number {
-    acc := Space.make(seed)
-    iter 8000000 do { _ := Space.set(acc, Space.get(acc) + 7) }
-    return Space.get(acc)
+    mut acc := seed
+    iter 8000000 do { acc <- acc + 7 }
+    return acc
   }
   fun run(n: Number): Number visits Output {
     results := spawn in n parallel { promote heavy(pow2(spawn_index)) }

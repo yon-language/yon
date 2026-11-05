@@ -45,8 +45,8 @@ _BUILD = """place Q {
     return m
   }
   fun apply(f: Number -> Number, x: Number): Number { return f(x) }
+  fun peek(c: Number): Number { return c }
   fun adder(n: Number): Number -> Number { return fun(x: Number) => x + n }
-  fun peek(c: Space): Number { return Space.get(c) }
   fun points(n: Number): XRelMap<Number, Number> {
     mut m := XRelMap.empty
     mut k := 0
@@ -165,14 +165,30 @@ def test_a_closure_does_not_come_back_from_another_space(tmp_path):
 
 
 def test_a_cell_does_not_cross_into_another_space(tmp_path):
+    # what mentions a cell names something that exists only here
     rc, out, _ = _in_binary(tmp_path, """place Entry {
   fun main: Number {
-    c := Space.make(7)
-    return Q.peek(c)
+    mut c := 7
+    return Q.apply(fun(y: Number) => y + c, 1)
   }
 }
 """)
-    assert _refused(rc, out, "Q__peek", "another Space"), out
+    assert _refused(rc, out, "Q__apply", "another Space"), out
+
+
+def test_what_crosses_from_a_cell_is_the_value_read(tmp_path):
+    # the control: the read is a number, and a later write does not reach the other side
+    rc, out, exe = _in_binary(tmp_path, """place Entry {
+  fun main: Number {
+    mut c := 8
+    x := Q.peek(c)
+    c <- 9
+    return x
+  }
+}
+""")
+    assert rc == 0, out
+    assert subprocess.run([str(exe)], capture_output=True, timeout=60).returncode == 8
 
 
 @pytest.mark.parametrize("params,args", [("", ""), ("k: Number", "0")])
@@ -203,10 +219,10 @@ def test_a_call_inside_one_space_is_not_a_crossing(tmp_path):
 }
 """)
     (proj / "w" / "Q.yon").write_text(_BUILD.replace(
-        "  fun peek(c: Space)",
+        "  fun points(n: Number)",
         "  fun inside(x: Number): Number { mut k := 1\n"
         "    return Q.apply(fun(y: Number) => y + k, x) }\n"
-        "  fun peek(c: Space)"))
+        "  fun points(n: Number)"))
     exe = tmp_path / "probe.exe"
     rc, out = _yonc(proj, exe)
     assert rc == 0, out

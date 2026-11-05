@@ -1,14 +1,14 @@
 place Entry {
   fun build(seed: Text, doublings: Number): Text {
-    s := Space.make(seed)
-    iter doublings do { _ := Space.set(s, String.concat(Space.get(s), Space.get(s))) }
-    return Space.get(s)
+    mut s := seed
+    iter doublings do { s <- String.concat(s, s) }
+    return s
   }
   fun main(): Number visits Output {
     big := build("x", 15)
-    acc := Space.make(0)
-    iter 10000000 do { _ := Space.set(acc, Space.get(acc) + (if String.equal(big, big) then 7 else 0)) }
-    _p := Output.print(String.from_int(Space.get(acc)))
+    mut acc := 0
+    iter 10000000 do { acc <- acc + (if String.equal(big, big) then 7 else 0) }
+    _p := Output.print(String.from_int(acc))
     return 0
   }
 }

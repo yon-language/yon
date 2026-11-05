@@ -7,45 +7,45 @@ place Entry {
            else n
   }
   fun timed_insert(n: Number): Number visits Output {
-    mapc := Space.make(HashMap.empty)
-    i := Space.make(0)
+    mut mapc := HashMap.empty
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(mapc, HashMap.set(Space.get(mapc), k, k + 1))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                mapc <- HashMap.set(mapc, k, k + 1)
+                i <- k + 1 }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_insert_base(n: Number): Number visits Output {
-    i := Space.make(0)
-    acc := Space.make(0)
+    mut i := 0
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(acc, k + 1)
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                acc <- k + 1
+                i <- k + 1 }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun build_map(n: Number): HashMap<Number, Number> {
-    mapc := Space.make(HashMap.empty)
-    i := Space.make(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(mapc, HashMap.set(Space.get(mapc), k, k + 1))
-                _2 := Space.set(i, k + 1) }
-    return Space.get(mapc)
+    mut mapc := HashMap.empty
+    mut i := 0
+    iter n do { k := i
+                mapc <- HashMap.set(mapc, k, k + 1)
+                i <- k + 1 }
+    return mapc
   }
   fun timed_get(mp: HashMap<Number, Number>, m: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
     iter m do { v := (match HashMap.get(mp, 42) { Found as x => x, Absent => 0 })
-                _ := Space.set(acc, Space.get(acc) + v) }
+                acc <- acc + v }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_get_base(m: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter m do { _ := Space.set(acc, Space.get(acc) + 1) }
+    iter m do { acc <- acc + 1 }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
@@ -53,21 +53,21 @@ place Entry {
   fun main(): Number visits Output {
     n := scaled(100000)
     // insert throughput: min over a few reps, net of baseline
-    ins := Space.make(timed_insert(n))
-    iter 4 do { _ := Space.set(ins, min2(Space.get(ins), timed_insert(n))) }
-    insb := Space.make(timed_insert_base(n))
-    iter 4 do { _ := Space.set(insb, min2(Space.get(insb), timed_insert_base(n))) }
+    mut ins := timed_insert(n)
+    iter 4 do { ins <- min2(ins, timed_insert(n)) }
+    mut insb := timed_insert_base(n)
+    iter 4 do { insb <- min2(insb, timed_insert_base(n)) }
     mp := build_map(n)
     sz := HashMap.size(mp)
     m := scaled(1000000)
-    gk := Space.make(timed_get(mp, m))
-    iter 11 do { _ := Space.set(gk, min2(Space.get(gk), timed_get(mp, m))) }
-    gkb := Space.make(timed_get_base(m))
-    iter 11 do { _ := Space.set(gkb, min2(Space.get(gkb), timed_get_base(m))) }
+    mut gk := timed_get(mp, m)
+    iter 11 do { gk <- min2(gk, timed_get(mp, m)) }
+    mut gkb := timed_get_base(m)
+    iter 11 do { gkb <- min2(gkb, timed_get_base(m)) }
     _1 := Output.print(String.from_int(sz))                                  // final_size = N
-    _2 := Output.print(String.from_int((Space.get(ins) - Space.get(insb)))) // insert net ns for N
+    _2 := Output.print(String.from_int((ins - insb))) // insert net ns for N
     _3 := Output.print(String.from_int((match HashMap.get(mp, 42) { Found as x => x, Absent => 0 })))                // get value guard (==43)
-    _4 := Output.print(String.from_int((Space.get(gk) - Space.get(gkb))))   // get net ns for M
+    _4 := Output.print(String.from_int((gk - gkb)))   // get net ns for M
     return 0
   }
 }

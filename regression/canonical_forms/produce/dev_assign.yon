@@ -2,7 +2,7 @@
 // promotion that turns `be x :=` into a Space cell does not reach these
 // expression-context blocks), so it is rejected cleanly at type-check time (exit 3)
 // instead of crashing emit_mlir with a Fatal error. The fix is
-// `Space.set` or binding the value with `be` outside the block.
+// compute the value outside the block and bind it with `:=`.
 place Entry {
   fun main(): Number {
     s := produce {

@@ -219,17 +219,17 @@ internal place LeechHeap<V> carried by i64 {
 
   /* ─── The handle: (generation * 8 + level) * 2^18 + place ─── [T] ─── */
 
-  internal fun level_of<T>(h: LeechHeap<T>): Int64 { return (h / point_bits) % 8 }
-  internal fun segment_number<T>(h: LeechHeap<T>): Int64 {
+  internal fun level_of(h: Int64): Int64 { return (h / point_bits) % 8 }
+  internal fun segment_number(h: Int64): Int64 {
     return (h / (8 * point_bits)) / per_segment(level_of(h))
   }
-  internal fun slot_of<T>(h: LeechHeap<T>): Int64 {
+  internal fun slot_of(h: Int64): Int64 {
     l := level_of(h)
     return ((h / (8 * point_bits)) % per_segment(l)) * places(l) + h % point_bits
   }
   /* the region of the segment: part l * 13,120 + segment of the Space's
      heap, of 196,560 slots of the level */
-  internal fun segment_of<T>(h: LeechHeap<T>): Region {
+  internal fun segment_of(h: Int64): Region {
     l := level_of(h)
     return SystemOs.leech_heap_part(l * max_segments + segment_number(h), points * slot_words(l))
   }

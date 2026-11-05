@@ -78,7 +78,7 @@ refused: it compiles, and the call returns a wrong value (0). This is a defect.
 | `x := e` | ✓ | Definition of a value, with no keyword, at top level and inside functions alike (no `let`, no `be`). Defines once per scope: a second `x := ...` of a name already bound in the same scope is a compile error; nested-scope shadowing is allowed, `_`-prefixed names are exempt |
 | `mut c := e` | ✓ | Declares a **cell** (a Space cell, the one mutable thing): mutability shows where it is born |
 | `c <- e` | ✓ | Writes the cell `c`. A write to a name not declared `mut` is refused (E2008), with the message proposing `mut`. Snapshot semantics, no aliasing (`y := c` does not alias `c`'s cell). `x = e` does not exist |
-| `Space.make / set / get` | ✓ | The underlying mutable cells, also usable directly |
+| `Space.make / set / get` | ✗ | Retired, refused: a Space is a package. A cell is `mut c := e`, `c <- e`, `c` |
 | `x.f <- e` | ✗ rejected | Field mutation: place sections are immutable; the type checker rejects it ("place sections are immutable"). Mutate through cells |
 
 Yon has no assignment operator `=`: a value is defined with `:=`, and a cell
@@ -138,7 +138,7 @@ functions, a function has one type.
 | `functor(x) => e from W to V [law id]*` | ✓ | Inline functor lambda; its declared laws are checked |
 | `morph(s) => e from S1 to S2` | ✓ | Inline morph lambda |
 | `compose h1 with h2` | ✓ | Handle composition, `(compose f with g)(x) = g(f(x))`. Kind discipline enforced: e.g. `reduction ∘ reduction` is rejected (the eliminator lands in `Number`) |
-| *capture by value* | ✓ | A `move`/`functor`/`view`/`reduction`/`morph` lambda, like a `fun` lambda, may mention enclosing locals; they are captured by value. A **cell** (a local declared `mut`, or made with `Space.make`) cannot leave its call: returning, storing or sending an arrow that mentions one is a compile-time error (chapter 7) |
+| *capture by value* | ✓ | A `move`/`functor`/`view`/`reduction`/`morph` lambda, like a `fun` lambda, may mention enclosing locals; they are captured by value. A **cell** (a local declared `mut`) cannot leave its call: returning, storing or sending an arrow that mentions one is a compile-time error (chapter 7) |
 | `f(args) in S` | ✓ | Call in a Space context (`apply_move ... in S`, morph dispatch) |
 | `.-> P { field value }` | ✓ | Section construction through the mediatrice, **no `=`** between field and value. (`new` and `verify` are retired: the constructor is the mediating arrow, and a law-verified place is instantiated like any other) |
 | [`clear(t)`](/book/keywords#clear), `pair(a,b)`, `fst(p)`, `snd(p)` | ✓ | HoTT introduction forms. `clear` is the reflexivity proof: the path that needs no argument, because the two ends are definitionally the same |

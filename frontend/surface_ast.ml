@@ -1212,6 +1212,7 @@ let list_method_sites : (string * int * int * int, string) Hashtbl.t = Hashtbl.c
 type lambda_unknown = {
   lu_param : string;
   lu_loc : location;
+  lu_call : string option;   (* the generic fun of the call, when this is a T of a call *)
   mutable lu_solution : ty option;
 }
 let lambda_unknowns : (int, lambda_unknown) Hashtbl.t = Hashtbl.create 16

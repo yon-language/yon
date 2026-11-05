@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number visits Output {
     l := List.cons(1445, List.cons(1280, List.empty))
-    acc := Space.make(0)
-    iter 10000000 do { _ := Space.set(acc, Space.get(acc) + (match List.head(l) { Found as v => v, Absent => 0 })) }
-    _p := Output.print(String.from_int(Space.get(acc)))
+    mut acc := 0
+    iter 10000000 do { acc <- acc + (match List.head(l) { Found as v => v, Absent => 0 }) }
+    _p := Output.print(String.from_int(acc))
     return 0
   }
 }

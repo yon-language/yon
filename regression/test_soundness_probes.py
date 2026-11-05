@@ -539,24 +539,23 @@ _CELL_ESCAPES = {
                                  "while i < 2 do { when i > 0 { return k }  k <- fun(y: Number) => y + c  i <- i + 1 }  return k }",
     "assigned_in_a_while_then_returned": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
                                          "mut i := 0  while i < 2 do { k <- fun(y: Number) => y + c  i <- i + 1 }  return k }",
-    "stored_before_its_assignment_in_a_while": "fun mk(out: Space): Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
-                                               "mut i := 0  while i < 2 do { when i > 0 { _s := Space.set(out, k) }  "
-                                               "k <- fun(y: Number) => y + c  i <- i + 1 }  return 0 }",
     "alias_before_assignment": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
                                "mut h := fun(y: Number) => y  mut i := 0  "
                                "while i < 2 do { h <- k  k <- fun(y: Number) => y + c  i <- i + 1 }  return h }",
+    "stored_before_its_assignment_in_a_while": "fun mk(): Number -> Number { mut c := 10  c <- 20  mut k := fun(y: Number) => y  "
+                                               "mut out := fun(y: Number) => y  mut i := 0  "
+                                               "while i < 2 do { when i > 0 { out <- k }  "
+                                               "k <- fun(y: Number) => y + c  i <- i + 1 }  return out }",
     "no_declared_return": "fun mk() { mut c := 10  c <- 20  return fun(y: Number) => y + c }",
-    # a cell made with Space.make is freed on return as well
-    "space_cell_returned": "fun mk(): Space { mut h := Space.make(21)  h2 := h  return h2 }",
-    "space_cell_captured": "fun mk(): Number -> Number { mut h := Space.make(20)  return fun(y: Number) => y + Space.get(h) }",
-    "space_cell_contents_read_out": "fun mk(): Number -> Number { mut h := Space.make(0)  mut c := 10  c <- 20  "
-                                    "_s := Space.set(h, fun(y: Number) => y + c)  return Space.get(h) }",
-    "space_cell_made_with_a_closure": "fun mk(): Number -> Number { mut c := 10  c <- 20  "
-                                      "mut h := Space.make(fun(y: Number) => y + c)  return Space.get(h) }",
-    # stored into a cell the caller owns
-    "stored_in_outer_cell": "fun mk(k: Space): Number { mut c := 10  c <- 20  _s := Space.set(k, fun(y: Number) => y + c)  return 0 }",
-    "stored_by_a_helper": "fun put(k: Space, g: Number -> Number): Number { _s := Space.set(k, g)  return 0 }\n"
-                          "  fun mk(k: Space): Number { mut c := 10  c <- 20  return put(k, fun(y: Number) => y + c) }",
+    # a cell is freed on return, whatever holds what mentions it
+    "cell_captured": "fun mk(): Number -> Number { mut h := 20  h <- 21  return fun(y: Number) => y + h }",
+    "cell_contents_read_out": "fun mk(): Number -> Number { mut h := fun(y: Number) => y  mut c := 10  c <- 20  "
+                              "h <- fun(y: Number) => y + c  return h }",
+    "cell_made_with_a_closure": "fun mk(): Number -> Number { mut c := 10  c <- 20  "
+                                "mut h := fun(y: Number) => y + c  return h }",
+    # handed to a helper that gives it back
+    "stored_by_a_helper": "fun put(g: Number -> Number): Number -> Number { return g }\n"
+                          "  fun mk(): Number -> Number { mut c := 10  c <- 20  return put(fun(y: Number) => y + c) }",
     # sent on the wire
     "wire_send": "fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  "
                  "_s := Wire.send(ch, fun(y: Number) => y + c)  return 0 }",
@@ -573,6 +572,15 @@ _CELL_PLACES = ("place Box { f Number -> Number }\nplace P { v Number }\nplace Q
 # a return stands only where its body ends, so the program is refused before
 # mobility is asked.
 _CLOSED_BY_STRUCTURE = {"return_in_while", "assigned_after_the_return"}
+
+
+def test_a_closure_over_a_cell_of_a_block_stops_when_read_after_it(tmp_path):
+    # stored in a cell that outlives the block of the cell it mentions: the
+    # compiler lets it through, and the read of the dead cell is refused at run time
+    entry = ("place Entry {\n  fun mk(b: Boolean): Number { mut k := fun(y: Number) => y\n"
+             "    when b { mut c := 10  c <- 20  k <- fun(y: Number) => y + c }\n    return k(1) }\n"
+             "  fun main: Number { return mk(true) }\n}\n")
+    assert _compile_and_run(tmp_path, entry) == 3
 
 
 @pytest.mark.parametrize("form", sorted(_CELL_ESCAPES))
@@ -615,10 +623,10 @@ def test_closure_over_cell_sent_to_another_space_is_rejected(tmp_path):
     # a cell READ is a value, and so is what the closure computes
     ("fun mk: Number { mut c := 10  c <- 20  return c }", 20),
     ("fun mk: Number { mut c := 10  c <- 20  g := fun(y: Number) => y + c  n := g(1)  return n }", 21),
-    # a Space cell used inside its activation, or handed back to its owner
-    ("fun mk: Number { mut h := Space.make(20)  g := fun(y: Number) => y + Space.get(h)  return g(1) }", 21),
-    ("fun pass(k: Space): Space { return k }\n"
-     "  fun mk: Number { mut h := Space.make(21)  h2 := pass(h)  return Space.get(h2) }", 21),
+    # a cell used inside its activation, or its value handed to a callee
+    ("fun mk: Number { mut h := 20  g := fun(y: Number) => y + h  return g(1) }", 21),
+    ("fun pass(k: Number): Number { return k }\n"
+     "  fun mk: Number { mut h := 21  h2 := pass(h)  return h2 }", 21),
     # what crosses the wire is the closure's value, a number
     ("fun mk(): Number { ch := Wire.make(4)  mut c := 10  c <- 20  g := fun(y: Number) => y + c  "
      "_s := Wire.send(ch, g(1))  return Wire.recv(ch) }", 21),

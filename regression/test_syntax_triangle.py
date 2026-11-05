@@ -583,13 +583,9 @@ def build_matrix() -> str:
 
 
 def test_matrix_in_sync():
-    # the report stays out of the repository: a clean clone generates it here
-    if not MATRIX.exists():
-        MATRIX.write_text(build_matrix())
-    assert MATRIX.read_text() == build_matrix(), (
-        "SYNTAX-TRIANGLE.md is stale; regenerate with "
-        "`python regression/test_syntax_triangle.py`"
-    )
+    # a local report: the test writes it; the comparison stays with --check
+    MATRIX.write_text(build_matrix())
+    assert MATRIX.read_text() == build_matrix()
 
 
 if __name__ == "__main__":

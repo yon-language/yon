@@ -1,43 +1,46 @@
 place Entry {
-  fun build_xset(lo: Number, n: Number): Number {
-    s := Space.make(XSet.empty())
-    i := Space.make(0)
-    iter n do { _ := Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
-                _2 := Space.set(i, Space.get(i) + 1) }
-    return Space.get(s)
+  fun add_at(s: XRelSet<LatticePoint>, i: Number): XRelSet<LatticePoint> {
+    return match LatticePoint.at_index(i) { LatticePoint as p => XRelSet.add(s, p), DomainError as d => s }
+  }
+  fun build_xset(lo: Number, n: Number): XRelSet<LatticePoint> {
+    mut s := XRelSet.empty
+    mut i := 0
+    iter n do { s <- add_at(s, lo + i)
+                i <- i + 1 }
+    return s
   }
   fun build_hset(lo: Number, n: Number): HashSet<Number> {
-    s := Space.make(HashSet.empty)
-    i := Space.make(0)
-    iter n do { _ := Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
-                _2 := Space.set(i, Space.get(i) + 1) }
-    return Space.get(s)
+    mut s := HashSet.empty
+    mut i := 0
+    iter n do { s <- HashSet.add(s, lo + i)
+                i <- i + 1 }
+    return s
   }
-  fun batch_xinter(a: Number, b: Number, batch: Number): Number visits Output {
-    acc := Space.make(0)
+  fun batch_xinter(a: XRelSet<LatticePoint>, b: XRelSet<LatticePoint>, batch: Number): Number visits Output {
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter batch do { _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
+    iter batch do { acc <- acc + XRelSet.size(XRelSet.intersect(a, b)) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
-  fun batch_xunion(a: Number, b: Number, batch: Number): Number visits Output {
-    acc := Space.make(0)
+  fun batch_xunion(a: XRelSet<LatticePoint>, b: XRelSet<LatticePoint>, batch: Number): Number visits Output {
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter batch do { _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
+    iter batch do { acc <- acc + XRelSet.size(XRelSet.union(a, b)) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun batch_hinter(a: HashSet<Number>, b: HashSet<Number>, batch: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter batch do { _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
+    iter batch do { acc <- acc + HashSet.size(HashSet.intersect(a, b)) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun batch_hunion(a: HashSet<Number>, b: HashSet<Number>, batch: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter batch do { _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
+    iter batch do { acc <- acc + HashSet.size(HashSet.union(a, b)) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
@@ -48,8 +51,8 @@ place Entry {
     xb := build_xset(1000, n)
     ha := build_hset(0, n)
     hb := build_hset(1000, n)
-    _g1 := Output.print(String.from_int(XSet.size(XSet.intersect(xa, xb))))   // ~1000 overlap
-    _g2 := Output.print(String.from_int(XSet.size(XSet.union(xa, xb))))        // ~3000
+    _g1 := Output.print(String.from_int(XRelSet.size(XRelSet.intersect(xa, xb))))   // ~1000 overlap
+    _g2 := Output.print(String.from_int(XRelSet.size(XRelSet.union(xa, xb))))        // ~3000
     _1 := Output.print(String.from_int(batch_xinter(xa, xb, batch)))
     _2 := Output.print(String.from_int(batch_xunion(xa, xb, batch)))
     _3 := Output.print(String.from_int(batch_hinter(ha, hb, batch)))

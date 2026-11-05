@@ -192,8 +192,8 @@ def test_a_nullary_that_acts_declared_without_parentheses_is_refused(tmp_path):
 
 
 def test_a_pure_library_nullary_is_named_and_one_that_acts_is_called(tmp_path):
-    src = ("place Entry {\nfun main(): Number {\n"
-           "  s := HashSet.empty\n  v := Vec.empty()\n  return 42\n}\n}\n")
+    src = ("place Entry {\nfun no_numbers: HashSet<Number> { return HashSet.empty }\n"
+           "fun main(): Number {\n  s := no_numbers\n  v := Vec.empty()\n  return 42\n}\n}\n")
     assert _exit(tmp_path, src) == 42
 
 

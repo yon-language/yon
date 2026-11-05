@@ -91,9 +91,10 @@ _ACROSS = "another Space"
 _WIRE = "the element of this wire"
 _OUTLIVES = "outlive the call"
 REFUSED = {
-    "cell": ("Space", "Space.make(7)",
-             {"bin_arg": _ACROSS, "bin_res": _OUTLIVES, "proc_arg": _ACROSS,
-              "proc_res": _OUTLIVES, "wire": _OUTLIVES}),
+    # a closure that mentions a cell: the cell is what cannot leave
+    "cell": ("(Number -> Number)", "fun(y: Number) => y + c",
+             {"bin_arg": _ACROSS, "bin_res": _ACROSS, "proc_arg": _ACROSS,
+              "proc_res": _ACROSS, "wire": _WIRE}),
     "closure": ("(Number -> Number)", "fun(y: Number) => y + 5",
                 {"bin_arg": _ACROSS, "bin_res": _ACROSS, "proc_arg": _ACROSS,
                  "proc_res": _ACROSS, "wire": _WIRE}),
@@ -138,7 +139,7 @@ def _indent(body: str) -> str:
     return "\n".join("  " + line for line in body.splitlines())
 
 
-def _in_binary(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=None):
+def _in_binary(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=None, setup=""):
     """main (the root Space) and place Q in Space w, one binary. With
     `inline`, the value is that expression, made where it is handed over."""
     proj = tmp / "proj"
@@ -148,7 +149,7 @@ def _in_binary(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=
         main = f"  fun make: {ty} {{\n{_indent(build)}\n  }}\n" \
                "  fun main: Number { return Q.digest(make) }\n"
         if inline:
-            main = f"  fun main: Number {{\n    v := {inline}\n    return Q.digest(v)\n  }}\n"
+            main = f"  fun main: Number {{\n    {setup}v := {inline}\n    return Q.digest(v)\n  }}\n"
     else:
         q = f"  fun build: {ty} {{\n{_indent(build)}\n  }}\n"
         main = f"  fun main: Number {{\n    x := Q.build\n    return {read}\n  }}\n"
@@ -159,7 +160,7 @@ def _in_binary(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=
     return rc, out, [exe]
 
 
-def _between_processes(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=None):
+def _between_processes(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=None, setup=""):
     """a server P (its own binary, P_srv) and a client that imports from it."""
     svc, cli = tmp / "svc", tmp / "cli"
     objects = '"X", "Pt", "Note", "Line", "Bag", "SyntaxError"'
@@ -173,7 +174,7 @@ def _between_processes(tmp: Path, boundary: str, ty: str, build: str, read: str,
         main = f"  fun make: {ty} {{\n{_indent(build)}\n  }}\n" \
                "  fun main: Number { return digest(make) }\n"
         if inline:
-            main = f"  fun main: Number {{\n    v := {inline}\n    return digest(v)\n  }}\n"
+            main = f"  fun main: Number {{\n    {setup}v := {inline}\n    return digest(v)\n  }}\n"
     elif boundary == "proc_res":
         exported = stub = build_fn
         imp = "build"
@@ -181,7 +182,7 @@ def _between_processes(tmp: Path, boundary: str, ty: str, build: str, read: str,
     else:
         made = inline or "build"
         exported = stub = (build_fn if not inline else "") + \
-            f"fun items(): Wire<{ty}> {{\n  v := {made}\n" \
+            f"fun items(): Wire<{ty}> {{\n  {setup}v := {made}\n" \
             "  s := produce {\n    emit v\n  }\n  return s\n}\n"
         imp = "items"
         main = ("  fun main: Number {\n    w := wire to space P\n"
@@ -200,10 +201,10 @@ def _between_processes(tmp: Path, boundary: str, ty: str, build: str, read: str,
     return rc, out, [exe]
 
 
-def _case(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=None):
+def _case(tmp: Path, boundary: str, ty: str, build: str, read: str, inline=None, setup=""):
     if boundary.startswith("bin_"):
-        return _in_binary(tmp, boundary, ty, build, read, inline)
-    return _between_processes(tmp, boundary, ty, build, read, inline)
+        return _in_binary(tmp, boundary, ty, build, read, inline, setup)
+    return _between_processes(tmp, boundary, ty, build, read, inline, setup)
 
 
 @pytest.mark.parametrize("value,boundary", _cases(VALUES))
@@ -219,6 +220,7 @@ def test_a_value_arrives_intact(tmp_path, value, boundary):
 def test_what_has_no_meaning_on_the_other_side_is_refused(tmp_path, value, boundary):
     ty, made, words = REFUSED[value]
     # the receiving side reads nothing: the refusal is the crossing's alone
-    rc, out, _ = _case(tmp_path, boundary, ty, f"  return {made}", "0", inline=made)
+    setup = "mut c := 7\n  " if value == "cell" else ""
+    rc, out, _ = _case(tmp_path, boundary, ty, f"  {setup}return {made}", "0", inline=made, setup=setup)
     assert (rc != 0 and "[E" in out and "Fatal error: exception" not in out
             and words[boundary] in out), out

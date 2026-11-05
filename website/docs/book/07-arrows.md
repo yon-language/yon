@@ -199,8 +199,7 @@ base := 7
 m := move(s: Order) => .-> Ticket { total base + s.qty } from Order to Ticket
 ```
 
-What an arrow cannot carry is a **cell**: a local declared `mut`, or a cell
-made with `Space.make`. A cell belongs to the call that made it and dies when
+What an arrow cannot carry is a **cell**: a local declared `mut`. A cell belongs to the call that made it and dies when
 that call returns, so an arrow that mentions one holds a place, not a value. It
 can be applied inside that call, or passed down to a callee, but it cannot leave:
 returning it, storing it in a cell, or sending it to another Space is a

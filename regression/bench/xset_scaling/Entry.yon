@@ -6,42 +6,45 @@ place Entry {
            then Number.floor(n / String.parse_number(Env.get("YON_BENCH_DIV")))
            else n
   }
-  fun build_xset(lo: Number, n: Number): Number {
-    s := Space.make(XSet.empty())
-    i := Space.make(0)
-    iter n do { _ := Space.set(s, XSet.add(Space.get(s), Leech.point(lo + Space.get(i))))
-                _2 := Space.set(i, Space.get(i) + 1) }
-    return Space.get(s)
+  fun add_at(s: XRelSet<LatticePoint>, i: Number): XRelSet<LatticePoint> {
+    return match LatticePoint.at_index(i) { LatticePoint as p => XRelSet.add(s, p), DomainError as d => s }
+  }
+  fun build_xset(lo: Number, n: Number): XRelSet<LatticePoint> {
+    mut s := XRelSet.empty
+    mut i := 0
+    iter n do { s <- add_at(s, lo + i)
+                i <- i + 1 }
+    return s
   }
   fun build_hset(lo: Number, n: Number): HashSet<Number> {
-    s := Space.make(HashSet.empty)
-    i := Space.make(0)
-    iter n do { _ := Space.set(s, HashSet.add(Space.get(s), lo + Space.get(i)))
-                _2 := Space.set(i, Space.get(i) + 1) }
-    return Space.get(s)
+    mut s := HashSet.empty
+    mut i := 0
+    iter n do { s <- HashSet.add(s, lo + i)
+                i <- i + 1 }
+    return s
   }
-  fun b_xi(a: Number, b: Number): Number visits Output {
-    acc := Space.make(0)
+  fun b_xi(a: XRelSet<LatticePoint>, b: XRelSet<LatticePoint>): Number visits Output {
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter 30 do { _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.intersect(a, b))) }
+    iter 30 do { acc <- acc + XRelSet.size(XRelSet.intersect(a, b)) }
     return (Time.now_ns(0) - t0) / 30
   }
-  fun b_xu(a: Number, b: Number): Number visits Output {
-    acc := Space.make(0)
+  fun b_xu(a: XRelSet<LatticePoint>, b: XRelSet<LatticePoint>): Number visits Output {
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter 30 do { _ := Space.set(acc, Space.get(acc) + XSet.size(XSet.union(a, b))) }
+    iter 30 do { acc <- acc + XRelSet.size(XRelSet.union(a, b)) }
     return (Time.now_ns(0) - t0) / 30
   }
   fun b_hi(a: HashSet<Number>, b: HashSet<Number>): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter 30 do { _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.intersect(a, b))) }
+    iter 30 do { acc <- acc + HashSet.size(HashSet.intersect(a, b)) }
     return (Time.now_ns(0) - t0) / 30
   }
   fun b_hu(a: HashSet<Number>, b: HashSet<Number>): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter 30 do { _ := Space.set(acc, Space.get(acc) + HashSet.size(HashSet.union(a, b))) }
+    iter 30 do { acc <- acc + HashSet.size(HashSet.union(a, b)) }
     return (Time.now_ns(0) - t0) / 30
   }
   fun one(n: Number): Number visits Output {

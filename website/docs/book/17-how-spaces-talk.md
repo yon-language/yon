@@ -249,7 +249,7 @@ wire can carry. The rule holds in four places:
 
 At each of them the type of what crosses must be **mobile**: numbers, strings,
 places made of mobile fields, and collections of mobile values. A closure, a
-cell (`Space.make`) or a region handle names something that exists only in the
+cell (`mut`) or a region handle names something that exists only in the
 Space that made it. Given to another Space, it would name nothing there. So
 handing one over is a type error, and it is refused even when, today, both
 Spaces share one process:

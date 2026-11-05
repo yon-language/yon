@@ -8,69 +8,69 @@ place Entry {
   }
   fun mn(a: Number, b: Number): Number { return if a < b then a else b }
   fun warm(): Number visits Output {
-    l := Space.make(List.empty)
-    _a := Space.set(l, List.cons(1, Space.get(l)))
-    m := Space.make(HashMap.empty)
-    _b := Space.set(m, HashMap.set(Space.get(m), 1, 1))
-    s := Space.make(HashSet.empty)
-    _c := Space.set(s, HashSet.add(Space.get(s), 1))
+    mut l := List.empty
+    l <- List.cons(1, l)
+    mut m := HashMap.empty
+    m <- HashMap.set(m, 1, 1)
+    mut s := HashSet.empty
+    s <- HashSet.add(s, 1)
     return 0
   }
   fun twin(n: Number): Number visits Output {
-    acc := Space.make(0)
-    i := Space.make(0)
+    mut acc := 0
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(acc, Space.get(acc) + k)
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                acc <- acc + k
+                i <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun cons_loop(n: Number): Number visits Output {
-    l := Space.make(List.empty)
-    i := Space.make(0)
+    mut l := List.empty
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(l, List.cons(Space.get(l), k))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                l <- List.cons(k, l)
+                i <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun set_loop(n: Number): Number visits Output {
-    m := Space.make(HashMap.empty)
-    i := Space.make(0)
+    mut m := HashMap.empty
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(m, HashMap.set(Space.get(m), k, k))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                m <- HashMap.set(m, k, k)
+                i <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun add_loop(n: Number): Number visits Output {
-    s := Space.make(HashSet.empty)
-    i := Space.make(0)
+    mut s := HashSet.empty
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(s, HashSet.add(Space.get(s), k))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                s <- HashSet.add(s, k)
+                i <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun mtwin(n: Number): Number visits Output {
-    x := Space.make(twin(n))
-    iter 2 do { _ := Space.set(x, mn(Space.get(x), twin(n))) }
-    return Space.get(x)
+    mut x := twin(n)
+    iter 2 do { x <- mn(x, twin(n)) }
+    return x
   }
   fun min_cons(n: Number): Number visits Output {
-    x := Space.make(cons_loop(n))
-    iter 2 do { _ := Space.set(x, mn(Space.get(x), cons_loop(n))) }
-    return (Space.get(x) - mtwin(n)) / n
+    mut x := cons_loop(n)
+    iter 2 do { x <- mn(x, cons_loop(n)) }
+    return (x - mtwin(n)) / n
   }
   fun min_set(n: Number): Number visits Output {
-    x := Space.make(set_loop(n))
-    iter 2 do { _ := Space.set(x, mn(Space.get(x), set_loop(n))) }
-    return (Space.get(x) - mtwin(n)) / n
+    mut x := set_loop(n)
+    iter 2 do { x <- mn(x, set_loop(n)) }
+    return (x - mtwin(n)) / n
   }
   fun min_add(n: Number): Number visits Output {
-    x := Space.make(add_loop(n))
-    iter 2 do { _ := Space.set(x, mn(Space.get(x), add_loop(n))) }
-    return (Space.get(x) - mtwin(n)) / n
+    mut x := add_loop(n)
+    iter 2 do { x <- mn(x, add_loop(n)) }
+    return (x - mtwin(n)) / n
   }
   fun main(): Number visits Output {
     _w := warm()

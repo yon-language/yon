@@ -1,44 +1,44 @@
 place Entry {
   fun timed_cons(n: Number): Number visits Output {
-    lc := Space.make(List.empty)
-    i := Space.make(0)
+    mut lc := List.empty
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(lc, List.cons(k, Space.get(lc)))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                lc <- List.cons(k, lc)
+                i <- k + 1 }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_cons_base(n: Number): Number visits Output {
-    i := Space.make(0)
-    acc := Space.make(0)
+    mut i := 0
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(acc, k)
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                acc <- k
+                i <- k + 1 }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun build_list(n: Number): List<Number> {
-    lc := Space.make(List.empty)
-    i := Space.make(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(lc, List.cons(k, Space.get(lc)))
-                _2 := Space.set(i, k + 1) }
-    return Space.get(lc)
+    mut lc := List.empty
+    mut i := 0
+    iter n do { k := i
+                lc <- List.cons(k, lc)
+                i <- k + 1 }
+    return lc
   }
   fun timed_head(l: List<Number>, m: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
     iter m do { h := match List.head(l) { Found as v => v, Absent => 0 }
-                _ := Space.set(acc, Space.get(acc) + h) }
+                acc <- acc + h }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_head_base(m: Number, headv: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter m do { _ := Space.set(acc, Space.get(acc) + headv) }
+    iter m do { acc <- acc + headv }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
@@ -46,22 +46,22 @@ place Entry {
   fun main(): Number visits Output {
     n := 100000
     // cons throughput: min over a few reps, net of baseline
-    cns := Space.make(timed_cons(n))
-    iter 4 do { _ := Space.set(cns, min2(Space.get(cns), timed_cons(n))) }
-    cnsb := Space.make(timed_cons_base(n))
-    iter 4 do { _ := Space.set(cnsb, min2(Space.get(cnsb), timed_cons_base(n))) }
+    mut cns := timed_cons(n)
+    iter 4 do { cns <- min2(cns, timed_cons(n)) }
+    mut cnsb := timed_cons_base(n)
+    iter 4 do { cnsb <- min2(cnsb, timed_cons_base(n)) }
     l := build_list(n)
     len := List.length(l)
     hv := match List.head(l) { Found as v => v, Absent => 0 }
     m := 1000000
-    hd := Space.make(timed_head(l, m))
-    iter 11 do { _ := Space.set(hd, min2(Space.get(hd), timed_head(l, m))) }
-    hdb := Space.make(timed_head_base(m, hv))
-    iter 11 do { _ := Space.set(hdb, min2(Space.get(hdb), timed_head_base(m, hv))) }
+    mut hd := timed_head(l, m)
+    iter 11 do { hd <- min2(hd, timed_head(l, m)) }
+    mut hdb := timed_head_base(m, hv)
+    iter 11 do { hdb <- min2(hdb, timed_head_base(m, hv)) }
     _1 := Output.print(String.from_int(len))                                // final_length = N
-    _2 := Output.print(String.from_int((Space.get(cns) - Space.get(cnsb)))) // cons net ns for N
+    _2 := Output.print(String.from_int((cns - cnsb))) // cons net ns for N
     _3 := Output.print(String.from_int(hv))                                 // head guard (= N-1)
-    _4 := Output.print(String.from_int((Space.get(hd) - Space.get(hdb))))    // head net ns for M
+    _4 := Output.print(String.from_int((hd - hdb)))    // head net ns for M
     return 0
   }
 }

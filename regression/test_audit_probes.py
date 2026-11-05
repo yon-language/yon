@@ -3189,13 +3189,14 @@ fun xrel_i(x: Int64): Number {
 }
 fun both_n(x: Number): Number { return point_n(x) * xrel_n(x) }
 fun both_i(x: Int64): Number { return point_i(x) * xrel_i(x) }
+fun no_entries: XRelMap<LatticePoint, Number> { return XRelMap.empty }
 fun main(): Number {
   inf := 1 / 0.0
   floats := both_n(2.5) + both_n(0 - 3) + both_n(0.0 * (0 - 1)) + both_n(0.0 / 0.0)
                 + both_n(inf) + both_n(0 - inf)
   ints := both_i(Int64.max_value) + both_i(Int64.min_value) + both_i(9007199254740993)
   empty := match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.empty, p) { Found as v => 0, Absent => 1 }),
+    LatticePoint as p => (match XRelMap.get(no_entries, p) { Found as v => 0, Absent => 1 }),
     DomainError as d => 0 }
   return floats * 100 + ints * 10 + empty
 }

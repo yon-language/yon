@@ -22,12 +22,12 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 _TOML = '[package]\nname = "probe"\n\n[runtime]\nbackend = "memory"\n'
 
 
-def _run(tmp_path: Path, main_body: str, name="proj"):
+def _run(tmp_path: Path, main_body: str, name="proj", funs=""):
     proj = tmp_path / name
     proj.mkdir()
     (proj / "yon.toml").write_text(_TOML)
     (proj / "Entry.yon").write_text(
-        "place Entry {\nfun main: Number {\n" + main_body + "}\n}\n")
+        "place Entry {\n" + funs + "fun main: Number {\n" + main_body + "}\n}\n")
     exe = tmp_path / (name + ".exe")
     r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
                        capture_output=True, text=True, timeout=180)
@@ -38,8 +38,9 @@ def _run(tmp_path: Path, main_body: str, name="proj"):
 def test_is_empty_answers_for_the_empty_and_a_full_list(tmp_path):
     body = ("  l1 := List.cons(1, List.empty)\n"
             "  return (if List.is_empty(l1) then 1 else 2)"
-            " + (if List.is_empty(List.empty) then 40 else 0)\n")
-    assert _run(tmp_path, body).returncode == 42
+            " + (if List.is_empty(no_numbers) then 40 else 0)\n")
+    funs = "fun no_numbers: List<Number> { return List.empty }\n"
+    assert _run(tmp_path, body, funs=funs).returncode == 42
 
 
 def test_append_puts_the_cells_of_the_first_list_before_the_second(tmp_path):

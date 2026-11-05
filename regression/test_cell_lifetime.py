@@ -3,7 +3,7 @@
 A block that declares a cell (a loop body, a branch) takes the mark of the
 cell table on entry and gives the cells back on exit, so a cell declared in
 the body of a loop lives one turn, the hidden cell of a `for every` included.
-When as many cells are live as the table holds, Space.make stops the program
+When as many cells are live as the table holds, making one stops the program
 with a sentence and exit code 3: no write can land in another cell.
 
 Layer/kind: native / end-to-end.

@@ -2,9 +2,9 @@ place Entry {
   fun main(): Number visits Output {
     t1 := MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
     t2 := MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
-    acc := Space.make(0)
-    iter 10000000 do { _ := Space.set(acc, Space.get(acc) + (if MerkleTree.equal(t1, t2) then 1 else 0)) }
-    _p := Output.print(String.from_int(Space.get(acc)))
+    mut acc := 0
+    iter 10000000 do { acc <- acc + (if MerkleTree.equal(t1, t2) then 1 else 0) }
+    _p := Output.print(String.from_int(acc))
     return 0
   }
 }

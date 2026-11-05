@@ -1,11 +1,11 @@
 place Entry {
   fun main(): Number visits Output {
-    h := Space.make(0)
-    i := Space.make(0)
-    iter 1000000 do { k := Space.get(i)
-                 _ := Space.set(h, Space.get(h) + 1)
-                 _2 := Space.set(i, k + 1) }
-    _p := Output.print(String.from_int(Space.get(h)))
+    mut h := 0
+    mut i := 0
+    iter 1000000 do { k := i
+                 h <- h + 1
+                 i <- k + 1 }
+    _p := Output.print(String.from_int(h))
     return 0
   }
 }

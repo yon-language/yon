@@ -612,6 +612,8 @@ let rec ty_to_string (t : ty) : string =
   | TyMetaVar n ->
       (match Hashtbl.find_opt lambda_unknowns n with
        | Some { lu_solution = Some t; _ } -> ty_to_string t
+       | Some { lu_param; lu_call = Some f; _ } ->
+           Printf.sprintf "the type parameter %s of the call of %s, not yet fixed" lu_param f
        | Some { lu_param; _ } -> "the unknown type of the lambda parameter " ^ lu_param
        | None -> Printf.sprintf "alpha%d" n)
   | TyUniverse 0 -> "Type"

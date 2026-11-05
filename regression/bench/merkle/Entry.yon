@@ -1,30 +1,30 @@
 place Entry {
   fun timed_base(iters: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter iters do { _ := Space.set(acc, Space.get(acc) + 1) }
+    iter iters do { acc <- acc + 1 }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_eq(a: MerkleTree, b: MerkleTree, iters: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
     iter iters do { e := (if MerkleTree.equal(a, b) then 1 else 0)
-                    _ := Space.set(acc, Space.get(acc) + e) }
+                    acc <- acc + e }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun min_base(reps: Number, iters: Number): Number visits Output {
-    m := Space.make(timed_base(iters))
+    mut m := timed_base(iters)
     iter reps do { t := timed_base(iters)
-                   _ := Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
-    return Space.get(m)
+                   m <- if t < m then t else m }
+    return m
   }
   fun min_eq(a: MerkleTree, b: MerkleTree, reps: Number, iters: Number): Number visits Output {
-    m := Space.make(timed_eq(a, b, iters))
+    mut m := timed_eq(a, b, iters)
     iter reps do { t := timed_eq(a, b, iters)
-                   _ := Space.set(m, if t < Space.get(m) then t else Space.get(m)) }
-    return Space.get(m)
+                   m <- if t < m then t else m }
+    return m
   }
   fun build_tree(x: Number): MerkleTree {
     l1 := MerkleTree.leaf(1445)

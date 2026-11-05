@@ -1,8 +1,8 @@
 place Entry {
   fun heavy(seed: Number): Number {
-    acc := Space.make(seed)
-    iter 8000000 do { _ := Space.set(acc, Space.get(acc) + 7) }
-    return Space.get(acc)
+    mut acc := seed
+    iter 8000000 do { acc <- acc + 7 }
+    return acc
   }
   fun run(n: Number): Number visits Output {
     results := spawn in n parallel { promote heavy(spawn_index) }

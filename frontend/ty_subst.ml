@@ -48,8 +48,24 @@ let lambda_unknown (param : string) (loc : location) : ty =
       let n = !metavar_counter in
       incr metavar_counter;
       Hashtbl.replace lambda_unknowns n
-        { lu_param = param; lu_loc = loc; lu_solution = None };
+        { lu_param = param; lu_loc = loc; lu_call = None; lu_solution = None };
       Hashtbl.replace lambda_unknown_sites (loc, param) n;
+      TyMetaVar n
+
+(* A type parameter T of a generic fun that the arguments of a call do not fix: one
+   unknown for that T at that call, fixed by the context of use: the expected type
+   and the unifications with the uses. Same store, same solving, same undoing as
+   the parameter of a lambda; left open it refuses the call as ambiguous. *)
+let call_unknown (fname : string) (v : string) (loc : location) : ty =
+  let key = (loc, "call " ^ fname ^ " " ^ v) in
+  match Hashtbl.find_opt lambda_unknown_sites key with
+  | Some n -> TyMetaVar n
+  | None ->
+      let n = !metavar_counter in
+      incr metavar_counter;
+      Hashtbl.replace lambda_unknowns n
+        { lu_param = v; lu_loc = loc; lu_call = Some fname; lu_solution = None };
+      Hashtbl.replace lambda_unknown_sites key n;
       TyMetaVar n
 
 let is_lambda_unknown (n : int) : bool = Hashtbl.mem lambda_unknowns n

@@ -69,13 +69,14 @@ place Entry {}
 fun read(m: XRelMap<LatticePoint, Number>, p: LatticePoint): Number {
   return match XRelMap.get(m, p) { Found as v => v, Absent => 0 }
 }
+fun no_entries: XRelMap<LatticePoint, Number> { return XRelMap.empty }
 fun two(p: LatticePoint): Number {
   m1 := XRelMap.set(XRelMap.empty, p, 1)
   m2 := XRelMap.set(m1, p, 2)
   _1 := IO.print_num(read(m1, p))
   _2 := IO.print_num(read(m2, p))
   _3 := IO.print_num(XRelMap.size(m2))
-  _4 := IO.print_num(XRelMap.size(XRelMap.empty))
+  _4 := IO.print_num(XRelMap.size(no_entries))
   return 0
 }
 """ + _AT.format(n=1536, f="two")
@@ -94,6 +95,7 @@ fun orbit_at(n: Number): Number {
   return match LatticePoint.of_coordinate(n) {
     LatticePoint as q => LatticePoint.orbit(q), DomainError as d => 0 - 1 }
 }
+fun no_entries: XRelMap<LatticePoint, Number> { return XRelMap.empty }
 fun with_q(p: LatticePoint, q: LatticePoint): Number {
   a := XRelMap.set(XRelMap.set(XRelMap.empty, p, 42), q, 7)
   _1 := IO.print_num(match XRelMap.get(a, p) { Found as v => v, Absent => 0 })
@@ -101,7 +103,7 @@ fun with_q(p: LatticePoint, q: LatticePoint): Number {
   _3 := IO.print_num(LatticePoint.orbit(p))
   _4 := IO.print_num(if LatticePoint.orbit(p) == LatticePoint.orbit(q) then 1 else 0)
   _5 := IO.print_num(if LatticePoint.orbit(p) == orbit_at(16778752) then 1 else 0)
-  _6 := IO.print_num(match XRelMap.get(XRelMap.empty, p) { Found as v => 1, Absent => 0 })
+  _6 := IO.print_num(match XRelMap.get(no_entries, p) { Found as v => 1, Absent => 0 })
   _7 := IO.print_num(match XRelMap.get(a, q) { Found as v => v, Absent => 0 })
   return 0
 }

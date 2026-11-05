@@ -34,7 +34,6 @@ fun main: Number {
 *Space cell*, a mutable cell over the content-addressed heap: every read goes
 through it, every `acc <- e` updates it. Mutability shows where it is born: a
 name defined with plain `:=` is a value, and writing it is refused (E2008).
-(The cells are also usable directly as `Space.make / set / get`.)
 
 **`when` is the statement conditional.** It chains (`when c1 { } when c2 { }
 otherwise { }`) and accepts *pattern conditions*: `x is present`,

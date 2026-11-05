@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number visits Output {
-    acc := Space.make(0)
-    iter 1000000 do { _ := Space.set(acc, Space.get(acc) +
-          MerkleTree.label(MerkleTree.node2(1445, MerkleTree.leaf(1280), MerkleTree.leaf(7)))) }
-    _p := Output.print(String.from_int(Space.get(acc)))
+    mut acc := 0
+    iter 1000000 do { acc <- acc +
+          MerkleTree.label(MerkleTree.node2(1445, MerkleTree.leaf(1280), MerkleTree.leaf(7))) }
+    _p := Output.print(String.from_int(acc))
     return 0
   }
 }

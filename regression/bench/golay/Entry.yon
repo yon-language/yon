@@ -1,29 +1,29 @@
 place Entry {
   fun timed_base(iters: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter iters do { _ := Space.set(acc, Space.get(acc) + 1) }
+    iter iters do { acc <- acc + 1 }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_seal(g: Number, iters: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter iters do { _ := Space.set(acc, Space.get(acc) + VoyagerList.seal(g)) }
+    iter iters do { acc <- acc + VoyagerList.seal(g) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun timed_open(cw: Number, iters: Number): Number visits Output {
-    acc := Space.make(0)
+    mut acc := 0
     t0 := Time.now_ns(0)
-    iter iters do { _ := Space.set(acc, Space.get(acc) + VoyagerList.open(VoyagerList.corrupt(cw, 2))) }
+    iter iters do { acc <- acc + VoyagerList.open(VoyagerList.corrupt(cw, 2)) }
     t1 := Time.now_ns(0)
     return (t1 - t0)
   }
   fun acc_open(cw: Number, iters: Number): Number visits Output {
-    acc := Space.make(0)
-    iter iters do { _ := Space.set(acc, Space.get(acc) + VoyagerList.open(VoyagerList.corrupt(cw, 2))) }
-    return Space.get(acc)
+    mut acc := 0
+    iter iters do { acc <- acc + VoyagerList.open(VoyagerList.corrupt(cw, 2)) }
+    return acc
   }
   fun min2(a: Number, b: Number): Number { return if a < b then a else b }
   fun min_of(f0: Number, fseed: Number, reps: Number): Number { return fseed }
@@ -34,15 +34,15 @@ place Entry {
     reps := 11
     // recovered guard: open a few, average must be the gene 1445
     guard := (acc_open(cw, 1000) / 1000)
-    base := Space.make(timed_base(n))
-    iter reps do { _ := Space.set(base, min2(Space.get(base), timed_base(n))) }
-    sl := Space.make(timed_seal(g, n))
-    iter reps do { _ := Space.set(sl, min2(Space.get(sl), timed_seal(g, n))) }
-    op := Space.make(timed_open(cw, n))
-    iter reps do { _ := Space.set(op, min2(Space.get(op), timed_open(cw, n))) }
+    mut base := timed_base(n)
+    iter reps do { base <- min2(base, timed_base(n)) }
+    mut sl := timed_seal(g, n)
+    iter reps do { sl <- min2(sl, timed_seal(g, n)) }
+    mut op := timed_open(cw, n)
+    iter reps do { op <- min2(op, timed_open(cw, n)) }
     _g := Output.print(String.from_int(guard))                        // 1445 = correction works
-    _1 := Output.print(String.from_int(Space.get(sl) - Space.get(base)))
-    _2 := Output.print(String.from_int(Space.get(op) - Space.get(base)))
+    _1 := Output.print(String.from_int(sl - base))
+    _2 := Output.print(String.from_int(op - base))
     return 0
   }
 }

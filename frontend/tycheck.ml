@@ -430,6 +430,10 @@ let algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) opt
               | _ -> None) pd.pd_members) algebras
   | _ -> None
 
+(* Inside the body of a fun an expression computes; in the statement of a law the
+   same `=` states. *)
+let in_fun_body = ref false
+
 (* Type of a binop result, given operand types. *)
 let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
     (env : Tyenv.env) (ctx : Reduce.ctx) (loc : location) : ty tc_result =
@@ -471,6 +475,18 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
         (Printf.sprintf
            "comparison requires matching ordered operands; got %s and %s"
            (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs))
+  | OpEq | OpNeq when !in_fun_body
+                      && (match deref_lambda_unknown lhs, deref_lambda_unknown rhs with
+                          | TyVar _, _ | _, TyVar _ -> true
+                          | _ -> false) ->
+      (* the type is known only at each call: comparing two values of it says
+         nothing a generic function could mean for every type *)
+      let v = match deref_lambda_unknown lhs, deref_lambda_unknown rhs with
+        | TyVar v, _ | _, TyVar v -> v
+        | _ -> assert false in
+      err loc (Printf.sprintf
+        "a value of the abstract type %s admits no operation: inside a generic function \
+         it can only be passed on (its type is known only at each call)" v)
   | OpEq | OpNeq ->
       if is lhs rhs then begin
         if is_int64_ty env ctx lhs then record_int_arith_site ~i64:true op loc;
@@ -2976,8 +2992,7 @@ got %s" (Tyenv.ty_to_string other)))
       (match first_assign_loc body with
        | Some l ->
            err l "`=` (Space-cell assignment) is not supported inside a `produce` \
-                  block. Use `Space.set(cell, value)`, or compute the value before the \
-                  block and bind it with `be`."
+                  block: compute the value before the block and bind it with `:=`."
        | None ->
          let saved = !produce_emit_ty in
          produce_emit_ty := None;
@@ -2997,8 +3012,7 @@ got %s" (Tyenv.ty_to_string other)))
       let* () = (match first_assign_loc body with
         | Some l ->
             err l "`=` (Space-cell assignment) is not supported inside a `spawn` \
-                   block. Use `Space.set(cell, value)`, or compute the value before the \
-                   block and bind it with `be`."
+                   block: compute the value before the block and bind it with `:=`."
         | None -> ok ()) in
       let saved = !spawn_promote_ty in
       spawn_promote_ty := None;
@@ -4215,6 +4229,13 @@ and lambda_expected_by_call env ctx (name : string) (args : expr list)
 
 and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                (name : string) (args : expr list) (arg_tys : ty list) (loc : location) : ty tc_result =
+  match name with
+  | "Space__make" | "Space__new" | "Space__get" | "Space__set" ->
+      err loc (Printf.sprintf
+        "`Space.%s` is gone: a Space is a package, not where a cell is made. A cell is \
+         `mut c := e`, written with `c <- e`, read with `c`"
+        (String.sub name 7 (String.length name - 7)))
+  | _ ->
   match Hashtbl.find_opt ambiguous_imports name with
   | Some ms when Tyenv.lookup_fun env name = None ->
       err loc (Printf.sprintf
@@ -4518,8 +4539,8 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
       (* A generic function is instantiated at each call: its type
          parameters become fresh unknowns, solved by unifying the declared
          parameters with the arguments; the call is then checked, and typed,
-         at that instance. A parameter the arguments do not determine stays
-         open. *)
+         at that instance. A parameter the arguments do not determine is fixed
+         by the context of use, and is ambiguous if nothing does. *)
       let declared_return = fs.fs_return
       and declared_params = fs.fs_params in
       let fs =
@@ -4536,10 +4557,16 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                                      (Ty_subst.apply_subst sg at) with
             | Ok s -> Ty_subst.compose_subst s sg
             | Error _ -> sg) Ty_subst.empty_subst params arg_tys in
+        let name_of n =
+          List.find_map (fun (v, m) ->
+              match Ty_subst.apply_subst sigma m with
+              | TyMetaVar k when k = n -> Some v
+              | _ -> None) fresh in
         let close t =
           Ty_subst.map_leaves (function
-            | TyMetaVar n when not (Ty_subst.is_lambda_unknown n) ->
-                Some (TyPrim "unknown")
+            | TyMetaVar n when n >= 0 && not (Ty_subst.is_lambda_unknown n) ->
+                Some (Ty_subst.call_unknown name
+                        (Option.value (name_of n) ~default:"T") loc)
             | _ -> None) (Ty_subst.apply_subst sigma t) in
         { fs with fs_params = List.map (fun (n, t) -> (n, close t)) params;
                   fs_return = close (inst fs.fs_return) } in
@@ -6972,6 +6999,8 @@ and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit t
 
 and check_fun_decl_at_home (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
     : unit tc_result =
+  in_fun_body := true;
+  Fun.protect ~finally:(fun () -> in_fun_body := false) @@ fun () ->
   if fn.fn_given then check_given_fun env ctx fn else
   (* Step 1: rebind TyUser -> TyVar wherever the parser produced TyUser
    * for an identifier that's actually a declared type parameter. This
@@ -7084,6 +7113,8 @@ and check_fun_decl_accum (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
 
 and check_fun_decl_accum_at_home (env : Tyenv.env) (ctx : Reduce.ctx)
     (fn : fun_decl) : type_error list =
+  in_fun_body := true;
+  Fun.protect ~finally:(fun () -> in_fun_body := false) @@ fun () ->
   (* `is given`: no body to accumulate, but the external check holds here
      as in the fail-fast twin (every semantic rule lives in both). *)
   if fn.fn_given then
@@ -8858,12 +8889,18 @@ let check_program (p : program) : check_result =
     if errors <> [] then errors else
     Hashtbl.fold (fun _ lu acc ->
         if lu.lu_solution <> None then acc
-        else (lu.lu_loc, lu.lu_param) :: acc) lambda_unknowns []
+        else (lu.lu_loc, lu.lu_param, lu.lu_call) :: acc) lambda_unknowns []
     |> List.sort compare
-    |> List.rev_map (fun (loc, param) ->
-         { err_loc = loc; err_code = Error_codes.Type_check; err_msg = Printf.sprintf
-             "lambda parameter %s: neither the expected type of the lambda nor a \
-              use of the parameter gives it a type: annotate the parameter"
-             param }) in
+    |> List.rev_map (fun (loc, param, call) ->
+         { err_loc = loc; err_code = Error_codes.Type_check; err_msg =
+             match call with
+             | Some f -> Printf.sprintf
+                 "ambiguous call of %s: neither its arguments nor the use of its result \
+                  fix its type parameter %s: annotate the type where the value is used"
+                 f param
+             | None -> Printf.sprintf
+                 "lambda parameter %s: neither the expected type of the lambda nor a \
+                  use of the parameter gives it a type: annotate the parameter"
+                 param }) in
   { cr_env = env_with_sigs;
     cr_errors = List.rev errors @ heap_errors; }

@@ -1,11 +1,11 @@
 place Entry {
   fun main(): Number visits Output {
-    h := Space.make(Vec.empty())
-    i := Space.make(0)
-    iter 1000000 do { k := Space.get(i)
-                 _ := Space.set(h, Vec.push(Space.get(h), k))
-                 _2 := Space.set(i, k + 1) }
-    _p := Output.print(String.from_int(Vec.size(Space.get(h))))
+    mut h := Vec.empty()
+    mut i := 0
+    iter 1000000 do { k := i
+                 h <- Vec.push(h, k)
+                 i <- k + 1 }
+    _p := Output.print(String.from_int(Vec.size(h)))
     return 0
   }
 }

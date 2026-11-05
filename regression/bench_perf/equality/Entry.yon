@@ -1,9 +1,9 @@
 place Entry {
   fun main(): Number visits Output {
     a := "x"
-    acc := Space.make(0)
-    iter 10000000 do { _ := Space.set(acc, Space.get(acc) + (if String.equal(a, a) then 1 else 0)) }
-    _p := Output.print(String.from_int(Space.get(acc)))
+    mut acc := 0
+    iter 10000000 do { acc <- acc + (if String.equal(a, a) then 1 else 0) }
+    _p := Output.print(String.from_int(acc))
     return 0
   }
 }

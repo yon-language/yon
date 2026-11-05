@@ -19,64 +19,64 @@ place Entry {
       LatticePoint as p => LatticePoint.orbit(p), DomainError as d => 0 - 1 }
   }
   fun lp1(n: Number): Number visits Output {
-    acc := Space.make(0)
-    i := Space.make(0)
+    mut acc := 0
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(acc, Space.get(acc) + point_mark(k))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                acc <- acc + point_mark(k)
+                i <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun lp2(n: Number): Number visits Output {
-    acc := Space.make(0)
-    i := Space.make(0)
+    mut acc := 0
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(acc, Space.get(acc) + point_mark(k) + point_mark(k + 1))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                acc <- acc + point_mark(k) + point_mark(k + 1)
+                i <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun put_loop(n: Number): Number visits Output {
-    a := Space.make(XRelMap.empty)
-    i := Space.make(0)
+    mut a := XRelMap.empty
+    mut i := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(a, put_k(Space.get(a), k))
-                _2 := Space.set(i, k + 1) }
+    iter n do { k := i
+                a <- put_k(a, k)
+                i <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun get_loop(n: Number): Number visits Output {
-    a := Space.make(XRelMap.empty)
-    i := Space.make(0)
-    iter n do { k := Space.get(i)
-                _ := Space.set(a, put_k(Space.get(a), k))
-                _2 := Space.set(i, k + 1) }
-    acc := Space.make(0)
-    j := Space.make(0)
+    mut a := XRelMap.empty
+    mut i := 0
+    iter n do { k := i
+                a <- put_k(a, k)
+                i <- k + 1 }
+    mut acc := 0
+    mut j := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(j)
-                _ := Space.set(acc, Space.get(acc) + get_k(Space.get(a), k))
-                _2 := Space.set(j, k + 1) }
+    iter n do { k := j
+                acc <- acc + get_k(a, k)
+                j <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun so_loop(n: Number): Number visits Output {
-    acc := Space.make(0)
-    j := Space.make(0)
+    mut acc := 0
+    mut j := 0
     t0 := Time.now_ns(0)
-    iter n do { k := Space.get(j)
-                _ := Space.set(acc, Space.get(acc) + (if orbit_k(k) == orbit_k(k + 1) then 1 else 0))
-                _2 := Space.set(j, k + 1) }
+    iter n do { k := j
+                acc <- acc + (if orbit_k(k) == orbit_k(k + 1) then 1 else 0)
+                j <- k + 1 }
     return Time.now_ns(0) - t0
   }
   fun min_put(n: Number): Number visits Output {
-    m := Space.make(put_loop(n))
-    iter 2 do { _ := Space.set(m, mn(Space.get(m), put_loop(n))) }
-    return Space.get(m)
+    mut m := put_loop(n)
+    iter 2 do { m <- mn(m, put_loop(n)) }
+    return m
   }
   fun min_lp1(n: Number): Number visits Output {
-    m := Space.make(lp1(n))
-    iter 2 do { _ := Space.set(m, mn(Space.get(m), lp1(n))) }
-    return Space.get(m)
+    mut m := lp1(n)
+    iter 2 do { m <- mn(m, lp1(n)) }
+    return m
   }
   fun net_put(n: Number): Number visits Output { return (min_put(n) - min_lp1(n)) / n }
   fun main(): Number visits Output {
@@ -87,14 +87,14 @@ place Entry {
     _d := Output.print(String.from_int(net_put(20000)))
     n := 20000
     lpm := min_lp1(n)
-    getm := Space.make(get_loop(n))
-    iter 2 do { _ := Space.set(getm, mn(Space.get(getm), get_loop(n))) }
-    _e := Output.print(String.from_int((Space.get(getm) - lpm) / n))
-    lp2m := Space.make(lp2(n))
-    iter 2 do { _ := Space.set(lp2m, mn(Space.get(lp2m), lp2(n))) }
-    som := Space.make(so_loop(n))
-    iter 2 do { _ := Space.set(som, mn(Space.get(som), so_loop(n))) }
-    _f := Output.print(String.from_int((Space.get(som) - Space.get(lp2m)) / n))
+    mut getm := get_loop(n)
+    iter 2 do { getm <- mn(getm, get_loop(n)) }
+    _e := Output.print(String.from_int((getm - lpm) / n))
+    mut lp2m := lp2(n)
+    iter 2 do { lp2m <- mn(lp2m, lp2(n)) }
+    mut som := so_loop(n)
+    iter 2 do { som <- mn(som, so_loop(n)) }
+    _f := Output.print(String.from_int((som - lp2m) / n))
     return 0
   }
 }

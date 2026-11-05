@@ -1,0 +1,4 @@
+/* Vec<V> — the facade of a persistent array of the runtime: the name of its type.
+ * The operations are the runtime's until the commit of Vec in Yon. */
+place Vec<V> {
+}

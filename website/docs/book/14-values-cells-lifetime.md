@@ -30,11 +30,11 @@ it holds is still immutable content.
 ```yon
 fun main: Number {
   v := 7
-  c1 := Space.make(v)            // a cell holding 7
-  c2 := Space.make(v)            // ANOTHER cell holding 7
-  _s := Space.set(c1, 40)
-  x := Space.get(c1)             // 40
-  y := Space.get(c2)             // still 7: cells have identity
+  mut c1 := v                    // a cell holding 7
+  mut c2 := v                    // ANOTHER cell holding 7
+  c1 <- 40
+  x := c1                        // 40
+  y := c2                        // still 7: cells have identity
   return x + y - 5                     // 42
 }
 ```
@@ -79,7 +79,7 @@ result back, by the codec of the wire, in memory. A call between processes
 and a `Wire<T>` copy the same way. So no name of one Space is ever held by
 another, and a region can end without asking anyone (chapter 17).
 
-The cells (`mut c := e`, `Space.make`) are not in the heaps: they belong to the
+The cells (`mut c := e`) are not in the heaps: they belong to the
 call that made them and end with it (above).
 
 Across packages, a Space is a process: the first cross-Space call spawns the
