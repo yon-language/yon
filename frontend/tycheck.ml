@@ -944,25 +944,95 @@ let hit_signature_of (env : Tyenv.env) (x_ty : ty) : (string * Hit_env.hit_signa
                              hit_type_params = d.Hit_env.hit_type_params })
       | _ -> whole) (arms_signature_of env x_ty)
 
+(* The names an expression speaks of, the funs it calls among them: a binder with
+   one of these names around the expression would capture it. *)
+let names_in_expr (e : expr) : string list =
+  let names = ref [] in
+  ignore (Method_sugar.map_expr (function
+      | EVar (n, _) | ECall (n, _, _) -> names := n :: !names; None
+      | _ -> None) e);
+  !names
+
+let renamed_binders = ref 0
+let renamed_binder (n : string) : string =
+  incr renamed_binders;
+  Printf.sprintf "__bound_%s_%d" n !renamed_binders
+
 (* Substitute the surface variable [xv] by the expression [repl] inside a type,
    reaching the term endpoints a dependent type carries (`TyTermExpr`). This is
    how the expected type P(x) becomes P[x := ctor] per branch in the dependent
-   eliminator. Mirrors Dispatcher.rename_ty but replaces a variable with a term,
-   reusing Desugar.subst_evar_in_expr at the leaves. *)
+   eliminator, and how the type of a call speaks of its arguments.
+
+   Substitution under a binder: a binder named [xv] hides it, and a binder [repl]
+   speaks of takes a new name, so [repl] means what it meant where it was written.
+   The dimension of a walk is not among these binders: dimensions and terms are
+   two kinds of names. *)
 let rec subst_evar_in_ty (xv : string) (repl : expr) (t : ty) : ty =
   let r = subst_evar_in_ty xv repl in
   let rt = function
-    | TyTermExpr ex -> TyTermExpr (Desugar.subst_evar_in_expr xv repl ex) in
+    | TyTermExpr ex -> TyTermExpr (subst_evar_in_term xv repl ex) in
+  let under v c =
+    if String.equal v xv then (v, c)
+    else if List.mem v (names_in_expr repl) then
+      let v' = renamed_binder v in
+      (v', r (subst_evar_in_ty v (EVar (v', dummy_loc)) c))
+    else (v, r c) in
   match deref_lambda_unknown t with
   | TyId (a, x, y) -> TyId (r a, rt x, rt y)
   | TyEl c -> TyEl (rt c)
   | TyArrow (a, b) -> TyArrow (r a, r b)
-  | TyPi (v, d, c) ->
-      if String.equal v xv then TyPi (v, r d, c) else TyPi (v, r d, r c)
-  | TySigma (v, d, c) ->
-      if String.equal v xv then TySigma (v, r d, c) else TySigma (v, r d, r c)
+  | TyPi (v, d, c) -> let v', c' = under v c in TyPi (v', r d, c')
+  | TySigma (v, d, c) -> let v', c' = under v c in TySigma (v', r d, c')
   | TyPathP ((i, a), x, y) -> TyPathP ((i, r a), rt x, rt y)
   | t -> t
+
+and subst_evar_in_term (xv : string) (repl : expr) (e : expr) : expr =
+  let go = subst_evar_in_term xv repl in
+  let under names body =
+    if List.mem xv names then (Fun.id, body)
+    else
+      let spoken = names_in_expr repl in
+      let fresh = List.filter_map (fun n ->
+          if List.mem n spoken then Some (n, renamed_binder n) else None) names in
+      let body = List.fold_left (fun b (n, f) ->
+          subst_evar_in_term n (EVar (f, dummy_loc)) b) body fresh in
+      ((fun n -> Option.value (List.assoc_opt n fresh) ~default:n), go body) in
+  (* A parameter is renamed in the body only. The types of the parameters are substituted, but
+     they do not follow the renaming or the hiding of an earlier parameter: a lambda with
+     dependent parameters inside an endpoint can still capture. *)
+  let lam ps b =
+    let name, b' = under (List.map fst ps) b in
+    (List.map (fun (p, t) -> (name p, subst_evar_in_ty xv repl t)) ps, b') in
+  let pat name = function
+    | PatVars vs -> PatVars (List.map name vs)
+    | PatWitness w -> PatWitness (name w)
+    | PatFields fs -> PatFields (List.map (fun (f, b) -> (f, name b)) fs) in
+  Method_sugar.map_expr (function
+      | EVar (n, _) when String.equal n xv -> Some repl
+      (* a parameter that is a function, called *)
+      | ECall (n, args, l) when String.equal n xv ->
+          let args' = List.map go args in
+          Some (match repl with
+              | EVar (f, _) -> ECall (f, args', l)
+              | _ -> EApp (repl, args', l))
+      | EHITElim (m, branches, x, l) ->
+          Some (EHITElim (go m,
+                          List.map (fun (c, p, b) ->
+                              let name, b' = under (pat_bound_names p) b in
+                              (c, pat name p, b')) branches,
+                          go x, l))
+      | ELam (ps, b, l) -> let ps', b' = lam ps b in Some (ELam (ps', b', l))
+      | EMoveLam (ps, b, f, t, l) ->
+          let ps', b' = lam ps b in Some (EMoveLam (ps', b', f, t, l))
+      | EReductionLam (ps, b, o, l) ->
+          let ps', b' = lam ps b in Some (EReductionLam (ps', b', o, l))
+      | EMorphLam (ps, b, f, t, l) ->
+          let ps', b' = lam ps b in Some (EMorphLam (ps', b', f, t, l))
+      | EFunctorLam (ps, b, f, t, ls, l) ->
+          let ps', b' = lam ps b in Some (EFunctorLam (ps', b', f, t, ls, l))
+      | EViewLam (ps, b, o, l) ->
+          let ps', b' = lam ps b in Some (EViewLam (ps', b', o, l))
+      | _ -> None) e
 
 (* An arm over its binders, as a term the kernel computes on. Its sites are its own: a site records
    what stands there. *)
@@ -978,16 +1048,16 @@ let arm_as_term (ctor : string) (vars : string list) (loc : location) : expr =
     ECall (ctor, List.map (fun n -> EVar (n, own ())) vars, l)
   end
 
-(* The result of a call, when it is a path over the parameters: the arguments in their place,
-   all at once, since an argument may name another parameter. *)
-let instantiate_path_return (params : (string * ty) list) (args : expr list) (t : ty) : ty =
-  match t with
-  | TyId _ when List.length params = List.length args ->
-      let held = List.mapi (fun i (p, _) -> (p, Printf.sprintf "__arg_%d" i)) params in
-      let t = List.fold_left (fun acc (p, h) ->
-          subst_evar_in_ty p (EVar (h, dummy_loc)) acc) t held in
-      List.fold_left2 (fun acc (_, h) a -> subst_evar_in_ty h a acc) t held args
-  | t -> t
+(* A type in the signature of a fun, at a call: wherever it speaks of a parameter, a path or a
+   product of paths at any depth, the arguments stand in their place, all at once, since an
+   argument may name another parameter. *)
+let instantiate_at_arguments (params : (string * ty) list) (args : expr list) (t : ty) : ty =
+  if List.length params <> List.length args then t
+  else
+    let held = List.mapi (fun i (p, _) -> (p, Printf.sprintf "__arg_%d" i)) params in
+    let t = List.fold_left (fun acc (p, h) ->
+        subst_evar_in_ty p (EVar (h, dummy_loc)) acc) t held in
+    List.fold_left2 (fun acc (_, h) a -> subst_evar_in_ty h a acc) t held args
 
 (* Does the type refer to [xv] at a term endpoint? Only then is the expected type
    a genuine motive that varies with the scrutinee, so the dependent check is
@@ -3547,7 +3617,8 @@ got %s" (Tyenv.ty_to_string other)))
   | ESnd (p, loc) ->
       let* p_ty = infer env ctx p in
       (match p_ty with
-       | TySigma (_, _, b) -> ok b
+       (* the fibre at the first component: the binder is not free in the type of a value *)
+       | TySigma (x, _, b) -> ok (subst_evar_in_ty x (EFst (p, loc)) b)
        | TyVar v -> err loc (Printf.sprintf
                  "a value of the abstract type %s admits no operation: inside a \
                   generic function it can only be passed on (its type is known \
@@ -4192,8 +4263,10 @@ and flows_into (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : 
   match deref_lambda_unknown sub, deref_lambda_unknown super with
   | TySigma (y, a, b), TySigma (x, c, d) ->
       flows_into env ctx ~sub:a ~super:c
-      && flows_into env ctx
-           ~sub:(if String.equal y x then b else Dispatcher.rename_ty y x b) ~super:d
+      && (* the two fibres under one new binder: the binder of one of them, renamed to the binder
+            of the other, would capture a variable of the caller that bears that name *)
+      (let fresh = EVar (renamed_binder x, dummy_loc) in
+       flows_into env ctx ~sub:(subst_evar_in_ty y fresh b) ~super:(subst_evar_in_ty x fresh d))
   | _ -> Dispatcher.subtype env ctx ~sub ~super
 
 and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit tc_result =
@@ -5044,7 +5117,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
              (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col)
              fs.fs_return
        | _ -> ());
-      ok (instantiate_path_return fs.fs_params args fs.fs_return)
+      ok (instantiate_at_arguments fs.fs_params args fs.fs_return)
   | None ->
       (* Try qualified operation (desugared name: "Place__op"). *)
       (match Tyenv.lookup_op env name with
@@ -5163,10 +5236,10 @@ and check_call_signature ?(arg_exprs : expr list = [])
                          (params : (string * ty) list)
                          (arg_tys : ty list)
                          (loc : location) : unit tc_result =
-  (* a parameter whose type is a path over the earlier parameters *)
+  (* a parameter whose type speaks of the other parameters *)
   let params =
     if List.length arg_exprs = List.length params then
-      List.map (fun (p, t) -> (p, instantiate_path_return params arg_exprs t)) params
+      List.map (fun (p, t) -> (p, instantiate_at_arguments params arg_exprs t)) params
     else params in
   if List.length params <> List.length arg_tys then
     err loc (Printf.sprintf
@@ -5187,12 +5260,20 @@ and check_call_signature ?(arg_exprs : expr list = [])
           then pty else aty)
           (List.combine arg_exprs arg_tys) params
       else arg_tys in
+    (* a pair written at the call is checked against the Sigma, the fibre at its first component:
+       its inferred type has forgotten which first component the fibre speaks of *)
+    let pair_against_sigma position pty =
+      List.length arg_exprs = List.length params
+      && (match List.nth arg_exprs position, deref_lambda_unknown pty with
+          | (EPair _ as e), (TySigma _ as sigma) ->
+              (match check env ctx e sigma with Ok () -> true | Error _ -> false)
+          | _ -> false) in
     let rec check_args = function
       | [], [] -> ok ()
       | (pname, pty) :: prest, aty :: arest ->
-          if Dispatcher.subtype env ctx ~sub:aty ~super:pty
-             || flows_into env ctx ~sub:aty ~super:pty
+          if flows_into env ctx ~sub:aty ~super:pty
              || comprehension_coerces_to env ctx ~sub:aty ~super:pty
+             || pair_against_sigma (List.length params - List.length prest - 1) pty
           then check_args (prest, arest)
           else
             let lambda_params =
@@ -5687,7 +5768,7 @@ and check_implicit_tail_return (env_after : Tyenv.env) (ctx : Reduce.ctx)
             | Error _ -> []
             | Ok t ->
                 if t = TyPrim "unknown" then []
-                else if Dispatcher.subtype env_after ctx ~sub:t ~super:rt then []
+                else if flows_into env_after ctx ~sub:t ~super:rt then []
                 else [{ err_loc = loc; err_code = Error_codes.Type_check; err_msg = Printf.sprintf
                           "function declares return type %s but its body ends with \
                            a value of type %s (add an explicit `return`)"
