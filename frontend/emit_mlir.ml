@@ -47,7 +47,8 @@ exception Cubical_stuck of string
 (* A stream in a form its one lowering does not read: built in one place and
    consumed in another it cannot see (passed to or returned from a function,
    stored). A clean compile-time rejection, like Cubical_stuck: never a body
-   that returns 0. *)
+   that returns 0. The same channel, whose message reaches the user as it is,
+   refuses a generic call no argument gives a carrier to. *)
 exception Stream_not_fused of string
 
 (* ─── Output buffer ────────────────────────────────────────────────── *)
@@ -239,6 +240,31 @@ let emit_ty = ty_to_mlir
    arguments, results); an alias of the same canonical lowering as
    emit_ty, so schema and body agree on every carrier by construction. *)
 let core_ty_to_mlir_simple = ty_to_mlir
+
+(* The two carriers of a pair, read from its struct type. A component may itself
+   be a pair or a section, so the comma that separates them is the one outside
+   every bracket. *)
+let pair_carriers (t : string) : (string * string) option =
+  let prefix = "!llvm.struct<(" and suffix = ")>" in
+  let plen = String.length prefix and slen = String.length suffix in
+  let n = String.length t in
+  if n < plen + slen
+     || String.sub t 0 plen <> prefix
+     || String.sub t (n - slen) slen <> suffix then None
+  else begin
+    let inner = String.sub t plen (n - plen - slen) in
+    let separator = ref None and depth = ref 0 in
+    String.iteri (fun i c ->
+      match c with
+      | '(' | '<' -> incr depth
+      | ')' | '>' -> decr depth
+      | ',' when !depth = 0 && !separator = None -> separator := Some i
+      | _ -> ()) inner;
+    Option.map (fun i ->
+      (String.trim (String.sub inner 0 i),
+       String.trim (String.sub inner (i + 1) (String.length inner - i - 1))))
+      !separator
+  end
 
 (* ─── Body lowering ─────────────────────────────────────────────────── *)
 
@@ -1259,33 +1285,18 @@ let rec infer_mlir_ty (e : emitter)
       Printf.sprintf "!llvm.struct<(%s, %s)>" ta tb
   | C.Fst p ->
       let tp = infer_mlir_ty e env funcs p in
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] fst on a non-pair: %s." tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      if comma < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] malformed pair: %s." tp);
-      String.sub rest 0 comma |> String.trim
+      (match pair_carriers tp with
+       | Some (ta, _) -> ta
+       | None when tp = "f64" -> "f64"
+       | None -> failwith (Printf.sprintf
+                             "[emit_mlir infer] fst on a non-pair: %s." tp))
   | C.Snd p ->
       let tp = infer_mlir_ty e env funcs p in
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] snd on a non-pair: %s." tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      let close = (try String.index rest ')' with Not_found -> -1) in
-      if comma < 0 || close < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir infer] malformed pair: %s." tp);
-      String.sub rest (comma + 1) (close - comma - 1) |> String.trim
+      (match pair_carriers tp with
+       | Some (_, tb) -> tb
+       | None when tp = "f64" -> "f64"
+       | None -> failwith (Printf.sprintf
+                             "[emit_mlir infer] snd on a non-pair: %s." tp))
   | C.Refl x ->
       (* refl(x) is inert; its type is the type of x *)
       infer_mlir_ty e env funcs x
@@ -1528,7 +1539,7 @@ let specialize_func (fs : func_sig)
                 (List.length concrete_mlir));
   (* Build a substitution mapping each type parameter to a concrete C.ty. To do
    * this it converts the MLIR strings back to C.ty. *)
-  let mlir_to_cty s =
+  let rec mlir_to_cty s =
     if s = "f64" then C.TyPlace "number"
     else if s = "i1" then C.TyPlace "boolean"
     else if s = "!topos.proposition" then C.TyPlace "proposition"
@@ -1537,6 +1548,10 @@ let specialize_func (fs : func_sig)
        is its own primitive name *)
     else if Carrier.is_prim_name s then C.TyPlace s
     else
+      match pair_carriers s with
+      (* a pair: the non-dependent Sigma of its two carriers *)
+      | Some (a, b) -> C.TySigma ("_", mlir_to_cty a, mlir_to_cty b)
+      | None ->
       (* Section type -> extract the place name *)
       let prefix = "!topos.section<\"" in
       let plen = String.length prefix in
@@ -1731,10 +1746,35 @@ let request_mono (mono : mono_registry) (_e : emitter) (fs : func_sig)
       mono.mono_pending <- spec :: mono.mono_pending;
       spec.fn_name
 
+(* The root of a pair held in a uniform slot. Σ is no name a user arm can have. *)
+let pair_slot_root : int64 = arm_root "Σ"
+
+(* Some pair of this module entered a uniform slot: the builder of the arms of two
+   slots has to exist, even if no arm of the program has two. *)
+let pair_in_slot_built : bool ref = ref false
+
+(* The parameters of the function being emitted that are comprehensions. *)
+let comprehension_params : (string, unit) Hashtbl.t = Hashtbl.create 8
+
+(* The term is such a parameter, and not a local that shadows it. *)
+let is_comprehension_param (t : C.term) (ssa : string) : bool =
+  match t with
+  | C.Var x -> Hashtbl.mem comprehension_params x && ssa = "%arg_" ^ x
+  | _ -> false
+
+(* A slot of an arm's section. *)
+let read_arm_slot (e : emitter) (handle : string) (j : int) : string =
+  let vj = fresh_ssa e in
+  emit_line e (Printf.sprintf "%s = arith.constant %d : i32" vj j);
+  let v = fresh_ssa e in
+  emit_line e (Printf.sprintf
+    "%s = func.call @yon_rt_arm_field(%s, %s) : (f64, i32) -> f64" v handle vj);
+  v
+
 (* Coerce an argument to the parameter type the callee expects, emitting a
    subtype_cast when needed and doing nothing when the types already match.
    Kept separate from emit_term so it does not have to thread emitter state. *)
-let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
+let rec coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
     (param_ty : string) : string =
   if arg_ty = param_ty then arg_ssa
   else if (arg_ty = "i64" && param_ty = "f64") || (arg_ty = "f64" && param_ty = "i64")
@@ -1824,7 +1864,36 @@ let coerce_to_param (e : emitter) (arg_ssa : string) (arg_ty : string)
        injection along the mono is type-level only (the value-level \
        representation of a union of places is not designed yet)"
       arg_ty param_ty))
-  else arg_ssa  (* unhandled non-section mismatch: let it through, MLIR rejects it *)
+  else
+    let def rhs = let v = fresh_ssa e in emit_line e (v ^ " = " ^ rhs); v in
+    let component struct_ty p i =
+      def (Printf.sprintf "llvm.extractvalue %s[%d] : %s" p i struct_ty) in
+    let build struct_ty a b =
+      let u = def (Printf.sprintf "llvm.mlir.undef : %s" struct_ty) in
+      let u = def (Printf.sprintf "llvm.insertvalue %s, %s[0] : %s" a u struct_ty) in
+      def (Printf.sprintf "llvm.insertvalue %s, %s[1] : %s" b u struct_ty) in
+    match pair_carriers arg_ty, pair_carriers param_ty with
+    | Some (ta, tb), Some (tc, td) ->
+        (* a product flows component by component *)
+        let a = coerce_to_param e (component arg_ty arg_ssa 0) ta tc in
+        let b = coerce_to_param e (component arg_ty arg_ssa 1) tb td in
+        build param_ty a b
+    | Some (ta, tb), None when param_ty = "f64" ->
+        (* a pair in a uniform slot is a value of the FNV heap, as every product
+           in a slot: the section of an arm, its root and its two components,
+           each in a uniform slot *)
+        let a = coerce_to_param e (component arg_ty arg_ssa 0) ta "f64" in
+        let b = coerce_to_param e (component arg_ty arg_ssa 1) tb "f64" in
+        pair_in_slot_built := true;
+        let root = def (Printf.sprintf "arith.constant %Ld : i64" pair_slot_root) in
+        def (Printf.sprintf
+               "func.call @__arm_new_2(%s, %s, %s) : (i64, f64, f64) -> f64" root a b)
+    | None, Some (tc, td) when arg_ty = "f64" ->
+        (* and back: the type at the reader says what the slots hold *)
+        let a = coerce_to_param e (read_arm_slot e arg_ssa 0) "f64" tc in
+        let b = coerce_to_param e (read_arm_slot e arg_ssa 1) "f64" td in
+        build param_ty a b
+    | _ -> arg_ssa  (* unhandled non-section mismatch: let it through, MLIR rejects it *)
 
 (* The function whose body is being emitted (a call from it into another
    Space crosses by copy, Surface_ast.cross_calls). *)
@@ -1951,6 +2020,9 @@ let rec emit_term (e : emitter)
      the call is instantiated at: its bits, reinterpreted *)
   | C.App (C.Var ("__as_i64" | "__as_f64" | "__as_i1" as k), a) ->
       let (v, ty) = emit_term e env funcs a in
+      (* a value that came back as itself, not as a word: a generic read it from
+         the pair its argument carries *)
+      if (k = "__as_i1" && ty = "i1") || (k = "__as_f64" && ty <> "i64") then (v, ty) else
       let to_f64 v ty =
         if ty = "f64" then v
         else if ty = "i64" then begin
@@ -4326,45 +4398,32 @@ let rec emit_term (e : emitter)
       (v_pair, struct_ty)
   | C.Fst p ->
       let (vp, tp) = emit_term e env funcs p in
-      (* tp should be !llvm.struct<(T_a, T_b)>; extract T_a. *)
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
+      (match pair_carriers tp with
+       (* a comprehension has its carrier's layout: the first projection is the
+          value itself *)
+       | None when tp = "f64" && is_comprehension_param p vp -> (vp, "f64")
+       (* a pair read from a uniform slot: its component is in a uniform slot *)
+       | None when tp = "f64" -> (read_arm_slot e vp 0, "f64")
+       | None -> failwith (Printf.sprintf
                     "[emit_mlir] fst on a non-pair type: %s. fst applies only to a Sigma pair (built with `pair(a, b)`)."
-                    tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      if comma < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir] malformed pair type for fst: %s." tp);
-      let ta = String.sub rest 0 comma |> String.trim in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[0] : %s" v vp tp);
-      (v, ta)
+                    tp)
+       | Some (ta, _) ->
+           let v = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[0] : %s" v vp tp);
+           (v, ta))
   | C.Snd p ->
       let (vp, tp) = emit_term e env funcs p in
-      let prefix = "!llvm.struct<(" in
-      let plen = String.length prefix in
-      if String.length tp <= plen
-         || String.sub tp 0 plen <> prefix then
-        failwith (Printf.sprintf
+      (match pair_carriers tp with
+       | None when tp = "f64" && is_comprehension_param p vp ->
+           raise (Cubical_stuck "the proof of a comprehension has no bits: snd of it has no value at run time.")
+       | None when tp = "f64" -> (read_arm_slot e vp 1, "f64")
+       | None -> failwith (Printf.sprintf
                     "[emit_mlir] snd on a non-pair type: %s. fix: snd applies only to a Sigma pair."
-                    tp);
-      let rest = String.sub tp plen (String.length tp - plen) in
-      let comma = (try String.index rest ',' with Not_found -> -1) in
-      if comma < 0 then
-        failwith (Printf.sprintf
-                    "[emit_mlir] malformed pair type for snd: %s." tp);
-      let close = (try String.index rest ')' with Not_found -> -1) in
-      if close < 0 || close <= comma then
-        failwith (Printf.sprintf
-                    "[emit_mlir] malformed pair type for snd: %s." tp);
-      let tb = String.sub rest (comma + 1) (close - comma - 1) |> String.trim in
-      let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[1] : %s" v vp tp);
-      (v, tb)
+                    tp)
+       | Some (_, tb) ->
+           let v = fresh_ssa e in
+           emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[1] : %s" v vp tp);
+           (v, tb))
   | C.StreamCons _ ->
       failwith "[emit_mlir] Stream primitives not handled."
   | C.Unit ->
@@ -4524,20 +4583,34 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
                (* For each type parameter, find the first parameter that uses
                 * it and take the MLIR type of the corresponding argument. *)
                let concrete = List.map (fun tv ->
-                 (* Find the parameter that uses tv directly *)
-                 let rec find_param idx params =
-                   match params with
-                   | [] ->
-                       failwith (Printf.sprintf
-                                   "[emit_mlir A5] type parameter '%s' of '%s' cannot be resolved from the arguments."
-                                   tv fname)
-                   | (_, C.TyPlace n) :: _ when n = tv ->
-                       snd (List.nth arg_vals idx)
-                   | (_, C.TyPlace n) :: _ when n = tv ->
-                       snd (List.nth arg_vals idx)
-                   | _ :: rest -> find_param (idx + 1) rest
+                 (* The carrier at tv's position in a parameter type, walking
+                    the argument's carrier along the same Sigma. *)
+                 let rec read_carrier t carrier =
+                   match t with
+                   | C.TyPlace n when n = tv -> Some carrier
+                   | C.TySigma (_, a, _) when core_is_comprehension t ->
+                       read_carrier a carrier
+                   | C.TySigma (_, a, b) ->
+                       (* a pair from a uniform slot has uniform components *)
+                       let (ca, cb) =
+                         match pair_carriers carrier with
+                         | Some cs -> cs
+                         | None -> ("f64", "f64") in
+                       (match read_carrier a ca with
+                        | Some _ as found -> found
+                        | None -> read_carrier b cb)
+                   | _ -> None
                  in
-                 find_param 0 fs.fn_params
+                 let found = List.find_map (fun ((_, t), (_, carrier)) ->
+                   read_carrier t carrier)
+                   (List.combine fs.fn_params arg_vals) in
+                 match found with
+                 | Some carrier -> carrier
+                 | None ->
+                     raise (Stream_not_fused (Printf.sprintf
+                       "type parameter '%s' of '%s' cannot be deduced from the \
+                        arguments: no argument fixes its carrier"
+                       tv fname))
                ) fs.fn_type_params in
                let spec_name = request_mono !mono_global e fs concrete in
                let spec = (match List.find_opt (fun (_, _, sp) ->
@@ -4553,9 +4626,22 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
            let v = fresh_ssa e in
            (* Coerce each argument to the expected parameter type, inserting a
             * subtype_cast when the argument's type is a subtype. *)
-           let coerced_ssas = List.map2 (fun (ssa, ty) param_ty ->
-             coerce_to_param e ssa ty param_ty
-           ) arg_vals param_tys in
+           let coerced_ssas = List.map2 (fun ((ssa, ty), (_, declared)) param_ty ->
+             (* the checker lets a pair reach a parameter that is no pair only
+                as a comprehension: its proof has no bits, its carrier passes.
+                A parameter still open, or a type parameter another argument
+                fixed to a slot, is a uniform slot, and holds the pair. *)
+             match pair_carriers ty with
+             | Some (carrier, _)
+               when pair_carriers param_ty = None
+                    && (match declared with
+                        | C.TyPlace n -> n <> "unknown" && not (List.mem n fs.fn_type_params)
+                        | _ -> true) ->
+                 let first = fresh_ssa e in
+                 emit_line e (Printf.sprintf "%s = llvm.extractvalue %s[0] : %s" first ssa ty);
+                 coerce_to_param e first carrier param_ty
+             | _ -> coerce_to_param e ssa ty param_ty
+           ) (List.combine arg_vals fs.fn_params) param_tys in
            let crossing = Hashtbl.find_opt Surface_ast.cross_calls (!emit_cur_fun, fname) in
            (* a call into another Space: the framed arguments are copied into
               its heaps, the call runs there, the framed result is copied back *)
@@ -5402,11 +5488,14 @@ let emit_world (e : emitter) (world_name : string) (places : C.place_decl list) 
 let collect_type_params (e : emitter)
     (params : (string * C.ty) list) (ret_mlir : string) : string list =
   let acc = ref [] in
-  let visit_ty t =
+  let rec visit_ty t =
     match t with
     | C.TyPlace n ->
         if is_type_var e n && not (List.mem n !acc) then
           acc := n :: !acc
+    (* a comprehension has its carrier's layout, a pair one per component *)
+    | C.TySigma (_, a, _) when core_is_comprehension t -> visit_ty a
+    | C.TySigma (_, a, b) -> visit_ty a; visit_ty b
     | _ -> ()
   in
   List.iter (fun (_, t) -> visit_ty t) params;
@@ -5539,6 +5628,12 @@ let coerce_return (e : emitter) (v : string) (v_ty : string)
   if v_ty = "i1" && ret_ty = "!topos.proposition" then coerce_to_param e v v_ty ret_ty
   else if (v_ty = "f64" && ret_ty = "i64") || (v_ty = "i64" && ret_ty = "f64") then
     coerce_to_param e v v_ty ret_ty
+  (* the result of a generic is a uniform slot until its specialization says more:
+     what the body made of it reaches the signature through that slot *)
+  else if v_ty <> ret_ty
+       && (pair_carriers v_ty <> None || pair_carriers ret_ty <> None
+           || (v_ty = "i1" && ret_ty = "f64")) then
+    coerce_to_param e v v_ty ret_ty
   else if v_ty <> ret_ty && v_ty = "f64" then
     (* An inductive returns its MerkleTree f64 handle; pack it back into the
        section handle via the wire coercion, NOT the terminal constructor
@@ -5564,6 +5659,9 @@ let emit_function (e : emitter) (funcs : (string * func_sig) list)
     (fs : func_sig) : unit =
   Hashtbl.reset g_cell_elem;
   emit_cur_fun := fs.fn_name;
+  Hashtbl.reset comprehension_params;
+  List.iter (fun (n, t) ->
+    if core_is_comprehension t then Hashtbl.replace comprehension_params n ()) fs.fn_params;
   let param_strs = List.map (fun (n, t) ->
     Printf.sprintf "%%arg_%s: %s" n (core_ty_to_mlir_simple t)
   ) fs.fn_params in
@@ -6400,7 +6498,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
       let rec vars_of (t : C.term) (acc : string list) : string list =
         match t with
         | C.Var v -> if List.mem v fnames then v :: acc else acc
-        | C.App (a, b) -> vars_of a (vars_of b acc)
+        | C.App (a, b) | C.Pair (a, b) -> vars_of a (vars_of b acc)
+        | C.Fst b | C.Snd b -> vars_of b acc
         | C.Lam (_, _, b) -> vars_of b acc
         | C.PLam (_, b) -> vars_of b acc
         | C.PApp (b, _) -> vars_of b acc
@@ -6441,8 +6540,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
        | Some (_, args) -> Hashtbl.replace found (List.length args) ()
        | None -> ());
       match t with
-      | C.App (a, b) -> walk a; walk b
-      | C.Lam (_, _, b) | C.PLam (_, b) | C.PApp (b, _) -> walk b
+      | C.App (a, b) | C.Pair (a, b) -> walk a; walk b
+      | C.Lam (_, _, b) | C.PLam (_, b) | C.PApp (b, _) | C.Fst b | C.Snd b -> walk b
       | C.HITConstr (_, args) -> List.iter walk args
       | C.HITElim (brs, x) -> walk x; List.iter (fun (_, _, b) -> walk b) brs
       | _ -> () in
@@ -6472,9 +6571,9 @@ let emit_program (dr : Desugar.desugar_result) : string =
             Hashtbl.replace used (String.sub v 10 (String.length v - 10)) ()
         | _ -> ());
        match t with
-       | C.App (a, b) -> scan a; scan b
+       | C.App (a, b) | C.Pair (a, b) -> scan a; scan b
        | C.Lam (_, ty, b) -> named ty; scan b
-       | C.PLam (_, b) | C.PApp (b, _) -> scan b
+       | C.PLam (_, b) | C.PApp (b, _) | C.Fst b | C.Snd b -> scan b
        | C.HITConstr (_, args) -> List.iter scan args
        | C.HITElim (brs, x) -> scan x; List.iter (fun (_, _, b) -> scan b) brs
        | _ -> () in
@@ -7058,7 +7157,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
      alloca payload, field stores, yon_rt_section call. *)
   (* The section of an arm with a payload, one builder per arity: the root, then
      the projections, each in a uniform slot. *)
-  (List.iter (fun n ->
+  let emit_arm_builder n =
      let ps = List.init n (fun i -> Printf.sprintf "%%arg%d: f64" i) in
      emit_line e (Printf.sprintf "func.func @__arm_new_%d(%%root: i64, %s) -> f64 {"
                     n (String.concat ", " ps));
@@ -7078,8 +7177,8 @@ let emit_program (dr : Desugar.desugar_result) : string =
      let f = def (Printf.sprintf "arith.sitofp %s : i64 to f64" h) in
      emit_line e (Printf.sprintf "return %s : f64" f);
      pop_indent e;
-     emit_line e "}")
-     built_arm_arities);
+     emit_line e "}" in
+  List.iter emit_arm_builder built_arm_arities;
   if places <> [] then begin
     emit_line e "// Place constructors __section_<X> — alloca payload via yon_rt_section";
     List.iter (fun (pd : C.place_decl) ->
@@ -7349,6 +7448,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_blank e;
   (* reset the global monomorphization registry for this run *)
   mono_global := make_mono_registry ();
+  pair_in_slot_built := false;
   hof_inline_stack := [];
   hof_arg_counter := 0;
   (* Emit only the monomorphic functions (fn_type_params = []). The
@@ -7404,6 +7504,14 @@ let emit_program (dr : Desugar.desugar_result) : string =
     end
   in
   emit_specs ();
+  (* only the bodies say whether a pair entered a slot *)
+  if !pair_in_slot_built && not (List.mem 2 built_arm_arities) then begin
+    if built_arm_arities = [] then
+      refer_symbol e "yon_rt_arm_section"
+        "func.func private @yon_rt_arm_section(!llvm.ptr, i32) -> i64";
+    emit_blank e;
+    emit_arm_builder 2
+  end;
   (* the declarations of the symbols the bodies referred to *)
   if e.referenced <> [] then begin
     emit_blank e;
