@@ -4177,6 +4177,16 @@ and cell_match env ctx branches x loc (expected : ty option) : ty tc_result =
     (ok ()) branches in
   ok result
 
+(* a product flows into a product component by component, whatever the names of
+   their binders: the type of a path in it keeps its endpoints *)
+and flows_into (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : bool =
+  match deref_lambda_unknown sub, deref_lambda_unknown super with
+  | TySigma (y, a, b), TySigma (x, c, d) ->
+      flows_into env ctx ~sub:a ~super:c
+      && flows_into env ctx
+           ~sub:(if String.equal y x then b else Dispatcher.rename_ty y x b) ~super:d
+  | _ -> Dispatcher.subtype env ctx ~sub ~super
+
 and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit tc_result =
   let expected = deref_lambda_unknown expected in
   (* Universal property of the terminal object 1: for every object A there is
@@ -4191,18 +4201,10 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
        is forgotten; a bare point read so is the point of 1 *)
     let* _ = infer env ctx e in ok ()
   else
-  (* a product flows into a product component by component: the type of a path
-     in it keeps its endpoints *)
-  let rec flows ~sub ~super =
-    match deref_lambda_unknown sub, deref_lambda_unknown super with
-    | TySigma (y, a, b), TySigma (x, c, d) ->
-        flows ~sub:a ~super:c
-        && flows ~sub:(if String.equal y x then b else Dispatcher.rename_ty y x b) ~super:d
-    | _ -> Dispatcher.subtype env ctx ~sub ~super in
   let fallback env e expected =
     let* actual = infer env ctx e in
     let actual = admit_int_literal env ctx e actual expected in
-    if flows ~sub:actual ~super:expected
+    if flows_into env ctx ~sub:actual ~super:expected
        || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
     else err (location_of_expr e)
       (Printf.sprintf "type mismatch: expected %s, got %s%s"
@@ -5180,6 +5182,7 @@ and check_call_signature ?(arg_exprs : expr list = [])
       | [], [] -> ok ()
       | (pname, pty) :: prest, aty :: arest ->
           if Dispatcher.subtype env ctx ~sub:aty ~super:pty
+             || flows_into env ctx ~sub:aty ~super:pty
              || comprehension_coerces_to env ctx ~sub:aty ~super:pty
           then check_args (prest, arest)
           else
