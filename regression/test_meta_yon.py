@@ -324,6 +324,12 @@ def test_recursion_on_the_same_step_does_not_terminate(tmp_path):
     _proof_rejected(tmp_path, _descent("d1", "d2"), "E2010", "termination")
 
 
+def test_a_cycle_through_a_helper_does_not_terminate(tmp_path):
+    # peak_of recurses through peak_of_in_c/u/v: a cycle through a helper must not pass the check
+    _rule(tmp_path, "  fun ping(n: Nat): Nat { return pong(n) }\n"
+                    "  fun pong(n: Nat): Nat { return ping(n) }\n", "termination check")
+
+
 def test_a_path_over_a_boolean_is_read_at_the_branch(tmp_path):
     r = _compile(_with_theorem(tmp_path,
         "  fun gone(e: Empty): Number { return 0 }\n"

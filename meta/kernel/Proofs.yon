@@ -247,57 +247,100 @@ place Proofs {
     }
   }
 
-  /* Two steps with the same source build a Peak: the link to the two steps is not yet in the type. */
+  /* Two steps with the same source build a Peak. The structure is Huet's: a step is at the
+     root (ifTrue, ifFalse, ifSame) or nested in a context (inC, inU, inV). Written by hand are
+     the critical pairs at the root (rootT, rootF, diag) and the refused overlaps, together
+     with the overlaps on variables (trueU, trueV, falseU, falseV, sameC, sameU, sameV).
+     The disjoint steps commute (cU, cV, uV), and the nested ones are lifted with inC, inU,
+     inV (inCp, inUp, inVp). The link to the two steps is not yet in the type. */
   fun peak_of(d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.src)): Peak {
     return match d1 {
-      ifTrue as (u, v) => match d2 {
-        ifTrue as (u2, v2) => (u, v) ↪ ifTrue ↪ diag,
-        ifFalse as (u2, v2) => exfalso(yes_is_not_no(ite_injective(yes, u, v, no, u2, v2, q))),
-        ifSame as (c, w) => u ↪ rootT,
-        inC as (e, u2, v2) => exfalso(src_not_yes(e, inv(ite_injective(yes, u, v, e ↦ Step.src, u2, v2, q)))),
-        inU as (c, e, v2) => (e, v2) ↪ trueU,
-        inV as (c, u2, e) => (u2, e) ↪ trueV
-      },
-      ifFalse as (u, v) => match d2 {
-        ifTrue as (u2, v2) => exfalso(yes_is_not_no(inv(ite_injective(no, u, v, yes, u2, v2, q)))),
-        ifFalse as (u2, v2) => (u, v) ↪ ifFalse ↪ diag,
-        ifSame as (c, w) => u ↪ rootF,
-        inC as (e, u2, v2) => exfalso(src_not_no(e, inv(ite_injective(no, u, v, e ↦ Step.src, u2, v2, q)))),
-        inU as (c, e, v2) => (e, v2) ↪ falseU,
-        inV as (c, u2, e) => (u2, e) ↪ falseV
-      },
-      ifSame as (c, w) => match d2 {
-        ifTrue as (u2, v2) => w ↪ rootT ↪ swap,
-        ifFalse as (u2, v2) => w ↪ rootF ↪ swap,
-        ifSame as (c2, w2) => (c, w) ↪ ifSame ↪ diag,
-        inC as (e, u2, v2) => (e, w) ↪ sameC,
-        inU as (c2, e, v2) => (c, e) ↪ sameU,
-        inV as (c2, u2, e) => (c, e) ↪ sameV
-      },
-      inC as (e, u, v) => match d2 {
-        ifTrue as (u2, v2) => exfalso(src_not_yes(e, ite_injective(e ↦ Step.src, u, v, yes, u2, v2, q))),
-        ifFalse as (u2, v2) => exfalso(src_not_no(e, ite_injective(e ↦ Step.src, u, v, no, u2, v2, q))),
-        ifSame as (c2, w2) => (e, u) ↪ sameC ↪ swap,
-        inC as (e2, u2, v2) => (peak_of(e, e2, ite_injective(e ↦ Step.src, u, v, e2 ↦ Step.src, u2, v2, q)), u, v) ↪ inCp,
-        inU as (c2, e2, v2) => (e, e2, v) ↪ cU,
-        inV as (c2, u2, e2) => (e, u, e2) ↪ cV
-      },
-      inU as (c, e, v) => match d2 {
-        ifTrue as (u2, v2) => (e, v) ↪ trueU ↪ swap,
-        ifFalse as (u2, v2) => (e, v) ↪ falseU ↪ swap,
-        ifSame as (c2, w2) => (c, e) ↪ sameU ↪ swap,
-        inC as (e2, u2, v2) => (e2, e, v) ↪ cU ↪ swap,
-        inU as (c2, e2, v2) => (c, peak_of(e, e2, ite_injective_u(c, e ↦ Step.src, v, c2, e2 ↦ Step.src, v2, q)), v) ↪ inUp,
-        inV as (c2, u2, e2) => (c, e, e2) ↪ uV
-      },
-      inV as (c, u, e) => match d2 {
-        ifTrue as (u2, v2) => (u, e) ↪ trueV ↪ swap,
-        ifFalse as (u2, v2) => (u, e) ↪ falseV ↪ swap,
-        ifSame as (c2, w2) => (c, e) ↪ sameV ↪ swap,
-        inC as (e2, u2, v2) => (e2, u, e) ↪ cV ↪ swap,
-        inU as (c2, e2, v2) => (c, e2, e) ↪ uV ↪ swap,
-        inV as (c2, u2, e2) => (c, u, peak_of(e, e2, ite_injective_v(c, u, e ↦ Step.src, c2, u2, e2 ↦ Step.src, q))) ↪ inVp
-      }
+      ifTrue as (u, v) => peak_of_yes(d2, u, v, q),
+      ifFalse as (u, v) => peak_of_no(d2, u, v, q),
+      ifSame as (c, w) => peak_of_same(d2, c, w, q),
+      inC as (e, u, v) => peak_of_in_c(d2, e, u, v, q),
+      inU as (c, e, v) => peak_of_in_u(d2, c, e, v, q),
+      inV as (c, u, e) => peak_of_in_v(d2, c, u, e, q)
+    }
+  }
+
+  /* d1 is the ifTrue at the root: against a root step it is a critical pair (diag, rootT) or
+     a refused overlap (ifFalse); against a nested step it is a refused overlap (inC) or an
+     overlap on a variable (trueU, trueV). */
+  fun peak_of_yes(d2: Step, u: Term, v: Term, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+    return match d2 {
+      ifTrue as (u2, v2) => (u, v) ↪ ifTrue ↪ diag,
+      ifFalse as (u2, v2) => exfalso(yes_is_not_no(ite_injective(yes, u, v, no, u2, v2, q))),
+      ifSame as (c, w) => u ↪ rootT,
+      inC as (e, u2, v2) => exfalso(src_not_yes(e, inv(ite_injective(yes, u, v, e ↦ Step.src, u2, v2, q)))),
+      inU as (c, e, v2) => (e, v2) ↪ trueU,
+      inV as (c, u2, e) => (u2, e) ↪ trueV
+    }
+  }
+
+  /* d1 is the ifFalse at the root. */
+  fun peak_of_no(d2: Step, u: Term, v: Term, q: (no, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+    return match d2 {
+      ifTrue as (u2, v2) => exfalso(yes_is_not_no(inv(ite_injective(no, u, v, yes, u2, v2, q)))),
+      ifFalse as (u2, v2) => (u, v) ↪ ifFalse ↪ diag,
+      ifSame as (c, w) => u ↪ rootF,
+      inC as (e, u2, v2) => exfalso(src_not_no(e, inv(ite_injective(no, u, v, e ↦ Step.src, u2, v2, q)))),
+      inU as (c, e, v2) => (e, v2) ↪ falseU,
+      inV as (c, u2, e) => (u2, e) ↪ falseV
+    }
+  }
+
+  /* d1 is the ifSame at the root. */
+  fun peak_of_same(d2: Step, c: Term, w: Term, q: (c, w, w) ↪ ite = (d2 ↦ Step.src)): Peak {
+    return match d2 {
+      ifTrue as (u2, v2) => w ↪ rootT ↪ swap,
+      ifFalse as (u2, v2) => w ↪ rootF ↪ swap,
+      ifSame as (c2, w2) => (c, w) ↪ ifSame ↪ diag,
+      inC as (e, u2, v2) => (e, w) ↪ sameC,
+      inU as (c2, e, v2) => (c, e) ↪ sameU,
+      inV as (c2, u2, e) => (c, e) ↪ sameV
+    }
+  }
+
+  /* d1 is nested in the condition: in the same position it recurses and lifts with inC; in a
+     disjoint position the steps commute (cU, cV); against a root step it is a refused overlap
+     (ifTrue, ifFalse) or an overlap on a variable (sameC). */
+  fun peak_of_in_c(d2: Step, e: Step, u: Term, v: Term, q: (e ↦ Step.src, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+    return match d2 {
+      ifTrue as (u2, v2) => exfalso(src_not_yes(e, ite_injective(e ↦ Step.src, u, v, yes, u2, v2, q))),
+      ifFalse as (u2, v2) => exfalso(src_not_no(e, ite_injective(e ↦ Step.src, u, v, no, u2, v2, q))),
+      ifSame as (c2, w2) => (e, u) ↪ sameC ↪ swap,
+      inC as (e2, u2, v2) => (peak_of(e, e2, ite_injective(e ↦ Step.src, u, v, e2 ↦ Step.src, u2, v2, q)), u, v) ↪ inCp,
+      inU as (c2, e2, v2) => (e, e2, v) ↪ cU,
+      inV as (c2, u2, e2) => (e, u, e2) ↪ cV
+    }
+  }
+
+  /* d1 is nested in the then branch: in the same position it recurses and lifts with inU; in a
+     disjoint position the steps commute (cU, uV); against a root step it is an overlap on a
+     variable (trueU, falseU, sameU). */
+  fun peak_of_in_u(d2: Step, c: Term, e: Step, v: Term, q: (c, e ↦ Step.src, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+    return match d2 {
+      ifTrue as (u2, v2) => (e, v) ↪ trueU ↪ swap,
+      ifFalse as (u2, v2) => (e, v) ↪ falseU ↪ swap,
+      ifSame as (c2, w2) => (c, e) ↪ sameU ↪ swap,
+      inC as (e2, u2, v2) => (e2, e, v) ↪ cU ↪ swap,
+      inU as (c2, e2, v2) => (c, peak_of(e, e2, ite_injective_u(c, e ↦ Step.src, v, c2, e2 ↦ Step.src, v2, q)), v) ↪ inUp,
+      inV as (c2, u2, e2) => (c, e, e2) ↪ uV
+    }
+  }
+
+  /* d1 is nested in the else branch: in the same position it recurses and lifts with inV; in a
+     disjoint position the steps commute (cV, uV); against a root step it is an overlap on a
+     variable (trueV, falseV, sameV). */
+  fun peak_of_in_v(d2: Step, c: Term, u: Term, e: Step, q: (c, u, e ↦ Step.src) ↪ ite = (d2 ↦ Step.src)): Peak {
+    return match d2 {
+      ifTrue as (u2, v2) => (u, e) ↪ trueV ↪ swap,
+      ifFalse as (u2, v2) => (u, e) ↪ falseV ↪ swap,
+      ifSame as (c2, w2) => (c, e) ↪ sameV ↪ swap,
+      inC as (e2, u2, v2) => (e2, u, e) ↪ cV ↪ swap,
+      inU as (c2, e2, v2) => (c, e2, e) ↪ uV ↪ swap,
+      inV as (c2, u2, e2) => (c, u, peak_of(e, e2, ite_injective_v(c, u, e ↦ Step.src, c2, u2, e2 ↦ Step.src, q))) ↪ inVp
     }
   }
 
