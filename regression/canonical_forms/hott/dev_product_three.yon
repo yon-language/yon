@@ -1,0 +1,4 @@
+place Entry {
+  fun f(p: (Number, Number, Number)): Number { return 0 }
+  fun main: Number { return 0 }
+}

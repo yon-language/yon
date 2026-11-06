@@ -1167,6 +1167,14 @@ type_atom:
     { TyViewHandle (Some p) }
   | LPAREN t = type_expr RPAREN
     { t }
+  (* (K, V) is the non-dependent product, the Sigma whose fibre ignores its point: values
+     by pair, read by fst and snd. Before an arrow the same parentheses are the arguments
+     of a fun: the arrow is shifted, because CLAUSE_END is weaker than ARROW. *)
+  | LPAREN a = type_expr COMMA rest = separated_nonempty_list(COMMA, type_expr) RPAREN
+    %prec CLAUSE_END
+    { match rest with
+      | [b] -> TySigma ("_", a, b)
+      | _ -> failwith "a product has two components: (A, B, C) has no reading in a type, the components nest as (A, (B, C))" }
   (* Comprehension { x : A where P }: the subobject of A carved out by the
      mere-proposition fibre P (which may mention x). Desugars to the dependent
      pair Sigma(x:A). P, whose first projection is a mono exactly when P is a

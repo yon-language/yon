@@ -1,0 +1,15 @@
+place Entry {
+  fun first<K, V>(p: (K, V)): K { return fst(p) }
+
+  fun size<K, V>(xs: List<(K, V)>): Number { return List.length(xs) }
+
+  fun mid(p: (Number, (Number, Number))): Number { return fst(snd(p)) }
+
+  fun add(x: Number, y: Number): Number { return x + y }
+
+  fun apply(f: (Number, Number) -> Number): Number { return f(40, 1) }
+
+  fun main: Number {
+    return first(pair(apply(add), 0)) + size(List.cons(pair(1, 2), List.empty)) - mid(pair(0, pair(0, 0)))
+  }
+}

@@ -102,6 +102,7 @@ Equality between values is `==`. There is no `becomes` keyword.
 | `heyting<N>` | ✓ | Heyting integer: N trits with an Unknown mask |
 | [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
 | `Πx : A, B`, `Σx : A, B` (ASCII `Pi x : A, B`, `Sigma x : A, B`) | ✓ | Dependent function / pair types |
+| `(K, V)` | ✓ | **Product**: the non-dependent `Σ`, no new type and no place behind it. A value is built with `pair` and read with `fst` and `snd`. It has two components, and they nest: `(A, (B, C))`; `(A, B, C)` is refused (E1001). Before an arrow the same parentheses are the arguments of a fun: `(K, V) -> C` takes two arguments, `((K, V)) -> C` takes one product |
 | `x = y` | ✓ | Identity (path) type between terms `x`, `y`; the carrier is read off the endpoints |
 | `(a = b) ∧ (c = d)` | ✓ | **Conjunction of paths**: the non-dependent product of the two paths, no new type. Each path keeps its parentheses; `∧` is left-associative. A value is built with `pair` and read with `fst` and `snd`. See the two readings of `∧` below |
 | `{ x : A where P }` | ✓ | **Comprehension**: the subobject of `A` carved out by the fibre `P` (a Σ whose first projection is monic when `P` is a mere proposition) |

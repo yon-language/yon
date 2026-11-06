@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: type_atom
+note: |
+  (K, V) in a type is the non-dependent product, the Sigma that already exists: values by pair, read by fst and snd. Before an arrow the same parentheses are the arguments of a fun.
