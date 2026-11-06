@@ -3785,10 +3785,18 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
        is forgotten; a bare point read so is the point of 1 *)
     let* _ = infer env ctx e in ok ()
   else
+  (* a product flows into a product component by component: the type of a path
+     in it keeps its endpoints *)
+  let rec flows ~sub ~super =
+    match deref_lambda_unknown sub, deref_lambda_unknown super with
+    | TySigma (y, a, b), TySigma (x, c, d) ->
+        flows ~sub:a ~super:c
+        && flows ~sub:(if String.equal y x then b else Dispatcher.rename_ty y x b) ~super:d
+    | _ -> Dispatcher.subtype env ctx ~sub ~super in
   let fallback env e expected =
     let* actual = infer env ctx e in
     let actual = admit_int_literal env ctx e actual expected in
-    if Dispatcher.subtype env ctx ~sub:actual ~super:expected
+    if flows ~sub:actual ~super:expected
        || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
     else err (location_of_expr e)
       (Printf.sprintf "type mismatch: expected %s, got %s%s"
@@ -3805,6 +3813,11 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       let* () = check env ctx e2 expected in
       record_int_arith_site ~i64:(is_int64_ty env ctx expected) op loc;
       ok ()
+  (* a pair against a Sigma: the first component against the base, the second
+     against the fibre at the first *)
+  | EPair (a, b, _), TySigma (x, base, fibre) ->
+      let* () = check env ctx a base in
+      check env ctx b (subst_evar_in_ty x a fibre)
   | EHITConstr (ctor, args, loc), (TySum variants | TySumIn (variants, _)) ->
       (match List.find_opt (fun variant -> variant.v_name = ctor) variants with
        | None -> err loc (Printf.sprintf

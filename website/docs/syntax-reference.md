@@ -103,11 +103,21 @@ Equality between values is `==`. There is no `becomes` keyword.
 | [`Type`](/book/keywords#type), `Type_0`, `Type_1`, … | ✓ | Universes (HoTT) |
 | `Πx : A, B`, `Σx : A, B` (ASCII `Pi x : A, B`, `Sigma x : A, B`) | ✓ | Dependent function / pair types |
 | `x = y` | ✓ | Identity (path) type between terms `x`, `y`; the carrier is read off the endpoints |
+| `(a = b) ∧ (c = d)` | ✓ | **Conjunction of paths**: the non-dependent product of the two paths, no new type. Each path keeps its parentheses; `∧` is left-associative. A value is built with `pair` and read with `fst` and `snd`. See the two readings of `∧` below |
 | `{ x : A where P }` | ✓ | **Comprehension**: the subobject of `A` carved out by the fibre `P` (a Σ whose first projection is monic when `P` is a mere proposition) |
 | `move from W1 to W2` | ✓ | Handle type of a move from `W1` to `W2` |
 | `reduction of P` | ✓ | Handle type of a reduction over `P` |
 | `morph from S1 to S2` | ✓ | Handle type of a morph from `S1` to `S2` |
 | `view of P` | ✓ | Handle type of a view of `P` |
+
+**The two readings of `∧`.** In a law, `∧` gives a value in Ω. In a type,
+`(a = b) ∧ (c = d)` gives a product, the meet read as a product. The two readings
+coincide on propositions; on a type with more than one inhabitant only the product
+keeps which inhabitant. In a type `∧` does not stand bare among the endpoints of a path:
+`a = b ∧ c`, `a ∧ b = c`, `a = b ∧ c = d` and `a = (b → c) ∧ (c → b)` are refused (E1001)
+with the form to write. Each path of a conjunction keeps its parentheses, and an endpoint
+that is a meet keeps its own: `a = (b ∧ c)`. Only `∧` is refused there: `a = b ∨ c` is a
+path from `a` to `b ∨ c`, and `a = b ↔ c` a path from `a` to `b ↔ c`.
 
 The four **handle types** make arrows first-class values: a handle can be
 passed as a parameter. Each keeps its categorical stratification: handles do

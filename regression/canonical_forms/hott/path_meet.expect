@@ -1,0 +1,5 @@
+status: accept
+exit: 42
+covers: path_meet, parenthesized_path
+note: |
+  (a = b) ∧ (c = d) in a type is the non-dependent product of the two paths: values by pair, read by fst and snd.

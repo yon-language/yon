@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: (a = b) ∧ (c = d)
+note: |
+  In a type ∧ does not stand bare among the endpoints of a path, and an operand of ∧ is a path in its parentheses: without them a conjunction of paths has no reading in a type.

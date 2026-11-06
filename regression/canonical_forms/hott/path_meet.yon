@@ -1,0 +1,17 @@
+place Entry {
+  fun first_of(a: Number, q: (a = a) ∧ (a = a)): a = a {
+    return fst(q)
+  }
+
+  fun witness(a: Number): Σp : Number, (p = a) ∧ (p = a) {
+    return pair(a, pair(refl(a), refl(a)))
+  }
+
+  fun three(a: Number): (a = a) ∧ (a = a) ∧ (a = a) {
+    return pair(pair(refl(a), refl(a)), refl(a))
+  }
+
+  fun main: Number {
+    return fst(witness(42))
+  }
+}

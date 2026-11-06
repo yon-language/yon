@@ -25,6 +25,30 @@
       end_col = end_pos.Lexing.pos_cnum - end_pos.Lexing.pos_bol;
       file = start_pos.Lexing.pos_fname; }
 
+  (* ∧ in an endpoint of a path, outside its own parentheses. The search goes under
+     ∨, →, &&, || and =>, whose encoding ¬a || b is why it goes under ¬ too. p ↔ q has
+     its own case: the parser's meet of two implications, all three at the location
+     of the ↔, with its operands searched; a ∧ of the source spans its operands strictly. *)
+  let rec bare_meet = function
+    | ECall ("__heyt_and", [ECall ("__heyt_imp", [a; b], l1); ECall ("__heyt_imp", [c; d], l2)], l)
+      when l = l1 && l = l2 -> List.exists bare_meet [a; b; c; d]
+    | ECall (("__heyt_or" | "__heyt_imp"), [a; b], _)
+    | EBinop ((OpAnd | OpOr), a, b, _) -> bare_meet a || bare_meet b
+    | ENot (a, _) -> bare_meet a
+    | ECall ("__heyt_and", _, _) -> true
+    | _ -> false
+
+  (* The grammar lets an endpoint take a ∧ in; this is what keeps it out, because
+     the precedence table cannot stop at ∧ without also stopping at ∨, which stays
+     among the endpoints. *)
+  let refuse_bare_meet endpoints =
+    if List.exists bare_meet endpoints then
+      failwith "in a type \xe2\x88\xa7 does not stand bare among the endpoints of a path: a conjunction of paths is written (a = b) \xe2\x88\xa7 (c = d), and an endpoint that is a meet keeps its parentheses, a = (b \xe2\x88\xa7 c)"
+
+  let path_type x y =
+    refuse_bare_meet [x; y];
+    TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y)
+
   (* Split a qualified name "a::b::c" into (module="a::b", name="c").
    * The name is the last segment; the module is everything before it. *)
   let split_qident (q : string) : string * string =
@@ -280,6 +304,10 @@
 /* LOWEST ends an `if … then … else` and a condition: any operator shift
  * wins over closing them, so a condition is as long as it can be. */
 %nonassoc LOWEST
+
+/* The level the path of a type, at LOWEST, is weighed against: the second `=`
+ * of a = b = c is shifted, and that reaches the refusal that says why. */
+%nonassoc EQ
 
 /* A statement has no terminator, so a construct that may end with an
  * optional part meets the next token undecided. CLAUSE_END is the closing of
@@ -1019,7 +1047,14 @@ lambda_param:
 type_expr:
   (* a path: the carrier is inferred from the endpoints (Tycheck.elaborate_id_sugar) *)
   | PATH_TYPE x = expr EQ y = expr %prec LOWEST
-    { TyId (TyMetaVar (-424242), TyTermExpr x, TyTermExpr y) }
+    { path_type x y }
+  (* a path has two ends *)
+  | PATH_TYPE x = expr EQ y = expr EQ z = expr
+    { refuse_bare_meet [x; y; z];
+      failwith "a path has two ends: a = b = c has no reading in a type" }
+  (* a conjunction of paths: the meet is the product *)
+  | PATH_TYPE m = path_meet
+    { m }
   | a = type_atom ARROW b = type_expr
     { TyArrow (a, b) }
   (* a product as a domain: the arguments of a fun *)
@@ -1027,6 +1062,19 @@ type_expr:
     { List.fold_right (fun d c -> TyArrow (d, c)) (a :: rest) b }
   | a = type_atom %prec CLAUSE_END
     { a }
+
+(* (a = b) ∧ (c = d) in a type is the non-dependent product of the two paths: its
+   values are built with pair and read with fst and snd. Left-associative, as ∧
+   among the expressions; each `=` stands in its parentheses. *)
+path_meet:
+  | a = parenthesized_path AMPAMPQ b = parenthesized_path
+    { TySigma ("_", a, b) }
+  | m = path_meet AMPAMPQ b = parenthesized_path
+    { TySigma ("_", m, b) }
+
+parenthesized_path:
+  | LPAREN x = expr EQ y = expr RPAREN
+    { path_type x y }
 
 named_type:
   (* a term parameter's argument: an arrow of another place, by name *)
@@ -1494,7 +1542,8 @@ return_stmt:
   | RETURN e = expr                       { SReturn (e, mk_loc $startpos $endpos) }
   (* a fun whose result is a type may return the type of a path *)
   | RETURN PATH_TYPE x = expr EQ y = expr
-    { let l = mk_loc $startpos $endpos in SReturn (EBinop (OpEq, x, y, l), l) }
+    { refuse_bare_meet [x; y];
+      let l = mk_loc $startpos $endpos in SReturn (EBinop (OpEq, x, y, l), l) }
 
 call_or_new_stmt:
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN

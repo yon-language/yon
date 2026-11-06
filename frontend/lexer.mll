@@ -472,21 +472,27 @@ and string_lit buf = parse
     { t; start_p = lexbuf.Lexing.lex_start_p; curr_p = lexbuf.Lexing.lex_curr_p }
 
   let path_ahead (lexbuf : Lexing.lexbuf) (line : int) : bool =
-    let rec scan i depth =
-      let p =
-        match List.nth_opt !held i with
-        | Some p -> p
-        | None -> let p = lex_one lexbuf in held := !held @ [p]; p in
+    let at i =
+      match List.nth_opt !held i with
+      | Some p -> p
+      | None -> let p = lex_one lexbuf in held := !held @ [p]; p in
+    (* [opening] is true while the scan is inside the parentheses that open the type,
+       [met] once an `=` stands directly in them: closed and followed by ∧, those
+       parentheses are the first path of a conjunction *)
+    let rec scan i depth opening met =
+      let p = at i in
       if p.start_p.Lexing.pos_lnum > line then false
       else match p.t with
         | PI | SIGMA when i = 0 -> false
         | EQ when depth = 0 -> true
-        | LPAREN -> scan (i + 1) (depth + 1)
-        | RPAREN -> depth > 0 && scan (i + 1) (depth - 1)
+        | EQ when opening && depth = 1 -> scan (i + 1) depth opening true
+        | LPAREN -> scan (i + 1) (depth + 1) (i = 0 || opening) met
+        | RPAREN when opening && depth = 1 && met -> (at (i + 1)).t = AMPAMPQ
+        | RPAREN -> depth > 0 && scan (i + 1) (depth - 1) (opening && depth > 1) met
         | EOF -> false
         | LBRACE | RBRACE | COMMA | COLONEQ | WHERE | FORALL | EXISTS when depth = 0 -> false
-        | _ -> scan (i + 1) depth in
-    scan 0 0
+        | _ -> scan (i + 1) depth opening met in
+    scan 0 0 false false
 
   let token (lexbuf : Lexing.lexbuf) : Parser.token =
     (match !owner with
