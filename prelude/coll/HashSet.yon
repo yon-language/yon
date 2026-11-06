@@ -10,4 +10,6 @@ place HashSet<T> {
   fun size<T>(s: HashSet<T>): Number is given
   fun union<T>(a: HashSet<T>, b: HashSet<T>): HashSet<T> is given
   fun intersect<T>(a: HashSet<T>, b: HashSet<T>): HashSet<T> is given
+  /* given while the set stays in C: it goes when the set is written in Yon */
+  fun to_stream<T>(s: HashSet<T>): List<T> is given
 }

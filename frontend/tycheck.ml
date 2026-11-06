@@ -208,6 +208,19 @@ let isprop_ty (carrier : ty) : ty =
 let omega_ty : ty =
   TySigma ("P", TyUniverse 0, isprop_ty (TyVar "P"))
 
+(* The one step of a walk over the parameters of a place: it goes through an
+   arrow, an application, a channel, a map and a dependent former the same way.
+   A former not named here is left as it is. *)
+let map_ty_children (f : ty -> ty) (t : ty) : ty =
+  match t with
+  | TyArrow (a, b) -> TyArrow (f a, f b)
+  | TyApp (n, args) -> TyApp (n, List.map f args)
+  | TyChannel a -> TyChannel (f a)
+  | TyMap (k, v) -> TyMap (f k, f v)
+  | TySigma (x, a, b) -> TySigma (x, f a, f b)
+  | TyPi (x, a, b) -> TyPi (x, f a, f b)
+  | _ -> t
+
 (* Map a generic place's parameter names, seen as user types in field/op
    signatures (`place Box<T> { value T }`), to type variables — the same move
    the checker already makes for a function's fn_type_params. TyVar is then
@@ -218,9 +231,7 @@ let rec resolve_tparams (tps : string list) (t : ty) : ty =
     let go = resolve_tparams tps in
     match t with
     | TyUser n when List.mem n tps -> TyVar n
-    | TyArrow (a, b) -> TyArrow (go a, go b)
-    | TyChannel a -> TyChannel (go a)
-    | _ -> t
+    | _ -> map_ty_children go t
 
 (* PRECISE instantiation: given a generic place's parameters and the concrete
    type arguments of an application `Box<number>`, substitute each parameter by
@@ -236,9 +247,7 @@ let subst_place_tparams (params : string list) (args : ty list) (t : ty) : ty =
       match t with
       | TyUser n when List.mem_assoc n pairs -> List.assoc n pairs
       | TyVar n when List.mem_assoc n pairs -> List.assoc n pairs
-      | TyArrow (a, b) -> TyArrow (go a, go b)
-      | TyChannel a -> TyChannel (go a)
-      | _ -> t
+      | _ -> map_ty_children go t
     in
     go t
 
@@ -6126,15 +6135,7 @@ let register_decl (env : Tyenv.env) (td : top_decl) : Tyenv.env =
       let rebound_return =
         match fn.fn_on_error with
         | None -> rebound_return
-        | Some e ->
-            let face_of t = match t with
-              | TyPrim "number" -> "Number" | TyPrim "text" -> "Text"
-              | TyPrim "boolean" -> "Boolean" | TyPrim "unit" -> "Unit"
-              | TyUser n -> n
-              | other -> Tyenv.ty_to_string other in
-            TySum [ { v_name = face_of rebound_return;
-                      v_args = [rebound_return] };
-                    { v_name = e; v_args = [TyUser e] } ]
+        | Some e -> error_sum_of ~ret:rebound_return ~err:e
       in
       let env =
         List.fold_left

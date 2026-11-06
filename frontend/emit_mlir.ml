@@ -432,17 +432,6 @@ let stdlib_registry : (string * (string list * string)) list = [
   "Math__modulo",  (["f64"; "f64"], "f64");
   "Math__gcd",     (["f64"; "f64"], "f64");
   "Math__lcm",     (["f64"; "f64"], "f64");
-  "Magma__empty",          (["f64"], "f64");
-  "Magma__gen",            (["f64"; "f64"], "f64");
-  "Magma__is_commutative", (["f64"], "i1");
-  "Magma__is_associative", (["f64"], "i1");
-  "Magma__identity",       (["f64"], "f64");
-  "Magma__closure_size",   (["f64"], "f64");
-  "Land__reach",      (["f64"; "f64"], "i1");
-  "Land__witness",    (["f64"; "f64"], "f64");
-  "Magma__word_push",      (["f64"; "f64"], "f64");
-  "Magma__normal_form",    (["f64"], "f64");
-  "Magma__from_catalog",   (["f64"], "f64");
 
   "Math__log2",    (["f64"], "f64");
   "Math__log10",   (["f64"], "f64");
@@ -1100,9 +1089,6 @@ let rec infer_mlir_ty (e : emitter)
   (* Collection operations return f64 (the handle). *)
   | C.App (C.App (C.App (C.Var "HashMap__set", _), _), _) -> "f64"
   | C.App (C.App (C.Var "HashMap__has", _), _) -> "i1"
-  | C.App (C.Var "Magma__is_commutative", _) -> "i1"
-  | C.App (C.Var "Magma__is_associative", _) -> "i1"
-  | C.App (C.App (C.Var "Land__reach", _), _) -> "i1"
   | C.App (C.App (C.Var "HashSet__contains", _), _) -> "i1"
   | C.App (C.App (C.Var "XSet__contains", _), _) -> "i1"
   | C.App (C.App (C.Var "XSet__add", _), _) -> "f64"
@@ -3588,46 +3574,6 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_math_gcd(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  | C.App (C.Var "Magma__empty", a) ->
-      let (va,_) = emit_term e env funcs a in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_empty(%s) : (f64) -> f64" v va); (v,"f64")
-  | C.App (C.App (C.Var "Magma__gen", a), b) ->
-      let (va,_) = emit_term e env funcs a in let (vb,_) = emit_term e env funcs b in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_gen(%s, %s) : (f64, f64) -> f64" v va vb); (v,"f64")
-  | C.App (C.Var "Magma__is_commutative", a) ->
-      let (va,_) = emit_term e env funcs a in let vf = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_is_commutative(%s) : (f64) -> f64" vf va);
-      let vz = fresh_ssa e in emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" vz);
-      let vi = fresh_ssa e in emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" vi vf vz); (vi,"i1")
-  | C.App (C.Var "Magma__is_associative", a) ->
-      let (va,_) = emit_term e env funcs a in let vf = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_is_associative(%s) : (f64) -> f64" vf va);
-      let vz = fresh_ssa e in emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" vz);
-      let vi = fresh_ssa e in emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" vi vf vz); (vi,"i1")
-  | C.App (C.Var "Magma__identity", a) ->
-      let (va,_) = emit_term e env funcs a in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_identity(%s) : (f64) -> f64" v va); (v,"f64")
-  | C.App (C.Var "Magma__closure_size", a) ->
-      let (va,_) = emit_term e env funcs a in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_closure_size(%s) : (f64) -> f64" v va); (v,"f64")
-  | C.App (C.App (C.Var "Land__reach", a), b) ->
-      let (va,_) = emit_term e env funcs a in let (vb,_) = emit_term e env funcs b in let vf = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_land_reach(%s, %s) : (f64, f64) -> f64" vf va vb);
-      let vz = fresh_ssa e in emit_line e (Printf.sprintf "%s = arith.constant 0.0 : f64" vz);
-      let vi = fresh_ssa e in emit_line e (Printf.sprintf "%s = arith.cmpf one, %s, %s : f64" vi vf vz); (vi,"i1")
-  | C.App (C.App (C.Var "Land__witness", a), b) ->
-      let (va,_) = emit_term e env funcs a in let (vb,_) = emit_term e env funcs b in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_land_witness(%s, %s) : (f64, f64) -> f64" v va vb);
-      (v,"f64")
-  | C.App (C.App (C.Var "Magma__word_push", a), b) ->
-      let (va,_) = emit_term e env funcs a in let (vb,_) = emit_term e env funcs b in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_word_push(%s, %s) : (f64, f64) -> f64" v va vb); (v,"f64")
-  | C.App (C.Var "Magma__from_catalog", a) ->
-      let (va,_) = emit_term e env funcs a in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_from_algebra(%s) : (f64) -> f64" v va); (v,"f64")
-  | C.App (C.Var "Magma__normal_form", a) ->
-      let (va,_) = emit_term e env funcs a in let v = fresh_ssa e in
-      emit_line e (Printf.sprintf "%s = func.call @yon_rt_magma_normal_form(%s) : (f64) -> f64" v va); (v,"f64")
   | C.App (C.App (C.Var "Math__lcm", a), b) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
@@ -6963,17 +6909,6 @@ let emit_program (dr : Desugar.desugar_result) : string =
   emit_line e "func.func private @yon_rt_math_modulo(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_math_gcd(f64, f64) -> f64";
   emit_line e "func.func private @yon_rt_math_lcm(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_empty(f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_gen(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_is_commutative(f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_is_associative(f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_identity(f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_closure_size(f64) -> f64";
-  emit_line e "func.func private @yon_rt_land_reach(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_land_witness(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_word_push(f64, f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_normal_form(f64) -> f64";
-  emit_line e "func.func private @yon_rt_magma_from_algebra(f64) -> f64";
 
   emit_line e "func.func private @yon_rt_math_log2(f64) -> f64";
   emit_line e "func.func private @yon_rt_math_log10(f64) -> f64";

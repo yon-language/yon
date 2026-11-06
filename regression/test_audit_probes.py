@@ -2800,13 +2800,15 @@ fun main(): Number {
 
 _REVERSE_runtime = """\
 place Entry {}
+fun plus(a: Number, b: Number): Number { return a + b }
+fun used(m: Generated<Number>): Number {
+  return match Land.witness(m, 8) { Absent => 0, Found as w => List.fold_left(w, 0, plus) }
+}
 fun main(): Number {
-  m0 := Magma.empty(0)
-  m1 := Magma.gen(m0, 3)
-  m2 := Magma.gen(m1, 5)
-  before := Land.witness(m2, 8)
+  m := Generated.gen(Generated.gen(Generated.generated_by(plus, HashSet.empty), 3), 5)
+  before := used(m)
   mut r := List.reverse(Sequence.range(%d))
-  after := Land.witness(m2, 8)
+  after := used(m)
   return if before == after then 1 else 0
 }
 """
@@ -2814,7 +2816,7 @@ fun main(): Number {
 
 def test_reversing_a_long_list_does_not_touch_other_values(tmp_path):
     rc, out = _build_run_runtime(tmp_path, _REVERSE_runtime % 400000)
-    _verdict(rc == 1, f"a magma's witness changed across List.reverse (exit {rc})")
+    _verdict(rc == 1, f"the witness of Land over a Generated changed across List.reverse (exit {rc})")
 
 
 def test_reversing_a_short_list_does_not_touch_other_values(tmp_path):
@@ -3415,51 +3417,40 @@ fun main: Number {
     assert rc == 1
 
 
-# --- Magma / Land ----------------------------------------------------------------------
+# --- Generated / Land ------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="the 400th reachability query answers like the first")
-def test_land_reach_answers_the_same_on_every_call(tmp_path):
-    entry = """\
+_LAND_PLUS = """\
 place Entry {}
+fun plus(a: Number, b: Number): Number { return a + b }
+"""
+
+
+def test_land_reach_answers_the_same_on_every_call(tmp_path):
+    entry = _LAND_PLUS + """\
 fun main(): Number {
-  m0 := Magma.empty(0)
-  m1 := Magma.gen(m0, 3)
-  m2 := Magma.gen(m1, 5)
+  m := Generated.gen(Generated.gen(Generated.generated_by(plus, HashSet.empty), 3), 5)
   mut hits := 0
   mut i := 0
   while i < 400 do {
-    hits <- hits + (if Land.reach(m2, 8 + i - i) then 1 else 0)
+    hits <- hits + (if Land.reach(m, 8 + i - i) then 1 else 0)
     i <- i + 1
   }
   return if hits == 400 then 1 else 0
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
-    _verdict(rc == 1, "some of 400 identical reach queries answered unreachable")
+    assert rc == 1, "some of 400 identical reach queries answered unreachable"
 
 
-_LAND_runtime = """\
-place Entry {}
+def test_addition_reaches_through_a_negative_generator(tmp_path):
+    entry = _LAND_PLUS + """\
 fun main(): Number {
-  m0 := %s
-  m1 := Magma.gen(m0, 5)
-  m2 := Magma.gen(m1, 0 - 3)
-  return if Land.reach(m2, 2) then 1 else 0
+  m := Generated.gen(Generated.gen(Generated.generated_by(plus, HashSet.empty), 5), 0 - 3)
+  return if Land.reach(m, 2) then 1 else 0
 }
 """
-
-
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="with generators 5 and -3 under addition, 2 = 5 + (-3) is reachable")
-def test_additive_catalog_reaches_through_a_negative_generator(tmp_path):
-    rc, out = _build_run_runtime(tmp_path, _LAND_runtime % "Magma.from_catalog(0)")
-    _verdict(rc == 1, f"reach answered {rc}, expected 1")
-
-
-def test_raw_addition_reaches_through_a_negative_generator(tmp_path):
-    rc, out = _build_run_runtime(tmp_path, _LAND_runtime % "Magma.empty(0)")
-    assert rc == 1
+    rc, out = _build_run_runtime(tmp_path, entry)
+    assert rc == 1, f"with generators 5 and -3 under addition, 2 = 5 + (-3) is reachable: reach answered {rc}"
 
 
 # --- Int64 totality ------------------------------------------------------------------

@@ -568,25 +568,6 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "cosh", [tnum], tnum;
       "tanh", [tnum], tnum;
     ];
-    "Magma", [
-      (* world Magma: (op_id, generators). Laws VERIFIED, not assumed. *)
-      "empty", [tnum], TyUser "Magma";          (* op_id -> magma *)
-      "gen", [TyUser "Magma"; tnum], TyUser "Magma";
-      "is_commutative", [TyUser "Magma"], tbool;
-      "is_associative", [TyUser "Magma"], tbool;
-      "identity", [TyUser "Magma"], tnum;
-      "closure_size", [TyUser "Magma"], tnum;
-      "word_push", [TyUser "Magma"; tnum], TyUser "Magma";
-      "normal_form", [TyUser "Magma"], tnum;
-      "from_catalog", [tnum], TyUser "Magma";        (* catalog id -> place with certified laws *)
-    ];
-    (* Land: the reachability view of a Magma. reach = is the target reachable
-     * by composing generators (each at most once) under the magma operation;
-     * witness = the certificate (bitmask of which generators reach it). *)
-    "Land", [
-      "reach", [TyUser "Magma"; tnum], tbool;
-      "witness", [TyUser "Magma"; tnum], tnum;
-    ];
     "Bits", [
       "band", [tnum; tnum], tnum;
       "bor",  [tnum; tnum], tnum;

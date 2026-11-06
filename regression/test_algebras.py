@@ -10,6 +10,7 @@ carried internally; a law refuted is E2101, one not decided is E2102.
 
 Layer/kind: native / end-to-end.
 """
+import re
 import subprocess
 from pathlib import Path
 
@@ -230,63 +231,12 @@ def test_the_carrier_of_an_algebra_has_no_order_to_state_a_true_law_with(tmp_pat
     assert "comparison requires matching ordered operands; got Sum and Sum" in out, out
 
 
-_REACH = ("  m0 := Magma.from_catalog(OP)\n"
-          "  m1 := Magma.gen(m0, 3)\n"
-          "  m2 := Magma.gen(m1, 5)\n"
-          "  return if Land.reach(m2, 8) then 42 else 1")
-
-
-def test_a_magma_on_an_operation_of_an_algebra_runs(tmp_path):
-    rc, out, exe = _build(tmp_path, {}, _REACH.replace("OP", "0"))
-    assert rc == 0, out
-    assert _run(exe).returncode == 42
-
-
-def test_an_index_that_names_no_operation_never_becomes_the_sum(tmp_path):
-    rc, out, exe = _build(tmp_path, {}, _REACH.replace("OP", "7"))
-    assert rc == 0, out
-    r = _run(exe)
-    assert r.returncode == 3 and "names no operation of an algebra" in r.stderr, r.stderr
-
-
-def test_an_empty_magma_on_an_index_that_names_no_operation_is_refused(tmp_path):
-    src = "  m0 := Magma.empty(99)\n  return 42"
-    rc, out, exe = _build(tmp_path, {}, src)
-    assert rc == 0, out
-    r = _run(exe)
-    assert r.returncode == 3 and "99 names no operation" in r.stderr, r.stderr
-
-
-def test_an_empty_magma_on_an_operation_runs(tmp_path):
-    rc, out, exe = _build(tmp_path, {}, "  m0 := Magma.empty(7)\n  return 42")
-    assert rc == 0, out
-    assert _run(exe).returncode == 42
-
-
-# the or on a fractional generator is not monotone and loses its pruning; the sum
-# on fractions and the or on whole numbers are, and keep it
-_GENERATORS = [("4", "2.5", "0", "2"), ("0", "0.5", "1.5", "2"), ("4", "1", "2", "3")]
-
-
-def _reach_of(make: str, op: str, g1: str, g2: str, target: str) -> str:
-    return (f"  m0 := Magma.{make}({op})\n"
-            f"  m1 := Magma.gen(m0, {g1})\n"
-            f"  m2 := Magma.gen(m1, {g2})\n"
-            f"  return if Land.reach(m2, {target}) then 42 else 1")
-
-
-@pytest.mark.parametrize("op,g1,g2,target", _GENERATORS)
-def test_without_pruning_the_target_is_reached(tmp_path, op, g1, g2, target):
-    rc, out, exe = _build(tmp_path, {}, _reach_of("empty", op, g1, g2, target))
-    assert rc == 0, out
-    assert _run(exe).returncode == 42
-
-
-@pytest.mark.parametrize("op,g1,g2,target", _GENERATORS)
-def test_pruning_keeps_the_target(tmp_path, op, g1, g2, target):
-    rc, out, exe = _build(tmp_path, {}, _reach_of("from_catalog", op, g1, g2, target))
-    assert rc == 0, out
-    assert _run(exe).returncode == 42
+def test_the_runtime_keeps_of_the_magma_only_the_bridge_of_the_verifier(tmp_path):
+    rc, out, _ = _build(tmp_path, {}, "  m0 := Magma.empty(0)\n  return 42")
+    assert rc != 0 and "E2001" in out and "Magma" in out, out
+    src = (ROOT / "runtime" / "yon_rt_hsh.c").read_text()
+    assert set(re.findall(r"yon_rt_magma_\w+", src)) == {"yon_rt_magma_from_algebra"}
+    assert "alg_op_is_monotone" not in src and "yon_rt_land_" not in src
 
 
 def test_a_place_that_names_an_algebra_makes_no_instance_function(tmp_path):

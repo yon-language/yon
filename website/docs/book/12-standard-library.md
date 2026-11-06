@@ -110,17 +110,21 @@ fun main(): Number {
 
 ## The exotic corner
 
-Three modules are distinctly Yon. `MerkleTree` builds content-addressed Merkle
-trees. `VoyagerList`, above, is a Golay-sealed list, error-correcting
-storage, à la Voyager probe (`corrupt_at` exists precisely so you can watch
-it heal). And `Magma` (chapter 6) turns a law-verified place
-into a runnable algebraic structure: closure, reachability with certificates,
-and normal forms.
+Two modules wired in the compiler are distinctly Yon. `MerkleTree` builds
+content-addressed Merkle trees. `VoyagerList`, above, is a Golay-sealed list,
+error-correcting storage, à la Voyager probe (`corrupt_at` exists precisely so
+you can watch it heal).
+
+Two places of the prelude, written in Yon, keep them company. `Generated` holds
+an operation and its generators: it gives the closure, and decides commutativity
+and associativity over the whole closure, assuming no law. Past 512 elements a
+closure is a `DomainError`. `Land` then asks whether a target is the composition
+of generators, each used at most once, and answers with the generators used.
 
 ## The prelude: the primitives are places, written in Yon
 
-The modules above are wired in the compiler. The **prelude** is the other
-half, and it is not wired at all: it is Yon source that rides in front of
+`MerkleTree` and `VoyagerList` are wired in the compiler. The **prelude** is the
+other half, and it is not wired at all: it is Yon source that rides in front of
 every compilation, and it declares the primitives as what they are — places.
 
 ```

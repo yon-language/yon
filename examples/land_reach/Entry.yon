@@ -1,19 +1,20 @@
 place Entry {
-/* Land — the reachability view of a Magma. Generators {3, 5, 7} under (Z, +).
+/* Land — the reachability view of a Generated. Generators {3, 5, 7} under (Z, +).
  * Reachable by composing disjoint generators: 3, 5, 7, 8, 10, 12, 15.
  *   reach(8) = true  (3 + 5)
  *   reach(9) = false (no disjoint subset sums to 9)
- *   witness(8) = bitmask of the generators that reach 8 = {gen0=3, gen1=5}
- *              = 0b011 = 3
- * return (reach8 ? 100 : 0) + (reach9 ? 0 : 10) + witness8 = 100 + 10 + 3 = 113. */
+ *   witness(8) = the generators that reach 8 = {3, 5}; the least of them is 3
+ * return (reach8 ? 100 : 0) + (reach9 ? 0 : 10) + least = 100 + 10 + 3 = 113. */
+fun plus(a: Number, b: Number): Number { return a + b }
+fun least(a: Number, b: Number): Number { return if a < b then a else b }
 fun main(): Number {
-  m0 := Magma.empty(0)
-  m1 := Magma.gen(m0, 3)
-  m2 := Magma.gen(m1, 5)
-  m3 := Magma.gen(m2, 7)
-  reach8 := Land.reach(m3, 8)
-  reach9 := Land.reach(m3, 9)
-  w8 := Land.witness(m3, 8)
+  m := Generated.gen(Generated.gen(Generated.gen(Generated.generated_by(plus, HashSet.empty), 3), 5), 7)
+  reach8 := Land.reach(m, 8)
+  reach9 := Land.reach(m, 9)
+  w8 := match Land.witness(m, 8) {
+    Absent => 0,
+    Found as w => List.fold_left(w, 1000, least)
+  }
   return (if reach8 then 100 else 0) + (if reach9 then 0 else 10) + w8
 }
 }

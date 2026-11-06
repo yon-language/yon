@@ -1,0 +1,75 @@
+/* Land — the reachability view of a Generated<V>: is a target the composition of
+ * generators, each used at most once?
+ *
+ * A state is a value and the generators it has used. Two states compose only if
+ * they used disjoint generators, in either order and with any grouping: the
+ * composition is by pairs, so it holds with no law of the operation, and 10 - (5 - 2)
+ * reaches 7. The generators are finite and each is used once, so the states are
+ * finite and the search ends on any operation. */
+place Composed<V> {
+  value V
+  used HashSet<V>
+}
+
+place Land {
+  internal fun state<V>(x: V, used: HashSet<V>): Composed<V> {
+    return .-> Composed { value x used used }
+  }
+  internal fun value<V>(s: Composed<V>): V { return s.value }
+  internal fun used<V>(s: Composed<V>): HashSet<V> { return s.used }
+
+  internal fun disjoint<V>(a: HashSet<V>, b: HashSet<V>): Boolean {
+    return HashSet.size(HashSet.intersect(a, b)) == 0
+  }
+
+  /* the generators that compose to the target, if some do */
+  fun witness<V>(m: Generated<V>, target: V): Lookup<List<V>> {
+    f := m.op
+    goal := HashSet.add(HashSet.empty, target)
+    mut seen := HashSet.empty
+    mut all := List.empty
+    mut fresh := List.empty
+    mut found := Lookup.Absent
+    mut searching := true
+    for every g in HashSet.to_stream(m.gens) {
+      s := Land.state(g, HashSet.add(HashSet.empty, g))
+      seen <- HashSet.add(seen, s)
+      all <- (s, all) ↪ Cons
+      fresh <- (s, fresh) ↪ Cons
+    }
+    mut next := List.empty
+    while searching and not List.is_empty(fresh) do {
+      for every s in fresh {
+        when searching and HashSet.contains(goal, Land.value(s)) {
+          found <- HashSet.to_stream(Land.used(s)) ↪ Found
+          searching <- false
+        }
+      }
+      known := all
+      next <- List.empty
+      for every a in known {
+        for every b in fresh {
+          when Land.disjoint(Land.used(a), Land.used(b)) {
+            used := HashSet.union(Land.used(a), Land.used(b))
+            x := Land.value(a)
+            y := Land.value(b)
+            for every v in List.cons(f(x, y), List.cons(f(y, x), List.empty)) {
+              c := Land.state(v, used)
+              when not HashSet.contains(seen, c) {
+                seen <- HashSet.add(seen, c)
+                all <- (c, all) ↪ Cons
+                next <- (c, next) ↪ Cons
+              }
+            }
+          }
+        }
+      }
+      fresh <- next
+    }
+    return found
+  }
+
+  fun reach<V>(m: Generated<V>, target: V): Boolean {
+    return match Land.witness(m, target) { Absent => false, Found as w => true }
+  }
+}

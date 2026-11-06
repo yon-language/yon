@@ -1,0 +1,125 @@
+/* Generated<V> — a presentation: an operation V x V -> V and the generators it
+ * starts from. Nothing here presumes a law of the operation. The closure is the
+ * least set that holds the generators and is closed under the operation, reached
+ * by a semi-naive fixed point that composes every ordered pair; commutativity and
+ * associativity are decided over the whole closure, since what holds on the
+ * generators alone says nothing of it.
+ *
+ * The closure may be infinite. Past `closure_limit` elements it is refused with
+ * a DomainError that names the limit, never cut off.
+ *
+ * Markers: [T] total · [E] partial, DomainError past the limit */
+place Generated<V> {
+  op (V, V) -> V
+  gens HashSet<V>
+
+  /* ─── The presentation ───────────────────────────────────── [T] ─── */
+
+  fun generated_by<V>(op: (V, V) -> V, gens: HashSet<V>): Generated<V> {
+    return .-> Generated { op op gens gens }
+  }
+  fun gen<V>(m: Generated<V>, x: V): Generated<V> {
+    return .-> Generated { op m.op gens HashSet.add(m.gens, x) }
+  }
+
+  /* the most elements a closure may hold: the exhaustive associativity is cubic in
+     them, and past this size it takes more than a minute */
+  fun closure_limit: Number { return 512 }
+
+  internal fun same<V>(a: V, b: V): Boolean {
+    return HashSet.contains(HashSet.add(HashSet.empty, a), b)
+  }
+
+  /* a generator neutral on both sides for every generator; of the closure it
+     says nothing without associativity */
+  fun identity<V>(m: Generated<V>): Lookup<V> {
+    f := m.op
+    gs := HashSet.to_stream(m.gens)
+    mut found := Lookup.Absent
+    for every e in gs {
+      mut neutral := true
+      for every a in gs {
+        neutral <- neutral and Generated.same(f(e, a), a) and Generated.same(f(a, e), a)
+      }
+      when neutral { found <- e ↪ Found }
+    }
+    return found
+  }
+
+  /* ─── The closure ────────────────────────────────────────── [E] ─── */
+
+  internal fun too_large: DomainError {
+    return .-> DomainError {
+      message String.concat("the closure holds more than ",
+                            String.concat(String.from_int(Generated.closure_limit), " elements"))
+    }
+  }
+
+  /* The elements of a closure that is still growing: `seen` holds them all,
+     `all` lists them, `fresh` lists those of the last round. A pair is new
+     when one of its sides is fresh. */
+  fun closure<V>(m: Generated<V>) on error DomainError: HashSet<V> {
+    f := m.op
+    mut seen := m.gens
+    mut all := HashSet.to_stream(m.gens)
+    mut fresh := all
+    mut next := List.empty
+    while not List.is_empty(fresh) and HashSet.size(seen) <= Generated.closure_limit do {
+      known := all
+      next <- List.empty
+      for every a in known {
+        for every b in fresh {
+          for every c in List.cons(f(a, b), List.cons(f(b, a), List.empty)) {
+            when not HashSet.contains(seen, c) {
+              seen <- HashSet.add(seen, c)
+              all <- (c, all) ↪ Cons
+              next <- (c, next) ↪ Cons
+            }
+          }
+        }
+      }
+      fresh <- next
+    }
+    /* read here: a cell a loop captured does not reach the arm of the return */
+    held := seen
+    return if HashSet.size(held) > Generated.closure_limit then Generated.too_large else held
+  }
+
+  /* ─── The laws, decided on the closure ───────────────────── [E] ─── */
+
+  internal fun commutes<V>(f: (V, V) -> V, xs: List<V>): Boolean {
+    mut holds := true
+    for every a in xs {
+      for every b in xs {
+        holds <- holds and Generated.same(f(a, b), f(b, a))
+      }
+    }
+    return holds
+  }
+
+  internal fun associates<V>(f: (V, V) -> V, xs: List<V>): Boolean {
+    mut holds := true
+    for every a in xs {
+      for every b in xs {
+        for every c in xs {
+          holds <- holds and Generated.same(f(f(a, b), c), f(a, f(b, c)))
+        }
+      }
+    }
+    return holds
+  }
+
+  fun is_commutative<V>(m: Generated<V>) on error DomainError: Boolean {
+    return match Generated.closure(m) {
+      Value as c => Generated.commutes(m.op, HashSet.to_stream(c)),
+      DomainError as d => d
+    }
+  }
+
+  fun is_associative<V>(m: Generated<V>) on error DomainError: Boolean {
+    return match Generated.closure(m) {
+      Value as c => Generated.associates(m.op, HashSet.to_stream(c)),
+      DomainError as d => d
+    }
+  }
+}
