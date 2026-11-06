@@ -33,7 +33,7 @@ def _with_proofs(tmp_path, body):
     proj = tmp_path / "meta"
     shutil.copytree(META, proj)
     (proj / "kernel" / "Proofs.yon").write_text(
-        "place Proofs {\n  statement Term\n" + body + "}\n")
+        "place Proofs {\n" + body + "}\n")
     return proj
 
 
@@ -158,6 +158,12 @@ def test_a_normal_project_keeps_what_a_proof_refuses(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
 
 
+def _line_of(text, marker):
+    """La riga (da 1) della prima occorrenza di marker in text."""
+    assert marker in text, marker
+    return text[:text.index(marker)].count("\n") + 1
+
+
 def _broken(tmp_path, file, old, new):
     proj = tmp_path / "meta"
     shutil.copytree(META, proj)
@@ -168,7 +174,7 @@ def _broken(tmp_path, file, old, new):
     r = _compile(proj, tmp_path)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out, out
-    return out
+    return out, proj
 
 
 def test_termination_is_refused_with_a_wrong_gap(tmp_path):
@@ -233,11 +239,13 @@ FORGET = "  fun forget(a: Term, b: Term, p: a = b): Number { return 0 }\n"
 
 
 def _proof_rejected(tmp_path, theorem, *words):
-    r = _compile(_with_theorem(tmp_path, theorem), tmp_path)
+    proj = _with_theorem(tmp_path, theorem)
+    r = _compile(proj, tmp_path)
     out = r.stdout + r.stderr
     assert r.returncode != 0, out
     for w in words:
         assert w in out, out
+    return out, proj
 
 
 def _nested_match(leaf):
@@ -356,3 +364,91 @@ def test_a_binder_that_hides_a_name_leaves_a_true_statement_true(tmp_path):
         "  fun kept(w: W, u: Term, q: (w ↦ W.inner) = u): (w ↦ W.inner) = u {\n"
         "    return match w { only as u => q }\n  }\n"), tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _empty(tmp_path, funs):
+    proj = tmp_path / "empty"
+    proj.mkdir()
+    (proj / "yon.toml").write_text('[package]\nname = "empty"\nkind = "proof"\n\n'
+                                    '[world.W]\nobjects = ["Empty"]\nspaces = ["w"]\n\n'
+                                    '[runtime]\nbackend = "memory"\n')
+    (proj / "w").mkdir()
+    (proj / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
+    (proj / "w" / "Empty.yon").write_text("place Empty { this > nessuno Empty }\n")
+    (proj / "Entry.yon").write_text("place Entry {\n" + funs + "  fun main: Number { return 0 }\n}\n")
+    return subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
+                          capture_output=True, text=True, timeout=300), proj
+
+
+def test_exfalso_is_elimination_by_structural_recursion(tmp_path):
+    # Empty has no base case: elimination recurses on the subterm carried by nessuno
+    r, _ = _empty(tmp_path,
+                  "  fun exfalso<T>(e: Empty): T { return match e { nessuno as x => x ↦ exfalso } }\n")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_exfalso_must_recurse_on_the_subterm(tmp_path):
+    # a version that recurses on e instead of the subterm x does not terminate
+    r, proj = _empty(tmp_path,
+                     "  fun exfalso<T>(e: Empty): T { return match e { nessuno as x => e ↦ exfalso } }\n")
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "E2010" in out and "termination" in out and "exfalso" in out, out
+    # fn_loc usa $startpos di una regola che comincia con boption(INTERNAL): riporta la riga del
+    # token precedente la keyword, qui la `{` di `place Entry {`, una riga sopra `fun exfalso`.
+    # Il `line - 1` vale perche' il test scrive quel testo.
+    line = _line_of((proj / "Entry.yon").read_text(), "fun exfalso")
+    assert f"[line {line - 1}," in out, out
+
+
+def test_ite_injective_u_does_not_give_the_third_component(tmp_path):
+    # the second component is u = x, not u = y: the equality of the other branch is refused
+    out, proj = _broken(tmp_path, "Proofs.yon", ": u = x {", ": u = y {")
+    assert "type mismatch" in out, out
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "return (then_of, p) ↦ ap")
+    assert f"[line {line}," in out, out
+
+
+def test_ite_injective_v_does_not_give_the_second_component(tmp_path):
+    # the third component is v = y, not v = x
+    out, proj = _broken(tmp_path, "Proofs.yon", ": v = y {", ": v = x {")
+    assert "type mismatch" in out, out
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "return (else_of, p) ↦ ap")
+    assert f"[line {line}," in out, out
+
+
+def test_ite_is_not_no_is_not_ite_is_not_yes(tmp_path):
+    # an ite is not no; the same proof under "= yes" is refused: the body calls absurd on
+    # false = false, and only the body can name absurd
+    out, proj = _broken(tmp_path, "Proofs.yon", "↪ ite = Term.no): Empty", "↪ ite = Term.yes): Empty")
+    assert "Proofs__absurd" in out, out
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "return absurd(inv((is_no, p) ↦ ap))")
+    assert f"[line {line}," in out, out
+
+
+def test_src_not_yes_does_not_give_src_not_no(tmp_path):
+    # the source of a step is never yes; claiming it is never no is refused in the body,
+    # which passes the path to ite_is_not_yes
+    out, proj = _broken(tmp_path, "Proofs.yon", "Step.src) = Term.yes): Empty", "Step.src) = Term.no): Empty")
+    assert "Proofs__ite_is_not_yes" in out, out
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "ite_is_not_yes(yes, u, v, p)")
+    assert f"[line {line}," in out, out
+
+
+def test_src_not_no_does_not_give_src_not_yes(tmp_path):
+    # the source of a step is never no; claiming it is never yes is refused in the body,
+    # which passes the path to ite_is_not_no
+    out, proj = _broken(tmp_path, "Proofs.yon", "Step.src) = Term.no): Empty", "Step.src) = Term.yes): Empty")
+    assert "Proofs__ite_is_not_no" in out, out
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "ite_is_not_no(yes, u, v, p)")
+    assert f"[line {line}," in out, out
+
+
+def test_peak_of_refuses_a_path_between_different_terms(tmp_path):
+    # peak_of asks q to link the two sources: a q from the source of d1 to the target of d2
+    # is a different equality, and the call is refused before any peak is built
+    out, proj = _proof_rejected(tmp_path,
+        "  fun bad(d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.tgt)): Peak {\n"
+        "    return peak_of(d1, d2, q)\n  }\n",
+        "E2001", "Proofs__peak_of", "parameter q expects", "Step__src(d2)")
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "return peak_of(d1, d2, q)")
+    assert f"[line {line}," in out, out

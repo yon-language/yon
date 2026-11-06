@@ -1,10 +1,11 @@
-/* Peak — two steps out of one term: every overlap of the rules, the critical pairs among them. Each
- * peak has its valley: l1 then l2 from the end of left, r1 then r2 from the end of right. */
+/* Peak — two steps out of one term: the overlaps of the rules, the critical pairs among them, and
+ * diag for the two equal steps. Each peak has its valley: l1 then l2 from the end of left,
+ * r1 then r2 from the end of right. */
 place Peak {
   this > rootT Term :U rootF Term :U trueU Step Term :U trueV Term Step :U falseU Step Term :U falseV Term Step
       :U sameC Step Term :U sameU Term Step :U sameV Term Step
       :U cU Step Step Term :U cV Step Term Step :U uV Term Step Step
-      :U inCp Peak Term Term :U inUp Term Peak Term :U inVp Term Term Peak :U swap Peak
+      :U inCp Peak Term Term :U inUp Term Peak Term :U inVp Term Term Peak :U diag Step :U swap Peak
 
   fun left(p: Peak): Step {
     return match p {
@@ -23,6 +24,7 @@ place Peak {
       inCp as (p, u, v) => (left(p), u, v) ↪ inC,
       inUp as (c, p, v) => (c, left(p), v) ↪ inU,
       inVp as (c, u, p) => (c, u, left(p)) ↪ inV,
+      diag as d => d,
       swap as p => right(p)
     }
   }
@@ -44,6 +46,7 @@ place Peak {
       inCp as (p, u, v) => (right(p), u, v) ↪ inC,
       inUp as (c, p, v) => (c, right(p), v) ↪ inU,
       inVp as (c, u, p) => (c, u, right(p)) ↪ inV,
+      diag as d => d,
       swap as p => left(p)
     }
   }
@@ -65,6 +68,7 @@ place Peak {
       inCp as (p, u, v) => (l1(p), u, v) ↦ Move.in_c,
       inUp as (c, p, v) => (c, l1(p), v) ↦ Move.in_u,
       inVp as (c, u, p) => (c, u, l1(p)) ↦ Move.in_v,
+      diag as d => d ↦ Step.tgt ↪ still,
       swap as p => r1(p)
     }
   }
@@ -86,6 +90,7 @@ place Peak {
       inCp as (p, u, v) => (l2(p), u, v) ↦ Move.in_c,
       inUp as (c, p, v) => (c, l2(p), v) ↦ Move.in_u,
       inVp as (c, u, p) => (c, u, l2(p)) ↦ Move.in_v,
+      diag as d => d ↦ Step.tgt ↪ still,
       swap as p => r2(p)
     }
   }
@@ -107,6 +112,7 @@ place Peak {
       inCp as (p, u, v) => (r1(p), u, v) ↦ Move.in_c,
       inUp as (c, p, v) => (c, r1(p), v) ↦ Move.in_u,
       inVp as (c, u, p) => (c, u, r1(p)) ↦ Move.in_v,
+      diag as d => d ↦ Step.tgt ↪ still,
       swap as p => l1(p)
     }
   }
@@ -128,6 +134,7 @@ place Peak {
       inCp as (p, u, v) => (r2(p), u, v) ↦ Move.in_c,
       inUp as (c, p, v) => (c, r2(p), v) ↦ Move.in_u,
       inVp as (c, u, p) => (c, u, r2(p)) ↦ Move.in_v,
+      diag as d => d ↦ Step.tgt ↪ still,
       swap as p => l2(p)
     }
   }

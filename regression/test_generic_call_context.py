@@ -40,44 +40,53 @@ def _refused(r, *words):
         assert w in out, out
 
 
+def _line_of(text, marker):
+    """La riga (da 1) della prima occorrenza di marker in text."""
+    assert marker in text, marker
+    return text[:text.index(marker)].count("\n") + 1
+
+
 def _exits(tmp_path, r, code):
     assert r.returncode == 0, r.stdout + r.stderr
     assert subprocess.run([str(tmp_path / "exe")], capture_output=True, timeout=60).returncode == code
-
-
-EXFALSO = "  fun exfalso<T>(e: Empty): T { return match e { nessuno as x => x ↦ exfalso } }\n"
 
 
 def _proof(tmp_path, theorems):
     proj = tmp_path / "meta"
     shutil.copytree(META, proj)
     proofs = proj / "kernel" / "Proofs.yon"
-    proofs.write_text(proofs.read_text().replace("place Proofs {\n", "place Proofs {\n" + EXFALSO + theorems, 1))
-    return _compile(proj, tmp_path)
+    proofs.write_text(proofs.read_text().replace("place Proofs {\n", "place Proofs {\n" + theorems, 1))
+    return _compile(proj, tmp_path), proj
 
 
 def test_exfalso_takes_the_type_the_context_expects(tmp_path):
-    r = _proof(tmp_path, "  fun some_term(e: Empty): Term { return exfalso(e) }\n")
+    r, _ = _proof(tmp_path, "  fun some_term(e: Empty): Term { return exfalso(e) }\n")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_one_result_does_not_have_two_types(tmp_path):
-    r = _proof(tmp_path, "  fun as_term(t: Term): Number { return 0 }\n"
-                         "  fun as_nat(n: Nat): Number { return 0 }\n"
-                         "  fun twice(e: Empty): Number {\n    x := exfalso(e)\n"
-                         "    return as_term(x) + as_nat(x)\n  }\n")
+    r, proj = _proof(tmp_path, "  fun as_term(t: Term): Number { return 0 }\n"
+                               "  fun as_nat(n: Nat): Number { return 0 }\n"
+                               "  fun twice(e: Empty): Number {\n    x := exfalso(e)\n"
+                               "    return as_term(x) + as_nat(x)\n  }\n")
     _refused(r, "parameter")
     out = r.stdout + r.stderr
     assert "expects Nat, got Term" in out or "expects Term, got Nat" in out, out
+    assert "as_nat" in out or "as_term" in out, out
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "return as_term(x) + as_nat(x)")
+    assert f"[line {line}," in out, out
 
 
 def test_a_call_nothing_fixes_is_ambiguous(tmp_path):
-    r = _proof(tmp_path, "  fun loose(e: Empty): Number {\n    x := exfalso(e)\n    return 0\n  }\n")
+    r, proj = _proof(tmp_path, "  fun loose(e: Empty): Number {\n    x := exfalso(e)\n    return 0\n  }\n")
     _refused(r, "ambiguous call of", "exfalso", "type parameter T", "annotate")
+    out = r.stdout + r.stderr
+    line = _line_of((proj / "kernel" / "Proofs.yon").read_text(), "x := exfalso(e)")
+    assert f"[line {line}," in out, out
 
 
 def test_the_expected_type_of_a_later_use_fixes_the_call(tmp_path):
-    r = _proof(tmp_path, "  fun later(e: Empty): Term {\n    x := exfalso(e)\n    return x\n  }\n")
+    r, _ = _proof(tmp_path, "  fun later(e: Empty): Term {\n    x := exfalso(e)\n    return x\n  }\n")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
