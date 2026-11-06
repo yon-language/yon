@@ -2701,14 +2701,22 @@ and v1_targets_stmt acc st =
       let acc = List.fold_left (fun a (_, b2) -> v1_targets_stmts a b2) acc elifs in
       (match oth with None -> acc | Some o -> v1_targets_stmts acc o)
   | S.SIter (_, b, _) | S.SWhile (_, b, _) | S.SScope (_, b, _, _)
-  | S.SProduce (b, _) | S.SForces (_, _, b, _)
+  | S.SForces (_, _, b, _)
   | S.SForever (b, _) -> v1_targets_stmts acc b
+  (* a producer is a body of its own: what it writes are its own cells *)
+  | S.SProduce _ -> acc
   | S.SForEvery (_, _, _, b, _) | S.SInSequence (_, _, b, _) ->
       v1_targets_stmts acc b
   | S.SRepeat (_, b, oth, _) ->
       let acc = v1_targets_stmts acc b in
       (match oth with None -> acc | Some o -> v1_targets_stmts acc o)
   | _ -> acc
+
+(* The names a pattern of a match binds. *)
+let v1_pat_names : S.match_pat -> string list = function
+  | S.PatVars vs -> vs
+  | S.PatWitness w -> [w]
+  | S.PatFields fs -> List.map snd fs
 
 let rec v1_cell_expr cells (e : S.expr) : S.expr =
   let r = v1_cell_expr cells in
@@ -2720,8 +2728,11 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
   | S.EApp (f, args, loc) -> S.EApp (r f, List.map r args, loc)
   | S.EHITElim (c, branches, x, loc) ->
-      S.EHITElim
-        (r c, List.map (fun (n, vs, e) -> (n, vs, r e)) branches, r x, loc)
+      (* a binder of the branch hides the cell it shadows *)
+      let branch (n, vs, e) =
+        let inner = List.fold_left (fun a y -> V1SS.remove y a) cells (v1_pat_names vs) in
+        (n, vs, v1_cell_expr inner e) in
+      S.EHITElim (r c, List.map branch branches, r x, loc)
   | S.EPathApp (p, d, loc) -> S.EPathApp (r p, d, loc)
   | S.EPathAbs (i, e, loc) -> S.EPathAbs (i, r e, loc)
   | S.EHITConstr (ctor, args, loc) -> S.EHITConstr (ctor, List.map r args, loc)
@@ -2759,10 +2770,10 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   | S.EViewLam (ps, b, pl, loc) ->
       let inner = List.fold_left (fun a (n, _) -> V1SS.remove n a) cells ps in
       S.EViewLam (ps, v1_cell_expr inner b, pl, loc)
-  | S.EProduce (b, loc) -> S.EProduce (v1_cell_stmts cells b, loc)
+  | S.EProduce (b, loc) -> S.EProduce (v1_cell_block cells b, loc)
   | S.ESpawn (count, b, loc) ->
       S.ESpawn ((match count with Some e -> Some (r e) | None -> None),
-                v1_cell_stmts cells b, loc)
+                v1_cell_block cells b, loc)
   | S.EWireTo _ -> e
   | S.EComposeWith (a, b, loc) -> S.EComposeWith (r a, r b, loc)
   | S.EQuote (c, a, loc) -> S.EQuote (c, r a, loc)
@@ -2776,12 +2787,31 @@ and v1_cell_cond cells (c : S.condition) : S.condition =
   | S.CondAnd (a, b) -> S.CondAnd (v1_cell_cond cells a, v1_cell_cond cells b)
   | S.CondOr (a, b) -> S.CondOr (v1_cell_cond cells a, v1_cell_cond cells b)
 
-and v1_cell_stmts cells ss = List.map (v1_cell_stmt cells) ss
-and v1_cell_stmt cells st =
+(* The body of a producer is a body of its own: its loops are lowered here, and the
+   cells it writes are its own (the type checker refuses a store into any other).
+   They are [born]: a name becomes a cell at its declaration and stops being one at
+   the end of that block, so a same-named value outside the producer stays a value.
+   Inside the body the names count: a value named like a cell of a nested block is
+   promoted too. A producer it holds has its own: v1_targets_stmt stops there, in the
+   statement form too. *)
+and v1_cell_block cells b =
+  let lowered = List.concat_map v1_lower_stmt b in
+  v1_cell_stmts (v1_targets_stmts V1SS.empty lowered) cells lowered
+
+and v1_cell_stmts born cells ss =
+  let _, rev =
+    List.fold_left (fun (cells, acc) st ->
+      let st' = v1_cell_stmt born cells st in
+      let cells = match st with
+        | S.SLet (x, _, _) when V1SS.mem x born -> V1SS.add x cells
+        | _ -> cells in
+      (cells, st' :: acc)) (cells, []) ss in
+  List.rev rev
+and v1_cell_stmt born cells st =
   let re = v1_cell_expr cells in
-  let rb = v1_cell_stmts cells in
+  let rb = v1_cell_stmts born cells in
   match st with
-  | S.SLet (x, e, loc) when V1SS.mem x cells ->
+  | S.SLet (x, e, loc) when V1SS.mem x cells || V1SS.mem x born ->
       S.SLet (x, v1_call "__cell_make" [re e], loc)
   | S.SLet (x, e, loc) -> S.SLet (x, re e, loc)
   | S.SAssignBecomes (S.LVar x, e, loc) when V1SS.mem x cells ->
@@ -2804,7 +2834,7 @@ and v1_cell_stmt cells st =
   | S.SIter (n, b, loc) -> S.SIter (re n, rb b, loc)
   | S.SWhile (c, b, loc) -> S.SWhile (re c, rb b, loc)
   | S.SScope (n, b, r, loc) -> S.SScope (n, rb b, re r, loc)
-  | S.SProduce (b, loc) -> S.SProduce (rb b, loc)
+  | S.SProduce (b, loc) -> S.SProduce (v1_cell_block cells b, loc)
   | S.SEmit (e, loc) -> S.SEmit (re e, loc)
   | S.SPromote (e, loc) -> S.SPromote (re e, loc)
   | S.SForces (stg, c, b, loc) -> S.SForces (stg, v1_cell_cond cells c, rb b, loc)
@@ -2820,19 +2850,17 @@ and v1_cell_stmt cells st =
 let v1_lower_body (params : string list) (body : S.stmt list) : S.stmt list =
   let body1 = List.concat_map v1_lower_stmt body in
   let cells = v1_targets_stmts V1SS.empty body1 in
-  if V1SS.is_empty cells then body1
-  else begin
-    let body2 = v1_cell_stmts cells body1 in
-    let prologue =
-      List.filter_map
-        (fun p ->
-           if V1SS.mem p cells then
-             Some (S.SLet (p, v1_call "__cell_make" [S.EVar (p, S.dummy_loc)],
-                           S.dummy_loc))
-           else None)
-        params in
-    prologue @ body2
-  end
+  (* with no cell of its own a body may still hold a producer that has some *)
+  let body2 = v1_cell_stmts V1SS.empty cells body1 in
+  let prologue =
+    List.filter_map
+      (fun p ->
+         if V1SS.mem p cells then
+           Some (S.SLet (p, v1_call "__cell_make" [S.EVar (p, S.dummy_loc)],
+                         S.dummy_loc))
+         else None)
+      params in
+  prologue @ body2
 
 let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
   let params = List.map

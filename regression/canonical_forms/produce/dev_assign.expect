@@ -2,4 +2,4 @@ status: reject_clean
 exit: 1
 match: is not supported inside
 note: |
-  <- (a cell write) inside a produce body is refused: it has no lowering there.
+  <- (a cell write) into a cell declared outside a produce body is refused: a produce is a value.

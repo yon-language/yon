@@ -1,12 +1,10 @@
-// `=` (Space-cell assign) inside a produce/spawn body has no lowering (the cells
-// promotion that turns `be x :=` into a Space cell does not reach these
-// expression-context blocks), so it is rejected cleanly at type-check time (exit 3)
-// instead of crashing emit_mlir with a Fatal error. The fix is
-// compute the value outside the block and bind it with `:=`.
+// A produce is a value, identified by its content: a store into a cell declared
+// outside it would fire when the stream is consumed, so it is rejected at
+// type-check time (exit 3). The cells a produce declares are its own.
 place Entry {
   fun main(): Number {
+    mut i := 0
     s := produce {
-      mut i := 0
       iter 3 do { emit i  i <- i + 1 }
     }
     return 0

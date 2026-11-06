@@ -755,30 +755,52 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
   | (ELit _ | EVar _ | EWireTo _ | EProduce _ | EAll _
     | EPullback _ | EPushout _) -> e
 
-(* Stop-gap (1.1): `=` (Space-cell assign) inside a produce / spawn body desugars to
-   __space_update_here, which has no lowering — the cells promotion that turns `x :=`
-   into a Space cell and rewrites `x = e` into a write does not reach these
-   expression-context blocks, so emit_mlir would crash with a Fatal error. A clean
-   compile-time error rejects it instead.
-   Walks loop / when bodies but not nested produce/spawn (those run their own check). *)
+(* A spawn body runs in forked replicas, and it holds no store at any depth of its
+   blocks: the walk goes through every block a statement holds. A produce is a new
+   boundary, in either form, and a spawn in an expression too: each runs its own
+   check, and what a produce declares it can write. *)
 let rec first_assign_loc (ss : stmt list) : location option =
-  List.fold_left (fun acc s ->
-    match acc with
-    | Some _ -> acc
-    | None ->
-      match s with
-      | SAssignBecomes (_, _, l) -> Some l
-      | SIter (_, b, _) | SWhile (_, b, _) | SForEvery (_, _, _, b, _) -> first_assign_loc b
-      | SWhen (_, b, elifs, oth, _) ->
-          (match first_assign_loc b with
-           | Some _ as r -> r
-           | None ->
-             let r = List.fold_left (fun a (_, b2) ->
-                       match a with Some _ -> a | None -> first_assign_loc b2) None elifs in
-             (match r with
-              | Some _ -> r
-              | None -> (match oth with Some o -> first_assign_loc o | None -> None)))
-      | _ -> None) None ss
+  List.find_map (function
+    | SAssignBecomes (_, _, l) -> Some l
+    | SProduce _ -> None
+    | s -> List.find_map first_assign_loc (sub_stmts s)) ss
+
+(* A produce is a value: a Stream or a Wire, lazy and memoized, identified by its
+   content. A store into a cell declared outside it would make it impure: the effect
+   fires when the stream is consumed, and two streams with the same content would no
+   longer be the same value. It is the runST criterion: what a produce declares it
+   can write, and nothing else, at any depth of its blocks.
+   A name resolves to the declaration it sees where it is written, so a cell of a
+   finished inner block is outside too. A produce held by a statement is a new
+   boundary; one held by an expression of the body runs its own check.
+   This fixes what a store can reach. A match binder and a lambda parameter are bound
+   in an expression, and an expression holds statements only in a produce or a spawn
+   (Surface_ast.sub_exprs), so a store that sees one targets a cell declared after it,
+   in a block nested deeper, and the binder outlives that cell. *)
+let outer_store_loc (body : stmt list) : location option =
+  let rec in_block declared = function
+    | [] -> None
+    | SLet (x, _, _) :: rest -> in_block (x :: declared) rest
+    | SAssignBecomes ((LVar x | LField (x, _)), _, l) :: rest ->
+        if List.mem x declared then in_block declared rest else Some l
+    | SProduce (b, _) :: rest ->
+        (match in_block [] b with
+         | Some _ as r -> r
+         | None -> in_block declared rest)
+    | s :: rest ->
+        let inside = match s with
+          | SForEvery (_, x, _, _, _) | SInSequence (x, _, _, _) -> x :: declared
+          | _ -> declared in
+        (match List.find_map (in_block inside) (sub_stmts s) with
+         | Some _ as r -> r
+         | None -> in_block declared rest) in
+  in_block [] body
+
+let outer_store_msg =
+  "a store into a cell declared outside the block is not supported inside a `produce` \
+   block: a produce is a value, identified by its content, and the store would fire \
+   when the stream is consumed. Declare the cell inside the block, or compute the \
+   value before the block and bind it with `:=`."
 
 (* A function declared `internal` in a place is part of how that place is
    built, not of what it offers: it is reachable from the funs of its own
@@ -1071,13 +1093,31 @@ let certify_dependent_cone (hname : string)
      end, so a cell assigned after the `return` that reads it is still seen;
    - the walks below match every expression and statement form with no
      wildcard: a new form fails to compile here until it is classified;
-   - binders inside a body (match patterns, `for every`) are not subtracted:
-     that can only make more names count, never fewer.
+   - the walks of a value (mob_mentions, mob_carries) do not subtract the
+     binders inside it (match patterns, `for every`): that can only make more
+     names count, never fewer. What such a binder holds comes from its scrutinee
+     or its collection, which the same walk visits.
    The escape sites are: `return` and the implicit tail (leaving the call), a
    store into a cell (`c <- e`), and the wire (`Wire.send*`, a call to a
    function imported from another Space). At a store or on the wire the
    function's own parameters of non-mobile type count too, since a closure
-   that came in from a caller carries the caller's cells. *)
+   that came in from a caller carries the caller's cells.
+
+   The activation is the outermost block, and the same judgment holds at every
+   block: a cell lives as long as the block that declares it, so a store is a
+   transport into the world of its target, and it is defined only for what
+   carries no cell of a block nested deeper than the target (Turbak's letregion,
+   with a region for each block). This part knows the scopes of the statements:
+   `x := e` and the binder of a loop are declarations, and at a store a name
+   stands for the declaration it resolves to there, so a shadowing declaration
+   or a same-named cell of a sibling block is another cell. The binders of a
+   match and the parameters of a lambda are not declarations here: a store they
+   are visible at targets a cell they outlive (outer_store_loc says why). Inside
+   the value of a store the walks do not subtract the binders of a match, as
+   above, and a binder that shadows a cell counts as the cell.
+   An element of a stream outlives every cell: the stream is a value, and it
+   can be consumed after any block is gone. *)
+(* the cells of the body, and those written in the producers it holds, by name *)
 let mob_cells : Desugar.V1SS.t ref = ref Desugar.V1SS.empty
 let mob_params : string list ref = ref []
 (* every binding: (name, its type is mobile, the value bound) *)
@@ -1087,12 +1127,153 @@ let mob_sites : (bool * bool * expr * location) list ref = ref []
 (* every write into a named cell: (cell, the type is mobile, value, loc) *)
 let mob_stores : (string * bool * expr * location) list ref = ref []
 
+(* A declaration, and the depth of the block that holds it. *)
+type mob_decl = { md_id : int; md_depth : int; md_cell : bool }
+type mob_scope_names = (string * mob_decl) list
+let mob_depth = ref 0
+let mob_scope : mob_scope_names ref = ref []
+let mob_decls = ref 0
+(* every binding of a declaration, with the names visible where it is written *)
+let mob_scoped_binds : (mob_decl * bool * expr * mob_scope_names) list ref = ref []
+(* every assignment: (target, depth of its block, the type is mobile, value,
+   the names visible, loc) *)
+let mob_assigns : (string * int * bool * expr * mob_scope_names * location) list ref = ref []
+(* every element of a stream: (the type is mobile, value, the names visible, loc) *)
+let mob_emits : (bool * expr * mob_scope_names * location) list ref = ref []
+
+(* The cells written in the producers that [ss] holds, in either form. *)
+let rec mob_producer_cells acc (ss : stmt list) : Desugar.V1SS.t =
+  List.fold_left (fun acc s ->
+    let acc = List.fold_left mob_producer_cells_expr acc (stmt_exprs s) in
+    match s with
+    | SProduce (b, _) -> mob_producer_cells (Desugar.v1_targets_stmts acc b) b
+    | _ -> List.fold_left mob_producer_cells acc (sub_stmts s)) acc ss
+and mob_producer_cells_expr acc (e : expr) : Desugar.V1SS.t =
+  let es, blocks = sub_exprs e in
+  let acc = List.fold_left mob_producer_cells_expr acc es in
+  List.fold_left (fun acc b ->
+    mob_producer_cells (Desugar.v1_targets_stmts acc b) b) acc blocks
+
 let mob_lam (e : expr) : ((string * ty) list * expr) option =
   match e with
   | ELam (ps, b, _) | EMoveLam (ps, b, _, _, _) | EMorphLam (ps, b, _, _, _)
   | EFunctorLam (ps, b, _, _, _, _) | EReductionLam (ps, b, _, _)
   | EViewLam (ps, b, _, _) -> Some (ps, b)
   | _ -> None
+
+(* Only `mut x := e` declares a cell. A store into anything else (a parameter, a value)
+   is refused by its own rule, and it makes no cell of its target. *)
+let mob_mut_site (l : location) : bool =
+  Hashtbl.mem Surface_ast.mut_sites (l.file, l.start_line, l.start_col)
+
+(* A declaration seen by the walk below: what it is, how many produces hold it, and
+   whether it is a cell that is stored into. *)
+type mob_origin =
+  | Mob_declared of location            (* where it is written in the source *)
+  | Mob_param of int                    (* a parameter of the function, by position *)
+  | Mob_lam_param of int * ty           (* a parameter of a lambda, by position *)
+type mob_held = { mh_origin : mob_origin; mh_depth : int; mutable mh_written : bool }
+
+(* A call in the body: its callee (none for a function value, known only when it
+   runs), its arguments, the names visible, and where it is. *)
+type mob_call = {
+  mc_callee : string option;
+  mc_args : expr list;
+  mc_names : (string * mob_held) list;
+  mc_loc : location;
+}
+
+(* What the walk of a body sees: the names read inside a produce and declared outside
+   it, each resolved to its declaration; the calls; the names read as values, which
+   may name a function. A lambda parameter and a match binder hide what they
+   shadow. *)
+let mob_walk_body (params : string list) (body : stmt list)
+    : (string * mob_held * location) list * mob_call list * string list =
+  let reads = ref [] and calls = ref [] and values = ref [] in
+  let held origin depth = { mh_origin = origin; mh_depth = depth; mh_written = false } in
+  let hide xs names = List.filter (fun (y, _) -> not (List.mem y xs)) names in
+  let read depth names x loc =
+    match List.assoc_opt x names with
+    | Some h when h.mh_depth < depth -> reads := (x, h, loc) :: !reads
+    | _ -> () in
+  let call names callee args loc =
+    calls := { mc_callee = callee; mc_args = args; mc_names = names; mc_loc = loc } :: !calls in
+  let named names n = if List.mem_assoc n names then None else Some n in
+  let rec block depth names ss = List.fold_left (stmt depth) names ss
+  and stmt depth names s =
+    match s with
+    | SLet (x, e, l) -> expr depth names e; (x, held (Mob_declared l) depth) :: names
+    | SProduce (b, _) -> ignore (block (depth + 1) names b); names
+    | SForEvery (_, x, e, b, l) | SInSequence (x, e, b, l) ->
+        expr depth names e;
+        ignore (block depth ((x, held (Mob_declared l) depth) :: names) b);
+        names
+    | _ ->
+        (match s with
+         | SAssignBecomes (LVar x, _, _) ->
+             (match List.assoc_opt x names with
+              | Some ({ mh_origin = Mob_declared l; _ } as h) when mob_mut_site l ->
+                  h.mh_written <- true
+              | _ -> ())
+         | SCall (n, args, l) ->
+             read depth names n l;
+             call names (named names n) args l
+         | _ -> ());
+        List.iter (expr depth names) (stmt_exprs s);
+        List.iter (fun b -> ignore (block depth names b)) (sub_stmts s);
+        names
+  and expr depth names e =
+    match e, mob_lam e with
+    | _, Some (ps, b) ->
+        let own = List.mapi (fun i (p, t) -> (p, held (Mob_lam_param (i, t)) depth)) ps in
+        expr depth (own @ hide (List.map fst ps) names) b
+    | EVar (x, l), _ ->
+        read depth names x l;
+        if not (List.mem_assoc x names) then values := x :: !values
+    | ECall (n, args, l), _ ->
+        read depth names n l;
+        call names (named names n) args l;
+        List.iter (expr depth names) args
+    | EApp (f, args, l), _ ->
+        expr depth names f;
+        call names (match f with EVar (x, _) -> named names x | _ -> None) args l;
+        List.iter (expr depth names) args
+    | EProduce (b, _), _ -> ignore (block (depth + 1) names b)
+    | EHITElim (c, branches, x, _), _ ->
+        expr depth names c;
+        expr depth names x;
+        List.iter (fun (_, p, b) -> expr depth (hide (Desugar.v1_pat_names p) names) b) branches
+    | _ ->
+        let es, blocks = sub_exprs e in
+        List.iter (expr depth names) es;
+        List.iter (fun b -> ignore (block depth names b)) blocks in
+  ignore (block 0 (List.mapi (fun i p -> (p, held (Mob_param i) 0)) params) body);
+  (List.rev !reads, List.rev !calls, !values)
+
+let mob_outer_reads : (string * mob_held * location) list ref = ref []
+let mob_calls : mob_call list ref = ref []
+let mob_value_names : string list ref = ref []
+let mob_fn_params : string list ref = ref []
+(* the declaration the checker made for the source position of a binding *)
+let mob_decl_at : (location, mob_decl) Hashtbl.t = Hashtbl.create 16
+
+(* A parameter is an arrow into the body of a function, and what it reads inside a
+   produce depends on what the caller passes: the type does not say what a closure
+   captures. So the verdict on a closure over a cell that enters through a parameter
+   is taken on the whole program, once every body has been seen. Each body leaves its
+   facts here; [Mob_value] stands for a function known only as a value, whichever it
+   is: a lambda, or a function named where it is not called. *)
+type mob_target = Mob_fun of string | Mob_value
+type mob_fact =
+  | Mob_reads of mob_target * int
+      (* this parameter is read inside a produce *)
+  | Mob_passes of mob_target * int * mob_target * int
+      (* the argument at this position of a call holds this parameter *)
+  | Mob_is_value of string
+      (* this name is read as a value, not called *)
+  | Mob_gets_closure of mob_target * int * location
+      (* the argument at this position of a call holds a closure over a cell *)
+let mob_facts : mob_fact list ref = ref []
 
 let rec mob_kids (e : expr) : expr list =
   match e with
@@ -1193,18 +1374,21 @@ let rec mob_mentions (s : string -> bool) (bound : string list) (e : expr) : boo
 (* Does [e] carry something of this activation, given the names [s] already
    known to? Outside a lambda a cell occurrence is a read (a value); inside one
    it is a captured handle. *)
-let rec mob_carries (s : string -> bool) (e : expr) : bool =
+let rec mob_carries_over (cell : string -> bool) (s : string -> bool) (e : expr) : bool =
+  let carries = mob_carries_over cell s in
   match e with
   | EVar (x, _) -> s x
   | ECall (n, [EVar (h, _)], _) when mob_reads n && !mob_owned h ->
       s (mob_contents h)
-  | ECall (n, a, _) -> s n || mob_allocates n || List.exists (mob_carries s) a
+  | ECall (n, a, _) -> s n || mob_allocates n || List.exists carries a
   | _ ->
       (match mob_lam e with
        | Some (ps, b) ->
-           mob_mentions (fun x -> s x || Desugar.V1SS.mem x !mob_cells)
-             (List.map fst ps) b
-       | None -> List.exists (mob_carries s) (mob_kids e))
+           mob_mentions (fun x -> s x || cell x) (List.map fst ps) b
+       | None -> List.exists carries (mob_kids e))
+
+let mob_carries (s : string -> bool) (e : expr) : bool =
+  mob_carries_over (fun x -> Desugar.V1SS.mem x !mob_cells) s e
 
 (* The least set of locals that carry, closed over every binding of the
    function: [seed] names carry from the start. *)
@@ -1226,17 +1410,64 @@ let mob_close (binds : (string * bool * expr) list) (seed : string -> bool)
 let mob_begin (fn : fun_decl) (non_mobile_params : string list) =
   current_space := Hashtbl.find_opt Surface_ast.user_file_space fn.fn_loc.file;
   current_fun := fn.fn_name;
-  mob_cells := Desugar.v1_targets_stmts Desugar.V1SS.empty fn.fn_body;
+  mob_cells :=
+    mob_producer_cells (Desugar.v1_targets_stmts Desugar.V1SS.empty fn.fn_body) fn.fn_body;
+  mob_fn_params := List.map (fun p -> p.param_name) fn.fn_params;
+  (let reads, calls, values = mob_walk_body !mob_fn_params fn.fn_body in
+   mob_outer_reads := reads;
+   mob_calls := calls;
+   mob_value_names := values);
+  Hashtbl.reset mob_decl_at;
+  mob_emits := [];
   mob_params := non_mobile_params;
   mob_binds := [];
   mob_sites := [];
-  mob_stores := []
+  mob_stores := [];
+  mob_depth := 0;
+  mob_scope := [];
+  mob_scoped_binds := [];
+  mob_assigns := []
 
 let mob_bind (env : Tyenv.env) (x : string) (t : ty) (e : expr) =
   mob_binds := (x, ty_mobile env t, e) :: !mob_binds
 
+(* A block opens a scope one level deeper; leaving it restores the outer one. *)
+let mob_enter_block () : int * mob_scope_names =
+  let saved = (!mob_depth, !mob_scope) in
+  incr mob_depth;
+  saved
+
+let mob_leave_block ((depth, scope) : int * mob_scope_names) =
+  mob_depth := depth;
+  mob_scope := scope
+
+(* `x := e`, and the binder of a loop over `e`: a new declaration, which [e]
+   cannot name. *)
+let mob_declare (env : Tyenv.env) (x : string) (t : ty) (e : expr) (loc : location) =
+  incr mob_decls;
+  let d = { md_id = !mob_decls; md_depth = !mob_depth; md_cell = mob_mut_site loc } in
+  Hashtbl.replace mob_decl_at loc d;
+  mob_scoped_binds := (d, ty_mobile env t, e, !mob_scope) :: !mob_scoped_binds;
+  mob_scope := (x, d) :: !mob_scope
+
+(* `x <- e`, `x.f <- e`: the declaration [x] resolves to takes [e]. A name with
+   no declaration in the body is a parameter: it outlives every block. *)
+let mob_assign (env : Tyenv.env) (x : string) (t : ty) (e : expr) (loc : location) =
+  let mobile = ty_mobile env t in
+  let depth = match List.assoc_opt x !mob_scope with
+    | Some d ->
+        mob_scoped_binds := (d, mobile, e, !mob_scope) :: !mob_scoped_binds;
+        d.md_depth
+    | None -> 0 in
+  mob_assigns := (x, depth, mobile, e, !mob_scope, loc) :: !mob_assigns
+
 let mob_site (env : Tyenv.env) ~(crossing : bool) (t : ty) (e : expr) (loc : location) =
   mob_sites := (crossing, ty_mobile env t, e, loc) :: !mob_sites
+
+(* `emit e`: the stream holds [e] after every block. *)
+let mob_emit (env : Tyenv.env) (t : ty) (e : expr) (loc : location) =
+  mob_site env ~crossing:true t e loc;
+  mob_emits := (ty_mobile env t, e, !mob_scope, loc) :: !mob_emits
 
 (* A store into a cell, and the wire: the value arguments cross. The first
    argument of a cell write / Wire.send* is the cell or the channel itself. *)
@@ -1603,8 +1834,181 @@ let producer_errors (env : Tyenv.env) (fn : fun_decl) : type_error list =
                  (Tyenv.ty_to_string t) (Tyenv.ty_to_string t) } ])
   | _ -> []
 
+(* The declarations that carry what [cell] and [seed] say, and the question for a value
+   written where [names] are visible: the least set closed over every binding of the
+   function. [cell] counts inside a lambda, where an occurrence is a captured handle;
+   [seed] is a name with no declaration in the body, and it counts anywhere. *)
+let mob_carrier_of (cell : mob_scope_names -> string -> bool) (seed : string -> bool)
+    : mob_scope_names -> expr -> bool =
+  let set = Hashtbl.create 16 in
+  let carries names e =
+    let carrier x =
+      match List.assoc_opt x names with
+      | Some d -> Hashtbl.mem set d.md_id
+      | None -> seed x in
+    mob_carries_over (cell names) carrier e in
+  let changed = ref true in
+  while !changed do
+    changed := false;
+    List.iter (fun (d, mobile, e, names) ->
+      if not mobile && not (Hashtbl.mem set d.md_id) && carries names e then begin
+        Hashtbl.replace set d.md_id ();
+        changed := true
+      end) !mob_scoped_binds
+  done;
+  carries
+
+(* The declarations that carry a cell of a block deeper than [depth]: a written `mut`
+   declared there. A name with no declaration is a parameter, and a parameter is no
+   cell. *)
+let mob_carrier_below (depth : int) : mob_scope_names -> expr -> bool =
+  mob_carrier_of (fun names x ->
+    Desugar.V1SS.mem x !mob_cells
+    && (match List.assoc_opt x names with
+        | Some d -> d.md_cell && d.md_depth > depth
+        | None -> false)) (fun _ -> false)
+
+(* A store is stopped when its value carries a cell its target outlives. *)
+let mob_block_errors () : type_error list =
+  let carrier_at = Hashtbl.create 4 in
+  let carrier depth =
+    match Hashtbl.find_opt carrier_at depth with
+    | Some c -> c
+    | None ->
+        let c = mob_carrier_below depth in
+        Hashtbl.replace carrier_at depth c;
+        c in
+  List.filter_map (fun (x, depth, mobile, e, names, loc) ->
+    if (not mobile) && carrier depth names e then
+      Some { err_loc = loc; err_code = Error_codes.Type_check; err_msg = Printf.sprintf
+        "this value carries a closure over a cell of an inner block, and `%s` \
+         outlives the block: a cell lives as long as the block that declares \
+         it, so the closure would read a dead slot. Declare the cell in the \
+         block of `%s`, or apply the closure inside the block."
+        x x }
+    else None) (List.rev !mob_assigns)
+  @ List.filter_map (fun (mobile, e, names, loc) ->
+    (* every declaration is deeper than -1: an element outlives every cell *)
+    if (not mobile) && carrier (-1) names e then
+      Some { err_loc = loc; err_code = Error_codes.Type_check; err_msg =
+        "this value carries a closure over a cell, and an element of a stream \
+         outlives the block: a cell lives as long as the block that declares \
+         it, and a stream is a value. Emit what the closure computes." }
+    else None) (List.rev !mob_emits)
+
+(* A read inside a produce obeys the store's criterion: the value of the stream would
+   depend on when it is consumed, so a produce reads no cell declared outside it, at
+   any depth of its blocks and through a closure over one. A copy made before the
+   block is a value, and a `mut` never written holds a value: both are read freely.
+   Whether a cell is written is known only at the end of the body, because the store
+   can follow the produce. A closure that comes in through a parameter is the caller's:
+   mob_note_flows leaves the facts, and mob_flow_errors gives the verdict. *)
+let mob_producer_read_errors () : type_error list =
+  let carrier = mob_carrier_below (-1) in
+  let refused loc msg = Some { err_loc = loc; err_code = Error_codes.Type_check; err_msg = msg } in
+  List.filter_map (fun (x, held, loc) ->
+    let closure = match held.mh_origin with
+      | Mob_declared l ->
+          (match Hashtbl.find_opt mob_decl_at l with
+           | Some d -> carrier [(x, d)] (EVar (x, loc))
+           | None -> false)
+      | Mob_param _ | Mob_lam_param _ -> false in
+    if held.mh_written then refused loc (Printf.sprintf
+      "`%s` is a cell declared outside the block, and it cannot be read inside a \
+       `produce` block: a produce is a value, identified by its content, and its value \
+       would depend on when the stream is consumed. Copy it into a value first: \
+       `x := %s`, then `produce { emit x }`." x x)
+    else if closure then refused loc (Printf.sprintf
+      "`%s` holds a closure over a cell declared outside the block, and it cannot be \
+       read inside a `produce` block: a produce is a value, identified by its content, \
+       and its value would depend on when the stream is consumed. Compute the value \
+       before the block and bind it with `:=`." x)
+    else None) !mob_outer_reads
+
+(* The facts of this body for the verdict on the whole program. A parameter of a
+   non-mobile type counts: one of a mobile type holds no closure. A local holds a
+   parameter when it carries it, and a value computed by the parameter is mobile, so it
+   does not. A method call is resolved by the checker at its position. *)
+let mob_note_flows (env : Tyenv.env) =
+  let self = Mob_fun !current_fun in
+  let fact f = mob_facts := f :: !mob_facts in
+  let positioned = List.mapi (fun i p -> (i, p)) !mob_fn_params in
+  let params = List.filter (fun (_, p) -> List.mem p !mob_params) positioned in
+  let carriers =
+    List.map (fun (i, p) -> (i, mob_carrier_of (fun _ _ -> false) (String.equal p))) params in
+  List.iter (fun (x, held, _) ->
+    match held.mh_origin with
+    | Mob_param i ->
+        if List.mem_assoc i params then fact (Mob_reads (self, i))
+    | Mob_lam_param (i, t) ->
+        if not (ty_mobile env t) then fact (Mob_reads (Mob_value, i))
+    | Mob_declared l ->
+        Option.iter (fun d ->
+          List.iter (fun (i, carries) ->
+            if carries [(x, d)] (EVar (x, l)) then fact (Mob_reads (self, i))) carriers)
+          (Hashtbl.find_opt mob_decl_at l)) !mob_outer_reads;
+  List.iter (fun n -> fact (Mob_is_value n)) !mob_value_names;
+  let closure = mob_carrier_below (-1) in
+  List.iter (fun c ->
+    let callee = match c.mc_callee with
+      | None -> Mob_value
+      | Some n ->
+          let key = (c.mc_loc.start_line, c.mc_loc.start_col) in
+          Mob_fun (Option.value (Hashtbl.find_opt Surface_ast.method_resolutions key) ~default:n) in
+    (* the names as the carriers see them: the declarations *)
+    let names = List.filter_map (fun (x, h) ->
+      match h.mh_origin with
+      | Mob_declared l -> Option.map (fun d -> (x, d)) (Hashtbl.find_opt mob_decl_at l)
+      | Mob_param _ | Mob_lam_param _ -> None) c.mc_names in
+    List.iteri (fun pos arg ->
+      if closure names arg then fact (Mob_gets_closure (callee, pos, c.mc_loc));
+      List.iter (fun (i, carries) ->
+        if carries names arg then fact (Mob_passes (callee, pos, self, i))) carriers;
+      List.iter (fun (x, h) ->
+        match h.mh_origin with
+        | Mob_lam_param (i, t) when not (ty_mobile env t)
+            && mob_carries_over (fun _ -> false) (String.equal x) arg ->
+            fact (Mob_passes (callee, pos, Mob_value, i))
+        | _ -> ()) c.mc_names) c.mc_args) !mob_calls
+
+(* The verdict on the whole program: the least set of parameters read inside a produce,
+   directly or by what they are passed to, and a closure over a cell given to one of
+   them is a read of that cell inside the produce. A function named as a value can be
+   any function value, so it reaches what it reaches through [Mob_value] too. *)
+let mob_flow_errors () : type_error list =
+  let reached = Hashtbl.create 16 in
+  let mem t i = Hashtbl.mem reached (t, i) in
+  let changed = ref true in
+  let reach t i =
+    if not (mem t i) then begin Hashtbl.replace reached (t, i) (); changed := true end in
+  let values =
+    List.sort_uniq compare
+      (List.filter_map (function Mob_is_value n -> Some n | _ -> None) !mob_facts) in
+  let positions n =
+    Hashtbl.fold (fun (t, i) () acc -> if t = Mob_fun n then i :: acc else acc) reached [] in
+  while !changed do
+    changed := false;
+    List.iter (function
+      | Mob_reads (t, i) -> reach t i
+      | Mob_passes (callee, pos, owner, i) -> if mem callee pos then reach owner i
+      | Mob_is_value _ | Mob_gets_closure _ -> ()) !mob_facts;
+    List.iter (fun n -> List.iter (reach Mob_value) (positions n)) values
+  done;
+  List.filter_map (function
+    | Mob_gets_closure (callee, pos, loc) when mem callee pos ->
+        let who = match callee with
+          | Mob_fun n -> Printf.sprintf "`%s`" n
+          | Mob_value -> "this function value" in
+        Some { err_loc = loc; err_code = Error_codes.Type_check; err_msg = Printf.sprintf
+          "this argument holds a closure over a cell, and %s can read that parameter \
+           inside a `produce` block: a produce is a value, identified by its content, and \
+           its value would depend on when the stream is consumed. Compute the value before \
+           the call and pass that." who }
+    | _ -> None) (List.sort_uniq compare !mob_facts)
+
 (* The verdicts, once the whole body has been seen. *)
-let mob_finish () : type_error list =
+let mob_finish (env : Tyenv.env) : type_error list =
+  mob_note_flows env;
   let owned x =
     let bs = List.filter (fun (y, _, _) -> y = x) !mob_binds in
     bs <> [] && List.for_all (function
@@ -1629,6 +2033,8 @@ let mob_finish () : type_error list =
     else if (not crossing) && mob_carries local e then
       Some { err_loc = loc; err_code = Error_codes.Type_check; err_msg = mob_escape_msg }
     else None) (List.rev (foreign @ !mob_sites))
+  @ mob_block_errors ()
+  @ mob_producer_read_errors ()
 
 (* The values a body yields when it falls off its end (the implicit tail):
    the last statement, and through a compound statement the tails of every
@@ -1650,8 +2056,10 @@ let rec mob_tails (body : stmt list) : (expr * location) list =
        | SRepeat (_, b, oth, _) ->
            mob_tails b @ (match oth with Some o -> mob_tails o | None -> [])
        | SForEvery (_, _, _, b, _) | SInSequence (_, _, b, _) | SIter (_, b, _)
-       | SWhile (_, b, _) | SForever (b, _) | SProduce (b, _)
+       | SWhile (_, b, _) | SForever (b, _)
        | SForces (_, _, b, _) -> mob_tails b
+       (* the statement yields its stream, not the last statement of its body *)
+       | SProduce _ -> []
        | SScope (_, b, e, l) -> (e, l) :: mob_tails b)
 
 (* A path between types is an identity in the universe, Id(Type, A, B), whose
@@ -2989,10 +3397,8 @@ got %s" (Tyenv.ty_to_string other)))
          a number, same convention as the Stream.* API. The stream's
          element type is inferred from the emits (number if none), and
          is checked against the declared return type by the caller. *)
-      (match first_assign_loc body with
-       | Some l ->
-           err l "`=` (Space-cell assignment) is not supported inside a `produce` \
-                  block: compute the value before the block and bind it with `:=`."
+      (match outer_store_loc body with
+       | Some l -> err l outer_store_msg
        | None ->
          let saved = !produce_emit_ty in
          produce_emit_ty := None;
@@ -3011,8 +3417,8 @@ got %s" (Tyenv.ty_to_string other)))
         | None -> ok ()) in
       let* () = (match first_assign_loc body with
         | Some l ->
-            err l "`=` (Space-cell assignment) is not supported inside a `spawn` \
-                   block: compute the value before the block and bind it with `:=`."
+            err l "a store (`<-`) is not supported inside a `spawn` block: compute \
+                   the value before the block and bind it with `:=`."
         | None -> ok ()) in
       let saved = !spawn_promote_ty in
       spawn_promote_ty := None;
@@ -4954,7 +5360,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
            ok (Tyenv.add_var env name t)
        | _ ->
            ok (Tyenv.add_var env name t))
-      |> (fun r -> mob_bind env name t e; r)      (* the binding may carry a cell *)
+      |> (fun r -> mob_bind env name t e; mob_declare env name t e loc; r)      (* the binding may carry a cell *)
       |> (fun r ->
             (* `mut c := e`: the binding is a cell *)
             if Hashtbl.mem Surface_ast.mut_sites
@@ -4975,8 +5381,12 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       let* () = check env ctx e expected in
       (* the target takes e; a field write makes its object carry *)
       (match lv with
-       | LVar x -> mob_bind env x expected e
-       | LField (o, _) -> mob_bind env o (TyPrim "unknown") e);
+       | LVar x ->
+           mob_bind env x expected e;
+           mob_assign env x expected e loc
+       | LField (o, _) ->
+           mob_bind env o (TyPrim "unknown") e;
+           mob_assign env o (TyPrim "unknown") e loc);
       ok env
 
   | SReturn (e, loc) ->
@@ -5099,7 +5509,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
               (Tyenv.ty_to_string coll_ty))
        | Some elem ->
            let env' = Tyenv.add_var env x elem in
-           let* _ = check_stmts env' ctx body expected_return in
+           let* _ = check_loop_body env' ctx x elem collection body expected_return loc in
            ok env)
 
   | SInSequence (x, collection, body, loc) ->
@@ -5114,7 +5524,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
               (Tyenv.ty_to_string coll_ty))
        | Some elem ->
            let env' = Tyenv.add_var env x elem in
-           let* _ = check_stmts env' ctx body expected_return in
+           let* _ = check_loop_body env' ctx x elem collection body expected_return loc in
            ok env)
 
   | SRepeat (_, body, otherwise, _) ->
@@ -5137,14 +5547,18 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
 
   | SProduce (body, _) ->
       (* produce { ... } — body emits values; result is a stream type. *)
-      let* _ = check_stmts env ctx body expected_return in
-      ok env
+      (match outer_store_loc body with
+       | Some l -> err l outer_store_msg
+       | None ->
+         let* _ = check_stmts env ctx body expected_return in
+         ok env)
 
-  | SEmit (e, _) ->
+  | SEmit (e, loc) ->
       let* t = infer env ctx e in
       (match !produce_emit_ty with
        | None -> produce_emit_ty := Some t
        | Some _ -> ());
+      mob_emit env t e loc;
       ok env
 
   | SPromote (e, loc) ->
@@ -5184,6 +5598,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
 and check_stmts (env : Tyenv.env) (ctx : Reduce.ctx)
                 (stmts : stmt list) (expected_return : ty option) : Tyenv.env tc_result =
   scope_push ();
+  let outer = mob_enter_block () in
   let result =
     List.fold_left
       (fun acc s ->
@@ -5191,7 +5606,20 @@ and check_stmts (env : Tyenv.env) (ctx : Reduce.ctx)
          check_stmt env' ctx s expected_return)
       (ok env) stmts
   in
+  mob_leave_block outer;
   scope_pop ();
+  result
+
+(* The body of a loop over a collection: its binder holds what the collection
+   holds, and it is visible only in the body. *)
+and check_loop_body (env : Tyenv.env) (ctx : Reduce.ctx) (x : string) (elem : ty)
+                    (collection : expr) (body : stmt list)
+                    (expected_return : ty option) (loc : location) : Tyenv.env tc_result =
+  let outer = !mob_scope in
+  mob_bind env x elem collection;
+  mob_declare env x elem collection loc;
+  let result = check_stmts env ctx body expected_return in
+  mob_scope := outer;
   result
 
 (* Variant of check_stmts that accumulates errors across statements
@@ -5203,6 +5631,7 @@ and check_stmts_accum (env : Tyenv.env) (ctx : Reduce.ctx)
     : Tyenv.env * type_error list =
   scope_reset ();
   scope_push ();
+  let outer = mob_enter_block () in
   let result =
     List.fold_left
       (fun (env', errs) s ->
@@ -5211,6 +5640,7 @@ and check_stmts_accum (env : Tyenv.env) (ctx : Reduce.ctx)
          | Error e -> (env', e :: errs))
       (env, []) stmts
   in
+  mob_leave_block outer;
   scope_pop ();
   result
 
@@ -5260,7 +5690,7 @@ and mob_check_function (env_after : Tyenv.env) (ctx : Reduce.ctx)
       | Some rt -> rt
       | None -> (match infer env_after ctx e with Ok t -> t | Error _ -> TyPrim "unknown") in
     mob_site env_after ~crossing:false t e loc) (mob_tails body);
-  mob_finish ()
+  mob_finish env_after
 
 and mob_non_mobile_params (env : Tyenv.env) (fn : fun_decl) : string list =
   List.filter_map (fun p ->
@@ -8340,6 +8770,7 @@ let is_lifted_lambda (name : string) : bool =
   || String.starts_with ~prefix:"__by_inline_p_" name
 
 let check_program (p : program) : check_result =
+  mob_facts := [];
   let p = expand_mono_fields p in   (* idempotent: shadow-check on the names *)
   Hashtbl.reset Surface_ast.method_resolutions;
   Hashtbl.reset Surface_ast.given_decls;
@@ -8903,6 +9334,7 @@ let check_program (p : program) : check_result =
            | Error e -> e :: errs)
     [] p
   in
+  let errors = List.rev_append (mob_flow_errors ()) errors in
   (* the verdict on what the whole program left open *)
   let errors =
     if errors <> [] then errors else
