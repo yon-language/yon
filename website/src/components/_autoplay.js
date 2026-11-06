@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 
 /**
- * Shared auto-play driver for the field-guide viz, matching the house pattern
- * (LeechShells / Mutation / XTowerDial step through states on a timer). Cycles the
+ * Shared auto-play driver for the field-guide viz. Cycles the
  * current step 0..steps-1 on an interval; manual interaction pauses. The visual
  * smoothness is each component's own CSS transitions.
  */
