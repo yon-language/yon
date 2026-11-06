@@ -377,21 +377,6 @@ let is_synthetic_place (env : env) (name : string) : bool =
 
 let add_place (env : env) (pd : place_decl) : env =
   let env = { env with places = (pd.pd_name, pd) :: env.places } in
-  (* If an operation of the place instantiates a catalog algebra (op_algebra),
-   * register the function <P>_instantiate : () -> Magma. This is the function
-   * the AlgebraVerifier pass generates; the type checker knows it so that a
-   * call to it type-checks. *)
-  let has_algebra =
-    List.exists (function FoOp o -> o.op_algebra <> None | _ -> false) pd.pd_members
-  in
-  let env =
-    if has_algebra then
-      { env with funs =
-          (pd.pd_name ^ "_instantiate",
-           { fs_params = []; fs_return = TyUser "Magma"; fs_visits = []})
-          :: env.funs }
-    else env
-  in
   List.fold_left
     (fun env fo ->
        match fo with

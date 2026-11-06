@@ -272,7 +272,9 @@ double yon_rt_alg_op(double a, double b, double op_id_d) {
             int64_t x=(int64_t)(a<0?-a:a), y=(int64_t)(b<0?-b:b);
             while (y){ int64_t t=y; y=x%y; x=t; } return (double)x; }
         case 7: return a - b;   /* subtraction: NOT comm, NOT assoc (negative test) */
-        default: return a + b;
+        default:
+            fprintf(stderr, "Magma: %d names no operation\n", op);
+            exit(3);
     }
 }
 
@@ -505,20 +507,35 @@ double yon_rt_alg_word_equal(double op_id,
  *
  * Handle = index+1 (0 reserved as "empty"). Pool YON_MAGMA_MAX.
  * ============================================================================ */
-/* forward decl of the algebra catalog (defined further below) */
-double yon_rt_alg_catalog_op(double cat_id);
-double yon_rt_alg_catalog_is_commutative(double cat_id);
-double yon_rt_alg_catalog_is_associative(double cat_id);
-double yon_rt_alg_catalog_identity(double cat_id);
-double yon_rt_alg_catalog_is_monotone(double cat_id);
 double yon_rt_alg_reachable_bounded(double,const double*,double,int,double);
 double yon_rt_alg_subsetsum(double,const double*,double,double,int,double*);
+
+/* The operations of the solver that are monotone (a op b >= max(a,b)) on generators
+ * >= 0: the sum and the bitwise or, the or only on whole ones. Pruning beyond the
+ * target is valid only on these. The algebras are places of the prelude, and this
+ * property is not a law of theirs: the carrier of an algebra has no order to state
+ * it with, and the certifier refutes it on the sum of the 64-bit word, which wraps,
+ * while the solver reads the sum on doubles. It stays here until the magma is a
+ * place of the prelude, with the laws on its operations. */
+static int alg_op_is_monotone(double op_id) {
+    int op = (int)op_id;
+    return op == 0 || op == 4;
+}
+
+/* The or truncates its operands to the 64-bit word, so it falls below a fractional
+ * generator: one that is not a whole number of that word turns the pruning off. A
+ * negative generator of the sum does not: it still prunes and misses the target,
+ * an open hole that the audit probes pin. */
+static int alg_generator_keeps_pruning(double op_id, double x) {
+    if ((int)op_id != 4) return 1;
+    return x >= 0.0 && x < 18446744073709551616.0 && (double)(uint64_t)x == x;
+}
 
 #define YON_MAGMA_MAX     64u
 #define YON_MAGMA_GEN_CAP 4096u
 typedef struct {
     double   op_id;
-    double   cat_id;        /* algebra catalog index; -1 = raw op without certified laws */
+    int      monotone;      /* target pruning is valid: see alg_op_is_monotone */
     double   gen[YON_MAGMA_GEN_CAP];
     uint32_t n_gen;
     double   word[YON_MAGMA_GEN_CAP];   /* parola per normal_form */
@@ -531,10 +548,15 @@ static uint32_t g_n_magmas = 0;
 
 double yon_rt_magma_empty(double op_id) {
     ds_ensure_init();
+    /* 0 to 7, the cases of yon_rt_alg_op: refused here, even with no generators */
+    if (!(op_id >= 0.0 && op_id <= 7.0) || op_id != (double)(int)op_id) {
+        fprintf(stderr, "Magma.empty: %g names no operation\n", op_id);
+        exit(3);
+    }
     if (g_n_magmas >= YON_MAGMA_MAX) { fprintf(stderr,"[YON-RT] magma pool exhausted\n"); return 0.0; }
     uint32_t id = g_n_magmas++;
     g_magmas[id].op_id = op_id;
-    g_magmas[id].cat_id = -1.0;       /* raw op: laws to be verified, not certified */
+    g_magmas[id].monotone = 0;        /* a raw op prunes nothing */
     g_magmas[id].n_gen = 0;
     g_magmas[id].n_knap = 0;
     g_magmas[id].n_word = 0;
@@ -542,31 +564,25 @@ double yon_rt_magma_empty(double op_id) {
     return (double)(id + 1);
 }
 
-/* Instantiate a place from a catalog algebra: the laws come WITH the algebra
- * (theorems), they are not verified on the generators. This is the intended way
- * for the user: pick a known algebra and instantiate a place with its
- * generators. */
-double yon_rt_magma_from_algebra(double cat_id) {
+/* A magma on one of the solver's operations, which prunes beyond the target where
+ * the operation is monotone. An index that names none of them (0 to 6, the
+ * operations of the algebras) is refused: it never becomes the sum. */
+double yon_rt_magma_from_algebra(double op_id) {
     ds_ensure_init();
-    if (g_n_magmas >= YON_MAGMA_MAX) { fprintf(stderr,"[YON-RT] magma pool exhausted\n"); return 0.0; }
-    uint32_t id = g_n_magmas++;
-    g_magmas[id].op_id  = yon_rt_alg_catalog_op(cat_id);
-    g_magmas[id].cat_id = cat_id;
-    g_magmas[id].n_gen = 0;
-    g_magmas[id].n_knap = 0;
-    g_magmas[id].n_word = 0;
-    g_magmas[id].is_used = 1;
-    return (double)(id + 1);
+    if (!(op_id >= 0.0 && op_id <= 6.0) || op_id != (double)(int)op_id) {
+        fprintf(stderr, "Magma.from_catalog: %g names no operation of an algebra\n", op_id);
+        exit(3);
+    }
+    double h = yon_rt_magma_empty(op_id);
+    ds_magma_t *m = (h >= 1.0) ? &g_magmas[(uint32_t)h - 1] : NULL;
+    if (m) m->monotone = alg_op_is_monotone(op_id);
+    return h;
 }
 
-/* Effective commutativity of the magma: if instantiated from the catalog, it is
- * the certified law of the algebra (a theorem); if a raw op, it is verified on
- * the generators. This is the function the queries use to decide whether to
- * quotient. */
+/* Effective commutativity of the magma, verified on its generators: this is the
+ * function the queries use to decide whether to quotient. */
 static int magma_commutative(ds_magma_t *m) {
-    if (m->cat_id >= 0.0)
-        return (int)yon_rt_alg_catalog_is_commutative(m->cat_id);   /* certified */
-    return (int)yon_rt_alg_verify_commutative(m->op_id, m->gen, (double)m->n_gen); /* verified */
+    return (int)yon_rt_alg_verify_commutative(m->op_id, m->gen, (double)m->n_gen);
 }
 static ds_magma_t *magma_lookup(double h) {
     uint32_t id = (uint32_t)h;
@@ -579,6 +595,7 @@ double yon_rt_magma_gen(double h, double x) {
     ds_magma_t *m = magma_lookup(h);
     if (!m) return h;
     if (m->n_gen < YON_MAGMA_GEN_CAP) m->gen[m->n_gen++] = x;
+    if (!alg_generator_keeps_pruning(m->op_id, x)) m->monotone = 0;
     return h;
 }
 /* verify laws (exact, on the generators) */
@@ -605,11 +622,10 @@ double yon_rt_magma_closure_size(double h) {
 double yon_rt_magma_reachable(double h, double T) {
     ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
     int comm = magma_commutative(m);
-    /* If the algebra is monotone (certified by the catalog), use the
-     * bounded-by-target variant: it terminates even on an infinite closure
-     * (e.g. Additive), pruning that is valid by theorem. Otherwise the full
-     * closure (requires finite R). */
-    if (m->cat_id >= 0.0 && yon_rt_alg_catalog_is_monotone(m->cat_id) >= 0.5)
+    /* If the operation is monotone, use the bounded-by-target variant: it
+     * terminates even on an infinite closure (the sum), pruning that is valid by
+     * theorem. Otherwise the full closure (requires finite R). */
+    if (m->monotone)
         return yon_rt_alg_reachable_bounded(m->op_id, m->gen, (double)m->n_gen, comm, T);
     double ca, cb;
     return yon_rt_alg_reachable(m->op_id, m->gen, (double)m->n_gen, comm, T, &ca, &cb);
@@ -621,9 +637,8 @@ double yon_rt_magma_reachable(double h, double T) {
  * composition; reach is "a witness exists", witness is the witness itself. */
 double yon_rt_land_reach(double h, double T) {
     ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
-    int mono = (m->cat_id >= 0.0) ? (int)yon_rt_alg_catalog_is_monotone(m->cat_id) : 0;
     double mask = 0.0;
-    return yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, mono, &mask);
+    return yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, m->monotone, &mask);
 }
 
 /* Land.witness(magma, target) -> the certificate: a bitmask of which generators
@@ -632,9 +647,8 @@ double yon_rt_land_reach(double h, double T) {
  * Land.reach; this returns the witnessing combination. */
 double yon_rt_land_witness(double h, double T) {
     ds_magma_t *m = magma_lookup(h); if (!m) return 0.0;
-    int mono = (m->cat_id >= 0.0) ? (int)yon_rt_alg_catalog_is_monotone(m->cat_id) : 0;
     double mask = 0.0;
-    yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, mono, &mask);
+    yon_rt_alg_subsetsum(m->op_id, m->gen, (double)m->n_gen, T, m->monotone, &mask);
     return mask;
 }
 /* word for normal_form: push elements, then normal_form reduces them */
@@ -651,84 +665,11 @@ double yon_rt_magma_normal_form(double h) {
     return nf;
 }
 
-/* ============================================================================
- * ALGEBRA CATALOG — certified laws.
- *
- * Key difference from "verification on the generators": here the laws are
- * theorems about the structure, not empirical checks. (Z,+) is commutative by
- * proof, not because we tested it on {1,5,8}. The user instantiates a catalog
- * algebra as a place; the laws come WITH the algebra.
- *
- * Law bitfield: bit0=commutative, bit1=associative, bit2=idempotent,
- * bit3=has_identity. identity_value valid iff bit3.
- *
- * These are properties known in universal algebra, here declared as catalog
- * facts (the proof is standard: monoids, semilattices, Boolean algebra, gcd
- * domain). They are not heuristics: they are the theorems that define each
- * structure. The user cannot inject an algebra with false laws — they can only
- * choose from the verified catalog.
- * ============================================================================ */
-#define ALG_COMMUTATIVE  0x1u
-#define ALG_ASSOCIATIVE  0x2u
-#define ALG_IDEMPOTENT   0x4u
-#define ALG_HAS_IDENTITY 0x8u
-#define ALG_MONOTONE     0x10u  /* a op b >= max(a,b) for generators >=0: target pruning is valid */
-
-typedef struct {
-    const char *name;
-    int    op_id;            /* operazione in yon_rt_alg_op */
-    uint32_t laws;           /* bitfield of certified laws */
-    double identity_value;   /* valid iff ALG_HAS_IDENTITY */
-} alg_catalog_entry_t;
-
-/* The catalog. Each row = an algebra with its proven laws. */
-static const alg_catalog_entry_t g_alg_catalog[] = {
-    /* name          op  laws                                                  id  */
-    { "Additive",     0, ALG_COMMUTATIVE|ALG_ASSOCIATIVE|ALG_HAS_IDENTITY|ALG_MONOTONE, 0.0 },  /* (N,+) comm monoid, monotone for gen>=0 */
-    { "TropicalMax",  1, ALG_COMMUTATIVE|ALG_ASSOCIATIVE|ALG_IDEMPOTENT,       0.0 },  /* sup-semilattice */
-    { "TropicalMin",  2, ALG_COMMUTATIVE|ALG_ASSOCIATIVE|ALG_IDEMPOTENT,       0.0 },  /* inf-semilattice */
-    { "Multiplicative",3,ALG_COMMUTATIVE|ALG_ASSOCIATIVE|ALG_HAS_IDENTITY,     1.0 },  /* (Z,*) comm monoid */
-    { "BooleanOr",    4, ALG_COMMUTATIVE|ALG_ASSOCIATIVE|ALG_IDEMPOTENT|ALG_HAS_IDENTITY|ALG_MONOTONE, 0.0 }, /* sup-semilattice, monotone */
-    { "BooleanAnd",   5, ALG_COMMUTATIVE|ALG_ASSOCIATIVE|ALG_IDEMPOTENT,       0.0 },  /* inf-semilattice (AND) */
-    { "Gcd",          6, ALG_COMMUTATIVE|ALG_ASSOCIATIVE|ALG_HAS_IDENTITY,     0.0 },  /* gcd-monoid, id=0 */
-};
-#define ALG_CATALOG_N (sizeof(g_alg_catalog)/sizeof(g_alg_catalog[0]))
-
-/* Lookup by name -> catalog index (-1 if absent). */
-double yon_rt_alg_catalog_id(const char *name) {
-    for (uint32_t i = 0; i < ALG_CATALOG_N; i++)
-        if (strcmp(g_alg_catalog[i].name, name) == 0) return (double)i;
-    return -1.0;
-}
-/* Accessor for certified laws by catalog index. */
-double yon_rt_alg_catalog_op(double cat_id) {
-    int i = (int)cat_id; if (i < 0 || i >= (int)ALG_CATALOG_N) return 0.0;
-    return (double)g_alg_catalog[i].op_id;
-}
-double yon_rt_alg_catalog_is_commutative(double cat_id) {
-    int i = (int)cat_id; if (i < 0 || i >= (int)ALG_CATALOG_N) return 0.0;
-    return (g_alg_catalog[i].laws & ALG_COMMUTATIVE) ? 1.0 : 0.0;
-}
-double yon_rt_alg_catalog_is_associative(double cat_id) {
-    int i = (int)cat_id; if (i < 0 || i >= (int)ALG_CATALOG_N) return 0.0;
-    return (g_alg_catalog[i].laws & ALG_ASSOCIATIVE) ? 1.0 : 0.0;
-}
-double yon_rt_alg_catalog_is_monotone(double cat_id) {
-    int i = (int)cat_id; if (i < 0 || i >= (int)ALG_CATALOG_N) return 0.0;
-    return (g_alg_catalog[i].laws & ALG_MONOTONE) ? 1.0 : 0.0;
-}
-double yon_rt_alg_catalog_identity(double cat_id) {
-    int i = (int)cat_id; if (i < 0 || i >= (int)ALG_CATALOG_N) return (double)(0.0/0.0);
-    if (!(g_alg_catalog[i].laws & ALG_HAS_IDENTITY)) return (double)(0.0/0.0);
-    return g_alg_catalog[i].identity_value;
-}
-
-/* reachable bounded-by-target: for monotone algebras (a op b >= max(a,b)),
- * expands only states <= T. Pruning that is valid by theorem (certified
- * monotonicity), not heuristic: a state > T can never come back down to T. It
- * terminates because the states <= T reachable from positive generators are
- * finite in number. Use only if the algebra is marked ALG_MONOTONE and the
- * generators are >=0. */
+/* reachable bounded-by-target: for monotone operations (a op b >= max(a,b)),
+ * expands only states <= T. Pruning that is valid by theorem, not heuristic: a
+ * state > T can never come back down to T. It terminates because the states <= T
+ * reachable from positive generators are finite in number. Use only if
+ * alg_op_is_monotone holds and the generators are >=0, whole for the or. */
 double yon_rt_alg_reachable_bounded(double op_id, const double *gen, double n_gen_d,
                                     int commutative_verified, double T) {
     uint32_t n_gen = (uint32_t)n_gen_d;

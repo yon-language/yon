@@ -6,6 +6,11 @@
  * logic over its carrier. Inside an algebra its own name stands for the
  * carrier, the generic model; a place that `uses algebra A` is a model of A:
  * it stays itself, it provides A's operations as its own funs of the same
- * names, its laws are certified on it, and A's operators write them. */
+ * names, its laws are certified on it, and A's operators write them.
+ *
+ * This package is the catalog of the algebras of the language: the type checker
+ * asks no other. A name that is not a place declared `is algebra` is refused,
+ * wherever a source file names it. The MLIR verifier keeps a table of its own,
+ * for units written by hand; the frontend emits nothing that reaches it. */
 topos where {
 }

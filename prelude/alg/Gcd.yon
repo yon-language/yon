@@ -1,6 +1,9 @@
-/* Gcd — the greatest common divisor of two: associative and commutative. */
+/* Gcd — the greatest common divisor of two: associative and commutative, with
+ * zero as its neutral element, since every number divides zero. */
 place Gcd is algebra {
   operation gcd(a: Gcd, b: Gcd): Gcd
+  operation zero: Gcd
   law associative ∀a : Gcd ∀b : Gcd ∀c : Gcd, gcd(gcd(a, b), c) = gcd(a, gcd(b, c))
   law commutative ∀a : Gcd ∀b : Gcd, gcd(a, b) = gcd(b, a)
+  law neutral ∀a : Gcd, gcd(a, zero) = a
 }

@@ -275,10 +275,24 @@ and mprop (env : (string * mvalue) list) (e : S.expr) : bool =
     (* the same value iff the same bits; every NaN is the one NaN *)
     | D x, D y -> (Float.is_nan x && Float.is_nan y) || Int64.equal (Int64.bits_of_float x) (Int64.bits_of_float y)
     | _ -> false in
+  (* the machine's order: signed on a word, IEEE on a double, where NaN is
+     below nothing and above nothing *)
+  let less a b = match a, b with
+    | W x, W y -> Int64.compare x y < 0
+    | D x, D y -> x < y
+    | _ -> false in
+  let at_most a b = match a, b with
+    | W x, W y -> Int64.compare x y <= 0
+    | D x, D y -> x <= y
+    | _ -> false in
   let p = mprop env in
   match e with
   | S.EBinop (S.OpEq, a, b, _) -> same (mterm env a) (mterm env b)
   | S.EBinop (S.OpNeq, a, b, _) -> not (same (mterm env a) (mterm env b))
+  | S.EBinop (S.OpLt, a, b, _) -> less (mterm env a) (mterm env b)
+  | S.EBinop (S.OpGt, a, b, _) -> less (mterm env b) (mterm env a)
+  | S.EBinop (S.OpLeq, a, b, _) -> at_most (mterm env a) (mterm env b)
+  | S.EBinop (S.OpGeq, a, b, _) -> at_most (mterm env b) (mterm env a)
   | S.EBinop (S.OpAnd, a, b, _) | S.ECall ("__heyt_and", [a; b], _) -> p a && p b
   | S.EBinop (S.OpOr, a, b, _) | S.ECall ("__heyt_or", [a; b], _) -> p a || p b
   | S.ECall ("__heyt_imp", [a; b], _) -> (not (p a)) || p b
@@ -412,6 +426,42 @@ let check_carriers (ps : (string * S.place_decl) list) : law_result list =
             { lr_place = "the carrier " ^ c; lr_algebra = a; lr_law = law; lr_loc = loc;
               lr_given = given; lr_verdict = verdict }) (laws_of apd)) models) ps
 
+(* The catalog of the algebras is the set of the places declared `is algebra`.
+   An operation that names one (`operation op(...) uses algebra A`) names such
+   a place, by the same rule as `place P uses algebra A`, and a law its house
+   declares by name alone, with no statement, must be a law of A, stated or
+   named there: the only check is that A declares it, and that certifies nothing. *)
+let not_certified (house : string) (a : string) (law : string) (loc : S.location) (why : string)
+    : law_result =
+  { lr_place = house; lr_algebra = a; lr_law = law; lr_loc = loc;
+    lr_given = false; lr_verdict = Law_check.Unknown why }
+
+let laws_by_name (pd : S.place_decl) =
+  List.filter_map (function S.FoLaw (law, None) -> Some law | _ -> None) pd.S.pd_members
+
+let check_named_algebra (ps : (string * S.place_decl) list) (house : string)
+    (by_name : string list) (o : S.operation_decl) : law_result list =
+  match o.S.op_algebra with
+  | None -> []
+  | Some a ->
+      (match List.assoc_opt a ps with
+       | Some apd when Hashtbl.mem S.algebra_places a ->
+           List.filter_map (fun law ->
+             if List.mem law apd.S.pd_laws then None
+             else Some (not_certified house a law o.S.op_loc
+               (Printf.sprintf "%s does not state it, and the operation %s takes its laws from %s"
+                  a o.S.op_name a))) by_name
+       | _ ->
+           [not_certified house a ("of the operation " ^ o.S.op_name) o.S.op_loc
+              (Printf.sprintf "%s is no algebra: an algebra is a place declared `is algebra`" a)])
+
+let check_named_algebras (p : S.program) (ps : (string * S.place_decl) list) : law_result list =
+  List.concat_map (function
+    | S.TopPlace pd ->
+        List.concat_map (check_named_algebra ps pd.S.pd_name (laws_by_name pd)) (ops_of pd)
+    | S.TopOperation o -> check_named_algebra ps o.S.op_name [] o
+    | _ -> []) p
+
 let check (p : S.program) : law_result list =
   let ps = places p in
-  check_carriers ps @ check_models p ps
+  check_carriers ps @ check_models p ps @ check_named_algebras p ps
