@@ -306,11 +306,12 @@ let rec try_reduce_builtin (t : term) : term option =
       when String.length op > 2 && String.sub op 0 2 = "__"
         && not (String.length op > 7 && String.sub op 0 7 = "__heyt_")
         && not (String.length op > 10 && String.sub op 0 10 = "__section_")
+        && not (String.length op > 7 && String.sub op 0 7 = "__cell_")
         && not (String.length op > 16
                 && String.sub op 0 16 = "__apply_move_in_") ->
       (* Also exclude __apply_move_in_<S> from the generic binary-op pattern,
        * otherwise it would be caught before the specific apply_move pattern
-       * below. *)
+       * below; and the write of a cell, which the stdlib hook carries out. *)
       (* Try recursing on a and b first to ensure they are evaluated. *)
       let a' = match try_reduce_builtin a with Some v -> v | None -> a in
       let b' = match try_reduce_builtin b with Some v -> v | None -> b in
@@ -898,11 +899,11 @@ and deep_reduce_pure (t : term) : term =
           String.length name >= String.length p
           && String.sub name 0 (String.length p) = p
         in
-        prefix "Space__"
+        prefix "__cell_"
         || prefix "Output__"
         (* Note: List__, Map__ are pure functional (each op creates a
          * new id; no in-place mutation), so they CAN be deep-reduced.
-         * Only Space, Output have mutable state
+         * Only the cells and Output have mutable state
          * and must follow strict reduction order.
          *
          * Note: Stream__ has mutable state (the stream queue), but we leave it

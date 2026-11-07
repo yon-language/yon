@@ -91,3 +91,30 @@ def test_the_words_of_the_occasion_take_their_places(tmp_path):
     run = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30)
     assert run.returncode == 3, run
     assert run.stderr == "error: region: word 7 is outside a region of 5 words\n", run.stderr
+
+
+def test_the_bridge_of_the_algebra_verifier_refuses_through_the_registry(tmp_path):
+    # The bridge gives a unit written by hand the handle of an algebra of the
+    # table, and refuses an index outside it with the arm AlgebraNotInTable.
+    from test_runtime_units import CC, DISPATCH_STUB, FT, RTSET
+    missing = [n for n in RTSET if not Path(n).exists()]
+    if missing:
+        pytest.skip(f"runtime objects not built: {missing[0]} (run `make` in runtime/)")
+    main = tmp_path / "bridge.c"
+    main.write_text(
+        "#include <stdio.h>\n#include <stdlib.h>\n"
+        "double yon_rt_magma_from_algebra(double);\n"
+        "int main(int argc, char **argv) {\n"
+        "  (void)argc;\n"
+        "  printf(\"%g\\n\", yon_rt_magma_from_algebra(atof(argv[1])));\n"
+        "  return 0;\n}\n")
+    exe = tmp_path / "bridge"
+    c = subprocess.run([CC, "-std=c11", "-O2", f"-I{FT}", str(main), *RTSET, DISPATCH_STUB,
+                        "-lpthread", "-lm", "-o", str(exe)], capture_output=True, text=True, timeout=120)
+    assert c.returncode == 0, c.stderr[-2000:]
+    ok = subprocess.run([str(exe), "6"], capture_output=True, text=True, timeout=30)
+    assert ok.returncode == 0 and ok.stdout == "7\n", ok
+    for bad, said in (("7", "7"), ("2.5", "2.5"), ("-1", "-1")):
+        run = subprocess.run([str(exe), bad], capture_output=True, text=True, timeout=30)
+        assert run.returncode == 3, run
+        assert run.stderr == f"error: algebra verifier: {said} names no algebra of the table\n", run.stderr

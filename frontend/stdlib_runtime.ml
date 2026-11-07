@@ -296,7 +296,7 @@ let try_reduce_stdlib (t : term) : term option =
        | App _ -> List.nth_opt (args [] v) j
        | _ -> None)
 
-  (* Space operations *)
+  (* the cells *)
   | App (Var "__cell_make", init) ->
       Some (space_new init)
   | App (Var "__cell_get", sp) ->

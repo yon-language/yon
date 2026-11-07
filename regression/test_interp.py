@@ -16,9 +16,11 @@ regression does not exercise.
 The interpreter is incomplete for the imperative / effectful / stdlib layer, and it
 says so in one of four ways (see interp_ledger.txt): a punt (`EXIT 0` with
 "[no extractable value, assuming 0]" on --trace stderr), a refusal ("EVAL
-INCOMPLETE", exit 6, for loop / produce / spawn / wire), a rejection by its own
-checker, or an uncaught exception. On `iter` / `while` / `produce` / `spawn` /
-`wire` / `for every` it refuses, never returns a silent wrong value. An
+INCOMPLETE", exit 6, for loop / produce / spawn / wire, in the program or in a fun
+of the prelude main reaches, and for a cell written inside a block: `scope`,
+`when`), a rejection by its own checker, or an uncaught exception. On `iter` /
+`while` / `produce` / `spawn` / `wire` / `for every` it refuses, never returns a
+silent wrong value. An
 interpreter that evaluates the imperative layer turns INCOMPLETE rows into AGREE
 rows.
 

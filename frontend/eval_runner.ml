@@ -99,14 +99,86 @@ let assemble_project (root : string)
   Project.record_file_spaces l;
   let prog = Project.prepare_for_typecheck l in
   let prog = Tycheck.elaborate_id_sugar prog in
-  (* the refusal check below reads the USER sources only: the prelude's own
-     loops are the library's, run by the compiler, not by this program *)
+  (* the text kept here is the USER sources only, for the check on the source
+     text; the funs of the prelude main reaches are checked on the program
+     itself (unfaithful_reached), since the reducer unfolds them too *)
   let prelude = List.map fst (Project.prelude_sources ()) in
   let user =
     List.filter (fun (f : Project.file_info) -> not (List.mem f.Project.fi_path prelude))
       l.Project.files in
   (prog, [], String.concat "\n" (List.map (fun (f : Project.file_info) ->
                                     read_file f.Project.fi_path) user))
+
+(* The funs main reaches through its calls, over the whole program, and the
+ * first of them whose body holds what the pure interpreter does not run, with
+ * the reason: a loop, a producer, a spawn, a wire; or a cell written inside a
+ * block, which the reducer writes in the block only, so the value after it is
+ * the old one. A fun of a house carries its qualified name (Home__f); a bare
+ * call inside the house reaches it too. *)
+let unfaithful_reached (prog : Surface_ast.program) : (string * string) option =
+  let open Surface_ast in
+  let funs = Hashtbl.create 256 in
+  List.iter (function TopFun fd -> Hashtbl.replace funs fd.fn_name fd | _ -> ()) prog;
+  let rec names_e acc e =
+    let acc = match e with
+      | ECall (n, _, _) | EVar (n, _) -> n :: acc
+      | _ -> acc in
+    let (es, bs) = sub_exprs e in
+    List.fold_left names_ss (List.fold_left names_e acc es) bs
+  and names_s acc s =
+    let acc = match s with SCall (n, _, _) -> n :: acc | _ -> acc in
+    List.fold_left names_ss (List.fold_left names_e acc (stmt_exprs s)) (sub_stmts s)
+  and names_ss acc ss = List.fold_left names_s acc ss in
+  let rec unfaithful_e e =
+    (match e with EProduce _ | ESpawn _ | EWireTo _ -> true | _ -> false)
+    || (let (es, bs) = sub_exprs e in
+        List.exists unfaithful_e es || List.exists unfaithful_ss bs)
+  and unfaithful_s s =
+    (match s with
+     | SWhile _ | SIter _ | SForEvery _ | SInSequence _ | SRepeat _ | SForever _
+     | SProduce _ | SEmit _ | SPromote _ -> true
+     | _ -> false)
+    || List.exists unfaithful_e (stmt_exprs s)
+    || List.exists unfaithful_ss (sub_stmts s)
+  and unfaithful_ss ss = List.exists unfaithful_s ss in
+  let rec writes_ss ss =
+    List.exists (fun s ->
+        (match s with SAssignHolds _ | SAssignBecomes _ -> true | _ -> false)
+        || List.exists writes_ss (sub_stmts s)) ss in
+  let rec written_in_block ss =
+    List.exists (fun s ->
+        List.exists writes_ss (sub_stmts s) || List.exists written_in_block (sub_stmts s)) ss in
+  let resolve (caller : fun_decl) n =
+    (* the house first, as a bare name inside it is read *)
+    let in_house = match caller.fn_home with
+      | Some h -> Hashtbl.find_opt funs (h ^ "__" ^ n)
+      | None -> None in
+    match in_house with
+    | Some fd -> Some fd
+    | None -> Hashtbl.find_opt funs n in
+  let seen = Hashtbl.create 64 in
+  let rec visit (fd : fun_decl) =
+    let key = fd.fn_name in
+    if Hashtbl.mem seen key then None
+    else begin
+      Hashtbl.replace seen key ();
+      if unfaithful_ss fd.fn_body then
+        Some (key, "uses an imperative/effectful construct (loop / produce / spawn / wire)")
+      else if written_in_block fd.fn_body then
+        Some (key, "writes a cell inside a block, and the pure interpreter keeps that write \
+                    inside the block, so it would read the old value after it")
+      else
+        List.fold_left (fun found n ->
+            match found with
+            | Some _ -> found
+            | None ->
+                (match resolve fd n with Some g -> visit g | None -> None))
+          None (List.rev (names_ss [] fd.fn_body))
+    end in
+  let mains = List.filter_map (function
+      | TopFun fd when fd.fn_name = "main" -> Some fd | _ -> None) prog in
+  List.fold_left (fun found m -> match found with Some _ -> found | None -> visit m)
+    None mains
 
 let () =
   let args = Array.to_list Sys.argv in
@@ -156,7 +228,7 @@ let () =
         exit 4
       end;
       (* The pure evaluator does NOT faithfully run the imperative / effectful layer:
-       * loops do not iterate, Space mutations and stream sends do not take effect, so it
+       * loops do not iterate, writes of cells and stream sends do not take effect, so it
        * would return a WRONG value SILENTLY. Reject such programs rather than lie: if the
        * source uses one of these constructs, exit with a distinct EVAL-INCOMPLETE code
        * instead of a value the evaluator cannot vouch for. (Line comments stripped first;
@@ -188,6 +260,19 @@ let () =
         print_string "EVAL INCOMPLETE\n";
         exit 6
       end;
+      (* The same holds for every fun main reaches, the prelude's included: the
+       * reducer unfolds a library fun as it unfolds the program's own, so a
+       * loop in its body is evaluated as wrongly. Follow the calls from main
+       * over the whole program and refuse at the first fun whose body holds
+       * a construct the pure interpreter does not run. *)
+      (match unfaithful_reached prog with
+       | Some (f, why) ->
+           Printf.eprintf
+             "EVAL INCOMPLETE: main reaches `%s`, whose body %s; refusing to emit a value \
+              rather than return a wrong one.\n" f why;
+           print_string "EVAL INCOMPLETE\n";
+           exit 6
+       | None -> ());
       let no_line_comments = Str.global_replace (Str.regexp "//[^\n]*") "" source in
       let unfaithful =
         Str.regexp "\\b\\(iter\\|while\\|every\\|sequence\\|repeat\\|forever\\|produce\\|emit\\|spawn\\|promote\\|wire\\)\\b" in

@@ -37,6 +37,8 @@ place Refusal {
     :U SpaceUnknown :U SpaceHasNoHeap
     /* logic */
     :U UnknownDecided
+    /* the algebras */
+    :U AlgebraNotInTable
 
   fun sentence(r: Refusal): Text {
     return match r {
@@ -90,7 +92,8 @@ place Refusal {
       SubTableFull => "wire: the table of sub-objects is full ({a} entries)",
       SpaceUnknown => "space: there is no Space {a}",
       SpaceHasNoHeap => "space: there is no heap for Space {a}",
-      UnknownDecided => "logic: unknown reached a decided condition"
+      UnknownDecided => "logic: unknown reached a decided condition",
+      AlgebraNotInTable => "algebra verifier: {a:f} names no algebra of the table"
     }
   }
 }

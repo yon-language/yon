@@ -255,8 +255,7 @@ double yon_rt_leech_co0_equivalent(double a_24bit, double b_24bit) {
  * reachability are places of the prelude, Generated and Land. */
 double yon_rt_magma_from_algebra(double op_id) {
     if (!(op_id >= 0.0 && op_id <= 6.0) || op_id != (double)(int)op_id) {
-        fprintf(stderr, "algebra verifier: %g names no algebra of the table\n", op_id);
-        exit(3);
+        yon_rt_refuse_with(YON_REFUSAL_AlgebraNotInTable, yon_refusal_real(op_id), 0, 0);
     }
     return op_id + 1.0;
 }

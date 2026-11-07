@@ -6,7 +6,9 @@
 #   INCOMPLETE <name> <how>   eval_runner does not evaluate the program and SAYS
 #                             so; <how> is the way it says it:
 #       punt        `EXIT 0` plus "[no extractable value, assuming 0]" on stderr
-#       refused     "EVAL INCOMPLETE" (exit 6): an imperative/effectful construct
+#       refused     "EVAL INCOMPLETE" (exit 6): an imperative/effectful construct,
+#                   in the program or in a fun of the prelude main reaches, or a
+#                   cell written inside a block (scope, when)
 #       type-error  its own checker rejects what the native frontend accepts
 #       crash       an uncaught OCaml exception, no EXIT line
 #
@@ -84,7 +86,7 @@ AGREE      kw_reduction_modifiers
 AGREE      kw_stream_policies
 AGREE      kw_topos_block
 AGREE      kw_view_show
-INCOMPLETE land_reach punt
+INCOMPLETE land_reach refused
 INCOMPLETE math_ext punt
 INCOMPLETE merkle_noncommutative punt
 AGREE      nat_transform_functor

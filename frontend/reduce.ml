@@ -215,7 +215,7 @@ let rec has_side_effect t =
         String.length name >= String.length p
         && String.sub name 0 (String.length p) = p
       in
-      prefix "Space__"
+      prefix "__cell_"
       || prefix "Output__"
       || prefix "Stream__"
       (* List__, Map__ are pure: each op produces a new id without
