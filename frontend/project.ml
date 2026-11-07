@@ -160,6 +160,13 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
   Hashtbl.reset Surface_ast.law_origin;
   Hashtbl.reset Surface_ast.carrier_taken;
   Hashtbl.reset Surface_ast.model_arrows;
+  (* the algebras are read again from these sources: written, deduced, with
+     their carriers and their models *)
+  Hashtbl.reset Surface_ast.algebra_places;
+  Hashtbl.reset Surface_ast.algebra_written;
+  Hashtbl.reset Surface_ast.carrier_headers;
+  Hashtbl.reset Surface_ast.carrier_models;
+  Hashtbl.reset Surface_ast.place_algebras;
   let wm =
     let mpath = Filename.concat root Package_layout.manifest_name in
     if Sys.file_exists mpath then

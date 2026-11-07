@@ -223,7 +223,7 @@ def test_this_under_a_name_that_is_no_algebra_is_refused(tmp_path):
 
 
 def test_a_declared_again_operation_must_have_the_signatures_type(tmp_path):
-    src = ("place Odd is algebra {\n  this < Magma\n"
+    src = ("place Odd {\n  this < Magma\n"
            "  operation op(a: Odd): Odd\n}\n")
     rc, out, _ = _build(tmp_path, "  return 42", {"Odd": src}, top="")
     assert rc != 0 and "E2001" in out and "does not have the type it has in Magma" in out, out
@@ -295,12 +295,12 @@ def test_the_lemma_comes_down_to_additive_proved(tmp_path):
 def test_without_its_axioms_the_lemma_is_an_axiom(tmp_path):
     """The proof is a real one: take away what it rests on and the same statement
     is asked of the model, and refuted."""
-    weak = ("place Weak is algebra {\n"
+    weak = ("place Weak {\n"
             "  this < Monoid\n"
             "  operation inv(a: Weak): Weak\n"
             "  law inverse_of_unit inv(unit) = unit\n"
             "}\n"
-            "place Weaker is algebra { this < Weak }\n")
+            "place Weaker { this < Weak }\n")
     model = _NOT_A_GROUP.replace("uses algebra Group", "uses algebra Weak")
     rc, out, _ = _build(tmp_path, "  return 42", {"Weak": weak, "Two": model}, top="")
     assert rc != 0 and "E2101" in out and "inverse_of_unit" in out, out
@@ -385,7 +385,7 @@ def _in_space(tmp_path: Path, files: dict, main_body: str, top: str = ""):
     return r.returncode, r.stdout + r.stderr, exe
 
 
-_TALLY = ("place Tally is algebra {\n"
+_TALLY = ("place Tally {\n"
           "  this < Monoid\n"
           "  law idempotent ∀a : Tally, op(a, a) = a\n"
           "}\n")
@@ -536,7 +536,7 @@ def test_the_free_magma_keeps_the_parentheses_and_the_order(tmp_path):
 def test_an_heir_that_states_again_a_law_of_the_signature_is_refused(tmp_path):
     # stated again, the law would replace the one of Group, and a model of the
     # weaker law would pass for a group
-    loose = ("place Loose is algebra {\n"
+    loose = ("place Loose {\n"
              "  this < Group\n"
              "  law inverse ∀a : Loose, a = a\n"
              "}\n")
@@ -548,7 +548,7 @@ def test_an_heir_that_states_again_a_law_of_the_signature_is_refused(tmp_path):
 
 def test_a_chain_of_signatures_that_comes_back_is_refused(tmp_path):
     a = "place A is algebra {\n  this < B\n  operation op(x: A, y: A): A\n}\n"
-    b = "place B is algebra {\n  this < A\n  operation op(x: B, y: B): B\n}\n"
+    b = "place B {\n  this < A\n  operation op(x: B, y: B): B\n}\n"
     rc, out, _ = _in_space(tmp_path, {"A": a, "B": b}, "  return 42")
     assert rc != 0 and "E2001" in out, out
     assert "algebra A is `this <` itself through A < B < A" in out, out
@@ -557,7 +557,7 @@ def test_a_chain_of_signatures_that_comes_back_is_refused(tmp_path):
 def test_a_law_named_commutative_that_states_another_thing_answers_no(tmp_path):
     # the law named commutative here says op(a, a) = a: the word asks for
     # op(a, b) = op(b, a), which does not follow, and the closure decides
-    idem = ("place Idem is algebra {\n"
+    idem = ("place Idem {\n"
             "  this < Semigroup\n"
             "  law commutative ∀a : Idem, op(a, a) = a\n"
             "}\n")
@@ -576,7 +576,7 @@ def test_a_law_named_commutative_that_states_another_thing_answers_no(tmp_path):
 
 # ─── an internal instance is its carrier inside its house ──────────────────
 
-_HIDDEN = ("internal place Sum carried by i64 is algebra {\n"
+_HIDDEN = ("internal place Sum carried by i64 {\n"
            "  this < Monoid\n"
            '  operation op(a: Sum, b: Sum): Sum as "+"\n'
            '  operation unit: Sum as "0"\n'
@@ -679,3 +679,58 @@ def test_a_nesting_of_operations_of_an_algebra_is_checked_once_per_level(tmp_pat
     assert rc == 0, out
     assert subprocess.run([str(exe)], capture_output=True, timeout=30).returncode == 42
     assert took < 10, f"twenty nested operations took {took:.1f} s to compile"
+
+
+# ─── a place `this <` an algebra is an algebra ─────────────────────────────
+
+_SUM64 = ("place Sum carried by i64 {\n"
+          "  this < Monoid\n"
+          '  operation op(a: Sum, b: Sum): Sum as "+"\n'
+          '  operation unit: Sum as "0"\n'
+          "LAW}\n")
+
+
+def test_a_place_below_an_algebra_is_an_algebra(tmp_path):
+    # no `is algebra`: by `this < Monoid` Sum is an instance on i64, a model of
+    # itself, with the funs of its house and the laws of Monoid certified on
+    # the carrier
+    make = "  fun make(n: Int64): Sum { return n }\n"
+    body = "  return if Sum.op(Sum.make(40), Sum.make(2)) + Sum.unit == Sum.make(42) then 42 else 1"
+    assert _exit_of(tmp_path, body, {"Sum": "internal " + _SUM64.replace("LAW", make)}) == 42
+    (tmp_path / "f").mkdir()
+    false = "  law absorbs ∀a : Sum, a + unit = unit\n"
+    rc, out, _ = _build(tmp_path / "f", "  return 42", {"Sum": _SUM64.replace("LAW", false)})
+    assert rc != 0 and "E2101" in out, out
+    assert "law absorbs of algebra Sum on the carrier i64 is refuted" in out, out
+
+
+def test_a_place_below_an_algebra_takes_is_given_on_its_carrier(tmp_path):
+    # i32 is no carrier the solver models: the laws are axioms with `is given`,
+    # not certified without it
+    plus32 = _SUM64.replace("Sum", "Plus32").replace("i64", "i32").replace("LAW", "")
+    given = plus32.replace("carried by i32 {", "carried by i32 is given {")
+    rc, out, _ = _build(tmp_path, "  return 42", {"Plus32": given})
+    assert rc == 0, out
+    (tmp_path / "n").mkdir()
+    rc, out, _ = _build(tmp_path / "n", "  return 42", {"Plus32": plus32})
+    assert rc != 0 and "E2102" in out, out
+
+
+def test_is_algebra_where_it_follows_from_this_is_refused(tmp_path):
+    cases = {
+        "Odd": ("place Odd is algebra {\n  this < Monoid\n}\n",
+                "place Odd is already an algebra by `this < Monoid`: `is algebra` is written only at a root,"
+                " a signature below no algebra; write `place Odd { this < Monoid ... }`"),
+        "Sum": (_SUM64.replace("LAW", "").replace("carried by i64 {", "carried by i64 is algebra {"),
+                "place Sum is already an algebra by `this < Monoid`: `is algebra` is written only at a root,"
+                " a signature below no algebra; write `place Sum carried by i64 { this < Monoid ... }`"),
+        "Plus32": (_SUM64.replace("Sum", "Plus32").replace("LAW", "")
+                   .replace("carried by i64 {", "carried by i32 is given is algebra {"),
+                   "place Plus32 is already an algebra by `this < Monoid`: `is algebra` is written only at a root,"
+                   " a signature below no algebra; write `place Plus32 carried by i32 is given { this < Monoid ... }`"),
+    }
+    for name, (src, words) in cases.items():
+        (tmp_path / name).mkdir()
+        rc, out, _ = _build(tmp_path / name, "  return 42", {name: src})
+        assert rc != 0 and "E2001" in out, out
+        assert words in out, out

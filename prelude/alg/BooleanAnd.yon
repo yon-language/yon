@@ -1,6 +1,6 @@
 /* BooleanAnd — an instance of Monoid: a meet semilattice with a top. The meet of
  * two is commutative and idempotent, and the top is its unit. */
-place BooleanAnd is algebra {
+place BooleanAnd {
   this < Monoid
   operation op(a: BooleanAnd, b: BooleanAnd): BooleanAnd
   operation unit: BooleanAnd

@@ -1,7 +1,7 @@
 /* Multiplicative — an instance of Monoid written with *: commutative, with the
  * neutral element 1. Its carrier is i64, with the machine's product and one (the
  * ring Z/2^64). */
-place Multiplicative carried by i64 is algebra {
+place Multiplicative carried by i64 {
   this < Monoid
   operation op(a: Multiplicative, b: Multiplicative): Multiplicative as "*"
   operation unit: Multiplicative as "1"

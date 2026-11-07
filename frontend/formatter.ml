@@ -505,11 +505,9 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
   let world =
     if pd.pd_world = "__INFER" || pd.pd_world = "" then "" else " in " ^ pd.pd_world in
   let on_error = match pd.pd_on_error with Some e -> " on error " ^ e | None -> "" in
-  let algebra = if Hashtbl.mem Surface_ast.algebra_places pd.pd_name then
-      (match Hashtbl.find_opt Surface_ast.carrier_models pd.pd_name with
-       | Some [(_, true, _)] -> " is given is algebra"
-       | _ -> " is algebra")
-    else "" in
+  let given = match Hashtbl.find_opt Surface_ast.carrier_headers pd.pd_name with
+    | Some (_, true, _) -> " is given" | _ -> "" in
+  let algebra = given ^ (if Hashtbl.mem Surface_ast.algebra_written pd.pd_name then " is algebra" else "") in
   let uses = match Hashtbl.find_opt Surface_ast.place_algebras pd.pd_name with
     | Some names -> " uses algebra " ^ String.concat ", " names | None -> "" in
   line f (Printf.sprintf "%s%s%s%s%s {"

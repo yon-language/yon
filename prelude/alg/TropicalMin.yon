@@ -1,6 +1,6 @@
 /* TropicalMin — an instance of Monoid, the min-plus semiring's sum: the smaller
  * of two, commutative and idempotent, with top (above everything) as its unit. */
-place TropicalMin is algebra {
+place TropicalMin {
   this < Monoid
   operation op(a: TropicalMin, b: TropicalMin): TropicalMin
   operation unit: TropicalMin

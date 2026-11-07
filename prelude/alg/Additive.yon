@@ -2,7 +2,7 @@
  * neutral element 0 and the opposite. Its carrier is i64, with the machine's sum,
  * zero and opposite (the ring Z/2^64): a place carried by i64 that uses Additive
  * takes from it the operations it does not give. */
-place Additive carried by i64 is algebra {
+place Additive carried by i64 {
   this < Group
   operation op(a: Additive, b: Additive): Additive as "+"
   operation unit: Additive as "0"

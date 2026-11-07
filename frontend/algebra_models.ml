@@ -306,7 +306,14 @@ let elaborate_bounded (p : S.program) : S.program =
         S.TopFun { fd with S.fn_params = fd.S.fn_params @ dictionary; fn_body = body }
     | d -> d) p
 
+(* The algebras of a whole program: the roots and every place below one. *)
+let deduce (p : S.program) : unit =
+  S.deduce_algebras (List.filter_map (function
+      | S.TopPlace pd -> Option.map (fun b -> (pd.S.pd_name, b)) pd.S.pd_subcontains
+      | _ -> None) p)
+
 let complete (p : S.program) : S.program =
+  deduce p;
   let p = read_signatures p in
   let places = List.filter_map (function S.TopPlace pd -> Some pd | _ -> None) p in
   let find a = List.find_opt (fun (pd : S.place_decl) -> pd.S.pd_name = a) places in

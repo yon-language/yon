@@ -1,6 +1,6 @@
 /* Gcd — an instance of Monoid: the greatest common divisor of two, commutative,
  * with zero as its unit, since every number divides zero. */
-place Gcd is algebra {
+place Gcd {
   this < Monoid
   operation op(a: Gcd, b: Gcd): Gcd
   operation unit: Gcd

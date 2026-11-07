@@ -1,6 +1,6 @@
 /* TropicalMax — an instance of Monoid, the max-plus semiring's sum: the larger of
  * two, commutative and idempotent, with bottom (below everything) as its unit. */
-place TropicalMax is algebra {
+place TropicalMax {
   this < Monoid
   operation op(a: TropicalMax, b: TropicalMax): TropicalMax
   operation unit: TropicalMax

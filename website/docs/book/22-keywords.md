@@ -442,7 +442,7 @@ place Entry {
 
 #### `algebra`
 
-`place A is algebra { ... }` declares an algebra: its operations and its laws, over its own name as the carrier. `uses algebra A, B` after a place's name makes the place a model of each. The algebras of the prelude are in `prelude/alg/`.
+`place A is algebra { ... }` declares an algebra: its operations and its laws, over its own name as the carrier. It is written only at a root: a place `this <` an algebra is an algebra already, `place Group { this < Monoid ... }`, and `is algebra` written there is refused. `uses algebra A, B` after a place's name makes the place a model of each. The algebras of the prelude are in `prelude/alg/`.
 
 #### `uses`
 
@@ -657,7 +657,7 @@ The source of a move, morph, geomorph or import.
 
 #### `carried`
 
-`place P carried by C`: the values of `P` are carried by `C`, the object of the machine they are (`place Int64 carried by i64`). Written `internal place P carried by C`, the representation is internal to the house: inside it `P` is `C`, outside it `P` is abstract. Before `is algebra` it makes an instance on a carrier: `place Additive carried by i64 is algebra { this < Group ... }`, whose laws are certified on the machine of `C`; `carried by C is given is algebra` makes axioms of the laws the certification does not decide there, and a fun in its body is a fun of its house, never a derived operation of the models. An `internal` instance is its carrier inside its house only, where its funs reach the carrier: outside it the carrier is opaque and its values come from the funs of its house and its operations, while the signature stays usable everywhere.
+`place P carried by C`: the values of `P` are carried by `C`, the object of the machine they are (`place Int64 carried by i64`). Written `internal place P carried by C`, the representation is internal to the house: inside it `P` is `C`, outside it `P` is abstract. On a place below an algebra it makes an instance on a carrier: `place Additive carried by i64 { this < Group ... }`, whose laws are certified on the machine of `C`; `carried by C is given` makes axioms of the laws the certification does not decide there, and a fun in its body is a fun of its house, never a derived operation of the models. An `internal` instance is its carrier inside its house only, where its funs reach the carrier: outside it the carrier is opaque and its values come from the funs of its house and its operations, while the signature stays usable everywhere.
 
 #### `is`
 

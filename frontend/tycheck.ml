@@ -2415,7 +2415,7 @@ let resolve_model (env : Tyenv.env) ~(called : string) ~(signature : string)
       "the call of %s: no argument fixes the values of the parameter that uses %s"
       called signature) in
   if not (is_algebra signature) then
-    err loc (Printf.sprintf "the parameter of %s uses %s, which is no algebra: an algebra is a place declared `is algebra`"
+    err loc (Printf.sprintf "the parameter of %s uses %s, which is no algebra: an algebra is a place written `is algebra` or `this <` an algebra"
                called signature)
   else
   match named with
@@ -7474,6 +7474,16 @@ and check_signature_above (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl)
             err pd.pd_loc (Printf.sprintf
               "algebra %s is `this <` itself through %s: the models of an heir are a subobject of the models above it, and a chain of signatures does not come back"
               pd.pd_name (String.concat " < " loop))
+        | None when Hashtbl.mem Surface_ast.algebra_written pd.pd_name ->
+            (* below an algebra a place is one already: `is algebra` names a root *)
+            err pd.pd_loc (Printf.sprintf
+              "place %s is already an algebra by `this < %s`: `is algebra` is written only at a root, a signature below no algebra; write `place %s%s { this < %s ... }`"
+              pd.pd_name b pd.pd_name
+              (match Hashtbl.find_opt Surface_ast.carrier_headers pd.pd_name with
+               | Some (c, true, _) -> " carried by " ^ c ^ " is given"
+               | Some (c, false, _) -> " carried by " ^ c
+               | None -> "")
+              b)
         | None ->
         List.fold_left (fun acc m ->
           let* () = acc in
@@ -7510,8 +7520,15 @@ and check_signature_above (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl)
    gives the interpretation. Each operation of the algebra is a fun of the
    place of the same name, with the algebra's name read as the place: the
    model provides it, the algebra never does, since an algebra has no carrier
-   of its own to compute on. An algebra not declared `is algebra` is unknown. *)
+   of its own to compute on. A name that is no algebra, written `is algebra` or
+   `this <` one, is unknown. *)
 and check_algebra_models (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
+  let* () = match Hashtbl.find_opt Surface_ast.carrier_headers pd.pd_name with
+    | Some (c, true, _) when not (Hashtbl.mem Surface_ast.algebra_places pd.pd_name) ->
+        err pd.pd_loc (Printf.sprintf
+          "place %s: `carried by %s is given` declares the axioms of an algebra on its carrier, and %s is no algebra: an instance is `this <` an algebra (`place %s carried by %s is given { this < A ... }`), a place that is no algebra writes `place %s carried by %s`"
+          pd.pd_name c pd.pd_name pd.pd_name c pd.pd_name c)
+    | _ -> ok () in
   let* () = check_signature_above env ctx pd in
   let algebras = match Hashtbl.find_opt Surface_ast.place_algebras pd.pd_name with
     | Some l -> l | None -> [] in
@@ -7552,7 +7569,7 @@ and check_algebra_models (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) 
                      pd.pd_name a o.op_name shown))
           | _ -> ok ()) (ok ()) apd.pd_members
     | _ -> err pd.pd_loc (Printf.sprintf
-        "place %s uses algebra %s, which is no algebra: an algebra is a place declared `is algebra`"
+        "place %s uses algebra %s, which is no algebra: an algebra is a place written `is algebra` or `this <` an algebra"
         pd.pd_name a)) (ok ()) algebras
 
 and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc_result =

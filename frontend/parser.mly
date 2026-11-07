@@ -780,20 +780,26 @@ place_decl:
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
     { let (carried, given, carried_loc, is_c) = ci in
+      (* parsed again (an editor reads a file many times), a place is what this
+         text says: an algebra it no longer writes is deduced again, or none *)
       (match is_c with
-       | Some `Algebra -> Hashtbl.replace Surface_ast.algebra_places name ()
-       | None -> ());
+       | Some `Algebra ->
+           Hashtbl.replace Surface_ast.algebra_places name ();
+           Hashtbl.replace Surface_ast.algebra_written name ()
+       | None ->
+           Hashtbl.remove Surface_ast.algebra_places name;
+           Hashtbl.remove Surface_ast.algebra_written name);
+      (match carried, carried_loc with
+       | Some c, Some l -> Hashtbl.replace Surface_ast.carrier_headers name (c, given, l)
+       | _ -> Hashtbl.remove Surface_ast.carrier_headers name);
       (let (_, _, clauses, _) = mv in
        if List.exists (function PcCarriedBy _ -> true | _ -> false) clauses then
          failwith (Printf.sprintf
-           "place %s: `carried by` is not written in the body of a place: the carrier of an instance of an algebra is in its header, `place %s carried by C is algebra { ... }` (`carried by C is given is algebra` when its laws are axioms on C)" name name);
-       if given && is_c <> Some `Algebra then
-         failwith (Printf.sprintf
-           "place %s: `carried by C is given` declares the axioms of an algebra on its carrier; a place that is no algebra writes `place %s carried by C`" name name);
+           "place %s: `carried by` is not written in the body of a place: the carrier of an instance of an algebra is in its header, `place %s carried by C { this < A ... }` (`carried by C is given` when its laws are axioms on C)" name name);
        match is_c, carried, carried_loc with
        | Some `Algebra, Some c, Some l ->
            Hashtbl.replace Surface_ast.carrier_models name [(c, given, l)]
-       | _ -> ());
+       | _ -> Hashtbl.remove Surface_ast.carrier_models name);
       if internal && carried = None then
         failwith (Printf.sprintf
           "internal place %s has no carrier: `internal` hides how a place is carried, write `internal place %s carried by C`" name name);

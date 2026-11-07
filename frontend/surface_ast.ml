@@ -127,9 +127,30 @@ let place_algebras : (string, string list) Hashtbl.t = Hashtbl.create 8
 (* An operator written on a value of a place that an algebra gives it
    (`a + b` on a Word64, by Additive's `as "+"`): the site, by its full span,
    and the fun it calls. *)
-(* The carriers each algebra declares a model (`carried by C` in its body):
+(* The carrier each instance is a model on (`carried by C` in its header):
    algebra -> (carrier, declared an axiom, site). *)
 let carrier_models : (string, (string * bool * location) list) Hashtbl.t = Hashtbl.create 8
+(* The algebras written `is algebra`: the roots, signatures below no algebra. *)
+let algebra_written : (string, unit) Hashtbl.t = Hashtbl.create 8
+(* The carrier in the header of each place: (carrier, declared `is given`, site). *)
+let carrier_headers : (string, string * bool * location) Hashtbl.t = Hashtbl.create 16
+
+(* A place `this <` an algebra is an algebra, a subobject of its models: the
+   algebras are the roots written `is algebra` and every place below one. An
+   heir with its carrier in its header is an instance, a model of itself on
+   that carrier. *)
+let deduce_algebras (heirs : (string * string) list) : unit =
+  let rec go () =
+    let grew = List.fold_left (fun grew (p, above) ->
+        if Hashtbl.mem algebra_places above && not (Hashtbl.mem algebra_places p) then begin
+          Hashtbl.replace algebra_places p ();
+          (match Hashtbl.find_opt carrier_headers p with
+           | Some h -> Hashtbl.replace carrier_models p [h]
+           | None -> ());
+          true
+        end else grew) false heirs in
+    if grew then go () in
+  go ()
 let algebra_op_sites : (string * int * int * int * int, string) Hashtbl.t = Hashtbl.create 16
 (* The house whose funs are being checked. Inside the house of a place
    `internal place P carried by <carrier>` the place is its carrier, in both directions;

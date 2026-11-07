@@ -643,7 +643,7 @@ let check_named_algebra (ps : (string * S.place_decl) list) (house : string)
                   a o.S.op_name a))) by_name
        | _ ->
            [not_certified house a ("of the operation " ^ o.S.op_name) o.S.op_loc
-              (Printf.sprintf "%s is no algebra: an algebra is a place declared `is algebra`" a)])
+              (Printf.sprintf "%s is no algebra: an algebra is a place written `is algebra` or `this <` an algebra" a)])
 
 let check_named_algebras (p : S.program) (ps : (string * S.place_decl) list) : law_result list =
   List.concat_map (function

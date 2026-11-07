@@ -8,9 +8,10 @@
  * it stays itself, it provides A's operations as its own funs of the same
  * names, its laws are certified on it, and A's operators write them.
  *
- * The four signatures: Magma, Semigroup, Monoid, Group. With `this <` between
- * algebras the models of the heir are a subobject: the heir reads the signature
- * above it, its operations and its laws. The catalog of the instances, with a
+ * The four signatures: Magma, Semigroup, Monoid, Group. Magma is the root,
+ * written `is algebra`; a place `this <` an algebra is an algebra, so the others
+ * are algebras by `this <`, and the models of the heir are a subobject: the heir
+ * reads the signature above it, its operations and its laws. The catalog of the instances, with a
  * name each: Additive, Multiplicative, BooleanOr, BooleanAnd, TropicalMax,
  * TropicalMin, Gcd. An instance declares again the operations of its signature
  * with the same names, `op`, `unit`, `inv`, and its own symbols; they are told
@@ -21,7 +22,8 @@
  * call, `f<Additive>(xs)`.
  *
  * This package is the catalog of the algebras of the language: the type checker
- * asks no other. A name that is not a place declared `is algebra` is refused,
+ * asks no other. A name that is no algebra, written `is algebra` or `this <`
+ * one, is refused,
  * wherever a source file names it. The MLIR verifier keeps a table of its own,
  * for units written by hand; the frontend emits nothing that reaches it. */
 topos where {

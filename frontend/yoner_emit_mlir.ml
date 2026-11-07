@@ -356,6 +356,7 @@ let () =
      exit 3 (the shared semantic-error channel). Must stay before
      Module_prefix.lower_cross_space (below): the drop analysis needs the raw
      import/call arcs, gone after lowering. *)
+  Algebra_models.deduce prog;
   let loaded : Project.loaded =
     { Project.root = path;
       declared = declared_spaces;

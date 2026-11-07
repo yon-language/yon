@@ -121,8 +121,17 @@ def test_an_operation_that_names_an_algebra_of_the_prelude_passes(tmp_path, alge
 
 
 def test_the_catalog_is_the_set_of_the_algebras_of_the_prelude():
-    declared = {p.stem for p in (ROOT / "prelude" / "alg").glob("*.yon")
-                if re.search(rf"place {p.stem}( carried by \w+( is given)?)? is algebra", p.read_text())}
+    # an algebra is a root written `is algebra` or a place `this <` an algebra
+    texts = {p.stem: p.read_text() for p in (ROOT / "prelude" / "alg").glob("*.yon")}
+    declared = {n for n, t in texts.items()
+                if re.search(rf"place {n}( carried by \w+( is given)?)? is algebra", t)}
+    while True:
+        below = {n for n, t in texts.items()
+                 if n not in declared
+                 and any(re.search(rf"^\s*this < {a}\s*$", t, re.M) for a in declared)}
+        if not below:
+            break
+        declared |= below
     assert declared == set(PRELUDE_ALGEBRAS)
     assert "g_alg_catalog" not in (ROOT / "runtime" / "yon_rt_hsh.c").read_text()
 
@@ -338,14 +347,15 @@ def test_carried_by_in_the_body_of_an_algebra_points_to_the_header(tmp_path):
     src = src.replace("}\n", "  carried by i64\n}\n")
     rc, out, _ = _build(tmp_path, {"Sum": src}, "  return 42", objects=["Sum"])
     assert rc != 0 and "E1001" in out, out
-    assert "the carrier of an instance of an algebra is in its header, `place Sum carried by C is algebra { ... }`" in out, out
+    assert "the carrier of an instance of an algebra is in its header, `place Sum carried by C { this < A ... }`" in out, out
 
 
 def test_carried_by_is_given_on_a_place_that_is_no_algebra_is_refused(tmp_path):
     src = "place Meter carried by i64 is given {\n}\n"
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
-    assert rc != 0 and "E1001" in out, out
-    assert "`carried by C is given` declares the axioms of an algebra on its carrier" in out, out
+    assert rc != 0 and "E2001" in out, out
+    assert ("place Meter: `carried by i64 is given` declares the axioms of an algebra on its carrier, "
+            "and Meter is no algebra: an instance is `this <` an algebra") in out, out
 
 
 def test_is_given_makes_axioms_only_of_the_laws_not_decided(tmp_path):
@@ -423,7 +433,7 @@ def test_a_derived_operation_on_a_finite_model(tmp_path):
     assert _run(exe).returncode == 42
 
 
-_INSTANCE = ("place Sum carried by i64 is algebra {\n"
+_INSTANCE = ("place Sum carried by i64 {\n"
              "  this < Monoid\n"
              '  operation op(a: Sum, b: Sum): Sum as "+"\n'
              '  operation unit: Sum as "0"\n'

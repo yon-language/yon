@@ -220,6 +220,7 @@ let () =
       exit 3
   | Ok (prog, place_to_space, source) ->
       (* Type check first; if errors, abort. *)
+      Algebra_models.deduce prog;
       let cr = Tycheck.check_program prog in
       if cr.cr_errors <> [] then begin
         List.iter (fun err ->

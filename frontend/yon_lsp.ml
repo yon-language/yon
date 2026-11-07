@@ -73,6 +73,7 @@ let diagnostics_of_source (source : string) : diag list =
   match parse_source source with
   | Error d -> [d]
   | Ok prog ->
+      Algebra_models.deduce prog;
       let result = Tycheck.check_program prog in
       List.map type_error_to_diag result.Tycheck.cr_errors
 

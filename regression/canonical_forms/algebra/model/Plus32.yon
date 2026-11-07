@@ -1,6 +1,6 @@
-place Plus32 carried by i32 is given is algebra {
-  operation plus(a: Plus32, b: Plus32): Plus32 as "+"
-  operation nought: Plus32 as "0"
+place Plus32 carried by i32 is given {
+  this < Monoid
+  operation op(a: Plus32, b: Plus32): Plus32 as "+"
+  operation unit: Plus32 as "0"
   law commutative ∀a : Plus32 ∀b : Plus32, a + b = b + a
-  law neutral ∀a : Plus32, a + nought = a
 }

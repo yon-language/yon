@@ -1,7 +1,7 @@
 /* Group — a monoid where each element has an inverse on both sides. The last law
  * follows from the others: it is proved here, on the signature, once, and every
  * instance below inherits it. */
-place Group is algebra {
+place Group {
   this < Monoid
   operation inv(a: Group): Group
   law inverse ∀a : Group, op(a, inv(a)) = unit ∧ op(inv(a), a) = unit

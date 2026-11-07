@@ -1,6 +1,6 @@
 /* BooleanOr — an instance of Monoid: a join semilattice with a bottom. The join
  * of two is commutative and idempotent, and the bottom is its unit. */
-place BooleanOr is algebra {
+place BooleanOr {
   this < Monoid
   operation op(a: BooleanOr, b: BooleanOr): BooleanOr
   operation unit: BooleanOr

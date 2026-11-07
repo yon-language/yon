@@ -404,3 +404,43 @@ def test_lsp_protocol_whole_program_drop_check_uses_buffer(tmp_path):
         c.stop()
     finally:
         c.kill()
+
+
+_ODD_WRITTEN = "place Odd is algebra {\n  this < Monoid\n}\n"
+_ODD_DEDUCED = "place Odd {\n  this < Monoid\n}\n"
+
+
+@pytest.mark.skipif(not LSP.exists(), reason="yon_lsp missing")
+def test_lsp_reads_the_algebras_again_at_each_change(tmp_path):
+    """An algebra below Monoid written `is algebra` is refused; once the buffer
+    no longer writes it, the server no longer refuses it, and formatting keeps
+    the header as written: what an earlier text said does not stay."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "yon.toml").write_text('[package]\nname = "odd"\n\n[world.W]\nobjects = ["Odd"]\n\n'
+                                   '[runtime]\nbackend = "memory"\n')
+    (root / "Odd.yon").write_text(_ODD_DEDUCED)
+    (root / "Entry.yon").write_text("place Entry {\nfun main: Number {\n  return 42\n}\n}\n")
+    uri = _uri(root / "Odd.yon")
+    c = _LspClient()
+    try:
+        c.start()
+        c.send("textDocument/didOpen", {"textDocument": {
+            "uri": uri, "languageId": "yon", "version": 1, "text": _ODD_WRITTEN}})
+        diags = c.diagnostics_for(uri)
+        assert any(d.get("code") == "E2001"
+                   and "place Odd is already an algebra by `this < Monoid`" in d["message"]
+                   for d in diags), diags
+        c.send("textDocument/didChange", {
+            "textDocument": {"uri": uri, "version": 2},
+            "contentChanges": [{"text": _ODD_DEDUCED}]})
+        assert c.diagnostics_for(uri) == []
+        rid = c.send("textDocument/formatting", {
+            "textDocument": {"uri": uri}, "options": {"tabSize": 2, "insertSpaces": True}},
+            request=True)
+        edits = c.wait_for(lambda m: m.get("id") == rid)["result"] or []
+        text = "".join(e["newText"] for e in edits)
+        assert "is algebra" not in text and "this < Monoid" in (text or _ODD_DEDUCED), edits
+        c.stop()
+    finally:
+        c.kill()
