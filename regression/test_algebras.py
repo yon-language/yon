@@ -64,8 +64,8 @@ def test_a_place_that_lists_no_algebra_takes_no_operator(tmp_path):
 
 _COIN = ("place Coin uses algebra BooleanOr {\n"
          "  this > Heads :U Tails\n"
-         "  fun join(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }\n"
-         "  fun bottom: Coin { return Tails }\n"
+         "  fun op(a: Coin, b: Coin): Coin { return match a { Heads => Heads, Tails => b } }\n"
+         "  fun unit: Coin { return Tails }\n"
          "}\n")
 
 
@@ -82,9 +82,9 @@ def test_a_law_false_on_the_model_is_refuted(tmp_path):
 
 
 def test_a_model_must_give_each_operation(tmp_path):
-    src = _COIN.replace("  fun bottom: Coin { return Tails }\n", "")
+    src = _COIN.replace("  fun unit: Coin { return Tails }\n", "")
     rc, out, _ = _build(tmp_path, {"Coin": src}, "  return 42", objects=["Coin"])
-    assert rc != 0 and "does not give its operation bottom" in out, out
+    assert rc != 0 and "does not give its operation unit" in out, out
 
 
 def test_an_unknown_algebra_is_refused(tmp_path):
@@ -108,7 +108,8 @@ def test_an_operation_that_names_an_unknown_algebra_is_refused(tmp_path):
     assert "BooleanOrr is no algebra" in out and "the operation join" in out, out
 
 
-PRELUDE_ALGEBRAS = ["Additive", "Multiplicative", "BooleanOr", "BooleanAnd",
+PRELUDE_ALGEBRAS = ["Magma", "Semigroup", "Monoid", "Group",
+                    "Additive", "Multiplicative", "BooleanOr", "BooleanAnd",
                     "TropicalMax", "TropicalMin", "Gcd"]
 
 
@@ -121,7 +122,7 @@ def test_an_operation_that_names_an_algebra_of_the_prelude_passes(tmp_path, alge
 
 def test_the_catalog_is_the_set_of_the_algebras_of_the_prelude():
     declared = {p.stem for p in (ROOT / "prelude" / "alg").glob("*.yon")
-                if f"place {p.stem} is algebra" in p.read_text()}
+                if re.search(rf"place {p.stem}( carried by \w+( is given)?)? is algebra", p.read_text())}
     assert declared == set(PRELUDE_ALGEBRAS)
     assert "g_alg_catalog" not in (ROOT / "runtime" / "yon_rt_hsh.c").read_text()
 
@@ -186,25 +187,24 @@ def test_a_standalone_operation_that_names_an_algebra_passes(tmp_path):
 def test_the_neutral_of_gcd_is_a_law_of_the_algebra(tmp_path):
     bit = ("place Bit uses algebra Gcd {\n"
            "  this > Naught :U Tick\n"
-           "  fun gcd(a: Bit, b: Bit): Bit { return match a { Naught => b, Tick => Tick } }\n"
+           "  fun op(a: Bit, b: Bit): Bit { return match a { Naught => b, Tick => Tick } }\n"
            "ZERO}\n")
-    rc, out, exe = _build(tmp_path, {"Bit": bit.replace("ZERO", "  fun zero: Bit { return Naught }\n")},
+    rc, out, exe = _build(tmp_path, {"Bit": bit.replace("ZERO", "  fun unit: Bit { return Naught }\n")},
                           "  return 42", objects=["Bit"])
     assert rc == 0, out
     assert _run(exe).returncode == 42
     (tmp_path / "wrong").mkdir()
     rc, out, _ = _build(tmp_path / "wrong",
-                        {"Bit": bit.replace("ZERO", "  fun zero: Bit { return Tick }\n")},
+                        {"Bit": bit.replace("ZERO", "  fun unit: Bit { return Tick }\n")},
                         "  return 42", objects=["Bit"])
     assert rc != 0 and "E2101" in out and "law neutral of algebra Gcd" in out, out
 
 
 def _order(law: str, carrier: str = "i64") -> str:
-    return ("place Sum is algebra {\n"
+    return (f"place Sum carried by {carrier} is algebra {{\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
             '  operation zero: Sum as "0"\n'
             f"  {law}\n"
-            f"  carried by {carrier}\n"
             "}\n")
 
 
@@ -224,11 +224,25 @@ def test_monotonicity_has_no_order_to_be_stated_with_on_the_double(tmp_path):
     assert "comparison requires matching ordered operands; got Sum and Sum" in out, out
 
 
-def test_the_carrier_of_an_algebra_has_no_order_to_state_a_true_law_with(tmp_path):
-    src = _order("law total ∀a : Sum ∀b : Sum, a <= b ∨ b < a")
+def test_a_signature_has_no_order_to_state_a_law_with(tmp_path):
+    src = _order("law total ∀a : Sum ∀b : Sum, a <= b ∨ b < a").replace(
+        "place Sum carried by i64 is algebra {", "place Sum is algebra {")
     rc, out, _ = _build(tmp_path, {"Sum": src}, "  return 42", objects=["Sum"])
     assert rc != 0 and "E2001" in out, out
     assert "comparison requires matching ordered operands; got Sum and Sum" in out, out
+
+
+def test_an_instance_is_its_carrier_and_states_a_law_with_its_order(tmp_path):
+    # carried by i64 in the header: the instance is a face of i64, whose order is
+    # total, and the law is certified on the machine.
+    src = _order("law total ∀a : Sum ∀b : Sum, a <= b ∨ b < a")
+    rc, out, exe = _build(tmp_path, {"Sum": src}, "  return 42", objects=["Sum"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+    false = _order("law strict ∀a : Sum ∀b : Sum, a < b ∨ b < a")
+    rc, out, _ = _build(tmp_path / "f", {"Sum": false}, "  return 42", objects=["Sum"]) \
+        if (tmp_path / "f").mkdir() is None else (0, "", None)
+    assert rc != 0 and "E2101" in out and "law strict of algebra Sum on the carrier i64 is refuted" in out, out
 
 
 def test_the_runtime_keeps_of_the_magma_only_the_bridge_of_the_verifier(tmp_path):
@@ -248,22 +262,22 @@ def test_a_place_that_names_an_algebra_makes_no_instance_function(tmp_path):
 
 def test_a_law_not_decided_is_not_certified(tmp_path):
     src = ("place Meter carried by number uses algebra Additive {\n"
-           "  fun add(a: Meter, b: Meter): Meter { return a + b }\n"
-           "  fun zero: Meter { return 0 }\n"
+           "  fun op(a: Meter, b: Meter): Meter { return a + b }\n"
+           "  fun unit: Meter { return 0 }\n"
+           "  fun inv(a: Meter): Meter { return 0 - a }\n"
            "}\n")
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
     assert rc != 0 and "E2102" in out and "not certified" in out, out
 
 
 def _sum(carrier: str, extra: str = "", given: str = "") -> str:
-    return ("place Sum is algebra {\n"
+    return (f"place Sum carried by {carrier}{given} is algebra {{\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
             '  operation zero: Sum as "0"\n'
             "  law associative ∀a : Sum ∀b : Sum ∀c : Sum, (a + b) + c = a + (b + c)\n"
             "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
             "  law neutral ∀a : Sum, a + zero = a\n"
             + extra +
-            f"  carried by {carrier}{given}\n"
             "}\n")
 
 
@@ -298,7 +312,7 @@ def test_an_axiom_is_declared_only_where_the_certification_does_not_decide(tmp_p
     assert rc == 0, out
     rc, out, _ = _build(tmp_path / "decided", {"Sum": _sum("i64", given=" is given")}, "  return 42",
                         objects=["Sum"]) if (tmp_path / "decided").mkdir() is None else (0, "", None)
-    assert rc != 0 and "E2001" in out and "the certification decides it" in out, out
+    assert rc != 0 and "E2001" in out and "the certification decides every one of its laws" in out, out
 
 
 def test_a_place_takes_the_operations_it_does_not_give_from_its_carrier(tmp_path):
@@ -307,24 +321,60 @@ def test_a_place_takes_the_operations_it_does_not_give_from_its_carrier(tmp_path
             "  fun value(w: W): Int64 { return w }\n"
             "}\n")
     rc, out, exe = _build(tmp_path, {"W": word},
-                          "  return if W.value(W.make(40) + W.make(2) * W.one) == 42 then 42 else 1",
+                          "  return if W.value(W.make(40) + W.make(2) * W.make(1)) == 42 then 42 else 1",
                           objects=["W"])
     assert rc == 0, out
     assert _run(exe).returncode == 42
 
 
-def test_body_carried_by_is_only_for_an_algebra(tmp_path):
+def test_carried_by_is_not_written_in_the_body_of_a_place(tmp_path):
     src = "place Meter {\n  carried by i64\n}\n"
     rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
-    assert rc != 0 and "E1001" in out and "declares a carrier model of an algebra" in out, out
+    assert rc != 0 and "E1001" in out and "`carried by` is not written in the body of a place" in out, out
 
 
-_DERIVED = ("place Sum is algebra {\n"
+def test_carried_by_in_the_body_of_an_algebra_points_to_the_header(tmp_path):
+    src = _sum("i64").replace("place Sum carried by i64 is algebra {\n", "place Sum is algebra {\n")
+    src = src.replace("}\n", "  carried by i64\n}\n")
+    rc, out, _ = _build(tmp_path, {"Sum": src}, "  return 42", objects=["Sum"])
+    assert rc != 0 and "E1001" in out, out
+    assert "the carrier of an instance of an algebra is in its header, `place Sum carried by C is algebra { ... }`" in out, out
+
+
+def test_carried_by_is_given_on_a_place_that_is_no_algebra_is_refused(tmp_path):
+    src = "place Meter carried by i64 is given {\n}\n"
+    rc, out, _ = _build(tmp_path, {"Meter": src}, "  return 42", objects=["Meter"])
+    assert rc != 0 and "E1001" in out, out
+    assert "`carried by C is given` declares the axioms of an algebra on its carrier" in out, out
+
+
+def test_is_given_makes_axioms_only_of_the_laws_not_decided(tmp_path):
+    # twice has no symbol: its law is not decided on i64, so `is given` makes it
+    # an axiom, while the sum's laws are still decided there.
+    twice = ("  operation twice(a: Sum): Sum\n"
+             "  law doubled ∀a : Sum, twice(a) = a + a\n")
+    rc, out, exe = _build(tmp_path, {"Sum": _sum("i64", extra=twice, given=" is given")},
+                          "  return 42", objects=["Sum"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+
+
+def test_a_decided_law_that_is_false_is_refuted_even_with_is_given(tmp_path):
+    twice = ("  operation twice(a: Sum): Sum\n"
+             "  law doubled ∀a : Sum, twice(a) = a + a\n"
+             "  law doubles ∀a : Sum, a + a = a\n")
+    rc, out, _ = _build(tmp_path, {"Sum": _sum("i64", extra=twice, given=" is given")},
+                        "  return 42", objects=["Sum"])
+    assert rc != 0 and "E2101" in out, out
+    assert "law doubles of algebra Sum on the carrier i64 is refuted; counterexample:" in out, out
+    assert "law doubled" not in out, out
+
+
+_DERIVED = ("place Sum carried by i64 is algebra {\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
             '  operation zero: Sum as "0"\n'
             "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
             "  law neutral ∀a : Sum, a + zero = a\n"
-            "  carried by i64\n"
             "  fun double(a: Sum): Sum { return a + a }\n"
             "  fun triple(a: Sum): Sum { return double(a) + a + zero }\n"
             "}\n")
@@ -367,3 +417,46 @@ def test_a_derived_operation_on_a_finite_model(tmp_path):
                           objects=["Lub", "Coin"])
     assert rc == 0, out
     assert _run(exe).returncode == 42
+
+
+_INSTANCE = ("place Sum carried by i64 is algebra {\n"
+             "  this < Monoid\n"
+             '  operation op(a: Sum, b: Sum): Sum as "+"\n'
+             '  operation unit: Sum as "0"\n'
+             "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
+             "}\n")
+_MODEL = ("internal place W carried by i64 uses algebra Sum {\n"
+          "  fun make(n: Int64): W { return n }\n"
+          "  fun value(w: W): Int64 { return w }\n"
+          "GIVES}\n")
+_FORTY_TWO = "  return if W.value(W.make(40) + W.make(2)) == 42 then 42 else 1"
+
+
+def test_a_model_takes_the_operations_from_the_carrier_of_an_instance(tmp_path):
+    rc, out, exe = _build(tmp_path, {"Sum": _INSTANCE, "W": _MODEL.replace("GIVES", "")},
+                          _FORTY_TWO, objects=["Sum", "W"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+
+
+def test_in_its_space_a_model_takes_the_operations_from_an_internal_instance(tmp_path):
+    # Sum and W are in the one Space of the project: there the instance is its
+    # carrier (outside its Space it is opaque: test_alg_hierarchy.py)
+    rc, out, exe = _build(tmp_path, {"Sum": "internal " + _INSTANCE, "W": _MODEL.replace("GIVES", "")},
+                          _FORTY_TWO, objects=["Sum", "W"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+
+
+def test_an_internal_instance_keeps_its_signature(tmp_path):
+    gives = ("  fun op(a: W, b: W): W { return make(value(a) + value(b)) }\n"
+             "  fun unit: W { return make(0) }\n")
+    rc, out, exe = _build(tmp_path, {"Sum": "internal " + _INSTANCE, "W": _MODEL.replace("GIVES", gives)},
+                          _FORTY_TWO, objects=["Sum", "W"])
+    assert rc == 0, out
+    assert _run(exe).returncode == 42
+    false = gives.replace("make(value(a) + value(b))", "make(value(a) - value(b))")
+    (tmp_path / "f").mkdir()
+    rc, out, _ = _build(tmp_path / "f", {"Sum": "internal " + _INSTANCE, "W": _MODEL.replace("GIVES", false)},
+                        _FORTY_TWO, objects=["Sum", "W"])
+    assert rc != 0 and "E2101" in out and "law commutative of algebra Sum on place W is refuted" in out, out

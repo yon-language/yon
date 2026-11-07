@@ -88,6 +88,21 @@
     if dot_is_module obj then ECall (obj ^ "__" ^ fld, args, loc)
     else ECall (fld, EVar (obj, loc) :: args, loc)
 
+  (* `<T uses Monoid>`: the name of the parameter, and its signature kept by
+     the site of the fun. *)
+  let bound_params (tparams : (string * string option) list) (loc : location) : string list =
+    (match List.filter_map (fun (t, a) -> Option.map (fun a -> (t, a)) a) tparams with
+     | [] -> Hashtbl.remove Surface_ast.fun_bounds (Surface_ast.site_of loc)
+     | bounds -> Hashtbl.replace Surface_ast.fun_bounds (Surface_ast.site_of loc) bounds);
+    List.map fst tparams
+
+  (* `f<A>(args)`: the type arguments, kept by the site of the call. *)
+  let with_type_args (targs : string list) (e : expr) : expr =
+    (match e with
+     | ECall (_, _, l) -> Hashtbl.replace Surface_ast.explicit_type_args (Surface_ast.site_of l) targs
+     | _ -> ());
+    e
+
   (* a ↦ f, a ↪ Arm: the left side enters as the first argument, a tuple spreads. The
      checker knows whether the name is a fun or an arm, and holds each arrow to its own. *)
   let arrow kind a b (loc : location) =
@@ -289,6 +304,8 @@
 /* Operators and punctuation */
 %token PLUS MINUS STAR SLASH PERCENT
 %token LT GT LEQ GEQ EQ EQEQ NEQ
+/* the `<` of `f<A, B>(`: a name, then type arguments that a `(` follows */
+%token LT_TYPE_ARGS
 %token PIPE DOT COMMA COLON
 %token PIPEGT                          (* the old pipe, refused *)
 %token MAPSTO INJ                      (* application ↦, injection into an arm ↪ *)
@@ -721,6 +738,23 @@ place_params:
 carried_clause:
   | CARRIED BY c = IDENT  { c }
 
+(* What follows the name of a place, up to its uses: the carrier, the `is` of the
+   carrier model, the `is` of an algebra. ONE nonterminal, so the `is` after
+   `carried by C` is read by its next word (GIVEN or ALGEBRA) and the grammar
+   stays LR(1). `place A carried by C is algebra` is an instance of an algebra
+   on the carrier C, whose laws are certified on the machine of C;
+   `carried by C is given` makes axioms of the laws the certification does not
+   decide there. Returns (carrier, given, location of the carrier, is). *)
+carrier_and_is:
+  | (* empty *)                       { (None, false, None, None) }
+  | ic = is_clause                    { (None, false, None, Some ic) }
+  | c = carried_clause                { (Some c, false, Some (mk_loc $startpos $endpos), None) }
+  | c = carried_clause IS GIVEN       { (Some c, true, Some (mk_loc $startpos $endpos), None) }
+  | c = carried_clause ic = is_clause
+    { (Some c, false, Some (mk_loc $startpos(c) $endpos(c)), Some ic) }
+  | c = carried_clause IS GIVEN ic = is_clause
+    { (Some c, true, Some (mk_loc $startpos(c) $endpos(c)), Some ic) }
+
 (* `is algebra`: the place is an algebra, a theory its users are models of.
    The carrier is no longer written with `is`: `is C` and `is internal C` are
    refused with the form that replaced them. *)
@@ -740,24 +774,26 @@ place_uses_clause:
 place_decl:
   | internal = boption(INTERNAL) is_err = place_kw name = IDENT
     wp = place_params
-    carried = option(carried_clause)
-    is_c = option(is_clause)
+    ci = carrier_and_is
     uses = option(place_uses_clause)
     option(over_clause)
     oerr = option(on_error_clause)
     LBRACE mv = place_member_list RBRACE
-    { (match is_c with
+    { let (carried, given, carried_loc, is_c) = ci in
+      (match is_c with
        | Some `Algebra -> Hashtbl.replace Surface_ast.algebra_places name ()
        | None -> ());
       (let (_, _, clauses, _) = mv in
-       let models = List.filter_map (function
-           | PcCarriedBy (c, g, l) -> Some (c, g, l) | _ -> None) clauses in
-       if models <> [] then begin
-         if is_c <> Some `Algebra then
-           failwith (Printf.sprintf
-             "place %s: `carried by` in the body declares a carrier model of an algebra; a place that is no algebra writes its carrier in the header, `place %s carried by C`" name name);
-         Hashtbl.replace Surface_ast.carrier_models name models
-       end);
+       if List.exists (function PcCarriedBy _ -> true | _ -> false) clauses then
+         failwith (Printf.sprintf
+           "place %s: `carried by` is not written in the body of a place: the carrier of an instance of an algebra is in its header, `place %s carried by C is algebra { ... }` (`carried by C is given is algebra` when its laws are axioms on C)" name name);
+       if given && is_c <> Some `Algebra then
+         failwith (Printf.sprintf
+           "place %s: `carried by C is given` declares the axioms of an algebra on its carrier; a place that is no algebra writes `place %s carried by C`" name name);
+       match is_c, carried, carried_loc with
+       | Some `Algebra, Some c, Some l ->
+           Hashtbl.replace Surface_ast.carrier_models name [(c, given, l)]
+       | _ -> ());
       if internal && carried = None then
         failwith (Printf.sprintf
           "internal place %s has no carrier: `internal` hides how a place is carried, write `internal place %s carried by C`" name name);
@@ -1288,7 +1324,7 @@ fun_decl:
          failwith (Printf.sprintf
            "fun %s: `on error` requires an explicit return type \
             (`) on error E : T`)" name));
-      { fn_name = name; fn_type_params = tparams; fn_params = params;
+      { fn_name = name; fn_type_params = bound_params tparams (mk_loc $startpos $endpos); fn_params = params;
         fn_return = ret; fn_on_error = oerr;
         fn_visits = visits; fn_internal = internal; fn_given = true;
         fn_home = None;
@@ -1298,7 +1334,7 @@ fun_decl:
     ret = option(return_type_decl) visits = visits_clause IS GIVEN
     { let loc = mk_loc $startpos $endpos in
       Hashtbl.replace Surface_ast.bare_nullary_decls (loc.file, loc.start_line, loc.start_col) ();
-      { fn_name = name; fn_type_params = tparams; fn_params = [];
+      { fn_name = name; fn_type_params = bound_params tparams loc; fn_params = [];
         fn_return = ret; fn_on_error = None;
         fn_visits = visits; fn_internal = internal; fn_given = true;
         fn_home = None; fn_body = []; fn_loc = loc } }
@@ -1306,7 +1342,7 @@ fun_decl:
     ret = option(return_type_decl) visits = visits_clause LBRACE body = list(stmt) RBRACE
     { let loc = mk_loc $startpos $endpos in
       Hashtbl.replace Surface_ast.bare_nullary_decls (loc.file, loc.start_line, loc.start_col) ();
-      { fn_name = name; fn_type_params = tparams; fn_params = [];
+      { fn_name = name; fn_type_params = bound_params tparams loc; fn_params = [];
         fn_return = ret; fn_on_error = None;
         fn_visits = visits; fn_internal = internal; fn_given = false;
         fn_home = None; fn_body = body; fn_loc = loc } }
@@ -1341,7 +1377,7 @@ fun_decl:
          failwith (Printf.sprintf
            "fun %s: `on error` requires an explicit return type \
             (`) on error E : T`)" name));
-      { fn_name = name; fn_type_params = tparams; fn_params = params;
+      { fn_name = name; fn_type_params = bound_params tparams (mk_loc $startpos $endpos); fn_params = params;
         fn_return = ret; fn_on_error = oerr;
         fn_visits = visits; fn_internal = internal; fn_given = false; fn_home = None;
         fn_body = body; fn_loc = mk_loc $startpos $endpos } }
@@ -1349,8 +1385,15 @@ fun_decl:
 /* Optional type parameters: <A>, <A, B>, or empty. */
 type_params_opt:
   | (* empty *)                                   { [] }
-  | LT names = separated_nonempty_list(COMMA, IDENT) GT
-                                                  { names }
+  | LT ps = separated_nonempty_list(COMMA, type_param) GT
+                                                  { ps }
+  | LT_TYPE_ARGS names = separated_nonempty_list(COMMA, IDENT) GT
+                                                  { List.map (fun n -> (n, None)) names }
+
+(* `T uses Monoid`: a parameter whose instances are the models of a signature *)
+type_param:
+  | t = IDENT                                     { (t, None) }
+  | t = IDENT USES a = IDENT                      { (t, Some a) }
 
 visits_clause:
   | (* empty *)                           { [] }
@@ -1913,6 +1956,12 @@ expr_atom:
         ctor ctor) }
   | obj = IDENT DOT fld = IDENT LPAREN args = expr_list RPAREN
     { dot_call_expr obj fld args (mk_loc $startpos $endpos) }
+  (* `concat_all<Additive>(xs)`: the parameter named at the call. The lexer tells
+     this `<` from a comparison, which has no `>` that closes it before `(`. *)
+  | name = IDENT LT_TYPE_ARGS targs = separated_nonempty_list(COMMA, IDENT) GT LPAREN args = expr_list RPAREN
+    { with_type_args targs (ECall (name, args, mk_loc $startpos $endpos)) }
+  | obj = IDENT DOT fld = IDENT LT_TYPE_ARGS targs = separated_nonempty_list(COMMA, IDENT) GT LPAREN args = expr_list RPAREN
+    { with_type_args targs (dot_call_expr obj fld args (mk_loc $startpos $endpos)) }
   (* FOLD is a keyword token (the reduction's `fold "..."` clause), so it
    * does not match IDENT in method-name position: explicit rule for
    * Class.fold(args). PUSH is a keyword too (geometric-morphism

@@ -19,7 +19,7 @@
  *   [T] total       written here, no dependency
  *   [E] partial     dressed with `on error`
  */
-place Int64 carried by i64 {
+place Int64 carried by i64 uses algebra Additive, Multiplicative {
 
   /* ─── Sign and magnitude ─────────────────────────────────── [T] ─── */
 
@@ -210,9 +210,9 @@ place Int64 carried by i64 {
  *     an unsigned reading of the carrier — a design decision (a UInt place?
  *     a flag?). Not invented here.
  *
- * The algebras: `+` and `*` stay operators. Their declared face is an
- *     algebra, attached by `operation … uses algebra Additive` on a place;
- *     Int64 declares no such operation. Int64 is a richer model than
- *     Number: it is a genuine ring, so its algebra is Additive and
- *     Multiplicative with distributivity.
+ * The algebras: Int64 uses Additive and Multiplicative, taken whole from the
+ *     model of i64, so it has two structures and a fun parameter that uses
+ *     Monoid names one: concat_all<Additive>. `+` and `*` stay the exact
+ *     operators of the carrier, and an overflow stops the program as anywhere
+ *     else on Int64. The distributivity of the two is not stated.
  * ═══════════════════════════════════════════════════════════════════ */

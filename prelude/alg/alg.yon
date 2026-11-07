@@ -8,6 +8,18 @@
  * it stays itself, it provides A's operations as its own funs of the same
  * names, its laws are certified on it, and A's operators write them.
  *
+ * The four signatures: Magma, Semigroup, Monoid, Group. With `this <` between
+ * algebras the models of the heir are a subobject: the heir reads the signature
+ * above it, its operations and its laws. The catalog of the instances, with a
+ * name each: Additive, Multiplicative, BooleanOr, BooleanAnd, TropicalMax,
+ * TropicalMin, Gcd. An instance declares again the operations of its signature
+ * with the same names, `op`, `unit`, `inv`, and its own symbols; they are told
+ * apart as `Additive.op` and `Multiplicative.op`.
+ *
+ * A fun parameter uses a signature, `fun f<T uses Monoid>(xs: List<T>): T`; its
+ * instance is a model, and a place with two structures names the algebra at the
+ * call, `f<Additive>(xs)`.
+ *
  * This package is the catalog of the algebras of the language: the type checker
  * asks no other. A name that is not a place declared `is algebra` is refused,
  * wherever a source file names it. The MLIR verifier keeps a table of its own,

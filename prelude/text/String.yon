@@ -15,7 +15,11 @@
  * Markers: [G] given, wired body · [T] total, written here ·
  *          [E] partial, dressed with on error
  */
-place String carried by text {
+place String carried by text uses algebra Monoid {
+
+  /* the monoid of the texts: the concatenation and the empty text */
+  fun op(a: String, b: String): String { return concat(a, b) }
+  fun unit: String { return "" }
 
   /* ─── The axiomatic core ─────────────────────────────────────── [G] ───
    *

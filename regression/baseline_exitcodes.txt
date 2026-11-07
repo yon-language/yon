@@ -2,6 +2,7 @@ EMITFAIL false_coherence
 EMITFAIL union_cross_space_reject
 EMITFAIL union_cross_world_reject
 EMITFAIL union_field_obligation_reject
+RAN bound_monoid exit=42
 RAN c_cell exit=0
 RAN c_morph_on_morphism exit=0
 RAN c_place_projection exit=0

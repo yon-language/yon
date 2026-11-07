@@ -1,0 +1,5 @@
+[package]
+name = "bound_monoid"
+
+[runtime]
+backend = "memory"

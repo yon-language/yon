@@ -1,5 +1,5 @@
 place Or {
-  operation join(a: Number, b: Number): Number uses algebra BooleanOr
+  operation op(a: Number, b: Number): Number uses algebra BooleanOr
   law commutative
   law associative
 }

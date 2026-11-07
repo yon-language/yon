@@ -668,6 +668,10 @@ and desugar_expr (e0 : S.expr) : C.term =
   | None ->
   let e = strip_parens e0 in
   match e with
+  | S.ECall (n, args, loc) when Surface_ast.elaborated_call n args loc <> None ->
+      (* a call the checker read at a model: the model's fun, or the fun with
+         the arrows of the model after the written arguments *)
+      desugar_expr (Option.get (Surface_ast.elaborated_call n args loc))
   | S.EField (S.EVar (c, _), arm, loc)
     when Hashtbl.find_opt Surface_ast.qualified_arm_sites
            (loc.S.file, loc.S.start_line, loc.S.start_col) = Some (c, arm) ->

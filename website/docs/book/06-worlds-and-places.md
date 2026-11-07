@@ -194,7 +194,7 @@ compiler checks it. `sala/Tally.yon`:
 ```yon
 place Tally {
   total Number
-  operation add(a: Number, b: Number): Number uses algebra Additive
+  operation op(a: Number, b: Number): Number uses algebra Additive
   law commutative
   law associative
 }
@@ -211,7 +211,7 @@ and the verification descends from `uses` by itself:
 <!-- yon-gate: fragment -->
 ```yon
 place Tally {
-  operation add(a: Number, b: Number): Number uses algebra Additive
+  operation op(a: Number, b: Number): Number uses algebra Additive
   law commutative
   law associative      // a false claim here is a COMPILE error
 }

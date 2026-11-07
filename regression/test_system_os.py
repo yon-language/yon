@@ -321,7 +321,7 @@ def test_heap_code_that_reads_and_writes_words_and_computes_is_accepted(tmp_path
     env = _prelude_with_heap_funs(
         tmp_path,
         "  fun bump(r: Region, i: Int64): Word64 {\n"
-        "    w := Word64.add(Word64.mul(read_word(r, i), Word64.from_int64(31)), Word64.one)\n"
+        "    w := read_word(r, i) * Word64.from_int64(31) + Word64.one\n"
         "    _u := write_word(r, i, w)\n"
         "    return w\n  }\n")
     rc, out, exe = _build(tmp_path, "  return 1\n", env=env)

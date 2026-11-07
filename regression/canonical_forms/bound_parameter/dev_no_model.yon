@@ -1,0 +1,9 @@
+fun concat_all<T uses Monoid>(xs: List<T>): T {
+  return match xs {
+    Nil => T.unit,
+    Cons as (h, t) => T.op(h, concat_all<T>(t))
+  }
+}
+place Entry {
+  fun main: Number { return concat_all(List.cons(1, List.empty)) }
+}

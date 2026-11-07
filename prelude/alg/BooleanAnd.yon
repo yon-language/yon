@@ -1,10 +1,9 @@
-/* BooleanAnd — a meet semilattice with a top: the meet of two is
- * associative, commutative and idempotent, and top is its neutral element. */
+/* BooleanAnd — an instance of Monoid: a meet semilattice with a top. The meet of
+ * two is commutative and idempotent, and the top is its unit. */
 place BooleanAnd is algebra {
-  operation meet(a: BooleanAnd, b: BooleanAnd): BooleanAnd
-  operation top: BooleanAnd
-  law associative ∀a : BooleanAnd ∀b : BooleanAnd ∀c : BooleanAnd, meet(meet(a, b), c) = meet(a, meet(b, c))
-  law commutative ∀a : BooleanAnd ∀b : BooleanAnd, meet(a, b) = meet(b, a)
-  law idempotent ∀a : BooleanAnd, meet(a, a) = a
-  law neutral ∀a : BooleanAnd, meet(a, top) = a
+  this < Monoid
+  operation op(a: BooleanAnd, b: BooleanAnd): BooleanAnd
+  operation unit: BooleanAnd
+  law commutative ∀a : BooleanAnd ∀b : BooleanAnd, op(a, b) = op(b, a)
+  law idempotent ∀a : BooleanAnd, op(a, a) = a
 }

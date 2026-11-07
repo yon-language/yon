@@ -1,0 +1,6 @@
+/* Magma — the signature of one binary operation, with no law. Its free object
+ * is MerkleTree<V>: `node2` at a fixed label is a term with its parentheses,
+ * and `node2_commutative` gives the free commutative magma. */
+place Magma is algebra {
+  operation op(a: Magma, b: Magma): Magma
+}

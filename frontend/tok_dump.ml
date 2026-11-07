@@ -146,6 +146,7 @@ let tok_name = function
   | Parser.SLASH -> "SLASH"
   | Parser.PERCENT -> "PERCENT"
   | Parser.LT -> "LT"
+  | Parser.LT_TYPE_ARGS -> "LT_TYPE_ARGS"
   | Parser.GT -> "GT"
   | Parser.LEQ -> "LEQ"
   | Parser.GEQ -> "GEQ"

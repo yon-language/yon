@@ -118,6 +118,16 @@ and fmt_expr (e : expr) : string =
            fmt_expr a ^ " " ^ sym ^ " " ^ target
        | [a] -> "(" ^ fmt_expr a ^ ") " ^ sym ^ " " ^ target
        | _ -> "(" ^ String.concat ", " (List.map fmt_expr args) ^ ") " ^ sym ^ " " ^ target)
+  | ECall (_, _, l) when Hashtbl.mem Surface_ast.explicit_type_args (Surface_ast.site_of l) ->
+      (* `f<A>(args)`: the call as any other, with its type arguments before `(` *)
+      let site = Surface_ast.site_of l in
+      let targs = Hashtbl.find Surface_ast.explicit_type_args site in
+      Hashtbl.remove Surface_ast.explicit_type_args site;
+      let call = fmt_expr e in
+      Hashtbl.replace Surface_ast.explicit_type_args site targs;
+      let open_paren = String.index call '(' in
+      String.sub call 0 open_paren ^ "<" ^ String.concat ", " targs ^ ">"
+      ^ String.sub call open_paren (String.length call - open_paren)
   | ECall (name, args, _) ->
       (* Undo the parser's normalization, to reprint the surface syntax the
        * user wrote:
@@ -361,8 +371,13 @@ let rec fmt_stmt (f : fmt) (s : stmt) : unit =
 (* ─── Top-level ─────────────────────────────────────────────────────── *)
 
 let fmt_fun (f : fmt) (fn : fun_decl) : unit =
+  let bounds = Option.value ~default:[]
+      (Hashtbl.find_opt Surface_ast.fun_bounds (Surface_ast.site_of fn.fn_loc)) in
+  let shown t = match List.assoc_opt t bounds with
+    | Some a -> t ^ " uses " ^ a
+    | None -> t in
   let tps = match fn.fn_type_params with
-    | [] -> "" | ps -> "<" ^ String.concat ", " ps ^ ">" in
+    | [] -> "" | ps -> "<" ^ String.concat ", " (List.map shown ps) ^ ">" in
   let params = String.concat ", "
     (List.map (fun p -> p.param_name ^ ": " ^ fmt_ty p.param_ty) fn.fn_params) in
   let ret = match fn.fn_return with Some t -> ": " ^ fmt_ty t | None -> "" in
@@ -490,7 +505,11 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
   let world =
     if pd.pd_world = "__INFER" || pd.pd_world = "" then "" else " in " ^ pd.pd_world in
   let on_error = match pd.pd_on_error with Some e -> " on error " ^ e | None -> "" in
-  let algebra = if Hashtbl.mem Surface_ast.algebra_places pd.pd_name then " is algebra" else "" in
+  let algebra = if Hashtbl.mem Surface_ast.algebra_places pd.pd_name then
+      (match Hashtbl.find_opt Surface_ast.carrier_models pd.pd_name with
+       | Some [(_, true, _)] -> " is given is algebra"
+       | _ -> " is algebra")
+    else "" in
   let uses = match Hashtbl.find_opt Surface_ast.place_algebras pd.pd_name with
     | Some names -> " uses algebra " ^ String.concat ", " names | None -> "" in
   line f (Printf.sprintf "%s%s%s%s%s {"
@@ -518,11 +537,6 @@ let fmt_place ?(close = true) (f : fmt) (pd : place_decl) : unit =
         line f (Printf.sprintf "cell %s from %s to %s"
                   c.cell_name (fmt_expr c.cell_src) (fmt_expr c.cell_tgt))
   ) pd.pd_members;
-  (match Hashtbl.find_opt Surface_ast.carrier_models pd.pd_name with
-   | Some models ->
-       List.iter (fun (c, given, _) ->
-         line f ("carried by " ^ c ^ (if given then " is given" else ""))) models
-   | None -> ());
   if close then begin f.indent <- f.indent - 1; line f "}" end
   end
 

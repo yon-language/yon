@@ -41,12 +41,12 @@ def _signed_is(word: str, int64: str) -> str:
 
 
 def test_the_sum_wraps_past_the_largest_integer(tmp_path):
-    w = "Word64.add(Word64.from_int64(Int64.max_value), Word64.one)"
+    w = "Additive.op(Word64.from_int64(Int64.max_value), Word64.one)"
     assert _value(tmp_path, _signed_is(w, "Int64.min_value")) == 42
 
 
 def test_the_product_wraps(tmp_path):
-    w = "Word64.mul(Word64.from_int64(4294967296), Word64.from_int64(4294967296))"
+    w = "Multiplicative.op(Word64.from_int64(4294967296), Word64.from_int64(4294967296))"
     assert _value(tmp_path, _signed_is(w, "0")) == 42
 
 

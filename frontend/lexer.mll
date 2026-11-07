@@ -357,6 +357,21 @@ rule raw_token = parse
   | '*'              { STAR }
   | '/'              { SLASH }
   | '%'              { PERCENT }
+  (* `f<A, B>(`, written with no space after the name: type arguments, of a
+     declaration or of a call. Only the `<` is consumed; the names are read again. *)
+  | '<' upper_start alnum_id* (',' ' '* upper_start alnum_id*)* '>' '('
+    { let n = Lexing.lexeme_end lexbuf - Lexing.lexeme_start lexbuf - 1 in
+      lexbuf.Lexing.lex_curr_pos <- lexbuf.Lexing.lex_curr_pos - n;
+      lexbuf.Lexing.lex_curr_p <-
+        { lexbuf.Lexing.lex_curr_p with
+          Lexing.pos_cnum = lexbuf.Lexing.lex_curr_p.Lexing.pos_cnum - n };
+      let at = lexbuf.Lexing.lex_start_pos in
+      let after_a_name =
+        at > 0
+        && (match Bytes.get lexbuf.Lexing.lex_buffer (at - 1) with
+            | 'a' .. 'z' | 'A' .. 'Z' | '0' .. '9' | '_' -> true
+            | _ -> false) in
+      if after_a_name then LT_TYPE_ARGS else LT }
   | '<'              { LT }
   | '>'              { GT }
   | '='              { (match !statement with

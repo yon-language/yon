@@ -1,0 +1,6 @@
+status: accept
+exit: 42
+covers: type_param
+note: |
+  A parameter that uses a signature takes a model at each call. A place with two
+  structures names the algebra at the call: concat_all<Additive>(xs).

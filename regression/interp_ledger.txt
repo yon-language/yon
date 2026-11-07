@@ -17,6 +17,7 @@
 # starts to agree fails too, asking for the row to become AGREE (a ratchet: the
 # ledger cannot go stale). The rows and the RAN set must match exactly.
 
+INCOMPLETE bound_monoid punt
 AGREE      c_cell
 AGREE      c_morph_on_morphism
 AGREE      c_place_projection

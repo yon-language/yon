@@ -149,6 +149,17 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
   (* the cells of a previous compilation are not this one's (the LSP
      compiles many times in one process) *)
   Hashtbl.reset Surface_ast.mut_sites;
+  Hashtbl.reset Surface_ast.explicit_type_args;
+  Hashtbl.reset Surface_ast.elaborated_calls;
+  Hashtbl.reset Surface_ast.instance_call_types;
+  Hashtbl.reset Surface_ast.own_instance_calls;
+  Hashtbl.reset Surface_ast.bounded_funs;
+  Hashtbl.reset Surface_ast.fun_bounds;
+  Hashtbl.reset Surface_ast.algebra_ancestors;
+  Hashtbl.reset Surface_ast.algebra_ops;
+  Hashtbl.reset Surface_ast.law_origin;
+  Hashtbl.reset Surface_ast.carrier_taken;
+  Hashtbl.reset Surface_ast.model_arrows;
   let wm =
     let mpath = Filename.concat root Package_layout.manifest_name in
     if Sys.file_exists mpath then
@@ -184,6 +195,11 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
                      fi_prog = parse_text ~file:p t }
           with _ -> None))
     @ files in
+  let prelude_paths = List.map fst (prelude_sources ()) in
+  Hashtbl.reset S.file_spaces;
+  List.iter (fun f ->
+      Hashtbl.replace S.file_spaces f.fi_path
+        ((if List.mem f.fi_path prelude_paths then "prelude:" else "") ^ f.fi_space)) files;
   let merged = Prop_quantifiers.expand (Algebra_models.complete (List.concat_map (fun f -> f.fi_prog) files)) in
   let place_space : (string, string) Hashtbl.t = Hashtbl.create 32 in
   let place_acc = ref [] and main_files = ref [] in
@@ -421,7 +437,26 @@ let law_diags (l : loaded) : Error_codes.t list =
    rejects the program with its counterexample, one not decided is not
    certified and rejects it too. *)
 let algebra_law_diags (l : loaded) : Error_codes.t list =
-  List.filter_map
+  let results = Algebra_check.check l.merged in
+  (* `is given` makes axioms of the laws the certification does not decide on
+     that carrier; the laws it decides stay checked. Declared where it decides
+     every law, it makes no axiom at all, and it is refused. *)
+  let given_models = List.sort_uniq compare (List.filter_map (fun (r : Algebra_check.law_result) ->
+      if r.Algebra_check.lr_given then Some (r.Algebra_check.lr_algebra, r.Algebra_check.lr_place)
+      else None) results) in
+  let idle_given = List.filter_map (fun (a, on) ->
+      let mine = List.filter (fun (r : Algebra_check.law_result) ->
+          r.Algebra_check.lr_given && r.Algebra_check.lr_algebra = a
+          && r.Algebra_check.lr_place = on) results in
+      if List.exists (fun (r : Algebra_check.law_result) ->
+          match r.Algebra_check.lr_verdict with Law_check.Unknown _ -> true | _ -> false) mine
+      then None
+      else
+        let r = List.hd mine in
+        Some (Error_codes.make ~range:r.Algebra_check.lr_loc Error_codes.Type_check
+                (Printf.sprintf "algebra %s on %s is declared `is given`, but the certification decides every one of its laws: remove `is given`" a on)))
+      given_models in
+  idle_given @ List.filter_map
     (fun (r : Algebra_check.law_result) ->
        let on = r.Algebra_check.lr_place in
        let what = Printf.sprintf "law %s of algebra %s on %s"
@@ -429,10 +464,6 @@ let algebra_law_diags (l : loaded) : Error_codes.t list =
            (if String.length on > 12 && String.sub on 0 12 = "the carrier " then on
             else "place " ^ on) in
        match r.Algebra_check.lr_verdict with
-       | Law_check.Proven by when r.Algebra_check.lr_given ->
-           (* an axiom only where the certification does not decide *)
-           Some (Error_codes.make ~range:r.Algebra_check.lr_loc Error_codes.Type_check
-                   (Printf.sprintf "%s is declared `is given`, but the certification decides it (proven: %s): remove `is given`" what by))
        | Law_check.Proven _ -> None
        | Law_check.Unknown _ when r.Algebra_check.lr_given -> None
        | Law_check.Refuted model ->
@@ -443,11 +474,12 @@ let algebra_law_diags (l : loaded) : Error_codes.t list =
                    (Printf.sprintf "%s is not certified: %s%s" what why
                       (if String.length r.Algebra_check.lr_place > 12
                           && String.sub r.Algebra_check.lr_place 0 12 = "the carrier "
-                       then ". If it holds, declare the model an axiom: `carried by "
+                       then ". If it holds, declare it an axiom on that carrier: `place "
+                            ^ r.Algebra_check.lr_algebra ^ " carried by "
                             ^ String.sub r.Algebra_check.lr_place 12 (String.length r.Algebra_check.lr_place - 12)
-                            ^ " is given`"
+                            ^ " is given is algebra`"
                        else ""))))
-    (Algebra_check.check l.merged)
+    results
 
 (* An operation is an effect: the program reaches a value only if every
    operation it calls is handled by a reduction of its place (in the Kleisli
@@ -466,7 +498,9 @@ let unhandled_op_diags (l : loaded) : Error_codes.t list =
     List.concat_map (function
       | S.TopPlace pd ->
           List.filter_map (function
-            | S.FoOp o -> Some (pd.S.pd_name ^ "__" ^ o.S.op_name, (pd.S.pd_name, o.S.op_name))
+            (* the operation of an algebra is an arrow of its models, no effect *)
+            | S.FoOp o when not (Hashtbl.mem S.algebra_places pd.S.pd_name) ->
+                Some (pd.S.pd_name ^ "__" ^ o.S.op_name, (pd.S.pd_name, o.S.op_name))
             | _ -> None) pd.S.pd_members
       | _ -> []) l.merged in
   List.concat_map (function

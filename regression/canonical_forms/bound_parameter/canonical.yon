@@ -1,0 +1,19 @@
+fun concat_all<T uses Monoid>(xs: List<T>): T {
+  return match xs {
+    Nil => T.unit,
+    Cons as (h, t) => T.op(h, concat_all<T>(t))
+  }
+}
+fun three(a: Int64, b: Int64, c: Int64): List<Int64> {
+  return List.cons(a, List.cons(b, List.cons(c, List.empty)))
+}
+fun word(a: Int64, b: Int64): (Int64, List<Int64>) {
+  return pair(a, List.cons(b, List.empty))
+}
+place Entry {
+  fun main: Number {
+    x := concat_all<Additive>(three(1, 2, 39))
+    y := List.normal_form<Multiplicative>(word(6, 7))
+    return if x == 42 and y == 42 then 42 else 1
+  }
+}

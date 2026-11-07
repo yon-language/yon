@@ -1,0 +1,7 @@
+/* Monoid — a semigroup with a neutral element on both sides. Its free object is
+ * List<V>. */
+place Monoid is algebra {
+  this < Semigroup
+  operation unit: Monoid
+  law neutral ∀a : Monoid, op(a, unit) = a ∧ op(unit, a) = a
+}

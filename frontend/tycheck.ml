@@ -424,18 +424,28 @@ let algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) opt
         (if Hashtbl.mem Surface_ast.algebra_places p then [p] else [])
         @ (match Hashtbl.find_opt Surface_ast.place_algebras p with
            | Some l -> l | None -> []) in
+      (* a place that shows its carrier and takes a structure whole from it
+         keeps the carrier's operators: Int64 stays exact *)
+      let shown_carrier a =
+        Hashtbl.mem Surface_ast.carrier_taken (p, a)
+        && (match Tyenv.lookup_place env p with
+            | Some pd ->
+                not (Hashtbl.mem Surface_ast.internal_carrier_sites
+                       (Surface_ast.site_of pd.pd_loc))
+            | None -> false) in
       List.find_map (fun a ->
         match Tyenv.lookup_place env a with
         | None -> None
+        | Some _ when shown_carrier a -> None
         | Some pd ->
             List.find_map (function
-              | FoOp o when o.op_symbol = Some symbol ->
+              | FoOp o when o.op_symbol = Some symbol && List.length o.op_params = 2 ->
                   (* the carrier of the algebra, in its operation, is the place *)
                   let ret = match o.op_return with
                     | Some (TyUser r) when r = a -> TyUser p
                     | Some r -> r
                     | None -> TyUser p in
-                  Some (p ^ "__" ^ o.op_name, ret)
+                  Some (p ^ "__" ^ Surface_ast.model_fun p a o.op_name, ret)
               | _ -> None) pd.pd_members) algebras
   | _ -> None
 
@@ -820,11 +830,14 @@ let internal_homes : (string, string) Hashtbl.t = Hashtbl.create 16
 let current_home : string option ref = ref None
 
 let with_home (fn : fun_decl) (k : unit -> 'a) : 'a =
-  let saved = !current_home and saved_house = !Surface_ast.open_house in
+  let saved = !current_home and saved_house = !Surface_ast.open_house
+  and saved_space = !Surface_ast.open_space in
   current_home := fn.fn_home;
   Surface_ast.open_house := fn.fn_home;
+  Surface_ast.open_space := Some (Surface_ast.space_of_file fn.fn_loc.file);
   Fun.protect ~finally:(fun () ->
-    current_home := saved; Surface_ast.open_house := saved_house) k
+    current_home := saved; Surface_ast.open_house := saved_house;
+    Surface_ast.open_space := saved_space) k
 
 (* The collections of the Leech heap hold their keys and values as 64 bits
    in a node of its trie: which types fit is derived from their carrier — a
@@ -2341,8 +2354,170 @@ let arrow_refusal (env : Tyenv.env) (name : string) (loc : location) : string op
       Some (Printf.sprintf "%s is no arm of a coproduct" shown)
   | _ -> None
 
+(* ─── a parameter that uses a signature ───────────────────────────────────
+   A call of `fun f<T uses Monoid>` writes the arguments of f; the arrows of the
+   model come from here. The model is a pair: the place of the values and the
+   algebra it is a model of. A place may be a model of the signature in more
+   than one way, and then the call must name the algebra. *)
+
+let bounded_target (env : Tyenv.env) (name : string) (args : expr list)
+    : (string * Surface_ast.bounded_fun) option =
+  let of_name n =
+    match Hashtbl.find_opt Surface_ast.bounded_funs n with
+    | Some bf when bf.bf_written = List.length args && Tyenv.lookup_fun env n <> None -> Some (n, bf)
+    | _ -> None in
+  match of_name name with
+  | Some _ as found -> found
+  | None ->
+      (match !current_home with
+       | Some h -> of_name (h ^ "__" ^ name)
+       | None -> None)
+
+(* `Additive.op(a, b)`: the operation of an algebra called on values, outside
+   the statements of its laws, where it is the symbol of the theory. *)
+let instance_operation (env : Tyenv.env) (name : string) : (string * string) option =
+  match Method_sugar.split_method_name name with
+  | Some (a, op)
+    when Hashtbl.mem Surface_ast.algebra_places a
+         && not (List.mem a env.Tyenv.current_effects)
+         && List.mem op (Option.value ~default:[] (Hashtbl.find_opt Surface_ast.algebra_ops a)) ->
+      Some (a, op)
+  | _ -> None
+
+(* The place of a value's type: a fused primitive has its face. *)
+let place_of_value (t : ty) : string option =
+  match t with
+  | TyUser p | TyVar p -> Some p
+  | TyApp (p, _) -> Some p
+  | TyPrim "text" -> Some "String"
+  | TyPrim "number" -> Some "Number"
+  | TyPrim "boolean" -> Some "Boolean"
+  | TyPrim "i64" -> Some "Int64"
+  | _ -> None
+
+let resolve_model (env : Tyenv.env) ~(called : string) ~(signature : string)
+    ~(named : string option) (value : string option) (loc : location)
+    : (string * string) tc_result =
+  let is_algebra a = Hashtbl.mem Surface_ast.algebra_places a in
+  let structures_of p =
+    List.filter (fun a -> Surface_ast.is_model_of a signature)
+      (Option.value ~default:[] (Hashtbl.find_opt Surface_ast.place_algebras p)) in
+  let no_value () = err loc (Printf.sprintf
+      "the call of %s: no argument fixes the values of the parameter that uses %s"
+      called signature) in
+  if not (is_algebra signature) then
+    err loc (Printf.sprintf "the parameter of %s uses %s, which is no algebra: an algebra is a place declared `is algebra`"
+               called signature)
+  else
+  match named with
+  | Some a when is_algebra a ->
+      if not (Surface_ast.is_model_of a signature) then
+        err loc (Printf.sprintf "the call of %s names %s, which is no %s: %s has no `this <` that reaches it"
+                   called a signature a)
+      else
+        (match value with
+         | None -> no_value ()
+         | Some p ->
+             (match List.filter (fun b -> Surface_ast.is_model_of b a) (structures_of p) with
+              | b :: _ -> ok (p, b)
+              | [] when p = a && Hashtbl.mem Surface_ast.carrier_models a ->
+                  (* an instance on a carrier is a model of itself *)
+                  ok (a, a)
+              | [] -> err loc (Printf.sprintf
+                  "the call of %s names %s, but %s is no model of it: the place does not `uses algebra %s`"
+                  called a p a)))
+  | named ->
+      let place = match named with Some p -> Some p | None -> value in
+      (match place with
+       | None -> no_value ()
+       | Some p when Tyenv.lookup_place env p = None
+                     && Hashtbl.find_opt Surface_ast.place_algebras p = None ->
+           err loc (Printf.sprintf "the call of %s: %s does not use %s, and the parameter takes a model of it"
+                      called p signature)
+       | Some p ->
+           (match structures_of p with
+            | [a] -> ok (p, a)
+            | [] -> err loc (Printf.sprintf
+                "the call of %s: %s does not use %s, and the parameter takes a model of it: a place that `uses algebra %s`, or an algebra below it"
+                called p signature signature)
+            | several ->
+                err loc (Printf.sprintf
+                  "the call of %s is ambiguous: %s has %d structures that use %s (%s); name the one: %s<%s>(...)"
+                  called p (List.length several) signature (String.concat ", " several)
+                  called (List.hd several))))
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   Result.map deref_lambda_unknown (infer_node env ctx e)
+
+(* The call at the model each parameter resolves to. Inside a fun whose own
+   parameter uses a signature, that parameter stays abstract: the arrows passed
+   on are the ones received. *)
+and elaborate_bounded_call env ctx name (bf : Surface_ast.bounded_fun) args loc : ty tc_result =
+  let* arg_tys =
+    List.fold_right (fun a acc ->
+        let* rest = acc in
+        let* t = infer env ctx a in
+        ok (t :: rest)) args (ok []) in
+  let fs = Option.get (Tyenv.lookup_fun env name) in
+  let written = List.filteri (fun i _ -> i < bf.bf_written) fs.fs_params in
+  let fresh = List.map (fun v -> (v, Ty_subst.fresh_metavar ())) bf.bf_tparams in
+  let sigma = List.fold_left2 (fun sg (_, pt) at ->
+      match Ty_subst.try_unify (Ty_subst.apply_subst sg (Ty_subst.subst_type_vars fresh pt))
+              (Ty_subst.apply_subst sg at) with
+      | Ok s -> Ty_subst.compose_subst s sg
+      | Error _ -> sg) Ty_subst.empty_subst written arg_tys in
+  let targs = Option.value ~default:[]
+      (Hashtbl.find_opt Surface_ast.explicit_type_args (Surface_ast.site_of loc)) in
+  let* () =
+    if targs <> [] && List.length targs <> List.length bf.bf_tparams then
+      err loc (Printf.sprintf "%s has %d type parameters, and the call names %d"
+                 name (List.length bf.bf_tparams) (List.length targs))
+    else ok () in
+  let named_of t =
+    if targs = [] then None
+    else List.find_map (fun (v, a) -> if v = t then Some a else None)
+        (List.combine bf.bf_tparams targs) in
+  let value_of t = place_of_value (Ty_subst.apply_subst sigma (List.assoc t fresh)) in
+  (* a parameter of the fun being checked, abstract in it, gives what it received *)
+  let abstract_in_here x (members : Surface_ast.bound_member list) =
+    List.exists (function
+        | Surface_ast.BoundOp m -> Tyenv.lookup_var env (Surface_ast.bound_param x m) <> None
+        | Surface_ast.BoundLaw _ -> false) members in
+  let* dictionary =
+    List.fold_right (fun (t, signature, members) acc ->
+        let* rest = acc in
+        let named = named_of t and value = value_of t in
+        let abstract = match named, value with
+          | Some x, _ | None, Some x when abstract_in_here x members -> Some x
+          | _ -> None in
+        match abstract with
+        | Some x ->
+            ok (List.map (function
+                | Surface_ast.BoundOp m -> EVar (Surface_ast.bound_param x m, loc)
+                | Surface_ast.BoundLaw q ->
+                    if Tyenv.lookup_var env (Surface_ast.bound_param x q) <> None
+                    then EVar (Surface_ast.bound_param x q, loc)
+                    else ELit (LitBool false, loc)) members @ rest)
+        | None ->
+            let* (place, model) = resolve_model env ~called:name ~signature ~named value loc in
+            let states law = match Tyenv.lookup_place env model with
+              | Some apd -> Algebra_check.states_by_law apd law
+              | None -> false in
+            ok (List.map (function
+                | Surface_ast.BoundOp m ->
+                    let arrow = place ^ "__" ^ Surface_ast.model_fun place model m in
+                    (* a constant of the model is a value; only an arrow is passed as one *)
+                    (match Tyenv.lookup_fun env arrow with
+                     | Some f when f.fs_params <> [] ->
+                         Hashtbl.replace Surface_ast.model_arrows arrow ()
+                     | _ -> ());
+                    EVar (arrow, loc)
+                | Surface_ast.BoundLaw q -> ELit (LitBool (states q), loc)) members @ rest))
+      bf.bf_bounds (ok []) in
+  let call = ECall (name, args @ dictionary, loc) in
+  Hashtbl.replace Surface_ast.elaborated_calls (Surface_ast.span_of loc) call;
+  if dictionary = [] then err loc (Printf.sprintf "%s has no arrows of a model to receive" name)
+  else infer env ctx call
 
 and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
   match e with
@@ -2350,6 +2525,35 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
 
   | ENew (place_name, _, loc) when Tyenv.is_synthetic_place env place_name ->
       arm_mediatrice_err env place_name loc
+
+  | ECall (name, args, loc) when bounded_target env name args <> None ->
+      let (target, bf) = Option.get (bounded_target env name args) in
+      elaborate_bounded_call env ctx target bf args loc
+
+  | ECall (name, (first :: _ as args), loc)
+    when instance_operation env name <> None
+         && not (Hashtbl.mem Surface_ast.own_instance_calls (Surface_ast.span_of loc)) ->
+      let site = Surface_ast.span_of loc in
+      (match Hashtbl.find_opt Surface_ast.instance_call_types site with
+       | Some t -> ok t
+       | None ->
+           let (algebra, op) = Option.get (instance_operation env name) in
+           let* v = infer env ctx first in
+           let* t =
+             if Hashtbl.mem Surface_ast.carrier_models algebra
+                && Tyenv.lookup_fun env name <> None && v = TyUser algebra then begin
+               (* on a value of the instance itself, the operation is its own fun *)
+               Hashtbl.replace Surface_ast.own_instance_calls site ();
+               infer env ctx (ECall (name, args, loc))
+             end else
+               let* (place, model) = resolve_model env ~called:name ~signature:algebra
+                   ~named:(Some algebra) (place_of_value v) loc in
+               let target = place ^ "__" ^ Surface_ast.model_fun place model op in
+               let call = ECall (target, args, loc) in
+               Hashtbl.replace Surface_ast.elaborated_calls site call;
+               infer env ctx call in
+           Hashtbl.replace Surface_ast.instance_call_types site t;
+           ok t)
 
   | EVar (name, loc)
     when Tyenv.lookup_var env name = None
@@ -6087,8 +6291,11 @@ let register_fusion (pd : place_decl) : unit =
       let internal =
         Hashtbl.mem Surface_ast.internal_carrier_sites
           (pd.pd_loc.file, pd.pd_loc.start_line, pd.pd_loc.start_col) in
-      (if internal then
-         Hashtbl.replace Surface_ast.internal_faces pd.pd_name prim
+      (if internal then begin
+         Hashtbl.replace Surface_ast.internal_faces pd.pd_name prim;
+         if Hashtbl.mem Surface_ast.algebra_places pd.pd_name then
+           Hashtbl.replace Surface_ast.instance_file pd.pd_name pd.pd_loc.file
+       end
        else if in_prelude
           && Hashtbl.mem Surface_ast.fusion_places pd.pd_name
           && Hashtbl.find Surface_ast.fusion_places pd.pd_name <> prim
@@ -7233,6 +7440,65 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
              name pd.pd_name (Tyenv.ty_to_string t)))
     (ok ()) pd.pd_members
 
+(* `this < B` on an algebra: B is an algebra, and an operation declared again has
+   the type it has in B, with the heir's name for the carrier. *)
+and check_signature_above (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
+  match pd.pd_subcontains with
+  | Some b when Hashtbl.mem Surface_ast.algebra_places pd.pd_name ->
+      if not (Hashtbl.mem Surface_ast.algebra_places b) then
+        err pd.pd_loc (Printf.sprintf
+          "algebra %s is `this < %s`, which is no algebra: a signature inherits from an algebra"
+          pd.pd_name b)
+      else
+        let above = match Tyenv.lookup_place env b with Some apd -> apd.pd_members | None -> [] in
+        let read t = match t with TyUser x when x = b -> TyUser pd.pd_name | t -> t in
+        (* `this <` is a mono: following it from an algebra never comes back *)
+        let rec chain seen x =
+          match Tyenv.lookup_place env x with
+          | Some xpd ->
+              (match xpd.pd_subcontains with
+               | Some y when Hashtbl.mem Surface_ast.algebra_places y ->
+                   if y = pd.pd_name then Some (List.rev (y :: seen))
+                   else if List.mem y seen then None
+                   else chain (y :: seen) y
+               | _ -> None)
+          | None -> None in
+        (match chain [pd.pd_name] pd.pd_name with
+        | Some loop ->
+            err pd.pd_loc (Printf.sprintf
+              "algebra %s is `this <` itself through %s: the models of an heir are a subobject of the models above it, and a chain of signatures does not come back"
+              pd.pd_name (String.concat " < " loop))
+        | None ->
+        List.fold_left (fun acc m ->
+          let* () = acc in
+          match m with
+          | FoLaw (law, _)
+            when List.exists (function FoLaw (x, _) -> x = law | _ -> false) above
+                 && not (Hashtbl.mem Surface_ast.law_origin (pd.pd_name, law)) ->
+              err pd.pd_loc (Printf.sprintf
+                "law %s of %s is a law of %s, which %s inherits: an heir adds laws and does not state again one of the signature above it; give the new law its own name"
+                law pd.pd_name b pd.pd_name)
+          | FoOp o ->
+              (match List.find_map (function
+                   | FoOp u when u.op_name = o.op_name -> Some u | _ -> None) above with
+               | None -> ok ()
+               | Some u ->
+                   let same =
+                     List.length u.op_params = List.length o.op_params
+                     && List.for_all2 (fun (p : param) (q : param) ->
+                         Dispatcher.type_equal env ctx (read p.param_ty) q.param_ty)
+                       u.op_params o.op_params
+                     && (match u.op_return, o.op_return with
+                         | Some a, Some c -> Dispatcher.type_equal env ctx (read a) c
+                         | None, None -> true
+                         | _ -> false) in
+                   if same then ok ()
+                   else err pd.pd_loc (Printf.sprintf
+                     "operation %s of %s does not have the type it has in %s"
+                     o.op_name pd.pd_name b))
+          | _ -> ok ()) (ok ()) pd.pd_members)
+  | _ -> ok ()
+
 (* A place that uses an algebra is a model of it: the algebra is the theory
    (its operations and its laws, over its own name as the carrier), the place
    gives the interpretation. Each operation of the algebra is a fun of the
@@ -7240,6 +7506,7 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
    model provides it, the algebra never does, since an algebra has no carrier
    of its own to compute on. An algebra not declared `is algebra` is unknown. *)
 and check_algebra_models (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
+  let* () = check_signature_above env ctx pd in
   let algebras = match Hashtbl.find_opt Surface_ast.place_algebras pd.pd_name with
     | Some l -> l | None -> [] in
   let subst a t = match t with TyUser x when x = a -> TyUser pd.pd_name | t -> t in
@@ -7257,10 +7524,17 @@ and check_algebra_models (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) 
                   (String.concat ", " (List.map (fun p ->
                      p.param_name ^ ": " ^ Tyenv.ty_to_string (subst a p.param_ty)) o.op_params))
                   (Tyenv.ty_to_string want_ret) in
-              (match Tyenv.lookup_fun env (pd.pd_name ^ "__" ^ o.op_name) with
-               | None -> err pd.pd_loc (Printf.sprintf
-                   "place %s uses algebra %s but does not give its operation %s: a model gives each operation of the algebra as its own fun, %s"
-                   pd.pd_name a o.op_name shown)
+              (match Tyenv.lookup_fun env (pd.pd_name ^ "__" ^ Surface_ast.model_fun pd.pd_name a o.op_name) with
+               | None ->
+                   let hidden =
+                     Hashtbl.mem Surface_ast.internal_carrier_sites
+                       (apd.pd_loc.file, apd.pd_loc.start_line, apd.pd_loc.start_col)
+                     && Hashtbl.mem Surface_ast.carrier_models a in
+                   err pd.pd_loc (Printf.sprintf
+                   "place %s uses algebra %s but does not give its operation %s: a model gives each operation of the algebra as its own fun, %s%s"
+                   pd.pd_name a o.op_name shown
+                   (if hidden then Printf.sprintf " (%s is internal: outside its Space its carrier is opaque, and no model there takes the operations from it)" a
+                    else ""))
                | Some fs ->
                    let same_params =
                      List.length fs.fs_params = List.length want_params

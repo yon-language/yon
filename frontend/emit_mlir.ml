@@ -1648,7 +1648,8 @@ let closure_target_list (funcs : (string * func_sig) list)
      A plain named user function must stay all-f64: admitting every
      section-returning function (an inductive fun, a place fun) would bloat
      the dispatcher and shift the dense indices that the inductive path relies
-     on. So sections are admitted ONLY for the lifted lambdas. *)
+     on. So sections are admitted ONLY for the lifted lambdas, and for the funs
+     that a parameter using a signature receives as the arrows of its model. *)
   (* a 64-bit slot: a Number, or an Int64 carried as its bits (the
      dispatcher reinterprets it to its real type) *)
   let slot64 t = t = "f64" || t = "i64" in
@@ -1664,7 +1665,8 @@ let closure_target_list (funcs : (string * func_sig) list)
     && List.length fs.fn_params <= 4
     && not (has_pfx "yon_rt_" name)
     && not (has_pfx "Stream__" name)
-    && (if is_lifted_lambda name then f64_or_section fs
+    && (if is_lifted_lambda name || Hashtbl.mem Surface_ast.model_arrows name
+        then f64_or_section fs
         else not (has_pfx "__" name) && all_f64 fs)) funcs
 
 (* The dense index a closure carries as its tag for [name], or None if [name] is
@@ -1695,7 +1697,8 @@ let emit_closure_node (e : emitter) (funcs : (string * func_sig) list)
      number-returning view) stays f64. *)
   let logical_ty =
     match List.assoc_opt target funcs with
-    | Some fs when is_section_ty_str fs.fn_ret_mlir -> fs.fn_ret_mlir
+    | Some fs when is_section_ty_str fs.fn_ret_mlir
+                   && not (Hashtbl.mem Surface_ast.model_arrows target) -> fs.fn_ret_mlir
     | _ -> "f64" in
   let const c =
     let v = fresh_ssa e in
@@ -4496,7 +4499,12 @@ and emit_app (e : emitter) (env : (string * string) Env.t)
            let inlined_result = emit_term e env funcs inlined_body in
            hof_inline_stack :=
              (match !hof_inline_stack with _ :: tl -> tl | [] -> []);
-           inlined_result
+           (* a fun that received a model's arrows comes back like any call: an
+              inductive result is unpacked, so the body stays f64 *)
+           (match inlined_result with
+            | (v, t) when is_ind_section t && Hashtbl.mem Surface_ast.bounded_funs fname ->
+                (coerce_to_param e v t "f64", "f64")
+            | r -> r)
        | Some (fname, args) when
            List.mem_assoc fname funcs
            && List.length args < List.length (List.assoc fname funcs).fn_params

@@ -135,12 +135,27 @@ let algebra_op_sites : (string * int * int * int * int, string) Hashtbl.t = Hash
    `internal place P carried by <carrier>` the place is its carrier, in both directions;
    outside it the place is abstract (the rule of the abstract type). *)
 let open_house : string option ref = ref None
+(* The Space of the fun being checked (Some, inside a fun; its value is the
+   Space of the file, None for the prelude's). *)
+let open_space : string option option ref = ref None
+(* The file of each internal instance of an algebra: an instance is its carrier
+   in its whole Space, not only in its house. *)
+let instance_file : (string, string) Hashtbl.t = Hashtbl.create 4
+(* The Space of every source file, the prelude's included (marked apart from the
+   program's): where an internal instance is its carrier. *)
+let file_spaces : (string, string) Hashtbl.t = Hashtbl.create 32
+let space_of_file (f : string) : string option = Hashtbl.find_opt file_spaces f
 
-(* Whether t, inside the open house, is the carrier p of that house's place. *)
+(* Whether t, inside the open house, is the carrier p of that house's place;
+   for an internal instance of an algebra, inside its Space. *)
 let in_house_carrier (u : string) : string option =
   match !open_house with
   | Some h when h = u -> Hashtbl.find_opt internal_faces u
-  | _ -> None
+  | _ ->
+      (match Hashtbl.find_opt instance_file u, !open_space with
+       | Some file, Some here when space_of_file file = here ->
+           Hashtbl.find_opt internal_faces u
+       | _ -> None)
 
 (* The faces the language fuses to their primitive codes: a capitalized face
    and its code are one object, as a type (the parser) and as a code (a type
@@ -1241,3 +1256,71 @@ let undo_lambda_unknowns (mark : int list) : unit =
         (Hashtbl.find lambda_unknowns n).lu_solution <- None;
         lambda_unknown_trail := rest
   done
+
+(* ─── the signatures and the funs that use them ─────────────────────────── *)
+
+let site_of (l : location) = (l.file, l.start_line, l.start_col)
+let span_of (l : location) = (l.file, l.start_line, l.start_col, l.end_line, l.end_col)
+
+(* The algebras an algebra is a subobject of (`this < B`), nearest first, and
+   the operations each declares once its signature is read whole. *)
+let algebra_ancestors : (string, string list) Hashtbl.t = Hashtbl.create 8
+let algebra_ops : (string, string list) Hashtbl.t = Hashtbl.create 8
+(* The laws of an algebra that came down from a signature above it: the pair
+   (algebra, law) gives the signature that states the law. *)
+let law_origin : (string * string, string) Hashtbl.t = Hashtbl.create 16
+(* The structures a place takes whole from a carrier model, so that its values
+   keep the carrier's own operators: (place, algebra). *)
+let carrier_taken : (string * string, unit) Hashtbl.t = Hashtbl.create 8
+
+let is_model_of (a : string) (signature : string) : bool =
+  a = signature
+  || (match Hashtbl.find_opt algebra_ancestors a with
+      | Some l -> List.mem signature l
+      | None -> false)
+
+(* The name, in a place, of the fun that gives an operation of an algebra: the
+   operation's own, unless another algebra the place uses declares the same
+   name; then each is told apart by its algebra. *)
+let model_fun (place : string) (algebra : string) (op : string) : string =
+  let others = List.filter (fun b -> b <> algebra)
+      (Option.value ~default:[] (Hashtbl.find_opt place_algebras place)) in
+  let declares b = List.mem op (Option.value ~default:[] (Hashtbl.find_opt algebra_ops b)) in
+  if List.exists declares others then algebra ^ "__" ^ op else op
+
+(* `fun f<T uses Monoid>`: the parameters that use an algebra, by the site of the fun. *)
+let fun_bounds : (string * int * int, (string * string) list) Hashtbl.t = Hashtbl.create 8
+
+(* `f<Additive>(xs)`: the type arguments written at a call, by the site of the call. *)
+let explicit_type_args : (string * int * int, string list) Hashtbl.t = Hashtbl.create 8
+
+(* A parameter that uses a signature receives the arrows of a model after the
+   arguments the program writes: the signature's operations, and a truth for
+   each law the body asks about. *)
+type bound_member = BoundOp of string | BoundLaw of string
+type bounded_fun = {
+  bf_written : int;                      (* the arguments the program writes *)
+  bf_tparams : string list;              (* all its type parameters, in order *)
+  bf_bounds : (string * string * bound_member list) list;   (* T, its signature, its members *)
+}
+let bounded_funs : (string, bounded_fun) Hashtbl.t = Hashtbl.create 8
+
+let bound_param (t : string) (member : string) : string = "__" ^ t ^ "__" ^ member
+
+(* A call the checker has read again: the fun it reaches, with the arguments
+   that the model adds, by the full span of the call. *)
+let elaborated_calls : (string * int * int * int * int, expr) Hashtbl.t = Hashtbl.create 8
+(* The calls of an operation of an algebra already checked, by site: their
+   type, so a nesting of them is checked once per level; and those that are the
+   instance's own fun, on a value of the instance itself. *)
+let instance_call_types : (string * int * int * int * int, ty) Hashtbl.t = Hashtbl.create 8
+let own_instance_calls : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 8
+
+(* The funs passed as the arrows of a model: first-class on any carrier. *)
+let model_arrows : (string, unit) Hashtbl.t = Hashtbl.create 8
+
+let elaborated_call (name : string) (args : expr list) (l : location) : expr option =
+  match Hashtbl.find_opt elaborated_calls (span_of l) with
+  | Some (ECall (n, full, _)) as found
+    when n <> name || List.length full <> List.length args -> found
+  | _ -> None

@@ -200,7 +200,7 @@ def test_a_pure_library_nullary_is_named_and_one_that_acts_is_called(tmp_path):
 def test_a_constant_of_an_algebra_with_parentheses_is_refused(tmp_path):
     extra = dict(ALGEBRA)
     extra["w/Somma.yon"] = extra["w/Somma.yon"].replace(
-        "  carried by i64", "  operation zero(): Somma as \"0\"\n  carried by i64")
+        "  %s\n", "  operation zero(): Somma as \"0\"\n  %s\n")
     extra["w/Somma.yon"] %= "law nulla zero + zero = zero"
     r, _ = _compile(tmp_path, _main("  return 42"), extra)
     out = r.stdout + r.stderr
@@ -616,8 +616,8 @@ def test_the_path_application_takes_the_whole_pipe(tmp_path):
 
 ALGEBRA = {
     "w/Topos.yon": "topos WTopos where {\n}\n",
-    "w/Somma.yon": "place Somma is algebra {\n  operation add(a: Somma, b: Somma): Somma as \"+\"\n"
-                   "  %s\n  carried by i64\n}\n",
+    "w/Somma.yon": "place Somma carried by i64 is algebra {\n  operation add(a: Somma, b: Somma): Somma as \"+\"\n"
+                   "  %s\n}\n",
 }
 
 
@@ -638,7 +638,7 @@ def test_a_quantifier_over_another_type_in_an_algebra_is_refused(tmp_path):
 def test_a_law_without_quantifiers_follows_its_name(tmp_path):
     extra = dict(ALGEBRA)
     extra["w/Somma.yon"] = extra["w/Somma.yon"].replace(
-        "  carried by i64", "  operation zero: Somma as \"0\"\n  carried by i64")
+        "  %s\n", "  operation zero: Somma as \"0\"\n  %s\n")
     extra["w/Somma.yon"] %= "law nulla zero + zero = zero"
     assert _exit(tmp_path, _main("  return 42"), extra) == 42
 
@@ -646,7 +646,7 @@ def test_a_law_without_quantifiers_follows_its_name(tmp_path):
 def test_a_statement_in_parentheses_is_refused(tmp_path):
     extra = dict(ALGEBRA)
     extra["w/Somma.yon"] = extra["w/Somma.yon"].replace(
-        "  carried by i64", "  operation zero: Somma as \"0\"\n  carried by i64")
+        "  %s\n", "  operation zero: Somma as \"0\"\n  %s\n")
     extra["w/Somma.yon"] %= "law nulla (zero = zero)"
     r, _ = _compile(tmp_path, _main("  return 42"), extra)
     out = r.stdout + r.stderr

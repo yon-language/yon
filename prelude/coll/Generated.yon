@@ -3,7 +3,9 @@
  * least set that holds the generators and is closed under the operation, reached
  * by a semi-naive fixed point that composes every ordered pair; commutativity and
  * associativity are decided over the whole closure, since what holds on the
- * generators alone says nothing of it.
+ * generators alone says nothing of it. When the operation is an instance of a
+ * signature (`generated_by_instance`), a law the instance states answers without
+ * the closure.
  *
  * The closure may be infinite. Past `closure_limit` elements it is refused with
  * a DomainError that names the limit, never cut off.
@@ -12,14 +14,25 @@
 place Generated<V> {
   op (V, V) -> V
   gens HashSet<V>
+  associative_by_law Boolean
+  commutative_by_law Boolean
 
   /* ─── The presentation ───────────────────────────────────── [T] ─── */
 
   fun generated_by<V>(op: (V, V) -> V, gens: HashSet<V>): Generated<V> {
-    return .-> Generated { op op gens gens }
+    return .-> Generated { op op gens gens associative_by_law false commutative_by_law false }
+  }
+  /* the operation of an instance: its laws are known, and they are the answer */
+  fun generated_by_instance<V uses Semigroup>(gens: HashSet<V>): Generated<V> {
+    return .-> Generated {
+      op V.op gens gens associative_by_law V.associative commutative_by_law V.commutative
+    }
   }
   fun gen<V>(m: Generated<V>, x: V): Generated<V> {
-    return .-> Generated { op m.op gens HashSet.add(m.gens, x) }
+    return .-> Generated {
+      op m.op gens HashSet.add(m.gens, x)
+      associative_by_law m.associative_by_law commutative_by_law m.commutative_by_law
+    }
   }
 
   /* the most elements a closure may hold: the exhaustive associativity is cubic in
@@ -110,14 +123,14 @@ place Generated<V> {
   }
 
   fun is_commutative<V>(m: Generated<V>) on error DomainError: Boolean {
-    return match Generated.closure(m) {
+    return if m.commutative_by_law then true else match Generated.closure(m) {
       Value as c => Generated.commutes(m.op, HashSet.to_stream(c)),
       DomainError as d => d
     }
   }
 
   fun is_associative<V>(m: Generated<V>) on error DomainError: Boolean {
-    return match Generated.closure(m) {
+    return if m.associative_by_law then true else match Generated.closure(m) {
       Value as c => Generated.associates(m.op, HashSet.to_stream(c)),
       DomainError as d => d
     }

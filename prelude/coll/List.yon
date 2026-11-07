@@ -31,6 +31,11 @@ place List<V> {
     for every x in l { acc <- f(acc, x) }
     return acc
   }
+  /* the free semigroup on T is the pair (T, List<T>): a first letter and the rest.
+     A word reads to one value in any semigroup, since the parentheses do not count */
+  fun normal_form<T uses Semigroup>(w: (T, List<T>)): T {
+    return List.fold_left(snd(w), fst(w), T.op)
+  }
   internal fun map_onto<V, W>(l: List<V>, f: V -> W, onto: List<W>): List<W> {
     mut r := onto
     for every x in l { r <- (f(x), r) ↪ Cons }

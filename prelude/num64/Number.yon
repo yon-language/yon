@@ -203,8 +203,7 @@ place Number carried by number {
  *     notation (1.797…e308), so MAX_VALUE has no exact literal; left out
  *     rather than written wrong.
  *
- * On the algebras: `+` and `*` stay operators. Their declared face is an
- *     algebra, attached by `operation … uses algebra Additive` on a place;
- *     Number declares no such operation. f64 addition is not associative,
- *     so Number is not a ring.
+ * On the algebras: `+` and `*` stay operators. Number uses no algebra: f64
+ *     addition is not associative, so Number is not even a semigroup, and a
+ *     fun parameter that uses one refuses it.
  * ═══════════════════════════════════════════════════════════════════ */

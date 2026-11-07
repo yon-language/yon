@@ -448,6 +448,8 @@ place Entry {
 
 `place P uses algebra A, B`: `P` gives the operations of `A` and `B` as its own funs, their operators write them on `P`, and their laws are certified on `P`.
 
+`fun f<T uses Monoid>(xs: List<T>): T`: the parameter takes a model of the signature, and `T.op` and `T.unit` are its arrows. The call names the algebra when the values have more than one structure, as in `f<Additive>(xs)` on an `Int64`; without the name that call is refused as ambiguous, and so is a place that uses no `Monoid` (E2001).
+
 #### `law`
 
 States a law of an algebra over its carrier, with the symbols of logic: `law commutative ∀a : P ∀b : P, a + b = b + a`. It is certified on each model: refuted is E2101, not decided is E2102. In the body of a place with `this >`, a law without `is given` is constitutive: it is a cell of the place, as in `place S1 { this > base  law loop base = base }`. Outside an algebra, a law may end in `is given`: an axiom, declared and never certified, which adds no cell even in a place with `this >`.
@@ -461,7 +463,7 @@ Names a reduction's canonical fold: `reduction R of P fold "sum_f64" { ... }`.
             out={["0"]}>
 {`// alg/Or.yon
 place Or {
-  operation join(a: Number, b: Number): Number uses algebra BooleanOr
+  operation op(a: Number, b: Number): Number uses algebra BooleanOr
   law commutative
   law associative
 }
@@ -655,7 +657,7 @@ The source of a move, morph, geomorph or import.
 
 #### `carried`
 
-`place P carried by C`: the values of `P` are carried by `C`, the object of the machine they are (`place Int64 carried by i64`). Written `internal place P carried by C`, the representation is internal to the house: inside it `P` is `C`, outside it `P` is abstract.
+`place P carried by C`: the values of `P` are carried by `C`, the object of the machine they are (`place Int64 carried by i64`). Written `internal place P carried by C`, the representation is internal to the house: inside it `P` is `C`, outside it `P` is abstract. Before `is algebra` it makes an instance on a carrier: `place Additive carried by i64 is algebra { this < Group ... }`, whose laws are certified on the machine of `C`; `carried by C is given is algebra` makes axioms of the laws the certification does not decide there, and an `internal` instance is its carrier inside its Space only: outside it the carrier is opaque, while the signature stays usable everywhere.
 
 #### `is`
 

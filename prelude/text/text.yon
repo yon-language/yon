@@ -36,8 +36,8 @@ topos where {
    * monoid (addition and multiplication on Int64, Z/2^64) is commutative;
    * f64 addition on Number is not even associative.
    *
-   * No algebra is attached: a topos `morphism` has no `uses algebra`
-   * position (that clause belongs to `operation` on a place).
+   * The place String uses algebra Monoid with it. A topos `morphism` has no
+   * `uses algebra` position (that clause belongs to `operation` on a place).
    */
   morphism concat(a: String, b: String): String
 }

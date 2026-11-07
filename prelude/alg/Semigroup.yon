@@ -1,0 +1,6 @@
+/* Semigroup — a magma whose operation is associative: the parentheses of a word
+ * do not count. Its free object on V is the pair (V, List<V>). */
+place Semigroup is algebra {
+  this < Magma
+  law associative ∀a : Semigroup ∀b : Semigroup ∀c : Semigroup, op(op(a, b), c) = op(a, op(b, c))
+}

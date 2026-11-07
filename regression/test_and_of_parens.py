@@ -265,11 +265,10 @@ def _project(tmp_path, place, source):
 
 
 def _sum(law):
-    return ("place Sum is algebra {\n"
+    return ("place Sum carried by i64 is algebra {\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
             '  operation zero: Sum as "0"\n'
             f"  {law}\n"
-            "  carried by i64\n"
             "}\n")
 
 

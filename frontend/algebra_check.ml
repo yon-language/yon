@@ -101,7 +101,7 @@ let unfold (algebra_ops : S.operation_decl list)
              let op = List.find (fun (op : S.operation_decl) -> op.S.op_symbol = Some sym) algebra_ops in
              g (S.ECall (op.S.op_name, [a; b], l))
          | _ -> S.EBinop (o, g a, g b, l))
-    | S.ECall (("__heyt_and" | "__heyt_or" | "__heyt_imp" | "__heyt_not") as f, args, l) ->
+    | S.ECall (("__heyt_and" | "__heyt_or" | "__heyt_imp" | "__heyt_not" | "__text_concat") as f, args, l) ->
         S.ECall (f, List.map g args, l)
     | S.ECall (f, args, _) ->
         let args = List.map g args in
@@ -181,16 +181,29 @@ let decide_finite (arms : string list) (st : S.law_statement) (body : S.expr) : 
 (* ─── a machine carrier: z3 over its values ──────────────────────────── *)
 
 (* The machine values the solver models: a 64-bit two's-complement word,
-   whose sum and product wrap, and an IEEE double, rounded to nearest-even;
-   two values are the same iff they have the same bits. *)
-type machine = Word | Double
+   whose sum and product wrap, an IEEE double, rounded to nearest-even, and a
+   text, whose one operation is the concatenation; two values are the same iff
+   they have the same bits. *)
+type machine = Word | Double | Characters
 
 let machine_of_carrier = function
   | "i64" -> Some Word
   | "f64" -> Some Double
+  | "text" -> Some Characters
   | _ -> None
 
-let sort = function Word -> "(_ BitVec 64)" | Double -> "(_ FloatingPoint 11 53)"
+let sort = function
+  | Word -> "(_ BitVec 64)"
+  | Double -> "(_ FloatingPoint 11 53)"
+  | Characters -> "String"
+
+let machine_name = function
+  | Word -> "64-bit words"
+  | Double -> "IEEE doubles"
+  | Characters -> "texts"
+
+let text_literal (s : string) : string =
+  "\"" ^ String.concat "\"\"" (String.split_on_char '"' s) ^ "\""
 
 let rec to_term (m : machine) (e : S.expr) : string =
   let t = to_term m in
@@ -209,12 +222,17 @@ let rec to_term (m : machine) (e : S.expr) : string =
   | Double, S.EBinop (S.OpAdd, a, b, _) -> Printf.sprintf "(fp.add RNE %s %s)" (t a) (t b)
   | Double, S.EBinop (S.OpSub, a, b, _) -> Printf.sprintf "(fp.sub RNE %s %s)" (t a) (t b)
   | Double, S.EBinop (S.OpMul, a, b, _) -> Printf.sprintf "(fp.mul RNE %s %s)" (t a) (t b)
+  | Characters, S.ELit (S.LitString s, _) -> text_literal s
+  | Characters, S.ECall ("__text_concat", [a; b], _) -> Printf.sprintf "(str.++ %s %s)" (t a) (t b)
   | _, S.EIfThenElse (c, a, b, _) -> Printf.sprintf "(ite %s %s %s)" (to_prop m c) (t a) (t b)
   | _ -> raise (Not_modelled "a term outside the machine fragment")
 
 and to_prop (m : machine) (e : S.expr) : string =
   let t = to_term m and p = to_prop m in
-  let cmp w d a b = Printf.sprintf "(%s %s %s)" (match m with Word -> w | Double -> d) (t a) (t b) in
+  let cmp w d a b = match m with
+    | Word -> Printf.sprintf "(%s %s %s)" w (t a) (t b)
+    | Double -> Printf.sprintf "(%s %s %s)" d (t a) (t b)
+    | Characters -> raise (Not_modelled "an order of texts") in
   match e with
   | S.EBinop (S.OpEq, a, b, _) -> Printf.sprintf "(= %s %s)" (t a) (t b)
   | S.EBinop (S.OpNeq, a, b, _) -> Printf.sprintf "(not (= %s %s))" (t a) (t b)
@@ -242,13 +260,14 @@ let model_of (out : string) : string =
 (* ─── the machine's own arithmetic, on fixed candidates ───────────────── *)
 
 (* A value of the machine: a word, or a double, compared by its bits. *)
-type mvalue = W of int64 | D of float
+type mvalue = W of int64 | D of float | C of string
 
 let candidates = function
   | Word -> List.map (fun x -> W x)
               [0L; 1L; -1L; 2L; Int64.max_int; Int64.min_int; 4294967296L; 3L]
   | Double -> List.map (fun x -> D x)
                 [0.0; -0.0; 1.0; -1.0; 0.1; 0.2; 0.3; 1e16; 1e308; nan; infinity]
+  | Characters -> List.map (fun x -> C x) [""; "a"; "b"; "ab"]
 
 let rec mterm (env : (string * mvalue) list) (e : S.expr) : mvalue =
   let t = mterm env in
@@ -257,6 +276,11 @@ let rec mterm (env : (string * mvalue) list) (e : S.expr) : mvalue =
   | S.EParen (a, _) -> t a
   | S.ELit (S.LitNumber n, _) ->
       (match env with (_, D _) :: _ -> D n | _ -> W (Int64.of_float n))
+  | S.ELit (S.LitString s, _) -> C s
+  | S.ECall ("__text_concat", [a; b], _) ->
+      (match t a, t b with
+       | C x, C y -> C (x ^ y)
+       | _ -> raise (Not_modelled "a term outside the machine fragment"))
   | S.EBinop (o, a, b, _) ->
       (match o, t a, t b with
        | S.OpAdd, W x, W y -> W (Int64.add x y)
@@ -274,6 +298,7 @@ and mprop (env : (string * mvalue) list) (e : S.expr) : bool =
     | W x, W y -> Int64.equal x y
     (* the same value iff the same bits; every NaN is the one NaN *)
     | D x, D y -> (Float.is_nan x && Float.is_nan y) || Int64.equal (Int64.bits_of_float x) (Int64.bits_of_float y)
+    | C x, C y -> String.equal x y
     | _ -> false in
   (* the machine's order: signed on a word, IEEE on a double, where NaN is
      below nothing and above nothing *)
@@ -303,6 +328,7 @@ and mprop (env : (string * mvalue) list) (e : S.expr) : bool =
 let show = function
   | W x -> Int64.to_string x
   | D x -> Printf.sprintf "%h (%g)" x x
+  | C x -> Printf.sprintf "%S" x
 
 (* An assignment of candidates where a statement with only ∀ is false: a
    counterexample in the machine's own arithmetic. *)
@@ -319,8 +345,7 @@ let search (m : machine) (st : S.law_statement) (body : S.expr) : string option 
 let decide_machine (m : machine) (st : S.law_statement) (body : S.expr) : Law_check.verdict =
   let all_forall = List.for_all (fun (q, _, _) -> q = S.Forall) st.S.ls_quants in
   match (if all_forall then search m st body else None) with
-  | Some cex -> Law_check.Refuted (Printf.sprintf "in the arithmetic of %s, at %s"
-                                     (match m with Word -> "64-bit words" | Double -> "IEEE doubles") cex)
+  | Some cex -> Law_check.Refuted (Printf.sprintf "in the arithmetic of %s, at %s" (machine_name m) cex)
   | None ->
   let all_forall = List.for_all (fun (q, _, _) -> q = S.Forall) st.S.ls_quants in
   let program =
@@ -340,7 +365,7 @@ let decide_machine (m : machine) (st : S.law_statement) (body : S.expr) : Law_ch
     | Error e -> Law_check.Unknown e
     | Ok out ->
         let lines = String.split_on_char '\n' out in
-        let what = match m with Word -> "64-bit words" | Double -> "IEEE doubles" in
+        let what = machine_name m in
         (match String.trim (List.hd lines) with
          | "unsat" -> Law_check.Proven ("z3, over " ^ what)
          | "sat" ->
@@ -357,32 +382,195 @@ let laws_of (apd : S.place_decl) =
 let ops_of (apd : S.place_decl) =
   List.filter_map (function S.FoOp o -> Some o | _ -> None) apd.S.pd_members
 
+(* ─── a law proved on the signature ─────────────────────────────────────
+   A signature's law that follows from the laws stated before it holds on every
+   model of the signature, whatever the model: it is a theorem, proved once, by
+   z3 over an uninterpreted carrier and uninterpreted operations, with those laws
+   as the assumptions. A law that does not follow is an axiom, and it is
+   certified on each model. *)
+
+let rec signature_term (ops : S.operation_decl list) (e : S.expr) : string =
+  let t = signature_term ops in
+  match e with
+  | S.EVar (x, _) -> "|" ^ x ^ "|"
+  | S.EParen (a, _) -> t a
+  | S.ECall (f, [], _) when List.exists (fun (o : S.operation_decl) -> o.S.op_name = short_name f) ops ->
+      (* a constant is applied to nothing: it is its own name *)
+      "|" ^ short_name f ^ "|"
+  | S.ECall (f, args, _) when List.exists (fun (o : S.operation_decl) -> o.S.op_name = short_name f) ops ->
+      Printf.sprintf "(|%s| %s)" (short_name f) (String.concat " " (List.map t args))
+  | _ -> raise (Not_modelled "a term outside the signature")
+
+let rec signature_prop (ops : S.operation_decl list) (e : S.expr) : string =
+  let t = signature_term ops and p = signature_prop ops in
+  match e with
+  | S.EBinop (S.OpEq, a, b, _) -> Printf.sprintf "(= %s %s)" (t a) (t b)
+  | S.EBinop (S.OpNeq, a, b, _) -> Printf.sprintf "(not (= %s %s))" (t a) (t b)
+  | S.ECall ("__heyt_and", [a; b], _) -> Printf.sprintf "(and %s %s)" (p a) (p b)
+  | S.ECall ("__heyt_or", [a; b], _) -> Printf.sprintf "(or %s %s)" (p a) (p b)
+  | S.ECall ("__heyt_imp", [a; b], _) -> Printf.sprintf "(=> %s %s)" (p a) (p b)
+  | S.ECall ("__heyt_not", [a], _) -> Printf.sprintf "(not %s)" (p a)
+  | S.EParen (a, _) -> p a
+  | _ -> raise (Not_modelled "a proposition outside the signature")
+
+let signature_formula ops (st : S.law_statement) : string =
+  List.fold_right (fun (q, x, _) acc ->
+      Printf.sprintf "(%s ((|%s| C)) %s)"
+        (match q with S.Forall -> "forall" | S.Exists -> "exists") x acc)
+    st.S.ls_quants (signature_prop ops st.S.ls_body)
+
+(* The names of the operations a statement speaks of. *)
+let mentioned (ops : S.operation_decl list) (e : S.expr) : string list =
+  let named x = List.exists (fun (o : S.operation_decl) -> o.S.op_name = x) ops in
+  let rec go e = match e with
+    | S.EVar (x, _) when named x -> [x]
+    | S.ECall (f, args, _) ->
+        (if named (short_name f) then [short_name f] else []) @ List.concat_map go args
+    | S.EBinop (_, a, b, _) -> go a @ go b
+    | S.EParen (a, _) -> go a
+    | _ -> [] in
+  go e
+
+let follows (ops : S.operation_decl list) (assumed : S.law_statement list) (st : S.law_statement) : bool =
+  (* a law that first speaks of an operation says what nothing before it says *)
+  let known = List.concat_map (fun (a : S.law_statement) -> mentioned ops a.S.ls_body) assumed in
+  List.for_all (fun x -> List.mem x known) (mentioned ops st.S.ls_body)
+  &&
+  try
+    let declared = String.concat "" (List.map (fun (o : S.operation_decl) ->
+        let c = String.concat " " (List.map (fun _ -> "C") o.S.op_params) in
+        Printf.sprintf "(declare-fun |%s| (%s) C)\n" o.S.op_name c) ops) in
+    let program =
+      "(declare-sort C 0)\n" ^ declared
+      ^ String.concat "" (List.map (fun a ->
+          Printf.sprintf "(assert %s)\n" (signature_formula ops a)) assumed)
+      ^ Printf.sprintf "(assert (not %s))\n(check-sat)\n" (signature_formula ops st) in
+    Law_check.z3_available ()
+    && (match Naturality_smtcheck.run_z3 program with
+        | Ok out -> String.trim (List.hd (String.split_on_char '\n' out)) = "unsat"
+        | Error _ -> false)
+  with Not_modelled _ -> false
+
+(* What a model answers for `V.associative` and `V.commutative`: the law the word
+   names, not a law that happens to carry the name. The statement is the
+   canonical one over the operation `op`, and the answer is whether it follows
+   from the laws of the algebra, proved by z3 over an uninterpreted carrier; a
+   law written with the operator of `op` is read as `op`. Another name is
+   answered by the law of that name. *)
+let canonical_law (carrier : string) (law : string) : S.law_statement option =
+  let l = S.dummy_loc in
+  let v x = S.EVar (x, l) and op a b = S.ECall ("op", [a; b], l) in
+  let all xs = List.map (fun x -> (S.Forall, x, S.TyUser carrier)) xs in
+  match law with
+  | "commutative" ->
+      Some { S.ls_quants = all ["a"; "b"];
+             ls_body = S.EBinop (S.OpEq, op (v "a") (v "b"), op (v "b") (v "a"), l);
+             ls_given = false }
+  | "associative" ->
+      Some { S.ls_quants = all ["a"; "b"; "c"];
+             ls_body = S.EBinop (S.OpEq, op (op (v "a") (v "b")) (v "c"),
+                                 op (v "a") (op (v "b") (v "c")), l);
+             ls_given = false }
+  | _ -> None
+
+let read_symbols (ops : S.operation_decl list) (e : S.expr) : S.expr =
+  let sym_of = function
+    | S.OpAdd -> Some "+" | S.OpSub -> Some "-" | S.OpMul -> Some "*"
+    | S.OpDiv -> Some "/" | S.OpMod -> Some "%" | _ -> None in
+  let rec go e = match e with
+    | S.EParen (a, _) -> go a
+    | S.EBinop (o, a, b, l) ->
+        (match sym_of o with
+         | Some sym when List.exists (fun (op : S.operation_decl) ->
+               op.S.op_symbol = Some sym && List.length op.S.op_params = 2) ops ->
+             let op = List.find (fun (op : S.operation_decl) ->
+                 op.S.op_symbol = Some sym && List.length op.S.op_params = 2) ops in
+             S.ECall (op.S.op_name, [go a; go b], l)
+         | _ -> S.EBinop (o, go a, go b, l))
+    | S.ECall (f, args, l) -> S.ECall (f, List.map go args, l)
+    | e -> e in
+  go e
+
+let states_by_law (apd : S.place_decl) (law : string) : bool =
+  match canonical_law apd.S.pd_name law with
+  | None -> List.exists (function S.FoLaw (l, _) -> l = law | _ -> false) apd.S.pd_members
+  | Some st ->
+      let ops = ops_of apd in
+      List.exists (fun (o : S.operation_decl) -> o.S.op_name = "op") ops
+      &&
+      let assumed = List.filter_map (fun (_, (a : S.law_statement)) ->
+          let a = { a with S.ls_body = read_symbols ops a.S.ls_body } in
+          match signature_formula ops a with
+          | _ -> Some a
+          | exception Not_modelled _ -> None) (laws_of apd) in
+      assumed <> [] && follows ops assumed st
+
+(* The theorems of the signatures: (the signature that states it, the law). Only
+   a signature is asked, an algebra another algebra is below; its assumptions
+   are the laws above it and the ones it states first. *)
+let theorems (ps : (string * S.place_decl) list) : (string * string) list =
+  let is_signature a = List.exists (fun (_, (pd : S.place_decl)) ->
+      pd.S.pd_subcontains = Some a && Hashtbl.mem S.algebra_places pd.S.pd_name) ps in
+  List.concat_map (fun (a, (apd : S.place_decl)) ->
+      if not (Hashtbl.mem S.algebra_places a && is_signature a) then [] else
+      let ops = ops_of apd in
+      let (found, _) = List.fold_left (fun (found, assumed) (law, st) ->
+          if Hashtbl.mem S.law_origin (a, law) then (found, assumed @ [st])
+          else if assumed <> [] && follows ops assumed st then ((a, law) :: found, assumed)
+          else (found, assumed @ [st])) ([], []) (laws_of apd) in
+      found) ps
+
+let is_theorem (theorems : (string * string) list) (a : string) (law : string) : bool =
+  let origin = Option.value ~default:a (Hashtbl.find_opt S.law_origin (a, law)) in
+  List.mem (origin, law) theorems
+
+(* The funs of a house that give the operations of one algebra, by the
+   operations' names. *)
+let funs_of_model (pname : string) (a : string) (ops : S.operation_decl list)
+    (funs : (string * S.fun_decl) list) : (string * S.fun_decl) list =
+  List.filter_map (fun (o : S.operation_decl) ->
+      Option.map (fun fd -> (o.S.op_name, fd))
+        (List.assoc_opt (S.model_fun pname a o.S.op_name) funs)) ops
+  @ funs
+
 (* A place that uses an algebra: its laws read on the place's funs. *)
-let check_models (p : S.program) (ps : (string * S.place_decl) list) : law_result list =
+let check_models (p : S.program) (ps : (string * S.place_decl) list)
+    (theorems : (string * string) list) : law_result list =
   List.concat_map (fun (pname, (pd : S.place_decl)) ->
     let algebras = match Hashtbl.find_opt S.place_algebras pname with Some l -> l | None -> [] in
-    let funs = house_funs p pname in
+    let house = house_funs p pname in
+    let internal = Hashtbl.mem S.internal_carrier_sites
+        (pd.S.pd_loc.S.file, pd.S.pd_loc.S.start_line, pd.S.pd_loc.S.start_col) in
     List.concat_map (fun a ->
       match List.assoc_opt a ps with
       | Some apd when Hashtbl.mem S.algebra_places a ->
           let ops = ops_of apd in
+          let funs = funs_of_model pname a ops house in
+          (* the concatenation is the carrier's own, and has no body to unfold; a
+             fun of that name with a body is that body *)
+          let resolve f args =
+            match pd.S.pd_fusion, short_name f, List.assoc_opt "concat" funs with
+            | Some "text", "concat", Some fd when fd.S.fn_given ->
+                Some (S.ECall ("__text_concat", args, pd.S.pd_loc))
+            | _ -> house_resolver funs f args in
           (* a model that does not give every operation is refused by the
-             checker of models; its laws are not read on it *)
+             checker of models; its laws are not read on it. A place that shows
+             its carrier and takes the structure whole from it is the carrier
+             model, certified as such *)
           if not (List.for_all (fun (o : S.operation_decl) -> List.mem_assoc o.S.op_name funs) ops)
+             || (Hashtbl.mem S.carrier_taken (pname, a) && not internal)
           then [] else
           List.map (fun (law, st) ->
             let verdict =
               try
-                let body = unfold ops (house_resolver funs) st.S.ls_body in
+                let body = unfold ops resolve st.S.ls_body in
                 let nullary = pd.S.pd_arms <> []
                   && List.for_all (fun (v : S.variant) -> v.S.v_args = []) pd.S.pd_arms in
-                let internal = Hashtbl.mem S.internal_carrier_sites
-                    (pd.S.pd_loc.S.file, pd.S.pd_loc.S.start_line, pd.S.pd_loc.S.start_col) in
                 if nullary && pd.S.pd_fusion = None then
                   decide_finite (List.map (fun (v : S.variant) -> v.S.v_name) pd.S.pd_arms) st body
                 else
                   match pd.S.pd_fusion with
-                  | Some c when internal && machine_of_carrier c <> None ->
+                  | Some c when (internal || c = "text") && machine_of_carrier c <> None ->
                       (match machine_of_carrier c with
                        | Some m -> decide_machine m st body
                        | None -> assert false)
@@ -393,12 +581,13 @@ let check_models (p : S.program) (ps : (string * S.place_decl) list) : law_resul
               with Not_modelled why -> Law_check.Unknown ("the statement on " ^ pname ^ " contains " ^ why)
             in
             { lr_place = pname; lr_algebra = a; lr_law = law; lr_loc = pd.S.pd_loc;
-              lr_given = false; lr_verdict = verdict }) (laws_of apd)
+              lr_given = false; lr_verdict = verdict })
+            (List.filter (fun (law, _) -> not (is_theorem theorems a law)) (laws_of apd))
       | _ -> []) algebras) ps
 
 (* The carrier models an algebra declares (`carried by C`): its laws read on
    the machine's operation of each symbol. *)
-let check_carriers (ps : (string * S.place_decl) list) : law_result list =
+let check_carriers (ps : (string * S.place_decl) list) (theorems : (string * string) list) : law_result list =
   List.concat_map (fun (a, (apd : S.place_decl)) ->
     match Hashtbl.find_opt S.carrier_models a with
     | None -> []
@@ -424,7 +613,8 @@ let check_carriers (ps : (string * S.place_decl) list) : law_result list =
                    with Not_modelled why -> Law_check.Unknown ("the statement on " ^ c ^ " contains " ^ why))
             in
             { lr_place = "the carrier " ^ c; lr_algebra = a; lr_law = law; lr_loc = loc;
-              lr_given = given; lr_verdict = verdict }) (laws_of apd)) models) ps
+              lr_given = given; lr_verdict = verdict })
+            (List.filter (fun (law, _) -> not (is_theorem theorems a law)) (laws_of apd))) models) ps
 
 (* The catalog of the algebras is the set of the places declared `is algebra`.
    An operation that names one (`operation op(...) uses algebra A`) names such
@@ -463,5 +653,9 @@ let check_named_algebras (p : S.program) (ps : (string * S.place_decl) list) : l
     | _ -> []) p
 
 let check (p : S.program) : law_result list =
+  (* the driver's diagnostics read the program as it was parsed: the signatures
+     are read whole here, and reading them again changes nothing *)
+  let p = Algebra_models.read_signatures p in
   let ps = places p in
-  check_carriers ps @ check_models p ps @ check_named_algebras p ps
+  let proved = theorems ps in
+  check_carriers ps proved @ check_models p ps proved @ check_named_algebras p ps

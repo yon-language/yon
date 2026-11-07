@@ -139,7 +139,9 @@ functions, a function has one type.
 | `e.method(args).map(f).fold(0, g)` | ✓ | Method chaining: `recv.m(args)` ≡ `m(recv, args)` |
 | `fun answer: Number { return 42 }`, used as `answer` | ✓ | **A point** `1 → X`: a pure nullary is declared and named without `()`; a value fixed for the life of the Space is pure |
 | `fun tick(): Int64 { .. }`, used as `tick()` | ✓ | **A nullary that acts**: an effect, a wait, shared memory, a cell that leaves, or a call of one that acts; `()` is the empty product |
-| `operation zero: Additive as "0"`, used as `zero` | ✓ | A constant of an algebra |
+| `operation unit: Additive as "0"`, used as `unit` | ✓ | A constant of an algebra |
+| `concat_all<Additive>(xs)` | ✓ | **A call that names the model** of a parameter that uses a signature, with no space before `<`. A place with one structure needs no name: `concat_all(xs)`. Two structures and no name are refused as ambiguous (E2001) |
+| `Additive.op(a, b)` | ✓ | The operation of an instance on values of a place that is a model of it; `Multiplicative.op(a, b)` is the other structure of the same values |
 | `place P<A, f : A -> A> { … }`, `(A, B) -> C` | ✓ | A parameter that stands for a term, read in the laws; its argument is the name of a fun, and that name is its identity |
 | `a ↦ f`, `(a, b) ↦ f` | ✓ | Application: a tuple spreads into the arguments. The call `f(a, b)` stays |
 | `if c then a else b` | ✓ | Conditional expression |
@@ -278,6 +280,7 @@ runtime cost. `if/then/else` lowers to `scf.if`, `iter` to `scf.for`, and
 ```yon
 fun f(x: Number, y: Number): Number { return x + y }
 fun g<A>(x: A): A { return x }                                      // type parameters
+fun concat_all<T uses Monoid>(xs: List<T>): T { return List.fold_left(xs, T.unit, T.op) }  // a parameter that uses a signature
 fun h(x: Number): Number visits Output { return x }                 // declared effect
 internal fun secret(x: Number): Number { return x }                 // only its house calls it; not exported cross-Space
 fun p(x: Number) on error DomainError: Number { return x }          // partial: it declares how it fails
@@ -317,13 +320,17 @@ A `place` then takes its world by inference from the project's toml, not from an
 | `operation op(...) uses algebra Additive` | ✓ | Bind to a catalog algebra; laws certified by the compiler |
 | `law commutative` etc. | ✓ | Declared law, verified (AlgebraVerifier) |
 | `place A is algebra { ... }` | ✓ | **An algebra**: a theory, its operations and its laws. Inside it the name `A` stands for the carrier of any model. It lowers to nothing that runs: the models give the operations |
-| `operation add(a: A, b: A): A as "+"` | ✓ | An operation of an algebra and the operator that writes it; a nullary operation (`operation zero: A`) is a neutral element |
+| `operation op(a: A, b: A): A as "+"` | ✓ | An operation of an algebra and the operator that writes it; a nullary operation (`operation unit: A`) is a neutral element. An instance declares again the operations of its signature with the same names and its own symbols; the two are told apart as `Additive.op` and `Multiplicative.op` |
+| `this < Monoid` (in an algebra) | ✓ | **A signature above**: the models of the heir are a subobject of the models of `Monoid`. The heir reads its operations and its laws. A law of a signature that follows from the laws stated before it is proved there, once, and no model is asked for it; one that does not follow is an axiom, certified on each model |
+| `fun f<T uses Monoid>(xs: List<T>): T` | ✓ | **A parameter that uses a signature**: its instance is a model, an algebra below the signature or a place that `uses algebra` one, and `T.op` and `T.unit` are the model's arrows. `T.commutative` answers whether the model's algebra states that law. A place that is no model is refused (E2001) |
 | `law associative ∀a : A ∀b : A ∀c : A, (a + b) + c = a + (b + c)` | ✓ | A law stated over the carrier: each quantifier carries its type, here the carrier; the comma closes the quantifiers, and the statement reaches the end of the line, with parentheses only to group |
 | `place Cerchio { this > punto  law giro punto = punto }` | ✓ | **A cell**: a law in the body of a place with `this >` is constitutive. The arms are the 0-cells, each law a cell, of the order its ends say; source and target have one type. A cell is an arrow with a name in the house: `x ↦ meridiano` is a path, `x ↦ meridiano @ i` a point on it |
 | `match s { punto => 42, giro => walk i => 42 }` | ✓ | The eliminator wants a branch for each cell: a path between what it gives at the two ends, decided by the kernel's conversion. `meridiano as a => walk i => ..`, `quot as (a, b, r) => ..` bind the quantifiers and the premise |
-| `law nothing zero + zero = zero` | ✓ | A law with no quantifier: the statement follows its name, to the end of the line |
+| `law nothing unit + unit = unit` | ✓ | A law with no quantifier: the statement follows its name, to the end of the line |
 | `law retract ∀x : V, value_of(word_of(x)) = x is given` | ✓ | **An axiom**: a law of a place that is not an algebra, about faces the certification cannot read (given ones); it is declared, never certified, and its variables range over every type. A law of an algebra is certified on each model and cannot be given |
-| `carried by i64` (in an algebra) | ✓ | **A carrier model**: the carrier is a model of the algebra, with the machine's operation for each symbol (`as "+"` the machine's sum, `as "0"` its zero). Its laws are certified like those of any model; `carried by C is given` declares it an axiom, admitted only where the certification does not decide (E2102) |
+| `place A carried by i64 is algebra { ... }` | ✓ | **An instance on a carrier**: the instance is a face of its carrier, one carrier for each instance, and several instances may share one (`Additive` and `Multiplicative` on i64). The carrier is a model of the algebra, with the machine's operation for each symbol (`as "+"` the machine's sum, `as "0"` its zero), and its laws are certified there: a false one is refuted with its counterexample (E2101). An instance on a carrier is a model of itself: its operations are the machine's, `A.op(a, b)` and `A.unit` on its values. A model carried by the same carrier takes from it the operations it does not give. `carried by` is not written in the body of an algebra |
+| `place A carried by i32 is given is algebra { ... }` | ✓ | **Axioms on the carrier**: the laws the certification does not decide on that carrier are axioms; the ones it decides are still checked, and a false one is refuted (E2101). Declared where the certification decides every law, `is given` is refused (E2001); a law not decided without it is not certified (E2102) |
+| `internal place A carried by i64 is algebra { ... }` | ✓ | An internal instance does what `internal place` does, **in its Space**: inside the Space the instance is its carrier, and a model there takes the machine's operations from it; outside it the carrier is opaque, no literal is one of its points, no arithmetic of the carrier applies, its values come only from its operations (`a + b`, `A.op(a, b)`, `A.unit`), and no model takes the operations from it. The signature stays visible everywhere: `uses algebra A` works, and the laws are certified on every model |
 | `fun double(a: A): A { return a + a }` (in an algebra) | ✓ | **A derived operation**: a composite of the algebra's operations over its name as the carrier. Each model that does not give a fun of that name receives its instance, the composite read with the model for the carrier: `P.double`. A model that gives the fun keeps its own. The algebra itself has no fun to run |
 | `place P uses algebra A, B { ... }` | ✓ | **A model**: `P` gives each operation of `A` and `B` as its own fun of the same name and type (the algebra's name read as `P`); the operators of the algebras then write those funs on values of `P`, and every law is certified on `P`. An operation `P` does not give is taken from the carrier model of `A` for the carrier of `P`, when `A` declares one; a fun `P` gives itself is its own, and the laws are certified on it. An algebra not listed gives `P` nothing, whatever its carrier models |
 | `cell c from e1 to e2` | ✓ | Higher cell between lower cells (CaTT witness) |
@@ -338,10 +345,21 @@ The carrier after `carried by` names how the bits are laid out, not a type: `f64
 `f32`, `i64`, `i32`, `i16`, `i8`, `i1`. These lowercase names are valid only
 in this clause; in a type position they are refused (E1001), like `number`.
 
-The algebras of the prelude (`prelude/alg/`): `Additive` (`+`, `zero`, carried by i64),
-`Multiplicative` (`*`, `one`, carried by i64), `TropicalMax`, `TropicalMin`, `BooleanOr`,
-`BooleanAnd`, `Gcd`. An algebra named but not declared `is algebra` is an
-error.
+The signatures of the prelude (`prelude/alg/`): `Magma` (`op`, its free object is
+`MerkleTree<V>`, with `node2` at a fixed label, and `node2_commutative` gives the free
+commutative magma), `Semigroup` (associative, its free object is the pair `(V, List<V>)`), `Monoid`
+(`unit`, its free object is `List<V>`), `Group` (`inv`). Its instances, with a name each:
+`Additive` (`+`, `0`, `-`, a group, carried by i64), `Multiplicative` (`*`, `1`, a monoid,
+carried by i64), `TropicalMax`, `TropicalMin`, `BooleanOr`, `BooleanAnd`, `Gcd` (monoids).
+`Int64` and `Word64` use `Additive` and `Multiplicative`, `String` uses `Monoid`. An algebra
+named but not declared `is algebra` is an error.
+
+**An algebra of the program** is a place `is algebra` in a file of a Space, with the world
+its `yon.toml` gives: the signatures of the prelude have no privilege over it. It may be
+below one of them (`this < Monoid`), add its operations and its laws, and be a bound
+(`fun f<T uses Tally>`); a signature of its own, below none, is a bound too. An heir adds
+laws and does not state again, under the same name, a law of the signature above it, and a
+chain of `this <` does not come back (both are refused, E2001).
 
 **The statement of a law** is written with the symbols of mathematical logic:
 `∀x : T` and `∃x : T` (only at the head of a law), `=` and `≠` (equality, the
@@ -454,7 +472,8 @@ a move's `requires` check is emitted but not yet enforced, chapter 20) with opt-
 | `Vec` | `empty, push, get, set, size`, a dynamic array on an arena strip (in-place mutable, no malloc), neither a value nor a cell (chapter 14) |
 | `MerkleTree` | `leaf, node2, node2_commutative, node3, node4, label, child, equal, to_stream`, a Merkle tree on the FNV heap. The label is the node's datum, given by whoever builds the node; the identity of the node is the content address of the pair of its label and its children, so two identical subtrees are the same node and `equal` is a comparison of handles, exact. `node2` keeps the order of the children; `node2_commutative`, `node3` and `node4` sort them, for commutative operators |
 | `VoyagerList` | `empty, append, get, size, seal, open, corrupt, corrupt_at, to_stream`, a Golay-sealed list: `append` seals each entry into a codeword, `get` decodes it and corrects up to 3 flipped bits. `seal` and `open` do the same on one word (12 bits to a 24-bit codeword and back); `corrupt` and `corrupt_at` flip bits, for tests |
-| `Generated` | `place Generated<V>` in the prelude, written in Yon: an operation `(V, V) -> V` and a `HashSet<V>` of generators. `generated_by, gen, closure, is_commutative, is_associative, identity, closure_limit`. `closure`, `is_commutative` and `is_associative` carry `on error DomainError`, past 512 elements; the laws are decided over the whole closure. `identity` answers `Lookup` and looks at the generators alone. The success arm of `closure` is matched as `Value as c` |
+| `Generated` | `place Generated<V>` in the prelude, written in Yon: an operation `(V, V) -> V` and a `HashSet<V>` of generators. `generated_by, generated_by_instance, gen, closure, is_commutative, is_associative, identity, closure_limit`. `closure`, `is_commutative` and `is_associative` carry `on error DomainError`, past 512 elements; the laws are decided over the whole closure. With `generated_by_instance<Additive>(gens)` the operation is an instance of a signature, and a law it states answers without the closure. `identity` answers `Lookup` and looks at the generators alone. The success arm of `closure` is matched as `Value as c` |
+| `List.normal_form` | `normal_form<T uses Semigroup>(w: (T, List<T>)): T`, in the prelude, is total: it starts from the first letter and folds the rest with `op`. A bare `List` is refused (E2001) |
 | `Land` | `reach, witness`, in the prelude: is a target the composition of generators, each used at most once, by pairs with no law assumed. `witness` answers `Lookup<List<V>>`, the generators used |
 | `Space` | `make, set, get`, mutable cells (the mutation mechanism) |
 

@@ -2,7 +2,7 @@
 name = "algebra_model"
 
 [world.W]
-objects = ["Coin", "Turn", "Pick", "Plus"]
+objects = ["Coin", "Turn", "Pick", "Plus", "Plus32"]
 
 [runtime]
 backend = "memory"

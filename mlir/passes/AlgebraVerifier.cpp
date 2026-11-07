@@ -18,9 +18,9 @@ using namespace mlir::topos;
 
 namespace {
 
-// Algebra catalog with certified laws (theorems). Same table as the runtime
-// (yon_rt_hsh.c g_alg_catalog). The laws here are the universal-algebra theorems
-// that define each structure, not empirical checks.
+// Algebra catalog with certified laws (theorems), for units written by hand: the
+// frontend emits nothing that reaches it. The laws here are the universal-algebra
+// theorems that define each structure, not empirical checks.
 struct CatalogEntry {
   const char *name;
   bool commutative;
