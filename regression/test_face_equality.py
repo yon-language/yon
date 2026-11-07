@@ -145,12 +145,12 @@ def test_a_place_on_number_has_its_literals_its_arithmetic_and_its_order(tmp_pat
 
 
 def test_a_place_on_text_has_its_literals_and_its_concatenation(tmp_path):
-    # two Names concatenate to a Name; the value is read on the concatenation
-    # of the literals, which the compiler computes
+    # two Names concatenate to a Name, at run time
     top = ('fun hello: Name { return "hel" + "lo" }\n'
            "fun twice(n: Name): Name { return n + n }\n")
     body = ('  both := hello + hello\n'
-            '  return if String.equal(Name.spelled(hello), "hello") then 42 else 1')
+            '  return if String.equal(Name.spelled(both), "hellohello")'
+            ' and String.equal(Name.spelled(twice(hello)), "hellohello") then 42 else 1')
     rc, out, exe = _faces(tmp_path, _NAME, body, top)
     assert rc == 0, out
     assert subprocess.run([str(exe)], capture_output=True, timeout=30).returncode == 42

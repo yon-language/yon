@@ -154,6 +154,7 @@ let load ~(root : string) ?(overrides : (string * string) list = []) () : loaded
   Hashtbl.reset Surface_ast.instance_call_types;
   Hashtbl.reset Surface_ast.own_instance_calls;
   Hashtbl.reset Surface_ast.transport_sites;
+  Hashtbl.reset Surface_ast.text_concat_sites;
   Hashtbl.reset Surface_ast.univalence_sites;
   Hashtbl.reset Surface_ast.bounded_funs;
   Hashtbl.reset Surface_ast.fun_bounds;

@@ -479,6 +479,15 @@ let house_hint (expected : ty) (actual : ty) : string =
       Printf.sprintf " (%s is internal: outside its house it is not its carrier, and its values come from its funs, and from its operations for an algebra)" u
   | None, None -> ""
 
+(* A `+` between two values of text is their concatenation. *)
+let record_text_concat (loc : location) : unit =
+  Hashtbl.replace Surface_ast.text_concat_sites
+    (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col) ()
+
+(* A `+` whose operands wait for the type of a lambda parameter: the site is
+   read once the check of the program has solved it. *)
+let pending_text_concat : (location * ty) list ref = ref []
+
 (* Type of a binop result, given operand types. *)
 let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
     (env : Tyenv.env) (ctx : Reduce.ctx) (loc : location) : ty tc_result =
@@ -500,14 +509,16 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
       if is lhs num && is rhs num then ok num
       (* a place of the program on number: its arithmetic, among its own values *)
       else if face_carrier lhs = Some "number" && is lhs rhs then ok lhs
-      else if face_carrier lhs = Some "text" && is lhs rhs && op = OpAdd then ok lhs
+      else if face_carrier lhs = Some "text" && is lhs rhs && op = OpAdd then
+        (record_text_concat loc; ok lhs)
       else if is_int_prim_ty env ctx lhs && is lhs rhs then begin
         record_int_arith_site ~i64:(is_int64_ty env ctx lhs) op loc;
         ok lhs
       end
       else if is lhs dur && is rhs dur && (op = OpAdd || op = OpSub) then ok dur
       else if is lhs mon && is rhs mon && (op = OpAdd || op = OpSub) then ok mon
-      else if is lhs txt && is rhs txt && op = OpAdd then ok txt  (* string concat *)
+      else if is lhs txt && is rhs txt && op = OpAdd then
+        (record_text_concat loc; ok txt)
       else err loc
         (Printf.sprintf
            "operator requires matching numeric/duration/money operands; got %s and %s%s"
@@ -3806,7 +3817,8 @@ got %s" (Tyenv.ty_to_string other)))
       let t1 = deref_lambda_unknown t1 and t2 = deref_lambda_unknown t2 in
       if open_lambda_unknown t1 <> None then
         (match op with
-         | OpAdd | OpSub | OpMul | OpDiv | OpMod -> ok t1
+         | OpAdd -> pending_text_concat := (loc, t1) :: !pending_text_concat; ok t1
+         | OpSub | OpMul | OpDiv | OpMod -> ok t1
          | OpAnd | OpOr ->
              ignore (Dispatcher.subtype env ctx ~sub:t1 ~super:(TyPrim "boolean"));
              ok (TyPrim "boolean")
@@ -4561,11 +4573,13 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       record_int_arith_site ~i64:(is_int64_ty env ctx expected) op loc;
       ok ()
   (* the same against a place of the program on number, or on text for `+` *)
-  | EBinop ((OpAdd | OpSub | OpMul | OpDiv | OpMod) as op, e1, e2, _), _
+  | EBinop ((OpAdd | OpSub | OpMul | OpDiv | OpMod) as op, e1, e2, loc), _
     when face_carrier expected = Some "number"
          || (face_carrier expected = Some "text" && op = OpAdd) ->
       let* () = check env ctx e1 expected in
-      check env ctx e2 expected
+      let* () = check env ctx e2 expected in
+      if face_carrier expected = Some "text" then record_text_concat loc;
+      ok ()
   (* a pair against a Sigma: the first component against the base, the second
      against the fibre at the first *)
   | EPair (a, b, _), TySigma (x, base, fibre) ->
@@ -9211,6 +9225,7 @@ let is_lifted_lambda (name : string) : bool =
 
 let check_program (p : program) : check_result =
   mob_facts := [];
+  pending_text_concat := [];
   let p = expand_mono_fields p in   (* idempotent: shadow-check on the names *)
   Hashtbl.reset Surface_ast.method_resolutions;
   Hashtbl.reset Surface_ast.given_decls;
@@ -9793,5 +9808,11 @@ let check_program (p : program) : check_result =
                  "lambda parameter %s: neither the expected type of the lambda nor a \
                   use of the parameter gives it a type: annotate the parameter"
                  param }) in
+  (* the `+` of a lambda whose parameter turned out to be text *)
+  List.iter (fun (loc, t) ->
+      match deref_lambda_unknown t with
+      | TyPrim "text" | TyUser "String" -> record_text_concat loc
+      | t when face_carrier t = Some "text" -> record_text_concat loc
+      | _ -> ()) !pending_text_concat;
   { cr_env = env_with_sigs;
     cr_errors = List.rev errors @ heap_errors; }

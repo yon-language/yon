@@ -1367,6 +1367,9 @@ let transport_sites : (string * int * int * int * int, bool) Hashtbl.t = Hashtbl
 (* The equivalences given where a path between types is asked: by univalence
    each is that path, `ua` of it, at its site. *)
 let univalence_sites : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 8
+(* The `+` between two values of text, by the full span of the operator: the
+   concatenation of the two, never the sum of their handles. *)
+let text_concat_sites : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 8
 let own_instance_calls : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 8
 
 (* The funs passed as the arrows of a model: first-class on any carrier. *)

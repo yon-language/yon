@@ -1211,6 +1211,10 @@ and desugar_expr (e0 : S.expr) : C.term =
       let target = Hashtbl.find Surface_ast.algebra_op_sites
           (loc.S.file, loc.S.start_line, loc.S.start_col, loc.S.end_line, loc.S.end_col) in
       curry_apply (C.Var target) [desugar_expr e1; desugar_expr e2]
+  | S.EBinop (S.OpAdd, e1, e2, loc)
+    when Hashtbl.mem Surface_ast.text_concat_sites (site5 loc) ->
+      (* two values of text: their concatenation *)
+      curry_apply (C.Var "String__concat") [desugar_expr e1; desugar_expr e2]
   | S.EBinop (op, e1, e2, loc) ->
       (* integer-carrier / and % diverge from the f64 ops: the tycheck
          recorded the FULL-SPAN site, desugar routes it — and only for the
