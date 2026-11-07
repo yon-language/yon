@@ -151,5 +151,5 @@ the `T` it was given is not performed (Appendix B).
 That gap is the last thing between generics and the paths of chapter 9, and the
 two are one idea seen from two sides. A generic value does not care which type
 it sits at; a path is a proof that two types are *genuinely the same*, and
-`carry x along e` moves a value across that proof. Both meet at the universe,
+`x ↦ e` moves a value across that proof. Both meet at the universe,
 which is why the next time you reach for `El` it will already feel familiar.

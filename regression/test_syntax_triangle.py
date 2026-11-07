@@ -73,6 +73,8 @@ KEYWORD_ALLOWLIST = {
     "I0",      # cubical interval endpoint 0; kernel form
     "I1",      # cubical interval endpoint 1; kernel form
     "Type_",   # lexing prefix, not a standalone token; the numbered form Type_0 is exercised
+    "carry",   # the old transport, refused: canonical_forms/hott/dev_old_carry
+    "along",   # the second half of the old transport, refused: hott/dev_old_carry
 }
 
 # Keywords whose only legal place is the prelude: `is given` declares a

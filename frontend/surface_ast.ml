@@ -1321,6 +1321,41 @@ let elaborated_calls : (string * int * int * int * int, expr) Hashtbl.t = Hashtb
    type, so a nesting of them is checked once per level; and those that are the
    instance's own fun, on a value of the instance itself. *)
 let instance_call_types : (string * int * int * int * int, ty) Hashtbl.t = Hashtbl.create 8
+(* The site of an expression: where it is written. *)
+let location_of_expr (e : expr) : location =
+  match e with
+  | EProduce (_, l) | EWireTo (_, l)
+  | ELit (_, l) | EVar (_, l) | EField (_, _, l) | ECall (_, _, l)
+  | ENew (_, _, l) | ENewIn (_, _, _, l) | EBinop (_, _, _, l) | EParen (_, l)
+  | EAll (_, _, l) | EIn (_, _, l)
+  | ERefl (_, l) | EPair (_, _, l) | EFst (_, l) | ESnd (_, l)
+  | EJ (_, _, _, l)
+  | EPullback (_, _, l) | EPushout (_, _, l) -> l
+  | EPullbackVal (_, _, _, _, l) -> l
+  | ENot (_, l) -> l
+  | EIfThenElse (_, _, _, l) -> l
+  | ELam (_, _, l) -> l
+  | EMoveLam (_, _, _, _, l)
+  | EReductionLam (_, _, _, l)
+  | EMorphLam (_, _, _, _, l) -> l
+  | EFunctorLam (_, _, _, _, _, l) -> l
+  | EViewLam (_, _, _, l) -> l
+  | EComposeWith (_, _, l) -> l
+  | ESpawn (_, _, l) -> l
+  | EQuote (_, _, l) -> l
+  | EElMatch (_, _, _, l) -> l
+  | EApp (_, _, l) -> l
+  | EHITElim (_, _, _, l) -> l
+  | EPathApp (_, _, l) -> l
+  | EPathAbs (_, _, l) -> l
+  | EHITConstr (_, _, l) -> l
+
+(* The transports written as an application, `x ↦ e` with e an equivalence: the
+   site of the arrow, and whether it runs forth (from the source of e) or back. *)
+let transport_sites : (string * int * int * int * int, bool) Hashtbl.t = Hashtbl.create 8
+(* The equivalences given where a path between types is asked: by univalence
+   each is that path, `ua` of it, at its site. *)
+let univalence_sites : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 8
 let own_instance_calls : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 8
 
 (* The funs passed as the arrows of a model: first-class on any carrier. *)

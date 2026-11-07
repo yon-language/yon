@@ -208,7 +208,7 @@ let infer_ua (arg_tys : ty list) : infer_result =
   | [_other] ->
       (* SOUNDNESS GATE: ua needs a genuine equivalence, not a bare function. *)
       fail_ty (mk_path_ty universe_ty)
-        "ua expects an equivalence (Equiv = Sigma(f:A->B). ...), not a bare function; build one with equiv(f, g, eta, eps) or idEquiv(A)"
+        "ua expects an equivalence (Equiv = Sigma(f:A->B). ...), not a bare function; build one with f <=> g, f <=> g by eta, eps, or idEquiv(A)"
   | _ -> fail_ty (mk_path_ty universe_ty)
            (Printf.sprintf "ua expects 1 argument, got %d"
               (List.length arg_tys))

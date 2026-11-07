@@ -5,7 +5,7 @@ place Entry {
 // COSA: univalenza fra due place-oggetti DISTINTI. Bool e Bit hanno root-Merkle
 // diverse (il carrier le tiene separate apposta), ed e' un'EQUIVALENZA
 // vera, non l'identita': tt<->one, ff<->zero. Il ponte diventa un cammino nei
-// tipi e trasportare `tt` lungo esso lo porta in `one` (exit 1).
+// tipi e trasportare `tt` lungo esso, `tt ↦ bridge`, lo porta in `one` (exit 1).
 //
 // PERCHE': e' il cuore che il carrier per root rende possibile. Perche' l'equivalenza sia un cammino
 // servono le due coerenze del round-trip (bit2b(b2bit(a)) = a e viceversa). Su un
@@ -30,8 +30,8 @@ fun eps(b: Bit): b2bit(bit2b(b)) = b {
 }
 
 fun main(): Number {
-  bridge := equiv(b2bit, bit2b, eta, eps)   // Bool ~= Bit, non l'identita'
-  y := transport(ua(bridge), tt)       // porta tt lungo ua(Bool~=Bit)
+  bridge := b2bit <=> bit2b by eta, eps   // Bool ~= Bit, non l'identita'
+  y := tt ↦ bridge                     // porta tt lungo Bool ~= Bit
   return match y { one => 1, zero => 0 }           // tt |-> one |-> 1
 }
 }

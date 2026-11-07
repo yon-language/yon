@@ -1,0 +1,11 @@
+place Entry {
+  fun succ(n: Int64): Int64 { return n + 1 }
+  fun pred(n: Int64): Int64 { return n - 1 }
+  fun main: Number {
+    bridge := succ <=> pred by fun(a) => clear a, fun(b) => clear b
+    y := 41 ↦ bridge
+    undone := undo(bridge)
+    z := y ↦ undone
+    return if transport(bridge, 1) == 2 and y == 42 and z == 41 then 42 else 1
+  }
+}

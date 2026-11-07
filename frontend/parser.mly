@@ -352,6 +352,7 @@
 %left ATSIGN              /* path application p @ i */
 %left PIPEGT MAPSTO INJ   /* application and injection */
 %nonassoc LRARROW        /* f <=> g = equivalence, non-associative */
+%nonassoc BY             /* f <=> g by eta, eps: `by` goes to the nearest <=> */
 %left PIPE
 %left PIPEQ
 %left CARET CARETQ
@@ -1703,6 +1704,10 @@ expr:
     { let l = mk_loc $startpos $endpos in
       let refl_lam v = ELam ([(v, TyPrim "unknown")], ERefl (EVar (v, l), l), l) in
       ECall ("equiv", [f; g; refl_lam "a"; refl_lam "b"], l) }
+  (* with its two laws given as funs of proof: eta for undo after forth, eps for
+     forth after undo *)
+  | f = expr LRARROW g = expr BY eta = expr COMMA eps = expr %prec LRARROW
+    { ECall ("equiv", [f; g; eta; eps], mk_loc $startpos $endpos) }
   | p = expr THROUGH f = expr
     { ECall ("ap", [f; p], mk_loc $startpos $endpos) }
   | e1 = expr MINUS e2 = expr
@@ -1915,9 +1920,8 @@ expr_atom:
      (`span` is retired: univalence is written `ua(e)` directly.) *)
   | BACK e = expr_atom
     { ECall ("inv", [e], mk_loc $startpos $endpos) }
-  | CARRY x = expr_atom ALONG e = expr_atom
-    { let l = mk_loc $startpos $endpos in
-      ECall ("transport", [ECall ("ua", [e], l); x], l) }
+  | CARRY expr_atom ALONG expr_atom
+    { failwith "carry x along e is not written: the transport is the application of the equivalence, x \xe2\x86\xa6 e" }
   | PAIR LPAREN a = expr COMMA b = expr RPAREN
     { EPair (a, b, mk_loc $startpos $endpos) }
   /* a tuple, a product: right-nested pairs of one location */
@@ -2000,7 +2004,11 @@ expr_atom:
         ECall ("__morph_in_" ^ space ^ "__" ^ name, args,
                mk_loc $startpos $endpos) }
   | name = IDENT LPAREN args = expr_list RPAREN %prec CLAUSE_END
-    { ECall (name, args, mk_loc $startpos $endpos) }
+    { (match name with
+       | "ua" -> failwith "ua(e) is not written: by univalence an equivalence is the path between its types wherever a path is asked, so write e, and carry a value along it with x \xe2\x86\xa6 e"
+       | "equiv" -> failwith "equiv(f, g, eta, eps) is not written: an equivalence is f <=> g by eta, eps, or f <=> g when its laws close by computation"
+       | _ -> ());
+      ECall (name, args, mk_loc $startpos $endpos) }
   | name = QIDENT LPAREN args = expr_list RPAREN
     { ECall (name, args, mk_loc $startpos $endpos) }   (* mod::fun(args) *)
   | x = IDENT DOT fs = field_path

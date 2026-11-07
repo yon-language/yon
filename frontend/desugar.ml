@@ -377,11 +377,15 @@ let lift_capturing_lambda (prefix : string)
    than given a value. *)
 exception Path_not_known of string
 
+(* Whether the program declares a fun named undo: then `undo(..)` is a call of
+   it, and not the equivalence read the other way. *)
+let undo_is_a_fun = ref false
+
 let path_not_known () =
   raise (Path_not_known
     "transport along a path whose line of types is not known at compile time \
      (for example a path received as a parameter). Transport along the path \
-     where it is built — transport(ua(e), x), or a path named with `be` — or \
+     where it is built — x \xe2\x86\xa6 e with e := f <=> g, or transport(e, x) — or \
      pass the equivalence's function instead.")
 
 (* the funs declared `is given`, and the phantom-typed calls being lowered *)
@@ -630,6 +634,11 @@ and decode_composition_system (clauses : S.expr list)
 and strip_parens (e : S.expr) : S.expr =
   match e with
   | S.EParen (e', _) -> strip_parens e'
+  (* an equivalence read the other way: undo is its forth, its laws trade places *)
+  | S.ECall (("undo" | "__undo") as u, [e'], l) when u = "__undo" || not !undo_is_a_fun ->
+      (match strip_parens e' with
+       | S.ECall ("equiv", [f; g; eta; eps], _) -> S.ECall ("equiv", [g; f; eps; eta], l)
+       | e' -> S.ECall (u, [e'], l))
   | S.ECall (n, args, l) -> S.ECall (n, List.map strip_parens args, l)
   | S.EApp (f, args, l) -> S.EApp (strip_parens f, List.map strip_parens args, l)
   | S.EBinop (op, a, b, l) -> S.EBinop (op, strip_parens a, strip_parens b, l)
@@ -1828,8 +1837,13 @@ and inject_captured_args_in_stmt (old_n : string) (new_n : string)
  * as an unknown function. Cubical/proof values are PURE, so we inline such a
  * binding into its uses before desugaring; the inline patterns then see a
  * closed form and fold it. *)
-let is_cubical_surface_value (e : S.expr) : bool =
+let rec is_cubical_surface_value (e : S.expr) : bool =
   match e with
+  | S.EParen (e', _) -> is_cubical_surface_value e'
+  (* undo of an equivalence, not a fun of the program named undo; the reverse
+     the lowering writes for a transport back is always the equivalence's *)
+  | S.ECall ("undo", _, _) -> not !undo_is_a_fun
+  | S.ECall ("__undo", _, _) -> true
   | S.ECall (("equiv" | "ua" | "idEquiv" | "transport" | "transp"
              | "comp" | "hcomp" | "refl" | "inv" | "concat" | "ap"
              | "glue" | "unglue" | "path"), _, _) -> true
@@ -3581,6 +3595,37 @@ let impure_funs (p : S.program) : unit =
       end) funs
   done
 
+(* An equivalence where the checker read a path or a transport: by univalence
+   it is the path `ua(e)`, and `x ↦ e` is the transport of x along that path,
+   forth, or back along `undo(e)`. The primitives of the kernel take them from
+   here, before a named equivalence is inlined into its uses. *)
+let read_equivalences (p : S.program) : S.program =
+  undo_is_a_fun := List.exists (function
+      | S.TopFun fd -> fd.S.fn_name = "undo" && fd.S.fn_home = None
+      | _ -> false) p;
+  if Hashtbl.length Surface_ast.transport_sites = 0
+     && Hashtbl.length Surface_ast.univalence_sites = 0 then p else
+  let rec read (e : S.expr) : S.expr option =
+    match e with
+    | S.ECall (n, [x], l) when Hashtbl.mem Surface_ast.transport_sites (site5 l) ->
+        let along = S.EVar (n, l) in
+        let along = if Hashtbl.find Surface_ast.transport_sites (site5 l) then along
+                    else S.ECall ("__undo", [along], l) in
+        Some (S.ECall ("transport",
+                       [S.ECall ("ua", [along], l); Method_sugar.map_expr read x], l))
+    | _ ->
+        let l = S.location_of_expr e in
+        if Hashtbl.mem Surface_ast.univalence_sites (site5 l)
+           && (match e with S.ECall ("ua", _, _) -> false | _ -> true) then begin
+          Hashtbl.remove Surface_ast.univalence_sites (site5 l);
+          let e' = Method_sugar.map_expr read e in
+          Hashtbl.replace Surface_ast.univalence_sites (site5 l) ();
+          Some (S.ECall ("ua", [e'], l))
+        end else None in
+  List.map (function
+    | S.TopFun fd -> S.TopFun { fd with S.fn_body = List.map (Method_sugar.map_stmt read) fd.S.fn_body }
+    | d -> d) p
+
 let desugar_program ?(env : Tyenv.env option = None)
     ?(place_to_space : (string * string) list = []) (p : S.program) : desugar_result =
   (* The optional [env] is the typed environment from Tycheck (cr_env). The
@@ -3588,6 +3633,7 @@ let desugar_program ?(env : Tyenv.env option = None)
      function body to the unique inhabitant `()`. When None the absorber stays
      inert, so behavior is identical to before. *)
   C.prelude_place_decls := [];  (* per-run identity registry (LSP re-runs) *)
+  let p = read_equivalences p in
   let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
   (* a proof is checked and has no run time: only main is lowered *)

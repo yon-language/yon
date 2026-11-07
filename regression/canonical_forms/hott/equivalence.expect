@@ -1,0 +1,7 @@
+status: accept
+exit: 42
+note: |
+  An equivalence is f <=> g, with its two laws closed by computation or given
+  by two funs after `by`. The transport is its application, x ↦ e; where a path
+  between types is asked, the equivalence is that path, by univalence; undo(e)
+  is the equivalence read the other way.

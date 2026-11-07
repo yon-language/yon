@@ -132,8 +132,8 @@ and gen_cubical d =
     | 3 -> Printf.sprintf "(%s through %s)" (gen_cubical (d-1)) cubfn_pool.(Random.int 3)
     | 4 -> Printf.sprintf "refl(%s)" (num ())
     | 5 -> Printf.sprintf "(%s @ I0)" (gen_cubical (d-1))
-    | 6 -> Printf.sprintf "carry %s along (%s <=> %s)" (num ())
-             cubfn_pool.(Random.int 3) cubfn_pool.(Random.int 3)
+    | 6 -> Printf.sprintf "transport((%s <=> %s), %s)"
+             cubfn_pool.(Random.int 3) cubfn_pool.(Random.int 3) (num ())
     | _ -> Printf.sprintf "match S1.base { base => %s, loop => walk i => %s }"
              (num ()) (num ())
 
@@ -169,7 +169,7 @@ let seeds = [|
   "internal fun k(x: Number): Number { return x * 1789 }\nfun main: Number { return k(2) }";
   "fun main: Number {\n  g := HashSet.add(HashSet.empty(0), 1445)\n  return HashSet.size(g)\n}";
   (* metonymic / cubical / generics seeds — near the new-syntax manifold *)
-  "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main: Number {\n  b := succ <=> pred\n  return carry 10 along b\n}";
+  "fun succ(n: Number): Number { return n + 1 }\nfun pred(n: Number): Number { return n - 1 }\nfun main: Number {\n  b := succ <=> pred\n  return 10 \xe2\x86\xa6 b\n}";
   "fun main: Number {\n  p := back (clear 5)\n  return p @ I0\n}";
   "fun dbl(n: Number): Number { return n + n }\nfun main: Number {\n  mut s := clear 7 ++ (clear 5 through dbl)\n  return s @ I0\n}";
   "fun main: Number {\n  return match S1.base { base => 42, loop => walk i => 42 }\n}";

@@ -1,0 +1,8 @@
+place Entry {
+  fun succ(n: Int64): Int64 { return n + 1 }
+  fun pred(n: Int64): Int64 { return n - 1 }
+  fun main: Number {
+    bridge := succ <=> pred
+    return if carry 41 along bridge == 42 then 42 else 1
+  }
+}

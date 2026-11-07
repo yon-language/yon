@@ -1,9 +1,0 @@
-/* carry x along e = transport(ua(e), x): carrying a value along a bridge. */
-place Entry {
-  fun succ(n: Int64): Int64 { return n + 1 }
-  fun pred(n: Int64): Int64 { return n - 1 }
-  fun main(): Number {
-    bridge := succ <=> pred
-    y := carry 10 along bridge
-    return if y == 11 then 11 else 0 }
-}

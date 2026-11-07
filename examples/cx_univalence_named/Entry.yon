@@ -1,6 +1,6 @@
 place Entry {
 // COSA: univalenza con l'equivalenza NOMINATA — si lega il ponte succ<->pred a un
-// nome (`bridge`), poi si trasporta lungo di esso (10 |-> 11).
+// nome (`bridge`), poi si trasporta lungo di esso, `10 ↦ bridge` (10 |-> 11).
 // PERCHE': dare un nome al ponte prima di attraversarlo e' leggibilita' senza
 // perdere il calcolo; l'intermedio legato viene inlineato prima del desugar cosi'
 // la macchina di univalenza resta chiusa e computa.
@@ -10,8 +10,8 @@ fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 
 fun main(): Number {
-  bridge := equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)
-  y := transport(ua(bridge), 10)
+  bridge := succ <=> pred by fun(a) => clear a, fun(b) => clear b
+  y := 10 ↦ bridge
   return if y == 11 then 11 else 0     // y -> 11
 }
 }

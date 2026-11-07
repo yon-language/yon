@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: ua(e) is not written
+note: |
+  ua is a primitive of the kernel: by univalence an equivalence is the path between its types where a path is asked.

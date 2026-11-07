@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: carry x along e is not written
+note: |
+  The transport is the application of the equivalence, x ↦ e.

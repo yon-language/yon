@@ -1609,7 +1609,7 @@ _BOOL_BIT_kernel = (
 def test_transport_along_a_named_univalence_path_lands_in_the_target(tmp_path):
     entry = _BOOL_BIT_kernel + (
         "fun main: Number {\n"
-        "  mut u := ua(equiv(b2bit, bit2b, eta, eps))\n"
+        "  mut u := b2bit <=> bit2b by eta, eps\n"
         "  y := transport(u, tt)\n"
         "  return match y { one => 1, zero => 0 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
@@ -1620,7 +1620,7 @@ def test_transport_along_a_named_univalence_path_lands_in_the_target(tmp_path):
 def test_transport_along_a_named_univalence_path_leaves_the_source(tmp_path):
     entry = _BOOL_BIT_kernel + (
         "fun main: Number {\n"
-        "  mut u := ua(equiv(b2bit, bit2b, eta, eps))\n"
+        "  mut u := b2bit <=> bit2b by eta, eps\n"
         "  y := transport(u, tt)\n"
         "  return match y { tt => 1, ff => 2 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
@@ -1634,7 +1634,7 @@ def test_transport_along_a_named_univalence_path_leaves_the_source(tmp_path):
 def test_transport_along_an_inline_univalence_path_lands_in_the_target(tmp_path):
     entry = _BOOL_BIT_kernel + (
         "fun main: Number {\n"
-        "  y := transport(ua(equiv(b2bit, bit2b, eta, eps)), tt)\n"
+        "  y := transport((b2bit <=> bit2b by eta, eps), tt)\n"
         "  return match y { one => 1, zero => 0 }\n}\n}\n")
     rc, out = _build_kernel(tmp_path, entry, _TWO_OBJECTS_kernel)
     assert rc == 0, out
@@ -2305,7 +2305,7 @@ fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 fun go(p: Int64 = Int64, v: Int64): Int64 { return transport(p, v) }
 fun main: Number {
-  y := go(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)
+  y := go(succ <=> pred, 10)
   return if y == 11 then 11 else 0
 }
 }
@@ -2317,7 +2317,7 @@ def test_transport_along_an_inline_univalence_path_applies_the_equivalence(tmp_p
         "place Entry {\nfun succ(n: Int64): Int64 { return n + 1 }\n"
         "fun pred(n: Int64): Int64 { return n - 1 }\n"
         "fun main: Number {\n"
-        "  y := transport(ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)), 10)\n"
+        "  y := transport(succ <=> pred, 10)\n"
         "  return if y == 11 then 11 else 0\n}\n}\n")
     rc, out = _compile(proj, tmp_path / "out")
     assert rc == 0, out
@@ -2332,7 +2332,7 @@ def test_transport_along_a_path_argument_applies_the_equivalence(tmp_path):
     _verdict("Fatal error: exception" not in out,
              f"the compiler crashed: {out.strip()[-160:]}")
     _verdict(rc == 0, f"the program is refused: {out.strip()[-200:]}")
-    _verdict(_run(tmp_path / "out")[0] == 11, "transport(ua(succ), 10) is not 11")
+    _verdict(_run(tmp_path / "out")[0] == 11, "transport(succ <=> pred, 10) is not 11")
 
 
 @pytest.mark.skipif(not EVAL_frontend.exists(), reason="the interpreter is not built")
@@ -2348,7 +2348,7 @@ def test_the_interpreter_does_not_transport_by_identity(tmp_path):
         assert ("EVAL INCOMPLETE" in r.stdout + r.stderr
                 or "TYPE ERROR" in r.stdout + r.stderr), (r.stdout + r.stderr)[-400:]
     else:
-        assert int(m.group(1)) == 11, "transport(ua(succ), 10) evaluated to a value other than 11"
+        assert int(m.group(1)) == 11, "transport(succ <=> pred, 10) evaluated to a value other than 11"
 
 
 # --- formatter: formatting never changes what the text says ---

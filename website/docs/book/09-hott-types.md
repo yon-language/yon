@@ -30,8 +30,8 @@ two sides are the same *by computation* is bare `clear` — reflexivity of the
 endpoint inferred from the goal, gated exactly as the kernel `refl` written by
 hand. Pairs are the Σ introduction with `fst`/`snd`
 projections. The runnable path fragment is wider than that one witness, though:
-the *journey vocabulary* in the next section (`back`, `++`, `through`, `carry`,
-`carry`, `<=>`, and the `match` eliminator) compiles and computes. Path
+the *journey vocabulary* in the next section (`back`, `++`, `through`, `<=>`,
+`↦`, and the `match` eliminator) compiles and computes. Path
 induction is `induct(d, p)`; the bare J eliminator `ind_path(C, d, p)` stays a
 proof-layer construct in the lower stratum, and `match` is the eliminator you
 actually run.
@@ -81,9 +81,11 @@ fun main: Number {
 
 A journey can also run between *types*. An equivalence, written `f <=> g`, is a
 two-way bridge: the pair of maps together with the coherence that each undoes the
-other, and Yon synthesises the trivial coherences for you. Laid down as a path,
-an equivalence is univalence itself, `ua(e)`. And you can **carry** a value
-across the bridge (here on `Int64`, where `succ` and `pred` really undo each
+other. When the coherences close by computation Yon finds them; otherwise you
+give them after `by`, as two funs of proof: `f <=> g by eta, eps`. Wherever a
+path between types is asked, an equivalence is that path: that is univalence,
+and nothing is written for it. And you **apply** the bridge to a value to carry
+it across, `x ↦ e` (here on `Int64`, where `succ` and `pred` really undo each
 other; on `Number`, a float, `(n + 1) - 1` is not always `n`):
 
 <!-- yon-gate: exit 11 -->
@@ -92,15 +94,21 @@ fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 fun main: Number {
   bridge := succ <=> pred    // the two-way bridge
-  y := carry 10 along bridge // transport 10 across it: succ 10 = 11
-  return if y == 11 then 11 else 0
+  y := 10 ↦ bridge           // transport 10 across it: succ 10 = 11
+  undone := undo(bridge)     // the bridge read the other way
+  z := y ↦ undone            // and back: pred 11 = 10
+  return if y == 11 and z == 10 then 11 else 0
 }
 ```
 
-`carry x along e` is `transport(ua(e), x)`. When the bridge is `f <=> g` it
-computes to `f x`: an equivalence of *types* has become computation on *values*,
-univalence made operational. It survives a `:=`, so you can name the bridge and
-carry across it later.
+`x ↦ e` is the transport of `x` along the path the equivalence is. The type of
+`x` says the way: from the source of the bridge it runs forth, from its target
+back; on a bridge from a type to itself it runs forth, and `undo` reads it the
+other way. When the bridge is `f <=> g` it computes to `f x`: an equivalence of
+*types* has become computation on *values*, univalence made operational. It
+survives a `:=`, so you can name the bridge and carry across it later. The
+kernel's own spellings, `ua(e)`, `equiv(f, g, eta, eps)` and the old
+`carry x along e`, are not written: each is refused with the form above.
 
 Finally, a **higher inductive type** carries paths between its own points, and
 its eliminator is spelled `match`, the part standing for the whole: one case per

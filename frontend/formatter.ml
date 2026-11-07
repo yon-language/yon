@@ -118,6 +118,13 @@ and fmt_expr (e : expr) : string =
            fmt_expr a ^ " " ^ sym ^ " " ^ target
        | [a] -> "(" ^ fmt_expr a ^ ") " ^ sym ^ " " ^ target
        | _ -> "(" ^ String.concat ", " (List.map fmt_expr args) ^ ") " ^ sym ^ " " ^ target)
+  | ECall ("equiv", [f; g; eta; eps], _) ->
+      (* an equivalence: its laws closed by computation, or given by two funs *)
+      let closes v = function
+        | ELam ([(x, TyPrim "unknown")], ERefl (EVar (y, _), _), _) -> x = v && y = v
+        | _ -> false in
+      if closes "a" eta && closes "b" eps then fmt_expr f ^ " <=> " ^ fmt_expr g
+      else Printf.sprintf "%s <=> %s by %s, %s" (fmt_expr f) (fmt_expr g) (fmt_expr eta) (fmt_expr eps)
   | ECall (_, _, l) when Hashtbl.mem Surface_ast.explicit_type_args (Surface_ast.site_of l) ->
       (* `f<A>(args)`: the call as any other, with its type arguments before `(` *)
       let site = Surface_ast.site_of l in

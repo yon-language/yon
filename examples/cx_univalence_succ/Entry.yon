@@ -1,6 +1,6 @@
 place Entry {
-// COSA: univalenza OPERATIVA — transport lungo ua(succ ≃ pred) applica il forward
-// `succ` e COMPUTA su un valore (10 |-> 11).
+// COSA: univalenza OPERATIVA — transport lungo succ <=> pred, accettata dove serve un
+// cammino fra tipi, applica il forward `succ` e COMPUTA su un valore (10 |-> 11).
 // PERCHE': è il cuore di Yon — un'EQUIVALENZA di tipi (Int64 ≃ Int64 via succ/pred;
 // su Int64, Z/2^64, sono inversi davvero, su Number (f64) no)
 // diventa un cammino nei tipi, e trasportare lungo quel cammino ESEGUE la struttura.
@@ -8,9 +8,7 @@ fun succ(n: Int64): Int64 { return n + 1 }
 fun pred(n: Int64): Int64 { return n - 1 }
 
 fun main(): Number {
-  y := transport(
-    ua(equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)),
-    10)
+  y := transport(succ <=> pred, 10)
   return if y == 11 then 11 else 0     // y -> 11
 }
 }

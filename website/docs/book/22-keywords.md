@@ -653,7 +653,7 @@ The source of a move, morph, geomorph or import.
 
 #### `by`
 
-`A maps to B by f`: names the function realizing a clause. After `carried`, it names the carrier of a place.
+`A maps to B by f`: names the function realizing a clause. After `carried`, it names the carrier of a place. After an equivalence, `f <=> g by eta, eps`, it names the two funs that prove its laws.
 
 #### `carried`
 
@@ -920,7 +920,7 @@ The old spelling, refused: the proposition that `X` and `Y` are the same value i
 
 #### `clear`
 
-THE surface spelling of reflexivity, one keyword with two shapes. `clear a` is the trivial path, the proof that `a` is clearly itself (kernel: `refl(a)`) — the journey that goes nowhere; read off at either end, it is just `a`. Bare `clear` is the proof that the two sides of a `Same` (or `Id`) return type are the same *by computation* — reflexivity of the endpoint, inferred from the goal; it is checked, not asserted: if the two sides do not reduce to one value the compiler rejects it, the same gate as the kernel `refl` written by hand, and it is valid only in return position, where the goal fixes which endpoint to reflect. Part of the *journey* vocabulary for paths (`clear`/`back`/`through`/`carry`/`along`, `++`, `<=>`), plain names for the cubical primitives.
+THE surface spelling of reflexivity, one keyword with two shapes. `clear a` is the trivial path, the proof that `a` is clearly itself (kernel: `refl(a)`) — the journey that goes nowhere; read off at either end, it is just `a`. Bare `clear` is the proof that the two sides of a `Same` (or `Id`) return type are the same *by computation* — reflexivity of the endpoint, inferred from the goal; it is checked, not asserted: if the two sides do not reduce to one value the compiler rejects it, the same gate as the kernel `refl` written by hand, and it is valid only in return position, where the goal fixes which endpoint to reflect. Part of the *journey* vocabulary for paths (`clear`/`back`/`through`, `++`, `<=>`, `↦`), plain names for the cubical primitives.
 
 #### `back`
 
@@ -932,11 +932,11 @@ THE surface spelling of reflexivity, one keyword with two shapes. `clear a` is t
 
 #### `carry`
 
-`carry x along e` carries the value `x` along the bridge `e`, sugar for `transport(ua(e), x)`. When `e` is `f <=> g`, this computes to `f x`: an equivalence of *types* becomes computation on *values*. Always paired with `along`.
+The old spelling of the transport, refused: a value is carried along an equivalence by applying it, `x ↦ e`.
 
 #### `along`
 
-The second half of `carry x along e` (see `carry`): it names the bridge the value travels. `along` has no meaning on its own.
+The second half of the old `carry x along e`, refused with it (see `carry`): the transport is `x ↦ e`.
 
 #### `ind_path`
 

@@ -752,24 +752,23 @@ let test_tycheck_refl_wrong_arity () =
       Printf.printf "FAIL — parser should have rejected refl()\n";
       false
 
-(* Test 43: cubical primitive ua type-checks. *)
+(* Test 43: ua is a primitive of the kernel, not written: by univalence an
+   equivalence is the path where a path between types is asked. *)
 let test_tycheck_ua () =
   let src = {|
     fun get_path(e: Equiv): Path {
       return ua(e)
     }
   |} in
-  Printf.printf "\n=== Test 43: type-check ua primitive ===\n";
-  match tc_program src with
-  | Error msg -> Printf.printf "FAIL parse — %s\n" msg; false
-  | Ok cr ->
-      if cr.cr_errors = [] then
-        (Printf.printf "ua(e) type-checks. Status: PASS\n"; true)
-      else
-        (List.iter (fun e ->
-           Printf.printf "  unexpected: %s\n" (Tycheck.error_to_string e))
-           cr.cr_errors;
-         false)
+  Printf.printf "\n=== Test 43: ua is not written ===\n";
+  let refused m =
+    try ignore (Str.search_forward (Str.regexp_string "ua(e) is not written") m 0); true
+    with Not_found -> false in
+  match (try parse_string src with Failure m -> Error m) with
+  | Error m when refused m ->
+      Printf.printf "  refused with the form to write. Status: PASS\n"; true
+  | Error m -> Printf.printf "FAIL — refused for another reason: %s\n" m; false
+  | Ok _ -> Printf.printf "FAIL — ua(e) was accepted\n"; false
 
 (* Test 44: transport reads its target from the path's type: along a path
    between known types it type-checks, along a path without endpoints it is

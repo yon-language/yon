@@ -2186,6 +2186,26 @@ let ty_of_code (env : Tyenv.env) (c : expr) : ty option =
            if Carrier.is_prim_name n then Some (TyPrim n) else Some (TyUser n))
   | _ -> None
 
+(* The two ends of an equivalence, read from its type: forth A -> B, undo B -> A. *)
+let equiv_ends (t : ty) : (ty * ty) option =
+  match t with
+  | TySigma (_, TyArrow (a, b), TyArrow (b', a')) when b = b' && a = a' -> Some (a, b)
+  | _ -> None
+
+(* Univalence, in one place: where a path between types is asked, an
+   equivalence A ≃ B is that path, A = B. The site is kept so the lowering
+   reads the equivalence as its path. *)
+let as_type_path (l : location) (t : ty) : ty =
+  match equiv_ends t with
+  | Some (a, b) ->
+      (match code_of_ty a, code_of_ty b with
+       | Some ca, Some cb ->
+           Hashtbl.replace Surface_ast.univalence_sites
+             (l.file, l.start_line, l.start_col, l.end_line, l.end_col) ();
+           TyId (TyUniverse 0, TyTermExpr ca, TyTermExpr cb)
+       | _ -> t)
+  | None -> t
+
 (* The source and target types of a path in the universe, read from its type. *)
 let universe_path_endpoints (env : Tyenv.env) (t : ty) : (ty * ty) option =
   match t with
@@ -3416,6 +3436,7 @@ got %s" (Tyenv.ty_to_string other)))
                   | _ -> err loc "hcomp expects a nominal carrier type")
                else
                  let* line_ty = infer env ctx line_or_type in
+                 let line_ty = as_type_path (location_of_expr line_or_type) line_ty in
                  (match line_ty with
                   | TyId _ | TyUser "Path" -> ok ()
                   | other -> err loc (Printf.sprintf
@@ -4499,6 +4520,9 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
   let fallback env e expected =
     let* actual = infer env ctx e in
     let actual = admit_int_literal env ctx e actual expected in
+    let actual = match expected with
+      | TyId _ -> as_type_path (location_of_expr e) actual
+      | _ -> actual in
     if flows_into env ctx ~sub:actual ~super:expected
        || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
     else err (location_of_expr e)
@@ -4882,34 +4906,6 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
                       inductive's universal cell (malformed dependent cocone)")
   | _ -> fallback env e expected
 
-and location_of_expr (e : expr) : location =
-  match e with
-  | EProduce (_, l) | EWireTo (_, l)
-  | ELit (_, l) | EVar (_, l) | EField (_, _, l) | ECall (_, _, l)
-  | ENew (_, _, l) | ENewIn (_, _, _, l) | EBinop (_, _, _, l) | EParen (_, l)
-  | EAll (_, _, l) | EIn (_, _, l)
-  | ERefl (_, l) | EPair (_, _, l) | EFst (_, l) | ESnd (_, l)
-  | EJ (_, _, _, l)
-  | EPullback (_, _, l) | EPushout (_, _, l) -> l
-  | EPullbackVal (_, _, _, _, l) -> l
-  | ENot (_, l) -> l
-  | EIfThenElse (_, _, _, l) -> l
-  | ELam (_, _, l) -> l
-  | EMoveLam (_, _, _, _, l)
-  | EReductionLam (_, _, _, l)
-  | EMorphLam (_, _, _, _, l) -> l
-  | EFunctorLam (_, _, _, _, _, l) -> l
-  | EViewLam (_, _, _, l) -> l
-  | EComposeWith (_, _, l) -> l
-  | ESpawn (_, _, l) -> l
-  | EQuote (_, _, l) -> l
-  | EElMatch (_, _, _, l) -> l
-  | EApp (_, _, l) -> l
-  | EHITElim (_, _, _, l) -> l
-  | EPathApp (_, _, l) -> l
-  | EPathAbs (_, _, l) -> l
-  | EHITConstr (_, _, l) -> l
-
 (* ─── Call checking ────────────────────────────────────────────────── *)
 
 (* The type a call expects of a lambda with unannotated parameters, when the
@@ -5006,6 +5002,23 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
    * passed as a parameter), treat the call as an application of the function
    * value. *)
   (match Tyenv.lookup_var env name with
+   (* `x ↦ e` with e an equivalence: the transport of x along it. The type of
+      x says the way: from the source of e it runs forth, from its target back;
+      on an equivalence A ≃ A it runs forth, and back is `undo` of it. *)
+   | Some var_ty when arrow_kind name loc = Some Surface_ast.Apply
+                      && equiv_ends var_ty <> None ->
+       let (a, b) = Option.get (equiv_ends var_ty) in
+       let site = (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col) in
+       (match args, arg_tys with
+        | [x], [x_ty] ->
+            let at t = Dispatcher.subtype env ctx ~sub:(admit_int_literal env ctx x x_ty t) ~super:t in
+            if at a then (Hashtbl.replace Surface_ast.transport_sites site true; ok b)
+            else if at b then (Hashtbl.replace Surface_ast.transport_sites site false; ok a)
+            else err loc (Printf.sprintf
+              "%s is an equivalence between %s and %s, and the value carried along it has type %s"
+              name (Tyenv.ty_to_string a) (Tyenv.ty_to_string b) (Tyenv.ty_to_string x_ty))
+        | _ -> err loc (Printf.sprintf
+                 "%s is an equivalence: one value is carried along it, x \xe2\x86\xa6 %s" name name))
    | Some var_ty when (match var_ty with TyArrow _ -> true | _ -> false) ->
        let call_exprs = args in
        let rec apply_arrow t args =
@@ -5161,6 +5174,19 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
                | Ok ty -> ok ty
                | Error msg -> err loc msg)))
   else
+  (* undo(e) : B ≃ A for e : A ≃ B, the equivalence read the other way: its
+   * forth is the undo of e, and its two laws trade places. *)
+  if name = "undo" && Tyenv.lookup_fun env name = None then
+    (match arg_tys with
+     | [t] ->
+         (match equiv_ends t with
+          | Some (a, b) -> ok (Cubical_bindings.mk_equiv_ty b a)
+          | None -> err loc (Printf.sprintf
+              "undo takes an equivalence, f <=> g, and this value has type %s"
+              (Tyenv.ty_to_string t)))
+     | _ -> err loc (Printf.sprintf "undo expects 1 argument (an equivalence), got %d"
+                       (List.length arg_tys)))
+  else
   (* idEquiv(T) : Equiv(T, T), the identity equivalence on the type whose
    * code is its argument. *)
   if name = "idEquiv" then
@@ -5194,6 +5220,7 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
   if name = "transport" || name = "transp" then
     (match arg_tys with
      | [p_ty; x_ty] | [p_ty; _; x_ty] when name = "transp" || List.length arg_tys = 2 ->
+         let p_ty = match args with p :: _ -> as_type_path (location_of_expr p) p_ty | [] -> p_ty in
          (match universe_path_endpoints env p_ty with
           | Some (a_ty, b_ty) ->
               (* an integer literal is admitted at A, as against any expected
@@ -5467,6 +5494,10 @@ and check_call_signature ?(arg_exprs : expr list = [])
       if List.length arg_exprs = List.length arg_tys then
         List.map2 (fun (e, aty) (_, pty) ->
           let aty = admit_int_literal env ctx e aty pty in
+          (* an equivalence passed where the parameter is a path between types *)
+          let aty = match pty with
+            | TyId _ -> as_type_path (location_of_expr e) aty
+            | _ -> aty in
           if is_int_prim_ty env ctx pty
              && Dispatcher.type_equal env ctx aty (TyPrim "number")
              && (match check env ctx e pty with Ok () -> true | Error _ -> false)

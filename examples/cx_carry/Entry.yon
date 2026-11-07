@@ -1,10 +1,10 @@
 place Entry {
 // COSA: univalenza nella voce del VIAGGIO. Si costruisce il ponte `succ <=> pred`
-// (un'equivalenza) e si porta 10 attraverso di esso — `carry 10 along bridge`.
+// (un'equivalenza) e si porta 10 attraverso di esso — `10 ↦ bridge` — e indietro con undo.
 // PERCHE': un'equivalenza e' un ponte a due sensi fra tipi; trasportare e'
 // PORTARE un valore lungo il ponte. Stesso motore di cx_univalence_named, ma
-// leggibile senza conoscere transport/ua/equiv. Zucchero metonimico che
-// desugar-a a transport(ua(equiv(succ,pred,refl,refl)), 10) = 11.
+// leggibile senza conoscere transport. Il trasporto e' l'applicazione
+// dell'equivalenza: 10 ↦ bridge = 11, e 11 ↦ undo(bridge) torna a 10.
 // succ e pred su Int64 (Z/2^64): li' sono inversi davvero; su Number (f64)
 // (n + 1) - 1 non e' sempre n, e il ponte non sarebbe un'equivalenza.
 fun succ(n: Int64): Int64 { return n + 1 }
@@ -12,7 +12,9 @@ fun pred(n: Int64): Int64 { return n - 1 }
 
 fun main(): Number {
   bridge := succ <=> pred        // il ponte: coerenze refl sintetizzate
-  y := carry 10 along bridge     // -> 11 (un Int64)
-  return if y == 11 then 11 else 0
+  y := 10 ↦ bridge               // -> 11 (un Int64)
+  undone := undo(bridge)         // il ponte letto all'indietro
+  z := y ↦ undone                // -> 10
+  return if y == 11 and z == 10 then 11 else 0
 }
 }

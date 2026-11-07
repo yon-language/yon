@@ -188,7 +188,7 @@ def test_the_suspension_of_boolean_is_the_circle_by_univalence(tmp_path):
                  "fun eps(x: S1): to_circle(from_circle(x)) = x {\n"
                  "  return match x { base => clear, loop => walk i => walk j => loop @ i }\n}\n"
                  "fun path: Suspension<Boolean> = S1 {\n"
-                 "  return ua(equiv(to_circle, from_circle, eta, eps))\n}\n")
+                 "  return to_circle <=> from_circle by eta, eps\n}\n")
     assert _exit(tmp_path, src) == 42
 
 

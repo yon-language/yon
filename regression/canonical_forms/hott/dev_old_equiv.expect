@@ -1,0 +1,5 @@
+status: reject_clean
+exit: 1
+match: equiv(f, g, eta, eps) is not written
+note: |
+  equiv is a primitive of the kernel: an equivalence is written f <=> g by eta, eps.

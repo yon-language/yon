@@ -1,0 +1,8 @@
+place Entry {
+  fun succ(n: Int64): Int64 { return n + 1 }
+  fun pred(n: Int64): Int64 { return n - 1 }
+  fun main: Number {
+    bridge := equiv(succ, pred, fun(a) => clear a, fun(b) => clear b)
+    return 0
+  }
+}
