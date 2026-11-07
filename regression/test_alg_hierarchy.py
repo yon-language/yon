@@ -574,13 +574,17 @@ def test_a_law_named_commutative_that_states_another_thing_answers_no(tmp_path):
     assert subprocess.run([str(exe)], timeout=30).returncode == 42
 
 
-# ─── an internal instance is its carrier inside its Space ──────────────────
+# ─── an internal instance is its carrier inside its house ──────────────────
 
 _HIDDEN = ("internal place Sum carried by i64 is algebra {\n"
            "  this < Monoid\n"
            '  operation op(a: Sum, b: Sum): Sum as "+"\n'
            '  operation unit: Sum as "0"\n'
            "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
+           "  fun make(n: Int64): Sum { return n }\n"
+           "  fun value(s: Sum): Int64 { return s }\n"
+           "  fun forty: Sum { return 40 }\n"
+           "  fun raised(s: Sum): Int64 { return s + 2 }\n"
            "}\n")
 _WORD = ("internal place Word carried by i64 uses algebra Sum {\n"
          "  fun make(n: Int64): Word { return n }\n"
@@ -589,84 +593,59 @@ _WORD = ("internal place Word carried by i64 uses algebra Sum {\n"
 _MEET = ("place Meet {\n"
          "  fun forty(n: Int64): Sum { return n }\n"
          "  fun raised(s: Sum): Int64 { return s + 2 }\n"
+         "  fun lit: Sum { return 3 }\n"
          "}\n")
-_SUM_42 = "  return if Word.value(Word.make(40) + Word.make(2)) == 42 then 42 else 1"
+_OUTSIDE = "is internal: outside its house it is not its carrier, and its values come from its funs, and from its operations for an algebra"
 
 
-def test_inside_its_space_an_internal_instance_is_its_carrier(tmp_path):
-    # a model in the Space takes the machine's sum from the carrier, and a fun
-    # of another place of the Space reads a Sum as an i64, with its literals
-    rc, out, exe = _in_space(tmp_path, {"Sum": _HIDDEN, "Word": _WORD, "Meet": _MEET},
-                             "  return if Meet.raised(Meet.forty(40)) == 42 then 42 else 1")
-    assert rc == 0, out
-    assert subprocess.run([str(exe)], timeout=30).returncode == 42
-    (tmp_path / "m").mkdir()
-    rc, out, exe = _in_space(tmp_path / "m", {"Sum": _HIDDEN, "Word": _WORD}, _SUM_42)
+def test_inside_its_house_an_internal_instance_is_its_carrier(tmp_path):
+    # a fun in the body of an instance is a fun of its house, on the carrier:
+    # a Sum from an Int64, an Int64 from a Sum, a literal, the carrier's sum
+    rc, out, exe = _in_space(tmp_path, {"Sum": _HIDDEN},
+                             "  return if Sum.value(Sum.make(40) + Sum.make(2)) == 42"
+                             " and Sum.raised(Sum.forty) == 42 then 42 else 1")
     assert rc == 0, out
     assert subprocess.run([str(exe)], timeout=30).returncode == 42
 
 
-def _two_spaces(tmp_path: Path, outside: dict):
-    """Sum in the Space `w`, the places of `outside` in the Space `v`."""
-    proj = tmp_path / "proj"
-    (proj / "w").mkdir(parents=True)
-    (proj / "v").mkdir(parents=True)
-    objs = ", ".join(f'"{p}"' for p in ["Sum", *outside])
-    (proj / "yon.toml").write_text(
-        '[package]\nname = "user_alg"\n\n'
-        f'[world.W]\nobjects = [{objs}]\nspaces  = ["w", "v"]\n\n'
-        '[runtime]\nbackend = "memory"\n')
-    (proj / "w" / "Sum.yon").write_text(_HIDDEN)
-    for d in ("w", "v"):
-        (proj / d / "Topos.yon").write_text("topos where {\n}\n")
-    for name, src in outside.items():
-        (proj / "v" / f"{name}.yon").write_text(src)
-    (proj / "Entry.yon").write_text("place Entry {}\nfun main: Number {\n  return 42\n}\n")
-    r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
-                       capture_output=True, text=True, timeout=300)
-    return r.returncode, r.stdout + r.stderr
-
-
-def test_outside_its_space_an_internal_instance_is_opaque(tmp_path):
-    # the same fun, out of the Space of Sum: no literal is a Sum, and a Sum is
-    # no i64
-    rc, out = _two_spaces(tmp_path, {"Meet": _MEET})
+def test_outside_its_house_an_internal_instance_is_opaque(tmp_path):
+    # the same funs in another place of the same Space: no literal is a Sum,
+    # and a Sum is no i64
+    rc, out, _ = _in_space(tmp_path, {"Sum": _HIDDEN, "Meet": _MEET}, "  return 42")
     assert rc != 0 and "E2001" in out, out
-    assert "type mismatch: expected Sum, got Int64" in out, out
-    assert "type mismatch: expected Int64, got Sum" in out, out
+    assert "type mismatch: expected Sum, got Int64 (Sum " + _OUTSIDE in out, out
+    assert "type mismatch: expected Int64, got Sum (Sum " + _OUTSIDE in out, out
+    assert "type mismatch: expected Sum, got number (Sum " + _OUTSIDE in out, out
 
 
-def test_outside_its_space_no_model_takes_the_operations_of_an_internal_instance(tmp_path):
-    rc, out = _two_spaces(tmp_path, {"Word": _WORD})
+def test_outside_its_house_no_model_takes_the_operations_of_an_internal_instance(tmp_path):
+    # a model is a house of its own, even in the Space of the instance
+    rc, out, _ = _in_space(tmp_path, {"Sum": _HIDDEN, "Word": _WORD}, "  return 42")
     assert rc != 0 and "E2001" in out, out
     assert "place Word uses algebra Sum but does not give its operation op" in out, out
-    assert "(Sum is internal: outside its Space its carrier is opaque, and no model there takes the operations from it)" in out, out
+    assert "(Sum is internal: outside its house its carrier is opaque, and no model takes the operations from it)" in out, out
 
 
 _PASS = ("place Pass {\n"
-         "  fun forty(n: Int64): Sum { return n }\n"
-         "  fun value(s: Sum): Int64 { return s }\n"
          "  fun twice_each(xs: List<Sum>): List<Sum> { return List.map(xs, fun(s: Sum) => s + s) }\n"
          "}\n")
 _ADDS = ("place Adds {\n"
-         "  fun go(n: Int64): Int64 { return Pass.value(Pass.forty(n) + Pass.forty(2)) }\n"
-         "  fun by_op(n: Int64): Int64 { return Pass.value(Sum.op(Pass.forty(n), Sum.unit)) }\n"
+         "  fun go(n: Int64): Int64 { return Sum.value(Sum.make(n) + Sum.make(2)) }\n"
+         "  fun by_op(n: Int64): Int64 { return Sum.value(Sum.op(Sum.make(n), Sum.unit)) }\n"
          "}\n")
+_HEAD = ("  doubled := Pass.twice_each(List.cons(Sum.make(21), List.empty))\n"
+         "  head_value := match doubled { Nil => Sum.value(Sum.unit), Cons as (h, t) => Sum.value(h) }\n"
+         "  return if Adds.go(40) == 42 and Adds.by_op(42) == 42 and head_value == 42 then 42 else 1")
 
 
-def test_the_operator_of_an_internal_instance_works_between_places_of_its_space(tmp_path):
-    body = ("  doubled := Pass.twice_each(List.cons(Pass.forty(21), List.empty))\n"
-            "  head_value := match doubled { Nil => Pass.value(Pass.forty(0)), Cons as (h, t) => Pass.value(h) }\n"
-            "  return if Adds.go(40) == 42 and Adds.by_op(42) == 42 and head_value == 42 then 42 else 1")
-    rc, out, exe = _in_space(tmp_path, {"Sum": _HIDDEN, "Pass": _PASS, "Adds": _ADDS}, body)
+def test_outside_its_house_the_values_of_an_internal_instance_come_from_its_funs_and_operations(tmp_path):
+    # Pass and Adds, out of the house of Sum, reach its values only through
+    # the funs of its house and its operations: +, Sum.op, Sum.unit; in the
+    # Space of Sum and in another Space alike
+    rc, out, exe = _in_space(tmp_path, {"Sum": _HIDDEN, "Pass": _PASS, "Adds": _ADDS}, _HEAD)
     assert rc == 0, out
     assert subprocess.run([str(exe)], timeout=30).returncode == 42
-
-
-def test_outside_its_space_the_values_of_an_internal_instance_come_from_its_operations(tmp_path):
-    # Pass lives with Sum; Adds, in another Space, reaches the values only
-    # through the operations of the instance: +, Sum.op, Sum.unit
-    proj = tmp_path / "proj"
+    proj = tmp_path / "two" / "proj"
     (proj / "w").mkdir(parents=True)
     (proj / "v").mkdir(parents=True)
     (proj / "yon.toml").write_text(
@@ -674,17 +653,16 @@ def test_outside_its_space_the_values_of_an_internal_instance_come_from_its_oper
         '[world.W]\nobjects = ["Sum", "Pass", "Adds"]\nspaces  = ["w", "v"]\n\n'
         '[runtime]\nbackend = "memory"\n')
     (proj / "w" / "Sum.yon").write_text(_HIDDEN)
-    (proj / "w" / "Pass.yon").write_text(_PASS)
+    (proj / "v" / "Pass.yon").write_text(_PASS)
     (proj / "v" / "Adds.yon").write_text(_ADDS)
     for d in ("w", "v"):
         (proj / d / "Topos.yon").write_text("topos where {\n}\n")
-    (proj / "Entry.yon").write_text(
-        "place Entry {}\nfun main: Number {\n"
-        "  return if Adds.go(40) == 42 and Adds.by_op(42) == 42 then 42 else 1\n}\n")
-    r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "exe")],
+    (proj / "Entry.yon").write_text("place Entry {}\nfun main: Number {\n" + _HEAD + "\n}\n")
+    exe = tmp_path / "two" / "exe"
+    r = subprocess.run([str(YONC), str(proj), "-o", str(exe)],
                        capture_output=True, text=True, timeout=300)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert subprocess.run([str(tmp_path / "exe")], timeout=30).returncode == 42
+    assert subprocess.run([str(exe)], timeout=30).returncode == 42
 
 
 def test_a_nesting_of_operations_of_an_algebra_is_checked_once_per_level(tmp_path):

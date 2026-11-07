@@ -41,7 +41,12 @@ let gives (p : S.program) (house : string) (name : string) : bool =
    fun's source with the model's name for the algebra's and every call of an
    operation (or of another derived operation) addressed to the model; the
    instance is a fun of the model, `P.name`, and the algebra keeps no fun of
-   its own to run. *)
+   its own to run. This holds of a signature; an instance, an algebra with its
+   carrier in its header, is a place like any other, and a fun in its body is
+   a fun of its house, on the carrier. *)
+
+(* An algebra with its carrier in its header: an instance, not a signature. *)
+let is_instance (apd : S.place_decl) : bool = apd.S.pd_fusion <> None
 
 let is_ident_char c =
   (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c = '_'
@@ -128,7 +133,7 @@ let instances (p : S.program) (places : S.place_decl list) : S.top_decl list =
     let algebras = match Hashtbl.find_opt S.place_algebras pd.S.pd_name with Some l -> l | None -> [] in
     List.concat_map (fun a ->
       match List.find_opt (fun (x : S.place_decl) -> x.S.pd_name = a) places with
-      | Some apd when Hashtbl.mem S.algebra_places a ->
+      | Some apd when Hashtbl.mem S.algebra_places a && not (is_instance apd) ->
           let ops = List.filter_map (function S.FoOp o -> Some o.S.op_name | _ -> None) apd.S.pd_members in
           let ds = derived p a in
           let calls = ops @ List.map (fun (fd : S.fun_decl) -> fd.S.fn_name) ds in
@@ -302,7 +307,6 @@ let elaborate_bounded (p : S.program) : S.program =
     | d -> d) p
 
 let complete (p : S.program) : S.program =
-  let space_of = S.space_of_file in
   let p = read_signatures p in
   let places = List.filter_map (function S.TopPlace pd -> Some pd | _ -> None) p in
   let find a = List.find_opt (fun (pd : S.place_decl) -> pd.S.pd_name = a) places in
@@ -314,13 +318,12 @@ let complete (p : S.program) : S.program =
           match find a, Hashtbl.find_opt S.carrier_models a with
           | Some apd, Some models
             when List.exists (fun (c, _, _) -> c = carrier) models
-                 (* an internal instance is its carrier inside its Space only:
-                    outside, the carrier is opaque, and no model there takes
-                    the machine's operations from it *)
-                 && (not (Hashtbl.mem S.internal_carrier_sites
-                            (apd.S.pd_loc.S.file, apd.S.pd_loc.S.start_line,
-                             apd.S.pd_loc.S.start_col))
-                     || space_of pd.S.pd_loc.S.file = space_of apd.S.pd_loc.S.file) ->
+                 (* an internal instance is its carrier inside its house only:
+                    a model is a house of its own, where that carrier is
+                    opaque, so no model takes the machine's operations from it *)
+                 && not (Hashtbl.mem S.internal_carrier_sites
+                           (apd.S.pd_loc.S.file, apd.S.pd_loc.S.start_line,
+                            apd.S.pd_loc.S.start_col)) ->
               (* the site of the fun is the `carried by` line of the algebra
                  (a prelude site when the algebra is the prelude's), one
                  column per place and operation *)
@@ -367,7 +370,8 @@ let complete (p : S.program) : S.program =
           | _ -> ()) algebras
     | _ -> ()) places;
   let completed = p @ List.rev !added in
-  (* the derived operations: an instance in each model; the algebra keeps none *)
+  (* the derived operations: an instance in each model; a signature keeps none,
+     an instance keeps the funs of its house *)
   let inst = instances completed places in
   (* an instance on a carrier is a model of itself: its operations are the
      machine's of the carrier, funs of its house, the one access to its values
@@ -408,7 +412,9 @@ let complete (p : S.program) : S.program =
       | _ -> []) (List.filter (fun (pd : S.place_decl) -> Hashtbl.mem S.algebra_places pd.S.pd_name) places) in
   List.filter (function
     | S.TopFun fd -> (match fd.S.fn_home with
-                      | Some h -> not (Hashtbl.mem S.algebra_places h) | None -> true)
+                      | Some h -> not (Hashtbl.mem S.algebra_places h)
+                                  || (match find h with Some apd -> is_instance apd | None -> false)
+                      | None -> true)
     | _ -> true) completed
   @ inst @ own
   |> elaborate_bounded

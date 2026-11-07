@@ -370,7 +370,9 @@ def test_a_decided_law_that_is_false_is_refuted_even_with_is_given(tmp_path):
     assert "law doubled" not in out, out
 
 
-_DERIVED = ("place Sum carried by i64 is algebra {\n"
+# a signature: a fun in its body is a derived operation, with an instance in
+# each model (a fun in the body of an instance is a fun of its house instead)
+_DERIVED = ("place Sum is algebra {\n"
             '  operation add(a: Sum, b: Sum): Sum as "+"\n'
             '  operation zero: Sum as "0"\n'
             "  law commutative ∀a : Sum ∀b : Sum, a + b = b + a\n"
@@ -382,6 +384,8 @@ _DERIVED = ("place Sum carried by i64 is algebra {\n"
 _W = ("internal place W carried by i64 uses algebra Sum {\n"
       "  fun make(n: Int64): W { return n }\n"
       "  fun value(w: W): Int64 { return w }\n"
+      "  fun add(a: W, b: W): W { return make(value(a) + value(b)) }\n"
+      "  fun zero: W { return make(0) }\n"
       "EXTRA}\n")
 
 
@@ -439,13 +443,25 @@ def test_a_model_takes_the_operations_from_the_carrier_of_an_instance(tmp_path):
     assert _run(exe).returncode == 42
 
 
-def test_in_its_space_a_model_takes_the_operations_from_an_internal_instance(tmp_path):
-    # Sum and W are in the one Space of the project: there the instance is its
-    # carrier (outside its Space it is opaque: test_alg_hierarchy.py)
-    rc, out, exe = _build(tmp_path, {"Sum": "internal " + _INSTANCE, "W": _MODEL.replace("GIVES", "")},
-                          _FORTY_TWO, objects=["Sum", "W"])
-    assert rc == 0, out
-    assert _run(exe).returncode == 42
+def test_no_model_takes_the_operations_from_an_internal_instance(tmp_path):
+    # W is a house of its own: there the carrier of Sum is opaque, so W gives
+    # the operations itself (test_an_internal_instance_keeps_its_signature)
+    rc, out, _ = _build(tmp_path, {"Sum": "internal " + _INSTANCE, "W": _MODEL.replace("GIVES", "")},
+                        _FORTY_TWO, objects=["Sum", "W"])
+    assert rc != 0 and "E2001" in out, out
+    assert "place W uses algebra Sum but does not give its operation op" in out, out
+    assert "(Sum is internal: outside its house its carrier is opaque, and no model takes the operations from it)" in out, out
+
+
+def test_a_fun_in_the_body_of_an_instance_is_no_derived_operation(tmp_path):
+    # a fun of the house of Sum: no model receives an instance of it
+    double = "  fun double(a: Sum): Sum { return a + a }\n}\n"
+    sum_ = _INSTANCE[:-2] + double
+    rc, out, exe = _build(tmp_path, {"Sum": sum_, "W": _MODEL.replace("GIVES", "")},
+                          "  return if W.value(W.double(W.make(21))) == 42 then 42 else 1",
+                          objects=["Sum", "W"])
+    assert rc != 0 and "E2001" in out, out
+    assert "unknown function or operation: W__double" in out, out
 
 
 def test_an_internal_instance_keeps_its_signature(tmp_path):

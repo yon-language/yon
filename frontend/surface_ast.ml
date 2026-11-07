@@ -135,27 +135,13 @@ let algebra_op_sites : (string * int * int * int * int, string) Hashtbl.t = Hash
    `internal place P carried by <carrier>` the place is its carrier, in both directions;
    outside it the place is abstract (the rule of the abstract type). *)
 let open_house : string option ref = ref None
-(* The Space of the fun being checked (Some, inside a fun; its value is the
-   Space of the file, None for the prelude's). *)
-let open_space : string option option ref = ref None
-(* The file of each internal instance of an algebra: an instance is its carrier
-   in its whole Space, not only in its house. *)
-let instance_file : (string, string) Hashtbl.t = Hashtbl.create 4
-(* The Space of every source file, the prelude's included (marked apart from the
-   program's): where an internal instance is its carrier. *)
-let file_spaces : (string, string) Hashtbl.t = Hashtbl.create 32
-let space_of_file (f : string) : string option = Hashtbl.find_opt file_spaces f
-
-(* Whether t, inside the open house, is the carrier p of that house's place;
-   for an internal instance of an algebra, inside its Space. *)
+(* Whether t, inside the open house, is the carrier p of that house's place:
+   an internal place, an internal instance of an algebra too, is its carrier
+   in its house only. *)
 let in_house_carrier (u : string) : string option =
   match !open_house with
   | Some h when h = u -> Hashtbl.find_opt internal_faces u
-  | _ ->
-      (match Hashtbl.find_opt instance_file u, !open_space with
-       | Some file, Some here when space_of_file file = here ->
-           Hashtbl.find_opt internal_faces u
-       | _ -> None)
+  | _ -> None
 
 (* The faces the language fuses to their primitive codes: a capitalized face
    and its code are one object, as a type (the parser) and as a code (a type

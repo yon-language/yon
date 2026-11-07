@@ -453,6 +453,18 @@ let algebra_operator (env : Tyenv.env) (op : binop) (t : ty) : (string * ty) opt
    same `=` states. *)
 let in_fun_body = ref false
 
+(* A value crossing the wall of an internal place, an internal instance too:
+   outside its house the place is not its carrier, and the diagnostic says so. *)
+let house_hint (expected : ty) (actual : ty) : string =
+  let hidden = function
+    | TyUser u when Hashtbl.mem Surface_ast.internal_faces u
+                    && Surface_ast.in_house_carrier u = None -> Some u
+    | _ -> None in
+  match hidden expected, hidden actual with
+  | Some u, _ | None, Some u ->
+      Printf.sprintf " (%s is internal: outside its house it is not its carrier, and its values come from its funs, and from its operations for an algebra)" u
+  | None, None -> ""
+
 (* Type of a binop result, given operand types. *)
 let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
     (env : Tyenv.env) (ctx : Reduce.ctx) (loc : location) : ty tc_result =
@@ -481,8 +493,8 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
       else if is lhs txt && is rhs txt && op = OpAdd then ok txt  (* string concat *)
       else err loc
         (Printf.sprintf
-           "operator requires matching numeric/duration/money operands; got %s and %s"
-           (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs))
+           "operator requires matching numeric/duration/money operands; got %s and %s%s"
+           (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs) (house_hint lhs rhs))
   (* Comparison operators *)
   | OpLt | OpGt | OpLeq | OpGeq ->
       if is lhs rhs && (is lhs num || is lhs dur || is lhs mon
@@ -830,14 +842,11 @@ let internal_homes : (string, string) Hashtbl.t = Hashtbl.create 16
 let current_home : string option ref = ref None
 
 let with_home (fn : fun_decl) (k : unit -> 'a) : 'a =
-  let saved = !current_home and saved_house = !Surface_ast.open_house
-  and saved_space = !Surface_ast.open_space in
+  let saved = !current_home and saved_house = !Surface_ast.open_house in
   current_home := fn.fn_home;
   Surface_ast.open_house := fn.fn_home;
-  Surface_ast.open_space := Some (Surface_ast.space_of_file fn.fn_loc.file);
   Fun.protect ~finally:(fun () ->
-    current_home := saved; Surface_ast.open_house := saved_house;
-    Surface_ast.open_space := saved_space) k
+    current_home := saved; Surface_ast.open_house := saved_house) k
 
 (* The collections of the Leech heap hold their keys and values as 64 bits
    in a node of its trie: which types fit is derived from their carrier — a
@@ -4495,7 +4504,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
     else err (location_of_expr e)
       (Printf.sprintf "type mismatch: expected %s, got %s%s"
          (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual)
-         (omega_hint expected actual))
+         (omega_hint expected actual ^ house_hint expected actual))
   in
   match e, expected with
   (* Bidirectional integer arithmetic: `0 - 1` against Int pushes Int into
@@ -6291,11 +6300,8 @@ let register_fusion (pd : place_decl) : unit =
       let internal =
         Hashtbl.mem Surface_ast.internal_carrier_sites
           (pd.pd_loc.file, pd.pd_loc.start_line, pd.pd_loc.start_col) in
-      (if internal then begin
-         Hashtbl.replace Surface_ast.internal_faces pd.pd_name prim;
-         if Hashtbl.mem Surface_ast.algebra_places pd.pd_name then
-           Hashtbl.replace Surface_ast.instance_file pd.pd_name pd.pd_loc.file
-       end
+      (if internal then
+         Hashtbl.replace Surface_ast.internal_faces pd.pd_name prim
        else if in_prelude
           && Hashtbl.mem Surface_ast.fusion_places pd.pd_name
           && Hashtbl.find Surface_ast.fusion_places pd.pd_name <> prim
@@ -7533,7 +7539,7 @@ and check_algebra_models (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) 
                    err pd.pd_loc (Printf.sprintf
                    "place %s uses algebra %s but does not give its operation %s: a model gives each operation of the algebra as its own fun, %s%s"
                    pd.pd_name a o.op_name shown
-                   (if hidden then Printf.sprintf " (%s is internal: outside its Space its carrier is opaque, and no model there takes the operations from it)" a
+                   (if hidden then Printf.sprintf " (%s is internal: outside its house its carrier is opaque, and no model takes the operations from it)" a
                     else ""))
                | Some fs ->
                    let same_params =

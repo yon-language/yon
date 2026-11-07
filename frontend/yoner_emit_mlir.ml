@@ -588,10 +588,6 @@ let () =
      __INFER and orphan the view in multi-world projects. *)
   (* qualify BEFORE expanding: the synthetic view fun copies show-exprs
      verbatim (same ordering fix as Project.load; qualify is idempotent). *)
-  Hashtbl.reset Surface_ast.file_spaces;
-  Hashtbl.iter (fun p sp -> Hashtbl.replace Surface_ast.file_spaces p sp) space_of_path;
-  List.iter (fun (pp, sp, _) -> Hashtbl.replace Surface_ast.file_spaces pp ("prelude:" ^ sp))
-    (fst (Project.prelude_units ()));
   let prog = Prop_quantifiers.expand (Algebra_models.complete prog) in
   let prog = Desugar.expand_views (Method_sugar.qualify_homes prog) in
   (* Lower the Id-proposition sugar (Same / bare clear) before check + desugar. *)
