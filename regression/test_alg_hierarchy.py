@@ -70,7 +70,7 @@ def test_concat_all_on_multiplicative(tmp_path):
 
 def test_concat_all_on_text_needs_no_name(tmp_path):
     body = ('  r := concat_all(List.cons("a", List.cons("b", List.cons("c", List.empty))))\n'
-            '  return if String.equal(r, "abc") then 42 else 1')
+            '  return if Text.equal(r, "abc") then 42 else 1')
     assert _exit_of(tmp_path, body) == 42
 
 
@@ -336,7 +336,7 @@ def test_normal_form_on_a_word_of_one_letter_is_the_letter(tmp_path):
 
 def test_normal_form_keeps_the_order_of_a_word_of_text(tmp_path):
     body = ('  w := pair("a", List.cons("b", List.cons("c", List.empty)))\n'
-            '  return if String.equal(List.normal_form(w), "abc") then 42 else 1')
+            '  return if Text.equal(List.normal_form(w), "abc") then 42 else 1')
     assert _exit_of(tmp_path, body, top="") == 42
 
 
@@ -499,7 +499,7 @@ def test_is_commutative_answers_from_the_law_with_no_closure(tmp_path):
 
 
 def test_a_law_the_instance_does_not_state_is_decided_on_the_closure(tmp_path):
-    # String is a Monoid with no law of commutativity: the question goes to the closure,
+    # Text is a Monoid with no law of commutativity: the question goes to the closure,
     # which on texts does not end, and the answer is the refusal past its limit
     top = ("fun answer(b: Boolean): Number { return if b then 1 else 42 }\n"
            "fun refused(d: DomainError): Number { return 2 }\n")

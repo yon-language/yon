@@ -57,10 +57,10 @@ place Entry {
     iter 11 do { gt <- min2(gt, timed_get(v, m)) }
     mut gtb := timed_get_base(m)
     iter 11 do { gtb <- min2(gtb, timed_get_base(m)) }
-    _1 := Output.print(String.from_int(sz))                                  // final_size = N
-    _2 := Output.print(String.from_int((psh - pshb))) // push net ns for N
-    _3 := Output.print(String.from_int(Vec.get(v, 42)))                      // get guard (=42)
-    _4 := Output.print(String.from_int((gt - gtb)))    // get net ns for M
+    _1 := Output.print(Text.from_int(sz))                                    // final_size = N
+    _2 := Output.print(Text.from_int((psh - pshb))) // push net ns for N
+    _3 := Output.print(Text.from_int(Vec.get(v, 42)))                        // get guard (=42)
+    _4 := Output.print(Text.from_int((gt - gtb)))      // get net ns for M
     return 0
   }
 }

@@ -39,7 +39,7 @@ Printing takes one call:
 <!-- yon-gate: exit 0 -->
 ```yon
 fun main: Number {
-  _p := String.print("ciao, mondo")
+  _p := Text.print("ciao, mondo")
   return 0
 }
 ```
@@ -47,10 +47,10 @@ fun main: Number {
 Two things are already visible here. First, `x := e` is *the* binding
 form of Yon, immutable, used everywhere (there is no `let`). Second, the
 string literal is a real value: with the *string fusion*, `"ciao, mondo"`
-is a section of the builtin `String` place, interned on the content-addressed
+is a section of the builtin `Text` place, interned on the content-addressed
 heap.
 
-`String.print` is a direct builtin. Yon also has an *effectful* printing path
+`Text.print` is a direct builtin. Yon also has an *effectful* printing path
 (`Output.print` under the `visits Output` effect), we will meet it in the
 chapter on functions and effects.
 

@@ -63,8 +63,8 @@ place Generated<V> {
 
   internal fun too_large: DomainError {
     return .-> DomainError {
-      message String.concat("the closure holds more than ",
-                            String.concat(String.from_int(Generated.closure_limit), " elements"))
+      message Text.concat("the closure holds more than ",
+                            Text.concat(Text.from_int(Generated.closure_limit), " elements"))
     }
   }
 

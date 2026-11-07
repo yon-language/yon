@@ -48,12 +48,12 @@ place Entry {
     xb := build_xset(1000, n)
     ha := build_hset(0, n)
     hb := build_hset(1000, n)
-    _g1 := Output.print(String.from_int(XSet.size(XSet.intersect(xa, xb))))   // ~1000 overlap
-    _g2 := Output.print(String.from_int(XSet.size(XSet.union(xa, xb))))        // ~3000
-    _1 := Output.print(String.from_int(batch_xinter(xa, xb, batch)))
-    _2 := Output.print(String.from_int(batch_xunion(xa, xb, batch)))
-    _3 := Output.print(String.from_int(batch_hinter(ha, hb, batch)))
-    _4 := Output.print(String.from_int(batch_hunion(ha, hb, batch)))
+    _g1 := Output.print(Text.from_int(XSet.size(XSet.intersect(xa, xb))))     // ~1000 overlap
+    _g2 := Output.print(Text.from_int(XSet.size(XSet.union(xa, xb))))          // ~3000
+    _1 := Output.print(Text.from_int(batch_xinter(xa, xb, batch)))
+    _2 := Output.print(Text.from_int(batch_xunion(xa, xb, batch)))
+    _3 := Output.print(Text.from_int(batch_hinter(ha, hb, batch)))
+    _4 := Output.print(Text.from_int(batch_hunion(ha, hb, batch)))
     return 0
   }
 }

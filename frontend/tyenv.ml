@@ -178,11 +178,11 @@ let simple_ty_compatible (t1 : ty) (t2 : ty) : bool =
   let is_unknown = function
     | TyPrim "unknown" | TyUser "unknown" -> true
     | _ -> false in
-  (* String fusion: "text" and "String" are the same semantic
-   * object — sections of the builtin String place (runtime: an xheap handle).
+  (* Text fusion: "text" and "Text" are the same semantic
+   * object — sections of the builtin Text place (runtime: an xheap handle).
    * "text" survives as the primitive-family alias. *)
   let is_text = function
-    | TyPrim "text" | TyUser "String" -> true
+    | TyPrim "text" | TyUser "Text" -> true
     | _ -> false in
   if is_unknown t1 || is_unknown t2 then true
   else if is_text t1 && is_text t2 then true
@@ -534,7 +534,7 @@ let with_builtins (env : env) : env =
   let output_op_decl = {
     op_name = "print";
     op_symbol = None;
-    op_params = [{ param_name = "s"; param_ty = TyUser "String" }];
+    op_params = [{ param_name = "s"; param_ty = TyUser "Text" }];
     op_return = Some (TyPrim "unit"); op_on_error = None;
 
     op_algebra = None;
@@ -589,6 +589,8 @@ let rec ty_to_string (t : ty) : string =
   match t with
   | TyWire sp -> "wire to " ^ sp
   | TySubscription (sp, _) -> "subscription to " ^ sp
+  (* a type is named by its place: the carrier text is the place Text *)
+  | TyPrim "text" -> "Text"
   | TyPrim n -> n
   | TyPrimIn (n, ws) -> n ^ " in " ^ String.concat ", " ws
   | TyUser n -> n

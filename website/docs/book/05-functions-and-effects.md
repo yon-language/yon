@@ -109,7 +109,7 @@ function that uses it must say so:
 
 <!-- yon-gate: exit 0 -->
 ```yon
-fun announce(msg: String): Unit visits Output {
+fun announce(msg: Text): Unit visits Output {
   return Output.print(msg)
 }
 fun run(): Unit visits Output {                     // the effect propagates
@@ -127,7 +127,7 @@ propagates up the call chain to `main`. This is the algebraic-effects
 discipline of Yon: what a function touches is part of its signature, checked
 by the compiler.
 
-(The direct builtins `IO.print_num` and `String.print` exist as conveniences
+(The direct builtins `IO.print_num` and `Text.print` exist as conveniences
 and do not require the clause.)
 
 ## Polymorphism
@@ -165,7 +165,7 @@ place SyntaxError { this < Error  line Number }
 -->
 ```yon
 place Entry { }
-fun describe(e: Error): Number { return String.length(e.message) }   // accepts any sub-object
+fun describe(e: Error): Number { return Text.length(e.message) }     // accepts any sub-object
 fun main: Number {
   s := .-> SyntaxError { message "unexpected }" line 30 }
   return describe(s) + s.line     // 12 + 30 = 42: SyntaxError used as Error

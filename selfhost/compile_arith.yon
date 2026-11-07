@@ -16,21 +16,21 @@ place Token { this > TNum Number :U TPlus :U TStar :U TLParen :U TRParen :U TEnd
 place TokList { this > TkNil :U TkCons Token TokList }
 place Parse { this > POk Term TokList :U PErr }
 /* result of gen: (result ssa, accumulated code, next counter). */
-place EmitR { this > ER String String Number }
+place EmitR { this > ER Text Text Number }
 
-/* ---- lexer: String -> TokList ---- */
-fun lex_at(s: String, i: Number, len: Number, c: Number): TokList {
+/* ---- lexer: Text -> TokList ---- */
+fun lex_at(s: Text, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
     else if c == 43 then (TPlus, lex_from(s, i + 1, len)) ↪ TkCons
     else if c == 42 then (TStar, lex_from(s, i + 1, len)) ↪ TkCons
     else if c >= 48 then (c - 48 ↪ TNum, lex_from(s, i + 1, len)) ↪ TkCons
     else lex_from(s, i + 1, len)
 }
-fun lex_from(s: String, i: Number, len: Number): TokList {
+fun lex_from(s: Text, i: Number, len: Number): TokList {
   return if i >= len then (TEnd, TkNil) ↪ TkCons
-    else lex_at(s, i, len, String.char_at(s, i))
+    else lex_at(s, i, len, Text.char_at(s, i))
 }
-fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
+fun lex(s: Text): TokList { return lex_from(s, 0, Text.length(s)) }
 
 /* ---- token/list peeking ---- */
 fun tok_tag(t: Token): Number {
@@ -88,48 +88,48 @@ fun term_of(p: Parse): Term {
 }
 
 /* ---- back end: gen (Term -> MLIR text) ---- */
-fun er_ssa(e: EmitR):  String { return match e { ER as (s, c, n) => s } }
-fun er_code(e: EmitR): String { return match e { ER as (s, c, n) => c } }
+fun er_ssa(e: EmitR):  Text { return match e { ER as (s, c, n) => s } }
+fun er_code(e: EmitR): Text { return match e { ER as (s, c, n) => c } }
 fun er_ctr(e: EmitR):  Number { return match e { ER as (s, c, n) => n } }
 
-fun ssa_name(n: Number): String { return String.concat("%v", String.from_int(n)) }
-fun num_lit(k: Number): String  { return String.concat(String.from_int(k), ".0") }
-fun line(ssa: String, rhs: String): String {
-  return String.concat(String.concat(String.concat("  ", ssa),
-           String.concat(" = ", rhs)), " : f64\n")
+fun ssa_name(n: Number): Text { return Text.concat("%v", Text.from_int(n)) }
+fun num_lit(k: Number): Text  { return Text.concat(Text.from_int(k), ".0") }
+fun line(ssa: Text, rhs: Text): Text {
+  return Text.concat(Text.concat(Text.concat("  ", ssa),
+           Text.concat(" = ", rhs)), " : f64\n")
 }
 
 fun gen(t: Term, n: Number): EmitR {
   return match t {
     TLit as k =>
-      (ssa_name(n), line(ssa_name(n), String.concat("arith.constant ", num_lit(k))), n + 1) ↪ ER,
+      (ssa_name(n), line(ssa_name(n), Text.concat("arith.constant ", num_lit(k))), n + 1) ↪ ER,
     TAdd as (a, b) => gen_bin("arith.addf", a, b, n),
     TMul as (a, b) => gen_bin("arith.mulf", a, b, n)
   }
 }
-fun gen_bin(op: String, a: Term, b: Term, n: Number): EmitR {
+fun gen_bin(op: Text, a: Term, b: Term, n: Number): EmitR {
   ea := gen(a, n)
   eb := gen(b, er_ctr(ea))
   m  := er_ctr(eb)
-  rhs := String.concat(String.concat(op, " "),
-                 String.concat(String.concat(er_ssa(ea), ", "), er_ssa(eb)))
-  return (ssa_name(m), String.concat(String.concat(er_code(ea), er_code(eb)),
+  rhs := Text.concat(Text.concat(op, " "),
+                 Text.concat(Text.concat(er_ssa(ea), ", "), er_ssa(eb)))
+  return (ssa_name(m), Text.concat(Text.concat(er_code(ea), er_code(eb)),
                           line(ssa_name(m), rhs)), m + 1) ↪ ER
 }
 
 /* ---- module boilerplate ---- */
-fun mod_prefix: String {
+fun mod_prefix: Text {
   return "module {\n  func.func private @yon_rt_maybe_serve() -> ()\n  func.func @main() -> i32 {\n    func.call @yon_rt_maybe_serve() : () -> ()\n"
 }
-fun stubs: String {
+fun stubs: Text {
   return "  func.func @__yon_dispatch(%sel: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %d = arith.constant -777.0 : f64\n    return %d : f64\n  }\n  func.func @__yon_closure_call(%clo: f64, %a1: f64, %a2: f64, %a3: f64, %a4: f64) -> f64 {\n    %c = arith.constant -777.0 : f64\n    return %c : f64\n  }\n}\n"
 }
-fun mod_suffix(result_ssa: String, ctr: Number): String {
+fun mod_suffix(result_ssa: Text, ctr: Number): Text {
   rss := ssa_name(ctr)
-  return String.concat(
-    String.concat("    ", String.concat(rss,
-      String.concat(" = arith.fptosi ", String.concat(result_ssa, " : f64 to i32\n")))),
-    String.concat(String.concat("    return ", String.concat(rss, " : i32\n  }\n")),
+  return Text.concat(
+    Text.concat("    ", Text.concat(rss,
+      Text.concat(" = arith.fptosi ", Text.concat(result_ssa, " : f64 to i32\n")))),
+    Text.concat(Text.concat("    return ", Text.concat(rss, " : i32\n  }\n")),
       stubs))
 }
 
@@ -137,10 +137,10 @@ fun main(): Number {
   /* the whole pipeline: source text -> tokens -> Term -> MLIR module -> file. */
   prog := term_of(parse_expr(lex("2+3*4")))     /* 2 + (3*4) = 14 */
   r := gen(prog, 0)
-  full := String.concat(mod_prefix,
-                  String.concat(er_code(r),
+  full := Text.concat(mod_prefix,
+                  Text.concat(er_code(r),
                     mod_suffix(er_ssa(r), er_ctr(r))))
-  _w := File.write_text(String.concat(Args.get(1), "/out.mlir"), full)
-  _p := String.print(full)
-  return String.length(full)
+  _w := File.write_text(Text.concat(Args.get(1), "/out.mlir"), full)
+  _p := Text.print(full)
+  return Text.length(full)
 }

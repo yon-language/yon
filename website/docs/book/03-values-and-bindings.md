@@ -11,11 +11,11 @@ sidebar_position: 3
 fun main: Number {
   answer := 42
   greeting := "ciao"
-  who := String.concat(greeting, " mondo")     // strings are values
-  same := String.equal("ciao", greeting)       // literals are interned
+  who := Text.concat(greeting, " mondo")       // strings are values
+  same := Text.equal("ciao", greeting)         // literals are interned
   wait := 2500                                 // a duration is just a number (ms)
-  when same { _p := String.print(who) }
-  return String.length(who) + (wait / 250) + answer  // 10 + 10 + 42 = 62
+  when same { _p := Text.print(who) }
+  return Text.length(who) + (wait / 250) + answer    // 10 + 10 + 42 = 62
 }
 ```
 
@@ -29,11 +29,11 @@ whole scope of `x`. It is the same symbol that defines a field of a place
 **Numbers.** `Number` is an IEEE double. Arithmetic is the usual
 `+ - * / %`.
 
-**Strings.** `Text` (the same type as `String`) is the type of a string
-literal; `String` is the builtin place whose functions (`concat`, `equal`, `length`, `print`, ...) act on those
+**Strings.** `Text` is the place of a string literal, and the place whose
+functions (`concat`, `equal`, `length`, `print`, ...) act on those
 values. At runtime a string is a handle into the content-addressed heap, and
 literals are **interned**, the same literal is the same value, which is why
-`String.equal("ciao", greeting)` holds: equality is equality of content.
+`Text.equal("ciao", greeting)` holds: equality is equality of content.
 A string that crosses to another process, as the argument of a call or on a
 `Wire<T>`, crosses by copy: its bytes travel and the receiver interns them in
 its own heap (chapter 17).

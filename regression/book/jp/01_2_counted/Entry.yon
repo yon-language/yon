@@ -3,7 +3,7 @@ place Entry {
     herd0 := HashSet.empty
     herd1 := HashSet.add(herd0, 100247)
     herd2 := HashSet.add(herd1, 100247)
-    _printed := Output.print(String.from_int(HashSet.size(herd2)))
+    _printed := Output.print(Text.from_int(HashSet.size(herd2)))
     return 0
   }
 }

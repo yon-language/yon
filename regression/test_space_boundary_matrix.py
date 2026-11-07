@@ -51,7 +51,7 @@ VALUES = {
     # 2^62 + 1 has no f64: a value carried as a Number would come back as 2^62
     "int64": ("Int64", "  return Int64.two_to_62 + 1",
               "if x - Int64.two_to_62 == 1 then 42 else 1", 42),
-    "text": ("Text", '  return "seven c"', "String.length(x)", 7),
+    "text": ("Text", '  return "seven c"', "Text.length(x)", 7),
     "list": ("List<Number>", "  return List.cons(1, List.cons(2, List.cons(3, List.empty)))",
              "(match x { Nil => 0, Cons as (a, r) => a * 100 + (match r { Nil => 0, Cons as (b, s) => b * 10 }) }) + List.length(x)", 123),
     "hashmap": ("HashMap<Number, Number>",
@@ -69,17 +69,17 @@ VALUES = {
                 "XRelSet.size(x) + (if XRelSet.contains(x, 8) then 30 else 0)", 39),
     "place": ("Pt", "  return .-> Pt { x 4 y 2 }", "x.x * 10 + x.y", 42),
     "place_text": ("Note", '  return .-> Note { message "unexpected }" line 30 }',
-                   "String.length(x.message) + x.line", 42),
+                   "Text.length(x.message) + x.line", 42),
     "nested": ("Line", "  p := .-> Pt { x 4 y 2 }\n"
                        '  n := .-> Note { message "abc" line 5 }\n'
                        "  return .-> Line { a p b n }",
-               "x.a.x * 10 + x.a.y + String.length(x.b.message) + x.b.line", 50),
+               "x.a.x * 10 + x.a.y + Text.length(x.b.message) + x.b.line", 50),
     "place_map": ("Bag", '  return .-> Bag { label "abc" counts HashMap.set(HashMap.empty, 4, 40) }',
-                  "String.length(x.label) + (match HashMap.get(x.counts, 4) "
+                  "Text.length(x.label) + (match HashMap.get(x.counts, 4) "
                   "{ Found as v => v, Absent => 0 })", 43),
     # a SyntaxError where an Error is expected: it crosses by its own frame
     "sub_object": ("Error", '  return .-> SyntaxError { message "unexpected }" line 30 }',
-                   "String.length(x.message)", 12),
+                   "Text.length(x.message)", 12),
 }
 
 # what has no meaning on the other side: (type, the value made in place,

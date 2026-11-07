@@ -3,7 +3,7 @@ place Entry {
     s := HashSet.add(HashSet.add(HashSet.empty, 42), 7)
     mut acc := 0
     iter 10000000 do { acc <- acc + (if HashSet.contains(s, 42) then 1 else 0) }
-    _p := Output.print(String.from_int(acc))
+    _p := Output.print(Text.from_int(acc))
     return 0
   }
 }

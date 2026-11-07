@@ -12,10 +12,10 @@ place Entry {
     sSSV := Leech.pair_subtype(S, SV)   // also {feathered,carnivore}
     sRX  := Leech.pair_subtype(R, X)    // distinguished by {feathered,armored}
 
-    _1 := Output.print(String.from_int(sVD))
-    _2 := Output.print(String.from_int(sRV))
-    _3 := Output.print(String.from_int(sSSV))
-    _4 := Output.print(String.from_int(sRX))
+    _1 := Output.print(Text.from_int(sVD))
+    _2 := Output.print(Text.from_int(sRV))
+    _3 := Output.print(Text.from_int(sSSV))
+    _4 := Output.print(Text.from_int(sRX))
 
     f := (if sVD == 0 then 0 else 1)      // identical trait-set -> nothing distinguishes them
              + (if sRV == sSSV then 0 else 1)    // same synapomorphy set -> same class (function of a^b)

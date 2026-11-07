@@ -1,31 +1,31 @@
 place Entry {
-/* String fusion: "..." literals ARE String values — sections of
- * the builtin String place, interned to xheap handles (content-addressed:
+/* Text fusion: "..." literals ARE Text values — sections of
+ * the builtin Text place, interned to xheap handles (content-addressed:
  * same literal, same slot). Expected exit: 1+2+4+8+16 = 31. */
 
-fun greet(who: String): String {
-  return String.concat("ciao ", who)
+fun greet(who: Text): Text {
+  return Text.concat("ciao ", who)
 }
 
 fun main(): Number {
   lit := "yon"
-  ok_len := if String.length(lit) == 3 then 1 else 0
+  ok_len := if Text.length(lit) == 3 then 1 else 0
 
-  /* literals flow into String.* and user functions transparently (text = String) */
+  /* literals flow into Text.* and user functions transparently (text = Text) */
   msg := greet("mondo")
-  ok_msg := if String.length(msg) == 10 then 1 else 0
+  ok_msg := if Text.length(msg) == 10 then 1 else 0
 
   /* content-addressing: same literal, same slot -> equal as values */
-  ok_eq := if String.equal("yon", lit) then 1 else 0
+  ok_eq := if Text.equal("yon", lit) then 1 else 0
 
   /* the file path is finally a literal */
   _wr := File.write_text("/tmp/yon_lit.txt", msg)
   readback := File.read_text("/tmp/yon_lit.txt")
-  ok_io := if String.equal(readback, msg) then 1 else 0
+  ok_io := if Text.equal(readback, msg) then 1 else 0
 
   ok_env := if Env.has("PATH") then 1 else 0
 
-  _p := String.print(msg)
+  _p := Text.print(msg)
   return ok_len + ok_msg * 2 + ok_eq * 4 + ok_io * 8 + ok_env * 16
 }
 }

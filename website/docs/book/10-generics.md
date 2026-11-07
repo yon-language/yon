@@ -53,7 +53,7 @@ fun first<A, B>(x: A, y: B): A {
 fun main: Number {
   n := first(7, 99)         // A and B both Number
   t := first("hi", 5)       // A is Text, B is Number
-  return n + String.length(t)     // 7 + 2 = 9
+  return n + Text.length(t)       // 7 + 2 = 9
 }
 ```
 

@@ -1,5 +1,5 @@
 /* A parameter that uses a signature: `concat_all` takes a model of Monoid. An
- * Int64 has two structures, so the call names the algebra; a String has one. */
+ * Int64 has two structures, so the call names the algebra; a Text has one. */
 fun concat_all<T uses Monoid>(xs: List<T>): T {
   return match xs {
     Nil => T.unit,
@@ -14,6 +14,6 @@ place Entry {
     sum := concat_all<Additive>(three(1, 2, 39))
     product := concat_all<Multiplicative>(three(2, 3, 7))
     joined := concat_all(List.cons("a", List.cons("b", List.cons("c", List.empty))))
-    return if sum == 42 and product == 42 and String.equal(joined, "abc") then 42 else 1
+    return if sum == 42 and product == 42 and Text.equal(joined, "abc") then 42 else 1
   }
 }

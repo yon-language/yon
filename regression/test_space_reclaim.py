@@ -37,7 +37,7 @@ _WORK = """  fun {name}(n: Number): Number {{
 """
 
 # a call that keeps something in a runtime registry past the call: state
-_KEEP = """ + String.length(Buffer.finish(Buffer.append(Buffer.make(0), "kept"))) * 0"""
+_KEEP = """ + Text.length(Buffer.finish(Buffer.append(Buffer.make(0), "kept"))) * 0"""
 
 
 def _project(tmp_path: Path, spaces: dict, entry: str) -> Path:

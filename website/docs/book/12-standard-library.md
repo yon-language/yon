@@ -131,13 +131,13 @@ every compilation, and it declares the primitives as what they are — places.
 prelude/
   yon.toml          [world.Num64] [world.Num32] [world.Txt] [world.Logic] [world.Err]
   num64/  Number.yon  Int64.yon    num32/  Int32.yon
-  text/   String.yon  logic/  Boolean.yon  Unit.yon   err/  Error.yon  DomainError.yon
+  text/   Text.yon  logic/  Boolean.yon  Unit.yon   err/  Error.yon  DomainError.yon
 ```
 
 `place Number carried by number` is a **fusion**: the place is the declared face of a
 primitive code, and `is <prim>` says the carrier is axiomatic — the leaf of the
 carrier functor's recursion, not a way around it. Most of the rest is ordinary
-Yon: `Number.gcd` is written with Euclid's algorithm, `String.reverse`
+Yon: `Number.gcd` is written with Euclid's algorithm, `Text.reverse`
 character by character. Where the platform already has the function, the
 place declares it `is given` instead of writing a second one: `Number.floor`,
 `Number.exp`, `Number.sin`, `Number.cos` are the libm functions `Math.*`
@@ -192,6 +192,6 @@ place Entry {
 **The boundary with the silicon is readable.** Where a body genuinely cannot be
 written in Yon — measuring a rope, indexing it, allocating one — the prelude
 says so with `is given`, and the compiler checks that the wired implementation
-exists with exactly that signature. Ten declarations at the top of `String.yon`
+exists with exactly that signature. Ten declarations at the top of `Text.yon`
 are the whole of it; the other twelve functions are derived above them, in
 Yon.

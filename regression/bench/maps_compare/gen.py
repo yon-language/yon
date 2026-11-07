@@ -28,7 +28,7 @@ REPS = 3
 KINDS = [
     ("point", "LatticePoint", None, None),
     ("number", "Number", "k * 0.5", "k * 0.5 + 0.25"),
-    ("text", "String", "String.from_int(k)", 'String.concat(String.from_int(k), "x")'),
+    ("text", "Text", "Text.from_int(k)", 'Text.concat(Text.from_int(k), "x")'),
 ]
 FAMILIES = [("hash", "HashMap", "HashSet"), ("xrel", "XRelMap", "XRelSet")]
 
@@ -140,11 +140,11 @@ for fam, Map, Set in FAMILIES:
         w(f"    mut m := {p}_build(n)")
         w(f"    a := {p}_set(0, n)")
         w(f"    b := {p}_set(n / 2, n)")
-        w(f"    _0 := Output.print(String.from_int({Map}.size(m)))")
-        w(f"    _1 := Output.print(String.from_int({p}_count_has(m, n)))")
-        w(f"    _2 := Output.print(String.from_int(" + (f"{p}_count_miss(m, n)" if miss else "0") + "))")
-        w(f"    _3 := Output.print(String.from_int({Set}.size({Set}.union(a, b))))")
-        w(f"    _4 := Output.print(String.from_int({Set}.size({Set}.intersect(a, b))))")
+        w(f"    _0 := Output.print(Text.from_int({Map}.size(m)))")
+        w(f"    _1 := Output.print(Text.from_int({p}_count_has(m, n)))")
+        w(f"    _2 := Output.print(Text.from_int(" + (f"{p}_count_miss(m, n)" if miss else "0") + "))")
+        w(f"    _3 := Output.print(Text.from_int({Set}.size({Set}.union(a, b))))")
+        w(f"    _4 := Output.print(Text.from_int({Set}.size({Set}.intersect(a, b))))")
         w("    return 0")
         w("  }")
         w(f"  fun {p}_row(n: Number): Number visits Output {{")
@@ -169,11 +169,11 @@ for fam, Map, Set in FAMILIES:
         w(f"      ti <- mn(ti, {p}_t_inter(a, b))")
         w("    }")
         for i, e in enumerate(["(tb - tw) / n", "(tg - tw) / n", "(tm - tmw) / n", "tu / n", "ti / n"]):
-            w(f"    _{i} := Output.print(String.from_int({e}))")
+            w(f"    _{i} := Output.print(Text.from_int({e}))")
         w("    return 0")
         w("  }")
 
-w("  fun arg(i: Number): Number { return String.parse_number(Args.get(i)) }")
+w("  fun arg(i: Number): Number { return Text.parse_number(Args.get(i)) }")
 w("  fun smoke(n: Number): Number visits Output {")
 for fam, _, _ in FAMILIES:
     for kind, _, _, _ in KINDS:

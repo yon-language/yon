@@ -166,10 +166,10 @@ A relation is a fun whose result is a type, and that type may be a path:
 <!-- yon-gate: fragment -->
 ```yon
 place Entry {
-  fun lower(s: String): String { return String.concat(s, "") }
-  fun same_case(a: String, b: String): Type { return a ↦ lower = b ↦ lower }
-  fun domain_of(s: String): Number { return String.length(s) }
-  fun domain(e: Quotient<String, same_case>): Number {
+  fun lower(s: Text): Text { return Text.concat(s, "") }
+  fun same_case(a: Text, b: Text): Type { return a ↦ lower = b ↦ lower }
+  fun domain_of(s: Text): Number { return Text.length(s) }
+  fun domain(e: Quotient<Text, same_case>): Number {
     return match e { inj as s => s ↦ lower ↦ domain_of,
                      quot as (a, b, prova) => (domain_of, prova) ↦ ap }
   }

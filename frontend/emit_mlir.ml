@@ -449,17 +449,17 @@ let stdlib_registry : (string * (string list * string)) list = [
   "IO__print_num", (["f64"], "f64");
   "Output__print", (["f64"], "f64");   (* I/O effect op *)
   (* Extended stdlib. *)
-  "String__from_int", (["f64"], "f64");
-  "String__length",   (["f64"], "f64");
-  "String__concat",   (["f64"; "f64"], "f64");
-  "String__equal",    (["f64"; "f64"], "i1");
-  "String__char_at",  (["f64"; "f64"], "f64");
-  "String__print",    (["f64"], "f64");
+  "Text__from_int", (["f64"], "f64");
+  "Text__length",   (["f64"], "f64");
+  "Text__concat",   (["f64"; "f64"], "f64");
+  "Text__equal",    (["f64"; "f64"], "i1");
+  "Text__char_at",  (["f64"; "f64"], "f64");
+  "Text__print",    (["f64"], "f64");
 
-  "String__parse_number", (["f64"], "f64");
-  "String__substring", (["f64"; "f64"; "f64"], "f64");
-  "String__find_char", (["f64"; "f64"; "f64"], "f64");
-  "String__from_char", (["f64"], "f64");
+  "Text__parse_number", (["f64"], "f64");
+  "Text__substring", (["f64"; "f64"; "f64"], "f64");
+  "Text__find_char", (["f64"; "f64"; "f64"], "f64");
+  "Text__from_char", (["f64"], "f64");
   "File__read_text",  (["f64"], "f64");
   "File__write_text",  (["f64"; "f64"], "f64");
   "File__append_text", (["f64"; "f64"], "f64");
@@ -595,7 +595,7 @@ let rec collect_used_builtins (acc : (string, unit) Hashtbl.t) (t : C.term) : un
 module Env = Map.Make (String)
 module SS = Set.Make (String)
 
-(* String fusion: per-module table of string literals.
+(* Text fusion: per-module table of string literals.
  * content -> global symbol name. Filled by collect_string_literals during
  * the module prologue; consumed at every literal use site, which emits
  * llvm.mlir.addressof + a call to @yon_rt_string_lit (runtime interning on
@@ -1046,7 +1046,7 @@ let rec infer_mlir_ty (e : emitter)
                  | None ->
                      (* Otherwise: a string literal or an stdlib builtin. *)
                      if String.length x >= 6 && String.sub x 0 6 = "__str_"
-                     then "f64"  (* String fusion: interned handle *)
+                     then "f64"  (* Text fusion: interned handle *)
                      else if is_stdlib_builtin x then
                        let (_, ret) = List.assoc x stdlib_registry in ret
                      else if Carrier.is_prim_name x then
@@ -2242,7 +2242,7 @@ let rec emit_term (e : emitter)
                                     v x func_ty);
                      (v, func_ty))
             | None ->
-                (* A string literal __str_X — String fusion: emit the
+                (* A string literal __str_X — Text fusion: emit the
                  * address of its module global and intern it at runtime to
                  * an xheap handle (content-addressed: idempotent). *)
                 if String.length x >= 6 && String.sub x 0 6 = "__str_" then begin
@@ -3660,23 +3660,23 @@ let rec emit_term (e : emitter)
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_io_print_num(%s) : (f64) -> f64" v va);
       (v, "f64")
   (* Extended stdlib. *)
-  | C.App (C.Var "String__from_int", a) ->
+  | C.App (C.Var "Text__from_int", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_from_int(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "String__length", a) ->
+  | C.App (C.Var "Text__length", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_length(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.Var "String__concat", a), b) ->
+  | C.App (C.App (C.Var "Text__concat", a), b) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_concat(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  | C.App (C.App (C.Var "String__equal", a), b) ->
+  | C.App (C.App (C.Var "Text__equal", a), b) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
       let v = fresh_ssa e in
@@ -3686,13 +3686,13 @@ let rec emit_term (e : emitter)
       let cv = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = arith.cmpf une, %s, %s : f64" cv v bv);
       (cv, "i1")
-  | C.App (C.App (C.Var "String__char_at", a), b) ->
+  | C.App (C.App (C.Var "Text__char_at", a), b) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_char_at(%s, %s) : (f64, f64) -> f64" v va vb);
       (v, "f64")
-  | C.App (C.Var "String__print", a) ->
+  | C.App (C.Var "Text__print", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_print(%s) : (f64) -> f64" v va);
@@ -3705,26 +3705,26 @@ let rec emit_term (e : emitter)
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_print(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.Var "String__parse_number", a) ->
+  | C.App (C.Var "Text__parse_number", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_parse_number(%s) : (f64) -> f64" v va);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "String__substring", a), b), c) ->
+  | C.App (C.App (C.App (C.Var "Text__substring", a), b), c) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
       let (vc, _) = emit_term e env funcs c in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_substring(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
-  | C.App (C.App (C.App (C.Var "String__find_char", a), b), c) ->
+  | C.App (C.App (C.App (C.Var "Text__find_char", a), b), c) ->
       let (va, _) = emit_term e env funcs a in
       let (vb, _) = emit_term e env funcs b in
       let (vc, _) = emit_term e env funcs c in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_find_char(%s, %s, %s) : (f64, f64, f64) -> f64" v va vb vc);
       (v, "f64")
-  | C.App (C.Var "String__from_char", a) ->
+  | C.App (C.Var "Text__from_char", a) ->
       let (va, _) = emit_term e env funcs a in
       let v = fresh_ssa e in
       emit_line e (Printf.sprintf "%s = func.call @yon_rt_string_from_char(%s) : (f64) -> f64" v va);
@@ -6727,7 +6727,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
                            "%s = arith.sitofp %s : i32 to f64" v_f v_i32);
             emit_line e (Printf.sprintf "return %s : f64" v_f)
         | `PtrToProp ->
-            (* String fusion: the argument is the f64 handle *)
+            (* Text fusion: the argument is the f64 handle *)
             let v_call = fresh_ssa e in
             emit_line e (Printf.sprintf
                            "%s = func.call @%s(%%arg0) : (f64) -> i8"
@@ -7071,7 +7071,7 @@ let emit_program (dr : Desugar.desugar_result) : string =
     emit_srv_path_globals e dr.space_imports;
     emit_blank e
   end;
-  (* String fusion: collect every string literal of the program, emit one
+  (* Text fusion: collect every string literal of the program, emit one
      module global per distinct content, and declare the interning runtime. *)
   Hashtbl.reset g_strlits;
   g_strlit_order := [];

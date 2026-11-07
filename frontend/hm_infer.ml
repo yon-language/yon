@@ -105,7 +105,7 @@ let param_names : (string, string list) Hashtbl.t = Hashtbl.create 16
 (* A fused face is its carrier. *)
 let normalize (t : ty) : ty =
   map_leaves (function
-    | TyUser "String" -> Some (TyPrim "text")
+    | TyUser "Text" -> Some (TyPrim "text")
     | TyUser u -> Option.map (fun p -> TyPrim p) (prim_of_face u)
     | _ -> None) t
 

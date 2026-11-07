@@ -73,7 +73,7 @@ let debruijn (name : string) (ctx : string list) : int option =
    it is a type variable / unresolved and has no root. Mirrors tycheck's check_ty. *)
 let runtime_leaf = ["Map"; "HashSet"; "HashMap"; "HSH"; "List"; "Stream";
                     "Sequence"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower";
-                    "MerkleTree"; "VoyagerList"; "String"]
+                    "MerkleTree"; "VoyagerList"; "Text"]
 let is_nominal_leaf (env : TE.env) (n : string) : bool =
   List.mem n runtime_leaf || TE.lookup_place env n <> None
 

@@ -30,7 +30,7 @@ const mono = 'var(--ifm-font-family-monospace)';
 
 // (op, ns, kind). floor = below the subprocess harness floor (sub-ns), shown at the rail.
 const OPS = [
-  ['String.equal (1 or 32,768 chars)', 1, 'floor'],
+  ['Text.equal (1 or 32,768 chars)', 1, 'floor'],
   ['MerkleTree.equal', 0.6, 'floor'],
   ['VoyagerList.seal', 0.6, 'floor'],
   ['Vec.push', 0.7, 'floor'],

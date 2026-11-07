@@ -109,7 +109,7 @@ a long value is still being sent.
 What crosses, recursively:
 
 - **scalars** (`Number`, `money`) as their `f64`;
-- **strings**, length-prefixed, re-interned into the consumer's `String` place
+- **strings**, length-prefixed, re-interned into the consumer's `Text` place
   on arrival, so a string that left as one slot arrives as one slot again;
 - **collections**: a `List`, a `HashMap`, a `HashSet`, an `XRelMap`, an
   `XRelSet`, by their elements (and a map's values), rebuilt on arrival as a
@@ -179,7 +179,7 @@ place Entry {
     w := wire to space Weather
     sub := w.awaits(forecasts)
     s := sub.stream
-    total := s.fold(0, fun(a: Number, r: Reading) => a + r.temp + String.length(r.label))
+    total := s.fold(0, fun(a: Number, r: Reading) => a + r.temp + Text.length(r.label))
     return total
   }
 }

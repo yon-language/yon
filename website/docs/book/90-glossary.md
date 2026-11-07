@@ -31,7 +31,7 @@ node of a `MerkleTree`. A section with fields has a **section handle** of 64 bit
 its own encoding: the reserved number `0xFFFF` in the 32 high bits, and a HeapRef
 of the chain in the 32 low bits. The heaps written in Yon in the prelude have a
 handle of their own, one 64-bit word; programs do not run on them yet. A string is
-a section of the builtin `String` place and still has a HeapRef; a nullary arm has
+a section of the builtin `Text` place and still has a HeapRef; a nullary arm has
 no handle at all, only a negative constant.
 
 **cell**, a word with two senses. In memory, a cell: a mutable register with

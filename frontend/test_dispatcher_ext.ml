@@ -4,7 +4,7 @@
  * federation equality/subtype dispatcher, disjoint from test_dispatcher.ml.
  *
  * test_dispatcher.ml already pins: primitives, TyHeytInt<N> equality,
- * text/String fusion, and the four subtype-promotion answers. This file ADDS,
+ * text/Text fusion, and the four subtype-promotion answers. This file ADDS,
  * with a bias toward NEGATIVE / endpoint-sensitive cases that would catch a
  * regression:
  *

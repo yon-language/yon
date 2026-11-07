@@ -86,12 +86,12 @@ def test_a_truncation_is_built_and_read(tmp_path):
 
 
 def _up_to_case(lowered):
-    return {"TextUpToCase": "place TextUpToCase { this > inj String\n"
-            "  law quot ∀a : String ∀b : String, a ↦ lower = b ↦ lower → a ↪ inj = b ↪ inj\n"
-            "  fun lower(s: String): String { return String.lower(s) }\n}\n",
+    return {"TextUpToCase": "place TextUpToCase { this > inj Text\n"
+            "  law quot ∀a : Text ∀b : Text, a ↦ lower = b ↦ lower → a ↪ inj = b ↪ inj\n"
+            "  fun lower(s: Text): Text { return Text.lower(s) }\n}\n",
             "Uso": "place Uso {\n"
-            "  fun domain_of(s: String): Number {\n"
-            "    return if String.equal(s, \"abc\") then 3 else 0\n"
+            "  fun domain_of(s: Text): Number {\n"
+            "    return if Text.equal(s, \"abc\") then 3 else 0\n"
             "  }\n"
             "  fun domain(e: TextUpToCase): Number {\n"
             f"    return match e {{ inj as s => {lowered} ↦ domain_of,\n"
@@ -101,7 +101,7 @@ def _up_to_case(lowered):
 
 
 def test_lower_lowers_ascii_letters(tmp_path):
-    src = _entry("fun same(s: String, t: String): Boolean { return String.equal(String.lower(s), t) }\n",
+    src = _entry("fun same(s: Text, t: Text): Boolean { return Text.equal(Text.lower(s), t) }\n",
                  "return if same(\"AbC\", \"abc\") && same(\"ABC\", \"abc\") && same(\"a1!Z\", \"a1!z\") "
                  "&& same(\"@[\", \"@[\") && same(\"\", \"\") && same(\"È\", \"È\") "
                  "then 42 else 1")
@@ -301,16 +301,16 @@ def test_a_term_parameter_may_name_a_fun_of_a_place_read_later(tmp_path):
 
 def _generic_up_to_case(lowered):
     return ("place Entry {\n"
-            "  fun lower(s: String): String { return String.lower(s) }\n"
-            "  fun same_case(a: String, b: String): Type { return a ↦ lower = b ↦ lower }\n"
-            "  fun domain_of(s: String): Number {\n"
-            "    return if String.equal(s, \"abc\") then 3 else 0\n"
+            "  fun lower(s: Text): Text { return Text.lower(s) }\n"
+            "  fun same_case(a: Text, b: Text): Type { return a ↦ lower = b ↦ lower }\n"
+            "  fun domain_of(s: Text): Number {\n"
+            "    return if Text.equal(s, \"abc\") then 3 else 0\n"
             "  }\n"
-            "  fun domain(e: Quotient<String, same_case>): Number {\n"
+            "  fun domain(e: Quotient<Text, same_case>): Number {\n"
             f"    return match e {{ inj as s => {lowered} ↦ domain_of,\n"
             "                     quot as (a, b, prova) => (domain_of, prova) ↦ ap }\n"
             "  }\n"
-            "  fun dentro(s: String): Quotient<String, same_case> { return s ↪ inj }\n"
+            "  fun dentro(s: Text): Quotient<Text, same_case> { return s ↪ inj }\n"
             "  fun main: Number { return domain(dentro(\"AbC\")) }\n}\n")
 
 
@@ -323,5 +323,5 @@ def test_a_map_out_of_the_generic_quotient_without_lower_is_refused(tmp_path):
 
 
 def test_a_relation_that_is_no_path_of_one_type_is_refused(tmp_path):
-    src = _entry("fun storta(a: String, b: Number): Type { return a = b }\n")
+    src = _entry("fun storta(a: Text, b: Number): Type { return a = b }\n")
     _refused(tmp_path, src, None, "different types")

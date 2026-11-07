@@ -36,7 +36,7 @@ here: it is not part of the 1.2 contract.
 |---|---|---|
 | `// ...`, `/* ... */` | ✓ | Line / block comments |
 | `42`, `3.14` | ✓ | `Number` literal (IEEE f64) |
-| `"ciao"` | ✓ | String literal, a real value of type `Text`/`String` (see *Strings*) |
+| `"ciao"` | ✓ | String literal, a real value of the place `Text` (see *Strings*) |
 | [`true`](/book/keywords#true), [`false`](/book/keywords#false) | ✓ | Boolean literals |
 | [`present`](/book/keywords#present), [`absent`](/book/keywords#absent), [`unknown`](/book/keywords#unknown) | ✓ | Heyting truth values (intuitionistic Ω) |
 | `mod::name` | ✓ | Qualified name (module namespace) |
@@ -48,21 +48,20 @@ lexes as `NUM_LIT 2` followed by the identifier `s`. Currency literals
 
 ## Strings
 
-Since the **string fusion**, `Text` and `String` are the *same semantic
-object*: sections of the builtin `String` place. At runtime a string is a
+A string is a value of the place `Text`, carried by `text`. At runtime a string is a
 handle into the content-addressed heap; literals are interned, so the same
-literal is the same value and `String.equal` compares content:
+literal is the same value and `Text.equal` compares content:
 
 <!-- yon-gate: fragment -->
 ```yon
-fun greet(who: String): String {
-  return String.concat("ciao ", who)
+fun greet(who: Text): Text {
+  return Text.concat("ciao ", who)
 }
 
 fun main(): Number {
   msg := greet("mondo")
   _w := File.write_text("/tmp/out.txt", msg)
-  return String.length(msg)        // 10
+  return Text.length(msg)        // 10
 }
 ```
 
@@ -92,7 +91,7 @@ Equality between values is `==`. There is no `becomes` keyword.
 
 | Form | Status | Meaning |
 |---|---|---|
-| `Number`, `Text`, `Boolean`, `Unit` | ✓ | Primitives, the prelude places. `Text` ≡ `String`. The lowercase spellings `number`, `text`, `boolean`, `unit` are the kernel codes and are rejected at the surface (E1001) |
+| `Number`, `Text`, `Boolean`, `Unit` | ✓ | Primitives, the prelude places. The lowercase spellings `number`, `text`, `boolean`, `unit` are the kernel codes and are rejected at the surface (E1001) |
 | `Int64` | ✓ | The exact 64-bit integer, a prelude place carried as `i64`: no rounding. A literal is an `Int64` where the context asks for one |
 | `T in A, B, C` | ✓ | Constrained primitive (e.g. `money in EUR, USD`) |
 | `place P { this > A :U B T }` | ✓ | Coproduct (sum): the arms are places, an arm may carry arguments; see [`this`](/book/keywords#this) |
@@ -355,7 +354,7 @@ commutative magma), `Semigroup` (associative, its free object is the pair `(V, L
 (`unit`, its free object is `List<V>`), `Group` (`inv`). Its instances, with a name each:
 `Additive` (`+`, `0`, `-`, a group, carried by i64), `Multiplicative` (`*`, `1`, a monoid,
 carried by i64), `TropicalMax`, `TropicalMin`, `BooleanOr`, `BooleanAnd`, `Gcd` (monoids).
-`Int64` and `Word64` use `Additive` and `Multiplicative`, `String` uses `Monoid`. An algebra
+`Int64` and `Word64` use `Additive` and `Multiplicative`, `Text` uses `Monoid`. An algebra
 named that is no algebra, written `is algebra` or `this <` one, is an error.
 
 **An algebra of the program** is a place of a Space, with the world its `yon.toml` gives,
@@ -458,7 +457,7 @@ a move's `requires` check is emitted but not yet enforced, chapter 20) with opt-
 | Module | Operations |
 |---|---|
 | `IO` | `print_num` |
-| `String` | `length, concat, equal, char_at, substring, find_char, from_char, from_int, parse_number, print` |
+| `Text` | `length, concat, equal, char_at, substring, find_char, from_char, from_int, parse_number, print` |
 | `File` | `read_text, exists, write_text, append_text` |
 | `Env` | `get, has` |
 | `Args` | `count, get` |

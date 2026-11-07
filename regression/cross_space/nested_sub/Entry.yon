@@ -5,7 +5,7 @@ place Entry {
     w := wire to space Nested
     sub := w.awaits(pairs)
     s := sub.stream
-    total := s.fold(0, fun(acc: Number, o: Outer) => acc + o.tag + o.inner.a + String.length(o.inner.b))
+    total := s.fold(0, fun(acc: Number, o: Outer) => acc + o.tag + o.inner.a + Text.length(o.inner.b))
     return total
   }
 }

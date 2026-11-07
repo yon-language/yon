@@ -70,7 +70,7 @@ function Heap() {
               correction and the Co<sub>0</sub>/M<sub>24</sub> orbit operations live.
             </p>
             <div className={styles.stat}>
-              <b>String.equal</b>: ~1 ns at 1 char and at 32,768 chars (Apple M1). Three orders of
+              <b>Text.equal</b>: ~1 ns at 1 char and at 32,768 chars (Apple M1). Three orders of
               magnitude of size, the same per-comparison time.
               <Link className={styles.statLink} to="/book/benchmarks">
                 Benchmarks
@@ -99,7 +99,7 @@ function Heap() {
                 {'\n'}
                 {'  '}
                 _ :={' '}
-                <span className={styles.ty}>String</span>.<span className={styles.fn}>print</span>
+                <span className={styles.ty}>Text</span>.<span className={styles.fn}>print</span>
                 (greeting){'\n'}
                 {'  '}
                 <span className={styles.kw}>return</span> <span className={styles.nu}>0</span>
@@ -114,7 +114,7 @@ function Heap() {
               </div>
             </div>
             <p className={styles.caption}>
-              Every string literal is a section of the builtin <code>String</code> place, interned
+              Every string literal is a section of the builtin <code>Text</code> place, interned
               on that same heap, so two equal strings are one slot, however they were built.
             </p>
           </div>

@@ -2,11 +2,11 @@ place Entry {
   fun main(): Number visits Output {
     mut x := 3
     y := x
-    _1 := Output.print(String.from_int(x))
-    _2 := Output.print(String.from_int(y))
+    _1 := Output.print(Text.from_int(x))
+    _2 := Output.print(Text.from_int(y))
     x <- 5
-    _3 := Output.print(String.from_int(x))
-    _4 := Output.print(String.from_int(y))
+    _3 := Output.print(Text.from_int(x))
+    _4 := Output.print(Text.from_int(y))
     return 0
   }
 }

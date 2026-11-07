@@ -1,13 +1,13 @@
-// Front end: a minimal lexer written in Yon. It reads a String and produces a
+// Front end: a minimal lexer written in Yon. It reads a Text and produces a
 // TokList (single digits and the operators + * ( ), spaces ignored). Two mutually
 // recursive functions (lex_from looks at the char, emit_at dispatches and recurs);
-// dispatch on String.char_at (a number) via an if/else-if chain, not match.
+// dispatch on Text.char_at (a number) via an if/else-if chain, not match.
 // Oracle: structural checksum of "2+3*4" = 309.
 place Token { this > TNum Number :U TPlus :U TStar :U TLParen :U TRParen :U TEnd }
 place TokList { this > TkNil :U TkCons Token TokList }
 
 // decide the token for the character c at position i, then continue from i+1
-fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
+fun emit_at(s: Text, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
     else if c == 43 then (TPlus, lex_from(s, i + 1, len)) ↪ TkCons
     else if c == 42 then (TStar, lex_from(s, i + 1, len)) ↪ TkCons
@@ -18,14 +18,14 @@ fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
 }
 
 // scan from i: at the end of the string close with TEnd, otherwise read and dispatch
-fun lex_from(s: String, i: Number, len: Number): TokList {
+fun lex_from(s: Text, i: Number, len: Number): TokList {
   return if i >= len
     then (TEnd, TkNil) ↪ TkCons
-    else emit_at(s, i, len, String.char_at(s, i))
+    else emit_at(s, i, len, Text.char_at(s, i))
 }
 
-fun lex(s: String): TokList {
-  return lex_from(s, 0, String.length(s))
+fun lex(s: Text): TokList {
+  return lex_from(s, 0, Text.length(s))
 }
 
 // ── oracle: each token weighs a distinct value ──────────────────────────────
@@ -44,11 +44,11 @@ fun checksum(l: TokList): Number {
 }
 
 // source "2+3*4" = codes 50 43 51 42 52
-fun src: String {
-  return String.concat(
-           String.concat(String.from_char(50), String.from_char(43)),
-           String.concat(String.concat(String.from_char(51), String.from_char(42)),
-                         String.from_char(52)))
+fun src: Text {
+  return Text.concat(
+           Text.concat(Text.from_char(50), Text.from_char(43)),
+           Text.concat(Text.concat(Text.from_char(51), Text.from_char(42)),
+                         Text.from_char(52)))
 }
 
 // expected: TNum2, TPlus, TNum3, TStar, TNum4, TEnd = 2+100+3+200+4+0 = 309

@@ -8,7 +8,7 @@ import React from 'react';
  * and equality becomes one integer comparison on the address: O(1), by construction.
  *
  * Static teaching figure. The dedup and the O(1)-equality claim are the measured
- * behaviour of Appendix D (String.equal is flat at about 1 ns from 1 to 32,768
+ * behaviour of Appendix D (Text.equal is flat at about 1 ns from 1 to 32,768
  * characters); this only draws the mechanism.
  */
 

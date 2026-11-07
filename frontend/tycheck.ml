@@ -2450,7 +2450,7 @@ let place_of_value (t : ty) : string option =
   match t with
   | TyUser p | TyVar p -> Some p
   | TyApp (p, _) -> Some p
-  | TyPrim "text" -> Some "String"
+  | TyPrim "text" -> Some "Text"
   | TyPrim "number" -> Some "Number"
   | TyPrim "boolean" -> Some "Boolean"
   | TyPrim "i64" -> Some "Int64"
@@ -7320,7 +7320,7 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
   (* Check that the world is declared. There is no Constant world:
      a fused or prelude place is NOT exempt — it lives in its
      package's world (Num, Txt, Logic, Err), stamped from its space by the
-     loaders. The only standing exemptions: __Builtin (String) and the
+     loaders. The only standing exemptions: __Builtin (Text) and the
      fieldless Entry marker (the entrypoint is not a site object). *)
   let* () =
     if pd.pd_world = "__Builtin"
@@ -7667,7 +7667,7 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    * them with `place`. *)
   let runtime_builtin = ["Map"; "HashSet"; "HashMap"; "HSH";
                          "List"; "Stream"; "Sequence"; "Wire"; "XSet"; "XRelSet"; "XRelMap"; "XSimplex"; "XTower"; "MerkleTree";
-                         "VoyagerList"; "String"; "Buffer"] in
+                         "VoyagerList"; "Text"; "Buffer"] in
   match t with
   | TyPrim n | TyPrimIn (n, _) ->
       if List.mem n primitives then ok ()
@@ -7843,13 +7843,13 @@ and check_type_well_formed (env : Tyenv.env) (t : ty) (loc : location) : unit tc
    `is given` would be a mute promise: a word the compiler does not check
    says nothing.
 
-   The wired name is the one qualified by the house (String__length): the
+   The wired name is the one qualified by the house (Text__length): the
    house gives the name, and the name is the registry's key. *)
 and check_given_fun (env : Tyenv.env) (ctx : Reduce.ctx)
     (fn : fun_decl) : unit tc_result =
   (* the check runs after qualify_homes, so the name may already be
      qualified: idempotence lives in the prefix, as in the naming walk
-     (never qualify twice -> String__String__length). *)
+     (never qualify twice -> Text__Text__length). *)
   let qname = match fn.fn_home with
     | Some h ->
         let pfx = h ^ "__" in
@@ -9812,7 +9812,7 @@ let check_program (p : program) : check_result =
   (* the `+` of a lambda whose parameter turned out to be text *)
   List.iter (fun (loc, t) ->
       match deref_lambda_unknown t with
-      | TyPrim "text" | TyUser "String" -> record_text_concat loc
+      | TyPrim "text" | TyUser "Text" -> record_text_concat loc
       | t when face_carrier t = Some "text" -> record_text_concat loc
       | _ -> ()) !pending_text_concat;
   { cr_env = env_with_sigs;

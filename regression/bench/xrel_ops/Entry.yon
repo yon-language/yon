@@ -81,20 +81,20 @@ place Entry {
   fun net_put(n: Number): Number visits Output { return (min_put(n) - min_lp1(n)) / n }
   fun main(): Number visits Output {
     _w := warm()
-    _a := Output.print(String.from_int(net_put(2000)))
-    _b := Output.print(String.from_int(net_put(5000)))
-    _c := Output.print(String.from_int(net_put(10000)))
-    _d := Output.print(String.from_int(net_put(20000)))
+    _a := Output.print(Text.from_int(net_put(2000)))
+    _b := Output.print(Text.from_int(net_put(5000)))
+    _c := Output.print(Text.from_int(net_put(10000)))
+    _d := Output.print(Text.from_int(net_put(20000)))
     n := 20000
     lpm := min_lp1(n)
     mut getm := get_loop(n)
     iter 2 do { getm <- mn(getm, get_loop(n)) }
-    _e := Output.print(String.from_int((getm - lpm) / n))
+    _e := Output.print(Text.from_int((getm - lpm) / n))
     mut lp2m := lp2(n)
     iter 2 do { lp2m <- mn(lp2m, lp2(n)) }
     mut som := so_loop(n)
     iter 2 do { som <- mn(som, so_loop(n)) }
-    _f := Output.print(String.from_int((som - lp2m) / n))
+    _f := Output.print(Text.from_int((som - lp2m) / n))
     return 0
   }
 }

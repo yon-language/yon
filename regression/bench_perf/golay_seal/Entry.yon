@@ -3,7 +3,7 @@ place Entry {
     g := 1445
     mut acc := 0
     iter 10000000 do { acc <- acc + (VoyagerList.seal(g)) }
-    _p := Output.print(String.from_int(acc))
+    _p := Output.print(Text.from_int(acc))
     return 0
   }
 }

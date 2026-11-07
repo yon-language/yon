@@ -3,7 +3,7 @@ place Entry {
     mut acc := 0
     iter 1000000 do { acc <- acc +
           MerkleTree.label(MerkleTree.node2(1445, MerkleTree.leaf(1280), MerkleTree.leaf(7))) }
-    _p := Output.print(String.from_int(acc))
+    _p := Output.print(Text.from_int(acc))
     return 0
   }
 }

@@ -10,7 +10,7 @@ place Entry {
      * a runtime tramite Crypto.fnv1a per consistenza con emit MLIR).
      * NOTA MVP: il compile-time hash in emit_mlir.ml usa lo stesso FNV-1a init
      * 0x811c9dc5 + multiplier 0x01000193, identico a Crypto.fnv1a runtime. */
-    cap_name := String.from_int(0)   /* placeholder; per ora hardcode hash */
+    cap_name := Text.from_int(0)     /* placeholder; per ora hardcode hash */
     /* Hash hardcoded: FNV-1a di "MoneyTransfer" (string Yon). */
     /* Per il check runtime, grant lo stesso hash che emette emit_mlir. */
     cap_hash := 169281588   /* FNV-1a("MoneyTransfer"), matches emit_mlir's Cap.check */

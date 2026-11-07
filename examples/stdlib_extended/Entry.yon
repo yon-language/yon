@@ -1,14 +1,14 @@
 place Entry {
-/* Stdlib estesa: String, Time, Random, Crypto. */
+/* Stdlib estesa: Text, Time, Random, Crypto. */
 
 fun main(): Number {
-  /* String */
-  s_42 := String.from_int(42)
-  s_99 := String.from_int(99)
-  s_cat := String.concat(s_42, s_99)        /* "4299" */
-  len := String.length(s_cat)               /* = 4 */
-  _io1 := String.print(s_cat)
-  char0 := String.char_at(s_cat, 0)         /* '4' = 52 */
+  /* Text */
+  s_42 := Text.from_int(42)
+  s_99 := Text.from_int(99)
+  s_cat := Text.concat(s_42, s_99)          /* "4299" */
+  len := Text.length(s_cat)                 /* = 4 */
+  _io1 := Text.print(s_cat)
+  char0 := Text.char_at(s_cat, 0)           /* '4' = 52 */
 
   /* Time */
   t1 := Time.now_ms(0)
@@ -25,7 +25,7 @@ fun main(): Number {
   rand_in_range := if r1 >= 0 then (if r1 < 100 then 1 else 0) else 0
 
   /* Crypto */
-  s_hello := String.from_int(12345)
+  s_hello := Text.from_int(12345)
   h := Crypto.fnv1a(s_hello)
   h_int := Crypto.hash_int(42)
   _io4 := IO.print_num(h)

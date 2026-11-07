@@ -98,8 +98,8 @@ let kw_pool =
 let op_pool = [| "+"; "-"; "*"; "/"; "<"; ">"; "="; "=="; "("; ")"; "{"; "}"; ","; ":"; ";";
                  "++"; "<=>"; "@"; "=>" |]
 let fn_pool =
-  [| "List.cons"; "List.empty"; "List.head"; "List.tail"; "String.from_int";
-     "String.equal"; "IO.print_num"; "Output.print"; "HashSet.add"; "HashSet.empty" |]
+  [| "List.cons"; "List.empty"; "List.head"; "List.tail"; "Text.from_int";
+     "Text.equal"; "IO.print_num"; "Output.print"; "HashSet.add"; "HashSet.empty" |]
 (* Simple functions defined by the generated prelude — used by the cubical /
    metonymic generators for `through f` and `f <=> g`. *)
 let cubfn_pool = [| "succ"; "pred"; "dbl" |]

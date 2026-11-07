@@ -40,9 +40,9 @@ place Entry {
     iter reps do { sl <- min2(sl, timed_seal(g, n)) }
     mut op := timed_open(cw, n)
     iter reps do { op <- min2(op, timed_open(cw, n)) }
-    _g := Output.print(String.from_int(guard))                        // 1445 = correction works
-    _1 := Output.print(String.from_int(sl - base))
-    _2 := Output.print(String.from_int(op - base))
+    _g := Output.print(Text.from_int(guard))                          // 1445 = correction works
+    _1 := Output.print(Text.from_int(sl - base))
+    _2 := Output.print(Text.from_int(op - base))
     return 0
   }
 }

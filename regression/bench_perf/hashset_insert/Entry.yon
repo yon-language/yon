@@ -5,7 +5,7 @@ place Entry {
     iter 1000000 do { k := i
                  h <- HashSet.add(h, k)
                  i <- k + 1 }
-    _p := Output.print(String.from_int(HashSet.size(h)))
+    _p := Output.print(Text.from_int(HashSet.size(h)))
     return 0
   }
 }

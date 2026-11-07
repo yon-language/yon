@@ -58,15 +58,15 @@ philosophy:
    and reductions defined on it, its presheaf of observations.
 3. **Content addressing is extensionality made physical** (chapter 13):
    two values indistinguishable by observation are not only equal, they
-   are *the same slot*. When `String.equal` compares two handles it is
+   are *the same slot*. When `Text.equal` compares two handles it is
    checking Yoneda-style indiscernibility in O(1):
 
 <!-- yon-gate: exit 42 -->
 ```yon
 fun main: Number {
   a := "ab"
-  b := String.concat("a", "b")   // built by a different route
-  same := String.equal(a, b)     // same content, same slot
+  b := Text.concat("a", "b")     // built by a different route
+  same := Text.equal(a, b)       // same content, same slot
   return if same then 42 else 0
 }
 ```

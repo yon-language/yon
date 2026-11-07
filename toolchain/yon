@@ -171,7 +171,7 @@ case "$cmd" in
       echo "  stage 2  fixpoint (self-built)      : available"
     else
       echo "  stage 2  fixpoint (self-built)      : blocked      stage 1 compiles only Yon0; the"
-      echo "                                                     compiler source uses place/hit_elim/String"
+      echo "                                                     compiler source uses place/hit_elim/Text"
     fi
     echo ""
     echo "  yon build            -> stage 2 (falls back to rooted until the fixpoint)"

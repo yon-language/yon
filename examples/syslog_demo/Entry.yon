@@ -2,22 +2,22 @@ place Entry {
 /* System logger demo — logger built in Yon on the Output effect, with a main
  * that exercises the three levels. Levels: 0=INFO 1=WARN 2=ERROR. */
 
-fun log_at(level: Number, msg: String): Unit visits Output {
+fun log_at(level: Number, msg: Text): Unit visits Output {
   ts := Time.now_ms(0)
-  ts_str := String.from_int(ts)
-  lvl_str := String.from_int(level)
-  line := String.concat(String.concat(lvl_str, ts_str), msg)
+  ts_str := Text.from_int(ts)
+  lvl_str := Text.from_int(level)
+  line := Text.concat(Text.concat(lvl_str, ts_str), msg)
   return Output.print(line)
 }
 
-fun log_info(msg: String): Unit visits Output { return log_at(0, msg) }
-fun log_warn(msg: String): Unit visits Output { return log_at(1, msg) }
-fun log_error(msg: String): Unit visits Output { return log_at(2, msg) }
+fun log_info(msg: Text): Unit visits Output { return log_at(0, msg) }
+fun log_warn(msg: Text): Unit visits Output { return log_at(1, msg) }
+fun log_error(msg: Text): Unit visits Output { return log_at(2, msg) }
 
 fun main(): Number visits Output {
-  _a := log_info(String.from_int(100))
-  _b := log_warn(String.from_int(200))
-  _c := log_error(String.from_int(300))
+  _a := log_info(Text.from_int(100))
+  _b := log_warn(Text.from_int(200))
+  _c := log_error(Text.from_int(300))
   return 0
 }
 }

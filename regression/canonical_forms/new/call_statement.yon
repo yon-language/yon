@@ -1,7 +1,7 @@
 place Entry {
   fun main: Number {
     x := 42
-    String.length("a")
+    Text.length("a")
     return x
   }
 }

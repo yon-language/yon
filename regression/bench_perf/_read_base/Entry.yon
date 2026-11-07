@@ -2,7 +2,7 @@ place Entry {
   fun main(): Number visits Output {
     mut acc := 0
     iter 10000000 do { acc <- acc + 1 }
-    _p := Output.print(String.from_int(acc))
+    _p := Output.print(Text.from_int(acc))
     return 0
   }
 }

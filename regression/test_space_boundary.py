@@ -56,7 +56,7 @@ _BUILD = """place Q {
     }
     return m
   }
-  fun len(s: String): Number { return String.length(s) }
+  fun len(s: Text): Number { return Text.length(s) }
   fun flow(): Wire<Number> {
     s := produce {
       emit 1
@@ -260,7 +260,7 @@ def test_a_place_with_a_text_crosses_into_another_space_and_stays_the_callers(tm
     # Space emptied it under main (the read of s.line aborted)
     proj = _note_project(tmp_path, ("Note.yon",
         "place Note { message Text  line Number }\n\n"
-        "fun describe(e: Note): Number { return String.length(e.message) }\n"),
+        "fun describe(e: Note): Number { return Text.length(e.message) }\n"),
         _NOTE_ENTRY % "Note")
     exe = tmp_path / "probe.exe"
     rc, out = _yonc(proj, exe)
@@ -273,7 +273,7 @@ def test_a_sub_object_crosses_by_its_own_frame(tmp_path):
     # by its own frame (the frame of Error does not describe it)
     proj = _note_project(tmp_path, ("SyntaxError.yon",
         "place SyntaxError { this < Error  line Number }\n\n"
-        "fun describe(e: Error): Number { return String.length(e.message) }\n"),
+        "fun describe(e: Error): Number { return Text.length(e.message) }\n"),
         _NOTE_ENTRY % "SyntaxError")
     (proj / "yon.toml").write_text(_TOML.replace('objects = ["Q"]', 'objects = ["SyntaxError"]'))
     exe = tmp_path / "probe.exe"
@@ -285,7 +285,7 @@ def test_a_sub_object_crosses_by_its_own_frame(tmp_path):
 # ---- two processes ----
 
 _ECHO = """place Entry {
-  fun slen(s: String): Number { return String.length(s) }
+  fun slen(s: Text): Number { return Text.length(s) }
   fun twice(x: Number): Number { return x * 2 }
   fun build(n: Number): HashMap<Number, Number> {
     mut m := HashMap.empty
@@ -411,7 +411,7 @@ def test_a_wire_of_closures_is_refused(tmp_path):
 
 
 def test_a_wire_of_text_is_accepted(tmp_path):
-    rc, out = _producer(tmp_path, "String", "\"a\"")
+    rc, out = _producer(tmp_path, "Text", "\"a\"")
     assert rc == 0, out
 
 
@@ -449,7 +449,7 @@ def test_a_place_with_a_text_crosses_between_processes(tmp_path):
         (tmp_path / p / "w" / "Topos.yon").write_text("topos WTopos where {\n}\n")
         (tmp_path / p / "w" / "Note.yon").write_text("place Note { message Text  line Number }\n")
     (tmp_path / "svc" / "Entry.yon").write_text(
-        "place Entry {\n  fun describe(e: Note): Number { return String.length(e.message) + e.line }\n"
+        "place Entry {\n  fun describe(e: Note): Number { return Text.length(e.message) + e.line }\n"
         "  fun main: Number { return 0 }\n}\n")
     mods = tmp_path / "client" / "yon_modules" / "notes"
     mods.mkdir(parents=True)

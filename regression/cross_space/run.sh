@@ -65,7 +65,7 @@ timeout 20 ./sub_meteo >/dev/null 2>&1; rc=$?
 # Scenario 6: a place with a STRING field crosses the wire. The Weather Space
 # declares a producer returning Wire<Reading> {temp number, label text} and
 # emits three. The subscriber awaits(forecasts), drains .stream and folds
-# a + r.temp + String.length(r.label). Seal 2 of the wire-DTO wormhole: the
+# a + r.temp + Text.length(r.label). Seal 2 of the wire-DTO wormhole: the
 # recursive length-prefixed frame carries the string content by value, rebuilt
 # in the consumer's own ds heap; (10+11+15) + length("ok")*3 = 36 + 6 = 42.
 "$YONC" weather_svc -o "$TMP/Weather_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weather_svc does not compile"; exit 1; }
@@ -74,7 +74,7 @@ timeout 20 ./sub_weather >/dev/null 2>&1; rc=$?
 [ "$rc" = "42" ] || { echo "CROSS-SPACE FAIL: DTO-string scenario rc=$rc (expected 42)"; fail=1; }
 # Scenario 7: a DTO frame larger than the old 256-byte slot cap. The WeatherBig
 # Space emits a Note {id number, body text} whose 250-char body makes the frame
-# about 270 bytes; the subscriber folds a + n.id + String.length(n.body) = 5 +
+# about 270 bytes; the subscriber folds a + n.id + Text.length(n.body) = 5 +
 # 250 = 255. Under seal 2b this frame could not cross (serialize > slot -> the
 # pump truncated); the dense byte ring of seal 2c carries it whole.
 "$YONC" weatherbig_svc -o "$TMP/WeatherBig_srv" >/dev/null 2>&1 || { echo "CROSS-SPACE FAIL: weatherbig_svc does not compile"; exit 1; }
@@ -83,7 +83,7 @@ timeout 20 ./sub_weather_big >/dev/null 2>&1; rc=$?
 [ "$rc" = "255" ] || { echo "CROSS-SPACE FAIL: DTO-large-frame scenario rc=$rc (expected 255)"; fail=1; }
 # Scenario 8: a nested DTO. The Nested Space emits Outer {tag number, inner
 # Inner} where Inner {a number, b text}; the subscriber folds
-# acc + o.tag + o.inner.a + String.length(o.inner.b) over two pairs = (7+3+2) +
+# acc + o.tag + o.inner.a + Text.length(o.inner.b) over two pairs = (7+3+2) +
 # (8+4+2) = 26. The sub-place's frame is inlined recursively into the parent's
 # and rebuilt in the consumer's heap; the schema registry resolves the
 # sub-descriptor from the sub-frame's own id.

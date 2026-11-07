@@ -96,7 +96,7 @@ def test_a_change_of_source_or_prelude_is_another_key(tmp_path):
     assert len(_entries(cache)) == 2
     pre = tmp_path / "prelude"
     shutil.copytree(ROOT / "prelude", pre)
-    (pre / "text" / "String.yon").write_text((pre / "text" / "String.yon").read_text() + "\n")
+    (pre / "text" / "Text.yon").write_text((pre / "text" / "Text.yon").read_text() + "\n")
     env = dict(os.environ, YON_PRELUDE=str(pre))
     assert _yonc(proj, tmp_path / "o3", cache, env).returncode == 0
     assert len(_entries(cache)) == 3

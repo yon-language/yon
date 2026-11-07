@@ -395,12 +395,12 @@ let site5 (l : S.location) = (l.S.file, l.S.start_line, l.S.start_col, l.S.end_l
 
 let rec desugar_ty (t : S.ty) : C.ty =
   match t with
-  (* String fusion: normalize the nominal face "String" to the
+  (* Text fusion: normalize the nominal face "Text" to the
      primitive "text" ONCE, here, so every downstream layer (specialization,
      emit_ty, layouts, __new constructors) sees the already-fused type.
      Fixing this at the emit layer instead caused signature/call splits
      (the monomorphizer keyed on the divergent type strings). *)
-  | S.TyUser "String" -> C.TyPlace "text"
+  | S.TyUser "Text" -> C.TyPlace "text"
   (* fusion places: TyUser Number -> EXACTLY what its prim code desugars
      to (the fused pair is one semantic object; one source of truth) *)
   | S.TyUser u when Hashtbl.mem S.fusion_places u ->
@@ -1214,7 +1214,7 @@ and desugar_expr (e0 : S.expr) : C.term =
   | S.EBinop (S.OpAdd, e1, e2, loc)
     when Hashtbl.mem Surface_ast.text_concat_sites (site5 loc) ->
       (* two values of text: their concatenation *)
-      curry_apply (C.Var "String__concat") [desugar_expr e1; desugar_expr e2]
+      curry_apply (C.Var "Text__concat") [desugar_expr e1; desugar_expr e2]
   | S.EBinop (op, e1, e2, loc) ->
       (* integer-carrier / and % diverge from the f64 ops: the tycheck
          recorded the FULL-SPAN site, desugar routes it — and only for the
@@ -3530,7 +3530,7 @@ let primitive_acts (n : string) : bool =
     not (List.mem n [ "XTower__depth"; "Args__count"; "Args__get";
                       "ap"; "inv"; "concat"; "transport"; "ua"; "equiv" ]
          || List.exists starts
-              [ "Math__"; "Bits__"; "String__"; "List__"; "MerkleTree__"; "Crypto__";
+              [ "Math__"; "Bits__"; "Text__"; "List__"; "MerkleTree__"; "Crypto__";
                 "Number__"; "Leech__"; "HashSet__"; "HashMap__"; "XRelMap__"; "XRelSet__";
                 "XRelFrame__"; "XTower__"; "LatticePoint__";
                 "S1__"; "S2__"; "Suspension__"; "PropTrunc__"; "SetTrunc__"; "Pushout__";
@@ -3549,7 +3549,7 @@ let impure_funs (p : S.program) : unit =
     fd.S.fn_visits <> []    (* it declares an effect *)
     || (fd.S.fn_given
         && ((fd.S.fn_home = Some "SystemOs" && not (List.mem fd.S.fn_name pure_systemos))
-            || fd.S.fn_name = "String__print"
+            || fd.S.fn_name = "Text__print"
             || List.mem fd.S.fn_name word_faces)) in
   List.iter (fun fd -> if seed fd then Hashtbl.replace Tyenv.impure_funs fd.S.fn_name ()) funs;
   let acts (fd : S.fun_decl) =

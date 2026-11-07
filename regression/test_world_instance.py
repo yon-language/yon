@@ -23,7 +23,7 @@ pytestmark = pytest.mark.skipif(not YONC.exists(), reason="toolchain/yonc missin
 
 _SERVER = """\
 place Entry {
-  fun instance(x: Number): Number { return String.length(Env.get("YON_PROBE_INSTANCE")) + x * 0 }
+  fun instance(x: Number): Number { return Text.length(Env.get("YON_PROBE_INSTANCE")) + x * 0 }
   fun main: Number { return 0 }
 }
 """
@@ -33,7 +33,7 @@ import who::instance from Who
 
 place Entry {
   fun main(): Number {
-    k := String.length(Env.get("YON_PROBE_INSTANCE"))
+    k := Text.length(Env.get("YON_PROBE_INSTANCE"))
     mut good := 0
     mut i := 0
     while i < 400 do {

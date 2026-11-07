@@ -202,7 +202,7 @@ def test_arg_count_counts_the_program_and_its_arguments(tmp_path):
 
 def test_arg_gives_the_argument_text(tmp_path):
     body = ("  return match SystemOs.arg(2) {\n"
-            "    Text as t => String.length(t),\n"
+            "    Text as t => Text.length(t),\n"
             "    DomainError as d => 200 }\n")
     assert _value(tmp_path, body, args=("a", "hello")) == 5
 
@@ -299,7 +299,7 @@ def test_heap_code_reaching_an_allocation_through_its_calls_is_refused(tmp_path)
     env = _prelude_with_heap_funs(
         tmp_path,
         '  internal fun label(r: Region): Text { return "slot" }\n'
-        "  internal fun probe_tag(r: Region, w: Int64): Int64 { return String.length(label(r)) + w }\n"
+        "  internal fun probe_tag(r: Region, w: Int64): Int64 { return Text.length(label(r)) + w }\n"
         "  fun probe_put(r: Region, w: Int64): Int64 { return probe_tag(r, w) }\n")
     rc, out, _ = _build(tmp_path, "  return 1\n", env=env)
     assert rc != 0 and "[E2009]" in out and "Fatal error" not in out, out

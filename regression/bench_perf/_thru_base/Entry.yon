@@ -5,7 +5,7 @@ place Entry {
     iter 1000000 do { k := i
                  h <- h + 1
                  i <- k + 1 }
-    _p := Output.print(String.from_int(h))
+    _p := Output.print(Text.from_int(h))
     return 0
   }
 }

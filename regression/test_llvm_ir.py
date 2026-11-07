@@ -98,7 +98,7 @@ def _run(cmd, **kw):
 #   xrel_points            : pure arithmetic / a Leech-heap map, no spawn/stream
 #   spawn_parallel_collect : exercises Spawn__* and Stream__* runtime calls
 #   net_stream             : exercises Stream__*_net send/recv runtime calls
-#   string_literals        : exercises yon_rt_string_lit + String.* family
+#   string_literals        : exercises yon_rt_string_lit + Text.* family
 #   collections_ext        : exercises yon_rt_hashset_* (set union/intersect)
 #   merkle_noncommutative  : exercises yon_rt_merkle_* (node2 / commutative)
 # Every name here is an example the acceptance suite compiles and runs, so a

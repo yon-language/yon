@@ -668,22 +668,22 @@ The pattern condition `e is pattern` (a variable, a literal, `present`, `absent`
             out={["x is seven", "city is rome", "other is not rome", "30"]}>
 {`fun pick(x: Number): Number visits Output {
   when x is 7 {
-    _ := String.print("x is seven")
+    _ := Text.print("x is seven")
   }
   return 10
 }
 fun name_check(a: Number, b: Number): Number visits Output {
   city := "rome"
   when city is "rome" {
-    _ := String.print("city is rome")
+    _ := Text.print("city is rome")
   }
   other := "paris"
   when other is not "rome" {
-    _ := String.print("other is not rome")
+    _ := Text.print("other is not rome")
   }
   y := (a + b)
   when y is a {
-    _ := String.print("NEVER: y equals a")
+    _ := Text.print("NEVER: y equals a")
   }
   return 20
 }
@@ -809,21 +809,21 @@ Pattern negation, `e is not pattern`: the Heyting negation of the positive test,
 {`fun chain_one(a: Number, b: Number): Number visits Output {
   p := (a < b)
   when p is not absent {
-    _ := String.print("p is not absent")
+    _ := Text.print("p is not absent")
   }
   return 1
 }
 fun chain_two(d: Number): Number visits Output {
   u := unknown
   when u is unknown {
-    _ := String.print("u is unknown")
+    _ := Text.print("u is unknown")
   }
   return d
 }
 fun chain_three(a: Number, b: Number): Number visits Output {
   p := (a < b)
   when p is absent {
-    _ := String.print("NEVER printed: p is a known truth")
+    _ := Text.print("NEVER printed: p is a known truth")
   }
   return 3
 }

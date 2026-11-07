@@ -80,7 +80,7 @@
           "match": "\\b(number|text|boolean|proposition|unit|money|person|address|tensor|cryptographic|duration|sum|list|map|stream|wire|heyting|Type|Pi|Sigma|Id|PathP|El)\\b"
         },
         {
-          "comment": "Upper-case head = a place, module or type (String, List, Generated, ...).",
+          "comment": "Upper-case head = a place, module or type (Text, List, Generated, ...).",
           "name": "entity.name.type.yon",
           "match": "\\b[A-Z][A-Za-z0-9_]*\\b"
         }

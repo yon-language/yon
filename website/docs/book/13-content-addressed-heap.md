@@ -34,7 +34,7 @@ meaningless outside the heap that minted it.
 
 The consequence that pays for itself: **same content ⟺ same slot**. Equality
 of arbitrarily large values is one number comparison. This is the entire
-implementation of `String.equal` in the runtime:
+implementation of `Text.equal` in the runtime:
 
 ```c
 double yon_rt_string_equal(double a_id_d, double b_id_d) {
@@ -50,8 +50,8 @@ And it holds *by construction*, whatever route built the value:
 ```yon
 fun main: Number {
   a := "ab"
-  b := String.concat("a", "b")   // built by a different route
-  same := String.equal(a, b)     // 1.0: same content, same slot
+  b := Text.concat("a", "b")     // built by a different route
+  same := Text.equal(a, b)       // 1.0: same content, same slot
   return if same then 42 else 0
 }
 ```
@@ -129,7 +129,7 @@ built by an arm with a payload, such as a `Cons` of a list, has a reserved numbe
 in the top 32 bits, which says that the low 32 bits are a HeapRef of the chain.
 
 Not everything called a section has this handle. A string is a section of the
-builtin `String` place, and its handle is a plain HeapRef. A nullary arm, such as
+builtin `Text` place, and its handle is a plain HeapRef. A nullary arm, such as
 `Nil`, is a negative constant: it names no slot at all.
 
 Allocation walks a **chain** of heaps in two phases:

@@ -10,21 +10,21 @@ place Entry {
 fun chain_one(a: Number, b: Number): Number visits Output {
   p := (a < b)
   when p is not absent {
-    _ := String.print("p is not absent")
+    _ := Text.print("p is not absent")
   }
   return 1
 }
 fun chain_two(d: Number): Number visits Output {
   u := unknown
   when u is unknown {
-    _ := String.print("u is unknown")
+    _ := Text.print("u is unknown")
   }
   return d
 }
 fun chain_three(a: Number, b: Number): Number visits Output {
   p := (a < b)
   when p is absent {
-    _ := String.print("NEVER printed: p is a known truth")
+    _ := Text.print("NEVER printed: p is a known truth")
   }
   return 3
 }

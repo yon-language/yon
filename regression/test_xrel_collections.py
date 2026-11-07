@@ -123,8 +123,8 @@ def test_keys_that_are_not_points(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  t := XRelMap.set(XRelMap.empty, String.concat("ab", "c"), 7)
-  _1 := IO.print_num(match XRelMap.get(t, String.concat("a", "bc")) { Found as v => v, Absent => 0 })
+  t := XRelMap.set(XRelMap.empty, Text.concat("ab", "c"), 7)
+  _1 := IO.print_num(match XRelMap.get(t, Text.concat("a", "bc")) { Found as v => v, Absent => 0 })
   z := XRelMap.set(XRelMap.set(XRelMap.empty, 0.0, 1), (0 - 1) * 0.0, 2)
   _2 := IO.print_num(XRelMap.size(z))
   _3 := IO.print_num(match XRelMap.get(z, 2.5) { Found as v => v, Absent => 0 - 1 })

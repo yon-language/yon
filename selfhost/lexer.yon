@@ -32,11 +32,11 @@ fun char_to_tok(c: Number): MerkleTree {
     else if c == 42 then tok_op(3)          // '*'
     else tok_num(c - 48)                     // a digit
 }
-fun lex_from(src: String, i: Number, n: Number): MerkleTree {
+fun lex_from(src: Text, i: Number, n: Number): MerkleTree {
   return if i == n then toks_nil
-    else toks_cons(char_to_tok(String.char_at(src, i)), lex_from(src, i + 1, n))
+    else toks_cons(char_to_tok(Text.char_at(src, i)), lex_from(src, i + 1, n))
 }
-fun lex(src: String): MerkleTree { return lex_from(src, 0, String.length(src)) }
+fun lex(src: Text): MerkleTree { return lex_from(src, 0, Text.length(src)) }
 
 // --- parser: left-assoc fold over the token stream (op kind = AST tag) ---
 fun parse_loop(toks: MerkleTree, acc: MerkleTree): MerkleTree {

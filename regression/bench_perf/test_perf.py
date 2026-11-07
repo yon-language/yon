@@ -69,7 +69,7 @@ PROGRAMS = sorted(set(OPS) | set(BASE_N))
 #   v = 1445: the payload the program stores and reads back (Vec.get, List.head,
 #             HashMap.get, MerkleTree.label of node2(1445, ...)), or the data
 #             word VoyagerList.open recovers from a codeword with 2 bit errors;
-#   v = 7:    equality_big adds 7 per String.equal(big, big);
+#   v = 7:    equality_big adds 7 per Text.equal(big, big);
 #   v = 1:    an equality/lookup that holds adds 1;
 #   golay_seal: VoyagerList.seal(1445), the extended-Golay codeword of 1445.
 # Pinned as measured; a sanity anchor independent of the encoder basis: it is 24
@@ -85,7 +85,7 @@ CHECKSUM = {
     "golay_seal": ("sum", GOLAY_SEAL_1445),
     "vec_push": ("count", None), "hashset_insert": ("count", None),
 }
-# String.from_int converts through a C `int`, so a total above 2**31 - 1 does not
+# Text.from_int converts through a C `int`, so a total above 2**31 - 1 does not
 # print as itself (it saturates on arm64). Five timed programs overflow that
 # (10_000_000 * 1445): for them the exact checksum is taken on a TWIN, the same
 # source with the loop count replaced by TWIN_N, small enough to print exactly.

@@ -16,12 +16,12 @@
       "n": 1000000
     },
     "equality": {
-      "label": "String.equal (1-char)",
+      "label": "Text.equal (1-char)",
       "ns": -2.16,
       "n": 10000000
     },
     "equality_big": {
-      "label": "String.equal (32768-char)",
+      "label": "Text.equal (32768-char)",
       "ns": -2.16,
       "n": 10000000
     },

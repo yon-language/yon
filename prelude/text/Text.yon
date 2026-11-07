@@ -1,4 +1,4 @@
-/* String — the declared face of the primitive code `text`.
+/* Text — the place of the texts, carried by `text`.
  *
  * `is text` declares the axiomatic carrier: the leaf of the carrier
  * functor's recursion. The carrier of `text` is a handle into the
@@ -15,11 +15,11 @@
  * Markers: [G] given, wired body · [T] total, written here ·
  *          [E] partial, dressed with on error
  */
-place String carried by text uses algebra Monoid {
+place Text carried by text uses algebra Monoid {
 
   /* the monoid of the texts: the concatenation and the empty text */
-  fun op(a: String, b: String): String { return concat(a, b) }
-  fun unit: String { return "" }
+  fun op(a: Text, b: Text): Text { return concat(a, b) }
+  fun unit: Text { return "" }
 
   /* ─── The axiomatic core ─────────────────────────────────────── [G] ───
    *
@@ -36,62 +36,62 @@ place String carried by text uses algebra Monoid {
    * silently ignored. Declaring them here makes them visible instead of
    * invisible; the honest two-argument derivative is `index_of`. */
 
-  fun length(s: String): Number is given
-  fun char_at(s: String, i: Number): Number is given
-  fun concat(a: String, b: String): String is given
-  fun from_char(c: Number): String is given
-  fun equal(a: String, b: String): Boolean is given
-  fun substring(s: String, start: Number, len: Number): String is given
+  fun length(s: Text): Number is given
+  fun char_at(s: Text, i: Number): Number is given
+  fun concat(a: Text, b: Text): Text is given
+  fun from_char(c: Number): Text is given
+  fun equal(a: Text, b: Text): Boolean is given
+  fun substring(s: Text, start: Number, len: Number): Text is given
   /* `pos`, not `from` nor `at`: both are keywords (the from/to clauses of
      the arrows, `repeat at most`). The language lexicon takes precedence
      over prelude names — the fourth collision, after mul/times, skip/drop
      and replicate/repeat. */
-  fun find_char(s: String, c: Number, pos: Number): Number is given
-  fun parse_number(s: String): Number is given
-  fun from_int(n: Number): String is given
-  fun print(s: String): Number is given
+  fun find_char(s: Text, c: Number, pos: Number): Number is given
+  fun parse_number(s: Text): Number is given
+  fun from_int(n: Number): Text is given
+  fun print(s: Text): Number is given
 
   /* ─── Predicates ─────────────────────────────────────────────── [T] ─── */
 
-  fun is_empty(s: String): Boolean { return String.length(s) == 0 }
+  fun is_empty(s: Text): Boolean { return Text.length(s) == 0 }
 
-  fun starts_with(s: String, p: String): Boolean {
-    return if String.length(p) > String.length(s) then false
-           else String.equal(String.substring(s, 0, String.length(p)), p)
+  fun starts_with(s: Text, p: Text): Boolean {
+    return if Text.length(p) > Text.length(s) then false
+           else Text.equal(Text.substring(s, 0, Text.length(p)), p)
   }
 
-  fun ends_with(s: String, p: String): Boolean {
-    return if String.length(p) > String.length(s) then false
-           else String.equal(
-             String.substring(s, String.length(s) - String.length(p),
-                              String.length(p)), p)
+  fun ends_with(s: Text, p: Text): Boolean {
+    return if Text.length(p) > Text.length(s) then false
+           else Text.equal(
+             Text.substring(s, Text.length(s) - Text.length(p),
+                            Text.length(p)), p)
   }
 
   /* ─── Extraction ─────────────────────────────────────────────── [T] ─── */
 
-  fun take(s: String, n: Number): String {
-    return String.substring(s, 0, n)
+  fun take(s: Text, n: Number): Text {
+    return Text.substring(s, 0, n)
   }
   /* `skip`, not `drop`: drop is a keyword (releasing a Space). Same
      reason as mul/times — the language lexicon takes precedence. */
-  fun skip(s: String, n: Number): String {
-    return String.substring(s, n, String.length(s) - n)
+  fun skip(s: Text, n: Number): Text {
+    return Text.substring(s, n, Text.length(s) - n)
   }
 
   /* ─── Search: Java's indexOf contract (-1 when absent) ───────── [T] ───
-   * `index_of` under its own name: the wired String.find_char takes three
+   * `index_of` under its own name: the wired Text.find_char takes three
    * arguments (s, c, pos) — this is the two-argument contract, derived
    * honestly. */
 
-  fun index_of_step(s: String, c: Number, i: Number): Number {
-    return if i >= String.length(s) then 0 - 1
-           else if String.char_at(s, i) == c then i
+  fun index_of_step(s: Text, c: Number, i: Number): Number {
+    return if i >= Text.length(s) then 0 - 1
+           else if Text.char_at(s, i) == c then i
            else index_of_step(s, c, i + 1)
   }
 
-  fun index_of(s: String, c: Number): Number { return index_of_step(s, c, 0) }
+  fun index_of(s: Text, c: Number): Number { return index_of_step(s, c, 0) }
 
-  fun contains_char(s: String, c: Number): Boolean { return index_of(s, c) >= 0 }
+  fun contains_char(s: Text, c: Number): Boolean { return index_of(s, c) >= 0 }
 
   /* ─── Transformation ─────────────────────────────────────────── [T] ───
    * Derived character by character: the honest definition first, the
@@ -99,19 +99,19 @@ place String carried by text uses algebra Monoid {
    * monoid's neutral, and a literal is a point of the face — so the
    * accumulator is legitimate. */
 
-  fun reverse_step(s: String, i: Number, acc: String): String {
+  fun reverse_step(s: Text, i: Number, acc: Text): Text {
     return if i < 0 then acc
            else reverse_step(s, i - 1,
-                  String.concat(acc, String.from_char(String.char_at(s, i))))
+                  Text.concat(acc, Text.from_char(Text.char_at(s, i))))
   }
 
-  fun reverse(s: String): String {
-    return reverse_step(s, String.length(s) - 1, "")
+  fun reverse(s: Text): Text {
+    return reverse_step(s, Text.length(s) - 1, "")
   }
 
   /* `replicate`, not `repeat`: repeat is a keyword (repeat at most N times). */
-  fun replicate(s: String, n: Number): String {
-    return if n <= 0 then "" else String.concat(s, replicate(s, n - 1))
+  fun replicate(s: Text, n: Number): Text {
+    return if n <= 0 then "" else Text.concat(s, replicate(s, n - 1))
   }
 
   /* ─── Case ───────────────────────────────────────────────────── [T] ───
@@ -125,15 +125,15 @@ place String carried by text uses algebra Monoid {
     return if c >= 65 && c <= 90 then c + 32 else c
   }
 
-  fun lower_step(s: String, i: Number, acc: String): String {
+  fun lower_step(s: Text, i: Number, acc: Text): Text {
     return if i < 0 then acc
            else lower_step(s, i - 1,
-                  String.concat(String.from_char(lower_char(String.char_at(s, i))),
-                                acc))
+                  Text.concat(Text.from_char(lower_char(Text.char_at(s, i))),
+                              acc))
   }
 
-  fun lower(s: String): String {
-    return lower_step(s, String.length(s) - 1, "")
+  fun lower(s: Text): Text {
+    return lower_step(s, Text.length(s) - 1, "")
   }
 
   /* ─── The endomorphism, declared as such ─────────────────────────────
@@ -142,19 +142,19 @@ place String carried by text uses algebra Monoid {
    * calling them morph would be noise. The arrows are encouraged, not
    * mandatory. */
 
-  morph Reverse from String to String {
-    on object(s: String): String { return reverse(s) }
+  morph Reverse from Text to Text {
+    on object(s: Text): Text { return reverse(s) }
     law involutive        /* reverse(reverse(s)) == s */
   }
 
   /* ─── Toward the numbers — the incoming arrow ────────────────── [E] ───
-   * `parse` is String -> Number: the container appears as the source,
+   * `parse` is Text -> Number: the container appears as the source,
    * which the containment rule admits — and it is where Java puts it
    * (Integer.parseInt takes a String). The core is wired
-   * (String.parse_number); here the partiality gets dressed. */
+   * (Text.parse_number); here the partiality gets dressed. */
 
-  fun parse(s: String) on error DomainError: Number {
+  fun parse(s: Text) on error DomainError: Number {
     return if is_empty(s) then .-> DomainError { message "parse: empty string" }
-           else String.parse_number(s)
+           else Text.parse_number(s)
   }
 }

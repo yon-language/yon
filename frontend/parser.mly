@@ -59,7 +59,7 @@
 
   (* `recv.f(args)` dispatch on the case of the receiver head, the ML-like
    * convention shared by the corpus. An UPPERCASE head is a MODULE / namespace
-   * (String, List, Wire, Space, ...): the call is the qualified function
+   * (Text, List, Wire, Space, ...): the call is the qualified function
    * `Module__f(args)`, the receiver is a prefix of the name, not a value. A
    * lowercase head is a VALUE — a place section, a stream/wire handle: the
    * receiver enters as the FIRST ARGUMENT, recv.f(args) = f(recv, args). That
@@ -1144,7 +1144,7 @@ named_type:
     { (* prelude fusion, canonicalized AT THE SOURCE: the capitalized face
          and its primitive code are one object; parsing them to one node
          means no comparator downstream can ever tell them apart (the same
-         move as the String/text normalization in desugar, one layer up). *)
+         move as the Text/text normalization in desugar, one layer up). *)
       match Surface_ast.prim_of_face name, name with
       | Some prim, _ -> TyPrim prim
       | None, ("number" | "text" | "boolean" | "unit") when

@@ -79,7 +79,7 @@ fun main(): Number {
 Note the conventions the `.->` shows: a field is written `name type` with no
 colon, `.-> P { field value }` fills the fields without an `=`, and access is
 the usual dot. What a place does is said by arrows: the arrows that touch a
-place are declared in it (the prelude's `String` place declares its own
+place are declared in it (the prelude's `Text` place declares its own
 functions), and the kinds of arrow are the whole of the next chapter.
 
 ## Operations: a place's effectful interface

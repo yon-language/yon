@@ -9,8 +9,8 @@
 // Exit: 0 all sent; 2 the channel could not be created; 3 the ready signal could
 // not be written; 4 a produce timed out (no consumer drained the ring).
 fun main(): Number visits Output {
-  n := String.parse_number(Args.get(2))
-  ch := String.parse_number(Args.get(3))
+  n := Text.parse_number(Args.get(2))
+  ch := Text.parse_number(Args.get(3))
   w := Wire.make_shm(ch, 1)
   ok := File.write_text(Args.get(1), "ready")
   mut failed := 0

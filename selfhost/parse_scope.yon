@@ -9,7 +9,7 @@ place Token { this > TNum Number :U TPlus :U TStar :U TLParen :U TRParen :U TEnd
 place TokList { this > TkNil :U TkCons Token TokList }
 
 // exact checks, and c>=97 (names) BEFORE c>=48 (digits), or '='/letters would lex as digits
-fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
+fun emit_at(s: Text, i: Number, len: Number, c: Number): TokList {
   return if c == 32 then lex_from(s, i + 1, len)
     else if c == 43 then (TPlus, lex_from(s, i + 1, len)) ↪ TkCons
     else if c == 42 then (TStar, lex_from(s, i + 1, len)) ↪ TkCons
@@ -21,11 +21,11 @@ fun emit_at(s: String, i: Number, len: Number, c: Number): TokList {
     else if c >= 48 then (c - 48 ↪ TNum, lex_from(s, i + 1, len)) ↪ TkCons
     else lex_from(s, i + 1, len)
 }
-fun lex_from(s: String, i: Number, len: Number): TokList {
+fun lex_from(s: Text, i: Number, len: Number): TokList {
   return if i >= len then (TEnd, TkNil) ↪ TkCons
-    else emit_at(s, i, len, String.char_at(s, i))
+    else emit_at(s, i, len, Text.char_at(s, i))
 }
-fun lex(s: String): TokList { return lex_from(s, 0, String.length(s)) }
+fun lex(s: Text): TokList { return lex_from(s, 0, Text.length(s)) }
 
 // ── unified Term + eval ─────────────────────────────────────────────────────
 place Term { this > TLit Number :U TVar Number :U TLam Term :U TApp Term Term :U TAdd Term Term :U TMul Term Term }
@@ -151,11 +151,11 @@ fun term_of(p: Parse): Term {
 }
 
 // source "\aa+a" = codes 92 97 97 43 97  (lambda, name a, body a+a)
-fun src: String {
-  return String.concat(
-           String.concat(String.from_char(92), String.from_char(97)),
-           String.concat(String.concat(String.from_char(97), String.from_char(43)),
-                         String.from_char(97)))
+fun src: Text {
+  return Text.concat(
+           Text.concat(Text.from_char(92), Text.from_char(97)),
+           Text.concat(Text.concat(Text.from_char(97), Text.from_char(43)),
+                         Text.from_char(97)))
 }
 
 fun main: Number {

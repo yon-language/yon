@@ -165,24 +165,24 @@ def test_an_xrelset_crosses(tmp_path):
 
 
 def test_a_string_crosses(tmp_path):
-    rc = _cross(tmp_path, "", "String", '  return "hello wire"', "String.length(x)")
+    rc = _cross(tmp_path, "", "Text", '  return "hello wire"', "Text.length(x)")
     assert rc == 10
 
 
 def test_a_place_with_a_map_field_crosses(tmp_path):
-    fields = "  label String\n  counts HashMap<Number, Number>\n"
+    fields = "  label Text\n  counts HashMap<Number, Number>\n"
     build = '    return .-> Bag { label "abc" counts HashMap.set(HashMap.empty, 4, 40) }'
     rc = _cross_project(tmp_path, "Bag", fields, "Bag", build,
-                        "String.length(x.label) + (match HashMap.get(x.counts, 4) "
+                        "Text.length(x.label) + (match HashMap.get(x.counts, 4) "
                         "{ Found as v => v, Absent => 0 })")
     assert rc == 43
 
 
 def test_a_list_of_strings_crosses(tmp_path):
     build = '  return List.cons("abc", List.cons("de", List.empty))'
-    rc = _cross(tmp_path, "", "List<String>", build,
-                "List.length(x) * 100 + (match x { Nil => 0, Cons as (a, r) => String.length(a) * 10"
-                " + (match r { Nil => 0, Cons as (b, s) => String.length(b) }) })")
+    rc = _cross(tmp_path, "", "List<Text>", build,
+                "List.length(x) * 100 + (match x { Nil => 0, Cons as (a, r) => Text.length(a) * 10"
+                " + (match r { Nil => 0, Cons as (b, s) => Text.length(b) }) })")
     assert rc == (200 + 30 + 2) % 256
 
 

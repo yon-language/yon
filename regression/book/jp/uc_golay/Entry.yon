@@ -2,12 +2,12 @@ place Entry {
   fun main(): Number visits Output {
     cw := VoyagerList.seal(1445)
     readback := VoyagerList.open(VoyagerList.corrupt(cw, 2))
-    _1 := Output.print(String.from_int(1445))
-    _2 := Output.print(String.from_int(readback))
+    _1 := Output.print(Text.from_int(1445))
+    _2 := Output.print(Text.from_int(readback))
     mut l := VoyagerList.empty()
     l <- VoyagerList.append(l, 1445)
     l <- VoyagerList.corrupt_at(l, 0, 3)
-    _3 := Output.print(String.from_int(VoyagerList.get(l, 0)))
+    _3 := Output.print(Text.from_int(VoyagerList.get(l, 0)))
     return 0
   }
 }

@@ -9,7 +9,7 @@ place Entry {
   fun timed_eq(a: Text, b: Text, iters: Number): Number visits Output {
     mut acc := 0
     t0 := Time.now_ns(0)
-    iter iters do { e := (if String.equal(a, b) then 1 else 0)
+    iter iters do { e := (if Text.equal(a, b) then 1 else 0)
                     acc <- acc + e }
     t1 := Time.now_ns(0)
     return (t1 - t0)
@@ -28,7 +28,7 @@ place Entry {
   }
   fun build(seed: Text, doublings: Number): Text {
     mut s := seed
-    iter doublings do { s <- String.concat(s, s) }
+    iter doublings do { s <- Text.concat(s, s) }
     return s
   }
   fun main(): Number visits Output {
@@ -38,17 +38,17 @@ place Entry {
     reps := 15
     n := 1000000
     base := min_base(reps, n)
-    _l1 := Output.print(String.from_int(String.length(s1)))
-    _l2 := Output.print(String.from_int(String.length(s1k)))
-    _l3 := Output.print(String.from_int(String.length(s32k)))
-    _n1 := Output.print(String.from_int(min_eq(s1, s1, reps, n) - base))
-    _n2 := Output.print(String.from_int(min_eq(s1k, s1k, reps, n) - base))
-    _n3 := Output.print(String.from_int(min_eq(s32k, s32k, reps, n) - base))
+    _l1 := Output.print(Text.from_int(Text.length(s1)))
+    _l2 := Output.print(Text.from_int(Text.length(s1k)))
+    _l3 := Output.print(Text.from_int(Text.length(s32k)))
+    _n1 := Output.print(Text.from_int(min_eq(s1, s1, reps, n) - base))
+    _n2 := Output.print(Text.from_int(min_eq(s1k, s1k, reps, n) - base))
+    _n3 := Output.print(Text.from_int(min_eq(s32k, s32k, reps, n) - base))
     return 0
   }
 }
 // BENCHMARK — content-addressed equality is O(1) in string length.
-// String.equal compares two heap addresses (one integer compare), so it costs the
+// Text.equal compares two heap addresses (one integer compare), so it costs the
 // same at 1 char and at 32,768 chars. Method: time 1e6 equal() calls, take the MIN
 // over 15 reps (least-interrupted run = true cost), and subtract the MIN of an
 // identical loop+accumulator baseline. The accumulator is printed (=1000000) so

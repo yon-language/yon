@@ -58,10 +58,10 @@ place Entry {
     iter 11 do { hd <- min2(hd, timed_head(l, m)) }
     mut hdb := timed_head_base(m, hv)
     iter 11 do { hdb <- min2(hdb, timed_head_base(m, hv)) }
-    _1 := Output.print(String.from_int(len))                                // final_length = N
-    _2 := Output.print(String.from_int((cns - cnsb))) // cons net ns for N
-    _3 := Output.print(String.from_int(hv))                                 // head guard (= N-1)
-    _4 := Output.print(String.from_int((hd - hdb)))    // head net ns for M
+    _1 := Output.print(Text.from_int(len))                                  // final_length = N
+    _2 := Output.print(Text.from_int((cns - cnsb))) // cons net ns for N
+    _3 := Output.print(Text.from_int(hv))                                   // head guard (= N-1)
+    _4 := Output.print(Text.from_int((hd - hdb)))      // head net ns for M
     return 0
   }
 }

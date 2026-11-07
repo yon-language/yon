@@ -5,7 +5,7 @@ place Entry {
     w := wire to space WeatherBig
     sub := w.awaits(bulletins)
     s := sub.stream
-    total := s.fold(0, fun(a: Number, n: Note) => a + n.id + String.length(n.body))
+    total := s.fold(0, fun(a: Number, n: Note) => a + n.id + Text.length(n.body))
     return total
   }
 }

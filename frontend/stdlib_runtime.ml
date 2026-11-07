@@ -337,7 +337,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
   let tunk = TyPrim "unknown" in
   let ti64 = TyUser "Int64" and tregion = TyUser "Region" in
   let tword = TyUser "Word64" in
-  let ttext = TyUser "String" in
+  let ttext = TyUser "Text" in
   let tlist t = TyApp ("List", [t]) in
   (* the generic collections' own parameters, as their places declare them *)
   let tk = TyVar "K" and tv = TyVar "V" and tt = TyVar "T" in
@@ -595,40 +595,40 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "cos", [tnum], tnum;
     ];
     (* stdlib estesa. *)
-    "String", [
-      "from_int", [tnum], TyUser "String";
-      "length",   [TyUser "String"], tnum;
-      "concat",   [TyUser "String"; TyUser "String"], TyUser "String";
-      "equal",    [TyUser "String"; TyUser "String"], tbool;
-      "char_at",  [TyUser "String"; tnum], tnum;
-      "print",    [TyUser "String"], tnum;
+    "Text", [
+      "from_int", [tnum], TyUser "Text";
+      "length",   [TyUser "Text"], tnum;
+      "concat",   [TyUser "Text"; TyUser "Text"], TyUser "Text";
+      "equal",    [TyUser "Text"; TyUser "Text"], tbool;
+      "char_at",  [TyUser "Text"; tnum], tnum;
+      "print",    [TyUser "Text"], tnum;
       (* string parsing helpers *)
-      "parse_number", [TyUser "String"], tnum;
-      "substring", [TyUser "String"; tnum; tnum], TyUser "String";
-      "find_char", [TyUser "String"; tnum; tnum], tnum;
-      "from_char", [tnum], TyUser "String";
+      "parse_number", [TyUser "Text"], tnum;
+      "substring", [TyUser "Text"; tnum; tnum], TyUser "Text";
+      "find_char", [TyUser "Text"; tnum; tnum], tnum;
+      "from_char", [tnum], TyUser "Text";
     ];
     "File", [
-      "read_text", [TyUser "String"], TyUser "String";
-      "exists",    [TyUser "String"], tbool;
+      "read_text", [TyUser "Text"], TyUser "Text";
+      "exists",    [TyUser "Text"], tbool;
       (* write side *)
-      "write_text",  [TyUser "String"; TyUser "String"], tnum;
-      "append_text", [TyUser "String"; TyUser "String"], tnum;
+      "write_text",  [TyUser "Text"; TyUser "Text"], tnum;
+      "append_text", [TyUser "Text"; TyUser "Text"], tnum;
     ];
     (* Buffer: the transient string forge (mmap-backed builder, interns once at
        finish). make takes a dummy arg (nullary-call convention, like Args.count). *)
     "Buffer", [
       "make",   [tunit], TyUser "Buffer";
-      "append", [TyUser "Buffer"; TyUser "String"], TyUser "Buffer";
-      "finish", [TyUser "Buffer"], TyUser "String";
+      "append", [TyUser "Buffer"; TyUser "Text"], TyUser "Buffer";
+      "finish", [TyUser "Buffer"], TyUser "Text";
     ];
     "Env", [
-      "get", [TyUser "String"], TyUser "String";
-      "has", [TyUser "String"], tbool;
+      "get", [TyUser "Text"], TyUser "Text";
+      "has", [TyUser "Text"], tbool;
     ];
     "Args", [
       "count", [tunit], tnum;
-      "get",   [tnum], TyUser "String";
+      "get",   [tnum], TyUser "Text";
     ];
     "Time", [
       "now_ms", [tunit], tnum;
@@ -686,7 +686,7 @@ let stdlib_signatures : (string * (string * Surface_ast.ty list * Surface_ast.ty
       "range", [tnum; tnum], tnum;
     ];
     "Crypto", [
-      "fnv1a",    [TyUser "String"], tnum;
+      "fnv1a",    [TyUser "Text"], tnum;
       "hash_int", [tnum], tnum;
     ];
     (* Cross-Space channels.

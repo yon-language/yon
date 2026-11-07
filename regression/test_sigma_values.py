@@ -321,7 +321,7 @@ def test_a_sigma_over_a_lookup_is_no_generic(tmp_path):
 
 def test_a_sigma_over_text_is_no_generic(tmp_path):
     assert _runs(tmp_path,
-                 "  fun grab(p: Σx : String, Number): Number { return snd(p) }\n",
+                 "  fun grab(p: Σx : Text, Number): Number { return snd(p) }\n",
                  'return grab(pair("a", 42))') == 42
 
 

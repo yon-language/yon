@@ -42,7 +42,7 @@ error QueryError { this < Error  sqlstate Number }
 -->
 ```yon
 place Entry { }
-fun handle(e: Error): Number { return String.length(e.message) }
+fun handle(e: Error): Number { return Text.length(e.message) }
 fun on_query_fail(q: QueryError): Number {
   return handle(q)               // sub-error used where Error is expected
 }

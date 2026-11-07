@@ -3,7 +3,7 @@ place Entry {
   // checks the values on a small run and the measurement runs the full one.
   fun scaled(n: Number): Number {
     return if Env.has("YON_BENCH_DIV")
-           then Number.floor(n / String.parse_number(Env.get("YON_BENCH_DIV")))
+           then Number.floor(n / Text.parse_number(Env.get("YON_BENCH_DIV")))
            else n
   }
   fun timed_insert(n: Number): Number visits Output {
@@ -64,10 +64,10 @@ place Entry {
     iter 11 do { lk <- min2(lk, timed_lookup(s, m)) }
     mut lkb := timed_lookup_base(m)
     iter 11 do { lkb <- min2(lkb, timed_lookup_base(m)) }
-    _1 := Output.print(String.from_int(sz))                                  // final_size = N
-    _2 := Output.print(String.from_int((ins - insb))) // insert net ns for N
-    _3 := Output.print(String.from_int(if HashSet.contains(s, 42) then 1 else 0)) // hit guard
-    _4 := Output.print(String.from_int((lk - lkb)))    // lookup net ns for M
+    _1 := Output.print(Text.from_int(sz))                                    // final_size = N
+    _2 := Output.print(Text.from_int((ins - insb))) // insert net ns for N
+    _3 := Output.print(Text.from_int(if HashSet.contains(s, 42) then 1 else 0)) // hit guard
+    _4 := Output.print(Text.from_int((lk - lkb)))      // lookup net ns for M
     return 0
   }
 }

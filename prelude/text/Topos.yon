@@ -1,21 +1,17 @@
-/* text.yon — the package file of `text`, under prelude/.
+/* Topos.yon — the package file of `text`, under prelude/.
  *
  * The site C(Txt): the category of text.
  *
- *   Objects  String — the place of this directory. The compiler counts it.
+ *   Objects  Text — the place of this directory. The compiler counts it.
  *   Arrows   the `morphism` below, the generators of the site.
  *
  * The topos name is not written (it comes from the file). The terminal is
  * not declared: every topos has one.
  *
- * On the name. The space is called `text` (the fused primitive code), the
- * place is called `String`, and the fusion is `String -> text`. It is not
- * an inconsistency: `text` is the name of the code in the kernel, `String`
- * the declared face. In the toml the world is `Txt`.
- *
- * Careful on macOS: the filesystem is case-insensitive, so this file and a
- * `Text.yon` would be one and the same file — an `rm Text.yon` deletes the
- * package. A place named `Text` needs this file renamed first.
+ * On the name. The space is called `text`, the carrier of the place `Text`.
+ * In the toml the world is `Txt`. The package file is `Topos.yon`, as in a
+ * Space of a program: on a filesystem that does not tell case apart a
+ * `text.yon` would be the same file as `Text.yon`.
  */
 topos where {
 
@@ -36,10 +32,10 @@ topos where {
    * monoid (addition and multiplication on Int64, Z/2^64) is commutative;
    * f64 addition on Number is not even associative.
    *
-   * The place String uses algebra Monoid with it. A topos `morphism` has no
+   * The place Text uses algebra Monoid with it. A topos `morphism` has no
    * `uses algebra` position (that clause belongs to `operation` on a place).
    */
-  morphism concat(a: String, b: String): String
+  morphism concat(a: Text, b: Text): Text
 }
 
 /* ═══ Reverse is contravariant ═════════════════════════════════════════
@@ -56,7 +52,7 @@ topos where {
  * in algebra (the same structure as (a·b)^-1 = b^-1·a^-1 in groups). The
  * image of concat under it is concat with the arguments swapped.
  *
- * The `morph Reverse` in String.yon declares only the involution.
+ * The `morph Reverse` in Text.yon declares only the involution.
  *
  * Mapping a character function over a string is covariant instead:
  * map(f, a ++ b) == map(f, a) ++ map(f, b). It has no type to name here,
@@ -87,7 +83,7 @@ topos where {
  *
  * This is the place where someone will try again. The comment stays.
  *
- * `split` is absent: it would return `List<String>`, and `List<T>` is a
+ * `split` is absent: it would return `List<Text>`, and `List<T>` is a
  * language generic, not a declared place of the prelude.
  *
  * The laws of a `morph` are parsed and not checked; a `functor` accepts

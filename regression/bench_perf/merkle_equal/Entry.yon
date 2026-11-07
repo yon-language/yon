@@ -4,7 +4,7 @@ place Entry {
     t2 := MerkleTree.node2(0, MerkleTree.leaf(1445), MerkleTree.leaf(1280))
     mut acc := 0
     iter 10000000 do { acc <- acc + (if MerkleTree.equal(t1, t2) then 1 else 0) }
-    _p := Output.print(String.from_int(acc))
+    _p := Output.print(Text.from_int(acc))
     return 0
   }
 }

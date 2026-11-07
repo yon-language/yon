@@ -23,12 +23,12 @@ place Entry {
     c <- XSet.add(c, Leech.embed(99, 0))
     v6 := XSet.size(XSet.union(a, c))         // {7,11} u {99} -> 3
 
-    _1 := Output.print(String.from_int(v1))
-    _2 := Output.print(String.from_int(v2))
-    _3 := Output.print(String.from_int(v3))
-    _4 := Output.print(String.from_int(v4))
-    _5 := Output.print(String.from_int(v5))
-    _6 := Output.print(String.from_int(v6))
+    _1 := Output.print(Text.from_int(v1))
+    _2 := Output.print(Text.from_int(v2))
+    _3 := Output.print(Text.from_int(v3))
+    _4 := Output.print(Text.from_int(v4))
+    _5 := Output.print(Text.from_int(v5))
+    _6 := Output.print(Text.from_int(v6))
 
     f := (if v1 == 1 then 0 else 1)
              + (if v2 == 2 then 0 else 1)

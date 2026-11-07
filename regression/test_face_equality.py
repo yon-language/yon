@@ -133,7 +133,7 @@ def _faces(tmp_path: Path, places: dict, body: str, top: str = ""):
 
 
 _METER = {"Meter": "place Meter carried by number {\n  fun reading(m: Meter): Number { return m }\n}\n"}
-_NAME = {"Name": "place Name carried by text {\n  fun spelled(n: Name): String { return n }\n}\n"}
+_NAME = {"Name": "place Name carried by text {\n  fun spelled(n: Name): Text { return n }\n}\n"}
 
 
 def test_a_place_on_number_has_its_literals_its_arithmetic_and_its_order(tmp_path):
@@ -151,8 +151,8 @@ def test_a_place_on_text_has_its_literals_and_its_concatenation(tmp_path):
     top = ('fun hello: Name { return "hel" + "lo" }\n'
            "fun twice(n: Name): Name { return n + n }\n")
     body = ('  both := hello + hello\n'
-            '  return if String.equal(Name.spelled(both), "hellohello")'
-            ' and String.equal(Name.spelled(twice(hello)), "hellohello") then 42 else 1')
+            '  return if Text.equal(Name.spelled(both), "hellohello")'
+            ' and Text.equal(Name.spelled(twice(hello)), "hellohello") then 42 else 1')
     rc, out, exe = _faces(tmp_path, _NAME, body, top)
     assert rc == 0, out
     assert subprocess.run([str(exe)], capture_output=True, timeout=30).returncode == 42
@@ -163,8 +163,8 @@ def test_a_place_on_text_has_its_literals_and_its_concatenation(tmp_path):
      "  x := lit + far(1.0)\n  return 42", "got Meter and number"),
     (_METER, "fun lit: Meter { return 1.5 }\nfun as_number(m: Meter): Number { return m }\n",
      "  return 42", "type mismatch: expected number, got Meter"),
-    (_NAME, 'fun lit: Name { return "a" }\n', '  x := lit + String.concat("b", "c")\n  return 42',
-     "got Name and String"),
+    (_NAME, 'fun lit: Name { return "a" }\n', '  x := lit + Text.concat("b", "c")\n  return 42',
+     "got Name and Text"),
 ])
 def test_a_place_on_number_or_text_does_not_convert_outside_its_house(tmp_path, places, top, body, words):
     rc, out, _ = _faces(tmp_path, places, body, top)

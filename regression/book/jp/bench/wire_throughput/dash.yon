@@ -10,6 +10,6 @@ fun main(): Number visits Output {
     i <- i + 1
   }
   t1 := Time.now_ns(0)
-  _p := Output.print(String.from_int((t1 - t0) / 200000))
+  _p := Output.print(Text.from_int((t1 - t0) / 200000))
   return 0
 }

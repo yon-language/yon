@@ -192,9 +192,9 @@ place Number carried by number {
  *     (prelude/err/DomainError.yon, message by composition); pow propagates
  *     ln's failure through its own coproduct via match + witness.
  *
- * Conversions to and from text live in String (the house is given by the
- *     target): String.from_int is Number → String, String.parse and
- *     String.parse_number are String → Number.
+ * Conversions to and from text live in Text (the house is given by the
+ *     target): Text.from_int is Number → Text, Text.parse and
+ *     Text.parse_number are Text → Number.
  *
  * The bit family (bit_count, bit_length, shifts, rotations…) lives on
  *     Int64: on an f64 face it would be a lie.

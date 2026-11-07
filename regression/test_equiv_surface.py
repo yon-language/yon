@@ -134,7 +134,7 @@ def test_back_from_the_target_is_the_undo_and_not_the_forth(tmp_path):
 def test_a_fun_of_the_program_named_undo_is_called_once_as_a_fun(tmp_path):
     # undo is the reverse of an equivalence only where no fun has the name: a
     # fun undo is checked as a fun, and its call is not copied where it is used
-    top = 'fun undo(n: Int64): Int64 {\n  _ := String.print("undone")\n  return n + 1\n}\n'
+    top = 'fun undo(n: Int64): Int64 {\n  _ := Text.print("undone")\n  return n + 1\n}\n'
     rc, out, exe = _build(tmp_path, top, "  u := undo(41)\n  return if u == 42 and u + 0 == 42 then 42 else 1")
     assert rc == 0, out
     r = subprocess.run([str(exe)], capture_output=True, text=True, timeout=30)

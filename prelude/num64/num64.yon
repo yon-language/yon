@@ -41,7 +41,7 @@ topos where {
    * at all. With `law additive` it would be a lie; without any law it
    * would add nothing to a `fun`.
    *
-   * So formatting stays a `fun` (Int64.to_text, String.from_int): it is an
+   * So formatting stays a `fun` (Int64.to_text, Text.from_int): it is an
    * arrow between objects, not between categories.
    *
    * The same holds for the predicates toward Logic:

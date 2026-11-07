@@ -131,7 +131,7 @@ place Entry {
 @pytest.mark.parametrize("body,reason", [
     ("7", "expected T, got number"),
     ("x + 1", "got T and number"),
-    ('"hello"', "expected T, got text")])
+    ('"hello"', "expected T, got Text")])
 def test_t_to_t_is_the_identity(tmp_path, body, reason):
     entry = f"""\
 place Entry {{
@@ -178,7 +178,7 @@ place Entry {
 
 
 def test_a_generic_call_is_typed_at_its_instance(tmp_path):
-    """identity(41) is a Number, first("ok", 0) a String; a generic function
+    """identity(41) is a Number, first("ok", 0) a Text; a generic function
     passed as a value fits the arrow it is passed to."""
     entry = """\
 place Entry {
@@ -186,7 +186,7 @@ place Entry {
   fun first<A, B>(x: A, y: B): A { return x }
   fun apply(f: Number -> Number, x: Number): Number { return f(x) }
   fun main: Number {
-    return identity(40) + String.length(first("ok", 0)) + apply(identity, 0)
+    return identity(40) + Text.length(first("ok", 0)) + apply(identity, 0)
   }
 }
 """
@@ -198,11 +198,11 @@ def test_a_generic_result_is_not_another_type(tmp_path):
     entry = """\
 place Entry {
   fun identity<T>(x: T): T { return x }
-  fun main: Number { return String.length(identity(5)) }
+  fun main: Number { return Text.length(identity(5)) }
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out, 'E2001', 'String__length: parameter s expects String, got number'), out
+    assert _clean_rejection(rc, out, 'E2001', 'Text__length: parameter s expects Text, got number'), out
 
 
 # --- Int64 precision -----------------------------------------------------------
@@ -352,10 +352,10 @@ def test_int64_to_text_writes_its_exact_digits(tmp_path):
     entry = """\
 place Entry {
   fun main: Number {
-    _a := String.print(Int64.to_text(Int64.max_value))
-    _b := String.print(Int64.to_text(Int64.min_value))
-    _c := String.print(Int64.to_text(9007199254740993))
-    _d := String.print(Int64.to_text(0 - 42))
+    _a := Text.print(Int64.to_text(Int64.max_value))
+    _b := Text.print(Int64.to_text(Int64.min_value))
+    _c := Text.print(Int64.to_text(9007199254740993))
+    _d := Text.print(Int64.to_text(0 - 42))
     return 0
   }
 }
@@ -442,8 +442,8 @@ def test_reserved_prefix_names_are_exported(tmp_path, fn, expected):
                    "never an in-band value such as 0.0 or -1")
 @pytest.mark.parametrize("expr,sentinel_exit", [
     ("Vec.get(Vec.push(Vec.push(Vec.push(Vec.empty(), 10), 20), 30), 1000) + 1", 1),
-    ('String.char_at("abc", 3) + 100', 99),
-    ('String.index_of("abc", 122) + 100', 99),
+    ('Text.char_at("abc", 3) + 100', 99),
+    ('Text.index_of("abc", 122) + 100', 99),
 ])
 def test_no_in_band_sentinel(tmp_path, expr, sentinel_exit):
     """A failure must be a typed value the program has to handle. Either the

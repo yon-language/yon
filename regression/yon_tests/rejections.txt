@@ -37,9 +37,9 @@ regression/yon_tests/negative/neg_empty_body_with_return.yon | E2001 | function 
 regression/yon_tests/negative/neg_handle_plain_fn.yon | E2001 | run: parameter m expects morph from S1 to S2, got number -> number
 regression/yon_tests/negative/neg_path_app_nonpath.yon | E2001 | path application (@): the head is not a path (Id type)
 regression/yon_tests/negative/neg_pathp_endpoint.yon | E2001 | expected PathP(<i> number, a, b), got PathP(<i> number, a, c)
-regression/yon_tests/negative/neg_quote_carrier_mismatch.yon | E2001 | quote: inhabitant has type text but El(number) carrier is number
+regression/yon_tests/negative/neg_quote_carrier_mismatch.yon | E2001 | quote: inhabitant has type Text but El(number) carrier is number
 regression/yon_tests/negative/neg_rebind_holds.yon | E2001 | 'x' is already bound in this scope
-regression/yon_tests/negative/neg_return_tail_mismatch.yon | E2001 | function declares return type number but its body ends with a value of type text
-regression/yon_tests/negative/neg_return_type_mismatch.yon | E2001 | type mismatch: expected number, got text
+regression/yon_tests/negative/neg_return_tail_mismatch.yon | E2001 | function declares return type number but its body ends with a value of type Text
+regression/yon_tests/negative/neg_return_type_mismatch.yon | E2001 | type mismatch: expected number, got Text
 regression/yon_tests/negative/neg_unknown_var.yon | E2001 | unknown identifier: nonexistent
-regression/yon_tests/negative/sum_payload_wrong_type.yon | E2001 | type mismatch: expected number, got text
+regression/yon_tests/negative/sum_payload_wrong_type.yon | E2001 | type mismatch: expected number, got Text

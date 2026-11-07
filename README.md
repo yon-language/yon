@@ -80,14 +80,14 @@ toolchain/yonc examples/inductive_tree -o tree && ./tree; echo $?
 
 - **Places and arrows.** A type is a place, a function is an arrow, and an
   arrow is declared in the place it touches: the place gives it its name
-  (`String.length`, `Int64.gcd`). Sums are written
+  (`Text.length`, `Int64.gcd`). Sums are written
   as coproducts (`this > A :U B`), subtypes as monomorphisms (`this < Base`).
 - **Failure is a value.** An arrow that can fail says so in its type, and the
   error is a coproduct that the caller resolves with `match`. Nothing is thrown.
 - **Precision is a world.** `Int32` and `Int64` live in separate sites
   (`prelude/num32`, `prelude/num64`), so widening is an actual functor between
   categories rather than an implicit conversion.
-- **The prelude is written in Yon.** `Number`, `String`, `Boolean`, the error
+- **The prelude is written in Yon.** `Number`, `Text`, `Boolean`, the error
   places and the collections are declared in [`prelude/`](prelude/). A function
   the compiler implements is marked `is given`, and the checker verifies that
   the implementation exists with exactly that signature.

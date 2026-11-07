@@ -377,7 +377,7 @@ def test_compose_requires_the_output_of_the_first_to_be_the_input_of_the_second(
 }
 """
     _must_reject_checker(tmp_path, entry, "Text-valued f composed into Number-taking g",
-                         'E2001', 'compose with: the first function returns text, but the second takes number')
+                         'E2001', 'compose with: the first function returns Text, but the second takes number')
 
 
 def test_compose_of_two_function_parameters_computes_their_composite(tmp_path):
@@ -463,7 +463,7 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text emitted on a Number stream", 'E2001', 'expected number, got text')
+    _must_reject_checker(tmp_path, entry, "Text emitted on a Number stream", 'E2001', 'expected number, got Text')
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -480,7 +480,7 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text promoted on a Number stream", 'E2001', 'expected number, got text')
+    _must_reject_checker(tmp_path, entry, "Text promoted on a Number stream", 'E2001', 'expected number, got Text')
 
 
 # ---------------------------------------------------------------- stdlib
@@ -495,19 +495,19 @@ fun main: Number {
 }
 """
     _must_reject_checker(tmp_path, entry, "Text passed to Math.abs(Number)",
-                         'E2001', 'Math__abs: parameter x expects number, got text')
+                         'E2001', 'Math__abs: parameter x expects number, got Text')
 
 
 def test_a_prelude_string_function_rejects_a_number(tmp_path):
     entry = """place Entry {
 fun main: Number {
-  return String.length(42)
+  return Text.length(42)
 }
 }
 """
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out, 'E2001', 'String__length: parameter s expects String, got number'), out
+    assert _clean_rejection(rc, out, 'E2001', 'Text__length: parameter s expects Text, got number'), out
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -1525,14 +1525,14 @@ def test_a_named_sum_value_is_in_scope_in_a_reassignment(tmp_path):
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="the method form a.concat(b) on two Strings is String concatenation")
+                   reason="the method form a.concat(b) on two Strings is Text concatenation")
 def test_string_concat_method_form(tmp_path):
     src = ("place Entry {}\n"
            "fun main: Number {\n"
            "  mut a := \"ab\"\n"
            "  mut b := \"cde\"\n"
            "  s := a.concat(b)\n"
-           "  return String.length(s)\n"
+           "  return Text.length(s)\n"
            "}\n")
     v = _value_desugar(tmp_path, src)
     _verdict(v == 5, f"length of \"abcde\" is 5, got {v}")
@@ -1543,8 +1543,8 @@ def test_string_concat_qualified_form(tmp_path):
            "fun main: Number {\n"
            "  mut a := \"ab\"\n"
            "  mut b := \"cde\"\n"
-           "  s := String.concat(a, b)\n"
-           "  return String.length(s)\n"
+           "  s := Text.concat(a, b)\n"
+           "  return Text.length(s)\n"
            "}\n")
     assert _value_desugar(tmp_path, src) == 5
 
@@ -2499,7 +2499,7 @@ def test_section_literal_binds_fields_of_different_types_by_name(tmp_path):
         "place Entry {\n"
         "  fun main: Number {\n"
         "    q := .-> Q { n 3 name \"ab\" }\n"
-        "    return String.length(q.name) * 10 + q.n\n"
+        "    return Text.length(q.name) * 10 + q.n\n"
         "  }\n"
         "}\n"), extra=WORLD_dialect, files={
             "w/Topos.yon": TOPOS_dialect,
@@ -2701,15 +2701,15 @@ def test_coproduct_payload_reads_back_bit_for_bit(tmp_path, value):
 
 
 def test_coproduct_payloads_of_every_carrier_read_back(tmp_path):
-    """A Boolean, a String and a nested coproduct payload come back as they went in."""
+    """A Boolean, a Text and a nested coproduct payload come back as they went in."""
     entry = """\
 place Switch { this > Flag Boolean :U Off }
-place Tag { this > Named String :U Anon }
+place Tag { this > Named Text :U Anon }
 place Expr { this > Lit Number :U Nil }
 place Wrapped { this > Wrap Expr :U None }
 place Entry {}
 fun flag(e: Switch): Number { return match e { Flag as b => if b then 1 else 0, Off => 7 } }
-fun name(e: Tag): Number { return match e { Named as s => String.length(s), Anon => 0 } }
+fun name(e: Tag): Number { return match e { Named as s => Text.length(s), Anon => 0 } }
 fun inner(e: Wrapped): Number {
   return match e { Wrap as x => (match x { Lit as n => n, Nil => 0 }), None => 0 }
 }
@@ -2907,7 +2907,7 @@ _TEXT_IFACE_runtime = 'fun feed(): Wire<R> {\n  s := produce { emit .-> R { id 5
 
 def test_wire_carries_a_long_text_field_whole(tmp_path):
     rc = _wire_runtime(tmp_path, _TEXT_SVC_runtime % ("a" * 2000),
-               "fun(a: Number, n: R) => a + n.id + String.length(n.body)",
+               "fun(a: Number, n: R) => a + n.id + Text.length(n.body)",
                "place R {\n  id Number\n  body Text\n}\n", _TEXT_IFACE_runtime)
     _verdict(rc == (5 + 2000) % 256, f"exit {rc}, expected {(5 + 2000) % 256} (5 + 2000)")
 
@@ -3246,8 +3246,8 @@ def test_text_keys_equal_by_content_are_one_key(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  m := HashMap.set(HashMap.empty, String.concat("ab", "c"), 7)
-  m2 := HashMap.set(m, String.concat("a", "bc"), 9)
+  m := HashMap.set(HashMap.empty, Text.concat("ab", "c"), 7)
+  m2 := HashMap.set(m, Text.concat("a", "bc"), 9)
   got := match HashMap.get(m2, "abc") { Found as v => v, Absent => 0 }
   return HashMap.size(m2) * 10 + got
 }
@@ -3260,11 +3260,11 @@ def test_a_text_value_rides_a_lattice_slot_by_its_handle(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  m := XRelMap.set(XRelMap.empty, 1536, String.concat("ab", "c"))
+  m := XRelMap.set(XRelMap.empty, 1536, Text.concat("ab", "c"))
   mut x := match XRelMap.get(m, 1536) { Found as v => (if v == "abc" then 1 else 0), Absent => 0 }
   y := match LatticePoint.of_coordinate(1536) {
-    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, String.concat("a", "bc")), p) {
-      Found as v => String.length(v), Absent => 0 }),
+    LatticePoint as p => (match XRelMap.get(XRelMap.set(XRelMap.empty, p, Text.concat("a", "bc")), p) {
+      Found as v => Text.length(v), Absent => 0 }),
     DomainError as d => 0 }
   return x * 10 + y
 }
@@ -3277,8 +3277,8 @@ def test_text_keys_equal_by_content_are_one_key_in_xrelmap(tmp_path):
     entry = """\
 place Entry {}
 fun main(): Number {
-  m := XRelMap.set(XRelMap.empty, String.concat("ab", "c"), 7)
-  m2 := XRelMap.set(m, String.concat("a", "bc"), 9)
+  m := XRelMap.set(XRelMap.empty, Text.concat("ab", "c"), 7)
+  m2 := XRelMap.set(m, Text.concat("a", "bc"), 9)
   got := match XRelMap.get(m2, "abc") { Found as v => v, Absent => 0 }
   return XRelMap.size(m2) * 10 + got
 }
@@ -3324,16 +3324,16 @@ def test_a_body_is_never_replaced_by_a_primitive_of_its_name(tmp_path):
 
 
 def test_a_body_named_like_a_lowered_primitive_runs_its_body(tmp_path):
-    """String.length has its own lowering in the emitter; a String.length with
+    """Text.length has its own lowering in the emitter; a Text.length with
     a body is the body."""
     prelude = tmp_path / "prelude"
     shutil.copytree(ROOT / "prelude", prelude)
-    text = prelude / "text" / "String.yon"
+    text = prelude / "text" / "Text.yon"
     src = text.read_text()
-    given = "  fun length(s: String): Number is given\n"
-    assert given in src, "the prelude no longer declares String.length as given"
-    text.write_text(src.replace(given, "  fun length(s: String): Number { return 40 + 2 }\n"))
-    proj = _project(tmp_path, 'place Entry {}\nfun main: Number { return String.length("abc") }\n')
+    given = "  fun length(s: Text): Number is given\n"
+    assert given in src, "the prelude no longer declares Text.length as given"
+    text.write_text(src.replace(given, "  fun length(s: Text): Number { return 40 + 2 }\n"))
+    proj = _project(tmp_path, 'place Entry {}\nfun main: Number { return Text.length("abc") }\n')
     r = subprocess.run([str(YONC), str(proj), "-o", str(tmp_path / "out")],
                        capture_output=True, text=True, timeout=120,
                        env={**os.environ, "YON_PRELUDE": str(prelude)})
@@ -3342,7 +3342,7 @@ def test_a_body_named_like_a_lowered_primitive_runs_its_body(tmp_path):
         _verdict(_clean_rejection(r.returncode, out, 'E2001', 'length'), f"not a clean rejection: {out[-300:]}")
         return
     code, _ = _run(tmp_path / "out")
-    _verdict(code == 42, f"String.length with the body 40 + 2 gave {code}, expected 42 or a refusal")
+    _verdict(code == 42, f"Text.length with the body 40 + 2 gave {code}, expected 42 or a refusal")
 
 
 def test_is_given_and_a_body_exclude_each_other(tmp_path):
@@ -3399,7 +3399,7 @@ def test_out_of_range_substring_is_a_neutral_string(tmp_path):
     entry = """\
 place Entry {}
 fun main: Number {
-  return String.length(String.concat(String.substring("ab", 5, 1), "x"))
+  return Text.length(Text.concat(Text.substring("ab", 5, 1), "x"))
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
@@ -3410,7 +3410,7 @@ def test_empty_substring_is_neutral_for_concat(tmp_path):
     entry = """\
 place Entry {}
 fun main: Number {
-  return String.length(String.concat(String.substring("ab", 0, 0), "x"))
+  return Text.length(Text.concat(Text.substring("ab", 0, 0), "x"))
 }
 """
     rc, out = _build_run_runtime(tmp_path, entry)
@@ -3671,7 +3671,7 @@ def test_is_given_outside_the_prelude_is_refused(tmp_path):
 
 
 def test_a_library_place_is_extended_with_this_under(tmp_path):
-    entry = ("place Entry {}\nfun handle(e: Error): Number { return String.length(e.message) }\n"
+    entry = ("place Entry {}\nfun handle(e: Error): Number { return Text.length(e.message) }\n"
              "fun main: Number {\n  mut a := .-> AppError { message \"boom\" code 38 }\n"
              "  return handle(a) + a.code\n}\n")
     proj = _one_place_project(tmp_path, "AppError",

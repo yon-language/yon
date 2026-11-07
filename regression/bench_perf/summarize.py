@@ -20,7 +20,7 @@ def _git_commit():
         return "?"
 
 OPS = {
-    "equality": ("_read_base", 10_000_000, "String.equal (1-char)"),
+    "equality": ("_read_base", 10_000_000, "Text.equal (1-char)"),
     "merkle_equal": ("_read_base", 10_000_000, "MerkleTree.equal"),
     "golay_seal": ("_read_base", 10_000_000, "VoyagerList.seal"),
     "golay_open": ("_read_base", 10_000_000, "VoyagerList.open (corrected)"),
@@ -38,7 +38,7 @@ OPS = {
     # an exact twin at several N in regression/bench/ds_ops (cons ~70 ns flat, set ~130 ns
     # rising to ~340 ns by 1M).
     "merkle_construct": ("_read_base", 1_000_000, "MerkleTree.node2 (build)"),
-    "equality_big": ("_read_base", 10_000_000, "String.equal (32768-char)"),
+    "equality_big": ("_read_base", 10_000_000, "Text.equal (32768-char)"),
 }
 BASE_N = {"_read_base": 10_000_000, "_thru_base": 1_000_000}
 

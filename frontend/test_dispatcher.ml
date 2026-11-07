@@ -14,7 +14,7 @@
  *         heyt_int<N> <: proposition
  *         number      <: proposition
  *   - dispatcher.ml:308  TyHeytInt n1 = TyHeytInt n2  iff  n1 = n2
- *   - dispatcher.ml:312  text <-> TyUser "String"  (string fusion)
+ *   - dispatcher.ml:312  text <-> TyUser "Text"  (string fusion)
  *   - tyenv.ml:89 empty, tyenv.ml:467 with_builtins (env construction,
  *     same as Tycheck.check_program at tycheck.ml:4204)
  *   - reduce.ml:47 empty_ctx
@@ -51,11 +51,11 @@ let () =
   check "type_equal heyt_int<8> heyt_int<16> = false"
     (not (eq (TyHeytInt 8) (TyHeytInt 16)));
 
-  (* ── type_equal: text / String fusion (bidirectional) ───────────── *)
-  check "type_equal text (TyUser \"String\") = true (fusion)"
-    (eq txt (TyUser "String"));
-  check "type_equal (TyUser \"String\") text = true (fusion, reverse)"
-    (eq (TyUser "String") txt);
+  (* ── type_equal: text / Text fusion (bidirectional) ───────────── *)
+  check "type_equal text (TyUser \"Text\") = true (fusion)"
+    (eq txt (TyUser "Text"));
+  check "type_equal (TyUser \"Text\") text = true (fusion, reverse)"
+    (eq (TyUser "Text") txt);
 
   (* ── subtype: the directional fix ───────────────────────────────── *)
   (* number promotes to heyt_int (mask=0: every bit certain). *)

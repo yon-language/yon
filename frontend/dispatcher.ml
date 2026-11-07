@@ -509,13 +509,13 @@ let rec type_equal
   | other, TyApp (u, _)
     when (match Surface_ast.in_house_carrier u with
           | Some p -> carrier_is p other | None -> false) -> true
-  (* String fusion: "text" and "String" are the SAME semantic
-   * object — sections of the builtin String place (runtime: xheap handle).
+  (* Text fusion: "text" and "Text" are the SAME semantic
+   * object — sections of the builtin Text place (runtime: xheap handle).
    * Bidirectional, like boolean/proposition. *)
-  | TyPrim "text", TyUser "String" -> true
-  | TyUser "String", TyPrim "text" -> true
+  | TyPrim "text", TyUser "Text" -> true
+  | TyUser "Text", TyPrim "text" -> true
   (* The place of the prelude a carrier represents (`place Number carried by
-     number`) meets that carrier both ways (the String/text pair above,
+     number`) meets that carrier both ways (the Text/text pair above,
      promoted to a rule); no other place on it does. *)
   | TyPrim p, TyUser u when
       (match Hashtbl.find_opt Surface_ast.fusion_places u with

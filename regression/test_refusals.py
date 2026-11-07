@@ -60,7 +60,7 @@ def test_every_arm_writes_its_own_sentence(tmp_path):
     branches = "\n".join(
         f"    else if i == {k} then SystemOs.refuse({a}, w, w, w)" for k, a in enumerate(arms))
     entry = ("place Entry {\nfun main(): Number {\n"
-             "  i := match SystemOs.arg(1) { Text as t => String.parse_number(t), DomainError as d => 0 - 1 }\n"
+             "  i := match SystemOs.arg(1) { Text as t => Text.parse_number(t), DomainError as d => 0 - 1 }\n"
              "  w := Word64.from_int64(7)\n"
              "  return if i < 0 then 1\n" + branches + "\n    else 2\n}\n}\n")
     proj = tmp_path / "proj"

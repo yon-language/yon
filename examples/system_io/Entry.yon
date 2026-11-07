@@ -3,8 +3,8 @@ place Entry {
  * Strings are built with the verified from_char/concat machinery.
  * Expected exit: 1+2+4+8+16+32 = 63. */
 
-fun chr2(a: Number, b: Number): String {
-  return String.concat(String.from_char(a), String.from_char(b))
+fun chr2(a: Number, b: Number): Text {
+  return Text.concat(Text.from_char(a), Text.from_char(b))
 }
 
 fun main(): Number {
@@ -13,29 +13,29 @@ fun main(): Number {
   p2 := chr2(109, 112)
   p3 := chr2(47, 121)
   p4 := chr2(105, 111)
-  path := String.concat(String.concat(p1, p2), String.concat(p3, p4))
+  path := Text.concat(Text.concat(p1, p2), Text.concat(p3, p4))
 
-  content := String.from_int(4242)          /* 4 chars */
+  content := Text.from_int(4242)            /* 4 chars */
 
   /* write (truncating): deterministic across runs */
   wr := File.write_text(path, content)      /* 1.0 */
   r1 := File.read_text(path)
-  ok_rd := if String.length(r1) == 4 then 1 else 0
+  ok_rd := if Text.length(r1) == 4 then 1 else 0
 
   _ap := File.append_text(path, content)
   r2 := File.read_text(path)
-  ok_ap := if String.length(r2) == 8 then 1 else 0
+  ok_ap := if Text.length(r2) == 8 then 1 else 0
 
   /* Env: PATH is always set ( P A T H ) */
-  ev := String.concat(chr2(80, 65), chr2(84, 72))
+  ev := Text.concat(chr2(80, 65), chr2(84, 72))
   ok_env := if Env.has(ev) then 1 else 0
   ev_val := Env.get(ev)
-  _io := IO.print_num(String.length(ev_val))
+  _io := IO.print_num(Text.length(ev_val))
 
   /* Args: at least argv[0], non-empty */
   ok_argc := if Args.count(0) >= 1 then 1 else 0
   a0 := Args.get(0)
-  ok_a0 := if String.length(a0) > 0 then 1 else 0
+  ok_a0 := if Text.length(a0) > 0 then 1 else 0
 
   return wr + ok_rd * 2 + ok_ap * 4 + ok_env * 8 + ok_argc * 16 + ok_a0 * 32
 }

@@ -164,7 +164,7 @@ fun main: Number {
 ```
 
 Equality of whole trees is one comparison, the same trick as
-`String.equal`, at any depth.
+`Text.equal`, at any depth.
 
 ## VoyagerList: storage that heals
 

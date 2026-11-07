@@ -5,7 +5,7 @@ place Entry {
     w := wire to space Weather
     sub := w.awaits(forecasts)
     s := sub.stream
-    total := s.fold(0, fun(a: Number, r: Reading) => a + r.temp + String.length(r.label))
+    total := s.fold(0, fun(a: Number, r: Reading) => a + r.temp + Text.length(r.label))
     return total
   }
 }

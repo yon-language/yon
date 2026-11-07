@@ -31,7 +31,7 @@ export default function prismIncludeLanguages(PrismObject) {
       greedy: true,
     },
     'class-name': {
-      // Capitalized identifiers: places, worlds, builtins (String, HashMap...)
+      // Capitalized identifiers: places, worlds, builtins (Text, HashMap...)
       // Also catches Pi, Sigma, Type, Id from the HoTT layer.
       pattern: /\b[A-Z][A-Za-z0-9_]*\b/,
     },

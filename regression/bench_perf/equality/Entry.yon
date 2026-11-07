@@ -2,8 +2,8 @@ place Entry {
   fun main(): Number visits Output {
     a := "x"
     mut acc := 0
-    iter 10000000 do { acc <- acc + (if String.equal(a, a) then 1 else 0) }
-    _p := Output.print(String.from_int(acc))
+    iter 10000000 do { acc <- acc + (if Text.equal(a, a) then 1 else 0) }
+    _p := Output.print(Text.from_int(acc))
     return 0
   }
 }

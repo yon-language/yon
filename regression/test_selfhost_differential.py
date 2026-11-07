@@ -85,14 +85,14 @@ PROGRAMS = [
     ("rec_list",   "place Lst { this > Nil :U Cons Number Lst }\n"
                    "fun sum(l: Lst): Number { return match l { Nil => 0, Cons as (h, t) => h + sum(t) } }\n"
                    "fun main: Number { return sum((10, (20, (12, Nil) ↪ Cons) ↪ Cons) ↪ Cons) }", 42),
-    # String literals and qualified runtime calls (String.op). A literal lexes
+    # Text literals and qualified runtime calls (Text.op). A literal lexes
     # to a content handle (substring), lowers to a from_char/concat chain that
     # interns to the same content-address as yonc's global+string_lit, so the
-    # exit codes agree; `String.op(..)` lowers to a runtime call.
-    ("str_len",    'fun main: Number { return String.length("hello") }', 5),
-    ("str_concat", 'fun main: Number { return String.length(String.concat("ab", "cde")) }', 5),
-    ("str_char",   'fun main: Number { return String.char_at("ABC", 1) }', 66),
-    ("str_in_fun", 'fun size(s): Number { return String.length(s) }\n'
+    # exit codes agree; `Text.op(..)` lowers to a runtime call.
+    ("str_len",    'fun main: Number { return Text.length("hello") }', 5),
+    ("str_concat", 'fun main: Number { return Text.length(Text.concat("ab", "cde")) }', 5),
+    ("str_char",   'fun main: Number { return Text.char_at("ABC", 1) }', 66),
+    ("str_in_fun", 'fun size(s): Number { return Text.length(s) }\n'
                    'fun main: Number { return size("abcd") }', 4),
 ]
 
