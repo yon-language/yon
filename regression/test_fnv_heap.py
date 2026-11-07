@@ -210,14 +210,14 @@ def test_a_handle_of_one_type_is_not_a_handle_of_another(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
                         "fun wrong(h: FnvHeap<Number>): FnvHeap<Boolean> { return h }\n")
     assert rc != 0 and "E2001" in out, out
-    assert "type mismatch: expected FnvHeap<boolean>, got FnvHeap<number>" in out, out
+    assert "type mismatch: expected FnvHeap<Boolean>, got FnvHeap<Number>" in out, out
 
 
 def test_outside_the_heap_a_handle_is_not_its_word(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
                         "fun raw(h: FnvHeap<Number>): Int64 { return h }\n")
     assert rc != 0 and "E2001" in out, out
-    assert "type mismatch: expected Int64, got FnvHeap<number>" in out, out
+    assert "type mismatch: expected Int64, got FnvHeap<Number>" in out, out
 
 
 def test_outside_the_heap_no_word_becomes_a_value(tmp_path):
@@ -242,7 +242,7 @@ def test_a_handle_does_not_cross_a_space(tmp_path):
                        capture_output=True, text=True, timeout=300)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out, out
-    assert ("argument 1 of Other__keep of type FnvHeap<number> crosses into another "
+    assert ("argument 1 of Other__keep of type FnvHeap<Number> crosses into another "
             "Space") in out, out
 
 

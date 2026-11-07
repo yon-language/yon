@@ -108,7 +108,7 @@ def test_a_parameter_fixed_by_the_body_has_that_type(tmp_path):
 
 def test_a_call_of_another_type_is_refused(tmp_path):
     _refused(tmp_path, 'fun f(x): Number { return x + 1 }\nfun main: Number { return f("a") }',
-             "parameter x expects number, got Text")
+             "parameter x expects Number, got Text")
 
 
 def test_the_call_sites_do_not_type_a_parameter(tmp_path):

@@ -1,7 +1,7 @@
 // quote(c, a) : El(c). The code `number` decodes (el_decode) to the carrier
 // number, but the inhabitant "text" has type text. The EQuote case in infer
-// rejects via Dispatcher.type_equal: "inhabitant has type text but El(number)
-// carrier is number" -> exit 3.
+// rejects via Dispatcher.type_equal: "inhabitant has type Text but El(Number)
+// carrier is Number" -> exit 3.
 place Entry {
   fun main: Number {
     q := quote(Number, "text")

@@ -81,7 +81,7 @@ def test_reflexivity_does_not_inhabit_a_false_identity(tmp_path):
     entry = ("place Entry {\n  fun bad: 0 = 1 { return refl(0) }\n"
              "  fun main: Number { return 0 }\n}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_number'), out
+    assert _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_Number'), out
 
 
 # A path is an identity between two given endpoints; a path whose endpoints the
@@ -101,7 +101,7 @@ def test_a_path_does_not_prove_every_identity(tmp_path, voice):
     entry = (f"place Entry {{\n  {launder}\n"
              f"  fun main: Number {{ q := {call}  return (q @ I0) * 10 + (q @ I1) }}\n}}\n")
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    if _clean_rejection(rc, out, 'E2001', 'expected Id_number', 'got Path'):
+    if _clean_rejection(rc, out, 'E2001', 'expected Id_Number', 'got Path'):
         return
     assert rc == 0, f"neither refused cleanly nor compiled:\n{out}"
     ends, _ = _run(tmp_path / "out")
@@ -195,7 +195,7 @@ fun main: Number {
   return LatticePoint.orbit(1536)
 }
 """), tmp_path / "out")
-    _verdict(_clean_rejection(rc, out, 'E2001', 'parameter p expects LatticePoint, got number'), f"a Number used as a lattice point was accepted: rc={rc}")
+    _verdict(_clean_rejection(rc, out, 'E2001', 'parameter p expects LatticePoint, got Number'), f"a Number used as a lattice point was accepted: rc={rc}")
 
 
 def test_a_lattice_point_has_no_arithmetic(tmp_path):
@@ -205,7 +205,7 @@ fun main: Number {
   return match LatticePoint.at_index(0) { LatticePoint as p => LatticePoint.index(p + 1), DomainError as d => 0 }
 }
 """), tmp_path / "out")
-    _verdict(_clean_rejection(rc, out, 'E2001', 'got LatticePoint and number') and "LatticePoint" in out,
+    _verdict(_clean_rejection(rc, out, 'E2001', 'got LatticePoint and Number') and "LatticePoint" in out,
              f"p + 1 on a lattice point was not refused: rc={rc} {out[-200:]}")
 
 
@@ -377,7 +377,7 @@ def test_compose_requires_the_output_of_the_first_to_be_the_input_of_the_second(
 }
 """
     _must_reject_checker(tmp_path, entry, "Text-valued f composed into Number-taking g",
-                         'E2001', 'compose with: the first function returns Text, but the second takes number')
+                         'E2001', 'compose with: the first function returns Text, but the second takes Number')
 
 
 def test_compose_of_two_function_parameters_computes_their_composite(tmp_path):
@@ -463,7 +463,7 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text emitted on a Number stream", 'E2001', 'expected number, got Text')
+    _must_reject_checker(tmp_path, entry, "Text emitted on a Number stream", 'E2001', 'expected Number, got Text')
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -480,7 +480,7 @@ fun main(): Number {
 }
 }
 """
-    _must_reject_checker(tmp_path, entry, "Text promoted on a Number stream", 'E2001', 'expected number, got Text')
+    _must_reject_checker(tmp_path, entry, "Text promoted on a Number stream", 'E2001', 'expected Number, got Text')
 
 
 # ---------------------------------------------------------------- stdlib
@@ -495,7 +495,7 @@ fun main: Number {
 }
 """
     _must_reject_checker(tmp_path, entry, "Text passed to Math.abs(Number)",
-                         'E2001', 'Math__abs: parameter x expects number, got Text')
+                         'E2001', 'Math__abs: parameter x expects Number, got Text')
 
 
 def test_a_prelude_string_function_rejects_a_number(tmp_path):
@@ -507,7 +507,7 @@ fun main: Number {
 """
     proj = _project(tmp_path, entry)
     rc, out = _compile(proj, tmp_path / "exe")
-    assert _clean_rejection(rc, out, 'E2001', 'Text__length: parameter s expects Text, got number'), out
+    assert _clean_rejection(rc, out, 'E2001', 'Text__length: parameter s expects Text, got Number'), out
 
 
 @pytest.mark.xfail(strict=True, raises=ProbeOutcome,
@@ -1672,7 +1672,7 @@ def test_refl_proves_exactly_the_ring_laws_of_the_carrier(tmp_path, law):
 
 def _accepted_identity_is_false_kernel(tmp_path, entry):
     rc, out = _build_kernel(tmp_path, entry)
-    if _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_number'):
+    if _clean_rejection(rc, out, 'E2001', 'type mismatch: expected Id_Number'):
         return
     assert rc == 0, out
     differs, _ = _run(tmp_path / "out")
@@ -1704,7 +1704,7 @@ def test_a_shifted_value_is_not_identical_to_itself(tmp_path):
              "  fun off(x: Number): x + 1 = x { return clear x }\n"
              "  fun main: Number { return 0 }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
-    assert _clean_rejection(rc, out, 'E2001', 'expected Id_number(_code, x), got Id_number(x, x)'), out
+    assert _clean_rejection(rc, out, 'E2001', 'expected Id_Number(_code, x), got Id_Number(x, x)'), out
 
 
 # --- naturality ----------------------------------------------------------------
@@ -1776,7 +1776,7 @@ def test_a_decision_is_left_only_by_answering_unknown(tmp_path):
 @pytest.mark.parametrize("form,reason", [
     ("to_bool(p)", "unknown function or operation: to_bool"),
     ("to_bool_dec(decide(p))", "unknown function or operation: to_bool_dec"),
-    ("p", "expected boolean, got proposition")])
+    ("p", "expected Boolean, got proposition")])
 def test_there_is_no_arrow_from_proposition_to_boolean(tmp_path, form, reason):
     entry = ("place Entry {}\nfun main: Number {\n  p := unknown\n"
              f"  return if {form} then 1 else 2\n}}\n")
@@ -1800,7 +1800,7 @@ def test_a_proposition_is_not_a_boolean(tmp_path):
              "  fun g(p: proposition): Number { return f(p) }\n"
              "  fun main: Number { return g(unknown) }\n}\n")
     rc, out = _build_kernel(tmp_path, entry)
-    _verdict(_clean_rejection(rc, out, 'E2001', 'expects boolean, got proposition'),
+    _verdict(_clean_rejection(rc, out, 'E2001', 'expects Boolean, got proposition'),
              f"the checker accepted a proposition as a boolean (rc={rc}, "
              f"refused downstream: {'stage0.topos.mlir' in out})")
 
@@ -3039,11 +3039,11 @@ def test_one_collection_is_not_another(tmp_path):
     for i, (body, reason) in enumerate([
             ("fun f(s: HashSet<Number>): Number { return HashSet.size(s) }\n"
              "fun main: Number { return f(HashMap.set(HashMap.empty, 1, 2)) }\n",
-             "parameter s expects HashSet<number>, got HashMap<number, number>"),
+             "parameter s expects HashSet<Number>, got HashMap<Number, Number>"),
             ("fun f(m: HashMap<Number, Number>): Number { return HashMap.size(m) }\n"
              "fun big: Int64 { return 5 }\n"
              "fun main: Number { return f(HashMap.set(HashMap.empty, 1, big)) }\n",
-             "parameter m expects HashMap<number, number>, got HashMap<number, Int64>")]):
+             "parameter m expects HashMap<Number, Number>, got HashMap<Number, Int64>")]):
         d = tmp_path / str(i)
         d.mkdir()
         rc, out = _compile(_project(d, "place Entry {}\n" + body), d / "out")
@@ -3611,7 +3611,7 @@ def test_a_produce_block_is_a_wire(tmp_path):
 def test_a_stream_is_not_a_channel(tmp_path):
     rc, out = _compile(_project(tmp_path, _produce_returning("Stream<Number>")),
                        tmp_path / "out")
-    assert _clean_rejection(rc, out, 'E2001', 'expected Stream<number>, got Wire<number>'), out
+    assert _clean_rejection(rc, out, 'E2001', 'expected Stream<Number>, got Wire<Number>'), out
 
 
 # ---------------------------------------------------------------- the library's names are extended, never redeclared

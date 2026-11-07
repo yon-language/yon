@@ -56,20 +56,20 @@ def test_two_uses_of_different_types_are_refused(tmp_path):
     _refused(tmp_path, "fun n(a: Number): Number { return a }\n"
                        "fun u(a: Text): Number { return 0 }\n"
                        "fun main: Number {\n  k := fun(x) => n(x) + u(x)\n  return k(1)\n}",
-             "expects Text, got number", "x was read as number")
+             "expects Text, got Number", "x was read as Number")
 
 
 def test_one_lambda_does_not_take_two_types(tmp_path):
     # no generalization: the unknown is one, whoever applies the lambda
     _refused(tmp_path, 'fun main: Number {\n  id := fun(x) => x\n  a := id(5)\n'
                        '  b := id("h")\n  return a\n}',
-             "expects number, got Text", "x was read as number")
+             "expects Number, got Text", "x was read as Number")
 
 
 def test_the_expected_type_and_the_uses_must_agree(tmp_path):
     _refused(tmp_path, "fun app(f: Text -> Number, x: Text): Number { return f(x) }\n"
                        'fun main: Number {\n  return app(fun(y) => y + 1, "a")\n}',
-             "got Text and number", "y was read as Text")
+             "got Text and Number", "y was read as Text")
 
 
 def test_a_field_of_a_parameter_with_no_type_yet_is_refused(tmp_path):

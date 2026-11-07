@@ -101,7 +101,7 @@ def test_checker_terminates_on_negative_place(tmp_path):
     proj = _project(tmp_path, _BAD, '\n[world.W]\nobjects = ["Bad"]\n')
     rc, out = _compile(proj, tmp_path / "out", timeout=60)
     assert "Fatal error" not in out, f"the checker crashed instead of deciding:\n{out}"
-    assert _clean_rejection(rc, out, 'E2001', 'expected Id_number(boom(n), _code), got Id_number(boom(n), boom(n))'), (
+    assert _clean_rejection(rc, out, 'E2001', 'expected Id_Number(boom(n), _code), got Id_Number(boom(n), boom(n))'), (
         f"boom(n) = 0 is false, so `clear` must be rejected with a diagnostic "
         f"code (rc={rc}):\n{out}")
 
@@ -129,8 +129,8 @@ place Entry {
 
 
 @pytest.mark.parametrize("body,reason", [
-    ("7", "expected T, got number"),
-    ("x + 1", "got T and number"),
+    ("7", "expected T, got Number"),
+    ("x + 1", "got T and Number"),
     ('"hello"', "expected T, got Text")])
 def test_t_to_t_is_the_identity(tmp_path, body, reason):
     entry = f"""\
@@ -174,7 +174,7 @@ place Entry {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out, 'E2001', 'pattern literal of type number', 'scrutinee type T'), out
+    assert _clean_rejection(rc, out, 'E2001', 'pattern literal of type Number', 'scrutinee type T'), out
 
 
 def test_a_generic_call_is_typed_at_its_instance(tmp_path):
@@ -202,7 +202,7 @@ place Entry {
 }
 """
     rc, out = _compile(_project(tmp_path, entry), tmp_path / "out")
-    assert _clean_rejection(rc, out, 'E2001', 'Text__length: parameter s expects Text, got number'), out
+    assert _clean_rejection(rc, out, 'E2001', 'Text__length: parameter s expects Text, got Number'), out
 
 
 # --- Int64 precision -----------------------------------------------------------

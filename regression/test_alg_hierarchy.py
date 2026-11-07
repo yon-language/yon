@@ -615,7 +615,7 @@ def test_outside_its_house_an_internal_instance_is_opaque(tmp_path):
     assert rc != 0 and "E2001" in out, out
     assert "type mismatch: expected Sum, got Int64 (Sum " + _OUTSIDE in out, out
     assert "type mismatch: expected Int64, got Sum (Sum " + _OUTSIDE in out, out
-    assert "type mismatch: expected Sum, got number (Sum " + _OUTSIDE in out, out
+    assert "type mismatch: expected Sum, got Number (Sum " + _OUTSIDE in out, out
 
 
 def test_outside_its_house_no_model_takes_the_operations_of_an_internal_instance(tmp_path):

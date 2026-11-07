@@ -274,14 +274,14 @@ def test_a_handle_of_one_type_is_not_a_handle_of_another(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
                         _NO_POINT + "fun wrong(h: LeechHeap<Number>): LeechHeap<Boolean> { return h }\n")
     assert rc != 0 and "E2001" in out, out
-    assert "type mismatch: expected LeechHeap<boolean>, got LeechHeap<number>" in out, out
+    assert "type mismatch: expected LeechHeap<Boolean>, got LeechHeap<Number>" in out, out
 
 
 def test_outside_the_heap_a_handle_is_not_its_word(tmp_path):
     rc, out, _ = _build(tmp_path, "  return 1\n",
                         _NO_POINT + "fun raw(h: LeechHeap<Number>): Int64 { return h }\n")
     assert rc != 0 and "E2001" in out, out
-    assert "type mismatch: expected Int64, got LeechHeap<number>" in out, out
+    assert "type mismatch: expected Int64, got LeechHeap<Number>" in out, out
 
 
 def test_a_handle_does_not_cross_a_space(tmp_path):

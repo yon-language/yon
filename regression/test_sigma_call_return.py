@@ -68,14 +68,14 @@ def test_the_proof_read_from_a_call_is_on_the_argument(tmp_path):
 
 def test_the_proof_used_on_another_argument_is_refused(tmp_path):
     _refused(tmp_path, MK + "  fun use(e: Number, f: Number): e = f { return fst(snd(mk(e))) }\n",
-             "fun use", "expected Id_number(e, f)")
+             "fun use", "expected Id_Number(e, f)")
 
 
 def test_a_proof_on_the_names_of_the_parameters_proves_nothing_about_the_caller(tmp_path):
     # the hole: with the names of the callee left free, x and d were variables of this function,
     # and any two numbers were equal
     _refused(tmp_path, MK + "  fun bad(x: Number, d: Number): x = d { return fst(snd(mk(0))) }\n",
-             "fun bad", "Id_number(x, d)")
+             "fun bad", "Id_Number(x, d)")
 
 
 def test_the_second_proof_speaks_of_the_first_component_of_the_call(tmp_path):
@@ -89,7 +89,7 @@ def test_the_arguments_stand_all_at_once(tmp_path):
     two = "  fun two(a: Number, b: Number, q: a = b): Σx : Number, (a = b) ∧ (a = b) { return pair(a, pair(q, q)) }\n"
     _accepted(tmp_path, two + "  fun use(a: Number, b: Number, q: b = a): b = a { return fst(snd(two(b, a, q))) }\n")
     _refused(tmp_path, two + "  fun use(a: Number, b: Number, q: b = a): a = b { return fst(snd(two(b, a, q))) }\n",
-             "fun use", "Id_number(a, b)", "Id_number(b, a)")
+             "fun use", "Id_Number(a, b)", "Id_Number(b, a)")
 
 
 def test_a_nested_sigma_speaks_of_the_arguments_at_every_depth(tmp_path):
@@ -98,9 +98,9 @@ def test_a_nested_sigma_speaks_of_the_arguments_at_every_depth(tmp_path):
     _accepted(tmp_path, three + "  fun use(e: Number): e = e { return fst(snd(snd(three(e)))) }\n"
                                 "  fun other(e: Number): fst(snd(three(e))) = e { return snd(snd(snd(three(e)))) }\n")
     _refused(tmp_path, three + "  fun bad(a: Number, d: Number): a = d { return fst(snd(snd(three(0)))) }\n",
-             "fun bad", "Id_number(a, d)")
+             "fun bad", "Id_Number(a, d)")
     _refused(tmp_path, three + "  fun bad(b: Number, d: Number): b = d { return snd(snd(snd(three(0)))) }\n",
-             "fun bad", "Id_number(b, d)")
+             "fun bad", "Id_Number(b, d)")
 
 
 def test_a_call_flows_into_a_sigma_on_the_arguments(tmp_path):
@@ -167,7 +167,7 @@ def test_an_argument_named_as_the_binder_stays_the_argument(tmp_path):
 def test_the_proof_read_with_an_argument_named_as_the_binder(tmp_path):
     _accepted(tmp_path, MK + "  fun use(x: Number): x = x { return fst(snd(mk(x))) }\n")
     _refused(tmp_path, MK + "  fun bad(x: Number, y: Number): y = x { return fst(snd(mk(x))) }\n",
-             "fun bad", "Id_number(y, x)")
+             "fun bad", "Id_Number(y, x)")
 
 
 def test_an_argument_inside_an_expression_named_as_the_binder(tmp_path):
@@ -287,14 +287,14 @@ def test_a_cell_keeps_the_statement_of_its_first_value(tmp_path):
 def test_the_proof_read_from_a_variable_speaks_of_the_variable(tmp_path):
     _accepted(tmp_path, f"  fun read(d: Number, s: Σx : Number, x = d): fst(s) = d {{ return snd(s) }}\n")
     _refused(tmp_path, f"  fun bad(x: Number, d: Number, s: Σx : Number, x = d): x = d {{ return snd(s) }}\n",
-             "fun bad", "Id_number(x, d)")
+             "fun bad", "Id_Number(x, d)")
 
 
 def test_the_proof_of_a_comprehension_speaks_of_its_element(tmp_path):
     _accepted(tmp_path, "  fun proof(a: Number, s: { x : Number where x = a }): fst(s) = a { return snd(s) }\n")
     _refused(tmp_path,
              "  fun bad(x: Number, a: Number, s: { x : Number where x = a }): x = a { return snd(s) }\n",
-             "fun bad", "Id_number(x, a)")
+             "fun bad", "Id_Number(x, a)")
 
 
 def _on_the_kernel(tmp_path, body):

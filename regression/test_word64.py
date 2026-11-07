@@ -111,4 +111,4 @@ def test_a_word_takes_no_integer_arithmetic(tmp_path):
                        capture_output=True, text=True, timeout=180)
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "[E2001]" in out, out
-    assert "operator requires matching numeric/duration/money operands; got Word64 and number" in out, out
+    assert "operator requires matching numeric/duration/money operands; got Word64 and Number" in out, out

@@ -264,7 +264,7 @@ def test_a_field_of_an_applied_type_refuses_another_argument(tmp_path):
         "  b := Box.make(List.cons(41, List.empty))\n"
         "  return Text.length(List.head(b.items))"), {"Box": _BOX})
     assert rc != 0 and "E2001" in out, out
-    assert "Lookup<number>" in out, out
+    assert "Lookup<Number>" in out, out
 
 
 _FOLDER = ("place Folder<V> {\n"
@@ -287,4 +287,4 @@ def test_a_field_of_a_product_domain_refuses_another_argument(tmp_path):
         "  g := f.step\n"
         "  return g(\"a\", \"b\")"), {"Folder": _FOLDER})
     assert rc != 0 and "E2001" in out, out
-    assert "parameter expects number, got Text" in out, out
+    assert "parameter expects Number, got Text" in out, out

@@ -589,9 +589,15 @@ let rec ty_to_string (t : ty) : string =
   match t with
   | TyWire sp -> "wire to " ^ sp
   | TySubscription (sp, _) -> "subscription to " ^ sp
-  (* a type is named by its place: the carrier text is the place Text *)
-  | TyPrim "text" -> "Text"
-  | TyPrim n -> n
+  (* a type is named by its place, never by its carrier: the place of the
+     prelude the carrier represents *)
+  | TyPrim n ->
+      (match Hashtbl.find_opt Surface_ast.fusion_of_prim n with
+       | Some place -> place
+       | None ->
+           (match n with
+            | "number" -> "Number" | "text" -> "Text" | "boolean" -> "Boolean"
+            | "unit" -> "Unit" | other -> other))
   | TyPrimIn (n, ws) -> n ^ " in " ^ String.concat ", " ws
   | TyUser n -> n
   | TyApp (n, args) -> n ^ "<" ^ String.concat ", " (List.map ty_to_string args) ^ ">"
@@ -615,7 +621,14 @@ let rec ty_to_string (t : ty) : string =
   | TyPathP ((i, a), x, y) ->
       let ts = function TyTermExpr e -> ty_term_to_name e in
       Printf.sprintf "PathP(<%s> %s, %s, %s)" i (ty_to_string a) (ts x) (ts y)
-  | TyEl (TyTermExpr e) -> Printf.sprintf "El(%s)" (ty_term_to_name e)
+  | TyEl (TyTermExpr e) ->
+      (* the code of a carrier is shown by its place, as the carrier is *)
+      let shown = match ty_term_to_name e with
+        | c when Hashtbl.mem Surface_ast.fusion_of_prim c
+                 || List.mem c ["number"; "text"; "boolean"; "unit"] ->
+            ty_to_string (TyPrim c)
+        | name -> name in
+      Printf.sprintf "El(%s)" shown
   | TyMap (k, v) -> "map of " ^ ty_to_string k ^ " to " ^ ty_to_string v
   | TyChannel inner -> "Wire<" ^ ty_to_string inner ^ ">"
   | TySum variants ->

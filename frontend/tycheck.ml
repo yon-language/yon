@@ -567,7 +567,7 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
       if is_bool_like lhs && is_bool_like rhs then ok bool_t
       else err loc
         (Printf.sprintf
-           "boolean operator requires boolean/number/proposition operands; got %s and %s"
+           "boolean operator requires Boolean, Number or proposition operands; got %s and %s"
            (Tyenv.ty_to_string lhs) (Tyenv.ty_to_string rhs))
 
 (* ─── Expression: infer ────────────────────────────────────────────── *)
@@ -3408,7 +3408,7 @@ imported: import <module>::%s from %s)" sp fname fname sp)
                       | Some r ->
                           let shown = (match r with
                             | Some t -> Tyenv.ty_to_string t
-                            | None -> "number") in
+                            | None -> "Number") in
                           err floc (Printf.sprintf
                             "'%s' is not a producer: it returns %s; a \
 producer is declared `Wire<T>`" bare shown)
@@ -3947,8 +3947,8 @@ got %s" (Tyenv.ty_to_string other)))
            if Dispatcher.type_equal env ctx a_ty carrier
            then ok (TyEl c)
            else err loc (Printf.sprintf
-             "quote: inhabitant has type %s but El(%s) carrier is %s"
-             (Tyenv.ty_to_string a_ty) cname (Tyenv.ty_to_string carrier))
+             "quote: inhabitant has type %s but %s carrier is %s"
+             (Tyenv.ty_to_string a_ty) (Tyenv.ty_to_string (TyEl c)) (Tyenv.ty_to_string carrier))
        | None ->
            err loc (Printf.sprintf
              "El(%s): code does not decode to a carrier (only 0/1-cells supported)" cname))
@@ -3992,7 +3992,7 @@ got %s" (Tyenv.ty_to_string other)))
        | TyPrim "proposition" -> ok (TyPrim "proposition")
        | TyPrim "number" -> ok (TyPrim "boolean")
        | _ ->
-           err (location_of_expr e) "not: expected boolean, proposition, or number")
+           err (location_of_expr e) "not: expected Boolean, proposition, or Number")
 
   | EIfThenElse (c, a, b, _loc) ->
       (* if/then/else expression typing:

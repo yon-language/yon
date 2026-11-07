@@ -155,7 +155,7 @@ def test_before_an_arrow_they_are_two_arguments(tmp_path):
 
 def test_before_an_arrow_the_two_arguments_are_not_a_pair(tmp_path):
     body = ADD + "  fun apply(f: (Number, Number) -> Number): Number { return f(pair(40, 2)) }\n"
-    _refused(tmp_path, body, "return apply(add)", "E2001", "HOF f: parameter expects number")
+    _refused(tmp_path, body, "return apply(add)", "E2001", "HOF f: parameter expects Number")
 
 
 def test_three_arguments_before_an_arrow_stay_arguments(tmp_path):

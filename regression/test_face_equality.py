@@ -160,9 +160,9 @@ def test_a_place_on_text_has_its_literals_and_its_concatenation(tmp_path):
 
 @pytest.mark.parametrize("places,top,body,words", [
     (_METER, "fun lit: Meter { return 1.5 }\nfun far(n: Number): Number { return n }\n",
-     "  x := lit + far(1.0)\n  return 42", "got Meter and number"),
+     "  x := lit + far(1.0)\n  return 42", "got Meter and Number"),
     (_METER, "fun lit: Meter { return 1.5 }\nfun as_number(m: Meter): Number { return m }\n",
-     "  return 42", "type mismatch: expected number, got Meter"),
+     "  return 42", "type mismatch: expected Number, got Meter"),
     (_NAME, 'fun lit: Name { return "a" }\n', '  x := lit + Text.concat("b", "c")\n  return 42',
      "got Name and Text"),
 ])
