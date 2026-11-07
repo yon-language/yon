@@ -156,12 +156,23 @@ let algebra_op_sites : (string * int * int * int * int, string) Hashtbl.t = Hash
    `internal place P carried by <carrier>` the place is its carrier, in both directions;
    outside it the place is abstract (the rule of the abstract type). *)
 let open_house : string option ref = ref None
-(* Whether t, inside the open house, is the carrier p of that house's place:
-   an internal place, an internal instance of an algebra too, is its carrier
-   in its house only. *)
+(* The face of a primitive that owns it, the prelude's (Int64 for i64): it is
+   its primitive everywhere. Every other place carried by the primitive, the
+   program's and the instances of an algebra, is a representation on it. *)
+let face_owner (u : string) : bool =
+  match Hashtbl.find_opt fusion_places u with
+  | Some p -> Hashtbl.find_opt fusion_of_prim p = Some u
+  | None -> false
+
+(* Whether t, inside the open house, is the carrier p of that house's place: a
+   place carried by a primitive that does not own it, internal or not, is its
+   carrier in its house only. *)
 let in_house_carrier (u : string) : string option =
   match !open_house with
-  | Some h when h = u -> Hashtbl.find_opt internal_faces u
+  | Some h when h = u ->
+      (match Hashtbl.find_opt internal_faces u with
+       | Some p -> Some p
+       | None -> if face_owner u then None else Hashtbl.find_opt fusion_places u)
   | _ -> None
 
 (* The faces the language fuses to their primitive codes: a capitalized face

@@ -323,6 +323,9 @@ let resolve_points (env : Tyenv.env) (e : expr) : expr =
 let is_ring_carrier (t : ty) : bool =
   match t with
   | TyUser "Int64" | TyPrim "i64" -> true
+  (* a place carried by i64 computes in the ring of its carrier *)
+  | TyUser u -> Hashtbl.find_opt Surface_ast.fusion_places u = Some "i64"
+                || Hashtbl.find_opt Surface_ast.internal_faces u = Some "i64"
   | _ -> false
 
 (* What conversion adds to the normal form, up to which two paths are one: a path along
@@ -470,9 +473,12 @@ let rec type_equal
   let t1 = deref_lambda_unknown t1 and t2 = deref_lambda_unknown t2 in
   (* Direct equality on TyHeytInt. Neither Cubical nor CATT_R_Yon knows this
    * type, so the equality is handled here before the dispatch. *)
+  (* a carrier is the primitive, or the face that owns it: no face of the
+     program is another face *)
   let carrier_is p t = match t with
     | TyPrim q -> q = p
     | TyUser f -> Hashtbl.find_opt Surface_ast.fusion_places f = Some p
+                  && Surface_ast.face_owner f
     | _ -> false in
   let meets_lambda_unknown n other =
     match other with
@@ -513,10 +519,10 @@ let rec type_equal
      (the String/text pair above, promoted to a rule). *)
   | TyPrim p, TyUser u when
       (match Hashtbl.find_opt Surface_ast.fusion_places u with
-       | Some p' -> p' = p | None -> false) -> true
+       | Some p' -> p' = p && Surface_ast.face_owner u | None -> false) -> true
   | TyUser u, TyPrim p when
       (match Hashtbl.find_opt Surface_ast.fusion_places u with
-       | Some p' -> p' = p | None -> false) -> true
+       | Some p' -> p' = p && Surface_ast.face_owner u | None -> false) -> true
   (* Type application vs its head: a bare place `Box` (as built by `.-> Box { ... }`)
    * is an instance whose arguments are open, compatible with `Box<number>`. Two
    * instances are the same type when their arguments are: `Box<Int64>` is not

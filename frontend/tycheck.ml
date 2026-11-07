@@ -348,9 +348,18 @@ let int_prims = ["i8"; "i16"; "i32"; "i64"]
 let is_placeholder_ty (t : ty) : bool =
   match t with TyPrim "unknown" | TyUser "unknown" -> true | _ -> false
 
+(* The primitive a place of the program is carried by, when it does not own it:
+   outside its house it is not that primitive, yet it has its points and its
+   arithmetic among its own values (Meter + Meter, never Meter + Int64). *)
+let face_carrier (t : ty) : string option =
+  match t with
+  | TyUser u when not (Surface_ast.face_owner u) -> Hashtbl.find_opt Surface_ast.fusion_places u
+  | _ -> None
+
 let is_int_prim_ty (env : Tyenv.env) (ctx : Reduce.ctx) (t : ty) : bool =
   not (is_placeholder_ty t)
-  && List.exists (fun p -> Dispatcher.type_equal env ctx t (TyPrim p)) int_prims
+  && (List.exists (fun p -> Dispatcher.type_equal env ctx t (TyPrim p)) int_prims
+      || (match face_carrier t with Some p -> List.mem p int_prims | None -> false))
 
 (* `/` and `%` on integer operands are the TRUNCATING ops: record the site
    for desugar (one helper, used by the infer rule and the checking rule). *)
@@ -381,7 +390,8 @@ let record_int_arith_site ?(i64 = false) (op : binop) (loc : location) : unit =
   | _ -> ()
 
 let is_int64_ty (env : Tyenv.env) (ctx : Reduce.ctx) (t : ty) : bool =
-  not (is_placeholder_ty t) && Dispatcher.type_equal env ctx t (TyPrim "i64")
+  not (is_placeholder_ty t)
+  && (Dispatcher.type_equal env ctx t (TyPrim "i64") || face_carrier t = Some "i64")
 
 (* Literal admission: an INTEGRAL numeric literal is a point of every integer
    face (the transport carries it exactly). A non-literal Number is NOT —
@@ -403,6 +413,10 @@ let admit_int_literal (env : Tyenv.env) (ctx : Reduce.ctx)
         Hashtbl.replace Surface_ast.int64_literal_sites
           (loc.file, loc.start_line, loc.start_col, loc.end_line, loc.end_col) ();
       expected
+  (* a literal of the carrier is a point of a place of the program on it *)
+  | ELit (LitNumber _, _) when face_carrier expected = Some "number" -> expected
+  | ELit (LitString _, _) when face_carrier expected = Some "text" -> expected
+  | ELit (LitBool _, _) when face_carrier expected = Some "boolean" -> expected
   | _ -> inferred
 
 (* The operation an algebra gives an operator on a place: the place is the
@@ -484,6 +498,9 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
   (* Arithmetic operators *)
   | OpAdd | OpSub | OpMul | OpDiv | OpMod ->
       if is lhs num && is rhs num then ok num
+      (* a place of the program on number: its arithmetic, among its own values *)
+      else if face_carrier lhs = Some "number" && is lhs rhs then ok lhs
+      else if face_carrier lhs = Some "text" && is lhs rhs && op = OpAdd then ok lhs
       else if is_int_prim_ty env ctx lhs && is lhs rhs then begin
         record_int_arith_site ~i64:(is_int64_ty env ctx lhs) op loc;
         ok lhs
@@ -498,7 +515,8 @@ let ty_of_binop (op : binop) (lhs : ty) (rhs : ty)
   (* Comparison operators *)
   | OpLt | OpGt | OpLeq | OpGeq ->
       if is lhs rhs && (is lhs num || is lhs dur || is lhs mon
-                        || is_int_prim_ty env ctx lhs) then begin
+                        || is_int_prim_ty env ctx lhs
+                        || face_carrier lhs = Some "number") then begin
         if is_int64_ty env ctx lhs then record_int_arith_site ~i64:true op loc;
         ok bool_t
       end
@@ -2177,6 +2195,8 @@ let ty_of_code (env : Tyenv.env) (c : expr) : ty option =
   match c with
   | EVar (n, _) ->
       (match Hashtbl.find_opt Surface_ast.fusion_places n, Surface_ast.prim_of_face n with
+       (* a place on a primitive it does not own is a type of its own *)
+       | Some _, _ when not (Surface_ast.face_owner n) -> Some (TyUser n)
        | Some prim, _ | None, Some prim -> Some (TyPrim prim)
        | None, None ->
            (* the inverse of code_of_ty, whatever the environment has loaded:
@@ -4540,6 +4560,12 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       let* () = check env ctx e2 expected in
       record_int_arith_site ~i64:(is_int64_ty env ctx expected) op loc;
       ok ()
+  (* the same against a place of the program on number, or on text for `+` *)
+  | EBinop ((OpAdd | OpSub | OpMul | OpDiv | OpMod) as op, e1, e2, _), _
+    when face_carrier expected = Some "number"
+         || (face_carrier expected = Some "text" && op = OpAdd) ->
+      let* () = check env ctx e1 expected in
+      check env ctx e2 expected
   (* a pair against a Sigma: the first component against the base, the second
      against the fibre at the first *)
   | EPair (a, b, _), TySigma (x, base, fibre) ->
@@ -6341,11 +6367,12 @@ let register_fusion (pd : place_decl) : unit =
        else begin
          Hashtbl.replace Surface_ast.fusion_places pd.pd_name prim;
          (* the inverse, prim -> face, belongs to the declaration that owns
-            the primitive: the prelude's face. A user face (`place Meter is
-            number`) is one more name of the same object; it never takes the
-            primitive over (it would answer a match on `unit` with its own
-            arms). *)
-         if in_prelude || not (Hashtbl.mem Surface_ast.fusion_of_prim prim)
+            the primitive: the prelude's face, which is its primitive
+            everywhere. Every other place carried by it, the program's and
+            the instances of an algebra, is a representation on it: its
+            carrier inside its house only, and it never takes the primitive
+            over (it would answer a match on `unit` with its own arms). *)
+         if in_prelude && not (Hashtbl.mem Surface_ast.algebra_places pd.pd_name)
          then Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name
        end);
       (match prim, pd.pd_arms with

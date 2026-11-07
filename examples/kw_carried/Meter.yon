@@ -1,2 +1,3 @@
-/* A meter is carried by number, in the open: it is a number. */
+/* A meter is carried by number, in the open: it has the literals and the
+ * arithmetic of number among meters, and it is no Number. */
 place Meter carried by number { }
