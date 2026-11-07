@@ -473,8 +473,8 @@ let rec type_equal
   let t1 = deref_lambda_unknown t1 and t2 = deref_lambda_unknown t2 in
   (* Direct equality on TyHeytInt. Neither Cubical nor CATT_R_Yon knows this
    * type, so the equality is handled here before the dispatch. *)
-  (* a carrier is the primitive, or the face that owns it: no face of the
-     program is another face *)
+  (* what meets the carrier p: p itself, or the place of the prelude p
+     represents; no place of the program is another place *)
   let carrier_is p t = match t with
     | TyPrim q -> q = p
     | TyUser f -> Hashtbl.find_opt Surface_ast.fusion_places f = Some p
@@ -514,9 +514,9 @@ let rec type_equal
    * Bidirectional, like boolean/proposition. *)
   | TyPrim "text", TyUser "String" -> true
   | TyUser "String", TyPrim "text" -> true
-  (* Fusion places (prelude): `place Number is number` — the declared face
-     and its primitive code are the SAME semantic object, bidirectionally
-     (the String/text pair above, promoted to a rule). *)
+  (* The place of the prelude a carrier represents (`place Number carried by
+     number`) meets that carrier both ways (the String/text pair above,
+     promoted to a rule); no other place on it does. *)
   | TyPrim p, TyUser u when
       (match Hashtbl.find_opt Surface_ast.fusion_places u with
        | Some p' -> p' = p && Surface_ast.face_owner u | None -> false) -> true

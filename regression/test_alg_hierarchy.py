@@ -595,7 +595,7 @@ _MEET = ("place Meet {\n"
          "  fun raised(s: Sum): Int64 { return s + 2 }\n"
          "  fun lit: Sum { return 3 }\n"
          "}\n")
-_OUTSIDE = "is internal: outside its house it is not its carrier, and its values come from its funs, and from its operations for an algebra"
+_OUTSIDE = "is internal: outside its house its values do not convert through its carrier, and come from its funs, and from its operations for an algebra"
 
 
 def test_inside_its_house_an_internal_instance_is_its_carrier(tmp_path):

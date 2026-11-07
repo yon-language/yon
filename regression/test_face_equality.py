@@ -1,9 +1,10 @@
-"""A place carried by a primitive is a representation, not the primitive.
+"""`carried by` declares a representation, not an identity.
 
-Int64 is i64 everywhere: the prelude's face owns its primitive. A place of the
-program carried by i64 is its carrier inside its house, and there it is Int64
-too; outside it is neither i64 nor Int64, and no face is another face. Its
-values convert only through what its house exports. A public place has the
+Int64 is the place of the prelude represented by i64, and its values convert
+through the representation everywhere. A place of the program carried by i64
+converts through it inside its house, and there it meets Int64 too; outside it
+is not Int64, and no place is another place on the same carrier. Its values
+convert only through what its house exports. A public place has the
 literals of its carrier and the arithmetic among its own values; an internal
 one closes them outside its house (test_internal_house.py)."""
 import subprocess
@@ -91,8 +92,9 @@ def test_zero_celsius_does_not_become_zero_kelvin_by_any_implicit_way(tmp_path, 
     assert words in out, (name, out)
 
 
-def test_inside_its_house_a_place_is_its_carrier_and_int64_but_no_other_face(tmp_path):
-    # Celsius ≡ i64 ≡ Int64 in its house, both ways; Kelvin stays Kelvin there
+def test_inside_its_house_a_place_converts_through_its_carrier_and_meets_int64_but_no_other_place(tmp_path):
+    # in its house a Celsius converts through i64, so with Int64, both ways;
+    # Kelvin stays Kelvin there
     rc, out, _ = _build(tmp_path, "  return 42",
                         extra="  fun cold(c: Celsius): Kelvin { return c }\n")
     assert rc != 0 and "E2001" in out, out
@@ -108,9 +110,9 @@ def test_a_public_place_has_the_literals_and_the_arithmetic_of_its_own_values(tm
     assert _exit(tmp_path, body, top) == 42
 
 
-def test_int64_is_i64_everywhere(tmp_path):
-    # the face of the prelude owns its primitive: its literals, its machine
-    # arithmetic, the funs of the prelude on it
+def test_int64_converts_through_i64_everywhere(tmp_path):
+    # the place of the prelude for i64: its literals, the arithmetic of the
+    # machine, the funs of the prelude on it
     body = "  n := Int64.max_value - Int64.max_value + 42\n  return if n == 42 then 42 else 1"
     assert _exit(tmp_path, body) == 42
 
@@ -164,15 +166,15 @@ def test_a_place_on_text_has_its_literals_and_its_concatenation(tmp_path):
     (_NAME, 'fun lit: Name { return "a" }\n', '  x := lit + String.concat("b", "c")\n  return 42',
      "got Name and String"),
 ])
-def test_a_place_on_number_or_text_is_not_its_primitive_outside_its_house(tmp_path, places, top, body, words):
+def test_a_place_on_number_or_text_does_not_convert_outside_its_house(tmp_path, places, top, body, words):
     rc, out, _ = _faces(tmp_path, places, body, top)
     assert rc != 0 and "E2001" in out, out
     assert words in out, out
 
 
-def test_no_place_of_the_program_owns_a_primitive_the_prelude_does_not_fuse(tmp_path):
-    # on i16 there is no face of the prelude: the first place on it is no
-    # owner, and a Celsius is no Kelvin in the house of Kelvin either
+def test_no_place_of_the_program_is_the_place_of_a_carrier(tmp_path):
+    # i16 has no place of the prelude: the first place on it does not become
+    # one, and a Celsius is no Kelvin in the house of Kelvin either
     places = {"Celsius": "place Celsius carried by i16 {\n  fun zero: Celsius { return 0 }\n}\n",
               "Kelvin": "place Kelvin carried by i16 {\n  fun from_c(c: Celsius): Kelvin { return c }\n}\n"}
     rc, out, _ = _faces(tmp_path, places, "  return 42")

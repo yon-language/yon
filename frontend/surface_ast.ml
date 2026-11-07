@@ -156,17 +156,18 @@ let algebra_op_sites : (string * int * int * int * int, string) Hashtbl.t = Hash
    `internal place P carried by <carrier>` the place is its carrier, in both directions;
    outside it the place is abstract (the rule of the abstract type). *)
 let open_house : string option ref = ref None
-(* The face of a primitive that owns it, the prelude's (Int64 for i64): it is
-   its primitive everywhere. Every other place carried by the primitive, the
-   program's and the instances of an algebra, is a representation on it. *)
+(* The place of the prelude a carrier represents (Int64, represented by i64):
+   its values convert through the representation everywhere. Every other place
+   on that carrier, the program's and the instances of an algebra, converts
+   through it only inside its house. *)
 let face_owner (u : string) : bool =
   match Hashtbl.find_opt fusion_places u with
   | Some p -> Hashtbl.find_opt fusion_of_prim p = Some u
   | None -> false
 
-(* Whether t, inside the open house, is the carrier p of that house's place: a
-   place carried by a primitive that does not own it, internal or not, is its
-   carrier in its house only. *)
+(* Whether t, inside the open house, converts through the carrier p of that
+   house's place: a place that is not the place of the prelude for its carrier,
+   internal or not, converts in its house only. *)
 let in_house_carrier (u : string) : string option =
   match !open_house with
   | Some h when h = u ->

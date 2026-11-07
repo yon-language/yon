@@ -348,9 +348,10 @@ let int_prims = ["i8"; "i16"; "i32"; "i64"]
 let is_placeholder_ty (t : ty) : bool =
   match t with TyPrim "unknown" | TyUser "unknown" -> true | _ -> false
 
-(* The primitive a place of the program is carried by, when it does not own it:
-   outside its house it is not that primitive, yet it has its points and its
-   arithmetic among its own values (Meter + Meter, never Meter + Int64). *)
+(* The carrier of a place that is not the place of the prelude for it: outside
+   its house its values do not convert through the carrier, yet the place has
+   the literals of the carrier and its arithmetic among its own values
+   (Meter + Meter, never Meter + Int64). *)
 let face_carrier (t : ty) : string option =
   match t with
   | TyUser u when not (Surface_ast.face_owner u) -> Hashtbl.find_opt Surface_ast.fusion_places u
@@ -476,7 +477,7 @@ let house_hint (expected : ty) (actual : ty) : string =
     | _ -> None in
   match hidden expected, hidden actual with
   | Some u, _ | None, Some u ->
-      Printf.sprintf " (%s is internal: outside its house it is not its carrier, and its values come from its funs, and from its operations for an algebra)" u
+      Printf.sprintf " (%s is internal: outside its house its values do not convert through its carrier, and come from its funs, and from its operations for an algebra)" u
   | None, None -> ""
 
 (* A `+` between two values of text is their concatenation. *)
@@ -2206,7 +2207,7 @@ let ty_of_code (env : Tyenv.env) (c : expr) : ty option =
   match c with
   | EVar (n, _) ->
       (match Hashtbl.find_opt Surface_ast.fusion_places n, Surface_ast.prim_of_face n with
-       (* a place on a primitive it does not own is a type of its own *)
+       (* a place on a carrier, not the prelude's for it, is a place of its own *)
        | Some _, _ when not (Surface_ast.face_owner n) -> Some (TyUser n)
        | Some prim, _ | None, Some prim -> Some (TyPrim prim)
        | None, None ->
@@ -6380,12 +6381,12 @@ let register_fusion (pd : place_decl) : unit =
        then ()
        else begin
          Hashtbl.replace Surface_ast.fusion_places pd.pd_name prim;
-         (* the inverse, prim -> face, belongs to the declaration that owns
-            the primitive: the prelude's face, which is its primitive
-            everywhere. Every other place carried by it, the program's and
-            the instances of an algebra, is a representation on it: its
-            carrier inside its house only, and it never takes the primitive
-            over (it would answer a match on `unit` with its own arms). *)
+         (* the inverse, carrier -> place, belongs to the place of the prelude
+            the carrier represents, whose values convert through it
+            everywhere. Every other place on it, the program's and the
+            instances of an algebra, converts through it inside its house
+            only, and never takes the carrier over (it would answer a match on
+            `unit` with its own arms). *)
          if in_prelude && not (Hashtbl.mem Surface_ast.algebra_places pd.pd_name)
          then Hashtbl.replace Surface_ast.fusion_of_prim prim pd.pd_name
        end);
