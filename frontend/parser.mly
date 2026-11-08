@@ -121,6 +121,10 @@
             "the right of an arrow is a name: write (a, y) %s %s, not a %s %s(y)" sym shown sym shown)
       | EVar (name, _) -> ECall (name, lhs, loc)
       | EField (EVar (obj, _), fld, _) when dot_is_module obj -> dot_call_expr obj fld lhs loc
+      (* x ↦ e.forth: a field read off a point is applied *)
+      | EField (_, _, _) when kind = Surface_ast.Apply -> EApp (b, lhs, loc)
+      | _ when kind = Surface_ast.Apply ->
+          failwith "[parser] the right of \xe2\x86\xa6 is a name or a field read off a point: x \xe2\x86\xa6 f, x \xe2\x86\xa6 e.f"
       | _ -> failwith "[parser] the right of an arrow must be a name" in
     (match call with
      | ECall (n, _, _) ->

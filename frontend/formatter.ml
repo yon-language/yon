@@ -209,6 +209,14 @@ and fmt_expr (e : expr) : string =
       Printf.sprintf "view(%s) => %s of %s" (lam_params ps) (fmt_expr body) p
   | EReductionLam (ps, body, p, _) ->
       Printf.sprintf "reduction(%s) => %s of %s" (lam_params ps) (fmt_expr body) p
+  | EApp ((EField _ as head), args, _) ->
+      (* x ↦ e.f: a field read off a point, applied *)
+      let target = fmt_expr head in
+      (match args with
+       | [(ELit _ | EVar _ | ECall _ | EField _ | EParen _ | EApp (EField _, _, _)) as a] ->
+           fmt_expr a ^ " \xe2\x86\xa6 " ^ target
+       | [a] -> "(" ^ fmt_expr a ^ ") \xe2\x86\xa6 " ^ target
+       | _ -> "(" ^ String.concat ", " (List.map fmt_expr args) ^ ") \xe2\x86\xa6 " ^ target)
   | EApp (head, args, _) ->
       Printf.sprintf "%s(%s)" (fmt_expr head) (String.concat ", " (List.map fmt_expr args))
   | EIn (e, ctx, _) -> fmt_expr e ^ " in " ^ ctx

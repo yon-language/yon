@@ -1086,6 +1086,46 @@ and subst_evar_in_term (xv : string) (repl : expr) (e : expr) : expr =
           let ps', b' = lam ps b in Some (EViewLam (ps', b', o, l))
       | _ -> None) e
 
+(* ─── Dependent fields ──────────────────────────────────────────────
+   The fields of a place are a telescope: the type of a field may name the
+   fields before it. A point is checked with the values given in place of
+   those names; the type of a field read off a point names the fields of that
+   same point. *)
+
+(* The names a type speaks of in its terms. *)
+let rec names_in_ty (t : ty) : string list =
+  let tm = function TyTermExpr e -> names_in_expr e in
+  match t with
+  | TyId (a, x, y) -> names_in_ty a @ tm x @ tm y
+  | TyEl c -> tm c
+  | TyPathP ((_, a), x, y) -> names_in_ty a @ tm x @ tm y
+  | TyPi (v, a, b) | TySigma (v, a, b) ->
+      names_in_ty a @ List.filter (fun n -> n <> v) (names_in_ty b)
+  | TyArrow (a, b) -> names_in_ty a @ names_in_ty b
+  | TyApp (_, args) -> List.concat_map names_in_ty args
+  | _ -> []
+
+(* The type of a field, with the fields before it read as the given terms. *)
+let read_prior_fields (prior : (string * expr) list) (t : ty) : ty =
+  (* all at once: each name first becomes a hole of its own, then every hole
+     its value, so a value that speaks of a name of a field is not read again *)
+  let hole n = "__prior_field__" ^ n in
+  let t = List.fold_left (fun t (n, _) ->
+      subst_evar_in_ty n (EVar (hole n, dummy_loc)) t) t prior in
+  List.fold_left (fun t (n, e) -> subst_evar_in_ty (hole n) e t) t prior
+
+(* The fields of a place, in the order they are written. *)
+let place_fields (pd : place_decl) : field_decl list =
+  List.filter_map (function FoField f -> Some f | _ -> None) pd.pd_members
+
+(* The fields written before the field [name]. *)
+let fields_before (pd : place_decl) (name : string) : string list =
+  let rec go acc = function
+    | [] -> List.rev acc
+    | (f : field_decl) :: _ when f.fd_name = name -> List.rev acc
+    | f :: rest -> go (f.fd_name :: acc) rest in
+  go [] (place_fields pd)
+
 (* An arm over its binders, as a term the kernel computes on. Its sites are its own: a site records
    what stands there. *)
 let refined_sites = ref 0
@@ -2683,10 +2723,18 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
 
   | EApp (f, args, loc) ->
       let* f_ty = infer env ctx f in
+      let applies_a_field = (match f with EField _ -> true | _ -> false) in
       let rec apply ft = function
         | [] -> ok ft
-        | _ :: rest ->
+        | a :: rest ->
             (match ft with
+             | TyArrow (dom, cod) when applies_a_field ->
+                 let* () = check env ctx a dom in apply cod rest
+             | TyPi (v, dom, cod) when applies_a_field ->
+                 (* a dependent function: its value at the argument has the
+                    codomain at that argument *)
+                 let* () = check env ctx a dom in
+                 apply (subst_evar_in_ty v a cod) rest
              | TyArrow (_, cod) -> apply cod rest
              | TyPi (_, _, cod) -> apply cod rest
              | TyVar v -> err loc (Printf.sprintf
@@ -3346,8 +3394,11 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
                       (Printf.sprintf "place %s has no field %s" place_name fld)
                   | FoField f :: _ when f.fd_name = fld ->
                       (* precise on a type application (Box<number> -> value:number),
-                         monomorphic-erased on a bare place *)
-                      ok (subst_place_tparams pd.pd_type_params targs f.fd_ty)
+                         monomorphic-erased on a bare place; the fields before
+                         it are the fields of this same point *)
+                      let t = subst_place_tparams pd.pd_type_params targs f.fd_ty in
+                      resolve_field_paths env ctx (read_prior_fields
+                            (List.map (fun g -> (g, EField (obj, g, loc))) (fields_before pd fld)) t)
                   | _ :: rest -> find_field rest
                 in
                 find_field pd.pd_members)
@@ -3784,14 +3835,38 @@ got %s" (Tyenv.ty_to_string other)))
       (match Tyenv.lookup_place env place_name with
        | None -> err loc (Printf.sprintf "unknown place %s in new expression" place_name)
        | Some pd ->
-           (* Check that each field assignment matches a declared field
-            * and has the right type. *)
-           let fields = List.filter_map
-             (function FoField f -> Some { f with fd_ty = resolve_tparams pd.pd_type_params f.fd_ty }
-                     | FoOp _ -> None | FoCell _ -> None | FoLaw _ -> None)
-             pd.pd_members in
+           (* the parameters of a generic place are read from the values of
+              its fields: each parameter a fresh unknown, solved by the
+              fields whose types it meets *)
+           let params = pd.pd_type_params in
+           let args =
+             if params = [] then None else begin
+               let fresh = List.map (fun v -> (v, Ty_subst.fresh_metavar ())) params in
+               let sigma = List.fold_left (fun sg (f : field_decl) ->
+                   match List.find_opt (fun fa -> fa.fa_name = f.fd_name) fas with
+                   | None -> sg
+                   | Some fa ->
+                       (match infer env ctx fa.fa_value with
+                        | Error _ -> sg
+                        | Ok vt ->
+                            let want = Ty_subst.subst_type_vars fresh (resolve_tparams params f.fd_ty) in
+                            (match Ty_subst.try_unify (Ty_subst.apply_subst sg want)
+                                     (Ty_subst.apply_subst sg vt) with
+                             | Ok s -> Ty_subst.compose_subst s sg
+                             | Error _ -> sg)))
+                   Ty_subst.empty_subst (place_fields pd) in
+               let solved = List.map (fun (_, m) -> Ty_subst.apply_subst sigma m) fresh in
+               if List.exists (function TyMetaVar _ -> true | _ -> false) solved then None
+               else Some solved
+             end in
+           let fields = List.map (fun (f : field_decl) ->
+               { f with fd_ty = (match args with
+                    | Some a -> subst_place_tparams params a f.fd_ty
+                    | None -> resolve_tparams params f.fd_ty) }) (place_fields pd) in
            let* () = check_field_assignments env ctx pd.pd_name fields fas loc in
-           ok (TyUser place_name))
+           ok (match args with
+               | Some a -> TyApp (place_name, a)
+               | None -> TyUser place_name))
 
   | ENewIn (place_name, _space_name, fas, loc) ->
       (* Unreachable from source: the parser does not produce ENewIn (the
@@ -5060,6 +5135,16 @@ and check_call (env : Tyenv.env) (ctx : Reduce.ctx)
               name (Tyenv.ty_to_string a) (Tyenv.ty_to_string b) (Tyenv.ty_to_string x_ty))
         | _ -> err loc (Printf.sprintf
                  "%s is an equivalence: one value is carried along it, x \xe2\x86\xa6 %s" name name))
+   (* a local that is a dependent function, a proof read off a field among them:
+      its value at the argument has the codomain at that argument *)
+   | Some (TyPi (v, dom, cod)) ->
+       (match args with
+        | [x] ->
+            let* () = check env ctx x dom in
+            ok (subst_evar_in_ty v x cod)
+        | _ -> err loc (Printf.sprintf
+                 "%s is a dependent function of one argument, applied to %d"
+                 name (List.length args)))
    | Some var_ty when (match var_ty with TyArrow _ -> true | _ -> false) ->
        let call_exprs = args in
        let rec apply_arrow t args =
@@ -5598,14 +5683,48 @@ and check_op_call (env : Tyenv.env) (ctx : Reduce.ctx)
        "operation %s.%s requires effect on %s, but the current function does not declare it"
        op.os_place op.os_op_name op.os_place)
 
+(* The carrier of a path in the type of a field, read off its left endpoint once
+   the fields it names are read: as the signature of a fun reads it, under the
+   binders of the type. *)
+and resolve_field_paths (env : Tyenv.env) (ctx : Reduce.ctx) (t : ty) : ty tc_result =
+  match t with
+  | TyId (TyMetaVar s, (TyTermExpr x as tx), ty_r) when s = -424242 ->
+      let* c = infer env ctx x in
+      ok (TyId (c, tx, ty_r))
+  | TyPi (x, a, b) ->
+      let* a' = resolve_field_paths env ctx a in
+      let* b' = resolve_field_paths (Tyenv.add_var env x a') ctx b in
+      ok (TyPi (x, a', b'))
+  | TySigma (x, a, b) ->
+      let* a' = resolve_field_paths env ctx a in
+      let* b' = resolve_field_paths (Tyenv.add_var env x a') ctx b in
+      ok (TySigma (x, a', b'))
+  | TyArrow (a, b) ->
+      let* a' = resolve_field_paths env ctx a in
+      let* b' = resolve_field_paths env ctx b in
+      ok (TyArrow (a', b'))
+  | t -> ok t
+
 and check_field_assignments (env : Tyenv.env) (ctx : Reduce.ctx)
                             (place_name : string)
                             (fields : field_decl list)
                             (fas : field_assignment list)
                             (loc : location) : unit tc_result =
-  (* Each field assignment names a field; check that the field exists
-   * and the value has the expected type. Missing fields are OK
-   * (default), extra fields are errors. *)
+  (* Each field assignment names a field of the place, once, and every
+     field is given: a point gives a value to each field of its place. *)
+  let rec given_once seen = function
+    | [] -> ok ()
+    | fa :: _ when List.mem fa.fa_name seen -> err fa.fa_loc
+        (Printf.sprintf "place %s: field %s is given twice: a point gives each field once"
+           place_name fa.fa_name)
+    | fa :: rest -> given_once (fa.fa_name :: seen) rest in
+  let* () = given_once [] fas in
+  let* () = match List.find_opt (fun (f : field_decl) ->
+      List.for_all (fun fa -> fa.fa_name <> f.fd_name) fas) fields with
+    | Some f -> err loc (Printf.sprintf
+        "place %s: field %s is not given: a point gives a value to each field of its place"
+        place_name f.fd_name)
+    | None -> ok () in
   let rec check_each = function
     | [] -> ok ()
     | fa :: rest ->
@@ -5613,10 +5732,18 @@ and check_field_assignments (env : Tyenv.env) (ctx : Reduce.ctx)
         | None -> err fa.fa_loc
             (Printf.sprintf "place %s has no field %s" place_name fa.fa_name)
         | Some f ->
-            let* () = check env ctx fa.fa_value f.fd_ty in
+            (* the fields before it, read as the values given to them *)
+            let rec before acc = function
+              | [] -> List.rev acc
+              | (g : field_decl) :: _ when g.fd_name = f.fd_name -> List.rev acc
+              | (g : field_decl) :: more ->
+                  (match List.find_opt (fun fa' -> fa'.fa_name = g.fd_name) fas with
+                   | Some fa' -> before ((g.fd_name, fa'.fa_value) :: acc) more
+                   | None -> before acc more) in
+            let* want = resolve_field_paths env ctx (read_prior_fields (before [] fields) f.fd_ty) in
+            let* () = check env ctx fa.fa_value want in
             check_each rest
   in
-  ignore loc;
   check_each fas
 
 (* ─── Conditions ───────────────────────────────────────────────────── *)
@@ -7316,6 +7443,7 @@ let rec check_decl (env : Tyenv.env) (ctx : Reduce.ctx) (td : top_decl) : unit t
        | _ -> ok ())
 
 and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : unit tc_result =
+  let* () = check_field_order pd in
   let* () = check_algebra_models env ctx pd in
   (* Check that the world is declared. There is no Constant world:
      a fused or prelude place is NOT exempt — it lives in its
@@ -7587,6 +7715,23 @@ and check_signature_above (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl)
                      o.op_name pd.pd_name b))
           | _ -> ok ()) (ok ()) pd.pd_members)
   | _ -> ok ()
+
+(* The type of a field names only the fields written before it: a telescope
+   is read from the left. *)
+and check_field_order (pd : place_decl) : unit tc_result =
+  let fields = place_fields pd in
+  let rec go = function
+    | [] -> ok ()
+    | (f : field_decl) :: rest ->
+        let later = List.map (fun (g : field_decl) -> g.fd_name) (f :: rest) in
+        (match List.find_opt (fun n -> List.mem n later) (names_in_ty f.fd_ty) with
+         | Some n ->
+             err f.fd_loc (Printf.sprintf
+               "place %s: the type of field %s names %s: the type of a field names only the fields before it"
+               pd.pd_name f.fd_name
+               (if n = f.fd_name then "the field itself" else "field " ^ n ^ ", written after it"))
+         | None -> go rest) in
+  go fields
 
 (* A place that uses an algebra is a model of it: the algebra is the theory
    (its operations and its laws, over its own name as the carrier), the place

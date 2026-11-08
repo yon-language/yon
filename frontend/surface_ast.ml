@@ -697,6 +697,16 @@ let rec ty_term_to_name (e : expr) : string =
   | ERefl (t, _) -> "refl(" ^ ty_term_to_name t ^ ")"
   | ECall (f, args, _) ->
       f ^ "(" ^ String.concat "," (List.map ty_term_to_name args) ^ ")"
+  | EField (o, f, _) -> ty_term_to_name o ^ "." ^ f
+  (* x ↦ e.f, a field read off a point applied: written as it is written *)
+  | EApp (EField _, _ :: _, _) ->
+      let rec chain = function
+        | EApp ((EField _ as h), [a], _) -> chain a ^ " \xe2\x86\xa6 " ^ ty_term_to_name h
+        | EApp ((EField _ as h), args, _) ->
+            "(" ^ String.concat ", " (List.map ty_term_to_name args) ^ ") \xe2\x86\xa6 "
+            ^ ty_term_to_name h
+        | a -> ty_term_to_name a in
+      "(" ^ chain e ^ ")"
   | _ -> "_code"
 
 (* ─── Declarations ─────────────────────────────────────────────────── *)

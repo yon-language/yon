@@ -756,6 +756,12 @@ and desugar_expr (e0 : S.expr) : C.term =
       (* the fused face in TERM position is its prim's Tarski code *)
       C.Var (Hashtbl.find Surface_ast.fusion_places x)
   | S.EVar (x, _) -> C.Var x
+  | S.EApp ((S.EField _ as f), args, _) ->
+      (* x ↦ e.f: the field read off the point is a local, applied as one *)
+      incr sum_scrut_counter;
+      let v = Printf.sprintf "__applied_field_%d" !sum_scrut_counter in
+      C.App (C.Lam (v, C.TyPlace "unit", curry_apply (C.Var v) (List.map desugar_expr args)),
+             desugar_expr f)
   | S.EApp (f, args, _) ->
       curry_apply (desugar_expr f) (List.map desugar_expr args)
   | S.EHITElim (_motive, branches, x, loc) ->
