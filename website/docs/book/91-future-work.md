@@ -103,7 +103,7 @@ date.
   inhabitant and cannot inspect its own structure (chapter 22, `quote`).
 - **A full treatment of cubical type theory** in this book is not yet written;
   chapter 9 and the keyword entries cover what the kernel runs.
-- **Prebuilt binaries and a Homebrew tap** do not exist yet; Yon builds from
+- **A release with prebuilt binaries** does not exist yet; Yon builds from
   source (chapter 1).
 - **The VS Code extension** is not yet published on the Marketplace; it is
   installed from the packaged `.vsix` (chapter 21).

@@ -1,6 +1,6 @@
 // Cloudflare Worker for the Yon site: static Docusaurus assets from
-// website/build, plus a tiny Worker (worker.js) that serves /install.sh
-// straight from the repo so `curl https://yon-lang.org/install.sh | bash` works.
+// website/build, served through a tiny Worker (worker.js) that adds the
+// security and cache headers.
 {
   "name": "yon",
   "compatibility_date": "2026-06-04",

@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://yon-lang.org">Book</a> ·
-  <a href="#build-from-source">Build</a> ·
+  <a href="#building-from-source">Build</a> ·
   <a href="examples/">Examples</a> ·
   <a href="#status">Status</a>
 </p>
@@ -117,42 +117,13 @@ Yon, where a property of the kernel is a `fun` whose type states it and the
 compiler that accepts it checks the proof. The collections of the prelude
 and other parts are still being worked on.
 
-Platforms: macOS on Apple Silicon and Linux x86-64.
+Platforms: developed on macOS (Apple Silicon).
 
-## Install
+## Building from source
 
-On macOS arm64 or Linux x86-64:
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://yon-lang.org/install.sh | bash
-```
-
-The script checks prerequisites (and tells you what is missing), builds from
-source, and installs the toolchain into `~/.yon`: `yonc`, `yon-lsp`, `yon-fmt`,
-`yon-lint`, `yon-doc`, `yon-pkg`, and the VS Code / Cursor extension. Run it
-with `| bash -s -- --check` to only check prerequisites.
-
-## Build from source
-
-Prerequisites: LLVM/MLIR 18, OCaml 5.1 with `dune` and `menhir`, a C
-compiler, CMake, Ninja.
-
-From the repository root, with `LLVM_PREFIX` the directory where LLVM 18 is
-installed:
-
-```bash
-make -C runtime                                    # C runtime
-(cd frontend && dune build)                        # OCaml frontend
-cmake -G Ninja -S mlir -B mlir/build \
-  -DMLIR_DIR=$LLVM_PREFIX/lib/cmake/mlir \
-  -DLLVM_DIR=$LLVM_PREFIX/lib/cmake/llvm
-ninja -C mlir/build                                # the topos MLIR dialect
-regression/gate.sh 2                               # build, smoke, acceptance
-```
-
-No Python is needed to build: the mmgroup core is vendored under
-`runtime/vendor/`. `yonc` finds the LLVM tools by itself; the `YONC_LLC`,
-`YONC_MLIR_TRANSLATE`, `YONC_CC` and `YONC_TOPOS_OPT` variables override them.
+Yon is built from its sources; there is no release yet. You need OCaml with
+`dune` and `menhir`, LLVM and MLIR 18, CMake, Ninja and a C compiler; the
+steps are in [chapter 1 of the book](https://yon-lang.org/book/installation).
 
 ## Testing
 
@@ -199,7 +170,7 @@ lsp/, pkg/    editor integration and the package tool
 
 The book lives in [`website/docs/book/`](website/docs/book/) and at
 [yon-lang.org](https://yon-lang.org): 23 chapters and four appendices, from
-installation to Spaces, the Heyting core, identity types and the heap.
+building from source to Spaces, the Heyting core, identity types and the heap.
 Code blocks are compiled by the suite unless marked as illustrative.
 
 ## Packages

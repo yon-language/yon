@@ -44,7 +44,7 @@ Start with the [Syntax Reference](./syntax-reference.md), the normative
 description of Yon 1.2.1, then follow the book:
 
 0. [Topos-Oriented Programming](./book/00-topos-oriented-programming.md), the paradigm: sites, the Yoneda principle, structure that works for you.
-1. [Installation](./book/01-installation.md), what you need, build, verify, the toolchain.
+1. [Building from source](./book/01-installation.md), what you need, build, verify, the toolchain.
 2. [Hello, world](./book/02-hello-world.md), your first program, `yonc`, exit codes.
 3. [Values and bindings](./book/03-values-and-bindings.md), numbers, strings (and their fusion), durations, truth.
 4. [Control flow and mutation](./book/04-control-flow.md), `when`/`is`, loops, `=` and Space cells.
@@ -87,6 +87,5 @@ Appendices: [Glossary](./book/90-glossary.md) · [Future work](./book/91-future-
 
 ## Platforms
 
-Yon is developed on Linux (x86-64). It is buildable on macOS (Apple Silicon)
-from source, see the build instructions in chapter 2. The final artifact is, in
-all cases, a native executable produced through LLVM.
+Yon is developed on macOS (Apple Silicon) and built from source, see
+chapter 1. The final artifact is a native executable produced through LLVM.

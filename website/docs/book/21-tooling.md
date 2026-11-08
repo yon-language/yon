@@ -101,9 +101,9 @@ leaves the file exactly as it found it. The worst case is "not formatted", never
 ## Using these in an editor (VS Code)
 
 The language server, the linter, and the formatter reach the editor through one
-extension. Install the Yon extension (a packaged `.vsix` is in `lsp/editors/vscode`, and
-`./install.sh` installs it; or build it from that directory) and, if `yon-lsp` is not on your
-`PATH`, point the `yon.lspPath` setting at your built binary. With that in place:
+extension. Install the Yon extension (build the `.vsix` from `lsp/editors/vscode`, as
+chapter 1 shows) and, if `yon-lsp` is not on your `PATH`, point the
+`yon.lspPath` setting at your built binary. With that in place:
 
 - **diagnostics and warnings appear inline as you type.** Compiler errors under
   their `Exxxx` codes, linter warnings under their `Wxxx` codes, each at its site.

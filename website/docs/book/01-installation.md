@@ -1,59 +1,34 @@
 ---
 id: installation
-title: "1. Installation"
+title: "1. Building from source"
 sidebar_position: 1
 slug: /book/installation
 ---
 
-# Installation
+# Building from source
 
-Yon runs on Linux x86-64 and macOS arm64 (Apple Silicon). You build it
-from source: one round of prerequisites and three builds, the same on both
-platforms.
-
-## The one-line installer
-
-The fastest path runs those three builds for you. From a clone of the
-repository:
-
-```bash
-./install.sh
-```
-
-It reports what is missing (it never installs system packages behind your
-back), builds the runtime, the frontend and the MLIR dialect, then installs a
-self-contained toolchain into `~/.yon` with the CLI on your `PATH` and the
-VS Code / Cursor extension wired up. Pass `--check` (`./install.sh --check`)
-for a dry prerequisites report. Everything below is what the installer does by
-hand, and the path to take when you want each step under your control.
+Yon is built from its sources: there is no release yet, and no installer. It
+is developed on macOS (Apple Silicon).
 
 ## What you need
 
-- OCaml and `dune` (the compiler frontend)
-- LLVM/MLIR 18 (`topos-opt` is an MLIR dialect; `mlir-translate` and
+- OCaml 5.1, through opam, with `dune` and `menhir` (the compiler frontend)
+- LLVM and MLIR 18 (`topos-opt` is an MLIR dialect; `mlir-translate` and
   `llc` come from the same toolchain)
+- CMake and Ninja, to build the dialect
 - A C compiler (`gcc` or `clang`) to link the runtime
+- Python 3, for the regression suite (the build itself does not use it)
 
-That is the whole list. The mathematical core of the runtime (Golay
-code and Leech lattice, the machinery of the Leech heap and its structures)
-is vendored in the repository under `runtime/vendor/mmgroup`
-(BSD-2-Clause) and built with the rest: no Python, no packages to
-install, and a Yon binary depends on libc and libpthread only.
-
-Prerequisites, once:
-
-```bash
-# macOS
-xcode-select --install
-brew install opam cmake ninja llvm@18 coreutils
-
-# Linux (Debian/Ubuntu)
-apt install llvm-18 mlir-18-tools libmlir-18-dev clang opam cmake ninja-build
-```
+How you get them is up to you and your system. The mathematical core of the
+runtime (Golay code and Leech lattice, the machinery of the Leech heap and its
+structures) is vendored in the repository under `runtime/vendor/mmgroup`
+(BSD-2-Clause) and built with the rest, and a Yon binary depends on libc and
+libpthread only.
 
 ## Build
 
-Three builds, one per compiler stage:
+Three builds, one per compiler stage. `LLVM_PREFIX` is the directory where
+LLVM 18 is installed:
 
 ```bash
 git clone https://github.com/yon-language/yon.git
@@ -62,18 +37,16 @@ cd yon
 (cd frontend && dune build)     # 2. compiler frontend and tools
 cd mlir                         # 3. the Topos MLIR dialect
 cmake -G Ninja -B build \
-  -DMLIR_DIR=$(brew --prefix llvm@18 2>/dev/null || echo /usr/lib/llvm-18)/lib/cmake/mlir \
-  -DLLVM_DIR=$(brew --prefix llvm@18 2>/dev/null || echo /usr/lib/llvm-18)/lib/cmake/llvm
+  -DMLIR_DIR=$LLVM_PREFIX/lib/cmake/mlir \
+  -DLLVM_DIR=$LLVM_PREFIX/lib/cmake/llvm
 ninja -C build
 cd ..
 export PATH="$PWD/toolchain:$PWD/pkg:$PATH"   # yonc and friends live in toolchain/, yon-pkg in pkg/
 ```
 
-No environment variables are needed: `yonc` locates the LLVM tools on
-its own (PATH, the `-18` suffixed names, the distro dir, the Homebrew
-keg). Exact platform notes live in the repository's `README.md`.
-The acceptance criterion
-on every platform is the regression suite:
+`yonc` finds the LLVM tools on its own, on the `PATH` or under their `-18`
+names; the `YONC_LLC`, `YONC_MLIR_TRANSLATE`, `YONC_CC` and `YONC_TOPOS_OPT`
+variables override them. The acceptance criterion is the regression suite:
 
 ```bash
 cd regression && ./run_regression.sh
@@ -116,8 +89,7 @@ frontend, Topos dialect, LLVM, runtime.
 
 ## Editor support
 
-The one-line installer already wires up the **VS Code / Cursor** extension. To
-do it by hand, build the `.vsix` and install it:
+For **VS Code / Cursor**, build the extension's `.vsix` and install it:
 
 ```bash
 cd lsp/editors/vscode
