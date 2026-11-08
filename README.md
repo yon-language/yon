@@ -21,9 +21,11 @@
 Yon starts from one question: what does a programming language look like if
 the categorical vocabulary is the *surface*, not a library on top of it? A
 **world** is a category, a **place** is an object in it, a **value** is a section
-of a place, and all behaviour lives in **arrows**. Logic is internal: truth is
-the subobject classifier Ω of a Heyting algebra, so `unknown` is an ordinary
-truth value rather than an error or a null.
+of a place, and all behaviour lives in **arrows**. A type is always named by its
+place; a place can be carried by a machine value, its **carrier**: `Number` by a
+double, `Int64` by a 64-bit word, `Text` by a handle into the heap. Logic is
+internal: truth is the subobject classifier Ω of a Heyting algebra, so
+`unknown` is an ordinary truth value rather than an error or a null.
 
 Underneath, values live in **two heaps**. The **FNV heap** is content-addressed:
 equal content gets the same address (an FNV-1a hash confirmed by a byte
@@ -106,25 +108,16 @@ toolchain/yonc examples/inductive_tree -o tree && ./tree; echo $?
 
 ## Status
 
-Yon is a research language under active development (version 1.2 in
-progress). It is not ready for production use, and the syntax still changes.
+Yon is in active development. The syntax still changes, and the language is
+not ready for production use.
 
-The regression suite is the source of truth. As of 2026-10-21, `regression/gate.sh 3`
-reports:
+The core is in place: the type checker; the kernel, with higher inductive
+types; the algebras of the prelude; and meta-Yon, the kernel formalized in
+Yon, where a property of the kernel is a `fun` whose type states it and the
+compiler that accepts it checks the proof. The collections of the prelude
+and other parts are still being worked on.
 
-| | |
-|---|---|
-| pytest | **1676 passed**, 10 skipped (each one declared in a register), **85 expected failures** |
-| example programs | **101**, every exit code identical to a recorded baseline |
-| cross-Space scenarios | **8**, multi-process, over shared memory and the wire |
-| self-hosting | the frontend for a core subset, written in Yon, reproduces itself byte for byte |
-
-The 85 expected failures are known defects found in audits, each pinned by a
-strict probe that will fail the suite the day the defect is fixed without the
-probe being updated. Most live in `regression/test_audit_probes.py` and
-`regression/test_soundness_probes.py`.
-
-Platforms: macOS on Apple Silicon and Linux x86-64. macOS on Intel is untested.
+Platforms: macOS on Apple Silicon and Linux x86-64.
 
 ## Install
 
@@ -141,20 +134,11 @@ with `| bash -s -- --check` to only check prerequisites.
 
 ## Build from source
 
-Prerequisites: LLVM/MLIR 18, OCaml 5.1 with `dune` and `menhir`, CMake, Ninja.
+Prerequisites: LLVM/MLIR 18, OCaml 5.1 with `dune` and `menhir`, a C
+compiler, CMake, Ninja.
 
-```bash
-# macOS
-brew install opam cmake ninja llvm@18 coreutils
-# Debian / Ubuntu
-apt install llvm-18 mlir-18-tools libmlir-18-dev clang opam cmake ninja-build
-
-opam init -y && opam switch create 5.1.1 && eval $(opam env)
-opam install dune menhir -y
-```
-
-Then, from the repository root (`LLVM_PREFIX` is `$(brew --prefix llvm@18)` on
-macOS and `/usr/lib/llvm-18` on Linux):
+From the repository root, with `LLVM_PREFIX` the directory where LLVM 18 is
+installed:
 
 ```bash
 make -C runtime                                    # C runtime
@@ -173,16 +157,17 @@ No Python is needed to build: the mmgroup core is vendored under
 ## Testing
 
 The gate is hierarchical and stops at the first failure, so the cost matches
-the change. The suite runs on its own Python environment; `python-flint` (Arb)
-is the oracle of the numeric tests and is needed by nothing else:
+the change. The suite runs on its own Python environment, `.venv` at the
+repository root, with the packages listed in `regression/requirements.txt`;
+`python-flint` (Arb) is the oracle of the numeric tests and is needed by
+nothing else:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -r regression/requirements.txt
-regression/gate.sh 0   # build + smoke                              ~10 s
-regression/gate.sh 1   # + tests targeted at the files you changed  ~1-3 min
-regression/gate.sh 2   # + acceptance: examples and cross-Space      ~3-5 min
-regression/gate.sh 3   # + the full suite (benchmarks checked on a small run) ~8 min
-regression/gate.sh bench  # the benchmark measurements, on a quiet machine     ~6-8 min
+regression/gate.sh 0      # build + smoke
+regression/gate.sh 1      # + tests targeted at the files you changed
+regression/gate.sh 2      # + acceptance: examples and cross-Space
+regression/gate.sh 3      # + the full suite (benchmarks checked on a small run)
+regression/gate.sh bench  # the benchmark measurements, on a quiet machine
 ```
 
 While you work, the compiler's content cache makes a re-run of tier 1 fast:
@@ -204,7 +189,7 @@ runtime/      C runtime: content-addressed heap, arenas, Spaces, wire protocol (
 prelude/      the standard places, written in Yon
 toolchain/    yonc and the yon driver
 selfhost/     the Yon frontend written in Yon
-examples/     example programs; 101 of them have a recorded expected exit code
+examples/     example programs; 103 have a recorded outcome: an exit code, or the refusal they show
 regression/   the test suite and gate.sh
 website/      the book (Docusaurus), published at yon-lang.org
 lsp/, pkg/    editor integration and the package tool
