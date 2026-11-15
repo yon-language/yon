@@ -2750,7 +2750,12 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   let r = v1_cell_expr cells in
   match e with
   | S.EVar (x, loc) when V1SS.mem x cells ->
-      v1_call "__cell_get" [S.EVar (x, loc)]
+      (* a read of a cell whose value is injected (into the coproduct of
+         `on error`) keeps the site of the name: the injection is of the
+         value read, not of the cell *)
+      if Hashtbl.mem S.return_inject_sites (loc.S.file, loc.S.start_line, loc.S.start_col)
+      then S.ECall ("__cell_get", [S.EVar (x, loc)], loc)
+      else v1_call "__cell_get" [S.EVar (x, loc)]
   | S.EVar _ | S.ELit _ | S.EPullback _ | S.EPushout _ -> e
   | S.EField (o, f, loc) -> S.EField (r o, f, loc)
   | S.ECall (n, args, loc) -> S.ECall (n, List.map r args, loc)
