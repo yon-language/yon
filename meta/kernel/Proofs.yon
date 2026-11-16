@@ -1,21 +1,21 @@
 /* Proofs — the theorems of the fragment: each fun's type is its statement. */
 place Proofs {
   /* if b then x else x = x: the kernel has no rule for it, the two cases prove it. */
-  fun if_same(b: Boolean, x: Term): (if b then x else x) = x {
+  proof fun if_same(b: Boolean, x: Term): (if b then x else x) = x {
     return match b { true => clear, false => clear }
   }
 
   /* Different arms are distinct: a path between them gives a point of Empty. */
   fun code(b: Boolean): Type { return if b then Number else Empty }
-  fun absurd(p: true = false): Empty { return transport((code, p) ↦ ap, 0) }
+  proof fun absurd(p: true = false): Empty { return transport((code, p) ↦ ap, 0) }
   fun is_yes(t: Term): Boolean {
     return match t { yes => true, no => false, var as n => false, ite as (c, u, v) => false }
   }
-  fun yes_is_not_no(p: Term.yes = Term.no): Empty { return absurd((is_yes, p) ↦ ap) }
+  proof fun yes_is_not_no(p: Term.yes = Term.no): Empty { return absurd((is_yes, p) ↦ ap) }
   fun is_ite(t: Term): Boolean {
     return match t { yes => false, no => false, var as n => false, ite as (c, u, v) => true }
   }
-  fun ite_is_not_yes(c: Term, u: Term, v: Term, p: (c, u, v) ↪ ite = Term.yes): Empty {
+  proof fun ite_is_not_yes(c: Term, u: Term, v: Term, p: (c, u, v) ↪ ite = Term.yes): Empty {
     return absurd((is_ite, p) ↦ ap)
   }
 
@@ -23,7 +23,7 @@ place Proofs {
   fun cond_of(t: Term): Term {
     return match t { yes => t, no => t, var as n => t, ite as (c, u, v) => c }
   }
-  fun ite_injective(a: Term, u: Term, v: Term, b: Term, x: Term, y: Term,
+  proof fun ite_injective(a: Term, u: Term, v: Term, b: Term, x: Term, y: Term,
                     p: (a, u, v) ↪ ite = (b, x, y) ↪ ite): a = b {
     return (cond_of, p) ↦ ap
   }
@@ -41,11 +41,11 @@ place Proofs {
   fun else_of(t: Term): Term {
     return match t { yes => t, no => t, var as n => t, ite as (c, u, v) => v }
   }
-  fun ite_injective_u(a: Term, u: Term, v: Term, b: Term, x: Term, y: Term,
+  proof fun ite_injective_u(a: Term, u: Term, v: Term, b: Term, x: Term, y: Term,
                       p: (a, u, v) ↪ ite = (b, x, y) ↪ ite): u = x {
     return (then_of, p) ↦ ap
   }
-  fun ite_injective_v(a: Term, u: Term, v: Term, b: Term, x: Term, y: Term,
+  proof fun ite_injective_v(a: Term, u: Term, v: Term, b: Term, x: Term, y: Term,
                       p: (a, u, v) ↪ ite = (b, x, y) ↪ ite): v = y {
     return (else_of, p) ↦ ap
   }
@@ -54,10 +54,10 @@ place Proofs {
   fun is_no(t: Term): Boolean {
     return match t { yes => false, no => true, var as n => false, ite as (c, u, v) => false }
   }
-  fun ite_is_not_no(c: Term, u: Term, v: Term, p: (c, u, v) ↪ ite = Term.no): Empty {
+  proof fun ite_is_not_no(c: Term, u: Term, v: Term, p: (c, u, v) ↪ ite = Term.no): Empty {
     return absurd(inv((is_no, p) ↦ ap))
   }
-  fun src_not_yes(e: Step, p: (e ↦ Step.src) = Term.yes): Empty {
+  proof fun src_not_yes(e: Step, p: (e ↦ Step.src) = Term.yes): Empty {
     return match e {
       ifTrue as (u, v) => ite_is_not_yes(yes, u, v, p),
       ifFalse as (u, v) => ite_is_not_yes(no, u, v, p),
@@ -67,7 +67,7 @@ place Proofs {
       inV as (c, u, e2) => ite_is_not_yes(c, u, e2 ↦ Step.src, p)
     }
   }
-  fun src_not_no(e: Step, p: (e ↦ Step.src) = Term.no): Empty {
+  proof fun src_not_no(e: Step, p: (e ↦ Step.src) = Term.no): Empty {
     return match e {
       ifTrue as (u, v) => ite_is_not_no(yes, u, v, p),
       ifFalse as (u, v) => ite_is_not_no(no, u, v, p),
@@ -84,19 +84,19 @@ place Proofs {
   }
   fun one_more(n: Nat): Nat { return n ↪ succ }
   fun two_more(n: Nat): Nat { return n ↪ succ ↪ succ }
-  fun plus_zero(n: Nat): plus(n, zero) = n {
+  proof fun plus_zero(n: Nat): plus(n, zero) = n {
     return match n { zero => clear, succ as m => (one_more, plus_zero(m)) ↦ ap }
   }
-  fun plus_succ(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {
+  proof fun plus_succ(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {
     return match a { zero => clear, succ as m => (one_more, plus_succ(m, b)) ↦ ap }
   }
-  fun comm(a: Nat, b: Nat): plus(a, b) = plus(b, a) {
+  proof fun comm(a: Nat, b: Nat): plus(a, b) = plus(b, a) {
     return match a {
       zero => inv(plus_zero(b)),
       succ as m => concat((one_more, comm(m, b)) ↦ ap, inv(plus_succ(b, m)))
     }
   }
-  fun assoc(a: Nat, b: Nat, c: Nat): plus(plus(a, b), c) = plus(a, plus(b, c)) {
+  proof fun assoc(a: Nat, b: Nat, c: Nat): plus(plus(a, b), c) = plus(a, plus(b, c)) {
     return match a { zero => clear, succ as m => (one_more, assoc(m, b, c)) ↦ ap }
   }
   fun size(t: Term): Nat {
@@ -107,14 +107,14 @@ place Proofs {
   }
 
   /* Adding is a congruence on each side. */
-  fun plus_l(a: Nat, b: Nat, r: Nat, p: a = b): plus(a, r) = plus(b, r) {
+  proof fun plus_l(a: Nat, b: Nat, r: Nat, p: a = b): plus(a, r) = plus(b, r) {
     return (fun(x: Nat) => plus(x, r), p) ↦ ap
   }
-  fun plus_r(r: Nat, a: Nat, b: Nat, p: a = b): plus(r, a) = plus(r, b) {
+  proof fun plus_r(r: Nat, a: Nat, b: Nat, p: a = b): plus(r, a) = plus(r, b) {
     return (fun(x: Nat) => plus(r, x), p) ↦ ap
   }
   /* Exchange of two summands. */
-  fun mid(a: Nat, g: Nat, b: Nat): plus(a, plus(g, b)) = plus(g, plus(a, b)) {
+  proof fun mid(a: Nat, g: Nat, b: Nat): plus(a, plus(g, b)) = plus(g, plus(a, b)) {
     return concat(inv(assoc(a, g, b)), concat(plus_l(plus(a, g), plus(g, a), b, comm(a, g)), assoc(g, a, b)))
   }
 
@@ -129,7 +129,7 @@ place Proofs {
       inV as (c, u, e) => gap(e)
     }
   }
-  fun decreases(d: Step): size(d ↦ Step.src) = plus(gap(d), size(d ↦ Step.tgt)) ↪ succ {
+  proof fun decreases(d: Step): size(d ↦ Step.src) = plus(gap(d), size(d ↦ Step.tgt)) ↪ succ {
     return match d {
       ifTrue as (u, v) => (two_more, comm(size(u), size(v))) ↦ ap,
       ifFalse as (u, v) => clear,
@@ -168,25 +168,25 @@ place Proofs {
   }
 
   /* Local confluence: every peak has a valley. */
-  fun start_in_c(m: Move, u: Term, v: Term): (m, u, v) ↦ Move.in_c ↦ Move.start = (m ↦ Move.start, u, v) ↪ ite {
+  proof fun start_in_c(m: Move, u: Term, v: Term): (m, u, v) ↦ Move.in_c ↦ Move.start = (m ↦ Move.start, u, v) ↪ ite {
     return match m { still as t => clear, once as d => clear }
   }
-  fun finish_in_c(m: Move, u: Term, v: Term): (m, u, v) ↦ Move.in_c ↦ Move.finish = (m ↦ Move.finish, u, v) ↪ ite {
+  proof fun finish_in_c(m: Move, u: Term, v: Term): (m, u, v) ↦ Move.in_c ↦ Move.finish = (m ↦ Move.finish, u, v) ↪ ite {
     return match m { still as t => clear, once as d => clear }
   }
-  fun start_in_u(c: Term, m: Move, v: Term): (c, m, v) ↦ Move.in_u ↦ Move.start = (c, m ↦ Move.start, v) ↪ ite {
+  proof fun start_in_u(c: Term, m: Move, v: Term): (c, m, v) ↦ Move.in_u ↦ Move.start = (c, m ↦ Move.start, v) ↪ ite {
     return match m { still as t => clear, once as d => clear }
   }
-  fun finish_in_u(c: Term, m: Move, v: Term): (c, m, v) ↦ Move.in_u ↦ Move.finish = (c, m ↦ Move.finish, v) ↪ ite {
+  proof fun finish_in_u(c: Term, m: Move, v: Term): (c, m, v) ↦ Move.in_u ↦ Move.finish = (c, m ↦ Move.finish, v) ↪ ite {
     return match m { still as t => clear, once as d => clear }
   }
-  fun start_in_v(c: Term, u: Term, m: Move): (c, u, m) ↦ Move.in_v ↦ Move.start = (c, u, m ↦ Move.start) ↪ ite {
+  proof fun start_in_v(c: Term, u: Term, m: Move): (c, u, m) ↦ Move.in_v ↦ Move.start = (c, u, m ↦ Move.start) ↪ ite {
     return match m { still as t => clear, once as d => clear }
   }
-  fun finish_in_v(c: Term, u: Term, m: Move): (c, u, m) ↦ Move.in_v ↦ Move.finish = (c, u, m ↦ Move.finish) ↪ ite {
+  proof fun finish_in_v(c: Term, u: Term, m: Move): (c, u, m) ↦ Move.in_v ↦ Move.finish = (c, u, m ↦ Move.finish) ↪ ite {
     return match m { still as t => clear, once as d => clear }
   }
-  fun same_source(p: Peak): p ↦ Peak.left ↦ Step.src = p ↦ Peak.right ↦ Step.src {
+  proof fun same_source(p: Peak): p ↦ Peak.left ↦ Step.src = p ↦ Peak.right ↦ Step.src {
     return match p {
       rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
       inCp as (p, u, v) => (fun(x: Term) => (x, u, v) ↪ ite, same_source(p)) ↦ ap,
@@ -196,7 +196,7 @@ place Proofs {
       swap as p2 => inv(same_source(p2))
     }
   }
-  fun left_starts(p: Peak): p ↦ Peak.l1 ↦ Move.start = p ↦ Peak.left ↦ Step.tgt {
+  proof fun left_starts(p: Peak): p ↦ Peak.l1 ↦ Move.start = p ↦ Peak.left ↦ Step.tgt {
     return match p {
       rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
       inCp as (p, u, v) => concat(start_in_c(p ↦ Peak.l1, u, v), (fun(x: Term) => (x, u, v) ↪ ite, left_starts(p)) ↦ ap),
@@ -206,7 +206,7 @@ place Proofs {
       swap as p2 => right_starts(p2)
     }
   }
-  fun right_starts(p: Peak): p ↦ Peak.r1 ↦ Move.start = p ↦ Peak.right ↦ Step.tgt {
+  proof fun right_starts(p: Peak): p ↦ Peak.r1 ↦ Move.start = p ↦ Peak.right ↦ Step.tgt {
     return match p {
       rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
       inCp as (p, u, v) => concat(start_in_c(p ↦ Peak.r1, u, v), (fun(x: Term) => (x, u, v) ↪ ite, right_starts(p)) ↦ ap),
@@ -216,7 +216,7 @@ place Proofs {
       swap as p2 => left_starts(p2)
     }
   }
-  fun left_links(p: Peak): p ↦ Peak.l1 ↦ Move.finish = p ↦ Peak.l2 ↦ Move.start {
+  proof fun left_links(p: Peak): p ↦ Peak.l1 ↦ Move.finish = p ↦ Peak.l2 ↦ Move.start {
     return match p {
       rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
       inCp as (p, u, v) => concat(finish_in_c(p ↦ Peak.l1, u, v), concat((fun(x: Term) => (x, u, v) ↪ ite, left_links(p)) ↦ ap, inv(start_in_c(p ↦ Peak.l2, u, v)))),
@@ -226,7 +226,7 @@ place Proofs {
       swap as p2 => right_links(p2)
     }
   }
-  fun right_links(p: Peak): p ↦ Peak.r1 ↦ Move.finish = p ↦ Peak.r2 ↦ Move.start {
+  proof fun right_links(p: Peak): p ↦ Peak.r1 ↦ Move.finish = p ↦ Peak.r2 ↦ Move.start {
     return match p {
       rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
       inCp as (p, u, v) => concat(finish_in_c(p ↦ Peak.r1, u, v), concat((fun(x: Term) => (x, u, v) ↪ ite, right_links(p)) ↦ ap, inv(start_in_c(p ↦ Peak.r2, u, v)))),
@@ -236,7 +236,7 @@ place Proofs {
       swap as p2 => left_links(p2)
     }
   }
-  fun valley_meets(p: Peak): p ↦ Peak.l2 ↦ Move.finish = p ↦ Peak.r2 ↦ Move.finish {
+  proof fun valley_meets(p: Peak): p ↦ Peak.l2 ↦ Move.finish = p ↦ Peak.r2 ↦ Move.finish {
     return match p {
       rootT as u => clear, rootF as u => clear, trueU as (e, v) => clear, trueV as (u, e) => clear, falseU as (e, v) => clear, falseV as (u, e) => clear, sameC as (e, u) => clear, sameU as (c, e) => clear, sameV as (c, e) => clear, cU as (e, f, v) => clear, cV as (e, u, f) => clear, uV as (c, e, f) => clear,
       inCp as (p, u, v) => concat(finish_in_c(p ↦ Peak.l2, u, v), concat((fun(x: Term) => (x, u, v) ↪ ite, valley_meets(p)) ↦ ap, inv(finish_in_c(p ↦ Peak.r2, u, v)))),
@@ -253,7 +253,7 @@ place Proofs {
      with the overlaps on variables (trueU, trueV, falseU, falseV, sameC, sameU, sameV).
      The disjoint steps commute (cU, cV, uV), and the nested ones are lifted with inC, inU,
      inV (inCp, inUp, inVp). The link to the two steps is not yet in the type. */
-  fun peak_of(d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.src)): Peak {
+  proof fun peak_of(d1: Step, d2: Step, q: (d1 ↦ Step.src) = (d2 ↦ Step.src)): Peak {
     return match d1 {
       ifTrue as (u, v) => peak_of_yes(d2, u, v, q),
       ifFalse as (u, v) => peak_of_no(d2, u, v, q),
@@ -267,7 +267,7 @@ place Proofs {
   /* d1 is the ifTrue at the root: against a root step it is a critical pair (diag, rootT) or
      a refused overlap (ifFalse); against a nested step it is a refused overlap (inC) or an
      overlap on a variable (trueU, trueV). */
-  fun peak_of_yes(d2: Step, u: Term, v: Term, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+  proof fun peak_of_yes(d2: Step, u: Term, v: Term, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
     return match d2 {
       ifTrue as (u2, v2) => (u, v) ↪ ifTrue ↪ diag,
       ifFalse as (u2, v2) => exfalso(yes_is_not_no(ite_injective(yes, u, v, no, u2, v2, q))),
@@ -279,7 +279,7 @@ place Proofs {
   }
 
   /* d1 is the ifFalse at the root. */
-  fun peak_of_no(d2: Step, u: Term, v: Term, q: (no, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+  proof fun peak_of_no(d2: Step, u: Term, v: Term, q: (no, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
     return match d2 {
       ifTrue as (u2, v2) => exfalso(yes_is_not_no(inv(ite_injective(no, u, v, yes, u2, v2, q)))),
       ifFalse as (u2, v2) => (u, v) ↪ ifFalse ↪ diag,
@@ -291,7 +291,7 @@ place Proofs {
   }
 
   /* d1 is the ifSame at the root. */
-  fun peak_of_same(d2: Step, c: Term, w: Term, q: (c, w, w) ↪ ite = (d2 ↦ Step.src)): Peak {
+  proof fun peak_of_same(d2: Step, c: Term, w: Term, q: (c, w, w) ↪ ite = (d2 ↦ Step.src)): Peak {
     return match d2 {
       ifTrue as (u2, v2) => w ↪ rootT ↪ swap,
       ifFalse as (u2, v2) => w ↪ rootF ↪ swap,
@@ -305,7 +305,7 @@ place Proofs {
   /* d1 is nested in the condition: in the same position it recurses and lifts with inC; in a
      disjoint position the steps commute (cU, cV); against a root step it is a refused overlap
      (ifTrue, ifFalse) or an overlap on a variable (sameC). */
-  fun peak_of_in_c(d2: Step, e: Step, u: Term, v: Term, q: (e ↦ Step.src, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+  proof fun peak_of_in_c(d2: Step, e: Step, u: Term, v: Term, q: (e ↦ Step.src, u, v) ↪ ite = (d2 ↦ Step.src)): Peak {
     return match d2 {
       ifTrue as (u2, v2) => exfalso(src_not_yes(e, ite_injective(e ↦ Step.src, u, v, yes, u2, v2, q))),
       ifFalse as (u2, v2) => exfalso(src_not_no(e, ite_injective(e ↦ Step.src, u, v, no, u2, v2, q))),
@@ -319,7 +319,7 @@ place Proofs {
   /* d1 is nested in the then branch: in the same position it recurses and lifts with inU; in a
      disjoint position the steps commute (cU, uV); against a root step it is an overlap on a
      variable (trueU, falseU, sameU). */
-  fun peak_of_in_u(d2: Step, c: Term, e: Step, v: Term, q: (c, e ↦ Step.src, v) ↪ ite = (d2 ↦ Step.src)): Peak {
+  proof fun peak_of_in_u(d2: Step, c: Term, e: Step, v: Term, q: (c, e ↦ Step.src, v) ↪ ite = (d2 ↦ Step.src)): Peak {
     return match d2 {
       ifTrue as (u2, v2) => (e, v) ↪ trueU ↪ swap,
       ifFalse as (u2, v2) => (e, v) ↪ falseU ↪ swap,
@@ -333,7 +333,7 @@ place Proofs {
   /* d1 is nested in the else branch: in the same position it recurses and lifts with inV; in a
      disjoint position the steps commute (cV, uV); against a root step it is an overlap on a
      variable (trueV, falseV, sameV). */
-  fun peak_of_in_v(d2: Step, c: Term, u: Term, e: Step, q: (c, u, e ↦ Step.src) ↪ ite = (d2 ↦ Step.src)): Peak {
+  proof fun peak_of_in_v(d2: Step, c: Term, u: Term, e: Step, q: (c, u, e ↦ Step.src) ↪ ite = (d2 ↦ Step.src)): Peak {
     return match d2 {
       ifTrue as (u2, v2) => (u, e) ↪ trueV ↪ swap,
       ifFalse as (u2, v2) => (u, e) ↪ falseV ↪ swap,

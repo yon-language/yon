@@ -121,8 +121,14 @@ went down with it.
 Three packages, two kinds of boundary, git for code, the kernel for
 processes, and the type checker policing both ends.
 
-## A project of proofs
+## Proofs in a project
 
-`kind = "proof"` in `[package]` makes every `fun` of the project a proof. The compiler refuses what
-does not pass the termination check, `is given`, `forever` and `while`, with code `E2010`, and only
-`main` reaches the run time: the theorems are checked and have no code. `meta/` is such a project.
+A project has no kind: a proof is marked on its fun, `proof fun name(params): statement { ... }`,
+and any project may hold proofs beside the code that runs. The statement is the return type,
+written as any type is: a path, a Σ, `Empty`, `{x : A where P}`. The compiler refuses, with code
+`E2010`, a proof fun that does not pass the termination check, that uses `forever` or `while`, or
+that calls a fun the termination check does not certify; and a fun that runs and calls a proof
+fun, because a proof has no run time: it is checked, and it has no code. Naming proof funs in
+`f <=> g by eta, eps` is not a call: the compiler checks the two laws, and at run time the
+equivalence is its two funs. `kind = "proof"` in `[package]` no longer exists, and a `yon.toml`
+that writes it is refused. The theorems of `meta/` are proof funs.

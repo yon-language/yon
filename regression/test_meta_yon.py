@@ -57,7 +57,7 @@ def test_the_two_cases_do_not_prove_a_false_statement(tmp_path):
 def _nat(tmp_path, proofs):
     proj = tmp_path / "nat"
     proj.mkdir()
-    (proj / "yon.toml").write_text('[package]\nname = "nat"\nkind = "proof"\n\n'
+    (proj / "yon.toml").write_text('[package]\nname = "nat"\n\n'
                                    '[world.W]\nobjects = ["Nat"]\nspaces = ["w"]\n\n'
                                    '[runtime]\nbackend = "memory"\n')
     (proj / "w").mkdir()
@@ -93,16 +93,16 @@ def test_a_step_does_not_compute_to_the_other_branch(tmp_path):
 
 def test_induction_computes_under_a_constructor(tmp_path):
     r = _nat(tmp_path,
-             "  fun zr(n: Nat): plus(n, zero) = n {\n"
+             "  proof fun zr(n: Nat): plus(n, zero) = n {\n"
              "    return match n { zero => clear, succ as m => (s_, zr(m)) ↦ ap }\n  }\n"
-             "  fun sr(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {\n"
+             "  proof fun sr(a: Nat, b: Nat): plus(a, b ↪ succ) = plus(a, b) ↪ succ {\n"
              "    return match a { zero => clear, succ as m => (s_, sr(m, b)) ↦ ap }\n  }\n")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_induction_does_not_prove_a_false_statement(tmp_path):
     r = _nat(tmp_path,
-             "  fun bad(n: Nat): plus(n, zero) = zero {\n"
+             "  proof fun bad(n: Nat): plus(n, zero) = zero {\n"
              "    return match n { zero => clear, succ as m => (s_, bad(m)) ↦ ap }\n  }\n")
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "mismatch" in out, out
@@ -116,39 +116,85 @@ def _rule(tmp_path, body, *words):
         assert w in out, out
 
 
-def test_a_proof_project_refuses_a_fun_that_does_not_terminate(tmp_path):
-    _rule(tmp_path, "  fun giro(n: Nat): Nat { return giro(n) }\n", "termination check")
+def test_a_proof_fun_that_does_not_terminate_is_refused(tmp_path):
+    _rule(tmp_path, "  proof fun giro(n: Nat): Nat { return giro(n) }\n",
+          "proof fun giro", "termination check")
 
 
-def test_a_proof_project_refuses_is_given(tmp_path):
-    proj = _with_proofs(tmp_path, "")
-    (proj / "kernel" / "Term.yon").write_text(
-        "place Term { this > yes :U no :U var Number :U ite Term Term Term\n"
-        "  law assioma ∀t : Term, t = t is given\n}\n")
-    r = _compile(proj, tmp_path)
+def test_a_proof_fun_that_is_given_is_refused(tmp_path):
+    # outside the prelude no fun is given, a proof fun neither: the refusal comes first, as E2007
+    r = _nat(tmp_path, "  proof fun assioma(n: Nat): n = n is given\n")
     out = r.stdout + r.stderr
-    assert r.returncode != 0 and "E2010" in out and "is given" in out, out
+    assert r.returncode != 0 and "E2007" in out and "fun assioma is given" in out, out
 
 
-def test_a_proof_project_refuses_forever(tmp_path):
-    _rule(tmp_path, "  fun gira: Number {\n    forever { x := 1 }\n    return 0\n  }\n", "forever")
+def test_a_proof_fun_with_forever_is_refused(tmp_path):
+    _rule(tmp_path, "  proof fun gira: Number {\n    forever { x := 1 }\n    return 0\n  }\n",
+          "proof fun gira", "forever is refused: a proof terminates")
 
 
-def test_a_proof_project_refuses_while(tmp_path):
-    _rule(tmp_path, "  fun gira: Number {\n    while true do { x := 1 }\n    return 0\n  }\n", "while")
+def test_a_proof_fun_with_while_is_refused(tmp_path):
+    _rule(tmp_path, "  proof fun gira: Number {\n    while true do { x := 1 }\n    return 0\n  }\n",
+          "proof fun gira", "while is refused: a proof terminates")
 
 
-def test_a_project_declares_no_other_kind(tmp_path):
-    proj = META
+def test_a_proof_fun_calls_only_certified_funs(tmp_path):
+    # giro is a fun like any other and compiles, but it does not terminate: a proof that rests
+    # on it would prove anything
+    _rule(tmp_path, "  fun giro(n: Nat): Nat { return giro(n) }\n"
+                    "  proof fun usa(n: Nat): Nat { return giro(n) }\n",
+          "proof fun usa", "it calls giro,",
+          "the termination check (SCT) does not certify")
+
+
+def test_a_proof_fun_is_not_called_by_code_that_runs(tmp_path):
+    _rule(tmp_path, "  proof fun zr(n: Nat): plus(n, zero) = n {\n"
+                    "    return match n { zero => clear, succ as m => (s_, zr(m)) ↦ ap }\n  }\n"
+                    "  fun usa: Number {\n    w := zr(zero)\n    return 0\n  }\n",
+          "fun usa calls proof fun zr", "a proof has no run time")
+
+
+def test_a_proof_fun_named_in_by_is_not_a_call_of_code_that_runs(tmp_path):
+    # main names two proof funs in `by`: the compiler checks them and that is all; at run time
+    # the equivalence is its two funs. Its negative twin is the direct call of a proof fun
+    # (test_a_proof_fun_is_not_called_by_code_that_runs)
+    proj = tmp_path / "eq"
+    proj.mkdir()
+    (proj / "Entry.yon").write_text(
+        "place Bool { this > tt :U ff }\nplace Bit { this > one :U zero }\nplace Entry {\n"
+        "  fun b2bit(b: Bool): Bit { return match b { tt => one, ff => zero } }\n"
+        "  fun bit2b(x: Bit): Bool { return match x { one => tt, zero => ff } }\n"
+        "  proof fun eta(a: Bool): bit2b(b2bit(a)) = a { return match a { tt => clear tt, ff => clear ff } }\n"
+        "  proof fun eps(b: Bit): b2bit(bit2b(b)) = b { return match b { one => clear one, zero => clear zero } }\n"
+        "  fun main: Number {\n    bridge := b2bit <=> bit2b by eta, eps\n"
+        "    y := tt ↦ bridge\n    return match y { one => 1, zero => 0 }\n  }\n}\n")
+    r = _compile(proj, tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert subprocess.run([str(tmp_path / "exe")]).returncode == 1
+
+
+def test_kind_proof_no_longer_exists(tmp_path):
     copy = tmp_path / "meta"
-    shutil.copytree(proj, copy)
-    (copy / "yon.toml").write_text((proj / "yon.toml").read_text().replace('"proof"', '"altro"'))
+    shutil.copytree(META, copy)
+    (copy / "yon.toml").write_text((META / "yon.toml").read_text().replace(
+        '[package]\n', '[package]\nkind = "proof"\n'))
     r = _compile(copy, tmp_path)
-    assert r.returncode != 0 and 'the only kind' in r.stdout + r.stderr, r.stdout + r.stderr
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and 'kind = "proof" no longer exists' in out and "proof fun" in out, out
 
 
-def test_a_normal_project_keeps_what_a_proof_refuses(tmp_path):
-    # the rule is the project's: a recursive fun without a certificate compiles elsewhere
+def test_a_project_declares_no_kind(tmp_path):
+    copy = tmp_path / "meta"
+    shutil.copytree(META, copy)
+    (copy / "yon.toml").write_text((META / "yon.toml").read_text().replace(
+        '[package]\n', '[package]\nkind = "altro"\n'))
+    r = _compile(copy, tmp_path)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "kind no longer exists" in out, out
+
+
+def test_a_fun_that_is_not_a_proof_keeps_what_a_proof_refuses(tmp_path):
+    # the rule is the proof fun's: a recursive fun without a certificate compiles
     proj = tmp_path / "free"
     proj.mkdir()
     (proj / "Entry.yon").write_text(
@@ -268,7 +314,7 @@ def _call_injective(a1, a2):
 
 
 def test_a_nested_match_reads_q_at_the_arms_of_both_steps(tmp_path):
-    r = _compile(_with_theorem(tmp_path, FORGET + f"  fun heads({TWO_STEPS}): Number {{\n"
+    r = _compile(_with_theorem(tmp_path, FORGET + f"  proof fun heads({TWO_STEPS}): Number {{\n"
                                + _nested_match(_call_injective) + "  }\n"), tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -277,13 +323,13 @@ def test_a_branch_does_not_read_q_at_the_arm_of_another(tmp_path):
     # every branch reads q as if d1 were ifFalse: in the branch of ifTrue that is yes = no
     def leaf(a1, a2):
         return _call_injective("ifFalse" if a1 == "ifTrue" else a1, a2)
-    _proof_rejected(tmp_path, FORGET + f"  fun heads({TWO_STEPS}): Number {{\n"
+    _proof_rejected(tmp_path, FORGET + f"  proof fun heads({TWO_STEPS}): Number {{\n"
                     + _nested_match(leaf) + "  }\n", "E2001", "ite_injective")
 
 
 def test_q_is_not_specialized_before_the_match(tmp_path):
     _proof_rejected(tmp_path, FORGET +
-        f"  fun early(u: Term, v: Term, u2: Term, v2: Term, {TWO_STEPS}): Number {{\n"
+        f"  proof fun early(u: Term, v: Term, u2: Term, v2: Term, {TWO_STEPS}): Number {{\n"
         "    x := forget(yes, no, ite_injective(yes, u, v, no, u2, v2, q))\n"
         "    return match d1 { ifTrue as (a, b) => x, ifFalse as (a, b) => x, ifSame as (a, b) => x,\n"
         "      inC as (a, b, c) => x, inU as (a, b, c) => x, inV as (a, b, c) => x }\n  }\n",
@@ -293,7 +339,7 @@ def test_q_is_not_specialized_before_the_match(tmp_path):
 def test_a_scrutinee_that_is_not_a_variable_refines_nothing(tmp_path):
     _proof_rejected(tmp_path, FORGET +
         "  fun same(d: Step): Step { return d }\n"
-        f"  fun not_var({TWO_STEPS}, u: Term, v: Term, u2: Term, v2: Term): Number {{\n"
+        f"  proof fun not_var({TWO_STEPS}, u: Term, v: Term, u2: Term, v2: Term): Number {{\n"
         "    return match same(d1) { ifTrue as (a, b) => forget(yes, no, ite_injective(yes, a, b, no, u2, v2, q)),\n"
         "      ifFalse as (a, b) => 0, ifSame as (a, b) => 0,\n"
         "      inC as (a, b, c) => 0, inU as (a, b, c) => 0, inV as (a, b, c) => 0 }\n  }\n",
@@ -302,7 +348,7 @@ def test_a_scrutinee_that_is_not_a_variable_refines_nothing(tmp_path):
 
 def _descent(first, second):
     return (
-        FORGET + f"  fun descend({TWO_STEPS}): Number {{\n"
+        FORGET + f"  proof fun descend({TWO_STEPS}): Number {{\n"
         "    return match d1 {\n"
         "      inC as (e, u, v) => match d2 {\n"
         f"        inC as (e2, u2, v2) => descend({first}, {second}, "
@@ -326,14 +372,14 @@ def test_recursion_on_the_same_step_does_not_terminate(tmp_path):
 
 def test_a_cycle_through_a_helper_does_not_terminate(tmp_path):
     # peak_of recurses through peak_of_in_c/u/v: a cycle through a helper must not pass the check
-    _rule(tmp_path, "  fun ping(n: Nat): Nat { return pong(n) }\n"
-                    "  fun pong(n: Nat): Nat { return ping(n) }\n", "termination check")
+    _rule(tmp_path, "  proof fun ping(n: Nat): Nat { return pong(n) }\n"
+                    "  proof fun pong(n: Nat): Nat { return ping(n) }\n", "termination check")
 
 
 def test_a_path_over_a_boolean_is_read_at_the_branch(tmp_path):
     r = _compile(_with_theorem(tmp_path,
         "  fun gone(e: Empty): Number { return 0 }\n"
-        "  fun at_true(b: Boolean, q: b = true): Number {\n"
+        "  proof fun at_true(b: Boolean, q: b = true): Number {\n"
         "    return match b { true => 1, false => gone(absurd(inv(q))) }\n  }\n"), tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -375,7 +421,7 @@ def test_a_binder_that_hides_a_name_leaves_a_true_statement_true(tmp_path):
 def _empty(tmp_path, funs):
     proj = tmp_path / "empty"
     proj.mkdir()
-    (proj / "yon.toml").write_text('[package]\nname = "empty"\nkind = "proof"\n\n'
+    (proj / "yon.toml").write_text('[package]\nname = "empty"\n\n'
                                     '[world.W]\nobjects = ["Empty"]\nspaces = ["w"]\n\n'
                                     '[runtime]\nbackend = "memory"\n')
     (proj / "w").mkdir()
@@ -389,14 +435,14 @@ def _empty(tmp_path, funs):
 def test_exfalso_is_elimination_by_structural_recursion(tmp_path):
     # Empty has no base case: elimination recurses on the subterm carried by nessuno
     r, _ = _empty(tmp_path,
-                  "  fun exfalso<T>(e: Empty): T { return match e { nessuno as x => x ↦ exfalso } }\n")
+                  "  proof fun exfalso<T>(e: Empty): T { return match e { nessuno as x => x ↦ exfalso } }\n")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_exfalso_must_recurse_on_the_subterm(tmp_path):
     # a version that recurses on e instead of the subterm x does not terminate
     r, proj = _empty(tmp_path,
-                     "  fun exfalso<T>(e: Empty): T { return match e { nessuno as x => e ↦ exfalso } }\n")
+                     "  proof fun exfalso<T>(e: Empty): T { return match e { nessuno as x => e ↦ exfalso } }\n")
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2010" in out and "termination" in out and "exfalso" in out, out
     # fn_loc usa $startpos di una regola che comincia con boption(INTERNAL): riporta la riga del

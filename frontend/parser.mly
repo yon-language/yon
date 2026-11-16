@@ -96,6 +96,11 @@
      | bounds -> Hashtbl.replace Surface_ast.fun_bounds (Surface_ast.site_of loc) bounds);
     List.map fst tparams
 
+  (* `proof fun`: the mark is kept by the site of the declaration. *)
+  let mark_proof (proof : bool) (fd : fun_decl) : fun_decl =
+    if proof then Hashtbl.replace Surface_ast.proof_funs (Surface_ast.proof_site fd) ();
+    fd
+
   (* `f<A>(args)`: the type arguments, kept by the site of the call. *)
   let with_type_args (targs : string list) (e : expr) : expr =
     (match e with
@@ -205,7 +210,7 @@
 %token GEOM_MORPHISM PULL PUSH
 %token FUNCTOR
 %token IMPORT
-%token INTERNAL
+%token INTERNAL PROOF
 %token CARRIED
 %token LAW
 %token USES
@@ -1325,7 +1330,7 @@ fun_decl:
      verifica che esista davvero. Niente graffe: un corpo vuoto direbbe
      "returns nothing", this says "the body is elsewhere, and it is a
      fact". *)
-  | internal = boption(INTERNAL) FUN name = IDENT
+  | internal = boption(INTERNAL) proof = boption(PROOF) FUN name = IDENT
     tparams = type_params_opt
     LPAREN params = param_list RPAREN
     oerr = option(on_error_clause)
@@ -1336,29 +1341,29 @@ fun_decl:
          failwith (Printf.sprintf
            "fun %s: `on error` requires an explicit return type \
             (`) on error E : T`)" name));
-      { fn_name = name; fn_type_params = bound_params tparams (mk_loc $startpos $endpos); fn_params = params;
+      mark_proof proof { fn_name = name; fn_type_params = bound_params tparams (mk_loc $startpos $endpos); fn_params = params;
         fn_return = ret; fn_on_error = oerr;
         fn_visits = visits; fn_internal = internal; fn_given = true;
         fn_home = None;
         fn_body = []; fn_loc = mk_loc $startpos $endpos } }
   (* no parentheses: a point 1 -> X, whose purity the checker holds it to *)
-  | internal = boption(INTERNAL) FUN name = IDENT tparams = type_params_opt
+  | internal = boption(INTERNAL) proof = boption(PROOF) FUN name = IDENT tparams = type_params_opt
     ret = option(return_type_decl) visits = visits_clause IS GIVEN
     { let loc = mk_loc $startpos $endpos in
       Hashtbl.replace Surface_ast.bare_nullary_decls (loc.file, loc.start_line, loc.start_col) ();
-      { fn_name = name; fn_type_params = bound_params tparams loc; fn_params = [];
+      mark_proof proof { fn_name = name; fn_type_params = bound_params tparams loc; fn_params = [];
         fn_return = ret; fn_on_error = None;
         fn_visits = visits; fn_internal = internal; fn_given = true;
         fn_home = None; fn_body = []; fn_loc = loc } }
-  | internal = boption(INTERNAL) FUN name = IDENT tparams = type_params_opt
+  | internal = boption(INTERNAL) proof = boption(PROOF) FUN name = IDENT tparams = type_params_opt
     ret = option(return_type_decl) visits = visits_clause LBRACE body = list(stmt) RBRACE
     { let loc = mk_loc $startpos $endpos in
       Hashtbl.replace Surface_ast.bare_nullary_decls (loc.file, loc.start_line, loc.start_col) ();
-      { fn_name = name; fn_type_params = bound_params tparams loc; fn_params = [];
+      mark_proof proof { fn_name = name; fn_type_params = bound_params tparams loc; fn_params = [];
         fn_return = ret; fn_on_error = None;
         fn_visits = visits; fn_internal = internal; fn_given = false;
         fn_home = None; fn_body = body; fn_loc = loc } }
-  | boption(INTERNAL) FUN name = IDENT type_params_opt option(return_type_decl)
+  | boption(INTERNAL) boption(PROOF) FUN name = IDENT type_params_opt option(return_type_decl)
     visits_clause IS GIVEN LBRACE list(stmt) RBRACE
     { failwith (Printf.sprintf
         "fun %s is given and has a body: `is given` declares that the body is \
@@ -1366,14 +1371,14 @@ fun_decl:
          of the two" name) }
   (* `is given` and a body exclude each other: `is given` says the body is
      the compiler's (a primitive), a body says it is this one. *)
-  | boption(INTERNAL) FUN name = IDENT type_params_opt
+  | boption(INTERNAL) boption(PROOF) FUN name = IDENT type_params_opt
     LPAREN param_list RPAREN option(on_error_clause) option(return_type_decl)
     visits_clause IS GIVEN LBRACE list(stmt) RBRACE
     { failwith (Printf.sprintf
         "fun %s is given and has a body: `is given` declares that the body is \
          the compiler's primitive, a body declares it is this one; write one \
          of the two" name) }
-  | internal = boption(INTERNAL) FUN name = IDENT
+  | internal = boption(INTERNAL) proof = boption(PROOF) FUN name = IDENT
     tparams = type_params_opt
     LPAREN params = param_list RPAREN
     oerr = option(on_error_clause)
@@ -1389,7 +1394,7 @@ fun_decl:
          failwith (Printf.sprintf
            "fun %s: `on error` requires an explicit return type \
             (`) on error E : T`)" name));
-      { fn_name = name; fn_type_params = bound_params tparams (mk_loc $startpos $endpos); fn_params = params;
+      mark_proof proof { fn_name = name; fn_type_params = bound_params tparams (mk_loc $startpos $endpos); fn_params = params;
         fn_return = ret; fn_on_error = oerr;
         fn_visits = visits; fn_internal = internal; fn_given = false; fn_home = None;
         fn_body = body; fn_loc = mk_loc $startpos $endpos } }

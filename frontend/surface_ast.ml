@@ -1265,9 +1265,12 @@ let phantom_return_sites : (string * int * int * int * int, ty) Hashtbl.t = Hash
    stand for a term with its type. *)
 let place_term_params : (string, string list * (string * ty) list) Hashtbl.t = Hashtbl.create 8
 
-(* The project declares kind = "proof" in [package]: its funs are proofs, every one terminates and
-   none is given or loops, and only main reaches the run time. *)
-let proof_project = ref false
+(* The funs declared `proof fun`, by the site of their declaration. A proof fun is a proof of
+   the statement its type writes: it terminates, it is neither given nor a loop, it calls only
+   funs the termination check certifies, and it has no run time. *)
+let proof_funs : (string * int * int, unit) Hashtbl.t = Hashtbl.create 64
+let proof_site (fd : fun_decl) = (fd.fn_loc.file, fd.fn_loc.start_line, fd.fn_loc.start_col)
+let is_proof_fun (fd : fun_decl) = Hashtbl.mem proof_funs (proof_site fd)
 
 (* The sites where a method on a list is that fun of the prelude. *)
 let list_method_sites : (string * int * int * int, string) Hashtbl.t = Hashtbl.create 16

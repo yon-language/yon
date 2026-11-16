@@ -139,7 +139,7 @@ let title : code -> string = function
   | Arm_name_clash      -> "an arm and an arrow of the same home share a name"
   | Library_name_taken  -> "a user place takes the name of a library place"
   | Given_outside_prelude -> "a runtime primitive declared outside the prelude"
-  | Proof_rule -> "what a project of kind proof refuses: no termination certificate, is given, forever, while"
+  | Proof_rule -> "what a proof fun refuses: no termination certificate, is given, forever, while, a call of a fun the termination check does not certify, a call from code that runs"
   | Write_to_value      -> "a write to a name that is not a cell"
   | Error_undeclared    -> "an escape whose error has no way out: the signature does not declare it, or the code is a lambda, a producer or a spawn"
   | Escape_missing      -> "a value that may be an error is read where its success is wanted without escape"

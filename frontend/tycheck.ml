@@ -9185,27 +9185,36 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
  * nothing outside can tell (the criterion of runST). A heap's put allocates
  * in its own region and answers a slot, never the region: from outside it is
  * pure. *)
-(* What a project of kind proof refuses. *)
+(* What a proof fun refuses. A proof fun is a proof of the statement its type writes: it
+   terminates (the size-change check), it is neither given nor a loop, every fun it calls is a
+   proof fun or a fun the termination check certifies, and it has no run time, so no other fun
+   calls it. *)
 let proof_rule_errors (env : Tyenv.env) (p : program) : type_error list =
-  if not !Surface_ast.proof_project then [] else begin
+  let shown n = Str.global_replace (Str.regexp_string "__") "." n in
+  let proofs = List.filter_map (function
+      | TopFun fd when Surface_ast.is_proof_fun fd -> Some fd.fn_name | _ -> None) p in
+  if proofs = [] then [] else begin
     let certified = List.map fst (Dispatcher.certified_deltas env) in
     let refuse fd msg =
       { err_loc = fd.fn_loc; err_code = Error_codes.Proof_rule;
-        err_msg = Printf.sprintf "fun %s, in a project of kind proof: %s"
-            (Str.global_replace (Str.regexp_string "__") "." fd.fn_name) msg } in
+        err_msg = Printf.sprintf "proof fun %s: %s" (shown fd.fn_name) msg } in
     let bodies = List.filter_map (function
         | TopFun fd -> Some (fd.fn_name, fd.fn_body) | _ -> None) p in
-    let callees name =
+    (* the funs a body names; with [~laws:false] the two laws of an equivalence
+       (`f <=> g by eta, eps`) are left out: they are proved at compile time, and at run
+       time the equivalence is its two funs *)
+    let callees ?(laws = true) name =
       let found = ref [] in
-      let note e =
-        (match e with
-         | ECall (n, _, _) -> found := n :: !found
-         | EVar (n, _) -> found := n :: !found
-         | _ -> ());
-        None in
+      let rec note e =
+        match e with
+        | ECall ("equiv", f :: g :: _, _) when not laws ->
+            ignore (Method_sugar.map_expr note f); ignore (Method_sugar.map_expr note g); Some e
+        | ECall (n, _, _) -> found := n :: !found; None
+        | EVar (n, _) -> found := n :: !found; None
+        | _ -> None in
       List.iter (fun st -> ignore (Method_sugar.map_stmt note st))
         (Option.value ~default:[] (List.assoc_opt name bodies));
-      List.filter (fun n -> List.mem_assoc n bodies) !found in
+      List.sort_uniq compare (List.filter (fun n -> List.mem_assoc n bodies) !found) in
     let reaches_itself name =
       let seen = Hashtbl.create 16 in
       let rec go n =
@@ -9219,22 +9228,30 @@ let proof_rule_errors (env : Tyenv.env) (p : program) : type_error list =
       | SWhile _ -> Some "while"
       | s -> List.find_map (List.find_map loops) (sub_stmts s) in
     List.concat_map (function
-        | TopPlace pd when not (in_prelude_file pd.pd_loc) ->
-            List.filter_map (function
-                | FoLaw (n, Some st) when st.ls_given ->
-                    Some { err_loc = pd.pd_loc; err_code = Error_codes.Proof_rule;
-                           err_msg = Printf.sprintf
-                               "law %s of %s, in a project of kind proof: is given is refused: a proof states no axiom"
-                               n pd.pd_name }
-                | _ -> None) pd.pd_members
-        | TopFun fd when not (in_prelude_file fd.fn_loc) ->
+        | TopFun fd when Surface_ast.is_proof_fun fd ->
             if fd.fn_given then [refuse fd "is given is refused: a proof states no axiom"]
             else (match List.find_map loops fd.fn_body with
                 | Some kw -> [refuse fd (kw ^ " is refused: a proof terminates")]
                 | None ->
                     (* a fun the kernel does not unfold terminates if it calls itself nowhere *)
-                    if List.mem fd.fn_name certified || not (reaches_itself fd.fn_name) then []
-                    else [refuse fd "it does not pass the termination check (SCT)"])
+                    if not (List.mem fd.fn_name certified) && reaches_itself fd.fn_name then
+                      [refuse fd "it does not pass the termination check (SCT)"]
+                    else
+                      List.filter_map (fun c ->
+                          if c = fd.fn_name || List.mem c proofs || List.mem c certified then None
+                          else Some (refuse fd (Printf.sprintf
+                              "it calls %s, which the termination check (SCT) does not certify: a proof calls only proof funs and certified funs"
+                              (shown c))))
+                        (callees fd.fn_name))
+        | TopFun fd ->
+            List.filter_map (fun c ->
+                if List.mem c proofs then
+                  Some { err_loc = fd.fn_loc; err_code = Error_codes.Proof_rule;
+                         err_msg = Printf.sprintf
+                             "fun %s calls proof fun %s: a proof has no run time, so code that runs does not call it"
+                             (shown fd.fn_name) (shown c) }
+                else None)
+              (callees ~laws:false fd.fn_name)
         | _ -> []) p
   end
 

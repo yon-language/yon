@@ -89,7 +89,7 @@ let classify (src : string) : verdict =
 (* ---- generators ---- *)
 let kw_pool =
   [| "be"; ":="; "fun"; "return"; "if"; "then"; "else"; "while"; "do";
-     "for"; "every"; "in"; "place"; "internal"; "view"; "move"; "reduction";
+     "for"; "every"; "in"; "place"; "internal"; "proof"; "view"; "move"; "reduction";
      "operation"; "number"; "text"; "true"; "false"; "and"; "or"; "not";
      "visits"; "import"; "topos"; "where";
      (* new surface: metonymic journey + cubical + HIT *)

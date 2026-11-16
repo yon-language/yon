@@ -26,6 +26,7 @@ let tok_name = function
   | Parser.FUNCTOR -> "FUNCTOR"
   | Parser.IMPORT -> "IMPORT"
   | Parser.INTERNAL -> "INTERNAL"
+  | Parser.PROOF -> "PROOF"
   | Parser.LAW -> "LAW"
   | Parser.USES -> "USES"
   | Parser.ALGEBRA -> "ALGEBRA"

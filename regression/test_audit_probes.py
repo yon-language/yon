@@ -1808,7 +1808,7 @@ def test_a_proposition_is_not_a_boolean(tmp_path):
 # --- cubical composition -------------------------------------------------------
 
 _SUSP_kernel = ("place Entry {{\n"
-         "fun proof(m: Number): {claim} {{ return clear }}\n"
+         "fun claim_of(m: Number): {claim} {{ return clear }}\n"
          "fun main: Number {{ return 42 }}\n}}\n")
 
 

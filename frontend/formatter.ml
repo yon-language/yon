@@ -399,7 +399,8 @@ let fmt_fun (f : fmt) (fn : fun_decl) : unit =
   let ret = match fn.fn_return with Some t -> ": " ^ fmt_ty t | None -> "" in
   let visits = match fn.fn_visits with
     | [] -> "" | vs -> " visits " ^ String.concat ", " vs in
-  let prefix = if fn.fn_internal then "internal " else "" in
+  let prefix = (if fn.fn_internal then "internal " else "")
+               ^ (if Surface_ast.is_proof_fun fn then "proof " else "") in
   let oerr = match fn.fn_on_error with
     | Some e -> " on error " ^ e | None -> "" in
   let dom =
