@@ -635,6 +635,10 @@ projection to X, written as a field or a fun, and its fibres are said in the law
 
 `error QueryError { this < Error message Number sqlstate Number }` (examples/error_morphism/db/QueryError.yon): an error is a place that is a subobject of its base, every QueryError is an Error. A place declares its error morphism with the two-word phrase `on error E`.
 
+#### `escape`
+
+`y := escape Number.sqrt(x)`: inside a fun `on error E'`, a value of `S + E` (`E` below `E'`) is read as an `S`; if it is the error, the error leaves the fun as an `E'`. It is the bind of the monad `(-) + E'`, marked at the site. It is a prefix like `not`: `escape Number.sqrt(x) + 1` is `(escape Number.sqrt(x)) + 1`. A value of `S + E` read where an `S` is wanted without `escape` is refused with code E2012; `escape` on a value that cannot fail, or on the value a fun on error returns, is refused with E2013; `escape` where the error has no way out (a fun without `on error`, an error its signature does not contain, a lambda, a producer, a spawn) is refused with E2011.
+
 #### `of`
 
 `view of P`, `reduction ... of P`.

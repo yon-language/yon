@@ -173,6 +173,13 @@ let is_place_arm (ctor : string) : bool =
   Hashtbl.mem armless_place_names ctor
   && (match Hashtbl.find_opt place_layouts ctor with Some (_ :: _) -> true | _ -> false)
 
+(* the status of a block: done (the nullary arm, at tag 0) or the error *)
+let status_arm = "__done"
+let status_variants (target : string) : S.variant list =
+  [ { S.v_name = status_arm; v_args = [] };
+    { S.v_name = target; v_args = [S.TyUser target] } ]
+let status_key (target : string) : string = S.anon_sum_key (status_variants target)
+
 let build_sum_registry (p : S.program) : unit =
   Hashtbl.clear sum_ctor_registry;
   Hashtbl.clear inductive_type_names;
@@ -191,7 +198,9 @@ let build_sum_registry (p : S.program) : unit =
            (error_sum_of is the ONE shared builder — tags cannot diverge) *)
         (match fd.S.fn_return, fd.S.fn_on_error with
          | Some t, Some e ->
-             collect_sums_in_ty (S.error_sum_of ~ret:t ~err:e)
+             collect_sums_in_ty (S.error_sum_of ~ret:t ~err:e);
+             (* the status of a block of that fun: done, or the error *)
+             collect_sums_in_ty ~key:(status_key e) (S.TySum (status_variants e))
          | _ -> ())
     | S.TopPlace pd ->
         Hashtbl.replace place_layouts pd.S.pd_name
@@ -287,6 +296,7 @@ let rec free_vars_in_expr (bound : string list) (e : S.expr) : string list =
   | S.EApp (f, args, _) ->
       free_vars_in_expr bound f @ List.concat_map (free_vars_in_expr bound) args
   | S.ENot (sub, _) -> free_vars_in_expr bound sub
+  | S.EEscape (sub, _) -> free_vars_in_expr bound sub
   | S.EIn (sub, _, _) -> free_vars_in_expr bound sub
   | S.ERefl (sub, _) -> free_vars_in_expr bound sub
   | S.EPair (a, b, _) ->
@@ -392,6 +402,279 @@ let path_not_known () =
 let given_names : (string, unit) Hashtbl.t = Hashtbl.create 64
 let phantom_reading : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 4
 let site5 (l : S.location) = (l.S.file, l.S.start_line, l.S.start_col, l.S.end_line, l.S.end_col)
+
+(* ─── The bind of the monad (-) + E', inside a fun that declares `on error E'`.
+
+   The checker records, by span, each value of S + E read where S is wanted
+   (Surface_ast.bind_sites), and each conditional whose branches hold one
+   (cond_bind_sites). The desugar writes the bind as the match that exists:
+   the success arm goes on with the rest, the error arm leaves through E'.
+   Where the rest is a value (a branch of an `if` or a `match`), the bind is a
+   surface match; where the rest is the rest of a block, the match is built in
+   Core with the rest already lowered (a hole). The values are hoisted in the
+   order of evaluation, left to right: the first error wins.
+
+   What the error arm does depends on where the block stands:
+   - the body of the fun, and a block in its tail: the error is the fun's;
+   - a block whose value is its status (a `when` in the middle of a body): the
+     block is a value of 1 + E', done or the error, bound by the block around;
+   - a loop body: the error is written in a status cell of the fun, the loop
+     stops at the next turn, and the status is bound after the loop. A loop
+     with an accumulator is a fold; with a partial step it is the monadic
+     fold, and the first error leaves the loop and the fun. ─── *)
+
+type bind_mode =
+  | BTop                 (* the value of the block is the fun's *)
+  | BStatus              (* the value of the block is its status *)
+  | BStore              (* a loop body: the error goes into the status cell *)
+
+type bind_ctx = {
+  bc_mode : bind_mode;
+  bc_target : string;       (* E', the error the fun declares *)
+  bc_fun_key : string;      (* the key of the fun's coproduct T + E' *)
+  bc_status_key : string;   (* the key of the status 1 + E' *)
+  bc_cell : string;         (* the status cell of the fun *)
+}
+let bind_ctx : bind_ctx option ref = ref None
+
+(* the injection into an arm, lowered (set once the lowering is defined) *)
+let inject_core : (string -> string -> S.expr -> C.term) ref =
+  ref (fun _ _ _ -> failwith "internal: the injection is not defined yet")
+(* the statement after a hoisted bind is already lifted *)
+let skip_bind_guard = ref false
+
+(* the value of the nullary arm at tag 0 is -(0 + 1) *)
+let status_done () = S.ELit (S.LitNumber (-1.0), S.dummy_loc)
+
+let bind_ctr = ref 0
+let fresh_bind_loc () : S.location =
+  incr bind_ctr;
+  { S.dummy_loc with S.file = "<bind>"; start_line = !bind_ctr; end_line = !bind_ctr }
+let fresh_bind_var (p : string) : string =
+  incr bind_ctr; Printf.sprintf "__bind_%s_%d" p !bind_ctr
+let site3 (l : S.location) = (l.S.file, l.S.start_line, l.S.start_col)
+
+(* Core terms already lowered, standing where the surface wants an expression *)
+let core_holes : (string, C.term) Hashtbl.t = Hashtbl.create 16
+let hole (t : C.term) : S.expr =
+  let k = fresh_bind_var "hole" in
+  Hashtbl.replace core_holes k t;
+  S.EVar (k, S.dummy_loc)
+
+let bind_site_of (e : S.expr) : S.bind_site option =
+  let l = S.location_of_expr e in
+  if l.S.file = "" && l.S.start_line = 0 then None
+  else Hashtbl.find_opt S.bind_sites (S.span_of l)
+
+let rec expr_has_bind (e : S.expr) : bool =
+  bind_site_of e <> None
+  || (let (es, bodies) = S.sub_exprs e in
+      List.exists expr_has_bind es || List.exists stmts_have_bind bodies)
+and stmts_have_bind (ss : S.stmt list) : bool = List.exists stmt_has_bind ss
+and stmt_has_bind (s : S.stmt) : bool =
+  List.exists expr_has_bind (S.stmt_exprs s) || List.exists stmts_have_bind (S.sub_stmts s)
+
+(* a loop of the body holds a bind: the fun needs its status cell *)
+let rec stmts_have_loop_bind (ss : S.stmt list) : bool =
+  List.exists (fun s ->
+      match s with
+      | S.SIter (_, b, _) when stmts_have_bind b -> true
+      | S.SWhile (c, b, _) when expr_has_bind c || stmts_have_bind b -> true
+      | _ -> List.exists stmts_have_loop_bind (S.sub_stmts s)) ss
+
+(* The bind as the match that exists: the success arm goes on with [body],
+   the error arm is injected into the arm E' of the coproduct [err_key]. *)
+let bind_match (bs : S.bind_site) (scrut : S.expr) (v : string) (body : S.expr)
+    (err_key : string) : S.expr =
+  let ml = fresh_bind_loc () and dl = fresh_bind_loc () in
+  let d = fresh_bind_var "err" in
+  Hashtbl.replace S.arm_coproduct_sites (site3 ml) bs.S.bs_coproduct;
+  Hashtbl.replace S.return_inject_sites (S.span_of dl) (err_key, bs.S.bs_target);
+  S.EHITElim (S.EVar ("__match", ml),
+              [ (bs.S.bs_ok_arm, S.PatVars [v], body);
+                (bs.S.bs_err_arm, S.PatVars [d], S.EVar (d, dl)) ],
+              scrut, ml)
+
+(* the coproduct T + E' a conditional is read into, registered *)
+let join_sum (t : S.ty) (target : string) : string * string =
+  let sum = S.error_sum_of ~ret:t ~err:target in
+  collect_sums_in_ty sum;
+  match sum with
+  | S.TySum vs -> (S.anon_sum_key vs, S.face_name_of_ty t)
+  | _ -> assert false
+
+type hoisted = (S.expr * string * S.bind_site) list
+
+(* The binds of [e] in the order of evaluation, each replaced by a variable.
+   A bind inside a bind is hoisted before it. A conditional with a bind in a
+   branch is read in the monad: its branches become values of T + E', and the
+   conditional itself is bound. The checker refuses a bind anywhere else. *)
+let rec lift_expr ?(self = true) (e : S.expr) : hoisted * S.expr =
+  match (if self then bind_site_of e else None) with
+  | Some bs ->
+      let (pre, e') = lift_children e in
+      let v = fresh_bind_var "v" in
+      let l = fresh_bind_loc () in
+      (* an injection of the bound value belongs to its place: the variable *)
+      let span = S.span_of (S.location_of_expr e) in
+      (match Hashtbl.find_opt S.return_inject_sites span with
+       | Some inj ->
+           Hashtbl.remove S.return_inject_sites span;
+           Hashtbl.replace S.return_inject_sites (S.span_of l) inj
+       | None -> ());
+      (pre @ [ (e', v, bs) ], S.EVar (v, l))
+  | None -> lift_children e
+
+and lift_list (es : S.expr list) : hoisted * S.expr list =
+  let (pre, rev) =
+    List.fold_left (fun (pre, acc) x ->
+        let (p, x') = lift_expr x in (pre @ p, x' :: acc)) ([], []) es in
+  (pre, List.rev rev)
+
+and lift_children (e : S.expr) : hoisted * S.expr =
+  (* a child with the span of its parent is the same value (a cell read) *)
+  let same x = S.span_of (S.location_of_expr x) = S.span_of (S.location_of_expr e) in
+  let lift x = if same x then lift_expr ~self:false x else lift_expr x in
+  match e with
+  | S.ECall (n, args, l) ->
+      let (p, args') = List.fold_left (fun (pre, acc) x ->
+          let (q, x') = lift x in (pre @ q, x' :: acc)) ([], []) args in
+      (p, S.ECall (n, List.rev args', l))
+  | S.EApp (f, args, l) ->
+      let (pf, f') = lift f in
+      let (pa, args') = lift_list args in
+      (pf @ pa, S.EApp (f', args', l))
+  | S.EField (o, f, l) -> let (p, o') = lift o in (p, S.EField (o', f, l))
+  | S.EBinop ((S.OpAnd | S.OpOr) as op, a, b, l) when expr_has_bind b ->
+      let (pa, a') = lift a in
+      let as_if = match op with
+        | S.OpAnd -> S.EIfThenElse (a', b, S.ELit (S.LitBool false, l), l)
+        | _ -> S.EIfThenElse (a', S.ELit (S.LitBool true, l), b, l) in
+      let (pc, c) = conditional e as_if in
+      (pa @ pc, c)
+  | S.EBinop (op, a, b, l) ->
+      let (pa, a') = lift a in
+      let (pb, b') = lift b in
+      (pa @ pb, S.EBinop (op, a', b', l))
+  | S.EParen (x, l) -> let (p, x') = lift x in (p, S.EParen (x', l))
+  | S.ENot (x, l) -> let (p, x') = lift x in (p, S.ENot (x', l))
+  | S.EEscape (x, l) -> let (p, x') = lift x in (p, S.EEscape (x', l))
+  | S.EIn (x, c, l) -> let (p, x') = lift x in (p, S.EIn (x', c, l))
+  | S.EFst (x, l) -> let (p, x') = lift x in (p, S.EFst (x', l))
+  | S.ESnd (x, l) -> let (p, x') = lift x in (p, S.ESnd (x', l))
+  | S.EPair (a, b, l) ->
+      let (pa, a') = lift a in
+      let (pb, b') = lift b in
+      (pa @ pb, S.EPair (a', b', l))
+  | S.EHITConstr (c, args, l) -> let (p, a') = lift_list args in (p, S.EHITConstr (c, a', l))
+  | S.ENew (n, fas, l) ->
+      let (p, vs) = lift_list (List.map (fun fa -> fa.S.fa_value) fas) in
+      (p, S.ENew (n, List.map2 (fun fa v -> { fa with S.fa_value = v }) fas vs, l))
+  | S.ENewIn (n, sp, fas, l) ->
+      let (p, vs) = lift_list (List.map (fun fa -> fa.S.fa_value) fas) in
+      (p, S.ENewIn (n, sp, List.map2 (fun fa v -> { fa with S.fa_value = v }) fas vs, l))
+  | S.EPullbackVal (f, g, a, b, l) ->
+      let (pa, a') = lift a in
+      let (pb, b') = lift b in
+      (pa @ pb, S.EPullbackVal (f, g, a', b', l))
+  | S.EIfThenElse (c, a, b, l) ->
+      let (pc, c') = lift c in
+      if expr_has_bind a || expr_has_bind b then
+        let (pk, k) = conditional e (S.EIfThenElse (c', a, b, l)) in (pc @ pk, k)
+      else (pc, S.EIfThenElse (c', a, b, l))
+  | S.EHITElim (m, branches, x, l) ->
+      let (px, x') = lift x in
+      if List.exists (fun (_, _, b) -> expr_has_bind b) branches then
+        let (pk, k) = conditional e (S.EHITElim (m, branches, x', l)) in (px @ pk, k)
+      else (px, S.EHITElim (m, branches, x', l))
+  | _ -> ([], e)
+
+(* [orig] read in the monad, [e] its form with the unconditional part lifted:
+   each branch a value of T + E', the whole bound. *)
+and conditional (orig : S.expr) (e : S.expr) : hoisted * S.expr =
+  let bc = Option.get !bind_ctx in
+  let t = match Hashtbl.find_opt S.cond_bind_sites (S.span_of (S.location_of_expr orig)) with
+    | Some t -> t
+    | None -> failwith "internal: a conditional holds a bind and the checker gave it no type" in
+  let (jk, ok_arm) = join_sum t bc.bc_target in
+  let branch br = kleisli_branch br (Some (jk, ok_arm)) jk in
+  let e' = map_branches branch e in
+  let bs = { S.bs_ok_arm = ok_arm; bs_ok_ty = t; bs_err_arm = bc.bc_target;
+             bs_coproduct = jk; bs_target = bc.bc_target } in
+  let v = fresh_bind_var "v" in
+  ([ (e', v, bs) ], S.EVar (v, fresh_bind_loc ()))
+
+and map_branches (f : S.expr -> S.expr) (e : S.expr) : S.expr =
+  match e with
+  | S.EIfThenElse (c, a, b, l) -> S.EIfThenElse (c, f a, f b, l)
+  | S.EHITElim (m, branches, x, l) ->
+      S.EHITElim (m, List.map (fun (c, p, b) -> (c, p, f b)) branches, x, l)
+  | _ -> e
+
+(* A branch as a value of a coproduct with an arm E': its binds as matches,
+   its value injected into the success arm when [ok] names one. *)
+and kleisli_branch (br : S.expr) (ok : (string * string) option) (err_key : string) : S.expr =
+  let (pre, br') = lift_expr br in
+  let inner = match ok with
+    | Some (key, arm) -> hole (!inject_core key arm br')
+    | None -> br' in
+  List.fold_right (fun (scrut, v, bs) acc -> bind_match bs scrut v acc err_key) pre inner
+
+(* The expression a fun returns: a conditional there is already a value of the
+   fun's coproduct, each branch with its own injection; its binds leave the
+   fun directly. *)
+let rec lift_tail (e : S.expr) : hoisted * S.expr =
+  let bc = Option.get !bind_ctx in
+  let branch br =
+    let (pre, br') = lift_tail br in
+    List.fold_right (fun (scrut, v, bs) acc -> bind_match bs scrut v acc bc.bc_fun_key) pre br' in
+  match e with
+  | S.EIfThenElse (c, a, b, l) when expr_has_bind a || expr_has_bind b ->
+      let (pc, c') = lift_expr c in
+      (pc, S.EIfThenElse (c', branch a, branch b, l))
+  | S.EHITElim (m, branches, x, l)
+    when List.exists (fun (_, _, b) -> expr_has_bind b) branches ->
+      let (px, x') = lift_expr x in
+      (px, S.EHITElim (m, List.map (fun (c, p, b) -> (c, p, branch b)) branches, x', l))
+  | S.EParen (x, l) -> let (p, x') = lift_tail x in (p, S.EParen (x', l))
+  | _ -> lift_expr e
+
+let rec lift_cond (c : S.condition) : hoisted * S.condition =
+  match c with
+  | S.CondExpr e -> let (p, e') = lift_expr e in (p, S.CondExpr e')
+  | S.CondIs (e, pat) -> let (p, e') = lift_expr e in (p, S.CondIs (e', pat))
+  | S.CondIsNot (e, pat) -> let (p, e') = lift_expr e in (p, S.CondIsNot (e', pat))
+  | S.CondAnd (a, b) -> let (p, a') = lift_cond a in (p, S.CondAnd (a', b))
+  | S.CondOr (a, b) -> let (p, a') = lift_cond a in (p, S.CondOr (a', b))
+
+(* The binds a statement evaluates before anything else. *)
+let lift_stmt ~(tail : bool) (s : S.stmt) : hoisted * S.stmt =
+  match s with
+  | S.SLet (x, e, l) -> let (p, e') = lift_expr e in (p, S.SLet (x, e', l))
+  | S.SReturn (e, l) ->
+      let (p, e') = if tail then lift_tail e else lift_expr e in (p, S.SReturn (e', l))
+  | S.SCall (n, args, l) -> let (p, a') = lift_list args in (p, S.SCall (n, a', l))
+  | S.SAssignBecomes (lv, e, l) -> let (p, e') = lift_expr e in (p, S.SAssignBecomes (lv, e', l))
+  | S.SAssignHolds (lv, e, l) -> let (p, e') = lift_expr e in (p, S.SAssignHolds (lv, e', l))
+  | S.SNew (n, fas, l) ->
+      let (p, vs) = lift_list (List.map (fun fa -> fa.S.fa_value) fas) in
+      (p, S.SNew (n, List.map2 (fun fa v -> { fa with S.fa_value = v }) fas vs, l))
+  | S.SEmit (e, l) -> let (p, e') = lift_expr e in (p, S.SEmit (e', l))
+  | S.SPromote (e, l) -> let (p, e') = lift_expr e in (p, S.SPromote (e', l))
+  | S.SWhen (c, b, elifs, oth, l) -> let (p, c') = lift_cond c in (p, S.SWhen (c', b, elifs, oth, l))
+  | S.SIter (n, b, l) -> let (p, n') = lift_expr n in (p, S.SIter (n', b, l))
+  | S.SForces (stg, c, b, l) -> let (p, c') = lift_cond c in (p, S.SForces (stg, c', b, l))
+  | _ -> ([], s)
+
+(* `when c1 {..} when c2 {..} otherwise {..}`, with a bind in c2: c2 is read
+   only when c1 is false, so it is the first condition of the otherwise. *)
+let rec nest_elifs (s : S.stmt) : S.stmt =
+  match s with
+  | S.SWhen (c, b, (c2, b2) :: rest, oth, l)
+    when List.exists expr_has_bind (S.cond_exprs c2)
+         || List.exists (fun (ac, _) -> List.exists expr_has_bind (S.cond_exprs ac)) rest ->
+      S.SWhen (c, b, [], Some [ nest_elifs (S.SWhen (c2, b2, rest, oth, l)) ], l)
+  | _ -> s
 
 let rec desugar_ty (t : S.ty) : C.ty =
   match t with
@@ -663,11 +946,11 @@ and desugar_expr (e0 : S.expr) : C.term =
       | _ -> None in
     match loc_of e0 with
     | Some l when Hashtbl.mem Surface_ast.return_inject_sites
-                    (l.S.file, l.S.start_line, l.S.start_col) ->
+                    (Surface_ast.span_of l) ->
         let (coproduct, arm) = Hashtbl.find Surface_ast.return_inject_sites
-                    (l.S.file, l.S.start_line, l.S.start_col) in
+                    (Surface_ast.span_of l) in
         Hashtbl.remove Surface_ast.return_inject_sites
-          (l.S.file, l.S.start_line, l.S.start_col);
+          (Surface_ast.span_of l);
         (match find_arm ~coproduct arm with
          | Some (tag, arg_tys) -> Some (arm, tag, arg_tys, l)
          | None -> None)
@@ -677,6 +960,7 @@ and desugar_expr (e0 : S.expr) : C.term =
   | None ->
   let e = strip_parens e0 in
   match e with
+  | S.EVar (k, _) when Hashtbl.mem core_holes k -> Hashtbl.find core_holes k
   | S.ECall (n, args, loc) when Surface_ast.elaborated_call n args loc <> None ->
       (* a call the checker read at a model: the model's fun, or the fun with
          the arrows of the model after the written arguments *)
@@ -1243,6 +1527,9 @@ and desugar_expr (e0 : S.expr) : C.term =
              | _ -> binop_name op) in
       curry_apply (C.Var op_name) [desugar_expr e1; desugar_expr e2]
   | S.EParen (e, _) -> desugar_expr e
+  (* the bind of escape is hoisted by its site before the lowering: what is
+     left here is the success variable *)
+  | S.EEscape (e, _) -> desugar_expr e
   | S.EAll (place_name, _cond, _) ->
       (* unreachable: EAll has no surface form *)
       C.App (C.Var "__all", C.Var place_name)
@@ -1917,6 +2204,10 @@ and desugar_stmts_with_locals (locals : string list) (stmts : S.stmt list) : C.t
   current_locals_ref := locals;  (* aggiorna tracker per arg-lam capture *)
   match stmts with
   | [] -> C.Unit
+  | stmt :: rest when !bind_ctx <> None
+                      && (if !skip_bind_guard then (skip_bind_guard := false; false)
+                          else stmt_has_bind stmt) ->
+      desugar_bound_stmt locals stmt rest
   | [single] -> desugar_stmt_or_return single
   (* Closure capture: a let-binding of a lambda with possible capture of local
    * variables.
@@ -1985,6 +2276,139 @@ and desugar_stmts_with_locals (locals : string list) (stmts : S.stmt list) : C.t
       let stmt_term = desugar_stmt_or_return stmt in
       let rest_term = desugar_stmts_with_locals locals rest in
       C.App (C.Lam ("_", C.TyPlace "unit", rest_term), stmt_term)
+
+(* A statement holding a bind, then the rest of its block. *)
+and desugar_bound_stmt (locals : string list) (stmt : S.stmt) (rest : S.stmt list) : C.term =
+  let bc = Option.get !bind_ctx in
+  let stmt = nest_elifs stmt in
+  let tail = rest = [] && bc.bc_mode = BTop in
+  let (pre, stmt') = lift_stmt ~tail stmt in
+  if pre <> [] then
+    let vars = List.map (fun (_, v, _) -> v) pre in
+    let rec go = function
+      | [] ->
+          (* a block goes on to its blocks; any other statement is lifted *)
+          (match stmt' with
+           | S.SWhen _ | S.SIter _ | S.SWhile _ -> ()
+           | _ -> skip_bind_guard := true);
+          desugar_stmts_with_locals (vars @ locals) (stmt' :: rest)
+      | (scrut, v, bs) :: more -> stmt_bind bs scrut [v] (fun () -> go more)
+    in
+    go pre
+  else
+  match stmt' with
+  | S.SWhen _ when tail -> desugar_stmt_or_return stmt'
+  | S.SReturn _ when tail -> desugar_stmt_or_return stmt'
+  | S.SWhen (c, b, elifs, oth, _) ->
+      (* in the middle of a block: the value of the `when` is its status *)
+      let done_ = S.SReturn (status_done (), S.dummy_loc) in
+      let w = with_bind_mode BStatus (fun () ->
+          desugar_when c (b @ [done_])
+            (List.map (fun (c2, b2) -> (c2, b2 @ [done_])) elifs)
+            (Some ((match oth with Some o -> o | None -> []) @ [done_]))) in
+      bind_status locals w rest
+  | S.SForces _ when tail -> desugar_stmt_or_return stmt'
+  | S.SForces (stg, c, b, l) ->
+      let done_ = S.SReturn (status_done (), S.dummy_loc) in
+      let w = with_bind_mode BStatus (fun () -> desugar_stmt (S.SForces (stg, c, b @ [done_], l))) in
+      bind_status locals w rest
+  | S.SScope (name, b, _, _) ->
+      (* the value of a scope is its status; the scope is a block *)
+      let done_ = S.SReturn (status_done (), S.dummy_loc) in
+      let scope_name = match name with Some n -> n | None -> "_anon" in
+      let w = with_bind_mode BStatus (fun () ->
+          C.Scope (scope_name, desugar_stmts (b @ [done_]))) in
+      bind_status locals w rest
+  | S.SIter (n, b, _) ->
+      let n_term = desugar_expr n in
+      let body = with_bind_mode BStore (fun () -> desugar_stmts_with_locals locals b) in
+      let guarded = curry_apply (C.Var "__if") [status_is_done (); body; C.Unit] in
+      let loop = curry_apply (C.Var "__iter_n") [n_term; C.Lam ("_idx", C.TyPlace "unit", guarded)] in
+      C.App (C.Lam ("_", C.TyPlace "unit", bind_status locals (status_read ()) rest), loop)
+  | S.SWhile (c, b, _) ->
+      let cond =
+        if expr_has_bind c then
+          let (pre, c') = lift_expr c in
+          let rec go = function
+            | [] -> desugar_expr c'
+            | (scrut, v, bs) :: more ->
+                stmt_bind ~on_error:(fun d ->
+                    seq (store_status d) (Builtins.encode_bool false))
+                  bs scrut [v] (fun () -> go more) in
+          with_bind_mode BStore (fun () -> go pre)
+        else desugar_expr c in
+      let body = with_bind_mode BStore (fun () -> desugar_stmts_with_locals locals b) in
+      let loop = curry_apply (C.Var "__while_loop")
+          [ C.Lam ("_", C.TyPlace "unit",
+                   curry_apply (C.Var "__and") [status_is_done (); cond]);
+            C.Lam ("_", C.TyPlace "unit", body) ] in
+      C.App (C.Lam ("_", C.TyPlace "unit", bind_status locals (status_read ()) rest), loop)
+  | _ ->
+      failwith "internal: a bind in a block the checker should have refused"
+
+(* first a, then b *)
+and seq (a : C.term) (b : C.term) : C.term = C.App (C.Lam ("_", C.TyPlace "unit", b), a)
+
+and with_bind_mode : 'a. bind_mode -> (unit -> 'a) -> 'a = fun m f ->
+  let saved = !bind_ctx in
+  bind_ctx := Option.map (fun bc -> { bc with bc_mode = m }) saved;
+  Fun.protect ~finally:(fun () -> bind_ctx := saved) f
+
+and status_read () : C.term =
+  let bc = Option.get !bind_ctx in
+  desugar_expr (S.ECall ("__cell_get", [S.EVar (bc.bc_cell, S.dummy_loc)], S.dummy_loc))
+
+and status_is_done () : C.term =
+  let bc = Option.get !bind_ctx in
+  desugar_expr (S.EBinop (S.OpEq,
+    S.ECall ("__cell_get", [S.EVar (bc.bc_cell, S.dummy_loc)], S.dummy_loc),
+    status_done (), S.dummy_loc))
+
+(* the error d, written into the status cell *)
+and store_status (d : string) : C.term =
+  let bc = Option.get !bind_ctx in
+  let tag = match find_arm ~coproduct:bc.bc_status_key bc.bc_target with
+    | Some (t, _) -> t
+    | None -> failwith "internal: the status coproduct is not registered" in
+  let err = lower_sum_constr bc.bc_target tag [S.EVar (d, S.dummy_loc)] S.dummy_loc in
+  desugar_stmt (S.SCall ("__cell_set", [S.EVar (bc.bc_cell, S.dummy_loc); hole err], S.dummy_loc))
+
+(* the error arm of a bind, by where the block stands *)
+and bind_error (d : string) : S.expr =
+  let bc = Option.get !bind_ctx in
+  let into key =
+    let l = fresh_bind_loc () in
+    Hashtbl.replace S.return_inject_sites (S.span_of l) (key, bc.bc_target);
+    S.EVar (d, l) in
+  match bc.bc_mode with
+  | BTop -> into bc.bc_fun_key
+  | BStatus -> into bc.bc_status_key
+  | BStore -> hole (seq (store_status d) (Builtins.encode_number 0.0))
+
+(* The match that binds [scrut] (an arm of S + E): the success arm binds
+   [vars] and goes on with [k], the error arm as the block says. In a loop
+   body both arms end with a number, so the two arms agree. *)
+and stmt_bind ?on_error (bs : S.bind_site) (scrut : S.expr) (vars : string list)
+    (k : unit -> C.term) : C.term =
+  let bc = Option.get !bind_ctx in
+  let ml = fresh_bind_loc () in
+  Hashtbl.replace S.arm_coproduct_sites (site3 ml) bs.S.bs_coproduct;
+  let d = fresh_bind_var "err" in
+  let k_core = k () in
+  let (ok_body, err_body) = match on_error with
+    | Some f -> (hole k_core, hole (f d))
+    | None ->
+        (match bc.bc_mode with
+         | BStore -> (hole (seq k_core (Builtins.encode_number 0.0)), bind_error d)
+         | _ -> (hole k_core, bind_error d)) in
+  lower_sum_elim [ (bs.S.bs_ok_arm, vars, ok_body); (bs.S.bs_err_arm, [d], err_body) ] scrut ml
+
+(* the status [w] of a block, bound: done goes on with [rest] *)
+and bind_status (locals : string list) (w : C.term) (rest : S.stmt list) : C.term =
+  let bc = Option.get !bind_ctx in
+  let bs = { S.bs_ok_arm = status_arm; bs_ok_ty = S.TyPrim "unit"; bs_err_arm = bc.bc_target;
+             bs_coproduct = bc.bc_status_key; bs_target = bc.bc_target } in
+  stmt_bind bs (hole w) [] (fun () -> desugar_stmts_with_locals locals rest)
 
 and desugar_stmt_or_return (s : S.stmt) : C.term =
   match s with
@@ -2491,6 +2915,7 @@ and v1_hoist_expr (e : S.expr) : S.stmt list * S.expr =
       (pa @ pb, S.EBinop (op, a', b', l))
   | S.EParen (a, l) -> let (p, a') = v1_hoist_expr a in (p, S.EParen (a', l))
   | S.ENot (a, l) -> let (p, a') = v1_hoist_operand a in (p, S.ENot (a', l))
+  | S.EEscape (a, l) -> let (p, a') = v1_hoist_operand a in (p, S.EEscape (a', l))
   | S.EIfThenElse (c, t, f, l) ->
       let (pc, c') = v1_hoist_operand c in
       let (pt, t') = v1_hoist_operand t in
@@ -2751,9 +3176,10 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   match e with
   | S.EVar (x, loc) when V1SS.mem x cells ->
       (* a read of a cell whose value is injected (into the coproduct of
-         `on error`) keeps the site of the name: the injection is of the
-         value read, not of the cell *)
-      if Hashtbl.mem S.return_inject_sites (loc.S.file, loc.S.start_line, loc.S.start_col)
+         `on error`) or bound keeps the span of the name: the injection and
+         the bind are of the value read, not of the cell *)
+      if Hashtbl.mem S.return_inject_sites (S.span_of loc)
+         || Hashtbl.mem S.bind_sites (S.span_of loc)
       then S.ECall ("__cell_get", [S.EVar (x, loc)], loc)
       else v1_call "__cell_get" [S.EVar (x, loc)]
   | S.EVar _ | S.ELit _ | S.EPullback _ | S.EPushout _ -> e
@@ -2784,6 +3210,7 @@ let rec v1_cell_expr cells (e : S.expr) : S.expr =
   | S.EJ (a, b, c, loc) -> S.EJ (r a, r b, r c, loc)
   | S.EPullbackVal (f, g, a, b, loc) -> S.EPullbackVal (f, g, r a, r b, loc)
   | S.ENot (x, loc) -> S.ENot (r x, loc)
+  | S.EEscape (x, loc) -> S.EEscape (r x, loc)
   | S.EIfThenElse (c, t, el, loc) -> S.EIfThenElse (r c, r t, r el, loc)
   | S.ELam (ps, b, loc) ->
       let inner = List.fold_left (fun a (n, _) -> V1SS.remove n a) cells ps in
@@ -2895,6 +3322,12 @@ let v1_lower_body (params : string list) (body : S.stmt list) : S.stmt list =
       params in
   prologue @ body2
 
+let () =
+  inject_core := (fun key arm e ->
+    match find_arm ~coproduct:key arm with
+    | Some (tag, _) -> lower_sum_constr arm tag [e] S.dummy_loc
+    | None -> failwith "internal: the arm of a coproduct of a bind is not registered")
+
 let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
   let params = List.map
     (fun p -> (p.S.param_name, desugar_ty p.S.param_ty))
@@ -2906,7 +3339,23 @@ let desugar_fun_decl (fn : S.fun_decl) : string * C.term =
   let param_names = List.map (fun p -> p.S.param_name) fn.S.fn_params in
   (* surface sugar: loops + `x = e` lowering BEFORE Core desugaring. *)
   let lowered_body = v1_lower_body param_names fn.S.fn_body in
-  let body = desugar_stmts_with_locals param_names lowered_body in
+  let saved = !bind_ctx in
+  bind_ctx :=
+    (match fn.S.fn_return, fn.S.fn_on_error with
+     | Some t, Some e ->
+         let fun_key = match S.error_sum_of ~ret:t ~err:e with
+           | S.TySum vs -> S.anon_sum_key vs | _ -> assert false in
+         Some { bc_mode = BTop; bc_target = e; bc_fun_key = fun_key;
+                bc_status_key = status_key e; bc_cell = fresh_bind_var "status" }
+     | _ -> None);
+  let body = Fun.protect ~finally:(fun () -> bind_ctx := saved) (fun () ->
+      let body = desugar_stmts_with_locals param_names lowered_body in
+      match !bind_ctx with
+      | Some bc when stmts_have_loop_bind lowered_body ->
+          (* the status cell of the fun, done until an error is written *)
+          C.App (C.Lam (bc.bc_cell, C.TyPlace "unit", body),
+                 desugar_expr (S.ECall ("__cell_make", [status_done ()], S.dummy_loc)))
+      | _ -> body) in
   let lam = curry_lam params body in
   (fn.S.fn_name, lam)
 
@@ -2953,6 +3402,10 @@ let desugar_expr_pure (env : Tyenv.env) (e : S.expr) : C.term option =
 let delta_rule_of_fun (env : Tyenv.env) (fn : S.fun_decl) : C.term option =
   with_saved_state (fun () ->
     match fn.S.fn_body with
+    (* a fun that declares `on error` is an arrow of the monad: its body may
+       bind, and the binds are known only once the body is checked, so its
+       body read as a pure term is not its meaning *)
+    | _ when fn.S.fn_on_error <> None -> None
     | [ S.SReturn (rexpr, _) ] when Tyenv.is_pure_expr env rexpr ->
         let params =
           List.map
@@ -4084,7 +4537,7 @@ let desugar_program ?(env : Tyenv.env option = None)
     (let go = expr_any pred in
      match e with
      | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> false
-     | S.EField (e,_,_) | S.EParen (e,_) | S.ENot (e,_) | S.ERefl (e,_)
+     | S.EField (e,_,_) | S.EParen (e,_) | S.ENot (e,_) | S.EEscape (e,_) | S.ERefl (e,_)
      | S.EFst (e,_) | S.ESnd (e,_) | S.EPathAbs (_,e,_) | S.EPathApp (e,_,_)
      | S.EIn (e,_,_) | S.EQuote (_,e,_) | S.ELam (_,e,_)
      | S.EMoveLam (_,e,_,_,_) | S.EReductionLam (_,e,_,_)

@@ -153,6 +153,7 @@ let rec infer_expr (env : env) (cs : constraint_set) (e : expr) : ty =
             | None when !open_world -> fresh_metavar ()
             | None -> raise (Infer_error (UnknownVar (x, loc)))))
   | EParen (inner, _) -> infer_expr env cs inner
+  | EEscape (inner, _) -> infer_expr env cs inner
   | EBinop (op, a, b, loc) ->
       let ta = infer_expr env cs a in
       let tb = infer_expr env cs b in

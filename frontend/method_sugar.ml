@@ -134,6 +134,7 @@ let rec map_expr (f : S.expr -> S.expr option) (e : S.expr) : S.expr =
       | S.EElMatch (a, b, c, l) -> S.EElMatch (r a, r b, r c, l)
       | S.EPullbackVal (g, h, a, b, l) -> S.EPullbackVal (g, h, r a, r b, l)
       | S.ENot (x, l) -> S.ENot (r x, l)
+      | S.EEscape (x, l) -> S.EEscape (r x, l)
       | S.EIfThenElse (a, b, c, l) -> S.EIfThenElse (r a, r b, r c, l)
       | S.ELam (p, b, l) -> S.ELam (p, r b, l)
       | S.EMoveLam (p, b, a, c, l) -> S.EMoveLam (p, r b, a, c, l)
@@ -368,6 +369,7 @@ let qualify_homes (p : S.program) : S.program =
     | S.EFst (x, l) -> S.EFst (r x, l)
     | S.ESnd (x, l) -> S.ESnd (r x, l)
     | S.ENot (x, l) -> S.ENot (r x, l)
+    | S.EEscape (x, l) -> S.EEscape (r x, l)
     | other -> other
   in
   let rec rw_stmt sibs h (st : S.stmt) : S.stmt =

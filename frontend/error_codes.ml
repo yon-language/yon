@@ -41,6 +41,9 @@ type code =
   | Write_to_value
   | Heap_allocates
   | Proof_rule
+  | Error_undeclared
+  | Escape_missing
+  | Escape_needless
   | Law_refuted
   | Law_uncertified
   (* E3xxx Space semantics *)
@@ -72,6 +75,9 @@ let id : code -> string = function
   | Write_to_value      -> "E2008"
   | Heap_allocates      -> "E2009"
   | Proof_rule          -> "E2010"
+  | Error_undeclared    -> "E2011"
+  | Escape_missing      -> "E2012"
+  | Escape_needless     -> "E2013"
   | Law_refuted         -> "E2101"
   | Law_uncertified     -> "E2102"
   | Union_arms_cross_space -> "E3003"
@@ -91,6 +97,9 @@ let severity : code -> severity = function
   | Parse_syntax | Lex_bad_token | Type_check | Return_not_in_tail | Effect_unhandled
   | Arm_coproduct_unnamed | Arm_name_clash | Library_name_taken
   | Given_outside_prelude | Write_to_value | Heap_allocates | Proof_rule
+  | Error_undeclared
+  | Escape_missing
+  | Escape_needless
   | Law_refuted
   | Law_uncertified
   | Union_arms_cross_space
@@ -107,7 +116,8 @@ let cli_prefix : code -> string = function
   | Return_not_in_tail           -> "TYPE ERROR"
   | Effect_unhandled             -> "TYPE ERROR"
   | Arm_coproduct_unnamed | Arm_name_clash | Library_name_taken
-  | Given_outside_prelude | Write_to_value | Heap_allocates | Proof_rule -> "TYPE ERROR"
+  | Given_outside_prelude | Write_to_value | Heap_allocates | Proof_rule
+  | Error_undeclared | Escape_missing | Escape_needless -> "TYPE ERROR"
   | Law_refuted | Law_uncertified -> "LAW ERROR"
   | Union_arms_cross_space -> "TYPE ERROR"
   | Drop_still_live | Drop_unknown_space -> "DROP ERROR"
@@ -131,6 +141,9 @@ let title : code -> string = function
   | Given_outside_prelude -> "a runtime primitive declared outside the prelude"
   | Proof_rule -> "what a project of kind proof refuses: no termination certificate, is given, forever, while"
   | Write_to_value      -> "a write to a name that is not a cell"
+  | Error_undeclared    -> "an escape whose error has no way out: the signature does not declare it, or the code is a lambda, a producer or a spawn"
+  | Escape_missing      -> "a value that may be an error is read where its success is wanted without escape"
+  | Escape_needless     -> "an escape with nothing to do: the value cannot fail, or the fun returns the error as it is"
   | Heap_allocates      -> "the code of a heap allocates a value"
   | Law_refuted         -> "a declared law is refuted by a counterexample"
   | Law_uncertified     -> "a declared law is neither proven nor declared an axiom"
@@ -170,6 +183,7 @@ let to_cli (d : t) : string =
  * assigned ids are all distinct -- the one hazard hand-numbering invites. *)
 let all : code list =
   [ Parse_syntax; Lex_bad_token; Type_check; Return_not_in_tail; Effect_unhandled;
+    Error_undeclared; Escape_missing; Escape_needless;
     Law_refuted;
     Law_uncertified;
     Union_arms_cross_space; Drop_still_live; Drop_unknown_space; Wire_boundary;

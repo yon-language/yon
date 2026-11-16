@@ -1,0 +1,15 @@
+place Entry {
+  // escape: inside a fun on error E, a value of S + E is read as an S, and its
+  // error leaves the fun. sqrt(16) = 4, sqrt(4) = 2, so k(16) = 3; k(0 - 16)
+  // leaves k at the first sqrt, and main answers 99.
+  fun k(x: Number) on error DomainError: Number {
+    y := escape Number.sqrt(x)
+    return escape Number.sqrt(y) + 1
+  }
+
+  fun main: Number {
+    a := match k(16) { Number as v => v, DomainError as d => 99 }
+    b := match k(0 - 16) { Number as v => v, DomainError as d => 99 }
+    return a + b
+  }
+}

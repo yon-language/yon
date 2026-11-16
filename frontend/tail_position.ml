@@ -73,7 +73,7 @@ and expr (acc : S.location list ref) (e : S.expr) : unit =
   | S.ELit _ | S.EVar _ | S.EWireTo _ | S.EPullback _ | S.EPushout _ -> ()
   | S.EField (x, _, _) | S.EPathApp (x, _, _) | S.EPathAbs (_, x, _)
   | S.EParen (x, _) | S.EIn (x, _, _) | S.ERefl (x, _) | S.EFst (x, _)
-  | S.ESnd (x, _) | S.ENot (x, _) | S.EQuote (_, x, _) -> ex x
+  | S.ESnd (x, _) | S.ENot (x, _) | S.EEscape (x, _) | S.EQuote (_, x, _) -> ex x
   | S.ECall (_, xs, _) | S.EHITConstr (_, xs, _) -> List.iter ex xs
   | S.EApp (f, xs, _) -> ex f; List.iter ex xs
   | S.EHITElim (x, arms, m, _) ->

@@ -42,7 +42,7 @@ let rec wires_expr (e : S.expr) : (string * S.location) list =
   match e with
   | S.EWireTo (sp, loc) -> [ (sp, loc) ]
   | S.ELit _ | S.EVar _ -> []
-  | S.EField (a, _, _) | S.EParen (a, _) | S.ENot (a, _)
+  | S.EField (a, _, _) | S.EParen (a, _) | S.ENot (a, _) | S.EEscape (a, _)
   | S.ERefl (a, _) | S.EFst (a, _) | S.ESnd (a, _)
   | S.EPathApp (a, _, _) | S.EPathAbs (_, a, _) | S.EIn (a, _, _)
   | S.ELam (_, a, _) | S.EMoveLam (_, a, _, _, _)

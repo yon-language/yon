@@ -227,6 +227,7 @@
 
 /* Type-related */
 %token OF IN TO STREAM IS NOT BY FROM WITH UNIFIES REQUIRES
+%token ESCAPE             /* `escape e`: the bind of the monad (-) + E at the site */
 /* `is given`: the axiomatic body — Java's `native` */
 %token GIVEN
 %token WIRE
@@ -1761,6 +1762,10 @@ expr:
     { ENot (e, mk_loc $startpos $endpos) }
   | BANG e = expr %prec UNOT
     { ENot (e, mk_loc $startpos $endpos) }
+  (* `escape e`, a prefix as `not`: e is S + E inside a fun on error E', the
+     success goes on as S and the error leaves the fun. *)
+  | ESCAPE e = expr %prec UNOT
+    { EEscape (e, mk_loc $startpos $endpos) }
   | e1 = expr AMP e2 = expr
     { (* bitwise AND su number. *)
       ECall ("__band", [e1; e2], mk_loc $startpos $endpos) }

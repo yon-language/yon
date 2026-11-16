@@ -49,7 +49,7 @@
       "patterns": [
         {
           "name": "keyword.control.yon",
-          "match": "\\b(when|otherwise|forces|for|every|here|sequence|repeat|at|most|times|forever|scope|return|produce|emit|if|then|else|iter|do|while)\\b"
+          "match": "\\b(when|otherwise|forces|for|every|here|sequence|repeat|at|most|times|forever|scope|return|escape|produce|emit|if|then|else|iter|do|while)\\b"
         },
         {
           "name": "storage.type.yon",

@@ -123,6 +123,8 @@
          left as a silent promise. *)
       "given", GIVEN;
       "not", NOT;
+      (* `escape e`: the value of S + E goes on as S, its error leaves the fun *)
+      "escape", ESCAPE;
       "by", BY;
       (* `place P carried by C`: the carrier of the place, the object of the
          machine its values are *)

@@ -45,6 +45,7 @@ let tok_name = function
   | Parser.IS -> "IS"
   | Parser.GIVEN -> "GIVEN"
   | Parser.NOT -> "NOT"
+  | Parser.ESCAPE -> "ESCAPE"
   | Parser.BY -> "BY"
   | Parser.FROM -> "FROM"
   | Parser.WITH -> "WITH"

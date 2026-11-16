@@ -278,6 +278,7 @@ let rec hover_expr (line0 : int) (col0 : int) (e : Surface_ast.expr)
   | Surface_ast.EIfThenElse (c, t, f, l) ->
       pick [c; t; f] (fun () -> here "if/then/else" l)
   | Surface_ast.ENot (a, l) -> pick [a] (fun () -> here "not" l)
+  | Surface_ast.EEscape (a, l) -> pick [a] (fun () -> here "escape" l)
   | _ -> None
 
 (* Extract the statement-expressions from a fun body for the hit-test

@@ -45,6 +45,7 @@ let rec rw_expr (rename : string -> string) (e : S.expr) : S.expr =
   | S.ESnd (e1, l) -> S.ESnd (r e1, l)
   | S.EJ (a, b, c, l) -> S.EJ (r a, r b, r c, l)
   | S.ENot (e1, l) -> S.ENot (r e1, l)
+  | S.EEscape (e1, l) -> S.EEscape (r e1, l)
   | S.EIfThenElse (c, a, b, l) -> S.EIfThenElse (r c, r a, r b, l)
   | S.ELam (ps, body, l) -> S.ELam (ps, r body, l)
   | S.EMoveLam (ps, b, p1, p2, l) -> S.EMoveLam (ps, r b, p1, p2, l)
@@ -135,7 +136,7 @@ let rec refs_in_expr (e : S.expr) : string list =
       (if String.length n > 0 then [n] else []) @ List.concat_map r args
   | S.EApp (h, args, _) -> r h @ List.concat_map r args
   | S.EField (e1, _, _) | S.EParen (e1, _) | S.ERefl (e1, _)
-  | S.EFst (e1, _) | S.ESnd (e1, _) | S.ENot (e1, _) | S.ELam (_, e1, _)
+  | S.EFst (e1, _) | S.ESnd (e1, _) | S.ENot (e1, _) | S.EEscape (e1, _) | S.ELam (_, e1, _)
   | S.EIn (e1, _, _) | S.EMoveLam (_, e1, _, _, _) | S.EReductionLam (_, e1, _, _)
   | S.EMorphLam (_, e1, _, _, _) | S.EFunctorLam (_, e1, _, _, _, _)
   | S.EViewLam (_, e1, _, _) | S.EPathApp (e1, _, _) | S.EPathAbs (_, e1, _)
@@ -268,6 +269,7 @@ let lower_cross_space (decls : S.top_decl list) : S.top_decl list =
          when branch, lambda, field value) is rewritten like one at the top,
          otherwise it reaches tycheck as an unknown name. *)
       | S.ENot (x, ll) -> S.ENot (rwe x, ll)
+      | S.EEscape (x, ll) -> S.EEscape (rwe x, ll)
       | S.EField (o, f, ll) -> S.EField (rwe o, f, ll)
       | S.ENew (n, fas, ll) ->
           S.ENew (n, List.map (fun fa -> { fa with S.fa_value = rwe fa.S.fa_value }) fas, ll)

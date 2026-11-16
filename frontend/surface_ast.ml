@@ -215,10 +215,12 @@ let fused_elim_sites : (string * int * int, unit) Hashtbl.t = Hashtbl.create 8
 
 (* `on error E`: return sites where the checker proved the
    expression inhabits ONE ARM of the coproduct T + E and desugar must wrap
-   it in that arm's injection. Site-keyed (the ledger rule), value = arm
+   it in that arm's injection. Keyed by the whole span: an expression and its
+   first operand start at the same place (the ledger rule), value = arm
    index (0 = success, 1 = error). Value: (the key of the coproduct, as
    sum_key names it, the arm). *)
-let return_inject_sites : (string * int * int, string * string) Hashtbl.t = Hashtbl.create 16
+let return_inject_sites : (string * int * int * int * int, string * string) Hashtbl.t = Hashtbl.create 16
+
 
 (* arrows DECLARED IN THE PRELUDE (qualified names, post-qualify_homes).
    Two consumers: emit TREE-SHAKES them (a program carries only what it
@@ -476,6 +478,9 @@ and expr =
   (* Unary boolean/Heyting not. Type check: bool -> bool, Heyt -> Heyt.
    * Lowered to an MLIR xor with true for booleans. *)
   | ENot of expr * location
+  (* `escape e`: e is a value of S + E, bound at the site (the bind of the
+     monad (-) + E'); the checker records the site on e, the desugar reads e *)
+  | EEscape of expr * location
   (* if/then/else as an EXPRESSION.
    * Tycheck: T_cond=bool, T_then=T_else=T_result.
    * Lowered to scf.if with scf.yield of the value. *)
@@ -639,7 +644,7 @@ let sub_exprs (e : expr) : expr list * stmt list list =
   | ELit _ | EVar _ | EWireTo _ | EPullback _ | EPushout _ -> ([], [])
   | EField (a, _, _) | EPathApp (a, _, _) | EPathAbs (_, a, _) | EParen (a, _)
   | EIn (a, _, _) | ERefl (a, _) | EFst (a, _) | ESnd (a, _) | EQuote (_, a, _)
-  | ENot (a, _) | ELam (_, a, _) | EMoveLam (_, a, _, _, _)
+  | ENot (a, _) | EEscape (a, _) | ELam (_, a, _) | EMoveLam (_, a, _, _, _)
   | EReductionLam (_, a, _, _) | EMorphLam (_, a, _, _, _)
   | EFunctorLam (_, a, _, _, _, _) | EViewLam (_, a, _, _) -> ([a], [])
   | ECall (_, args, _) | EHITConstr (_, args, _) -> (args, [])
@@ -681,6 +686,26 @@ let anon_sum_key (vs : variant list) : string =
 let error_sum_of ~(ret : ty) ~(err : string) : ty =
   TySum [ { v_name = face_name_of_ty ret; v_args = [ret] };
           { v_name = err; v_args = [TyUser err] } ]
+
+(* The bind of the monad (-) + E', inside a fun that declares `on error E'`:
+   an expression of the coproduct S + E (E <= E') read where S is wanted is
+   bound, i.e. eliminated by the match that exists, its success arm going on
+   with the rest and its error arm leaving the fun through E'. Keyed by the
+   span of the expression. *)
+type bind_site = {
+  bs_ok_arm : string;        (* the success arm of S + E, named after S *)
+  bs_ok_ty : ty;             (* S *)
+  bs_err_arm : string;       (* E *)
+  bs_coproduct : string;     (* the key of S + E *)
+  bs_target : string;        (* E', the error the fun declares *)
+}
+let bind_sites : (string * int * int * int * int, bind_site) Hashtbl.t = Hashtbl.create 16
+let bind_count = ref 0
+
+(* A conditional (an `if`, a `match`) with a bind inside a branch: the branch
+   cannot be hoisted, so the conditional itself is read in the monad. The
+   value is the type the checker gave the conditional. Keyed by span. *)
+let cond_bind_sites : (string * int * int * int * int, ty) Hashtbl.t = Hashtbl.create 16
 
 (* Canonical NAME of a Tarski code term (for carrier lookup, pretty-printing,
  * El_<name> mangling). Simple codes are variables, exactly the old string;
@@ -1355,6 +1380,7 @@ let location_of_expr (e : expr) : location =
   | EPullback (_, _, l) | EPushout (_, _, l) -> l
   | EPullbackVal (_, _, _, _, l) -> l
   | ENot (_, l) -> l
+  | EEscape (_, l) -> l
   | EIfThenElse (_, _, _, l) -> l
   | ELam (_, _, l) -> l
   | EMoveLam (_, _, _, _, l)

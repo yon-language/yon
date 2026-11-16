@@ -620,6 +620,7 @@ let rec contains_handle_lambda (e : expr) : string option =
   | EField (sub, _, _) -> contains_handle_lambda sub
   | EParen (sub, _) -> contains_handle_lambda sub
   | ENot (sub, _) -> contains_handle_lambda sub
+  | EEscape (sub, _) -> contains_handle_lambda sub
   | EBinop (_, a, b, _) ->
       (match contains_handle_lambda a with
        | Some _ as r -> r
@@ -711,6 +712,7 @@ let free_vars_expr (e0 : expr) : string list =
     | EPushout (_, _, _) -> []
     | EPullbackVal (_, _, a, b, _) -> s a @ s b
     | ENot (e, _) -> s e
+    | EEscape (e, _) -> s e
     | EIfThenElse (a, b, c, _) -> s a @ s b @ s c
     | ELam (ps, body, _) -> go (List.map fst ps @ bound) body
     | EMoveLam (ps, body, _, _, _) -> go (List.map fst ps @ bound) body
@@ -799,6 +801,7 @@ let rec subst_dim_in_expr (i : string) (d : dim) (e : expr) : expr =
       EElMatch (r target, r ret, r body, loc)
   | EPullbackVal (f, g, a, b, loc) -> EPullbackVal (f, g, r a, r b, loc)
   | ENot (x, loc) -> ENot (r x, loc)
+  | EEscape (x, loc) -> EEscape (r x, loc)
   | EIfThenElse (a, b, c, loc) -> EIfThenElse (r a, r b, r c, loc)
   | ELam (params, body, loc) -> ELam (params, r body, loc)
   | EMoveLam (params, body, from_p, to_p, loc) ->
@@ -1449,7 +1452,7 @@ let mob_facts : mob_fact list ref = ref []
 let rec mob_kids (e : expr) : expr list =
   match e with
   | ELit _ | EVar _ | EWireTo _ | EAll _ | EPullback _ | EPushout _ -> []
-  | EField (o, _, _) | EParen (o, _) | ENot (o, _) | EIn (o, _, _) | ERefl (o, _)
+  | EField (o, _, _) | EParen (o, _) | ENot (o, _) | EEscape (o, _) | EIn (o, _, _) | ERefl (o, _)
   | EFst (o, _) | ESnd (o, _) | EPathApp (o, _, _) | EPathAbs (_, o, _)
   | EQuote (_, o, _) -> [o]
   | ECall (_, a, _) | EHITConstr (_, a, _) -> a
@@ -2547,8 +2550,14 @@ let resolve_model (env : Tyenv.env) ~(called : string) ~(signature : string)
                   called p (List.length several) signature (String.concat ", " several)
                   called (List.hd several))))
 
+(* the values in the tail of a fun on error, by span (see tail_escape) *)
+let tail_values : (string * int * int * int * int, unit) Hashtbl.t = Hashtbl.create 16
+
 let rec infer (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
-  Result.map deref_lambda_unknown (infer_node env ctx e)
+  let before = !Surface_ast.bind_count in
+  let r = Result.map deref_lambda_unknown (infer_node env ctx e) in
+  (match r with Ok t -> note_conditional e before t | Error _ -> ());
+  r
 
 (* The call at the model each parameter resolves to. Inside a fun whose own
    parameter uses a signature, that parameter stays abstract: the arrows passed
@@ -3350,6 +3359,7 @@ and infer_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : ty tc_result =
        * (`backend=separate` + the process/package boundary), not a field-read
        * type-check. See chapter 10. *)
       let* obj_ty = infer env ctx obj in
+      let* obj_ty = bound_or_self env ctx obj obj_ty in
       (match obj_ty with
        | TyVar v -> err loc (Printf.sprintf
                  "a value of the abstract type %s admits no operation: inside a \
@@ -3884,7 +3894,9 @@ got %s" (Tyenv.ty_to_string other)))
 
   | EBinop (op, e1, e2, loc) ->
       let* t1 = infer env ctx e1 in
+      let* t1 = bound_or_self env ctx e1 t1 in
       let* t2 = infer env ctx e2 in
+      let* t2 = bound_or_self env ctx e2 t2 in
       (* an operator wants operands of one type: an open lambda unknown takes
          the type of the other side; two open ones become one, and the operator
          waits for it *)
@@ -4058,6 +4070,7 @@ got %s" (Tyenv.ty_to_string other)))
       (* pullback runtime semantics.
        * Returns a handle encoded as a number (bit-packing). *)
       ok (TyPrim "number")
+  | EEscape (x, loc) -> escape_value env ctx x loc
   | ENot (e, _loc) ->
       (* Unary not. Accepts boolean -> boolean, proposition -> proposition, and
        * number -> boolean (C-style: 0 -> true, nonzero -> false). *)
@@ -4087,7 +4100,7 @@ got %s" (Tyenv.ty_to_string other)))
       let env_ext = List.fold_left
         (fun env_acc (pname, pty) ->
            Tyenv.add_var env_acc pname pty)
-        env params in
+        { env with Tyenv.bind_scope = Tyenv.BindLambda } params in
       let* body_ty = asks_annotation params (infer env_ext ctx body) in
       let result_ty = List.fold_right
         (fun (_pname, pty) acc -> TyArrow (pty, acc))
@@ -4151,6 +4164,7 @@ got %s" (Tyenv.ty_to_string other)))
         | EParen (inner, _) -> count_var name inner
         | EField (o, _, _) -> count_var name o
         | ENot (inner, _) -> count_var name inner
+        | EEscape (inner, _) -> count_var name inner
         | EIfThenElse (c, t, f, _) -> count_var name c + count_var name t + count_var name f
         | _ -> 0
       in
@@ -4611,7 +4625,131 @@ and flows_into (env : Tyenv.env) (ctx : Reduce.ctx) ~(sub : ty) ~(super : ty) : 
        flows_into env ctx ~sub:(subst_evar_in_ty y fresh b) ~super:(subst_evar_in_ty x fresh d))
   | _ -> Dispatcher.subtype env ctx ~sub ~super
 
+(* The coproduct S + E that `on error E` builds, E an error place: its success
+   type, the names of its two arms, and its key. *)
+and as_error_sum (env : Tyenv.env) (ctx : Reduce.ctx) (t : ty)
+    : (ty * string * string * string) option =
+  match deref_lambda_unknown t with
+  | TySum ([ { v_name = ok_arm; v_args = [s] }; { v_name = e; v_args = [TyUser e'] } ] as variants)
+    when e = e' && ok_arm = Surface_ast.face_name_of_ty s
+         && flows_into env ctx ~sub:(TyUser e) ~super:(TyUser "Error") ->
+      Some (s, ok_arm, e, Surface_ast.anon_sum_key variants)
+  | _ -> None
+
+(* A value of S + E read where S is wanted. Inside a fun that declares
+   `on error E'` with E <= E' this is the bind of the monad (-) + E': the
+   site is recorded, the desugar eliminates the value with the match, the
+   success arm goes on and the error arm leaves the fun through E' (along the
+   mono E -> E'). Anywhere else the error has no way out, and the value is
+   refused. None: the type is no error coproduct. *)
+and bind_error_sum ?(escaped = false) (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (t : ty)
+    : ty option tc_result =
+  match as_error_sum env ctx t with
+  | None -> ok None
+  | Some (s, _, e_name, _)
+    when not escaped
+         && not (Hashtbl.mem tail_values (Surface_ast.span_of (location_of_expr e))) ->
+      let sname = Tyenv.ty_to_string s in
+      err_coded Error_codes.Escape_missing (location_of_expr e) (Printf.sprintf
+        "this value is a %s or the error %s, and it is read where a %s is wanted \
+         without escape: write escape, or handle the error with match"
+        sname e_name sname)
+  | Some (s, ok_arm, e_name, key) ->
+      let loc = location_of_expr e in
+      let sname = Tyenv.ty_to_string s in
+      let refuse msg = err_coded Error_codes.Error_undeclared loc msg in
+      (match env.Tyenv.bind_scope with
+       | Tyenv.BindOn (_, target)
+         when flows_into env ctx ~sub:(TyUser e_name) ~super:(TyUser target) ->
+           Hashtbl.replace Surface_ast.bind_sites (Surface_ast.span_of loc)
+             { Surface_ast.bs_ok_arm = ok_arm; bs_ok_ty = s; bs_err_arm = e_name;
+               bs_coproduct = key; bs_target = target };
+           incr Surface_ast.bind_count;
+           ok (Some s)
+       | Tyenv.BindOn (f, target) ->
+           refuse (Printf.sprintf
+             "this value is a %s or the error %s, and it is read where a %s is wanted: \
+              %s declares on error %s, which does not contain %s. Declare an error that \
+              contains %s, or look at the value with match"
+             sname e_name sname f target e_name e_name)
+       | Tyenv.BindLambda ->
+           refuse (Printf.sprintf
+             "this value is a %s or the error %s, and it is read where a %s is wanted \
+              inside a lambda: the arrow of a lambda carries no on error, so the error \
+              has no way out. Look at the value with match"
+             sname e_name sname)
+       | Tyenv.BindNone f ->
+           let who = if f = "" || String.length f > 1 && String.sub f 0 2 = "__"
+             then "this code declares no on error"
+             else Printf.sprintf "%s declares no on error" f in
+           refuse (Printf.sprintf
+             "this value is a %s or the error %s, and it is read where a %s is wanted: \
+              %s, so the error has no way out. Declare on error %s in the signature, \
+              or look at the value with match"
+             sname e_name sname who e_name))
+
+(* `escape x`: x is a value of S + E, bound at the site; its type is S. On a
+   value that cannot fail there is nothing to escape. *)
+and escape_value (env : Tyenv.env) (ctx : Reduce.ctx) (x : expr) (loc : location)
+    : ty tc_result =
+  let* t = infer env ctx x in
+  match as_error_sum env ctx t with
+  | None ->
+      err_coded Error_codes.Escape_needless loc (Printf.sprintf
+        "there is nothing to escape: this value is a %s, which cannot fail. \
+         Write it without escape" (Tyenv.ty_to_string t))
+  | Some _ ->
+      let* b = bind_error_sum ~escaped:true env ctx x t in
+      ok (match b with Some s -> s | None -> t)
+
+(* The tail of a fun on error E': a value S + E there is the return of the
+   fun as it is (along the mono E -> E'), so it is bound without escape, and an
+   escape there has nothing to do. The tails are the value returned, inside its
+   parentheses and in the branches of an if or a match. *)
+and tail_escape (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) : unit tc_result =
+  match env.Tyenv.bind_scope with
+  | Tyenv.BindOn (_, target) ->
+      let rec tails e =
+        Hashtbl.replace tail_values (Surface_ast.span_of (location_of_expr e)) ();
+        match e with
+        | EParen (x, _) -> tails x
+        | EIfThenElse (_, a, b, _) -> tails a @ tails b
+        | EHITElim (_, branches, _, _) -> List.concat_map (fun (_, _, b) -> tails b) branches
+        | EEscape (x, l) -> [ (x, l) ]
+        | _ -> [] in
+      List.fold_left (fun acc (x, l) ->
+          let* () = acc in
+          let* t = infer env ctx x in
+          match as_error_sum env ctx t with
+          | Some (_, _, e_name, _)
+            when flows_into env ctx ~sub:(TyUser e_name) ~super:(TyUser target) ->
+              err_coded Error_codes.Escape_needless l
+                "escape is not needed here: the fun returns the error as it is"
+          | _ -> ok ()) (ok ()) (tails e)
+  | _ -> ok ()
+
+(* the type an operand is read at: its success type, when it is bound *)
+and bound_or_self env ctx (e : expr) (t : ty) : ty tc_result =
+  let* b = bind_error_sum env ctx e t in
+  ok (match b with Some s -> s | None -> t)
+
+(* A conditional whose branches hold a bind is read in the monad: the type
+   the checker gives it is recorded by span for the desugar. *)
+and note_conditional (e : expr) (before : int) (t : ty) : unit =
+  if !Surface_ast.bind_count > before then
+    match e with
+    | EIfThenElse (_, _, _, l) | EHITElim (_, _, _, l)
+    | EBinop ((OpAnd | OpOr), _, _, l) ->
+        Hashtbl.replace Surface_ast.cond_bind_sites (Surface_ast.span_of l) t
+    | _ -> ()
+
 and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit tc_result =
+  let before = !Surface_ast.bind_count in
+  let r = check_node env ctx e expected in
+  (match r with Ok () -> note_conditional e before (deref_lambda_unknown expected) | Error _ -> ());
+  r
+
+and check_node (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit tc_result =
   let expected = deref_lambda_unknown expected in
   (* Universal property of the terminal object 1: for every object A there is
      a unique map `!_A : A -> 1`. So a term of any type checks against 1 (it
@@ -4633,6 +4771,10 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
       | _ -> actual in
     if flows_into env ctx ~sub:actual ~super:expected
        || comprehension_coerces_to env ctx ~sub:actual ~super:expected then ok ()
+    else if (match as_error_sum env ctx actual with
+             | Some (st, _, _, _) -> flows_into env ctx ~sub:st ~super:expected
+             | None -> false) then
+      let* _ = bind_error_sum env ctx e actual in ok ()
     else err (location_of_expr e)
       (Printf.sprintf "type mismatch: expected %s, got %s%s"
          (Tyenv.ty_to_string expected) (Tyenv.ty_to_string actual)
@@ -4751,6 +4893,7 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
         ok ()
       end
   | ELam ((params as lam_params), body, lam_loc), (TyPi _ | TyArrow _) ->
+      let env = { env with Tyenv.bind_scope = Tyenv.BindLambda } in
       (* Bidirectional lambda checking.  A dependent expected type carries the
          information needed to type an unannotated surface lambda and to align
          its binder with endpoint terms in the codomain: the domain of the
@@ -4830,13 +4973,25 @@ and check (env : Tyenv.env) (ctx : Reduce.ctx) (e : expr) (expected : ty) : unit
             | [v] ->
                 let* () = check env ctx e_inj (List.hd v.v_args) in
                 Hashtbl.replace Surface_ast.return_inject_sites
-                  (loc_e.file, loc_e.start_line, loc_e.start_col)
+                  (Surface_ast.span_of loc_e)
                   (Surface_ast.anon_sum_key variants, v.v_name);
                 ok ()
             | [] ->
+                (* an arm refused for its escape (missing, needless, without a way out) says so *)
+                let undeclared = List.find_map (fun v ->
+                    let mark = !lambda_unknown_trail in
+                    let r = check env ctx e_inj (List.hd v.v_args) in
+                    undo_lambda_unknowns mark;
+                    match r with
+                    | Error ({ err_code = Error_codes.(Error_undeclared | Escape_missing
+                                                     | Escape_needless); _ } as er) -> Some er
+                    | _ -> None) variants in
+                (match undeclared with
+                 | Some er -> Error er
+                 | None ->
                 err loc_e (Printf.sprintf
                   "expected %s: the value inhabits neither arm of the coproduct"
-                  (Tyenv.ty_to_string sum_ty))
+                  (Tyenv.ty_to_string sum_ty)))
             | _ ->
                 err loc_e (Printf.sprintf
                   "ambiguous injection into %s: the value inhabits more than \
@@ -5641,10 +5796,17 @@ and check_call_signature ?(arg_exprs : expr list = [])
     let rec check_args = function
       | [], [] -> ok ()
       | (pname, pty) :: prest, aty :: arest ->
+          let position = List.length params - List.length prest - 1 in
           if flows_into env ctx ~sub:aty ~super:pty
              || comprehension_coerces_to env ctx ~sub:aty ~super:pty
-             || pair_against_sigma (List.length params - List.length prest - 1) pty
+             || pair_against_sigma position pty
           then check_args (prest, arest)
+          else if List.length arg_exprs = List.length params
+                  && (match as_error_sum env ctx aty with
+                      | Some (st, _, _, _) -> flows_into env ctx ~sub:st ~super:pty
+                      | None -> false) then
+            let* _ = bind_error_sum env ctx (List.nth arg_exprs position) aty in
+            check_args (prest, arest)
           else
             let lambda_params =
               if List.length arg_exprs <> List.length params then []
@@ -5898,6 +6060,7 @@ let rec check_stmt (env : Tyenv.env) (ctx : Reduce.ctx)
       (* leaving the activation is a transport; it needs mobility *)
       (match expected_return with
        | Some t ->
+           let* () = tail_escape env ctx e in
            let* () = check env ctx e t in
            mob_site env ~crossing:false t e loc;
            ok env
@@ -7591,6 +7754,7 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
              | EBinop (o, a, b, l) -> EBinop (o, qualify a, qualify b, l)
              | EParen (a, l) -> EParen (qualify a, l)
              | ENot (a, l) -> ENot (qualify a, l)
+             | EEscape (a, l) -> EEscape (qualify a, l)
              | EIfThenElse (c, a, b, l) -> EIfThenElse (qualify c, qualify a, qualify b, l)
              | e -> e in
            let saved_house = !Surface_ast.open_house in
@@ -7633,6 +7797,7 @@ and check_place_decl (env : Tyenv.env) (ctx : Reduce.ctx) (pd : place_decl) : un
              | EBinop (o, a, b, l) -> EBinop (o, qualify a, qualify b, l)
              | EParen (a, l) -> EParen (qualify a, l)
              | ENot (a, l) -> ENot (qualify a, l)
+             | EEscape (a, l) -> EEscape (qualify a, l)
              | EIfThenElse (c, a, b, l) -> EIfThenElse (qualify c, qualify a, qualify b, l)
              | e -> e in
            let saved_house = !Surface_ast.open_house in
@@ -8043,6 +8208,87 @@ and check_given_fun (env : Tyenv.env) (ctx : Reduce.ctx)
                     (Tyenv.ty_to_string wired_ret))
               | _ -> ok ()))
 
+(* The binds of a body that the desugar cannot reach, each refused with the
+   reason: the error has a way out of a statement, a block, a branch, a loop;
+   it has none out of a producer or a spawn (a process of its own), out of the
+   right side of `and`/`or` in a condition (read only when the left side does
+   not decide), or out of a form that is no computation (a path, a proof). *)
+and unreachable_binds (body : stmt list) : type_error list =
+  let found = ref [] in
+  let bind_at e = Hashtbl.find_opt Surface_ast.bind_sites
+      (Surface_ast.span_of (location_of_expr e)) <> None in
+  let rec binds_in e =
+    (if bind_at e then [location_of_expr e] else [])
+    @ (let (es, bodies) = Surface_ast.sub_exprs e in
+       List.concat_map binds_in es
+       @ List.concat_map (List.concat_map binds_in_stmt) bodies)
+  and binds_in_stmt st =
+    List.concat_map binds_in (Surface_ast.stmt_exprs st)
+    @ List.concat_map (List.concat_map binds_in_stmt) (Surface_ast.sub_stmts st) in
+  let refuse why ls =
+    List.iter (fun l -> found := (l, why) :: !found) ls in
+  let rec walk e =
+    let conditional () =
+      Hashtbl.mem Surface_ast.cond_bind_sites (Surface_ast.span_of (location_of_expr e)) in
+    match e with
+    | ECall _ | EApp _ | EField _ | EBinop _ | EParen _ | ENot _ | EEscape _ | EIn _ | EFst _
+    | ESnd _ | EPair _ | EHITConstr _ | ENew _ | ENewIn _ | EPullbackVal _
+    | ELit _ | EVar _ ->
+        (match e with
+         | EBinop ((OpAnd | OpOr), _, b, _)
+           when binds_in b <> [] && not (conditional ()) ->
+             refuse "the right side of and/or holds it, and the checker gave the \
+                     whole no type" (binds_in b)
+         | _ -> ());
+        List.iter walk (fst (Surface_ast.sub_exprs e))
+    | EIfThenElse (c, a, b, _) ->
+        walk c;
+        if (binds_in a <> [] || binds_in b <> []) && not (conditional ()) then
+          refuse "a branch of this if holds it, and the checker gave the if no type"
+            (binds_in a @ binds_in b)
+        else (walk a; walk b)
+    | EHITElim (_, branches, x, _) ->
+        walk x;
+        let inside = List.concat_map (fun (_, _, b) -> binds_in b) branches in
+        if inside <> [] && not (conditional ()) then
+          refuse "a branch of this match holds it, and the checker gave the match no type" inside
+        else List.iter (fun (_, _, b) -> walk b) branches
+    | EProduce _ ->
+        refuse "a producer is a process of its own: an error inside it has no way \
+                out to the fun" (binds_in e)
+    | ESpawn _ ->
+        refuse "a spawn is a process of its own: an error inside it has no way \
+                out to the fun" (binds_in e)
+    | _ ->
+        refuse "this form is no computation (a path, a proof, a quote): an error \
+                has no place in it" (binds_in e)
+  and walk_cond c =
+    match c with
+    | CondExpr e | CondIs (e, _) | CondIsNot (e, _) -> walk e
+    | CondAnd (a, b) | CondOr (a, b) ->
+        walk_cond a;
+        refuse "the right side of and/or in a condition is read only when the left \
+                side does not decide: write it as a when inside the when"
+          (List.concat_map binds_in (Surface_ast.cond_exprs b))
+  and walk_stmt st =
+    match st with
+    | SWhen (c, b, alts, oth, _) ->
+        walk_cond c; List.iter walk_stmt b;
+        List.iter (fun (ac, ab) -> walk_cond ac; List.iter walk_stmt ab) alts;
+        Option.iter (List.iter walk_stmt) oth
+    | SForces (_, c, b, _) -> walk_cond c; List.iter walk_stmt b
+    | SProduce (b, _) ->
+        refuse "a producer is a process of its own: an error inside it has no way \
+                out to the fun" (List.concat_map binds_in_stmt b)
+    | _ ->
+        List.iter walk (Surface_ast.stmt_exprs st);
+        List.iter (List.iter walk_stmt) (Surface_ast.sub_stmts st) in
+  List.iter walk_stmt body;
+  List.rev_map (fun (l, why) ->
+      { err_loc = l; err_code = Error_codes.Error_undeclared;
+        err_msg = "this value is bound here, and its error has no way out: " ^ why })
+    !found
+
 and check_fun_decl (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl) : unit tc_result =
   with_home fn (fun () -> check_fun_decl_at_home env ctx fn)
 
@@ -8128,6 +8374,10 @@ and check_fun_decl_at_home (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
          (fun e p -> Tyenv.add_var e p.param_name p.param_ty)
          env
     |> (fun e -> Tyenv.set_effects e fn.fn_visits)
+    |> (fun e -> { e with Tyenv.bind_scope =
+                            (match fn.fn_on_error with
+                             | Some er -> Tyenv.BindOn (fn.fn_name, er)
+                             | None -> Tyenv.BindNone fn.fn_name) })
   in
   let expected_ret = match fn.fn_return, fn.fn_on_error with
     | Some t, Some e ->
@@ -8146,7 +8396,8 @@ and check_fun_decl_at_home (env : Tyenv.env) (ctx : Reduce.ctx) (fn : fun_decl)
   let tail_errs = (match expected_ret with
     | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
     | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret
-    @ producer_errors env fn in
+    @ producer_errors env fn
+    @ (if fn.fn_on_error <> None then unreachable_binds fn.fn_body else []) in
   match body_errs @ tail_errs with
   | [] -> ok ()
   | e :: _ ->
@@ -8227,6 +8478,10 @@ and check_fun_decl_accum_at_home (env : Tyenv.env) (ctx : Reduce.ctx)
          (fun e p -> Tyenv.add_var e p.param_name p.param_ty)
          env
     |> (fun e -> Tyenv.set_effects e fn.fn_visits)
+    |> (fun e -> { e with Tyenv.bind_scope =
+                            (match fn.fn_on_error with
+                             | Some er -> Tyenv.BindOn (fn.fn_name, er)
+                             | None -> Tyenv.BindNone fn.fn_name) })
   in
   let expected_ret = match fn.fn_return, fn.fn_on_error with
     | Some t, Some e -> Some (Surface_ast.error_sum_of ~ret:t ~err:e)
@@ -8236,7 +8491,8 @@ and check_fun_decl_accum_at_home (env : Tyenv.env) (ctx : Reduce.ctx)
   let tail_errs = (match expected_ret with
     | Some rt -> check_implicit_tail_return final_env ctx fn.fn_body rt
     | None -> []) @ mob_check_function final_env ctx fn.fn_body expected_ret
-    @ producer_errors env fn in
+    @ producer_errors env fn
+    @ (if fn.fn_on_error <> None then unreachable_binds fn.fn_body else []) in
   List.rev_append (body_errs @ tail_errs) (List.rev !errs)
 
 and check_reduction_decl (env : Tyenv.env) (ctx : Reduce.ctx) (rd : reduction_decl) : unit tc_result =
@@ -8848,6 +9104,7 @@ let collect_calls_in_stmts (stmts : stmt list) : string list =
     | EPullback (_, _, _) | EPushout (_, _, _) | EWireTo (_, _) -> ()
     | EPullbackVal (_, _, a, b, _) -> walk_expr a; walk_expr b
     | ENot (e, _) -> walk_expr e
+    | EEscape (e, _) -> walk_expr e
     | EIfThenElse (c, a, b, _) -> walk_expr c; walk_expr a; walk_expr b
     | ELam (_, body, _) -> walk_expr body
     | EMoveLam (_, body, _, _, _)

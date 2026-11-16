@@ -57,6 +57,7 @@ let rec subst (env : (string * S.expr) list) (e : S.expr) : S.expr =
   | S.ECall (f, args, l) -> S.ECall (f, List.map s args, l)
   | S.EIfThenElse (c, a, b, l) -> S.EIfThenElse (s c, s a, s b, l)
   | S.ENot (a, l) -> S.ENot (s a, l)
+  | S.EEscape (a, l) -> S.EEscape (s a, l)
   | S.EHITElim (m, branches, x, l) ->
       S.EHITElim (m, List.map (fun (c, pat, b) -> (c, pat, s b)) branches, s x, l)
   | _ -> e
@@ -110,6 +111,7 @@ let unfold (algebra_ops : S.operation_decl list)
          | None -> raise (Not_modelled ("a call of " ^ f)))
     | S.EIfThenElse (c, a, b, l) -> S.EIfThenElse (g c, g a, g b, l)
     | S.ENot (a, l) -> S.ENot (g a, l)
+    | S.EEscape (a, l) -> S.EEscape (g a, l)
     | S.EHITElim (m, branches, x, l) ->
         S.EHITElim (m, List.map (fun (c, pat, b) -> (c, pat, g b)) branches, g x, l)
     | S.EVar (x, _) ->

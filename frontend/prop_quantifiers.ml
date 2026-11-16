@@ -29,6 +29,7 @@ let rec subst (x : string) (v : S.expr) (e : S.expr) : S.expr =
   | S.ECall (f, args, l) -> S.ECall (f, List.map s args, l)
   | S.EIfThenElse (c, a, b, l) -> S.EIfThenElse (s c, s a, s b, l)
   | S.ENot (a, l) -> S.ENot (s a, l)
+  | S.EEscape (a, l) -> S.EEscape (s a, l)
   | S.EField (a, f, l) -> S.EField (s a, f, l)
   | S.EHITElim (m, branches, sc, l) ->
       S.EHITElim (m, List.map (fun (c, pat, b) -> (c, pat, s b)) branches, s sc, l)

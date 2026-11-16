@@ -2382,8 +2382,6 @@ def test_formatting_keeps_every_digit_of_a_literal(tmp_path):
 
 
 @pytest.mark.skipif(not FMT_frontend.exists(), reason="yonfmt is not built")
-@pytest.mark.xfail(strict=True, raises=ProbeOutcome,
-                   reason="formatting keeps a function's on error clause")
 def test_formatting_keeps_a_function_error_clause(tmp_path):
     ok, out = _fmt_keeps_frontend(tmp_path,
         "place Entry {\n  fun half(n: Number) on error DomainError: Number { return n / 2 }\n"

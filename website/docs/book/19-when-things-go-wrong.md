@@ -60,6 +60,58 @@ An error is a section: it carries fields, it is content-addressed, it can
 cross a `move`. Nothing is thrown; errors travel by the same arrows as
 everything else.
 
+## An error leaves by `escape`
+
+A fun with `on error E` returns `T + E`, the coproduct of its success and its
+error. Inside such a fun, `escape` reads a value of `S + E` as an `S`: the
+checker eliminates it with the `match` you would write, the success goes on
+with the rest of the body, and the error leaves the fun as its own. It is the
+bind of the monad `(-) + E`, and `escape` marks the site where it happens.
+`Number.sqrt` is `on error DomainError`:
+
+<!-- yon-gate: exit 3 -->
+```yon
+place Entry { }
+fun k(x: Number) on error DomainError: Number {
+  y := escape Number.sqrt(x)    // sqrt(4) = 2, or the error leaves k
+  return y + 1
+}
+
+fun main: Number {
+  return match k(4) { Number as v => v, DomainError as d => 99 }
+}
+```
+
+`escape` is a prefix, like `not`: `escape Number.sqrt(x) + 1` is
+`(escape Number.sqrt(x)) + 1`. The values are read from left to right and the
+first error wins. In a loop with a partial step the first error leaves the
+loop and the fun. A fun that declares a larger error lets a smaller one
+through, along its `this <`: a `DomainError` leaves a fun `on error Error` as
+an `Error`.
+
+The value a fun returns needs no `escape`: `return Number.sqrt(x)` in a fun
+`on error DomainError` returns the error as it is, and an `escape` there is
+refused with code `E2013`, as an `escape` on a value that cannot fail. Without
+`escape` a value of `S + E` stays a value: `y := Number.sqrt(x)` binds `y` to
+the coproduct, to look at later with `match`. Read where an `S` is wanted
+without `escape`, it is refused with code `E2012`, and the message says the
+two ways: write `escape`, or handle the error with `match`. Where the error
+has no way out (a fun that declares no `on error`, an error its signature does
+not contain, a lambda, a producer, a spawn), `escape` is refused with code
+`E2011`.
+
+<!-- yon-gate: refuses write escape, or handle the error with match -->
+```yon
+place Entry { }
+fun f(x: Number) on error DomainError: Number {
+  return Number.sqrt(x) + 1
+}
+
+fun main: Number {
+  return match f(4) { Number as v => v, DomainError as d => 99 }
+}
+```
+
 ## Failure is a value
 
 At the stdlib boundary, absence is in-band (chapter 12): a missing file, an

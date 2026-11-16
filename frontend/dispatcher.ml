@@ -112,6 +112,7 @@ let rec classify_expr (e : expr) : fragment =
        | FragCubical, _ | _, FragCubical -> FragCubical
        | _ -> FragCATT)
   | EParen (inner, _) -> classify_expr inner
+  | EEscape (inner, _) -> classify_expr inner
   | EAll _ -> FragCATT
   | EIn (inner, _, _) -> classify_expr inner
   | ERefl _ | EPair _ | EFst _ | ESnd _ | EJ _ -> FragCubical
@@ -199,6 +200,7 @@ let rec rename_evar (old_n : string) (new_n : string) (e : expr) : expr =
   | EField (obj, fld, loc) -> EField (r obj, fld, loc)
   | EBinop (op, l, ri, loc) -> EBinop (op, r l, r ri, loc)
   | EParen (inner, loc) -> EParen (r inner, loc)
+  | EEscape (inner, loc) -> EEscape (r inner, loc)
   | _ -> e
 
 let rename_ty_term (old_n : string) (new_n : string) (tt : ty_term) : ty_term =

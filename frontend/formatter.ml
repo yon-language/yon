@@ -166,6 +166,7 @@ and fmt_expr (e : expr) : string =
       Printf.sprintf "%s %s %s" (fmt_expr a) (binop_str op) (fmt_expr b)
   | EParen (inner, _) -> "(" ^ fmt_expr inner ^ ")"
   | ENot (a, _) -> "not " ^ fmt_expr a
+  | EEscape (a, _) -> "escape " ^ fmt_expr a
   | EIfThenElse (c, t, f, _) ->
       Printf.sprintf "if %s then %s else %s" (fmt_expr c) (fmt_expr t) (fmt_expr f)
   | ELam (params, body, _) ->
@@ -411,7 +412,7 @@ let fmt_fun (f : fmt) (fn : fun_decl) : unit =
     line f (Printf.sprintf "%sfun %s%s%s%s%s%s is given"
               prefix fn.fn_name tps dom oerr ret visits)
   else begin
-    line f (Printf.sprintf "%sfun %s%s%s%s%s {" prefix fn.fn_name tps dom ret visits);
+    line f (Printf.sprintf "%sfun %s%s%s%s%s%s {" prefix fn.fn_name tps dom oerr ret visits);
     f.indent <- f.indent + 1;
     List.iter (fmt_stmt f) fn.fn_body;
     f.indent <- f.indent - 1;

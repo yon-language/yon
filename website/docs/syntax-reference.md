@@ -528,6 +528,7 @@ Every keyword, alphabetically, each linked to its entry in
 [`else`](/book/keywords#else) ·
 [`emit`](/book/keywords#emit) ·
 [`error`](/book/keywords#error) ·
+[`escape`](/book/keywords#escape) ·
 [`every`](/book/keywords#every) ·
 [`exact`](/book/keywords#exact) ·
 [`false`](/book/keywords#false) ·

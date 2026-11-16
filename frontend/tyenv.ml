@@ -37,6 +37,14 @@ type op_sig = {
 
 (* ─── The environment ──────────────────────────────────────────────── *)
 
+(* What a term inside a fun may do with a value of an error coproduct S + E
+   where S is wanted: bind it (the fun declares `on error E'` with E <= E'),
+   or not. A lambda's arrow carries no `on error`. *)
+type bind_scope =
+  | BindNone of string             (* the fun, which declares no error *)
+  | BindOn of string * string      (* the fun and the error it declares *)
+  | BindLambda                     (* the body of a lambda *)
+
 type env = {
   vars : (string * ty) list;
   (* Structural sum signatures visible in the program. Each sum is the
@@ -70,6 +78,7 @@ type env = {
   delta : (string * Ast.term) list;
   ops : (string * op_sig) list;
   current_effects : string list;
+  bind_scope : bind_scope;
   active_handlers : string list;
   (* Place pairs transportable only while checking a geometric morphism's
    * pull/push bodies. This is scoped typing evidence, not global subtyping. *)
@@ -110,6 +119,7 @@ let empty : env = {
   delta = [];
   ops = [];
   current_effects = [];
+  bind_scope = BindNone "";
   active_handlers = [];
   transport_pairs = [];
   declared_spaces = [];
@@ -253,7 +263,7 @@ let rec is_pure_expr (env : env) (e : expr) : bool =
   | ELit _ | EVar _ -> true
   | ELam (_, body, _) -> is_pure_expr env body
   | EField (e1, _, _) | EParen (e1, _) | EFst (e1, _) | ESnd (e1, _)
-  | ENot (e1, _) | ERefl (e1, _) | EPathAbs (_, e1, _) | EPathApp (e1, _, _) ->
+  | ENot (e1, _) | EEscape (e1, _) | ERefl (e1, _) | EPathAbs (_, e1, _) | EPathApp (e1, _, _) ->
       is_pure_expr env e1
   | EBinop (_, a, b, _) | EPair (a, b, _) | EComposeWith (a, b, _) ->
       is_pure_expr env a && is_pure_expr env b

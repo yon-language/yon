@@ -138,6 +138,7 @@ let rec collect_names (e : expr) : string list =
   | EPullback (_, _, _) | EPushout (_, _, _) -> []
   | EPullbackVal (_, _, a, b, _) -> collect_names a @ collect_names b
   | ENot (e, _) -> collect_names e
+  | EEscape (e, _) -> collect_names e
   | EIfThenElse (c, a, b, _) -> collect_names c @ collect_names a @ collect_names b
   | ELam (_params, body, _) ->
       (* Inline lambda. The free vars of the body minus the parameter names;
