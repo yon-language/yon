@@ -1,4 +1,4 @@
 place Entry {
-  fun bogus(p: Σx : Number, Number): pair(snd(p), fst(p)) = p { return refl(p) }
+  proof fun bogus(p: Σx : Number, Number): pair(snd(p), fst(p)) = p { return refl(p) }
   fun main: Number { return 0 }
 }

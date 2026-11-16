@@ -43,6 +43,10 @@ Brings a module or a qualified symbol into scope: `import "x/rates"`, `import q 
 
 Marks a function as part of how its owner is built, not of what it offers. Inside a place, an `internal fun` is reachable only from the funs of that place: called from anywhere else it is a type error that names its house. The prelude's collections keep `value` this way, so their public face is `get`. An `internal` function never enters the cross-Space dispatch table either. Before `place`, it makes a representation internal: `internal place LatticePoint carried by i64` is carried as an `i64` at runtime and is an abstract type everywhere else, with no literals, no arithmetic and no identity with `Int64`; its values come only from its own funs.
 
+#### `proof`
+
+Marks a function as a proof of the statement its type writes: `proof fun plus_zero(n: Nat): plus(n, zero) = n { ... }`. A proof fun terminates (the termination check certifies it), is never `is given`, uses no `while` or `forever`, and calls only proof funs and funs the termination check certifies; it is checked and has no run time, so code that runs does not call it, while naming it in `f <=> g by eta, eps` is allowed, because the compiler checks the laws and at run time the equivalence is its two funs. Inside a proof, the value of a proof fun is a proof of its statement: `plus_zero(m) through one_more`. It comes after `internal` when both are written: `internal proof fun`. A refusal has code E2010.
+
 #### `given`
 
 `fun f(x: T): U is given` — the body is axiomatic: the compiler realizes it, the language declares its face. It is Java's `native`, and it is the brother of `is <prim>`: that one says the *carrier* is a leaf of the recursion, this one says the *body* is.

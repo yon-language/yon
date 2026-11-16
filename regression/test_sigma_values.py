@@ -241,7 +241,7 @@ def test_a_comprehension_is_its_carrier_without_a_slot(tmp_path):
 
 def test_the_proof_of_a_comprehension_has_no_value(tmp_path):
     _refused(tmp_path,
-             f"  fun proof(s: {SUB}): {PROOF} {{ return snd(s) }}\n",
+             f"  fun of_sub(s: {SUB}): {PROOF} {{ return snd(s) }}\n",
              "return 42",
              "E2001", "proof of a comprehension")
 

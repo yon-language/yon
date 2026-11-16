@@ -45,7 +45,7 @@ def _exits(tmp_path, entry, code):
     assert subprocess.run([str(tmp_path / "exe")], capture_output=True, timeout=60).returncode == code
 
 
-HELPER = ("  fun helper(u: Term, v: Term, q): Term.yes = Term.no {\n"
+HELPER = ("  proof fun helper(u: Term, v: Term, q): Term.yes = Term.no {\n"
           "    return ite_injective(yes, u, v, no, u, v, q)\n  }\n")
 
 
@@ -60,7 +60,7 @@ def _proof(tmp_path, theorems):
 def test_a_parameter_without_annotation_does_not_prove_the_false(tmp_path):
     # q is fixed by ite_injective as (yes, u, v) = (no, u, v): the q of bad is another path
     r = _proof(tmp_path, HELPER +
-               "  fun bad(u: Term, v: Term, d2: Step, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Term.yes = Term.no {\n"
+               "  proof fun bad(u: Term, v: Term, d2: Step, q: (yes, u, v) ↪ ite = (d2 ↦ Step.src)): Term.yes = Term.no {\n"
                "    return helper(u, v, q)\n  }\n")
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "parameter q expects" in out, out

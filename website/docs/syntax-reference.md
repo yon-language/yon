@@ -286,10 +286,11 @@ fun concat_all<T uses Monoid>(xs: List<T>): T { return List.fold_left(xs, T.unit
 fun h(x: Number): Number visits Output { return x }                 // declared effect
 internal fun secret(x: Number): Number { return x }                 // only its house calls it; not exported cross-Space
 fun p(x: Number) on error DomainError: Number { return x }          // partial: it declares how it fails
+proof fun beta_fst(a: Number, b: Number): fst(pair(a, b)) = a { return clear }  // a proof: checked, terminates, no run time
 ```
 
-The four modifiers above, type parameters, `visits`, `internal` and
-`on error`, are ✓ verified. **Effect discipline (`visits`)**: calling a
+The five modifiers above, type parameters, `visits`, `internal`,
+`on error` and `proof`, are ✓ verified. **Effect discipline (`visits`)**: calling a
 function that `visits E` requires the caller to cover `E`, by declaring
 `visits E` itself or having a handler active; the effect propagates up to
 `main`. I/O is an effect (`visits Output`).
@@ -582,6 +583,7 @@ Every keyword, alphabetically, each linked to its entry in
 [`present`](/book/keywords#present) ·
 [`produce`](/book/keywords#produce) ·
 [`promote`](/book/keywords#promote) ·
+[`proof`](/book/keywords#proof) ·
 [`prop`](/book/keywords#prop) ·
 [`pull`](/book/keywords#pull) ·
 [`push`](/book/keywords#push) ·

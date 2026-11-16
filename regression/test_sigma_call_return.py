@@ -291,7 +291,7 @@ def test_the_proof_read_from_a_variable_speaks_of_the_variable(tmp_path):
 
 
 def test_the_proof_of_a_comprehension_speaks_of_its_element(tmp_path):
-    _accepted(tmp_path, "  fun proof(a: Number, s: { x : Number where x = a }): fst(s) = a { return snd(s) }\n")
+    _accepted(tmp_path, "  fun elem(a: Number, s: { x : Number where x = a }): fst(s) = a { return snd(s) }\n")
     _refused(tmp_path,
              "  fun bad(x: Number, a: Number, s: { x : Number where x = a }): x = a { return snd(s) }\n",
              "fun bad", "Id_Number(x, a)")
@@ -314,7 +314,7 @@ def _on_the_kernel(tmp_path, body):
 # what peak_of asks of it: the proofs of a recursive call, whose result does not compute. The
 # project of the kernel is a project of proofs: a proof reaches no native code
 
-SAME = ("  fun same(n: Nat): Σm : Nat, m = n {\n"
+SAME = ("  proof fun same(n: Nat): Σm : Nat, m = n {\n"
         "    return match n {\n"
         "      zero => pair(zero, refl(zero)),\n"
         "      succ as k => pair(fst(same(k)) ↪ succ, (fun(x: Nat) => x ↪ succ, snd(same(k))) ↦ ap)\n"
@@ -343,47 +343,47 @@ def test_the_proof_of_the_recursive_call_says_only_its_argument(tmp_path):
 
 
 def test_a_recursive_proof_used_on_another_number_is_refused(tmp_path):
-    body = SAME + "  fun bad(n: Nat, k: Nat): fst(same(k)) = n { return snd(same(k)) }\n"
+    body = SAME + "  proof fun bad(n: Nat, k: Nat): fst(same(k)) = n { return snd(same(k)) }\n"
     _kernel_refusal(_on_the_kernel(tmp_path, body), body, "fun bad")
 
 
 # the binder of a branch inside an endpoint does not capture an argument either
 
-PICK = ("  fun pick(d: Nat, n: Nat): (match n { zero => d, succ as k => d }) = d {\n"
+PICK = ("  proof fun pick(d: Nat, n: Nat): (match n { zero => d, succ as k => d }) = d {\n"
         "    return match n { zero => refl(d), succ as k => refl(d) }\n  }\n")
 
 
 def test_an_argument_named_as_the_binder_of_a_branch_stays_the_argument(tmp_path):
     # with the capture the endpoint would compute to the payload, zero, and not to k
-    r = _on_the_kernel(tmp_path, PICK + "  fun use(k: Nat): k = k { return pick(k, zero ↪ succ) }\n")
+    r = _on_the_kernel(tmp_path, PICK + "  proof fun use(k: Nat): k = k { return pick(k, zero ↪ succ) }\n")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_the_argument_in_a_branch_is_not_the_payload(tmp_path):
-    body = PICK + "  fun bad(k: Nat): zero = k { return pick(k, zero ↪ succ) }\n"
+    body = PICK + "  proof fun bad(k: Nat): zero = k { return pick(k, zero ↪ succ) }\n"
     _kernel_refusal(_on_the_kernel(tmp_path, body), body, "fun bad")
 
 
 STATED = "Σp : Peak, (p ↦ Peak.left = d1) ∧ (p ↦ Peak.right = d2)"
-READ = (f"  fun left_of(d1: Step, d2: Step, s: {STATED}): fst(s) ↦ Peak.left = d1 {{\n"
+READ = (f"  proof fun left_of(d1: Step, d2: Step, s: {STATED}): fst(s) ↦ Peak.left = d1 {{\n"
         "    return fst(snd(s))\n  }\n"
-        f"  fun right_of(d1: Step, d2: Step, s: {STATED}): fst(s) ↦ Peak.right = d2 {{\n"
+        f"  proof fun right_of(d1: Step, d2: Step, s: {STATED}): fst(s) ↦ Peak.right = d2 {{\n"
         "    return snd(snd(s))\n  }\n")
 AT_ARGS = "s: Σr : Peak, (r ↦ Peak.left = e) ∧ (r ↦ Peak.right = f)"
 
 
 def test_the_statement_of_peak_of_is_read_on_the_arguments_in_the_kernel(tmp_path):
     r = _on_the_kernel(tmp_path, READ +
-                       f"  fun read(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = e {{\n"
+                       f"  proof fun read(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = e {{\n"
                        "    return left_of(e, f, s)\n  }\n"
-                       f"  fun read_right(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.right = f {{\n"
+                       f"  proof fun read_right(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.right = f {{\n"
                        "    return right_of(e, f, s)\n  }\n")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
 def test_the_statement_of_peak_of_on_the_other_step_is_refused_in_the_kernel(tmp_path):
     r = _on_the_kernel(tmp_path, READ +
-                       f"  fun wrong(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = f {{\n"
+                       f"  proof fun wrong(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = f {{\n"
                        "    return left_of(e, f, s)\n  }\n")
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "type mismatch" in out, out
@@ -391,7 +391,7 @@ def test_the_statement_of_peak_of_on_the_other_step_is_refused_in_the_kernel(tmp
 
 def test_the_statement_of_peak_of_with_its_steps_swapped_is_refused_in_the_kernel(tmp_path):
     r = _on_the_kernel(tmp_path, READ +
-                       f"  fun swapped(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = e {{\n"
+                       f"  proof fun swapped(e: Step, f: Step, {AT_ARGS}): fst(s) ↦ Peak.left = e {{\n"
                        "    return left_of(f, e, s)\n  }\n")
     out = r.stdout + r.stderr
     assert r.returncode != 0 and "E2001" in out and "left_of" in out and "parameter s" in out, out

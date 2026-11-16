@@ -172,7 +172,7 @@ def test_the_statement_compiles_on_the_peak_of_the_kernel(tmp_path):
     proofs.write_text(source.replace(
         "place Proofs {\n",
         "place Proofs {\n"
-        "  fun peak_of_statement(d1: Step, d2: Step, p: Peak, "
+        "  proof fun peak_of_statement(d1: Step, d2: Step, p: Peak, "
         "q: (p ↦ Peak.left = d1) ∧ (p ↦ Peak.right = d2)): "
         "Σr : Peak, (r ↦ Peak.left = d1) ∧ (r ↦ Peak.right = d2) {\n"
         "    return pair(p, q)\n  }\n", 1))

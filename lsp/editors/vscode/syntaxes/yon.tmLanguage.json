@@ -53,7 +53,7 @@
         },
         {
           "name": "storage.type.yon",
-          "match": "\\b(import|internal|place|space|fun|move|view|reduction|operation|cell|geomorph|functor|topos|morphism|prop|nat|morph|error)\\b"
+          "match": "\\b(import|internal|proof|place|space|fun|move|view|reduction|operation|cell|geomorph|functor|topos|morphism|prop|nat|morph|error)\\b"
         },
         {
           "name": "keyword.other.binding.yon",

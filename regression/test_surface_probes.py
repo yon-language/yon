@@ -500,7 +500,7 @@ def test_a_qualified_nullary_arm_stays_bare(tmp_path):
 def test_the_type_of_a_path_is_written_with_its_endpoints(tmp_path):
     src = ("place Entry {\n"
            "fun twice(x: Number): Number { return x + x }\n"
-           "fun proof(a: Number): twice(a) = a + a { return clear }\n"
+           "fun doubled(a: Number): twice(a) = a + a { return clear }\n"
            "fun main: Number { return 42 }\n}\n")
     assert _exit(tmp_path, src) == 42
 

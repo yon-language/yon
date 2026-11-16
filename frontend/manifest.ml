@@ -153,10 +153,12 @@ let parse_string (text : string) : world_map =
             | Some i when trim (String.sub line 0 i) = "kind" ->
                 let rhs = String.sub line (i + 1) (String.length line - i - 1) in
                 (match parse_spaces_value rhs with
-                 | ["proof"] -> Surface_ast.proof_project := true
+                 | ["proof"] ->
+                     raise (Manifest_error
+                       "yon.toml: [package] kind = \"proof\" no longer exists: a project has no kind; a proof is marked on its fun, `proof fun name(params): statement { ... }`")
                  | _ ->
                      raise (Manifest_error
-                       "yon.toml: [package] kind is \"proof\", the only kind a project declares"))
+                       "yon.toml: [package] kind no longer exists: a project has no kind; a proof is marked on its fun, `proof fun`"))
             | Some i when trim (String.sub line 0 i) = "entry" ->
                 let rhs =
                   String.sub line (i + 1) (String.length line - i - 1) in

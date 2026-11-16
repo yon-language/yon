@@ -21,6 +21,8 @@
          filesystem. *)
       "import", IMPORT;
       "internal", INTERNAL;
+      (* `proof fun`: the fun is a proof of the statement its type writes *)
+      "proof", PROOF;
       "place", PLACE;
       (* `this` heads the coproduct clause of a block place: `this > A :U B`
          names the arms (sub-objects) that this place is the sum of. *)

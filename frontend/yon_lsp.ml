@@ -199,7 +199,8 @@ let symbols_of_program (prog : Surface_ast.program) : symbol list =
                s_detail = "place in " ^ pd.Surface_ast.pd_world;
                s_loc = pd.Surface_ast.pd_loc }
     | Surface_ast.TopFun fn ->
-        let det = (if fn.Surface_ast.fn_internal then "internal " else "") ^ fun_signature fn in
+        let det = (if fn.Surface_ast.fn_internal then "internal " else "")
+                  ^ (if Surface_ast.is_proof_fun fn then "proof " else "") ^ fun_signature fn in
         Some { s_name = fn.Surface_ast.fn_name; s_kind = 12;
                s_detail = det; s_loc = fn.Surface_ast.fn_loc }
     | Surface_ast.TopMove mv ->
