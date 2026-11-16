@@ -11,6 +11,8 @@
 #                only checked for their values, on a small run)
 #   gate.sh bench   the measurements alone: the benchmarks at full size, serial,
 #                on a quiet machine (before publishing numbers)
+#   gate.sh mlir <base>   the MLIR of the corpus at <base> against the working
+#                tree: the programs whose MLIR differs
 #
 # While working, the content cache of yonc makes a re-run of tier 1 fast (a
 # compilation already made with this toolchain is answered from the cache):
@@ -31,13 +33,53 @@ BASE=""
 # (toolchain/yonc_cache_key.py). Off by default: on this machine the time is in
 # the system's check of every new binary, which a cached copy pays again.
 export YONC_CACHE_DIR="${YONC_CACHE_DIR-}"
+# The temporary directories of pytest are in notes/tmp/yon-pytest, which git
+# ignores and only pytest uses: pytest empties it at the start of each run.
+PYTEST_TMP="$ROOT/notes/tmp/yon-pytest"
 if [ "$TIER" = "bench" ]; then
   ROOT="$(cd "$(dirname "$0")/.." && pwd)"
   t0=$(date +%s)
   echo "── bench: the measurements (serial, -m bench)"
-  "$ROOT/.venv/bin/pytest" "$ROOT/regression/" -q -m bench --skip-ledger "$ROOT/regression/SKIPS.txt" || {
+  "$ROOT/.venv/bin/pytest" "$ROOT/regression/" -q --basetemp "$PYTEST_TMP" -m bench --skip-ledger "$ROOT/regression/SKIPS.txt" || {
     echo "GATE RED (bench) after $(( $(date +%s) - t0 ))s"; exit 1; }
   echo "bench green ($(( $(date +%s) - t0 ))s)"
+  exit 0
+fi
+# gate.sh mlir <base>: the MLIR of the whole corpus (meta/ included) at <base>
+# and in the working tree, and the programs whose MLIR differs. The base is a
+# `git archive` of <base> in notes/tmp, with its own frontend built there; one
+# base is kept: building a new one removes the others and their dumps.
+if [ "$TIER" = "mlir" ]; then
+  REF="${2:?usage: gate.sh mlir <commit-base>}"
+  SHA=$(cd "$ROOT" && git rev-parse --short "$REF^{commit}") || exit 1
+  TMP="$ROOT/notes/tmp"; BT="$TMP/base-$SHA"
+  if [ ! -x "$BT/frontend/_build/default/yoner_emit_mlir.exe" ]; then
+    rm -rf "$TMP"/base-* "$TMP"/mlir-*; mkdir -p "$BT"
+    (cd "$ROOT" && git archive "$SHA") | tar -x -C "$BT" || exit 1
+    (cd "$BT/frontend" && dune build) || { echo "the frontend of $SHA does not build"; exit 1; }
+  fi
+  (cd "$ROOT/frontend" && dune build) || { echo "the frontend of the working tree does not build"; exit 1; }
+  dump() {  # dump <tree> <out>: one .mlir per project of the corpus, a .refused when yonc refuses it
+    rm -rf "$2"; mkdir -p "$2"
+    for d in "$1"/examples/*/ "$1"/regression/book/jp/*/ "$1"/regression/canonical_forms/*/*/ \
+             "$1"/regression/cross_space/ "$1"/regression/wire_pair/ "$1"/regression/spawn_check/ "$1"/meta/; do
+      [ -f "$d/yon.toml" ] || continue
+      n=$(echo "${d#"$1"/}" | tr '/' '_')
+      "$1/toolchain/yonc" --emit=mlir "$d" -o "$2/$n.mlir" >/dev/null 2>&1 \
+        || { rm -f "$2/$n.mlir"; : > "$2/$n.refused"; }
+    done
+  }
+  A="$TMP/mlir-$SHA"; W="$TMP/mlir-work"
+  dump "$BT" "$A"; dump "$ROOT" "$W"
+  same=0; refused=0; listed=0
+  for b in $( (ls "$A"; ls "$W") | sort -u); do
+    if [ ! -e "$A/$b" ]; then echo "new      $b"; listed=$((listed+1))
+    elif [ ! -e "$W/$b" ]; then echo "gone     $b"; listed=$((listed+1))
+    elif [ "${b%.refused}" != "$b" ]; then refused=$((refused+1))
+    elif cmp -s "$A/$b" "$W/$b"; then same=$((same+1))
+    else echo "changed  $b ($(diff "$A/$b" "$W/$b" | grep -c '^[<>]') lines)"; listed=$((listed+1)); fi
+  done
+  echo "mlir: $SHA -> working tree: $same identical, $refused refused on both sides, $listed listed above"
   exit 0
 fi
 PYTEST="$ROOT/.venv/bin/pytest"
@@ -49,9 +91,9 @@ t0=$(date +%s)
 say() { echo "── $*"; }
 # A red gate keeps what it saw: the whole output of the step that failed and
 # the environment it failed in, in a file of its own that nothing deletes
-# (YON_GATE_FAILURES, by default ~/Projects/yon-wt/gate-failures, outside the
-# repo). A failure that does not come back can be read there afterwards.
-FAILDIR="${YON_GATE_FAILURES:-$HOME/Projects/yon-wt/gate-failures}"
+# (YON_GATE_FAILURES, by default notes/gate-failures of the repo, which git
+# ignores). A failure that does not come back can be read there afterwards.
+FAILDIR="${YON_GATE_FAILURES:-$ROOT/notes/gate-failures}"
 keep() {  # keep <step> <output>
   mkdir -p "$FAILDIR" 2>/dev/null || return 0
   local sha f
@@ -182,7 +224,7 @@ for f in $DIRTY; do
 done
 if [ -n "$PICK" ]; then
   say "tier 1: targeted:$PICK"
-  T1=$("$PYTEST" $PICK -q -rfE -n "${YON_JOBS:-auto}" --dist loadgroup --skip-ledger "$ROOT/regression/SKIPS.txt" 2>&1); rc=$?
+  T1=$("$PYTEST" $PICK -q --basetemp "$PYTEST_TMP" -rfE -n "${YON_JOBS:-auto}" --dist loadgroup --skip-ledger "$ROOT/regression/SKIPS.txt" 2>&1); rc=$?
   echo "$T1" | tail -2
   [ $rc -eq 0 ] || die "targeted" "$T1"
 else
@@ -218,11 +260,11 @@ LEDGER="$ROOT/regression/SKIPS.txt"
 WORLDS_DIR="${TMPDIR:-/tmp}"
 WORLDS_BEFORE=$(ls "$WORLDS_DIR" 2>/dev/null | grep '^yon-world-' | sort)
 say "tier 3: full pytest, parallel phase (-n $JOBS)"
-T3=$("$PYTEST" "$ROOT/regression/" -q -rfE -n "$JOBS" --dist loadgroup -m "not bench and not serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
+T3=$("$PYTEST" "$ROOT/regression/" -q --basetemp "$PYTEST_TMP" -rfE -n "$JOBS" --dist loadgroup -m "not bench and not serial" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
 [ $rc -eq 0 ] || die "full pytest (parallel phase)" "$T3"
 say "tier 3: full pytest, serial phase (no-xdist tests)"
-T3B=$("$PYTEST" "$ROOT/regression/" -q -rfE -m "serial and not bench" --skip-ledger "$LEDGER" 2>&1); rc=$?
+T3B=$("$PYTEST" "$ROOT/regression/" -q --basetemp "$PYTEST_TMP" -rfE -m "serial and not bench" --skip-ledger "$LEDGER" 2>&1); rc=$?
 echo "$T3B" | grep -E "FAILED|passed|failed|UNDECLARED|STALE" | tail -12
 [ $rc -eq 0 ] || die "full pytest (serial phase)" "$T3B"
 leaked=""
