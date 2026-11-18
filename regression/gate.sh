@@ -68,6 +68,16 @@ if [ "$TIER" = "mlir" ]; then
       "$1/toolchain/yonc" --emit=mlir "$d" -o "$2/$n.mlir" >/dev/null 2>&1 \
         || { rm -f "$2/$n.mlir"; : > "$2/$n.refused"; }
     done
+    # the single files, that no project holds: the tests of regression/yon_tests, the self-host,
+    # and the programs that left the strings of the Python tests (regression/programs)
+    for f in $(cd "$1" && find regression/yon_tests selfhost regression/programs -name "*.yon" 2>/dev/null | sort); do
+      dir=$(dirname "$1/$f"); inproj=0
+      while [ "$dir" != "$1" ] && [ "$dir" != "/" ]; do [ -f "$dir/yon.toml" ] && inproj=1 && break; dir=$(dirname "$dir"); done
+      [ $inproj -eq 1 ] && continue
+      n=$(echo "$f" | tr '/' '_')
+      "$1/toolchain/yonc" --emit=mlir "$1/$f" -o "$2/$n.mlir" >/dev/null 2>&1 \
+        || { rm -f "$2/$n.mlir"; : > "$2/$n.refused"; }
+    done
   }
   A="$TMP/mlir-$SHA"; W="$TMP/mlir-work"
   dump "$BT" "$A"; dump "$ROOT" "$W"
