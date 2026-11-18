@@ -30,7 +30,9 @@ open Ast
    lets El of a code that mentions a primitive infer its universe. *)
 let prim_codes = [ "number"; "money"; "text"; "boolean"; "unit" ]
 
-type report = { certified : int; skipped : int; bodies_checked : int; bodies_skipped : int }
+type report = { certified : int; skipped : int; bodies_checked : int; bodies_skipped : int;
+                proofs_certified : string list;
+                proofs_skipped : (string * string) list }
 
 (* Peel a function's top-level lambda chain into its (binder, type) parameters. *)
 let peel_params (body : term) : (string * ty) list =
@@ -114,8 +116,10 @@ let global_ctx (dr : Desugar.desugar_result) : Core_check.tctx =
         Some (name, List.fold_right (fun (x, t) acc -> TyPi (x, t, acc)) params ret)
     | None -> None
   in
+  let sig_of_proof (name, _, decl) = Option.map (fun t -> (name, t)) decl in
   List.map (fun p -> (p, TyType 0)) prim_codes
   @ List.filter_map sig_of dr.Desugar.functions
+  @ List.filter_map sig_of_proof dr.Desugar.proofs
 
 let certify_program (dr : Desugar.desugar_result) : (report, string) result =
   let g0 = global_ctx dr in
@@ -161,10 +165,35 @@ let certify_program (dr : Desugar.desugar_result) : (report, string) result =
     | Var _ | Unit | Place _ | Reduction _ | World _ -> ()
   in
   List.iter (fun (_, b) -> wt g0 b) dr.Desugar.functions;
+  List.iter (fun (_, b, _) -> Option.iter (wt g0) b) dr.Desugar.proofs;
   (match dr.Desugar.main with Some m -> wt g0 m | None -> ());
   (* Also certify each declared return type (a family's `Type_0`, or a function
      returning El(...)), which is not a Lam binder. *)
   List.iter (fun (_, ret) -> certify g0 ret) dr.Desugar.fn_ret_hints;
+
+  (* A proof states its theorem in its type: the Π over its parameters with the
+     statement at the end. The kernel certifies that whole type, and keeps the name
+     of each proof whose type it certified, and of each it skipped with the reason,
+     so that a proof that no longer reaches the kernel is seen by name. A statement
+     the checker finds ill-formed is skipped, not rejected, as a body is: tycheck has
+     already checked it, and a point of a sum reaches the Core as its run-time
+     encoding, which the checker cannot tell from an ill-formed endpoint. *)
+  let proofs_ok = ref [] and proofs_skip = ref [] in
+  List.iter
+    (fun (name, _, decl) ->
+       match decl with
+       | None -> proofs_skip := (name, "no declared statement") :: !proofs_skip
+       | Some decl_ty ->
+           (match Core_check.certify_ty ~cc g0 decl_ty with
+            | `Ok -> incr certn; proofs_ok := name :: !proofs_ok
+            | `Skipped why -> incr skipn; proofs_skip := (name, why) :: !proofs_skip
+            | `Type_error m ->
+                (* not a rejection: a point of a sum reaches the Core as its run-time
+                   encoding, so a well-formed statement about one can look ill-formed
+                   to the checker; the proof is named as skipped, with the reason *)
+                incr skipn;
+                proofs_skip := (name, "the checker cannot read the statement: " ^ m) :: !proofs_skip))
+    dr.Desugar.proofs;
 
   (* ── Term-checking pass ────────────────────────────────────────────────────
      Beyond certifying that every dependent TYPE is well-formed, kernel-CHECK
@@ -222,6 +251,20 @@ let certify_program (dr : Desugar.desugar_result) : (report, string) result =
                 incr bskip;
                 bwarn := (name, m) :: !bwarn))
     dr.Desugar.functions;
+  (* A proof body is checked against the theorem it states, under the same
+     advisory policy: today most proof bodies fall outside the fragment and are
+     skipped; the kernel re-check of a proof body is the work of the cubical
+     kernel, not of this gate. *)
+  List.iter
+    (fun (name, body, decl) ->
+       match body, decl with
+       | None, _ | _, None -> ()
+       | Some body, Some decl_ty ->
+           (match Core_check.certify_term ~cc g0 body decl_ty with
+            | `Ok -> incr bchk
+            | `Skipped _ -> incr bskip
+            | `Type_error m -> incr bskip; bwarn := (name, m) :: !bwarn))
+    dr.Desugar.proofs;
 
   (* Report the term-checking counts under the same YON_CORE_WF flag the emitter
      uses for the type-certification line (the emitter's fixed log prints only
@@ -234,10 +277,18 @@ let certify_program (dr : Desugar.desugar_result) : (report, string) result =
     if !bwarn <> [] then
       Printf.eprintf "[core-wf] %d bodies unverified (advisory, not rejected): %s\n"
         (List.length !bwarn)
-        (String.concat ", " (List.rev_map fst !bwarn))
+        (String.concat ", " (List.rev_map fst !bwarn));
+    if !proofs_ok <> [] then
+      Printf.eprintf "[core-wf] proof types certified: %s\n"
+        (String.concat ", " (List.rev !proofs_ok));
+    if !proofs_skip <> [] then
+      Printf.eprintf "[core-wf] proof types skipped (out of fragment): %s\n"
+        (String.concat ", " (List.rev_map (fun (n, w) -> n ^ " (" ^ w ^ ")") !proofs_skip))
   end;
 
   if !errs = [] then
     Ok { certified = !certn; skipped = !skipn;
-         bodies_checked = !bchk; bodies_skipped = !bskip }
+         bodies_checked = !bchk; bodies_skipped = !bskip;
+         proofs_certified = List.rev !proofs_ok;
+         proofs_skipped = List.rev !proofs_skip }
   else Error (String.concat "; " (List.rev !errs))

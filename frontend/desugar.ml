@@ -2736,6 +2736,11 @@ type desugar_result = {
      synthesize a wrapper <NatTransform>__<obj> that invokes tgt (a fun or a
      reduction clause). *)
   nat_transforms : S.nat_transform_decl list;
+  (* The proof funs, lowered for the kernel check only: each is a name, its Core
+     term and the theorem it states, the Π over its parameters with the statement
+     at the end, its paths with their endpoints. A proof has no run time, so
+     nothing that emits reads this field; the kernel re-check reads it. *)
+  proofs : (string * C.term option * C.ty option) list;
 }
 
 let empty_result : desugar_result = {
@@ -2752,6 +2757,7 @@ let empty_result : desugar_result = {
   morphs = [];
   toposes = [];
   nat_transforms = [];
+  proofs = [];
 }
 
 let desugar_place_decl (pd : S.place_decl) : C.place_decl =
@@ -3388,6 +3394,44 @@ let desugar_expr_pure (env : Tyenv.env) (e : S.expr) : C.term option =
   with_saved_state (fun () ->
     if Tyenv.is_pure_expr env e then Some (desugar_expr e) else None)
 
+(* A bare point in a term the kernel reads is its arm: a name is a point iff it
+ * is a nullary variant of a named sum and is not shadowed by a parameter or a
+ * var in scope. subst_evar_in_expr respects the inner binders (lambda params,
+ * match patterns). *)
+let points_as_arms (env : Tyenv.env) (params : S.param list) (e : S.expr) : S.expr =
+  List.fold_left
+    (fun acc (_, variants) ->
+       List.fold_left
+         (fun acc (v : S.variant) ->
+            if v.S.v_args = []
+               && not (List.exists
+                         (fun (p : S.param) ->
+                            p.S.param_name = v.S.v_name)
+                         params)
+               && Tyenv.lookup_var env v.S.v_name = None
+            then subst_evar_in_expr v.S.v_name
+                   (S.EHITConstr (v.S.v_name, [], S.dummy_loc)) acc
+            else acc)
+         acc variants)
+    e env.Tyenv.named_sums
+
+(* The type a proof states, lowered with the endpoints of its paths. The type of
+ * the code that runs drops them (desugar_ty: the path is erased at run time);
+ * the theorem keeps them, because they are what it says. An endpoint that is not
+ * a pure expression has no Core term: it stays the erased endpoint, and the
+ * kernel then skips the type instead of certifying it. *)
+let rec statement_ty (params : S.param list) (t : S.ty) : C.ty =
+  let endpoint (S.TyTermExpr e) =
+    match !current_env with
+    | Some env ->
+        Option.value (desugar_expr_pure env (points_as_arms env params e)) ~default:C.Unit
+    | None -> C.Unit in
+  match t with
+  | S.TyId (a, l, r) -> C.TyId (statement_ty params a, endpoint l, endpoint r)
+  | S.TyPi (x, a, b) -> C.TyPi (x, statement_ty params a, statement_ty params b)
+  | S.TySigma (x, a, b) -> C.TySigma (x, statement_ty params a, statement_ty params b)
+  | t -> desugar_ty t
+
 (* Build the delta-rule of a user function: its body as a CURRIED LAMBDA in
  * Core, so that unfolding f(args) is just beta on (lambda params. body) args.
  *
@@ -3419,23 +3463,7 @@ let delta_rule_of_fun (env : Tyenv.env) (fn : S.fun_decl) : C.term option =
            is a point iff it is a nullary variant of a named sum and is not
            shadowed by a parameter or a var in scope. subst_evar_in_expr
            respects the inner binders (lambda params, match patterns). *)
-        let rexpr =
-          List.fold_left
-            (fun acc (_, variants) ->
-               List.fold_left
-                 (fun acc (v : S.variant) ->
-                    if v.S.v_args = []
-                       && not (List.exists
-                                 (fun (p : S.param) ->
-                                    p.S.param_name = v.S.v_name)
-                                 fn.S.fn_params)
-                       && Tyenv.lookup_var env v.S.v_name = None
-                    then subst_evar_in_expr v.S.v_name
-                           (S.EHITConstr (v.S.v_name, [], S.dummy_loc)) acc
-                    else acc)
-                 acc variants)
-            rexpr env.Tyenv.named_sums
-        in
+        let rexpr = points_as_arms env fn.S.fn_params rexpr in
         Some (curry_lam params (desugar_expr rexpr))
     | _ -> None)
 
@@ -4104,7 +4132,11 @@ let desugar_program ?(env : Tyenv.env option = None)
   let p = read_equivalences p in
   let p = Method_sugar.normalize_program p in  (* method-call sugar; idempotent *)
   let p = Method_sugar.qualify_homes p in   (* the house gives the name *)
-  (* a proof fun is checked and has no run time: it is not lowered *)
+  (* a proof fun is checked and has no run time: it leaves the program that is
+     lowered to code, and is lowered on its own, after it, for the kernel check *)
+  let proof_decls = List.filter_map (function
+    | S.TopFun fd when Surface_ast.is_proof_fun fd -> Some fd
+    | _ -> None) p in
   let p = List.filter (function S.TopFun fd -> not (Surface_ast.is_proof_fun fd) | _ -> true) p in
   let p = Method_sugar.qualify_overloads p in  (* overloaded method decls -> Place__name (same as tycheck) *)
   current_env := env;
@@ -5047,6 +5079,7 @@ let desugar_program ?(env : Tyenv.env option = None)
     in
     fix [] (free_names [] start)
   in
+  let res =
   match res.main with
   | None -> res
   | Some main_body ->
@@ -5065,3 +5098,27 @@ let desugar_program ?(env : Tyenv.env option = None)
           res.functions
       in
       { res with main = Some wrapped }
+  in
+  (* The proofs are lowered last, when the code that runs is already lowered, so
+     what is emitted is the same with or without them. *)
+  let proofs = List.map (fun fd ->
+    let fd = match rewrite_top_decl [] (S.TopFun fd) with
+      | S.TopFun fd' -> fd'
+      | _ -> fd in
+    (* a proof body that has no Core term (a transport along a path received as
+       a parameter) leaves its statement to the kernel and its body to tycheck *)
+    let term = try Some (snd (with_saved_state (fun () -> desugar_fun_decl fd)))
+      with Path_not_known _ -> None in
+    (* the binders of the proof take the types of its theorem, endpoints and all,
+       so that the body is checked under the hypotheses the statement names *)
+    let rec retype ps t = match ps, t with
+      | (p : S.param) :: rest, C.Lam (x, _, b) when x = p.S.param_name ->
+          C.Lam (x, statement_ty fd.S.fn_params p.S.param_ty, retype rest b)
+      | _, t -> t in
+    let term = Option.map (retype fd.S.fn_params) term in
+    let statement = Option.map (fun ret ->
+      List.fold_right (fun (p : S.param) acc ->
+          C.TyPi (p.S.param_name, statement_ty fd.S.fn_params p.S.param_ty, acc))
+        fd.S.fn_params (statement_ty fd.S.fn_params ret)) fd.S.fn_return in
+    (fd.S.fn_name, term, statement)) proof_decls in
+  { res with proofs }
