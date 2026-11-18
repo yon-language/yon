@@ -36,7 +36,8 @@ import pytest
 from test_formatter import CORPUS, FMT, ROOT
 
 EMIT = ROOT / "frontend" / "_build" / "default" / "yoner_emit_mlir.exe"
-_CORPUS_ROOTS = (ROOT / "examples", ROOT / "regression" / "yon_tests")
+_CORPUS_ROOTS = (ROOT / "examples", ROOT / "regression" / "yon_tests", ROOT / "selfhost",
+                 ROOT / "regression" / "canonical_forms")
 
 
 def _package_of(f: Path):
@@ -63,16 +64,10 @@ def _units():
 UNITS = _units()
 
 # Units whose formatting breaks the oracle, each with the law it breaks. Strict:
-# an entry whose unit formats correctly fails the run and must go.
-# kw_geomorph_full: formatter.ml (TopGeomMorphism) does not print the
-# `exact push` / `exact pull` clause (gm_f_lower_star_exact / gm_f_star_exact),
-# so the emitted MLIR changes (an i32 constant 1 -> 0); the round-trip
-# fail-safe does not see it.
-KNOWN_DEFECTS = {
-    "examples/kw_geomorph_full": (
-        "formatting keeps the exactness of a geomorph's push/pull: the "
-        "formatted program emits the same MLIR"),
-}
+# an entry whose unit formats correctly fails the run and must go. None today:
+# the formatter writes `exact push` again, and the round-trip compares the whole
+# tree, so a clause it drops is a refusal of the round-trip, not a silent change.
+KNOWN_DEFECTS = {}
 
 
 def _params():
@@ -162,14 +157,7 @@ def test_corpus_units_cover_the_formatter_corpus():
     assert set(CORPUS) <= covered, sorted(map(str, set(CORPUS) - covered))[:10]
 
 
-_DROP_PROBE = """\
-place Entry { }
-fun main: Number {
-  mut x := 1
-  x <- x + 41
-  return x
-}
-"""
+_DROP_PROBE = 'place Entry { }\nfun main: Number {\n  mut x := 1\n  x <- x + 41\n  return x\n}\n'
 
 
 @pytest.mark.skipif(not FMT.exists() or not EMIT.exists(), reason="yonfmt or emitter not built")

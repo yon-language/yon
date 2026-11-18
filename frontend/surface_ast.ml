@@ -1420,3 +1420,13 @@ let elaborated_call (name : string) (args : expr list) (l : location) : expr opt
   | Some (ECall (n, full, _)) as found
     when n <> name || List.length full <> List.length args -> found
   | _ -> None
+
+(* The tables the parser fills and the formatter reads, emptied before a reading that stands alone
+   (the formatter, the rewriter): two readings of two texts in one process must not see each
+   other's sites. A compilation does not empty them: it reads many files, and their sites add up. *)
+let reset_parse_tables () =
+  Hashtbl.reset exact_int_literals; Hashtbl.reset arrow_sites; Hashtbl.reset explicit_type_args;
+  Hashtbl.reset mut_sites; Hashtbl.reset fun_bounds; Hashtbl.reset bare_nullary_decls;
+  Hashtbl.reset internal_carrier_sites; Hashtbl.reset arrow_written_in;
+  Hashtbl.reset carrier_headers; Hashtbl.reset algebra_written; Hashtbl.reset place_algebras;
+  Hashtbl.reset proof_funs

@@ -13,15 +13,45 @@ import json
 import subprocess
 from pathlib import Path
 
+import re
+
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FMT = ROOT / "frontend" / "_build" / "default" / "yonfmt.exe"
 LSP = ROOT / "frontend" / "_build" / "default" / "yon_lsp.exe"
 
+CANONICAL = ROOT / "regression" / "canonical_forms"
+
+# Two accepted fixtures use a form the formatter does not write, and that leaves the language: the
+# operation at top level and the binding at top level. They leave the corpus with their forms.
+UNCOVERED = {
+    CANONICAL / "algebra" / "standalone_op.yon": "an operation at top level (a form that leaves)",
+    CANONICAL / "binding" / "canonical.yon": "a binding at top level (a form that leaves)",
+}
+
+
+def _refused_by_the_parser(f: Path) -> bool:
+    """A file of a refusal proof the parser refuses on purpose (its .expect: reject_clean, E1xxx):
+    a text that does not parse cannot be formatted."""
+    if CANONICAL not in f.parents:
+        return False
+    construct, name = f.relative_to(CANONICAL).parts[:2]
+    exp = CANONICAL / construct / (Path(name).stem + ".expect")
+    if not exp.exists():
+        return False
+    t = exp.read_text()
+    return "status: reject_clean" in t and re.search(r"^code: E1\d{3}", t, re.M) is not None
+
+
 CORPUS = sorted(
-    list((ROOT / "examples").rglob("*.yon"))
-    + list((ROOT / "regression" / "yon_tests").rglob("*.yon"))
+    f for f in (list((ROOT / "examples").rglob("*.yon"))
+                + list((ROOT / "regression" / "yon_tests").rglob("*.yon"))
+                + list((ROOT / "prelude").rglob("*.yon"))
+                + list((ROOT / "selfhost").rglob("*.yon"))
+                + list((ROOT / "meta").rglob("*.yon"))
+                + list(CANONICAL.rglob("*.yon")))
+    if f not in UNCOVERED and not _refused_by_the_parser(f)
 )
 
 

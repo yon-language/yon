@@ -42,6 +42,30 @@ let () =
            (match Formatter.format_program prog with
             | None -> prerr_endline "format_program: Exit (costrutto non coperto)"; exit 3
             | Some out -> print_string out))
+  | [_; "--ast-diff"; file] ->
+      (* where the program and its formatting differ, but for positions: the guard's reason *)
+      (match Formatter.parse (read_file file) with
+       | None -> prerr_endline "parse failed"; exit 2
+       | Some prog ->
+           (match Formatter.format_program prog with
+            | None -> prerr_endline "format_program: Exit (an uncovered construct)"; exit 3
+            | Some out ->
+                (match Formatter.parse out with
+                 | None -> prerr_endline "the formatted text does not parse"; exit 4
+                 | Some prog2 ->
+                     (match Ast_compare.first_difference prog prog2 with
+                      | None ->
+                          (match Formatter.format_program prog2 with
+                           | Some out2 when out2 = out -> print_endline "the same program, and idempotent"
+                           | Some out2 ->
+                               let oc = open_out "/tmp/yonfmt_second.yon" in output_string oc out2; close_out oc;
+                               let oc = open_out "/tmp/yonfmt_first.yon" in output_string oc out; close_out oc;
+                               print_endline "the same program, not idempotent: /tmp/yonfmt_first.yon, /tmp/yonfmt_second.yon"
+                           | None -> print_endline "the same program; the second formatting fails")
+                      | Some (l1, l2, what) ->
+                          Printf.printf "differ: source %d:%d, formatted %d:%d: %s\n"
+                            l1.Surface_ast.start_line l1.Surface_ast.start_col
+                            l2.Surface_ast.start_line l2.Surface_ast.start_col what))))
   | [_; file] ->
       (match Formatter.safe_format (read_file file) with
        | Some out -> print_string out

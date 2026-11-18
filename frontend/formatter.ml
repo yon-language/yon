@@ -34,22 +34,37 @@ let binop_str = function
   | OpEq -> "==" | OpNeq -> "!=" | OpLt -> "<" | OpGt -> ">"
   | OpLeq -> "<=" | OpGeq -> ">=" | OpAnd -> "and" | OpOr -> "or"
 
+(* the shortest decimal writing that reads back as the same float, without an exponent (the
+   lexer reads `digits.digits`): %g kept six digits and changed the number (3.14159265358979
+   became 3.14159), and wrote 2.22e-16, which does not lex *)
+let float_str (n : float) : string =
+  let rec go p =
+    let s = Printf.sprintf "%.*f" p n in
+    if p >= 340 || float_of_string s = n then s else go (p + 1) in
+  go 1
+
 let lit_str = function
   | LitNumber n ->
       (* integer if possible, otherwise float *)
       if Float.is_integer n && Float.abs n < 1e15
       then Printf.sprintf "%d" (int_of_float n)
-      else Printf.sprintf "%g" n
+      else float_str n
   | LitString s -> Printf.sprintf "\"%s\"" s
   | LitBool b -> if b then "true" else "false"
-  | LitCurrency (n, c) -> Printf.sprintf "%g %s" n c
-  | LitDuration (n, u) -> Printf.sprintf "%g %s" n u
+  | LitCurrency (n, c) -> Printf.sprintf "%s %s" (float_str n) c
+  | LitDuration (n, u) -> Printf.sprintf "%s %s" (float_str n) u
   | LitHeytPresent -> "present"
   | LitHeytAbsent -> "absent"
   | LitHeytUnknown -> "unknown"
 
 (* ─── Tipi ed espressioni (mutuamente ricorsivi: un tipo dipendente porta
        terms, an expression carries type annotations) ────────────────── *)
+
+(* a product of paths: each component a path, or on the left a product of paths *)
+let rec is_meet (t : ty) : bool =
+  match t with
+  | TySigma ("_", l, TyId _) -> (match l with TyId _ -> true | _ -> is_meet l)
+  | _ -> false
 
 let rec fmt_ty (t : ty) : string =
   match t with
@@ -74,6 +89,14 @@ let rec fmt_ty (t : ty) : string =
   | TyUniverse n -> Printf.sprintf "Type_%d" n
   | TyHeytInt n -> Printf.sprintf "heyt_int<%d>" n
   | TyPi (x, a, b) -> Printf.sprintf "\xce\xa0%s : %s, %s" x (fmt_ty a) (fmt_ty b)
+  (* the Sigma whose fibre ignores its point is a product, written as it is read: the meet of
+     paths `(a = b) ∧ (c = d)`, left-associative, or the pair of types `(A, B)` *)
+  | TySigma ("_", a, b) when is_meet t ->
+      let rec meet = function
+        | TySigma ("_", l, r) -> meet l ^ " \xe2\x88\xa7 (" ^ fmt_ty r ^ ")"
+        | p -> "(" ^ fmt_ty p ^ ")" in
+      ignore (a, b); meet t
+  | TySigma ("_", a, b) -> Printf.sprintf "(%s, %s)" (fmt_ty a) (fmt_ty b)
   | TySigma (x, a, b) -> Printf.sprintf "\xce\xa3%s : %s, %s" x (fmt_ty a) (fmt_ty b)
   | TyId (_, x, y) -> Printf.sprintf "%s = %s" (fmt_ty_term x) (fmt_ty_term y)
   | TyEl c -> Printf.sprintf "El(%s)" (fmt_ty_term c)
@@ -339,8 +362,9 @@ let rec fmt_stmt (f : fmt) (s : stmt) : unit =
            f.indent <- f.indent + 1; List.iter (fmt_stmt f) ob; f.indent <- f.indent - 1
        | None -> ());
       line f "}"
-  | SForEvery (_fk, var, e, body, _) ->
-      line f (Printf.sprintf "for every %s in %s {" var (fmt_expr e));
+  | SForEvery (fk, var, e, body, _) ->
+      line f (Printf.sprintf "for every %s in %s%s {" var (fmt_expr e)
+                (match fk with ForWhenHere -> " when here" | ForParallel -> ""));
       f.indent <- f.indent + 1; List.iter (fmt_stmt f) body; f.indent <- f.indent - 1;
       line f "}"
   | SForces (stage, c, body, _) ->
@@ -639,6 +663,7 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
        line f (Printf.sprintf "geomorph %s from %s to %s {"
                  gm.gm_name gm.gm_source_site gm.gm_target_site);
        f.indent <- f.indent + 1;
+       if gm.gm_f_lower_star_exact then line f "exact push";
        let fmt_dir kw (fd : fun_decl) =
          let params = String.concat ", "
            (List.map (fun p -> p.param_name ^ ": " ^ fmt_ty p.param_ty)
@@ -712,6 +737,7 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
         | None -> ());
        List.iter (fun (a, b) -> line f (Printf.sprintf "on morphism %s via %s" a b))
          mp.mp_on_morphism_map;
+       List.iter (fun l -> line f ("law " ^ l)) mp.mp_laws;
        f.indent <- f.indent - 1;
        line f "}"
    | TopReduction rd ->
@@ -743,6 +769,8 @@ let fmt_top (f : fmt) (td : top_decl) : unit =
 
 let parse (source : string) : program option =
   Parser_state.reset ();   (* avoid stale synth_decls on re-parse *)
+  Surface_ast.reset_parse_tables ();   (* and the sites of a previous reading *)
+  Lexer.reset_statement ();
   let lexbuf = Lexing.from_string source in
   try
     let p = Parser.program Lexer.token lexbuf in
@@ -801,10 +829,8 @@ let format_program (prog : program) : string option =
 
 (* ─── Round-trip: the formatter never corrupts ──────────────────────── *)
 
-(* A light structural comparison: two programs are "equivalent" if they have
- * the same number of top-level declarations with the same names and shapes.
- * For the round-trip it is enough that the re-parse succeeds and produces the
- * same structure, so we compare top-level names (robust, ignores locations). *)
+(* The names and kinds of the top-level declarations: what a reader of a program sees first. The
+ * round-trip compares more: the whole tree, but for the positions (Ast_compare). *)
 let top_names (prog : program) : string list =
   List.filter_map (function
     | TopFun fn -> Some ("fun:" ^ fn.fn_name)
@@ -822,8 +848,8 @@ let top_names (prog : program) : string list =
     | _ -> None) prog
 
 (* Format with a guarantee. Return the output only if BOTH hold:
- *   - the output re-parses to the same top-level structure (no decl lost or
- *     renamed), and
+ *   - the output re-parses to the same program: the whole tree is equal but for
+ *     the positions (Ast_compare), so no change inside a body goes unseen, and
  *   - formatting is idempotent: formatting the re-parsed output reproduces it
  *     byte-for-byte (a fixed point). Idempotence catches a formatter that is
  *     unstable under its own output -- a real proxy for "the AST round-tripped".
@@ -838,7 +864,7 @@ let safe_format (source : string) : string option =
           match parse formatted with
           | None -> None   (* the output does not re-parse: do NOT use it *)
           | Some prog2 ->
-              if top_names prog <> top_names prog2 then None  (* structure changed *)
+              if not (Ast_compare.equal prog prog2) then None  (* the program changed *)
               else match format_program prog2 with
                    | Some formatted2 when formatted2 = formatted -> Some formatted
                    | _ -> None   (* not idempotent: do NOT use it *)

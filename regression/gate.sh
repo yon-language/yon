@@ -197,7 +197,11 @@ PICK=""
 add() { case " $PICK " in *" $1 "*) ;; *) PICK="$PICK $1";; esac; }
 for f in $DIRTY; do
   case "$f" in
+    frontend/rewriter.ml|frontend/yonrw.ml|frontend/ast_compare.ml|frontend/yonfmt.ml)
+      add regression/test_rewriter.py; add regression/test_formatter.py
+      add regression/test_formatter_semantics.py ;;
     frontend/parser.mly|frontend/lexer.mll|frontend/parser_state.ml|frontend/surface_ast.ml|frontend/formatter.ml)
+      add regression/test_rewriter.py; add regression/test_formatter_semantics.py
       add regression/test_syntax_triangle.py; add regression/test_canonical_forms.py
       add regression/test_grammar_guard.py; add regression/test_gen_highlighters.py
       add regression/test_website_surface.py; add regression/test_keyword_docs.py
